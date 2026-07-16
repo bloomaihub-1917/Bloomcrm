@@ -1,0 +1,10 @@
+# 무관한 참고자료 (Frappe CRM 벤치마킹용)
+crm-develop/
+crm-develop.zip
+
+# 실데이터 엑셀 (개인정보 포함 — 저장소에 커밋하지 않음)
+Data/
+
+# OS/에디터
+Thumbs.db
+.DS_Store

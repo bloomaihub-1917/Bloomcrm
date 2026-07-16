@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Contact CRM</title>
+<link rel="stylesheet" href="styles/tokens.css">
+<link rel="stylesheet" href="styles/layout.css">
+<link rel="stylesheet" href="styles/components.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<!-- ══════════ LOGIN SCREEN ══════════ -->
+<div class="login-screen" id="login-screen">
+  <div class="login-card">
+    <div class="login-head">
+      <div class="login-logo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/>
+          <path d="M3 14h7v7H3z"/><circle cx="17.5" cy="17.5" r="3.5"/>
+        </svg>
+      </div>
+      <div class="login-title">Contact CRM</div>
+      <div class="login-sub">@13100m.net 계정으로 로그인</div>
+    </div>
+    <div class="login-body">
+      <div class="login-field">
+        <label class="login-lbl">이름</label>
+        <input class="login-inp" type="text" id="login-name" placeholder="홍길동" autocomplete="name">
+      </div>
+      <div class="login-field">
+        <label class="login-lbl">이메일</label>
+        <div class="login-domain">
+          <input type="text" id="login-email-local" placeholder="yourname"
+            autocomplete="email"
+            oninput="loginEmailInput(this)"
+            onkeydown="if(event.key==='Enter')doLogin()">
+          <div class="login-domain-suffix">@13100m.net</div>
+        </div>
+      </div>
+      <div class="login-field">
+        <label class="login-lbl">비밀번호</label>
+        <input class="login-inp" type="password" id="login-pw" placeholder="••••••••"
+          onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <button class="login-btn" onclick="doLogin()" id="login-btn">로그인</button>
+      <div class="login-err" id="login-err"></div>
+    </div>
+    <div class="login-foot">@13100m.net 계정을 가진 팀원만 접속할 수 있어요</div>
+  </div>
+</div>
+
+<!-- ══════════ USER MENU ══════════ -->
+<div class="user-menu" id="user-menu">
+  <div class="user-menu-head">
+    <div class="user-menu-email" id="um-email"></div>
+    <div class="user-menu-since" id="um-since"></div>
+  </div>
+  <button class="user-menu-item" onclick="switchApp('audit',null);closeUserMenu()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+    </svg>
+    활동 로그 보기
+  </button>
+  <button class="user-menu-item danger" onclick="doLogout()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+      <polyline points="16 17 21 12 16 7"/>
+      <line x1="21" y1="12" x2="9" y2="12"/>
+    </svg>
+    로그아웃
+  </button>
+</div>
+<div class="sb-backdrop" id="sb-bd" onclick="closeSb()"></div>
+<div class="app">
+<div class="sb" id="sb">
+  <div class="sb-hd">
+    <div class="sb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/><path d="M3 14h7v7H3z"/><circle cx="17.5" cy="17.5" r="3.5"/></svg></div>
+    <div><div class="sb-nm">Contact CRM</div><div class="sb-sb">행사 타겟 관리 시스템</div></div>
+  </div>
+  <div class="atabs">
+    <button class="atab on" onclick="switchApp('mdb',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>DB</button>
+    <button class="atab" onclick="switchApp('up',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>업로드</button>
+    <button class="atab" onclick="switchApp('arch',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>설정</button>
+    <button class="atab" onclick="switchApp('co',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>기업DB</button>
+    <button class="atab" onclick="switchApp('crm',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="5" height="18"/><rect x="10" y="3" width="5" height="18"/><rect x="17" y="3" width="4" height="18"/></svg>CRM</button>
+    <button class="atab" onclick="switchApp('audit',this)" id="apptab-audit">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+      </svg>로그
+    </button>
+  </div>
+  <div class="sb-body">
+    <!-- MDB sidebar -->
+    <div class="sbp on" id="sbp-mdb">
+      <div class="sbs s-ef"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">행사별 보기</div></div>
+      <div class="sbi"><div id="mdb-ev-list"></div></div></div>
+      <div class="sbs s-q"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">카테고리</div></div>
+      <div class="sbi">
+        <button class="nr on" onclick="filterCat('all',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>전체<span class="nbg" id="ct-all">18</span></button>
+        <button class="nr" onclick="filterCat('speaker',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>연사<span class="nbg" id="ct-sp">3</span></button>
+        <button class="nr" onclick="filterCat('vip',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>VIP<span class="nbg" id="ct-vip">0</span></button>
+        <button class="nr" onclick="filterCat('attendee',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>일반참가자<span class="nbg" id="ct-at">0</span></button>
+      </div></div>
+      <div class="sbs s-s"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">상태</div></div>
+      <div class="sbi">
+        <button class="nr" onclick="filterStat('verified',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>검증됨<span class="nbg" id="ct-vf">8</span></button>
+        <button class="nr" onclick="filterStat('pending',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>확인 중<span class="nbg" id="ct-pe">2</span></button>
+        <button class="nr" onclick="filterStat('new',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>신규<span class="nbg" id="ct-nw">2</span></button>
+      </div></div>
+    </div>
+    <!-- Upload sidebar -->
+    <div class="sbp" id="sbp-up">
+      <div class="sbs s-v"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">업로드 메뉴</div></div>
+      <div class="sbi">
+        <button class="nr on" onclick="switchUV('upload',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>파일 업로드 & AI 파서</button>
+        <button class="nr" onclick="switchUV('log',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>수집 로그</button>
+        <button class="nr" onclick="switchUV('merge',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>기업 병합 관리</button>
+      </div></div>
+    </div>
+    <!-- Arch sidebar -->
+    <div class="sbp" id="sbp-arch">
+      <div class="sbs s-v"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">설정 메뉴</div></div>
+      <div class="sbi">
+        <button id="arch-tab-ev"     class="nr on" onclick="switchArchTab('ev')"     >📅 행사 관리</button>
+        <button id="arch-tab-sector" class="nr"    onclick="switchArchTab('sector')" >🏭 기업 섹터</button>
+        <button id="arch-tab-sys"    class="nr"    onclick="switchArchTab('sys')"    >⚙️ 시스템 구조</button>
+      </div></div>
+      <div class="sbs s-v" id="sbp-arch-sysnav" style="display:none"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">시스템 구조</div></div>
+      <div class="sbi">
+        <button class="nr on" onclick="switchAV('arch',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>전체 아키텍처</button>
+        <button class="nr" onclick="switchAV('sheet',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>구글시트 연동</button>
+        <button class="nr" onclick="switchAV('flow',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>업무 플로우</button>
+      </div></div>
+    </div>
+    <!-- CO sidebar -->
+    <div class="sbp" id="sbp-co">
+      <div class="sbs s-q"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">기업 검색</div></div>
+      <div class="sb-srch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" placeholder="기업명 검색…" oninput="searchCo(this.value)" id="co-si"></div>
+      </div>
+      <div class="sbs s-c"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">기업 섹터</div></div>
+      <div class="sbi" id="co-catf"></div></div>
+      <div class="sbs s-c"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">카테고리 코드</div></div>
+      <div class="sbi" id="co-codef"></div></div>
+      <div class="sbs s-q" style="flex:1;overflow-y:auto;min-height:0">
+      <div class="co-ls" id="co-ls"></div></div>
+    </div>
+    <!-- Audit sidebar -->
+    <div class="sbp" id="sbp-audit">
+      <div class="sbs s-v"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">활동 필터</div></div>
+      <div class="sbi">
+        <button class="nr on" onclick="filterAudit('all',this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+          전체<span class="nbg" id="act-all">0</span>
+        </button>
+        <button class="nr" onclick="filterAudit('status',this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>
+          상태 변경<span class="nbg" id="act-status">0</span>
+        </button>
+        <button class="nr" onclick="filterAudit('log',this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          컨택 기록<span class="nbg" id="act-log">0</span>
+        </button>
+        <button class="nr" onclick="filterAudit('add',this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
+          타겟 추가<span class="nbg" id="act-add">0</span>
+        </button>
+        <button class="nr" onclick="filterAudit('stage',this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          단계 변경<span class="nbg" id="act-stage">0</span>
+        </button>
+        <button class="nr" onclick="filterAudit('login',this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          로그인<span class="nbg" id="act-login">0</span>
+        </button>
+      </div></div>
+      <div class="sbs s-e"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">팀원별</div></div>
+      <div class="sbi"><div id="audit-user-list"></div></div></div>
+    </div>
+
+    <!-- CRM sidebar -->
+    <div class="sbp" id="sbp-crm">
+      <div class="sbs s-v"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">뷰</div></div>
+      <div class="sbi">
+        <button class="nr on" onclick="switchCV('pipeline',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="5" height="18"/><rect x="10" y="3" width="5" height="18"/><rect x="17" y="3" width="4" height="18"/></svg>파이프라인<span class="nbg" id="ct-pipe">12</span></button>
+        <button class="nr" onclick="switchCV('table',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>전체 목록<span class="nbg" id="ct-tbl">12</span></button>
+      </div></div>
+      <div class="sbs s-e"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">행사별 보기</div></div>
+      <div class="sbi"><div id="ev-fil"></div></div></div>
+      <div class="sbs s-s"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">컨택 현황</div></div>
+      <div class="sbi">
+        <button class="nr" onclick="filterSt2('미접촉',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>미접촉<span class="nbg" id="ct-s0">4</span></button>
+        <button class="nr" onclick="filterSt2('컨택중',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 3.07 4.18 2 2 0 0 1 5.06 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L9.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>컨택중<span class="nbg" id="ct-s1">5</span></button>
+        <button class="nr" onclick="filterSt2('협의중',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>협의중<span class="nbg" id="ct-s2">2</span></button>
+        <button class="nr" onclick="filterSt2('확정',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>확정<span class="nbg" id="ct-s3">1</span></button>
+      </div></div>
+    </div>
+  </div>
+  <div class="sb-ft">마지막 동기화<br><span id="last-sync-time">-</span></div>
+</div>
+<div class="mn">
+<div id="sheets-warn" style="display:none;padding:9px 18px;background:var(--ab);border-bottom:1px solid #FDE68A;align-items:center;gap:9px;font-size:12px;color:var(--am)">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+  구글시트에 연결할 수 없어요 — 데이터가 표시되지 않을 수 있어요. 새로고침해보거나 관리자에게 문의해주세요.
+  <button onclick="loadFromSheets()" style="margin-left:auto;font-size:11px;font-weight:600;color:var(--am);background:none;border:1px solid var(--am);border-radius:5px;padding:3px 10px;cursor:pointer">다시 시도</button>
+</div>
+<div id="test-mode-banner" style="display:none;padding:9px 18px;background:#F5F3FF;border-bottom:1px solid #DDD6FE;align-items:center;gap:9px;font-size:12px;color:#6D28D9">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px;flex-shrink:0"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+  테스트 모드 — Data 폴더의 더미 데이터를 표시 중입니다. 구글시트에는 연결되지 않았고, 어떤 변경도 저장되지 않습니다.
+</div>
+<!-- ① Master DB -->
+<div class="page on" id="page-mdb">
+<div class="mob-header" id="mob-h-mdb">
+  <button class="mob-menu-btn" onclick="toggleSb()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+  <div class="mob-title">Master DB</div>
+  <button class="mob-action-btn" onclick="document.getElementById('mdb-q').focus()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></button>
+</div>
+  <div class="tb">
+    <div class="tb-t">Master DB <span class="tb-s">통합 연락처 데이터베이스</span></div>
+    <div class="srch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" placeholder="이름, 기업, 직함 검색…" oninput="renderMDB()" id="mdb-q"></div>
+    <button class="btn bp" onclick="openAddContactModal()" style="gap:4px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>연락처 추가
+    </button>
+    <button class="btn bs" id="sync-btn" onclick="manualSync()" title="구글시트에서 데이터 새로고침" style="gap:4px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>동기화
+    </button>
+    <button class="btn bs" onclick="exportCSV()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>내보내기</button>
+    <div class="user-chip" onclick="toggleUserMenu(event)" id="user-chip" style="display:none">
+      <div class="user-av" id="user-av" style="background:var(--a)"></div>
+      <div><div class="user-name" id="user-name-chip"></div></div>
+    </div>
+  </div>
+  <div class="db-bar">
+    <div class="db-view-toggle">
+      <button class="dvt-btn on" id="dvt-flat" onclick="setDBView('flat',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>목록
+      </button>
+      <button class="dvt-btn" id="dvt-group" onclick="setDBView('group',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>행사별
+      </button>
+      <button class="dvt-btn" id="dvt-matrix" onclick="setDBView('matrix',this)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>교차표
+      </button>
+    </div>
+    <div class="seg">
+      <button class="seg-b mdb-seg-b on" onclick="segCat('all',this)">전체</button>
+      <button class="seg-b mdb-seg-b" onclick="segCat('speaker',this)">연사</button>
+      <button class="seg-b mdb-seg-b" onclick="segCat('sponsor',this)">스폰서</button>
+      <button class="seg-b mdb-seg-b" onclick="segCat('investor',this)">투자자</button>
+      <button class="seg-b mdb-seg-b" onclick="segCat('buyer',this)">바이어</button>
+      <button class="seg-b mdb-seg-b" onclick="segCat('bd',this)">BD</button>
+    </div>
+    <span class="db-ct" id="db-ct"></span>
+  </div>
+  <div class="tw" id="mdb-tw"><table><thead><tr><th>이름</th><th>기업</th><th>국가</th><th>직함/부서</th><th id="mdb-th-role">카테고리</th><th>행사</th><th>연락처</th><th>수집일</th><th>상태</th></tr></thead><tbody id="mdb-body"></tbody></table></div>
+</div>
+
+<!-- ② Upload -->
+<div class="page" id="page-up">
+<div class="mob-header" id="mob-h-up">
+  <button class="mob-menu-btn" onclick="toggleSb()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+  <div class="mob-title">업로드 & AI 파서</div>
+  <button class="mob-action-btn primary" onclick="document.getElementById('file-input').click()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></button>
+</div>
+  <div class="tb"><div class="tb-t" id="up-ttl">업로드 & AI 파서 <span class="tb-s">파일 업로드 후 자동 파싱</span></div></div>
+  <div class="uw">
+    <div id="upv-upload">
+      <div class="ugrid">
+        <div class="uc">
+          <div class="uc-ttl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>파일 업로드</div>
+          <div class="dz" id="drop-zone" onclick="document.getElementById('file-input').click()"
+     ondragover="event.preventDefault();this.style.borderColor='var(--a)';this.style.background='var(--ad)'"
+     ondragleave="this.style.borderColor='';this.style.background=''"
+     ondrop="handleFileDrop(event)">
+            <input type="file" id="file-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileSelect(event)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+            <div class="dz-ttl" id="dz-filename">파일을 드래그하거나 클릭해서 업로드</div>
+            <div class="dz-sub">Excel (.xlsx) · CSV · 구글시트 링크 · 국문/영문 자동 감지</div>
+          </div>
+          <div class="mf">
+            <div class="mr">
+              <div style="flex:1">
+                <div class="mlbl">수집 출처 <span style="font-size:9px;color:var(--i4)">(직접 입력)</span></div>
+                <input class="fi" type="text" id="up-src" placeholder="예: KIC 행사 참가자 명단, 명함 스캔 등" style="width:100%">
+              </div>
+              <div>
+                <div class="mlbl">기본 카테고리</div>
+                <select class="fi" id="up-cat">
+                  <option value="">자동 분류</option>
+                  <option value="attendee">일반참가자</option>
+                  <option value="vip">VIP</option>
+                  <option value="speaker">연사</option>
+                </select>
+              </div>
+            </div>
+            <div class="mr" style="margin-top:8px">
+              <div style="flex:1">
+                <div class="mlbl">기업 카테고리 (sector) <span style="font-size:9px;color:var(--i4)">이 파일의 기업에 일괄 적용</span></div>
+                <select class="fi" id="up-sector" style="width:100%">
+                  <option value="">적용 안 함</option>
+                </select>
+              </div>
+            </div>
+            <div class="mr" style="margin-top:8px">
+              <div style="flex:1">
+                <div class="mlbl" style="display:flex;align-items:center;justify-content:space-between">
+                  <span>연결 행사 <span style="font-size:9px;color:var(--i4)">(참가자로 자동 등록)</span></span>
+                  <button type="button" id="up-ev-toggle" onclick="toggleEvInput()"
+                    style="font-size:10px;color:var(--a);background:none;border:none;cursor:pointer;padding:0">직접 입력</button>
+                </div>
+                <select class="fi" id="up-ev" style="width:100%">
+                  <option value="">행사 연결 안 함</option>
+                </select>
+                <input class="fi" id="up-ev-text" placeholder="행사명 직접 입력 (예: BioKorea 2025)"
+                  style="width:100%;display:none;margin-top:4px">
+              </div>
+              <div>
+                <div class="mlbl">참가 역할</div>
+                <select class="fi parttype-select" id="up-ev-role"></select>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="uc">
+          <div class="uc-ttl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M18 2l4 4-4 4"/><path d="M22 2v4h-4"/></svg>AI 파서 로그</div>
+          <div class="ailog" id="ai-log"><p style="color:var(--i4);font-family:inherit;font-size:11px">파일을 업로드하면 AI 파서가 자동으로 분석을 시작합니다…</p></div>
+          <div id="merge-wrap"></div>
+          <div id="up-btns" style="margin-top:10px;display:none"><div style="display:flex;gap:8px">
+            <button class="btn bp bs" onclick="confirmImport()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>DB에 추가 (11건)</button>
+            <button class="btn bs" onclick="resetUpload()">다시 업로드</button>
+          </div></div>
+        </div>
+      </div>
+      <div class="uc">
+        <div class="uc-ttl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>파서 미리보기 — 컬럼 매핑 결과</div>
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead><tr style="background:var(--i8)"><th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--i3);border-bottom:1px solid var(--i6);text-transform:uppercase;letter-spacing:.04em">원본 컬럼</th><th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--i3);border-bottom:1px solid var(--i6);text-transform:uppercase;letter-spacing:.04em">→ DB 컬럼</th><th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--i3);border-bottom:1px solid var(--i6);text-transform:uppercase;letter-spacing:.04em">샘플 값</th><th style="padding:6px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--i3);border-bottom:1px solid var(--i6);text-transform:uppercase;letter-spacing:.04em">신뢰도</th></tr></thead>
+          <tbody id="parser-prev"><tr><td colspan="4" style="padding:18px;text-align:center;color:var(--i4);font-size:11px">파일을 업로드하면 컬럼 매핑이 표시됩니다</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div id="upv-log" style="display:none"><div class="uc"><div class="uc-ttl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>수집 로그 — 업로드 이력</div>
+    <table class="lt2"><thead><tr><th>날짜</th><th>출처</th><th>파일명</th><th>카테고리</th><th>추가</th><th>중복</th><th>병합</th><th>담당자</th></tr></thead><tbody id="log-body"></tbody></table></div></div>
+    <div id="upv-merge" style="display:none"><div class="uc"><div class="uc-ttl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>기업 병합 관리</div><div id="merge-ls"></div></div></div>
+  </div>
+</div>
+
+<!-- ③ Architecture -->
+<div class="page" id="page-arch" style="overflow-y:auto">
+  <div class="mob-title">설정</div>
+  <div class="tb">
+    <div class="tb-t">설정 <span class="tb-s">행사 관리 · 기업 섹터 · 시스템 구조</span></div>
+  </div>
+
+  <!-- ── 행사 관리 탭 ── -->
+  <div id="arch-pane-ev" style="padding:16px 20px;max-width:900px">
+    <div style="font-size:13px;font-weight:700;color:var(--i1);margin-bottom:14px;display:flex;align-items:center;gap:8px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      행사 관리
+    </div>
+    <div id="ev-mgr-list" style="margin-bottom:16px"></div>
+    <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:12px">+ 행사 추가</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div>
+          <div class="mlbl">행사 ID (ev_id) <span style="color:var(--i4);font-weight:400">participations 연결 키</span></div>
+          <input class="fi" id="ev-add-id" placeholder="예: KIC-SV-2026 (영문, 하이픈 권장)" style="width:100%">
+        </div>
+        <div>
+          <div class="mlbl">행사명 (풀네임)</div>
+          <input class="fi" id="ev-add-name" placeholder="예: KIC Silicon Valley 2026" style="width:100%"
+            oninput="autoFillEvId(this.value)">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+        <div>
+          <div class="mlbl">약칭</div>
+          <input class="fi" id="ev-add-short" placeholder="예: BioKorea 2026" style="width:100%">
+        </div>
+        <div>
+          <div class="mlbl">시작일</div>
+          <input class="fi" id="ev-add-date-start" type="date" style="width:100%">
+        </div>
+        <div>
+          <div class="mlbl">종료일</div>
+          <input class="fi" id="ev-add-date-end" type="date" style="width:100%">
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end">
+        <div>
+          <div class="mlbl">장소</div>
+          <input class="fi" id="ev-add-loc" placeholder="예: 서울 코엑스" style="width:100%">
+        </div>
+        <div>
+          <div class="mlbl">색상</div>
+          <input type="color" id="ev-add-color" value="#3B5BDB"
+            style="width:40px;height:36px;border:1px solid var(--i6);border-radius:6px;cursor:pointer;padding:2px">
+        </div>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px">
+        <button class="btn bp" onclick="addEventToList()" style="min-width:80px">추가</button>
+        <span id="ev-add-msg" style="font-size:11px;color:var(--g);align-self:center"></span>
+      </div>
+    </div>
+
+    <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:16px;margin-top:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:6px">🌐 국가 데이터 정리</div>
+      <div style="font-size:11px;color:var(--i4);margin-bottom:10px">시트에 "KR", "SG" 같은 약자·영문명이 섞여 있으면 한글 국가명(예: 대한민국)으로 통일해서 구글시트까지 다시 저장해요.</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn bp" onclick="normalizeAllCountries()" style="min-width:120px">국가명 일괄 정리</button>
+        <span id="country-fix-msg" style="font-size:11px;color:var(--i3)"></span>
+      </div>
+    </div>
+
+    <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:16px;margin-top:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:6px">🏢 기업/직책/부서 국문·영문 분리</div>
+      <div style="font-size:11px;color:var(--i4);margin-bottom:10px">"한국보건산업진흥원 Korea Health Industry Development Institute"처럼 국문·영문이 한 칸에 붙어 들어간 기업명·직책·부서를 국문/영문으로 분리해서 저장해요. ("SK 바이오사이언스"처럼 영문이 1단어인 경우는 원래 이름의 일부로 보고 그대로 둡니다.)</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn bp" onclick="splitMixedOrgNames()" style="min-width:120px">기업명 분리 정리</button>
+        <span id="orgsplit-fix-msg" style="font-size:11px;color:var(--i3)"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 기업 섹터 탭 ── -->
+  <div id="arch-pane-sector" style="padding:16px 20px;max-width:900px;display:none">
+    <div style="font-size:13px;font-weight:700;color:var(--i1);margin-bottom:6px">기업 섹터 관리</div>
+    <div style="font-size:11px;color:var(--i4);margin-bottom:14px">메인 섹터와 서브섹터를 정의합니다. 기업에 복수 섹터를 적용할 수 있어요. 행사를 선택하면 그 행사만의 독립된 섹터 트리를 만들고 관리할 수 있어요(예: 바이오코리아 전용 메인/서브 섹터).</div>
+
+    <div style="margin-bottom:14px">
+      <div class="mlbl">섹터 트리 대상</div>
+      <select class="fi" id="sector-scope-select" onchange="onSectorScopeChange(this.value)" style="max-width:280px">
+        <option value="">공통 (모든 행사 공유)</option>
+      </select>
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <div style="font-size:12px;font-weight:700;color:var(--i2)" id="sector-tree-title">섹터 트리</div>
+      <button class="btn bs" style="font-size:11px" onclick="reorganizeSectorsSheet()">🧹 시트 보기 좋게 정렬</button>
+    </div>
+    <div style="font-size:11px;color:var(--i4);margin-bottom:8px">서브섹터 칩을 드래그해서 다른 메인 섹터로 옮기거나, 맨 위 점선 영역에 놓으면 메인 섹터로 승격됩니다. "시트 보기 좋게 정렬"을 누르면 구글시트의 <code>sectors</code> 탭 행 순서를 메인 → 그 서브섹터들 순으로 재배열해요.</div>
+    <div id="sector-root-drop" ondragover="event.preventDefault()" ondrop="onSectorDropToRoot(event)"
+      style="border:2px dashed var(--i6);border-radius:8px;padding:8px;text-align:center;font-size:11px;color:var(--i4);margin-bottom:10px">
+      ⬆ 서브섹터를 여기로 드래그하면 메인 섹터로 승격
+    </div>
+    <div id="sector-tree" style="margin-bottom:14px"></div>
+    <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:14px;margin-bottom:22px">
+      <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:10px">+ 새 메인 섹터 추가</div>
+      <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px">
+          <div class="mlbl">섹터명</div>
+          <input class="fi" id="sector-main-add-input" placeholder="예: 바이오 소재" style="width:100%"
+            onkeydown="if(event.key==='Enter')addMainSector()">
+        </div>
+        <button class="btn bp" onclick="addMainSector()" style="min-width:60px;height:36px">추가</button>
+      </div>
+    </div>
+
+    <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:14px;margin-bottom:22px">
+      <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:6px">📊 엑셀로 섹터 일괄 추가</div>
+      <div style="font-size:11px;color:var(--i4);margin-bottom:10px">"메인섹터" / "서브섹터" 2개 컬럼으로 된 엑셀(.xlsx)을 올리면, 지금 위에서 선택한 대상(공통 또는 특정 행사)에 메인·서브 섹터를 한 번에 만들어줘요. 이미 있는 섹터는 건너뜁니다.</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="file" id="sector-file-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleSectorFileSelect(event)">
+        <button class="btn bs" onclick="document.getElementById('sector-file-input').click()">파일 선택…</button>
+        <span id="sector-file-name" style="font-size:11px;color:var(--i4)"></span>
+      </div>
+      <div id="sector-import-preview" style="margin-top:10px"></div>
+    </div>
+
+    <div style="font-size:12px;font-weight:700;color:var(--i2);margin:22px 0 4px">🗂 미등록 섹터 그룹으로 묶기</div>
+    <div style="font-size:11px;color:var(--i4);margin-bottom:10px">업로드 데이터에 나온 섹터 값(예: Pharma, CRO, Vaccine)이 아직 섹터 체계에 등록 안 돼서 대시보드에 각각 따로 나올 때, 여기서 골라 하나의 그룹(메인 섹터) 아래로 묶을 수 있어요.</div>
+    <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:14px">
+      <div id="sector-unreg-list" style="display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto;margin-bottom:10px"></div>
+      <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px">
+          <div class="mlbl">묶을 그룹(메인 섹터)</div>
+          <select class="fi" id="sector-unreg-group" style="width:100%"></select>
+        </div>
+        <button class="btn bp" onclick="applySectorGrouping()" style="min-width:120px;height:36px">선택 항목 그룹에 편입</button>
+      </div>
+    </div>
+
+    <div style="font-size:12px;font-weight:700;color:var(--i2);margin:22px 0 4px">🏷️ 기존 메인 섹터를 그룹의 서브로 편입</div>
+    <div style="font-size:11px;color:var(--i4);margin-bottom:10px">이미 메인 섹터로 등록된 것들(예: Professional Services and Consulting, Synthetic drugs)을 골라 다른 메인 섹터(또는 새로 만드는 그룹, 예: BIO) 아래 서브섹터로 한 번에 옮깁니다. 선택한 섹터에 이미 서브섹터가 있으면 그 서브섹터도 함께 그룹 하위로 옮겨져요.</div>
+    <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:14px">
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;padding-bottom:6px;margin-bottom:6px;border-bottom:1px solid var(--i6);cursor:pointer">
+        <input type="checkbox" id="mainconv-all" onchange="toggleAllMainConv(this)"> 전체 선택
+      </label>
+      <div id="mainconv-list" style="display:flex;flex-direction:column;gap:4px;max-height:220px;overflow-y:auto;margin-bottom:10px"></div>
+      <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px">
+          <div class="mlbl">편입할 그룹(메인 섹터)</div>
+          <select class="fi" id="mainconv-group" style="width:100%"></select>
+        </div>
+        <button class="btn bp" onclick="convertMainsToGroup()" style="min-width:120px;height:36px">선택 항목 서브로 편입</button>
+      </div>
+    </div>
+
+    <div style="font-size:12px;font-weight:700;color:var(--i2);margin:22px 0 4px">🔀 섹터 병합 (중복 정리)</div>
+    <div style="font-size:11px;color:var(--i4);margin-bottom:10px">같은 뜻으로 겹치는 섹터(예: Embassy / 대사관)를 골라 하나로 합칩니다. 연결된 기업의 섹터 값도 함께 정리되고, 남기지 않은 섹터는 삭제됩니다.</div>
+    <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:14px">
+      <div id="sector-merge-list" style="display:flex;flex-direction:column;gap:4px;max-height:220px;overflow-y:auto;margin-bottom:10px"></div>
+      <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px">
+          <div class="mlbl">남길 섹터 (선택한 것들이 여기로 합쳐짐)</div>
+          <select class="fi" id="sector-merge-keep" style="width:100%"></select>
+        </div>
+        <button class="btn bp" onclick="mergeSectors()" style="min-width:100px;height:36px">병합 실행</button>
+      </div>
+    </div>
+
+    <div style="font-size:12px;font-weight:700;color:var(--i2);margin:22px 0 4px">🔗 유사 기업명 찾기 (기업DB 중복 정리)</div>
+    <div style="font-size:11px;color:var(--i4);margin-bottom:10px">대소문자·구두점·법인 표기(Inc./（주） 등) 차이는 기업DB에서 이미 자동으로 하나로 묶입니다. 그 외 오타나 줄임말처럼 애매한 경우만 여기서 찾아 수동으로 합칠 수 있어요.</div>
+    <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:14px">
+      <div style="margin-bottom:10px">
+        <button class="btn bs" onclick="renderSimilarCompanyList()" style="font-size:11px">유사 기업명 다시 찾기</button>
+      </div>
+      <div id="similar-co-list" style="display:flex;flex-direction:column;gap:8px;max-height:280px;overflow-y:auto">
+        <div style="font-size:12px;color:var(--i4)">"유사 기업명 다시 찾기"를 눌러 검사하세요</div>
+      </div>
+    </div>
+
+    <div style="font-size:12px;font-weight:700;color:var(--i2);margin:22px 0 4px">🎫 행사 참가 유형 관리 (VIP/연사/BD 등)</div>
+    <div style="font-size:11px;color:var(--i4);margin-bottom:10px">업로드·행사 참여 추가 시 고를 수 있는 "참가 역할" 목록입니다. 여기서 추가/삭제하면 관련 드롭다운에 바로 반영돼요.</div>
+    <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:14px">
+      <div id="parttype-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
+      <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
+        <div style="flex:1;min-width:160px">
+          <div class="mlbl">참가 유형명</div>
+          <input class="fi" id="parttype-add-input" placeholder="예: 미디어 파트너" style="width:100%"
+            onkeydown="if(event.key==='Enter')addPartType()">
+        </div>
+        <div style="min-width:140px">
+          <div class="mlbl">색상</div>
+          <select class="fi" id="parttype-add-color" style="width:100%">
+            <option value="p-blue">파랑</option>
+            <option value="p-green">초록</option>
+            <option value="p-amber">주황</option>
+            <option value="p-teal">청록</option>
+            <option value="p-purple">보라</option>
+            <option value="p-red">빨강</option>
+            <option value="p-gray" selected>회색</option>
+            <option value="p-gold">금색</option>
+            <option value="p-indigo">남색</option>
+          </select>
+        </div>
+        <button class="btn bp" onclick="addPartType()" style="min-width:60px;height:36px">추가</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 시스템 구조 탭 ── -->
+  <div id="arch-pane-sys" style="display:none">
+
+<div class="mob-header" id="mob-h-arch">
+  <button class="mob-menu-btn" onclick="toggleSb()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+  <div class="mob-title">시스템 구조</div>
+</div>
+  <div class="tb"><div class="tb-t" id="arch-ttl">시스템 아키텍처 <span class="tb-s">구글시트 연동 구조</span></div></div>
+  <div class="aw">
+    <div id="av-arch">
+      <div class="at">통합 Contact CRM 시스템 아키텍처</div>
+      <div class="ad2">파일 업로드 → AI 파싱 → Master DB → 구글시트 동기화 → CRM 파이프라인으로 이어지는 전체 데이터 흐름</div>
+      <div class="asvg">
+        <svg viewBox="0 0 780 430" width="100%" style="min-width:680px">
+          <defs><marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></marker></defs>
+          <text x="20" y="22" font-size="9" font-weight="700" fill="#9C9890" letter-spacing="1">INPUT SOURCES</text>
+          <rect x="18" y="32" width="100" height="42" rx="7" fill="#EEF2FF" stroke="#3B5BDB" stroke-width="1"/><text x="68" y="49" text-anchor="middle" font-size="11" font-weight="600" fill="#3B5BDB">Excel / CSV</text><text x="68" y="64" text-anchor="middle" font-size="10" fill="#6B6860">행사 명단</text>
+          <rect x="130" y="32" width="100" height="42" rx="7" fill="#EEF2FF" stroke="#3B5BDB" stroke-width="1"/><text x="180" y="49" text-anchor="middle" font-size="11" font-weight="600" fill="#3B5BDB">구글시트</text><text x="180" y="64" text-anchor="middle" font-size="10" fill="#6B6860">링크 연동</text>
+          <rect x="242" y="32" width="100" height="42" rx="7" fill="#EEF2FF" stroke="#3B5BDB" stroke-width="1"/><text x="292" y="49" text-anchor="middle" font-size="11" font-weight="600" fill="#3B5BDB">명함 스캔</text><text x="292" y="64" text-anchor="middle" font-size="10" fill="#6B6860">이미지 OCR</text>
+          <rect x="354" y="32" width="100" height="42" rx="7" fill="#EEF2FF" stroke="#3B5BDB" stroke-width="1"/><text x="404" y="49" text-anchor="middle" font-size="11" font-weight="600" fill="#3B5BDB">직접 입력</text><text x="404" y="64" text-anchor="middle" font-size="10" fill="#6B6860">수동 등록</text>
+          <line x1="68" y1="74" x2="68" y2="122" stroke="#C8C4BC" stroke-width="1.2" marker-end="url(#arr)"/>
+          <line x1="180" y1="74" x2="160" y2="122" stroke="#C8C4BC" stroke-width="1.2" marker-end="url(#arr)"/>
+          <line x1="292" y1="74" x2="256" y2="122" stroke="#C8C4BC" stroke-width="1.2" marker-end="url(#arr)"/>
+          <line x1="404" y1="74" x2="360" y2="122" stroke="#C8C4BC" stroke-width="1.2" marker-end="url(#arr)"/>
+          <text x="20" y="116" font-size="9" font-weight="700" fill="#9C9890" letter-spacing="1">AI PARSER</text>
+          <rect x="18" y="128" width="360" height="56" rx="9" fill="#F5F3FF" stroke="#6D28D9" stroke-width="1.5"/>
+          <text x="198" y="150" text-anchor="middle" font-size="12" font-weight="700" fill="#6D28D9">AI 자동 파서</text>
+          <text x="40" y="170" font-size="10" fill="#6B6860">언어 감지</text><text x="118" y="170" font-size="10" fill="#6B6860">컬럼 매핑</text><text x="200" y="170" font-size="10" fill="#6B6860">카테고리 분류</text><text x="290" y="170" font-size="10" fill="#6B6860">중복 감지</text>
+          <line x1="198" y1="184" x2="198" y2="226" stroke="#6D28D9" stroke-width="1.5" stroke-dasharray="4 2" marker-end="url(#arr)"/>
+          <text x="20" y="220" font-size="9" font-weight="700" fill="#9C9890" letter-spacing="1">MASTER DB</text>
+          <rect x="18" y="232" width="360" height="56" rx="9" fill="#F0FDF4" stroke="#16A34A" stroke-width="1.5"/>
+          <text x="198" y="254" text-anchor="middle" font-size="12" font-weight="700" fill="#16A34A">통합 Master DB</text>
+          <text x="40" y="274" font-size="10" fill="#6B6860">연락처 247명</text><text x="135" y="274" font-size="10" fill="#6B6860">기업 62개</text><text x="215" y="274" font-size="10" fill="#6B6860">이력 로그</text><text x="295" y="274" font-size="10" fill="#6B6860">병합 관리</text>
+          <line x1="120" y1="288" x2="68" y2="332" stroke="#C8C4BC" stroke-width="1.2" marker-end="url(#arr)"/>
+          <line x1="198" y1="288" x2="198" y2="332" stroke="#C8C4BC" stroke-width="1.2" marker-end="url(#arr)"/>
+          <line x1="276" y1="288" x2="330" y2="332" stroke="#C8C4BC" stroke-width="1.2" marker-end="url(#arr)"/>
+          <text x="20" y="326" font-size="9" font-weight="700" fill="#9C9890" letter-spacing="1">OUTPUTS</text>
+          <rect x="18" y="338" width="108" height="48" rx="7" fill="#FFFBEB" stroke="#C97B0A" stroke-width="1"/><text x="72" y="357" text-anchor="middle" font-size="11" font-weight="600" fill="#C97B0A">Company DB</text><text x="72" y="373" text-anchor="middle" font-size="10" fill="#6B6860">행사 이력 타임라인</text>
+          <rect x="142" y="338" width="108" height="48" rx="7" fill="#EEF2FF" stroke="#3B5BDB" stroke-width="1"/><text x="196" y="357" text-anchor="middle" font-size="11" font-weight="600" fill="#3B5BDB">Contact CRM</text><text x="196" y="373" text-anchor="middle" font-size="10" fill="#6B6860">파이프라인 관리</text>
+          <rect x="266" y="338" width="112" height="48" rx="7" fill="#F0FDF4" stroke="#16A34A" stroke-width="1"/><text x="322" y="357" text-anchor="middle" font-size="11" font-weight="600" fill="#16A34A">구글시트 동기화</text><text x="322" y="373" text-anchor="middle" font-size="10" fill="#6B6860">실시간 업데이트</text>
+          <text x="514" y="22" font-size="9" font-weight="700" fill="#9C9890" letter-spacing="1">GOOGLE SHEETS</text>
+          <rect x="504" y="32" width="260" height="344" rx="11" fill="#FAFAF8" stroke="#E4E1DB" stroke-width="1.5" stroke-dasharray="6 3"/>
+          <text x="634" y="54" text-anchor="middle" font-size="12" font-weight="700" fill="#3C3A36">구글시트 연동</text>
+          <rect x="522" y="66" width="224" height="34" rx="6" fill="#F0FDF4" stroke="#16A34A" stroke-width="1"/><text x="634" y="81" text-anchor="middle" font-size="11" font-weight="600" fill="#16A34A">Master DB 시트</text><text x="634" y="96" text-anchor="middle" font-size="10" fill="#6B6860">전체 연락처 · 자동 동기화</text>
+          <rect x="522" y="110" width="224" height="34" rx="6" fill="#EEF2FF" stroke="#3B5BDB" stroke-width="1"/><text x="634" y="125" text-anchor="middle" font-size="11" font-weight="600" fill="#3B5BDB">Companies 시트</text><text x="634" y="140" text-anchor="middle" font-size="10" fill="#6B6860">기업 정규화 · 지부 관계</text>
+          <rect x="522" y="154" width="224" height="34" rx="6" fill="#FFFBEB" stroke="#C97B0A" stroke-width="1"/><text x="634" y="169" text-anchor="middle" font-size="11" font-weight="600" fill="#C97B0A">CRM Pipeline 시트</text><text x="634" y="184" text-anchor="middle" font-size="10" fill="#6B6860">타겟 기업 · 컨택 상태</text>
+          <rect x="522" y="198" width="224" height="34" rx="6" fill="#F5F3FF" stroke="#6D28D9" stroke-width="1"/><text x="634" y="213" text-anchor="middle" font-size="11" font-weight="600" fill="#6D28D9">Upload Log 시트</text><text x="634" y="228" text-anchor="middle" font-size="10" fill="#6B6860">수집 출처 · 날짜 자동 태깅</text>
+          <rect x="522" y="242" width="224" height="34" rx="6" fill="#F0FDFA" stroke="#0F766E" stroke-width="1"/><text x="634" y="257" text-anchor="middle" font-size="11" font-weight="600" fill="#0F766E">Event History 시트</text><text x="634" y="272" text-anchor="middle" font-size="10" fill="#6B6860">행사 참여 이력 · 타임라인</text>
+          <line x1="382" y1="260" x2="500" y2="260" stroke="#3B5BDB" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#arr)"/>
+          <text x="440" y="254" text-anchor="middle" font-size="9" fill="#6B6860">양방향 동기화</text>
+          <rect x="522" y="290" width="224" height="48" rx="6" fill="#FEF2F2" stroke="#DC2626" stroke-width="1" stroke-dasharray="4 2"/><text x="634" y="310" text-anchor="middle" font-size="11" font-weight="600" fill="#DC2626">Apps Script</text><text x="634" y="328" text-anchor="middle" font-size="10" fill="#6B6860">자동화 트리거 · 이메일 알림</text>
+        </svg>
+      </div>
+      <div class="aleg">
+        <div class="ali"><div class="ald" style="background:#EEF2FF;border:1px solid #3B5BDB"></div>입력 소스</div>
+        <div class="ali"><div class="ald" style="background:#F5F3FF;border:1px solid #6D28D9"></div>AI 처리</div>
+        <div class="ali"><div class="ald" style="background:#F0FDF4;border:1px solid #16A34A"></div>Master DB</div>
+        <div class="ali"><div class="ald" style="background:#FFFBEB;border:1px solid #C97B0A"></div>출력/뷰</div>
+        <div class="ali"><div class="ald" style="background:transparent;border:1px dashed #9C9890"></div>구글시트 컨테이너</div>
+      </div>
+      <div class="asteps">
+        <div class="astep"><div class="snum">1</div><div class="sttl">파일 업로드</div><div class="sdsc">Excel, CSV, 구글시트 링크, 명함 사진 등 다양한 형태로 데이터 입력</div></div>
+        <div class="astep"><div class="snum">2</div><div class="sttl">AI 자동 파싱</div><div class="sdsc">언어 감지 → 컬럼 매핑 → 카테고리 분류 → 중복 감지 자동 수행</div></div>
+        <div class="astep"><div class="snum">3</div><div class="sttl">병합 검토</div><div class="sdsc">유사 기업명 통합 제안 (Samsung ↔ 삼성전자). 담당자 승인/거절</div></div>
+        <div class="astep"><div class="snum">4</div><div class="sttl">Master DB 저장</div><div class="sdsc">통합 DB에 추가. 출처·날짜 자동 태깅. 구글시트와 실시간 동기화</div></div>
+        <div class="astep"><div class="snum">5</div><div class="sttl">CRM 활용</div><div class="sdsc">Company DB 타임라인 조회 및 Contact CRM 파이프라인으로 컨택 관리</div></div>
+        <div class="astep"><div class="snum">6</div><div class="sttl">Apps Script</div><div class="sdsc">컨택 상태 변경 시 이메일 알림, 주간 리포트 자동 발송</div></div>
+      </div>
+    </div>
+    <div id="av-sheet" style="display:none">
+      <div class="at">구글시트 연동 구조 상세</div>
+      <div class="ad2">각 시트의 역할과 컬럼 구조, Apps Script 연동 방법</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">
+        <div class="astep" style="padding:13px 15px"><div style="display:flex;align-items:center;gap:7px;margin-bottom:9px"><div style="width:9px;height:9px;border-radius:2px;background:#16A34A;flex-shrink:0"></div><div class="sttl" style="margin:0">Master DB 시트</div></div><div class="sdsc" style="margin-bottom:7px">전체 연락처 통합 관리. AI 파서가 직접 쓰는 시트.</div><div style="font-size:10px;color:var(--i3);line-height:1.9;font-family:monospace;background:var(--i8);padding:7px;border-radius:5px">id | name | nameEn | org | orgEn<br>title | cat | lang | source | date<br>status | event | note | addedBy</div></div>
+        <div class="astep" style="padding:13px 15px"><div style="display:flex;align-items:center;gap:7px;margin-bottom:9px"><div style="width:9px;height:9px;border-radius:2px;background:#3B5BDB;flex-shrink:0"></div><div class="sttl" style="margin:0">Companies 시트</div></div><div class="sdsc" style="margin-bottom:7px">기업 정규화. 본사/지부 관계, 통합 기업명 관리.</div><div style="font-size:10px;color:var(--i3);line-height:1.9;font-family:monospace;background:var(--i8);padding:7px;border-radius:5px">key | name | nameEn | sector<br>hq | mainBranch | branches[]<br>contactCount | eventCount</div></div>
+        <div class="astep" style="padding:13px 15px"><div style="display:flex;align-items:center;gap:7px;margin-bottom:9px"><div style="width:9px;height:9px;border-radius:2px;background:#C97B0A;flex-shrink:0"></div><div class="sttl" style="margin:0">CRM Pipeline 시트</div></div><div class="sdsc" style="margin-bottom:7px">타겟 기업 컨택 현황. CRM 페이지와 연동.</div><div style="font-size:10px;color:var(--i3);line-height:1.9;font-family:monospace;background:var(--i8);padding:7px;border-radius:5px">id | name | event | role<br>status | priority | assignee<br>lastActivity | currentStage</div></div>
+        <div class="astep" style="padding:13px 15px"><div style="display:flex;align-items:center;gap:7px;margin-bottom:9px"><div style="width:9px;height:9px;border-radius:2px;background:#6D28D9;flex-shrink:0"></div><div class="sttl" style="margin:0">Upload Log 시트</div></div><div class="sdsc" style="margin-bottom:7px">모든 업로드 이력 자동 기록. 수집 출처 추적.</div><div style="font-size:10px;color:var(--i3);line-height:1.9;font-family:monospace;background:var(--i8);padding:7px;border-radius:5px">date | source | file | cat<br>added | dup | merged | by<br>notes</div></div>
+      </div>
+      <div class="astep" style="margin-top:11px;padding:13px 15px">
+        <div class="sttl">Apps Script 자동화 예시</div>
+        <div style="margin-top:7px;background:var(--i0);border-radius:var(--r);padding:13px;font-family:monospace;font-size:11px;color:#A8F5A0;line-height:1.9;overflow-x:auto">
+          <span style="color:#74C0FC">// 컨택 상태 변경 시 자동 알림</span><br>
+          <span style="color:#FFD166">function</span> onStatusChange(row, newStatus) {<br>
+          &nbsp;&nbsp;<span style="color:#FFD166">if</span> (newStatus === <span style="color:#A8F5A0">'확정'</span>) {<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;MailApp.sendEmail({<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;to: <span style="color:#A8F5A0">'manager@company.com'</span>,<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;subject: <span style="color:#A8F5A0">`[CRM] ${row.name} 확정`</span>,<br>
+          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;body: <span style="color:#A8F5A0">`담당자: ${row.assignee}`</span><br>
+          &nbsp;&nbsp;&nbsp;&nbsp;});<br>
+          &nbsp;&nbsp;}<br>
+          }
+        </div>
+      </div>
+    </div>
+    <div id="av-flow" style="display:none">
+      <div class="at">업무 플로우 — 행사 전 컨택 관리</div>
+      <div class="ad2">행사 6개월 전부터 당일까지의 팀 업무 흐름</div>
+      <div style="display:flex;flex-direction:column">
+        <div style="display:flex;align-items:stretch"><div style="width:96px;flex-shrink:0;padding:11px 12px;background:var(--ad);border:1px solid var(--i6);border-radius:8px 0 0 0;font-size:10px;font-weight:700;color:var(--a);display:flex;align-items:center">D-6개월</div><div style="flex:1;padding:11px 14px;background:var(--W);border:1px solid var(--i6);border-left:none;border-radius:0 8px 0 0"><div style="font-size:12px;font-weight:700;color:var(--i1);margin-bottom:3px">타겟 기업 발굴</div><div style="font-size:11px;color:var(--i3)">이전 행사 참가자 DB 분석 → 신규 기업 리서치 → Master DB 업로드 → CRM 파이프라인 등록</div></div></div>
+        <div style="display:flex;align-items:stretch"><div style="width:96px;flex-shrink:0;padding:11px 12px;background:var(--i8);border:1px solid var(--i6);border-top:none;font-size:10px;font-weight:700;color:var(--i2);display:flex;align-items:center">D-4개월</div><div style="flex:1;padding:11px 14px;background:var(--W);border:1px solid var(--i6);border-left:none;border-top:none"><div style="font-size:12px;font-weight:700;color:var(--i1);margin-bottom:3px">초기 컨택</div><div style="font-size:11px;color:var(--i3)">이메일/전화 첫 컨택 → 컨택 이력 CRM 기록 → 상태 '컨택중' 업데이트 → 담당자 배정</div></div></div>
+        <div style="display:flex;align-items:stretch"><div style="width:96px;flex-shrink:0;padding:11px 12px;background:var(--i8);border:1px solid var(--i6);border-top:none;font-size:10px;font-weight:700;color:var(--am);display:flex;align-items:center">D-2개월</div><div style="flex:1;padding:11px 14px;background:var(--W);border:1px solid var(--i6);border-left:none;border-top:none"><div style="font-size:12px;font-weight:700;color:var(--i1);margin-bottom:3px">제안서 발송 & 협의</div><div style="font-size:11px;color:var(--i3)">스폰서십/참여 패키지 제안 → 미팅 진행 → 조건 협의 → '협의중' 상태 → 계약서 검토</div></div></div>
+        <div style="display:flex;align-items:stretch"><div style="width:96px;flex-shrink:0;padding:11px 12px;background:var(--gb);border:1px solid var(--i6);border-top:none;font-size:10px;font-weight:700;color:var(--g);display:flex;align-items:center">D-1개월</div><div style="flex:1;padding:11px 14px;background:var(--W);border:1px solid var(--i6);border-left:none;border-top:none"><div style="font-size:12px;font-weight:700;color:var(--i1);margin-bottom:3px">계약 확정</div><div style="font-size:11px;color:var(--i3)">계약 체결 → '확정' 상태 → 구글시트 자동 업데이트 → 운영팀 인수인계</div></div></div>
+        <div style="display:flex;align-items:stretch"><div style="width:96px;flex-shrink:0;padding:11px 12px;background:var(--i8);border:1px solid var(--i6);border-top:none;border-radius:0 0 0 8px;font-size:10px;font-weight:700;color:var(--i2);display:flex;align-items:center">행사 후</div><div style="flex:1;padding:11px 14px;background:var(--W);border:1px solid var(--i6);border-left:none;border-top:none;border-radius:0 0 8px 0"><div style="font-size:12px;font-weight:700;color:var(--i1);margin-bottom:3px">사후 관리</div><div style="font-size:11px;color:var(--i3)">행사 참여 이력 → Company DB 타임라인 업데이트 → 다음 행사 타겟 DB 구축 시작</div></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ④ Company DB -->
+<div class="page" id="page-co">
+<div class="mob-header" id="mob-h-co">
+  <button class="mob-menu-btn" onclick="toggleSb()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+  <div class="mob-title">기업 DB</div>
+  <button class="mob-action-btn" onclick="document.getElementById('co-si').focus()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></button>
+</div>
+  <div class="tb">
+    <div class="tb-t">Company DB <span class="tb-s">기업별 행사 참여 이력</span></div>
+    <div class="srch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" placeholder="기업명, 섹터 검색…" oninput="searchCoM(this.value)"></div>
+  </div>
+  <div class="dbm">
+    <div class="co-dash" id="co-dash" style="flex:1;overflow-y:auto;padding:18px 22px"></div>
+    <div class="cdt" id="cdt" style="display:none">
+      <div class="cdh" id="cdh"></div>
+      <div class="cotabs" id="cotabs"></div>
+      <div class="cotb" id="cotb"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ⑤ CRM -->
+<div class="page" id="page-crm">
+<div class="mob-header" id="mob-h-audit" style="display:none">
+  <button class="mob-menu-btn" onclick="toggleSb()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+  <div class="mob-title">활동 로그</div>
+  <button class="mob-action-btn" onclick="exportAuditCSV()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+</div>
+<div class="mob-header" id="mob-h-crm">
+  <button class="mob-menu-btn" onclick="toggleSb()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+  <div class="mob-title" id="mob-crm-ttl">파이프라인</div>
+  <button class="mob-action-btn primary" onclick="openModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
+</div>
+  <div class="tb">
+    <div class="tb-t" id="crm-ttl">파이프라인 <span class="tb-s">행사 타겟 기업 컨택 현황</span></div>
+    <div class="srch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" placeholder="기업명 검색…" oninput="renderCrm()" id="crm-q"></div>
+    <button class="btn bp bs" onclick="openModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>타겟 추가</button>
+  </div>
+  <div class="view on" id="v-pipeline"><div class="kanban" id="kanban"></div></div>
+  <div class="view" id="v-table">
+    <div class="tbar"><div class="seg"><button class="seg-b on" onclick="tblF('전체',this)">전체</button><button class="seg-b" onclick="tblF('미접촉',this)">미접촉</button><button class="seg-b" onclick="tblF('컨택중',this)">컨택중</button><button class="seg-b" onclick="tblF('협의중',this)">협의중</button><button class="seg-b" onclick="tblF('확정',this)">확정</button></div><span class="tct" id="tct"></span></div>
+    <div class="tw"><table><thead><tr><th>기업</th><th>행사</th><th>유형</th><th>담당</th><th>컨택 상태</th><th>우선순위</th><th>최근 활동</th><th></th></tr></thead><tbody id="crm-tbody"></tbody></table></div>
+  </div>
+</div>
+
+<nav class="mob-nav" id="mob-nav">
+  <button class="mob-nav-btn on" id="mn-mdb" onclick="switchApp('mdb',null);updateMobNav('mdb')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+    DB
+  </button>
+  <button class="mob-nav-btn" id="mn-up" onclick="switchApp('up',null);updateMobNav('up')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+    업로드
+  </button>
+  <button class="mob-nav-btn" id="mn-arch" onclick="switchApp('arch',null);updateMobNav('arch')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+    구조도
+  </button>
+  <button class="mob-nav-btn" id="mn-co" onclick="switchApp('co',null);updateMobNav('co')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
+    기업
+  </button>
+  <button class="mob-nav-btn" id="mn-crm" onclick="switchApp('crm',null);updateMobNav('crm')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="5" height="18"/><rect x="10" y="3" width="5" height="18"/><rect x="17" y="3" width="4" height="18"/></svg>
+    CRM
+  </button>
+  <button class="mob-nav-btn" id="mn-audit" onclick="switchApp('audit',null);updateMobNav('audit')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>
+    로그
+  </button>
+</nav>
+
+<!-- ⑥ AUDIT LOG PAGE -->
+<div class="page" id="page-audit">
+  <div class="tb">
+    <div class="tb-t">활동 로그 <span class="tb-s">팀원 액션 추적</span></div>
+    <div class="srch">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input type="text" placeholder="이름, 기업, 내용 검색…" oninput="renderAudit()" id="audit-q">
+    </div>
+    <button class="btn bs" onclick="exportAuditCSV()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      내보내기
+    </button>
+  </div>
+  <div class="audit-filters">
+    <div class="seg">
+      <button class="seg-b on" id="af-all"    onclick="filterAudit('all',this)">전체</button>
+      <button class="seg-b" id="af-status" onclick="filterAudit('status',this)">상태 변경</button>
+      <button class="seg-b" id="af-log"    onclick="filterAudit('log',this)">컨택 기록</button>
+      <button class="seg-b" id="af-add"    onclick="filterAudit('add',this)">타겟 추가</button>
+      <button class="seg-b" id="af-stage"  onclick="filterAudit('stage',this)">단계 변경</button>
+      <button class="seg-b" id="af-login"  onclick="filterAudit('login',this)">로그인</button>
+    </div>
+    <select id="audit-user-sel" onchange="renderAudit()" style="font-size:12px;padding:6px 10px;border:1px solid var(--i6);border-radius:var(--r);background:var(--i8);color:var(--i1);outline:none">
+      <option value="">전체 팀원</option>
+    </select>
+    <span class="audit-ct" id="audit-ct"></span>
+  </div>
+  <div class="audit-list" id="audit-list"></div>
+</div>
+
+</div><!-- /.mn -->
+</div><!-- /.app -->
+
+
+<!-- ══════════ 연락처 상세/편집 드로어 ══════════ -->
+<div class="bd" id="con-bd" onclick="closeContactDr()"></div>
+<div class="dr" id="con-dr">
+  <div class="drh">
+    <div class="drav" id="con-dr-av">--</div>
+    <div style="flex:1">
+      <div class="drnm" id="con-dr-name">이름</div>
+      <div class="drmt" id="con-dr-meta"></div>
+    </div>
+    <button class="drcls" onclick="closeContactDr()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+  <div class="drbd" id="con-dr-body" style="padding:18px"></div>
+</div>
+
+<!-- DRAWER -->
+<div class="bd" id="bd" onclick="closeDr()"></div>
+<div class="dr" id="dr">
+  <div id="drh" class="drh"></div>
+  <div id="drtabs" class="drtabs"></div>
+  <div id="drbd" class="drbd"></div>
+</div>
+
+<!-- MODAL -->
+<div class="mw" id="mw">
+  <div class="modal">
+    <div class="mh"><div class="mt2">타겟 기업 추가</div><button class="mc" onclick="closeModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button></div>
+    <div class="mb">
+      <div class="fg"><label class="fl">DB에서 기업 검색</label><input class="fi" type="text" placeholder="기업명 입력…" oninput="mSrch(this.value)" id="m-si"><div class="dls" id="m-dl"></div></div>
+      <div class="fgr">
+        <div class="fg"><label class="fl">타겟 행사</label><select class="fi" id="m-ev"><option>KIC Silicon Valley 2025</option><option>CES 2026</option><option>KIC New York 2025</option><option>GHC 2025</option></select></div>
+        <div class="fg"><label class="fl">참여 유형</label><select class="fi" id="m-role"><option>참가자</option><option>VIP</option><option>연사</option><option>BD</option><option>바이어</option><option>전시참가기업</option><option>스폰서</option><option>비즈니스파트너링</option><option>주최사</option></select></div>
+      </div>
+      <div class="fgr">
+        <div class="fg"><label class="fl">우선순위</label><select class="fi" id="m-pri"><option value="high">높음</option><option value="mid" selected>중간</option><option value="low">낮음</option></select></div>
+        <div class="fg"><label class="fl">담당자</label><select class="fi" id="m-who"><option>박지영</option><option>김태훈</option><option>이수진</option><option>최민서</option></select></div>
+      </div>
+      <div class="fg"><label class="fl">메모</label><textarea class="fi" rows="3" placeholder="초기 접근 전략, 특이사항…" id="m-note"></textarea></div>
+    </div>
+    <div class="mf2"><button class="btn bs" onclick="closeModal()">취소</button><button class="btn bp bs" onclick="addTarget()">추가하기</button></div>
+  </div>
+</div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

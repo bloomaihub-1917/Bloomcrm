@@ -1,0 +1,17 @@
+/* ══════════════════════════════════════════
+   DESIGN TOKENS
+   Twenty(twenty-ui/theme/constants) 벤치마킹:
+   색상/반경/그림자를 :root 변수 한 곳에서만 정의하고,
+   layout.css / components.css는 이 변수만 참조한다.
+   (기존 contact_crm.html 8~17행에서 이전, 값 변경 없음)
+══════════════════════════════════════════ */
+:root{
+  --i0:#0F0E0C;--i1:#1E1C19;--i2:#3C3A36;--i3:#6B6860;
+  --i4:#9C9890;--i5:#C8C4BC;--i6:#E4E1DB;--i7:#F0EDE8;
+  --i8:#F7F5F2;--i9:#FAFAF9;--W:#FFFFFF;
+  --a:#3B5BDB;--ad:#EEF2FF;--ak:#2C44B5;
+  --g:#16A34A;--gb:#F0FDF4;--am:#C97B0A;--ab:#FFFBEB;
+  --re:#DC2626;--rb:#FEF2F2;--pu:#6D28D9;--pb:#F5F3FF;--te:#0F766E;--tb:#F0FDFA;
+  --r:8px;--rs:5px;--rl:11px;--rx:16px;
+  --sh:0 1px 3px rgba(0,0,0,.07);--shl:0 8px 24px rgba(0,0,0,.10),0 1px 4px rgba(0,0,0,.06);
+}
