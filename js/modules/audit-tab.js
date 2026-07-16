@@ -77,10 +77,11 @@ export function trackAction(type, action, target, detail, extra){
 const TAG_MAP = {
   status: '<span class="audit-tag at-status">상태 변경</span>',
   log:    '<span class="audit-tag at-log">컨택 기록</span>',
-  add:    '<span class="audit-tag at-add">타겟 추가</span>',
+  add:    '<span class="audit-tag at-add">추가</span>',
   stage:  '<span class="audit-tag at-stage">단계 변경</span>',
   login:  '<span class="audit-tag at-login">로그인</span>',
   upload: '<span class="audit-tag at-upload">파일 업로드</span>',
+  edit:   '<span class="audit-tag at-status">정보 수정</span>',
 };
 
 /* (원본 5214~5229행) */
@@ -129,7 +130,7 @@ export function renderAudit(){
       <div class="audit-av" style="background:${e.color}">${escapeHtml(userInitials(e.name))}</div>
       <div class="audit-main">
         <div class="audit-who">${escapeHtml(e.name)}<span class="audit-email">${escapeHtml(e.email)}</span></div>
-        <div class="audit-what">${escapeHtml(e.detail)}</div>
+        <div class="audit-what">${escapeHtml(String(e.detail||'').replace(/<[^>]+>/g,''))}</div>
         <div class="audit-meta">
           ${TAG_MAP[e.type]||''}
           <span class="audit-time">${timeStr}</span>
@@ -191,7 +192,7 @@ export function setAuditUser(email){
 
 /* (원본 5315~5325행) */
 export function updateAuditBadges(){
-  const types = ['all','status','log','add','stage','login'];
+  const types = ['all','status','log','add','stage','login','edit','upload'];
   types.forEach(t=>{
     const el = document.getElementById('act-'+t);
     if(!el) return;

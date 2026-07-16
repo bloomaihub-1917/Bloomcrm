@@ -28,7 +28,7 @@ const SHEET_HEADERS = {
   contacts:      ['id','nameKo','nameEn','orgKo','orgEn','titleKo','titleEn','deptKo','deptEn','country','cat','lang','source','date','status','email1','email2','phone1','phone2','beat','products'],
   participations:['id','ev_id','행사명','cid','소속','성명','직함','type','note','matched'],
   events:        ['id','name','short','date_start','date_end','location','color'],
-  crm_targets:   ['id','name','nameEn','sector','hq','event','role','status','priority','assignee','currentStage','lastActivity'],
+  crm_targets:   ['id','name','nameEn','sector','hq','event','role','status','priority','assignee','currentStage','lastActivity','log'],
   activity_log:  ['id','ts','email','name','type','action','target','detail'],
   settings:       ['key','value'],
   sectors:        ['id','name','parent'],
@@ -459,6 +459,20 @@ function doPostInner(e) {
   applyTextFormatRow(sh, headers, newRowNum, row.length);
   sh.getRange(newRowNum, 1, 1, row.length).setValues([row.map(v => v==null?'':String(v))]);
   return out({ ok: true, action: 'appended' });
+}
+
+// 기존 crm_targets 시트에 log 컬럼 헤더 추가 (1회 수동 실행)
+// — CRM 컨택 기록을 시트에 저장할 수 있도록 스키마 확장.
+//   새로 만드는 시트는 SHEET_HEADERS로 자동 생성되지만 기존 시트는
+//   이 함수를 Apps Script 편집기에서 한 번 실행해서 헤더를 추가한다.
+function addCrmLogColumn() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName('crm_targets');
+  if (!sh) { Logger.log('crm_targets 시트 없음'); return; }
+  const headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  if (headers.indexOf('log') >= 0) { Logger.log('log 컬럼 이미 존재'); return; }
+  sh.getRange(1, headers.length + 1).setValue('log');
+  Logger.log('log 컬럼 추가 완료 (컬럼 ' + (headers.length + 1) + ')');
 }
 
 // 기존 시트 일괄 정리 (1회 수동 실행)

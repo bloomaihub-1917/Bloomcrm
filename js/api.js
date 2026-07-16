@@ -115,6 +115,61 @@ export function showSheetsWarning(show){
 }
 
 /* ══════════════════════════════════════════
+   1.5) postToSheet — 모든 쓰기 요청의 공통 래퍼 (신규)
+
+   기존 문제: 쓰기 함수들이 fetch만 하고 응답 본문을 확인하지 않았다.
+   Apps Script는 오류도 HTTP 200 + {error:...} JSON으로 반환하므로
+   저장 실패가 조용히 삼켜져 "화면에는 있는데 시트에는 없는" 데이터
+   불일치가 생겼다. 이 래퍼는:
+   - 응답 JSON의 ok/error를 검사해 실패를 실패로 처리
+   - 실패 시 사용자에게 토스트로 알림 (silent 옵션으로 억제 가능)
+   - 반환값: 성공 시 서버 JSON({ok:true,...}), 실패 시 {ok:false, error}
+   - 테스트 모드(GS_URL 없음)에서는 {ok:true, offline:true} — 로컬 전용
+     동작이 정상이므로 실패로 취급하지 않는다.
+══════════════════════════════════════════ */
+let _toastTimer = null;
+export function showSaveErrorToast(msg){
+  let el = document.getElementById('save-error-toast');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'save-error-toast';
+    el.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);'
+      + 'background:#DC2626;color:#fff;padding:10px 18px;border-radius:8px;'
+      + 'font-size:13px;font-weight:600;z-index:99999;box-shadow:0 4px 16px rgba(0,0,0,.25);'
+      + 'max-width:90vw;text-align:center';
+    document.body.appendChild(el);
+  }
+  el.textContent = msg;
+  el.style.display = 'block';
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { el.style.display = 'none'; }, 6000);
+}
+
+export async function postToSheet(payload, label, { silent = false } = {}){
+  if(!GS_URL || !currentUser) return { ok: true, offline: true };
+  try {
+    const res  = await fetch(GS_URL, {
+      method: 'POST',
+      body: JSON.stringify({ email: currentUser.email, ...payload }),
+    });
+    let json = null;
+    try { json = JSON.parse(await res.text()); } catch(e){}
+    if(!res.ok || !json || json.error || json.ok === false){
+      const errMsg = (json && (json.error || json.action)) || ('HTTP ' + res.status);
+      console.error('[CRM] 저장 실패:', label, errMsg);
+      if(!silent) showSaveErrorToast(`저장 실패 (${label}): ${errMsg} — 새로고침 전 다시 시도하세요`);
+      return { ok: false, error: errMsg };
+    }
+    return json;
+  } catch(e){
+    const errMsg = String(e && e.message || e);
+    console.error('[CRM] 저장 실패(네트워크):', label, errMsg);
+    if(!silent) showSaveErrorToast(`저장 실패 (${label}): 네트워크 오류 — 새로고침 전 다시 시도하세요`);
+    return { ok: false, error: errMsg };
+  }
+}
+
+/* ══════════════════════════════════════════
    2) loadFromSheets — 구글시트에서 전체 데이터 로드 (원본 5364~5603행)
    여러 시트(contacts/participations/events/companies/sectors/part_types/
    crm_targets/activity_log)를 불러와 state.js의 배열/객체를 채운다.
@@ -160,14 +215,29 @@ export async function loadFromSheets(hooks = {}){
       safeFetch(GS_URL + '?sheet=part_types&email='     + email, 'part_types'),
     ]);
 
+    // ── 실패 감지 (신규) ──
+    // safeFetch는 실패 시 예외 대신 null을 반환하므로, 여기서 null 개수를
+    // 세지 않으면 "전 시트 로드 실패"도 성공으로 표시되는 버그가 있었다.
+    const _results = [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, companiesData, partTypesData];
+    const _failed  = _results.filter(r => r === null).length;
+    if(_failed === _results.length){
+      // 전부 실패 — 연결 안 됨으로 처리하고 기존(stale) 화면 유지
+      console.warn('[CRM] 모든 시트 로드 실패 — 연결 실패 처리');
+      setSheetsConnected(false);
+      showSheetsWarning(true);
+      try { hooks.buildMDBEvList?.(); hooks.renderMDB?.(); } catch(e){}
+      return;
+    }
     setSheetsConnected(true);
-    showSheetsWarning(false);
-    // 마지막 동기화 시각 업데이트
-    const syncEl = document.getElementById('last-sync-time');
-    if(syncEl){
-      const now = new Date();
-      syncEl.textContent = now.toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit'})
-        + ' ' + now.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+    showSheetsWarning(_failed > 0); // 일부 실패 시 경고 배너 유지
+    // 마지막 동기화 시각 업데이트 (전체 성공 시에만 — 부분 실패를 최신 동기화로 오인하지 않도록)
+    if(_failed === 0){
+      const syncEl = document.getElementById('last-sync-time');
+      if(syncEl){
+        const now = new Date();
+        syncEl.textContent = now.toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit'})
+          + ' ' + now.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+      }
     }
 
     // contacts 업데이트 (최신 필드 구조 반영) — 시트가 비어있으면 화면도 빈 상태 유지
@@ -210,9 +280,6 @@ export async function loadFromSheets(hooks = {}){
         };
       }));
       console.log('[CRM] contacts loaded & cleaned:', contacts.length);
-      // 동기화 시각 업데이트
-      const _syncEl = document.getElementById('last-sync-time');
-      if(_syncEl) _syncEl.textContent = new Date().toLocaleTimeString('ko-KR');
 
     // ── sectors 시트 → COMPANY_SECTORS (스프레드시트에서 직접 행 추가/삭제 가능) ──
     if(sectorsData && Array.isArray(sectorsData) && sectorsData.length){
@@ -291,34 +358,56 @@ export async function loadFromSheets(hooks = {}){
 
     // targets 업데이트
     if(targetsData && Array.isArray(targetsData)){
-      targets.splice(0, targets.length, ...targetsData.map(r=>({
-        id:+r.id, name:r.name, nameEn:r.nameEn||'',
-        sector:r.sector||'', hq:r.hq||'',
-        event:r.event||'', role:r.role||'스폰서',
-        status:r.status||'미접촉', priority:r.priority||'mid',
-        assignee:r.assignee||'', currentStage:+r.currentStage||1,
-        lastActivity:r.lastActivity||'',
-        branches:[r.name], mainBranch:r.name,
-        contacts:[], eventHistory:[], log:[],
-      })));
+      targets.splice(0, targets.length, ...targetsData.map(r=>{
+        // log 컬럼: 컨택 기록 JSON (없거나 파싱 실패 시 빈 배열 — 구버전 행 호환)
+        let logArr = [];
+        try {
+          const parsed = JSON.parse(r.log || '[]');
+          if(Array.isArray(parsed)) logArr = parsed;
+        } catch(e){}
+        return {
+          id:+r.id, name:r.name, nameEn:r.nameEn||'',
+          sector:r.sector||'', hq:r.hq||'',
+          event:r.event||'', role:r.role||'스폰서',
+          status:r.status||'미접촉', priority:r.priority||'mid',
+          assignee:r.assignee||'', currentStage:+r.currentStage||1,
+          lastActivity:r.lastActivity||'',
+          branches:[r.name], mainBranch:r.name,
+          contacts:[], eventHistory:[], log:logArr,
+        };
+      }));
       console.log('targets loaded:', targets.length);
     }
 
     // activity_log 업데이트
     if(logsData && Array.isArray(logsData)){
-      const remoteLog = logsData.map(r=>({
-        id: Date.now() + Math.random(),
-        ts: r.ts||new Date().toISOString(),
-        email: r.email||'', name: r.name||'',
-        color: userColor(r.email||''),
-        type: r.action==='로그인'?'login':
-              r.action==='상태 변경'?'status':
-              r.action==='컨택 기록 추가'?'log':
-              r.action==='타겟 추가'?'add':
-              r.action==='단계 변경'?'stage':'login',
-        action: r.action||'', target: r.target||'',
-        detail: r.detail||'',
-      }));
+      // 구버전 행 복구: 예전 saveAuditToSheets가 6개 값을 한 칸씩 밀린 순서
+      // [id←ts, ts←name, email←email, name←action, type←target, action←detail]
+      // 로 저장했었다. id 자리에 ISO 시각이 들어있으면 구버전 행으로 보고 되돌린다.
+      const ACTION_TYPE = {
+        '로그인':'login', '로그아웃':'login',
+        '상태 변경':'status', '행사 참여 추가':'status',
+        '컨택 기록 추가':'log',
+        '타겟 추가':'add', '연락처 추가':'add',
+        '단계 변경':'stage',
+        '연락처 정보 수정':'edit', '행사 추가':'edit', '행사 삭제':'edit',
+        '파일 업로드':'upload',
+      };
+      const remoteLog = logsData.map(r=>{
+        const legacy = /^\d{4}-\d{2}-\d{2}T/.test(String(r.id||'')) && !r.detail && !r.target;
+        const row = legacy
+          ? { ts: r.id, email: r.email, name: r.ts, type: '', action: r.name, target: r.type, detail: r.action }
+          : r;
+        return {
+          id: row.id || (Date.now() + Math.random()),
+          ts: row.ts || new Date().toISOString(),
+          email: row.email||'', name: row.name||'',
+          color: userColor(row.email||''),
+          type: row.type || ACTION_TYPE[row.action] || 'login',
+          action: row.action||'', target: row.target||'',
+          detail: row.detail||'',
+        };
+      });
       auditLog.splice(0, auditLog.length, ...remoteLog);
     }
 
@@ -327,9 +416,6 @@ export async function loadFromSheets(hooks = {}){
     try { hooks.buildEvFil?.(); hooks.updBadges?.(); }     catch(e){}
     try { hooks.populateUploadEvDropdown?.(); }            catch(e){}
     try { hooks.buildCoDB?.(); hooks.buildCoCAT?.(); }     catch(e){}
-    // 마지막 동기화 시간 업데이트
-    const syncEl2 = document.getElementById('last-sync-time');
-    if(syncEl2) syncEl2.textContent = new Date().toLocaleTimeString('ko-KR');
     try { hooks.buildAuditUserList?.(); }  catch(e){}
     try { hooks.renderCoList?.(); }        catch(e){}
     if(curApp==='audit') hooks.renderAudit?.();
@@ -348,84 +434,53 @@ export async function loadFromSheets(hooks = {}){
 ══════════════════════════════════════════ */
 
 // 활동 로그 저장 (원본 5343~5359행)
+// ⚠ 수정: 기존에는 6개 값을 시트 헤더(id,ts,email,name,type,action,target,detail
+// — 8컬럼)와 다른 순서로 append해서 모든 로그가 한 칸씩 밀려 저장되는
+// 버그가 있었다. 시트 헤더 순서에 정확히 맞춘다.
 export async function saveAuditToSheets(entry){
-  if(!GS_URL || !currentUser) return;
-  try{
-    await fetch(GS_URL, {
-      method:'POST',
-      body: JSON.stringify({
-        sheet:'activity_log',
-        email: currentUser.email,
-        row:[
-          entry.ts, entry.name, entry.email,
-          entry.action, entry.target,
-          entry.detail.replace(/<[^>]+>/g,'')
-        ]
-      })
-    });
-  }catch(e){ console.warn('Audit log save failed (offline?):', e); }
+  await postToSheet({
+    sheet: 'activity_log',
+    row: [
+      String(entry.id || Date.now()),
+      entry.ts, entry.email, entry.name,
+      entry.type || '', entry.action, entry.target,
+      String(entry.detail || '').replace(/<[^>]+>/g, ''),
+    ],
+  }, '활동 로그', { silent: true }); // 로그 저장 실패는 업무 흐름을 막지 않음(콘솔에만 기록)
 }
 
 // 행사 저장/삭제 (원본 6540~6571행)
 export async function saveEventToSheet(ev){
-  if(!GS_URL || !currentUser) return;
-  try {
-    await fetch(GS_URL, {
-      method: 'POST',
-      body: JSON.stringify({
-        sheet:  'events',
-        email:  currentUser.email,
-        action: 'upsert',
-        row: [ev.key, ev.name, ev.short, ev.date_start||ev.date||'', ev.date_end||'', ev.location||'', ev.color],
-      })
-    });
-    console.log('[CRM] event saved:', ev.key);
-  } catch(e){ console.warn('event 저장 실패:', e); }
+  const r = await postToSheet({
+    sheet:  'events',
+    action: 'upsert',
+    row: [ev.key, ev.name, ev.short, ev.date_start||ev.date||'', ev.date_end||'', ev.location||'', ev.color],
+  }, '행사 저장');
+  if(r.ok) console.log('[CRM] event saved:', ev.key);
+  return r;
 }
 
 export async function deleteEventFromSheet(key){
-  if(!GS_URL || !currentUser) return;
-  try {
-    await fetch(GS_URL, {
-      method: 'POST',
-      body: JSON.stringify({
-        sheet:  'events',
-        email:  currentUser.email,
-        action: 'delete',
-        row:    [key],
-      })
-    });
-    console.log('[CRM] event deleted:', key);
-  } catch(e){ console.warn('event 삭제 실패:', e); }
+  const r = await postToSheet({ sheet: 'events', action: 'delete', row: [key] }, '행사 삭제');
+  if(r.ok) console.log('[CRM] event deleted:', key);
+  return r;
 }
 
 // 섹터 저장/삭제/마이그레이션 (원본 4139~4174행, 6307~6333행)
 export async function upsertSectorRow(sector){
-  if(!GS_URL || !currentUser) return;
-  try{
-    await fetch(GS_URL, {
-      method: 'POST',
-      body: JSON.stringify({
-        sheet:  'sectors',
-        email:  currentUser.email,
-        action: 'upsert',
-        row:    [sector.id, sector.name, sector.parent || ''],
-      }),
-    });
-  } catch(e){ console.warn('섹터 저장 실패:', e); }
+  const r = await postToSheet({
+    sheet:  'sectors',
+    action: 'upsert',
+    row:    [sector.id, sector.name, sector.parent || ''],
+  }, '섹터 저장');
   try { localStorage.setItem('crm_sectors', JSON.stringify(COMPANY_SECTORS)); } catch(e){}
+  return r;
 }
 
 export async function deleteSectorRow(id){
-  if(GS_URL && currentUser){
-    try{
-      await fetch(GS_URL, {
-        method: 'POST',
-        body: JSON.stringify({ sheet: 'sectors', email: currentUser.email, action: 'delete', row: [id] }),
-      });
-    } catch(e){ console.warn('섹터 삭제 실패:', e); }
-  }
+  const r = await postToSheet({ sheet: 'sectors', action: 'delete', row: [id] }, '섹터 삭제');
   try { localStorage.setItem('crm_sectors', JSON.stringify(COMPANY_SECTORS)); } catch(e){}
+  return r;
 }
 
 // 구버전 settings.sectors(JSON blob) → sectors 시트로 1회 마이그레이션
@@ -439,22 +494,15 @@ export async function migrateSectorsToSheet(){
 
 export async function saveSectors(){
   // 구글시트 settings 시트에 저장
-  if(GS_URL && currentUser){
-    try {
-      await fetch(GS_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          sheet:  'settings',
-          email:  currentUser.email,
-          action: 'upsert',
-          row:    ['sectors', JSON.stringify(COMPANY_SECTORS)],  // 객체 배열
-        })
-      });
-      console.log('[CRM] sectors 저장 완료:', COMPANY_SECTORS.length, '개');
-    } catch(e){ console.warn('sectors 저장 실패:', e); }
-  }
+  const r = await postToSheet({
+    sheet:  'settings',
+    action: 'upsert',
+    row:    ['sectors', JSON.stringify(COMPANY_SECTORS)],  // 객체 배열
+  }, '섹터 목록 저장');
+  if(r.ok) console.log('[CRM] sectors 저장 완료:', COMPANY_SECTORS.length, '개');
   // localStorage에도 백업
   try { localStorage.setItem('crm_sectors', JSON.stringify(COMPANY_SECTORS)); } catch(e){}
+  return r;
 }
 
 export function loadSectors(){
@@ -474,23 +522,11 @@ export function loadSectors(){
 
 // 참가 유형(PART_TYPES) 저장/삭제/마이그레이션 (원본 6353~6376행)
 export async function upsertPartTypeRow(t){
-  if(!GS_URL || !currentUser) return;
-  try{
-    await fetch(GS_URL, {
-      method: 'POST',
-      body: JSON.stringify({ sheet: 'part_types', email: currentUser.email, action: 'upsert', row: [t.key, t.label, t.cls] }),
-    });
-  } catch(e){ console.warn('참가 유형 저장 실패:', t.key, e); }
+  return postToSheet({ sheet: 'part_types', action: 'upsert', row: [t.key, t.label, t.cls] }, '참가 유형 저장');
 }
 
 export async function deletePartTypeRow(key){
-  if(!GS_URL || !currentUser) return;
-  try{
-    await fetch(GS_URL, {
-      method: 'POST',
-      body: JSON.stringify({ sheet: 'part_types', email: currentUser.email, action: 'delete', row: [key] }),
-    });
-  } catch(e){ console.warn('참가 유형 삭제 실패:', key, e); }
+  return postToSheet({ sheet: 'part_types', action: 'delete', row: [key] }, '참가 유형 삭제');
 }
 
 export async function migratePartTypesToSheet(){

@@ -31,12 +31,28 @@ import {
   EVENT_LIST,
   CO_DB,
   contacts,
-  currentUser,
-  GS_URL,
 } from '../state.js';
 import { RP, SC, LC, EC, STGS, avB, avF } from '../constants.js';
 import { ab, td, escapeHtml } from '../utils.js';
 import { trackAction } from './audit-tab.js';
+import { postToSheet } from '../api.js';
+
+/* ── 타겟 1건을 crm_targets 시트에 upsert (신규) ──
+   기존에는 chgSt/chgStD/setStg/addLog가 메모리(targets)만 수정하고
+   시트에 저장하지 않아, 새로고침/재동기화 시 변경이 전부 사라지는
+   치명적 버그가 있었다. 모든 타겟 변경은 이 함수를 거쳐 저장한다.
+   실패 시 postToSheet가 토스트로 알리고 {ok:false}를 반환하므로
+   호출부에서 이전 상태로 롤백한다. */
+export async function saveTargetToSheet(t) {
+  return postToSheet({
+    sheet: 'crm_targets',
+    action: 'upsert',
+    row: [t.id, t.name, t.nameEn, t.sector, t.hq,
+      t.event, t.role, t.status, t.priority,
+      t.assignee, t.currentStage, t.lastActivity,
+      JSON.stringify(t.log || [])],
+  }, 'CRM 타겟');
+}
 
 /* ── 우선순위 라벨 (원본은 renderTable2/dCRM 두 곳에 동일 객체가 중복 정의되어
    있었음 — 값 변경 없이 이 파일 안에서 한 번만 정의해서 공유) ── */
@@ -173,13 +189,23 @@ export function renderTable2() {
     </tr>`;
   }).join('');
 }
-export function chgSt(id, val) {
+export async function chgSt(id, val) {
   const i = targets.findIndex(x => x.id === id);
   if (i < 0) return;
+  const prev = { status: targets[i].status, lastActivity: targets[i].lastActivity };
   targets[i].status = val;
   targets[i].lastActivity = td();
   renderCrm();
   updBadges();
+  const r = await saveTargetToSheet(targets[i]);
+  if (!r.ok) { // 저장 실패 → 롤백
+    Object.assign(targets[i], prev);
+    renderCrm();
+    updBadges();
+    return;
+  }
+  trackAction('status', '상태 변경', targets[i].name,
+    `<b>${escapeHtml(targets[i].name)}</b>의 컨택 상태를 <b>${escapeHtml(prev.status)} → ${escapeHtml(val)}</b>로 변경`);
 }
 
 /* ══════════════════════════════════════════
@@ -263,10 +289,15 @@ export function dCon(t) {
    바로 import해서 쓸 수 있으므로 감싸지 않고 함수 안에 직접 반영했다
    (동작은 동일 — 상태/단계 변경 *후* 이전 값과 함께 기록). */
 const STGS_KR = ['타겟 등록','초기 컨택','제안서 발송','미팅','협의 중','계약 완료'];
-export function setStg(id, stage) {
+export async function setStg(id, stage) {
   const i = targets.findIndex(x => x.id === id);
   if (i < 0) return;
-  const prev = STGS_KR[(targets[i].currentStage||1)-1];
+  const prev = {
+    currentStage: targets[i].currentStage,
+    status: targets[i].status,
+    lastActivity: targets[i].lastActivity,
+  };
+  const prevLabel = STGS_KR[(targets[i].currentStage||1)-1];
   targets[i].currentStage = stage;
   targets[i].lastActivity = td();
   const m = { 1: '미접촉', 2: '컨택중', 3: '컨택중', 4: '협의중', 5: '협의중', 6: '확정' };
@@ -274,30 +305,54 @@ export function setStg(id, stage) {
   renderDr();
   renderCrm();
   updBadges();
+  const r = await saveTargetToSheet(targets[i]);
+  if (!r.ok) { // 저장 실패 → 롤백
+    Object.assign(targets[i], prev);
+    renderDr();
+    renderCrm();
+    updBadges();
+    return;
+  }
   trackAction('stage', '단계 변경', targets[i].name,
-    `<b>${escapeHtml(targets[i].name)}</b>의 진행 단계를 <b>${escapeHtml(prev)} → ${escapeHtml(STGS_KR[stage-1])}</b>로 변경`);
+    `<b>${escapeHtml(targets[i].name)}</b>의 진행 단계를 <b>${escapeHtml(prevLabel)} → ${escapeHtml(STGS_KR[stage-1])}</b>로 변경`);
 }
-export function chgStD(id, val) {
+export async function chgStD(id, val) {
   const i = targets.findIndex(x => x.id === id);
   if (i < 0) return;
-  const prev = targets[i].status;
+  const prev = { status: targets[i].status, lastActivity: targets[i].lastActivity };
   targets[i].status = val;
   targets[i].lastActivity = td();
   renderDr();
   renderCrm();
   updBadges();
+  const r = await saveTargetToSheet(targets[i]);
+  if (!r.ok) { // 저장 실패 → 롤백
+    Object.assign(targets[i], prev);
+    renderDr();
+    renderCrm();
+    updBadges();
+    return;
+  }
   trackAction('status', '상태 변경', targets[i].name,
-    `<b>${escapeHtml(targets[i].name)}</b>의 컨택 상태를 <b>${escapeHtml(prev)} → ${escapeHtml(val)}</b>로 변경`);
+    `<b>${escapeHtml(targets[i].name)}</b>의 컨택 상태를 <b>${escapeHtml(prev.status)} → ${escapeHtml(val)}</b>로 변경`);
 }
-export function addLog(id) {
+export async function addLog(id) {
   const i = targets.findIndex(x => x.id === id);
   if (i < 0) return;
   const type = document.getElementById('lt-' + id).value;
   const text = document.getElementById('lx-' + id).value.trim();
   if (!text) return;
+  const prevLastActivity = targets[i].lastActivity;
   targets[i].log.unshift({ type, text, date: td(), color: LC[type] || '#9C9890' });
   targets[i].lastActivity = td();
   renderDr();
+  const r = await saveTargetToSheet(targets[i]);
+  if (!r.ok) { // 저장 실패 → 롤백 (방금 넣은 기록 제거)
+    targets[i].log.shift();
+    targets[i].lastActivity = prevLastActivity;
+    renderDr();
+    return;
+  }
   trackAction('log', '컨택 기록 추가', targets[i].name,
     `<b>${escapeHtml(targets[i].name)}</b>에 <b>${escapeHtml(type)}</b> 기록 추가: "${escapeHtml(text)}"`);
 }
@@ -407,22 +462,17 @@ export async function addTarget() {
   renderCrm();
   updBadges();
 
-  // 구글시트 저장
-  if (GS_URL && currentUser) {
-    try {
-      await fetch(GS_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          sheet: 'crm_targets',
-          email: currentUser.email,
-          row: [t.id, t.name, t.nameEn, t.sector, t.hq,
-            t.event, t.role, t.status, t.priority,
-            t.assignee, t.currentStage, t.lastActivity],
-        }),
-      });
-      trackAction('add', '타겟 추가', t.name, `CRM 타겟 추가: ${t.name} / ${t.event}`);
-    } catch (e) { console.warn('타겟 저장 실패:', e); }
+  // 구글시트 저장 — 실패 시 방금 추가한 타겟을 목록에서 제거(롤백)
+  const r = await saveTargetToSheet(t);
+  if (!r.ok) {
+    const idx = targets.findIndex(x => x.id === t.id);
+    if (idx >= 0) targets.splice(idx, 1);
+    buildEvFil();
+    renderCrm();
+    updBadges();
+    return;
   }
+  trackAction('add', '타겟 추가', t.name, `CRM 타겟 추가: ${t.name} / ${t.event}`);
 }
 
 /* ══════════════════════════════════════════
