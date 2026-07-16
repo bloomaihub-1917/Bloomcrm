@@ -19,6 +19,8 @@
 ## 3. 1회 수동 실행 함수
 Apps Script 편집기에서 함수 선택 → 실행:
 - `addCrmLogColumn` — 기존 crm_targets 시트에 `log` 컬럼 추가 (CRM 컨택 기록 저장용)
+- `addSectorCanonicalColumn` — sectors 시트에 `canonical` 컬럼 추가
+  (행사 스코프 섹터 → 공통 섹터 연결용. 연결 자체는 앱 설정 탭에서 수동)
 - `migrateSectorDomains` — 섹터 "분야(도메인)" 도입:
   sectors 시트에 `domain` 컬럼 추가 + 분야 6종(BIO/IT/VC/AI/기자/MICE) 등록 +
   bio/mice 분야 초기 배정. 실행 후 로그(보기 → 로그)에서 "배정 N건 / 스킵 M건" 확인.

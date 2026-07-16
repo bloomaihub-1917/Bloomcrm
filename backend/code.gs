@@ -31,7 +31,7 @@ const SHEET_HEADERS = {
   crm_targets:   ['id','name','nameEn','sector','hq','event','role','status','priority','assignee','currentStage','lastActivity','log'],
   activity_log:  ['id','ts','email','name','type','action','target','detail'],
   settings:       ['key','value'],
-  sectors:        ['id','name','parent','domain'],
+  sectors:        ['id','name','parent','domain','canonical'],
   companies:      ['key','sector','hq','website','notes','catCode','country','abbr','source','updatedAt'],
   part_types:     ['key','label','cls'],
 };
@@ -550,6 +550,21 @@ function addCrmLogColumn() {
   if (headers.indexOf('log') >= 0) { Logger.log('log 컬럼 이미 존재'); return; }
   sh.getRange(1, headers.length + 1).setValue('log');
   Logger.log('log 컬럼 추가 완료 (컬럼 ' + (headers.length + 1) + ')');
+}
+
+// ══════════════════════════════════════════
+//  섹터 canonical 컬럼 마이그레이션 (1회 수동 실행)
+//  행사 스코프 섹터("행사short · 섹터명")를 공통 섹터에 "연결"하기 위한
+//  참조 컬럼. 연결 자체는 앱의 설정 탭에서 수동으로 한다.
+// ══════════════════════════════════════════
+function addSectorCanonicalColumn() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName('sectors');
+  if (!sh) { Logger.log('sectors 시트 없음'); return; }
+  var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  if (headers.indexOf('canonical') >= 0) { Logger.log('canonical 컬럼 이미 존재'); return; }
+  sh.getRange(1, headers.length + 1).setValue('canonical');
+  Logger.log('canonical 컬럼 추가 완료 (컬럼 ' + (headers.length + 1) + ')');
 }
 
 // ══════════════════════════════════════════

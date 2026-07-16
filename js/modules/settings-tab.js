@@ -53,7 +53,7 @@ import {
 } from '../api.js';
 import { trackAction } from './audit-tab.js';
 
-import { slugifySectorName, escapeHtml, escAttr, countryName, scopedSectorName, parseSectorScope } from '../utils.js';
+import { slugifySectorName, escapeHtml, escAttr, countryName, scopedSectorName, parseSectorScope, sectorRowValues } from '../utils.js';
 import { buildCoDB, buildCoCAT, renderCoDashboard, setCoCat } from './company-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
 import { populateUploadEvDropdown } from './upload-tab.js';
@@ -76,6 +76,9 @@ export function joinSectors(arr){ return arr.join('|'); }
 export function mainSectors(){ return COMPANY_SECTORS.filter(s=>s.parent===null); }
 export function subSectors(parentId){ return COMPANY_SECTORS.filter(s=>s.parent===parentId); }
 
+/* sectorRowValues는 utils.js에 정의 — api.js(upsertSectorRow)와 이 파일이
+   함께 쓰는데 settings-tab을 api.js가 import하면 순환 참조가 되기 때문 */
+
 /* ── 분야(도메인) 헬퍼 (신규) ──
    분야는 섹터 계층과 직교하는 속성: 메인 섹터의 s.domain에만 저장되고
    서브 섹터는 런타임에 부모의 domain을 따라간다. */
@@ -84,9 +87,23 @@ export function domainName(id){
   if(id === UNASSIGNED_DOMAIN) return '미분류';
   return (DOMAINS.find(d => d.id === id)||{}).name || id;
 }
+/* 공통(스코프 접두어 없는) 메인 섹터인지 */
+function isCommonMain(s){
+  return !!s && !s.parent && !parseSectorScope(s.name).eventShort;
+}
+
 export function domainOfSector(s){
   if(!s) return '';
-  const main = s.parent ? COMPANY_SECTORS.find(x => x.id === s.parent) : s;
+  let main = s.parent ? COMPANY_SECTORS.find(x => x.id === s.parent) : s;
+  if(!main) return '';
+  // 행사 스코프 메인이 공통 섹터에 연결(canonical)돼 있으면 그 공통 섹터의 분야를 상속.
+  // 방어: 연결 대상이 없거나 / 서브이거나 / 또 다른 스코프 섹터면 무시(미분류).
+  // 체인은 최대 (서브 → 부모 스코프 메인 → 공통 메인) 2단계라 순환 불가.
+  if(parseSectorScope(main.name).eventShort && main.canonical){
+    const target = COMPANY_SECTORS.find(x => x.id === main.canonical);
+    if(isCommonMain(target)) main = target;
+    else return '';
+  }
   const dom = (main && main.domain) || '';
   // 목록에 없는 id는 미분류 취급 (분야 삭제 후 잔존값 방어)
   return DOMAINS.some(d => d.id === dom) ? dom : '';
@@ -186,13 +203,29 @@ export function renderSectorTree(){
   const counts = computeSectorCompanyCounts();
   const countBadge = cnt => `<span style="font-size:10px;color:var(--i4);font-weight:400" title="클릭하면 기업DB에서 이 섹터로 필터링">${cnt||0}개사</span>`;
 
-  // 분야 배정 드롭다운 (메인 섹터 카드용)
+  // 분야 배정 드롭다운 (공통 트리의 메인 섹터 카드용)
   const domainSelect = m => {
-    const cur = domainOfSector(m);
+    const cur = m.domain && DOMAINS.some(d => d.id === m.domain) ? m.domain : '';
     return `<select class="fi" style="font-size:10px;padding:1px 4px;width:auto" title="이 섹터가 속한 분야"
       onchange="assignSectorDomain('${escAttr(m.id)}', this.value)">
       <option value=""${!cur?' selected':''}>미분류</option>
       ${DOMAINS.map(d => `<option value="${escAttr(d.id)}"${cur===d.id?' selected':''}>${escapeHtml(d.name)}</option>`).join('')}
+    </select>`;
+  };
+
+  // 공통 섹터 연결 드롭다운 (행사 트리의 메인 섹터 카드용) —
+  // 스코프 섹터는 분야를 직접 갖지 않고, 연결된 공통 섹터의 분야를 상속한다
+  const commonMains = mainSectors().filter(s => !parseSectorScope(s.name).eventShort);
+  const canonicalSelect = m => {
+    const cur = m.canonical && commonMains.some(c => c.id === m.canonical) ? m.canonical : '';
+    const inheritedDom = domainOfSector(m);
+    const badge = cur && inheritedDom
+      ? `<span style="font-size:10px;color:var(--te);flex-shrink:0" title="연결된 공통 섹터의 분야를 상속">🗂 ${escapeHtml(domainName(inheritedDom))}</span>`
+      : '';
+    return `${badge}<select class="fi" style="font-size:10px;padding:1px 4px;width:auto;max-width:150px" title="이 행사 섹터가 대응하는 공통 섹터 (분야 집계는 공통 기준으로 통합)"
+      onchange="assignSectorCanonical('${escAttr(m.id)}', this.value)">
+      <option value=""${!cur?' selected':''}>공통 미연결</option>
+      ${commonMains.map(c => `<option value="${escAttr(c.id)}"${cur===c.id?' selected':''}>= ${escapeHtml(c.name)}</option>`).join('')}
     </select>`;
   };
 
@@ -205,7 +238,7 @@ export function renderSectorTree(){
         <span draggable="true" ondragstart="onSectorDragStart(event,'${m.id}')" onclick="filterCoBySector('${escAttr(m.name)}')"
           style="font-weight:700;font-size:13px;flex:1;cursor:pointer" title="클릭하면 기업DB에서 이 섹터로 필터링">${escapeHtml(parseSectorScope(m.name).plainName)}</span>
         ${countBadge(counts[m.name])}
-        ${domainSelect(m)}
+        ${_sectorScope ? canonicalSelect(m) : domainSelect(m)}
         <button class="btn bs" style="font-size:11px;padding:2px 8px" onclick="toggleSubAddInline('${m.id}')">+ 서브</button>
         <button onclick="removeSectorById('${m.id}')"
           style="background:none;border:none;cursor:pointer;color:var(--i4);font-size:16px;line-height:1"
@@ -246,6 +279,21 @@ export function renderSectorTree(){
   `).join('');
 }
 
+/* 행사 스코프 메인 섹터를 공통 섹터에 연결/해제 (행사 트리 카드의 드롭다운 onchange) */
+export async function assignSectorCanonical(sectorId, canonicalId){
+  const s = COMPANY_SECTORS.find(x => x.id === sectorId);
+  if(!s) return;
+  const prev = s.canonical || '';
+  s.canonical = canonicalId || '';
+  const r = await upsertSectorRow(s);
+  if(!r.ok){ s.canonical = prev; renderSectorList(); return; } // 실패 시 롤백
+  const targetName = canonicalId ? sectorName(canonicalId) : '미연결';
+  trackAction('edit', '섹터 공통 연결', s.name,
+    `행사 섹터 "${parseSectorScope(s.name).plainName}" 공통 연결: ${prev?sectorName(prev):'미연결'} → ${targetName}`);
+  renderSectorList();
+  try { buildCoCAT(); } catch(e){}
+}
+
 /* 메인 섹터를 분야에 배정/해제 (트리 카드의 드롭다운 onchange) */
 export async function assignSectorDomain(sectorId, domainId){
   const s = COMPANY_SECTORS.find(x => x.id === sectorId);
@@ -282,7 +330,7 @@ export async function addSubSectorTo(mainId){
   if(COMPANY_SECTORS.some(s => (typeof s==='string'?s:s.name) === val)){ alert('이미 있는 섹터예요.'); return; }
 
   const newId = slugifySectorName(val);
-  const sector = { id: newId, name: val, parent: mainId, domain: '' };
+  const sector = { id: newId, name: val, parent: mainId, domain: '', canonical: '' };
   COMPANY_SECTORS.push(sector);
   renderSectorList();
   try { buildCoCAT(); populateUploadEvDropdown(); } catch(e){}
@@ -342,6 +390,15 @@ export async function removeSectorById(id){
     child.parent = null;
     await upsertSectorRow(child);
   }
+  // 이 섹터를 공통 연결(canonical)로 참조하던 스코프 섹터의 연결 해제 (유령 참조 방지)
+  const linked = COMPANY_SECTORS.filter(s => s.canonical === id);
+  if(linked.length){
+    linked.forEach(s => { s.canonical = ''; });
+    await postToSheet({
+      sheet: 'sectors', action: 'batchUpsert',
+      rows: linked.map(sectorRowValues),
+    }, '섹터 연결 해제');
+  }
   COMPANY_SECTORS.splice(idx, 1);
   renderSectorList();
   try { buildCoCAT(); populateUploadEvDropdown(); } catch(e){}
@@ -367,7 +424,7 @@ export async function reorganizeSectorsSheet(){
   if(!confirm(`섹터 ${ordered.length}개를 메인 → 서브 순서로 구글시트에 재정렬할까요?`)) return;
 
   // ⚠ replaceAll은 rows 폭만큼만 재작성하므로 반드시 domain까지 4컬럼으로 보낸다
-  const rows = ordered.map(s => [s.id, s.name, s.parent || '', s.domain || '']);
+  const rows = ordered.map(sectorRowValues);
   const r = await postToSheet({ sheet: 'sectors', action: 'replaceAll', rows }, '섹터 정렬');
   if(r.ok){
     COMPANY_SECTORS.splice(0, COMPANY_SECTORS.length, ...ordered);
@@ -458,6 +515,14 @@ export async function mergeSectors(){
     }
   }
 
+  // 2.5) 병합 대상을 공통 연결(canonical)로 참조하던 스코프 섹터는 남는 섹터로 재연결
+  for(const s of COMPANY_SECTORS){
+    if(s.canonical && removeIds.includes(s.canonical) && !removeIds.includes(s.id)){
+      s.canonical = keepId;
+      await upsertSectorRow(s);
+    }
+  }
+
   // 3) 병합된(삭제 대상) 섹터 제거
   for(const id of removeIds){
     const idx = COMPANY_SECTORS.findIndex(s => s.id === id);
@@ -512,7 +577,7 @@ export async function applySectorGrouping(){
     const trimmed = name.trim();
     if(COMPANY_SECTORS.some(s => (typeof s==='string'?s:s.name) === trimmed)){ alert('이미 있는 섹터명이에요.'); return; }
     groupId = slugifySectorName(trimmed);
-    const groupSector = { id: groupId, name: trimmed, parent: null, domain: '' };
+    const groupSector = { id: groupId, name: trimmed, parent: null, domain: '', canonical: '' };
     COMPANY_SECTORS.push(groupSector);
     await upsertSectorRow(groupSector);
   }
@@ -523,7 +588,7 @@ export async function applySectorGrouping(){
     const name = checked[i];
     if(COMPANY_SECTORS.some(s => (typeof s==='string'?s:s.name) === name)) continue;
     const newId = slugifySectorName(name);
-    const sector = { id: newId, name, parent: groupId, domain: '' };
+    const sector = { id: newId, name, parent: groupId, domain: '', canonical: '' };
     COMPANY_SECTORS.push(sector);
     await upsertSectorRow(sector);
   }
@@ -584,7 +649,7 @@ export async function convertMainsToGroup(){
     const trimmed = name.trim();
     if(COMPANY_SECTORS.some(s => (typeof s==='string'?s:s.name) === trimmed)){ alert('이미 있는 섹터명이에요.'); return; }
     groupId = slugifySectorName(trimmed);
-    const groupSector = { id: groupId, name: trimmed, parent: null, domain: '' };
+    const groupSector = { id: groupId, name: trimmed, parent: null, domain: '', canonical: '' };
     COMPANY_SECTORS.push(groupSector);
     await upsertSectorRow(groupSector);
   }
@@ -606,7 +671,7 @@ export async function convertMainsToGroup(){
 
   // 개별 요청 대신 한 번의 batchUpsert로 전부 저장 (요청 수를 크게 줄여 안정성 확보)
   if(targets.length){
-    const rows = targets.map(s => [s.id, s.name, s.parent || '', s.domain || '']);
+    const rows = targets.map(sectorRowValues);
     await postToSheet({ sheet: 'sectors', action: 'batchUpsert', rows }, '섹터 그룹 편입');
   }
 
@@ -632,7 +697,7 @@ export async function addMainSector(){
   if(exists){ alert('이미 있는 섹터예요.'); return; }
 
   const newId = slugifySectorName(val);
-  const sector = { id: newId, name: val, parent: null, domain: '' };
+  const sector = { id: newId, name: val, parent: null, domain: '', canonical: '' };
 
   COMPANY_SECTORS.push(sector);
   if(inp) inp.value = '';
@@ -759,7 +824,7 @@ export async function confirmSectorImport(){
     const mainName = scopedSectorName(_sectorScope, g.main);
     let mainSector = COMPANY_SECTORS.find(s => s.name === mainName && !s.parent);
     if(!mainSector){
-      mainSector = { id: slugifySectorName(mainName), name: mainName, parent: null, domain: '' };
+      mainSector = { id: slugifySectorName(mainName), name: mainName, parent: null, domain: '', canonical: '' };
       COMPANY_SECTORS.push(mainSector);
       addedMain++;
       await upsertSectorRow(mainSector);
@@ -779,7 +844,7 @@ export async function confirmSectorImport(){
       const exists = COMPANY_SECTORS.some(s => s.parent === mainSector.id && s.name === subName);
       if(exists){ skippedSub++; continue; }
 
-      const subSector = { id: slugifySectorName(subName), name: subName, parent: mainSector.id, domain: '' };
+      const subSector = { id: slugifySectorName(subName), name: subName, parent: mainSector.id, domain: '', canonical: '' };
       COMPANY_SECTORS.push(subSector);
       addedSub++;
       await upsertSectorRow(subSector);
@@ -861,7 +926,7 @@ export async function removeDomain(id){
     affected.forEach(s => { s.domain = ''; });
     const r = await postToSheet({
       sheet: 'sectors', action: 'batchUpsert',
-      rows: affected.map(s => [s.id, s.name, s.parent || '', '']),
+      rows: affected.map(sectorRowValues),
     }, '분야 해제');
     if(!r.ok){ affected.forEach(s => { s.domain = id; }); return; } // 실패 시 롤백
   }
@@ -1243,6 +1308,7 @@ window.handleSectorFileSelect = handleSectorFileSelect;
 window.confirmSectorImport    = confirmSectorImport;
 window.cancelSectorImport     = cancelSectorImport;
 window.assignSectorDomain     = assignSectorDomain;
+window.assignSectorCanonical  = assignSectorCanonical;
 window.addDomain              = addDomain;
 window.renameDomain           = renameDomain;
 window.removeDomain           = removeDomain;

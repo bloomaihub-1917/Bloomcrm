@@ -23,7 +23,7 @@
    safeFetch/GS_URL을 가져다 쓰는 방식으로 이동할 것.
 ═══════════════════════════════════════════════════════════════ */
 
-import { normalizeCat, countryName } from './utils.js';
+import { normalizeCat, countryName, sectorRowValues } from './utils.js';
 import {
   GS_URL,
   authToken,
@@ -36,6 +36,7 @@ import {
   COMPANY_SECTORS,
   DOMAINS,
   setDomains,
+  CATMAPS,
   PART_TYPES,
   currentUser,
   curApp,
@@ -296,13 +297,26 @@ export async function loadFromSheets(hooks = {}){
           }
         } catch(e){ console.warn('[CRM] domains JSON 파싱 실패 — 전부 미분류로 표시:', e); }
       }
+
+      // ── settings 시트 → CATMAPS (업로드 카테고리 값별 매핑, key='catmap_<행사key>') ──
+      for(const k in CATMAPS) delete CATMAPS[k];
+      settingsData.forEach(row => {
+        if(!String(row.key||'').startsWith('catmap_')) return;
+        const evKey = String(row.key).slice('catmap_'.length);
+        try {
+          const parsed = JSON.parse(row.value);
+          if(parsed && typeof parsed === 'object') CATMAPS[evKey] = parsed;
+        } catch(e){ console.warn('[CRM] catmap 파싱 실패:', row.key, e); }
+      });
+      const catmapCount = Object.keys(CATMAPS).length;
+      if(catmapCount) console.log('[CRM] 카테고리 매핑 로드:', catmapCount, '개 행사');
     }
 
     // ── sectors 시트 → COMPANY_SECTORS (스프레드시트에서 직접 행 추가/삭제 가능) ──
     if(sectorsData && Array.isArray(sectorsData) && sectorsData.length){
       COMPANY_SECTORS.splice(0, COMPANY_SECTORS.length, ...sectorsData.map(r => ({
         id: r.id || '', name: r.name || '', parent: r.parent || null,
-        domain: r.domain || '',
+        domain: r.domain || '', canonical: r.canonical || '',
       })).filter(s => s.id && s.name));
       console.log('[CRM] sectors 시트 로드:', COMPANY_SECTORS.length, '개');
     } else if(settingsData && Array.isArray(settingsData)){
@@ -489,10 +503,20 @@ export async function upsertSectorRow(sector){
   const r = await postToSheet({
     sheet:  'sectors',
     action: 'upsert',
-    row:    [sector.id, sector.name, sector.parent || '', sector.domain || ''],
+    row:    sectorRowValues(sector),
   }, '섹터 저장');
   try { localStorage.setItem('crm_sectors', JSON.stringify(COMPANY_SECTORS)); } catch(e){}
   return r;
+}
+
+// 업로드 카테고리 값별 매핑 저장 — settings 시트 key='catmap_<행사key>' JSON
+export async function saveCatmap(eventKey){
+  if(!eventKey || !CATMAPS[eventKey]) return { ok: false, error: 'no catmap' };
+  return postToSheet({
+    sheet:  'settings',
+    action: 'upsert',
+    row:    ['catmap_' + eventKey, JSON.stringify(CATMAPS[eventKey])],
+  }, '카테고리 매핑 저장');
 }
 
 // 분야(도메인) 목록 저장 — settings 시트 key='domains' JSON

@@ -202,6 +202,14 @@ export function setDomains(arr){
 }
 
 /* ══════════════════════════════════════════
+   CATMAPS — 업로드 카테고리 값별 매핑 (신규)
+   { [행사key]: { [엑셀 원문 카테고리값]: 섹터name } }
+   settings 시트 key='catmap_<행사key>' JSON에서 로드.
+   같은 행사 재업로드 시 매핑 UI에 자동 preselect된다.
+══════════════════════════════════════════ */
+export const CATMAPS = {};
+
+/* ══════════════════════════════════════════
    COMPANY_SECTORS — 기업 섹터 트리 (원본 6258~6276행)
    { id, name, parent: null or parent_id, domain: ''|분야id }
    - parent: 메인(null) → 서브(부모 id)의 2단계 계층

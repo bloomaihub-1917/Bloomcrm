@@ -49,13 +49,14 @@ import {
   COMPANY_INFO,
   EVENT_LIST,
   COMPANY_SECTORS,
+  CATMAPS,
   PART_TYPES,
   GS_URL,
   currentUser,
 } from '../state.js';
 import { CL } from '../constants.js';
-import { normalizeCat, normalizeCountry, escapeHtml } from '../utils.js';
-import { postToSheet } from '../api.js';
+import { normalizeCat, normalizeCountry, escapeHtml, escAttr, scopedSectorName, slugifySectorName, sectorRowValues } from '../utils.js';
+import { postToSheet, saveCatmap } from '../api.js';
 import { buildCoDB, buildCoCAT, batchUpsertCompanies } from './company-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
 import { trackAction } from './audit-tab.js';
@@ -527,6 +528,7 @@ let _lastRows = null;
    AI 로그/"DB에 추가" 버튼을 갱신한다. 최초 자동 매칭 시와, 사용자가
    드롭다운으로 매핑을 고쳤을 때 둘 다 이 함수를 통해 재계산된다. */
 function applyColumnMap(colMap){
+  _lastColMap = colMap;
   const headers = _lastHeaders || [];
   const rows = _lastRows || [];
 
@@ -731,6 +733,102 @@ function applyColumnMap(colMap){
   const addBtn = document.querySelector('#up-btns .bp');
   if(addBtn) addBtn.innerHTML =
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>DB에 추가 (' + newCount + '건)';
+
+  // 카테고리 컬럼이 매핑돼 있으면 값별 매핑 UI 표시 (신규)
+  renderCategoryMappingUI();
+}
+
+/* ═══════════════════════════════════════
+   카테고리 컬럼 값별 매핑 (신규)
+   엑셀에 카테고리 컬럼(beat로 매핑됨)이 있으면 고유값별로 섹터를 배정한다.
+   매핑은 행사별로 settings 시트(catmap_<행사key>)에 저장되어
+   같은 행사 재업로드 시 자동으로 preselect된다.
+═══════════════════════════════════════ */
+let _lastColMap = null;
+let _catmapOn = false;
+
+function getSelectedUploadEventKey(){
+  const sel = document.getElementById('up-ev');
+  const inp = document.getElementById('up-ev-text');
+  if(_evDirectMode && inp && inp.value.trim()) return inp.value.trim();
+  if(sel && sel.value && sel.value !== '__direct__') return sel.value;
+  return '';
+}
+
+/* mappedContacts의 beat 원문값 집계 ('|' 복수값은 개별 카운트) */
+function beatValueCounts(){
+  const counts = {};
+  mappedContacts.forEach(c => {
+    String(c.beat||'').split('|').map(v=>v.trim()).filter(Boolean)
+      .forEach(v => { counts[v] = (counts[v]||0)+1; });
+  });
+  return counts;
+}
+
+export function renderCategoryMappingUI(){
+  const wrap = document.getElementById('catmap-wrap');
+  if(!wrap) return;
+  if(!_lastColMap || !_lastColMap.beat){ wrap.innerHTML = ''; _catmapOn = false; return; }
+
+  const counts = beatValueCounts();
+  const values = Object.entries(counts).sort((a,b) => b[1]-a[1]);
+  if(!values.length){ wrap.innerHTML = ''; _catmapOn = false; return; }
+
+  const evKey = getSelectedUploadEventKey();
+  const saved = (evKey && CATMAPS[evKey]) || {};
+  const hasSaved = values.some(([v]) => saved[v]);
+  // 이전 매핑이 저장된 행사면 자동으로 토글 on
+  if(hasSaved) _catmapOn = true;
+
+  const sectorOptions = sel => COMPANY_SECTORS.map(s =>
+    `<option value="${escapeHtml(s.name)}"${sel===s.name?' selected':''}>${s.parent?'　↳ ':''}${escapeHtml(s.name)}</option>`).join('');
+
+  wrap.innerHTML = `
+    <div style="background:var(--i8);border:1px solid var(--i6);border-radius:8px;padding:10px 12px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;cursor:pointer">
+        <input type="checkbox" id="catmap-toggle" ${_catmapOn?'checked':''} onchange="toggleCatmap(this.checked)">
+        카테고리 컬럼 값별 매핑 (${values.length}개 값)
+        ${hasSaved ? '<span style="font-size:10px;color:var(--te);font-weight:600">이전 매핑 적용됨</span>' : ''}
+      </label>
+      <div style="font-size:10px;color:var(--i4);margin:4px 0 0 20px">컬럼 "${escapeHtml(_lastColMap.beat)}"의 값별로 섹터를 배정합니다. 켜면 위의 일괄 카테고리 대신 행별 매핑이 적용돼요.</div>
+      <div id="catmap-table" style="display:${_catmapOn?'block':'none'};margin-top:8px;max-height:220px;overflow-y:auto">
+        ${values.map(([val, cnt]) => `
+          <div style="display:flex;align-items:center;gap:8px;padding:3px 0">
+            <span style="flex:1;min-width:0;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(val)}">${escapeHtml(val)} <span style="color:var(--i4)">(${cnt}건)</span></span>
+            <select class="fi catmap-sel" data-val="${escapeHtml(val)}" style="width:55%;font-size:11px;padding:2px 4px">
+              <option value="__keep__">원문 유지</option>
+              ${evKey ? `<option value="__new__">＋ 새 행사 섹터로 생성</option>` : ''}
+              ${sectorOptions(saved[val] || '')}
+            </select>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  applyCatmapSideEffects();
+}
+
+export function toggleCatmap(on){
+  _catmapOn = !!on;
+  const tbl = document.getElementById('catmap-table');
+  if(tbl) tbl.style.display = _catmapOn ? 'block' : 'none';
+  applyCatmapSideEffects();
+}
+
+function applyCatmapSideEffects(){
+  const upSector = document.getElementById('up-sector');
+  if(upSector) upSector.disabled = _catmapOn; // 행별 매핑이 우선
+}
+
+/* 매핑 UI 상태 수집 — 토글 off이면 null (기존 일괄 방식 유지) */
+function collectCatMapFromUI(){
+  if(!_catmapOn) return null;
+  const map = {}; const newVals = [];
+  document.querySelectorAll('.catmap-sel').forEach(sel => {
+    const val = sel.getAttribute('data-val');
+    if(!val || sel.value === '__keep__') return;
+    if(sel.value === '__new__'){ newVals.push(val); return; }
+    map[val] = sel.value;
+  });
+  return { map, newVals };
 }
 
 /* ═══════════════════════════════════════
@@ -858,6 +956,46 @@ export async function runValidationStep(newRows, dupRows){
     '| _evDirectMode:', _evDirectMode, '| up-ev.value:', _evSel && _evSel.value,
     '| up-ev-text.value:', _evInp && _evInp.value);
 
+  // ── 카테고리 값별 매핑 수집 (토글 off이면 null → 기존 일괄 방식) ──
+  const catSel = collectCatMapFromUI();
+  if(catSel && catSel.newVals.length){
+    // "새 행사 섹터로 생성" — 연락처 저장 전에 섹터부터 만들어야
+    // beat가 존재하지 않는 섹터명을 가리키지 않는다
+    const evShortName = (EVENT_LIST.find(e => e.key === selectedEv)||{}).short || selectedEv;
+    if(!evShortName){
+      alert('새 행사 섹터 생성은 연결 행사를 선택했을 때만 가능해요.');
+      if(btn){ btn.disabled = false; btn.textContent = 'DB에 추가'; }
+      return;
+    }
+    const created = [];
+    catSel.newVals.forEach(v => {
+      const name = scopedSectorName(evShortName, v);
+      let s = COMPANY_SECTORS.find(x => x.name === name);
+      if(!s){
+        s = { id: slugifySectorName(name), name, parent: null, domain: '', canonical: '' };
+        COMPANY_SECTORS.push(s);
+        created.push(s);
+      }
+      catSel.map[v] = name;
+    });
+    if(created.length){
+      const rSec = await postToSheet({
+        sheet: 'sectors', action: 'batchUpsert',
+        rows: created.map(sectorRowValues),
+      }, '행사 섹터 생성');
+      if(!rSec.ok){
+        created.forEach(s => {
+          const i = COMPANY_SECTORS.findIndex(x => x.id === s.id);
+          if(i >= 0) COMPANY_SECTORS.splice(i, 1);
+        });
+        alert('행사 섹터 생성 저장에 실패해서 업로드를 중단했어요. 다시 시도해주세요.');
+        if(btn){ btn.disabled = false; btn.textContent = 'DB에 추가'; }
+        return;
+      }
+      addAiLog('ok', '행사 섹터 ' + created.length + '개 생성: ' + created.map(s=>s.name).join(', '));
+    }
+  }
+
   // 1) 화면(Master DB)에 즉시 반영 — 중복 id 방지
   const newParts = [];
   const companyUpdates = []; // 업로드된 website/note를 기업(companies) 단위로 반영할 목록
@@ -874,8 +1012,16 @@ export async function runValidationStep(newRows, dupRows){
     }
     existingIds.add(clean.id);
     addedContacts.push(clean);
-    // 기업 카테고리(sector) 일괄 적용 → beat 필드에 저장
-    if(selectedSector) clean.beat = selectedSector;
+    // 기업 카테고리(sector) → beat 저장:
+    // 값별 매핑이 켜져 있으면 컬럼 원문값을 매핑된 섹터명으로 치환('|' 복수값 개별 처리,
+    // 미매핑 값은 원문 유지), 꺼져 있으면 기존처럼 일괄 선택값 적용
+    if(catSel){
+      clean.beat = String(clean.beat||'').split('|').map(v=>v.trim()).filter(Boolean)
+        .map(v => catSel.map[v] || v).join('|');
+      if(!clean.beat && selectedSector) clean.beat = selectedSector; // 컬럼 값이 빈 행은 일괄값으로 보충
+    } else if(selectedSector){
+      clean.beat = selectedSector;
+    }
     contacts.push(clean);
 
     const coKey = (clean.orgKo || clean.orgEn || '').trim();
@@ -1047,9 +1193,17 @@ export async function runValidationStep(newRows, dupRows){
         addAiLog('warn', '⚠️ 행사 참여 기록 저장 실패 — 연락처는 저장됐지만 행사 연결(' + newParts.length + '건)은 시트에 반영되지 않았어요.');
       }
     }
+    // 카테고리 값별 매핑을 행사별로 저장 — 같은 행사 재업로드 시 자동 적용
+    if(catSel && selectedEv && Object.keys(catSel.map).length){
+      CATMAPS[selectedEv] = { ...(CATMAPS[selectedEv]||{}), ...catSel.map };
+      await saveCatmap(selectedEv);
+      addAiLog('ok', '카테고리 매핑 ' + Object.keys(catSel.map).length + '개 저장 — 다음 업로드에 자동 적용돼요');
+    }
+
     const evMsg = selectedEv ? ` / 행사 "${selectedEv}" ${newParts.length}건 연결` : '';
     trackAction('upload', '파일 업로드', uploadedFileName,
       '<b>' + escapeHtml(uploadedFileName) + '</b> 업로드 — 신규 ' + addedContacts.length + '건 저장' + evMsg
+      + (catSel ? ' / 카테고리 매핑 적용' : '')
       + (partsSaveFailed ? ' (⚠️ 행사 연결 저장 실패)' : ''));
   } else {
     const evMsg = selectedEv ? ` / 행사 "${selectedEv}" ${newParts.length}건 연결` : '';
@@ -1087,6 +1241,12 @@ export function resetUpload(){
   if(log){ log.style.display = 'none'; log.innerHTML = ''; }
   const mergeWrap = document.getElementById('merge-wrap');
   if(mergeWrap) mergeWrap.innerHTML = '';
+  const catmapWrap = document.getElementById('catmap-wrap');
+  if(catmapWrap) catmapWrap.innerHTML = '';
+  _catmapOn = false;
+  _lastColMap = null;
+  const upSectorEl = document.getElementById('up-sector');
+  if(upSectorEl) upSectorEl.disabled = false;
   const upBtns = document.getElementById('up-btns');
   if(upBtns) upBtns.style.display = 'none';
   const prevEl = document.getElementById('parser-prev');
@@ -1214,9 +1374,11 @@ export function toggleEvInput(forceOn){
     sel.style.display = 'block';
     inp.style.display = 'none';
     if(btn) btn.textContent = '직접 입력';
-    // 드롭다운에서 "직접입력…" 선택하면 자동 전환
+    // 드롭다운에서 "직접입력…" 선택하면 자동 전환.
+    // 행사가 바뀌면 카테고리 매핑 UI를 다시 그려 그 행사의 저장된 매핑을 preselect.
     sel.onchange = () => {
-      if(sel.value === '__direct__') toggleEvInput(true);
+      if(sel.value === '__direct__'){ toggleEvInput(true); return; }
+      renderCategoryMappingUI();
     };
   }
 }
@@ -1236,3 +1398,4 @@ window.rejectMg               = rejectMg;
 window.toggleEvInput          = toggleEvInput;
 window.populateUploadEvDropdown = populateUploadEvDropdown;
 window.onColumnMapChange      = onColumnMapChange;
+window.toggleCatmap           = toggleCatmap;
