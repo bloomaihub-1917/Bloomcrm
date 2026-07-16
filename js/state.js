@@ -22,7 +22,7 @@ import { EVENT_LIST_SEED } from './constants.js';
 /* ── Apps Script 배포 URL (원본 1558행) ──
    테스트 모드(test/test/test 로그인) 진입 시 setGsUrl('')으로 비워서
    이 세션 동안 모든 구글시트 읽기/쓰기를 원천 차단한다(auth.js 참고). */
-let GS_URL = 'https://script.google.com/macros/s/AKfycbwiXforYFOO8tyFw8aBLgR3ai7HWS6I8nGG8dp124MaepIMHmNAf5X1rRrcyKiwpUa3pw/exec';
+let GS_URL = 'https://script.google.com/macros/s/AKfycbyqFcodNap4k_uyyw3sBMzdEphPMajlPm6eLBtulSzBb63pRjc-X5M1-LO1zr9PZDmy9w/exec';
 export function setGsUrl(v){ GS_URL = v; }
 export { GS_URL };
 
