@@ -31,7 +31,7 @@ const SHEET_HEADERS = {
   crm_targets:   ['id','name','nameEn','sector','hq','event','role','status','priority','assignee','currentStage','lastActivity','log'],
   activity_log:  ['id','ts','email','name','type','action','target','detail'],
   settings:       ['key','value'],
-  sectors:        ['id','name','parent'],
+  sectors:        ['id','name','parent','domain'],
   companies:      ['key','sector','hq','website','notes','catCode','country','abbr','source','updatedAt'],
   part_types:     ['key','label','cls'],
 };
@@ -550,6 +550,98 @@ function addCrmLogColumn() {
   if (headers.indexOf('log') >= 0) { Logger.log('log 컬럼 이미 존재'); return; }
   sh.getRange(1, headers.length + 1).setValue('log');
   Logger.log('log 컬럼 추가 완료 (컬럼 ' + (headers.length + 1) + ')');
+}
+
+// ══════════════════════════════════════════
+//  섹터 "분야(도메인)" 마이그레이션 (1회 수동 실행)
+//  1) sectors 시트에 domain 컬럼 헤더 추가
+//  2) settings 시트에 분야 목록(domains JSON) 등록
+//  3) 알려진 섹터 id에 bio/mice 분야 초기 배정
+//  시트에 없는 id는 조용히 스킵하고 로그로 건수만 남긴다.
+// ══════════════════════════════════════════
+function migrateSectorDomains() {
+  var BIO_IDS = [
+    'pharma','synthetic_drugs','protein_drug','cell_therapy_products','gene_therapy_drugs',
+    'therapeutic_antibody','vaccine','blood_preparation','others','medical_device',
+    'medical_instruments','medical_supplies','dental_materials',
+    'reagents_for_in_vitro_diagnosticsivd_rea','others_medical_device','digital_health',
+    'telehealthcare','mobile_health','health_analytics','digital_health_system',
+    'others_digital_health','investor','incubator_accelerator','vc_corporate_vc',
+    'business_development_1','private_investor','others_investor','academic_non_profit',
+    'non_profit_organizat','hospital','academic_university','industry_association',
+    'professional_services_and_consulting','cro','cdmo_cmo','drug_delivery',
+    'business_development_2','sales_marketing','press_media',
+    'others_professional_services_and_consult','gene_therapy_drugs_2',
+    'analytical_services','digital_health_2',
+  ];
+  var MICE_IDS = [
+    'mice_event','mice_mice','mice_led','mice_broadcast','mice_video','mice_sound',
+    'mice_lighting','mice_rental','mice_console','mice_camera','mice_interpret',
+    'mice_staffing','mice_electric','mice_structure','mice_pr','mice_sfx',
+    'mice_planning','mice_media','mice_etc',
+  ];
+  var DEFAULT_DOMAINS = [
+    { id: 'bio',   name: 'BIO' },
+    { id: 'it',    name: 'IT' },
+    { id: 'vc',    name: 'VC' },
+    { id: 'ai',    name: 'AI' },
+    { id: 'press', name: '기자/미디어' },
+    { id: 'mice',  name: 'MICE' },
+  ];
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  // 1) sectors 시트에 domain 헤더 추가
+  var sh = ss.getSheetByName('sectors');
+  if (!sh) { Logger.log('sectors 시트 없음 — 중단'); return; }
+  var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  var domainCol = headers.indexOf('domain');
+  if (domainCol < 0) {
+    domainCol = headers.length;
+    sh.getRange(1, domainCol + 1).setValue('domain');
+    Logger.log('domain 컬럼 추가 (컬럼 ' + (domainCol + 1) + ')');
+  } else {
+    Logger.log('domain 컬럼 이미 존재 (컬럼 ' + (domainCol + 1) + ')');
+  }
+
+  // 2) settings에 domains JSON 등록 (이미 있으면 건너뜀)
+  var setSh = getOrCreateSheet(ss, 'settings');
+  var setVals = setSh.getDataRange().getValues();
+  var hasDomains = false;
+  for (var i = 1; i < setVals.length; i++) {
+    if (String(setVals[i][0]) === 'domains') { hasDomains = true; break; }
+  }
+  if (!hasDomains) {
+    setSh.appendRow(['domains', JSON.stringify(DEFAULT_DOMAINS)]);
+    Logger.log('settings.domains 등록: ' + DEFAULT_DOMAINS.length + '개 분야');
+  } else {
+    Logger.log('settings.domains 이미 존재 — 건너뜀');
+  }
+
+  // 3) 초기 배정 — id 매칭 행의 domain 셀 기입 (기존 값이 있으면 덮어쓰지 않음)
+  var lastRow = sh.getLastRow();
+  if (lastRow < 2) { Logger.log('섹터 데이터 없음'); return; }
+  var idIdx = headers.indexOf('id');
+  var data = sh.getRange(2, 1, lastRow - 1, sh.getLastColumn()).getValues();
+  var domainMap = {};
+  BIO_IDS.forEach(function (id) { domainMap[id] = 'bio'; });
+  MICE_IDS.forEach(function (id) { domainMap[id] = 'mice'; });
+
+  var assigned = 0, skippedExisting = 0;
+  var foundIds = {};
+  for (var r = 0; r < data.length; r++) {
+    var id = String(data[r][idIdx] || '');
+    if (!domainMap[id]) continue;
+    foundIds[id] = true;
+    var cur = domainCol < data[r].length ? String(data[r][domainCol] || '') : '';
+    if (cur) { skippedExisting++; continue; }
+    sh.getRange(r + 2, domainCol + 1).setValue(domainMap[id]);
+    assigned++;
+  }
+  var missing = Object.keys(domainMap).filter(function (id) { return !foundIds[id]; });
+  Logger.log('분야 배정 완료: ' + assigned + '건 배정, 기존값 유지 ' + skippedExisting
+    + '건, 시트에 없어 스킵 ' + missing.length + '건'
+    + (missing.length ? (': ' + missing.join(', ')) : ''));
 }
 
 // 기존 시트 일괄 정리 (1회 수동 실행)

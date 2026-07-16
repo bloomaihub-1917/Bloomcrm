@@ -155,12 +155,13 @@ export function setSheetsConnected(v){ sheetsConnected = v; }
 export { sheetsConnected };
 
 /* ── 기업DB(co) 탭 상태 ── */
-let selCo = null, coTab = 0, coCatF = null, coCodeF = null;
+let selCo = null, coTab = 0, coCatF = null, coCodeF = null, coDomainF = null;
 export function setSelCo(v){ selCo = v; }
 export function setCoTab(v){ coTab = v; }
 export function setCoCatF(v){ coCatF = v; }
 export function setCoCodeF(v){ coCodeF = v; }
-export { selCo, coTab, coCatF, coCodeF };
+export function setCoDomainF(v){ coDomainF = v; }
+export { selCo, coTab, coCatF, coCodeF, coDomainF };
 
 /* ── CRM(crm) 탭 상태 ── */
 let crmV = 'pipeline', crmEvF = null, crmStF = null, tblSt = '전체';
@@ -189,8 +190,22 @@ export function setMdbStat(v){ mdbStat = v; }
 export { mdbEvFilter, mdbView, mdbCat, mdbStat };
 
 /* ══════════════════════════════════════════
+   DOMAINS — 섹터의 최상위 "분야(도메인)" 목록 (신규)
+   { id, name } — 예: {id:'bio', name:'BIO'}
+   settings 시트 key='domains'의 JSON에서 로드된다.
+   섹터(COMPANY_SECTORS)의 domain 필드가 이 id를 참조한다.
+══════════════════════════════════════════ */
+export const DOMAINS = [];
+export function setDomains(arr){
+  DOMAINS.length = 0;
+  DOMAINS.push(...(arr || []));
+}
+
+/* ══════════════════════════════════════════
    COMPANY_SECTORS — 기업 섹터 트리 (원본 6258~6276행)
-   { id, name, parent: null or parent_id }
+   { id, name, parent: null or parent_id, domain: ''|분야id }
+   - parent: 메인(null) → 서브(부모 id)의 2단계 계층
+   - domain: 메인 섹터에만 저장되는 분야 참조 (서브는 런타임에 부모를 따라감)
 ══════════════════════════════════════════ */
 export const COMPANY_SECTORS = [
   {id:'pharma-global',    name:'글로벌 제약사',          parent:null},

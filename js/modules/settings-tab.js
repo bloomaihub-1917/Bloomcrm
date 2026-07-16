@@ -36,6 +36,7 @@ import {
   CO_DB,
   EVENT_LIST,
   COMPANY_SECTORS,
+  DOMAINS,
   PART_TYPES,
 } from '../state.js';
 
@@ -48,6 +49,7 @@ import {
   deleteEventFromSheet,
   postToSheet,
   safeFetch,
+  saveDomains,
 } from '../api.js';
 import { trackAction } from './audit-tab.js';
 
@@ -73,6 +75,34 @@ export function parseSectors(beat){
 export function joinSectors(arr){ return arr.join('|'); }
 export function mainSectors(){ return COMPANY_SECTORS.filter(s=>s.parent===null); }
 export function subSectors(parentId){ return COMPANY_SECTORS.filter(s=>s.parent===parentId); }
+
+/* ── 분야(도메인) 헬퍼 (신규) ──
+   분야는 섹터 계층과 직교하는 속성: 메인 섹터의 s.domain에만 저장되고
+   서브 섹터는 런타임에 부모의 domain을 따라간다. */
+export const UNASSIGNED_DOMAIN = '__none__'; // "미분류" 가상 분야 id
+export function domainName(id){
+  if(id === UNASSIGNED_DOMAIN) return '미분류';
+  return (DOMAINS.find(d => d.id === id)||{}).name || id;
+}
+export function domainOfSector(s){
+  if(!s) return '';
+  const main = s.parent ? COMPANY_SECTORS.find(x => x.id === s.parent) : s;
+  const dom = (main && main.domain) || '';
+  // 목록에 없는 id는 미분류 취급 (분야 삭제 후 잔존값 방어)
+  return DOMAINS.some(d => d.id === dom) ? dom : '';
+}
+/* 해당 분야에 속한 모든 섹터의 "이름" Set (메인 + 그 서브들).
+   domainId가 UNASSIGNED_DOMAIN이면 어떤 분야에도 속하지 않은 섹터들. */
+export function sectorNamesInDomain(domainId){
+  const names = new Set();
+  mainSectors().forEach(m => {
+    const dom = domainOfSector(m) || UNASSIGNED_DOMAIN;
+    if(dom !== domainId) return;
+    names.add(m.name);
+    subSectors(m.id).forEach(s => names.add(s.name));
+  });
+  return names;
+}
 
 /* 섹터명(정확히 일치)을 가진 기업 수 — 기업DB 필터(setCoCat)와 동일한 기준으로
    세어서 숫자와 클릭 결과가 항상 일치하게 함 (원본 3695~3705행) */
@@ -156,7 +186,17 @@ export function renderSectorTree(){
   const counts = computeSectorCompanyCounts();
   const countBadge = cnt => `<span style="font-size:10px;color:var(--i4);font-weight:400" title="클릭하면 기업DB에서 이 섹터로 필터링">${cnt||0}개사</span>`;
 
-  el.innerHTML = mains.map(m => {
+  // 분야 배정 드롭다운 (메인 섹터 카드용)
+  const domainSelect = m => {
+    const cur = domainOfSector(m);
+    return `<select class="fi" style="font-size:10px;padding:1px 4px;width:auto" title="이 섹터가 속한 분야"
+      onchange="assignSectorDomain('${escAttr(m.id)}', this.value)">
+      <option value=""${!cur?' selected':''}>미분류</option>
+      ${DOMAINS.map(d => `<option value="${escAttr(d.id)}"${cur===d.id?' selected':''}>${escapeHtml(d.name)}</option>`).join('')}
+    </select>`;
+  };
+
+  const mainCard = m => {
     const subs = subSectors(m.id);
     return `
     <div class="sector-tree-main" ondragover="event.preventDefault()" ondrop="onSectorDropToMain(event,'${m.id}')"
@@ -165,6 +205,7 @@ export function renderSectorTree(){
         <span draggable="true" ondragstart="onSectorDragStart(event,'${m.id}')" onclick="filterCoBySector('${escAttr(m.name)}')"
           style="font-weight:700;font-size:13px;flex:1;cursor:pointer" title="클릭하면 기업DB에서 이 섹터로 필터링">${escapeHtml(parseSectorScope(m.name).plainName)}</span>
         ${countBadge(counts[m.name])}
+        ${domainSelect(m)}
         <button class="btn bs" style="font-size:11px;padding:2px 8px" onclick="toggleSubAddInline('${m.id}')">+ 서브</button>
         <button onclick="removeSectorById('${m.id}')"
           style="background:none;border:none;cursor:pointer;color:var(--i4);font-size:16px;line-height:1"
@@ -186,7 +227,37 @@ export function renderSectorTree(){
           </span>`).join('') : '<span style="font-size:11px;color:var(--i4)">서브섹터 없음 — 드래그해서 넣을 수 있어요</span>'}
       </div>
     </div>`;
-  }).join('');
+  };
+
+  // 분야별 그룹핑: 분야 목록 순서대로 + 마지막에 미분류
+  const groups = [];
+  DOMAINS.forEach(d => {
+    const ms = mains.filter(m => domainOfSector(m) === d.id);
+    if(ms.length) groups.push({ title: d.name, mains: ms });
+  });
+  const unassigned = mains.filter(m => !domainOfSector(m));
+  if(unassigned.length) groups.push({ title: '미분류', mains: unassigned });
+
+  el.innerHTML = groups.map(g => `
+    <div style="font-size:11px;font-weight:700;color:var(--i3);margin:14px 0 6px;text-transform:uppercase;letter-spacing:.4px">
+      🗂 ${escapeHtml(g.title)} <span style="font-weight:400;color:var(--i4)">(${g.mains.length})</span>
+    </div>
+    ${g.mains.map(mainCard).join('')}
+  `).join('');
+}
+
+/* 메인 섹터를 분야에 배정/해제 (트리 카드의 드롭다운 onchange) */
+export async function assignSectorDomain(sectorId, domainId){
+  const s = COMPANY_SECTORS.find(x => x.id === sectorId);
+  if(!s) return;
+  const prev = s.domain || '';
+  s.domain = domainId || '';
+  const r = await upsertSectorRow(s);
+  if(!r.ok){ s.domain = prev; renderSectorList(); return; } // 실패 시 롤백
+  trackAction('edit', '섹터 분야 배정', s.name,
+    `섹터 "${parseSectorScope(s.name).plainName}" 분야: ${prev?domainName(prev):'미분류'} → ${domainId?domainName(domainId):'미분류'}`);
+  renderSectorList();
+  try { buildCoCAT(); } catch(e){}
 }
 
 export function toggleSubAddInline(mainId){
@@ -211,7 +282,7 @@ export async function addSubSectorTo(mainId){
   if(COMPANY_SECTORS.some(s => (typeof s==='string'?s:s.name) === val)){ alert('이미 있는 섹터예요.'); return; }
 
   const newId = slugifySectorName(val);
-  const sector = { id: newId, name: val, parent: mainId };
+  const sector = { id: newId, name: val, parent: mainId, domain: '' };
   COMPANY_SECTORS.push(sector);
   renderSectorList();
   try { buildCoCAT(); populateUploadEvDropdown(); } catch(e){}
@@ -295,7 +366,8 @@ export async function reorganizeSectorsSheet(){
 
   if(!confirm(`섹터 ${ordered.length}개를 메인 → 서브 순서로 구글시트에 재정렬할까요?`)) return;
 
-  const rows = ordered.map(s => [s.id, s.name, s.parent || '']);
+  // ⚠ replaceAll은 rows 폭만큼만 재작성하므로 반드시 domain까지 4컬럼으로 보낸다
+  const rows = ordered.map(s => [s.id, s.name, s.parent || '', s.domain || '']);
   const r = await postToSheet({ sheet: 'sectors', action: 'replaceAll', rows }, '섹터 정렬');
   if(r.ok){
     COMPANY_SECTORS.splice(0, COMPANY_SECTORS.length, ...ordered);
@@ -440,7 +512,7 @@ export async function applySectorGrouping(){
     const trimmed = name.trim();
     if(COMPANY_SECTORS.some(s => (typeof s==='string'?s:s.name) === trimmed)){ alert('이미 있는 섹터명이에요.'); return; }
     groupId = slugifySectorName(trimmed);
-    const groupSector = { id: groupId, name: trimmed, parent: null };
+    const groupSector = { id: groupId, name: trimmed, parent: null, domain: '' };
     COMPANY_SECTORS.push(groupSector);
     await upsertSectorRow(groupSector);
   }
@@ -451,7 +523,7 @@ export async function applySectorGrouping(){
     const name = checked[i];
     if(COMPANY_SECTORS.some(s => (typeof s==='string'?s:s.name) === name)) continue;
     const newId = slugifySectorName(name);
-    const sector = { id: newId, name, parent: groupId };
+    const sector = { id: newId, name, parent: groupId, domain: '' };
     COMPANY_SECTORS.push(sector);
     await upsertSectorRow(sector);
   }
@@ -512,7 +584,7 @@ export async function convertMainsToGroup(){
     const trimmed = name.trim();
     if(COMPANY_SECTORS.some(s => (typeof s==='string'?s:s.name) === trimmed)){ alert('이미 있는 섹터명이에요.'); return; }
     groupId = slugifySectorName(trimmed);
-    const groupSector = { id: groupId, name: trimmed, parent: null };
+    const groupSector = { id: groupId, name: trimmed, parent: null, domain: '' };
     COMPANY_SECTORS.push(groupSector);
     await upsertSectorRow(groupSector);
   }
@@ -529,11 +601,12 @@ export async function convertMainsToGroup(){
   const targets = [...toReparent].map(id => COMPANY_SECTORS.find(s => s.id === id)).filter(Boolean);
   if(!confirm(`${targets.length}개 섹터를 "${groupName}" 그룹 하위로 편입할까요?`)) return;
 
-  targets.forEach(s => { s.parent = groupId; });
+  // 서브가 되는 섹터는 분야 배정을 비운다 (분야는 메인 섹터에만 저장 — 부모를 따라가게 됨)
+  targets.forEach(s => { s.parent = groupId; s.domain = ''; });
 
   // 개별 요청 대신 한 번의 batchUpsert로 전부 저장 (요청 수를 크게 줄여 안정성 확보)
   if(targets.length){
-    const rows = targets.map(s => [s.id, s.name, s.parent || '']);
+    const rows = targets.map(s => [s.id, s.name, s.parent || '', s.domain || '']);
     await postToSheet({ sheet: 'sectors', action: 'batchUpsert', rows }, '섹터 그룹 편입');
   }
 
@@ -559,7 +632,7 @@ export async function addMainSector(){
   if(exists){ alert('이미 있는 섹터예요.'); return; }
 
   const newId = slugifySectorName(val);
-  const sector = { id: newId, name: val, parent: null };
+  const sector = { id: newId, name: val, parent: null, domain: '' };
 
   COMPANY_SECTORS.push(sector);
   if(inp) inp.value = '';
@@ -686,7 +759,7 @@ export async function confirmSectorImport(){
     const mainName = scopedSectorName(_sectorScope, g.main);
     let mainSector = COMPANY_SECTORS.find(s => s.name === mainName && !s.parent);
     if(!mainSector){
-      mainSector = { id: slugifySectorName(mainName), name: mainName, parent: null };
+      mainSector = { id: slugifySectorName(mainName), name: mainName, parent: null, domain: '' };
       COMPANY_SECTORS.push(mainSector);
       addedMain++;
       await upsertSectorRow(mainSector);
@@ -706,7 +779,7 @@ export async function confirmSectorImport(){
       const exists = COMPANY_SECTORS.some(s => s.parent === mainSector.id && s.name === subName);
       if(exists){ skippedSub++; continue; }
 
-      const subSector = { id: slugifySectorName(subName), name: subName, parent: mainSector.id };
+      const subSector = { id: slugifySectorName(subName), name: subName, parent: mainSector.id, domain: '' };
       COMPANY_SECTORS.push(subSector);
       addedSub++;
       await upsertSectorRow(subSector);
@@ -720,8 +793,91 @@ export async function confirmSectorImport(){
   alert(`섹터 추가 완료 — 메인 ${addedMain}개(중복 ${skippedMain}개 건너뜀), 서브 ${addedSub}개(중복 ${skippedSub}개 건너뜀)`);
 }
 
+/* ══════════════════════════════════════════
+   분야(도메인) 관리 (신규) — PART_TYPES 관리 UI 패턴
+══════════════════════════════════════════ */
+export function renderDomainList(){
+  const el = document.getElementById('domain-list');
+  if(!el) return;
+  if(!DOMAINS.length){
+    el.innerHTML = '<span style="font-size:12px;color:var(--i4)">등록된 분야가 없어요 — 모든 섹터가 미분류로 표시됩니다.</span>';
+    return;
+  }
+  const mainCount = id => mainSectors().filter(m => domainOfSector(m) === id).length;
+  el.innerHTML = DOMAINS.map(d => `
+    <span style="display:inline-flex;align-items:center;gap:6px;background:var(--W);border:1px solid var(--i6);border-radius:20px;padding:4px 6px 4px 12px;font-size:12px">
+      <b>${escapeHtml(d.name)}</b>
+      <span style="font-size:10px;color:var(--i4)">${mainCount(d.id)}개 섹터</span>
+      <button onclick="renameDomain('${escAttr(d.id)}')" title="이름 변경"
+        style="background:none;border:none;cursor:pointer;color:var(--i4);font-size:12px;padding:0">✎</button>
+      <button onclick="removeDomain('${escAttr(d.id)}')" title="삭제"
+        style="background:none;border:none;cursor:pointer;color:var(--i4);font-size:14px;line-height:1;padding:0"
+        onmouseover="this.style.color='var(--re)'" onmouseout="this.style.color='var(--i4)'">×</button>
+    </span>`).join('');
+}
+
+export async function addDomain(){
+  const inp = document.getElementById('domain-add-input');
+  const raw = inp ? inp.value.trim() : '';
+  if(!raw){ inp && inp.focus(); return; }
+  if(DOMAINS.some(d => d.name === raw)){ alert('이미 있는 분야예요.'); return; }
+  let id = raw.toLowerCase().replace(/[^a-z0-9가-힣]+/g,'_').replace(/^_+|_+$/g,'').slice(0,20) || 'domain';
+  let n = 2; const base = id;
+  while(DOMAINS.some(d => d.id === id)) id = `${base}_${n++}`;
+  DOMAINS.push({ id, name: raw });
+  if(inp) inp.value = '';
+  const r = await saveDomains();
+  if(!r.ok){ DOMAINS.pop(); renderDomainList(); return; } // 실패 시 롤백
+  trackAction('edit', '분야 추가', raw, `분야 "${raw}" 추가`);
+  renderDomainList();
+  renderSectorTree();
+  try { buildCoCAT(); } catch(e){}
+}
+
+export async function renameDomain(id){
+  const d = DOMAINS.find(x => x.id === id);
+  if(!d) return;
+  const name = prompt('분야의 새 이름을 입력하세요.', d.name);
+  if(!name || !name.trim() || name.trim() === d.name) return;
+  const prev = d.name;
+  d.name = name.trim();
+  const r = await saveDomains();
+  if(!r.ok){ d.name = prev; renderDomainList(); return; }
+  trackAction('edit', '분야 이름 변경', d.name, `분야 이름: ${prev} → ${d.name}`);
+  renderDomainList();
+  renderSectorTree();
+  try { buildCoCAT(); } catch(e){}
+}
+
+export async function removeDomain(id){
+  const d = DOMAINS.find(x => x.id === id);
+  if(!d) return;
+  const affected = mainSectors().filter(m => (m.domain||'') === id);
+  if(!confirm(`분야 "${d.name}"을(를) 삭제할까요?`
+    + (affected.length ? `\n소속 메인 섹터 ${affected.length}개는 "미분류"로 이동합니다.` : ''))) return;
+
+  // 소속 섹터의 domain을 비우고 일괄 저장 (batchUpsert 1회)
+  if(affected.length){
+    affected.forEach(s => { s.domain = ''; });
+    const r = await postToSheet({
+      sheet: 'sectors', action: 'batchUpsert',
+      rows: affected.map(s => [s.id, s.name, s.parent || '', '']),
+    }, '분야 해제');
+    if(!r.ok){ affected.forEach(s => { s.domain = id; }); return; } // 실패 시 롤백
+  }
+  const idx = DOMAINS.findIndex(x => x.id === id);
+  if(idx >= 0) DOMAINS.splice(idx, 1);
+  const r2 = await saveDomains();
+  if(!r2.ok){ DOMAINS.splice(idx, 0, d); renderDomainList(); return; }
+  trackAction('edit', '분야 삭제', d.name, `분야 "${d.name}" 삭제 (섹터 ${affected.length}개 미분류로 이동)`);
+  renderDomainList();
+  renderSectorTree();
+  try { buildCoCAT(); } catch(e){}
+}
+
 /* 섹터 탭 하위 4개 영역을 한 번에 새로고침 (원본 3685~3691행) */
 export function renderSectorList(){
+  renderDomainList();
   populateSectorScopeSelect();
   renderSectorTree();
   renderUnregisteredSectors();
@@ -1086,3 +1242,7 @@ window.onSectorScopeChange   = onSectorScopeChange;
 window.handleSectorFileSelect = handleSectorFileSelect;
 window.confirmSectorImport    = confirmSectorImport;
 window.cancelSectorImport     = cancelSectorImport;
+window.assignSectorDomain     = assignSectorDomain;
+window.addDomain              = addDomain;
+window.renameDomain           = renameDomain;
+window.removeDomain           = removeDomain;

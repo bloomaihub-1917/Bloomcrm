@@ -36,21 +36,24 @@ import {
   EVENT_LIST,
   PART_TYPES,
   COMPANY_SECTORS,
+  DOMAINS,
   selCo,
   coTab,
   coCatF,
   coCodeF,
+  coDomainF,
   setSelCo,
   setCoTab,
   setCoCatF,
   setCoCodeF,
+  setCoDomainF,
   evColor,
   evShort,
 } from '../state.js';
 import { RP, avB, avF } from '../constants.js';
 import { escapeHtml, escAttr, levenshteinDist, parseSectorScope } from '../utils.js';
 import { postToSheet } from '../api.js';
-import { parseSectors, joinSectors, mainSectors } from './settings-tab.js';
+import { parseSectors, joinSectors, mainSectors, sectorNamesInDomain, domainName, UNASSIGNED_DOMAIN } from './settings-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
 import { trackAction } from './audit-tab.js';
 
@@ -351,6 +354,16 @@ function coCatButton(name, cnt, indent, title){
     </button>`;
 }
 
+/* 펼쳐진 분야 아코디언 상태 (화면 전용 — 저장하지 않음) */
+const _expandedDomains = new Set();
+
+/* 어떤 분야에도 속하지 않은 섹터명 집합 (미분류): 등록 섹터 중 미배정 + 미등록 값 */
+function unassignedSectorNames(sectorCounts){
+  const assigned = new Set();
+  DOMAINS.forEach(d => sectorNamesInDomain(d.id).forEach(n => assigned.add(n)));
+  return Object.keys(sectorCounts).filter(name => !assigned.has(name));
+}
+
 export function buildCoCAT(){
   const el = document.getElementById('co-catf');
   if(!el) return;
@@ -362,47 +375,119 @@ export function buildCoCAT(){
       .forEach(s => { sectorCounts[s] = (sectorCounts[s]||0) + 1; });
   });
 
-  const html = [`<button class="nr${!coCatF?' on':''}" onclick="setCoCat(null)">
+  const html = [`<button class="nr${!coCatF && !coDomainF?' on':''}" onclick="setCoCat(null)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><circle cx="12" cy="12" r="10"/></svg>
       전체<span class="nbg">${CO_DB.length}</span>
     </button>`];
 
-  // 등록된 섹터를 "공통" + 행사별로 그룹핑해서 보여준다(행사가 많아질수록
-  // 검색하기 쉽도록) — 같은 이름이 다른 행사에 있어도 섞이지 않는다.
-  const shown = new Set();
-  const groupOrder = ['', ...EVENT_LIST.map(e => e.short)];
-  const groupLabel = short => short || '공통';
+  // 분야 하나의 기업 수 — 하위 전 섹터에 해당하는 기업 key의 Set 크기 (중복 이중 카운트 방지)
+  const domainCompanyCount = names => {
+    const keys = new Set();
+    CO_DB.forEach(c => {
+      const secs = c.sectors && c.sectors.length ? c.sectors : [c.sector||'General / Others'];
+      if(secs.some(s => names.has(s))) keys.add(c.key);
+    });
+    return keys.size;
+  };
 
-  groupOrder.forEach(short => {
-    const items = COMPANY_SECTORS.filter(s => {
-      const sc = typeof s==='string' ? { eventShort:null } : parseSectorScope(s.name);
-      return (sc.eventShort||'') === short && (sectorCounts[typeof s==='string'?s:s.name]||0) > 0;
+  // 분야 안의 섹터 버튼들 — 기존 방식(공통 + 행사별 그룹, 서브 들여쓰기) 유지하되
+  // 그 분야 이름 집합(names)에 속한 섹터만 나열
+  const sectorButtonsIn = names => {
+    const rows = [];
+    const groupOrder = ['', ...EVENT_LIST.map(e => e.short)];
+    groupOrder.forEach(short => {
+      const items = COMPANY_SECTORS.filter(s => {
+        if(!names.has(s.name)) return false;
+        const sc = parseSectorScope(s.name);
+        return (sc.eventShort||'') === short && (sectorCounts[s.name]||0) > 0;
+      });
+      if(!items.length) return;
+      if(short) rows.push(`<div style="font-size:10px;font-weight:700;color:var(--i4);text-transform:uppercase;letter-spacing:.04em;margin:6px 0 2px 14px">${escapeHtml(short)}</div>`);
+      items.forEach(s => {
+        rows.push(coCatButton(s.name, sectorCounts[s.name]||0,
+          s.parent ? 'padding-left:30px;font-size:11px' : 'padding-left:18px'));
+      });
     });
-    if(!items.length) return;
-    html.push(`<div style="font-size:10px;font-weight:700;color:var(--i4);text-transform:uppercase;letter-spacing:.04em;margin:8px 0 2px 2px">${escapeHtml(groupLabel(short))}</div>`);
-    items.forEach(s => {
-      const name = typeof s === 'string' ? s : s.name;
-      const parent = typeof s === 'string' ? null : s.parent;
-      shown.add(name);
-      html.push(coCatButton(name, sectorCounts[name]||0, parent ? 'padding-left:18px;font-size:11px' : ''));
-    });
+    return rows;
+  };
+
+  // 분야 아코디언 행: 이름 클릭 = 분야 전체 필터, ▸ 클릭 = 펼치기/접기
+  const domainRow = (id, label, count, expanded) => `
+    <div class="nr${coDomainF===id?' on':''}" style="display:flex;align-items:center;gap:4px;cursor:pointer">
+      <span onclick="event.stopPropagation();toggleCoDomain('${escAttr(id)}')"
+        style="width:16px;text-align:center;flex-shrink:0;font-size:10px;color:var(--i4)" title="펼치기/접기">${expanded?'▾':'▸'}</span>
+      <span onclick="setCoDomain('${escAttr(id)}')" style="flex:1;display:flex;align-items:center;gap:6px;font-weight:700" title="이 분야 전체 기업으로 필터링">
+        🗂 ${escapeHtml(label)}<span class="nbg">${count}</span>
+      </span>
+    </div>`;
+
+  DOMAINS.forEach(d => {
+    const names = sectorNamesInDomain(d.id);
+    const count = domainCompanyCount(names);
+    if(!count && !_expandedDomains.has(d.id)) {
+      // 기업이 없는 빈 분야도 접힌 상태로 표시 (배정 안내용)
+      html.push(domainRow(d.id, d.name, 0, false));
+      return;
+    }
+    const expanded = _expandedDomains.has(d.id);
+    html.push(domainRow(d.id, d.name, count, expanded));
+    if(expanded) html.push(...sectorButtonsIn(names));
   });
 
-  // 아직 섹터 체계에 등록 안 된 값도 대시보드와 동일하게 표시 (설정 → 기업 섹터에서 그룹으로 정리 가능)
-  const unregistered = Object.keys(sectorCounts).filter(name => !shown.has(name));
-  if(unregistered.length){
-    html.push(`<div style="font-size:10px;font-weight:700;color:var(--i4);text-transform:uppercase;letter-spacing:.04em;margin:8px 0 2px 2px">미등록</div>`);
-    unregistered.forEach(name => html.push(coCatButton(name, sectorCounts[name], '', '미등록 섹터')));
+  // 미분류: 미배정 섹터 + 미등록 값
+  const unassigned = unassignedSectorNames(sectorCounts);
+  if(unassigned.length){
+    const names = new Set(unassigned);
+    const expanded = _expandedDomains.has(UNASSIGNED_DOMAIN);
+    html.push(domainRow(UNASSIGNED_DOMAIN, '미분류', domainCompanyCount(names), expanded));
+    if(expanded){
+      // 등록 섹터는 그룹 규칙대로, 미등록 값은 그 뒤에
+      html.push(...sectorButtonsIn(names));
+      const registered = new Set(COMPANY_SECTORS.map(s => s.name));
+      unassigned.filter(n => !registered.has(n)).forEach(name =>
+        html.push(coCatButton(name, sectorCounts[name], 'padding-left:18px', '미등록 섹터')));
+    }
   }
 
   el.innerHTML = html.join('');
   buildCoCodeF();
 }
+
 export function setCoCat(s){
   setCoCatF((coCatF===s)?null:s);
+  setCoDomainF(null); // 분야 필터와 상호 배타
   buildCoCAT(); renderCoList();
   // 기업이 선택되어 상세화면을 보는 중이 아니라면, 메인 화면도 필터된 기업 리스트로 갱신
   if(!selCo) renderCoDashboard();
+}
+
+/* 분야 전체 필터 (신규) */
+export function setCoDomain(id){
+  setCoDomainF((coDomainF===id)?null:id);
+  setCoCatF(null); // 섹터 필터와 상호 배타
+  if(coDomainF) _expandedDomains.add(id); // 필터 걸면 자동 펼침
+  buildCoCAT(); renderCoList();
+  if(!selCo) renderCoDashboard();
+}
+
+export function toggleCoDomain(id){
+  if(_expandedDomains.has(id)) _expandedDomains.delete(id);
+  else _expandedDomains.add(id);
+  buildCoCAT();
+}
+
+/* 현재 분야 필터에 해당하는 섹터명 집합 (renderCoList/대시보드 공용) */
+export function coDomainNameSet(){
+  if(!coDomainF) return null;
+  if(coDomainF === UNASSIGNED_DOMAIN){
+    const sectorCounts = {};
+    CO_DB.forEach(c => {
+      (c.sectors && c.sectors.length ? c.sectors : [c.sector||'General / Others'])
+        .forEach(s => { sectorCounts[s] = 1; });
+    });
+    return new Set(unassignedSectorNames(sectorCounts));
+  }
+  return sectorNamesInDomain(coDomainF);
 }
 export function buildCoCodeF(){
   const el = document.getElementById('co-codef');
@@ -438,6 +523,11 @@ export function renderCoList(q2=''){
   let list=[...CO_DB];
   if(q)list=list.filter(c=>c.nameKo.toLowerCase().includes(q.toLowerCase())||c.nameEn.toLowerCase().includes(q.toLowerCase())||c.sector.toLowerCase().includes(q.toLowerCase()));
   if(coCatF)list=list.filter(c=>(c.sectors||[c.sector]).some(s=>s===coCatF));
+  if(coDomainF){
+    const names = coDomainNameSet();
+    if(names) list = list.filter(c =>
+      (c.sectors && c.sectors.length ? c.sectors : [c.sector||'General / Others']).some(s => names.has(s)));
+  }
   if(coCodeF)list=list.filter(c=>c.catCode && c.catCode.startsWith(coCodeF+'-'));
 
   const toggleHtml = renderCoColumnToggleHtml();
@@ -477,7 +567,7 @@ export function selectCo(key){
 
 // ── 기업DB 진입 시 기본 화면: 섹터별 대시보드 ──
 export function showCoDashboard(){
-  setSelCo(null); setCoCatF(null); setCoCodeF(null);
+  setSelCo(null); setCoCatF(null); setCoCodeF(null); setCoDomainF(null);
   renderCoList(); buildCoCAT(); buildCoCodeF();
   const cdtEl = document.getElementById('cdt'); if(cdtEl) cdtEl.style.display='none';
   const dashEl = document.getElementById('co-dash'); if(dashEl) dashEl.style.display='block';
@@ -530,6 +620,34 @@ export function renderCoDashboard(){
 
   if(!CO_DB.length){
     el.innerHTML = `<div class="dbe" style="height:100%"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg><p>등록된 기업이 없어요</p></div>`;
+    return;
+  }
+
+  // 분야가 선택되어 있으면 그 분야 하위 전체 섹터의 기업 리스트를 보여줌
+  if(coDomainF){
+    const names = coDomainNameSet() || new Set();
+    const list = CO_DB.filter(c =>
+      (c.sectors&&c.sectors.length?c.sectors:[c.sector||'General / Others']).some(s=>names.has(s)));
+    const label = domainName(coDomainF);
+    el.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+        <button onclick="setCoDomain('${escAttr(coDomainF)}')" style="background:none;border:none;cursor:pointer;color:var(--i3);font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:4px;padding:0">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          전체 섹터 보기
+        </button>
+      </div>
+      <div style="font-size:13px;font-weight:700;color:var(--i1);margin-bottom:2px">🗂 ${escapeHtml(label)} <span style="font-weight:400;color:var(--i4);font-size:12px">${list.length}개 기업</span></div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-top:12px">
+        ${list.length ? list.map((c,i) => `
+          <div class="co-rw" onclick="selectCo('${escAttr(c.key)}')" style="cursor:pointer;border:1px solid var(--i6);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;background:var(--W)">
+            <div class="co-av" style="background:${avB(i)};color:${avF(i)}">${escapeHtml(c.abbr)}</div>
+            <div style="flex:1;min-width:0">
+              <div class="co-rn">${escapeHtml(c.nameKo||c.nameEn)}</div>
+              <div style="font-size:11px;color:var(--i4)">${escapeHtml((c.sectors||[c.sector]).join(', ')||'미분류')}</div>
+            </div>
+            <div class="co-ct">${c.events.length}회</div>
+          </div>`).join('') : `<div style="font-size:12px;color:var(--i4)">해당 분야의 기업이 없어요</div>`}
+      </div>`;
     return;
   }
 
@@ -1093,6 +1211,8 @@ window.selectCo = selectCo;
 window.showCoDashboard = showCoDashboard;
 window.setCoCat = setCoCat;
 window.setCoCode = setCoCode;
+window.setCoDomain = setCoDomain;
+window.toggleCoDomain = toggleCoDomain;
 window.searchCo = searchCo;
 window.searchCoM = searchCoM;
 window.switchCoT = switchCoT;

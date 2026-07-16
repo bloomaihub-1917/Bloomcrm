@@ -34,6 +34,8 @@ import {
   auditLog,
   COMPANY_INFO,
   COMPANY_SECTORS,
+  DOMAINS,
+  setDomains,
   PART_TYPES,
   currentUser,
   curApp,
@@ -282,10 +284,25 @@ export async function loadFromSheets(hooks = {}){
       }));
       console.log('[CRM] contacts loaded & cleaned:', contacts.length);
 
+    // ── settings 시트 → DOMAINS (분야 목록, key='domains' JSON) ──
+    if(settingsData && Array.isArray(settingsData)){
+      const domRow = settingsData.find(row => row.key === 'domains');
+      if(domRow){
+        try {
+          const parsed = JSON.parse(domRow.value);
+          if(Array.isArray(parsed)){
+            setDomains(parsed.filter(d => d && d.id));
+            console.log('[CRM] domains 로드:', DOMAINS.length, '개 분야');
+          }
+        } catch(e){ console.warn('[CRM] domains JSON 파싱 실패 — 전부 미분류로 표시:', e); }
+      }
+    }
+
     // ── sectors 시트 → COMPANY_SECTORS (스프레드시트에서 직접 행 추가/삭제 가능) ──
     if(sectorsData && Array.isArray(sectorsData) && sectorsData.length){
       COMPANY_SECTORS.splice(0, COMPANY_SECTORS.length, ...sectorsData.map(r => ({
         id: r.id || '', name: r.name || '', parent: r.parent || null,
+        domain: r.domain || '',
       })).filter(s => s.id && s.name));
       console.log('[CRM] sectors 시트 로드:', COMPANY_SECTORS.length, '개');
     } else if(settingsData && Array.isArray(settingsData)){
@@ -472,9 +489,20 @@ export async function upsertSectorRow(sector){
   const r = await postToSheet({
     sheet:  'sectors',
     action: 'upsert',
-    row:    [sector.id, sector.name, sector.parent || ''],
+    row:    [sector.id, sector.name, sector.parent || '', sector.domain || ''],
   }, '섹터 저장');
   try { localStorage.setItem('crm_sectors', JSON.stringify(COMPANY_SECTORS)); } catch(e){}
+  return r;
+}
+
+// 분야(도메인) 목록 저장 — settings 시트 key='domains' JSON
+export async function saveDomains(){
+  const r = await postToSheet({
+    sheet:  'settings',
+    action: 'upsert',
+    row:    ['domains', JSON.stringify(DOMAINS)],
+  }, '분야 목록 저장');
+  if(r.ok) console.log('[CRM] domains 저장 완료:', DOMAINS.length, '개');
   return r;
 }
 
