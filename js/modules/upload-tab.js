@@ -55,6 +55,7 @@ import {
 } from '../state.js';
 import { CL } from '../constants.js';
 import { normalizeCat, normalizeCountry, escapeHtml } from '../utils.js';
+import { postToSheet } from '../api.js';
 import { buildCoDB, buildCoCAT, batchUpsertCompanies } from './company-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
 import { trackAction } from './audit-tab.js';
@@ -74,6 +75,19 @@ let upV = 'upload';
 
 /* ── 업로드 폼의 "연결 행사" 직접입력 모드 여부 (원본 6604행) ── */
 let _evDirectMode = false;
+
+/* ── 충돌 없는 신규 id 생성기 (신규) ──
+   기존 `Date.now() + random(100000)` 방식은 대량 업로드 시 전 행이 같은
+   밀리초를 공유해 충돌 공간이 10만뿐이라, 수백 행 업로드에서 id 충돌로
+   연락처가 조용히 누락되는 버그가 있었다. ms 타임스탬프 × 1000 + 단조
+   증가 카운터로 세션 내 충돌을 원천 차단한다 (최대값 ≈ 1.7e15로
+   Number.MAX_SAFE_INTEGER 이내 — 기존 숫자 id 체계와 호환). */
+let _lastGenId = 0;
+function genContactId(){
+  const base = Date.now() * 1000;
+  _lastGenId = base > _lastGenId ? base : _lastGenId + 1;
+  return _lastGenId;
+}
 
 /* ═══════════════════════════════════════
    AI 로그 한 줄 추가 (애니메이션 없이 즉시) (원본 2838행)
@@ -643,7 +657,7 @@ function applyColumnMap(colMap){
     }
 
     return {
-      id: Date.now() + Math.floor(Math.random()*100000),
+      id: genContactId(),
       nameKo,
       nameEn,
       orgKo: org,
@@ -849,10 +863,17 @@ export async function runValidationStep(newRows, dupRows){
   const companyUpdates = []; // 업로드된 website/note를 기업(companies) 단위로 반영할 목록
   const touchedCompanyKeys = new Set(); // 이번 업로드에 등장한 회사(원문 표기) — companies 시트에 최초 저장 대상 확인용
   const existingIds = new Set(contacts.map(c => c.id));
+  const addedContacts = []; // 시트 저장 실패 시 롤백용
   newRows.forEach(r => {
     const { _dup, _suspect, _suspectId, _suspectName, _suspectOrg, _suspectEmail, _companyWebsite, _companyNote, ...clean } = r;
-    if(existingIds.has(clean.id)) return;
+    if(existingIds.has(clean.id)){
+      // 이제 genContactId()로 세션 내 충돌은 없지만, 만에 하나 걸리면 조용히 버리지 않고 알린다
+      addAiLog('warn', 'id 충돌로 1건 스킵: ' + (clean.nameKo||clean.nameEn||clean.id));
+      console.warn('[upload-tab] id 충돌 스킵:', clean.id, clean.nameKo||clean.nameEn);
+      return;
+    }
     existingIds.add(clean.id);
+    addedContacts.push(clean);
     // 기업 카테고리(sector) 일괄 적용 → beat 필드에 저장
     if(selectedSector) clean.beat = selectedSector;
     contacts.push(clean);
@@ -868,7 +889,7 @@ export async function runValidationStep(newRows, dupRows){
     // 행사 선택 시 participations 자동 생성 (정규화된 필드 형태: eventId/event/contactId/contact/role)
     if(selectedEv){
       const part = {
-        id:        'P-' + (Date.now() + Math.floor(Math.random()*100000)),
+        id:        'P-' + genContactId(),
         eventId:   selectedEv,
         event:     selectedEv,
         contactId: clean.id,
@@ -918,7 +939,7 @@ export async function runValidationStep(newRows, dupRows){
     if(!selectedEv) return;
     if(participations.some(p => p.contactId === existing.id && p.eventId === selectedEv && p.role === selectedRole)) return;
     const part = {
-      id:        'P-' + (Date.now() + Math.floor(Math.random()*100000)),
+      id:        'P-' + genContactId(),
       eventId:   selectedEv,
       event:     selectedEv,
       contactId: existing.id,
@@ -973,66 +994,73 @@ export async function runValidationStep(newRows, dupRows){
   console.log('[upload-tab] 업로드 확정 — newParts.length:', newParts.length, '| GS_URL:', !!GS_URL, '| currentUser:', !!currentUser);
 
   // 2) 구글시트에 저장 (Apps Script 연동) — 여러 행을 batchAppend로 한 번에 저장해 왕복 횟수를 줄임
+  // ⚠ 수정: 기존에는 응답을 확인하지 않아 저장 실패도 "저장됨"으로 표시되고,
+  // 새로고침 시 업로드 내용이 통째로 사라지는 버그가 있었다. 이제 contacts
+  // 저장 실패 시 화면 반영을 롤백하고 업로드 화면을 유지해 재시도할 수 있다.
+  let partsSaveFailed = false;
   if(GS_URL && currentUser){
-    let saved = 0, failed = 0;
-    if(newRows.length){
-      try{
-        const contactRows = newRows.map(r => [r.id, r.nameKo, r.nameEn, r.orgKo, r.orgEn, r.titleKo, r.titleEn, r.deptKo, r.deptEn,
-              r.country, r.cat, r.lang, r.source, r.date, r.status, r.email1, r.email2, r.phone1, r.phone2,
-              r.beat||'', r.products||'']);
-        const res = await fetch(GS_URL, {
-          method: 'POST',
-          body: JSON.stringify({ sheet: 'contacts', email: currentUser.email, action: 'batchAppend', rows: contactRows }),
-        });
-        const json = await res.json().catch(()=>null);
-        saved = (json && json.count) || newRows.length;
-      }catch(e){ failed = newRows.length; console.warn('contacts batchAppend 실패:', e); }
+    if(addedContacts.length){
+      const contactRows = addedContacts.map(r => [r.id, r.nameKo, r.nameEn, r.orgKo, r.orgEn, r.titleKo, r.titleEn, r.deptKo, r.deptEn,
+            r.country, r.cat, r.lang, r.source, r.date, r.status, r.email1, r.email2, r.phone1, r.phone2,
+            r.beat||'', r.products||'']);
+      const res = await postToSheet(
+        { sheet: 'contacts', action: 'batchAppend', rows: contactRows }, '연락처 업로드');
+      if(!res.ok){
+        // 롤백: 방금 화면에 넣은 연락처/참여기록 제거, 업로드 상태는 유지해서 재시도 가능하게
+        const addedIdSet = new Set(addedContacts.map(c => c.id));
+        const newPartIdSet = new Set(newParts.map(p => p.id));
+        for(let i = contacts.length - 1; i >= 0; i--){
+          if(addedIdSet.has(contacts[i].id)) contacts.splice(i, 1);
+        }
+        for(let i = participations.length - 1; i >= 0; i--){
+          if(newPartIdSet.has(participations[i].id)) participations.splice(i, 1);
+        }
+        try { buildCoDB(); buildCoCAT(); renderMDB(); buildMDBEvList(); } catch(e){}
+        addAiLog('warn', '⚠️ 구글시트 저장 실패 — 반영을 취소했어요. 네트워크 확인 후 "DB에 추가"를 다시 눌러주세요.');
+        alert('구글시트 저장에 실패해서 추가를 취소했어요.\n네트워크를 확인하고 "DB에 추가"를 다시 눌러주세요.');
+        if(btn){ btn.disabled = false; btn.innerHTML = 'DB에 추가 (' + addedContacts.length + '건)'; }
+        return;
+      }
     }
     // 기업명 국문 승격 / 추가 이메일(email2) 보강된 기존 연락처 재저장
     // (개별 upsert — 대상이 적어 배치 불필요. 같은 연락처가 두 목록에 겹칠 수 있어 id로 중복 제거)
     const toResave = new Map();
     [...orgUpgraded, ...emailAdded].forEach(c => toResave.set(c.id, c));
     for(const c of toResave.values()){
-      try{
-        await fetch(GS_URL, {
-          method: 'POST',
-          body: JSON.stringify({
-            sheet: 'contacts',
-            email: currentUser.email,
-            action: 'upsert',
-            row: [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
-                  c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
-                  c.beat||'', c.products||'']
-          })
-        });
-      }catch(e){ console.warn('연락처 재저장 실패:', c.id, e); }
+      await postToSheet({
+        sheet: 'contacts',
+        action: 'upsert',
+        row: [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
+              c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
+              c.beat||'', c.products||''],
+      }, '연락처 정보 보강');
     }
     // participations 구글시트 저장 — batchAppend로 한 번에
     // (시트 컬럼 순서: id, ev_id, 행사명, cid, 소속, 성명, 직함, type, note, matched —
     //  원본과 동일하게 행사명/소속/성명/직함 칸은 빈 문자열로 저장)
     if(newParts.length){
-      try{
-        const partRows = newParts.map(p => [p.id, p.eventId, '', p.contactId, '', '', '', p.role, p.note||'', p.matched||'✅ 앱에서 추가']);
-        const pRes = await fetch(GS_URL, {
-          method: 'POST',
-          body: JSON.stringify({ sheet: 'participations', email: currentUser.email, action: 'batchAppend', rows: partRows }),
-        });
-        const pJson = await pRes.json().catch(()=>null);
-        console.log('[upload-tab] participations batchAppend 응답:', pJson);
-      }catch(e){ console.warn('[upload-tab] participations batchAppend 실패:', e); }
+      const partRows = newParts.map(p => [p.id, p.eventId, '', p.contactId, '', '', '', p.role, p.note||'', p.matched||'✅ 앱에서 추가']);
+      const pRes = await postToSheet(
+        { sheet: 'participations', action: 'batchAppend', rows: partRows }, '행사 참여 기록');
+      if(!pRes.ok){
+        partsSaveFailed = true;
+        addAiLog('warn', '⚠️ 행사 참여 기록 저장 실패 — 연락처는 저장됐지만 행사 연결(' + newParts.length + '건)은 시트에 반영되지 않았어요.');
+      }
     }
     const evMsg = selectedEv ? ` / 행사 "${selectedEv}" ${newParts.length}건 연결` : '';
     trackAction('upload', '파일 업로드', uploadedFileName,
-      '<b>' + escapeHtml(uploadedFileName) + '</b> 업로드 — 신규 ' + saved + '건 저장' + evMsg + (failed?(', 실패 '+failed+'건'):''));
+      '<b>' + escapeHtml(uploadedFileName) + '</b> 업로드 — 신규 ' + addedContacts.length + '건 저장' + evMsg
+      + (partsSaveFailed ? ' (⚠️ 행사 연결 저장 실패)' : ''));
   } else {
     const evMsg = selectedEv ? ` / 행사 "${selectedEv}" ${newParts.length}건 연결` : '';
     trackAction('upload', '파일 업로드', uploadedFileName,
-      '<b>' + escapeHtml(uploadedFileName) + '</b> 업로드 — 신규 ' + newRows.length + '건 반영' + evMsg + ' (구글시트 미연동)');
+      '<b>' + escapeHtml(uploadedFileName) + '</b> 업로드 — 신규 ' + addedContacts.length + '건 반영' + evMsg + ' (구글시트 미연동)');
   }
 
   if(btn){ btn.disabled = false; }
-  addAiLog('ok', '검증/저장 완료: 신규 ' + newRows.length + '건 Master DB 반영' + (GS_URL?' (구글시트 저장 포함)':''));
-  alert(newRows.length + '건이 Master DB에 추가되었어요' + (GS_URL?' (구글시트에도 저장됨)':''));
+  addAiLog('ok', '검증/저장 완료: 신규 ' + addedContacts.length + '건 Master DB 반영' + (GS_URL?' (구글시트 저장 포함)':''));
+  alert(addedContacts.length + '건이 Master DB에 추가되었어요' + (GS_URL?' (구글시트에도 저장됨)':'')
+    + (partsSaveFailed ? '\n⚠️ 단, 행사 참여 기록 저장은 실패했어요 — 감사 로그를 확인해주세요.' : ''));
   resetUpload();
   callHook('switchApp', 'mdb', document.querySelector('.atab'));
 }
