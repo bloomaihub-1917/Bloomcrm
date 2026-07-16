@@ -121,6 +121,13 @@ let currentUser = null;
 export function setCurrentUser(v){ currentUser = v; }
 export { currentUser };
 
+/* ── 서버 발급 세션 토큰 (code.gs issueToken) ──
+   로그인 성공 시 발급받아 모든 doGet/doPost 요청에 auth 파라미터로 첨부.
+   crm_session(localStorage)에도 함께 저장되어 새로고침 후에도 유지된다. */
+let authToken = '';
+export function setAuthToken(v){ authToken = v || ''; }
+export { authToken };
+
 /* ── 사용자별 아바타 색상 (원본 4912~4918행) ── */
 export const USER_COLORS = ['#3B5BDB','#16A34A','#C97B0A','#6D28D9','#0F766E','#DC2626','#0369A1'];
 export function userColor(email){

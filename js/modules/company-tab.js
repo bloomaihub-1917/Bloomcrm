@@ -49,6 +49,7 @@ import {
 } from '../state.js';
 import { RP, avB, avF } from '../constants.js';
 import { escapeHtml, escAttr, levenshteinDist, parseSectorScope } from '../utils.js';
+import { postToSheet } from '../api.js';
 import { parseSectors, joinSectors, mainSectors } from './settings-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
 import { trackAction } from './audit-tab.js';
@@ -304,9 +305,11 @@ export async function mergeCompanies(loserKey, winnerKey){
   if(!confirm(`"${loser.nameKo||loser.nameEn}"(${loser.contacts.length}명) 을(를) "${winner.nameKo||winner.nameEn}"로 합칠까요?\n소속 연락처들의 기업명이 변경됩니다.`)) return;
 
   const changed = [];
+  const backup = []; // 저장 실패 시 롤백용 (id → 원래 orgKo/orgEn)
   loser.contacts.forEach(pc => {
     const c = contacts.find(x => x.id === pc.id);
     if(!c) return;
+    backup.push({ c, orgKo: c.orgKo, orgEn: c.orgEn });
     if(c.orgKo) c.orgKo = winner.nameKo || c.orgKo;
     if(c.orgEn) c.orgEn = winner.nameEn || c.orgEn;
     if(!c.orgKo && winner.nameKo) c.orgKo = winner.nameKo;
@@ -314,15 +317,18 @@ export async function mergeCompanies(loserKey, winnerKey){
     changed.push(c);
   });
 
-  if(GS_URL && currentUser && changed.length){
+  if(changed.length){
     const rows = changed.map(c => [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
       c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2, c.beat, c.products]);
-    try{
-      await fetch(GS_URL, {
-        method: 'POST',
-        body: JSON.stringify({ sheet: 'contacts', email: currentUser.email, action: 'batchUpsert', rows }),
-      });
-    }catch(e){ console.warn('기업 병합 저장 실패:', e); }
+    const r = await postToSheet({ sheet: 'contacts', action: 'batchUpsert', rows }, '기업 병합');
+    if(!r.ok){
+      // 저장 실패 → 로컬 변경 롤백 (기존엔 실패해도 "합쳤어요"가 떠서 새로고침 시 원복되는 거짓 성공이었음)
+      backup.forEach(b => { b.c.orgKo = b.orgKo; b.c.orgEn = b.orgEn; });
+      buildCoDB(); buildCoCAT();
+      try { renderCoList(); } catch(e){}
+      alert('병합 저장에 실패해서 취소했어요. 네트워크 확인 후 다시 시도해주세요.');
+      return;
+    }
   }
 
   buildCoDB(); buildCoCAT();
@@ -659,19 +665,12 @@ export async function upsertCompanyRow(c){
     sector: joinSectors(c.sectors||[]), hq: c.hq||'', website: c.website||'', notes: c.notes||'',
     catCode: c.catCode||'', country: c.country||'', abbr: c.abbr||'', source: c.source||'', updatedAt: c.updatedAt,
   };
-  if(!GS_URL || !currentUser) return;
-  try{
-    await fetch(GS_URL, {
-      method: 'POST',
-      body: JSON.stringify({
-        sheet: 'companies',
-        email: currentUser.email,
-        action: 'upsert',
-        row: [c.key, joinSectors(c.sectors||[]), c.hq||'', c.website||'', c.notes||'',
-              c.catCode||'', c.country||'', c.abbr||'', c.source||'', c.updatedAt],
-      }),
-    });
-  } catch(e){ console.warn('companies 저장 실패:', c.key, e); }
+  return postToSheet({
+    sheet: 'companies',
+    action: 'upsert',
+    row: [c.key, joinSectors(c.sectors||[]), c.hq||'', c.website||'', c.notes||'',
+          c.catCode||'', c.country||'', c.abbr||'', c.source||'', c.updatedAt],
+  }, '기업 정보 저장');
 }
 
 /* 여러 기업을 한 번에 저장 (신규 — 원본에는 없던 기능).
@@ -689,19 +688,12 @@ export async function batchUpsertCompanies(companies){
       catCode: c.catCode||'', country: c.country||'', abbr: c.abbr||'', source: c.source||'', updatedAt: now,
     };
   });
-  if(!GS_URL || !currentUser) return;
-  try{
-    await fetch(GS_URL, {
-      method: 'POST',
-      body: JSON.stringify({
-        sheet: 'companies',
-        email: currentUser.email,
-        action: 'batchUpsert',
-        rows: companies.map(c => [c.key, joinSectors(c.sectors||[]), c.hq||'', c.website||'', c.notes||'',
-              c.catCode||'', c.country||'', c.abbr||'', c.source||'', c.updatedAt]),
-      }),
-    });
-  } catch(e){ console.warn('companies 일괄 저장 실패:', e); }
+  return postToSheet({
+    sheet: 'companies',
+    action: 'batchUpsert',
+    rows: companies.map(c => [c.key, joinSectors(c.sectors||[]), c.hq||'', c.website||'', c.notes||'',
+          c.catCode||'', c.country||'', c.abbr||'', c.source||'', c.updatedAt]),
+  }, '기업 일괄 저장');
 }
 
 // ── 카테고리 코드 부여 (PREFIX-NNN, 이미 있으면 재계산하지 않음) (원본 4269~4281행) ──
@@ -884,25 +876,28 @@ export function saveCoSector(key){
     const el = document.getElementById('co-sector-' + key);
     if(el) el.textContent = newSectors.join(', ') || '미분류';
     const beatVal = joinSectors(newSectors);
+    // ⚠ 수정: 기존엔 소속 연락처 전원에게 개별 POST를 병렬 발사해서
+    // (연락처 100명이면 100개 동시 요청) Apps Script 과부하로 일부만
+    // 성공하는 불일치가 있었다 — batchUpsert 한 번으로 묶는다.
+    const changedContacts = [];
     c.contacts.forEach(ct => {
       const contact = contacts.find(x => x.id === ct.id);
       if(contact){
         contact.beat = beatVal;
-        if(GS_URL && currentUser){
-          fetch(GS_URL, {
-            method:'POST',
-            body: JSON.stringify({
-              sheet:'contacts', email:currentUser.email, action:'upsert',
-              row:[contact.id,contact.nameKo,contact.nameEn,contact.orgKo,contact.orgEn,
-                   contact.titleKo,contact.titleEn,contact.deptKo,contact.deptEn,
-                   contact.country,contact.cat,contact.lang,contact.source,contact.date,
-                   contact.status,contact.email1,contact.email2,contact.phone1,contact.phone2,
-                   contact.beat,contact.products]
-            })
-          }).catch(e=>console.warn('sector 저장 실패:',e));
-        }
+        changedContacts.push(contact);
       }
     });
+    if(changedContacts.length){
+      postToSheet({
+        sheet: 'contacts',
+        action: 'batchUpsert',
+        rows: changedContacts.map(ct2 => [ct2.id,ct2.nameKo,ct2.nameEn,ct2.orgKo,ct2.orgEn,
+          ct2.titleKo,ct2.titleEn,ct2.deptKo,ct2.deptEn,
+          ct2.country,ct2.cat,ct2.lang,ct2.source,ct2.date,
+          ct2.status,ct2.email1,ct2.email2,ct2.phone1,ct2.phone2,
+          ct2.beat,ct2.products]),
+      }, '기업 섹터 반영');
+    }
     upsertCompanyRow(c);
     buildCoCAT();
     renderCoList();
@@ -995,23 +990,20 @@ export async function submitAddCoEvent(key){
   }
 
   const part = {
-    id: 'P-' + (Date.now() + Math.floor(Math.random()*100000)),
+    id: 'P-' + Date.now() + '-' + Math.floor(Math.random()*1000),
     eventId: evId, event: evId, contactId: cid, contact: '',
     role, note, matched: '✅ 앱에서 추가',
   };
   participations.push(part);
 
-  if(GS_URL && currentUser){
-    try{
-      await fetch(GS_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          sheet: 'participations',
-          email: currentUser.email,
-          row: [part.id, evId, '', cid, '', '', '', role, note, part.matched],
-        }),
-      });
-    }catch(e){ console.warn('참여 이력 추가 저장 실패:', e); }
+  const r = await postToSheet({
+    sheet: 'participations',
+    row: [part.id, evId, '', cid, '', '', '', role, note, part.matched],
+  }, '참여 이력 추가');
+  if(!r.ok){ // 저장 실패 → 방금 추가한 참여 기록 롤백
+    const idx = participations.findIndex(p => p.id === part.id);
+    if(idx >= 0) participations.splice(idx, 1);
+    return;
   }
 
   document.getElementById('co-event-modal')?.remove();

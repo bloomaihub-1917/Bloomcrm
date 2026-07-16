@@ -26,6 +26,7 @@
 import { normalizeCat, countryName } from './utils.js';
 import {
   GS_URL,
+  authToken,
   EVENT_LIST,
   contacts,
   participations,
@@ -150,7 +151,7 @@ export async function postToSheet(payload, label, { silent = false } = {}){
   try {
     const res  = await fetch(GS_URL, {
       method: 'POST',
-      body: JSON.stringify({ email: currentUser.email, ...payload }),
+      body: JSON.stringify({ email: currentUser.email, auth: authToken, ...payload }),
     });
     let json = null;
     try { json = JSON.parse(await res.text()); } catch(e){}
@@ -200,19 +201,19 @@ export async function loadFromSheets(hooks = {}){
     return;
   }
   showSheetsWarning(false); // 시도 시작 시 일단 숨김
-  const email = encodeURIComponent(currentUser.email);
+  const qs = 'email=' + encodeURIComponent(currentUser.email) + '&auth=' + encodeURIComponent(authToken);
 
   try {
     const [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, companiesData, partTypesData] = await Promise.all([
-      safeFetch(GS_URL + '?sheet=contacts&email='       + email, 'contacts'),
-      safeFetch(GS_URL + '?sheet=participations&email=' + email, 'participations'),
-      safeFetch(GS_URL + '?sheet=crm_targets&email='    + email, 'crm_targets'),
-      safeFetch(GS_URL + '?sheet=activity_log&email='   + email, 'activity_log'),
-      safeFetch(GS_URL + '?sheet=events&email='         + email, 'events'),
-      safeFetch(GS_URL + '?sheet=settings&email='       + email, 'settings'),
-      safeFetch(GS_URL + '?sheet=sectors&email='        + email, 'sectors'),
-      safeFetch(GS_URL + '?sheet=companies&email='      + email, 'companies'),
-      safeFetch(GS_URL + '?sheet=part_types&email='     + email, 'part_types'),
+      safeFetch(GS_URL + '?sheet=contacts&'       + qs, 'contacts'),
+      safeFetch(GS_URL + '?sheet=participations&' + qs, 'participations'),
+      safeFetch(GS_URL + '?sheet=crm_targets&'    + qs, 'crm_targets'),
+      safeFetch(GS_URL + '?sheet=activity_log&'   + qs, 'activity_log'),
+      safeFetch(GS_URL + '?sheet=events&'         + qs, 'events'),
+      safeFetch(GS_URL + '?sheet=settings&'       + qs, 'settings'),
+      safeFetch(GS_URL + '?sheet=sectors&'        + qs, 'sectors'),
+      safeFetch(GS_URL + '?sheet=companies&'      + qs, 'companies'),
+      safeFetch(GS_URL + '?sheet=part_types&'     + qs, 'part_types'),
     ]);
 
     // ── 실패 감지 (신규) ──

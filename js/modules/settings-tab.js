@@ -29,8 +29,10 @@
 
 import {
   GS_URL,
+  authToken,
   currentUser,
   contacts,
+  participations,
   CO_DB,
   EVENT_LIST,
   COMPANY_SECTORS,
@@ -44,7 +46,10 @@ import {
   deletePartTypeRow,
   saveEventToSheet,
   deleteEventFromSheet,
+  postToSheet,
+  safeFetch,
 } from '../api.js';
+import { trackAction } from './audit-tab.js';
 
 import { slugifySectorName, escapeHtml, escAttr, countryName, scopedSectorName, parseSectorScope } from '../utils.js';
 import { buildCoDB, buildCoCAT, renderCoDashboard, setCoCat } from './company-tab.js';
@@ -291,17 +296,13 @@ export async function reorganizeSectorsSheet(){
   if(!confirm(`섹터 ${ordered.length}개를 메인 → 서브 순서로 구글시트에 재정렬할까요?`)) return;
 
   const rows = ordered.map(s => [s.id, s.name, s.parent || '']);
-  try{
-    await fetch(GS_URL, {
-      method: 'POST',
-      body: JSON.stringify({ sheet: 'sectors', email: currentUser.email, action: 'replaceAll', rows }),
-    });
+  const r = await postToSheet({ sheet: 'sectors', action: 'replaceAll', rows }, '섹터 정렬');
+  if(r.ok){
     COMPANY_SECTORS.splice(0, COMPANY_SECTORS.length, ...ordered);
     renderSectorList();
     alert('정렬 완료했어요. 구글시트에서 확인해 보세요.');
-  }catch(e){
-    console.warn('섹터 시트 정렬 실패:', e);
-    alert('정렬 저장에 실패했어요. 콘솔을 확인해 주세요.');
+  } else {
+    alert('정렬 저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
   }
 }
 
@@ -346,7 +347,10 @@ export async function mergeSectors(){
   if(!confirm(`"${removeNames.join(', ')}" 을(를) "${keepSector.name}"(으)로 합칠까요?\n연결된 기업의 섹터 값도 함께 정리되고, 병합되는 섹터는 삭제됩니다.`)) return;
 
   // 1) 연락처(beat)에 들어있는 옛 섹터명을 keepSector 이름으로 교체
+  //    ⚠ 수정: 기존엔 연락처마다 개별 upsert를 순차 전송해 대상이 많으면
+  //    부분 실패로 시트/화면 불일치가 생겼다 — batchUpsert 1회로 묶는다.
   let updatedContacts = 0;
+  const changedContacts = [];
   for(const c of contacts){
     if(!c.beat) continue;
     const arr = parseSectors(c.beat);
@@ -358,27 +362,39 @@ export async function mergeSectors(){
     });
     c.beat = joinSectors(newArr);
     updatedContacts++;
-    if(GS_URL && currentUser){
-      try{
-        await fetch(GS_URL, {
-          method: 'POST',
-          body: JSON.stringify({
-            sheet: 'contacts', email: currentUser.email, action: 'upsert',
-            row: [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
-                  c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
-                  c.beat||'', c.products||'']
-          })
-        });
-      }catch(e){ console.warn('섹터 병합 - 연락처 업데이트 실패:', c.id, e); }
+    changedContacts.push(c);
+  }
+  if(changedContacts.length){
+    const r = await postToSheet({
+      sheet: 'contacts', action: 'batchUpsert',
+      rows: changedContacts.map(c => [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
+            c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
+            c.beat||'', c.products||'']),
+    }, '섹터 병합 - 연락처 반영');
+    if(!r.ok){
+      alert('연락처 반영 저장에 실패해서 병합을 중단했어요. 새로고침 후 다시 시도해주세요.');
+      return;
     }
   }
 
-  // 2) 병합된(삭제 대상) 섹터 제거
+  // 2) 병합 대상 섹터의 자식(서브섹터)을 남는 섹터 아래로 재부모화
+  //    (기존엔 자식들이 삭제된 부모 id를 가리킨 채 트리에서 사라지는 유령 데이터가 됐음)
+  for(const s of COMPANY_SECTORS){
+    if(s.parent && removeIds.includes(s.parent) && !removeIds.includes(s.id)){
+      s.parent = keepId;
+      await upsertSectorRow(s);
+    }
+  }
+
+  // 3) 병합된(삭제 대상) 섹터 제거
   for(const id of removeIds){
     const idx = COMPANY_SECTORS.findIndex(s => s.id === id);
     if(idx >= 0) COMPANY_SECTORS.splice(idx, 1);
     await deleteSectorRow(id);
   }
+
+  trackAction('edit', '섹터 병합', keepSector.name,
+    `섹터 병합: ${removeNames.join(', ')} → ${keepSector.name} (연락처 ${updatedContacts}건)`);
 
   renderSectorList();
   try {
@@ -516,14 +532,9 @@ export async function convertMainsToGroup(){
   targets.forEach(s => { s.parent = groupId; });
 
   // 개별 요청 대신 한 번의 batchUpsert로 전부 저장 (요청 수를 크게 줄여 안정성 확보)
-  if(GS_URL && currentUser && targets.length){
+  if(targets.length){
     const rows = targets.map(s => [s.id, s.name, s.parent || '']);
-    try{
-      await fetch(GS_URL, {
-        method: 'POST',
-        body: JSON.stringify({ sheet: 'sectors', email: currentUser.email, action: 'batchUpsert', rows }),
-      });
-    }catch(e){ console.warn('섹터 그룹 편입 저장 실패:', e); }
+    await postToSheet({ sheet: 'sectors', action: 'batchUpsert', rows }, '섹터 그룹 편입');
   }
 
   renderSectorList();
@@ -858,20 +869,32 @@ export function addEventToList(){
   renderEvMgr();
   try { buildMDBEvList(); populateUploadEvDropdown(); } catch(e){}
 
-  // 구글시트 저장
-  saveEventToSheet(EVENT_LIST[EVENT_LIST.length - 1]);
+  // 구글시트 저장 + 감사 로그
+  const newEv = EVENT_LIST[EVENT_LIST.length - 1];
+  saveEventToSheet(newEv);
+  trackAction('edit', '행사 추가', newEv.key, `행사 "${newEv.name||newEv.key}" 추가`);
 }
 
 export function removeEventFromList(idx){
   const ev = EVENT_LIST[idx];
   if(!ev) return;
-  if(!confirm(`"${ev.key}" 행사를 삭제할까요?\n(기존 participations 데이터는 유지됩니다)`)) return;
+  // 삭제 전 참조 데이터 규모를 알려줘서 판단할 수 있게 한다
+  const partCount = participationsCountForEvent(ev.key);
+  if(!confirm(`"${ev.key}" 행사를 삭제할까요?\n`
+    + (partCount ? `⚠️ 이 행사에 연결된 참여 기록 ${partCount}건은 시트에 남지만 화면에서 연결이 끊깁니다.\n` : '')
+    + `(기존 participations 데이터는 유지됩니다)`)) return;
 
   const key = ev.key;
   EVENT_LIST.splice(idx, 1);
   renderEvMgr();
   try { buildMDBEvList(); populateUploadEvDropdown(); } catch(e){}
   deleteEventFromSheet(key);
+  trackAction('edit', '행사 삭제', key, `행사 "${ev.name||key}" 삭제`
+    + (partCount ? ` (참여 기록 ${partCount}건 잔존)` : ''));
+}
+
+function participationsCountForEvent(evKey){
+  return participations.filter(p => p.eventId === evKey).length;
 }
 
 /* ── 연락처 데이터 정리 도구 (원본 5996~6115행) ──
@@ -886,16 +909,11 @@ export async function normalizeAllCountries(){
   }
 
   if(msgEl) msgEl.textContent = '시트 원본 데이터 확인 중...';
-  let raw;
-  try{
-    const res = await fetch(GS_URL + '?sheet=contacts&email=' + encodeURIComponent(currentUser.email));
-    raw = await res.json();
-  }catch(e){
-    if(msgEl) msgEl.textContent = '시트 조회 실패: ' + e;
-    return;
-  }
+  const raw = await safeFetch(
+    GS_URL + '?sheet=contacts&email=' + encodeURIComponent(currentUser.email)
+      + '&auth=' + encodeURIComponent(authToken), 'contacts(정리)');
   if(!Array.isArray(raw)){
-    if(msgEl) msgEl.textContent = '시트 조회 결과가 올바르지 않아요.';
+    if(msgEl) msgEl.textContent = '시트 조회에 실패했어요. 네트워크를 확인해주세요.';
     return;
   }
 
@@ -915,13 +933,11 @@ export async function normalizeAllCountries(){
       newCountry, r.cat, r.lang, r.source, r.date, r.status, r.email1, r.email2, r.phone1, r.phone2,
       r.beat, r.products];
   });
-  try{
-    await fetch(GS_URL, {
-      method: 'POST',
-      body: JSON.stringify({ sheet: 'contacts', email: currentUser.email, action: 'batchUpsert', rows }),
-    });
-  }catch(e){ console.warn('국가명 정리 저장 실패:', e); }
-  if(msgEl) msgEl.textContent = `완료: ${targets.length}건 정리했어요.`;
+  const r = await postToSheet({ sheet: 'contacts', action: 'batchUpsert', rows }, '국가명 정리');
+  if(msgEl) msgEl.textContent = r.ok
+    ? `완료: ${targets.length}건 정리했어요.`
+    : '저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.';
+  if(r.ok) trackAction('edit', '국가명 정리', 'contacts', `국가명 한글 통일 ${targets.length}건`);
   try { renderMDB(); buildCoDB(); } catch(e){}
 }
 
@@ -989,13 +1005,11 @@ export async function splitMixedOrgNames(){
   const rows = targets.map(c => [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
     c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
     c.beat, c.products]);
-  try{
-    await fetch(GS_URL, {
-      method: 'POST',
-      body: JSON.stringify({ sheet: 'contacts', email: currentUser.email, action: 'batchUpsert', rows }),
-    });
-  }catch(e){ console.warn('기업/직책/부서 분리 저장 실패:', e); }
-  if(msgEl) msgEl.textContent = `완료: ${targets.length}건 분리했어요.`;
+  const r = await postToSheet({ sheet: 'contacts', action: 'batchUpsert', rows }, '기업/직책/부서 분리');
+  if(msgEl) msgEl.textContent = r.ok
+    ? `완료: ${targets.length}건 분리했어요.`
+    : '저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.';
+  if(r.ok) trackAction('edit', '국영문 분리', 'contacts', `기업/직책/부서 국영문 분리 ${targets.length}건`);
   try { renderMDB(); buildCoDB(); } catch(e){}
 }
 

@@ -50,6 +50,49 @@ function verifyUser(email, password) {
   return !!password && users[email] === password;
 }
 
+// ══════════════════════════════════════════
+//  세션 토큰 (HMAC 서명)
+//  기존에는 로그인 이후 모든 요청이 "이메일 도메인 문자열 검사"만으로
+//  통과되어, 배포 URL만 알면 누구나 전체 DB를 읽고 쓸 수 있었다.
+//  이제 로그인 성공 시 서버가 서명된 토큰을 발급하고, 모든 doGet/doPost가
+//  토큰을 검증한다. 비밀키(CRM_SECRET)는 Script Properties에 자동 생성.
+// ══════════════════════════════════════════
+const TOKEN_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14일
+
+function getSecret() {
+  const props = PropertiesService.getScriptProperties();
+  let s = props.getProperty('CRM_SECRET');
+  if (!s) {
+    s = Utilities.getUuid() + Utilities.getUuid();
+    props.setProperty('CRM_SECRET', s);
+  }
+  return s;
+}
+
+function issueToken(email) {
+  const payload = email + '|' + (Date.now() + TOKEN_TTL_MS);
+  const sig = Utilities.base64EncodeWebSafe(
+    Utilities.computeHmacSha256Signature(payload, getSecret()));
+  return Utilities.base64EncodeWebSafe(payload) + '.' + sig;
+}
+
+function verifyToken(email, token) {
+  if (!email || !token) return false;
+  const parts = String(token).split('.');
+  if (parts.length !== 2) return false;
+  let payload;
+  try {
+    payload = Utilities.newBlob(Utilities.base64DecodeWebSafe(parts[0])).getDataAsString();
+  } catch (err) { return false; }
+  const pp = payload.split('|');
+  if (pp.length !== 2) return false;
+  if (pp[0] !== email) return false;
+  if (Date.now() > Number(pp[1])) return false; // 만료
+  const expected = Utilities.base64EncodeWebSafe(
+    Utilities.computeHmacSha256Signature(payload, getSecret()));
+  return expected === parts[1];
+}
+
 function safeStr(v) {
   if (v === null || v === undefined || v === '') return '';
   if (v instanceof Date) return Utilities.formatDate(v, Session.getScriptTimeZone(), 'yyyy-MM-dd');
@@ -310,10 +353,16 @@ function doGet(e) {
 function doGetInner(e) {
   const sheet = (e.parameter.sheet || '').trim();
   const email = (e.parameter.email || '').toLowerCase().trim();
-  const token = (e.parameter.token || '');
+  const auth  = (e.parameter.auth || '');
 
-  if (sheet === 'login') return out({ ok: verifyUser(email, token), email });
-  if (!email.endsWith(ALLOWED_DOMAIN)) return out({ error: 'Unauthorized' });
+  // 로그인은 POST로만 처리한다 (비밀번호가 URL/실행 로그에 남지 않도록)
+  if (sheet === 'login') return out({ error: 'login must use POST' });
+
+  // 시트 화이트리스트 — 정의된 시트 외에는 읽기 불가
+  if (!SHEET_HEADERS[sheet]) return out({ error: 'unknown sheet' });
+  if (!email.endsWith(ALLOWED_DOMAIN) || !verifyToken(email, auth)) {
+    return out({ error: 'Unauthorized' });
+  }
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sh = ss.getSheetByName(sheet);
@@ -361,9 +410,37 @@ function doPostInner(e) {
   const rows   = body.rows   || [];
   const action = body.action || 'append';
 
-  if (!email.endsWith(ALLOWED_DOMAIN)) return out({ error: 'Unauthorized' });
-  if (!sheet) return out({ error: 'sheet required' });
+  // ── 로그인: 비밀번호 검증 후 서명 토큰 발급 ──
+  if (sheet === 'login') {
+    if (!verifyUser(email, body.password || '')) return out({ error: 'Unauthorized' });
+    return out({ ok: true, email: email, token: issueToken(email) });
+  }
 
+  // ── 인증: 모든 쓰기는 유효한 토큰 필수 ──
+  if (!email.endsWith(ALLOWED_DOMAIN) || !verifyToken(email, body.auth || '')) {
+    return out({ error: 'Unauthorized' });
+  }
+  if (!sheet) return out({ error: 'sheet required' });
+  // 시트 화이트리스트 — 정의된 시트 외에는 생성/쓰기 불가
+  if (!SHEET_HEADERS[sheet]) return out({ error: 'unknown sheet' });
+
+  // ── 동시성 보호: 쓰기 전체를 스크립트 락으로 감싼다 ──
+  // (row index 기반 upsert/delete가 동시 요청과 겹치면 엉뚱한 행을
+  //  덮어쓰거나 지울 수 있어, 쓰기는 한 번에 하나씩만 실행한다)
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+  } catch (err) {
+    return out({ error: 'busy — 다른 저장 작업이 진행 중입니다. 잠시 후 다시 시도하세요.' });
+  }
+  try {
+    return doWrite(sheet, action, row, rows);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function doWrite(sheet, action, row, rows) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sh = getOrCreateSheet(ss, sheet);
 

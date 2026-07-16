@@ -31,6 +31,7 @@ import {
 } from '../state.js';
 import { CP, CL, RP, ROLE_TO_CAT, COUNTRIES, avB, avF } from '../constants.js';
 import { ab, countryName, countryOptions, escapeHtml, escAttr } from '../utils.js';
+import { postToSheet } from '../api.js';
 import { buildCoDB } from './company-tab.js';
 import { trackAction } from './audit-tab.js';
 
@@ -617,7 +618,9 @@ export async function confirmAddEv(cid){
     alert('이미 같은 참가 유형으로 등록된 행사입니다.'); return;
   }
 
-  const partId = 'P-' + Date.now();
+  // id에 랜덤 성분 추가 — 같은 ms 내 이중 클릭 시 id 충돌로 다른 행이
+  // 삭제될 수 있던 문제 방지
+  const partId = 'P-' + Date.now() + '-' + Math.floor(Math.random()*1000);
   const part = {
     id:        partId,
     eventId:   ev,
@@ -634,47 +637,44 @@ export async function confirmAddEv(cid){
   buildCoDB();
   renderMDB();
 
-  // 구글시트 저장
-  if(GS_URL && currentUser){
-    try {
-      await fetch(GS_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          sheet: 'participations',
-          email: currentUser.email,
-          row: [part.id, part.eventId, '', part.contactId, '', '', '', part.role, part.note, part.matched],
-        })
-      });
-      trackAction('edit', '행사 추가', ev, `${contacts.find(x=>x.id===cid)?.nameKo||cid} → ${ev} (${role})`);
-    } catch(e){ console.warn('participation 저장 실패:', e); }
+  // 구글시트 저장 — 실패 시 방금 추가한 참여 기록 롤백
+  const r = await postToSheet({
+    sheet: 'participations',
+    row: [part.id, part.eventId, '', part.contactId, '', '', '', part.role, part.note, part.matched],
+  }, '행사 참여 추가');
+  if(!r.ok){
+    const idx = participations.findIndex(p => p.id === partId);
+    if(idx >= 0) participations.splice(idx, 1);
+    renderContactDr(); buildCoDB(); renderMDB();
+    return;
   }
+  trackAction('edit', '행사 추가', ev, `${contacts.find(x=>x.id===cid)?.nameKo||cid} → ${ev} (${role})`);
 }
 
 export async function removeParticipation(cid, partId, ev){
   if(!confirm(`"${evShort(ev)}" 참여를 삭제할까요?`)) return;
 
-  // 로컬 제거
+  // 로컬 제거 (실패 시 복원할 수 있도록 백업)
   const idx = participations.findIndex(p => String(p.id) === String(partId));
-  if(idx >= 0) participations.splice(idx, 1);
+  const removed = idx >= 0 ? participations.splice(idx, 1)[0] : null;
 
   renderContactDr();
   buildCoDB();
   renderMDB();
 
-  // 구글시트 삭제
-  if(GS_URL && currentUser && partId){
-    try {
-      await fetch(GS_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          sheet: 'participations',
-          email: currentUser.email,
-          action: 'delete',
-          row: [partId],
-        })
-      });
-      trackAction('edit', '행사 삭제', ev, `${contacts.find(x=>x.id===cid)?.nameKo||cid} ← ${ev} 제거`);
-    } catch(e){ console.warn('participation 삭제 실패:', e); }
+  // 구글시트 삭제 — 실패 시 로컬 복원
+  if(partId){
+    const r = await postToSheet({
+      sheet: 'participations',
+      action: 'delete',
+      row: [partId],
+    }, '행사 참여 삭제');
+    if(!r.ok){
+      if(removed) participations.splice(Math.min(idx, participations.length), 0, removed);
+      renderContactDr(); buildCoDB(); renderMDB();
+      return;
+    }
+    trackAction('edit', '행사 삭제', ev, `${contacts.find(x=>x.id===cid)?.nameKo||cid} ← ${ev} 제거`);
   }
 }
 
@@ -833,6 +833,13 @@ export async function saveContactEdit(){
   const c = contacts.find(x => x.id === conDrId);
   if(!c) return;
 
+  // 이름이 전부 비면 저장 거부 (기존엔 빈 이름도 저장됐음)
+  const _nameKo = document.getElementById('ce-name').value.trim();
+  const _nameEn = document.getElementById('ce-nameEn').value.trim();
+  if(!_nameKo && !_nameEn){ alert('이름(한글 또는 영문)을 입력해주세요.'); return; }
+
+  const prev = { ...c }; // 저장 실패 시 롤백용 스냅샷
+
   c.nameKo  = document.getElementById('ce-name').value.trim();
   c.nameEn  = document.getElementById('ce-nameEn').value.trim();
   c.orgKo   = document.getElementById('ce-org').value.trim();
@@ -858,26 +865,21 @@ export async function saveContactEdit(){
   renderContactDr();
   try { renderMDB(); } catch(e){}
 
-  trackAction('status', '연락처 정보 수정', c.nameKo, '<b>'+c.nameKo+'</b>의 정보를 수정했어요');
-
-  // 구글시트 동기화 — upsert (id 일치 행 덮어쓰기)
-  if(GS_URL && currentUser){
-    try{
-      const res = await fetch(GS_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          sheet:  'contacts',
-          email:  currentUser.email,
-          action: 'upsert',
-          row: [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
-                c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
-                c.beat, c.products]
-        })
-      });
-      const result = await res.json().catch(()=>null);
-      console.log('[CRM] 연락처 수정 저장:', result?.action || 'done');
-    }catch(e){ console.warn('Sheet sync failed:', e); }
+  // 구글시트 동기화 — upsert (id 일치 행 덮어쓰기). 실패 시 편집 전 상태로 롤백
+  const r = await postToSheet({
+    sheet:  'contacts',
+    action: 'upsert',
+    row: [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
+          c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
+          c.beat, c.products],
+  }, '연락처 수정');
+  if(!r.ok){
+    Object.assign(c, prev);
+    renderContactDr();
+    try { renderMDB(); } catch(e){}
+    return;
   }
+  trackAction('status', '연락처 정보 수정', c.nameKo, '<b>'+c.nameKo+'</b>의 정보를 수정했어요');
 }
 
 /* ══════════════════════════════════════════
@@ -991,29 +993,24 @@ export async function saveNewContact(){
   contacts.push(c);
   try { buildCoDB(); renderMDB(); buildMDBEvList(); } catch(e){}
 
-  // 구글시트 저장
-  if(GS_URL && currentUser){
-    try {
-      await fetch(GS_URL, {
-        method: 'POST',
-        body: JSON.stringify({
-          sheet: 'contacts',
-          email: currentUser.email,
-          row: [c.id,c.nameKo,c.nameEn,c.orgKo,c.orgEn,c.titleKo,c.titleEn,c.deptKo,c.deptEn,
-                c.country,c.cat,c.lang,c.source,c.date,c.status,c.email1,c.email2,c.phone1,c.phone2,
-                c.beat,c.products]
-        })
-      });
-      trackAction('add','연락처 추가', c.nameKo||c.nameEn,
-        `${c.nameKo||c.nameEn} / ${c.orgKo||c.orgEn} 추가`);
-      closeAddContactModal();
-    } catch(e){
-      if(btn){ btn.disabled=false; btn.textContent='저장'; }
-      if(msg){msg.style.color='var(--re)';msg.textContent='저장 실패: '+e.message;}
-    }
-  } else {
-    closeAddContactModal();
+  // 구글시트 저장 — 실패 시 로컬 추가도 롤백 (기존엔 로컬에 남아 새로고침 시 증발)
+  const r = await postToSheet({
+    sheet: 'contacts',
+    row: [c.id,c.nameKo,c.nameEn,c.orgKo,c.orgEn,c.titleKo,c.titleEn,c.deptKo,c.deptEn,
+          c.country,c.cat,c.lang,c.source,c.date,c.status,c.email1,c.email2,c.phone1,c.phone2,
+          c.beat,c.products],
+  }, '연락처 추가', { silent: true });
+  if(!r.ok){
+    const idx = contacts.findIndex(x => x.id === c.id);
+    if(idx >= 0) contacts.splice(idx, 1);
+    try { buildCoDB(); renderMDB(); buildMDBEvList(); } catch(e){}
+    if(btn){ btn.disabled=false; btn.textContent='저장'; }
+    if(msg){msg.style.color='var(--re)';msg.textContent='저장 실패: '+(r.error||'네트워크 오류')+' — 다시 시도해주세요';}
+    return;
   }
+  trackAction('add','연락처 추가', c.nameKo||c.nameEn,
+    `${c.nameKo||c.nameEn} / ${c.orgKo||c.orgEn} 추가`);
+  closeAddContactModal();
 }
 
 /* ══════════════════════════════════════════

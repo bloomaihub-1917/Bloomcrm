@@ -3,7 +3,7 @@
    5029~5047행 manualSync 포함)
 ═══════════════════════════════════════════════════════════════ */
 
-import { GS_URL, setGsUrl, ALLOWED_DOMAIN, currentUser, setCurrentUser, userColor } from './state.js';
+import { GS_URL, setGsUrl, ALLOWED_DOMAIN, currentUser, setCurrentUser, setAuthToken, userColor } from './state.js';
 import { userInitials } from './utils.js';
 import { loadFromSheets, loadSectors } from './api.js';
 import { loadTestData } from './testdata.js';
@@ -76,52 +76,43 @@ export function doLogin(){
   btn.textContent = '확인 중…';
   errEl.classList.remove('on');
 
-  function loginLocal(reason){
-    const session = {
-      email, name, local,
-      loginAt: new Date().toISOString(),
-      color: userColor(email),
-    };
-    localStorage.setItem('crm_session', JSON.stringify(session));
-    setCurrentUser(session);
-    trackAction('login', '로그인', email, '<b>'+name+'</b>님이 로그인했어요'+(reason?(' ('+reason+')'):''));
-    btn.disabled = false;
-    btn.textContent = '로그인';
-    errEl.classList.remove('on');
-    initAfterLogin();
-  }
-
+  /* ⚠ 보안 수정: 기존에는 (1) 로그인 요청이 GET이라 비밀번호가 URL/서버
+     로그에 남았고, (2) 네트워크 실패 시 비밀번호 검증 없이 로컬 세션을
+     만들어주는 폴백이 있어 네트워크만 끊으면 인증을 우회할 수 있었다.
+     이제 POST로 비밀번호를 보내고, 서버가 발급한 서명 토큰 없이는
+     로그인되지 않는다 (오프라인 데모는 test/test/test 테스트 모드 사용). */
   if(!GS_URL){
-    loginLocal('오프라인');
+    showLoginErr('서버 주소가 설정되지 않았어요 — 테스트는 test/test/test로 로그인하세요');
     return;
   }
 
-  const fetchWithTimeout = (url, ms=8000) => Promise.race([
-    fetch(url, { redirect: 'follow' }),
+  const fetchWithTimeout = (url, opts, ms=8000) => Promise.race([
+    fetch(url, opts),
     new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))
   ]);
 
-  fetchWithTimeout(GS_URL + '?sheet=login&email=' + encodeURIComponent(email) + '&token=' + encodeURIComponent(pw))
+  fetchWithTimeout(GS_URL, {
+    method: 'POST',
+    body: JSON.stringify({ sheet: 'login', email, password: pw }),
+  })
     .then(r => {
       if(!r.ok) throw new Error('HTTP ' + r.status);
       return r.json();
     })
     .then(data => {
-      if(data && data.error === 'Unauthorized'){
-        showLoginErr('이메일 또는 비밀번호가 올바르지 않아요');
-        return;
-      }
-      if(!data || data.ok !== true){
+      if(!data || data.ok !== true || !data.token){
         showLoginErr('이메일 또는 비밀번호가 올바르지 않아요');
         return;
       }
       const session = {
         email, name, local,
+        token: data.token,
         loginAt: new Date().toISOString(),
         color: userColor(email),
       };
       localStorage.setItem('crm_session', JSON.stringify(session));
       setCurrentUser(session);
+      setAuthToken(data.token);
       trackAction('login', '로그인', email, '<b>'+name+'</b>님이 로그인했어요');
       btn.disabled = false;
       btn.textContent = '로그인';
@@ -129,8 +120,8 @@ export function doLogin(){
       initAfterLogin();
     })
     .catch(err => {
-      console.warn('Login fetch failed, falling back to local login:', err);
-      loginLocal('오프라인');
+      console.warn('Login fetch failed:', err);
+      showLoginErr('서버에 연결할 수 없어요 — 네트워크를 확인하고 다시 시도해주세요');
     });
 }
 
@@ -155,9 +146,12 @@ export async function manualSync(){
 
 export function doLogout(){
   if(!confirm('로그아웃할까요?')) return;
-  trackAction('login', '로그아웃', currentUser.email, `${currentUser.name}님이 로그아웃했어요`);
+  if(currentUser){ // 세션 만료 후 클릭 시 null 접근 방지
+    trackAction('login', '로그아웃', currentUser.email, `${currentUser.name}님이 로그아웃했어요`);
+  }
   localStorage.removeItem('crm_session');
   setCurrentUser(null);
+  setAuthToken('');
   closeUserMenu();
   location.reload();
 }
@@ -168,7 +162,10 @@ export function checkSession(){
   try{
     const session = JSON.parse(s);
     if(!session.email || !session.email.endsWith(ALLOWED_DOMAIN)) return false;
+    // 서버 토큰 없는 세션(구버전/수동 조작)은 무효 — 재로그인 필요
+    if(!session.token) return false;
     setCurrentUser(session);
+    setAuthToken(session.token);
     return true;
   }catch(e){ return false; }
 }
