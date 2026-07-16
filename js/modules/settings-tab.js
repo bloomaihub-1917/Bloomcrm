@@ -46,7 +46,7 @@ import {
   deleteEventFromSheet,
 } from '../api.js';
 
-import { slugifySectorName, escapeHtml, countryName, scopedSectorName, parseSectorScope } from '../utils.js';
+import { slugifySectorName, escapeHtml, escAttr, countryName, scopedSectorName, parseSectorScope } from '../utils.js';
 import { buildCoDB, buildCoCAT, renderCoDashboard, setCoCat } from './company-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
 import { populateUploadEvDropdown } from './upload-tab.js';
@@ -157,7 +157,7 @@ export function renderSectorTree(){
     <div class="sector-tree-main" ondragover="event.preventDefault()" ondrop="onSectorDropToMain(event,'${m.id}')"
       style="border:1px solid var(--i6);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:var(--W)">
       <div style="display:flex;align-items:center;gap:8px">
-        <span draggable="true" ondragstart="onSectorDragStart(event,'${m.id}')" onclick="filterCoBySector('${m.name.replace(/'/g,"\\'")}')"
+        <span draggable="true" ondragstart="onSectorDragStart(event,'${m.id}')" onclick="filterCoBySector('${escAttr(m.name)}')"
           style="font-weight:700;font-size:13px;flex:1;cursor:pointer" title="클릭하면 기업DB에서 이 섹터로 필터링">${escapeHtml(parseSectorScope(m.name).plainName)}</span>
         ${countBadge(counts[m.name])}
         <button class="btn bs" style="font-size:11px;padding:2px 8px" onclick="toggleSubAddInline('${m.id}')">+ 서브</button>
@@ -172,7 +172,7 @@ export function renderSectorTree(){
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;padding-left:14px;min-height:20px">
         ${subs.length ? subs.map(s => `
-          <span class="sector-chip" draggable="true" ondragstart="onSectorDragStart(event,'${s.id}')" onclick="filterCoBySector('${s.name.replace(/'/g,"\\'")}')"
+          <span class="sector-chip" draggable="true" ondragstart="onSectorDragStart(event,'${s.id}')" onclick="filterCoBySector('${escAttr(s.name)}')"
             style="display:inline-flex;align-items:center;gap:5px;background:var(--i7);border:1px solid var(--i6);border-radius:20px;padding:3px 10px;font-size:12px;cursor:pointer" title="클릭하면 기업DB에서 이 섹터로 필터링">
             ↳ ${escapeHtml(parseSectorScope(s.name).plainName)} ${countBadge(counts[s.name])}
             <button onclick="event.stopPropagation();removeSectorById('${s.id}')"

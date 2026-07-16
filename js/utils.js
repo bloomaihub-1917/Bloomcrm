@@ -158,3 +158,20 @@ export function escapeHtml(str){
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 }
+
+/* ── 인라인 핸들러 속성(onclick="fn('...')")에 문자열 인자를 넣을 때의
+   이스케이프 (신규) ──
+   기존 모듈들의 `.replace(/'/g,"\\'")`는 작은따옴표만 처리해서, 값에
+   큰따옴표가 들어오면 속성 경계를 탈출해 임의 속성 주입(XSS)이 가능했다.
+   1) JS 문자열 이스케이프(백슬래시·작은따옴표) 후
+   2) HTML 이스케이프(&, ", <, >)를 적용한다 — 브라우저가 속성값을 파싱할 때
+   &quot; 등이 원래 문자로 복원되므로 JS 쪽에서는 정상 문자열로 동작한다. */
+export function escAttr(s){
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}

@@ -33,7 +33,7 @@ import {
   contacts,
 } from '../state.js';
 import { RP, SC, LC, EC, STGS, avB, avF } from '../constants.js';
-import { ab, td, escapeHtml } from '../utils.js';
+import { ab, td, escapeHtml, escAttr } from '../utils.js';
 import { trackAction } from './audit-tab.js';
 import { postToSheet } from '../api.js';
 
@@ -64,13 +64,8 @@ const PRI_LABEL = { high: '높음', mid: '중간', low: '낮음' };
    완전히 동일하므로 값/순서 변경 없음. ── */
 const KCOLS = Object.entries(SC).map(([key, c]) => ({ key, c }));
 
-/* 속성(attribute) 안에 문자열 인자를 안전하게 넣기 위한 이스케이프.
-   (원본 mSrch의 `.replace(/'/g,"\'")`는 실제로는 아무 효과가 없는
-   버그였다 — "\'"는 그냥 "'"이므로 치환 전후가 동일. 회사명에 작은따옴표가
-   있으면 onclick 속성이 깨지는 문제가 있어 이번에 정상 이스케이프로 수정) */
-function escAttr(s) {
-  return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-}
+/* escAttr — utils.js의 공용 구현을 사용 (기존 로컬 버전은 큰따옴표를
+   이스케이프하지 않아 onclick="..." 속성 탈출 XSS가 가능했다) */
 
 /* ══════════════════════════════════════════
    목록 필터링 (원본 4614~4621행)

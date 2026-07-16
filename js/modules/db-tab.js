@@ -30,7 +30,7 @@ import {
   setMdbStat,
 } from '../state.js';
 import { CP, CL, RP, ROLE_TO_CAT, COUNTRIES, avB, avF } from '../constants.js';
-import { ab, countryName, countryOptions, escapeHtml } from '../utils.js';
+import { ab, countryName, countryOptions, escapeHtml, escAttr } from '../utils.js';
 import { buildCoDB } from './company-tab.js';
 import { trackAction } from './audit-tab.js';
 
@@ -49,7 +49,7 @@ export function buildMDBEvList(){
     </button>` +
     usedEvs.map(e => {
       const cnt = [...new Set(participations.filter(p=>p.eventId===e.key).map(p=>p.contactId))].length;
-      return `<button class="ev-chip${mdbEvFilter===e.key?' on':''}" onclick="setMDBEv('${e.key.replace(/'/g,"\\'")}')">`+
+      return `<button class="ev-chip${mdbEvFilter===e.key?' on':''}" onclick="setMDBEv('${escAttr(e.key)}')">`+
         `<span class="ev-chip-dot" style="background:${e.color}"></span>`+
         `<span class="ev-chip-nm">${escapeHtml(e.short)}</span>`+
         `<span class="ev-chip-ct">${cnt}명</span>`+
@@ -228,12 +228,12 @@ export function renderMDBFlat(pairs){
         ${c.beat?`<div style="font-size:10px;color:var(--te);margin-top:2px">🏭 ${escapeHtml(c.beat)}</div>`:''}
         ${c.products?`<div style="font-size:10px;color:var(--pu);margin-top:2px">📦 ${escapeHtml(c.products)}</div>`:''}
       </td>
-      <td><span class="pill ${CP[roleKey]||'p-gray'}">${CL[roleKey]||roleKey}</span></td>
+      <td><span class="pill ${CP[roleKey]||'p-gray'}">${escapeHtml(CL[roleKey]||roleKey)}</span></td>
       <td style="max-width:200px">${evCell}</td>
       <td>${contactCell}</td>
       <td style="color:var(--i4);font-size:11px">${escapeHtml(c.date)}</td>
       <td><span style="display:flex;align-items:center;gap:5px">
-        <span class="std ${sm[c.status]||'stn'}"></span>${sl[c.status]||c.status}
+        <span class="std ${sm[c.status]||'stn'}"></span>${escapeHtml(sl[c.status]||c.status)}
       </span></td>
     </tr>`;
   }).join('') || emptyStateRow();
@@ -301,13 +301,13 @@ export function renderMDBGrouped(pairs){
             <div><div class="tdnm">${escapeHtml(c.nameKo||c.nameEn)}</div><div class="tdsb">${escapeHtml(c.nameEn)}</div></div>
           </div></td>
           <td style="color:var(--i3);font-size:12px">${escapeHtml(c.titleKo||c.titleEn||'-')}</td>
-          <td><span class="pill ${CP[p.role]||'p-gray'}">${CL[p.role]||p.role}</span></td>
+          <td><span class="pill ${CP[p.role]||'p-gray'}">${escapeHtml(CL[p.role]||p.role)}</span></td>
           <td colspan="2" style="color:var(--i3);font-size:11px;font-style:italic">${escapeHtml(p.note||'')}</td>
           <td><span class="lt">${escapeHtml(c.lang)}</span></td>
           <td style="color:var(--i3);font-size:11px">${escapeHtml(c.source)}</td>
           <td style="color:var(--i4);font-size:11px">${escapeHtml(c.date)}</td>
           <td><span style="display:flex;align-items:center;gap:5px">
-            <span class="std ${sm[c.status]||'stn'}"></span>${sl[c.status]||c.status}
+            <span class="std ${sm[c.status]||'stn'}"></span>${escapeHtml(sl[c.status]||c.status)}
           </span></td>
         </tr>`;
       });
@@ -364,12 +364,12 @@ export function renderMDBGrouped(pairs){
             <td style="color:var(--i2);font-size:12px;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(c.orgKo||c.orgEn||'')}">${ms.length>1?'':escapeHtml(c.orgKo||c.orgEn||'')}</td>
             <td style="color:var(--i2);font-size:11px;white-space:nowrap">${escapeHtml(countryName(c.country))}</td>
             <td style="color:var(--i3);font-size:12px;max-width:140px;white-space:normal;line-height:1.4">${escapeHtml(c.titleKo||'')}${c.deptKo?(' · '+escapeHtml(c.deptKo)):''}</td>
-            <td><span class="pill ${CP[p.role]||'p-gray'}">${CL[p.role]||p.role}</span></td>
+            <td><span class="pill ${CP[p.role]||'p-gray'}">${escapeHtml(CL[p.role]||p.role)}</span></td>
             <td style="color:var(--i3);font-size:11px;font-style:italic;max-width:160px;white-space:normal">${escapeHtml(p.note||'')}</td>
             <td style="font-size:10px;color:var(--i3)">${escapeHtml(c.email1||c.phone1||'—')}</td>
             <td style="color:var(--i4);font-size:11px">${escapeHtml(c.date)}</td>
             <td><span style="display:flex;align-items:center;gap:5px">
-              <span class="std ${sm[c.status]||'stn'}"></span>${sl[c.status]||c.status}
+              <span class="std ${sm[c.status]||'stn'}"></span>${escapeHtml(sl[c.status]||c.status)}
             </span></td>
           </tr>`;
         });
@@ -420,7 +420,7 @@ export function renderMDBGrouped(pairs){
             <td style="font-size:10px;color:var(--i3)">${escapeHtml(c.email1||c.phone1||'—')}</td>
             <td style="color:var(--i4);font-size:11px">${escapeHtml(c.date)}</td>
             <td><span style="display:flex;align-items:center;gap:5px">
-              <span class="std ${sm[c.status]||'stn'}"></span>${sl[c.status]||c.status}
+              <span class="std ${sm[c.status]||'stn'}"></span>${escapeHtml(sl[c.status]||c.status)}
             </span></td>
           </tr>`;
         });
@@ -473,7 +473,7 @@ export function renderMDBMatrix(){
               return `<td style="padding:8px 10px;border-bottom:1px solid var(--i7);border-right:1px solid var(--i7);background:${e.color}07;vertical-align:top">
                 ${cell.map(({c,p})=>`
                   <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;white-space:nowrap">
-                    <span class="pill ${CP[p.role]||'p-gray'}" style="font-size:9px;padding:1px 5px">${CL[p.role]||p.role}</span>
+                    <span class="pill ${CP[p.role]||'p-gray'}" style="font-size:9px;padding:1px 5px">${escapeHtml(CL[p.role]||p.role)}</span>
                     <span style="font-size:11px;color:var(--i1);font-weight:500">${escapeHtml(c.nameKo||c.nameEn)}</span>
                   </div>`).join('')}
               </td>`;
@@ -563,7 +563,7 @@ export function openAddEvModal(cid){
           <div class="mlbl">행사 선택</div>
           <select class="fi" id="aem-ev" style="width:100%">
             ${available.length
-              ? available.map(e=>`<option value="${e.key}">${escapeHtml(e.short)} (${escapeHtml(e.date)})</option>`).join('')
+              ? available.map(e=>`<option value="${escapeHtml(e.key)}">${escapeHtml(e.short)} (${escapeHtml(e.date)})</option>`).join('')
               : '<option value="">추가 가능한 행사 없음</option>'}
             <option value="__direct__">✏️ 직접 입력…</option>
           </select>
@@ -574,7 +574,7 @@ export function openAddEvModal(cid){
         <div style="margin-bottom:16px">
           <div class="mlbl">참가 유형</div>
           <select class="fi parttype-select" id="aem-role" style="width:100%">
-            ${PART_TYPES.map(t=>`<option value="${t.key}">${t.label}</option>`).join('')}
+            ${PART_TYPES.map(t=>`<option value="${escapeHtml(t.key)}">${escapeHtml(t.label)}</option>`).join('')}
           </select>
         </div>
 
@@ -744,9 +744,9 @@ export function contactViewPanel(c){
           <span class="ev-pill" style="background:${evColor(ev)}18;color:${evColor(ev)};flex:1;min-width:0">
             <span class="ev-pill-dot" style="background:${evColor(ev)}"></span>
             <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(evShort(ev))}</span>
-            ${role ? `<span class="pill ${roleClass}" style="font-size:10px;padding:1px 6px;flex-shrink:0">${roleLabel}</span>` : ''}
+            ${role ? `<span class="pill ${roleClass}" style="font-size:10px;padding:1px 6px;flex-shrink:0">${escapeHtml(roleLabel)}</span>` : ''}
           </span>
-          <button onclick="removeParticipation(${c.id},'${partId}','${ev}')"
+          <button onclick="removeParticipation(${c.id},'${escAttr(partId)}','${escAttr(ev)}')"
             style="background:none;border:none;cursor:pointer;color:var(--i4);padding:2px 5px;font-size:16px;line-height:1;flex-shrink:0"
             title="삭제">×</button>
         </div>`;
@@ -758,7 +758,7 @@ export function contactViewPanel(c){
       <div class="ic"><div class="il">수집 출처</div><div class="iv" style="font-size:12px">${escapeHtml(c.source)||'-'}</div></div>
       <div class="ic"><div class="il">수집일</div><div class="iv">${escapeHtml(c.date)||'-'}</div></div>
       <div class="ic"><div class="il">언어</div><div class="iv"><span class="lt">${escapeHtml(c.lang)||'-'}</span></div></div>
-      <div class="ic"><div class="il">상태</div><div class="iv">${({verified:'검증됨',pending:'확인 중',new:'신규'})[c.status]||c.status}</div></div>
+      <div class="ic"><div class="il">상태</div><div class="iv">${({verified:'검증됨',pending:'확인 중',new:'신규'})[c.status]||escapeHtml(c.status)}</div></div>
     </div>
   `;
 }

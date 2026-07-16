@@ -48,7 +48,7 @@ import {
   evShort,
 } from '../state.js';
 import { RP, avB, avF } from '../constants.js';
-import { escapeHtml, levenshteinDist, parseSectorScope } from '../utils.js';
+import { escapeHtml, escAttr, levenshteinDist, parseSectorScope } from '../utils.js';
 import { parseSectors, joinSectors, mainSectors } from './settings-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
 import { trackAction } from './audit-tab.js';
@@ -286,8 +286,8 @@ export function renderSimilarCompanyList(){
         <div style="flex:1;min-width:120px;font-size:13px;font-weight:600">${escapeHtml(b.nameKo||b.nameEn)} <span style="font-size:11px;color:var(--i4);font-weight:400">(${b.contacts.length}명)</span></div>
       </div>
       <div style="display:flex;gap:6px;margin-top:8px">
-        <button class="btn bp bs" onclick="mergeCompanies('${b.key.replace(/'/g,"\\'")}','${a.key.replace(/'/g,"\\'")}')">"${escapeHtml(a.nameKo||a.nameEn)}"로 합치기</button>
-        <button class="btn bp bs" onclick="mergeCompanies('${a.key.replace(/'/g,"\\'")}','${b.key.replace(/'/g,"\\'")}')">"${escapeHtml(b.nameKo||b.nameEn)}"로 합치기</button>
+        <button class="btn bp bs" onclick="mergeCompanies('${escAttr(b.key)}','${escAttr(a.key)}')">"${escapeHtml(a.nameKo||a.nameEn)}"로 합치기</button>
+        <button class="btn bp bs" onclick="mergeCompanies('${escAttr(a.key)}','${escAttr(b.key)}')">"${escapeHtml(b.nameKo||b.nameEn)}"로 합치기</button>
         <button class="btn bs" onclick="this.closest('div[style*=\\'border-radius:8px\\']').remove()">다른 기업임</button>
       </div>
     </div>`).join('');
@@ -339,7 +339,7 @@ export { mergeCompanies as mergeCoInto };
 // 섹터 필터 버튼 하나 (기업DB 검색 사이드바) — 행사별 그룹핑에서 공통으로 사용
 function coCatButton(name, cnt, indent, title){
   const label = parseSectorScope(name).plainName;
-  return `<button class="nr${coCatF===name?' on':''}" onclick="setCoCat('${name.replace(/'/g,"\\'")}') " style="${indent||''}"${title?` title="${title}"`:''}>
+  return `<button class="nr${coCatF===name?' on':''}" onclick="setCoCat('${escAttr(name)}') " style="${indent||''}"${title?` title="${title}"`:''}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px;flex-shrink:0"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
       ${escapeHtml(label)}<span class="nbg">${cnt}</span>
     </button>`;
@@ -444,7 +444,7 @@ export function renderCoList(q2=''){
   }
 
   listEl.innerHTML = toggleHtml + list.map((c,i)=>`
-    <div class="co-rw${selCo===c.key?' on':''}" onclick="selectCo('${c.key.replace(/'/g,"\\'")}')">
+    <div class="co-rw${selCo===c.key?' on':''}" onclick="selectCo('${escAttr(c.key)}')">
       <div class="co-av" style="background:${avB(i)};color:${avF(i)}">${escapeHtml(c.abbr)}</div>
       <div style="flex:1;min-width:0">
         <div class="co-rn">${escapeHtml(c.nameKo||c.nameEn)}</div>
@@ -532,7 +532,7 @@ export function renderCoDashboard(){
     const list = CO_DB.filter(c => (c.sectors&&c.sectors.length?c.sectors:[c.sector]).some(s=>s===coCatF));
     el.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-        <button onclick="setCoCat('${coCatF.replace(/'/g,"\\'")}')" style="background:none;border:none;cursor:pointer;color:var(--i3);font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:4px;padding:0">
+        <button onclick="setCoCat('${escAttr(coCatF)}')" style="background:none;border:none;cursor:pointer;color:var(--i3);font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:4px;padding:0">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
           전체 섹터 보기
         </button>
@@ -540,7 +540,7 @@ export function renderCoDashboard(){
       <div style="font-size:13px;font-weight:700;color:var(--i1);margin-bottom:2px">🏭 ${escapeHtml(coCatF)} <span style="font-weight:400;color:var(--i4);font-size:12px">${list.length}개 기업</span></div>
       <div style="display:flex;flex-direction:column;gap:6px;margin-top:12px">
         ${list.length ? list.map((c,i) => `
-          <div class="co-rw" onclick="selectCo('${c.key.replace(/'/g,"\\'")}')" style="cursor:pointer;border:1px solid var(--i6);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;background:var(--W)">
+          <div class="co-rw" onclick="selectCo('${escAttr(c.key)}')" style="cursor:pointer;border:1px solid var(--i6);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;background:var(--W)">
             <div class="co-av" style="background:${avB(i)};color:${avF(i)}">${escapeHtml(c.abbr)}</div>
             <div style="flex:1;min-width:0">
               <div class="co-rn">${escapeHtml(c.nameKo||c.nameEn)}</div>
@@ -560,14 +560,14 @@ export function renderCoDashboard(){
     <div style="font-size:11px;color:var(--i4);margin-bottom:16px">전체 ${totalCo}개 기업 · 클릭하면 해당 섹터의 기업 리스트가 보여요</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">
       ${data.map(g => `
-        <div class="astep" style="padding:14px 15px;cursor:pointer" onclick="setCoCat('${g.name.replace(/'/g,"\\'")}')">
+        <div class="astep" style="padding:14px 15px;cursor:pointer" onclick="setCoCat('${escAttr(g.name)}')">
           <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
             <div class="sttl" style="margin:0">${escapeHtml(g.name)}</div>
             <div style="font-size:18px;font-weight:800;color:var(--a)">${g.count}<span style="font-size:10px;font-weight:600;color:var(--i4)">개사</span></div>
           </div>
           ${g.subs.length ? `<div style="display:flex;flex-direction:column;gap:5px">
             ${g.subs.map(s => `
-              <div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--i3)" onclick="event.stopPropagation();setCoCat('${s.name.replace(/'/g,"\\'")}')">
+              <div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--i3)" onclick="event.stopPropagation();setCoCat('${escAttr(s.name)}')">
                 <span>↳ ${escapeHtml(s.name)}</span>
                 <span style="font-weight:700;color:var(--i2)">${s.count}개사</span>
               </div>`).join('')}
@@ -604,28 +604,28 @@ export function renderCoDetail(c){
       <div style="flex:1"><div class="cdn">${escapeHtml(c.nameKo)} <span style="font-size:13px;font-weight:400;color:var(--i4)">${escapeHtml(c.nameEn)}</span></div>
         <div class="cdmt">
           <span>📍 ${escapeHtml(c.hq)}</span>
-          <span style="cursor:pointer" onclick="editCoSector('${c.key.replace(/'/g,"\\'")}')" title="클릭하여 섹터 변경">
-            🏭 <span id="co-sector-${c.key}">${escapeHtml(c.sector||'미분류')}</span> ✎
+          <span style="cursor:pointer" onclick="editCoSector('${escAttr(c.key)}')" title="클릭하여 섹터 변경">
+            🏭 <span id="co-sector-${escapeHtml(c.key)}">${escapeHtml(c.sector||'미분류')}</span> ✎
           </span>
-          <span style="cursor:pointer" onclick="editCoWebsite('${c.key.replace(/'/g,"\\'")}')" title="클릭하여 웹사이트 편집">
-            🔗 <span id="co-website-${c.key}">${c.website ? `<a href="${escapeHtml(c.website)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(c.website)}</a>` : '웹사이트 추가'}</span> ✎
+          <span style="cursor:pointer" onclick="editCoWebsite('${escAttr(c.key)}')" title="클릭하여 웹사이트 편집">
+            🔗 <span id="co-website-${escapeHtml(c.key)}">${c.website ? `<a href="${escapeHtml(c.website)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(c.website)}</a>` : '웹사이트 추가'}</span> ✎
           </span>
-          <span style="cursor:pointer" onclick="editCoNotes('${c.key.replace(/'/g,"\\'")}')" title="클릭하여 메모 편집">
-            📝 <span id="co-notes-${c.key}">${escapeHtml(c.notes||'메모 추가')}</span> ✎
+          <span style="cursor:pointer" onclick="editCoNotes('${escAttr(c.key)}')" title="클릭하여 메모 편집">
+            📝 <span id="co-notes-${escapeHtml(c.key)}">${escapeHtml(c.notes||'메모 추가')}</span> ✎
           </span>
-          <span style="cursor:pointer" onclick="editCoCountry('${c.key.replace(/'/g,"\\'")}')" title="클릭하여 국가 편집">
-            🌍 <span id="co-country-${c.key}">${escapeHtml(c.country||'국가 추가')}</span> ✎
+          <span style="cursor:pointer" onclick="editCoCountry('${escAttr(c.key)}')" title="클릭하여 국가 편집">
+            🌍 <span id="co-country-${escapeHtml(c.key)}">${escapeHtml(c.country||'국가 추가')}</span> ✎
           </span>
-          <span style="cursor:pointer" onclick="editCoAbbr('${c.key.replace(/'/g,"\\'")}')" title="클릭하여 약어 편집">
-            🔤 <span id="co-abbr-${c.key}">${escapeHtml(c.abbr||'약어 추가')}</span> ✎
+          <span style="cursor:pointer" onclick="editCoAbbr('${escAttr(c.key)}')" title="클릭하여 약어 편집">
+            🔤 <span id="co-abbr-${escapeHtml(c.key)}">${escapeHtml(c.abbr||'약어 추가')}</span> ✎
           </span>
-          <span style="cursor:pointer" onclick="editCoSource('${c.key.replace(/'/g,"\\'")}')" title="클릭하여 출처 편집">
-            📌 <span id="co-source-${c.key}">${escapeHtml(c.source||'출처 추가')}</span> ✎
+          <span style="cursor:pointer" onclick="editCoSource('${escAttr(c.key)}')" title="클릭하여 출처 편집">
+            📌 <span id="co-source-${escapeHtml(c.key)}">${escapeHtml(c.source||'출처 추가')}</span> ✎
           </span>
-          <span id="co-catcode-${c.key}">
+          <span id="co-catcode-${escapeHtml(c.key)}">
             ${c.catCode
               ? `<span class="btag main">${escapeHtml(c.catCode)}</span>`
-              : `<button class="btn bs" style="font-size:11px;padding:2px 8px" onclick="showAssignCatCodeUI('${c.key.replace(/'/g,"\\'")}')">코드 부여</button>`}
+              : `<button class="btn bs" style="font-size:11px;padding:2px 8px" onclick="showAssignCatCodeUI('${escAttr(c.key)}')">코드 부여</button>`}
           </span>
           <span style="color:var(--i4);font-size:11px">🕒 ${escapeHtml(c.updatedAt || '-')}</span>
         </div>
@@ -773,7 +773,7 @@ function startCoInlineEdit(key, field){
   const sizeStyle = cfg.multiline
     ? 'width:220px;height:64px;resize:vertical;font-size:11px;padding:4px 6px;font-family:inherit'
     : 'width:160px;font-size:11px;padding:2px 6px;font-family:inherit';
-  span.innerHTML = `<${tag} class="fi" id="co-inline-input-${field}-${key}" style="${sizeStyle}" placeholder="${escapeHtml(cfg.placeholder)}"></${tag}>`;
+  span.innerHTML = `<${tag} class="fi" id="co-inline-input-${field}-${escapeHtml(key)}" style="${sizeStyle}" placeholder="${escapeHtml(cfg.placeholder)}"></${tag}>`;
   const input = document.getElementById(`co-inline-input-${field}-${key}`);
   if(!input) return;
   input.value = current;
@@ -867,7 +867,7 @@ export function editCoSector(key){
     ${groupsHtml || '<div style="font-size:12px;color:var(--i4)">등록된 섹터 없음</div>'}
     <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:10px">
       <button class="btn bs" style="font-size:11px;padding:2px 8px" onclick="closeCoSectorPopover()">취소</button>
-      <button class="btn bp" style="font-size:11px;padding:2px 8px" onclick="saveCoSector('${key.replace(/'/g,"\\'")}')">저장</button>
+      <button class="btn bp" style="font-size:11px;padding:2px 8px" onclick="saveCoSector('${escAttr(key)}')">저장</button>
     </div>`;
   document.body.appendChild(pop);
   setTimeout(() => document.addEventListener('mousedown', handleCoSectorOutsideClick), 0);
@@ -915,7 +915,7 @@ export function showAssignCatCodeUI(key){
   const el = document.getElementById('co-catcode-' + key);
   if(!el) return;
   const opts = CATEGORY_CODES.map(cc => `<option value="${cc.code}">${cc.code} · ${escapeHtml(cc.label)}</option>`).join('');
-  el.innerHTML = `<select id="co-catcode-sel-${key}" class="fi" style="font-size:11px;padding:2px 6px" onchange="doAssignCatCode('${key.replace(/'/g,"\\'")}')">
+  el.innerHTML = `<select id="co-catcode-sel-${escapeHtml(key)}" class="fi" style="font-size:11px;padding:2px 6px" onchange="doAssignCatCode('${escAttr(key)}')">
     <option value="">prefix 선택</option>${opts}
   </select>`;
 }
@@ -966,7 +966,7 @@ export function openAddCoEventModal(key){
 
         <div style="display:flex;gap:8px;justify-content:flex-end">
           <button class="btn bs" onclick="document.getElementById('co-event-modal').remove()">취소</button>
-          <button class="btn bp" onclick="submitAddCoEvent('${key.replace(/'/g,"\\'")}')">추가</button>
+          <button class="btn bp" onclick="submitAddCoEvent('${escAttr(key)}')">추가</button>
         </div>
       </div>
     </div>`;
@@ -1034,7 +1034,7 @@ function renderCoBody(c){
 }
 function renderTL(c){
   const addBtn = `<div style="display:flex;justify-content:flex-end;margin-bottom:10px">
-    <button class="btn bp" style="font-size:11px" onclick="openAddCoEventModal('${c.key.replace(/'/g,"\\'")}')">+ 참여 이력 추가</button>
+    <button class="btn bp" style="font-size:11px" onclick="openAddCoEventModal('${escAttr(c.key)}')">+ 참여 이력 추가</button>
   </div>`;
   if(!c.events.length)return addBtn + `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><p>행사 참여 이력 없음</p></div>`;
   const byY={};c.events.forEach(e=>{if(!byY[e.year])byY[e.year]=[];byY[e.year].push(e)});

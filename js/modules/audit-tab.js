@@ -31,7 +31,7 @@ import {
   userColor,
 } from '../state.js';
 import { saveAuditToSheets } from '../api.js';
-import { escapeHtml, userInitials } from '../utils.js';
+import { escapeHtml, escAttr, userInitials } from '../utils.js';
 
 /* ══════════════════════════════════════════
    CSV 인젝션 방지 헬퍼 (신규 — 원본에는 없던 보안 개선)
@@ -163,7 +163,7 @@ export function buildAuditUserList(){
   // Sidebar list
   const sbEl = document.getElementById('audit-user-list');
   if(sbEl) sbEl.innerHTML = Object.entries(users).map(([email,name])=>`
-    <button class="evc${auditUserFilter===email?' on':''}" onclick="setAuditUser('${email}')">
+    <button class="evc${auditUserFilter===email?' on':''}" onclick="setAuditUser('${escAttr(email)}')">
       <div style="width:22px;height:22px;border-radius:50%;background:${userColor(email)};color:#fff;
         display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0">
         ${escapeHtml(userInitials(name))}
