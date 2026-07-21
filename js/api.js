@@ -36,6 +36,8 @@ import {
   COMPANY_SECTORS,
   DOMAINS,
   setDomains,
+  TAGS,
+  setTags,
   CATMAPS,
   PART_TYPES,
   currentUser,
@@ -281,6 +283,7 @@ export async function loadFromSheets(hooks = {}){
           phone1: p1,
           phone2: (p2 && p2 !== p1) ? p2 : '', // phone1과 같으면 비움
           beat:   r.beat||'',    products:r.products||'',
+          tags:   r.tags||'',
         };
       }));
       console.log('[CRM] contacts loaded & cleaned:', contacts.length);
@@ -296,6 +299,21 @@ export async function loadFromSheets(hooks = {}){
             console.log('[CRM] domains 로드:', DOMAINS.length, '개 분야');
           }
         } catch(e){ console.warn('[CRM] domains JSON 파싱 실패 — 전부 미분류로 표시:', e); }
+      }
+
+      // ── settings 시트 → TAGS (연락처 영구 태그 목록, key='tags' JSON) ──
+      const tagsRow = settingsData.find(row => row.key === 'tags');
+      if(tagsRow){
+        try {
+          const parsed = JSON.parse(tagsRow.value);
+          if(Array.isArray(parsed) && parsed.length){
+            setTags(parsed.filter(t => t && t.key));
+            console.log('[CRM] tags 로드:', TAGS.length, '개 태그');
+          }
+        } catch(e){ console.warn('[CRM] tags JSON 파싱 실패 — 기본값(BD/C-level) 유지:', e); }
+      } else if(GS_URL && currentUser){
+        // 시트에 아직 없으면 기본값(BD/C-level)을 1회 저장(마이그레이션)
+        saveTags();
       }
 
       // ── settings 시트 → CATMAPS (업로드 카테고리 값별 매핑, key='catmap_<행사key>') ──
@@ -349,6 +367,7 @@ export async function loadFromSheets(hooks = {}){
         COMPANY_INFO[r.key] = {
           sector: r.sector || '', hq: r.hq || '', website: r.website || '', notes: r.notes || '',
           catCode: r.catCode || '', country: r.country || '', abbr: r.abbr || '', source: r.source || '', updatedAt: r.updatedAt || '',
+          nameKo: r.nameKo || '', nameEn: r.nameEn || '',
         };
       });
       console.log('[CRM] companies 시트 로드:', Object.keys(COMPANY_INFO).length, '개');
@@ -527,6 +546,16 @@ export async function saveDomains(){
     row:    ['domains', JSON.stringify(DOMAINS)],
   }, '분야 목록 저장');
   if(r.ok) console.log('[CRM] domains 저장 완료:', DOMAINS.length, '개');
+  return r;
+}
+
+export async function saveTags(){
+  const r = await postToSheet({
+    sheet:  'settings',
+    action: 'upsert',
+    row:    ['tags', JSON.stringify(TAGS)],
+  }, '태그 목록 저장');
+  if(r.ok) console.log('[CRM] tags 저장 완료:', TAGS.length, '개');
   return r;
 }
 

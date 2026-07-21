@@ -22,7 +22,7 @@ import { EVENT_LIST_SEED } from './constants.js';
 /* ── Apps Script 배포 URL (원본 1558행) ──
    테스트 모드(test/test/test 로그인) 진입 시 setGsUrl('')으로 비워서
    이 세션 동안 모든 구글시트 읽기/쓰기를 원천 차단한다(auth.js 참고). */
-let GS_URL = 'https://script.google.com/macros/s/AKfycbyqFcodNap4k_uyyw3sBMzdEphPMajlPm6eLBtulSzBb63pRjc-X5M1-LO1zr9PZDmy9w/exec';
+let GS_URL = 'https://script.google.com/macros/s/AKfycbwM8KmiykL0ejiD24YhdqXKsMI8FBFP-Z4baOzIlnVdvu_DkXaJOnIP0PZoot3jqQlOwg/exec';
 export function setGsUrl(v){ GS_URL = v; }
 export { GS_URL };
 
@@ -78,7 +78,7 @@ export function contactEvents(c){
    CO_DB — 기업 마스터 (Company DB 탭용) (원본 1616~1620행)
 ══════════════════════════════════════════ */
 export const CO_DB = [];
-// key(회사명) → { sector, hq, website, notes, catCode, country, abbr, source, updatedAt }
+// key(회사명) → { sector, hq, website, notes, catCode, country, abbr, source, updatedAt, nameKo, nameEn }
 // companies 시트에서 로드된 회사 단위 관리 정보
 export const COMPANY_INFO = {};
 
@@ -155,13 +155,14 @@ export function setSheetsConnected(v){ sheetsConnected = v; }
 export { sheetsConnected };
 
 /* ── 기업DB(co) 탭 상태 ── */
-let selCo = null, coTab = 0, coCatF = null, coCodeF = null, coDomainF = null;
+let selCo = null, coTab = 0, coCatF = null, coCodeF = null, coDomainF = null, coCountryF = null;
 export function setSelCo(v){ selCo = v; }
 export function setCoTab(v){ coTab = v; }
 export function setCoCatF(v){ coCatF = v; }
 export function setCoCodeF(v){ coCodeF = v; }
 export function setCoDomainF(v){ coDomainF = v; }
-export { selCo, coTab, coCatF, coCodeF, coDomainF };
+export function setCoCountryF(v){ coCountryF = v; } // 'domestic' | 'overseas' | null
+export { selCo, coTab, coCatF, coCodeF, coDomainF, coCountryF };
 
 /* ── CRM(crm) 탭 상태 ── */
 let crmV = 'pipeline', crmEvF = null, crmStF = null, tblSt = '전체';
@@ -183,11 +184,17 @@ let mdbEvFilter = null;
 let mdbView = 'flat';
 let mdbCat = 'all';
 let mdbStat = null;
+let mdbDomainFilter = null; // 분야별 보기 — DOMAINS의 id, 또는 '__none__'(미분류). null=전체
 export function setMdbEvFilter(v){ mdbEvFilter = v; }
 export function setMdbView(v){ mdbView = v; }
 export function setMdbCat(v){ mdbCat = v; }
 export function setMdbStat(v){ mdbStat = v; }
-export { mdbEvFilter, mdbView, mdbCat, mdbStat };
+export function setMdbDomainFilter(v){ mdbDomainFilter = v; }
+export { mdbEvFilter, mdbView, mdbCat, mdbStat, mdbDomainFilter };
+
+/* 마스터DB 행 선택(체크) 상태 — 아바타 클릭으로 토글, 일괄 병합/삭제/변경에 사용.
+   Set은 재할당 없이 add/delete로 직접 조작(CO_DB 등과 동일한 패턴). */
+export const mdbSelected = new Set();
 
 /* ══════════════════════════════════════════
    DOMAINS — 섹터의 최상위 "분야(도메인)" 목록 (신규)
@@ -255,3 +262,18 @@ export const PART_TYPES = [
   {key:'주최사',        label:'주최사',        cls:'p-indigo'},
   {key:'참가자',        label:'참가자',        cls:'p-gray'},
 ];
+
+/* ══════════════════════════════════════════
+   TAGS — 연락처 영구 태그 목록(BD/C-level 등) (신규)
+   { key, label } — key는 마스터DB 필터/배지 id와 연락처.tags 값에 그대로 쓰인다.
+   settings 시트 key='tags'의 JSON에서 로드된다. 설정 > 기업 섹터 탭에서
+   추가/이름변경/삭제 가능.
+══════════════════════════════════════════ */
+export const TAGS = [
+  {key:'bd',     label:'BD'},
+  {key:'clevel', label:'C-level'},
+];
+export function setTags(arr){
+  TAGS.length = 0;
+  TAGS.push(...(arr || []));
+}

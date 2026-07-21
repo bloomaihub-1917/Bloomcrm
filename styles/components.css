@@ -29,7 +29,9 @@ thead th{position:sticky;top:0;z-index:1;background:var(--i8);padding:7px 12px;t
 tbody td{padding:9px 12px;border-bottom:1px solid var(--i7);vertical-align:middle;white-space:nowrap;color:var(--i2)}
 tbody tr{cursor:pointer;transition:background .1s}tbody tr:hover td{background:rgba(59,91,219,.03)}
 .tdco{display:flex;align-items:center;gap:8px}
-.tdav{width:26px;height:26px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0}
+.tdav{width:26px;height:26px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0;cursor:pointer}
+.tdav.sel{background:var(--a)!important;color:#fff!important;font-size:13px}
+tr.row-sel{background:var(--ad)}
 .tdnm{font-size:13px;font-weight:700;color:var(--i1)}.tdsb{font-size:10px;color:var(--i4);margin-top:1px}
 .std{width:7px;height:7px;border-radius:50%;flex-shrink:0}
 .stv{background:var(--g)}.stp{background:var(--am)}.stn{background:var(--i5)}

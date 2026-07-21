@@ -55,7 +55,7 @@ import {
   currentUser,
 } from '../state.js';
 import { CL } from '../constants.js';
-import { normalizeCat, normalizeCountry, escapeHtml, escAttr, scopedSectorName, slugifySectorName, sectorRowValues } from '../utils.js';
+import { normalizeCat, normalizeCountry, escapeHtml, escAttr, scopedSectorName, slugifySectorName, sectorRowValues, sectorKey } from '../utils.js';
 import { postToSheet, saveCatmap } from '../api.js';
 import { buildCoDB, buildCoCAT, batchUpsertCompanies } from './company-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
@@ -970,7 +970,7 @@ export async function runValidationStep(newRows, dupRows){
     const created = [];
     catSel.newVals.forEach(v => {
       const name = scopedSectorName(evShortName, v);
-      let s = COMPANY_SECTORS.find(x => x.name === name);
+      let s = COMPANY_SECTORS.find(x => sectorKey(x.name) === sectorKey(name));
       if(!s){
         s = { id: slugifySectorName(name), name, parent: null, domain: '', canonical: '' };
         COMPANY_SECTORS.push(s);
@@ -1148,7 +1148,7 @@ export async function runValidationStep(newRows, dupRows){
     if(addedContacts.length){
       const contactRows = addedContacts.map(r => [r.id, r.nameKo, r.nameEn, r.orgKo, r.orgEn, r.titleKo, r.titleEn, r.deptKo, r.deptEn,
             r.country, r.cat, r.lang, r.source, r.date, r.status, r.email1, r.email2, r.phone1, r.phone2,
-            r.beat||'', r.products||'']);
+            r.beat||'', r.products||'', r.tags||'']);
       const res = await postToSheet(
         { sheet: 'contacts', action: 'batchAppend', rows: contactRows }, '연락처 업로드');
       if(!res.ok){
@@ -1178,7 +1178,7 @@ export async function runValidationStep(newRows, dupRows){
         action: 'upsert',
         row: [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
               c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
-              c.beat||'', c.products||''],
+              c.beat||'', c.products||'', c.tags||''],
       }, '연락처 정보 보강');
     }
     // participations 구글시트 저장 — batchAppend로 한 번에

@@ -15,7 +15,7 @@ import './modules/company-tab.js';
 import './modules/crm-tab.js';
 import './modules/audit-tab.js';
 
-import { initMobileNav, initDrawerSwipe } from './router.js';
+import { initMobileNav, initDrawerSwipe, initSidebarLayout } from './router.js';
 import { checkSession, initAfterLogin, closeUserMenu } from './auth.js';
 import { buildCoDB, buildCoCAT } from './modules/company-tab.js';
 import { buildEvFil } from './modules/crm-tab.js';
@@ -34,6 +34,7 @@ buildCoDB(); buildCoCAT(); buildEvFil(); populateUploadEvDropdown();
 // 모바일 하단 네비 초기 상태 + 드로어 스와이프-닫기 (원본 6683~6696행)
 initMobileNav();
 initDrawerSwipe();
+initSidebarLayout();
 
 // 화면 아무 곳이나 클릭하면 사용자 메뉴 닫기 (원본 5118행)
 document.addEventListener('click', () => closeUserMenu());

@@ -65,6 +65,35 @@ export function parseSectorScope(name){
   return { eventShort: name.slice(0, idx), plainName: name.slice(idx + 3) };
 }
 
+/* 섹터명 비교용 정규화 키 (대소문자·앞뒤 공백 무시) — 업로드/설정 등에서
+   "Pharma"와 "pharma"를 같은 섹터로 인식시키기 위한 단일 소스.
+   섹터 표시 이름 자체는 바꾸지 않고, 동일성 판단(중복 생성 방지·집계·필터)에만 사용한다. */
+export function sectorKey(name){
+  return String(name||'').trim().toLowerCase();
+}
+
+/* 메인 섹터의 domain 컬럼 값 파싱/조합 — 섹터 하나가 여러 분야에 동시에 속할 수
+   있도록 "bio|vc"처럼 파이프로 여러 분야 id를 이어붙여 한 컬럼에 저장한다
+   (시트 스키마는 그대로, parseSectors/joinSectors와 동일한 패턴). */
+export function parseDomains(domain){
+  if(!domain) return [];
+  return String(domain).split('|').map(s=>s.trim()).filter(Boolean);
+}
+export function joinDomains(arr){
+  return (arr||[]).filter(Boolean).join('|');
+}
+
+/* 연락처의 tags 컬럼 값 파싱/조합 — BD/C-level처럼 참가 역할·직함과 무관하게
+   그 사람에게 직접 붙이는 영구 꼬리표. "bd|clevel"처럼 파이프로 여러 개를
+   이어붙인다(parseDomains와 동일한 패턴). */
+export function parseTags(tags){
+  if(!tags) return [];
+  return String(tags).split('|').map(s=>s.trim()).filter(Boolean);
+}
+export function joinTags(arr){
+  return (arr||[]).filter(Boolean).join('|');
+}
+
 /* sectors 시트 한 행의 값 배열 — 시트 컬럼(id,name,parent,domain,canonical)의
    단일 소스. sectors에 쓰는 모든 upsert/batchUpsert/replaceAll은 반드시 이
    헬퍼를 거쳐야 한다 (컬럼 폭이 모자라면 replaceAll이 뒷 컬럼을 통째로
@@ -87,9 +116,12 @@ export function slugifySectorName(name){
 }
 
 /* ── cat 값 정규화 (한글 원문 → DB 코드) ──
-   연락처(contacts)의 cat은 이제 speaker/vip/attendee 3분류로만 저장한다.
-   스폰서/투자자/바이어/BD/전시기업/기자/주최 등 상세 구분은 여기서
-   사라지고, 행사 참가 역할(participations.role/PART_TYPES)에만 남는다. */
+   연락처(contacts)의 cat은 speaker/vip/attendee 3분류로만 저장한다.
+   스폰서/투자자/바이어/BD/전시기업/기자/주최 등 그 외 상세 구분은 여기서
+   사라지고, 행사 참가 역할(participations.role/PART_TYPES)에만 남는다.
+   BD는 cat을 분리하지 않고 attendee로 유지 — db-tab.js에서 참가 역할
+   기준의 비배타적 보조 필터로 별도 구현했다(자세한 이유는 constants.js의
+   ROLE_TO_CAT 주석 참고). */
 const CAT_NORMALIZE_MAP = {
   // ── 연사 (좌장/패널도 무대에 오르는 발표 프로그램 참가자라 같은 그룹으로 묶음) ──
   '연사':'speaker','발표자':'speaker','강연자':'speaker','키노트':'speaker',
@@ -106,7 +138,9 @@ const CAT_NORMALIZE_MAP = {
   'sponsor':'attendee','sponsorship':'attendee',
   '투자자':'attendee','vc':'attendee','investor':'attendee',
   '바이어':'attendee','buyer':'attendee',
-  'bd':'attendee','비디':'attendee','사업개발':'attendee','파트너':'attendee',
+  // ── BD (Business Development) — cat은 attendee로 유지(위 주석 참고) ──
+  'bd':'attendee','비디':'attendee','사업개발':'attendee','비즈니스디벨롭먼트':'attendee','businessdevelopment':'attendee',
+  '파트너':'attendee',
   '전시기업':'attendee','전시참가기업':'attendee','전시참가':'attendee',
   '전시':'attendee','부스':'attendee',
   'exhibitor':'attendee','booth':'attendee',

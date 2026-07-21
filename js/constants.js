@@ -21,7 +21,11 @@ export const avF = i => FG[i % 6];
 
 /* participations.type(=role)의 한글 PART_TYPES 값 ↔ contacts.cat(영문 키) 매핑.
    cat은 speaker/vip/attendee 3분류만 쓰므로, VIP/연사를 제외한 모든 참가
-   역할(BD/바이어/전시참가기업/스폰서/주최사/참가자 등)은 attendee로 묶인다. */
+   역할(BD/바이어/전시참가기업/스폰서/주최사/참가자 등)은 attendee로 묶인다.
+   BD는 실제 데이터에서 attendee 대부분에 폭넓게 쓰이는 태그라, cat 자체를
+   분리하면 attendee가 통째로 비어버린다 — 그래서 cat은 attendee로 유지하고,
+   "BD" 필터/배지는 db-tab.js에서 참가 역할(role==='BD')만 별도로 검사하는
+   식으로 attendee와 겹치는(비배타적) 보조 필터로 구현했다. */
 export const ROLE_TO_CAT = {
   'VIP':'vip', '연사':'speaker', 'BD':'attendee', '바이어':'attendee',
   '전시참가기업':'attendee', '스폰서':'attendee', '주최사':'attendee', '참가자':'attendee',

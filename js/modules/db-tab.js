@@ -24,16 +24,81 @@ import {
   mdbView,
   mdbCat,
   mdbStat,
+  mdbDomainFilter,
   setMdbEvFilter,
   setMdbView,
   setMdbCat,
   setMdbStat,
+  setMdbDomainFilter,
+  CO_DB,
+  DOMAINS,
+  TAGS,
+  mdbSelected,
 } from '../state.js';
 import { CP, CL, RP, ROLE_TO_CAT, COUNTRIES, avB, avF } from '../constants.js';
-import { ab, countryName, countryOptions, escapeHtml, escAttr } from '../utils.js';
+import { ab, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseTags, joinTags } from '../utils.js';
 import { postToSheet } from '../api.js';
 import { buildCoDB } from './company-tab.js';
+import { domainOfSector, domainName, findSectorByName, UNASSIGNED_DOMAIN } from './settings-tab.js';
 import { trackAction } from './audit-tab.js';
+
+/* BD/C-level — cat("연사/VIP/일반참가자")을 분리하지 않는 비배타적 보조 태그.
+   행사·역할이 바뀌어도 남아있어야(다음 행사 메일링 리스트에 재사용) 하므로
+   participations.role이나 그때그때의 직함 텍스트가 아니라, 연락처 자체의
+   tags 컬럼("bd|clevel"처럼 파이프 구분)에 직접 저장한다. 다만 tags가 아직
+   없는 기존 데이터를 위해, C-level은 직함 키워드로도 보조 판별한다(BD는
+   참가 역할만으로 자동 추정하면 attendee 전체가 BD가 되는 사고가 났었어서
+   자동 추정 없이 tags에 명시적으로 붙인 사람만 잡는다). */
+const C_LEVEL_KEYWORDS = [
+  'ceo','cto','cfo','coo','cio','cmo','president','chairman','vice chairman','founder','co-founder',
+  '대표','대표이사','회장','부회장','사장','부사장','총괄대표','공동대표','창업자',
+];
+function hasTag(c, key){
+  return !!c && parseTags(c.tags).includes(key);
+}
+function isBDContact(c){
+  return hasTag(c, 'bd');
+}
+function isCLevelContact(c){
+  if(!c) return false;
+  if(hasTag(c, 'clevel')) return true;
+  const t = `${c.titleKo||''} ${c.titleEn||''}`.toLowerCase();
+  return C_LEVEL_KEYWORDS.some(k => t.includes(k));
+}
+/* mdbCat이 speaker/vip/attendee가 아니면(그리고 'all'도 아니면) 등록된
+   태그(TAGS) 키를 가리키는 것으로 취급한다 — 태그는 cat과 달리 서로/다른
+   카테고리와 배타적이지 않다(BD이면서 동시에 attendee일 수 있음). */
+const MDB_CAT_VALUES = ['speaker','vip','attendee'];
+function matchesTagFilter(c, tagKey){
+  return tagKey === 'clevel' ? isCLevelContact(c) : hasTag(c, tagKey);
+}
+/* 선택된 연락처들의 tags에서 name을 추가/제거 */
+function setContactTag(c, name, add){
+  const tags = parseTags(c.tags);
+  const idx = tags.indexOf(name);
+  if(add && idx < 0) tags.push(name);
+  if(!add && idx >= 0) tags.splice(idx, 1);
+  c.tags = joinTags(tags);
+}
+
+/* 연락처 id → 그 소속 기업이 속한 분야 id 배열. CO_DB(기업 단위 섹터 배정)를
+   역참조해서 만든다 — 한 기업이 여러 분야에 속할 수 있으므로(예: Investor
+   = BIO+VC) 연락처도 여러 분야에 동시에 속할 수 있다. 등록 안 된 섹터명이나
+   분야 미배정인 경우 빈 배열(미분류)을 반환한다. */
+function buildContactDomainMap(){
+  const map = new Map();
+  CO_DB.forEach(co => {
+    const doms = new Set();
+    (co.sectors && co.sectors.length ? co.sectors : [co.sector]).forEach(name => {
+      if(!name) return;
+      const sec = findSectorByName(name);
+      if(sec) domainOfSector(sec).forEach(d => doms.add(d));
+    });
+    const domArr = [...doms];
+    (co.contacts||[]).forEach(cc => map.set(cc.id, domArr));
+  });
+  return map;
+}
 
 /* ══════════════════════════════════════════
    행사 칩 목록 (원본 1745~1764행)
@@ -59,6 +124,233 @@ export function buildMDBEvList(){
 }
 export function setMDBEv(ev){ setMdbEvFilter(ev); buildMDBEvList(); renderMDB(); }
 
+/* ══════════════════════════════════════════
+   분야별 보기 (신규) — 행사별 보기와 같은 칩 UI 패턴.
+   연락처 소속 기업의 섹터가 속한 분야(BIO/VC/... , DOMAINS)를 기준으로
+   필터링한다. 행사별/카테고리/상태 필터와 함께(AND) 적용된다. */
+export function buildMDBDomainList(){
+  const el = document.getElementById('mdb-domain-list');
+  if(!el) return;
+  const domainMap = buildContactDomainMap();
+  const countFor = domainId => contacts.filter(c => {
+    const doms = domainMap.get(c.id) || [];
+    return domainId === UNASSIGNED_DOMAIN ? doms.length === 0 : doms.includes(domainId);
+  }).length;
+
+  el.innerHTML =
+    `<button class="ev-chip${!mdbDomainFilter?' on':''}" onclick="setMDBDomain(null)">
+      <span class="ev-chip-dot" style="background:var(--i4)"></span>
+      <span class="ev-chip-nm">전체 분야</span>
+      <span class="ev-chip-ct">${contacts.length}명</span>
+    </button>` +
+    DOMAINS.map(d => {
+      const cnt = countFor(d.id);
+      return `<button class="ev-chip${mdbDomainFilter===d.id?' on':''}" onclick="setMDBDomain('${escAttr(d.id)}')">`+
+        `<span class="ev-chip-dot" style="background:var(--a)"></span>`+
+        `<span class="ev-chip-nm">${escapeHtml(d.name)}</span>`+
+        `<span class="ev-chip-ct">${cnt}명</span>`+
+        `</button>`;
+    }).join('') +
+    (() => {
+      const cnt = countFor(UNASSIGNED_DOMAIN);
+      if(!cnt) return '';
+      return `<button class="ev-chip${mdbDomainFilter===UNASSIGNED_DOMAIN?' on':''}" onclick="setMDBDomain('${UNASSIGNED_DOMAIN}')">`+
+        `<span class="ev-chip-dot" style="background:var(--i5)"></span>`+
+        `<span class="ev-chip-nm">${escapeHtml(domainName(UNASSIGNED_DOMAIN))}</span>`+
+        `<span class="ev-chip-ct">${cnt}명</span>`+
+        `</button>`;
+    })();
+}
+export function setMDBDomain(d){ setMdbDomainFilter(d); buildMDBDomainList(); renderMDB(); }
+
+/* ══════════════════════════════════════════
+   목록(flat) 뷰 컬럼 정렬 (신규) — 헤더 클릭 시 오름차순/내림차순 토글.
+   화면 전용 상태(저장 안 함), 목록 뷰에서만 동작한다.
+══════════════════════════════════════════ */
+let _mdbSortCol = null;
+let _mdbSortDir = 1; // 1 = 오름차순, -1 = 내림차순
+export function sortMDBBy(col){
+  if(_mdbSortCol === col) _mdbSortDir = -_mdbSortDir;
+  else { _mdbSortCol = col; _mdbSortDir = 1; }
+  renderMDB();
+}
+/* 컬럼별 정렬 비교값 추출 — 문자열은 소문자로, "행사"는 필터 상황에 따라
+   (특정 행사면 그 행사에서의 참가 역할, 아니면 참여한 행사 수) 다르게 잡는다. */
+const MDB_SORT_KEYS = {
+  name:    ({c}) => (c.nameKo||c.nameEn||'').toLowerCase(),
+  org:     ({c}) => (c.orgKo||c.orgEn||'').toLowerCase(),
+  country: ({c}) => countryName(c.country||'').toLowerCase(),
+  title:   ({c}) => (c.titleKo||c.titleEn||'').toLowerCase(),
+  cat:     ({c,p}) => { const roleKey = p ? p.role : c.cat; return String(CL[roleKey]||roleKey||'').toLowerCase(); },
+  events:  ({c,p}) => p ? String(evShort(p.eventId)||'').toLowerCase() : contactEvents(c).length,
+  contact: ({c}) => (c.email1||c.phone1||'').toLowerCase(),
+  date:    ({c}) => c.date||'',
+  status:  ({c}) => c.status||'',
+};
+function applyMDBSort(pairs){
+  const keyFn = MDB_SORT_KEYS[_mdbSortCol];
+  if(!keyFn) return pairs;
+  return [...pairs].sort((a,b) => {
+    const va = keyFn(a), vb = keyFn(b);
+    if(va < vb) return -_mdbSortDir;
+    if(va > vb) return _mdbSortDir;
+    return 0;
+  });
+}
+
+/* ══════════════════════════════════════════
+   태그 필터 칩 목록 (신규) — 카테고리(연사/VIP/일반참가자)와 분리된 영역.
+   TAGS 레지스트리(설정 > 기업 섹터에서 추가/삭제 관리)를 그대로 버튼으로
+   렌더링한다. 서로 배타적이지 않으므로 클릭한 태그 하나만 mdbCat에 반영되고
+   (동시에 여러 태그로 필터링은 지원 안 함), 카테고리 버튼과 동일한
+   filterCat()/segCat() 메커니즘을 그대로 재사용한다.
+══════════════════════════════════════════ */
+export function buildMDBTagList(){
+  const el = document.getElementById('mdb-tag-list');
+  if(!el) return;
+  if(!TAGS.length){
+    el.innerHTML = '<span style="font-size:12px;color:var(--i4)">등록된 태그가 없어요 — 설정 &gt; 기업 섹터에서 추가할 수 있어요.</span>';
+    return;
+  }
+  el.innerHTML = TAGS.map(t => `
+    <button class="nr${mdbCat===t.key?' on':''}" onclick="filterCat('${escAttr(t.key)}',this)">
+      🏷 ${escapeHtml(t.label)}<span class="nbg" id="ct-tag-${escAttr(t.key)}">0</span>
+    </button>`).join('');
+}
+
+/* ══════════════════════════════════════════
+   행 선택(체크) + 일괄 작업 (신규) — 목록(flat) 뷰에서 이름 아바타를 클릭하면
+   그 사람이 선택되고, 선택된 사람이 1명 이상이면 상단에 일괄 작업 바가 뜬다.
+   기업 병합은 "기업명 일괄 변경"으로 통합 처리(선택된 연락처들의 orgKo를
+   하나로 맞추면 기업DB 집계 시 자연히 한 기업으로 합쳐진다).
+══════════════════════════════════════════ */
+export function toggleMDBSelect(id){
+  if(mdbSelected.has(id)) mdbSelected.delete(id);
+  else mdbSelected.add(id);
+  renderMDB();
+}
+export function clearMDBSelection(){
+  mdbSelected.clear();
+  renderMDB();
+}
+/* 현재 필터링돼서 보이는 목록 전체를 선택/해제 — 화면에 없는(필터에 안 걸린)
+   사람은 건드리지 않는다. */
+export function toggleMDBSelectAll(checked){
+  const pairs = getMDBPairs();
+  if(checked) pairs.forEach(({c}) => mdbSelected.add(c.id));
+  else pairs.forEach(({c}) => mdbSelected.delete(c.id));
+  renderMDB();
+}
+export function renderMDBSelectionBar(){
+  const el = document.getElementById('mdb-bulkbar');
+  if(!el) return;
+  const n = mdbSelected.size;
+  if(!n){ el.style.display = 'none'; el.innerHTML=''; return; }
+  el.style.display = 'flex';
+  el.innerHTML = `
+    <span style="font-size:12px;font-weight:600;color:var(--i1)">${n}명 선택됨</span>
+    <button class="btn bp bs" onclick="openMDBBulkEditModal()">기업명/카테고리/상태 일괄 변경</button>
+    <button class="btn bs" style="color:var(--re);border-color:var(--re)" onclick="bulkDeleteMDBContacts()">선택 삭제</button>
+    <button class="btn bs" style="margin-left:auto" onclick="clearMDBSelection()">선택 해제</button>
+  `;
+}
+
+export function openMDBBulkEditModal(){
+  if(!mdbSelected.size) return;
+  closeMDBBulkEditModal();
+  const pop = document.createElement('div');
+  pop.id = 'mdb-bulk-modal';
+  pop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.32);z-index:9999;display:flex;align-items:center;justify-content:center';
+  pop.onclick = () => closeMDBBulkEditModal();
+  pop.innerHTML = `
+    <div style="background:var(--W);border-radius:10px;padding:20px;width:320px;box-shadow:0 12px 40px rgba(0,0,0,.2)" onclick="event.stopPropagation()">
+      <div style="font-size:14px;font-weight:700;margin-bottom:12px">선택한 ${mdbSelected.size}명 일괄 변경</div>
+      <div class="fg"><label class="fl">기업명(국문) — 비워두면 유지 (여러 기업명을 하나로 합칠 때 사용)</label>
+        <input class="fi" id="mdb-bulk-org" placeholder="예: 삼성전자"></div>
+      <div class="fg" style="margin-top:8px"><label class="fl">카테고리 — 유지하려면 선택 안 함</label>
+        <select class="fi" id="mdb-bulk-cat"><option value="">변경 안 함</option>
+          ${['speaker','vip','attendee'].map(k=>`<option value="${k}">${CL[k]}</option>`).join('')}
+        </select></div>
+      <div class="fg" style="margin-top:8px"><label class="fl">상태 — 유지하려면 선택 안 함</label>
+        <select class="fi" id="mdb-bulk-status"><option value="">변경 안 함</option>
+          <option value="verified">검증됨</option><option value="pending">확인 중</option><option value="new">신규</option>
+        </select></div>
+      ${TAGS.map(t => `
+      <div class="fg" style="margin-top:8px"><label class="fl">${escapeHtml(t.label)} 태그 — 참가 역할·카테고리와 무관하게 계속 남는 꼬리표(다음 행사 메일링에 재사용)</label>
+        <select class="fi" id="mdb-bulk-tag-${escAttr(t.key)}"><option value="">유지</option><option value="add">${escapeHtml(t.label)}로 표시</option><option value="remove">${escapeHtml(t.label)} 표시 해제</option></select></div>`).join('')}
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+        <button class="btn bs" onclick="closeMDBBulkEditModal()">취소</button>
+        <button class="btn bp" onclick="applyMDBBulkEdit()">적용</button>
+      </div>
+    </div>`;
+  document.body.appendChild(pop);
+}
+export function closeMDBBulkEditModal(){
+  const el = document.getElementById('mdb-bulk-modal');
+  if(el) el.remove();
+}
+export async function applyMDBBulkEdit(){
+  const org    = ((document.getElementById('mdb-bulk-org')||{}).value||'').trim();
+  const cat    = (document.getElementById('mdb-bulk-cat')||{}).value||'';
+  const status = (document.getElementById('mdb-bulk-status')||{}).value||'';
+  const tagOps = TAGS.map(t => ({ key: t.key, label: t.label, op: (document.getElementById('mdb-bulk-tag-'+t.key)||{}).value||'' }))
+    .filter(x => x.op);
+  if(!org && !cat && !status && !tagOps.length){ alert('변경할 값을 하나 이상 입력/선택하세요.'); return; }
+
+  const ids = [...mdbSelected];
+  const changed = [];
+  ids.forEach(id => {
+    const c = getContactById(id);
+    if(!c) return;
+    if(org) c.orgKo = org;
+    if(cat) c.cat = cat;
+    if(status) c.status = status;
+    tagOps.forEach(t => setContactTag(c, t.key, t.op === 'add'));
+    changed.push(c);
+  });
+  closeMDBBulkEditModal();
+  if(!changed.length) return;
+
+  const r = await postToSheet({
+    sheet: 'contacts', action: 'batchUpsert',
+    rows: changed.map(c => [c.id,c.nameKo,c.nameEn,c.orgKo,c.orgEn,c.titleKo,c.titleEn,c.deptKo,c.deptEn,
+      c.country,c.cat,c.lang,c.source,c.date,c.status,c.email1,c.email2,c.phone1,c.phone2,c.beat,c.products,c.tags||'']),
+  }, '연락처 일괄 변경');
+  if(r.ok){
+    const parts = [org&&'기업명', cat&&'카테고리', status&&'상태', ...tagOps.map(t=>`${t.label} ${t.op==='add'?'추가':'해제'}`)].filter(Boolean).join(', ');
+    trackAction('edit', '연락처 일괄 변경', `${changed.length}명`, `연락처 ${changed.length}명 일괄 변경(${parts})`);
+  }
+  mdbSelected.clear();
+  buildCoDB();
+  renderMDB();
+}
+
+export async function bulkDeleteMDBContacts(){
+  const ids = [...mdbSelected];
+  if(!ids.length) return;
+  if(!confirm(`선택한 ${ids.length}명의 연락처를 삭제할까요?\n관련 행사 참여 기록도 함께 삭제되며, 되돌릴 수 없습니다.`)) return;
+
+  const idSet = new Set(ids);
+  const removedParts = participations.filter(p => idSet.has(p.contactId));
+
+  // 로컬 먼저 반영(화면 즉시 갱신), 시트 삭제는 그 뒤 순차 처리
+  for(let i = contacts.length-1; i >= 0; i--) if(idSet.has(contacts[i].id)) contacts.splice(i,1);
+  for(let i = participations.length-1; i >= 0; i--) if(idSet.has(participations[i].contactId)) participations.splice(i,1);
+
+  mdbSelected.clear();
+  buildCoDB();
+  renderMDB();
+
+  // Apps Script 과부하 방지를 위해 동시 요청이 아니라 순차로 삭제
+  for(const id of ids){
+    await postToSheet({ sheet:'contacts', action:'delete', row:[id] }, '연락처 삭제');
+  }
+  for(const p of removedParts){
+    await postToSheet({ sheet:'participations', action:'delete', row:[p.id] }, '행사 참여 삭제');
+  }
+  trackAction('edit', '연락처 일괄 삭제', `${ids.length}명`, `연락처 ${ids.length}명 삭제`);
+}
+
 /* ── View toggle (원본 1767~1772행) ── */
 export function setDBView(v,btn){
   setMdbView(v);
@@ -75,7 +367,10 @@ export function getMDBPairs(){
   if(mdbEvFilter){
     // 특정 행사 — participations 기준
     let evParts = participations.filter(p => p.eventId === mdbEvFilter);
-    if(mdbCat !== 'all'){
+    if(mdbCat !== 'all' && !MDB_CAT_VALUES.includes(mdbCat)){
+      // 태그(BD/C-level/커스텀) — cat이 아니라 연락처의 영구 태그로 직접 검사(다른 카테고리와 비배타적)
+      evParts = evParts.filter(p => matchesTagFilter(getContactById(p.contactId), mdbCat));
+    } else if(mdbCat !== 'all'){
       // "전체"와 동일하게: 연락처 자체의 cat 또는 참가 역할 둘 중 하나라도 맞으면 포함
       evParts = evParts.filter(p => {
         const c = getContactById(p.contactId);
@@ -95,7 +390,10 @@ export function getMDBPairs(){
     pairs = contacts
       .filter(c => { if(seenIds.has(c.id)) return false; seenIds.add(c.id); return true; })
       .map(c => ({ c, p: null }));
-    if(mdbCat !== 'all'){
+    if(mdbCat !== 'all' && !MDB_CAT_VALUES.includes(mdbCat)){
+      // 태그(BD/C-level/커스텀) — cat이 아니라 연락처의 영구 태그로 직접 검사(다른 카테고리와 비배타적)
+      pairs = pairs.filter(({c}) => matchesTagFilter(c, mdbCat));
+    } else if(mdbCat !== 'all'){
       pairs = pairs.filter(({c}) => {
         if(c.cat === mdbCat) return true;
         return participations.some(p => p.contactId === c.id && ROLE_TO_CAT[p.role] === mdbCat);
@@ -105,6 +403,14 @@ export function getMDBPairs(){
 
   // stat filter
   if(mdbStat) pairs = pairs.filter(({c}) => c.status === mdbStat);
+  // domain filter (분야별 보기) — 연락처 소속 기업이 속한 분야 기준
+  if(mdbDomainFilter){
+    const domainMap = buildContactDomainMap();
+    pairs = pairs.filter(({c}) => {
+      const doms = domainMap.get(c.id) || [];
+      return mdbDomainFilter === UNASSIGNED_DOMAIN ? doms.length === 0 : doms.includes(mdbDomainFilter);
+    });
+  }
   // text search
   if(q){
     const lq = q.toLowerCase();
@@ -118,6 +424,9 @@ export function getMDBPairs(){
 /* ── Main render dispatcher (원본 1829~1842행) ── */
 export function renderMDB(){
   const pairs = getMDBPairs();
+  buildMDBDomainList();
+  buildMDBTagList();
+  renderMDBSelectionBar();
 
   const ctEl = document.getElementById('db-ct');
   if(ctEl) ctEl.textContent = mdbEvFilter
@@ -158,6 +467,13 @@ export function updateMDBBadges(pairs){
       }).length;
     }
   });
+  // 태그(BD/C-level/커스텀)는 cat이 아니라 연락처의 영구 태그만 별도로 세는
+  // 비배타적 보조 배지 — attendee 등과 겹쳐도 되므로 위 cats 루프와 분리해서 처리한다.
+  TAGS.forEach(t => {
+    const el = document.getElementById('ct-tag-'+t.key);
+    if(!el) return;
+    el.textContent = [...new Set(basePairs.map(({c})=>c.id))].filter(id => matchesTagFilter(getContactById(id), t.key)).length;
+  });
   ['verified','pending','new'].forEach((s,i)=>{
     const el=document.getElementById(['ct-vf','ct-pe','ct-nw'][i]);
     if(el) el.textContent=[...new Set(basePairs.map(({c})=>c.id))].filter(id=>{
@@ -168,12 +484,22 @@ export function updateMDBBadges(pairs){
 
 /* ── FLAT VIEW (원본 1879~1958행) ── */
 export function renderMDBFlat(pairs){
-  // matrix 뷰에서 테이블이 교체됐을 경우 복원
+  pairs = applyMDBSort(pairs);
+  // matrix/행사별 뷰에서 테이블이 교체됐을 경우(또는 체크박스 헤더가 없는
+  // 다른 뷰의 헤더가 남아있는 경우) 목록 뷰용 헤더로 복원
   const tw = document.getElementById('mdb-tw');
-  if(tw && !tw.querySelector('#mdb-body')){
+  if(tw && !tw.querySelector('#mdb-select-all')){
     tw.innerHTML = '<table><thead><tr>'
-      + '<th>이름</th><th>기업</th><th>국가</th><th>직함/부서</th>'
-      + '<th id="mdb-th-role">카테고리</th><th>행사</th><th>연락처</th><th>수집일</th><th>상태</th>'
+      + '<th style="width:26px"><input type="checkbox" id="mdb-select-all" onclick="event.stopPropagation();toggleMDBSelectAll(this.checked)" title="현재 목록 전체 선택/해제"></th>'
+      + '<th onclick="sortMDBBy(\'name\')" style="cursor:pointer">이름<span class="mdb-sort-ind" data-sort="name"></span></th>'
+      + '<th onclick="sortMDBBy(\'org\')" style="cursor:pointer">기업<span class="mdb-sort-ind" data-sort="org"></span></th>'
+      + '<th onclick="sortMDBBy(\'country\')" style="cursor:pointer">국가<span class="mdb-sort-ind" data-sort="country"></span></th>'
+      + '<th onclick="sortMDBBy(\'title\')" style="cursor:pointer">직함/부서<span class="mdb-sort-ind" data-sort="title"></span></th>'
+      + '<th id="mdb-th-role" onclick="sortMDBBy(\'cat\')" style="cursor:pointer"><span class="mdb-th-label">카테고리</span><span class="mdb-sort-ind" data-sort="cat"></span></th>'
+      + '<th onclick="sortMDBBy(\'events\')" style="cursor:pointer">행사<span class="mdb-sort-ind" data-sort="events"></span></th>'
+      + '<th onclick="sortMDBBy(\'contact\')" style="cursor:pointer">연락처<span class="mdb-sort-ind" data-sort="contact"></span></th>'
+      + '<th onclick="sortMDBBy(\'date\')" style="cursor:pointer">수집일<span class="mdb-sort-ind" data-sort="date"></span></th>'
+      + '<th onclick="sortMDBBy(\'status\')" style="cursor:pointer">상태<span class="mdb-sort-ind" data-sort="status"></span></th>'
       + '</tr></thead><tbody id="mdb-body"></tbody></table>';
   }
   // 이 컬럼은 상황에 따라 서로 다른 값을 보여준다 — 특정 행사로 필터링하지 않았을 때는
@@ -181,7 +507,9 @@ export function renderMDBFlat(pairs){
   // 참가 역할(연사/BD/바이어 등 세부 유지)이다. 헤더 제목도 그에 맞게 매번 갱신해서
   // "카테고리"라는 이름이 서로 다른 데이터를 가리키며 혼동되지 않게 한다.
   const roleTh = document.getElementById('mdb-th-role');
-  if(roleTh) roleTh.textContent = mdbEvFilter ? '참가 역할' : '카테고리';
+  const roleThLabel = roleTh ? roleTh.querySelector('.mdb-th-label') : null;
+  if(roleThLabel) roleThLabel.textContent = mdbEvFilter ? '참가 역할' : '카테고리';
+  else if(roleTh) roleTh.textContent = mdbEvFilter ? '참가 역할' : '카테고리';
 
   const sm={verified:'stv',pending:'stp',new:'stn'};
   const sl={verified:'검증됨',pending:'확인 중',new:'신규'};
@@ -216,10 +544,12 @@ export function renderMDBFlat(pairs){
 
     const contactCell = [c.email1, c.phone1].filter(Boolean).map(v=>`<div style="font-size:10px;color:var(--i3);white-space:nowrap">${escapeHtml(v)}</div>`).join('') || '<span style="color:var(--i6)">—</span>';
 
-    return `<tr onclick="openContactDr(${c.id})" style="cursor:pointer">
+    const isSel = mdbSelected.has(c.id);
+    return `<tr onclick="openContactDr(${c.id})" style="cursor:pointer" class="${isSel?'row-sel':''}">
+      <td onclick="event.stopPropagation()" style="text-align:center"><input type="checkbox" ${isSel?'checked':''} onchange="toggleMDBSelect(${c.id})"></td>
       <td><div class="tdco">
-        <div class="tdav" style="background:${avB(gi)};color:${avF(gi)}">${ab(c.nameKo||c.nameEn||"")}</div>
-        <div><div class="tdnm">${c.nameKo?nameKo:nameEn}</div><div class="tdsb">${nameEn}</div></div>
+        <div class="tdav${isSel?' sel':''}" onclick="event.stopPropagation();toggleMDBSelect(${c.id})" title="클릭해서 선택/해제">${isSel?'✓':ab(c.nameKo||c.nameEn||"")}</div>
+        <div><div class="tdnm">${c.nameKo?nameKo:nameEn}${isBDContact(c)?' <span class="pill p-teal" style="font-size:9px;padding:1px 5px">BD</span>':''}${isCLevelContact(c)?' <span class="pill p-gold" style="font-size:9px;padding:1px 5px">C-level</span>':''}</div><div class="tdsb">${nameEn}</div></div>
       </div></td>
       <td style="max-width:200px"><div class="tdnm" style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${orgTitle}">${c.orgKo?orgKo:orgEn}</div><div class="tdsb" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${orgEnTitle}">${c.orgKo?orgEn:''}</div></td>
       <td style="color:var(--i2);font-size:12px;white-space:nowrap">${escapeHtml(countryName(c.country))}</td>
@@ -238,30 +568,42 @@ export function renderMDBFlat(pairs){
       </span></td>
     </tr>`;
   }).join('') || emptyStateRow();
+
+  // 헤더 체크박스는 지금 보이는 목록이 전부 선택돼 있을 때만 체크 표시
+  const selectAllEl = document.getElementById('mdb-select-all');
+  if(selectAllEl){
+    selectAllEl.checked = pairs.length > 0 && pairs.every(({c}) => mdbSelected.has(c.id));
+  }
+
+  // 정렬 화살표 표시 — 현재 정렬 중인 컬럼에만 방향 표시
+  document.querySelectorAll('.mdb-sort-ind').forEach(el => {
+    el.textContent = el.dataset.sort === _mdbSortCol ? (_mdbSortDir === 1 ? ' ▲' : ' ▼') : '';
+  });
 }
 
 /* ── 빈 상태 안내 (원본 1944~1958행) ── */
 export function emptyStateRow(){
   if(contacts.length === 0){
     if(!sheetsConnected){
-      return '<tr><td colspan="9" style="padding:40px 20px;text-align:center">'
+      return '<tr><td colspan="10" style="padding:40px 20px;text-align:center">'
         + '<div style="font-size:13px;color:var(--i3);margin-bottom:6px">📋 아직 등록된 연락처가 없어요</div>'
         + '<div style="font-size:11px;color:var(--i4)">상단 \'업로드\' 메뉴에서 파일을 추가하거나, 구글시트 연동을 확인해주세요</div>'
         + '</td></tr>';
     }
-    return '<tr><td colspan="9" style="padding:40px 20px;text-align:center">'
+    return '<tr><td colspan="10" style="padding:40px 20px;text-align:center">'
       + '<div style="font-size:13px;color:var(--i3);margin-bottom:6px">📋 아직 등록된 연락처가 없어요</div>'
       + '<div style="font-size:11px;color:var(--i4)">상단 \'업로드\' 메뉴에서 파일을 추가해주세요</div>'
       + '</td></tr>';
   }
-  return '<tr><td colspan="9" style="padding:32px;text-align:center;color:var(--i4);font-size:13px">검색 조건에 맞는 연락처가 없어요</td></tr>';
+  return '<tr><td colspan="10" style="padding:32px;text-align:center;color:var(--i4);font-size:13px">검색 조건에 맞는 연락처가 없어요</td></tr>';
 }
 
 /* ── GROUP VIEW: 행사별 → 기업별 소그룹 (원본 1961~2132행) ── */
 export function renderMDBGrouped(pairs){
-  // matrix 뷰에서 테이블이 교체됐을 경우 복원
+  // matrix 뷰에서 테이블이 교체됐거나, 목록 뷰의 체크박스 헤더가 남아있으면
+  // (컬럼 수가 안 맞아 행이 밀림) 행사별 그룹 보기용 헤더로 복원
   const tw = document.getElementById('mdb-tw');
-  if(tw && !tw.querySelector('#mdb-body')){
+  if(tw && (!tw.querySelector('#mdb-body') || tw.querySelector('#mdb-select-all'))){
     tw.innerHTML = '<table><thead><tr>'
       + '<th>이름</th><th>기업</th><th>국가</th><th>직함/부서</th>'
       + '<th id="mdb-th-role">참가 역할</th><th>행사</th><th>연락처</th><th>수집일</th><th>상태</th>'
@@ -490,7 +832,7 @@ export function filterCat(cat,btn){setMdbCat(cat);document.querySelectorAll('#sb
 export function filterStat(s,btn){setMdbStat(mdbStat===s?null:s);document.querySelectorAll('#sbp-mdb .s-s .nr').forEach(b=>b.classList.remove('on'));if(mdbStat)btn.classList.add('on');renderMDB()}
 export function segCat(cat,btn){setMdbCat(cat);document.querySelectorAll('.mdb-seg-b').forEach(b=>b.classList.remove('on'));if(btn)btn.classList.add('on');renderMDB();}
 export function exportCSV(){
-  const h=['이름','영문명','기업','영문기업','국가','직함(국)','직함(영)','부서(국)','부서(영)','카테고리','분야','전시품목','언어','이메일1','이메일2','연락처1','연락처2','출처','날짜','상태'];
+  const h=['이름','영문명','기업','영문기업','국가','직함(국)','직함(영)','부서(국)','부서(영)','카테고리','분야','전시품목','언어','이메일1','이메일2','연락처1','연락처2','출처','날짜','상태','태그'];
   const rows=contacts.map(c=>[
     c.nameKo,c.nameEn,c.orgKo,c.orgEn,countryName(c.country),
     c.titleKo,c.titleEn,c.deptKo,c.deptEn,
@@ -499,7 +841,8 @@ export function exportCSV(){
     c.products||'',
     c.lang,
     c.email1,c.email2,c.phone1,c.phone2,
-    c.source,c.date,c.status
+    c.source,c.date,c.status,
+    c.tags||''
   ]);
   const csv=[h,...rows].map(r=>r.map(v=>`"${(v||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
   const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);a.download='master_db_export.csv';a.click();
@@ -695,6 +1038,9 @@ export function contactViewPanel(c){
       <div class="ic"><div class="il">영문 기업</div><div class="iv">${escapeHtml(c.orgEn)||'-'}</div></div>
       <div class="ic"><div class="il">국가</div><div class="iv">${escapeHtml(countryName(c.country))}</div></div>
       <div class="ic"><div class="il">카테고리</div><div class="iv"><span class="pill ${CP[c.cat]||'p-gray'}">${CL[c.cat]||c.cat}</span></div></div>
+      <div class="ic"><div class="il">태그</div><div class="iv">
+        ${isBDContact(c)?'<span class="pill p-teal" style="margin-right:4px">BD</span>':''}${isCLevelContact(c)?'<span class="pill p-gold">C-level</span>':''}${(!isBDContact(c)&&!isCLevelContact(c))?'<span style="color:var(--i4)">-</span>':''}
+      </div></div>
     </div>
 
     <div class="sct" style="margin-top:14px">직함 / 부서</div>
@@ -871,7 +1217,7 @@ export async function saveContactEdit(){
     action: 'upsert',
     row: [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
           c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
-          c.beat, c.products],
+          c.beat, c.products, c.tags||''],
   }, '연락처 수정');
   if(!r.ok){
     Object.assign(c, prev);
@@ -998,7 +1344,7 @@ export async function saveNewContact(){
     sheet: 'contacts',
     row: [c.id,c.nameKo,c.nameEn,c.orgKo,c.orgEn,c.titleKo,c.titleEn,c.deptKo,c.deptEn,
           c.country,c.cat,c.lang,c.source,c.date,c.status,c.email1,c.email2,c.phone1,c.phone2,
-          c.beat,c.products],
+          c.beat,c.products,c.tags||''],
   }, '연락처 추가', { silent: true });
   if(!r.ok){
     const idx = contacts.findIndex(x => x.id === c.id);
@@ -1019,6 +1365,16 @@ export async function saveNewContact(){
 ══════════════════════════════════════════ */
 window.buildMDBEvList = buildMDBEvList;
 window.setMDBEv = setMDBEv;
+window.buildMDBDomainList = buildMDBDomainList;
+window.setMDBDomain = setMDBDomain;
+window.toggleMDBSelect = toggleMDBSelect;
+window.clearMDBSelection = clearMDBSelection;
+window.toggleMDBSelectAll = toggleMDBSelectAll;
+window.sortMDBBy = sortMDBBy;
+window.openMDBBulkEditModal = openMDBBulkEditModal;
+window.closeMDBBulkEditModal = closeMDBBulkEditModal;
+window.applyMDBBulkEdit = applyMDBBulkEdit;
+window.bulkDeleteMDBContacts = bulkDeleteMDBContacts;
 window.setDBView = setDBView;
 window.getMDBPairs = getMDBPairs;
 window.renderMDB = renderMDB;

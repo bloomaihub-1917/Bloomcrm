@@ -84,8 +84,65 @@ export function initDrawerSwipe(){
   }, {passive:true});
 }
 
+/* ══════════════════════════════════════════
+   사이드바 리사이즈(드래그) + 접기/펼치기 (신규, 데스크톱 전용)
+   너비/접힘 상태는 localStorage에 저장해 새로고침 후에도 유지된다.
+══════════════════════════════════════════ */
+const SB_WIDTH_KEY = 'crm_sb_width';
+const SB_COLLAPSED_KEY = 'crm_sb_collapsed';
+const SB_MIN_W = 160, SB_MAX_W = 480;
+
+export function toggleSidebarCollapse(){
+  const sb = document.getElementById('sb');
+  const expandBtn = document.getElementById('sb-expand-btn');
+  if(!sb || isMobile()) return;
+  const willCollapse = !sb.classList.contains('collapsed');
+  sb.classList.toggle('collapsed', willCollapse);
+  if(expandBtn) expandBtn.classList.toggle('on', willCollapse);
+  localStorage.setItem(SB_COLLAPSED_KEY, willCollapse ? '1' : '0');
+}
+
+export function initSidebarLayout(){
+  const sb = document.getElementById('sb');
+  const handle = document.getElementById('sb-resize');
+  const expandBtn = document.getElementById('sb-expand-btn');
+  if(!sb || isMobile()) return;
+
+  // 저장된 너비/접힘 상태 복원
+  const savedW = parseInt(localStorage.getItem(SB_WIDTH_KEY), 10);
+  if(savedW && savedW >= SB_MIN_W && savedW <= SB_MAX_W) sb.style.width = savedW + 'px';
+  if(localStorage.getItem(SB_COLLAPSED_KEY) === '1'){
+    sb.classList.add('collapsed');
+    if(expandBtn) expandBtn.classList.add('on');
+  }
+  if(!handle) return;
+
+  let dragging = false;
+  handle.addEventListener('mousedown', e => {
+    if(sb.classList.contains('collapsed')) return;
+    dragging = true;
+    handle.classList.add('dragging');
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if(!dragging) return;
+    const rect = sb.getBoundingClientRect();
+    const w = Math.max(SB_MIN_W, Math.min(SB_MAX_W, e.clientX - rect.left));
+    sb.style.width = w + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if(!dragging) return;
+    dragging = false;
+    handle.classList.remove('dragging');
+    document.body.style.userSelect = '';
+    localStorage.setItem(SB_WIDTH_KEY, parseInt(sb.style.width, 10));
+  });
+}
+
 window.switchApp = switchApp;
 window.switchCrmV = switchCrmV;
 window.toggleSb = toggleSb;
 window.closeSb = closeSb;
 window.updateMobNav = updateMobNav;
+window.toggleSidebarCollapse = toggleSidebarCollapse;

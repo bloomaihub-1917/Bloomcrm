@@ -75,12 +75,15 @@
   </button>
 </div>
 <div class="sb-backdrop" id="sb-bd" onclick="closeSb()"></div>
+<button class="sb-expand-btn" id="sb-expand-btn" onclick="toggleSidebarCollapse()" title="사이드바 펼치기">›</button>
 <div class="app">
 <div class="sb" id="sb">
   <div class="sb-hd">
     <div class="sb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 3h7v7H3z"/><path d="M14 3h7v7h-7z"/><path d="M3 14h7v7H3z"/><circle cx="17.5" cy="17.5" r="3.5"/></svg></div>
     <div><div class="sb-nm">Contact CRM</div><div class="sb-sb">행사 타겟 관리 시스템</div></div>
+    <button class="sb-collapse-btn" style="margin-left:auto" onclick="toggleSidebarCollapse()" title="사이드바 접기">‹</button>
   </div>
+  <div class="sb-resize" id="sb-resize" title="드래그해서 너비 조절"></div>
   <div class="atabs">
     <button class="atab on" onclick="switchApp('mdb',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>DB</button>
     <button class="atab" onclick="switchApp('up',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>업로드</button>
@@ -100,6 +103,8 @@
     <div class="sbp on" id="sbp-mdb">
       <div class="sbs s-ef"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">행사별 보기</div></div>
       <div class="sbi"><div id="mdb-ev-list"></div></div></div>
+      <div class="sbs s-ef"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">분야별 보기</div></div>
+      <div class="sbi"><div id="mdb-domain-list"></div></div></div>
       <div class="sbs s-q"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">카테고리</div></div>
       <div class="sbi">
         <button class="nr on" onclick="filterCat('all',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>전체<span class="nbg" id="ct-all">18</span></button>
@@ -107,6 +112,8 @@
         <button class="nr" onclick="filterCat('vip',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>VIP<span class="nbg" id="ct-vip">0</span></button>
         <button class="nr" onclick="filterCat('attendee',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>일반참가자<span class="nbg" id="ct-at">0</span></button>
       </div></div>
+      <div class="sbs s-c"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">태그</div></div>
+      <div class="sbi" id="mdb-tag-list"></div></div>
       <div class="sbs s-s"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">상태</div></div>
       <div class="sbi">
         <button class="nr" onclick="filterStat('verified',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>검증됨<span class="nbg" id="ct-vf">8</span></button>
@@ -147,6 +154,8 @@
       <div class="sbi" id="co-catf"></div></div>
       <div class="sbs s-c"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">카테고리 코드</div></div>
       <div class="sbi" id="co-codef"></div></div>
+      <div class="sbs s-c"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">국내 / 해외</div></div>
+      <div class="sbi" id="co-countryf"></div></div>
       <div class="sbs s-q" style="flex:1;overflow-y:auto;min-height:0">
       <div class="co-ls" id="co-ls"></div></div>
     </div>
@@ -253,11 +262,11 @@
       <button class="seg-b mdb-seg-b" onclick="segCat('sponsor',this)">스폰서</button>
       <button class="seg-b mdb-seg-b" onclick="segCat('investor',this)">투자자</button>
       <button class="seg-b mdb-seg-b" onclick="segCat('buyer',this)">바이어</button>
-      <button class="seg-b mdb-seg-b" onclick="segCat('bd',this)">BD</button>
     </div>
     <span class="db-ct" id="db-ct"></span>
   </div>
-  <div class="tw" id="mdb-tw"><table><thead><tr><th>이름</th><th>기업</th><th>국가</th><th>직함/부서</th><th id="mdb-th-role">카테고리</th><th>행사</th><th>연락처</th><th>수집일</th><th>상태</th></tr></thead><tbody id="mdb-body"></tbody></table></div>
+  <div id="mdb-bulkbar" style="display:none;align-items:center;gap:10px;padding:8px 18px;background:var(--ad);border-bottom:1px solid var(--i6)"></div>
+  <div class="tw" id="mdb-tw"><table><thead><tr><th style="width:26px"><input type="checkbox" id="mdb-select-all" onclick="event.stopPropagation();toggleMDBSelectAll(this.checked)" title="현재 목록 전체 선택/해제"></th><th onclick="sortMDBBy('name')" style="cursor:pointer">이름<span class="mdb-sort-ind" data-sort="name"></span></th><th onclick="sortMDBBy('org')" style="cursor:pointer">기업<span class="mdb-sort-ind" data-sort="org"></span></th><th onclick="sortMDBBy('country')" style="cursor:pointer">국가<span class="mdb-sort-ind" data-sort="country"></span></th><th onclick="sortMDBBy('title')" style="cursor:pointer">직함/부서<span class="mdb-sort-ind" data-sort="title"></span></th><th id="mdb-th-role" onclick="sortMDBBy('cat')" style="cursor:pointer"><span class="mdb-th-label">카테고리</span><span class="mdb-sort-ind" data-sort="cat"></span></th><th onclick="sortMDBBy('events')" style="cursor:pointer">행사<span class="mdb-sort-ind" data-sort="events"></span></th><th onclick="sortMDBBy('contact')" style="cursor:pointer">연락처<span class="mdb-sort-ind" data-sort="contact"></span></th><th onclick="sortMDBBy('date')" style="cursor:pointer">수집일<span class="mdb-sort-ind" data-sort="date"></span></th><th onclick="sortMDBBy('status')" style="cursor:pointer">상태<span class="mdb-sort-ind" data-sort="status"></span></th></tr></thead><tbody id="mdb-body"></tbody></table></div>
 </div>
 
 <!-- ② Upload -->
@@ -564,6 +573,20 @@
           </select>
         </div>
         <button class="btn bp" onclick="addPartType()" style="min-width:60px;height:36px">추가</button>
+      </div>
+    </div>
+
+    <div style="font-size:12px;font-weight:700;color:var(--i2);margin:22px 0 4px">🏷 연락처 태그 관리 (BD/C-level 등)</div>
+    <div style="font-size:11px;color:var(--i4);margin-bottom:10px">참가 역할·카테고리와 달리 행사가 바뀌어도 남아있는 영구 꼬리표입니다. 마스터DB 일괄 변경에서 연락처에 붙이고 뗄 수 있고, 여기서는 태그 종류 자체를 추가/이름변경/삭제합니다.</div>
+    <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:14px">
+      <div id="tag-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px"></div>
+      <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
+        <div style="flex:1;min-width:160px">
+          <div class="mlbl">태그명</div>
+          <input class="fi" id="tag-add-input" placeholder="예: 미디어" style="width:100%"
+            onkeydown="if(event.key==='Enter')addTag()">
+        </div>
+        <button class="btn bp" onclick="addTag()" style="min-width:60px;height:36px">추가</button>
       </div>
     </div>
   </div>

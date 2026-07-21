@@ -25,14 +25,14 @@ function getUsers() {
 }
 
 const SHEET_HEADERS = {
-  contacts:      ['id','nameKo','nameEn','orgKo','orgEn','titleKo','titleEn','deptKo','deptEn','country','cat','lang','source','date','status','email1','email2','phone1','phone2','beat','products'],
+  contacts:      ['id','nameKo','nameEn','orgKo','orgEn','titleKo','titleEn','deptKo','deptEn','country','cat','lang','source','date','status','email1','email2','phone1','phone2','beat','products','tags'],
   participations:['id','ev_id','행사명','cid','소속','성명','직함','type','note','matched'],
   events:        ['id','name','short','date_start','date_end','location','color'],
   crm_targets:   ['id','name','nameEn','sector','hq','event','role','status','priority','assignee','currentStage','lastActivity','log'],
   activity_log:  ['id','ts','email','name','type','action','target','detail'],
   settings:       ['key','value'],
   sectors:        ['id','name','parent','domain','canonical'],
-  companies:      ['key','sector','hq','website','notes','catCode','country','abbr','source','updatedAt'],
+  companies:      ['key','sector','hq','website','notes','catCode','country','abbr','source','updatedAt','nameKo','nameEn'],
   part_types:     ['key','label','cls'],
 };
 
@@ -542,6 +542,42 @@ function doWrite(sheet, action, row, rows) {
 // — CRM 컨택 기록을 시트에 저장할 수 있도록 스키마 확장.
 //   새로 만드는 시트는 SHEET_HEADERS로 자동 생성되지만 기존 시트는
 //   이 함수를 Apps Script 편집기에서 한 번 실행해서 헤더를 추가한다.
+// ══════════════════════════════════════════
+//  companies 시트 nameKo/nameEn 컬럼 마이그레이션 (1회 수동 실행)
+//  기업DB에서 회사명을 직접 수정할 수 있게 하기 위한 회사 단위 이름
+//  override 컬럼 — 비어있으면 연락처 소속명에서 자동 추출한 이름을 그대로 씀.
+// ══════════════════════════════════════════
+function addCompanyNameColumns() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName('companies');
+  if (!sh) { Logger.log('companies 시트 없음'); return; }
+  var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  var added = [];
+  ['nameKo', 'nameEn'].forEach(function(col) {
+    var headers2 = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+    if (headers2.indexOf(col) >= 0) return;
+    sh.getRange(1, headers2.length + 1).setValue(col);
+    added.push(col);
+  });
+  Logger.log(added.length ? ('컬럼 추가 완료: ' + added.join(', ')) : '이미 모두 존재함');
+}
+
+// ══════════════════════════════════════════
+//  contacts 시트 tags 컬럼 마이그레이션 (1회 수동 실행)
+//  BD/C-level처럼 참가 역할·직함과 무관하게 그 사람에게 직접 붙이는
+//  꼬리표(예: "bd|clevel") — 다음 행사 메일링 리스트 등에 재사용하기 위해
+//  행사/역할이 바뀌어도 남아있는 영구 태그다.
+// ══════════════════════════════════════════
+function addContactTagsColumn() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getSheetByName('contacts');
+  if (!sh) { Logger.log('contacts 시트 없음'); return; }
+  var headers = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  if (headers.indexOf('tags') >= 0) { Logger.log('tags 컬럼 이미 존재'); return; }
+  sh.getRange(1, headers.length + 1).setValue('tags');
+  Logger.log('tags 컬럼 추가 완료 (컬럼 ' + (headers.length + 1) + ')');
+}
+
 function addCrmLogColumn() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sh = ss.getSheetByName('crm_targets');

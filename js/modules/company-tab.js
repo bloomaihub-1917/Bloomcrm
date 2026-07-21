@@ -42,18 +42,20 @@ import {
   coCatF,
   coCodeF,
   coDomainF,
+  coCountryF,
   setSelCo,
   setCoTab,
   setCoCatF,
   setCoCodeF,
   setCoDomainF,
+  setCoCountryF,
   evColor,
   evShort,
 } from '../state.js';
 import { RP, avB, avF } from '../constants.js';
-import { escapeHtml, escAttr, levenshteinDist, parseSectorScope } from '../utils.js';
+import { escapeHtml, escAttr, levenshteinDist, parseSectorScope, sectorKey, countryName } from '../utils.js';
 import { postToSheet } from '../api.js';
-import { parseSectors, joinSectors, mainSectors, sectorNamesInDomain, domainName, UNASSIGNED_DOMAIN } from './settings-tab.js';
+import { parseSectors, joinSectors, mainSectors, sectorNamesInDomain, domainName, domainOfSector, UNASSIGNED_DOMAIN } from './settings-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
 import { trackAction } from './audit-tab.js';
 
@@ -75,6 +77,17 @@ const CATEGORY_CODES = [
   {code:'VC',   label:'Venture Capital'},
   {code:'GEN',  label:'General / Others'},
 ];
+
+/* ══════════════════════════════════════════
+   국내 / 해외 분류 — 기업의 "국가"(수동 입력) 필드를 우선, 없으면 "본사"
+   (업로드 데이터에서 자동 추출된 연락처 국가)로 대체해 판단한다.
+   countryName()으로 표기를 통일한 뒤 "대한민국"인지만 확인 — 값이 아예
+   없는 기업은 'unknown'(미확인)으로 분류한다. */
+function companyCountryGroup(c){
+  const raw = c.country || c.hq || '';
+  if(!raw) return 'unknown';
+  return countryName(raw) === '대한민국' ? 'domestic' : 'overseas';
+}
 
 /* ══════════════════════════════════════════
    기업DB 리스트 — Twenty Record Table 벤치마킹: 컬럼 표시/숨김 토글
@@ -218,8 +231,8 @@ export function buildCoDB(){
 
     CO_DB.push({
       key,
-      nameKo:     co.nameKo || mainBranch,   // 가장 많이 쓰인 표기를 대표 이름으로 사용
-      nameEn:     co.nameEn || '',
+      nameKo:     (info && info.nameKo) || co.nameKo || mainBranch,   // 수동으로 이름을 바꿨으면 그걸 우선
+      nameEn:     (info && info.nameEn) || co.nameEn || '',
       abbr:       (info && info.abbr) || abbr,
       sector:     infoSectors[0] || sector,     // 대표 섹터
       sectors:    infoSectors.length ? infoSectors : sectors,    // 복수 섹터 배열
@@ -322,7 +335,7 @@ export async function mergeCompanies(loserKey, winnerKey){
 
   if(changed.length){
     const rows = changed.map(c => [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
-      c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2, c.beat, c.products]);
+      c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2, c.beat, c.products, c.tags||'']);
     const r = await postToSheet({ sheet: 'contacts', action: 'batchUpsert', rows }, '기업 병합');
     if(!r.ok){
       // 저장 실패 → 로컬 변경 롤백 (기존엔 실패해도 "합쳤어요"가 떠서 새로고침 시 원복되는 거짓 성공이었음)
@@ -346,22 +359,48 @@ export { mergeCompanies as mergeCoInto };
    buildCoCAT / setCoCat — 좌측 섹터 필터 (원본 3415~3463행)
 ══════════════════════════════════════════ */
 // 섹터 필터 버튼 하나 (기업DB 검색 사이드바) — 행사별 그룹핑에서 공통으로 사용
-function coCatButton(name, cnt, indent, title){
+function coCatButton(name, cnt, indent, title, arrowHtml){
   const label = parseSectorScope(name).plainName;
-  return `<button class="nr${coCatF===name?' on':''}" onclick="setCoCat('${escAttr(name)}') " style="${indent||''}"${title?` title="${title}"`:''}>
+  return `<button class="nr${coCatF===name?' on':''}" onclick="setCoCat('${escAttr(name)}') " style="${indent||''}"${title?` title="${title}"`:` title="드래그한 기업을 여기로 놓으면 이 섹터로 이동해요"`}
+      ondragover="event.preventDefault();this.classList.add('co-drop-target')"
+      ondragleave="this.classList.remove('co-drop-target')"
+      ondrop="this.classList.remove('co-drop-target');onCoDropToSector(event,'${escAttr(name)}')">
+      ${arrowHtml||''}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px;flex-shrink:0"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
       ${escapeHtml(label)}<span class="nbg">${cnt}</span>
     </button>`;
 }
 
+/* 메인 섹터 + 그 서브섹터들에 하나라도 태그된 고유 기업 수(중복 제거).
+   사이드바 메인 행, 전체 대시보드 카드 헤더 등에서 공통으로 쓴다 — 기준이
+   다르면 같은 "Pharma"인데 화면마다 다른 숫자(예: 405 vs 480)가 보이게 된다. */
+function uniqueCompanyCountFor(main, subs){
+  const nameKeys = new Set([sectorKey(main.name), ...subs.map(s => sectorKey(s.name))]);
+  const keys = new Set();
+  CO_DB.forEach(c => {
+    const secs = c.sectors && c.sectors.length ? c.sectors : [c.sector||'General / Others'];
+    if(secs.some(s => nameKeys.has(sectorKey(s)))) keys.add(c.key);
+  });
+  return keys.size;
+}
+
 /* 펼쳐진 분야 아코디언 상태 (화면 전용 — 저장하지 않음) */
 const _expandedDomains = new Set();
+
+/* 기업DB 사이드바 트리에서 접힌 메인 섹터 id 집합 (화면 전용 — 저장 안 함).
+   서브섹터가 있는 메인 섹터 버튼 왼쪽 화살표로 접었다 펼쳤다 할 수 있다. */
+const _collapsedCoMains = new Set();
+export function toggleCoMainCollapse(id){
+  if(_collapsedCoMains.has(id)) _collapsedCoMains.delete(id);
+  else _collapsedCoMains.add(id);
+  buildCoCAT();
+}
 
 /* 어떤 분야에도 속하지 않은 섹터명 집합 (미분류): 등록 섹터 중 미배정 + 미등록 값 */
 function unassignedSectorNames(sectorCounts){
   const assigned = new Set();
   DOMAINS.forEach(d => sectorNamesInDomain(d.id).forEach(n => assigned.add(n)));
-  return Object.keys(sectorCounts).filter(name => !assigned.has(name));
+  return Object.keys(sectorCounts).filter(name => !assigned.has(sectorKey(name)));
 }
 
 export function buildCoCAT(){
@@ -385,27 +424,57 @@ export function buildCoCAT(){
     const keys = new Set();
     CO_DB.forEach(c => {
       const secs = c.sectors && c.sectors.length ? c.sectors : [c.sector||'General / Others'];
-      if(secs.some(s => names.has(s))) keys.add(c.key);
+      if(secs.some(s => names.has(sectorKey(s)))) keys.add(c.key);
     });
     return keys.size;
   };
 
   // 분야 안의 섹터 버튼들 — 기존 방식(공통 + 행사별 그룹, 서브 들여쓰기) 유지하되
-  // 그 분야 이름 집합(names)에 속한 섹터만 나열
+  // 그 분야 이름 집합(names)에 속한 섹터만 나열. 서브섹터가 있는 메인 섹터는
+  // 왼쪽 화살표로 접었다 펼쳤다 할 수 있고, 접으면 그 서브섹터 버튼들은 숨겨진다.
+  //
+  // ⚠ 메인 섹터 자신의 이름으로 직접 태그된 기업이 0개여도(기업들이 전부
+  // 서브섹터 이름으로만 태그된 경우), 카운트>0인 서브가 하나라도 있으면 그
+  // 부모 메인은 여전히 노출해야 한다 — 예전에는 메인/서브를 이름 매칭 배열
+  // 하나로 같이 필터링해서, 메인 자신의 카운트가 0이면 메인 행 자체가 통째로
+  // 빠지고 서브들만 부모 없이 낱개로 나열되는 버그가 있었다. 메인→그 서브들
+  // 순서로 명시적으로 묶어서 렌더링해 이 문제를 없앤다.
   const sectorButtonsIn = names => {
     const rows = [];
     const groupOrder = ['', ...EVENT_LIST.map(e => e.short)];
     groupOrder.forEach(short => {
-      const items = COMPANY_SECTORS.filter(s => {
-        if(!names.has(s.name)) return false;
+      const inScope = s => {
+        if(!names.has(sectorKey(s.name))) return false;
         const sc = parseSectorScope(s.name);
-        return (sc.eventShort||'') === short && (sectorCounts[s.name]||0) > 0;
+        return (sc.eventShort||'') === short;
+      };
+      const mainsHere = COMPANY_SECTORS.filter(s => !s.parent && inScope(s));
+      const subsByParent = {};
+      COMPANY_SECTORS.forEach(s => {
+        if(s.parent && inScope(s) && (sectorCounts[s.name]||0) > 0){
+          if(!subsByParent[s.parent]) subsByParent[s.parent] = [];
+          subsByParent[s.parent].push(s);
+        }
       });
-      if(!items.length) return;
+      const visibleMains = mainsHere.filter(m => (sectorCounts[m.name]||0) > 0 || subsByParent[m.id]);
+      if(!visibleMains.length) return;
       if(short) rows.push(`<div style="font-size:10px;font-weight:700;color:var(--i4);text-transform:uppercase;letter-spacing:.04em;margin:6px 0 2px 14px">${escapeHtml(short)}</div>`);
-      items.forEach(s => {
-        rows.push(coCatButton(s.name, sectorCounts[s.name]||0,
-          s.parent ? 'padding-left:30px;font-size:11px' : 'padding-left:18px'));
+      visibleMains.forEach(m => {
+        const subs = subsByParent[m.id] || [];
+        const hasSubs = subs.length > 0;
+        const collapsed = _collapsedCoMains.has(m.id);
+        const arrow = hasSubs
+          ? `<span onclick="event.stopPropagation();toggleCoMainCollapse('${escAttr(m.id)}')" style="width:22px;height:22px;margin:-4px 0;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;color:var(--i4);border-radius:4px" onmouseover="this.style.background='rgba(0,0,0,.08)'" onmouseout="this.style.background='none'" title="서브섹터 접기/펼치기">${collapsed?'▸':'▾'}</span>`
+          : `<span style="width:22px;flex-shrink:0"></span>`;
+        // 메인 행의 숫자는 "메인 자신에게 직접 태그된 기업"만이 아니라, 그
+        // 서브섹터들까지 합친 고유 기업 수여야 한다 — 전체 대시보드 카드의
+        // 헤더(예: "Pharma 480")와 같은 기준이어야 사이드바 숫자만 따로 낮게
+        // (예: 405) 보이는 혼란이 없다.
+        const mainCount = hasSubs ? uniqueCompanyCountFor(m, subs) : (sectorCounts[m.name]||0);
+        rows.push(coCatButton(m.name, mainCount, 'padding-left:18px', null, arrow));
+        if(hasSubs && !collapsed){
+          subs.forEach(s => rows.push(coCatButton(s.name, sectorCounts[s.name]||0, 'padding-left:30px;font-size:11px')));
+        }
       });
     });
     return rows;
@@ -437,7 +506,7 @@ export function buildCoCAT(){
   // 미분류: 미배정 섹터 + 미등록 값
   const unassigned = unassignedSectorNames(sectorCounts);
   if(unassigned.length){
-    const names = new Set(unassigned);
+    const names = new Set(unassigned.map(sectorKey));
     const expanded = _expandedDomains.has(UNASSIGNED_DOMAIN);
     html.push(domainRow(UNASSIGNED_DOMAIN, '미분류', domainCompanyCount(names), expanded));
     if(expanded){
@@ -451,6 +520,7 @@ export function buildCoCAT(){
 
   el.innerHTML = html.join('');
   buildCoCodeF();
+  buildCoCountryF();
 }
 
 export function setCoCat(s){
@@ -485,7 +555,7 @@ export function coDomainNameSet(){
       (c.sectors && c.sectors.length ? c.sectors : [c.sector||'General / Others'])
         .forEach(s => { sectorCounts[s] = 1; });
     });
-    return new Set(unassignedSectorNames(sectorCounts));
+    return new Set(unassignedSectorNames(sectorCounts).map(sectorKey));
   }
   return sectorNamesInDomain(coDomainF);
 }
@@ -512,6 +582,29 @@ export function setCoCode(s){
   buildCoCodeF(); renderCoList();
 }
 
+export function buildCoCountryF(){
+  const el = document.getElementById('co-countryf');
+  if(!el) return;
+  let domestic=0, overseas=0, unknown=0;
+  CO_DB.forEach(c => {
+    const g = companyCountryGroup(c);
+    if(g==='domestic') domestic++; else if(g==='overseas') overseas++; else unknown++;
+  });
+  const btn = (val, label, cnt) => `<button class="nr${coCountryF===val?' on':''}" onclick="setCoCountry(${val?`'${val}'`:'null'})">
+      ${label}<span class="nbg">${cnt}</span>
+    </button>`;
+  const html = [btn(null, '전체', CO_DB.length)];
+  if(domestic) html.push(btn('domestic', '국내', domestic));
+  if(overseas) html.push(btn('overseas', '해외', overseas));
+  if(unknown) html.push(btn('unknown', '미확인', unknown));
+  el.innerHTML = html.join('');
+}
+export function setCoCountry(v){
+  setCoCountryF((coCountryF===v)?null:v);
+  buildCoCountryF(); renderCoList();
+  if(!selCo) renderCoDashboard();
+}
+
 /* ══════════════════════════════════════════
    renderCoList — 기업 리스트 (원본 3486~3512행)
    Twenty Record Table 벤치마킹: 컬럼(국가/웹사이트/메모) 표시/숨김 토글 추가
@@ -526,9 +619,10 @@ export function renderCoList(q2=''){
   if(coDomainF){
     const names = coDomainNameSet();
     if(names) list = list.filter(c =>
-      (c.sectors && c.sectors.length ? c.sectors : [c.sector||'General / Others']).some(s => names.has(s)));
+      (c.sectors && c.sectors.length ? c.sectors : [c.sector||'General / Others']).some(s => names.has(sectorKey(s))));
   }
   if(coCodeF)list=list.filter(c=>c.catCode && c.catCode.startsWith(coCodeF+'-'));
+  if(coCountryF)list=list.filter(c=>companyCountryGroup(c)===coCountryF);
 
   const toggleHtml = renderCoColumnToggleHtml();
 
@@ -540,7 +634,8 @@ export function renderCoList(q2=''){
   }
 
   listEl.innerHTML = toggleHtml + list.map((c,i)=>`
-    <div class="co-rw${selCo===c.key?' on':''}" onclick="selectCo('${escAttr(c.key)}')">
+    <div class="co-rw${selCo===c.key?' on':''}" onclick="selectCo('${escAttr(c.key)}')"
+      draggable="true" ondragstart="this.classList.add('co-dragging');onCoDragStart(event,'${escAttr(c.key)}')" ondragend="this.classList.remove('co-dragging')" title="드래그해서 왼쪽 섹터로 이동">
       <div class="co-av" style="background:${avB(i)};color:${avF(i)}">${escapeHtml(c.abbr)}</div>
       <div style="flex:1;min-width:0">
         <div class="co-rn">${escapeHtml(c.nameKo||c.nameEn)}</div>
@@ -567,34 +662,40 @@ export function selectCo(key){
 
 // ── 기업DB 진입 시 기본 화면: 섹터별 대시보드 ──
 export function showCoDashboard(){
-  setSelCo(null); setCoCatF(null); setCoCodeF(null); setCoDomainF(null);
-  renderCoList(); buildCoCAT(); buildCoCodeF();
+  setSelCo(null); setCoCatF(null); setCoCodeF(null); setCoDomainF(null); setCoCountryF(null);
+  renderCoList(); buildCoCAT(); buildCoCodeF(); buildCoCountryF();
   const cdtEl = document.getElementById('cdt'); if(cdtEl) cdtEl.style.display='none';
   const dashEl = document.getElementById('co-dash'); if(dashEl) dashEl.style.display='block';
   renderCoDashboard();
 }
 
-function computeSectorDashboard(){
+function computeSectorDashboard(list){
+  const src = list || CO_DB;
   const mains = mainSectors();
   const groups = mains.map(m => ({ name:m.name, companies:new Set(), subs:{} }));
-  const byName = {}; groups.forEach(g => byName[g.name]=g);
+  // sectorKey(정규화된 소문자 키)로 조회해야 기업 데이터의 원본 텍스트가
+  // 등록 섹터명과 대소문자만 다른 경우("Synthetic Drugs" vs "Synthetic drugs")에도
+  // 같은 섹터로 인식된다 — byName/subParentName 모두 이 키로 색인.
+  const byName = {}; groups.forEach(g => byName[sectorKey(g.name)]=g);
   const subParentName = {};
   COMPANY_SECTORS.forEach(s => {
-    if(s.parent){ const p = COMPANY_SECTORS.find(x=>x.id===s.parent); if(p) subParentName[s.name]=p.name; }
+    if(s.parent){ const p = COMPANY_SECTORS.find(x=>x.id===s.parent); if(p) subParentName[sectorKey(s.name)]=p.name; }
   });
 
-  CO_DB.forEach(c => {
+  src.forEach(c => {
     const secs = (c.sectors && c.sectors.length) ? c.sectors : [c.sector || 'General / Others'];
     secs.forEach(secName => {
-      const parentName = subParentName[secName];
+      const parentName = subParentName[sectorKey(secName)];
       const mName  = parentName || secName;
       const subName = parentName ? secName : null;
-      let g = byName[mName];
-      if(!g){ g = { name: mName, companies: new Set(), subs: {} }; byName[mName]=g; groups.push(g); }
+      const mKey = sectorKey(mName);
+      let g = byName[mKey];
+      if(!g){ g = { name: mName, companies: new Set(), subs: {} }; byName[mKey]=g; groups.push(g); }
       g.companies.add(c.key);
       if(subName){
-        if(!g.subs[subName]) g.subs[subName] = new Set();
-        g.subs[subName].add(c.key);
+        const subKey = sectorKey(subName);
+        if(!g.subs[subKey]) g.subs[subKey] = { name: subName, set: new Set() };
+        g.subs[subKey].set.add(c.key);
       }
     });
   });
@@ -603,8 +704,8 @@ function computeSectorDashboard(){
     .map(g => ({
       name: g.name,
       count: g.companies.size,
-      subs: Object.entries(g.subs)
-        .map(([name, set]) => ({ name, count: set.size }))
+      subs: Object.values(g.subs)
+        .map(({ name, set }) => ({ name, count: set.size }))
         .sort((a,b) => b.count - a.count),
     }))
     .filter(g => g.count > 0)
@@ -623,11 +724,14 @@ export function renderCoDashboard(){
     return;
   }
 
+  // 국내/해외 필터가 걸려 있으면 이후 모든 집계·리스트의 기준 모집단을 좁힌다
+  const baseCoDb = coCountryF ? CO_DB.filter(c => companyCountryGroup(c) === coCountryF) : CO_DB;
+
   // 분야가 선택되어 있으면 그 분야 하위 전체 섹터의 기업 리스트를 보여줌
   if(coDomainF){
     const names = coDomainNameSet() || new Set();
-    const list = CO_DB.filter(c =>
-      (c.sectors&&c.sectors.length?c.sectors:[c.sector||'General / Others']).some(s=>names.has(s)));
+    const list = baseCoDb.filter(c =>
+      (c.sectors&&c.sectors.length?c.sectors:[c.sector||'General / Others']).some(s=>names.has(sectorKey(s))));
     const label = domainName(coDomainF);
     el.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
@@ -639,7 +743,9 @@ export function renderCoDashboard(){
       <div style="font-size:13px;font-weight:700;color:var(--i1);margin-bottom:2px">🗂 ${escapeHtml(label)} <span style="font-weight:400;color:var(--i4);font-size:12px">${list.length}개 기업</span></div>
       <div style="display:flex;flex-direction:column;gap:6px;margin-top:12px">
         ${list.length ? list.map((c,i) => `
-          <div class="co-rw" onclick="selectCo('${escAttr(c.key)}')" style="cursor:pointer;border:1px solid var(--i6);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;background:var(--W)">
+          <div class="co-rw" onclick="selectCo('${escAttr(c.key)}')"
+            draggable="true" ondragstart="this.classList.add('co-dragging');onCoDragStart(event,'${escAttr(c.key)}')" ondragend="this.classList.remove('co-dragging')" title="드래그해서 왼쪽 섹터로 이동"
+            style="cursor:pointer;border:1px solid var(--i6);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;background:var(--W)">
             <div class="co-av" style="background:${avB(i)};color:${avF(i)}">${escapeHtml(c.abbr)}</div>
             <div style="flex:1;min-width:0">
               <div class="co-rn">${escapeHtml(c.nameKo||c.nameEn)}</div>
@@ -653,7 +759,7 @@ export function renderCoDashboard(){
 
   // 섹터가 선택되어 있으면 메인 화면도 그 섹터의 기업 리스트로 보여줌 (카드 그리드 대신)
   if(coCatF){
-    const list = CO_DB.filter(c => (c.sectors&&c.sectors.length?c.sectors:[c.sector]).some(s=>s===coCatF));
+    const list = baseCoDb.filter(c => (c.sectors&&c.sectors.length?c.sectors:[c.sector]).some(s=>s===coCatF));
     el.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
         <button onclick="setCoCat('${escAttr(coCatF)}')" style="background:none;border:none;cursor:pointer;color:var(--i3);font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:4px;padding:0">
@@ -664,7 +770,9 @@ export function renderCoDashboard(){
       <div style="font-size:13px;font-weight:700;color:var(--i1);margin-bottom:2px">🏭 ${escapeHtml(coCatF)} <span style="font-weight:400;color:var(--i4);font-size:12px">${list.length}개 기업</span></div>
       <div style="display:flex;flex-direction:column;gap:6px;margin-top:12px">
         ${list.length ? list.map((c,i) => `
-          <div class="co-rw" onclick="selectCo('${escAttr(c.key)}')" style="cursor:pointer;border:1px solid var(--i6);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;background:var(--W)">
+          <div class="co-rw" onclick="selectCo('${escAttr(c.key)}')"
+            draggable="true" ondragstart="this.classList.add('co-dragging');onCoDragStart(event,'${escAttr(c.key)}')" ondragend="this.classList.remove('co-dragging')" title="드래그해서 왼쪽 섹터로 이동"
+            style="cursor:pointer;border:1px solid var(--i6);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;background:var(--W)">
             <div class="co-av" style="background:${avB(i)};color:${avF(i)}">${escapeHtml(c.abbr)}</div>
             <div style="flex:1;min-width:0">
               <div class="co-rn">${escapeHtml(c.nameKo||c.nameEn)}</div>
@@ -676,29 +784,75 @@ export function renderCoDashboard(){
     return;
   }
 
-  const data = computeSectorDashboard();
-  const totalCo = CO_DB.length;
+  const data = computeSectorDashboard(baseCoDb);
+  const totalCo = baseCoDb.length;
+
+  const sectorCardHtml = g => `
+    <div class="astep" style="padding:14px 15px;cursor:pointer" onclick="setCoCat('${escAttr(g.name)}')">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
+        <div class="sttl" style="margin:0">${escapeHtml(g.name)}</div>
+        <div style="font-size:18px;font-weight:800;color:var(--a)">${g.count}<span style="font-size:10px;font-weight:600;color:var(--i4)">개사</span></div>
+      </div>
+      ${g.subs.length ? `<div style="display:flex;flex-direction:column;gap:5px">
+        ${g.subs.map(s => `
+          <div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--i3)" onclick="event.stopPropagation();setCoCat('${escAttr(s.name)}')">
+            <span>↳ ${escapeHtml(s.name)}</span>
+            <span style="font-weight:700;color:var(--i2)">${s.count}개사</span>
+          </div>`).join('')}
+      </div>` : `<div style="font-size:11px;color:var(--i4)">서브섹터 없음</div>`}
+    </div>`;
+
+  // 분야 그룹 헤더의 "N개사"는 그 그룹에 속한 메인+서브 섹터 이름들 중 하나라도
+  // 태그된 "고유 기업 수"여야 한다 — 예전엔 카드별 count를 그냥 합산해서, 한
+  // 기업이 같은 분야 안의 섹터 여러 개(예: Pharma + Investor 둘 다 BIO)에
+  // 태그돼 있으면 두 번 카운트되어 사이드바 트리의 고유 카운트와 숫자가
+  // 어긋났다. 그룹에 속한 이름 전체를 모아 기업 key 기준으로 중복 제거한다.
+  const uniqueCoCountForGroup = items => {
+    const nameKeys = new Set();
+    items.forEach(it => {
+      nameKeys.add(sectorKey(it.name));
+      (it.subs||[]).forEach(s => nameKeys.add(sectorKey(s.name)));
+    });
+    const keys = new Set();
+    baseCoDb.forEach(c => {
+      const secs = c.sectors && c.sectors.length ? c.sectors : [c.sector||'General / Others'];
+      if(secs.some(s => nameKeys.has(sectorKey(s)))) keys.add(c.key);
+    });
+    return keys.size;
+  };
+
+  // 메인 섹터명 → 섹터 객체 (분야 조회용). 미등록 섹터명(레거시 c.sector 값 등)은
+  // 대응하는 객체가 없어 도메인을 알 수 없으므로 미분류로 취급한다.
+  const mainByName = {};
+  mainSectors().forEach(m => { mainByName[m.name] = m; });
+
+  // 한 섹터가 여러 분야에 속할 수 있어(예: Investor = BIO + VC), 같은 섹터
+  // 카드가 해당하는 모든 분야 그룹에 반복해서 나타난다.
+  const domainGroups = [];
+  DOMAINS.forEach(d => {
+    const items = data.filter(g => {
+      const m = mainByName[g.name];
+      return m && domainOfSector(m).includes(d.id);
+    });
+    if(items.length) domainGroups.push({ title: d.name, items });
+  });
+  const unassigned = data.filter(g => {
+    const m = mainByName[g.name];
+    return !m || !domainOfSector(m).length;
+  });
+  if(unassigned.length) domainGroups.push({ title: '미분류', items: unassigned });
 
   el.innerHTML = `
     <div style="font-size:13px;font-weight:700;color:var(--i1);margin-bottom:2px">섹터별 기업 대시보드</div>
-    <div style="font-size:11px;color:var(--i4);margin-bottom:16px">전체 ${totalCo}개 기업 · 클릭하면 해당 섹터의 기업 리스트가 보여요</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">
-      ${data.map(g => `
-        <div class="astep" style="padding:14px 15px;cursor:pointer" onclick="setCoCat('${escAttr(g.name)}')">
-          <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
-            <div class="sttl" style="margin:0">${escapeHtml(g.name)}</div>
-            <div style="font-size:18px;font-weight:800;color:var(--a)">${g.count}<span style="font-size:10px;font-weight:600;color:var(--i4)">개사</span></div>
-          </div>
-          ${g.subs.length ? `<div style="display:flex;flex-direction:column;gap:5px">
-            ${g.subs.map(s => `
-              <div style="display:flex;align-items:center;justify-content:space-between;font-size:11px;color:var(--i3)" onclick="event.stopPropagation();setCoCat('${escAttr(s.name)}')">
-                <span>↳ ${escapeHtml(s.name)}</span>
-                <span style="font-weight:700;color:var(--i2)">${s.count}개사</span>
-              </div>`).join('')}
-          </div>` : `<div style="font-size:11px;color:var(--i4)">서브섹터 없음</div>`}
-        </div>
-      `).join('')}
-    </div>`;
+    <div style="font-size:11px;color:var(--i4);margin-bottom:16px">${coCountryF ? {domestic:'국내',overseas:'해외',unknown:'미확인'}[coCountryF] : '전체'} ${totalCo}개 기업 · 클릭하면 해당 섹터의 기업 리스트가 보여요</div>
+    ${domainGroups.map(dg => `
+      <div style="font-size:11px;font-weight:700;color:var(--i3);margin:14px 0 6px;text-transform:uppercase;letter-spacing:.4px">
+        🗂 ${escapeHtml(dg.title)} <span style="font-weight:400;color:var(--i4)">(${uniqueCoCountForGroup(dg.items)}개사)</span>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">
+        ${dg.items.map(sectorCardHtml).join('')}
+      </div>
+    `).join('')}`;
 }
 
 /* ══════════════════════════════════════════
@@ -725,7 +879,10 @@ export function renderCoDetail(c){
     </div>
     <div class="cdt2">
       <div class="cdl" style="background:${avB(i)};color:${avF(i)}">${escapeHtml(c.abbr)}</div>
-      <div style="flex:1"><div class="cdn">${escapeHtml(c.nameKo)} <span style="font-size:13px;font-weight:400;color:var(--i4)">${escapeHtml(c.nameEn)}</span></div>
+      <div style="flex:1"><div class="cdn">
+          <span id="co-nameKo-${escapeHtml(c.key)}" style="cursor:pointer" onclick="editCoNameKo('${escAttr(c.key)}')" title="클릭하여 회사명(국문) 편집">${escapeHtml(c.nameKo)}</span>
+          <span style="font-size:13px;font-weight:400;color:var(--i4);cursor:pointer" id="co-nameEn-${escapeHtml(c.key)}" onclick="editCoNameEn('${escAttr(c.key)}')" title="클릭하여 회사명(영문) 편집">${escapeHtml(c.nameEn)}</span>
+        </div>
         <div class="cdmt">
           <span>📍 ${escapeHtml(c.hq)}</span>
           <span style="cursor:pointer" onclick="editCoSector('${escAttr(c.key)}')" title="클릭하여 섹터 변경">
@@ -782,12 +939,13 @@ export async function upsertCompanyRow(c){
   COMPANY_INFO[c.key] = {
     sector: joinSectors(c.sectors||[]), hq: c.hq||'', website: c.website||'', notes: c.notes||'',
     catCode: c.catCode||'', country: c.country||'', abbr: c.abbr||'', source: c.source||'', updatedAt: c.updatedAt,
+    nameKo: c.nameKo||'', nameEn: c.nameEn||'',
   };
   return postToSheet({
     sheet: 'companies',
     action: 'upsert',
     row: [c.key, joinSectors(c.sectors||[]), c.hq||'', c.website||'', c.notes||'',
-          c.catCode||'', c.country||'', c.abbr||'', c.source||'', c.updatedAt],
+          c.catCode||'', c.country||'', c.abbr||'', c.source||'', c.updatedAt, c.nameKo||'', c.nameEn||''],
   }, '기업 정보 저장');
 }
 
@@ -804,13 +962,14 @@ export async function batchUpsertCompanies(companies){
     COMPANY_INFO[c.key] = {
       sector: joinSectors(c.sectors||[]), hq: c.hq||'', website: c.website||'', notes: c.notes||'',
       catCode: c.catCode||'', country: c.country||'', abbr: c.abbr||'', source: c.source||'', updatedAt: now,
+      nameKo: c.nameKo||'', nameEn: c.nameEn||'',
     };
   });
   return postToSheet({
     sheet: 'companies',
     action: 'batchUpsert',
     rows: companies.map(c => [c.key, joinSectors(c.sectors||[]), c.hq||'', c.website||'', c.notes||'',
-          c.catCode||'', c.country||'', c.abbr||'', c.source||'', c.updatedAt]),
+          c.catCode||'', c.country||'', c.abbr||'', c.source||'', c.updatedAt, c.nameKo||'', c.nameEn||'']),
   }, '기업 일괄 저장');
 }
 
@@ -842,6 +1001,8 @@ const CO_TEXT_FIELDS = {
   country: { placeholder: '예: 한국',                          multiline: false, empty: '국가 추가' },
   abbr:    { placeholder: '예: SK',                            multiline: false, empty: '약어 추가' },
   source:  { placeholder: '예: 홈페이지 조사',                  multiline: false, empty: '출처 추가' },
+  nameKo:  { placeholder: '회사명(국문)',                       multiline: false, empty: '이름 없음' },
+  nameEn:  { placeholder: '회사명(영문)',                       multiline: false, empty: '영문명 추가' },
 };
 
 function renderCoFieldDisplay(key, field){
@@ -863,10 +1024,33 @@ async function saveCoTextField(key, field, rawValue){
   c[field] = rawValue.trim();
   await upsertCompanyRow(c);
   renderCoFieldDisplay(key, field);
-  if(field === 'abbr'){
-    // 원본 saveCoAbbr도 저장 후 상세/리스트를 다시 그렸음(약어는 아바타 등 여러 곳에 쓰이므로)
+  if(field === 'abbr' || field === 'nameKo' || field === 'nameEn'){
+    // 약어/회사명은 아바타·리스트·상세 헤더 등 여러 곳에 함께 쓰여서 저장 후 다시 그린다
     renderCoDetail(c);
     renderCoList();
+  }
+  if(field === 'nameKo' || field === 'nameEn'){
+    // ⚠ 기업DB의 회사명은 COMPANY_INFO(오버라이드)만 바꾸고 끝나면, 마스터DB는
+    // 연락처 원본 orgKo/orgEn을 그대로 보여주는 화면이라 반영이 안 된 것처럼
+    // 보인다 — mergeCompanies와 동일하게 소속 연락처 전원의 org 필드도 함께 갱신한다.
+    const orgField = field === 'nameKo' ? 'orgKo' : 'orgEn';
+    const changed = [];
+    (c.contacts||[]).forEach(cc => {
+      const contact = contacts.find(x => x.id === cc.id);
+      if(contact && contact[orgField] !== c[field]){
+        contact[orgField] = c[field];
+        changed.push(contact);
+      }
+    });
+    if(changed.length){
+      await postToSheet({
+        sheet: 'contacts', action: 'batchUpsert',
+        rows: changed.map(ct => [ct.id,ct.nameKo,ct.nameEn,ct.orgKo,ct.orgEn,ct.titleKo,ct.titleEn,ct.deptKo,ct.deptEn,
+          ct.country,ct.cat,ct.lang,ct.source,ct.date,ct.status,ct.email1,ct.email2,ct.phone1,ct.phone2,
+          ct.beat,ct.products,ct.tags||'']),
+      }, '기업명 변경 - 연락처 반영');
+      try { renderMDB(); } catch(e){}
+    }
   }
 }
 
@@ -908,6 +1092,8 @@ function startCoInlineEdit(key, field){
   });
 }
 
+export function editCoNameKo(key){ startCoInlineEdit(key, 'nameKo'); }
+export function editCoNameEn(key){ startCoInlineEdit(key, 'nameEn'); }
 export function editCoNotes(key){ startCoInlineEdit(key, 'notes'); }
 export function editCoWebsite(key){ startCoInlineEdit(key, 'website'); }
 export function editCoCountry(key){ startCoInlineEdit(key, 'country'); }
@@ -983,44 +1169,77 @@ export function editCoSector(key){
   setTimeout(() => document.addEventListener('mousedown', handleCoSectorOutsideClick), 0);
 }
 
+/* 기업의 섹터 배열을 교체하고 연락처 beat/companies 시트에 반영 — 섹터 선택
+   팝오버 저장과 드래그&드롭 이동이 이 로직을 공유한다. */
+function applyCoSectors(c, newSectors){
+  c.sectors = newSectors;
+  c.sector  = newSectors[0] || '';
+  const el = document.getElementById('co-sector-' + c.key);
+  if(el) el.textContent = newSectors.join(', ') || '미분류';
+  const beatVal = joinSectors(newSectors);
+  // ⚠ 수정: 기존엔 소속 연락처 전원에게 개별 POST를 병렬 발사해서
+  // (연락처 100명이면 100개 동시 요청) Apps Script 과부하로 일부만
+  // 성공하는 불일치가 있었다 — batchUpsert 한 번으로 묶는다.
+  const changedContacts = [];
+  c.contacts.forEach(ct => {
+    const contact = contacts.find(x => x.id === ct.id);
+    if(contact){
+      contact.beat = beatVal;
+      changedContacts.push(contact);
+    }
+  });
+  if(changedContacts.length){
+    postToSheet({
+      sheet: 'contacts',
+      action: 'batchUpsert',
+      rows: changedContacts.map(ct2 => [ct2.id,ct2.nameKo,ct2.nameEn,ct2.orgKo,ct2.orgEn,
+        ct2.titleKo,ct2.titleEn,ct2.deptKo,ct2.deptEn,
+        ct2.country,ct2.cat,ct2.lang,ct2.source,ct2.date,
+        ct2.status,ct2.email1,ct2.email2,ct2.phone1,ct2.phone2,
+        ct2.beat,ct2.products,ct2.tags||'']),
+    }, '기업 섹터 반영');
+  }
+  upsertCompanyRow(c);
+}
+
 export function saveCoSector(key){
   const pop = document.getElementById('co-sector-popover');
   const checkboxes = pop ? pop.querySelectorAll('input[type=checkbox]:checked') : [];
   const newSectors = [...checkboxes].map(cb => cb.value);
   const c = CO_DB.find(x => x.key === key);
   if(c){
-    c.sectors = newSectors;
-    c.sector  = newSectors[0] || '';
-    const el = document.getElementById('co-sector-' + key);
-    if(el) el.textContent = newSectors.join(', ') || '미분류';
-    const beatVal = joinSectors(newSectors);
-    // ⚠ 수정: 기존엔 소속 연락처 전원에게 개별 POST를 병렬 발사해서
-    // (연락처 100명이면 100개 동시 요청) Apps Script 과부하로 일부만
-    // 성공하는 불일치가 있었다 — batchUpsert 한 번으로 묶는다.
-    const changedContacts = [];
-    c.contacts.forEach(ct => {
-      const contact = contacts.find(x => x.id === ct.id);
-      if(contact){
-        contact.beat = beatVal;
-        changedContacts.push(contact);
-      }
-    });
-    if(changedContacts.length){
-      postToSheet({
-        sheet: 'contacts',
-        action: 'batchUpsert',
-        rows: changedContacts.map(ct2 => [ct2.id,ct2.nameKo,ct2.nameEn,ct2.orgKo,ct2.orgEn,
-          ct2.titleKo,ct2.titleEn,ct2.deptKo,ct2.deptEn,
-          ct2.country,ct2.cat,ct2.lang,ct2.source,ct2.date,
-          ct2.status,ct2.email1,ct2.email2,ct2.phone1,ct2.phone2,
-          ct2.beat,ct2.products]),
-      }, '기업 섹터 반영');
-    }
-    upsertCompanyRow(c);
+    applyCoSectors(c, newSectors);
     buildCoCAT();
     renderCoList();
   }
   closeCoSectorPopover();
+}
+
+/* ══════════════════════════════════════════
+   기업 리스트 → 사이드바 섹터로 드래그&드롭 이동 (신규)
+   드래그한 기업의 섹터를 드롭한 섹터 하나로 통째로 교체한다("이동" 의미 —
+   기존에 여러 섹터가 있었어도 드롭한 섹터 하나로 대체됨).
+══════════════════════════════════════════ */
+let _draggedCoKey = null;
+export function onCoDragStart(e, key){
+  _draggedCoKey = key;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', key); // Firefox 등에서 드래그 시작 요건 충족용
+}
+export function onCoDropToSector(e, sectorName){
+  e.preventDefault();
+  const key = _draggedCoKey;
+  _draggedCoKey = null;
+  if(!key || !sectorName) return;
+  const c = CO_DB.find(x => x.key === key);
+  if(!c) return;
+  applyCoSectors(c, [sectorName]);
+  trackAction('edit', '기업 섹터 이동(드래그)', c.nameKo||c.nameEn,
+    `"${c.nameKo||c.nameEn}" 섹터를 드래그해서 "${parseSectorScope(sectorName).plainName}"(으)로 변경`);
+  buildCoCAT();
+  renderCoList();
+  if(selCo === key) renderCoDetail(c);
+  if(!selCo) renderCoDashboard();
 }
 
 /* ── 카테고리 코드 부여 (prefix 선택 UI) — 원본에서 이미 인라인 방식이었음 (원본 4444~4459행) ── */
@@ -1211,12 +1430,18 @@ window.selectCo = selectCo;
 window.showCoDashboard = showCoDashboard;
 window.setCoCat = setCoCat;
 window.setCoCode = setCoCode;
+window.setCoCountry = setCoCountry;
+window.toggleCoMainCollapse = toggleCoMainCollapse;
+window.onCoDragStart = onCoDragStart;
+window.onCoDropToSector = onCoDropToSector;
 window.setCoDomain = setCoDomain;
 window.toggleCoDomain = toggleCoDomain;
 window.searchCo = searchCo;
 window.searchCoM = searchCoM;
 window.switchCoT = switchCoT;
 window.editCoSector = editCoSector;
+window.editCoNameKo = editCoNameKo;
+window.editCoNameEn = editCoNameEn;
 window.editCoNotes = editCoNotes;
 window.editCoWebsite = editCoWebsite;
 window.editCoCountry = editCoCountry;
