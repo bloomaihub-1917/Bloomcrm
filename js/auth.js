@@ -193,6 +193,11 @@ export function initAfterLogin(testMode){
   setTimeout(()=>{
     try { buildMDBEvList(); } catch(e){ console.warn('buildMDBEvList:', e); }
     try { renderMDB(); }      catch(e){ console.warn('renderMDB:', e); }
+    // buildCoDB가 여기서 안 돌면 기업DB 탭을 한 번도 안 열어본 상태에서는
+    // CO_DB가 비어있어서, MDB 일괄변경 모달의 기업명 자동완성(datalist)이
+    // 빈 채로 뜨는 문제가 있었다 — renderCoList/buildCoCAT보다 먼저 호출해
+    // 그 둘이 최신 CO_DB를 참조하게 한다.
+    try { buildCoDB(); }       catch(e){ console.warn('buildCoDB:', e); }
     try { renderCoList(); }   catch(e){ console.warn('renderCoList:', e); }
     if(!testMode){ try { loadSectors(); } catch(e){ console.warn('loadSectors:', e); } }
     try { buildCoCAT(); }              catch(e){ console.warn('buildCoCAT:', e); }

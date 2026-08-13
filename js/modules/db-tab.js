@@ -258,15 +258,31 @@ export function renderMDBSelectionBar(){
 export function openMDBBulkEditModal(){
   if(!mdbSelected.size) return;
   closeMDBBulkEditModal();
+
+  // 선택된 연락처들이 지금 전부 같은 기업 소속이면 "분리" 제안 버튼을 보여준다
+  // (다른 기업들이 섞여 있으면 분리라는 개념 자체가 애매하므로 숨김)
+  const selContacts = [...mdbSelected].map(id => getContactById(id)).filter(Boolean);
+  const orgsInSel = new Set(selContacts.map(c => c.orgKo || c.orgEn || ''));
+  const commonOrg = orgsInSel.size === 1 ? [...orgsInSel][0] : '';
+
   const pop = document.createElement('div');
   pop.id = 'mdb-bulk-modal';
   pop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.32);z-index:9999;display:flex;align-items:center;justify-content:center';
   pop.onclick = () => closeMDBBulkEditModal();
   pop.innerHTML = `
-    <div style="background:var(--W);border-radius:10px;padding:20px;width:320px;box-shadow:0 12px 40px rgba(0,0,0,.2)" onclick="event.stopPropagation()">
+    <div style="background:var(--W);border-radius:10px;padding:20px;width:340px;box-shadow:0 12px 40px rgba(0,0,0,.2)" onclick="event.stopPropagation()">
       <div style="font-size:14px;font-weight:700;margin-bottom:12px">선택한 ${mdbSelected.size}명 일괄 변경</div>
-      <div class="fg"><label class="fl">기업명(국문) — 비워두면 유지 (여러 기업명을 하나로 합칠 때 사용)</label>
-        <input class="fi" id="mdb-bulk-org" placeholder="예: 삼성전자"></div>
+      <div class="fg">
+        <label class="fl">기업명(국문) — 비워두면 유지<br>
+          <span style="font-weight:400;color:var(--i4)">목록에서 기존 기업을 고르면 그 기업으로 <b>통합</b>, 새 이름을 입력하면 <b>분리</b>돼요</span>
+        </label>
+        <input class="fi" id="mdb-bulk-org" list="mdb-bulk-org-list" placeholder="예: 삼성전자" oninput="updateMDBBulkOrgHint()">
+        <datalist id="mdb-bulk-org-list">
+          ${CO_DB.map(c => `<option value="${escAttr(c.nameKo||c.nameEn)}" label="${c.contacts.length}명 배정됨">`).join('')}
+        </datalist>
+        <div id="mdb-bulk-org-hint" style="font-size:11px;color:var(--i4);margin-top:4px;min-height:14px"></div>
+        ${commonOrg ? `<button type="button" class="btn bs" style="margin-top:2px;font-size:11px" onclick="suggestMDBSplitName()">🔀 "${escapeHtml(commonOrg)}"에서 분리할 새 이름 제안</button>` : ''}
+      </div>
       <div class="fg" style="margin-top:8px"><label class="fl">카테고리 — 유지하려면 선택 안 함</label>
         <select class="fi" id="mdb-bulk-cat"><option value="">변경 안 함</option>
           ${['speaker','vip','attendee'].map(k=>`<option value="${k}">${CL[k]}</option>`).join('')}
@@ -289,6 +305,41 @@ export function closeMDBBulkEditModal(){
   const el = document.getElementById('mdb-bulk-modal');
   if(el) el.remove();
 }
+/* "분리" 제안 — 지금 선택된 사람들이 다 같은 기업 소속일 때, 그 이름에
+   " (분리)" 접미사를 붙여 입력창에 채워준다. 사용자가 그대로 저장하거나
+   직접 다듬어서 적용하면, buildCoDB가 다음 재빌드 때 이 사람들을 원래
+   기업과 다른 별도의 CO_DB 항목으로 묶는다(기업 구분은 orgKo/orgEn 텍스트
+   기준으로만 이뤄지므로 별도의 저장 로직이 필요 없음). */
+/* 기업명 입력창에 값이 바뀔 때마다 그 이름과 정확히 일치하는 CO_DB 기업이
+   있는지 찾아 현재 배정 인원 수를 보여준다 — 통합 전에 "몇 명짜리 기업에
+   합쳐지는지" 미리 알 수 있게 하기 위함(사용자 요청). 일치하는 기업이 없으면
+   지금 입력 중인 이름이 새 기업(분리)이 된다는 걸 알려준다. */
+export function updateMDBBulkOrgHint(){
+  const hintEl = document.getElementById('mdb-bulk-org-hint');
+  if(!hintEl) return;
+  const val = ((document.getElementById('mdb-bulk-org')||{}).value||'').trim();
+  if(!val){ hintEl.textContent = ''; return; }
+  const match = CO_DB.find(c => (c.nameKo||'').trim() === val || (c.nameEn||'').trim() === val);
+  if(match){
+    hintEl.textContent = `→ "${match.nameKo||match.nameEn}"에 현재 ${match.contacts.length}명 배정돼있어요 — 선택한 사람들이 여기 합쳐져요`;
+    hintEl.style.color = 'var(--a)';
+  } else {
+    hintEl.textContent = '→ 일치하는 기존 기업이 없어요 — 새 기업으로 분리돼요';
+    hintEl.style.color = 'var(--i4)';
+  }
+}
+export function suggestMDBSplitName(){
+  const input = document.getElementById('mdb-bulk-org');
+  if(!input) return;
+  const selContacts = [...mdbSelected].map(id => getContactById(id)).filter(Boolean);
+  const orgsInSel = new Set(selContacts.map(c => c.orgKo || c.orgEn || ''));
+  if(orgsInSel.size !== 1) return;
+  const base = [...orgsInSel][0];
+  input.value = base ? `${base} (분리)` : '';
+  input.focus();
+  input.select();
+  updateMDBBulkOrgHint();
+}
 export async function applyMDBBulkEdit(){
   const org    = ((document.getElementById('mdb-bulk-org')||{}).value||'').trim();
   const cat    = (document.getElementById('mdb-bulk-cat')||{}).value||'';
@@ -299,10 +350,12 @@ export async function applyMDBBulkEdit(){
 
   const ids = [...mdbSelected];
   const changed = [];
+  const backup = []; // 저장 실패 시 롤백용
   ids.forEach(id => {
     const c = getContactById(id);
     if(!c) return;
-    if(org) c.orgKo = org;
+    backup.push({ c, orgKo: c.orgKo, orgEn: c.orgEn, cat: c.cat, status: c.status, tags: c.tags });
+    if(org){ c.orgKo = org; if(!c.orgEn) c.orgEn = org; }
     if(cat) c.cat = cat;
     if(status) c.status = status;
     tagOps.forEach(t => setContactTag(c, t.key, t.op === 'add'));
@@ -316,10 +369,19 @@ export async function applyMDBBulkEdit(){
     rows: changed.map(c => [c.id,c.nameKo,c.nameEn,c.orgKo,c.orgEn,c.titleKo,c.titleEn,c.deptKo,c.deptEn,
       c.country,c.cat,c.lang,c.source,c.date,c.status,c.email1,c.email2,c.phone1,c.phone2,c.beat,c.products,c.tags||'']),
   }, '연락처 일괄 변경');
-  if(r.ok){
-    const parts = [org&&'기업명', cat&&'카테고리', status&&'상태', ...tagOps.map(t=>`${t.label} ${t.op==='add'?'추가':'해제'}`)].filter(Boolean).join(', ');
-    trackAction('edit', '연락처 일괄 변경', `${changed.length}명`, `연락처 ${changed.length}명 일괄 변경(${parts})`);
+  if(!r.ok){
+    // 기업 병합(mergeCompanies)과 동일한 원칙 — 저장 실패 시 로컬 변경을 되돌려서
+    // 화면엔 바뀐 것처럼 보이는데 새로고침하면 원복되는 거짓 성공을 막는다.
+    backup.forEach(b => { b.c.orgKo = b.orgKo; b.c.orgEn = b.orgEn; b.c.cat = b.cat; b.c.status = b.status; b.c.tags = b.tags; });
+    buildCoDB();
+    mdbSelected.clear();
+    renderMDB();
+    alert('일괄 변경 저장에 실패해서 취소했어요. 네트워크 확인 후 다시 시도해주세요.');
+    return;
   }
+
+  const parts = [org&&'기업명', cat&&'카테고리', status&&'상태', ...tagOps.map(t=>`${t.label} ${t.op==='add'?'추가':'해제'}`)].filter(Boolean).join(', ');
+  trackAction('edit', '연락처 일괄 변경', `${changed.length}명`, `연락처 ${changed.length}명 일괄 변경(${parts})`);
   mdbSelected.clear();
   buildCoDB();
   renderMDB();
@@ -1373,6 +1435,8 @@ window.toggleMDBSelectAll = toggleMDBSelectAll;
 window.sortMDBBy = sortMDBBy;
 window.openMDBBulkEditModal = openMDBBulkEditModal;
 window.closeMDBBulkEditModal = closeMDBBulkEditModal;
+window.suggestMDBSplitName = suggestMDBSplitName;
+window.updateMDBBulkOrgHint = updateMDBBulkOrgHint;
 window.applyMDBBulkEdit = applyMDBBulkEdit;
 window.bulkDeleteMDBContacts = bulkDeleteMDBContacts;
 window.setDBView = setDBView;
