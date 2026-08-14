@@ -5,8 +5,8 @@ Google Apps Script + Sheets 백엔드를 대체하는 새 백엔드입니다. �
 기존 Apps Script 배포도 그대로 살려두세요(전환 중 안전망).
 
 ## 0. 준비물 (전부 무료)
-- [Neon](https://neon.tech) 계정 — Postgres
-- [Render](https://render.com) 계정 — 백엔드 호스팅
+- [Neon](https://neon.tech) 계정 — Postgres (서버리스 환경과 궁합이 좋은 `@neondatabase/serverless` 드라이버 사용)
+- [Vercel](https://vercel.com) 계정 — 백엔드 호스팅(서버리스 함수)
 - [Firebase](https://console.firebase.google.com) 프로젝트 — 로그인/계정 관리
 
 ## 1. Firebase 프로젝트 설정
@@ -34,28 +34,37 @@ DATABASE_URL="<Neon 연결 문자열>" \
 ```
 완료 후 `db/seed.sql`을 실행해 섹터 도메인 분류를 채웁니다.
 
-## 4. Render에 백엔드 배포
-1. 이 저장소를 GitHub 등에 올린 뒤 Render → New → Web Service → 저장소 연결
+## 4. Vercel에 백엔드 배포
+`app.js`가 실제 Express 앱이고, `api/index.js`가 이를 그대로 감싸는 서버리스
+진입점이다(`vercel.json`이 모든 요청을 여기로 라우팅). 로컬 실행(`node server.js`)과
+Vercel 배포가 같은 `app.js`를 공유하므로 로직은 한 곳에만 있으면 된다.
+
+1. 이 저장소를 GitHub 등에 올린 뒤 Vercel → Add New → Project → 저장소 연결
 2. Root Directory: `backend-node`
-3. Build Command: `npm install` / Start Command: `npm start`
-4. 환경변수 등록:
+3. Framework Preset: Other (빌드 스텝 없음 — Vercel이 `api/index.js`를 자동으로 함수로 인식)
+4. 환경변수 등록 (Project Settings → Environment Variables):
    - `DATABASE_URL` (Neon)
    - `FIREBASE_SERVICE_ACCOUNT` (서비스 계정 키 JSON, 한 줄)
    - `ALLOWED_DOMAIN` = `@13100m.net`
    - `ALLOWED_ORIGIN` = 프론트가 서빙되는 origin (예: `https://your-frontend.example.com`)
-5. 배포 완료 후 나온 URL을 `js/state.js`의 `API_BASE_URL`에 반영
+5. 배포 완료 후 나온 URL(`https://xxx.vercel.app`)을 `js/state.js`의 `API_BASE_URL`에 반영
 
 ## 5. 동작 확인 체크리스트
+- [ ] `배포URL/health` 접근 시 `{"ok":true}` 확인
 - [ ] Firebase 콘솔에 등록한 계정으로 로그인 성공
 - [ ] 잘못된 비밀번호로 로그인 실패 확인
 - [ ] 토큰 없이 `배포URL/api/data?sheet=contacts` 접근 시 401 확인
 - [ ] MDB에서 연락처 추가/수정 → 새로고침 후 유지되는지 확인
 - [ ] 여러 명이 동시에 저장해도 지연/에러 없이 처리되는지 확인(과거 LockService 병목 해소 확인)
-- [ ] 15분 이상 방치 후 첫 요청의 콜드스타트 지연(약 30~60초) 체감 확인 — 무료 플랜의 알려진 트레이드오프
 
 ## 참고: 기존 구조 대비 달라진 점
 - 계정 추가/삭제/비밀번호 재설정: Apps Script 스크립트 속성(CRM_USERS) 직접 편집 → Firebase 콘솔/`scripts/create-user.js`
 - 인증: 커스텀 HMAC 토큰(14일) → Firebase ID 토큰(1시간, SDK가 자동 갱신)
 - 동시 쓰기: 전역 LockService 직렬화 → Postgres 트랜잭션 + `ON CONFLICT` upsert
 - 에러 응답: 스택 그대로 노출 → 스택 제거, 서버 콘솔에만 로그
-- 요청 제한: 없음 → IP당 분당 120회(`express-rate-limit`)
+- 요청 제한: IP당 분당 120회(`express-rate-limit`) — 단, 서버리스 함수는 인스턴스별로 메모리가
+  분리돼 있어 이 카운터가 인스턴스마다 따로 리셋된다. 완벽한 전역 제한이 필요해지면
+  Upstash Redis 같은 공유 저장소 기반 rate limiter로 바꿔야 하지만, 지금 팀 규모에서는
+  이 정도로도 "토큰 하나로 무제한 접근" 문제는 충분히 완화된다.
+- DB 커넥션: 일반 `pg.Pool` → Neon 서버리스 드라이버(`@neondatabase/serverless`) —
+  서버리스 함수가 요청마다 새로 뜨면서 일반 TCP 커넥션 풀이 금방 고갈되는 문제를 피한다.
