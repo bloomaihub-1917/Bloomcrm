@@ -28,8 +28,7 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import {
-  GS_URL,
-  authToken,
+  API_BASE_URL,
   currentUser,
   contacts,
   participations,
@@ -50,6 +49,7 @@ import {
   deleteEventFromSheet,
   postToSheet,
   safeFetch,
+  authHeaders,
   saveDomains,
   saveTags,
 } from '../api.js';
@@ -450,7 +450,7 @@ export async function removeSectorById(id){
 // ── 구글시트 sectors 탭 행 순서를 "메인 → 그 서브섹터들" 순으로 재배열 (가독성 정리용, 원본 3844~3875행) ──
 export async function reorganizeSectorsSheet(){
   if(!COMPANY_SECTORS.length){ alert('정렬할 섹터가 없어요.'); return; }
-  if(!GS_URL || !currentUser){ alert('구글시트 연동 정보가 없어요.'); return; }
+  if(!API_BASE_URL || !currentUser){ alert('서버 연동 정보가 없어요.'); return; }
 
   const collator = (a,b) => String(a).localeCompare(String(b), 'ko');
   const mains = mainSectors().slice().sort((a,b) => collator(a.name, b.name));
@@ -1252,15 +1252,13 @@ function participationsCountForEvent(evKey){
    UI가 설정 탭에만 있고 다른 모듈이 소유를 명시하지 않아 이 파일에 둔다. */
 export async function normalizeAllCountries(){
   const msgEl = document.getElementById('country-fix-msg');
-  if(!GS_URL || !currentUser){
-    if(msgEl) msgEl.textContent = '구글시트 연동 정보가 없어요.';
+  if(!API_BASE_URL || !currentUser){
+    if(msgEl) msgEl.textContent = '서버 연동 정보가 없어요.';
     return;
   }
 
-  if(msgEl) msgEl.textContent = '시트 원본 데이터 확인 중...';
-  const raw = await safeFetch(
-    GS_URL + '?sheet=contacts&email=' + encodeURIComponent(currentUser.email)
-      + '&auth=' + encodeURIComponent(authToken), 'contacts(정리)');
+  if(msgEl) msgEl.textContent = '원본 데이터 확인 중...';
+  const raw = await safeFetch(API_BASE_URL + '/api/data?sheet=contacts', 'contacts(정리)', 1, await authHeaders());
   if(!Array.isArray(raw)){
     if(msgEl) msgEl.textContent = '시트 조회에 실패했어요. 네트워크를 확인해주세요.';
     return;
@@ -1344,8 +1342,8 @@ export async function splitMixedOrgNames(){
   }
   if(!confirm(`${targets.length}건의 기업/직책/부서를 국문·영문으로 분리해서 저장할까요?\n예(${firstExample.label}): "${firstExample.before}" → "${firstExample.ko}" / "${firstExample.en}"`)) return;
 
-  if(!GS_URL || !currentUser){
-    if(msgEl) msgEl.textContent = `완료: ${targets.length}건 정리했어요 (로컬만 반영, 시트 미연동).`;
+  if(!API_BASE_URL || !currentUser){
+    if(msgEl) msgEl.textContent = `완료: ${targets.length}건 정리했어요 (로컬만 반영, 서버 미연동).`;
     try { renderMDB(); buildCoDB(); } catch(e){}
     return;
   }

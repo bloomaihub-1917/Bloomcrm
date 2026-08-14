@@ -9,7 +9,6 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import {
-  GS_URL,
   EVENT_LIST,
   contacts,
   participations,

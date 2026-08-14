@@ -3,7 +3,8 @@
    5029~5047행 manualSync 포함)
 ═══════════════════════════════════════════════════════════════ */
 
-import { GS_URL, setGsUrl, ALLOWED_DOMAIN, currentUser, setCurrentUser, setAuthToken, userColor } from './state.js';
+import { API_BASE_URL, setApiBaseUrl, ALLOWED_DOMAIN, currentUser, setCurrentUser, setAuthToken, userColor } from './state.js';
+import { auth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from './firebase.js';
 import { userInitials } from './utils.js';
 import { loadFromSheets, loadSectors } from './api.js';
 import { loadTestData } from './testdata.js';
@@ -35,6 +36,12 @@ export function showLoginErr(msg){
   document.getElementById('login-btn').textContent = '로그인';
 }
 
+/* 로그인 폼의 "이름"은 Firebase 계정 정보와 무관한 자유 텍스트(표시용)다.
+   signInWithEmailAndPassword가 성공하면 onAuthStateChanged 옵저버가 실제
+   세션 구성과 화면 전환(initAfterLogin)을 처리하므로, 그 시점에 이름을
+   반영할 수 있게 잠깐 보관해둔다. */
+let pendingLoginName = '';
+
 export function doLogin(){
   const nameEl  = document.getElementById('login-name');
   const localEl = document.getElementById('login-email-local');
@@ -51,9 +58,9 @@ export function doLogin(){
   if(!pw){ showLoginErr('비밀번호를 입력해주세요'); pwEl.focus(); return; }
 
   /* 로컬 테스트 로그인: 이름/이메일/비밀번호를 전부 "test"로 입력하면
-     구글시트(운영 데이터)에 전혀 연결하지 않고 Data/ 폴더의 더미
-     엑셀로 화면을 채운다. 실수로 운영 시트에 쓰지 않도록 GS_URL 자체를
-     비워서 이후 어떤 저장 동작도 걸리지 않게 막는다. */
+     Firebase/백엔드에 전혀 연결하지 않고 Data/ 폴더의 더미 엑셀로 화면을
+     채운다. 실수로 운영 데이터에 쓰지 않도록 API_BASE_URL 자체를 비워서
+     이후 어떤 저장 동작도 걸리지 않게 막는다. */
   if(name.toLowerCase()==='test' && local==='test' && pw==='test'){
     btn.disabled = true;
     btn.textContent = '테스트 데이터 불러오는 중…';
@@ -75,53 +82,25 @@ export function doLogin(){
   btn.disabled = true;
   btn.textContent = '확인 중…';
   errEl.classList.remove('on');
+  pendingLoginName = name;
 
-  /* ⚠ 보안 수정: 기존에는 (1) 로그인 요청이 GET이라 비밀번호가 URL/서버
-     로그에 남았고, (2) 네트워크 실패 시 비밀번호 검증 없이 로컬 세션을
-     만들어주는 폴백이 있어 네트워크만 끊으면 인증을 우회할 수 있었다.
-     이제 POST로 비밀번호를 보내고, 서버가 발급한 서명 토큰 없이는
-     로그인되지 않는다 (오프라인 데모는 test/test/test 테스트 모드 사용). */
-  if(!GS_URL){
-    showLoginErr('서버 주소가 설정되지 않았어요 — 테스트는 test/test/test로 로그인하세요');
-    return;
-  }
-
-  const fetchWithTimeout = (url, opts, ms=8000) => Promise.race([
-    fetch(url, opts),
-    new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms))
-  ]);
-
-  fetchWithTimeout(GS_URL, {
-    method: 'POST',
-    body: JSON.stringify({ sheet: 'login', email, password: pw }),
-  })
-    .then(r => {
-      if(!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
-    })
-    .then(data => {
-      if(!data || data.ok !== true || !data.token){
-        showLoginErr('이메일 또는 비밀번호가 올바르지 않아요');
-        return;
-      }
-      const session = {
-        email, name, local,
-        token: data.token,
-        loginAt: new Date().toISOString(),
-        color: userColor(email),
-      };
-      localStorage.setItem('crm_session', JSON.stringify(session));
-      setCurrentUser(session);
-      setAuthToken(data.token);
-      trackAction('login', '로그인', email, '<b>'+name+'</b>님이 로그인했어요');
+  /* 계정/비밀번호 검증은 전부 Firebase Auth가 처리한다 — 커스텀 토큰
+     발급/검증 로직이 사라졌고, 계정 추가/삭제는 Firebase 콘솔이나
+     scripts/create-user.js로 한다(더 이상 Apps Script 스크립트 속성을
+     손으로 고칠 필요 없음). 로그인 성공 시 화면 전환은 onAuthStateChanged
+     옵저버(initAuth)가 담당한다. */
+  signInWithEmailAndPassword(auth, email, pw)
+    .then(() => {
       btn.disabled = false;
       btn.textContent = '로그인';
       errEl.classList.remove('on');
-      initAfterLogin();
     })
     .catch(err => {
-      console.warn('Login fetch failed:', err);
-      showLoginErr('서버에 연결할 수 없어요 — 네트워크를 확인하고 다시 시도해주세요');
+      console.warn('Login failed:', err);
+      pendingLoginName = '';
+      btn.disabled = false;
+      btn.textContent = '로그인';
+      showLoginErr('이메일 또는 비밀번호가 올바르지 않아요');
     });
 }
 
@@ -149,25 +128,46 @@ export function doLogout(){
   if(currentUser){ // 세션 만료 후 클릭 시 null 접근 방지
     trackAction('login', '로그아웃', currentUser.email, `${currentUser.name}님이 로그아웃했어요`);
   }
-  localStorage.removeItem('crm_session');
-  setCurrentUser(null);
-  setAuthToken('');
   closeUserMenu();
-  location.reload();
+  // 테스트 모드는 Firebase 세션이 없으므로 signOut 없이 바로 정리
+  if(!auth.currentUser){
+    localStorage.removeItem('crm_session');
+    setCurrentUser(null);
+    setAuthToken('');
+    location.reload();
+    return;
+  }
+  signOut(auth).finally(() => location.reload()); // onAuthStateChanged가 세션 정리를 처리
 }
 
-export function checkSession(){
-  const s = localStorage.getItem('crm_session');
-  if(!s) return false;
-  try{
-    const session = JSON.parse(s);
-    if(!session.email || !session.email.endsWith(ALLOWED_DOMAIN)) return false;
-    // 서버 토큰 없는 세션(구버전/수동 조작)은 무효 — 재로그인 필요
-    if(!session.token) return false;
-    setCurrentUser(session);
-    setAuthToken(session.token);
-    return true;
-  }catch(e){ return false; }
+/* ══ 로그인 상태 옵저버 (신규 — 과거 checkSession()을 대체) ══
+   Firebase Auth가 로그인 상태를 브라우저에 자체적으로 영속시키므로,
+   localStorage.crm_session은 이제 "표시용 캐시"일 뿐 신뢰 주체가 아니다.
+   앱 부팅 시 1회, 그리고 로그인/로그아웃이 일어날 때마다 이 콜백이 불린다. */
+export function initAuth(onResolved){
+  onAuthStateChanged(auth, (user) => {
+    if(user){
+      const cached = (() => {
+        try { return JSON.parse(localStorage.getItem('crm_session') || 'null'); } catch(e){ return null; }
+      })();
+      const name = pendingLoginName || (cached && cached.email === user.email ? cached.name : null)
+        || user.displayName || user.email.split('@')[0];
+      pendingLoginName = '';
+      const session = {
+        email: user.email, name, local: user.email.split('@')[0],
+        loginAt: (cached && cached.email === user.email) ? cached.loginAt : new Date().toISOString(),
+        color: userColor(user.email),
+      };
+      localStorage.setItem('crm_session', JSON.stringify(session));
+      setCurrentUser(session);
+      onResolved(true);
+    } else {
+      localStorage.removeItem('crm_session');
+      setCurrentUser(null);
+      setAuthToken('');
+      onResolved(false);
+    }
+  });
 }
 
 export function initAfterLogin(testMode){
@@ -209,7 +209,7 @@ export function initAfterLogin(testMode){
     if(testMode){
       showTestModeBanner();
     } else {
-      // 구글시트에서 최신 데이터 로드 (백그라운드)
+      // 백엔드에서 최신 데이터 로드 (백그라운드)
       loadFromSheets(sheetsHooks);
     }
   }, 350);
@@ -217,7 +217,7 @@ export function initAfterLogin(testMode){
 
 /* ══ 로컬 테스트 로그인 (test/test/test) ══ */
 async function startTestSession(){
-  setGsUrl(''); // 이 세션 동안 모든 구글시트 읽기/쓰기 원천 차단
+  setApiBaseUrl(''); // 이 세션 동안 모든 백엔드 읽기/쓰기 원천 차단
   const session = {
     email: 'test@13100m.net', name: '테스트 사용자', local: 'test',
     loginAt: new Date().toISOString(), color: userColor('test'),

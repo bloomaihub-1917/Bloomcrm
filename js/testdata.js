@@ -3,8 +3,8 @@
    입력) 전용 더미 데이터 로더.
 
    Data/ 폴더에 있는 예시 엑셀 5개를 브라우저에서 직접 fetch + XLSX로
-   읽어 contacts/participations/EVENT_LIST를 채운다. 구글시트는 전혀
-   건드리지 않는다 — auth.js가 테스트 세션 시작 시 GS_URL을 비워서
+   읽어 contacts/participations/EVENT_LIST를 채운다. 백엔드는 전혀
+   건드리지 않는다 — auth.js가 테스트 세션 시작 시 API_BASE_URL을 비워서
    이중으로 막아두므로, 이 파일이 실수로 저장 요청을 만들어도 어차피
    나가지 않는다.
 ═══════════════════════════════════════════════════════════════ */

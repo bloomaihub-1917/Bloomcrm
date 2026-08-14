@@ -1,10 +1,12 @@
 /* ══════════════════════════════════════════════════════════════
-   api.js — Google Apps Script 백엔드 통신 레이어
-   (원본 contact_crm.html 5342~6571행대에서 정리)
+   api.js — Node/Express 백엔드(backend-node/) 통신 레이어
+   (Google Apps Script + Sheets에서 마이그레이션 — 프로토콜 모양은 그대로,
+   구현만 Postgres로 교체됐다. backend-node/routes/data.js 참고)
 
    패턴
-   - GET  : `${GS_URL}?sheet=xxx&email=...`                (읽기)
-   - POST : JSON body { sheet, email, action, row|rows }   (쓰기)
+   - GET  : `${API_BASE_URL}/api/data?sheet=xxx`  + Authorization 헤더 (읽기)
+   - POST : `${API_BASE_URL}/api/data` JSON body { sheet, action, row|rows }
+            + Authorization: Bearer <Firebase ID token> 헤더            (쓰기)
      action: append | upsert | batchAppend | batchUpsert | replaceAll | delete
 
    이 파일의 책임
@@ -15,18 +17,20 @@
       (핵심 개선사항 — 기존 여기저기 흩어진 r.ev_id||r.ev, r.type||r.role
       같은 임시방편 fallback을 이 지점 하나로 모음)
    4) saveEventToSheet / saveSectors / upsertPartTypeRow 등 원본에서
-      GS_URL로 쓰기 요청을 보내던 "공통" 성격의 함수들
+      API_BASE_URL로 쓰기 요청을 보내던 "공통" 성격의 함수들
 
    범위 밖(포함하지 않음): saveCoNotes/saveCoWebsite/saveContactEdit/
    addTarget/submitAddCoEvent 등 특정 탭 UI에 강하게 결합된 쓰기 함수는
    각 tab 모듈(company-tab.js/crm-tab.js/db-tab.js 등)에서 이 파일의
-   safeFetch/GS_URL을 가져다 쓰는 방식으로 이동할 것.
+   safeFetch/postToSheet를 가져다 쓰는 방식으로 이동할 것.
 ═══════════════════════════════════════════════════════════════ */
 
 import { normalizeCat, countryName, sectorRowValues } from './utils.js';
+import { auth } from './firebase.js';
 import {
-  GS_URL,
+  API_BASE_URL,
   authToken,
+  setAuthToken,
   EVENT_LIST,
   contacts,
   participations,
@@ -94,10 +98,20 @@ export function normalizeParticipationRow(r){
 ══════════════════════════════════════════ */
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-export async function safeFetch(url, label, attempt = 1){
+/* Firebase ID 토큰을 매번 새로 받아온다 — SDK가 만료 임박(1시간) 시 자동
+   갱신, 아니면 캐시된 값을 즉시 반환하므로 매 요청마다 불러도 비용이 없다.
+   state.js의 authToken은 UI 표시/디버깅용 캐시일 뿐 신뢰 주체가 아니다. */
+export async function authHeaders(){
+  if(!auth.currentUser) return {};
+  const token = await auth.currentUser.getIdToken();
+  setAuthToken(token);
+  return { Authorization: 'Bearer ' + token };
+}
+
+export async function safeFetch(url, label, attempt = 1, headers = null){
   try {
     console.log('[CRM] fetching', label, attempt > 1 ? `(재시도 ${attempt-1})` : '', '...');
-    const res  = await fetch(url, { method: 'GET', redirect: 'follow', credentials: 'omit' });
+    const res  = await fetch(url, { method: 'GET', redirect: 'follow', credentials: 'omit', headers: headers || await authHeaders() });
     const text = await res.text();
     const json = JSON.parse(text);
     if(json && json.error){ console.error('[CRM]', label, 'error:', json.error); return null; }
@@ -107,7 +121,7 @@ export async function safeFetch(url, label, attempt = 1){
     if(attempt < 3){
       console.warn('[CRM]', label, '일시 실패, 재시도 예정:', e.message);
       await sleep(500 * attempt);
-      return safeFetch(url, label, attempt + 1);
+      return safeFetch(url, label, attempt + 1, headers);
     }
     console.warn('[CRM]', label, 'failed:', e.message);
     return null;
@@ -130,7 +144,7 @@ export function showSheetsWarning(show){
    - 응답 JSON의 ok/error를 검사해 실패를 실패로 처리
    - 실패 시 사용자에게 토스트로 알림 (silent 옵션으로 억제 가능)
    - 반환값: 성공 시 서버 JSON({ok:true,...}), 실패 시 {ok:false, error}
-   - 테스트 모드(GS_URL 없음)에서는 {ok:true, offline:true} — 로컬 전용
+   - 테스트 모드(API_BASE_URL 없음)에서는 {ok:true, offline:true} — 로컬 전용
      동작이 정상이므로 실패로 취급하지 않는다.
 ══════════════════════════════════════════ */
 let _toastTimer = null;
@@ -152,11 +166,13 @@ export function showSaveErrorToast(msg){
 }
 
 export async function postToSheet(payload, label, { silent = false } = {}){
-  if(!GS_URL || !currentUser) return { ok: true, offline: true };
+  if(!API_BASE_URL || !currentUser) return { ok: true, offline: true };
   try {
-    const res  = await fetch(GS_URL, {
+    const headers = { 'Content-Type': 'application/json', ...await authHeaders() };
+    const res  = await fetch(API_BASE_URL + '/api/data', {
       method: 'POST',
-      body: JSON.stringify({ email: currentUser.email, auth: authToken, ...payload }),
+      headers,
+      body: JSON.stringify(payload),
     });
     let json = null;
     try { json = JSON.parse(await res.text()); } catch(e){}
@@ -198,27 +214,28 @@ export async function postToSheet(payload, label, { silent = false } = {}){
        renderCoList, renderAudit })
 ══════════════════════════════════════════ */
 export async function loadFromSheets(hooks = {}){
-  // 구글시트는 유일한 데이터 소스 — 미연동 시 빈 화면 유지
-  if(!GS_URL || !currentUser){
+  // 백엔드 API는 유일한 데이터 소스 — 미연동 시 빈 화면 유지
+  if(!API_BASE_URL || !currentUser){
     setSheetsConnected(false);
     showSheetsWarning(true);
     try { hooks.buildMDBEvList?.(); hooks.renderMDB?.(); } catch(e){}
     return;
   }
   showSheetsWarning(false); // 시도 시작 시 일단 숨김
-  const qs = 'email=' + encodeURIComponent(currentUser.email) + '&auth=' + encodeURIComponent(authToken);
+  const base = API_BASE_URL + '/api/data?sheet=';
+  const headers = await authHeaders(); // 9개 요청이 같은 토큰을 쓰도록 한 번만 계산
 
   try {
     const [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, companiesData, partTypesData] = await Promise.all([
-      safeFetch(GS_URL + '?sheet=contacts&'       + qs, 'contacts'),
-      safeFetch(GS_URL + '?sheet=participations&' + qs, 'participations'),
-      safeFetch(GS_URL + '?sheet=crm_targets&'    + qs, 'crm_targets'),
-      safeFetch(GS_URL + '?sheet=activity_log&'   + qs, 'activity_log'),
-      safeFetch(GS_URL + '?sheet=events&'         + qs, 'events'),
-      safeFetch(GS_URL + '?sheet=settings&'       + qs, 'settings'),
-      safeFetch(GS_URL + '?sheet=sectors&'        + qs, 'sectors'),
-      safeFetch(GS_URL + '?sheet=companies&'      + qs, 'companies'),
-      safeFetch(GS_URL + '?sheet=part_types&'     + qs, 'part_types'),
+      safeFetch(base + 'contacts',       'contacts',       1, headers),
+      safeFetch(base + 'participations', 'participations', 1, headers),
+      safeFetch(base + 'crm_targets',    'crm_targets',    1, headers),
+      safeFetch(base + 'activity_log',   'activity_log',   1, headers),
+      safeFetch(base + 'events',         'events',         1, headers),
+      safeFetch(base + 'settings',       'settings',       1, headers),
+      safeFetch(base + 'sectors',        'sectors',        1, headers),
+      safeFetch(base + 'companies',      'companies',      1, headers),
+      safeFetch(base + 'part_types',     'part_types',     1, headers),
     ]);
 
     // ── 실패 감지 (신규) ──
@@ -311,7 +328,7 @@ export async function loadFromSheets(hooks = {}){
             console.log('[CRM] tags 로드:', TAGS.length, '개 태그');
           }
         } catch(e){ console.warn('[CRM] tags JSON 파싱 실패 — 기본값(BD/C-level) 유지:', e); }
-      } else if(GS_URL && currentUser){
+      } else if(API_BASE_URL && currentUser){
         // 시트에 아직 없으면 기본값(BD/C-level)을 1회 저장(마이그레이션)
         saveTags();
       }
@@ -379,7 +396,7 @@ export async function loadFromSheets(hooks = {}){
         .filter(r => r.key)
         .map(r => ({ key: r.key, label: r.label || r.key, cls: r.cls || 'p-gray' })));
       console.log('[CRM] part_types 시트 로드:', PART_TYPES.length, '개');
-    } else if(GS_URL && currentUser){
+    } else if(API_BASE_URL && currentUser){
       // 시트가 비어있으면 기본값을 1회 저장 (마이그레이션)
       migratePartTypesToSheet();
     }
@@ -567,7 +584,7 @@ export async function deleteSectorRow(id){
 
 // 구버전 settings.sectors(JSON blob) → sectors 시트로 1회 마이그레이션
 export async function migrateSectorsToSheet(){
-  if(!GS_URL || !currentUser) return;
+  if(!API_BASE_URL || !currentUser) return;
   for(const s of COMPANY_SECTORS){
     await upsertSectorRow(s);
   }
@@ -592,7 +609,7 @@ export function loadSectors(){
   // (원본은 `COMPANY_SECTORS = parsed;` 로 재할당했으나, ES 모듈에서
   //  다른 모듈이 import한 배열 참조가 살아있도록 splice로 내용만 교체)
   try {
-    if(!GS_URL){
+    if(!API_BASE_URL){
       const s = localStorage.getItem('crm_sectors');
       if(s){
         const parsed = JSON.parse(s);

@@ -16,18 +16,22 @@ import './modules/crm-tab.js';
 import './modules/audit-tab.js';
 
 import { initMobileNav, initDrawerSwipe, initSidebarLayout } from './router.js';
-import { checkSession, initAfterLogin, closeUserMenu } from './auth.js';
+import { initAuth, initAfterLogin, closeUserMenu } from './auth.js';
 import { buildCoDB, buildCoCAT } from './modules/company-tab.js';
 import { buildEvFil } from './modules/crm-tab.js';
 import { populateUploadEvDropdown } from './modules/upload-tab.js';
 
-/* INIT (원본 6699~6708행) */
-if(checkSession()){
-  initAfterLogin();
-} else {
-  const ls = document.getElementById('login-screen');
-  if(ls) ls.style.display = 'flex';
-}
+/* INIT — Firebase Auth의 onAuthStateChanged는 비동기라, 과거 동기
+   checkSession() 분기 대신 콜백으로 로그인 여부에 따라 화면을 정한다
+   (auth.js:initAuth 참고). */
+initAuth((loggedIn) => {
+  if(loggedIn){
+    initAfterLogin();
+  } else {
+    const ls = document.getElementById('login-screen');
+    if(ls) ls.style.display = 'flex';
+  }
+});
 // 로그인 여부와 무관하게 항상 초기화되는 부분(원본 6708행)
 buildCoDB(); buildCoCAT(); buildEvFil(); populateUploadEvDropdown();
 

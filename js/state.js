@@ -19,12 +19,13 @@
 
 import { EVENT_LIST_SEED } from './constants.js';
 
-/* ── Apps Script 배포 URL (원본 1558행) ──
-   테스트 모드(test/test/test 로그인) 진입 시 setGsUrl('')으로 비워서
-   이 세션 동안 모든 구글시트 읽기/쓰기를 원천 차단한다(auth.js 참고). */
-let GS_URL = 'https://script.google.com/macros/s/AKfycbwM8KmiykL0ejiD24YhdqXKsMI8FBFP-Z4baOzIlnVdvu_DkXaJOnIP0PZoot3jqQlOwg/exec';
-export function setGsUrl(v){ GS_URL = v; }
-export { GS_URL };
+/* ── 백엔드 API 베이스 URL (Node/Express, backend-node/) ──
+   Render 등에 배포한 뒤 이 값만 바꾸면 된다(과거 GS_URL과 동일한 역할).
+   테스트 모드(test/test/test 로그인) 진입 시 setApiBaseUrl('')으로 비워서
+   이 세션 동안 모든 서버 읽기/쓰기를 원천 차단한다(auth.js 참고). */
+let API_BASE_URL = 'http://localhost:8080';
+export function setApiBaseUrl(v){ API_BASE_URL = v; }
+export { API_BASE_URL };
 
 /* ══════════════════════════════════════════
    EVENT_LIST — 행사 마스터 (원본 1603~1614행)
@@ -121,9 +122,10 @@ let currentUser = null;
 export function setCurrentUser(v){ currentUser = v; }
 export { currentUser };
 
-/* ── 서버 발급 세션 토큰 (code.gs issueToken) ──
-   로그인 성공 시 발급받아 모든 doGet/doPost 요청에 auth 파라미터로 첨부.
-   crm_session(localStorage)에도 함께 저장되어 새로고침 후에도 유지된다. */
+/* ── Firebase ID 토큰 캐시 ──
+   Firebase Auth가 로그인/세션 유지를 전담하므로, 이 값은 매 API 호출 직전
+   auth.currentUser.getIdToken()로 새로 받아 갱신한다(1시간 만료, SDK가 자동
+   갱신). localStorage에 영구 저장하지 않는다 — 신뢰 주체는 Firebase SDK. */
 let authToken = '';
 export function setAuthToken(v){ authToken = v || ''; }
 export { authToken };

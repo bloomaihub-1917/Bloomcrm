@@ -51,7 +51,7 @@ import {
   COMPANY_SECTORS,
   CATMAPS,
   PART_TYPES,
-  GS_URL,
+  API_BASE_URL,
   currentUser,
 } from '../state.js';
 import { CL } from '../constants.js';
@@ -1137,14 +1137,14 @@ export async function runValidationStep(newRows, dupRows){
     addAiLog('ok', '기업 ' + newCount + '개를 companies 시트에 저장했어요.');
   }
 
-  console.log('[upload-tab] 업로드 확정 — newParts.length:', newParts.length, '| GS_URL:', !!GS_URL, '| currentUser:', !!currentUser);
+  console.log('[upload-tab] 업로드 확정 — newParts.length:', newParts.length, '| API_BASE_URL:', !!API_BASE_URL, '| currentUser:', !!currentUser);
 
   // 2) 구글시트에 저장 (Apps Script 연동) — 여러 행을 batchAppend로 한 번에 저장해 왕복 횟수를 줄임
   // ⚠ 수정: 기존에는 응답을 확인하지 않아 저장 실패도 "저장됨"으로 표시되고,
   // 새로고침 시 업로드 내용이 통째로 사라지는 버그가 있었다. 이제 contacts
   // 저장 실패 시 화면 반영을 롤백하고 업로드 화면을 유지해 재시도할 수 있다.
   let partsSaveFailed = false;
-  if(GS_URL && currentUser){
+  if(API_BASE_URL && currentUser){
     if(addedContacts.length){
       const contactRows = addedContacts.map(r => [r.id, r.nameKo, r.nameEn, r.orgKo, r.orgEn, r.titleKo, r.titleEn, r.deptKo, r.deptEn,
             r.country, r.cat, r.lang, r.source, r.date, r.status, r.email1, r.email2, r.phone1, r.phone2,
@@ -1208,12 +1208,12 @@ export async function runValidationStep(newRows, dupRows){
   } else {
     const evMsg = selectedEv ? ` / 행사 "${selectedEv}" ${newParts.length}건 연결` : '';
     trackAction('upload', '파일 업로드', uploadedFileName,
-      '<b>' + escapeHtml(uploadedFileName) + '</b> 업로드 — 신규 ' + addedContacts.length + '건 반영' + evMsg + ' (구글시트 미연동)');
+      '<b>' + escapeHtml(uploadedFileName) + '</b> 업로드 — 신규 ' + addedContacts.length + '건 반영' + evMsg + ' (서버 미연동)');
   }
 
   if(btn){ btn.disabled = false; }
-  addAiLog('ok', '검증/저장 완료: 신규 ' + addedContacts.length + '건 Master DB 반영' + (GS_URL?' (구글시트 저장 포함)':''));
-  alert(addedContacts.length + '건이 Master DB에 추가되었어요' + (GS_URL?' (구글시트에도 저장됨)':'')
+  addAiLog('ok', '검증/저장 완료: 신규 ' + addedContacts.length + '건 Master DB 반영' + (API_BASE_URL?' (서버 저장 포함)':''));
+  alert(addedContacts.length + '건이 Master DB에 추가되었어요' + (API_BASE_URL?' (서버에도 저장됨)':'')
     + (partsSaveFailed ? '\n⚠️ 단, 행사 참여 기록 저장은 실패했어요 — 감사 로그를 확인해주세요.' : ''));
   resetUpload();
   callHook('switchApp', 'mdb', document.querySelector('.atab'));

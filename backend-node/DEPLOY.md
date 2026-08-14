@@ -1,0 +1,61 @@
+# 백엔드(Node/Express + PostgreSQL + Firebase Auth) 배포 절차
+
+Google Apps Script + Sheets 백엔드를 대체하는 새 백엔드입니다. 기존 절차는
+`backend/DEPLOY.md`에 참고용으로 남아있습니다 — 데이터 이관이 끝나기 전까지는
+기존 Apps Script 배포도 그대로 살려두세요(전환 중 안전망).
+
+## 0. 준비물 (전부 무료)
+- [Neon](https://neon.tech) 계정 — Postgres
+- [Render](https://render.com) 계정 — 백엔드 호스팅
+- [Firebase](https://console.firebase.google.com) 프로젝트 — 로그인/계정 관리
+
+## 1. Firebase 프로젝트 설정
+1. Firebase 콘솔 → 새 프로젝트 생성 (Spark/무료 플랜 그대로 사용, Blaze 업그레이드 불필요)
+2. Authentication → 로그인 방법 → "이메일/비밀번호" 활성화
+3. Authentication → Users 탭에서 팀원 계정을 하나씩 추가하거나,
+   `node scripts/create-user.js "이름:이메일:임시비밀번호" ...` 로 일괄 생성
+4. 프로젝트 설정 → 일반 → "내 앱"에서 웹 앱 추가 → `firebaseConfig` 값을
+   `js/firebase.js`의 `firebaseConfig`에 붙여넣기(공개돼도 안전한 값)
+5. 프로젝트 설정 → 서비스 계정 → 새 비공개 키 생성(JSON 다운로드)
+   → 이 JSON 전체를 한 줄 문자열로 만들어 `FIREBASE_SERVICE_ACCOUNT` 환경변수로 사용
+
+## 2. Neon(Postgres) 설정
+1. Neon에서 새 프로젝트 생성 → `DATABASE_URL` 복사
+2. 스키마 적용: `psql "$DATABASE_URL" -f db/schema.sql`
+3. (데이터 이관 후) 시드 적용: `psql "$DATABASE_URL" -f db/seed.sql`
+
+## 3. 기존 Google Sheets 데이터 이관 (1회, 사용자 본인이 실행)
+운영 데이터가 있는 구글 계정으로 직접 실행해야 합니다.
+```
+GS_URL="<기존 Apps Script 배포 URL>" \
+GS_EMAIL="본인 이메일" GS_PASSWORD="본인 비밀번호" \
+DATABASE_URL="<Neon 연결 문자열>" \
+  node scripts/migrate-from-sheets.js
+```
+완료 후 `db/seed.sql`을 실행해 섹터 도메인 분류를 채웁니다.
+
+## 4. Render에 백엔드 배포
+1. 이 저장소를 GitHub 등에 올린 뒤 Render → New → Web Service → 저장소 연결
+2. Root Directory: `backend-node`
+3. Build Command: `npm install` / Start Command: `npm start`
+4. 환경변수 등록:
+   - `DATABASE_URL` (Neon)
+   - `FIREBASE_SERVICE_ACCOUNT` (서비스 계정 키 JSON, 한 줄)
+   - `ALLOWED_DOMAIN` = `@13100m.net`
+   - `ALLOWED_ORIGIN` = 프론트가 서빙되는 origin (예: `https://your-frontend.example.com`)
+5. 배포 완료 후 나온 URL을 `js/state.js`의 `API_BASE_URL`에 반영
+
+## 5. 동작 확인 체크리스트
+- [ ] Firebase 콘솔에 등록한 계정으로 로그인 성공
+- [ ] 잘못된 비밀번호로 로그인 실패 확인
+- [ ] 토큰 없이 `배포URL/api/data?sheet=contacts` 접근 시 401 확인
+- [ ] MDB에서 연락처 추가/수정 → 새로고침 후 유지되는지 확인
+- [ ] 여러 명이 동시에 저장해도 지연/에러 없이 처리되는지 확인(과거 LockService 병목 해소 확인)
+- [ ] 15분 이상 방치 후 첫 요청의 콜드스타트 지연(약 30~60초) 체감 확인 — 무료 플랜의 알려진 트레이드오프
+
+## 참고: 기존 구조 대비 달라진 점
+- 계정 추가/삭제/비밀번호 재설정: Apps Script 스크립트 속성(CRM_USERS) 직접 편집 → Firebase 콘솔/`scripts/create-user.js`
+- 인증: 커스텀 HMAC 토큰(14일) → Firebase ID 토큰(1시간, SDK가 자동 갱신)
+- 동시 쓰기: 전역 LockService 직렬화 → Postgres 트랜잭션 + `ON CONFLICT` upsert
+- 에러 응답: 스택 그대로 노출 → 스택 제거, 서버 콘솔에만 로그
+- 요청 제한: 없음 → IP당 분당 120회(`express-rate-limit`)

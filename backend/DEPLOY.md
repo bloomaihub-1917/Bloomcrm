@@ -1,4 +1,8 @@
-# 백엔드(Apps Script) 배포 절차
+# 백엔드(Apps Script) 배포 절차 — 레거시
+
+> ⚠️ 이 백엔드는 `backend-node/`(Node/Express + PostgreSQL + Firebase Auth)로
+> 대체되는 중입니다. 새 배포는 `backend-node/DEPLOY.md`를 따르세요. 이 문서는
+> 데이터 이관이 끝나기 전 안전망(기존 배포 유지)이나 과거 이력 참고용으로만 남겨둡니다.
 
 이번 보안/버그 수정으로 `code.gs`가 크게 바뀌었습니다. **아래 절차를 완료하기
 전까지는 앱이 시트에 연결되지 않습니다** (구버전 배포는 새 로그인 방식과 호환되지 않음).
