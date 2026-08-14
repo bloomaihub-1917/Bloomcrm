@@ -23,7 +23,7 @@ import { EVENT_LIST_SEED } from './constants.js';
    Render 등에 배포한 뒤 이 값만 바꾸면 된다(과거 GS_URL과 동일한 역할).
    테스트 모드(test/test/test 로그인) 진입 시 setApiBaseUrl('')으로 비워서
    이 세션 동안 모든 서버 읽기/쓰기를 원천 차단한다(auth.js 참고). */
-let API_BASE_URL = 'http://localhost:8080';
+let API_BASE_URL = 'https://backend-node-jade-delta.vercel.app';
 export function setApiBaseUrl(v){ API_BASE_URL = v; }
 export { API_BASE_URL };
 
