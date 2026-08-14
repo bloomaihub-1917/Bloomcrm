@@ -10,6 +10,11 @@ const dataRoutes = require('./routes/data');
    공유한다 — app.listen()은 각 진입점에서 따로 한다(서버리스는 안 함). */
 const app = express();
 
+// Vercel(과 대부분의 서버리스 호스팅)은 프록시 뒤에서 실행되어 X-Forwarded-For
+// 헤더로 실제 클라이언트 IP를 넘긴다. 이 설정이 없으면 express-rate-limit이
+// 그 헤더를 신뢰할 수 없다며 요청 자체를 에러로 처리한다(저장이 전부 실패하던 원인).
+app.set('trust proxy', 1);
+
 const allowedOrigins = (process.env.ALLOWED_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
 app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : true }));
 app.use(express.json());
