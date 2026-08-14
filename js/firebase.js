@@ -12,9 +12,9 @@ import {
    apiKey는 비밀키가 아니라 공개 클라이언트 식별자라 커밋해도 안전하다 —
    실제 접근 제어는 백엔드의 verifyIdToken + 이메일 도메인 검사가 담당한다. */
 const firebaseConfig = {
-  apiKey: 'REPLACE_ME',
-  authDomain: 'REPLACE_ME.firebaseapp.com',
-  projectId: 'REPLACE_ME',
+  apiKey: 'AIzaSyADVHyBCKMLNdFUWSWiNqR8H_Cms5P5KLE',
+  authDomain: 'bloomcrm-2d3a2.firebaseapp.com',
+  projectId: 'bloomcrm-2d3a2',
 };
 
 const app = initializeApp(firebaseConfig);
