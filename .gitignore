@@ -2,8 +2,9 @@
 crm-develop/
 crm-develop.zip
 
-# 실데이터 엑셀 (개인정보 포함 — 저장소에 커밋하지 않음)
+# 실데이터 엑셀/스크린샷 (개인정보 포함 — 저장소에 커밋하지 않음)
 Data/
+screenshot/
 
 # OS/에디터
 Thumbs.db
