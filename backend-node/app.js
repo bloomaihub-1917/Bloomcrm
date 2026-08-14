@@ -14,6 +14,11 @@ const allowedOrigins = (process.env.ALLOWED_ORIGIN || '').split(',').map((s) => 
 app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : true }));
 app.use(express.json());
 
+// CORS 헤더는 요청 Origin에 따라 매번 달라지므로, CDN/브라우저 등 어떤 계층도
+// 이 응답을 캐시해 다른 origin에 잘못된 Access-Control-Allow-Origin을
+// 돌려주는 일이 없도록 명시적으로 캐시를 금지한다.
+app.use((req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
+
 // 토큰 하나로 무제한 접근 가능하던 기존 문제 보완 — IP당 분당 요청 수 제한
 app.use('/api', rateLimit({ windowMs: 60 * 1000, max: 120 }));
 
