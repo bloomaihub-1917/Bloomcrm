@@ -17,7 +17,9 @@ app.set('trust proxy', 1);
 
 const allowedOrigins = (process.env.ALLOWED_ORIGIN || '').split(',').map((s) => s.trim()).filter(Boolean);
 app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : true }));
-app.use(express.json());
+// 기본 100KB 제한으로는 수백 건짜리 일괄 업로드(batchAppend/batchUpsert)가
+// 바로 거부된다. 넉넉하게 늘려둔다(Vercel 서버리스 함수 자체 한도 내에서 안전).
+app.use(express.json({ limit: '10mb' }));
 
 // CORS 헤더는 요청 Origin에 따라 매번 달라지므로, CDN/브라우저 등 어떤 계층도
 // 이 응답을 캐시해 다른 origin에 잘못된 Access-Control-Allow-Origin을

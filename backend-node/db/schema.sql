@@ -6,13 +6,20 @@
 -- 맞췄다 — 프론트(js/api.js)가 보내는 row 배열의 위치가 헤더 순서와 그대로 대응되므로
 -- 변환 코드를 최소화하기 위함이다. camelCase 컬럼은 대소문자 보존을 위해 큰따옴표로
 -- 정의한다(따옴표 없이 쓰면 Postgres가 전부 소문자로 접어버린다).
+--
+-- 참조 컬럼(event_id/contact_id/sector/parent/canonical 등)에는 의도적으로
+-- FOREIGN KEY 제약을 걸지 않는다 — 원본 Google Sheets는 이런 참조 무결성을
+-- 전혀 강제하지 않았고(그래서 업로드가 아직 등록 안 된 섹터 값을 자유롭게 써도
+-- 됐다), 업로드/일괄 저장 순서가 뒤바뀌면(예: 아직 sectors에 없는 카테고리명을
+-- companies.sector로 먼저 저장) 엄격한 FK가 정상적인 업로드까지 막아버린다.
+-- 대신 자주 JOIN하는 컬럼에는 인덱스만 걸어 조회 성능을 챙긴다.
 
 CREATE TABLE IF NOT EXISTS sectors (
   id        TEXT PRIMARY KEY,
   name      TEXT NOT NULL,
-  parent    TEXT REFERENCES sectors(id),
+  parent    TEXT,
   domain    TEXT,
-  canonical TEXT REFERENCES sectors(id)
+  canonical TEXT
 );
 
 CREATE TABLE IF NOT EXISTS events (
@@ -33,7 +40,7 @@ CREATE TABLE IF NOT EXISTS part_types (
 
 CREATE TABLE IF NOT EXISTS companies (
   key          TEXT PRIMARY KEY,
-  sector       TEXT REFERENCES sectors(id),
+  sector       TEXT,
   hq           TEXT,
   website      TEXT,
   notes        TEXT,
@@ -76,8 +83,8 @@ CREATE TABLE IF NOT EXISTS contacts (
 -- JOIN해서 그 자리에서 계산해 응답하면 프론트는 차이를 못 느낀다.
 CREATE TABLE IF NOT EXISTS participations (
   id         TEXT PRIMARY KEY,
-  event_id   TEXT REFERENCES events(id),
-  contact_id TEXT REFERENCES contacts(id),
+  event_id   TEXT,
+  contact_id TEXT,
   role       TEXT,
   note       TEXT,
   matched    TEXT
@@ -89,9 +96,9 @@ CREATE TABLE IF NOT EXISTS crm_targets (
   id             TEXT PRIMARY KEY,
   name           TEXT,
   "nameEn"       TEXT,
-  sector         TEXT REFERENCES sectors(id),
+  sector         TEXT,
   hq             TEXT,
-  event          TEXT REFERENCES events(id),
+  event          TEXT,
   role           TEXT,
   status         TEXT,
   priority       TEXT,

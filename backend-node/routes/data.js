@@ -54,26 +54,56 @@ function genId(prefix) {
 
 const q = (col) => `"${col}"`;
 
+// Postgres 바인드 파라미터 상한(65535)에 안전하게 걸치지 않도록 청크 단위로 나눠 처리한다.
+const CHUNK_SIZE = 500;
+function chunk(arr, size) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
 function rowToRecord(columns, row) {
   const rec = {};
   columns.forEach((col, i) => { rec[col] = row[i] === undefined ? null : row[i]; });
   return rec;
 }
 
-async function upsertOne(client, def, record, { onConflict = 'update' } = {}) {
-  const cols = def.columns;
-  if (def.idPrefix !== null && !record[def.pk]) record[def.pk] = genId(def.idPrefix);
-  const values = cols.map((c) => record[c] ?? null);
-  const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
+/* 한 건씩 왕복하면 수백 건짜리 업로드가 Vercel 함수 실행시간 제한(기본 10초)을
+   넘겨 항상 실패한다 — 청크당 한 번의 다중 행 INSERT로 왕복 횟수를 확 줄인다.
+   같은 청크 안에 pk가 중복되면 "ON CONFLICT DO UPDATE cannot affect row a
+   second time" 에러가 나므로, 청크에 넣기 전에 pk 기준으로 먼저 중복 제거한다
+   (뒤에 온 값이 이긴다 — 일반적인 upsert 기대 동작과 동일). */
+async function bulkUpsert(client, table, pk, cols, records, { onConflict = 'update' } = {}) {
+  const dedup = new Map();
+  records.forEach((rec) => dedup.set(rec[pk], rec));
+  const unique = [...dedup.values()];
+  if (!unique.length) return;
+
   const colList = cols.map(q).join(', ');
-  const updateSet = cols.filter((c) => c !== def.pk).map((c) => `${q(c)} = EXCLUDED.${q(c)}`).join(', ');
+  const updateSet = cols.filter((c) => c !== pk).map((c) => `${q(c)} = EXCLUDED.${q(c)}`).join(', ');
   const conflictClause = onConflict === 'nothing'
-    ? `ON CONFLICT (${q(def.pk)}) DO NOTHING`
-    : `ON CONFLICT (${q(def.pk)}) DO UPDATE SET ${updateSet}`;
-  await client.query(
-    `INSERT INTO ${def.table} (${colList}) VALUES (${placeholders}) ${conflictClause}`,
-    values,
-  );
+    ? `ON CONFLICT (${q(pk)}) DO NOTHING`
+    : `ON CONFLICT (${q(pk)}) DO UPDATE SET ${updateSet}`;
+
+  for (const part of chunk(unique, CHUNK_SIZE)) {
+    const values = [];
+    const groups = part.map((rec, ri) => {
+      const placeholders = cols.map((c, ci) => {
+        values.push(rec[c] ?? null);
+        return `$${ri * cols.length + ci + 1}`;
+      });
+      return `(${placeholders.join(', ')})`;
+    });
+    await client.query(
+      `INSERT INTO ${table} (${colList}) VALUES ${groups.join(', ')} ${conflictClause}`,
+      values,
+    );
+  }
+}
+
+async function upsertOne(client, def, record, opts = {}) {
+  if (def.idPrefix !== null && !record[def.pk]) record[def.pk] = genId(def.idPrefix);
+  await bulkUpsert(client, def.table, def.pk, def.columns, [record], opts);
   return record[def.pk];
 }
 
@@ -93,6 +123,8 @@ async function readParticipations() {
   return rows;
 }
 
+const PARTICIPATION_COLS = ['id', 'event_id', 'contact_id', 'role', 'note', 'matched'];
+
 function participationFromRow(row) {
   // 헤더 순서: id, ev_id, 행사명, cid, 소속, 성명, 직함, type, note, matched
   return {
@@ -103,20 +135,6 @@ function participationFromRow(row) {
     note: row[8] || null,
     matched: row[9] || null,
   };
-}
-
-async function upsertParticipation(client, rec, { onConflict = 'update' } = {}) {
-  const cols = ['id', 'event_id', 'contact_id', 'role', 'note', 'matched'];
-  const values = cols.map((c) => rec[c] ?? null);
-  const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
-  const updateSet = cols.filter((c) => c !== 'id').map((c) => `${q(c)} = EXCLUDED.${q(c)}`).join(', ');
-  const conflictClause = onConflict === 'nothing'
-    ? 'ON CONFLICT (id) DO NOTHING'
-    : `ON CONFLICT (id) DO UPDATE SET ${updateSet}`;
-  await client.query(
-    `INSERT INTO participations (${cols.map(q).join(', ')}) VALUES (${placeholders}) ${conflictClause}`,
-    values,
-  );
 }
 
 router.get('/', async (req, res) => {
@@ -144,13 +162,13 @@ router.post('/', async (req, res) => {
         await client.query('DELETE FROM participations WHERE id = ANY($1::text[])', [ids]);
       } else if (action === 'replaceAll') {
         await client.query('DELETE FROM participations');
-        for (const r of (rows || [])) await upsertParticipation(client, participationFromRow(r));
+        await bulkUpsert(client, 'participations', 'id', PARTICIPATION_COLS, (rows || []).map(participationFromRow));
       } else if (action === 'batchAppend' || action === 'batchUpsert') {
         const onConflict = action === 'batchAppend' ? 'nothing' : 'update';
-        for (const r of (rows || [])) await upsertParticipation(client, participationFromRow(r), { onConflict });
+        await bulkUpsert(client, 'participations', 'id', PARTICIPATION_COLS, (rows || []).map(participationFromRow), { onConflict });
       } else {
         // upsert(단건) / append(폴백)
-        await upsertParticipation(client, participationFromRow(row || []));
+        await bulkUpsert(client, 'participations', 'id', PARTICIPATION_COLS, [participationFromRow(row || [])]);
       }
     } else {
       const def = TABLES[sheet];
@@ -159,10 +177,15 @@ router.post('/', async (req, res) => {
         await client.query(`DELETE FROM ${def.table} WHERE ${q(def.pk)} = ANY($1::text[])`, [ids]);
       } else if (action === 'replaceAll') {
         await client.query(`DELETE FROM ${def.table}`);
-        for (const r of (rows || [])) await upsertOne(client, def, rowToRecord(def.columns, r));
+        await bulkUpsert(client, def.table, def.pk, def.columns, (rows || []).map((r) => rowToRecord(def.columns, r)));
       } else if (action === 'batchAppend' || action === 'batchUpsert') {
         const onConflict = action === 'batchAppend' ? 'nothing' : 'update';
-        for (const r of (rows || [])) await upsertOne(client, def, rowToRecord(def.columns, r), { onConflict });
+        const records = (rows || []).map((r) => {
+          const rec = rowToRecord(def.columns, r);
+          if (def.idPrefix !== null && !rec[def.pk]) rec[def.pk] = genId(def.idPrefix);
+          return rec;
+        });
+        await bulkUpsert(client, def.table, def.pk, def.columns, records, { onConflict });
       } else {
         // upsert(단건) / append(폴백) — 둘 다 실제로는 upsert로 처리해도 안전함
         await upsertOne(client, def, rowToRecord(def.columns, row || []));
