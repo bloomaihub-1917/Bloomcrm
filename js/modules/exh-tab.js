@@ -19,7 +19,8 @@ import {
   logsFor, openInquiriesFor, contactsFor, primaryContactFor,
   EVENT_LIST, contacts, participations, CO_DB, currentUser, API_BASE_URL, auditLog,
 } from '../state.js';
-import { td, escapeHtml, escAttr, isMobile } from '../utils.js';
+import { td, escapeHtml, escAttr, isMobile, cleanEmail } from '../utils.js';
+export { cleanEmail };   // exh-drawer가 여기서 가져다 쓴다
 import {
   postToSheet,
   saveExhibitor, saveExhItem, saveExhInvoice, saveExhPayment, saveExhLog,
@@ -209,8 +210,6 @@ export function exhContact(x){
     // 아직 담당자 줄이 없는 기업은 빈 값으로 (화면이 깨지지 않게)
     || { row: null, linked: false, id: null, name: '', email: '', phone: '', title: '', role: '', primary: false };
 }
-/* 업로드 원본에 <a@b.com> 처럼 꺾쇠가 섞여 들어온 건이 있어 표시 전에 벗긴다 */
-export const cleanEmail = (e) => String(e || '').replace(/[<>]/g, '').trim();
 
 /* 이 기업의 마스터DB 연락처 후보 — 드로어 드롭다운에 쓴다 */
 export function contactsForExhibitor(x){

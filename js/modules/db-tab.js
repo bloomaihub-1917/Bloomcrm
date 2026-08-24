@@ -35,7 +35,7 @@ import {
   mdbSelected,
 } from '../state.js';
 import { CP, CL, RP, ROLE_TO_CAT, COUNTRIES, avB, avF } from '../constants.js';
-import { ab, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseTags, joinTags } from '../utils.js';
+import { ab, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseTags, joinTags, isMobile, cleanEmail } from '../utils.js';
 import { postToSheet } from '../api.js';
 import { buildCoDB } from './company-tab.js';
 import { domainOfSector, domainName, findSectorByName, UNASSIGNED_DOMAIN } from './settings-tab.js';
@@ -494,9 +494,11 @@ export function renderMDB(){
     ? `${pairs.length}명 (${evShort(mdbEvFilter)})`
     : `${pairs.length}명`;
 
-  if(mdbView==='group')  renderMDBGrouped(pairs);
+  // 모바일은 좁아서 표 대신 카드로 그린다(교차표는 원래 가로 스크롤이 전제라 그대로)
+  const mob = isMobile();
+  if(mdbView==='group')  (mob ? renderMDBGroupedCards : renderMDBGrouped)(pairs);
   else if(mdbView==='matrix') renderMDBMatrix();
-  else renderMDBFlat(pairs);
+  else (mob ? renderMDBFlatCards : renderMDBFlat)(pairs);
 
   updateMDBBadges(pairs);
 }
@@ -541,6 +543,125 @@ export function updateMDBBadges(pairs){
       const c=getContactById(id);return c&&c.status===s;
     }).length;
   });
+}
+
+/* ══════════════════════════════════════════
+   모바일 카드 뷰
+
+   가로 10칸짜리 표는 폭 375px에 들어가지 않는다. 예전에는 CSS로 표를 세로로
+   펼치고 td:nth-child(n)으로 몇 칸을 감췄는데, 나중에 맨 앞에 체크박스 열이
+   생기면서 칸 번호가 한 칸씩 밀려 기업명이 감춰져 버렸다. 위치로 칸을 지목하는
+   방식은 열이 하나만 바뀌어도 이렇게 조용히 깨진다.
+
+   그래서 모바일에서는 표 대신 카드를 직접 그린다. 무엇을 보여줄지 코드에
+   이름으로 적혀 있어 열 순서가 바뀌어도 영향받지 않고, 좁은 화면에서 정말
+   필요한 정보(기업 · 이름 · 직함 · 역할 · 행사 · 연락처)만 골라 담을 수 있다.
+══════════════════════════════════════════ */
+const ST_MARK  = { verified:'stv', pending:'stp', new:'stn' };
+const ST_LABEL = { verified:'검증됨', pending:'확인 중', new:'신규' };
+
+/* 행사 배지 — 카드에서는 2개까지만 보여주고 나머지는 +N으로 접는다 */
+function mEvPills(c, p){
+  const one = (ev) => `<span class="ev-pill" style="background:${evColor(ev)}18;color:${evColor(ev)}">
+    <span class="ev-pill-dot" style="background:${evColor(ev)}"></span>${escapeHtml(evShort(ev))}</span>`;
+  if(p) return one(p.eventId);
+  const evs = contactEvents(c);
+  return evs.slice(0, 2).map(one).join('')
+    + (evs.length > 2 ? `<span class="pill p-gray">+${evs.length - 2}</span>` : '');
+}
+
+/* 연락처 한 줄 — 탭하면 바로 메일/전화로 이어지게 한다 */
+function mContactLinks(c){
+  const bits = [];
+  const em = cleanEmail(c.email1);
+  if(em) bits.push(`<a href="mailto:${escAttr(em)}" onclick="event.stopPropagation()" class="mdbc-lnk">✉ ${escapeHtml(em)}</a>`);
+  if(c.phone1) bits.push(`<a href="tel:${escAttr(String(c.phone1).replace(/[^0-9+]/g, ''))}" onclick="event.stopPropagation()" class="mdbc-lnk">☎ ${escapeHtml(c.phone1)}</a>`);
+  return bits.length ? `<div class="mdbc-ct">${bits.join('')}</div>` : '';
+}
+
+/* 연락처 카드 한 장.
+   showOrg=false는 행사별 보기처럼 기업명이 이미 그룹 머리글에 있을 때 쓴다. */
+function mdbCard(c, p, { showOrg = true } = {}){
+  const gi = contacts.indexOf(c);
+  const roleKey = p ? p.role : c.cat;
+  const isSel = mdbSelected.has(c.id);
+  const org = c.orgKo || c.orgEn || '';
+  const title = [c.titleKo || c.titleEn, c.deptKo || c.deptEn].filter(Boolean).join(' · ');
+
+  return `<div class="mdbc${isSel ? ' sel' : ''}" onclick="openContactDr(${c.id})">
+    <div class="mdbc-top">
+      <div class="tdav${isSel ? ' sel' : ''}" style="${isSel ? '' : `background:${avB(gi)};color:${avF(gi)}`}"
+        onclick="event.stopPropagation();toggleMDBSelect(${c.id})" title="탭해서 선택/해제">${isSel ? '✓' : ab(c.nameKo || c.nameEn || '')}</div>
+      <div class="mdbc-hd">
+        ${showOrg && org ? `<div class="mdbc-org">${escapeHtml(org)}</div>` : ''}
+        <div class="mdbc-nm">${escapeHtml(c.nameKo || c.nameEn || '이름 없음')}${
+          c.nameKo && c.nameEn ? `<span class="mdbc-en">${escapeHtml(c.nameEn)}</span>` : ''}${
+          isBDContact(c) ? ' <span class="pill p-teal mdbc-tag">BD</span>' : ''}${
+          isCLevelContact(c) ? ' <span class="pill p-gold mdbc-tag">C-level</span>' : ''}</div>
+        ${title ? `<div class="mdbc-ttl">${escapeHtml(title)}</div>` : ''}
+      </div>
+      <span class="std ${ST_MARK[c.status] || 'stn'}" title="${escAttr(ST_LABEL[c.status] || c.status || '')}"></span>
+    </div>
+    <div class="mdbc-pills">
+      <span class="pill ${CP[roleKey] || 'p-gray'}">${escapeHtml(CL[roleKey] || roleKey || '미분류')}</span>
+      ${c.country ? `<span class="pill p-gray">${escapeHtml(countryName(c.country))}</span>` : ''}
+      ${mEvPills(c, p)}
+    </div>
+    ${mContactLinks(c)}
+  </div>`;
+}
+
+/* 목록 보기 — 모바일 */
+function renderMDBFlatCards(pairs){
+  const tw = document.getElementById('mdb-tw');
+  if(!tw) return;
+  pairs = applyMDBSort(pairs);
+  tw.innerHTML = pairs.length
+    ? `<div class="mdbc-list">${pairs.map(({ c, p }) => mdbCard(c, p)).join('')}</div>`
+    : `<div class="mdbc-empty">${contacts.length ? '검색 조건에 맞는 연락처가 없어요'
+        : '아직 등록된 연락처가 없어요 — 업로드 메뉴에서 파일을 추가해주세요'}</div>`;
+}
+
+/* 행사별 보기 — 모바일 */
+function renderMDBGroupedCards(pairs){
+  const tw = document.getElementById('mdb-tw');
+  if(!tw) return;
+  let html = '';
+
+  if(mdbEvFilter){
+    const byOrg = {};
+    pairs.forEach(({ c, p }) => { const k = c.orgKo || c.orgEn || '(기업 미상)'; (byOrg[k] || (byOrg[k] = [])).push({ c, p }); });
+    const col = evColor(mdbEvFilter);
+    Object.entries(byOrg).sort((a, b) => a[0].localeCompare(b[0], 'ko')).forEach(([org, ms]) => {
+      html += `<div class="mdbc-grp" style="border-left:3px solid ${col};background:${col}0A">
+        <span class="mdbc-grp-nm">${escapeHtml(org)}</span><span class="mdbc-grp-ct">${ms.length}명</span></div>`;
+      html += ms.map(({ c, p }) => mdbCard(c, p, { showOrg: false })).join('');
+    });
+  } else {
+    const q = (document.getElementById('mdb-q') || {}).value || '';
+    EVENT_LIST.filter(e => participations.some(p => p.eventId === e.key)).forEach(evObj => {
+      let evParts = participations.filter(p => p.eventId === evObj.key);
+      if(mdbCat !== 'all') evParts = evParts.filter(p => {
+        const c = getContactById(p.contactId);
+        return (c && c.cat === mdbCat) || ROLE_TO_CAT[p.role] === mdbCat;
+      });
+      let members = evParts.map(p => ({ c: getContactById(p.contactId), p })).filter(x => x.c);
+      if(mdbStat) members = members.filter(({ c }) => c.status === mdbStat);
+      if(q){
+        const lq = q.toLowerCase();
+        members = members.filter(({ c }) => [c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn]
+          .some(v => v && v.toLowerCase().includes(lq)));
+      }
+      if(!members.length) return;
+      html += `<div class="mdbc-grp" style="border-left:3px solid ${evObj.color};background:${evObj.color}0A">
+        <span class="mdbc-grp-nm">${escapeHtml(evObj.key)}</span><span class="mdbc-grp-ct">${members.length}명</span>
+        <span class="mdbc-grp-dt">${escapeHtml(evObj.date || '')}</span></div>`;
+      html += members.map(({ c, p }) => mdbCard(c, p)).join('');
+    });
+  }
+
+  tw.innerHTML = html ? `<div class="mdbc-list">${html}</div>`
+    : '<div class="mdbc-empty">조건에 맞는 참가 이력이 없어요</div>';
 }
 
 /* ── FLAT VIEW (원본 1879~1958행) ── */

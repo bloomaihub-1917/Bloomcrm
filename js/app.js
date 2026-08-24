@@ -20,6 +20,7 @@ import './modules/exh-drawer.js';
 import { initMobileNav, initDrawerSwipe, initSidebarLayout } from './router.js';
 import { initOverlayNav } from './overlay-nav.js';
 import { initAuth, initAfterLogin, closeUserMenu } from './auth.js';
+import { isMobile } from './utils.js';
 import { buildCoDB, buildCoCAT } from './modules/company-tab.js';
 import { buildEvFil } from './modules/crm-tab.js';
 import { populateUploadEvDropdown } from './modules/upload-tab.js';
@@ -49,3 +50,21 @@ initOverlayNav();
 
 // 화면 아무 곳이나 클릭하면 사용자 메뉴 닫기 (원본 5118행)
 document.addEventListener('click', () => closeUserMenu());
+
+/* 모바일/데스크톱 경계(768px)를 넘나들 때 다시 그린다.
+   마스터DB와 전시 탭은 폭에 따라 표와 카드로 다르게 그리는데, 렌더는 화면이
+   그려질 때 한 번만 판단한다. 그래서 폰을 가로로 눕히거나 창을 넓히면 좁은
+   화면용 카드가 넓은 화면에 그대로 남아 있었다. 경계를 실제로 넘었을 때만
+   다시 그려서, 스크롤 중 주소창이 접히며 생기는 잦은 resize는 무시한다. */
+let wasMobile = isMobile();
+let resizeTimer = null;
+window.addEventListener('resize', () => {
+  const now = isMobile();
+  if(now === wasMobile) return;
+  wasMobile = now;
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    try { window.renderMDB?.(); } catch(e){ console.warn('[resize] MDB 재렌더 실패', e); }
+    try { window.renderExh?.();  } catch(e){ console.warn('[resize] 전시 재렌더 실패', e); }
+  }, 150);
+});

@@ -217,3 +217,6 @@ export function escAttr(s){
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 }
+
+/* 업로드 원본에 <a@b.com> 처럼 꺾쇠가 섞여 들어온 건이 있어 표시·링크 전에 벗긴다 */
+export const cleanEmail = (e) => String(e || '').replace(/[<>]/g, '').trim();
