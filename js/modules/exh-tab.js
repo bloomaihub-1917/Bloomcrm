@@ -83,6 +83,37 @@ export function graphicState(x){
   return { state: 'todo', text: '유형 미정' };
 }
 
+/* 기업측 담당자 해석.
+   contact_id가 있으면 마스터DB(contacts)에서 실시간으로 읽는다 — 값을 복사해두면
+   마스터DB에서 이메일을 고쳐도 전시 쪽은 옛 값으로 남기 때문이다.
+   마스터DB에 없는 사람은 exhibitors의 텍스트 필드를 그대로 쓴다. */
+export function exhContact(x){
+  if(x.contact_id){
+    const c = contacts.find(k => String(k.id) === String(x.contact_id));
+    if(c) return {
+      linked: true, id: c.id,
+      name:  c.nameKo || c.nameEn || '',
+      email: cleanEmail(c.email1),
+      phone: c.phone1 || '',
+      title: c.titleKo || c.titleEn || '',
+      org:   c.orgKo || c.orgEn || '',
+    };
+  }
+  return { linked: false, id: null, name: x.contact_name || '', email: cleanEmail(x.contact_email),
+    phone: x.contact_phone || '', title: '', org: x.company_name || '' };
+}
+/* 업로드 원본에 <a@b.com> 처럼 꺾쇠가 섞여 들어온 건이 있어 표시 전에 벗긴다 */
+export const cleanEmail = (e) => String(e || '').replace(/[<>]/g, '').trim();
+
+/* 이 기업의 마스터DB 연락처 후보 — 드로어 드롭다운에 쓴다 */
+export function contactsForExhibitor(x){
+  const key = x.company_key || '';
+  return contacts.filter(c => {
+    const k = normalizeCompanyKey(c.orgKo || c.orgEn || '');
+    return k && (k === key || k === normalizeCompanyKey(x.company_name || ''));
+  });
+}
+
 export function daysSince(dateStr){
   if(!dateStr) return 0;
   const d = new Date(dateStr);
@@ -309,8 +340,13 @@ function renderChecklist(list, all){
       return `<tr style="cursor:pointer" onclick="openExhDr('${escAttr(x.id)}')">
         <td><div style="font-weight:700;font-size:12px">${escapeHtml(x.company_name || '')}</div>
             ${x.booth_no ? `<div style="font-size:10px;color:var(--i4)">부스 ${escapeHtml(x.booth_no)}</div>` : ''}</td>
-        <td style="font-size:11px;color:var(--i3);max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-            title="${escAttr(x.contact_email || '')}">${escapeHtml(x.contact_name || x.contact_email || '-')}</td>
+        ${(() => {
+          const p = exhContact(x);
+          const label = p.name || p.email || '-';
+          return `<td style="font-size:11px;color:var(--i3);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+            title="${escAttr([p.name, p.title, p.email, p.phone].filter(Boolean).join(' · '))}">${escapeHtml(label)}${
+            p.linked ? '' : (p.name || p.email) ? ' <span style="color:var(--i6)" title="마스터DB에 없는 연락처">·</span>' : ''}</td>`;
+        })()}
         <td style="font-size:11px;color:var(--i3)">${escapeHtml(x.assignee || '-')}</td>
         <td><div class="br" style="width:52px"><div class="brf" style="width:${p}%"></div></div>
             <span style="font-size:10px;color:var(--i4)">${p}%</span></td>

@@ -23,7 +23,7 @@ import {
 import { trackAction } from './audit-tab.js';
 import {
   billedAmount, paidAmount, graphicState, money, daysSince,
-  patchExh, refreshExhViews,
+  patchExh, refreshExhViews, exhContact, contactsForExhibitor, cleanEmail,
 } from './exh-tab.js';
 
 let drId = null;
@@ -58,7 +58,8 @@ export function renderExhDr(){
     <div style="flex:1;min-width:0">
       <div class="drnm">${escapeHtml(x.company_name || '')}</div>
       <div class="drmt">${x.booth_no ? `부스 ${escapeHtml(x.booth_no)} · ` : ''}${
-        (x.contact_name || x.contact_email) ? `담당자 ${escapeHtml(x.contact_name || x.contact_email)} · ` : ''}우리 담당 ${escapeHtml(x.assignee || '-')}
+        (() => { const p = exhContact(x); return (p.name || p.email) ? `담당자 ${escapeHtml(p.name || p.email)} · ` : ''; })()
+        }우리 담당 ${escapeHtml(x.assignee || '-')}
         ${billed ? ` · 입금 ${money(paid)}/${money(billed)}` : ''}</div>
     </div>
     <button class="drcls" onclick="closeExhDr()">✕</button>`;
@@ -97,14 +98,40 @@ function textRow(x, field, label, placeholder = '', multi = false){
   return `<div class="fg"><label class="fl">${escapeHtml(label)}</label>${el}</div>`;
 }
 
-/* ══════════════════════════════════════════
-   1) 진행 — 매뉴얼 / 신청서 / 부스 / 도록 / 현장
-══════════════════════════════════════════ */
-function dProgress(x){
-  const appIssue = x.app_received_at && x.app_complete === 'no';
+/* 기업 담당자 — 마스터DB의 연락처를 가리키게 하고, 이름/이메일/연락처는
+   거기서 실시간으로 읽어 보여준다(값을 복사해두면 마스터DB에서 고쳐도 여기가
+   옛 값으로 남는다). 마스터DB에 없는 사람은 직접 입력으로 적는다. */
+function dContact(x){
+  const p = exhContact(x);
+  const cands = contactsForExhibitor(x);
+
   return `
-  ${sct('기업 담당자', `
-    <div style="font-size:11px;color:var(--i5);margin-bottom:6px">우리가 실제로 연락하는 기업측 담당자예요</div>
+  <div style="font-size:11px;color:var(--i5);margin-bottom:7px">우리가 실제로 연락하는 기업측 담당자예요</div>
+  <div class="fg"><label class="fl">마스터DB 연락처</label>
+    <select class="fi" style="font-size:12px" onchange="linkExhContact('${escAttr(x.id)}',this.value)">
+      <option value=""${!x.contact_id ? ' selected' : ''}>— 직접 입력 —</option>
+      ${cands.map(c => `<option value="${escAttr(String(c.id))}"${String(c.id) === String(x.contact_id) ? ' selected' : ''}>${
+        escapeHtml((c.nameKo || c.nameEn || '이름 없음') + (c.titleKo ? ` · ${c.titleKo}` : '') + (c.email1 ? ` · ${cleanEmail(c.email1)}` : ''))}</option>`).join('')}
+    </select>
+    ${!cands.length ? '<div style="font-size:10.5px;color:var(--am);margin-top:4px">이 기업의 연락처가 마스터DB에 없어요 — 아래에 직접 적어주세요</div>' : ''}
+  </div>
+
+  ${p.linked ? `
+    <div style="padding:10px 11px;background:var(--i9);border-radius:8px;border-left:3px solid var(--a)">
+      <div style="display:flex;align-items:center;gap:7px;margin-bottom:5px">
+        <span style="font-size:13px;font-weight:700">${escapeHtml(p.name || '-')}</span>
+        ${p.title ? `<span class="pill p-gray">${escapeHtml(p.title)}</span>` : ''}
+        <span style="font-size:10px;color:var(--a);margin-left:auto">마스터DB 연결됨</span>
+      </div>
+      <div style="font-size:11.5px;color:var(--i3);display:flex;flex-direction:column;gap:2px">
+        ${p.email ? `<div>✉ <a href="mailto:${escAttr(p.email)}" style="color:var(--a)">${escapeHtml(p.email)}</a></div>` : ''}
+        ${p.phone ? `<div>☎ ${escapeHtml(p.phone)}</div>` : ''}
+        ${!p.email && !p.phone ? '<div style="color:var(--i5)">연락처 정보가 비어있어요 — 마스터DB에서 보완해주세요</div>' : ''}
+      </div>
+      <div style="font-size:10.5px;color:var(--i5);margin-top:6px">
+        이름·이메일·연락처는 마스터DB에서 실시간으로 읽어와요. 고치려면 마스터DB에서 수정하세요.</div>
+    </div>`
+  : `
     <div class="fgr">
       <div class="fg"><label class="fl">이름</label>
         <input class="fi" style="font-size:12px" value="${escAttr(x.contact_name || '')}"
@@ -113,7 +140,16 @@ function dProgress(x){
         <input class="fi" style="font-size:12px" value="${escAttr(x.contact_phone || '')}"
           onchange="setExhField('${escAttr(x.id)}','contact_phone',this.value,'기업 담당자')"></div>
     </div>
-    ${textRow(x, 'contact_email', '이메일', '')}`)}
+    ${textRow(x, 'contact_email', '이메일', '')}`}`;
+}
+
+/* ══════════════════════════════════════════
+   1) 진행 — 매뉴얼 / 신청서 / 부스 / 도록 / 현장
+══════════════════════════════════════════ */
+function dProgress(x){
+  const appIssue = x.app_received_at && x.app_complete === 'no';
+  return `
+  ${sct('기업 담당자', dContact(x))}
 
   ${sct('매뉴얼', dateRow(x, 'manual_sent_at', '매뉴얼 발송') + dateRow(x, 'manual_replied_at', '매뉴얼 회신'))}
 
@@ -559,6 +595,20 @@ export async function answerExhLog(id){
     `<b>${escapeHtml(x?.company_name || '')}</b> 문의에 답변했어요: ${escapeHtml(l.subject || '')}`);
 }
 
+/* 마스터DB 연락처 연결/해제. 연결을 끊을 때는 지금 보이던 값을 텍스트 필드로
+   옮겨 적어둔다 — 화면에서 담당자가 통째로 사라지는 걸 막기 위함. */
+export async function linkExhContact(exhId, contactId){
+  const x = getExhibitorById(exhId);
+  if(!x) return;
+  if(contactId){
+    await patchExh(exhId, { contact_id: String(contactId) }, '기업 담당자 연결');
+  } else {
+    const p = exhContact(x);
+    await patchExh(exhId, { contact_id: '', contact_name: p.name || '', contact_email: p.email || '',
+      contact_phone: p.phone || '' }, '기업 담당자 연결 해제');
+  }
+}
+
 export async function holdExhLog(id){
   const l = EXH_LOGS.find(r => r.id === id);
   if(!l) return;
@@ -587,3 +637,4 @@ window.addExhLog = addExhLog;
 window.delExhLog = delExhLog;
 window.answerExhLog = answerExhLog;
 window.holdExhLog = holdExhLog;
+window.linkExhContact = linkExhContact;
