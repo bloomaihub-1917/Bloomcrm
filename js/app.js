@@ -18,6 +18,7 @@ import './modules/exh-tab.js';
 import './modules/exh-drawer.js';
 
 import { initMobileNav, initDrawerSwipe, initSidebarLayout } from './router.js';
+import { initOverlayNav } from './overlay-nav.js';
 import { initAuth, initAfterLogin, closeUserMenu } from './auth.js';
 import { buildCoDB, buildCoCAT } from './modules/company-tab.js';
 import { buildEvFil } from './modules/crm-tab.js';
@@ -41,6 +42,10 @@ buildCoDB(); buildCoCAT(); buildEvFil(); populateUploadEvDropdown();
 initMobileNav();
 initDrawerSwipe();
 initSidebarLayout();
+
+// 뒤로가기로 드로어·모달·사이드바를 닫는다 (앱을 벗어나지 않게).
+// 각 탭 모듈이 window에 함수를 등록한 뒤에 감싸야 하므로 import 이후에 호출한다.
+initOverlayNav();
 
 // 화면 아무 곳이나 클릭하면 사용자 메뉴 닫기 (원본 5118행)
 document.addEventListener('click', () => closeUserMenu());
