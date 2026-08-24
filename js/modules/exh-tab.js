@@ -21,6 +21,7 @@ import {
 } from '../state.js';
 import { td, escapeHtml, escAttr, isMobile } from '../utils.js';
 import {
+  postToSheet,
   saveExhibitor, saveExhItem, saveExhInvoice, saveExhPayment, saveExhLog,
   deleteExhItem, deleteExhInvoice, deleteExhPayment, deleteExhLog,
   batchCreateExhibitors,
@@ -93,6 +94,14 @@ export function billedAmount(exhId){
 export function paidAmount(exhId){
   return sumIn(paymentsFor(exhId), currencyOf(exhId));
 }
+/* 한 기업에 통화가 섞여 있는지 — 섞이면 합계에서 한쪽이 빠지므로 화면에 알린다.
+   (실데이터에 USD로 청구했다가 KRW로 재발행한 사례가 있다) */
+export function mixedCurrency(exhId){
+  const cs = new Set([...invoicesFor(exhId), ...paymentsFor(exhId)]
+    .map(r => r.currency).filter(Boolean));
+  return cs.size > 1 ? [...cs] : null;
+}
+
 /* 금액 표시 — 통화 기호를 붙인다 */
 export function fmtMoney(v, cur){
   return (cur === 'USD' ? '$' : '') + money(v) + (cur === 'USD' ? '' : '원');
@@ -154,6 +163,21 @@ export function contactsForExhibitor(x){
     const k = normalizeCompanyKey(c.orgKo || c.orgEn || '');
     return k && (k === key || k === normalizeCompanyKey(x.company_name || ''));
   });
+}
+
+/* 진행률 바 — components.css 규약이 .br(행) > .brt(트랙) > .brf(채움)인데
+   .brt를 빼거나 .brf에 배경을 안 주면 막대가 아예 보이지 않는다. */
+export function progressBar(pct, color = 'var(--a)', width = ''){
+  return `<div class="br" style="margin:0${width ? `;width:${width}` : ''}">
+    <div class="brt"><div class="brf" style="width:${Math.max(0, Math.min(100, pct))}%;background:${color}"></div></div>
+  </div>`;
+}
+
+/* 표에 넣을 짧은 표시값 — 날짜(YYYY-MM-DD)는 월-일만 남기고, 그 외 상태 문자열은
+   그대로 쓴다. 예전에는 무조건 5글자를 잘라 '규격 미확인'이 '인'으로 보였다. */
+export function shortCell(v){
+  const s = String(v || '');
+  return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(5, 10) : s;
 }
 
 export function daysSince(dateStr){
@@ -333,7 +357,9 @@ export function renderExh(){
 /* 미답변 문의 패널 — 프로세스와 무관하게 들어오는 문의를 놓치지 않는 게 목적이라
    화면 최상단에 두고 오래된 것부터 보여준다. */
 function renderInquiryPanel(){
-  const list = exhibitorsForEvent(exhEvent);
+  // 취소 기업은 사이드바 카운트·하단 배지·필터에서 빠지므로 여기서도 빼서
+  // "패널엔 보이는데 클릭하면 목록에 없는" 상태를 막는다.
+  const list = activeExhibitors(exhEvent);
   const open = [];
   list.forEach(x => openInquiriesFor(x.id).forEach(l => open.push({ l, x })));
   if(!open.length) return '';
@@ -403,14 +429,16 @@ function renderChecklistCards(list, all){
           <span style="font-size:14px;font-weight:700${off ? ';text-decoration:line-through' : ''}">${escapeHtml(x.company_name || '')}</span>
           ${off ? '<span class="pill p-gray">참가 취소</span>' : ''}
           ${x.grade && x.grade !== 'Exhibitor' ? `<span class="pill ${GRADE_CLS[x.grade] || 'p-gray'}">${escapeHtml(x.grade)}</span>` : ''}
-          ${openN ? `<span class="pill p-amber" style="margin-left:auto">문의 ${openN}</span>` : ''}
+          ${openN ? `<span class="pill p-amber" style="margin-left:auto"
+            onclick="event.stopPropagation();openExhDr('${escAttr(x.id)}',3)">문의 ${openN}</span>` : ''}
         </div>
         <div style="font-size:11.5px;color:var(--i4);margin-top:3px">
           ${x.booth_no ? `부스 ${escapeHtml(x.booth_no)}${x.booth_floor ? `·${escapeHtml(x.booth_floor)}층` : ''}${x.booth_type ? ` · ${escapeHtml(x.booth_type)}` : ''}` : '부스 미배정'}
           ${pc && (pc.name || pc.email) ? ` · ${escapeHtml(pc.name || pc.email)}` : ''}
+          ${x.assignee ? ` · 우리 담당 ${escapeHtml(x.assignee)}` : ''}
         </div>
         <div style="display:flex;align-items:center;gap:8px;margin:9px 0 8px">
-          <div class="br" style="flex:1"><div class="brf" style="width:${p}%"></div></div>
+          <div style="flex:1">${progressBar(p, p === 100 ? 'var(--g)' : 'var(--a)')}</div>
           <span style="font-size:11px;font-weight:700;color:var(--i3);min-width:32px;text-align:right">${p}%</span>
         </div>
         ${billed ? `<div style="font-size:11.5px;margin-bottom:7px">
@@ -437,7 +465,7 @@ function renderChecklistTable(list, all){
     return `<td style="text-align:center;padding:5px 3px" title="${tip}">
       <div style="display:inline-flex;flex-direction:column;align-items:center;gap:1px;min-width:44px;padding:3px 4px;border-radius:5px;background:${map.bg}">
         <span style="font-size:12px;font-weight:800;color:${map.fg};line-height:1">${map.mark}</span>
-        ${c.text ? `<span style="font-size:9px;color:${map.fg};line-height:1.1">${escapeHtml(String(c.text).slice(5) || String(c.text))}</span>` : ''}
+        ${c.text ? `<span style="font-size:9px;color:${map.fg};line-height:1.1">${escapeHtml(shortCell(c.text))}</span>` : ''}
       </div></td>`;
   };
 
@@ -484,7 +512,7 @@ function renderChecklistTable(list, all){
             ${all.length > 1 ? `<div style="font-size:9.5px;color:var(--i5)">외 ${all.length - 1}명</div>` : ''}</td>`;
         })()}
         <td style="font-size:11px;color:var(--i3)">${escapeHtml(x.assignee || '-')}</td>
-        <td><div class="br" style="width:52px"><div class="brf" style="width:${p}%"></div></div>
+        <td>${progressBar(p, p === 100 ? 'var(--g)' : 'var(--a)', '52px')}
             <span style="font-size:10px;color:var(--i4)">${p}%</span></td>
         ${STEPS.map(s => cell(x, s)).join('')}
         <td style="text-align:center" onclick="event.stopPropagation();openExhDr('${escAttr(x.id)}',3)">
@@ -492,7 +520,9 @@ function renderChecklistTable(list, all){
         <td style="text-align:right;font-size:11px">
           ${billed ? `<span style="font-weight:700;color:${paid >= billed ? 'var(--g)' : 'var(--i2)'}">${
               currencyOf(x.id) === 'USD' ? '$' : ''}${money(paid)}</span>
-            <span style="color:var(--i5)"> / ${money(billed)}</span>` : '<span style="color:var(--i6)">-</span>'}</td>
+            <span style="color:var(--i5)"> / ${money(billed)}</span>${
+            mixedCurrency(x.id) ? '<span title="통화가 섞여 있어 합계가 정확하지 않아요" style="color:var(--re);font-weight:800"> ⚠</span>' : ''}`
+            : '<span style="color:var(--i6)">-</span>'}</td>
       </tr>`;
     }).join('')}
     </tbody></table></div>
@@ -524,6 +554,71 @@ export function exhibitorCandidates(evKey){
       if(nm && !map.get(key).people.includes(nm)) map.get(key).people.push(nm);
     });
   return [...map.values()].sort((a, b) => a.company_name.localeCompare(b.company_name, 'ko'));
+}
+
+/* 담당자 일괄 지정 — 51곳을 하나씩 여는 건 현실적이지 않다.
+   지금 필터로 걸러진 목록에 그대로 적용하되, 체크로 뺄 수 있게 한다. */
+export function openExhAssign(){
+  closeExhAssign();
+  const list = visibleList();
+  if(!list.length){ alert('지정할 기업이 없어요.'); return; }
+  const pop = document.createElement('div');
+  pop.id = 'exh-assign-modal';
+  pop.className = 'mw on';
+  pop.onclick = (e) => { if(e.target === pop) closeExhAssign(); };
+  const known = [...new Set(EXHIBITORS.map(x => x.assignee).filter(Boolean))];
+  pop.innerHTML = `<div class="modal" style="max-width:520px">
+    <div class="mh"><div class="mt2">담당자 일괄 지정</div>
+      <div class="mc">지금 목록에 보이는 ${list.length}곳에 우리 팀 담당자를 한 번에 지정해요</div></div>
+    <div class="mb">
+      <div class="fg"><label class="fl">담당자</label>
+        <input class="fi" id="exh-as-who" list="exh-as-known" placeholder="예: 정다혜" value="${escAttr(currentUser?.name || '')}">
+        <datalist id="exh-as-known">${known.map(n => `<option value="${escAttr(n)}">`).join('')}</datalist>
+        <div style="font-size:10.5px;color:var(--i5);margin-top:4px">비워두고 적용하면 담당자를 해제해요</div></div>
+      <div class="fg"><label class="fl">대상 (${list.length}곳)</label>
+        <div id="exh-as-list" style="max-height:280px;overflow-y:auto;border:1px solid var(--i7);border-radius:8px;padding:6px">
+          ${list.map((x, i) => `<label style="display:flex;align-items:center;gap:9px;padding:5px 7px;border-radius:6px;cursor:pointer">
+            <input type="checkbox" class="exh-as-cb" data-id="${escAttr(x.id)}" checked>
+            <span style="font-weight:600;font-size:12px;flex:1">${escapeHtml(x.company_name || '')}</span>
+            ${x.assignee ? `<span style="font-size:10.5px;color:var(--i4)">현재 ${escapeHtml(x.assignee)}</span>` : ''}
+          </label>`).join('')}
+        </div></div>
+    </div>
+    <div class="mf2">
+      <button class="btn" onclick="closeExhAssign()">취소</button>
+      <button class="btn bp" onclick="confirmExhAssign()" id="exh-as-btn">적용</button>
+    </div></div>`;
+  document.body.appendChild(pop);
+}
+export function closeExhAssign(){ document.getElementById('exh-assign-modal')?.remove(); }
+
+export async function confirmExhAssign(){
+  const who = (document.getElementById('exh-as-who')?.value || '').trim();
+  const ids = [...document.querySelectorAll('.exh-as-cb')].filter(cb => cb.checked).map(cb => cb.dataset.id);
+  if(!ids.length){ alert('대상을 선택해주세요.'); return; }
+  const btn = document.getElementById('exh-as-btn');
+  if(btn){ btn.disabled = true; btn.textContent = '적용 중…'; }
+
+  const targets = ids.map(id => getExhibitorById(id)).filter(Boolean);
+  const backup = targets.map(x => ({ x, was: x.assignee }));
+  targets.forEach(x => { x.assignee = who; });
+  refreshExhViews();
+
+  // 전체 레코드가 아니라 바뀐 필드만 담아 보낸다(부분 upsert)
+  const r = await postToSheet({ sheet: 'exhibitors', action: 'batchUpsert',
+    dataRows: targets.map(x => ({ ...x, assignee: who, updated_at: td() })) }, '담당자 일괄 지정');
+  if(!r.ok){
+    backup.forEach(b => { b.x.assignee = b.was; });
+    refreshExhViews();
+    if(btn){ btn.disabled = false; btn.textContent = '적용'; }
+    alert('저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
+    return;
+  }
+  closeExhAssign();
+  buildExhEvList();
+  refreshExhViews();
+  trackAction('edit', '담당자 일괄 지정', `${targets.length}개사`,
+    `${targets.length}개사 담당자를 <b>${escapeHtml(who || '(해제)')}</b>로 지정했어요`);
 }
 
 export function openExhImport(){
@@ -647,11 +742,23 @@ export async function patchExh(id, patch, label){
   return r;
 }
 
-/* 표와 드로어가 같은 데이터를 보므로 항상 함께 다시 그린다 */
+/* 표와 드로어가 같은 데이터를 보므로 항상 함께 다시 그린다.
+   단, 드로어를 통째로 다시 그리면 작성 중이던 입력값(긴 문의 본문 등)이
+   날아가므로, 지금 그 안에서 타이핑 중이면 드로어는 건드리지 않는다.
+   해당 입력을 마치고 blur/저장하는 순간 어차피 다시 그려진다. */
 export function refreshExhViews(){
   renderExh();
   buildExhFilters();
-  window.renderExhDr?.();
+  if(!isTypingInDrawer()) window.renderExhDr?.();
+}
+
+function isTypingInDrawer(){
+  const el = document.activeElement;
+  if(!el) return false;
+  const tag = el.tagName;
+  if(tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT') return false;
+  const dr = document.getElementById('exh-dr');
+  return !!(dr && dr.contains(el) && String(el.value || '').trim());
 }
 
 /* 날짜 토글 — 비어있으면 오늘 날짜로 체크, 이미 있으면 해제 */
@@ -673,7 +780,8 @@ export function toggleExhFlag(id, flag, dateField, label){
 }
 /* 날짜를 넣으면 여부도 함께 켠다 */
 export function setExhDateWithFlag(id, dateField, flag, value, label){
-  patchExh(id, value ? { [dateField]: value, [flag]: 'yes' } : { [dateField]: '' }, label);
+  // 날짜를 지우면 체크도 함께 푼다 — 같은 화면의 dateRow와 동작을 맞춘다
+  patchExh(id, value ? { [dateField]: value, [flag]: 'yes' } : { [dateField]: '', [flag]: '' }, label);
 }
 
 window.setExhEvent2 = setExhEvent2;
@@ -681,6 +789,9 @@ window.setExhFilter = setExhFilter;
 window.setExhAssignee = setExhAssignee;
 window.renderExh = renderExh;
 window.openExhImport = openExhImport;
+window.openExhAssign = openExhAssign;
+window.closeExhAssign = closeExhAssign;
+window.confirmExhAssign = confirmExhAssign;
 window.closeExhImport = closeExhImport;
 window.renderExhImportList = renderExhImportList;
 window.confirmExhImport = confirmExhImport;

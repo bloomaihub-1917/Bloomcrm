@@ -23,8 +23,8 @@ import {
 } from '../api.js';
 import { trackAction } from './audit-tab.js';
 import {
-  billedAmount, paidAmount, graphicState, money, fmtMoney, currencyOf, daysSince, CANCELLED,
-  patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail,
+  billedAmount, paidAmount, graphicState, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
+  patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar,
 } from './exh-tab.js';
 
 let drId = null;
@@ -281,7 +281,12 @@ function dBilling(x){
       <span><b style="font-size:16px;color:${paid >= billed && billed > 0 ? 'var(--g)' : 'var(--i1)'}">${cur === 'USD' ? '$' : ''}${money(paid)}</b>
         <span style="color:var(--i5);font-size:13px"> / ${money(billed)}${cur === 'USD' ? '' : '원'}</span></span>
     </div>
-    <div class="br" style="margin:8px 0 4px"><div class="brf" style="width:${billed ? Math.min(100, paid / billed * 100) : 0}%"></div></div>
+    <div style="margin:8px 0 4px">${progressBar(billed ? paid / billed * 100 : 0,
+      paid >= billed && billed > 0 ? 'var(--g)' : 'var(--am)')}</div>
+    ${mixedCurrency(x.id) ? `<div style="font-size:11px;color:var(--re);background:var(--rb);padding:6px 8px;border-radius:6px;margin:6px 0">
+      ⚠ 인보이스·입금에 <b>${mixedCurrency(x.id).join(' / ')}</b>가 섞여 있어요.
+      위 합계는 <b>${currencyOf(x.id)}</b> 건만 더한 값이라 정확하지 않습니다 —
+      아래 목록에서 통화를 하나로 맞춰주세요.</div>` : ''}
     <div style="font-size:11px;color:${rest > 0 ? 'var(--am)' : 'var(--i4)'}">
       ${billed === 0 ? '금액 항목을 추가해주세요' : rest > 0 ? `잔액 ${fmtMoney(rest, cur)}` : '완납'}
       ${subtotals.length ? ` · ${subtotals.map(s => `${s.l} ${money(s.n)}`).join(' / ')}` : ''}</div>
@@ -302,7 +307,8 @@ function dBilling(x){
       <select class="fi" id="it-cat-${escAttr(x.id)}" style="width:74px;font-size:11.5px;padding:6px">
         ${CATS.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select>
       <input class="fi" id="it-nm-${escAttr(x.id)}" placeholder="항목명" style="flex:1;font-size:11.5px;padding:6px">
-      <input class="fi" id="it-qty-${escAttr(x.id)}" placeholder="수량" style="width:56px;font-size:11.5px;padding:6px">
+      <input class="fi" id="it-qty-${escAttr(x.id)}" placeholder="수량" style="width:56px;font-size:11.5px;padding:6px"
+        oninput="calcItemAmount('${escAttr(x.id)}')">
       <input class="fi" id="it-up-${escAttr(x.id)}" placeholder="단가" style="width:82px;font-size:11.5px;padding:6px"
         oninput="calcItemAmount('${escAttr(x.id)}')">
       <input class="fi" id="it-amt-${escAttr(x.id)}" placeholder="금액" style="width:90px;font-size:11.5px;padding:6px">
@@ -558,7 +564,11 @@ export function calcItemAmount(exhId){
 
 export async function addExhItem(exhId){
   const name = val(`it-nm-${exhId}`);
-  const amount = val(`it-amt-${exhId}`) || val(`it-up-${exhId}`);
+  // 금액칸이 비어 있으면 수량×단가로 계산한다. 예전에는 단가를 그대로 써서
+  // 수량 3 × 단가 1,000이 1,000원으로 저장되며 청구액이 조용히 적게 잡혔다.
+  const n = (v) => Number(String(v || '').replace(/[^0-9.-]/g, '')) || 0;
+  const qty = n(val(`it-qty-${exhId}`)), unit = n(val(`it-up-${exhId}`));
+  const amount = val(`it-amt-${exhId}`) || String(qty && unit ? qty * unit : unit || '');
   if(!name){ alert('항목명을 입력해주세요.'); return; }
   await addRow(EXH_ITEMS, {
     id: localId('XI-'), exhibitor_id: exhId, category: val(`it-cat-${exhId}`) || 'etc',

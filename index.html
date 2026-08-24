@@ -747,6 +747,7 @@
   <div class="tb">
     <div class="tb-t" id="exh-ttl">전시 진행관리 <span class="tb-s">참가기업 준비 현황</span></div>
     <div class="srch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" placeholder="기업명 검색…" oninput="renderExh()" id="exh-q"></div>
+    <button class="btn bs" onclick="openExhAssign()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg>담당자 일괄 지정</button>
     <button class="btn bp bs" onclick="openExhImport()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>참가기업 불러오기</button>
   </div>
   <!-- .page가 overflow:hidden이라 실제 세로 스크롤은 이 안쪽에서 일어난다
@@ -882,11 +883,11 @@
       <div class="fg"><label class="fl">DB에서 기업 검색</label><input class="fi" type="text" placeholder="기업명 입력…" oninput="mSrch(this.value)" id="m-si"><div class="dls" id="m-dl"></div></div>
       <div class="fgr">
         <div class="fg"><label class="fl">타겟 행사</label><select class="fi" id="m-ev"><option>KIC Silicon Valley 2025</option><option>CES 2026</option><option>KIC New York 2025</option><option>GHC 2025</option></select></div>
-        <div class="fg"><label class="fl">참여 유형</label><select class="fi" id="m-role"><option>참가자</option><option>VIP</option><option>연사</option><option>BD</option><option>바이어</option><option>전시참가기업</option><option>스폰서</option><option>비즈니스파트너링</option><option>주최사</option></select></div>
+        <div class="fg"><label class="fl">참여 유형</label><select class="fi parttype-select" id="m-role"></select></div>
       </div>
       <div class="fgr">
         <div class="fg"><label class="fl">우선순위</label><select class="fi" id="m-pri"><option value="high">높음</option><option value="mid" selected>중간</option><option value="low">낮음</option></select></div>
-        <div class="fg"><label class="fl">담당자</label><select class="fi" id="m-who"><option>박지영</option><option>김태훈</option><option>이수진</option><option>최민서</option></select></div>
+        <div class="fg"><label class="fl">담당자</label><input class="fi" id="m-who" placeholder="담당자 이름"></div>
       </div>
       <div class="fg"><label class="fl">메모</label><textarea class="fi" rows="3" placeholder="초기 접근 전략, 특이사항…" id="m-note"></textarea></div>
     </div>

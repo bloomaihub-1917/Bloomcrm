@@ -5,9 +5,15 @@
    같은 값이 RP2/CL2(1891, 1973, 2137행)와 RP3/CL3(5631~5632행)라는
    이름으로 함수 내부에 그대로 복붙되어 있었음 — 값이 CP/CL과 완전히 동일하므로
    이 파일의 CP/CL을 import해서 쓰도록 통합(값 변경 없음). */
-export const RP = {스폰서:'p-green',전시기업:'p-purple',연사:'p-blue',투자자:'p-amber',바이어:'p-teal',BD:'p-teal',기자:'p-red',참가자:'p-gray',VIP:'p-gold',주최:'p-indigo'};
+/* 참가 역할 → 배지색. 키는 PART_TYPES_SEED의 key와 정확히 같아야 한다 —
+   어긋나면 조용히 p-gray로 떨어져 색이 빠진다(전시참가기업/비즈니스파트너링/주최사가
+   그랬다). 옛 표기(전시기업/주최)도 남겨 과거 데이터를 함께 받는다. */
+export const RP = {스폰서:'p-green',전시참가기업:'p-purple',연사:'p-blue',투자자:'p-amber',
+  바이어:'p-teal',BD:'p-teal',기자:'p-red','기자/미디어':'p-red',참가자:'p-gray',VIP:'p-gold',
+  주최사:'p-indigo',비즈니스파트너링:'p-amber',
+  전시기업:'p-purple',주최:'p-indigo'};
 export const CP = {speaker:'p-blue',sponsor:'p-green',investor:'p-amber',buyer:'p-teal',bd:'p-teal',exhibitor:'p-purple',press:'p-red',attendee:'p-gray',vip:'p-gold',organizer:'p-indigo'};
-export const CL = {speaker:'연사',sponsor:'스폰서',investor:'투자자',buyer:'바이어',bd:'BD',exhibitor:'전시기업',press:'기자',attendee:'일반참가자',vip:'VIP',organizer:'주최'};
+export const CL = {speaker:'연사',sponsor:'스폰서',investor:'투자자',buyer:'바이어',bd:'BD',exhibitor:'전시참가기업',press:'기자',attendee:'일반참가자',vip:'VIP',organizer:'주최'};
 export const SC = {미접촉:'#9C9890',컨택중:'#3B5BDB',협의중:'#C97B0A',확정:'#16A34A',보류:'#DC2626'};
 export const LC = {이메일:'#6D28D9',전화:'#16A34A',미팅:'#3B5BDB',메모:'#9C9890',계약:'#16A34A'};
 export const BG = ['#EEF2FF','#F0FDF4','#FFFBEB','#F5F3FF','#F0FDFA','#FEF2F2'];

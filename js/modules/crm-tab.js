@@ -359,6 +359,10 @@ export function openModal() {
   // 행사 드롭다운 채우기
   const mev = document.getElementById('m-ev');
   mev.innerHTML = EVENT_LIST.map(e => `<option value="${escapeHtml(e.key)}">${escapeHtml(e.short)} (${escapeHtml(e.date)})</option>`).join('');
+  // 참여 유형(.parttype-select)은 PART_TYPES가 로드된 뒤 채워진다. 모달을 열 때
+  // 한 번 더 갱신해 설정에서 방금 추가한 유형도 바로 뜨게 한다(window 경유 —
+  // upload-tab을 직접 import하면 순환 참조가 된다).
+  window.populateUploadEvDropdown?.();
   document.getElementById('mw').classList.add('on');
   setMSel(null);
   document.getElementById('m-si').value = '';
