@@ -31,6 +31,16 @@ import { normalizeCompanyKey } from './company-tab.js';
 /* 전시 참가기업으로 취급할 참가 역할 — 데이터에 표기 흔들림이 있어 함께 본다 */
 const EXH_ROLES = ['전시참가기업', '전시기업', '전시참가'];
 
+/* 참가 취소된 기업은 지우지 않고 상태로 남긴다 — 왜 빠졌는지 나중에 알 수 있어야 하고,
+   그동안 주고받은 문의·정산 기록도 보존해야 하기 때문. 기본 목록과 집계에서는 빠진다. */
+export const CANCELLED = '취소';
+export function activeExhibitors(evKey){
+  return exhibitorsForEvent(evKey).filter(x => x.status !== CANCELLED);
+}
+export function cancelledExhibitors(evKey){
+  return exhibitorsForEvent(evKey).filter(x => x.status === CANCELLED);
+}
+
 /* 스폰서 등급별 배지색 — 'Exhibitor'(일반)는 배지를 달지 않는다 */
 const GRADE_CLS = { DIA: 'p-indigo', GOLD: 'p-gold', SILVER: 'p-gray', BRONZE: 'p-amber' };
 
@@ -230,7 +240,7 @@ export function buildExhEvList(){
       <span class="ev-pill-dot" style="background:${escAttr(e.color || '#9C9890')}"></span>${escapeHtml(e.short || e.name || e.key)}
       ${n ? `<span class="nbg">${n}</span>` : ''}</button>`;
 
-  el.innerHTML = (list.map(e => row(e, exhibitorsForEvent(e.key).length)).join('')
+  el.innerHTML = (list.map(e => row(e, activeExhibitors(e.key).length)).join('')
     + (rest.length ? `<div style="font-size:10px;color:var(--i4);margin:8px 0 4px;padding-left:2px">전시 대상 없음</div>`
         + rest.map(e => row(e, 0)).join('') : ''))
     || '<div style="font-size:11px;color:var(--i4);padding:6px 2px">등록된 행사가 없어요</div>';
@@ -241,17 +251,19 @@ export function buildExhEvList(){
 function buildExhFilters(){
   const el = document.getElementById('exh-filter-list');
   if(el){
-    const list = exhibitorsForEvent(exhEvent);
+    const list = activeExhibitors(exhEvent);
     const openInq = list.reduce((s, x) => s + openInquiriesFor(x.id).length, 0);
     const incomplete = list.filter(x => progressOf(x) < 100).length;
     const unpaid = list.filter(x => { const b = billedAmount(x.id); return b > 0 && paidAmount(x.id) < b; }).length;
+    const cancelled = cancelledExhibitors(exhEvent).length;
     const f = (k, label, n) => `<button class="nr${exhFilter === k ? ' on' : ''}" onclick="setExhFilter('${k}')">${label}<span class="nbg">${n}</span></button>`;
     el.innerHTML = f('all', '전체', list.length) + f('incomplete', '진행 중', incomplete)
-      + f('unpaid', '입금 미완료', unpaid) + f('inquiry', '미답변 문의', openInq);
+      + f('unpaid', '입금 미완료', unpaid) + f('inquiry', '미답변 문의', openInq)
+      + (cancelled ? f('cancelled', '참가 취소', cancelled) : '');
   }
   const ael = document.getElementById('exh-assignee-list');
   if(ael){
-    const list = exhibitorsForEvent(exhEvent);
+    const list = activeExhibitors(exhEvent);
     const names = [...new Set(list.map(x => x.assignee).filter(Boolean))].sort();
     ael.innerHTML = `<button class="nr${!exhAssignee ? ' on' : ''}" onclick="setExhAssignee('')">전체<span class="nbg">${list.length}</span></button>`
       + names.map(n => {
@@ -271,7 +283,7 @@ export function setExhAssignee(n){ exhAssignee = n || null; buildExhFilters(); r
 ══════════════════════════════════════════ */
 function visibleList(){
   const q = (document.getElementById('exh-q')?.value || '').trim().toLowerCase();
-  let list = exhibitorsForEvent(exhEvent);
+  let list = exhFilter === 'cancelled' ? cancelledExhibitors(exhEvent) : activeExhibitors(exhEvent);
   if(exhAssignee) list = list.filter(x => x.assignee === exhAssignee);
   if(exhFilter === 'incomplete') list = list.filter(x => progressOf(x) < 100);
   if(exhFilter === 'unpaid')     list = list.filter(x => { const b = billedAmount(x.id); return b > 0 && paidAmount(x.id) < b; });
@@ -289,7 +301,7 @@ export function renderExh(){
   if(ttl) ttl.innerHTML = `전시 진행관리 <span class="tb-s">${ev ? escapeHtml(ev.short || ev.name) + ' · ' : ''}참가기업 준비 현황</span>`;
 
   const list = visibleList();
-  const all = exhibitorsForEvent(exhEvent);
+  const all = activeExhibitors(exhEvent);
 
   if(!all.length){
     el.innerHTML = `<div class="empty" style="padding:60px 20px;text-align:center">
@@ -372,9 +384,11 @@ function renderChecklist(list, all){
       const p = progressOf(x);
       const openN = openInquiriesFor(x.id).length;
       const billed = billedAmount(x.id), paid = paidAmount(x.id);
-      return `<tr style="cursor:pointer" onclick="openExhDr('${escAttr(x.id)}')">
+      const off = x.status === CANCELLED;
+      return `<tr style="cursor:pointer${off ? ';opacity:.5' : ''}" onclick="openExhDr('${escAttr(x.id)}')">
         <td><div style="display:flex;align-items:center;gap:5px">
-              <span style="font-weight:700;font-size:12px">${escapeHtml(x.company_name || '')}</span>
+              <span style="font-weight:700;font-size:12px${off ? ';text-decoration:line-through' : ''}">${escapeHtml(x.company_name || '')}</span>
+              ${off ? '<span class="pill p-gray">참가 취소</span>' : ''}
               ${x.grade && x.grade !== 'Exhibitor' ? `<span class="pill ${GRADE_CLS[x.grade] || 'p-gray'}">${escapeHtml(x.grade)}</span>` : ''}
             </div>
             ${x.booth_no ? `<div style="font-size:10px;color:var(--i4)">부스 ${escapeHtml(x.booth_no)}${

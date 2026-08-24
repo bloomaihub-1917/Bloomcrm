@@ -23,7 +23,7 @@ import {
 } from '../api.js';
 import { trackAction } from './audit-tab.js';
 import {
-  billedAmount, paidAmount, graphicState, money, fmtMoney, currencyOf, daysSince,
+  billedAmount, paidAmount, graphicState, money, fmtMoney, currencyOf, daysSince, CANCELLED,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail,
 } from './exh-tab.js';
 
@@ -57,7 +57,8 @@ export function renderExhDr(){
   const h = document.getElementById('exh-drh');
   if(h) h.innerHTML = `
     <div style="flex:1;min-width:0">
-      <div class="drnm">${escapeHtml(x.company_name || '')}</div>
+      <div class="drnm" style="${x.status === CANCELLED ? 'text-decoration:line-through;opacity:.65' : ''}">${escapeHtml(x.company_name || '')}${
+        x.status === CANCELLED ? ' <span class="pill p-gray" style="vertical-align:middle">참가 취소</span>' : ''}</div>
       <div class="drmt">${x.booth_no ? `부스 ${escapeHtml(x.booth_no)}${x.booth_floor ? `(${escapeHtml(x.booth_floor)}층)` : ''} · ` : ''}${
         (() => { const p = exhContact(x); return (p.name || p.email) ? `담당자 ${escapeHtml(p.name || p.email)} · ` : ''; })()
         }우리 담당 ${escapeHtml(x.assignee || '-')}
@@ -247,7 +248,13 @@ function dProgress(x){
     </div>` +
     textRow(x, 'onsite_note', '현장 메모', '', true))}
 
-  ${sct('기타', textRow(x, 'assignee', '담당자', '') + textRow(x, 'note', '메모', '', true))}
+  ${sct('기타', textRow(x, 'assignee', '담당자', '') + textRow(x, 'note', '메모', '', true) +
+    `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--i8);display:flex;align-items:center;gap:9px">
+      <span style="font-size:11.5px;color:var(--i4);flex:1">${x.status === CANCELLED
+        ? '참가 취소된 기업이에요. 기록은 그대로 남아있어요.'
+        : '참가가 취소되면 목록에서 빼되 기록은 남겨둬요.'}</span>
+      <button class="btn bs" onclick="toggleExhCancel('${escAttr(x.id)}')">${x.status === CANCELLED ? '취소 해제' : '참가 취소 처리'}</button>
+    </div>`)}
   `;
 }
 
@@ -700,6 +707,15 @@ export async function setPrimaryExhContact(id){
   }
 }
 
+/* 참가 취소 토글 — 레코드를 지우지 않고 상태만 바꾼다(문의·정산 기록 보존) */
+export async function toggleExhCancel(id){
+  const x = getExhibitorById(id);
+  if(!x) return;
+  const off = x.status === CANCELLED;
+  if(!off && !confirm('참가 취소로 처리할까요?\n목록과 집계에서 빠지지만 기록은 그대로 남아요.')) return;
+  await patchExh(id, { status: off ? '준비중' : CANCELLED }, off ? '참가 취소 해제' : '참가 취소');
+}
+
 export async function holdExhLog(id){
   const l = EXH_LOGS.find(r => r.id === id);
   if(!l) return;
@@ -732,3 +748,4 @@ window.addExhContact = addExhContact;
 window.delExhContact = delExhContact;
 window.setExhContactField = setExhContactField;
 window.setPrimaryExhContact = setPrimaryExhContact;
+window.toggleExhCancel = toggleExhCancel;
