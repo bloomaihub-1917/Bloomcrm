@@ -60,10 +60,9 @@ export function renderExhDr(){
     <div style="flex:1;min-width:0">
       <div class="drnm" style="${x.status === CANCELLED ? 'text-decoration:line-through;opacity:.65' : ''}">${escapeHtml(x.company_name || '')}${
         x.status === CANCELLED ? ' <span class="pill p-gray" style="vertical-align:middle">참가 취소</span>' : ''}</div>
-      <div class="drmt">${x.booth_no ? `부스 ${escapeHtml(x.booth_no)}${x.booth_floor ? `(${escapeHtml(x.booth_floor)}층)` : ''} · ` : ''}${
-        (() => { const p = exhContact(x); return (p.name || p.email) ? `담당자 ${escapeHtml(p.name || p.email)} · ` : ''; })()
-        }우리 담당 ${escapeHtml(x.assignee || '-')}
-        ${billed ? ` · 입금 ${money(paid)}/${money(billed)}` : ''}</div>
+      <div class="drmt">${x.booth_no ? `부스 ${escapeHtml(x.booth_no)}${x.booth_floor ? `(${escapeHtml(x.booth_floor)}층)` : ''}` : ''}${
+        (() => { const p = exhContact(x); return (p.name || p.email) ? ` · 담당자 ${escapeHtml(p.name || p.email)}` : ''; })()
+        }${billed ? ` · 입금 ${money(paid)}/${money(billed)}` : ''}</div>
     </div>
     <button class="drcls" onclick="closeExhDr()">✕</button>`;
 
@@ -249,7 +248,7 @@ function dProgress(x){
     </div>` +
     textRow(x, 'onsite_note', '현장 메모', '', true))}
 
-  ${sct('기타', textRow(x, 'assignee', '담당자', '') + textRow(x, 'note', '메모', '', true) +
+  ${sct('기타', textRow(x, 'note', '메모', '', true) +
     `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--i8);display:flex;align-items:center;gap:9px">
       <span style="font-size:11.5px;color:var(--i4);flex:1">${x.status === CANCELLED
         ? '참가 취소된 기업이에요. 기록은 그대로 남아있어요.'
@@ -757,7 +756,11 @@ export async function setExhContactField(id, field, value){
   r[field] = value;
   refreshExhViews();
   const res = await saveExhContact({ id, [field]: value });
-  if(!res.ok){ r[field] = before; refreshExhViews(); alert('저장에 실패했어요.'); }
+  if(!res.ok){ r[field] = before; refreshExhViews(); alert('저장에 실패했어요.'); return; }
+  const x = getExhibitorById(r.exhibitor_id);
+  const lbl = { name:'이름', email:'이메일', phone:'연락처', role:'역할' }[field] || field;
+  trackAction('edit', '기업 담당자 수정', x?.company_name || '',
+    `<b>${escapeHtml(x?.company_name || '')}</b> 담당자 ${escapeHtml(lbl)} ${escapeHtml(String(before||'(없음)'))} → ${escapeHtml(String(value||'(없음)'))}`);
 }
 
 /* 대표는 기업당 한 명이라, 새로 지정하면 나머지는 내려준다 */

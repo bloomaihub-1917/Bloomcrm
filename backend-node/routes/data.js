@@ -50,7 +50,7 @@ const TABLES = {
      입력(data/dataRows)을 쓴다 — 아래 POST 핸들러 참고. */
   exhibitors: {
     table: 'exhibitors', pk: 'id', idPrefix: 'X-',
-    columns: ['id', 'event_id', 'company_key', 'company_name', 'assignee', 'status', 'note', 'updated_at',
+    columns: ['id', 'event_id', 'company_key', 'company_name', 'status', 'note', 'updated_at',
       'manual_sent_at', 'manual_replied_at',
       'app_received', 'app_received_at', 'app_complete', 'app_missing', 'extra_equipment',
       'booth_no', 'booth_floor', 'booth_type', 'booth_qty', 'grade', 'booth_confirmed', 'booth_confirmed_at',

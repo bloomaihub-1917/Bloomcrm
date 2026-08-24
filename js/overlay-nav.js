@@ -28,7 +28,6 @@ const OVERLAYS = [
   // 모달
   { open: 'openModal',            close: 'closeModal',            isOpen: hasOn('mw') },
   { open: 'openExhImport',        close: 'closeExhImport',        isOpen: byId('exh-import-modal') },
-  { open: 'openExhAssign',        close: 'closeExhAssign',        isOpen: byId('exh-assign-modal') },
   { open: 'openMDBBulkEditModal', close: 'closeMDBBulkEditModal',  isOpen: byId('mdb-bulk-modal') },
   { open: 'openAddContactModal',  close: 'closeAddContactModal',   isOpen: byId('add-contact-modal') },
   { open: 'openAddEvModal',       close: 'closeAddEvModal',        isOpen: byId('add-ev-modal') },

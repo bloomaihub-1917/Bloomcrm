@@ -17,7 +17,7 @@ import {
   exhEvent, setExhEvent,
   exhibitorsForEvent, getExhibitorById, itemsFor, invoicesFor, paymentsFor,
   logsFor, openInquiriesFor, contactsFor, primaryContactFor,
-  EVENT_LIST, contacts, participations, CO_DB, currentUser, API_BASE_URL,
+  EVENT_LIST, contacts, participations, CO_DB, currentUser, API_BASE_URL, auditLog,
 } from '../state.js';
 import { td, escapeHtml, escAttr, isMobile } from '../utils.js';
 import {
@@ -61,7 +61,6 @@ const STEPS = [
 ];
 
 let exhFilter = 'all';       // all | incomplete | unpaid | inquiry | billing | cancelled
-let exhAssignee = null;      // null = 전체
 let exhView = 'dash';        // dash(대시보드) | list(체크리스트)
 
 /* 드로어는 exh-drawer.js가 소유한다. 이 파일이 그쪽을 import하면 순환 참조가
@@ -348,17 +347,6 @@ function buildExhFilters(){
       + (attention ? f('billing', '정산 확인 필요', attention) : '')
       + (cancelled ? f('cancelled', '참가 취소', cancelled) : '');
   }
-  const ael = document.getElementById('exh-assignee-list');
-  if(ael){
-    const list = activeExhibitors(exhEvent);
-    const names = [...new Set(list.map(x => x.assignee).filter(Boolean))].sort();
-    ael.innerHTML = `<button class="nr${!exhAssignee ? ' on' : ''}" onclick="setExhAssignee('')">전체<span class="nbg">${list.length}</span></button>`
-      + names.map(n => {
-        const mine = list.filter(x => x.assignee === n);
-        const open = mine.reduce((s, x) => s + openInquiriesFor(x.id).length, 0);
-        return `<button class="nr${exhAssignee === n ? ' on' : ''}" onclick="setExhAssignee('${escAttr(n)}')">${escapeHtml(n)}<span class="nbg">${mine.length}${open ? ` · 문의${open}` : ''}</span></button>`;
-      }).join('');
-  }
 }
 
 /* 하단 네비 배지 — 미답변 문의가 있으면 숫자를 띄운다(놓치지 않는 게 핵심 기능이라
@@ -374,7 +362,6 @@ function updateExhBadge(){
 export function setExhView(v){ exhView = v; renderExh(); }
 export function setExhEvent2(key){ setExhEvent(key); buildExhEvList(); renderExh(); }
 export function setExhFilter(k){ exhFilter = k; buildExhFilters(); renderExh(); }
-export function setExhAssignee(n){ exhAssignee = n || null; buildExhFilters(); renderExh(); }
 
 /* ══════════════════════════════════════════
    메인 — 미답변 문의 패널 + 체크리스트 표
@@ -382,7 +369,6 @@ export function setExhAssignee(n){ exhAssignee = n || null; buildExhFilters(); r
 function visibleList(){
   const q = (document.getElementById('exh-q')?.value || '').trim().toLowerCase();
   let list = exhFilter === 'cancelled' ? cancelledExhibitors(exhEvent) : activeExhibitors(exhEvent);
-  if(exhAssignee) list = list.filter(x => x.assignee === exhAssignee);
   if(exhFilter === 'incomplete') list = list.filter(x => progressOf(x) < 100);
   if(exhFilter === 'unpaid')     list = list.filter(x => ['unpaid','partial'].includes(settleState(x).state));
   if(exhFilter === 'billing')    list = list.filter(x => { const s = settleState(x);
@@ -451,7 +437,6 @@ function renderInquiryPanel(){
           <span style="font-size:12px;color:var(--i2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(l.subject || l.body || '(내용 없음)')}</span>
           ${l.status === 'hold' ? '<span class="pill p-gray">확인 중</span>' : ''}
           <span class="pill ${d >= 3 ? 'p-amber' : 'p-gray'}">${d === 0 ? '오늘' : d + '일 경과'}</span>
-          <span style="font-size:11px;color:var(--i4);min-width:56px;text-align:right">${escapeHtml(x.assignee || '-')}</span>
         </div>`;
       }).join('')}
       ${open.length > 8 ? `<div style="font-size:11px;color:var(--i4);padding:6px 10px">외 ${open.length - 8}건</div>` : ''}
@@ -531,7 +516,6 @@ function renderDashboard(all){
     </div>`;
   };
 
-  const people = [...new Set(all.map(x => x.assignee).filter(Boolean))].sort();
   const STATE_PILLS = [['완납','paid','p-green'],['완납 처리','settled','p-green'],['부분 입금','partial','p-amber'],
     ['미납','unpaid','p-gray'],['초과 입금','over','p-red'],['청구 전','none','p-gray']];
 
@@ -574,22 +558,23 @@ function renderDashboard(all){
       </div>
     </div>
 
-    ${people.length ? `<div class="uc">
-      <div class="uc-ttl">담당자별</div>
-      ${people.map(p => {
-        const mine = all.filter(x => x.assignee === p);
-        const inq = mine.reduce((s, x) => s + openInquiriesFor(x.id).length, 0);
-        const pct = Math.round(mine.reduce((s, x) => s + progressOf(x), 0) / mine.length);
-        return `<div style="display:flex;align-items:center;gap:9px;margin-bottom:7px">
-          <span style="font-size:11.5px;font-weight:600;flex:0 0 66px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(p)}</span>
-          <div style="flex:1;min-width:0">${progressBar(pct, pct === 100 ? 'var(--g)' : 'var(--a)')}</div>
-          <span style="font-size:11px;color:var(--i4);flex:0 0 42px;text-align:right">${mine.length}곳</span>
-          ${inq ? `<span class="pill p-amber" style="flex:0 0 auto">문의 ${inq}</span>` : '<span style="flex:0 0 24px"></span>'}
-        </div>`;
-      }).join('')}
-    </div>` : `<div class="uc"><div class="uc-ttl">담당자별</div>
-      <div style="font-size:11.5px;color:var(--i5)">아직 담당자를 지정하지 않았어요 —
-        위 <b>담당자 일괄 지정</b>으로 한 번에 넣을 수 있어요</div></div>`}
+    ${(() => {
+      // 누가 무엇을 고쳤는지 — 계정 기준으로 최근 변경을 보여준다
+      const names = new Set(all.map(x => x.company_name).filter(Boolean));
+      const recent = auditLog.filter(l => names.has(l.target)).slice(0, 8);
+      if(!recent.length) return `<div class="uc"><div class="uc-ttl">최근 변경</div>
+        <div style="font-size:11.5px;color:var(--i5)">아직 변경 이력이 없어요</div></div>`;
+      return `<div class="uc">
+        <div class="uc-ttl">최근 변경</div>
+        ${recent.map(l => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--i8)">
+          <span style="width:22px;height:22px;border-radius:50%;background:${escAttr(l.color || '#9C9890')};color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${escapeHtml((l.name || '?').slice(0,2))}</span>
+          <span style="font-size:11px;color:var(--i3);flex:0 0 auto">${escapeHtml(l.name || '')}</span>
+          <span style="font-size:11.5px;color:var(--i2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(l.detail || '').replace(/<[^>]+>/g, '')}</span>
+          <span style="font-size:10px;color:var(--i5);flex:0 0 auto">${escapeHtml(String(l.ts || '').slice(5,10))}</span>
+        </div>`).join('')}
+        <div style="font-size:10.5px;color:var(--i5);margin-top:7px">전체 이력은 <b>로그</b> 탭에서 볼 수 있어요</div>
+      </div>`;
+    })()}
 
     <div class="uc">
       <div class="uc-ttl">부스 현황</div>
@@ -662,7 +647,6 @@ function renderChecklistCards(list, all){
         <div style="font-size:11.5px;color:var(--i4);margin-top:3px">
           ${x.booth_no ? `부스 ${escapeHtml(x.booth_no)}${x.booth_floor ? `·${escapeHtml(x.booth_floor)}층` : ''}${x.booth_type ? ` · ${escapeHtml(x.booth_type)}` : ''}` : '부스 미배정'}
           ${pc && (pc.name || pc.email) ? ` · ${escapeHtml(pc.name || pc.email)}` : ''}
-          ${x.assignee ? ` · 우리 담당 ${escapeHtml(x.assignee)}` : ''}
         </div>
         <div style="display:flex;align-items:center;gap:8px;margin:9px 0 8px">
           <div style="flex:1">${progressBar(p, p === 100 ? 'var(--g)' : 'var(--a)')}</div>
@@ -708,7 +692,6 @@ function renderChecklistTable(list, all){
     <div class="tw"><table><thead><tr>
       <th style="min-width:150px">기업</th>
       <th style="min-width:88px">기업 담당자</th>
-      <th style="min-width:56px">우리 담당</th>
       <th style="min-width:70px">진행률</th>
       ${STEPS.map(s => `<th style="text-align:center;font-size:10px;line-height:1.2">${s.label}</th>`).join('')}
       <th style="text-align:center;min-width:50px">문의</th>
@@ -738,7 +721,6 @@ function renderChecklistTable(list, all){
             <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(label)}</div>
             ${all.length > 1 ? `<div style="font-size:9.5px;color:var(--i5)">외 ${all.length - 1}명</div>` : ''}</td>`;
         })()}
-        <td style="font-size:11px;color:var(--i3)">${escapeHtml(x.assignee || '-')}</td>
         <td>${progressBar(p, p === 100 ? 'var(--g)' : 'var(--a)', '52px')}
             <span style="font-size:10px;color:var(--i4)">${p}%</span></td>
         ${STEPS.map(s => cell(x, s)).join('')}
@@ -791,71 +773,6 @@ export function exhibitorCandidates(evKey){
   return [...map.values()].sort((a, b) => a.company_name.localeCompare(b.company_name, 'ko'));
 }
 
-/* 담당자 일괄 지정 — 51곳을 하나씩 여는 건 현실적이지 않다.
-   지금 필터로 걸러진 목록에 그대로 적용하되, 체크로 뺄 수 있게 한다. */
-export function openExhAssign(){
-  closeExhAssign();
-  const list = visibleList();
-  if(!list.length){ alert('지정할 기업이 없어요.'); return; }
-  const pop = document.createElement('div');
-  pop.id = 'exh-assign-modal';
-  pop.className = 'mw on';
-  pop.onclick = (e) => { if(e.target === pop) closeExhAssign(); };
-  const known = [...new Set(EXHIBITORS.map(x => x.assignee).filter(Boolean))];
-  pop.innerHTML = `<div class="modal" style="max-width:520px">
-    <div class="mh"><div class="mt2">담당자 일괄 지정</div>
-      <div class="mc">지금 목록에 보이는 ${list.length}곳에 우리 팀 담당자를 한 번에 지정해요</div></div>
-    <div class="mb">
-      <div class="fg"><label class="fl">담당자</label>
-        <input class="fi" id="exh-as-who" list="exh-as-known" placeholder="예: 정다혜" value="${escAttr(currentUser?.name || '')}">
-        <datalist id="exh-as-known">${known.map(n => `<option value="${escAttr(n)}">`).join('')}</datalist>
-        <div style="font-size:10.5px;color:var(--i5);margin-top:4px">비워두고 적용하면 담당자를 해제해요</div></div>
-      <div class="fg"><label class="fl">대상 (${list.length}곳)</label>
-        <div id="exh-as-list" style="max-height:280px;overflow-y:auto;border:1px solid var(--i7);border-radius:8px;padding:6px">
-          ${list.map((x, i) => `<label style="display:flex;align-items:center;gap:9px;padding:5px 7px;border-radius:6px;cursor:pointer">
-            <input type="checkbox" class="exh-as-cb" data-id="${escAttr(x.id)}" checked>
-            <span style="font-weight:600;font-size:12px;flex:1">${escapeHtml(x.company_name || '')}</span>
-            ${x.assignee ? `<span style="font-size:10.5px;color:var(--i4)">현재 ${escapeHtml(x.assignee)}</span>` : ''}
-          </label>`).join('')}
-        </div></div>
-    </div>
-    <div class="mf2">
-      <button class="btn" onclick="closeExhAssign()">취소</button>
-      <button class="btn bp" onclick="confirmExhAssign()" id="exh-as-btn">적용</button>
-    </div></div>`;
-  document.body.appendChild(pop);
-}
-export function closeExhAssign(){ document.getElementById('exh-assign-modal')?.remove(); }
-
-export async function confirmExhAssign(){
-  const who = (document.getElementById('exh-as-who')?.value || '').trim();
-  const ids = [...document.querySelectorAll('.exh-as-cb')].filter(cb => cb.checked).map(cb => cb.dataset.id);
-  if(!ids.length){ alert('대상을 선택해주세요.'); return; }
-  const btn = document.getElementById('exh-as-btn');
-  if(btn){ btn.disabled = true; btn.textContent = '적용 중…'; }
-
-  const targets = ids.map(id => getExhibitorById(id)).filter(Boolean);
-  const backup = targets.map(x => ({ x, was: x.assignee }));
-  targets.forEach(x => { x.assignee = who; });
-  refreshExhViews();
-
-  // 전체 레코드가 아니라 바뀐 필드만 담아 보낸다(부분 upsert)
-  const r = await postToSheet({ sheet: 'exhibitors', action: 'batchUpsert',
-    dataRows: targets.map(x => ({ ...x, assignee: who, updated_at: td() })) }, '담당자 일괄 지정');
-  if(!r.ok){
-    backup.forEach(b => { b.x.assignee = b.was; });
-    refreshExhViews();
-    if(btn){ btn.disabled = false; btn.textContent = '적용'; }
-    alert('저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
-    return;
-  }
-  closeExhAssign();
-  buildExhEvList();
-  refreshExhViews();
-  trackAction('edit', '담당자 일괄 지정', `${targets.length}개사`,
-    `${targets.length}개사 담당자를 <b>${escapeHtml(who || '(해제)')}</b>로 지정했어요`);
-}
-
 export function openExhImport(){
   closeExhImport();
   const evKey = exhEvent || (EVENT_LIST[0] && EVENT_LIST[0].key) || '';
@@ -871,8 +788,6 @@ export function openExhImport(){
         <select class="fi" id="exh-imp-ev" onchange="renderExhImportList()">
           ${exhEventOptions().map(e => `<option value="${escAttr(e.key)}"${e.key === evKey ? ' selected' : ''}>${escapeHtml(e.name || e.key)}</option>`).join('')}
         </select></div>
-      <div class="fg"><label class="fl">담당자 — 고른 기업에 일괄 지정</label>
-        <input class="fi" id="exh-imp-who" placeholder="예: 정다혜" value="${escAttr(currentUser?.name || '')}"></div>
       <div class="fg"><label class="fl">대상 기업</label>
         <div id="exh-imp-list" style="max-height:300px;overflow-y:auto;border:1px solid var(--i7);border-radius:8px;padding:6px"></div></div>
     </div>
@@ -913,7 +828,6 @@ export function renderExhImportList(){
 export async function confirmExhImport(){
   const el = document.getElementById('exh-imp-list');
   const evKey = document.getElementById('exh-imp-ev').value;
-  const who = document.getElementById('exh-imp-who').value.trim();
   const cands = el._cands || [];
   const picked = [...document.querySelectorAll('.exh-imp-cb')]
     .filter(cb => cb.checked && !cb.disabled)
@@ -925,7 +839,7 @@ export async function confirmExhImport(){
 
   const rows = picked.map(c => ({
     event_id: evKey, company_key: c.company_key, company_name: c.company_name,
-    assignee: who, status: '준비중', updated_at: td(),
+    status: '준비중', updated_at: td(),
   }));
 
   const r = await batchCreateExhibitors(rows);
@@ -957,6 +871,41 @@ async function reloadExhibitors(){
    저장 — 단건 필드 수정
    서버가 "넘어온 키만" 갱신하므로 바뀐 필드만 보낸다(나머지는 보존됨).
 ══════════════════════════════════════════ */
+/* 어떤 계정이 무엇을 바꿨는지 남긴다. 값 자체를 before → after로 적어
+   나중에 "언제 왜 바뀌었나"를 되짚을 수 있게 한다. */
+const FIELD_LABEL = {
+  manual_sent_at:'매뉴얼 발송', manual_replied_at:'매뉴얼 회신',
+  app_received:'신청서 수신', app_received_at:'신청서 수신일', app_complete:'신청서 완비',
+  app_missing:'누락 항목', extra_equipment:'추가 비품',
+  booth_no:'부스 번호', booth_floor:'부스 층', booth_type:'부스 타입', booth_qty:'부스 수량',
+  grade:'등급', booth_confirmed:'부스 확정', booth_confirmed_at:'부스 확정일',
+  settled:'완납 처리', settled_note:'완납 사유', pay_due_date:'입금 기한',
+  tax_sent_at:'세금계산서 발송', tax_amount:'세금계산서 금액',
+  tax_contact_name:'세금계산서 담당자', tax_contact_email:'세금계산서 이메일', tax_contact_phone:'세금계산서 연락처',
+  graphic_ordered_at:'그래픽 주문', graphic_type:'그래픽 유형', graphic_spec_ok:'그래픽 규격',
+  graphic_spec_note:'규격 메모', graphic_draft_at:'초안', graphic_revised_at:'수정안', graphic_final_at:'최종안',
+  directory_received:'도록 자료', directory_received_at:'도록 수신일', directory_note:'도록 메모',
+  movein_at:'반입·설치', builder:'설치업체', badge_count:'출입증 매수', badge_issued_at:'출입증 발급',
+  onsite_note:'현장 메모', status:'상태', note:'메모',
+};
+const shortVal = (v) => { const t = String(v ?? '').trim();
+  return !t ? '(없음)' : (t.length > 24 ? t.slice(0, 24) + '…' : t); };
+
+export function logExhEdit(x, patch, backup){
+  const parts = [];
+  Object.keys(patch).forEach(k => {
+    if(k === 'updated_at' || k === 'id') return;
+    const b = String(backup[k] ?? '').trim(), a = String(patch[k] ?? '').trim();
+    if(b === a) return;
+    const lbl = FIELD_LABEL[k] || k;
+    parts.push(b && a ? `${lbl} ${shortVal(b)} → ${shortVal(a)}`
+      : a ? `${lbl} ${shortVal(a)}` : `${lbl} 지움`);
+  });
+  if(!parts.length) return;
+  trackAction('edit', '전시 정보 수정', x.company_name || '',
+    `<b>${escapeHtml(x.company_name || '')}</b> ${escapeHtml(parts.join(' / '))}`);
+}
+
 export async function patchExh(id, patch, label){
   const x = getExhibitorById(id);
   if(!x) return { ok: false };
@@ -973,7 +922,7 @@ export async function patchExh(id, patch, label){
     return r;
   }
   x.updated_at = td();
-  if(label) trackAction('edit', label, x.company_name || '', `<b>${escapeHtml(x.company_name || '')}</b> ${escapeHtml(label)}`);
+  logExhEdit(x, patch, backup);   // 어떤 계정이 무엇을 바꿨는지 항상 남긴다
   return r;
 }
 
@@ -1022,12 +971,8 @@ export function setExhDateWithFlag(id, dateField, flag, value, label){
 window.setExhEvent2 = setExhEvent2;
 window.setExhFilter = setExhFilter;
 window.setExhView = setExhView;
-window.setExhAssignee = setExhAssignee;
 window.renderExh = renderExh;
 window.openExhImport = openExhImport;
-window.openExhAssign = openExhAssign;
-window.closeExhAssign = closeExhAssign;
-window.confirmExhAssign = confirmExhAssign;
 window.closeExhImport = closeExhImport;
 window.renderExhImportList = renderExhImportList;
 window.confirmExhImport = confirmExhImport;

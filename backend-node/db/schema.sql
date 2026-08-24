@@ -138,8 +138,7 @@ CREATE TABLE IF NOT EXISTS exhibitors (
   event_id     TEXT,
   company_key  TEXT,   -- CO_DB 정규화 키
   company_name TEXT,   -- 표시용 스냅샷
-  assignee     TEXT,   -- 우리 팀 담당자
-  status       TEXT,
+  status       TEXT,   -- 준비중 | 취소
   note         TEXT,
   updated_at   TEXT,
 
