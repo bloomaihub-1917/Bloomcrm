@@ -123,3 +123,128 @@ CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value TEXT
 );
+
+-- ══════════════════════════════════════════
+--  전시 참가기업 진행관리 (전시 탭)
+--  기존 crm_targets(일반 영업 파이프라인)와 별개로, 전시 참가기업의
+--  매뉴얼→신청서→부스→정산→그래픽→도록→현장 실무 흐름을 추적한다.
+--  위 테이블들과 달리 컬럼명을 전부 snake_case로 통일했다 — 신규 테이블은
+--  구글시트 헤더와 1:1로 맞출 이유가 없고, camelCase 큰따옴표 인용을 피할 수 있다.
+-- ══════════════════════════════════════════
+
+-- 기업 × 행사 1건. 체크리스트 본체(1:1 항목만 여기 둔다).
+CREATE TABLE IF NOT EXISTS exhibitors (
+  id           TEXT PRIMARY KEY,
+  event_id     TEXT,
+  company_key  TEXT,   -- CO_DB 정규화 키
+  company_name TEXT,   -- 표시용 스냅샷
+  assignee     TEXT,   -- 우리 팀 담당자
+  status       TEXT,
+  note         TEXT,
+  updated_at   TEXT,
+
+  -- 1. 매뉴얼
+  manual_sent_at     TEXT,
+  manual_replied_at  TEXT,
+
+  -- 2. 신청서
+  app_received_at    TEXT,
+  app_complete       TEXT,  -- 'yes' | 'no' | ''
+  app_missing        TEXT,  -- 누락 항목 메모
+  extra_equipment    TEXT,  -- 추가 비품 신청 내역
+
+  -- 3. 부스 배정
+  booth_no           TEXT,
+  booth_confirmed_at TEXT,
+
+  -- 4. 세금계산서 (인보이스/입금은 1:N이라 별도 테이블)
+  tax_sent_at        TEXT,
+  tax_amount         TEXT,
+  tax_contact_name   TEXT,
+  tax_contact_email  TEXT,
+  tax_contact_phone  TEXT,
+
+  -- 5. 그래픽
+  graphic_ordered_at TEXT,
+  graphic_type       TEXT,  -- 'design'(제작) | 'print'(출력) | ''
+  graphic_spec_ok    TEXT,  -- 'yes' | 'no' | ''  (출력일 때 규격 적합 여부)
+  graphic_spec_note  TEXT,
+  graphic_draft_at   TEXT,  -- 초안
+  graphic_revised_at TEXT,  -- 수정안
+  graphic_final_at   TEXT,  -- 최종안 확정
+
+  -- 6. 도록/디렉토리
+  directory_received_at TEXT,
+  directory_note        TEXT,
+
+  -- 7. 현장
+  movein_at        TEXT,
+  builder          TEXT,   -- 설치업체
+  badge_count      TEXT,
+  badge_issued_at  TEXT,
+  onsite_note      TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_exhibitors_event ON exhibitors(event_id);
+
+-- 금액 항목. 전기·인터넷·카펫처럼 예상 못 한 항목이 계속 나오므로 줄 단위로 자유 추가.
+CREATE TABLE IF NOT EXISTS exhibitor_items (
+  id           TEXT PRIMARY KEY,
+  exhibitor_id TEXT,
+  category     TEXT,  -- 'booth' | 'equip' | 'graphic' | 'etc'
+  name         TEXT,
+  qty          TEXT,
+  unit_price   TEXT,
+  amount       TEXT,
+  note         TEXT,
+  sort_order   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_exhibitor_items_exh ON exhibitor_items(exhibitor_id);
+
+-- 인보이스. "부스+비품 먼저, 그래픽 나중"처럼 나눠 발행하거나 한 장에 합쳐 발행하는
+-- 두 방식이 다 쓰이므로 1:N으로 둔다.
+CREATE TABLE IF NOT EXISTS exhibitor_invoices (
+  id           TEXT PRIMARY KEY,
+  exhibitor_id TEXT,
+  title        TEXT,
+  created_at   TEXT,
+  sent_at      TEXT,
+  due_date     TEXT,   -- 입금 예정일
+  amount       TEXT,
+  note         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_exhibitor_invoices_exh ON exhibitor_invoices(exhibitor_id);
+
+-- 입금. 분할 입금 대응 — 완납 여부는 플래그를 두지 않고 입금액 합계로 계산한다
+-- (플래그와 실제 금액이 어긋나는 사고를 원천 차단).
+CREATE TABLE IF NOT EXISTS exhibitor_payments (
+  id           TEXT PRIMARY KEY,
+  exhibitor_id TEXT,
+  invoice_id   TEXT,
+  paid_at      TEXT,
+  amount       TEXT,
+  method       TEXT,
+  note         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_exhibitor_payments_exh ON exhibitor_payments(exhibitor_id);
+
+-- 문의사항 + 자유 기록. 한 테이블에 두는 이유는 기록 탭에서 둘이 시간순 한 줄기로
+-- 보여야 맥락이 이어지기 때문. 미답변은 kind='inquiry' AND answered_at IS NULL로 뽑는다.
+CREATE TABLE IF NOT EXISTS exhibitor_logs (
+  id           TEXT PRIMARY KEY,
+  exhibitor_id TEXT,
+  kind         TEXT,  -- 'inquiry'(문의) | 'note'(기록)
+  ts           TEXT,
+  direction    TEXT,  -- 'in'(수신) | 'out'(발신) | ''
+  channel      TEXT,  -- 이메일 | 전화 | 카톡 | 미팅 | 현장
+  counterpart  TEXT,  -- 기업측 담당자
+  category     TEXT,  -- 부스 | 비품 | 그래픽 | 정산 | 현장 | 기타
+  subject      TEXT,
+  body         TEXT,
+  answered_at  TEXT,
+  answer       TEXT,
+  status       TEXT,  -- 'open' | 'hold' | 'done'
+  author_email TEXT,
+  author_name  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_exhibitor_logs_exh ON exhibitor_logs(exhibitor_id);
+CREATE INDEX IF NOT EXISTS idx_exhibitor_logs_open ON exhibitor_logs(kind, answered_at);

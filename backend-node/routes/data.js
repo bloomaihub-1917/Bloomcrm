@@ -44,6 +44,39 @@ const TABLES = {
     table: 'part_types', pk: 'key', idPrefix: null,
     columns: ['key', 'label', 'cls'],
   },
+
+  /* ── 전시 참가기업 진행관리 ──
+     컬럼이 많고 부분 수정(체크 하나 누르기)이 잦아 위치 배열 대신 객체형
+     입력(data/dataRows)을 쓴다 — 아래 POST 핸들러 참고. */
+  exhibitors: {
+    table: 'exhibitors', pk: 'id', idPrefix: 'X-',
+    columns: ['id', 'event_id', 'company_key', 'company_name', 'assignee', 'status', 'note', 'updated_at',
+      'manual_sent_at', 'manual_replied_at',
+      'app_received_at', 'app_complete', 'app_missing', 'extra_equipment',
+      'booth_no', 'booth_confirmed_at',
+      'tax_sent_at', 'tax_amount', 'tax_contact_name', 'tax_contact_email', 'tax_contact_phone',
+      'graphic_ordered_at', 'graphic_type', 'graphic_spec_ok', 'graphic_spec_note',
+      'graphic_draft_at', 'graphic_revised_at', 'graphic_final_at',
+      'directory_received_at', 'directory_note',
+      'movein_at', 'builder', 'badge_count', 'badge_issued_at', 'onsite_note'],
+  },
+  exhibitor_items: {
+    table: 'exhibitor_items', pk: 'id', idPrefix: 'XI-',
+    columns: ['id', 'exhibitor_id', 'category', 'name', 'qty', 'unit_price', 'amount', 'note', 'sort_order'],
+  },
+  exhibitor_invoices: {
+    table: 'exhibitor_invoices', pk: 'id', idPrefix: 'XV-',
+    columns: ['id', 'exhibitor_id', 'title', 'created_at', 'sent_at', 'due_date', 'amount', 'note'],
+  },
+  exhibitor_payments: {
+    table: 'exhibitor_payments', pk: 'id', idPrefix: 'XP-',
+    columns: ['id', 'exhibitor_id', 'invoice_id', 'paid_at', 'amount', 'method', 'note'],
+  },
+  exhibitor_logs: {
+    table: 'exhibitor_logs', pk: 'id', idPrefix: 'XL-',
+    columns: ['id', 'exhibitor_id', 'kind', 'ts', 'direction', 'channel', 'counterpart', 'category',
+      'subject', 'body', 'answered_at', 'answer', 'status', 'author_email', 'author_name'],
+  },
 };
 
 let seq = 0;
@@ -107,6 +140,39 @@ async function upsertOne(client, def, record, opts = {}) {
   return record[def.pk];
 }
 
+/* ── 객체형 입력 (신규 exhibitor_* 테이블용) ──
+   위치 배열(row/rows)은 컬럼이 30개를 넘으면 순서가 어긋나는 사고가 나기 쉽다.
+   - dataRows(객체 배열): 전체 레코드로 취급 — 일괄 등록용
+   - data(객체 단건): 넘어온 키만 갱신하는 부분 upsert — 체크 하나 누를 때
+     보내지 않은 필드가 실수로 비워지지 않게 한다 */
+function pickColumns(columns, obj) {
+  const rec = {};
+  columns.forEach((c) => { rec[c] = obj[c] === undefined ? null : obj[c]; });
+  return rec;
+}
+
+async function upsertPartial(client, def, obj) {
+  const cols = def.columns.filter((c) => obj[c] !== undefined);
+  const rec = {};
+  cols.forEach((c) => { rec[c] = obj[c]; });
+  if (!rec[def.pk]) {
+    if (def.idPrefix === null) throw new Error(`${def.pk} is required`);
+    rec[def.pk] = genId(def.idPrefix);
+    if (!cols.includes(def.pk)) cols.unshift(def.pk);
+  }
+  const values = cols.map((c) => rec[c] ?? null);
+  const placeholders = cols.map((_, i) => `$${i + 1}`).join(', ');
+  const updateSet = cols.filter((c) => c !== def.pk).map((c) => `${q(c)} = EXCLUDED.${q(c)}`).join(', ');
+  const conflictClause = updateSet
+    ? `ON CONFLICT (${q(def.pk)}) DO UPDATE SET ${updateSet}`
+    : `ON CONFLICT (${q(def.pk)}) DO NOTHING`;
+  await client.query(
+    `INSERT INTO ${def.table} (${cols.map(q).join(', ')}) VALUES (${placeholders}) ${conflictClause}`,
+    values,
+  );
+  return rec[def.pk];
+}
+
 /* participations는 event_id/contact_id로 정규화하고, 원본 시트가 캐시해두던
    행사명/소속/성명/직함은 저장하지 않는다 — 읽을 때 JOIN으로 즉석 계산한다. */
 async function readParticipations() {
@@ -147,11 +213,12 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { sheet, action, row, rows } = req.body || {};
+  const { sheet, action, row, rows, data, dataRows } = req.body || {};
   if (sheet !== 'participations' && !TABLES[sheet]) {
     return res.status(400).json({ ok: false, error: 'unknown sheet' });
   }
 
+  let savedId = null;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -175,6 +242,18 @@ router.post('/', async (req, res) => {
       if (action === 'delete') {
         const ids = row || [];
         await client.query(`DELETE FROM ${def.table} WHERE ${q(def.pk)} = ANY($1::text[])`, [ids]);
+      } else if (dataRows) {
+        // 객체 배열 일괄 저장 — 전체 레코드로 취급
+        const onConflict = action === 'batchAppend' ? 'nothing' : 'update';
+        const records = dataRows.map((d) => {
+          const rec = pickColumns(def.columns, d);
+          if (def.idPrefix !== null && !rec[def.pk]) rec[def.pk] = genId(def.idPrefix);
+          return rec;
+        });
+        await bulkUpsert(client, def.table, def.pk, def.columns, records, { onConflict });
+      } else if (data) {
+        // 객체 단건 — 넘어온 키만 갱신
+        savedId = await upsertPartial(client, def, data);
       } else if (action === 'replaceAll') {
         await client.query(`DELETE FROM ${def.table}`);
         await bulkUpsert(client, def.table, def.pk, def.columns, (rows || []).map((r) => rowToRecord(def.columns, r)));
@@ -193,7 +272,7 @@ router.post('/', async (req, res) => {
     }
 
     await client.query('COMMIT');
-    res.json({ ok: true });
+    res.json(savedId ? { ok: true, id: savedId } : { ok: true }); // 신규 생성 시 프론트가 id를 받도록
   } catch (e) {
     await client.query('ROLLBACK');
     console.error(`[data] ${sheet}/${action} 실패:`, e.message);
