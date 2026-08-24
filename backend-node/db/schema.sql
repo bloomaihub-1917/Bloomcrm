@@ -143,15 +143,8 @@ CREATE TABLE IF NOT EXISTS exhibitors (
   note         TEXT,
   updated_at   TEXT,
 
-  -- 기업측 담당자(우리가 실제로 메일 주고받는 상대). assignee(우리 팀 담당)와는
-  -- 다른 개념이라 별도 컬럼으로 둔다. 세금계산서 담당자는 또 따로 있다(아래).
-  -- contact_id가 있으면 마스터DB(contacts)의 그 사람을 가리키고, 이름/이메일/
-  -- 연락처는 거기서 실시간으로 읽는다(복사본을 들고 있으면 마스터DB에서 고쳐도
-  -- 여기가 옛 값으로 남기 때문). 마스터DB에 없는 사람은 아래 텍스트 필드로 적는다.
-  contact_id    TEXT,
-  contact_name  TEXT,
-  contact_email TEXT,
-  contact_phone TEXT,
+  -- 기업측 담당자는 여러 명일 수 있어 exhibitor_contacts 테이블로 분리했다.
+  -- 세금계산서 담당자(tax_contact_*)는 성격이 달라 아래에 그대로 둔다.
 
   -- 1. 매뉴얼
   manual_sent_at     TEXT,

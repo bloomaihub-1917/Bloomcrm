@@ -5,10 +5,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "migrate": "psql \"$DATABASE_URL\" -f db/schema.sql",
-    "seed": "psql \"$DATABASE_URL\" -f db/seed.sql",
-    "create-user": "node scripts/create-user.js",
-    "migrate-from-sheets": "node scripts/migrate-from-sheets.js"
+    "create-user": "node scripts/create-user.js"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",

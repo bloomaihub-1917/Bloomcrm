@@ -51,7 +51,6 @@ const TABLES = {
   exhibitors: {
     table: 'exhibitors', pk: 'id', idPrefix: 'X-',
     columns: ['id', 'event_id', 'company_key', 'company_name', 'assignee', 'status', 'note', 'updated_at',
-      'contact_id', 'contact_name', 'contact_email', 'contact_phone',
       'manual_sent_at', 'manual_replied_at',
       'app_received', 'app_received_at', 'app_complete', 'app_missing', 'extra_equipment',
       'booth_no', 'booth_floor', 'booth_type', 'booth_qty', 'grade', 'booth_confirmed', 'booth_confirmed_at',
@@ -287,5 +286,4 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.TABLES = TABLES; // scripts/migrate-from-sheets.js에서 컬럼 정의 재사용
 module.exports = router;

@@ -1,8 +1,7 @@
 # 백엔드(Node/Express + PostgreSQL + Firebase Auth) 배포 절차
 
-Google Apps Script + Sheets 백엔드를 대체하는 새 백엔드입니다. 기존 절차는
-`backend/DEPLOY.md`에 참고용으로 남아있습니다 — 데이터 이관이 끝나기 전까지는
-기존 Apps Script 배포도 그대로 살려두세요(전환 중 안전망).
+Google Apps Script + Sheets 백엔드를 대체한 현재 운영 백엔드입니다.
+전환이 끝나 Apps Script 소스(`backend/`)와 1회성 이관 스크립트는 삭제했습니다.
 
 ## 0. 준비물 (전부 무료)
 - [Neon](https://neon.tech) 계정 — Postgres (서버리스 환경과 궁합이 좋은 `@neondatabase/serverless` 드라이버 사용)
@@ -22,17 +21,15 @@ Google Apps Script + Sheets 백엔드를 대체하는 새 백엔드입니다. �
 ## 2. Neon(Postgres) 설정
 1. Neon에서 새 프로젝트 생성 → `DATABASE_URL` 복사
 2. 스키마 적용: `psql "$DATABASE_URL" -f db/schema.sql`
-3. (데이터 이관 후) 시드 적용: `psql "$DATABASE_URL" -f db/seed.sql`
 
-## 3. 기존 Google Sheets 데이터 이관 (1회, 사용자 본인이 실행)
-운영 데이터가 있는 구글 계정으로 직접 실행해야 합니다.
+`psql`이 없는 환경(예: 개발용 Windows)에서는 Node로 같은 파일을 적용할 수 있습니다:
 ```
-GS_URL="<기존 Apps Script 배포 URL>" \
-GS_EMAIL="본인 이메일" GS_PASSWORD="본인 비밀번호" \
-DATABASE_URL="<Neon 연결 문자열>" \
-  node scripts/migrate-from-sheets.js
+node -e "require('dotenv').config();const fs=require('fs');const p=require('./db/pool');p.query(fs.readFileSync('db/schema.sql','utf8')).then(()=>console.log('done'))"
 ```
-완료 후 `db/seed.sql`을 실행해 섹터 도메인 분류를 채웁니다.
+
+## 3. 데이터 넣기
+데이터는 앱의 **업로드** 탭에서 엑셀/CSV로 넣습니다. 섹터 도메인 분류
+초기값이 필요하면 `db/seed.sql`을 한 번만 같은 방식으로 적용하세요.
 
 ## 4. Vercel에 백엔드 배포
 `app.js`가 실제 Express 앱이고, `api/index.js`가 이를 그대로 감싸는 서버리스
@@ -59,6 +56,8 @@ Vercel 배포가 같은 `app.js`를 공유하므로 로직은 한 곳에만 있�
 
 ## 참고: 기존 구조 대비 달라진 점
 - 계정 추가/삭제/비밀번호 재설정: Apps Script 스크립트 속성(CRM_USERS) 직접 편집 → Firebase 콘솔/`scripts/create-user.js`
+- 프론트엔드: GitHub Pages(`https://bloomaihub-1917.github.io/Bloomcrm/`)에 master 푸시로 자동 배포.
+  파일이 10분간 캐시되므로 배포 직후에는 강력 새로고침(Ctrl+Shift+R)이 필요할 수 있습니다.
 - 인증: 커스텀 HMAC 토큰(14일) → Firebase ID 토큰(1시간, SDK가 자동 갱신)
 - 동시 쓰기: 전역 LockService 직렬화 → Postgres 트랜잭션 + `ON CONFLICT` upsert
 - 에러 응답: 스택 그대로 노출 → 스택 제거, 서버 콘솔에만 로그
