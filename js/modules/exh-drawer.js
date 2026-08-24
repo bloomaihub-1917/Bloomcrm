@@ -295,24 +295,24 @@ function dBilling(x){
   ${sct('금액 항목', `
     <div style="display:flex;flex-direction:column;gap:1px;margin-bottom:8px">
       ${items.length ? items.map(i => `
-        <div style="display:flex;align-items:center;gap:7px;padding:6px 8px;background:var(--i9);border-radius:6px">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:7px;padding:6px 8px;background:var(--i9);border-radius:6px">
           <span class="pill p-gray" style="min-width:44px;text-align:center">${escapeHtml(catLabel(i.category))}</span>
-          <span style="flex:1;font-size:12px;font-weight:600">${escapeHtml(i.name || '')}</span>
+          <span style="flex:1 1 100px;min-width:0;font-size:12px;font-weight:600;word-break:break-all">${escapeHtml(i.name || '')}</span>
           <span style="font-size:11px;color:var(--i4)">${escapeHtml(i.qty || '')}${i.qty && i.unit_price ? ' × ' : ''}${i.unit_price ? money(i.unit_price) : ''}</span>
           <span style="font-size:12px;font-weight:700;min-width:88px;text-align:right">${fmtMoney(i.amount, i.currency || 'KRW')}</span>
           <button class="btn bs" onclick="delExhItem('${escAttr(i.id)}')" title="삭제">✕</button>
         </div>`).join('') : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">아직 항목이 없어요</div>'}
     </div>
-    <div style="display:flex;gap:5px;align-items:center">
-      <select class="fi" id="it-cat-${escAttr(x.id)}" style="width:74px;font-size:11.5px;padding:6px">
+    <div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center">
+      <select class="fi" id="it-cat-${escAttr(x.id)}" style="flex:0 0 72px;min-width:0;font-size:11.5px;padding:6px">
         ${CATS.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select>
-      <input class="fi" id="it-nm-${escAttr(x.id)}" placeholder="항목명" style="flex:1;font-size:11.5px;padding:6px">
-      <input class="fi" id="it-qty-${escAttr(x.id)}" placeholder="수량" style="width:56px;font-size:11.5px;padding:6px"
+      <input class="fi" id="it-nm-${escAttr(x.id)}" placeholder="항목명" style="flex:1 1 120px;min-width:0;font-size:11.5px;padding:6px">
+      <input class="fi" id="it-qty-${escAttr(x.id)}" placeholder="수량" style="flex:1 1 54px;min-width:0;font-size:11.5px;padding:6px"
         oninput="calcItemAmount('${escAttr(x.id)}')">
-      <input class="fi" id="it-up-${escAttr(x.id)}" placeholder="단가" style="width:82px;font-size:11.5px;padding:6px"
+      <input class="fi" id="it-up-${escAttr(x.id)}" placeholder="단가" style="flex:1 1 78px;min-width:0;font-size:11.5px;padding:6px"
         oninput="calcItemAmount('${escAttr(x.id)}')">
-      <input class="fi" id="it-amt-${escAttr(x.id)}" placeholder="금액" style="width:90px;font-size:11.5px;padding:6px">
-      <button class="btn bp bs" onclick="addExhItem('${escAttr(x.id)}')">추가</button>
+      <input class="fi" id="it-amt-${escAttr(x.id)}" placeholder="금액" style="flex:1 1 88px;min-width:0;font-size:11.5px;padding:6px">
+      <button class="btn bp bs" style="flex:0 0 auto" onclick="addExhItem('${escAttr(x.id)}')">추가</button>
     </div>`)}
 
   ${sct('인보이스', `
@@ -326,21 +326,21 @@ function dBilling(x){
           </div>
           <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap">
             <label style="font-size:10.5px;color:var(--i4)">발송</label>
-            <input type="date" class="fi" style="width:135px;padding:3px 6px;font-size:11px" value="${escAttr(v.sent_at || '')}"
+            <input type="date" class="fi" style="flex:1 1 128px;min-width:0;padding:3px 6px;font-size:11px" value="${escAttr(v.sent_at || '')}"
               onchange="setInvField('${escAttr(v.id)}','sent_at',this.value)">
             <label style="font-size:10.5px;color:var(--i4)">입금 예정</label>
-            <input type="date" class="fi" style="width:135px;padding:3px 6px;font-size:11px" value="${escAttr(v.due_date || '')}"
+            <input type="date" class="fi" style="flex:1 1 128px;min-width:0;padding:3px 6px;font-size:11px" value="${escAttr(v.due_date || '')}"
               onchange="setInvField('${escAttr(v.id)}','due_date',this.value)">
             ${!v.sent_at ? '<span class="pill p-amber">미발송</span>'
               : (v.due_date && daysSince(v.due_date) > 0 && paid < billed) ? `<span class="pill p-red" style="background:var(--rb);color:var(--re)">${daysSince(v.due_date)}일 지남</span>` : ''}
           </div>
         </div>`).join('') : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">발행한 인보이스가 없어요</div>'}
     </div>
-    <div style="display:flex;gap:5px">
-      <input class="fi" id="iv-t-${escAttr(x.id)}" placeholder="제목 (예: 부스+비품)" style="flex:1;font-size:11.5px;padding:6px">
-      <input class="fi" id="iv-a-${escAttr(x.id)}" placeholder="금액" style="width:100px;font-size:11.5px;padding:6px"
+    <div style="display:flex;flex-wrap:wrap;gap:5px">
+      <input class="fi" id="iv-t-${escAttr(x.id)}" placeholder="제목 (예: 부스+비품)" style="flex:1 1 140px;min-width:0;font-size:11.5px;padding:6px">
+      <input class="fi" id="iv-a-${escAttr(x.id)}" placeholder="금액" style="flex:1 1 96px;min-width:0;font-size:11.5px;padding:6px"
         value="${items.length && !invs.length ? billedAmount(x.id) : ''}">
-      <button class="btn bp bs" onclick="addExhInvoice('${escAttr(x.id)}')">발행</button>
+      <button class="btn bp bs" style="flex:0 0 auto" onclick="addExhInvoice('${escAttr(x.id)}')">발행</button>
     </div>
     <div style="font-size:10.5px;color:var(--i5);margin-top:5px">
       금액 항목 합계가 기본값으로 들어가요. 부스+비품 따로, 그래픽 따로 나눠 발행해도 됩니다.</div>`)}
@@ -367,7 +367,7 @@ function dBilling(x){
   ${sct('입금 내역', `
     <div style="display:flex;flex-direction:column;gap:1px;margin-bottom:8px">
       ${pays.length ? pays.map((p, i) => `
-        <div style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--i9);border-radius:6px">
+        <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:6px 8px;background:var(--i9);border-radius:6px">
           <span class="pill p-green">${pays.length > 1 ? `${i + 1}차` : '입금'}</span>
           <span style="font-size:11.5px;color:var(--i3)">${escapeHtml(p.paid_at || '')}</span>
           <span style="flex:1;font-size:11px;color:var(--i4)">${escapeHtml(p.method || '')}${p.note ? ' · ' + escapeHtml(p.note) : ''}</span>
@@ -375,12 +375,12 @@ function dBilling(x){
           <button class="btn bs" onclick="delExhPayment('${escAttr(p.id)}')">✕</button>
         </div>`).join('') : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">입금 내역이 없어요</div>'}
     </div>
-    <div style="display:flex;gap:5px">
-      <input type="date" class="fi" id="py-d-${escAttr(x.id)}" style="width:135px;font-size:11.5px;padding:6px" value="${td()}">
-      <input class="fi" id="py-a-${escAttr(x.id)}" placeholder="입금액" style="flex:1;font-size:11.5px;padding:6px"
+    <div style="display:flex;flex-wrap:wrap;gap:5px">
+      <input type="date" class="fi" id="py-d-${escAttr(x.id)}" style="flex:1 1 130px;min-width:0;font-size:11.5px;padding:6px" value="${td()}">
+      <input class="fi" id="py-a-${escAttr(x.id)}" placeholder="입금액" style="flex:1 1 100px;min-width:0;font-size:11.5px;padding:6px"
         value="${rest > 0 ? rest : ''}">
-      <input class="fi" id="py-m-${escAttr(x.id)}" placeholder="비고" style="width:90px;font-size:11.5px;padding:6px">
-      <button class="btn bp bs" onclick="addExhPayment('${escAttr(x.id)}')">추가</button>
+      <input class="fi" id="py-m-${escAttr(x.id)}" placeholder="비고" style="flex:1 1 80px;min-width:0;font-size:11.5px;padding:6px">
+      <button class="btn bp bs" style="flex:0 0 auto" onclick="addExhPayment('${escAttr(x.id)}')">추가</button>
     </div>
     <div style="font-size:10.5px;color:var(--i5);margin-top:5px">
       분할 입금이면 여러 번 추가하세요. 완납 여부는 입금액 합계로 자동 계산돼요.</div>`)}

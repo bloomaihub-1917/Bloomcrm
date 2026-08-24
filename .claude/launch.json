@@ -4,7 +4,15 @@
     {
       "name": "bloom-crm",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "5500"],
+      "runtimeArgs": ["-m", "http.server", "5500", "--bind", "127.0.0.1"],
+      "port": 5500
+    },
+    {
+      "//": "개발 중에는 캐시를 끈다 — 기본 http.server가 Last-Modified 기반 304를 주는 탓에",
+      "//2": "JS를 고쳐도 브라우저가 옛 모듈을 계속 써서 수정이 반영 안 된 것처럼 보였다.",
+      "name": "bloom-crm-nocache",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-c", "import http.server as h,functools;\nclass S(h.SimpleHTTPRequestHandler):\n    def end_headers(self):\n        self.send_header('Cache-Control','no-store, max-age=0')\n        super().end_headers()\n    def send_header(self,k,v):\n        if k=='Last-Modified': return\n        super().send_header(k,v)\nh.test(HandlerClass=S, port=5500, bind='127.0.0.1')"],
       "port": 5500
     }
   ]
