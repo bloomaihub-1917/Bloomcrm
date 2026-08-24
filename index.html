@@ -744,7 +744,9 @@
     <div class="srch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" placeholder="기업명 검색…" oninput="renderExh()" id="exh-q"></div>
     <button class="btn bp bs" onclick="openExhImport()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>참가기업 불러오기</button>
   </div>
-  <div id="exh-body"></div>
+  <!-- .page가 overflow:hidden이라 실제 세로 스크롤은 이 안쪽에서 일어난다
+       (다른 탭들이 .tw에 스크롤을 두는 것과 같은 방식) -->
+  <div id="exh-body" style="flex:1;overflow-y:auto;min-height:0"></div>
 </div>
 
 <!-- ⑤ CRM -->
