@@ -19,7 +19,7 @@ import {
   logsFor, openInquiriesFor, contactsFor, primaryContactFor,
   EVENT_LIST, contacts, participations, CO_DB, currentUser, API_BASE_URL,
 } from '../state.js';
-import { td, escapeHtml, escAttr } from '../utils.js';
+import { td, escapeHtml, escAttr, isMobile } from '../utils.js';
 import {
   saveExhibitor, saveExhItem, saveExhInvoice, saveExhPayment, saveExhLog,
   deleteExhItem, deleteExhInvoice, deleteExhPayment, deleteExhLog,
@@ -274,6 +274,16 @@ function buildExhFilters(){
   }
 }
 
+/* 하단 네비 배지 — 미답변 문의가 있으면 숫자를 띄운다(놓치지 않는 게 핵심 기능이라
+   다른 탭에 있어도 보이게). */
+function updateExhBadge(){
+  const el = document.getElementById('mn-exh-badge');
+  if(!el) return;
+  const n = activeExhibitors(exhEvent).reduce((s, x) => s + openInquiriesFor(x.id).length, 0);
+  el.textContent = n > 99 ? '99+' : String(n);
+  el.style.display = n ? 'block' : 'none';
+}
+
 export function setExhEvent2(key){ setExhEvent(key); buildExhEvList(); renderExh(); }
 export function setExhFilter(k){ exhFilter = k; buildExhFilters(); renderExh(); }
 export function setExhAssignee(n){ exhAssignee = n || null; buildExhFilters(); renderExh(); }
@@ -299,6 +309,10 @@ export function renderExh(){
   const ev = exhEventOptions().find(e => e.key === exhEvent);
   const ttl = document.getElementById('exh-ttl');
   if(ttl) ttl.innerHTML = `전시 진행관리 <span class="tb-s">${ev ? escapeHtml(ev.short || ev.name) + ' · ' : ''}참가기업 준비 현황</span>`;
+  // 모바일 헤더 제목은 행사명으로 (화면이 좁아 부제를 넣을 자리가 없다)
+  const mttl = document.getElementById('mob-exh-ttl');
+  if(mttl) mttl.textContent = ev ? (ev.short || ev.name || '전시 진행관리') : '전시 진행관리';
+  updateExhBadge();
 
   const list = visibleList();
   const all = activeExhibitors(exhEvent);
@@ -345,6 +359,71 @@ function renderInquiryPanel(){
 }
 
 function renderChecklist(list, all){
+  // 모바일에서는 표를 쓰지 않는다. layout.css가 모든 table을 마스터DB용 카드
+  // 규칙(헤더 숨김 + 특정 열 강제 숨김)으로 바꿔버려 15열짜리 체크리스트는
+  // 의미를 잃고 뭉개진다. 그래서 아예 전용 카드 목록으로 그린다.
+  if(isMobile()) return renderChecklistCards(list, all);
+  return renderChecklistTable(list, all);
+}
+
+/* 모바일 — 기업당 카드 하나. 진행률과 "지금 뭐가 걸려있나"가 먼저 보이게 한다. */
+function renderChecklistCards(list, all){
+  const stat = (x, s) => {
+    const c = cellState(x, s);
+    if(c.state === 'na') return '';
+    const label = s.label.replace(/<br>/g, '');
+    const map = {
+      done: 'background:var(--gb);color:var(--g)',
+      part: 'background:var(--ab);color:var(--am)',
+      warn: 'background:var(--rb);color:var(--re)',
+      todo: 'background:var(--i8);color:var(--i5)',
+    }[c.state];
+    const mark = { done: '✓', part: '◐', warn: '!', todo: '' }[c.state];
+    return `<span style="${map};font-size:10px;font-weight:600;padding:3px 7px;border-radius:5px;white-space:nowrap">${
+      mark ? mark + ' ' : ''}${escapeHtml(label)}</span>`;
+  };
+
+  return `<div style="padding:10px 12px 16px">
+    <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">
+      ${STEPS.map(s => {
+        const n = all.filter(x => cellState(x, s).state === 'done').length;
+        return `<span class="pill ${n === all.length ? 'p-green' : 'p-gray'}">${escapeHtml(s.label.replace(/<br>/g, ''))} ${n}/${all.length}</span>`;
+      }).join('')}
+    </div>
+    ${list.map(x => {
+      const p = progressOf(x);
+      const openN = openInquiriesFor(x.id).length;
+      const billed = billedAmount(x.id), paid = paidAmount(x.id);
+      const cur = currencyOf(x.id);
+      const pc = exhContacts(x)[0];
+      const off = x.status === CANCELLED;
+      return `<div onclick="openExhDr('${escAttr(x.id)}')"
+        style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:12px 13px;margin-bottom:8px;cursor:pointer${off ? ';opacity:.55' : ''}">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="font-size:14px;font-weight:700${off ? ';text-decoration:line-through' : ''}">${escapeHtml(x.company_name || '')}</span>
+          ${off ? '<span class="pill p-gray">참가 취소</span>' : ''}
+          ${x.grade && x.grade !== 'Exhibitor' ? `<span class="pill ${GRADE_CLS[x.grade] || 'p-gray'}">${escapeHtml(x.grade)}</span>` : ''}
+          ${openN ? `<span class="pill p-amber" style="margin-left:auto">문의 ${openN}</span>` : ''}
+        </div>
+        <div style="font-size:11.5px;color:var(--i4);margin-top:3px">
+          ${x.booth_no ? `부스 ${escapeHtml(x.booth_no)}${x.booth_floor ? `·${escapeHtml(x.booth_floor)}층` : ''}${x.booth_type ? ` · ${escapeHtml(x.booth_type)}` : ''}` : '부스 미배정'}
+          ${pc && (pc.name || pc.email) ? ` · ${escapeHtml(pc.name || pc.email)}` : ''}
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin:9px 0 8px">
+          <div class="br" style="flex:1"><div class="brf" style="width:${p}%"></div></div>
+          <span style="font-size:11px;font-weight:700;color:var(--i3);min-width:32px;text-align:right">${p}%</span>
+        </div>
+        ${billed ? `<div style="font-size:11.5px;margin-bottom:7px">
+          입금 <b style="color:${paid >= billed ? 'var(--g)' : 'var(--am)'}">${fmtMoney(paid, cur)}</b>
+          <span style="color:var(--i5)"> / ${fmtMoney(billed, cur)}</span></div>` : ''}
+        <div style="display:flex;flex-wrap:wrap;gap:4px">${STEPS.map(s => stat(x, s)).join('')}</div>
+      </div>`;
+    }).join('')}
+    ${!list.length ? '<div class="empty" style="padding:30px;text-align:center;font-size:12px;color:var(--i4)">조건에 맞는 기업이 없어요</div>' : ''}
+  </div>`;
+}
+
+function renderChecklistTable(list, all){
   const cell = (x, s) => {
     const c = cellState(x, s);
     const map = {

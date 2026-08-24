@@ -5,8 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>Contact CRM</title>
 <link rel="stylesheet" href="styles/tokens.css">
-<link rel="stylesheet" href="styles/layout.css">
+<!-- components.css를 layout.css보다 먼저 읽는다.
+     layout.css의 @media(모바일) 규칙과 components.css의 기본 규칙은 특이도가 같아
+     나중에 로드된 쪽이 이긴다. 반대 순서였을 때 모바일 규칙 68개(드로어 전체 너비,
+     칸반/폼/타임라인 등)가 전부 무시되고 있었다. 기본 규칙끼리 겹치는 셀렉터는
+     없어서 순서를 바꿔도 데스크톱 화면에는 영향이 없다. -->
 <link rel="stylesheet" href="styles/components.css">
+<link rel="stylesheet" href="styles/layout.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
@@ -793,6 +798,11 @@
   <button class="mob-nav-btn" id="mn-crm" onclick="switchApp('crm',null);updateMobNav('crm')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="5" height="18"/><rect x="10" y="3" width="5" height="18"/><rect x="17" y="3" width="4" height="18"/></svg>
     CRM
+  </button>
+  <button class="mob-nav-btn" id="mn-exh" onclick="switchApp('exh',null);updateMobNav('exh')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 7h20v13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"/><path d="M2 7l2-4h16l2 4"/><line x1="9" y1="12" x2="15" y2="12"/></svg>
+    전시
+    <span class="mob-badge" id="mn-exh-badge" style="display:none">0</span>
   </button>
   <button class="mob-nav-btn" id="mn-audit" onclick="switchApp('audit',null);updateMobNav('audit')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>
