@@ -14,6 +14,8 @@ import './modules/settings-tab.js';
 import './modules/company-tab.js';
 import './modules/crm-tab.js';
 import './modules/audit-tab.js';
+import './modules/exh-tab.js';
+import './modules/exh-drawer.js';
 
 import { initMobileNav, initDrawerSwipe, initSidebarLayout } from './router.js';
 import { initAuth, initAfterLogin, closeUserMenu } from './auth.js';

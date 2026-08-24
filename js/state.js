@@ -113,6 +113,43 @@ export { detectedCatFromFilename };
 export const targets = [];
 
 /* ══════════════════════════════════════════
+   전시 참가기업 진행관리 (전시 탭)
+   CRM targets(일반 영업 파이프라인)와 별개로, 전시 참가기업의
+   매뉴얼→신청서→부스→정산→그래픽→도록→현장 실무 흐름을 추적한다.
+   서버 테이블과 1:1 대응하며, 컬럼명은 전부 snake_case다.
+══════════════════════════════════════════ */
+export const EXHIBITORS   = [];  // 기업×행사 1건 (체크리스트 본체)
+export const EXH_ITEMS    = [];  // 금액 항목 (부스/비품/그래픽/기타)
+export const EXH_INVOICES = [];  // 인보이스 (여러 장 발행 가능)
+export const EXH_PAYMENTS = [];  // 입금 내역 (분할 입금 대응)
+export const EXH_LOGS     = [];  // 문의사항(kind='inquiry') + 자유 기록(kind='note')
+
+/* 전시 탭에서 지금 보고 있는 행사 (null = 미선택) */
+let exhEvent = null;
+export function setExhEvent(v){ exhEvent = v; }
+export { exhEvent };
+
+/* ── 전시 조회 헬퍼 ── */
+export function exhibitorsForEvent(evKey){
+  return EXHIBITORS.filter(x => x.event_id === evKey);
+}
+export function getExhibitorById(id){
+  return EXHIBITORS.find(x => x.id === id);
+}
+export function itemsFor(exhId){ return EXH_ITEMS.filter(i => i.exhibitor_id === exhId); }
+export function invoicesFor(exhId){ return EXH_INVOICES.filter(i => i.exhibitor_id === exhId); }
+export function paymentsFor(exhId){ return EXH_PAYMENTS.filter(p => p.exhibitor_id === exhId); }
+export function logsFor(exhId){
+  return EXH_LOGS.filter(l => l.exhibitor_id === exhId)
+    .sort((a,b) => String(b.ts||'').localeCompare(String(a.ts||'')));
+}
+/* 미답변 문의 — 답변 안 한 게 묻히는 걸 막는 게 이 기능의 핵심이라
+   여러 화면(체크리스트 배지/상단 패널/드로어)에서 같은 정의를 공유한다. */
+export function openInquiriesFor(exhId){
+  return EXH_LOGS.filter(l => l.exhibitor_id === exhId && l.kind === 'inquiry' && !l.answered_at);
+}
+
+/* ══════════════════════════════════════════
    Audit / 세션 (원본 4902~4910행)
 ══════════════════════════════════════════ */
 export const ALLOWED_DOMAIN = '@13100m.net';

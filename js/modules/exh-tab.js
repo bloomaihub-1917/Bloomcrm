@@ -1,0 +1,500 @@
+/* ══════════════════════════════════════════════════════════════
+   exh-tab.js — 전시 참가기업 진행관리 (전시 탭)
+
+   기존 CRM 탭은 일반 영업 파이프라인(미접촉→컨택중→확정)이라 성격이 완전히
+   달라 섞지 않고 분리했다. 여기서 다루는 건 전시 실무 흐름이다:
+     매뉴얼 발송/회신 → 신청서 → 부스 배정 → 정산(인보이스·세금계산서·입금)
+     → 그래픽 → 도록 → 현장
+   여기에 더해, 단계와 무관하게 수시로 들어오는 문의사항을 받아 적고
+   답변 여부를 추적한다(답변 안 한 문의가 묻히는 게 가장 큰 리스크).
+
+   데이터는 전부 서버 컬럼명(snake_case) 그대로 다룬다 — 변환 레이어를 두지
+   않아 저장할 때 필드명이 어긋날 여지를 없앴다.
+═══════════════════════════════════════════════════════════════ */
+
+import {
+  EXHIBITORS, EXH_ITEMS, EXH_INVOICES, EXH_PAYMENTS, EXH_LOGS,
+  exhEvent, setExhEvent,
+  exhibitorsForEvent, getExhibitorById, itemsFor, invoicesFor, paymentsFor,
+  logsFor, openInquiriesFor,
+  EVENT_LIST, contacts, participations, CO_DB, currentUser, API_BASE_URL,
+} from '../state.js';
+import { td, escapeHtml, escAttr } from '../utils.js';
+import {
+  saveExhibitor, saveExhItem, saveExhInvoice, saveExhPayment, saveExhLog,
+  deleteExhItem, deleteExhInvoice, deleteExhPayment, deleteExhLog,
+  batchCreateExhibitors,
+} from '../api.js';
+import { trackAction } from './audit-tab.js';
+import { normalizeCompanyKey } from './company-tab.js';
+
+/* 전시 참가기업으로 취급할 참가 역할 — 데이터에 표기 흔들림이 있어 함께 본다 */
+const EXH_ROLES = ['전시참가기업', '전시기업', '전시참가'];
+
+/* 체크리스트 표의 열 정의. key는 exhibitors 컬럼, 또는 파생 계산(calc). */
+const STEPS = [
+  { key: 'manual_sent_at',       label: '매뉴얼<br>발송' },
+  { key: 'manual_replied_at',    label: '매뉴얼<br>회신' },
+  { key: 'app_received_at',      label: '신청서',   warn: (x) => x.app_received_at && x.app_complete === 'no' },
+  { key: 'booth_confirmed_at',   label: '부스' },
+  { key: 'calc:invoice',         label: '인보이스' },
+  { key: 'tax_sent_at',          label: '세금<br>계산서' },
+  { key: 'calc:payment',         label: '입금' },
+  { key: 'calc:graphic',         label: '그래픽' },
+  { key: 'directory_received_at',label: '도록' },
+  { key: 'movein_at',            label: '현장' },
+];
+
+let exhFilter = 'all';       // all | incomplete | unpaid | inquiry
+let exhAssignee = null;      // null = 전체
+
+/* 드로어는 exh-drawer.js가 소유한다. 이 파일이 그쪽을 import하면 순환 참조가
+   되므로(드로어가 여기 집계 함수를 쓴다) window 경유로만 호출한다 —
+   기존 모듈들이 window.switchApp?.() 를 쓰는 것과 같은 방식. */
+
+/* ══════════════════════════════════════════
+   집계 헬퍼 — 여러 화면이 같은 정의를 쓰도록 한곳에 모은다
+══════════════════════════════════════════ */
+const num = (v) => { const n = Number(String(v ?? '').replace(/[^0-9.-]/g, '')); return isNaN(n) ? 0 : n; };
+export const money = (v) => num(v).toLocaleString('ko-KR');
+
+/* 청구액: 인보이스를 발행했으면 인보이스 합계, 아직이면 금액 항목 합계 */
+export function billedAmount(exhId){
+  const inv = invoicesFor(exhId);
+  if(inv.length) return inv.reduce((s, i) => s + num(i.amount), 0);
+  return itemsFor(exhId).reduce((s, i) => s + num(i.amount), 0);
+}
+export function paidAmount(exhId){
+  return paymentsFor(exhId).reduce((s, p) => s + num(p.amount), 0);
+}
+/* 그래픽 진행 상태 — 주문 안 했으면 해당 없음, 출력/제작에 따라 완료 기준이 다르다 */
+export function graphicState(x){
+  if(!x.graphic_ordered_at) return { state: 'none' };
+  if(x.graphic_type === 'print'){
+    if(x.graphic_spec_ok === 'no') return { state: 'warn', text: '규격 확인' };
+    return x.graphic_spec_ok === 'yes' ? { state: 'done', text: '출력' } : { state: 'todo', text: '규격 미확인' };
+  }
+  if(x.graphic_type === 'design'){
+    if(x.graphic_final_at)   return { state: 'done', text: '최종안' };
+    if(x.graphic_revised_at) return { state: 'todo', text: '수정안' };
+    if(x.graphic_draft_at)   return { state: 'todo', text: '초안' };
+    return { state: 'todo', text: '진행 전' };
+  }
+  return { state: 'todo', text: '유형 미정' };
+}
+
+export function daysSince(dateStr){
+  if(!dateStr) return 0;
+  const d = new Date(dateStr);
+  if(isNaN(d)) return 0;
+  return Math.floor((Date.now() - d.getTime()) / 86400000);
+}
+
+/* 셀 상태 계산 — 완료(done) / 미완(todo) / 주의(warn) */
+function cellState(x, step){
+  if(step.key === 'calc:invoice'){
+    const inv = invoicesFor(x.id);
+    if(!inv.length) return { state: 'todo' };
+    const sent = inv.filter(i => i.sent_at);
+    if(!sent.length) return { state: 'warn', text: '미발송' };
+    return { state: 'done', text: sent.length > 1 ? `${sent.length}건` : sent[0].sent_at };
+  }
+  if(step.key === 'calc:payment'){
+    const billed = billedAmount(x.id), paid = paidAmount(x.id);
+    if(!billed) return { state: 'todo' };
+    if(paid >= billed) return { state: 'done', text: '완납' };
+    if(paid > 0) return { state: 'part', text: Math.round(paid / billed * 100) + '%' };
+    // 입금 예정일이 지났는데 한 푼도 안 들어왔으면 경고
+    const overdue = invoicesFor(x.id).some(i => i.due_date && daysSince(i.due_date) > 0);
+    return overdue ? { state: 'warn', text: '지연' } : { state: 'todo' };
+  }
+  if(step.key === 'calc:graphic'){
+    const g = graphicState(x);
+    if(g.state === 'none') return { state: 'na' };
+    return g;
+  }
+  const v = x[step.key];
+  if(step.warn && step.warn(x)) return { state: 'warn', text: v };
+  return v ? { state: 'done', text: v } : { state: 'todo' };
+}
+
+/* 기업별 진행률 — 해당 없음(그래픽 미주문)은 분모에서 제외 */
+function progressOf(x){
+  let done = 0, total = 0;
+  STEPS.forEach(s => {
+    const c = cellState(x, s);
+    if(c.state === 'na') return;
+    total++;
+    if(c.state === 'done') done++;
+  });
+  return total ? Math.round(done / total * 100) : 0;
+}
+
+/* ══════════════════════════════════════════
+   사이드바
+══════════════════════════════════════════ */
+/* 고를 수 있는 행사 목록.
+   events 테이블(EVENT_LIST)에 등록되지 않았는데 participations에는 전시참가기업으로
+   올라와 있는 행사가 실제로 존재한다(업로드 시 행사를 따로 만들지 않은 경우).
+   그런 행사도 전시 관리 대상이므로 key만으로 만들어 함께 보여준다. */
+export function exhEventOptions(){
+  const map = new Map(EVENT_LIST.map(e => [e.key, e]));
+  const addLoose = (key) => {
+    if(!key || map.has(key)) return;
+    map.set(key, { key, name: key, short: key, color: '#9C9890', loose: true });
+  };
+  participations.forEach(p => {
+    if(EXH_ROLES.includes(String(p.role || '').trim())) addLoose(p.eventId);
+  });
+  EXHIBITORS.forEach(x => addLoose(x.event_id));
+  return [...map.values()];
+}
+
+export function buildExhEvList(){
+  const el = document.getElementById('exh-ev-list');
+  if(!el) return;
+  const opts = exhEventOptions();
+  // 참가기업이 등록됐거나 전시 대상이 있는 행사를 위로, 나머지는 아래로
+  const hasWork = (k) => exhibitorsForEvent(k).length || exhibitorCandidates(k).length;
+  const list = opts.filter(e => hasWork(e.key));
+  const rest = opts.filter(e => !hasWork(e.key));
+  if((!exhEvent || !opts.some(e => e.key === exhEvent)) && list.length) setExhEvent(list[0].key);
+
+  const row = (e, n) => `<button class="nr${exhEvent === e.key ? ' on' : ''}" onclick="setExhEvent2('${escAttr(e.key)}')">
+      <span class="ev-pill-dot" style="background:${escAttr(e.color || '#9C9890')}"></span>${escapeHtml(e.short || e.name || e.key)}
+      ${n ? `<span class="nbg">${n}</span>` : ''}</button>`;
+
+  el.innerHTML = (list.map(e => row(e, exhibitorsForEvent(e.key).length)).join('')
+    + (rest.length ? `<div style="font-size:10px;color:var(--i4);margin:8px 0 4px;padding-left:2px">전시 대상 없음</div>`
+        + rest.map(e => row(e, 0)).join('') : ''))
+    || '<div style="font-size:11px;color:var(--i4);padding:6px 2px">등록된 행사가 없어요</div>';
+
+  buildExhFilters();
+}
+
+function buildExhFilters(){
+  const el = document.getElementById('exh-filter-list');
+  if(el){
+    const list = exhibitorsForEvent(exhEvent);
+    const openInq = list.reduce((s, x) => s + openInquiriesFor(x.id).length, 0);
+    const incomplete = list.filter(x => progressOf(x) < 100).length;
+    const unpaid = list.filter(x => { const b = billedAmount(x.id); return b > 0 && paidAmount(x.id) < b; }).length;
+    const f = (k, label, n) => `<button class="nr${exhFilter === k ? ' on' : ''}" onclick="setExhFilter('${k}')">${label}<span class="nbg">${n}</span></button>`;
+    el.innerHTML = f('all', '전체', list.length) + f('incomplete', '진행 중', incomplete)
+      + f('unpaid', '입금 미완료', unpaid) + f('inquiry', '미답변 문의', openInq);
+  }
+  const ael = document.getElementById('exh-assignee-list');
+  if(ael){
+    const list = exhibitorsForEvent(exhEvent);
+    const names = [...new Set(list.map(x => x.assignee).filter(Boolean))].sort();
+    ael.innerHTML = `<button class="nr${!exhAssignee ? ' on' : ''}" onclick="setExhAssignee('')">전체<span class="nbg">${list.length}</span></button>`
+      + names.map(n => {
+        const mine = list.filter(x => x.assignee === n);
+        const open = mine.reduce((s, x) => s + openInquiriesFor(x.id).length, 0);
+        return `<button class="nr${exhAssignee === n ? ' on' : ''}" onclick="setExhAssignee('${escAttr(n)}')">${escapeHtml(n)}<span class="nbg">${mine.length}${open ? ` · 문의${open}` : ''}</span></button>`;
+      }).join('');
+  }
+}
+
+export function setExhEvent2(key){ setExhEvent(key); buildExhEvList(); renderExh(); }
+export function setExhFilter(k){ exhFilter = k; buildExhFilters(); renderExh(); }
+export function setExhAssignee(n){ exhAssignee = n || null; buildExhFilters(); renderExh(); }
+
+/* ══════════════════════════════════════════
+   메인 — 미답변 문의 패널 + 체크리스트 표
+══════════════════════════════════════════ */
+function visibleList(){
+  const q = (document.getElementById('exh-q')?.value || '').trim().toLowerCase();
+  let list = exhibitorsForEvent(exhEvent);
+  if(exhAssignee) list = list.filter(x => x.assignee === exhAssignee);
+  if(exhFilter === 'incomplete') list = list.filter(x => progressOf(x) < 100);
+  if(exhFilter === 'unpaid')     list = list.filter(x => { const b = billedAmount(x.id); return b > 0 && paidAmount(x.id) < b; });
+  if(exhFilter === 'inquiry')    list = list.filter(x => openInquiriesFor(x.id).length);
+  if(q) list = list.filter(x => String(x.company_name || '').toLowerCase().includes(q));
+  return list.sort((a, b) => String(a.company_name || '').localeCompare(String(b.company_name || ''), 'ko'));
+}
+
+export function renderExh(){
+  const el = document.getElementById('exh-body');
+  if(!el) return;
+
+  const ev = exhEventOptions().find(e => e.key === exhEvent);
+  const ttl = document.getElementById('exh-ttl');
+  if(ttl) ttl.innerHTML = `전시 진행관리 <span class="tb-s">${ev ? escapeHtml(ev.short || ev.name) + ' · ' : ''}참가기업 준비 현황</span>`;
+
+  const list = visibleList();
+  const all = exhibitorsForEvent(exhEvent);
+
+  if(!all.length){
+    el.innerHTML = `<div class="empty" style="padding:60px 20px;text-align:center">
+      <div style="font-size:30px;margin-bottom:10px">🏢</div>
+      <div style="font-weight:700;margin-bottom:6px">등록된 참가기업이 없어요</div>
+      <div style="font-size:12px;color:var(--i4);margin-bottom:14px">
+        기업DB에 "전시참가기업"으로 기록된 기업을 불러오거나 직접 추가할 수 있어요</div>
+      <button class="btn bp" onclick="openExhImport()">참가기업 불러오기</button></div>`;
+    return;
+  }
+
+  el.innerHTML = renderInquiryPanel() + renderChecklist(list, all);
+}
+
+/* 미답변 문의 패널 — 프로세스와 무관하게 들어오는 문의를 놓치지 않는 게 목적이라
+   화면 최상단에 두고 오래된 것부터 보여준다. */
+function renderInquiryPanel(){
+  const list = exhibitorsForEvent(exhEvent);
+  const open = [];
+  list.forEach(x => openInquiriesFor(x.id).forEach(l => open.push({ l, x })));
+  if(!open.length) return '';
+  open.sort((a, b) => String(a.l.ts || '').localeCompare(String(b.l.ts || '')));
+
+  return `<div class="uc" style="margin:14px 16px;border-left:3px solid var(--am)">
+    <div class="uc-ttl" style="display:flex;align-items:center;gap:8px">
+      <span>미답변 문의</span><span class="pill p-amber">${open.length}건</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:1px;margin-top:8px">
+      ${open.slice(0, 8).map(({ l, x }) => {
+        const d = daysSince(l.ts);
+        return `<div onclick="openExhDr('${escAttr(x.id)}',3)" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;cursor:pointer;background:var(--i9)">
+          <span style="font-weight:700;font-size:12px;min-width:120px">${escapeHtml(x.company_name || '')}</span>
+          <span style="font-size:12px;color:var(--i2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(l.subject || l.body || '(내용 없음)')}</span>
+          ${l.status === 'hold' ? '<span class="pill p-gray">확인 중</span>' : ''}
+          <span class="pill ${d >= 3 ? 'p-amber' : 'p-gray'}">${d === 0 ? '오늘' : d + '일 경과'}</span>
+          <span style="font-size:11px;color:var(--i4);min-width:56px;text-align:right">${escapeHtml(x.assignee || '-')}</span>
+        </div>`;
+      }).join('')}
+      ${open.length > 8 ? `<div style="font-size:11px;color:var(--i4);padding:6px 10px">외 ${open.length - 8}건</div>` : ''}
+    </div></div>`;
+}
+
+function renderChecklist(list, all){
+  const cell = (x, s) => {
+    const c = cellState(x, s);
+    const map = {
+      done: { bg: 'var(--gb)', fg: 'var(--g)',  mark: '✓' },
+      part: { bg: 'var(--ab)', fg: 'var(--am)', mark: '◐' },
+      warn: { bg: 'var(--rb)', fg: 'var(--re)', mark: '!' },
+      todo: { bg: 'transparent', fg: 'var(--i5)', mark: '—' },
+      na:   { bg: 'transparent', fg: 'var(--i6)', mark: '·' },
+    }[c.state];
+    const tip = c.text ? escAttr(String(c.text)) : '';
+    return `<td style="text-align:center;padding:5px 3px" title="${tip}">
+      <div style="display:inline-flex;flex-direction:column;align-items:center;gap:1px;min-width:44px;padding:3px 4px;border-radius:5px;background:${map.bg}">
+        <span style="font-size:12px;font-weight:800;color:${map.fg};line-height:1">${map.mark}</span>
+        ${c.text ? `<span style="font-size:9px;color:${map.fg};line-height:1.1">${escapeHtml(String(c.text).slice(5) || String(c.text))}</span>` : ''}
+      </div></td>`;
+  };
+
+  const stats = STEPS.map(s => ({
+    label: s.label.replace(/<br>/g, ''),
+    n: all.filter(x => cellState(x, s).state === 'done').length,
+  }));
+
+  return `<div style="padding:0 16px 16px">
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin:12px 0">
+      ${stats.map(s => `<span class="pill ${s.n === all.length ? 'p-green' : 'p-gray'}">${escapeHtml(s.label)} ${s.n}/${all.length}</span>`).join('')}
+    </div>
+    <div class="tw"><table><thead><tr>
+      <th style="min-width:150px">기업</th>
+      <th style="min-width:60px">담당</th>
+      <th style="min-width:70px">진행률</th>
+      ${STEPS.map(s => `<th style="text-align:center;font-size:10px;line-height:1.2">${s.label}</th>`).join('')}
+      <th style="text-align:center;min-width:50px">문의</th>
+      <th style="text-align:right;min-width:110px">입금/청구</th>
+    </tr></thead><tbody>
+    ${list.map(x => {
+      const p = progressOf(x);
+      const openN = openInquiriesFor(x.id).length;
+      const billed = billedAmount(x.id), paid = paidAmount(x.id);
+      return `<tr style="cursor:pointer" onclick="openExhDr('${escAttr(x.id)}')">
+        <td><div style="font-weight:700;font-size:12px">${escapeHtml(x.company_name || '')}</div>
+            ${x.booth_no ? `<div style="font-size:10px;color:var(--i4)">부스 ${escapeHtml(x.booth_no)}</div>` : ''}</td>
+        <td style="font-size:11px;color:var(--i3)">${escapeHtml(x.assignee || '-')}</td>
+        <td><div class="br" style="width:52px"><div class="brf" style="width:${p}%"></div></div>
+            <span style="font-size:10px;color:var(--i4)">${p}%</span></td>
+        ${STEPS.map(s => cell(x, s)).join('')}
+        <td style="text-align:center" onclick="event.stopPropagation();openExhDr('${escAttr(x.id)}',3)">
+          ${openN ? `<span class="pill p-amber">${openN}</span>` : '<span style="color:var(--i6)">·</span>'}</td>
+        <td style="text-align:right;font-size:11px">
+          ${billed ? `<span style="font-weight:700;color:${paid >= billed ? 'var(--g)' : 'var(--i2)'}">${money(paid)}</span>
+            <span style="color:var(--i5)"> / ${money(billed)}</span>` : '<span style="color:var(--i6)">-</span>'}</td>
+      </tr>`;
+    }).join('')}
+    </tbody></table></div>
+    ${!list.length ? '<div class="empty" style="padding:30px;text-align:center;font-size:12px;color:var(--i4)">조건에 맞는 기업이 없어요</div>' : ''}
+  </div>`;
+}
+
+/* ══════════════════════════════════════════
+   참가기업 불러오기 — 트래킹 대상 확보
+
+   participations에서 이 행사의 "전시참가기업" 역할을 뽑아 기업 단위로 묶는다.
+   (CO_DB[].events는 eventId를 안 들고 있어 행사별로 되짚을 수 없다.)
+══════════════════════════════════════════ */
+export function exhibitorCandidates(evKey){
+  const map = new Map();
+  participations
+    .filter(p => p.eventId === evKey && EXH_ROLES.includes(String(p.role || '').trim()))
+    .forEach(p => {
+      const c = contacts.find(x => String(x.id) === String(p.contactId));
+      if(!c) return;
+      const raw = c.orgKo || c.orgEn || '';
+      if(!raw) return;
+      const key = normalizeCompanyKey(raw);
+      if(!map.has(key)){
+        const co = CO_DB.find(o => o.key === key);
+        map.set(key, { company_key: key, company_name: (co && co.nameKo) || raw, people: [] });
+      }
+      const nm = c.nameKo || c.nameEn || '';
+      if(nm && !map.get(key).people.includes(nm)) map.get(key).people.push(nm);
+    });
+  return [...map.values()].sort((a, b) => a.company_name.localeCompare(b.company_name, 'ko'));
+}
+
+export function openExhImport(){
+  closeExhImport();
+  const evKey = exhEvent || (EVENT_LIST[0] && EVENT_LIST[0].key) || '';
+  const pop = document.createElement('div');
+  pop.id = 'exh-import-modal';
+  pop.className = 'mw on';
+  pop.onclick = (e) => { if(e.target === pop) closeExhImport(); };
+  pop.innerHTML = `<div class="modal" style="max-width:560px">
+    <div class="mh"><div class="mt2">참가기업 불러오기</div>
+      <div class="mc">기업DB에 "전시참가기업"으로 기록된 기업을 골라 진행관리에 등록해요</div></div>
+    <div class="mb">
+      <div class="fg"><label class="fl">행사</label>
+        <select class="fi" id="exh-imp-ev" onchange="renderExhImportList()">
+          ${exhEventOptions().map(e => `<option value="${escAttr(e.key)}"${e.key === evKey ? ' selected' : ''}>${escapeHtml(e.name || e.key)}</option>`).join('')}
+        </select></div>
+      <div class="fg"><label class="fl">담당자 — 고른 기업에 일괄 지정</label>
+        <input class="fi" id="exh-imp-who" placeholder="예: 정다혜" value="${escAttr(currentUser?.name || '')}"></div>
+      <div class="fg"><label class="fl">대상 기업</label>
+        <div id="exh-imp-list" style="max-height:300px;overflow-y:auto;border:1px solid var(--i7);border-radius:8px;padding:6px"></div></div>
+    </div>
+    <div class="mf2">
+      <button class="btn" onclick="closeExhImport()">취소</button>
+      <button class="btn bp" onclick="confirmExhImport()" id="exh-imp-btn">등록</button>
+    </div></div>`;
+  document.body.appendChild(pop);
+  renderExhImportList();
+}
+export function closeExhImport(){ document.getElementById('exh-import-modal')?.remove(); }
+
+export function renderExhImportList(){
+  const el = document.getElementById('exh-imp-list');
+  if(!el) return;
+  const evKey = document.getElementById('exh-imp-ev').value;
+  const cands = exhibitorCandidates(evKey);
+  const already = new Set(exhibitorsForEvent(evKey).map(x => x.company_key));
+
+  if(!cands.length){
+    el.innerHTML = `<div style="font-size:12px;color:var(--i4);padding:14px;text-align:center">
+      이 행사에 "전시참가기업" 역할로 기록된 기업이 없어요.<br>
+      업로드 시 참가 역할을 전시참가기업으로 지정했는지 확인해주세요.</div>`;
+    return;
+  }
+  el.innerHTML = cands.map((c, i) => {
+    const dup = already.has(c.company_key);
+    return `<label style="display:flex;align-items:center;gap:9px;padding:6px 7px;border-radius:6px;cursor:${dup ? 'default' : 'pointer'};opacity:${dup ? .45 : 1}">
+      <input type="checkbox" class="exh-imp-cb" data-i="${i}" ${dup ? 'disabled' : 'checked'}>
+      <span style="font-weight:600;font-size:12px;flex:1">${escapeHtml(c.company_name)}</span>
+      ${c.people.length ? `<span style="font-size:10px;color:var(--i4)">${escapeHtml(c.people.slice(0,2).join(', '))}${c.people.length > 2 ? ` 외 ${c.people.length - 2}` : ''}</span>` : ''}
+      ${dup ? '<span class="pill p-gray">등록됨</span>' : ''}
+    </label>`;
+  }).join('');
+  el._cands = cands;
+}
+
+export async function confirmExhImport(){
+  const el = document.getElementById('exh-imp-list');
+  const evKey = document.getElementById('exh-imp-ev').value;
+  const who = document.getElementById('exh-imp-who').value.trim();
+  const cands = el._cands || [];
+  const picked = [...document.querySelectorAll('.exh-imp-cb')]
+    .filter(cb => cb.checked && !cb.disabled)
+    .map(cb => cands[+cb.dataset.i]).filter(Boolean);
+
+  if(!picked.length){ alert('등록할 기업을 선택해주세요.'); return; }
+  const btn = document.getElementById('exh-imp-btn');
+  if(btn){ btn.disabled = true; btn.textContent = '등록 중…'; }
+
+  const rows = picked.map(c => ({
+    event_id: evKey, company_key: c.company_key, company_name: c.company_name,
+    assignee: who, status: '준비중', updated_at: td(),
+  }));
+
+  const r = await batchCreateExhibitors(rows);
+  if(!r.ok){
+    if(btn){ btn.disabled = false; btn.textContent = '등록'; }
+    alert('등록에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
+    return;
+  }
+  // 서버가 id를 만들어 주므로, 로컬 반영은 저장 직후 재조회로 맞춘다
+  await reloadExhibitors();
+  setExhEvent(evKey);
+  closeExhImport();
+  buildExhEvList();
+  renderExh();
+  trackAction('add', '전시 참가기업 등록', `${picked.length}개사`,
+    `<b>${escapeHtml(picked.length + '개사')}</b>를 전시 진행관리에 등록했어요`);
+}
+
+/* 서버가 id를 생성하는 일괄 등록 직후에만 쓰는 재조회 — 화면 전체를 다시 그리는
+   loadFromSheets 대신 exhibitors만 가볍게 다시 읽는다. */
+async function reloadExhibitors(){
+  if(!API_BASE_URL || !currentUser) return;
+  const { safeFetch, authHeaders } = await import('../api.js');
+  const rows = await safeFetch(API_BASE_URL + '/api/data?sheet=exhibitors', 'exhibitors', 1, await authHeaders());
+  if(Array.isArray(rows)) EXHIBITORS.splice(0, EXHIBITORS.length, ...rows);
+}
+
+/* ══════════════════════════════════════════
+   저장 — 단건 필드 수정
+   서버가 "넘어온 키만" 갱신하므로 바뀐 필드만 보낸다(나머지는 보존됨).
+══════════════════════════════════════════ */
+export async function patchExh(id, patch, label){
+  const x = getExhibitorById(id);
+  if(!x) return { ok: false };
+  const backup = {};
+  Object.keys(patch).forEach(k => { backup[k] = x[k]; });
+  Object.assign(x, patch);
+  refreshExhViews();
+
+  const r = await saveExhibitor({ id, ...patch, updated_at: td() });
+  if(!r.ok){
+    Object.assign(x, backup); // 저장 실패 시 되돌린다 — 화면만 바뀌는 거짓 성공 방지
+    refreshExhViews();
+    alert('저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
+    return r;
+  }
+  x.updated_at = td();
+  if(label) trackAction('edit', label, x.company_name || '', `<b>${escapeHtml(x.company_name || '')}</b> ${escapeHtml(label)}`);
+  return r;
+}
+
+/* 표와 드로어가 같은 데이터를 보므로 항상 함께 다시 그린다 */
+export function refreshExhViews(){
+  renderExh();
+  buildExhFilters();
+  window.renderExhDr?.();
+}
+
+/* 날짜 토글 — 비어있으면 오늘 날짜로 체크, 이미 있으면 해제 */
+export function toggleExhDate(id, field, label){
+  const x = getExhibitorById(id);
+  if(!x) return;
+  patchExh(id, { [field]: x[field] ? '' : td() }, label);
+}
+export function setExhField(id, field, value, label){
+  patchExh(id, { [field]: value }, label);
+}
+
+window.setExhEvent2 = setExhEvent2;
+window.setExhFilter = setExhFilter;
+window.setExhAssignee = setExhAssignee;
+window.renderExh = renderExh;
+window.openExhImport = openExhImport;
+window.closeExhImport = closeExhImport;
+window.renderExhImportList = renderExhImportList;
+window.confirmExhImport = confirmExhImport;
+window.toggleExhDate = toggleExhDate;
+window.setExhField = setExhField;

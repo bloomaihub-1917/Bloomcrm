@@ -11,6 +11,7 @@ import { buildMDBEvList, renderMDB } from './modules/db-tab.js';
 import { buildAuditUserList, renderAudit } from './modules/audit-tab.js';
 import { switchArchTab } from './modules/settings-tab.js';
 import { populateUploadEvDropdown } from './modules/upload-tab.js';
+import { buildExhEvList, renderExh } from './modules/exh-tab.js';
 
 export function switchApp(app, btn){
   setCurApp(app);
@@ -29,6 +30,7 @@ export function switchApp(app, btn){
   const sbp = document.getElementById('sbp-'+app);
   if(sbp) sbp.classList.add('on');
   if(app==='crm')    { buildEvFil(); renderCrm(); }
+  if(app==='exh')    { buildExhEvList(); renderExh(); }
   if(app==='co')     { buildCoDB(); showCoDashboard(); }
   if(app==='mdb')    { buildMDBEvList(); renderMDB(); }
   if(app==='audit')  { buildAuditUserList(); renderAudit(); }

@@ -35,6 +35,11 @@ import {
   contacts,
   participations,
   targets,
+  EXHIBITORS,
+  EXH_ITEMS,
+  EXH_INVOICES,
+  EXH_PAYMENTS,
+  EXH_LOGS,
   auditLog,
   COMPANY_INFO,
   COMPANY_SECTORS,
@@ -226,7 +231,8 @@ export async function loadFromSheets(hooks = {}){
   const headers = await authHeaders(); // 9개 요청이 같은 토큰을 쓰도록 한 번만 계산
 
   try {
-    const [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, companiesData, partTypesData] = await Promise.all([
+    const [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, companiesData, partTypesData,
+           exhData, exhItemData, exhInvData, exhPayData, exhLogData] = await Promise.all([
       safeFetch(base + 'contacts',       'contacts',       1, headers),
       safeFetch(base + 'participations', 'participations', 1, headers),
       safeFetch(base + 'crm_targets',    'crm_targets',    1, headers),
@@ -236,12 +242,18 @@ export async function loadFromSheets(hooks = {}){
       safeFetch(base + 'sectors',        'sectors',        1, headers),
       safeFetch(base + 'companies',      'companies',      1, headers),
       safeFetch(base + 'part_types',     'part_types',     1, headers),
+      safeFetch(base + 'exhibitors',         'exhibitors',         1, headers),
+      safeFetch(base + 'exhibitor_items',    'exhibitor_items',    1, headers),
+      safeFetch(base + 'exhibitor_invoices', 'exhibitor_invoices', 1, headers),
+      safeFetch(base + 'exhibitor_payments', 'exhibitor_payments', 1, headers),
+      safeFetch(base + 'exhibitor_logs',     'exhibitor_logs',     1, headers),
     ]);
 
     // ── 실패 감지 (신규) ──
     // safeFetch는 실패 시 예외 대신 null을 반환하므로, 여기서 null 개수를
     // 세지 않으면 "전 시트 로드 실패"도 성공으로 표시되는 버그가 있었다.
-    const _results = [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, companiesData, partTypesData];
+    const _results = [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, companiesData, partTypesData,
+      exhData, exhItemData, exhInvData, exhPayData, exhLogData];
     const _failed  = _results.filter(r => r === null).length;
     if(_failed === _results.length){
       // 전부 실패 — 연결 안 됨으로 처리하고 기존(stale) 화면 유지
@@ -447,6 +459,23 @@ export async function loadFromSheets(hooks = {}){
       console.log('targets loaded:', targets.length);
     }
 
+    /* ── 전시 참가기업 진행관리 ──
+       서버 컬럼명(snake_case)을 그대로 쓰므로 변환 없이 통째로 담는다.
+       주의: contacts 블록 안쪽(위)이 아니라 바깥에 둔다 — 안쪽에 두면
+       연락처가 0건일 때 전시 데이터까지 갱신이 안 되는 기존 함정에 빠진다. */
+    if(exhData && Array.isArray(exhData)){
+      EXHIBITORS.splice(0, EXHIBITORS.length, ...exhData);
+      console.log('[CRM] exhibitors 로드:', EXHIBITORS.length, '개');
+    }
+    if(exhItemData && Array.isArray(exhItemData)) EXH_ITEMS.splice(0, EXH_ITEMS.length, ...exhItemData);
+    if(exhInvData  && Array.isArray(exhInvData))  EXH_INVOICES.splice(0, EXH_INVOICES.length, ...exhInvData);
+    if(exhPayData  && Array.isArray(exhPayData))  EXH_PAYMENTS.splice(0, EXH_PAYMENTS.length, ...exhPayData);
+    if(exhLogData  && Array.isArray(exhLogData)){
+      EXH_LOGS.splice(0, EXH_LOGS.length, ...exhLogData);
+      const open = EXH_LOGS.filter(l => l.kind === 'inquiry' && !l.answered_at).length;
+      if(open) console.log('[CRM] 미답변 문의:', open, '건');
+    }
+
     // activity_log 업데이트
     if(logsData && Array.isArray(logsData)){
       // 구버전 행 복구: 예전 saveAuditToSheets가 6개 값을 한 칸씩 밀린 순서
@@ -631,4 +660,37 @@ export async function deletePartTypeRow(key){
 export async function migratePartTypesToSheet(){
   for(const t of PART_TYPES) await upsertPartTypeRow(t);
   console.log('[CRM] part_types 시트 마이그레이션 완료:', PART_TYPES.length, '개');
+}
+
+/* ══════════════════════════════════════════
+   4) 전시 참가기업 진행관리 저장 (객체형)
+
+   기존 시트들은 컬럼 순서에 맞춘 위치 배열(row)로 보내지만, exhibitors는
+   컬럼이 35개라 순서가 어긋나는 사고가 나기 쉬워 객체(data)로 보낸다.
+   서버는 이때 "넘어온 키만" 갱신하므로(부분 upsert), 체크 하나를 누를 때
+   {id, manual_sent_at} 처럼 바뀐 필드만 보내면 나머지는 그대로 보존된다.
+   신규 생성 시 서버가 id를 만들어 응답의 id로 돌려준다.
+══════════════════════════════════════════ */
+async function saveExhRow(sheet, obj, label){
+  return postToSheet({ sheet, data: obj }, label);
+}
+async function deleteExhRow(sheet, id, label){
+  return postToSheet({ sheet, action: 'delete', row: [id] }, label);
+}
+
+export const saveExhibitor       = (o) => saveExhRow('exhibitors',         o, '전시 참가기업 저장');
+export const saveExhItem         = (o) => saveExhRow('exhibitor_items',    o, '금액 항목 저장');
+export const saveExhInvoice      = (o) => saveExhRow('exhibitor_invoices', o, '인보이스 저장');
+export const saveExhPayment      = (o) => saveExhRow('exhibitor_payments', o, '입금 내역 저장');
+export const saveExhLog          = (o) => saveExhRow('exhibitor_logs',     o, '문의/기록 저장');
+
+export const deleteExhibitor     = (id) => deleteExhRow('exhibitors',         id, '전시 참가기업 삭제');
+export const deleteExhItem       = (id) => deleteExhRow('exhibitor_items',    id, '금액 항목 삭제');
+export const deleteExhInvoice    = (id) => deleteExhRow('exhibitor_invoices', id, '인보이스 삭제');
+export const deleteExhPayment    = (id) => deleteExhRow('exhibitor_payments', id, '입금 내역 삭제');
+export const deleteExhLog        = (id) => deleteExhRow('exhibitor_logs',     id, '문의/기록 삭제');
+
+/* 참가기업 일괄 등록 — 기업DB에서 전시참가기업을 뽑아 한 번에 만든다. */
+export async function batchCreateExhibitors(rows){
+  return postToSheet({ sheet: 'exhibitors', action: 'batchUpsert', dataRows: rows }, '참가기업 일괄 등록');
 }

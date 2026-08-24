@@ -134,7 +134,7 @@ function renderCoColumnToggleHtml(){
      { contactId, eventId, role, ... } 형태로 정규화해 두었으므로
      여기서는 p.cid/p.ev 대신 p.contactId/p.eventId를 사용한다.
 ══════════════════════════════════════════ */
-function normalizeCompanyKey(raw){
+export function normalizeCompanyKey(raw){
   if(!raw) return '';
   let s = String(raw).trim();
   s = s.replace(/^(주식회사|㈜|\(주\))\s*/, '').replace(/\s*(주식회사|㈜|\(주\))$/, '');
