@@ -158,6 +158,9 @@ CREATE TABLE IF NOT EXISTS exhibitors (
   manual_replied_at  TEXT,
 
   -- 2. 신청서
+  -- 관리대장에는 제출 여부가 O/X로만 있고 날짜가 없는 건이 많다. 날짜를 지어내지
+  -- 않기 위해 "받았다"는 사실(app_received)과 "언제"(app_received_at)를 나눠 둔다.
+  app_received       TEXT,  -- 'yes' | ''
   app_received_at    TEXT,
   app_complete       TEXT,  -- 'yes' | 'no' | ''
   app_missing        TEXT,  -- 누락 항목 메모
@@ -183,7 +186,8 @@ CREATE TABLE IF NOT EXISTS exhibitors (
   graphic_revised_at TEXT,  -- 수정안
   graphic_final_at   TEXT,  -- 최종안 확정
 
-  -- 6. 도록/디렉토리
+  -- 6. 도록/디렉토리 (신청서와 같은 이유로 여부/날짜를 분리)
+  directory_received    TEXT,  -- 'yes' | ''
   directory_received_at TEXT,
   directory_note        TEXT,
 
@@ -222,6 +226,7 @@ CREATE TABLE IF NOT EXISTS exhibitor_items (
   qty          TEXT,
   unit_price   TEXT,
   amount       TEXT,
+  currency     TEXT,   -- 'KRW' | 'USD' (비우면 KRW)
   note         TEXT,
   sort_order   TEXT
 );
@@ -237,6 +242,7 @@ CREATE TABLE IF NOT EXISTS exhibitor_invoices (
   sent_at      TEXT,
   due_date     TEXT,   -- 입금 예정일
   amount       TEXT,
+  currency     TEXT,   -- 'KRW' | 'USD' (비우면 KRW)
   note         TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_exhibitor_invoices_exh ON exhibitor_invoices(exhibitor_id);
@@ -249,6 +255,7 @@ CREATE TABLE IF NOT EXISTS exhibitor_payments (
   invoice_id   TEXT,
   paid_at      TEXT,
   amount       TEXT,
+  currency     TEXT,   -- 'KRW' | 'USD' (비우면 KRW)
   method       TEXT,
   note         TEXT
 );

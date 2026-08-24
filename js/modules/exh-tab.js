@@ -35,13 +35,14 @@ const EXH_ROLES = ['전시참가기업', '전시기업', '전시참가'];
 const STEPS = [
   { key: 'manual_sent_at',       label: '매뉴얼<br>발송' },
   { key: 'manual_replied_at',    label: '매뉴얼<br>회신' },
-  { key: 'app_received_at',      label: '신청서',   warn: (x) => x.app_received_at && x.app_complete === 'no' },
+  { key: 'app_received_at',      label: '신청서',   flag: 'app_received',
+    warn: (x) => (x.app_received_at || x.app_received === 'yes') && x.app_complete === 'no' },
   { key: 'booth_confirmed_at',   label: '부스' },
   { key: 'calc:invoice',         label: '인보이스' },
   { key: 'tax_sent_at',          label: '세금<br>계산서' },
   { key: 'calc:payment',         label: '입금' },
   { key: 'calc:graphic',         label: '그래픽' },
-  { key: 'directory_received_at',label: '도록' },
+  { key: 'directory_received_at',label: '도록', flag: 'directory_received' },
   { key: 'movein_at',            label: '현장' },
 ];
 
@@ -58,14 +59,30 @@ let exhAssignee = null;      // null = 전체
 const num = (v) => { const n = Number(String(v ?? '').replace(/[^0-9.-]/g, '')); return isNaN(n) ? 0 : n; };
 export const money = (v) => num(v).toLocaleString('ko-KR');
 
+/* 이 기업이 쓰는 통화. 인보이스가 있으면 그 통화, 없으면 금액 항목 기준.
+   USD 청구와 KRW 청구가 섞이면 더할 수 없으므로 통화를 하나로 정해 그것만 합산한다. */
+export function currencyOf(exhId){
+  const inv = invoicesFor(exhId);
+  const src = inv.length ? inv : itemsFor(exhId);
+  const hit = src.find(r => r.currency);
+  return (hit && hit.currency) || 'KRW';
+}
+const sumIn = (rows, cur) => rows
+  .filter(r => (r.currency || 'KRW') === cur)
+  .reduce((s, r) => s + num(r.amount), 0);
+
 /* 청구액: 인보이스를 발행했으면 인보이스 합계, 아직이면 금액 항목 합계 */
 export function billedAmount(exhId){
+  const cur = currencyOf(exhId);
   const inv = invoicesFor(exhId);
-  if(inv.length) return inv.reduce((s, i) => s + num(i.amount), 0);
-  return itemsFor(exhId).reduce((s, i) => s + num(i.amount), 0);
+  return inv.length ? sumIn(inv, cur) : sumIn(itemsFor(exhId), cur);
 }
 export function paidAmount(exhId){
-  return paymentsFor(exhId).reduce((s, p) => s + num(p.amount), 0);
+  return sumIn(paymentsFor(exhId), currencyOf(exhId));
+}
+/* 금액 표시 — 통화 기호를 붙인다 */
+export function fmtMoney(v, cur){
+  return (cur === 'USD' ? '$' : '') + money(v) + (cur === 'USD' ? '' : '원');
 }
 /* 그래픽 진행 상태 — 주문 안 했으면 해당 없음, 출력/제작에 따라 완료 기준이 다르다 */
 export function graphicState(x){
@@ -157,8 +174,11 @@ function cellState(x, step){
     return g;
   }
   const v = x[step.key];
-  if(step.warn && step.warn(x)) return { state: 'warn', text: v };
-  return v ? { state: 'done', text: v } : { state: 'todo' };
+  // 관리대장에 O/X만 있고 날짜가 없는 항목이 많다. 날짜를 지어내지 않되
+  // "받았다"는 사실은 완료로 인정한다(날짜가 없으면 ✓만 표시).
+  const done = v || (step.flag && x[step.flag] === 'yes');
+  if(step.warn && step.warn(x)) return { state: 'warn', text: v || '' };
+  return done ? { state: 'done', text: v || '' } : { state: 'todo' };
 }
 
 /* 기업별 진행률 — 해당 없음(그래픽 미주문)은 분모에서 제외 */
@@ -368,7 +388,8 @@ function renderChecklist(list, all){
         <td style="text-align:center" onclick="event.stopPropagation();openExhDr('${escAttr(x.id)}',3)">
           ${openN ? `<span class="pill p-amber">${openN}</span>` : '<span style="color:var(--i6)">·</span>'}</td>
         <td style="text-align:right;font-size:11px">
-          ${billed ? `<span style="font-weight:700;color:${paid >= billed ? 'var(--g)' : 'var(--i2)'}">${money(paid)}</span>
+          ${billed ? `<span style="font-weight:700;color:${paid >= billed ? 'var(--g)' : 'var(--i2)'}">${
+              currencyOf(x.id) === 'USD' ? '$' : ''}${money(paid)}</span>
             <span style="color:var(--i5)"> / ${money(billed)}</span>` : '<span style="color:var(--i6)">-</span>'}</td>
       </tr>`;
     }).join('')}
@@ -541,6 +562,18 @@ export function setExhField(id, field, value, label){
   patchExh(id, { [field]: value }, label);
 }
 
+/* 여부 플래그 토글 — 끌 때는 날짜도 함께 지운다(체크는 꺼졌는데 날짜만 남는 상태 방지) */
+export function toggleExhFlag(id, flag, dateField, label){
+  const x = getExhibitorById(id);
+  if(!x) return;
+  const on = x[flag] === 'yes' || !!x[dateField];
+  patchExh(id, on ? { [flag]: '', [dateField]: '' } : { [flag]: 'yes' }, label);
+}
+/* 날짜를 넣으면 여부도 함께 켠다 */
+export function setExhDateWithFlag(id, dateField, flag, value, label){
+  patchExh(id, value ? { [dateField]: value, [flag]: 'yes' } : { [dateField]: '' }, label);
+}
+
 window.setExhEvent2 = setExhEvent2;
 window.setExhFilter = setExhFilter;
 window.setExhAssignee = setExhAssignee;
@@ -551,3 +584,5 @@ window.renderExhImportList = renderExhImportList;
 window.confirmExhImport = confirmExhImport;
 window.toggleExhDate = toggleExhDate;
 window.setExhField = setExhField;
+window.toggleExhFlag = toggleExhFlag;
+window.setExhDateWithFlag = setExhDateWithFlag;

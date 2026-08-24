@@ -23,7 +23,7 @@ import {
 } from '../api.js';
 import { trackAction } from './audit-tab.js';
 import {
-  billedAmount, paidAmount, graphicState, money, daysSince,
+  billedAmount, paidAmount, graphicState, money, fmtMoney, currencyOf, daysSince,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail,
 } from './exh-tab.js';
 
@@ -87,6 +87,22 @@ function dateRow(x, field, label, hint){
       ${hint ? `<span style="font-size:10.5px;color:var(--i5);font-weight:400"> ${escapeHtml(hint)}</span>` : ''}</span>
     <input type="date" class="fi" style="width:140px;padding:4px 8px;font-size:11.5px" value="${escAttr(x[field] || '')}"
       onchange="setExhField('${escAttr(x.id)}','${field}',this.value,'${escAttr(label)}')">
+  </div>`;
+}
+
+/* 여부(플래그) + 날짜를 함께 다루는 줄.
+   관리대장에서 넘어온 건은 "받았다"는 사실만 있고 날짜가 없다. 체크는 플래그로
+   켜고, 날짜를 알게 되면 그때 채우면 된다(날짜를 넣으면 플래그도 함께 켠다). */
+function flagRow(x, flag, dateField, label, hint){
+  const on = x[flag] === 'yes' || !!x[dateField];
+  return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--i8)">
+    <button onclick="toggleExhFlag('${escAttr(x.id)}','${flag}','${dateField}','${escAttr(label)}')"
+      style="width:20px;height:20px;border-radius:5px;border:1.5px solid ${on ? 'var(--g)' : 'var(--i6)'};background:${on ? 'var(--g)' : 'transparent'};color:#fff;font-size:12px;font-weight:800;cursor:pointer;flex-shrink:0;line-height:1">${on ? '✓' : ''}</button>
+    <span style="font-size:12.5px;font-weight:${on ? 600 : 500};color:${on ? 'var(--i1)' : 'var(--i3)'};flex:1">${escapeHtml(label)}
+      ${hint ? `<span style="font-size:10.5px;color:var(--i5);font-weight:400"> ${escapeHtml(hint)}</span>` : ''}
+      ${on && !x[dateField] ? '<span style="font-size:10px;color:var(--i5)"> · 날짜 미상</span>' : ''}</span>
+    <input type="date" class="fi" style="width:140px;padding:4px 8px;font-size:11.5px" value="${escAttr(x[dateField] || '')}"
+      onchange="setExhDateWithFlag('${escAttr(x.id)}','${dateField}','${flag}',this.value,'${escAttr(label)}')">
   </div>`;
 }
 
@@ -174,7 +190,7 @@ function dProgress(x){
   ${sct('매뉴얼', dateRow(x, 'manual_sent_at', '매뉴얼 발송') + dateRow(x, 'manual_replied_at', '매뉴얼 회신'))}
 
   ${sct('신청서',
-    dateRow(x, 'app_received_at', '신청서 수신') +
+    flagRow(x, 'app_received', 'app_received_at', '신청서 수신') +
     `<div style="padding:10px 0 2px">
       <label class="fl">필수정보 완비 여부</label>
       <div class="stbs" style="margin:4px 0 8px">
@@ -192,7 +208,7 @@ function dProgress(x){
     dateRow(x, 'booth_confirmed_at', '배정 확정'))}
 
   ${sct('도록 / 디렉토리',
-    dateRow(x, 'directory_received_at', '자료 수신', '회사소개·로고·제품정보') +
+    flagRow(x, 'directory_received', 'directory_received_at', '자료 수신', '회사소개·로고·제품정보') +
     textRow(x, 'directory_note', '메모', '받은 자료나 누락 항목', true))}
 
   ${sct('현장',
@@ -224,6 +240,7 @@ function dBilling(x){
   const pays = paymentsFor(x.id);
   const billed = billedAmount(x.id), paid = paidAmount(x.id);
   const rest = billed - paid;
+  const cur = currencyOf(x.id);   // 이 기업의 청구 통화 (USD 청구 건이 19곳 있다)
 
   const subtotals = CATS.map(([k, l]) => ({ l, n: items.filter(i => i.category === k).reduce((s, i) => s + Number(String(i.amount || '').replace(/[^0-9.-]/g, '') || 0), 0) })).filter(s => s.n);
 
@@ -231,12 +248,12 @@ function dBilling(x){
   <div class="uc" style="margin-bottom:16px">
     <div style="display:flex;justify-content:space-between;align-items:baseline">
       <span style="font-size:11px;color:var(--i4)">청구 / 입금</span>
-      <span><b style="font-size:16px;color:${paid >= billed && billed > 0 ? 'var(--g)' : 'var(--i1)'}">${money(paid)}</b>
-        <span style="color:var(--i5);font-size:13px"> / ${money(billed)}</span></span>
+      <span><b style="font-size:16px;color:${paid >= billed && billed > 0 ? 'var(--g)' : 'var(--i1)'}">${cur === 'USD' ? '$' : ''}${money(paid)}</b>
+        <span style="color:var(--i5);font-size:13px"> / ${money(billed)}${cur === 'USD' ? '' : '원'}</span></span>
     </div>
     <div class="br" style="margin:8px 0 4px"><div class="brf" style="width:${billed ? Math.min(100, paid / billed * 100) : 0}%"></div></div>
     <div style="font-size:11px;color:${rest > 0 ? 'var(--am)' : 'var(--i4)'}">
-      ${billed === 0 ? '금액 항목을 추가해주세요' : rest > 0 ? `잔액 ${money(rest)}원` : '완납'}
+      ${billed === 0 ? '금액 항목을 추가해주세요' : rest > 0 ? `잔액 ${fmtMoney(rest, cur)}` : '완납'}
       ${subtotals.length ? ` · ${subtotals.map(s => `${s.l} ${money(s.n)}`).join(' / ')}` : ''}</div>
   </div>
 
@@ -247,7 +264,7 @@ function dBilling(x){
           <span class="pill p-gray" style="min-width:44px;text-align:center">${escapeHtml(catLabel(i.category))}</span>
           <span style="flex:1;font-size:12px;font-weight:600">${escapeHtml(i.name || '')}</span>
           <span style="font-size:11px;color:var(--i4)">${escapeHtml(i.qty || '')}${i.qty && i.unit_price ? ' × ' : ''}${i.unit_price ? money(i.unit_price) : ''}</span>
-          <span style="font-size:12px;font-weight:700;min-width:80px;text-align:right">${money(i.amount)}</span>
+          <span style="font-size:12px;font-weight:700;min-width:88px;text-align:right">${fmtMoney(i.amount, i.currency || 'KRW')}</span>
           <button class="btn bs" onclick="delExhItem('${escAttr(i.id)}')" title="삭제">✕</button>
         </div>`).join('') : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">아직 항목이 없어요</div>'}
     </div>
@@ -268,7 +285,7 @@ function dBilling(x){
         <div style="padding:8px 10px;background:var(--i9);border-radius:7px">
           <div style="display:flex;align-items:center;gap:7px">
             <span style="flex:1;font-size:12px;font-weight:700">${escapeHtml(v.title || '인보이스')}</span>
-            <span style="font-size:12px;font-weight:700">${money(v.amount)}</span>
+            <span style="font-size:12px;font-weight:700">${fmtMoney(v.amount, v.currency || 'KRW')}</span>
             <button class="btn bs" onclick="delExhInvoice('${escAttr(v.id)}')">✕</button>
           </div>
           <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap">
@@ -318,7 +335,7 @@ function dBilling(x){
           <span class="pill p-green">${pays.length > 1 ? `${i + 1}차` : '입금'}</span>
           <span style="font-size:11.5px;color:var(--i3)">${escapeHtml(p.paid_at || '')}</span>
           <span style="flex:1;font-size:11px;color:var(--i4)">${escapeHtml(p.method || '')}${p.note ? ' · ' + escapeHtml(p.note) : ''}</span>
-          <span style="font-size:12px;font-weight:700">${money(p.amount)}</span>
+          <span style="font-size:12px;font-weight:700">${fmtMoney(p.amount, p.currency || 'KRW')}</span>
           <button class="btn bs" onclick="delExhPayment('${escAttr(p.id)}')">✕</button>
         </div>`).join('') : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">입금 내역이 없어요</div>'}
     </div>
@@ -515,7 +532,8 @@ export async function addExhItem(exhId){
   if(!name){ alert('항목명을 입력해주세요.'); return; }
   await addRow(EXH_ITEMS, {
     id: localId('XI-'), exhibitor_id: exhId, category: val(`it-cat-${exhId}`) || 'etc',
-    name, qty: val(`it-qty-${exhId}`), unit_price: val(`it-up-${exhId}`), amount, note: '',
+    name, qty: val(`it-qty-${exhId}`), unit_price: val(`it-up-${exhId}`), amount,
+    currency: currencyOf(exhId), note: '',
     sort_order: String(itemsFor(exhId).length + 1),
   }, saveExhItem);
   clear(`it-nm-${exhId}`, `it-qty-${exhId}`, `it-up-${exhId}`, `it-amt-${exhId}`);
@@ -542,7 +560,7 @@ export async function addExhInvoice(exhId){
   const amount = val(`iv-a-${exhId}`);
   if(!amount){ alert('금액을 입력해주세요.'); return; }
   await addRow(EXH_INVOICES, {
-    id: localId('XV-'), exhibitor_id: exhId, title, amount,
+    id: localId('XV-'), exhibitor_id: exhId, title, amount, currency: currencyOf(exhId),
     created_at: td(), sent_at: '', due_date: '', note: '',
   }, saveExhInvoice);
   clear(`iv-t-${exhId}`, `iv-a-${exhId}`);
@@ -565,7 +583,8 @@ export async function addExhPayment(exhId){
   const invs = invoicesFor(exhId);
   const ok = await addRow(EXH_PAYMENTS, {
     id: localId('XP-'), exhibitor_id: exhId, invoice_id: invs[0]?.id || '',
-    paid_at: val(`py-d-${exhId}`) || td(), amount, method: val(`py-m-${exhId}`), note: '',
+    paid_at: val(`py-d-${exhId}`) || td(), amount, currency: currencyOf(exhId),
+    method: val(`py-m-${exhId}`), note: '',
   }, saveExhPayment);
   if(ok){
     clear(`py-m-${exhId}`);

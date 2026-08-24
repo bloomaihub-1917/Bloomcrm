@@ -53,12 +53,12 @@ const TABLES = {
     columns: ['id', 'event_id', 'company_key', 'company_name', 'assignee', 'status', 'note', 'updated_at',
       'contact_id', 'contact_name', 'contact_email', 'contact_phone',
       'manual_sent_at', 'manual_replied_at',
-      'app_received_at', 'app_complete', 'app_missing', 'extra_equipment',
+      'app_received', 'app_received_at', 'app_complete', 'app_missing', 'extra_equipment',
       'booth_no', 'booth_confirmed_at',
       'tax_sent_at', 'tax_amount', 'tax_contact_name', 'tax_contact_email', 'tax_contact_phone',
       'graphic_ordered_at', 'graphic_type', 'graphic_spec_ok', 'graphic_spec_note',
       'graphic_draft_at', 'graphic_revised_at', 'graphic_final_at',
-      'directory_received_at', 'directory_note',
+      'directory_received', 'directory_received_at', 'directory_note',
       'movein_at', 'builder', 'badge_count', 'badge_issued_at', 'onsite_note'],
   },
   exhibitor_contacts: {
@@ -67,15 +67,15 @@ const TABLES = {
   },
   exhibitor_items: {
     table: 'exhibitor_items', pk: 'id', idPrefix: 'XI-',
-    columns: ['id', 'exhibitor_id', 'category', 'name', 'qty', 'unit_price', 'amount', 'note', 'sort_order'],
+    columns: ['id', 'exhibitor_id', 'category', 'name', 'qty', 'unit_price', 'amount', 'currency', 'note', 'sort_order'],
   },
   exhibitor_invoices: {
     table: 'exhibitor_invoices', pk: 'id', idPrefix: 'XV-',
-    columns: ['id', 'exhibitor_id', 'title', 'created_at', 'sent_at', 'due_date', 'amount', 'note'],
+    columns: ['id', 'exhibitor_id', 'title', 'created_at', 'sent_at', 'due_date', 'amount', 'currency', 'note'],
   },
   exhibitor_payments: {
     table: 'exhibitor_payments', pk: 'id', idPrefix: 'XP-',
-    columns: ['id', 'exhibitor_id', 'invoice_id', 'paid_at', 'amount', 'method', 'note'],
+    columns: ['id', 'exhibitor_id', 'invoice_id', 'paid_at', 'amount', 'currency', 'method', 'note'],
   },
   exhibitor_logs: {
     table: 'exhibitor_logs', pk: 'id', idPrefix: 'XL-',
