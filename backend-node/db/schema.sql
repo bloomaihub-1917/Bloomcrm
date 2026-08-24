@@ -170,6 +170,13 @@ CREATE TABLE IF NOT EXISTS exhibitors (
   booth_confirmed    TEXT,   -- 'yes' | ''
   booth_confirmed_at TEXT,
 
+  -- 4-0. 정산 마무리
+  -- 해외 송금 수수료가 빠져 몇 달러 덜 들어오는 일이 흔한데, 그대로 두면 영원히
+  -- 미납으로 남아 계속 독촉하게 된다. 사유를 적고 완납으로 닫을 수 있게 한다.
+  settled       TEXT,  -- 'yes' | ''
+  settled_note  TEXT,  -- 완납 처리 사유 (예: 송금 수수료 8 USD 차감)
+  pay_due_date  TEXT,  -- 이 기업만의 입금 기한 (행사 공통 기한을 덮어씀)
+
   -- 4. 세금계산서 (인보이스/입금은 1:N이라 별도 테이블)
   tax_sent_at        TEXT,
   tax_amount         TEXT,
@@ -243,6 +250,10 @@ CREATE TABLE IF NOT EXISTS exhibitor_invoices (
   due_date     TEXT,   -- 입금 예정일
   amount       TEXT,
   currency     TEXT,   -- 'KRW' | 'USD' (비우면 KRW)
+  -- 통화 변경·금액 오류로 다시 발행하는 일이 잦다. 지우지 않고 무효로 표시해
+  -- 이력은 남기되 청구액 합계에서는 뺀다(둘 다 살아있으면 합계가 2배가 된다).
+  status       TEXT,   -- '' (유효) | 'void' (취소·대체됨)
+  void_note    TEXT,   -- 무효 사유 (예: EX-55-01 USD → KRW로 대체)
   note         TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_exhibitor_invoices_exh ON exhibitor_invoices(exhibitor_id);
@@ -256,6 +267,7 @@ CREATE TABLE IF NOT EXISTS exhibitor_payments (
   paid_at      TEXT,
   amount       TEXT,
   currency     TEXT,   -- 'KRW' | 'USD' (비우면 KRW)
+  kind         TEXT,   -- '' | 'in'(입금) | 'refund'(환불 — 합계에서 차감)
   method       TEXT,
   note         TEXT
 );

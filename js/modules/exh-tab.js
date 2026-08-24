@@ -73,39 +73,95 @@ let exhAssignee = null;      // null = 전체
 const num = (v) => { const n = Number(String(v ?? '').replace(/[^0-9.-]/g, '')); return isNaN(n) ? 0 : n; };
 export const money = (v) => num(v).toLocaleString('ko-KR');
 
-/* 이 기업이 쓰는 통화. 인보이스가 있으면 그 통화, 없으면 금액 항목 기준.
-   USD 청구와 KRW 청구가 섞이면 더할 수 없으므로 통화를 하나로 정해 그것만 합산한다. */
+/* ── 정산 계산 ──────────────────────────────────────────────────
+   실무에서 자주 나오는 상황을 그대로 반영한다:
+   - 통화 변경·금액 오류로 인보이스를 다시 발행 → 옛 건은 'void'로 두고 합계에서 뺀다
+   - 금액을 아직 모르는 인보이스(발행 예정) → 합계에 넣지 않는다
+   - 환불·차감 → 입금에서 뺀다
+   - 해외 송금 수수료로 몇 달러 덜 들어옴 → 사유를 적고 완납으로 닫을 수 있다
+   ────────────────────────────────────────────────────────────── */
+const hasAmount = (r) => String(r.amount ?? '').trim() !== '';
+export const liveInvoices = (exhId) =>
+  invoicesFor(exhId).filter(i => i.status !== 'void' && hasAmount(i));
+
+/* 이 기업의 청구 통화. 유효한 인보이스를 우선으로 보고, 없으면 금액 항목을 본다.
+   서로 다른 통화가 섞이면 합계를 낼 수 없으므로 하나를 고르고 경고를 띄운다. */
 export function currencyOf(exhId){
-  const inv = invoicesFor(exhId);
-  const src = inv.length ? inv : itemsFor(exhId);
-  const hit = src.find(r => r.currency);
+  const src = liveInvoices(exhId);
+  const hit = (src.length ? src : itemsFor(exhId)).find(r => r.currency);
   return (hit && hit.currency) || 'KRW';
 }
 const sumIn = (rows, cur) => rows
   .filter(r => (r.currency || 'KRW') === cur)
   .reduce((s, r) => s + num(r.amount), 0);
 
-/* 청구액: 인보이스를 발행했으면 인보이스 합계, 아직이면 금액 항목 합계 */
-export function billedAmount(exhId){
-  const cur = currencyOf(exhId);
-  const inv = invoicesFor(exhId);
-  return inv.length ? sumIn(inv, cur) : sumIn(itemsFor(exhId), cur);
-}
-export function paidAmount(exhId){
-  return sumIn(paymentsFor(exhId), currencyOf(exhId));
-}
-/* 한 기업에 통화가 섞여 있는지 — 섞이면 합계에서 한쪽이 빠지므로 화면에 알린다.
-   (실데이터에 USD로 청구했다가 KRW로 재발행한 사례가 있다) */
+/* 한 기업에 통화가 섞였는지 — 섞이면 한쪽이 합계에서 빠지므로 화면에 알린다 */
 export function mixedCurrency(exhId){
-  const cs = new Set([...invoicesFor(exhId), ...paymentsFor(exhId)]
+  const cs = new Set([...liveInvoices(exhId), ...paymentsFor(exhId).filter(hasAmount)]
     .map(r => r.currency).filter(Boolean));
   return cs.size > 1 ? [...cs] : null;
+}
+
+/* 청구액: 유효한 인보이스 합계. 아직 한 장도 없으면 금액 항목 합계를 예상액으로 쓴다. */
+export function billedAmount(exhId){
+  const cur = currencyOf(exhId);
+  const inv = liveInvoices(exhId);
+  return inv.length ? sumIn(inv, cur) : sumIn(itemsFor(exhId), cur);
+}
+/* 입금액: 입금 − 환불 */
+export function paidAmount(exhId){
+  const cur = currencyOf(exhId);
+  return paymentsFor(exhId)
+    .filter(p => (p.currency || 'KRW') === cur)
+    .reduce((s, p) => s + (p.kind === 'refund' ? -num(p.amount) : num(p.amount)), 0);
+}
+
+/* 이 기업의 입금 기한 — 기업별 지정이 없으면 행사 공통 기한, 그것도 없으면
+   인보이스에 적힌 기한을 쓴다. */
+export function payDueDate(x){
+  if(x.pay_due_date) return x.pay_due_date;
+  const ev = eventDeadlines(x.event_id);
+  if(ev.pay) return ev.pay;
+  const withDue = invoicesFor(x.id).filter(i => i.due_date && i.status !== 'void');
+  return withDue.length ? withDue.map(i => i.due_date).sort()[0] : '';
+}
+
+/* 정산 상태 한 곳에서 판정 — 표·드로어·필터가 같은 기준을 쓴다 */
+export function settleState(x){
+  const billed = billedAmount(x.id), paid = paidAmount(x.id);
+  const cur = currencyOf(x.id);
+  const balance = billed - paid;
+  const due = payDueDate(x);
+  const overdue = !!due && daysSince(due) > 0;
+  if(x.settled === 'yes')   return { state:'settled', billed, paid, balance, cur, due, overdue:false };
+  if(!billed)               return { state:'none',    billed, paid, balance, cur, due, overdue:false };
+  if(paid > billed)         return { state:'over',    billed, paid, balance, cur, due, overdue:false };
+  if(paid >= billed)        return { state:'paid',    billed, paid, balance, cur, due, overdue:false };
+  if(paid > 0)              return { state:'partial', billed, paid, balance, cur, due, overdue };
+  return { state:'unpaid', billed, paid, balance, cur, due, overdue };
 }
 
 /* 금액 표시 — 통화 기호를 붙인다 */
 export function fmtMoney(v, cur){
   return (cur === 'USD' ? '$' : '') + money(v) + (cur === 'USD' ? '' : '원');
 }
+
+/* 행사 공통 마감일 — settings 시트에 exh_due_<행사키>로 저장한다.
+   기업별 지정이 없을 때의 기본값이며, 기업별 값이 있으면 그쪽이 이긴다. */
+export function eventDeadlines(evKey){
+  try {
+    const row = SETTINGS_CACHE.get('exh_due_' + evKey);
+    return row ? JSON.parse(row) : {};
+  } catch(e){ return {}; }
+}
+const SETTINGS_CACHE = new Map();
+export function setEventDeadlines(evKey, obj){ SETTINGS_CACHE.set('exh_due_' + evKey, JSON.stringify(obj)); }
+export function loadEventDeadlines(settingsRows){
+  (settingsRows || []).forEach(r => {
+    if(String(r.key || '').startsWith('exh_due_')) SETTINGS_CACHE.set(r.key, r.value);
+  });
+}
+
 /* 그래픽 진행 상태 — 주문 안 했으면 해당 없음, 출력/제작에 따라 완료 기준이 다르다 */
 export function graphicState(x){
   if(!x.graphic_ordered_at) return { state: 'none' };
@@ -190,20 +246,22 @@ export function daysSince(dateStr){
 /* 셀 상태 계산 — 완료(done) / 미완(todo) / 주의(warn) */
 function cellState(x, step){
   if(step.key === 'calc:invoice'){
-    const inv = invoicesFor(x.id);
+    const inv = invoicesFor(x.id).filter(i => i.status !== 'void');
     if(!inv.length) return { state: 'todo' };
     const sent = inv.filter(i => i.sent_at);
     if(!sent.length) return { state: 'warn', text: '미발송' };
+    // 금액이 안 적힌 인보이스가 있으면 청구액이 실제보다 적게 잡힌다 — 눈에 띄게 한다
+    if(inv.some(i => String(i.amount ?? '').trim() === '')) return { state: 'warn', text: '금액 미입력' };
     return { state: 'done', text: sent.length > 1 ? `${sent.length}건` : sent[0].sent_at };
   }
   if(step.key === 'calc:payment'){
-    const billed = billedAmount(x.id), paid = paidAmount(x.id);
-    if(!billed) return { state: 'todo' };
-    if(paid >= billed) return { state: 'done', text: '완납' };
-    if(paid > 0) return { state: 'part', text: Math.round(paid / billed * 100) + '%' };
-    // 입금 예정일이 지났는데 한 푼도 안 들어왔으면 경고
-    const overdue = invoicesFor(x.id).some(i => i.due_date && daysSince(i.due_date) > 0);
-    return overdue ? { state: 'warn', text: '지연' } : { state: 'todo' };
+    const s = settleState(x);
+    if(s.state === 'settled') return { state: 'done', text: '완납 처리' };
+    if(s.state === 'paid')    return { state: 'done', text: '완납' };
+    if(s.state === 'over')    return { state: 'warn', text: '초과 입금' };
+    if(s.state === 'none')    return { state: 'todo' };
+    if(s.state === 'partial') return { state: 'part', text: Math.round(s.paid / s.billed * 100) + '%' };
+    return s.overdue ? { state: 'warn', text: '기한 지남' } : { state: 'todo' };
   }
   if(step.key === 'calc:graphic'){
     const g = graphicState(x);
@@ -278,11 +336,15 @@ function buildExhFilters(){
     const list = activeExhibitors(exhEvent);
     const openInq = list.reduce((s, x) => s + openInquiriesFor(x.id).length, 0);
     const incomplete = list.filter(x => progressOf(x) < 100).length;
-    const unpaid = list.filter(x => { const b = billedAmount(x.id); return b > 0 && paidAmount(x.id) < b; }).length;
+    const unpaid = list.filter(x => ['unpaid','partial'].includes(settleState(x).state)).length;
     const cancelled = cancelledExhibitors(exhEvent).length;
+    // 초과 입금·통화 혼재·금액 미입력처럼 사람이 봐야 하는 정산 건
+    const attention = list.filter(x => settleState(x).state === 'over' || mixedCurrency(x.id) ||
+      invoicesFor(x.id).some(i => i.status !== 'void' && String(i.amount ?? '').trim() === '')).length;
     const f = (k, label, n) => `<button class="nr${exhFilter === k ? ' on' : ''}" onclick="setExhFilter('${k}')">${label}<span class="nbg">${n}</span></button>`;
     el.innerHTML = f('all', '전체', list.length) + f('incomplete', '진행 중', incomplete)
       + f('unpaid', '입금 미완료', unpaid) + f('inquiry', '미답변 문의', openInq)
+      + (attention ? f('billing', '정산 확인 필요', attention) : '')
       + (cancelled ? f('cancelled', '참가 취소', cancelled) : '');
   }
   const ael = document.getElementById('exh-assignee-list');
@@ -320,7 +382,10 @@ function visibleList(){
   let list = exhFilter === 'cancelled' ? cancelledExhibitors(exhEvent) : activeExhibitors(exhEvent);
   if(exhAssignee) list = list.filter(x => x.assignee === exhAssignee);
   if(exhFilter === 'incomplete') list = list.filter(x => progressOf(x) < 100);
-  if(exhFilter === 'unpaid')     list = list.filter(x => { const b = billedAmount(x.id); return b > 0 && paidAmount(x.id) < b; });
+  if(exhFilter === 'unpaid')     list = list.filter(x => ['unpaid','partial'].includes(settleState(x).state));
+  if(exhFilter === 'billing')    list = list.filter(x => { const s = settleState(x);
+    return s.state === 'over' || mixedCurrency(x.id) ||
+      invoicesFor(x.id).some(i => i.status !== 'void' && String(i.amount ?? '').trim() === ''); });
   if(exhFilter === 'inquiry')    list = list.filter(x => openInquiriesFor(x.id).length);
   if(q) list = list.filter(x => String(x.company_name || '').toLowerCase().includes(q));
   return list.sort((a, b) => String(a.company_name || '').localeCompare(String(b.company_name || ''), 'ko'));
@@ -517,12 +582,20 @@ function renderChecklistTable(list, all){
         ${STEPS.map(s => cell(x, s)).join('')}
         <td style="text-align:center" onclick="event.stopPropagation();openExhDr('${escAttr(x.id)}',3)">
           ${openN ? `<span class="pill p-amber">${openN}</span>` : '<span style="color:var(--i6)">·</span>'}</td>
-        <td style="text-align:right;font-size:11px">
-          ${billed ? `<span style="font-weight:700;color:${paid >= billed ? 'var(--g)' : 'var(--i2)'}">${
-              currencyOf(x.id) === 'USD' ? '$' : ''}${money(paid)}</span>
-            <span style="color:var(--i5)"> / ${money(billed)}</span>${
-            mixedCurrency(x.id) ? '<span title="통화가 섞여 있어 합계가 정확하지 않아요" style="color:var(--re);font-weight:800"> ⚠</span>' : ''}`
-            : '<span style="color:var(--i6)">-</span>'}</td>
+        ${(() => {
+          const s = settleState(x);
+          if(!s.billed) return '<td style="text-align:right;font-size:11px;color:var(--i6)">-</td>';
+          const col = (s.state==='paid'||s.state==='settled') ? 'var(--g)'
+            : (s.state==='over' ? 'var(--re)' : 'var(--i2)');
+          return `<td style="text-align:right;font-size:11px">
+            <span style="font-weight:700;color:${col}">${s.cur==='USD'?'$':''}${money(s.paid)}</span>
+            <span style="color:var(--i5)"> / ${money(s.billed)}</span>
+            ${s.state==='over' ? `<div style="font-size:9.5px;color:var(--re)">초과 ${fmtMoney(-s.balance, s.cur)}</div>` : ''}
+            ${s.state==='settled' ? '<div style="font-size:9.5px;color:var(--g)">완납 처리</div>' : ''}
+            ${s.overdue && s.balance>0 ? `<div style="font-size:9.5px;color:var(--am)">기한 ${daysSince(s.due)}일 지남</div>` : ''}
+            ${mixedCurrency(x.id) ? '<div title="통화가 섞여 합계가 정확하지 않아요" style="font-size:9.5px;color:var(--re)">⚠ 통화 혼재</div>' : ''}
+          </td>`;
+        })()}
       </tr>`;
     }).join('')}
     </tbody></table></div>

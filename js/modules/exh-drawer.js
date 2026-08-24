@@ -25,6 +25,7 @@ import { trackAction } from './audit-tab.js';
 import {
   billedAmount, paidAmount, graphicState, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar,
+  settleState, liveInvoices, payDueDate,
 } from './exh-tab.js';
 
 let drId = null;
@@ -268,9 +269,9 @@ function dBilling(x){
   const items = itemsFor(x.id);
   const invs = invoicesFor(x.id);
   const pays = paymentsFor(x.id);
-  const billed = billedAmount(x.id), paid = paidAmount(x.id);
-  const rest = billed - paid;
-  const cur = currencyOf(x.id);   // 이 기업의 청구 통화 (USD 청구 건이 19곳 있다)
+  const st = settleState(x);
+  const billed = st.billed, paid = st.paid, rest = st.balance, cur = st.cur;
+  const noAmount = invoicesFor(x.id).filter(i => i.status !== 'void' && String(i.amount ?? '').trim() === '');
 
   const subtotals = CATS.map(([k, l]) => ({ l, n: items.filter(i => i.category === k).reduce((s, i) => s + Number(String(i.amount || '').replace(/[^0-9.-]/g, '') || 0), 0) })).filter(s => s.n);
 
@@ -287,9 +288,25 @@ function dBilling(x){
       ⚠ 인보이스·입금에 <b>${mixedCurrency(x.id).join(' / ')}</b>가 섞여 있어요.
       위 합계는 <b>${currencyOf(x.id)}</b> 건만 더한 값이라 정확하지 않습니다 —
       아래 목록에서 통화를 하나로 맞춰주세요.</div>` : ''}
-    <div style="font-size:11px;color:${rest > 0 ? 'var(--am)' : 'var(--i4)'}">
-      ${billed === 0 ? '금액 항목을 추가해주세요' : rest > 0 ? `잔액 ${fmtMoney(rest, cur)}` : '완납'}
+    <div style="font-size:11px;color:${
+      st.state === 'over' ? 'var(--re)' : (rest > 0 ? 'var(--am)' : 'var(--i4)')}">
+      ${st.state === 'settled' ? `완납 처리됨${x.settled_note ? ` — ${escapeHtml(x.settled_note)}` : ''}`
+        : billed === 0 ? '금액 항목을 추가하거나 인보이스를 발행해주세요'
+        : st.state === 'over' ? `초과 입금 ${fmtMoney(-rest, cur)} — 누락된 인보이스가 없는지 확인해주세요`
+        : rest > 0 ? `잔액 ${fmtMoney(rest, cur)}` : '완납'}
       ${subtotals.length ? ` · ${subtotals.map(s => `${s.l} ${money(s.n)}`).join(' / ')}` : ''}</div>
+    ${st.due ? `<div style="font-size:11px;margin-top:3px;color:${st.overdue && rest > 0 ? 'var(--re)' : 'var(--i4)'}">
+      입금 기한 ${escapeHtml(st.due)}${st.overdue && rest > 0 ? ` · ${daysSince(st.due)}일 지남` : ''}</div>` : ''}
+    ${noAmount.length ? `<div style="font-size:11px;color:var(--am);margin-top:3px">
+      ⚠ 금액이 안 적힌 인보이스 ${noAmount.length}건이 있어 청구액이 실제보다 적을 수 있어요</div>` : ''}
+    ${rest !== 0 && billed > 0 && st.state !== 'settled' ? `
+      <div style="margin-top:8px;display:flex;gap:5px;flex-wrap:wrap;align-items:center">
+        <input class="fi" id="stl-note-${escAttr(x.id)}" placeholder="완납 처리 사유 (예: 송금 수수료 차감)"
+          style="flex:1 1 180px;min-width:0;font-size:11px;padding:5px">
+        <button class="btn bs" style="flex:0 0 auto" onclick="settleExh('${escAttr(x.id)}')">완납으로 닫기</button>
+      </div>` : ''}
+    ${st.state === 'settled' ? `<div style="margin-top:8px;text-align:right">
+      <button class="btn bs" onclick="unsettleExh('${escAttr(x.id)}')">완납 처리 해제</button></div>` : ''}
   </div>
 
   ${sct('금액 항목', `
@@ -318,12 +335,15 @@ function dBilling(x){
   ${sct('인보이스', `
     <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:8px">
       ${invs.length ? invs.map(v => `
-        <div style="padding:8px 10px;background:var(--i9);border-radius:7px">
-          <div style="display:flex;align-items:center;gap:7px">
-            <span style="flex:1;font-size:12px;font-weight:700">${escapeHtml(v.title || '인보이스')}</span>
-            <span style="font-size:12px;font-weight:700">${fmtMoney(v.amount, v.currency || 'KRW')}</span>
+        <div style="padding:8px 10px;background:var(--i9);border-radius:7px${v.status === 'void' ? ';opacity:.55' : ''}">
+          <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+            <span style="flex:1 1 120px;min-width:0;font-size:12px;font-weight:700${v.status === 'void' ? ';text-decoration:line-through' : ''}">${escapeHtml(v.title || '인보이스')}</span>
+            ${v.status === 'void' ? '<span class="pill p-gray">무효</span>' : ''}
+            <span style="font-size:12px;font-weight:700">${String(v.amount ?? '').trim() ? fmtMoney(v.amount, v.currency || 'KRW') : '<span style="color:var(--am);font-size:11px">금액 미입력</span>'}</span>
+            <button class="btn bs" onclick="toggleVoidInvoice('${escAttr(v.id)}')" title="${v.status === 'void' ? '되살리기' : '취소·대체됨으로 표시(합계에서 제외)'}">${v.status === 'void' ? '되살리기' : '무효'}</button>
             <button class="btn bs" onclick="delExhInvoice('${escAttr(v.id)}')">✕</button>
           </div>
+          ${v.status === 'void' && v.void_note ? `<div style="font-size:10.5px;color:var(--i5);margin-top:3px">${escapeHtml(v.void_note)}</div>` : ''}
           <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap">
             <label style="font-size:10.5px;color:var(--i4)">발송</label>
             <input type="date" class="fi" style="flex:1 1 128px;min-width:0;padding:3px 6px;font-size:11px" value="${escAttr(v.sent_at || '')}"
@@ -368,14 +388,16 @@ function dBilling(x){
     <div style="display:flex;flex-direction:column;gap:1px;margin-bottom:8px">
       ${pays.length ? pays.map((p, i) => `
         <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:6px 8px;background:var(--i9);border-radius:6px">
-          <span class="pill p-green">${pays.length > 1 ? `${i + 1}차` : '입금'}</span>
+          <span class="pill ${p.kind === 'refund' ? 'p-red' : 'p-green'}">${p.kind === 'refund' ? '환불' : (pays.filter(q=>q.kind!=='refund').length > 1 ? `${i + 1}차` : '입금')}</span>
           <span style="font-size:11.5px;color:var(--i3)">${escapeHtml(p.paid_at || '')}</span>
           <span style="flex:1;font-size:11px;color:var(--i4)">${escapeHtml(p.method || '')}${p.note ? ' · ' + escapeHtml(p.note) : ''}</span>
-          <span style="font-size:12px;font-weight:700">${fmtMoney(p.amount, p.currency || 'KRW')}</span>
+          <span style="font-size:12px;font-weight:700;color:${p.kind === 'refund' ? 'var(--re)' : 'inherit'}">${p.kind === 'refund' ? '−' : ''}${fmtMoney(p.amount, p.currency || 'KRW')}</span>
           <button class="btn bs" onclick="delExhPayment('${escAttr(p.id)}')">✕</button>
         </div>`).join('') : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">입금 내역이 없어요</div>'}
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:5px">
+      <select class="fi" id="py-k-${escAttr(x.id)}" style="flex:0 0 72px;min-width:0;font-size:11.5px;padding:6px">
+        <option value="in">입금</option><option value="refund">환불</option></select>
       <input type="date" class="fi" id="py-d-${escAttr(x.id)}" style="flex:1 1 130px;min-width:0;font-size:11.5px;padding:6px" value="${td()}">
       <input class="fi" id="py-a-${escAttr(x.id)}" placeholder="입금액" style="flex:1 1 100px;min-width:0;font-size:11.5px;padding:6px"
         value="${rest > 0 ? rest : ''}">
@@ -383,7 +405,7 @@ function dBilling(x){
       <button class="btn bp bs" style="flex:0 0 auto" onclick="addExhPayment('${escAttr(x.id)}')">추가</button>
     </div>
     <div style="font-size:10.5px;color:var(--i5);margin-top:5px">
-      분할 입금이면 여러 번 추가하세요. 완납 여부는 입금액 합계로 자동 계산돼요.</div>`)}
+      분할 입금이면 여러 번 추가하세요. 환불·차감은 종류를 "환불"로 고르면 합계에서 빠져요.</div>`)}
   `;
 }
 
@@ -624,6 +646,7 @@ export async function addExhPayment(exhId){
   const ok = await addRow(EXH_PAYMENTS, {
     id: localId('XP-'), exhibitor_id: exhId, invoice_id: invs[0]?.id || '',
     paid_at: val(`py-d-${exhId}`) || td(), amount, currency: currencyOf(exhId),
+    kind: val(`py-k-${exhId}`) || 'in',
     method: val(`py-m-${exhId}`), note: '',
   }, saveExhPayment);
   if(ok){
@@ -634,6 +657,42 @@ export async function addExhPayment(exhId){
   }
 }
 export const delExhPayment = (id) => removeRow(EXH_PAYMENTS, id, deleteExhPayment);
+
+/* 인보이스 무효 처리 — 통화 변경·금액 오류로 다시 발행할 때 옛 건을 지우지 않고
+   합계에서만 뺀다(이력을 남겨야 나중에 왜 두 장인지 설명할 수 있다). */
+export async function toggleVoidInvoice(id){
+  const v = EXH_INVOICES.find(i => i.id === id);
+  if(!v) return;
+  const wasVoid = v.status === 'void';
+  let note = v.void_note || '';
+  if(!wasVoid){
+    note = prompt('무효 사유를 적어주세요 (예: EX-55-01 USD → KRW로 대체 발행)', note) ?? null;
+    if(note === null) return;   // 취소
+  }
+  const before = { status: v.status, void_note: v.void_note };
+  v.status = wasVoid ? '' : 'void';
+  v.void_note = wasVoid ? '' : note;
+  refreshExhViews();
+  const r = await saveExhInvoice({ id, status: v.status, void_note: v.void_note });
+  if(!r.ok){ Object.assign(v, before); refreshExhViews(); alert('저장에 실패했어요.'); return; }
+  const x = getExhibitorById(v.exhibitor_id);
+  trackAction('edit', wasVoid ? '인보이스 무효 해제' : '인보이스 무효 처리', x?.company_name || '',
+    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(v.title || '')} ${wasVoid ? '되살림' : '무효 처리'}${note ? ` — ${escapeHtml(note)}` : ''}`);
+}
+
+/* 완납 처리 — 송금 수수료 차액처럼 실무상 더 받을 수 없는 잔액을 사유와 함께 닫는다.
+   금액을 조작하지 않고 "닫았다"는 사실만 남겨 나중에 근거를 볼 수 있다. */
+export async function settleExh(exhId){
+  const note = (document.getElementById(`stl-note-${exhId}`)?.value || '').trim();
+  if(!note){ alert('완납 처리 사유를 적어주세요. (예: 송금 수수료 8 USD 차감)'); return; }
+  const st = settleState(getExhibitorById(exhId));
+  if(!confirm(`잔액 ${fmtMoney(st.balance, st.cur)}을(를) 남긴 채 완납으로 닫을까요?
+사유: ${note}`)) return;
+  await patchExh(exhId, { settled: 'yes', settled_note: note }, '완납 처리');
+}
+export async function unsettleExh(exhId){
+  await patchExh(exhId, { settled: '', settled_note: '' }, '완납 처리 해제');
+}
 
 export async function addExhLog(exhId){
   const kind = val(`lg-kind-${exhId}`) || 'inquiry';
@@ -759,3 +818,6 @@ window.delExhContact = delExhContact;
 window.setExhContactField = setExhContactField;
 window.setPrimaryExhContact = setPrimaryExhContact;
 window.toggleExhCancel = toggleExhCancel;
+window.toggleVoidInvoice = toggleVoidInvoice;
+window.settleExh = settleExh;
+window.unsettleExh = unsettleExh;

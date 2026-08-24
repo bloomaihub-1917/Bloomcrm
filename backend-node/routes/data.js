@@ -54,6 +54,7 @@ const TABLES = {
       'manual_sent_at', 'manual_replied_at',
       'app_received', 'app_received_at', 'app_complete', 'app_missing', 'extra_equipment',
       'booth_no', 'booth_floor', 'booth_type', 'booth_qty', 'grade', 'booth_confirmed', 'booth_confirmed_at',
+      'settled', 'settled_note', 'pay_due_date',
       'tax_sent_at', 'tax_amount', 'tax_contact_name', 'tax_contact_email', 'tax_contact_phone',
       'graphic_ordered_at', 'graphic_type', 'graphic_spec_ok', 'graphic_spec_note',
       'graphic_draft_at', 'graphic_revised_at', 'graphic_final_at',
@@ -70,11 +71,12 @@ const TABLES = {
   },
   exhibitor_invoices: {
     table: 'exhibitor_invoices', pk: 'id', idPrefix: 'XV-',
-    columns: ['id', 'exhibitor_id', 'title', 'created_at', 'sent_at', 'due_date', 'amount', 'currency', 'note'],
+    columns: ['id', 'exhibitor_id', 'title', 'created_at', 'sent_at', 'due_date', 'amount', 'currency',
+      'status', 'void_note', 'note'],
   },
   exhibitor_payments: {
     table: 'exhibitor_payments', pk: 'id', idPrefix: 'XP-',
-    columns: ['id', 'exhibitor_id', 'invoice_id', 'paid_at', 'amount', 'currency', 'method', 'note'],
+    columns: ['id', 'exhibitor_id', 'invoice_id', 'paid_at', 'amount', 'currency', 'kind', 'method', 'note'],
   },
   exhibitor_logs: {
     table: 'exhibitor_logs', pk: 'id', idPrefix: 'XL-',
