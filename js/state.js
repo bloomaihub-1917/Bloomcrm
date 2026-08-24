@@ -119,6 +119,7 @@ export const targets = [];
    서버 테이블과 1:1 대응하며, 컬럼명은 전부 snake_case다.
 ══════════════════════════════════════════ */
 export const EXHIBITORS   = [];  // 기업×행사 1건 (체크리스트 본체)
+export const EXH_CONTACTS = [];  // 기업측 담당자 (한 기업에 여러 명)
 export const EXH_ITEMS    = [];  // 금액 항목 (부스/비품/그래픽/기타)
 export const EXH_INVOICES = [];  // 인보이스 (여러 장 발행 가능)
 export const EXH_PAYMENTS = [];  // 입금 내역 (분할 입금 대응)
@@ -135,6 +136,15 @@ export function exhibitorsForEvent(evKey){
 }
 export function getExhibitorById(id){
   return EXHIBITORS.find(x => x.id === id);
+}
+/* 담당자 목록 — 대표(is_primary)를 항상 맨 앞에 둔다 */
+export function contactsFor(exhId){
+  return EXH_CONTACTS.filter(c => c.exhibitor_id === exhId)
+    .sort((a,b) => (b.is_primary === 'yes' ? 1 : 0) - (a.is_primary === 'yes' ? 1 : 0));
+}
+export function primaryContactFor(exhId){
+  const list = contactsFor(exhId);
+  return list.find(c => c.is_primary === 'yes') || list[0] || null;
 }
 export function itemsFor(exhId){ return EXH_ITEMS.filter(i => i.exhibitor_id === exhId); }
 export function invoicesFor(exhId){ return EXH_INVOICES.filter(i => i.exhibitor_id === exhId); }

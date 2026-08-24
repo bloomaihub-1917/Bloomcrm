@@ -61,6 +61,10 @@ const TABLES = {
       'directory_received_at', 'directory_note',
       'movein_at', 'builder', 'badge_count', 'badge_issued_at', 'onsite_note'],
   },
+  exhibitor_contacts: {
+    table: 'exhibitor_contacts', pk: 'id', idPrefix: 'XC-',
+    columns: ['id', 'exhibitor_id', 'contact_id', 'name', 'email', 'phone', 'role', 'is_primary', 'note'],
+  },
   exhibitor_items: {
     table: 'exhibitor_items', pk: 'id', idPrefix: 'XI-',
     columns: ['id', 'exhibitor_id', 'category', 'name', 'qty', 'unit_price', 'amount', 'note', 'sort_order'],

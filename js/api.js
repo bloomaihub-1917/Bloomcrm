@@ -36,6 +36,7 @@ import {
   participations,
   targets,
   EXHIBITORS,
+  EXH_CONTACTS,
   EXH_ITEMS,
   EXH_INVOICES,
   EXH_PAYMENTS,
@@ -232,7 +233,7 @@ export async function loadFromSheets(hooks = {}){
 
   try {
     const [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, companiesData, partTypesData,
-           exhData, exhItemData, exhInvData, exhPayData, exhLogData] = await Promise.all([
+           exhData, exhConData, exhItemData, exhInvData, exhPayData, exhLogData] = await Promise.all([
       safeFetch(base + 'contacts',       'contacts',       1, headers),
       safeFetch(base + 'participations', 'participations', 1, headers),
       safeFetch(base + 'crm_targets',    'crm_targets',    1, headers),
@@ -243,6 +244,7 @@ export async function loadFromSheets(hooks = {}){
       safeFetch(base + 'companies',      'companies',      1, headers),
       safeFetch(base + 'part_types',     'part_types',     1, headers),
       safeFetch(base + 'exhibitors',         'exhibitors',         1, headers),
+      safeFetch(base + 'exhibitor_contacts', 'exhibitor_contacts', 1, headers),
       safeFetch(base + 'exhibitor_items',    'exhibitor_items',    1, headers),
       safeFetch(base + 'exhibitor_invoices', 'exhibitor_invoices', 1, headers),
       safeFetch(base + 'exhibitor_payments', 'exhibitor_payments', 1, headers),
@@ -253,7 +255,7 @@ export async function loadFromSheets(hooks = {}){
     // safeFetch는 실패 시 예외 대신 null을 반환하므로, 여기서 null 개수를
     // 세지 않으면 "전 시트 로드 실패"도 성공으로 표시되는 버그가 있었다.
     const _results = [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, companiesData, partTypesData,
-      exhData, exhItemData, exhInvData, exhPayData, exhLogData];
+      exhData, exhConData, exhItemData, exhInvData, exhPayData, exhLogData];
     const _failed  = _results.filter(r => r === null).length;
     if(_failed === _results.length){
       // 전부 실패 — 연결 안 됨으로 처리하고 기존(stale) 화면 유지
@@ -467,6 +469,7 @@ export async function loadFromSheets(hooks = {}){
       EXHIBITORS.splice(0, EXHIBITORS.length, ...exhData);
       console.log('[CRM] exhibitors 로드:', EXHIBITORS.length, '개');
     }
+    if(exhConData  && Array.isArray(exhConData))  EXH_CONTACTS.splice(0, EXH_CONTACTS.length, ...exhConData);
     if(exhItemData && Array.isArray(exhItemData)) EXH_ITEMS.splice(0, EXH_ITEMS.length, ...exhItemData);
     if(exhInvData  && Array.isArray(exhInvData))  EXH_INVOICES.splice(0, EXH_INVOICES.length, ...exhInvData);
     if(exhPayData  && Array.isArray(exhPayData))  EXH_PAYMENTS.splice(0, EXH_PAYMENTS.length, ...exhPayData);
@@ -679,12 +682,14 @@ async function deleteExhRow(sheet, id, label){
 }
 
 export const saveExhibitor       = (o) => saveExhRow('exhibitors',         o, '전시 참가기업 저장');
+export const saveExhContact      = (o) => saveExhRow('exhibitor_contacts', o, '담당자 저장');
 export const saveExhItem         = (o) => saveExhRow('exhibitor_items',    o, '금액 항목 저장');
 export const saveExhInvoice      = (o) => saveExhRow('exhibitor_invoices', o, '인보이스 저장');
 export const saveExhPayment      = (o) => saveExhRow('exhibitor_payments', o, '입금 내역 저장');
 export const saveExhLog          = (o) => saveExhRow('exhibitor_logs',     o, '문의/기록 저장');
 
 export const deleteExhibitor     = (id) => deleteExhRow('exhibitors',         id, '전시 참가기업 삭제');
+export const deleteExhContact    = (id) => deleteExhRow('exhibitor_contacts', id, '담당자 삭제');
 export const deleteExhItem       = (id) => deleteExhRow('exhibitor_items',    id, '금액 항목 삭제');
 export const deleteExhInvoice    = (id) => deleteExhRow('exhibitor_invoices', id, '인보이스 삭제');
 export const deleteExhPayment    = (id) => deleteExhRow('exhibitor_payments', id, '입금 내역 삭제');

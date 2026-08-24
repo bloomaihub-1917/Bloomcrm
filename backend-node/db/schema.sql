@@ -196,6 +196,23 @@ CREATE TABLE IF NOT EXISTS exhibitors (
 );
 CREATE INDEX IF NOT EXISTS idx_exhibitors_event ON exhibitors(event_id);
 
+-- 기업측 담당자 (여러 명). 한 기업에 실무·정산·현장 담당이 따로인 경우가 많다.
+-- contact_id가 있으면 마스터DB(contacts)를 가리키고 이름/이메일/연락처는 거기서
+-- 실시간으로 읽는다. 마스터DB에 없는 사람은 아래 name/email/phone에 직접 적는다.
+-- is_primary='yes'인 한 명이 목록·헤더에 대표로 표시된다.
+CREATE TABLE IF NOT EXISTS exhibitor_contacts (
+  id           TEXT PRIMARY KEY,
+  exhibitor_id TEXT,
+  contact_id   TEXT,
+  name         TEXT,
+  email        TEXT,
+  phone        TEXT,
+  role         TEXT,   -- 실무 | 정산 | 현장 | 기타
+  is_primary   TEXT,   -- 'yes' | ''
+  note         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_exhibitor_contacts_exh ON exhibitor_contacts(exhibitor_id);
+
 -- 금액 항목. 전기·인터넷·카펫처럼 예상 못 한 항목이 계속 나오므로 줄 단위로 자유 추가.
 CREATE TABLE IF NOT EXISTS exhibitor_items (
   id           TEXT PRIMARY KEY,

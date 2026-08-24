@@ -16,7 +16,7 @@ import {
   EXHIBITORS, EXH_ITEMS, EXH_INVOICES, EXH_PAYMENTS, EXH_LOGS,
   exhEvent, setExhEvent,
   exhibitorsForEvent, getExhibitorById, itemsFor, invoicesFor, paymentsFor,
-  logsFor, openInquiriesFor,
+  logsFor, openInquiriesFor, contactsFor, primaryContactFor,
   EVENT_LIST, contacts, participations, CO_DB, currentUser, API_BASE_URL,
 } from '../state.js';
 import { td, escapeHtml, escAttr } from '../utils.js';
@@ -83,24 +83,36 @@ export function graphicState(x){
   return { state: 'todo', text: '유형 미정' };
 }
 
-/* 기업측 담당자 해석.
+/* 담당자 한 줄(exhibitor_contacts 레코드)을 화면용으로 푼다.
    contact_id가 있으면 마스터DB(contacts)에서 실시간으로 읽는다 — 값을 복사해두면
    마스터DB에서 이메일을 고쳐도 전시 쪽은 옛 값으로 남기 때문이다.
-   마스터DB에 없는 사람은 exhibitors의 텍스트 필드를 그대로 쓴다. */
-export function exhContact(x){
-  if(x.contact_id){
-    const c = contacts.find(k => String(k.id) === String(x.contact_id));
+   마스터DB에 없는 사람은 그 줄에 직접 적은 값을 쓴다. */
+export function resolveContact(row){
+  if(!row) return null;
+  if(row.contact_id){
+    const c = contacts.find(k => String(k.id) === String(row.contact_id));
     if(c) return {
-      linked: true, id: c.id,
+      row, linked: true, id: c.id,
       name:  c.nameKo || c.nameEn || '',
       email: cleanEmail(c.email1),
       phone: c.phone1 || '',
       title: c.titleKo || c.titleEn || '',
-      org:   c.orgKo || c.orgEn || '',
+      role:  row.role || '', primary: row.is_primary === 'yes',
     };
   }
-  return { linked: false, id: null, name: x.contact_name || '', email: cleanEmail(x.contact_email),
-    phone: x.contact_phone || '', title: '', org: x.company_name || '' };
+  return { row, linked: false, id: null, name: row.name || '', email: cleanEmail(row.email),
+    phone: row.phone || '', title: '', role: row.role || '', primary: row.is_primary === 'yes' };
+}
+
+/* 이 기업의 담당자 전원 (대표가 맨 앞) */
+export function exhContacts(x){
+  return contactsFor(x.id).map(resolveContact).filter(Boolean);
+}
+/* 대표 담당자 — 목록/헤더에 한 명만 보여줄 때 */
+export function exhContact(x){
+  return resolveContact(primaryContactFor(x.id))
+    // 아직 담당자 줄이 없는 기업은 빈 값으로 (화면이 깨지지 않게)
+    || { row: null, linked: false, id: null, name: '', email: '', phone: '', title: '', role: '', primary: false };
 }
 /* 업로드 원본에 <a@b.com> 처럼 꺾쇠가 섞여 들어온 건이 있어 표시 전에 벗긴다 */
 export const cleanEmail = (e) => String(e || '').replace(/[<>]/g, '').trim();
@@ -341,11 +353,13 @@ function renderChecklist(list, all){
         <td><div style="font-weight:700;font-size:12px">${escapeHtml(x.company_name || '')}</div>
             ${x.booth_no ? `<div style="font-size:10px;color:var(--i4)">부스 ${escapeHtml(x.booth_no)}</div>` : ''}</td>
         ${(() => {
-          const p = exhContact(x);
-          const label = p.name || p.email || '-';
-          return `<td style="font-size:11px;color:var(--i3);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-            title="${escAttr([p.name, p.title, p.email, p.phone].filter(Boolean).join(' · '))}">${escapeHtml(label)}${
-            p.linked ? '' : (p.name || p.email) ? ' <span style="color:var(--i6)" title="마스터DB에 없는 연락처">·</span>' : ''}</td>`;
+          const all = exhContacts(x);
+          const p = all[0];
+          const label = p ? (p.name || p.email || '-') : '-';
+          const tip = all.map(c => [c.role, c.name, c.title, c.email, c.phone].filter(Boolean).join(' · ')).join('\n');
+          return `<td style="font-size:11px;color:var(--i3);max-width:130px" title="${escAttr(tip)}">
+            <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(label)}</div>
+            ${all.length > 1 ? `<div style="font-size:9.5px;color:var(--i5)">외 ${all.length - 1}명</div>` : ''}</td>`;
         })()}
         <td style="font-size:11px;color:var(--i3)">${escapeHtml(x.assignee || '-')}</td>
         <td><div class="br" style="width:52px"><div class="brf" style="width:${p}%"></div></div>
