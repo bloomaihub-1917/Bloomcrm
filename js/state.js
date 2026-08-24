@@ -137,7 +137,7 @@ export function exhibitorsForEvent(evKey){
 export function getExhibitorById(id){
   return EXHIBITORS.find(x => x.id === id);
 }
-/* 담당자 목록 — 대표(is_primary)를 항상 맨 앞에 둔다 */
+/* 담당자 목록 — 메인(is_primary)을 항상 맨 앞에 둔다 */
 export function contactsFor(exhId){
   return EXH_CONTACTS.filter(c => c.exhibitor_id === exhId)
     .sort((a,b) => (b.is_primary === 'yes' ? 1 : 0) - (a.is_primary === 'yes' ? 1 : 0));

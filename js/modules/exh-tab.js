@@ -199,11 +199,11 @@ export function resolveContact(row){
     phone: row.phone || '', title: '', role: row.role || '', primary: row.is_primary === 'yes' };
 }
 
-/* 이 기업의 담당자 전원 (대표가 맨 앞) */
+/* 이 기업의 담당자 전원 (메인이 맨 앞) */
 export function exhContacts(x){
   return contactsFor(x.id).map(resolveContact).filter(Boolean);
 }
-/* 대표 담당자 — 목록/헤더에 한 명만 보여줄 때 */
+/* 메인 담당자 — 목록/헤더에 한 명만 보여줄 때 */
 export function exhContact(x){
   return resolveContact(primaryContactFor(x.id))
     // 아직 담당자 줄이 없는 기업은 빈 값으로 (화면이 깨지지 않게)

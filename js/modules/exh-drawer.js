@@ -137,7 +137,7 @@ function dContact(x){
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
         <span style="font-size:13px;font-weight:700">${escapeHtml(p.name || p.email || '이름 없음')}</span>
         ${p.title ? `<span class="pill p-gray">${escapeHtml(p.title)}</span>` : ''}
-        ${p.primary ? '<span class="pill p-blue">대표</span>' : ''}
+        ${p.primary ? '<span class="pill p-blue">메인</span>' : ''}
         <select class="fi" style="width:74px;padding:2px 5px;font-size:10.5px;margin-left:auto"
           onchange="setExhContactField('${escAttr(r.id)}','role',this.value)">
           ${C_ROLES.map(v => `<option${(r.role || '기타') === v ? ' selected' : ''}>${v}</option>`).join('')}
@@ -158,7 +158,7 @@ function dContact(x){
       </div>
       <div style="display:flex;gap:5px;margin-top:7px;align-items:center">
         <span style="font-size:10px;color:${p.linked ? 'var(--a)' : 'var(--i5)'}">${p.linked ? '마스터DB 연결됨' : '직접 입력'}</span>
-        ${!p.primary ? `<button class="btn bs" style="margin-left:auto;font-size:10px" onclick="setPrimaryExhContact('${escAttr(r.id)}')">대표로</button>` : '<span style="margin-left:auto"></span>'}
+        ${!p.primary ? `<button class="btn bs" style="margin-left:auto;font-size:10px" onclick="setPrimaryExhContact('${escAttr(r.id)}')">메인으로</button>` : '<span style="margin-left:auto"></span>'}
         <button class="btn bs" style="font-size:10px;opacity:.6" onclick="delExhContact('${escAttr(r.id)}')">삭제</button>
       </div>
     </div>`;
@@ -742,7 +742,7 @@ export async function addExhContact(exhId, manual){
   const ok = await addRow(EXH_CONTACTS, {
     id: localId('XC-'), exhibitor_id: exhId, contact_id: contactId,
     name: '', email: '', phone: '', role: '실무',
-    is_primary: first ? 'yes' : '',   // 첫 담당자는 자동으로 대표
+    is_primary: first ? 'yes' : '',   // 첫 담당자는 자동으로 메인
     note: '',
   }, saveExhContact);
   if(ok && sel) sel.value = '';
@@ -763,7 +763,7 @@ export async function setExhContactField(id, field, value){
     `<b>${escapeHtml(x?.company_name || '')}</b> 담당자 ${escapeHtml(lbl)} ${escapeHtml(String(before||'(없음)'))} → ${escapeHtml(String(value||'(없음)'))}`);
 }
 
-/* 대표는 기업당 한 명이라, 새로 지정하면 나머지는 내려준다 */
+/* 메인은 기업당 한 명이라, 새로 지정하면 나머지는 내려준다 */
 export async function setPrimaryExhContact(id){
   const target = EXH_CONTACTS.find(c => c.id === id);
   if(!target) return;
@@ -775,7 +775,7 @@ export async function setPrimaryExhContact(id){
   if(results.some(r => !r.ok)){
     before.forEach(b => { b.c.is_primary = b.was; });
     refreshExhViews();
-    alert('대표 담당자 변경에 실패했어요.');
+    alert('메인 담당자 변경에 실패했어요.');
   }
 }
 
