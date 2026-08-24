@@ -2,9 +2,12 @@
 crm-develop/
 crm-develop.zip
 
-# 실데이터 엑셀/스크린샷 (개인정보 포함 — 저장소에 커밋하지 않음)
+# 실데이터 (개인정보 포함 — 저장소에 커밋하지 않음)
+# 저장소가 public이므로 실명·이메일·결제정보가 담긴 파일은 절대 추적하지 않는다.
 Data/
 screenshot/
+# 메일 트래킹 등 실데이터 내보내기 결과는 docs/가 아니라 Data/ 아래에 둔다
+docs/*.json
 
 # OS/에디터
 Thumbs.db
