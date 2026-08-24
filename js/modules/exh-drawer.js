@@ -58,7 +58,7 @@ export function renderExhDr(){
   if(h) h.innerHTML = `
     <div style="flex:1;min-width:0">
       <div class="drnm">${escapeHtml(x.company_name || '')}</div>
-      <div class="drmt">${x.booth_no ? `부스 ${escapeHtml(x.booth_no)} · ` : ''}${
+      <div class="drmt">${x.booth_no ? `부스 ${escapeHtml(x.booth_no)}${x.booth_floor ? `(${escapeHtml(x.booth_floor)}층)` : ''} · ` : ''}${
         (() => { const p = exhContact(x); return (p.name || p.email) ? `담당자 ${escapeHtml(p.name || p.email)} · ` : ''; })()
         }우리 담당 ${escapeHtml(x.assignee || '-')}
         ${billed ? ` · 입금 ${money(paid)}/${money(billed)}` : ''}</div>
@@ -119,6 +119,9 @@ function textRow(x, field, label, placeholder = '', multi = false){
    거기서 실시간으로 읽어 보여준다(값을 복사해두면 마스터DB에서 고쳐도 여기가
    옛 값으로 남는다). 마스터DB에 없는 사람은 직접 입력으로 적는다. */
 const C_ROLES = ['실무', '정산', '현장', '기타'];
+const BOOTH_TYPES = ['Self-Construction', 'Block System A', 'Block System B', 'Block System C',
+  'Lighting Booth', 'Octanium (Standard)'];
+const GRADES = ['', 'DIA', 'GOLD', 'SILVER', 'BRONZE', 'Exhibitor'];
 
 function dContact(x){
   const list = exhContacts(x);
@@ -204,8 +207,28 @@ function dProgress(x){
     appIssue ? '<span class="pill p-amber">정보 누락</span>' : '')}
 
   ${sct('부스 배정',
-    textRow(x, 'booth_no', '부스 번호', '예: A-12') +
-    dateRow(x, 'booth_confirmed_at', '배정 확정'))}
+    `<div class="fgr">
+      <div class="fg"><label class="fl">부스 번호</label>
+        <input class="fi" style="font-size:12px" value="${escAttr(x.booth_no || '')}"
+          onchange="setExhField('${escAttr(x.id)}','booth_no',this.value,'부스 번호')"></div>
+      <div class="fg"><label class="fl">층</label>
+        <input class="fi" style="font-size:12px" value="${escAttr(x.booth_floor || '')}"
+          onchange="setExhField('${escAttr(x.id)}','booth_floor',this.value,'부스 층')"></div>
+    </div>
+    <div class="fgr">
+      <div class="fg"><label class="fl">부스 타입</label>
+        <input class="fi" style="font-size:12px" list="booth-types" value="${escAttr(x.booth_type || '')}"
+          onchange="setExhField('${escAttr(x.id)}','booth_type',this.value,'부스 타입')">
+        <datalist id="booth-types">${BOOTH_TYPES.map(t => `<option value="${escAttr(t)}">`).join('')}</datalist></div>
+      <div class="fg"><label class="fl">수량</label>
+        <input class="fi" style="font-size:12px" value="${escAttr(x.booth_qty || '')}"
+          onchange="setExhField('${escAttr(x.id)}','booth_qty',this.value,'부스 수량')"></div>
+    </div>
+    <div class="fg"><label class="fl">스폰서 등급</label>
+      <select class="fi" style="font-size:12px" onchange="setExhField('${escAttr(x.id)}','grade',this.value,'등급')">
+        ${GRADES.map(g => `<option value="${escAttr(g)}"${(x.grade || '') === g ? ' selected' : ''}>${g || '— 없음 —'}</option>`).join('')}
+      </select></div>` +
+    flagRow(x, 'booth_confirmed', 'booth_confirmed_at', '배정 확정'))}
 
   ${sct('도록 / 디렉토리',
     flagRow(x, 'directory_received', 'directory_received_at', '자료 수신', '회사소개·로고·제품정보') +

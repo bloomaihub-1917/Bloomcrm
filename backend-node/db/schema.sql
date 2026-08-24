@@ -167,7 +167,14 @@ CREATE TABLE IF NOT EXISTS exhibitors (
   extra_equipment    TEXT,  -- 추가 비품 신청 내역
 
   -- 3. 부스 배정
+  -- 확정 참가기업 리스트에 부스가 배정돼 있으면 확정으로 본다(날짜는 기록이 없어
+  -- booth_confirmed 플래그만 켜고, 알게 되면 booth_confirmed_at을 채운다).
   booth_no           TEXT,
+  booth_floor        TEXT,   -- 층
+  booth_type         TEXT,   -- Self-Construction | Block System A/B/C | Lighting Booth | Octanium ...
+  booth_qty          TEXT,
+  grade              TEXT,   -- DIA | GOLD | SILVER | BRONZE | Exhibitor (스폰서 등급)
+  booth_confirmed    TEXT,   -- 'yes' | ''
   booth_confirmed_at TEXT,
 
   -- 4. 세금계산서 (인보이스/입금은 1:N이라 별도 테이블)

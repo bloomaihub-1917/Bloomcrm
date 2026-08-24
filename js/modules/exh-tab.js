@@ -31,13 +31,16 @@ import { normalizeCompanyKey } from './company-tab.js';
 /* 전시 참가기업으로 취급할 참가 역할 — 데이터에 표기 흔들림이 있어 함께 본다 */
 const EXH_ROLES = ['전시참가기업', '전시기업', '전시참가'];
 
+/* 스폰서 등급별 배지색 — 'Exhibitor'(일반)는 배지를 달지 않는다 */
+const GRADE_CLS = { DIA: 'p-indigo', GOLD: 'p-gold', SILVER: 'p-gray', BRONZE: 'p-amber' };
+
 /* 체크리스트 표의 열 정의. key는 exhibitors 컬럼, 또는 파생 계산(calc). */
 const STEPS = [
   { key: 'manual_sent_at',       label: '매뉴얼<br>발송' },
   { key: 'manual_replied_at',    label: '매뉴얼<br>회신' },
   { key: 'app_received_at',      label: '신청서',   flag: 'app_received',
     warn: (x) => (x.app_received_at || x.app_received === 'yes') && x.app_complete === 'no' },
-  { key: 'booth_confirmed_at',   label: '부스' },
+  { key: 'booth_confirmed_at',   label: '부스', flag: 'booth_confirmed' },
   { key: 'calc:invoice',         label: '인보이스' },
   { key: 'tax_sent_at',          label: '세금<br>계산서' },
   { key: 'calc:payment',         label: '입금' },
@@ -370,8 +373,14 @@ function renderChecklist(list, all){
       const openN = openInquiriesFor(x.id).length;
       const billed = billedAmount(x.id), paid = paidAmount(x.id);
       return `<tr style="cursor:pointer" onclick="openExhDr('${escAttr(x.id)}')">
-        <td><div style="font-weight:700;font-size:12px">${escapeHtml(x.company_name || '')}</div>
-            ${x.booth_no ? `<div style="font-size:10px;color:var(--i4)">부스 ${escapeHtml(x.booth_no)}</div>` : ''}</td>
+        <td><div style="display:flex;align-items:center;gap:5px">
+              <span style="font-weight:700;font-size:12px">${escapeHtml(x.company_name || '')}</span>
+              ${x.grade && x.grade !== 'Exhibitor' ? `<span class="pill ${GRADE_CLS[x.grade] || 'p-gray'}">${escapeHtml(x.grade)}</span>` : ''}
+            </div>
+            ${x.booth_no ? `<div style="font-size:10px;color:var(--i4)">부스 ${escapeHtml(x.booth_no)}${
+              x.booth_floor ? ` · ${escapeHtml(x.booth_floor)}층` : ''}${
+              x.booth_type ? ` · ${escapeHtml(x.booth_type)}` : ''}${
+              x.booth_qty && x.booth_qty !== '1' ? ` ×${escapeHtml(x.booth_qty)}` : ''}</div>` : ''}</td>
         ${(() => {
           const all = exhContacts(x);
           const p = all[0];

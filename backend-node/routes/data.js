@@ -54,7 +54,7 @@ const TABLES = {
       'contact_id', 'contact_name', 'contact_email', 'contact_phone',
       'manual_sent_at', 'manual_replied_at',
       'app_received', 'app_received_at', 'app_complete', 'app_missing', 'extra_equipment',
-      'booth_no', 'booth_confirmed_at',
+      'booth_no', 'booth_floor', 'booth_type', 'booth_qty', 'grade', 'booth_confirmed', 'booth_confirmed_at',
       'tax_sent_at', 'tax_amount', 'tax_contact_name', 'tax_contact_email', 'tax_contact_phone',
       'graphic_ordered_at', 'graphic_type', 'graphic_spec_ok', 'graphic_spec_note',
       'graphic_draft_at', 'graphic_revised_at', 'graphic_final_at',
