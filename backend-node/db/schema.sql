@@ -143,6 +143,12 @@ CREATE TABLE IF NOT EXISTS exhibitors (
   note         TEXT,
   updated_at   TEXT,
 
+  -- 기업측 담당자(우리가 실제로 메일 주고받는 상대). assignee(우리 팀 담당)와는
+  -- 다른 개념이라 별도 컬럼으로 둔다. 세금계산서 담당자는 또 따로 있다(아래).
+  contact_name  TEXT,
+  contact_email TEXT,
+  contact_phone TEXT,
+
   -- 1. 매뉴얼
   manual_sent_at     TEXT,
   manual_replied_at  TEXT,

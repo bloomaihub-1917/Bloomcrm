@@ -295,7 +295,8 @@ function renderChecklist(list, all){
     </div>
     <div class="tw"><table><thead><tr>
       <th style="min-width:150px">기업</th>
-      <th style="min-width:60px">담당</th>
+      <th style="min-width:88px">기업 담당자</th>
+      <th style="min-width:56px">우리 담당</th>
       <th style="min-width:70px">진행률</th>
       ${STEPS.map(s => `<th style="text-align:center;font-size:10px;line-height:1.2">${s.label}</th>`).join('')}
       <th style="text-align:center;min-width:50px">문의</th>
@@ -308,6 +309,8 @@ function renderChecklist(list, all){
       return `<tr style="cursor:pointer" onclick="openExhDr('${escAttr(x.id)}')">
         <td><div style="font-weight:700;font-size:12px">${escapeHtml(x.company_name || '')}</div>
             ${x.booth_no ? `<div style="font-size:10px;color:var(--i4)">부스 ${escapeHtml(x.booth_no)}</div>` : ''}</td>
+        <td style="font-size:11px;color:var(--i3);max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+            title="${escAttr(x.contact_email || '')}">${escapeHtml(x.contact_name || x.contact_email || '-')}</td>
         <td style="font-size:11px;color:var(--i3)">${escapeHtml(x.assignee || '-')}</td>
         <td><div class="br" style="width:52px"><div class="brf" style="width:${p}%"></div></div>
             <span style="font-size:10px;color:var(--i4)">${p}%</span></td>

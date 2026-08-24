@@ -57,7 +57,8 @@ export function renderExhDr(){
   if(h) h.innerHTML = `
     <div style="flex:1;min-width:0">
       <div class="drnm">${escapeHtml(x.company_name || '')}</div>
-      <div class="drmt">${x.booth_no ? `부스 ${escapeHtml(x.booth_no)} · ` : ''}담당 ${escapeHtml(x.assignee || '-')}
+      <div class="drmt">${x.booth_no ? `부스 ${escapeHtml(x.booth_no)} · ` : ''}${
+        (x.contact_name || x.contact_email) ? `담당자 ${escapeHtml(x.contact_name || x.contact_email)} · ` : ''}우리 담당 ${escapeHtml(x.assignee || '-')}
         ${billed ? ` · 입금 ${money(paid)}/${money(billed)}` : ''}</div>
     </div>
     <button class="drcls" onclick="closeExhDr()">✕</button>`;
@@ -102,6 +103,18 @@ function textRow(x, field, label, placeholder = '', multi = false){
 function dProgress(x){
   const appIssue = x.app_received_at && x.app_complete === 'no';
   return `
+  ${sct('기업 담당자', `
+    <div style="font-size:11px;color:var(--i5);margin-bottom:6px">우리가 실제로 연락하는 기업측 담당자예요</div>
+    <div class="fgr">
+      <div class="fg"><label class="fl">이름</label>
+        <input class="fi" style="font-size:12px" value="${escAttr(x.contact_name || '')}"
+          onchange="setExhField('${escAttr(x.id)}','contact_name',this.value,'기업 담당자')"></div>
+      <div class="fg"><label class="fl">연락처</label>
+        <input class="fi" style="font-size:12px" value="${escAttr(x.contact_phone || '')}"
+          onchange="setExhField('${escAttr(x.id)}','contact_phone',this.value,'기업 담당자')"></div>
+    </div>
+    ${textRow(x, 'contact_email', '이메일', '')}`)}
+
   ${sct('매뉴얼', dateRow(x, 'manual_sent_at', '매뉴얼 발송') + dateRow(x, 'manual_replied_at', '매뉴얼 회신'))}
 
   ${sct('신청서',

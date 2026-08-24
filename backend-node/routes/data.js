@@ -51,6 +51,7 @@ const TABLES = {
   exhibitors: {
     table: 'exhibitors', pk: 'id', idPrefix: 'X-',
     columns: ['id', 'event_id', 'company_key', 'company_name', 'assignee', 'status', 'note', 'updated_at',
+      'contact_name', 'contact_email', 'contact_phone',
       'manual_sent_at', 'manual_replied_at',
       'app_received_at', 'app_complete', 'app_missing', 'extra_equipment',
       'booth_no', 'booth_confirmed_at',
