@@ -14,7 +14,7 @@
 import {
   getExhibitorById, itemsFor, invoicesFor, paymentsFor, logsFor, openInquiriesFor,
   EXH_CONTACTS, EXH_ITEMS, EXH_INVOICES, EXH_PAYMENTS, EXH_LOGS, CO_DB, currentUser,
-  contactsFor,
+  contactsFor, catalogFor, catalogItem,
 } from '../state.js';
 import { td, escapeHtml, escAttr } from '../utils.js';
 import {
@@ -156,6 +156,44 @@ function builderBlock(x){
     <div class="fgr">${row('builder_contact', '시공 담당자', '')}${row('builder_tel', '유선번호', '02-000-0000')}</div>
     <div class="fgr">${row('builder_mobile', '휴대폰', '010-0000-0000')}${row('builder_email', '이메일', '')}</div>
   </div>`;
+}
+
+/* ── 렌탈 비품 카탈로그 ──
+   비품 이름을 손으로 적으면 같은 의자가 "접이식 체어", "C-040 Folding Chair",
+   "폴딩체어"로 제각각 들어와 발주 합계가 갈라지고 단가도 매번 다시 찾아야 한다.
+   행사 카탈로그를 골라 넣으면 이름·규격·단가가 한 번에 채워지고, 어떤 품목인지
+   id로 이어져 집계가 표기에 흔들리지 않는다.
+
+   자유 입력도 그대로 둔다 — 카탈로그 밖의 품목(그래픽 랩핑, 전기 등)이 실제로
+   들어오기 때문에 목록에 없다고 못 적게 하면 안 된다. */
+function catalogDatalist(x){
+  const list = catalogFor(x.event_id);
+  if(!list.length) return '';
+  return `<datalist id="eqcat-${escAttr(x.id)}">${list.map(c =>
+    `<option value="${escAttr(`${c.code} ${c.name_ko}`)}">${escapeHtml([c.name_en, c.spec, c.price_krw && money(c.price_krw) + '원'].filter(Boolean).join(' · '))}</option>`
+  ).join('')}</datalist>`;
+}
+
+/* 카탈로그에서 고른 값이면 단가·분류를 대신 채운다. 손으로 적던 값은 건드리지 않는다. */
+export function pickCatalogItem(exhId){
+  const x = getExhibitorById(exhId);
+  if(!x) return;
+  const nameEl = document.getElementById(`it-nm-${exhId}`);
+  if(!nameEl) return;
+  const typed = nameEl.value.trim();
+  const hit = catalogFor(x.event_id).find(c => `${c.code} ${c.name_ko}` === typed);
+  if(!hit) return;
+
+  const up = document.getElementById(`it-up-${exhId}`);
+  const cur = document.getElementById(`it-cur-${exhId}`);
+  const cat = document.getElementById(`it-cat-${exhId}`);
+  // 렌탈 가구는 전부 '비품'이다 — 고르는 순간 분류를 맞춰 둔다
+  if(cat) cat.value = 'equip';
+  if(up && !up.value.trim()){
+    up.value = (cur && cur.value === 'USD') ? (hit.price_usd || '') : (hit.price_krw || '');
+  }
+  calcItemAmount(exhId);
+  nameEl.dataset.catalogId = hit.id;
 }
 
 function dContact(x){
@@ -409,7 +447,9 @@ function dBilling(x){
     <div class="bl-row bl-item-add">
       <select class="fi" id="it-cat-${escAttr(x.id)}" style="flex:0 0 72px;min-width:0;font-size:11.5px;padding:6px">
         ${CATS.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select>
-      <input class="fi" id="it-nm-${escAttr(x.id)}" placeholder="항목명" style="flex:1 1 120px;min-width:0;font-size:11.5px;padding:6px">
+      <input class="fi" id="it-nm-${escAttr(x.id)}" placeholder="항목명" style="flex:1 1 120px;min-width:0;font-size:11.5px;padding:6px"
+        list="eqcat-${escAttr(x.id)}" oninput="pickCatalogItem('${escAttr(x.id)}')">
+      ${catalogDatalist(x)}
       <input class="fi" id="it-qty-${escAttr(x.id)}" placeholder="수량" style="flex:1 1 54px;min-width:0;font-size:11.5px;padding:6px"
         oninput="calcItemAmount('${escAttr(x.id)}')">
       <input class="fi" id="it-up-${escAttr(x.id)}" placeholder="단가" style="flex:1 1 78px;min-width:0;font-size:11.5px;padding:6px"
@@ -732,11 +772,15 @@ export async function addExhItem(exhId){
   if(!name){ alert('항목명을 입력해주세요.'); return; }
   await addRow(EXH_ITEMS, {
     id: localId('XI-'), exhibitor_id: exhId, category: val(`it-cat-${exhId}`) || 'etc',
+    catalog_id: document.getElementById(`it-nm-${exhId}`)?.dataset.catalogId || '',
     name, qty: val(`it-qty-${exhId}`), unit_price: val(`it-up-${exhId}`), amount,
     currency: val(`it-cur-${exhId}`) || currencyOf(exhId), note: '',
     sort_order: String(itemsFor(exhId).length + 1),
   }, saveExhItem);
   clear(`it-nm-${exhId}`, `it-qty-${exhId}`, `it-up-${exhId}`, `it-amt-${exhId}`);
+  // 지난 선택이 남아 있으면 다음에 손으로 적은 항목에 엉뚱한 품목이 붙는다
+  const nmEl = document.getElementById(`it-nm-${exhId}`);
+  if(nmEl) delete nmEl.dataset.catalogId;
 }
 export const delExhItem = (id) => removeRow(EXH_ITEMS, id, deleteExhItem);
 
@@ -1010,6 +1054,7 @@ window.delExhInvoice = delExhInvoice;
 window.setInvField = setInvField;
 window.setItemField = setItemField;
 window.setPayField = setPayField;
+window.pickCatalogItem = pickCatalogItem;
 window.addExhRefund = addExhRefund;
 window.toggleRefundDone = toggleRefundDone;
 window.addExhPayment = addExhPayment;

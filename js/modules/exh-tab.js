@@ -18,6 +18,7 @@ import {
   exhibitorsForEvent, getExhibitorById, itemsFor, invoicesFor, paymentsFor,
   logsFor, openInquiriesFor, contactsFor, primaryContactFor,
   EVENT_LIST, contacts, participations, CO_DB, currentUser, API_BASE_URL, auditLog,
+  catalogItem,
 } from '../state.js';
 import { td, escapeHtml, escAttr, isMobile, cleanEmail } from '../utils.js';
 export { cleanEmail };   // exh-drawer가 여기서 가져다 쓴다
@@ -627,11 +628,18 @@ function renderEquipView(list){
     .filter(r => r.items.length);
   if(!rows.length) return emptyView('신청된 비품이 없어요');
 
-  // 품목명으로 묶는다. 표기가 조금씩 달라도 앞뒤 공백만 정리해 합친다.
+  /* 카탈로그에 이어진 품목은 그 id로 묶는다 — 기업마다 "접이식 체어",
+     "C-040 Folding Chair"처럼 다르게 적어 보내도 한 줄로 합쳐진다.
+     카탈로그 밖의 항목(그래픽 랩핑·전기 등)만 이름으로 묶는다. */
   const byName = new Map();
   rows.forEach(({ x, items }) => items.forEach(i => {
-    const k = String(i.name || '(이름 없음)').trim();
-    if(!byName.has(k)) byName.set(k, { name: k, qty: 0, cos: [], amt: {} });
+    const cat = i.catalog_id ? catalogItem(i.catalog_id) : null;
+    const k = cat ? cat.id : String(i.name || '(이름 없음)').trim();
+    if(!byName.has(k)) byName.set(k, {
+      name: cat ? `${cat.code} ${cat.name_ko}` : String(i.name || '(이름 없음)').trim(),
+      spec: cat ? cat.spec : '', offCatalog: !cat,
+      qty: 0, cos: [], amt: {},
+    });
     const g = byName.get(k);
     const q = Number(String(i.qty || '').replace(/[^0-9.-]/g, '')) || 0;
     g.qty += q || 1;   // 수량을 안 적었으면 1개로 센다
@@ -642,9 +650,11 @@ function renderEquipView(list){
   const groups = [...byName.values()].sort((a, b) => b.qty - a.qty);
   const money2 = (amt) => Object.keys(amt).filter(k => amt[k]).map(k => fmtMoney(amt[k], k)).join(' + ') || '-';
 
+  const offN = groups.filter(g => g.offCatalog).length;
   const pills = `<span class="pill p-gray">신청 기업 ${rows.length}</span>`
     + `<span class="pill p-blue">품목 ${groups.length}종</span>`
-    + `<span class="pill p-gray">총 ${groups.reduce((a, g) => a + g.qty, 0)}개</span>`;
+    + `<span class="pill p-gray">총 ${groups.reduce((a, g) => a + g.qty, 0)}개</span>`
+    + (offN ? `<span class="pill p-amber" title="카탈로그에 없는 품목 — 그래픽·전기처럼 다른 분류일 수 있어요">카탈로그 외 ${offN}종</span>` : '');
 
   /* 좁은 화면에서는 표를 쓰지 않는다 — 헤더가 숨겨지면서 25 / 7곳 / 187,000원이
      각각 무슨 숫자인지 알 수 없게 된다. 값마다 이름을 붙여 카드로 그린다. */
@@ -654,14 +664,17 @@ function renderEquipView(list){
           <span style="font-size:12.5px;font-weight:600;flex:1;min-width:0">${escapeHtml(g.name)}</span>
           <span style="font-size:15px;font-weight:800">${g.qty}<span style="font-size:10px;font-weight:400;color:var(--i4)">개</span></span>
         </div>
-        <div style="font-size:10.5px;color:var(--i4);margin-top:2px">${g.cos.length}개사 신청 · ${escapeHtml(money2(g.amt))}</div>
+        <div style="font-size:10.5px;color:var(--i4);margin-top:2px">${g.spec ? escapeHtml(g.spec) + ' · ' : ''}${g.cos.length}개사 신청 · ${escapeHtml(money2(g.amt))}</div>
       </div>`).join('')
     : `<div class="tw" style="overflow:visible"><table><thead><tr>
-        <th style="min-width:160px">품목</th><th style="min-width:60px;text-align:right">수량</th>
+        <th style="min-width:180px">품목</th><th style="min-width:110px">규격</th>
+        <th style="min-width:60px;text-align:right">수량</th>
         <th style="min-width:70px;text-align:right">신청 기업</th><th style="min-width:110px;text-align:right">금액</th>
       </tr></thead><tbody>
         ${groups.map(g => `<tr>
-          <td style="font-size:12.5px;font-weight:600">${escapeHtml(g.name)}</td>
+          <td style="font-size:12.5px;font-weight:600">${escapeHtml(g.name)}
+            ${g.offCatalog ? '<span class="pill p-amber" style="font-size:9px;margin-left:4px" title="카탈로그에 없는 품목 — 직접 입력됐어요">카탈로그 외</span>' : ''}</td>
+          <td style="font-size:11px;color:var(--i4)">${escapeHtml(g.spec || '-')}</td>
           <td style="text-align:right;font-weight:700">${g.qty}</td>
           <td style="text-align:right;color:var(--i4)" title="${escAttr(g.cos.map(c => `${c.name} ${c.qty}`).join(', '))}">${g.cos.length}곳</td>
           <td style="text-align:right">${money2(g.amt)}</td>

@@ -162,6 +162,18 @@ export const EXH_INVOICES = [];  // 인보이스 (여러 장 발행 가능)
 export const EXH_PAYMENTS = [];  // 입금 내역 (분할 입금 대응)
 export const EXH_LOGS     = [];  // 문의사항(kind='inquiry') + 자유 기록(kind='note')
 
+/* 렌탈 비품 품목표 — 행사별로 다르다(렌탈사와 단가가 행사마다 바뀐다).
+   신청 항목(EXH_ITEMS.catalog_id)이 여기의 id를 가리킨다. */
+export const EQUIP_CATALOG = [];
+
+/* 이 행사에서 고를 수 있는 품목 — 내린 품목(active='no')은 뺀다.
+   다만 이미 신청에 쓰인 품목은 이름을 보여줘야 하므로 조회는 따로 한다. */
+export function catalogFor(evKey){
+  return EQUIP_CATALOG.filter(c => c.event_id === evKey && c.active !== 'no')
+    .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0));
+}
+export function catalogItem(id){ return EQUIP_CATALOG.find(c => c.id === id) || null; }
+
 /* 전시 탭에서 지금 보고 있는 행사 (null = 미선택) */
 let exhEvent = null;
 export function setExhEvent(v){ exhEvent = v; }

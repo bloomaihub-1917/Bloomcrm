@@ -42,6 +42,7 @@ import {
   EXH_PAYMENTS,
   EXH_LOGS,
   ORGS,
+  EQUIP_CATALOG,
   auditLog,
   COMPANY_SECTORS,
   DOMAINS,
@@ -234,7 +235,7 @@ export async function loadFromSheets(hooks = {}){
   try {
     const [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, partTypesData,
            orgsData,
-           exhData, exhConData, exhItemData, exhInvData, exhPayData, exhLogData] = await Promise.all([
+           exhData, exhConData, exhItemData, exhInvData, exhPayData, exhLogData, equipCatData] = await Promise.all([
       safeFetch(base + 'contacts',       'contacts',       1, headers),
       safeFetch(base + 'participations', 'participations', 1, headers),
       safeFetch(base + 'crm_targets',    'crm_targets',    1, headers),
@@ -250,6 +251,7 @@ export async function loadFromSheets(hooks = {}){
       safeFetch(base + 'exhibitor_invoices', 'exhibitor_invoices', 1, headers),
       safeFetch(base + 'exhibitor_payments', 'exhibitor_payments', 1, headers),
       safeFetch(base + 'exhibitor_logs',     'exhibitor_logs',     1, headers),
+      safeFetch(base + 'equip_catalog',      'equip_catalog',      1, headers),
     ]);
 
     // ── 실패 감지 (신규) ──
@@ -257,7 +259,7 @@ export async function loadFromSheets(hooks = {}){
     // 세지 않으면 "전 시트 로드 실패"도 성공으로 표시되는 버그가 있었다.
     const _results = [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, partTypesData,
       orgsData,
-      exhData, exhConData, exhItemData, exhInvData, exhPayData, exhLogData];
+      exhData, exhConData, exhItemData, exhInvData, exhPayData, exhLogData, equipCatData];
     const _failed  = _results.filter(r => r === null).length;
     if(_failed === _results.length){
       // 전부 실패 — 연결 안 됨으로 처리하고 기존(stale) 화면 유지
@@ -394,6 +396,12 @@ export async function loadFromSheets(hooks = {}){
 
     // companies 테이블은 더 이상 읽지 않는다 — orgs가 그 자리를 대신한다.
     // (테이블 자체는 마이그레이션 이전 값이 남아 있어 그대로 둔다)
+
+    // ── equip_catalog → EQUIP_CATALOG (행사별 렌탈 비품 품목표) ──
+    if(equipCatData && Array.isArray(equipCatData)){
+      EQUIP_CATALOG.splice(0, EQUIP_CATALOG.length, ...equipCatData);
+      console.log('[CRM] equip_catalog 로드:', EQUIP_CATALOG.length, '개');
+    }
 
     // ── orgs → ORGS (기업 마스터) ──
     // 기업 화면(CO_DB)이 이걸 바탕으로 만들어지므로 companies보다 먼저 채운다.

@@ -356,3 +356,41 @@ ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS builder_contact TEXT;   -- 시�
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS builder_tel     TEXT;   -- 유선번호
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS builder_mobile  TEXT;   -- 휴대폰
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS builder_email   TEXT;
+
+/* ══════════════════════════════════════════════════════════════
+   equip_catalog — 렌탈 비품 카탈로그
+
+   참가기업이 신청하는 비품(의자·테이블·진열대·가전)의 품목표다. 지금까지는
+   exhibitor_items에 이름을 손으로 적어 넣어서, 같은 의자가 "접이식 체어",
+   "C-040 Folding Chair", "폴딩체어"로 제각각 들어왔다. 그러면 발주할 때
+   품목별 합계가 갈라지고 단가도 매번 다시 찾아야 한다.
+
+   행사별로 나눠 둔다(event_id). 행사마다 렌탈사가 다르고 단가도 바뀌기 때문에,
+   지난 행사의 카탈로그를 그대로 두고 새 행사용을 따로 만들어야 옛 주문의 단가가
+   보존된다. 새 행사를 열 때는 이전 카탈로그를 복제해 단가만 손보면 된다
+   (db/clone-catalog.js).
+
+   code는 행사 안에서만 유일하다 — 같은 C-011이 행사마다 다른 가격일 수 있다.
+══════════════════════════════════════════════════════════════ */
+CREATE TABLE IF NOT EXISTS equip_catalog (
+  id         TEXT PRIMARY KEY,   -- EC-xxxxx
+  event_id   TEXT,               -- 어느 행사의 품목표인가
+  category   TEXT,               -- 의자 | 테이블 | 진열대 | 가전제품 | 기타비품
+  code       TEXT,               -- C-011, T-030 …  (행사 안에서 유일)
+  name_ko    TEXT,
+  name_en    TEXT,
+  spec       TEXT,               -- 규격(mm)
+  price_krw  TEXT,
+  price_usd  TEXT,
+  note       TEXT,
+  -- 단종된 품목은 지우지 않고 내린다. 지우면 이미 그 품목을 신청한 기업의
+  -- 주문이 무엇을 가리키는지 알 수 없게 된다.
+  active     TEXT,               -- '' | 'no'(목록에서 숨김)
+  sort_order TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_equip_catalog_event ON equip_catalog(event_id);
+CREATE INDEX IF NOT EXISTS idx_equip_catalog_code  ON equip_catalog(event_id, code);
+
+/* 신청 내역이 카탈로그의 어느 품목인지 가리킨다. 이름만 적혀 있으면 표기가
+   흔들려 집계가 갈라지므로, 고른 품목의 id를 남긴다(직접 입력한 항목은 빈 값). */
+ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS catalog_id TEXT;

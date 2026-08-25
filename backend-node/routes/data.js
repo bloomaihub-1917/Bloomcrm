@@ -77,7 +77,15 @@ const TABLES = {
   },
   exhibitor_items: {
     table: 'exhibitor_items', pk: 'id', idPrefix: 'XI-',
-    columns: ['id', 'exhibitor_id', 'category', 'name', 'qty', 'unit_price', 'amount', 'currency', 'note', 'sort_order'],
+    columns: ['id', 'exhibitor_id', 'category', 'name', 'qty', 'unit_price', 'amount', 'currency', 'note', 'sort_order',
+      'catalog_id'],
+  },
+
+  /* 렌탈 비품 품목표 — 행사별로 따로 둔다(단가가 행사마다 다르다) */
+  equip_catalog: {
+    table: 'equip_catalog', pk: 'id', idPrefix: 'EC-',
+    columns: ['id', 'event_id', 'category', 'code', 'name_ko', 'name_en', 'spec',
+      'price_krw', 'price_usd', 'note', 'active', 'sort_order'],
   },
   exhibitor_invoices: {
     table: 'exhibitor_invoices', pk: 'id', idPrefix: 'XV-',
