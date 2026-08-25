@@ -540,7 +540,7 @@ function renderInquiryPanel(){
     <div style="display:flex;flex-direction:column;gap:1px;margin-top:8px">
       ${open.slice(0, 8).map(({ l, x }) => {
         const d = daysSince(l.ts);
-        return `<div onclick="openExhDr('${escAttr(x.id)}',3)" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;cursor:pointer;background:var(--i9)">
+        return `<div onclick="openExhDr('${escAttr(x.id)}','logs')" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;cursor:pointer;background:var(--i9)">
           <span style="font-weight:700;font-size:12px;min-width:120px">${escapeHtml(exhNames(x).ko)}${
             exhNames(x).en ? `<span style="font-weight:400;color:var(--i4);font-size:10.5px;margin-left:4px">${escapeHtml(exhNames(x).en)}</span>` : ''}</span>
           <span style="font-size:12px;color:var(--i2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(l.subject || l.body || '(내용 없음)')}</span>
@@ -591,7 +591,7 @@ const emptyView = (msg) => `<div class="empty" style="padding:40px 20px;text-ali
 
 /* 기업 이름 칸 — 어느 보기에서든 클릭하면 그 기업 드로어로 간다 */
 const coCell = (x, tab) => `<td style="min-width:150px">
-  <span onclick="openExhDr('${escAttr(x.id)}',${tab})" style="cursor:pointer;font-size:12.5px;font-weight:600${
+  <span onclick="openExhDr('${escAttr(x.id)}','${tab}')" style="cursor:pointer;font-size:12.5px;font-weight:600${
     x.status === CANCELLED ? ';text-decoration:line-through;opacity:.6' : ''}">${escapeHtml(exhNames(x).ko)}</span>${
     exhNames(x).en ? `<div style="font-size:10.5px;color:var(--i4);font-weight:400">${escapeHtml(exhNames(x).en)}</div>` : ''}</td>`;
 
@@ -668,7 +668,7 @@ function renderBoothView(list){
     + pillsOf(countBy(rows, x => x.booth_type));
 
   if(isMobile()) return viewShell(pills, rows.map(x => `
-    <div onclick="openExhDr('${escAttr(x.id)}',0)" style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
+    <div onclick="openExhDr('${escAttr(x.id)}','progress')" style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
         <span class="pill ${x.booth_no ? 'p-blue' : 'p-red'}">${x.booth_no ? '부스 ' + escapeHtml(x.booth_no) : '미배정'}${
           (() => { const b = parseBooth(x.booth_no);
@@ -700,7 +700,7 @@ function renderBoothView(list){
           ${(() => { const b = parseBooth(x.booth_no);
             return b.kind === 'range' ? `<div style="font-size:9.5px;color:var(--i4);margin-top:1px">${b.count}칸</div>`
               : b.kind === 'split' ? `<div style="font-size:9.5px;color:var(--a);margin-top:1px">공동</div>` : ''; })()}</td>
-        ${coCell(x, 0)}
+        ${coCell(x, 'progress')}
         <td><input class="fi" style="width:40px;padding:3px 5px;font-size:11.5px" value="${escAttr(x.booth_floor || '')}"
           onchange="setExhField('${escAttr(x.id)}','booth_floor',this.value,'부스 층')"></td>
         <td><select class="fi" style="width:126px;padding:3px 4px;font-size:11px"
@@ -718,7 +718,7 @@ function renderBoothView(list){
           ? (x.builder || x.builder_contact || x.builder_mobile
             ? `<div style="font-size:11.5px;font-weight:600">${escapeHtml(x.builder || '업체명 미입력')}</div>
                <div style="font-size:10.5px;color:var(--i4)">${[x.builder_contact, x.builder_mobile || x.builder_tel].filter(Boolean).map(escapeHtml).join(' · ')}</div>`
-            : `<button class="btn bs" style="font-size:10.5px" onclick="openExhDr('${escAttr(x.id)}',0)">시공사 입력</button>`)
+            : `<button class="btn bs" style="font-size:10.5px" onclick="openExhDr('${escAttr(x.id)}','progress')">시공사 입력</button>`)
           : '<span style="color:var(--i6);font-size:11px">—</span>'}</td>
       </tr>`;
     }).join('')}
@@ -792,7 +792,7 @@ function renderEquipView(list){
      발주하다 "이 의자 25개가 어디로 가는 거지"를 확인해야 할 때, 표 밖으로
      나가지 않고 그 자리에서 본다. */
   const coList = (g) => g.cos.slice().sort((a, b) => b.qty - a.qty).map(c => `
-    <div onclick="event.stopPropagation();openExhDr('${escAttr(c.id)}',1)"
+    <div onclick="event.stopPropagation();openExhDr('${escAttr(c.id)}','billing')"
       style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:11.5px">
       <span class="pill p-gray" style="min-width:52px;text-align:center">${c.booth ? '부스 ' + escapeHtml(c.booth) : '미배정'}</span>
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(c.name)}</span>
@@ -871,7 +871,7 @@ function renderEquipView(list){
     <div style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px">
       <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px">
         ${x.booth_no ? `<span class="pill p-blue">부스 ${escapeHtml(x.booth_no)}</span>` : ''}
-        <span onclick="openExhDr('${escAttr(x.id)}',1)" style="cursor:pointer;flex:1;min-width:0">
+        <span onclick="openExhDr('${escAttr(x.id)}','billing')" style="cursor:pointer;flex:1;min-width:0">
           <span style="font-size:13px;font-weight:700">${escapeHtml(exhNames(x).ko)}</span>${
           exhNames(x).en ? `<span style="font-size:11px;color:var(--i4);margin-left:5px">${escapeHtml(exhNames(x).en)}</span>` : ''}</span>
         <span style="font-size:11px;color:var(--i4)">${items.length}종</span>
@@ -928,7 +928,7 @@ function renderGraphicView(list){
 
   if(isMobile()) return viewShell(pills, rows.map(x => {
     const g = graphicState(x);
-    return `<div onclick="openExhDr('${escAttr(x.id)}',2)" style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
+    return `<div onclick="openExhDr('${escAttr(x.id)}','graphic')" style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
         <span style="flex:1;min-width:0">
           <span style="font-size:13px;font-weight:700">${escapeHtml(exhNames(x).ko)}</span>${
@@ -958,7 +958,7 @@ function renderGraphicView(list){
         : `<td><input type="date" class="fi" style="width:100px;padding:3px 5px;font-size:11px" value="${escAttr(x[f] || '')}"
             onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr({graphic_draft_at:'초안',graphic_revised_at:'수정안',graphic_final_at:'최종안'}[f])}')"></td>`;
       return `<tr>
-        ${coCell(x, 2)}
+        ${coCell(x, 'graphic')}
         <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
         <td><select class="fi" style="width:74px;padding:3px 4px;font-size:11px"
           onchange="setExhField('${escAttr(x.id)}','graphic_type',this.value,'그래픽 유형')">
@@ -1343,10 +1343,10 @@ function renderDashboard(all){
 
   const cardTodo = todo ? `<div class="uc" style="border-left:3px solid var(--am)">
       <div class="uc-ttl">처리 필요 <span class="pill p-amber">${todo}건</span></div>
-      ${myTurn.slice(0, 5).map(o => attnRow(o.x, o.label, o.st.action, o.days, o.label === '그래픽' ? 2 : 1)).join('')}
-      ${openInq.slice(0, 5).map(o => attnRow(o.x, '미답변 문의', o.l.subject || o.l.body || '', daysSince(o.l.ts), 3)).join('')}
-      ${overdue.slice(0, 5).map(o => attnRow(o.x, '입금 기한', fmtMoney(o.s.balance, o.s.cur) + ' 미납', daysSince(o.s.due), 1)).join('')}
-      ${attention.slice(0, 5).map(o => attnRow(o.x, '정산 확인', o.why, null, 1)).join('')}
+      ${myTurn.slice(0, 5).map(o => attnRow(o.x, o.label, o.st.action, o.days, o.label === '그래픽' ? 'graphic' : 'billing')).join('')}
+      ${openInq.slice(0, 5).map(o => attnRow(o.x, '미답변 문의', o.l.subject || o.l.body || '', daysSince(o.l.ts), 'logs')).join('')}
+      ${overdue.slice(0, 5).map(o => attnRow(o.x, '입금 기한', fmtMoney(o.s.balance, o.s.cur) + ' 미납', daysSince(o.s.due), 'billing')).join('')}
+      ${attention.slice(0, 5).map(o => attnRow(o.x, '정산 확인', o.why, null, 'billing')).join('')}
       ${todo > 20 ? `<div style="font-size:11px;color:var(--i4);padding:6px 2px">외 ${todo - 20}건 — 왼쪽 필터에서 전체를 볼 수 있어요</div>` : ''}
       ${waiting.length ? `<div style="font-size:10.5px;color:var(--i4);margin-top:8px;padding-top:7px;border-top:1px solid var(--i8)">
         넘겨 둔 일 ${waiting.length}건 — ${waiting.slice(0, 3).map(w =>
@@ -1405,7 +1405,7 @@ function renderDashboard(all){
 
 /* 처리 필요 목록의 한 줄 — 눌러서 바로 그 기업의 해당 탭으로 간다 */
 function attnRow(x, kind, text, days, tab){
-  return `<div onclick="openExhDr('${escAttr(x.id)}',${tab})"
+  return `<div onclick="openExhDr('${escAttr(x.id)}','${tab}')"
     style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:6px;cursor:pointer;background:var(--i9);margin-bottom:4px">
     <span style="flex:0 0 128px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
       <span style="font-weight:700;font-size:11.5px">${escapeHtml(exhNames(x).ko)}</span>${
@@ -1455,7 +1455,7 @@ function renderChecklistCards(list, all){
           ${off ? '<span class="pill p-gray">참가 취소</span>' : ''}
           ${x.grade && x.grade !== 'Exhibitor' ? `<span class="pill ${GRADE_CLS[x.grade] || 'p-gray'}">${escapeHtml(x.grade)}</span>` : ''}
           ${openN ? `<span class="pill p-amber" style="margin-left:auto"
-            onclick="event.stopPropagation();openExhDr('${escAttr(x.id)}',3)">문의 ${openN}</span>` : ''}
+            onclick="event.stopPropagation();openExhDr('${escAttr(x.id)}','logs')">문의 ${openN}</span>` : ''}
         </div>
         <div style="font-size:11.5px;color:var(--i4);margin-top:3px">
           ${x.booth_no ? `부스 ${escapeHtml(x.booth_no)}${x.booth_floor ? `·${escapeHtml(x.booth_floor)}층` : ''}${x.booth_type ? ` · ${escapeHtml(x.booth_type)}` : ''}` : '부스 미배정'}
@@ -1538,7 +1538,7 @@ function renderChecklistTable(list, all){
         <td>${progressBar(p, p === 100 ? 'var(--g)' : 'var(--a)', '52px')}
             <span style="font-size:10px;color:var(--i4)">${p}%</span></td>
         ${STEPS.map(s => cell(x, s)).join('')}
-        <td style="text-align:center" onclick="event.stopPropagation();openExhDr('${escAttr(x.id)}',3)">
+        <td style="text-align:center" onclick="event.stopPropagation();openExhDr('${escAttr(x.id)}','logs')">
           ${openN ? `<span class="pill p-amber">${openN}</span>` : '<span style="color:var(--i6)">·</span>'}</td>
         ${(() => {
           const s = settleState(x);

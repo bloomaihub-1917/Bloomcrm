@@ -1710,7 +1710,7 @@ export function goToExhibitor(exhId, evKey){
     window.switchApp('exh', null);
     window.setExhEvent?.(evKey);
     window.renderExh?.();
-    setTimeout(() => window.openExhDr?.(exhId, 1), 60);   // 1 = 정산 탭
+    setTimeout(() => window.openExhDr?.(exhId, 'billing'), 60);   // 정산 탭으로
   } catch(e){ console.warn('[company-tab] 전시로 이동 실패:', e); }
 }
 

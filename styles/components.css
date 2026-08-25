@@ -155,7 +155,11 @@ tr.row-sel{background:var(--ad)}
 .drmt{display:flex;gap:9px;flex-wrap:wrap;font-size:10px;color:var(--i3)}
 .drcls{margin-left:auto;width:27px;height:27px;border-radius:5px;border:1px solid var(--i6);background:var(--W);flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .drcls:hover{background:var(--i7)}.drcls svg{width:11px;height:11px;color:var(--i3)}
-.drtabs{display:flex;border-bottom:1px solid var(--i6);padding:0 17px;flex-shrink:0;background:var(--W)}
+/* 탭이 여섯 개라 좁은 화면에서는 글자가 눌려 읽히지 않는다 — 가로로 흐르게 둔다 */
+.drtabs{display:flex;border-bottom:1px solid var(--i6);padding:0 17px;flex-shrink:0;background:var(--W);
+  overflow-x:auto;scrollbar-width:none}
+.drtabs::-webkit-scrollbar{display:none}
+.drtabs .drtab{flex:0 0 auto;white-space:nowrap}
 .drtab{padding:8px 11px;font-size:11px;font-weight:500;color:var(--i4);cursor:pointer;border-bottom:2px solid transparent;transition:all .1s;white-space:nowrap}
 .drtab.on{color:var(--a);border-bottom-color:var(--a);font-weight:700}
 .drtab:hover:not(.on){color:var(--i1)}

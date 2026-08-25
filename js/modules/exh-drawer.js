@@ -32,13 +32,35 @@ import {
 } from './exh-tab.js';
 
 let drId = null;
-let drTab = 0;
+let drTab = 'contact';
 
-const TABS = ['진행', '정산', '그래픽', '문의·기록'];
+/* ── 드로어 탭 ──
+   전에는 진행 탭 하나에 담당자·매뉴얼·신청서·부스·도록·현장이 다 들어 있어
+   한참 스크롤해야 필요한 칸에 닿았다. 성격이 다른 두 덩어리를 떼어낸다.
+     담당자    누구와 연락하나 — 들어올 때 가장 먼저 보는 것
+     신청항목  무엇을 신청했나 — 신청서 회수와 누락 확인
+     진행      매뉴얼·부스·도록·현장
+
+   탭을 번호로 지목하던 걸 이름으로 바꿨다. 탭을 하나 끼워 넣을 때마다 여기저기
+   흩어진 openExhDr(id,'graphic') 같은 호출이 조용히 다른 탭을 열게 된다. */
+const TABS = [
+  { key: 'contact',  label: '담당자' },
+  { key: 'apply',    label: '신청항목' },
+  { key: 'progress', label: '진행' },
+  { key: 'billing',  label: '정산' },
+  { key: 'graphic',  label: '그래픽' },
+  { key: 'logs',     label: '문의·기록' },
+];
+/* 옛 번호로 부르는 곳이 남아 있어도 맞는 탭이 열리게 한다 */
+const LEGACY_TAB = ['progress', 'billing', 'graphic', 'logs'];
+const tabKey = (v) => {
+  if(typeof v === 'number') return LEGACY_TAB[v] || TABS[0].key;
+  return TABS.some(t => t.key === v) ? v : TABS[0].key;
+};
 
 export function openExhDr(id, tab){
   drId = id;
-  if(tab !== undefined) drTab = tab;
+  if(tab !== undefined) drTab = tabKey(tab);
   document.getElementById('exh-dr')?.classList.add('on');
   document.getElementById('exh-bd')?.classList.add('on');
   renderExhDr();
@@ -51,7 +73,7 @@ export function closeExhDr(){
   document.getElementById('exh-dr')?.classList.remove('on');
   document.getElementById('exh-bd')?.classList.remove('on');
 }
-export function switchExhDT(i){ drTab = i; renderExhDr(); }
+export function switchExhDT(v){ drTab = tabKey(v); renderExhDr(); }
 
 export function renderExhDr(){
   if(!drId) return;
@@ -73,12 +95,19 @@ export function renderExhDr(){
     </div>
     <button class="drcls" onclick="closeExhDr()">✕</button>`;
 
-  const t = document.getElementById('exh-drtabs');
-  if(t) t.innerHTML = TABS.map((label, i) =>
-    `<button class="drtab${drTab === i ? ' on' : ''}" onclick="switchExhDT(${i})">${label}${i === 3 && openN ? ` <span class="pill p-amber">${openN}</span>` : ''}</button>`).join('');
+  // 신청서가 아직 안 왔거나 정보가 빠졌으면 탭에서 바로 보이게 한다
+  const appNeedsWork = !(x.app_received === 'yes' || x.app_received_at) || x.app_complete === 'no';
+
+  const tabsEl = document.getElementById('exh-drtabs');
+  if(tabsEl) tabsEl.innerHTML = TABS.map((tb) =>
+    `<button class="drtab${drTab === tb.key ? ' on' : ''}" onclick="switchExhDT('${tb.key}')">${tb.label}${
+      tb.key === 'logs' && openN ? ` <span class="pill p-amber">${openN}</span>` : ''}${
+      tb.key === 'apply' && appNeedsWork ? ' <span class="pill p-amber">확인</span>' : ''}</button>`).join('');
 
   const b = document.getElementById('exh-drbd');
-  if(b) b.innerHTML = [dProgress, dBilling, dGraphic, dLogs][drTab](x);
+  const VIEW = { contact: dContactTab, apply: dApply, progress: dProgress,
+    billing: dBilling, graphic: dGraphic, logs: dLogs };
+  if(b) b.innerHTML = (VIEW[drTab] || dContactTab)(x);
 }
 
 /* ── 진행 단계 막대 ──
@@ -352,13 +381,19 @@ function dContact(x){
 /* ══════════════════════════════════════════
    1) 진행 — 매뉴얼 / 신청서 / 부스 / 도록 / 현장
 ══════════════════════════════════════════ */
-function dProgress(x){
+/* ── 담당자 탭 ── */
+function dContactTab(x){
+  return `${sct('기업 담당자', dContact(x))}`;
+}
+
+/* ── 신청항목 탭 ──
+   신청서를 받았는지, 받았다면 빠진 게 없는지, 무엇을 더 신청했는지를 한 화면에서
+   본다. 신청 내역을 정산의 금액 항목으로 옮기는 버튼도 여기 둔다 — 적어둔 내역과
+   실제 청구가 갈라지지 않게. */
+function dApply(x){
   const appIssue = x.app_received_at && x.app_complete === 'no';
+  const items = itemsFor(x.id).filter(i => (i.category || '') === 'equip');
   return `
-  ${sct('기업 담당자', dContact(x))}
-
-  ${sct('매뉴얼', dateRow(x, 'manual_sent_at', '매뉴얼 발송') + dateRow(x, 'manual_replied_at', '매뉴얼 회신'))}
-
   ${sct('신청서',
     flagRow(x, 'app_received', 'app_received_at', '신청서 수신') +
     `<div style="padding:10px 0 2px">
@@ -368,10 +403,32 @@ function dProgress(x){
           `<button class="stb${(x.app_complete || '') === v ? ' on' : ''}" onclick="setExhField('${escAttr(x.id)}','app_complete','${v}','신청서 정보 확인')">${l}</button>`).join('')}
       </div>
       ${x.app_complete === 'no' ? textRow(x, 'app_missing', '누락 항목 — 무엇이 비었나요', '예: 사업자등록증, 로고 파일') : ''}
-      ${textRow(x, 'extra_equipment', '추가 비품 신청 내역', '예: 추가 테이블 2, 전기 3kW', true)}
-      <button class="btn bs" onclick="addItemFromEquip('${escAttr(x.id)}')" style="margin-top:2px">이 내역을 비품 금액 항목으로 추가</button>
     </div>`,
     appIssue ? '<span class="pill p-amber">정보 누락</span>' : '')}
+
+  ${sct('추가 비품 신청',
+    textRow(x, 'extra_equipment', '신청 내역 (받은 그대로)', '예: 추가 테이블 2, 전기 3kW', true) +
+    `<button class="btn bs" onclick="addItemFromEquip('${escAttr(x.id)}')" style="margin-top:2px">이 내역을 비품 금액 항목으로 추가</button>`)}
+
+  ${sct('등록된 비품', items.length
+    ? `<div style="display:flex;flex-direction:column;gap:1px">
+        ${items.map(i => `<div class="bl-row bl-item" style="padding:6px 8px;background:var(--i9);border-radius:6px">
+          <span class="pill p-gray" style="text-align:center">비품</span>
+          <span style="min-width:0;font-size:12px;font-weight:600;word-break:break-all">${escapeHtml(i.name || '')}</span>
+          <span class="bl-qty" style="font-size:11px;color:var(--i4)">${escapeHtml(i.qty || '')}${i.qty && i.unit_price ? ' × ' : ''}${i.unit_price ? money(i.unit_price) : ''}</span>
+          <span class="bl-amt">${fmtMoney(i.amount, i.currency || 'KRW')}</span>
+          <span></span><span></span>
+        </div>`).join('')}
+      </div>
+      <div style="font-size:10.5px;color:var(--i5);margin-top:7px">금액을 고치거나 항목을 더하려면 <b>정산</b> 탭에서 하세요</div>`
+    : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">아직 등록된 비품이 없어요</div>',
+    items.length ? `<span class="pill p-gray">${items.length}종</span>` : '')}
+  `;
+}
+
+function dProgress(x){
+  return `
+  ${sct('매뉴얼', dateRow(x, 'manual_sent_at', '매뉴얼 발송') + dateRow(x, 'manual_replied_at', '매뉴얼 회신'))}
 
   ${sct('부스 배정',
     `<div class="fgr">
@@ -776,7 +833,7 @@ function dGraphic(x){
             그래픽 항목 ${gi.length}건 · 합계 <b>${money(total)}</b>원</div>`
         : '<div style="font-size:11.5px;color:var(--i5)">등록된 그래픽 금액 항목이 없어요</div>';
     })()}
-    <button class="btn bs" onclick="switchExhDT(1)" style="margin-top:8px">정산 탭으로 이동</button>`)}
+    <button class="btn bs" onclick="switchExhDT('billing')" style="margin-top:8px">정산 탭으로 이동</button>`)}
   `;
 }
 
@@ -931,7 +988,7 @@ export function addItemFromEquip(exhId){
   const x = getExhibitorById(exhId);
   const text = (x?.extra_equipment || '').trim();
   if(!text){ alert('신청서 탭의 "추가 비품 신청 내역"을 먼저 적어주세요.'); return; }
-  switchExhDT(1);
+  switchExhDT('billing');
   setTimeout(() => {
     const el = document.getElementById(`it-nm-${exhId}`);
     const cat = document.getElementById(`it-cat-${exhId}`);
