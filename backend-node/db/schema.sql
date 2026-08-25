@@ -409,3 +409,35 @@ ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS billable TEXT;  -- '' | 'no
    그래서 "실물 주문은 저쪽에 있다"는 사실을 적어 둔다. 값이 있으면 금액은 세되
    수량은 발주 집계에서 빼고, 화면에는 어느 부스와 나눠 쓰는지 보여준다. */
 ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS shared_ref TEXT;  -- 실물 수량을 들고 있는 참가기업 id
+
+/* ══════════════════════════════════════════════════════════════
+   세금계산서 · 그래픽 진행 단계
+
+   두 일 모두 우리 손을 떠났다 돌아오기를 반복한다. 날짜 한 칸만 있으면
+   "발행했나 안 했나"는 알아도 지금 공이 누구에게 있는지 — 기업 회신을 기다리는지,
+   재무팀에 넘겨 둔 건지, 우리가 회신할 차례인지 — 를 알 수 없다. 그래서 재촉할
+   대상을 매번 메일함에서 되짚어야 했다.
+
+   단계를 값으로 두고 넘어간 날짜를 각각 남긴다. 어느 단계에 며칠 머물러 있는지
+   보이면 막힌 건이 저절로 드러난다.
+
+   세금계산서 (3단계)
+     requested   기업이 요청함        → 우리 차례
+     to_finance  재무팀에 요청함      → 재무팀 차례
+     done        재무팀이 발행 완료
+   그래픽 (4단계)
+     received    기업이 파일 전달함    → 우리 차례
+     to_team     그래픽팀에 확인 요청  → 그래픽팀 차례
+     team_ok     그래픽팀 확인 완료    → 우리 차례(회신)
+     replied     기업에 확인 회신함
+══════════════════════════════════════════════════════════════ */
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS tax_stage           TEXT;
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS tax_requested_at    TEXT;  -- 기업이 요청한 날
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS tax_to_finance_at   TEXT;  -- 재무팀에 넘긴 날
+-- 발행 완료일은 기존 tax_sent_at을 그대로 쓴다
+
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS graphic_stage       TEXT;
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS graphic_received_at TEXT;  -- 기업이 파일 보낸 날
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS graphic_to_team_at  TEXT;  -- 그래픽팀에 넘긴 날
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS graphic_team_ok_at  TEXT;  -- 그래픽팀이 확인한 날
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS graphic_replied_at  TEXT;  -- 기업에 회신한 날

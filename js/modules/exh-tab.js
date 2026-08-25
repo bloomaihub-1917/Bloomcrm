@@ -183,6 +183,38 @@ export function settleState(x){
   return { state:'unpaid', billed, paid, balance, cur, due, overdue };
 }
 
+/* ══════════════════════════════════════════
+   진행 단계 — 세금계산서 · 그래픽
+
+   둘 다 우리 손을 떠났다 돌아오기를 반복하는 일이다. 날짜 한 칸만 있으면
+   "했나 안 했나"는 알아도 지금 공이 누구에게 있는지 — 기업 회신을 기다리는지,
+   재무팀에 넘겨 둔 건지, 우리가 회신할 차례인지 — 를 알 수 없다.
+
+   who는 지금 움직여야 할 쪽이다. 'us'인 것만 모으면 오늘 할 일이 된다.
+══════════════════════════════════════════ */
+export const TAX_STAGES = [
+  { key: '',           label: '요청 전',     who: '',      at: null,                 next: 'requested',  action: '기업이 요청함' },
+  { key: 'requested',  label: '기업 요청',   who: 'us',    at: 'tax_requested_at',   next: 'to_finance', action: '재무팀에 요청' },
+  { key: 'to_finance', label: '재무팀 요청', who: 'team',  at: 'tax_to_finance_at',  next: 'done',       action: '발행 완료' },
+  { key: 'done',       label: '발행 완료',   who: '',      at: 'tax_sent_at',        next: null,         action: '' },
+];
+
+export const GRAPHIC_STAGES = [
+  { key: '',          label: '전달 전',       who: '',     at: null,                  next: 'received', action: '기업이 파일 전달함' },
+  { key: 'received',  label: '기업 전달',     who: 'us',   at: 'graphic_received_at', next: 'to_team',  action: '그래픽팀에 확인 요청' },
+  { key: 'to_team',   label: '그래픽팀 확인', who: 'team', at: 'graphic_to_team_at',  next: 'team_ok',  action: '그래픽팀 확인 완료' },
+  { key: 'team_ok',   label: '확인 완료',     who: 'us',   at: 'graphic_team_ok_at',  next: 'replied',  action: '기업에 회신' },
+  { key: 'replied',   label: '기업 회신',     who: '',     at: 'graphic_replied_at',  next: null,       action: '' },
+];
+
+export const stageOf = (list, v) => list.find((s) => s.key === (v || '')) || list[0];
+
+/* 지금 단계에 며칠 머물러 있나 — 막힌 건을 찾는 데 쓴다 */
+export function stageAge(x, list, field){
+  const st = stageOf(list, x[field]);
+  return st.at && x[st.at] ? daysSince(x[st.at]) : null;
+}
+
 /* 이 참가 건의 거래 요약 — 기업DB가 "이 회사와 얼마나 거래했나"를 보여줄 때 쓴다.
    부스·청구·입금·미답변 문의가 전부 전시 탭에만 쌓여 있어 기업 화면에서는
    하나도 안 보였다. 판정 기준을 새로 만들지 않고 settleState를 그대로 쓴다 —
@@ -874,7 +906,7 @@ function renderGraphicView(list){
     + `<span class="pill p-green">완료 ${doneN}</span>`
     + (warnN ? `<span class="pill p-red">규격 확인 ${warnN}</span>` : '');
 
-  const stageOf = (x) => {
+  const stageLabel = (x) => {
     if(x.graphic_type === 'print') return x.graphic_spec_ok === 'yes' ? '규격 확인됨'
       : x.graphic_spec_ok === 'no' ? '규격 불일치' : '규격 미확인';
     if(x.graphic_final_at) return '최종안 확정';
@@ -902,7 +934,7 @@ function renderGraphicView(list){
           <span style="font-size:13px;font-weight:700">${escapeHtml(exhNames(x).ko)}</span>${
           exhNames(x).en ? `<span style="font-size:11px;color:var(--i4);margin-left:5px">${escapeHtml(exhNames(x).en)}</span>` : ''}</span>
         <span class="pill ${x.graphic_type === 'design' ? 'p-blue' : 'p-gray'}">${x.graphic_type === 'design' ? '제작' : x.graphic_type === 'print' ? '출력' : '유형 미정'}</span>
-        <span class="pill ${g.state === 'done' ? 'p-green' : g.state === 'warn' ? 'p-red' : 'p-amber'}">${escapeHtml(stageOf(x))}</span>
+        <span class="pill ${g.state === 'done' ? 'p-green' : g.state === 'warn' ? 'p-red' : 'p-amber'}">${escapeHtml(stageLabel(x))}</span>
       </div>
       <div style="font-size:11px;color:var(--i4)">주문 ${escapeHtml(x.graphic_ordered_at || '-')} · 금액 ${escapeHtml(gAmt(x))}</div>
     </div>`;
@@ -912,7 +944,8 @@ function renderGraphicView(list){
       <th style="min-width:150px">기업</th>
       <th style="min-width:56px">부스</th>
       <th style="min-width:80px">유형</th>
-      <th style="min-width:96px">단계</th>
+      <th style="min-width:96px">시안</th>
+      <th style="min-width:150px">확인 진행</th>
       <th style="min-width:104px">초안</th>
       <th style="min-width:104px">수정안</th>
       <th style="min-width:104px">최종안</th>
@@ -933,7 +966,8 @@ function renderGraphicView(list){
           <option value="design"${x.graphic_type === 'design' ? ' selected' : ''}>제작</option>
           <option value="print"${x.graphic_type === 'print' ? ' selected' : ''}>출력</option>
         </select></td>
-        <td><span class="pill ${g.state === 'done' ? 'p-green' : g.state === 'warn' ? 'p-red' : 'p-amber'}">${escapeHtml(stageOf(x))}</span></td>
+        <td><span class="pill ${g.state === 'done' ? 'p-green' : g.state === 'warn' ? 'p-red' : 'p-amber'}">${escapeHtml(stageLabel(x))}</span></td>
+        <td>${stageCell(x, 'graphic_stage', GRAPHIC_STAGES)}</td>
         ${dateCell('graphic_draft_at')}
         ${dateCell('graphic_revised_at')}
         ${dateCell('graphic_final_at')}
@@ -950,6 +984,56 @@ function renderGraphicView(list){
    했다. 품목표를 손보는 일과 주문을 받아 적는 일은 그 화면을 보고 있을 때 생기니,
    그 자리에서 끝낼 수 있어야 한다.
 ══════════════════════════════════════════ */
+/* 표 안에서 단계를 한 칸씩 넘긴다. 어느 쪽 차례인지 색으로 구분한다 —
+   우리 차례는 눈에 띄어야 하고, 남에게 넘겨 둔 건은 조용해야 한다. */
+export function stageCell(x, field, defs){
+  const st = stageOf(defs, x[field]);
+  const days = stageAge(x, defs, field);
+  const cls = st.who === 'us' ? 'p-red' : st.who === 'team' ? 'p-amber' : st.key ? 'p-green' : 'p-gray';
+  return `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+    <span class="pill ${cls}">${escapeHtml(st.label)}${days ? ` ${days}일` : ''}</span>
+    ${st.next ? `<button class="btn bs" style="font-size:10px;padding:2px 7px"
+      onclick="event.stopPropagation();advanceStage('${escAttr(x.id)}','${field}')"
+      title="다음 단계로 넘깁니다">${escapeHtml(st.action)} →</button>` : ''}
+    ${st.key ? `<button class="btn bs" style="font-size:10px;padding:2px 5px;color:var(--i4)"
+      onclick="event.stopPropagation();rewindStage('${escAttr(x.id)}','${field}')" title="이전 단계로 되돌립니다">↩</button>` : ''}
+  </div>`;
+}
+
+const STAGE_DEFS = { tax_stage: TAX_STAGES, graphic_stage: GRAPHIC_STAGES };
+const STAGE_NAME = { tax_stage: '세금계산서', graphic_stage: '그래픽' };
+
+/* 다음 단계로. 넘어간 날짜를 함께 찍어 두면 어디서 며칠 묶여 있었는지 남는다. */
+export async function advanceStage(id, field){
+  const x = getExhibitorById(id);
+  const defs = STAGE_DEFS[field];
+  if(!x || !defs) return;
+  const st = stageOf(defs, x[field]);
+  if(!st.next) return;
+  const nx = stageOf(defs, st.next);
+  const patch = { [field]: nx.key };
+  if(nx.at && !String(x[nx.at] || '').trim()) patch[nx.at] = td();
+  await patchExh(id, patch, null);
+  trackAction('status', `${STAGE_NAME[field]} 단계`, x.company_name || '',
+    `<b>${escapeHtml(x.company_name || '')}</b> ${escapeHtml(STAGE_NAME[field])} ${escapeHtml(st.label)} → ${escapeHtml(nx.label)}`);
+}
+
+/* 잘못 넘겼을 때 되돌린다.
+   날짜는 지우지 않는다. 처음엔 지웠는데, 그러면 실수로 한 번 누른 것만으로
+   실제로 있었던 발행일이 사라지고 되돌릴 방법이 없었다 — 그렇게 한 건을 잃었다.
+   날짜는 그 일이 있었다는 기록이므로 남기고, 틀렸으면 날짜 칸에서 직접 고친다. */
+export async function rewindStage(id, field){
+  const x = getExhibitorById(id);
+  const defs = STAGE_DEFS[field];
+  if(!x || !defs) return;
+  const i = defs.findIndex(s => s.key === (x[field] || ''));
+  if(i <= 0) return;
+  const cur = defs[i], prev = defs[i - 1];
+  await patchExh(id, { [field]: prev.key }, null);
+  trackAction('status', `${STAGE_NAME[field]} 단계`, x.company_name || '',
+    `<b>${escapeHtml(x.company_name || '')}</b> ${escapeHtml(STAGE_NAME[field])} ${escapeHtml(cur.label)} → ${escapeHtml(prev.label)} (되돌림)`);
+}
+
 const modalShell = (id, title, body) => {
   if(document.getElementById(id)) return;
   const el = document.createElement('div');
@@ -1158,8 +1242,34 @@ function renderDashboard(all){
   all.forEach(x => openInquiriesFor(x.id).forEach(l => openInq.push({ x, l })));
   openInq.sort((a, b) => String(a.l.ts || '').localeCompare(String(b.l.ts || '')));
 
+  /* 세금계산서·그래픽에서 지금 우리가 움직여야 하는 건. 남에게 넘겨 둔 건
+     (재무팀·그래픽팀 확인 중)은 여기 넣지 않는다 — 재촉은 해도 처리는
+     우리 손을 떠나 있어서, 섞어 두면 정작 내가 할 일이 묻힌다. */
+  const myTurn = [];
+  all.forEach(x => {
+    [['tax_stage', TAX_STAGES, '세금계산서'], ['graphic_stage', GRAPHIC_STAGES, '그래픽']]
+      .forEach(([f, defs, label]) => {
+        const st = stageOf(defs, x[f]);
+        if(st.who !== 'us') return;
+        myTurn.push({ x, label, st, days: stageAge(x, defs, f) });
+      });
+  });
+  myTurn.sort((a, b) => (b.days || 0) - (a.days || 0));
+
+  /* 남에게 넘겨 둔 건 — 오래 머물면 재촉해야 하니 따로 센다 */
+  const waiting = [];
+  all.forEach(x => {
+    [['tax_stage', TAX_STAGES, '세금계산서'], ['graphic_stage', GRAPHIC_STAGES, '그래픽']]
+      .forEach(([f, defs, label]) => {
+        const st = stageOf(defs, x[f]);
+        if(st.who !== 'team') return;
+        waiting.push({ x, label, st, days: stageAge(x, defs, f) });
+      });
+  });
+  waiting.sort((a, b) => (b.days || 0) - (a.days || 0));
+
   const avg = Math.round(all.reduce((s, x) => s + progressOf(x), 0) / n);
-  const todo = openInq.length + overdue.length + attention.length;
+  const todo = openInq.length + overdue.length + attention.length + myTurn.length;
   const curs = Object.keys(cash).filter(c => cash[c].n);
   const dueTotal = curs.map(c => cash[c].billed - cash[c].paid).reduce((a, b) => a + b, 0);
 
@@ -1233,10 +1343,15 @@ function renderDashboard(all){
 
   const cardTodo = todo ? `<div class="uc" style="border-left:3px solid var(--am)">
       <div class="uc-ttl">처리 필요 <span class="pill p-amber">${todo}건</span></div>
+      ${myTurn.slice(0, 5).map(o => attnRow(o.x, o.label, o.st.action, o.days, o.label === '그래픽' ? 2 : 1)).join('')}
       ${openInq.slice(0, 5).map(o => attnRow(o.x, '미답변 문의', o.l.subject || o.l.body || '', daysSince(o.l.ts), 3)).join('')}
       ${overdue.slice(0, 5).map(o => attnRow(o.x, '입금 기한', fmtMoney(o.s.balance, o.s.cur) + ' 미납', daysSince(o.s.due), 1)).join('')}
       ${attention.slice(0, 5).map(o => attnRow(o.x, '정산 확인', o.why, null, 1)).join('')}
-      ${todo > 15 ? `<div style="font-size:11px;color:var(--i4);padding:6px 2px">외 ${todo - 15}건 — 왼쪽 필터에서 전체를 볼 수 있어요</div>` : ''}
+      ${todo > 20 ? `<div style="font-size:11px;color:var(--i4);padding:6px 2px">외 ${todo - 20}건 — 왼쪽 필터에서 전체를 볼 수 있어요</div>` : ''}
+      ${waiting.length ? `<div style="font-size:10.5px;color:var(--i4);margin-top:8px;padding-top:7px;border-top:1px solid var(--i8)">
+        넘겨 둔 일 ${waiting.length}건 — ${waiting.slice(0, 3).map(w =>
+          `${escapeHtml(exhNames(w.x).ko)} ${escapeHtml(w.label)}${w.days ? ` ${w.days}일째` : ''}`).join(' · ')}
+        ${waiting.length > 3 ? ` 외 ${waiting.length - 3}건` : ''}</div>` : ''}
     </div>` : `<div class="uc" style="border-left:3px solid var(--g)">
       <div class="uc-ttl">처리 필요</div>
       <div style="font-size:12px;color:var(--g)">지금 처리할 게 없어요</div></div>`;
@@ -1275,7 +1390,8 @@ function renderDashboard(all){
       ${card('미수금', curs.length ? curs.map(c => fmtMoney(cash[c].billed - cash[c].paid, c)).join(' + ') : '-',
         '', dueTotal > 0 ? 'var(--am)' : 'var(--g)')}
       ${card('처리 필요', todo + '건',
-        '문의 ' + openInq.length + ' · 기한 ' + overdue.length + ' · 정산 ' + attention.length,
+        '문의 ' + openInq.length + ' · 기한 ' + overdue.length + ' · 정산 ' + attention.length
+        + (myTurn.length ? ' · 내 차례 ' + myTurn.length : ''),
         todo ? 'var(--re)' : 'var(--g)')}
     </div>
 
@@ -1597,8 +1713,10 @@ export function logExhEdit(x, patch, backup){
     const b = String(backup[k] ?? '').trim(), a = String(patch[k] ?? '').trim();
     if(b === a) return;
     const lbl = FIELD_LABEL[k] || k;
+    /* 지울 때 이전 값을 함께 남긴다. 전에는 "세금계산서 발송 지움"이라고만 적혀서,
+       잘못 지웠을 때 무엇이 있었는지 알 방법이 없었다 — 그렇게 한 건을 잃었다. */
     parts.push(b && a ? `${lbl} ${shortVal(b)} → ${shortVal(a)}`
-      : a ? `${lbl} ${shortVal(a)}` : `${lbl} 지움`);
+      : a ? `${lbl} ${shortVal(a)}` : `${lbl} ${shortVal(b)} 지움`);
   });
   if(!parts.length) return;
   trackAction('edit', '전시 정보 수정', x.company_name || '',
@@ -1671,6 +1789,8 @@ window.setExhEvent2 = setExhEvent2;
 window.setExhFilter = setExhFilter;
 window.setExhView = setExhView;
 window.toggleEquipRow = toggleEquipRow;
+window.advanceStage = advanceStage;
+window.rewindStage = rewindStage;
 window.openNewCatalogItem = openNewCatalogItem;
 // 뒤로가기로 닫을 수 있게 닫기 함수도 이름으로 내어 둔다(overlay-nav.js 참고)
 window.closeNewCatalogItem = () => document.getElementById('new-eq-modal')?.remove();

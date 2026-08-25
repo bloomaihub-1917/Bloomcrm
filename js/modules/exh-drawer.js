@@ -26,6 +26,7 @@ import { trackAction } from './audit-tab.js';
 import {
   billedAmount, paidAmount, graphicState, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
   isPendingRefund, boothTypeOptions, SELF_BUILD_TYPE, exhNames, isBillable,
+  TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar,
   settleState, liveInvoices, payDueDate,
 } from './exh-tab.js';
@@ -78,6 +79,41 @@ export function renderExhDr(){
 
   const b = document.getElementById('exh-drbd');
   if(b) b.innerHTML = [dProgress, dBilling, dGraphic, dLogs][drTab](x);
+}
+
+/* ── 진행 단계 막대 ──
+   세금계산서와 그래픽은 우리 손을 떠났다 돌아오기를 반복한다. 어느 칸까지 왔고
+   지금 누구 차례인지 한눈에 보이게 하고, 다음 칸으로 넘기는 버튼을 바로 옆에 둔다.
+   되돌리기도 함께 둔다 — 잘못 눌렀을 때 고칠 방법이 없으면 누르기를 망설이게 된다. */
+function stageBar(x, field, defs, who){
+  const cur = stageOf(defs, x[field]);
+  const i = defs.findIndex(d => d.key === cur.key);
+  const days = stageAge(x, defs, field);
+
+  return `<div style="margin-bottom:10px">
+    <div style="display:flex;gap:3px;margin-bottom:8px">
+      ${defs.slice(1).map((d, k) => {
+        const done = k + 1 <= i;
+        const now = k + 1 === i;
+        return `<div style="flex:1;text-align:center;padding:5px 3px;border-radius:5px;font-size:10px;line-height:1.3;
+          background:${now ? (d.who === 'us' ? 'var(--rb)' : d.who === 'team' ? 'var(--ab)' : 'var(--gb)') : done ? 'var(--gb)' : 'var(--i9)'};
+          color:${now ? (d.who === 'us' ? 'var(--re)' : d.who === 'team' ? 'var(--am)' : 'var(--g)') : done ? 'var(--g)' : 'var(--i5)'};
+          font-weight:${now || done ? 700 : 400}">
+          ${done && !now ? '✓ ' : ''}${escapeHtml(d.label)}
+          ${d.at && x[d.at] ? `<div style="font-size:9px;font-weight:400;opacity:.75">${escapeHtml(String(x[d.at]).slice(5))}</div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+      <span style="font-size:11.5px;color:${cur.who === 'us' ? 'var(--re)' : cur.who === 'team' ? 'var(--am)' : 'var(--i4)'};font-weight:${cur.who ? 700 : 400}">
+        ${cur.who === 'us' ? '내 차례' : cur.who === 'team' ? `${escapeHtml(who)} 확인 중` : cur.key ? '완료' : '아직 시작 전'}
+        ${days ? ` · ${days}일째` : ''}</span>
+      ${cur.next ? `<button class="btn bp bs" style="margin-left:auto"
+        onclick="advanceStage('${escAttr(x.id)}','${field}')">${escapeHtml(cur.action)} →</button>` : ''}
+      ${cur.key ? `<button class="btn bs" style="${cur.next ? '' : 'margin-left:auto;'}font-size:10.5px"
+        onclick="rewindStage('${escAttr(x.id)}','${field}')">↩ 되돌리기</button>` : ''}
+    </div>
+  </div>`;
 }
 
 /* ── 공통 조각 ── */
@@ -589,7 +625,8 @@ function dBilling(x){
       금액 항목 합계가 기본값으로 들어가요. 부스+비품 따로, 그래픽 따로 나눠 발행해도 됩니다.</div>`)}
 
   ${sct('세금계산서',
-    dateRow(x, 'tax_sent_at', '세금계산서 발송') +
+    stageBar(x, 'tax_stage', TAX_STAGES, '재무팀') +
+    dateRow(x, 'tax_sent_at', '발행 완료일') +
     `<div class="fgr bl-tax" style="margin-top:8px">
       <div class="fg"><label class="fl">금액</label>
         <input class="fi" style="font-size:12px" value="${escAttr(x.tax_amount || '')}"
@@ -703,6 +740,8 @@ function dGraphic(x){
           `<button class="stb${x.graphic_type === v ? ' on' : ''}" onclick="setExhField('${escAttr(x.id)}','graphic_type','${v}','그래픽 유형')">${l}</button>`).join('')}
       </div></div>`,
     g.state === 'done' ? '<span class="pill p-green">완료</span>' : g.state === 'warn' ? '<span class="pill p-amber">확인 필요</span>' : '')}
+
+  ${sct('확인 진행', stageBar(x, 'graphic_stage', GRAPHIC_STAGES, '그래픽팀'))}
 
   ${x.graphic_type === 'print' ? sct('출력 — 규격 확인', `
     <div class="stbs" style="margin-bottom:8px">
