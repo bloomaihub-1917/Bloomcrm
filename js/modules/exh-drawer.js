@@ -24,7 +24,7 @@ import {
 import { trackAction } from './audit-tab.js';
 import {
   billedAmount, paidAmount, graphicState, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
-  isPendingRefund,
+  isPendingRefund, boothTypeOptions, SELF_BUILD_TYPE,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar,
   settleState, liveInvoices, payDueDate,
 } from './exh-tab.js';
@@ -121,19 +121,6 @@ function textRow(x, field, label, placeholder = '', multi = false){
    거기서 실시간으로 읽어 보여준다(값을 복사해두면 마스터DB에서 고쳐도 여기가
    옛 값으로 남는다). 마스터DB에 없는 사람은 직접 입력으로 적는다. */
 const C_ROLES = ['실무', '정산', '현장', '기타'];
-/* 부스 타입은 주최 측이 정한 몇 가지 중 하나다. 자유 입력(datalist)이었더니
-   같은 타입을 조금씩 다르게 적을 수 있어 집계가 갈라진다 — 골라 쓰게 한다. */
-const BOOTH_TYPES = ['Self-Construction', 'Block System A', 'Block System B', 'Block System C',
-  'Lighting Booth', 'Octanium (Standard)'];
-
-/* 목록에 없는 값이 이미 들어 있으면(옛 데이터·행사마다 다른 타입) 그 값도 함께
-   보여준다 — 고정 목록으로 바꿨다는 이유로 저장돼 있던 값이 조용히 사라지면 안 된다. */
-function boothTypeOptions(current){
-  const cur = String(current || '').trim();
-  const list = BOOTH_TYPES.includes(cur) || !cur ? BOOTH_TYPES : [...BOOTH_TYPES, cur];
-  return `<option value=""${cur ? '' : ' selected'}>— 미지정 —</option>`
-    + list.map(t => `<option value="${escAttr(t)}"${cur === t ? ' selected' : ''}>${escapeHtml(t)}</option>`).join('');
-}
 const GRADES = ['', 'DIA', 'GOLD', 'SILVER', 'BRONZE', 'Exhibitor'];
 
 /* ── 독립부스 시공사 ──
@@ -144,7 +131,6 @@ const GRADES = ['', 'DIA', 'GOLD', 'SILVER', 'BRONZE', 'Exhibitor'];
    자체 시공일 때만 펼친다 — 조립부스 업체에게는 채울 일이 없는 칸이라
    모든 기업에 다 보이면 빈칸만 늘어난다. 이미 적어둔 값이 있으면 부스 타입과
    무관하게 보여준다(타입을 나중에 고쳤어도 적어둔 정보가 숨지 않게). */
-const SELF_BUILD = 'Self-Construction';
 const BUILDER_FIELDS = [
   ['builder',         '시공사명',   ''],
   ['builder_contact', '시공 담당자', ''],
@@ -154,11 +140,11 @@ const BUILDER_FIELDS = [
 ];
 
 function builderBlock(x){
-  const isSelf = (x.booth_type || '') === SELF_BUILD;
+  const isSelf = (x.booth_type || '') === SELF_BUILD_TYPE;
   const hasAny = BUILDER_FIELDS.some(([f]) => String(x[f] || '').trim());
   if(!isSelf && !hasAny){
     return `<div style="font-size:11px;color:var(--i5);padding:6px 0">
-      부스 타입이 <b>${escapeHtml(SELF_BUILD)}</b>이면 시공사 정보를 적는 칸이 나와요</div>`;
+      부스 타입이 <b>${escapeHtml(SELF_BUILD_TYPE)}</b>이면 시공사 정보를 적는 칸이 나와요</div>`;
   }
   const row = (f, label, ph) => `<div class="fg"><label class="fl">${escapeHtml(label)}</label>
     <input class="fi" style="font-size:12px" value="${escAttr(x[f] || '')}" placeholder="${escAttr(ph)}"

@@ -62,7 +62,7 @@ const STEPS = [
 ];
 
 let exhFilter = 'all';       // all | incomplete | unpaid | inquiry | billing | cancelled
-let exhView = 'dash';        // dash(대시보드) | list(체크리스트)
+let exhView = 'dash';        // dash | list | booth | equip | graphic
 
 /* 드로어는 exh-drawer.js가 소유한다. 이 파일이 그쪽을 import하면 순환 참조가
    되므로(드로어가 여기 집계 함수를 쓴다) window 경유로만 호출한다 —
@@ -441,14 +441,24 @@ export function renderExh(){
     return;
   }
 
+  /* 보기 전환 — 진행 전체를 보는 두 가지(대시보드·체크리스트) 다음에,
+     실무를 품목 단위로 처리하는 세 가지를 둔다. 부스·비품·그래픽은 각각
+     담당이 갈리고 마감도 달라서, 기업별 드로어를 51번 열지 않고 한 화면에서
+     끝낼 수 있어야 한다. */
+  const VIEWS = [['dash','대시보드'], ['list','체크리스트'],
+    ['booth','부스 현황'], ['equip','비품 현황'], ['graphic','그래픽 현황']];
   const seg = `<div class="tbar" style="padding:10px 16px 0">
-    <div class="seg">
-      <button class="seg-b${exhView === 'dash' ? ' on' : ''}" onclick="setExhView('dash')">대시보드</button>
-      <button class="seg-b${exhView === 'list' ? ' on' : ''}" onclick="setExhView('list')">체크리스트</button>
+    <div class="seg" style="flex-wrap:wrap">
+      ${VIEWS.map(([k, l]) => `<button class="seg-b${exhView === k ? ' on' : ''}" onclick="setExhView('${k}')">${l}</button>`).join('')}
     </div></div>`;
-  el.innerHTML = seg + (exhView === 'dash'
-    ? renderDashboard(all)
-    : renderInquiryPanel() + renderChecklist(list, all));
+
+  const bodyHtml =
+      exhView === 'dash'    ? renderDashboard(all)
+    : exhView === 'booth'   ? renderBoothView(list)
+    : exhView === 'equip'   ? renderEquipView(list)
+    : exhView === 'graphic' ? renderGraphicView(list)
+    : renderInquiryPanel() + renderChecklist(list, all);
+  el.innerHTML = seg + bodyHtml;
 }
 
 /* 미답변 문의 패널 — 프로세스와 무관하게 들어오는 문의를 놓치지 않는 게 목적이라
@@ -486,6 +496,281 @@ function renderChecklist(list, all){
   // 의미를 잃고 뭉개진다. 그래서 아예 전용 카드 목록으로 그린다.
   if(isMobile()) return renderChecklistCards(list, all);
   return renderChecklistTable(list, all);
+}
+
+/* ══════════════════════════════════════════
+   품목별 현황 보기 — 부스 / 비품 / 그래픽
+
+   체크리스트는 "이 기업이 어디까지 왔나"를 본다. 그런데 실무는 품목으로 갈린다 —
+   부스 배치는 현장 담당이, 비품은 발주 담당이, 그래픽은 디자인이 맡고 마감도
+   서로 다르다. 그때마다 기업 드로어를 51번 열어 필요한 칸만 찾아보는 건
+   현실적이지 않아서, 품목별로 한 화면에 모아 거기서 바로 고칠 수 있게 한다.
+
+   좁은 화면에서는 표 대신 카드로 그린다(마스터DB·체크리스트와 같은 이유).
+══════════════════════════════════════════ */
+
+/* 표/카드 공통 껍데기 — 요약 배지 + 본문 */
+const viewShell = (pills, inner) => `<div style="padding:0 16px 16px">
+  <div style="display:flex;flex-wrap:wrap;gap:6px;margin:12px 0">${pills}</div>
+  ${inner}</div>`;
+
+const countBy = (list, fn) => {
+  const c = {};
+  list.forEach(x => { const v = fn(x); if(v) c[v] = (c[v] || 0) + 1; });
+  return c;
+};
+const pillsOf = (cnt, cls = 'p-gray') => Object.entries(cnt)
+  .sort((a, b) => b[1] - a[1])
+  .map(([k, n]) => `<span class="pill ${cls}">${escapeHtml(k)} ${n}</span>`).join('');
+
+const emptyView = (msg) => `<div class="empty" style="padding:40px 20px;text-align:center;color:var(--i4);font-size:13px">${escapeHtml(msg)}</div>`;
+
+/* 기업 이름 칸 — 어느 보기에서든 클릭하면 그 기업 드로어로 간다 */
+const coCell = (x, tab) => `<td style="min-width:150px">
+  <span onclick="openExhDr('${escAttr(x.id)}',${tab})" style="cursor:pointer;font-size:12.5px;font-weight:600${
+    x.status === CANCELLED ? ';text-decoration:line-through;opacity:.6' : ''}">${escapeHtml(x.company_name || '')}</span></td>`;
+
+/* ── 부스 현황 ──
+   부스 번호로 정렬해 배치도를 훑듯 볼 수 있게 한다. 독립부스는 시공사가 따로
+   있어 현장에서 연락할 상대가 다르므로 그 열을 함께 보여준다. */
+/* 부스 타입은 주최 측이 정한 몇 가지 중 하나다. 자유 입력이었더니 같은 타입을
+   조금씩 다르게 적을 수 있어 집계가 갈라진다 — 골라 쓰게 한다.
+   드로어와 부스 현황 두 곳이 같은 목록을 써야 해서 여기(단방향 상류)에 둔다. */
+export const SELF_BUILD_TYPE = 'Self-Construction';
+export const BOOTH_TYPES = [SELF_BUILD_TYPE, 'Block System A', 'Block System B', 'Block System C',
+  'Lighting Booth', 'Octanium (Standard)'];
+
+/* 목록에 없는 값이 이미 들어 있으면(옛 데이터·행사마다 다른 타입) 그 값도 함께
+   보여준다 — 고정 목록으로 바꿨다는 이유로 저장돼 있던 값이 조용히 사라지면 안 된다. */
+export function boothTypeOptions(current){
+  const cur = String(current || '').trim();
+  const list = BOOTH_TYPES.includes(cur) || !cur ? BOOTH_TYPES : [...BOOTH_TYPES, cur];
+  return `<option value=""${cur ? '' : ' selected'}>— 미지정 —</option>`
+    + list.map(t => `<option value="${escAttr(t)}"${cur === t ? ' selected' : ''}>${escapeHtml(t)}</option>`).join('');
+}
+const boothSortKey = (x) => {
+  const n = parseInt(String(x.booth_no || '').replace(/[^0-9]/g, ''), 10);
+  return Number.isFinite(n) ? n : 1e9;   // 번호 없는 기업은 맨 뒤로
+};
+
+function renderBoothView(list){
+  if(!list.length) return emptyView('표시할 기업이 없어요');
+  const rows = [...list].sort((a, b) => boothSortKey(a) - boothSortKey(b));
+  const noBooth = rows.filter(x => !String(x.booth_no || '').trim()).length;
+  const selfN = rows.filter(x => x.booth_type === SELF_BUILD_TYPE).length;
+  const unconfirmed = rows.filter(x => x.booth_confirmed !== 'yes' && !x.booth_confirmed_at).length;
+
+  const pills = `<span class="pill p-gray">전체 ${rows.length}</span>`
+    + (noBooth ? `<span class="pill p-red">번호 미배정 ${noBooth}</span>` : '')
+    + (unconfirmed ? `<span class="pill p-amber">배정 미확정 ${unconfirmed}</span>` : '')
+    + `<span class="pill p-blue">독립부스 ${selfN}</span>`
+    + pillsOf(countBy(rows, x => x.booth_type));
+
+  if(isMobile()) return viewShell(pills, rows.map(x => `
+    <div onclick="openExhDr('${escAttr(x.id)}',0)" style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
+        <span class="pill ${x.booth_no ? 'p-blue' : 'p-red'}">${x.booth_no ? '부스 ' + escapeHtml(x.booth_no) : '미배정'}</span>
+        <span style="font-size:13px;font-weight:700;flex:1;min-width:0">${escapeHtml(x.company_name || '')}</span>
+        ${x.booth_confirmed === 'yes' || x.booth_confirmed_at ? '<span class="pill p-green">확정</span>' : '<span class="pill p-amber">미확정</span>'}
+      </div>
+      <div style="font-size:11px;color:var(--i4)">${[x.booth_floor && x.booth_floor + '층', x.booth_type, x.booth_qty && x.booth_qty + '부스', x.grade].filter(Boolean).map(escapeHtml).join(' · ') || '정보 없음'}</div>
+      ${x.builder ? `<div style="font-size:11px;color:var(--i3);margin-top:3px">🔧 ${escapeHtml(x.builder)}${x.builder_mobile ? ' · ' + escapeHtml(x.builder_mobile) : ''}</div>` : ''}
+    </div>`).join(''));
+
+  return viewShell(pills, `<div class="tw"><table><thead><tr>
+      <th style="min-width:64px">부스</th>
+      <th style="min-width:150px">기업</th>
+      <th style="min-width:46px">층</th>
+      <th style="min-width:130px">타입</th>
+      <th style="min-width:50px">수량</th>
+      <th style="min-width:70px">등급</th>
+      <th style="min-width:60px;text-align:center">확정</th>
+      <th style="min-width:180px">시공사 (독립부스)</th>
+    </tr></thead><tbody>
+    ${rows.map(x => {
+      const self = x.booth_type === SELF_BUILD_TYPE;
+      const done = x.booth_confirmed === 'yes' || !!x.booth_confirmed_at;
+      return `<tr>
+        <td><input class="fi" style="width:58px;padding:3px 5px;font-size:11.5px;font-weight:700" value="${escAttr(x.booth_no || '')}"
+          placeholder="—" onchange="setExhField('${escAttr(x.id)}','booth_no',this.value,'부스 번호')"></td>
+        ${coCell(x, 0)}
+        <td><input class="fi" style="width:40px;padding:3px 5px;font-size:11.5px" value="${escAttr(x.booth_floor || '')}"
+          onchange="setExhField('${escAttr(x.id)}','booth_floor',this.value,'부스 층')"></td>
+        <td><select class="fi" style="width:126px;padding:3px 4px;font-size:11px"
+          onchange="setExhField('${escAttr(x.id)}','booth_type',this.value,'부스 타입')">${boothTypeOptions(x.booth_type)}</select></td>
+        <td><input class="fi" style="width:44px;padding:3px 5px;font-size:11.5px" value="${escAttr(x.booth_qty || '')}"
+          onchange="setExhField('${escAttr(x.id)}','booth_qty',this.value,'부스 수량')"></td>
+        <td>${x.grade ? `<span class="pill ${GRADE_CLS[x.grade] || 'p-gray'}">${escapeHtml(x.grade)}</span>` : '<span style="color:var(--i6)">—</span>'}</td>
+        <td style="text-align:center">
+          <button onclick="toggleExhFlag('${escAttr(x.id)}','booth_confirmed','booth_confirmed_at','배정 확정')"
+            title="${done ? '확정 해제' : '배정 확정으로 표시'}"
+            style="width:20px;height:20px;border-radius:5px;line-height:1;cursor:pointer;
+              border:1.5px solid ${done ? 'var(--g)' : 'var(--i6)'};background:${done ? 'var(--g)' : 'transparent'};
+              color:#fff;font-size:11px;font-weight:800">${done ? '✓' : ''}</button></td>
+        <td>${self
+          ? (x.builder || x.builder_contact || x.builder_mobile
+            ? `<div style="font-size:11.5px;font-weight:600">${escapeHtml(x.builder || '업체명 미입력')}</div>
+               <div style="font-size:10.5px;color:var(--i4)">${[x.builder_contact, x.builder_mobile || x.builder_tel].filter(Boolean).map(escapeHtml).join(' · ')}</div>`
+            : `<button class="btn bs" style="font-size:10.5px" onclick="openExhDr('${escAttr(x.id)}',0)">시공사 입력</button>`)
+          : '<span style="color:var(--i6);font-size:11px">—</span>'}</td>
+      </tr>`;
+    }).join('')}
+    </tbody></table></div>`);
+}
+
+/* ── 비품 현황 ──
+   발주는 기업별이 아니라 품목별로 한다 — "테이블 몇 개, 의자 몇 개"를 알아야
+   주문서를 쓸 수 있는데, 지금은 51개 기업을 하나씩 열어 더해야 했다.
+   품목별 합계를 먼저 보여주고, 아래에 어느 기업이 무엇을 신청했는지 붙인다. */
+function renderEquipView(list){
+  const rows = list.map(x => ({ x, items: itemsFor(x.id).filter(i => (i.category || '') === 'equip') }))
+    .filter(r => r.items.length);
+  if(!rows.length) return emptyView('신청된 비품이 없어요');
+
+  // 품목명으로 묶는다. 표기가 조금씩 달라도 앞뒤 공백만 정리해 합친다.
+  const byName = new Map();
+  rows.forEach(({ x, items }) => items.forEach(i => {
+    const k = String(i.name || '(이름 없음)').trim();
+    if(!byName.has(k)) byName.set(k, { name: k, qty: 0, cos: [], amt: {} });
+    const g = byName.get(k);
+    const q = Number(String(i.qty || '').replace(/[^0-9.-]/g, '')) || 0;
+    g.qty += q || 1;   // 수량을 안 적었으면 1개로 센다
+    g.cos.push({ name: x.company_name, qty: q || 1, booth: x.booth_no });
+    const c = i.currency || 'KRW';
+    g.amt[c] = (g.amt[c] || 0) + (Number(String(i.amount || '').replace(/[^0-9.-]/g, '')) || 0);
+  }));
+  const groups = [...byName.values()].sort((a, b) => b.qty - a.qty);
+  const money2 = (amt) => Object.keys(amt).filter(k => amt[k]).map(k => fmtMoney(amt[k], k)).join(' + ') || '-';
+
+  const pills = `<span class="pill p-gray">신청 기업 ${rows.length}</span>`
+    + `<span class="pill p-blue">품목 ${groups.length}종</span>`
+    + `<span class="pill p-gray">총 ${groups.reduce((a, g) => a + g.qty, 0)}개</span>`;
+
+  /* 좁은 화면에서는 표를 쓰지 않는다 — 헤더가 숨겨지면서 25 / 7곳 / 187,000원이
+     각각 무슨 숫자인지 알 수 없게 된다. 값마다 이름을 붙여 카드로 그린다. */
+  const summaryBody = isMobile()
+    ? groups.map(g => `<div style="padding:8px 0;border-bottom:1px solid var(--i8)">
+        <div style="display:flex;align-items:baseline;gap:7px">
+          <span style="font-size:12.5px;font-weight:600;flex:1;min-width:0">${escapeHtml(g.name)}</span>
+          <span style="font-size:15px;font-weight:800">${g.qty}<span style="font-size:10px;font-weight:400;color:var(--i4)">개</span></span>
+        </div>
+        <div style="font-size:10.5px;color:var(--i4);margin-top:2px">${g.cos.length}개사 신청 · ${escapeHtml(money2(g.amt))}</div>
+      </div>`).join('')
+    : `<div class="tw" style="overflow:visible"><table><thead><tr>
+        <th style="min-width:160px">품목</th><th style="min-width:60px;text-align:right">수량</th>
+        <th style="min-width:70px;text-align:right">신청 기업</th><th style="min-width:110px;text-align:right">금액</th>
+      </tr></thead><tbody>
+        ${groups.map(g => `<tr>
+          <td style="font-size:12.5px;font-weight:600">${escapeHtml(g.name)}</td>
+          <td style="text-align:right;font-weight:700">${g.qty}</td>
+          <td style="text-align:right;color:var(--i4)" title="${escAttr(g.cos.map(c => `${c.name} ${c.qty}`).join(', '))}">${g.cos.length}곳</td>
+          <td style="text-align:right">${money2(g.amt)}</td>
+        </tr>`).join('')}
+      </tbody></table></div>`;
+
+  const summary = `<div class="uc" style="margin-bottom:14px">
+    <div class="uc-ttl">품목별 합계 <span style="font-weight:400;color:var(--i4);font-size:10px">— 발주서에 쓰는 숫자예요</span></div>
+    ${summaryBody}</div>`;
+
+  const detail = rows.map(({ x, items }) => `
+    <div style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px">
+      <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px">
+        ${x.booth_no ? `<span class="pill p-blue">부스 ${escapeHtml(x.booth_no)}</span>` : ''}
+        <span onclick="openExhDr('${escAttr(x.id)}',1)" style="cursor:pointer;font-size:13px;font-weight:700;flex:1;min-width:0">${escapeHtml(x.company_name || '')}</span>
+        <span style="font-size:11px;color:var(--i4)">${items.length}종</span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px">
+        ${items.map(i => `<span class="pill p-gray" title="${escAttr(fmtMoney(i.amount, i.currency || 'KRW'))}">${escapeHtml(i.name || '')}${i.qty ? ' ×' + escapeHtml(i.qty) : ''}</span>`).join('')}
+      </div>
+      ${x.extra_equipment ? `<div style="font-size:11px;color:var(--i4);margin-top:5px">메모: ${escapeHtml(x.extra_equipment)}</div>` : ''}
+    </div>`).join('');
+
+  return viewShell(pills, summary + `<div class="sct">기업별 신청 내역</div>` + detail);
+}
+
+/* ── 그래픽 현황 ──
+   제작(디자인)은 초안 → 수정안 → 최종안으로 왔다 갔다 하고, 출력은 규격이
+   맞는지만 보면 된다. 두 흐름이 섞여 있어 한 표에서 지금 누가 어느 단계에
+   걸려 있는지 봐야 다음 연락처를 정할 수 있다. */
+function renderGraphicView(list){
+  const rows = list.filter(x => x.graphic_ordered_at || x.graphic_type
+    || itemsFor(x.id).some(i => (i.category || '') === 'graphic'));
+  if(!rows.length) return emptyView('그래픽을 주문한 기업이 없어요');
+
+  const design = rows.filter(x => x.graphic_type === 'design');
+  const print  = rows.filter(x => x.graphic_type === 'print');
+  const doneN  = rows.filter(x => graphicState(x).state === 'done').length;
+  const warnN  = rows.filter(x => graphicState(x).state === 'warn').length;
+
+  const pills = `<span class="pill p-gray">주문 ${rows.length}</span>`
+    + `<span class="pill p-blue">제작 ${design.length}</span>`
+    + `<span class="pill p-gray">출력 ${print.length}</span>`
+    + `<span class="pill p-green">완료 ${doneN}</span>`
+    + (warnN ? `<span class="pill p-red">규격 확인 ${warnN}</span>` : '');
+
+  const stageOf = (x) => {
+    if(x.graphic_type === 'print') return x.graphic_spec_ok === 'yes' ? '규격 확인됨'
+      : x.graphic_spec_ok === 'no' ? '규격 불일치' : '규격 미확인';
+    if(x.graphic_final_at) return '최종안 확정';
+    if(x.graphic_revised_at) return '수정안';
+    if(x.graphic_draft_at) return '초안';
+    return '진행 전';
+  };
+  const gAmt = (x) => {
+    const by = {};
+    itemsFor(x.id).filter(i => (i.category || '') === 'graphic').forEach(i => {
+      const c = i.currency || 'KRW';
+      by[c] = (by[c] || 0) + (Number(String(i.amount || '').replace(/[^0-9.-]/g, '')) || 0);
+    });
+    const ks = Object.keys(by).filter(k => by[k]);
+    return ks.length ? ks.map(k => fmtMoney(by[k], k)).join(' + ') : '-';
+  };
+
+  if(isMobile()) return viewShell(pills, rows.map(x => {
+    const g = graphicState(x);
+    return `<div onclick="openExhDr('${escAttr(x.id)}',2)" style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
+        <span style="font-size:13px;font-weight:700;flex:1;min-width:0">${escapeHtml(x.company_name || '')}</span>
+        <span class="pill ${x.graphic_type === 'design' ? 'p-blue' : 'p-gray'}">${x.graphic_type === 'design' ? '제작' : x.graphic_type === 'print' ? '출력' : '유형 미정'}</span>
+        <span class="pill ${g.state === 'done' ? 'p-green' : g.state === 'warn' ? 'p-red' : 'p-amber'}">${escapeHtml(stageOf(x))}</span>
+      </div>
+      <div style="font-size:11px;color:var(--i4)">주문 ${escapeHtml(x.graphic_ordered_at || '-')} · 금액 ${escapeHtml(gAmt(x))}</div>
+    </div>`;
+  }).join(''));
+
+  return viewShell(pills, `<div class="tw"><table><thead><tr>
+      <th style="min-width:150px">기업</th>
+      <th style="min-width:56px">부스</th>
+      <th style="min-width:80px">유형</th>
+      <th style="min-width:96px">단계</th>
+      <th style="min-width:104px">초안</th>
+      <th style="min-width:104px">수정안</th>
+      <th style="min-width:104px">최종안</th>
+      <th style="min-width:100px;text-align:right">금액</th>
+    </tr></thead><tbody>
+    ${rows.map(x => {
+      const g = graphicState(x);
+      const isPrint = x.graphic_type === 'print';
+      const dateCell = (f) => isPrint ? '<td style="color:var(--i6);text-align:center">·</td>'
+        : `<td><input type="date" class="fi" style="width:100px;padding:3px 5px;font-size:11px" value="${escAttr(x[f] || '')}"
+            onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr({graphic_draft_at:'초안',graphic_revised_at:'수정안',graphic_final_at:'최종안'}[f])}')"></td>`;
+      return `<tr>
+        ${coCell(x, 2)}
+        <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
+        <td><select class="fi" style="width:74px;padding:3px 4px;font-size:11px"
+          onchange="setExhField('${escAttr(x.id)}','graphic_type',this.value,'그래픽 유형')">
+          <option value=""${!x.graphic_type ? ' selected' : ''}>미정</option>
+          <option value="design"${x.graphic_type === 'design' ? ' selected' : ''}>제작</option>
+          <option value="print"${x.graphic_type === 'print' ? ' selected' : ''}>출력</option>
+        </select></td>
+        <td><span class="pill ${g.state === 'done' ? 'p-green' : g.state === 'warn' ? 'p-red' : 'p-amber'}">${escapeHtml(stageOf(x))}</span></td>
+        ${dateCell('graphic_draft_at')}
+        ${dateCell('graphic_revised_at')}
+        ${dateCell('graphic_final_at')}
+        <td style="text-align:right;font-size:11.5px;font-weight:600">${escapeHtml(gAmt(x))}</td>
+      </tr>`;
+    }).join('')}
+    </tbody></table></div>`);
 }
 
 /* ══════════════════════════════════════════
