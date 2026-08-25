@@ -452,7 +452,7 @@ tr.row-sel{background:var(--ad)}
      목록 줄은 수량·단가를 한 칸으로 합쳐 쓰되(span 2) 칸 경계는 그대로라
      입력 줄의 수량·단가와 자리가 맞는다. */
   .bl-item, .bl-item-add{
-    display:grid;grid-template-columns:84px minmax(0,1fr) 62px 84px 104px 52px;
+    display:grid;grid-template-columns:84px minmax(0,1fr) 62px 84px minmax(78px,104px) 58px 52px;
     align-items:center;gap:6px;
   }
   /* 목록 줄에는 배경 여백이 있다 — 입력 줄에도 같은 여백을 줘야 칸 경계가
@@ -462,13 +462,13 @@ tr.row-sel{background:var(--ad)}
 
   /* 입금: 구분 · 날짜 · 비고 · 금액 · 버튼 */
   .bl-pay, .bl-pay-add{
-    display:grid;grid-template-columns:84px 132px minmax(0,1fr) 104px 52px;
+    display:grid;grid-template-columns:84px 132px minmax(0,1fr) minmax(78px,104px) 58px 52px;
     align-items:center;gap:6px;
   }
 
   /* 인보이스: 제목 · (상태) · 금액 · 버튼 */
-  .bl-inv-hd{display:grid;grid-template-columns:minmax(0,1fr) auto 104px auto auto;align-items:center;gap:6px}
-  .bl-inv-add{display:grid;grid-template-columns:minmax(0,1fr) 104px 52px;align-items:center;gap:6px}
+  .bl-inv-hd{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(78px,104px) 58px auto auto;align-items:center;gap:6px}
+  .bl-inv-add{display:grid;grid-template-columns:minmax(0,1fr) minmax(78px,104px) 58px 52px;align-items:center;gap:6px}
 
   /* 숫자는 오른쪽으로 붙여야 자릿수가 세로로 맞는다 */
   .bl-amt{text-align:right}
@@ -507,3 +507,20 @@ tr.row-sel{background:var(--ad)}
 }
 /* 나란히 놓인 카드는 키를 맞춰야 줄이 어긋나 보이지 않는다 */
 .exh-dash > * > .uc{height:100%;margin:0}
+
+/* ── 금액 항목: 소계·총계 줄 ──
+   분류별로 얼마인지 세어보지 않아도 되게 각 묶음 끝에 소계를, 맨 아래 총계를 둔다.
+   항목 줄과 같은 격자를 쓰므로 금액이 한 열에 그대로 이어진다. */
+.bl-subtotal{padding:5px 8px;border-top:1px dashed var(--i6)}
+.bl-subtotal .bl-amt{color:var(--i2)}
+.bl-total{padding:8px;margin-top:3px;background:var(--i8);border-radius:6px;border-top:2px solid var(--i5)}
+.bl-total .bl-amt{font-weight:800;color:var(--i0)}
+
+/* 금액은 줄에서 바로 고친다 — 잘못 들어간 값을 지우고 다시 넣으려고
+   삭제·재입력할 필요가 없다 */
+.bl-amt-in{
+  font-size:12px;font-weight:700;text-align:right;
+  padding:4px 6px;min-width:0;width:100%;
+}
+/* 통화 칸은 좁게 — 세 글자면 충분하다 */
+.bl-cur{font-size:10.5px;padding:4px 2px;min-width:0;width:100%;text-align:center}

@@ -339,3 +339,20 @@ ALTER TABLE contacts   ADD COLUMN IF NOT EXISTS org_id TEXT;
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS org_id TEXT;
 CREATE INDEX IF NOT EXISTS idx_contacts_org   ON contacts(org_id);
 CREATE INDEX IF NOT EXISTS idx_exhibitors_org ON exhibitors(org_id);
+
+/* ── 환불 요청 추적 ──
+   환불은 "요청받았다"와 "실제로 보냈다" 사이에 시간이 뜬다. 그동안에도 합계에서
+   빼버리면 아직 나가지 않은 돈이 이미 나간 것처럼 보인다 — 상태를 나눠 두고
+   완료된 것만 입금액에서 차감한다. */
+ALTER TABLE exhibitor_payments ADD COLUMN IF NOT EXISTS status       TEXT;  -- 'requested'(요청) | 'done'(완료)
+ALTER TABLE exhibitor_payments ADD COLUMN IF NOT EXISTS requested_at TEXT;
+ALTER TABLE exhibitor_payments ADD COLUMN IF NOT EXISTS reason       TEXT;  -- 환불 사유
+
+/* ── 독립부스 시공사 ──
+   자체 시공(Self-Construction) 업체는 부스를 직접 짓기 때문에 현장에서 우리가
+   연락할 상대가 참가기업 담당자가 아니라 시공사다. 지금은 업체명(builder) 한 칸뿐이라
+   반입 당일 연락처를 메일에서 다시 찾아야 했다. */
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS builder_contact TEXT;   -- 시공 담당자
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS builder_tel     TEXT;   -- 유선번호
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS builder_mobile  TEXT;   -- 휴대폰
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS builder_email   TEXT;

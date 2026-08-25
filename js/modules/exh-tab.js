@@ -110,11 +110,23 @@ export function billedAmount(exhId){
   return inv.length ? sumIn(inv, cur) : sumIn(itemsFor(exhId), cur);
 }
 /* 입금액: 입금 − 환불 */
+/* 환불은 요청받은 시점과 실제로 보낸 시점이 다르다. 요청만 들어온 건을 바로
+   빼버리면 아직 나가지 않은 돈이 이미 나간 것처럼 보여서, 잔액을 보고 판단하는
+   사람이 틀린 결정을 하게 된다 — 완료된 환불만 차감한다. */
+export const isDoneRefund = (p) => p.kind === 'refund' && p.status !== 'requested';
+export const isPendingRefund = (p) => p.kind === 'refund' && p.status === 'requested';
+
 export function paidAmount(exhId){
   const cur = currencyOf(exhId);
   return paymentsFor(exhId)
     .filter(p => (p.currency || 'KRW') === cur)
+    .filter(p => p.kind !== 'refund' || isDoneRefund(p))
     .reduce((s, p) => s + (p.kind === 'refund' ? -num(p.amount) : num(p.amount)), 0);
+}
+
+/* 아직 안 보낸 환불 — 처리 필요 목록에 올리기 위해 따로 센다 */
+export function pendingRefunds(exhId){
+  return paymentsFor(exhId).filter(isPendingRefund);
 }
 
 /* 이 기업의 입금 기한 — 기업별 지정이 없으면 행사 공통 기한, 그것도 없으면
@@ -922,6 +934,7 @@ const FIELD_LABEL = {
   app_received:'신청서 수신', app_received_at:'신청서 수신일', app_complete:'신청서 완비',
   app_missing:'누락 항목', extra_equipment:'추가 비품',
   booth_no:'부스 번호', booth_floor:'부스 층', booth_type:'부스 타입', booth_qty:'부스 수량',
+  builder:'시공사명', builder_contact:'시공 담당자', builder_tel:'시공사 유선', builder_mobile:'시공사 휴대폰', builder_email:'시공사 이메일',
   grade:'등급', booth_confirmed:'부스 확정', booth_confirmed_at:'부스 확정일',
   settled:'완납 처리', settled_note:'완납 사유', pay_due_date:'입금 기한',
   tax_sent_at:'세금계산서 발송', tax_amount:'세금계산서 금액',

@@ -68,7 +68,8 @@ const TABLES = {
       'graphic_ordered_at', 'graphic_type', 'graphic_spec_ok', 'graphic_spec_note',
       'graphic_draft_at', 'graphic_revised_at', 'graphic_final_at',
       'directory_received', 'directory_received_at', 'directory_note',
-      'movein_at', 'builder', 'badge_count', 'badge_issued_at', 'onsite_note'],
+      'movein_at', 'builder', 'builder_contact', 'builder_tel', 'builder_mobile', 'builder_email',
+      'badge_count', 'badge_issued_at', 'onsite_note'],
   },
   exhibitor_contacts: {
     table: 'exhibitor_contacts', pk: 'id', idPrefix: 'XC-',
@@ -85,7 +86,8 @@ const TABLES = {
   },
   exhibitor_payments: {
     table: 'exhibitor_payments', pk: 'id', idPrefix: 'XP-',
-    columns: ['id', 'exhibitor_id', 'invoice_id', 'paid_at', 'amount', 'currency', 'kind', 'method', 'note'],
+    columns: ['id', 'exhibitor_id', 'invoice_id', 'paid_at', 'amount', 'currency', 'kind', 'method', 'note',
+      'status', 'requested_at', 'reason'],
   },
   exhibitor_logs: {
     table: 'exhibitor_logs', pk: 'id', idPrefix: 'XL-',

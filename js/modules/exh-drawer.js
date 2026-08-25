@@ -24,6 +24,7 @@ import {
 import { trackAction } from './audit-tab.js';
 import {
   billedAmount, paidAmount, graphicState, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
+  isPendingRefund,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar,
   settleState, liveInvoices, payDueDate,
 } from './exh-tab.js';
@@ -134,6 +135,42 @@ function boothTypeOptions(current){
     + list.map(t => `<option value="${escAttr(t)}"${cur === t ? ' selected' : ''}>${escapeHtml(t)}</option>`).join('');
 }
 const GRADES = ['', 'DIA', 'GOLD', 'SILVER', 'BRONZE', 'Exhibitor'];
+
+/* ── 독립부스 시공사 ──
+   자체 시공 업체는 부스를 직접 짓기 때문에, 반입 당일 현장에서 우리가 연락할
+   상대가 참가기업 담당자가 아니라 시공사다. 업체명 한 칸만 있어서 그때마다
+   연락처를 메일에서 다시 찾아야 했다.
+
+   자체 시공일 때만 펼친다 — 조립부스 업체에게는 채울 일이 없는 칸이라
+   모든 기업에 다 보이면 빈칸만 늘어난다. 이미 적어둔 값이 있으면 부스 타입과
+   무관하게 보여준다(타입을 나중에 고쳤어도 적어둔 정보가 숨지 않게). */
+const SELF_BUILD = 'Self-Construction';
+const BUILDER_FIELDS = [
+  ['builder',         '시공사명',   ''],
+  ['builder_contact', '시공 담당자', ''],
+  ['builder_tel',     '유선번호',   '02-000-0000'],
+  ['builder_mobile',  '휴대폰',     '010-0000-0000'],
+  ['builder_email',   '이메일',     ''],
+];
+
+function builderBlock(x){
+  const isSelf = (x.booth_type || '') === SELF_BUILD;
+  const hasAny = BUILDER_FIELDS.some(([f]) => String(x[f] || '').trim());
+  if(!isSelf && !hasAny){
+    return `<div style="font-size:11px;color:var(--i5);padding:6px 0">
+      부스 타입이 <b>${escapeHtml(SELF_BUILD)}</b>이면 시공사 정보를 적는 칸이 나와요</div>`;
+  }
+  const row = (f, label, ph) => `<div class="fg"><label class="fl">${escapeHtml(label)}</label>
+    <input class="fi" style="font-size:12px" value="${escAttr(x[f] || '')}" placeholder="${escAttr(ph)}"
+      onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')"></div>`;
+  return `<div style="padding:9px 11px;background:var(--i9);border-radius:8px;border-left:3px solid var(--a);margin-bottom:10px">
+    <div style="font-size:11px;font-weight:700;color:var(--i2);margin-bottom:7px">
+      시공사 정보${isSelf ? '' : ' <span style="font-weight:400;color:var(--i5)">— 부스 타입은 자체 시공이 아니에요</span>'}</div>
+    ${row('builder', '시공사명', '')}
+    <div class="fgr">${row('builder_contact', '시공 담당자', '')}${row('builder_tel', '유선번호', '02-000-0000')}</div>
+    <div class="fgr">${row('builder_mobile', '휴대폰', '010-0000-0000')}${row('builder_email', '이메일', '')}</div>
+  </div>`;
+}
 
 function dContact(x){
   const list = exhContacts(x);
@@ -248,7 +285,7 @@ function dProgress(x){
 
   ${sct('현장',
     dateRow(x, 'movein_at', '반입 / 설치') +
-    textRow(x, 'builder', '설치업체', '') +
+    builderBlock(x) +
     `<div class="fgr">
       <div class="fg"><label class="fl">출입증 매수</label>
         <input class="fi" style="font-size:12px" value="${escAttr(x.badge_count || '')}"
@@ -275,15 +312,46 @@ function dProgress(x){
 const CATS = [['booth', '부스'], ['equip', '비품'], ['graphic', '그래픽'], ['etc', '기타']];
 const catLabel = (c) => (CATS.find(([k]) => k === c) || [null, '기타'])[1];
 
+const CURRENCIES = ['KRW', 'USD'];
+const itemAmount = (i) => Number(String(i.amount || '').replace(/[^0-9.-]/g, '') || 0);
+
+/* 통화는 줄마다 다르다. 전에는 저장할 때 그 기업의 주 통화를 그대로 붙였는데,
+   부스는 달러로 받고 비품은 원화로 받는 기업이 실제로 있어서 한 번 잘못 붙으면
+   고칠 방법이 없었다 — 줄에서 바로 고르게 한다. */
+const curSelect = (cur, onchange) =>
+  `<select class="fi bl-cur" onchange="${onchange}" title="통화">
+    ${CURRENCIES.map(c => `<option value="${c}"${(cur || 'KRW') === c ? ' selected' : ''}>${c}</option>`).join('')}
+  </select>`;
+
+/* 통화별로 더한다. 한 기업 안에서도 부스는 달러, 비품은 원화처럼 섞이는 일이
+   실제로 있어서(포트리아 등) 한 숫자로 합치면 거짓말이 된다. */
+function sumByCurrency(list){
+  const by = {};
+  list.forEach(i => {
+    const c = i.currency || 'KRW';
+    by[c] = (by[c] || 0) + itemAmount(i);
+  });
+  return by;
+}
+/* 통화가 하나면 그대로, 섞였으면 끊어서 적는다 */
+const sumText = (by) => {
+  // 순서를 CURRENCIES에 맞춘다 — 줄마다 원화가 먼저 왔다 나중에 왔다 하면
+  // 같은 자리 숫자를 비교하기 어렵다
+  const ks = [...CURRENCIES, ...Object.keys(by)].filter((k, i, a) => a.indexOf(k) === i && by[k]);
+  return ks.length ? ks.map(k => fmtMoney(by[k], k)).join(' + ') : fmtMoney(0, 'KRW');
+};
+
 function dBilling(x){
   const items = itemsFor(x.id);
   const invs = invoicesFor(x.id);
   const pays = paymentsFor(x.id);
+  // 입금과 환불은 성격이 달라 따로 본다 — 환불은 요청/완료 상태까지 따라간다
+  const ins = pays.filter(p => p.kind !== 'refund');
+  const refunds = pays.filter(p => p.kind === 'refund');
+  const pendingRf = refunds.filter(isPendingRefund);
   const st = settleState(x);
   const billed = st.billed, paid = st.paid, rest = st.balance, cur = st.cur;
   const noAmount = invoicesFor(x.id).filter(i => i.status !== 'void' && String(i.amount ?? '').trim() === '');
-
-  const subtotals = CATS.map(([k, l]) => ({ l, n: items.filter(i => i.category === k).reduce((s, i) => s + Number(String(i.amount || '').replace(/[^0-9.-]/g, '') || 0), 0) })).filter(s => s.n);
 
   return `
   <div class="uc" style="margin-bottom:16px">
@@ -304,7 +372,7 @@ function dBilling(x){
         : billed === 0 ? '금액 항목을 추가하거나 인보이스를 발행해주세요'
         : st.state === 'over' ? `초과 입금 ${fmtMoney(-rest, cur)} — 누락된 인보이스가 없는지 확인해주세요`
         : rest > 0 ? `잔액 ${fmtMoney(rest, cur)}` : '완납'}
-      ${subtotals.length ? ` · ${subtotals.map(s => `${s.l} ${money(s.n)}`).join(' / ')}` : ''}</div>
+</div>
     ${st.due ? `<div style="font-size:11px;margin-top:3px;color:${st.overdue && rest > 0 ? 'var(--re)' : 'var(--i4)'}">
       입금 기한 ${escapeHtml(st.due)}${st.overdue && rest > 0 ? ` · ${daysSince(st.due)}일 지남` : ''}</div>` : ''}
     ${noAmount.length ? `<div style="font-size:11px;color:var(--am);margin-top:3px">
@@ -321,14 +389,36 @@ function dBilling(x){
 
   ${sct('금액 항목', `
     <div style="display:flex;flex-direction:column;gap:1px;margin-bottom:8px">
-      ${items.length ? items.map(i => `
+      ${items.length ? CATS.map(([k, l]) => {
+        // 분류별로 묶어서 소계를 붙인다 — 부스와 비품이 섞여 있으면 어느 쪽이
+        // 얼마인지 세어보기 전엔 알 수 없다. 항목이 없는 분류는 건너뛴다.
+        const g = items.filter(i => (i.category || 'etc') === k);
+        if(!g.length) return '';
+        return g.map(i => `
         <div class="bl-row bl-item" style="padding:6px 8px;background:var(--i9);border-radius:6px">
-          <span class="pill p-gray" style="text-align:center">${escapeHtml(catLabel(i.category))}</span>
+          <span class="pill p-gray" style="text-align:center">${escapeHtml(l)}</span>
           <span style="min-width:0;font-size:12px;font-weight:600;word-break:break-all">${escapeHtml(i.name || '')}</span>
           <span class="bl-qty" style="font-size:11px;color:var(--i4)">${escapeHtml(i.qty || '')}${i.qty && i.unit_price ? ' × ' : ''}${i.unit_price ? money(i.unit_price) : ''}</span>
-          <span class="bl-amt">${fmtMoney(i.amount, i.currency || 'KRW')}</span>
+          <input class="fi bl-amt-in" value="${escAttr(i.amount || '')}" placeholder="금액"
+            onchange="setItemField('${escAttr(i.id)}','amount',this.value)">
+          ${curSelect(i.currency, `setItemField('${escAttr(i.id)}','currency',this.value)`)}
           <button class="btn bs" onclick="delExhItem('${escAttr(i.id)}')" title="삭제">✕</button>
-        </div>`).join('') : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">아직 항목이 없어요</div>'}
+        </div>`).join('')
+        + `<div class="bl-row bl-item bl-subtotal">
+            <span></span>
+            <span style="min-width:0;font-size:11px;color:var(--i4)">${escapeHtml(l)} 소계 <span style="color:var(--i5)">${g.length}건</span></span>
+            <span class="bl-qty"></span>
+            <span class="bl-amt" style="font-size:12px">${sumText(sumByCurrency(g))}</span>
+            <span></span><span></span>
+          </div>`;
+      }).join('') : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">아직 항목이 없어요</div>'}
+      ${items.length ? `<div class="bl-row bl-item bl-total">
+        <span></span>
+        <span style="min-width:0;font-size:12px;font-weight:700">총계 <span style="font-weight:400;color:var(--i4)">${items.length}건</span></span>
+        <span class="bl-qty"></span>
+        <span class="bl-amt" style="font-size:13px">${sumText(sumByCurrency(items))}</span>
+        <span></span><span></span>
+      </div>` : ''}
     </div>
     <div class="bl-row bl-item-add">
       <select class="fi" id="it-cat-${escAttr(x.id)}" style="flex:0 0 72px;min-width:0;font-size:11.5px;padding:6px">
@@ -339,6 +429,8 @@ function dBilling(x){
       <input class="fi" id="it-up-${escAttr(x.id)}" placeholder="단가" style="flex:1 1 78px;min-width:0;font-size:11.5px;padding:6px"
         oninput="calcItemAmount('${escAttr(x.id)}')">
       <input class="fi" id="it-amt-${escAttr(x.id)}" placeholder="금액" style="flex:1 1 88px;min-width:0;font-size:11.5px;padding:6px;text-align:right">
+      <select class="fi bl-cur" id="it-cur-${escAttr(x.id)}">
+        ${CURRENCIES.map(c => `<option value="${c}"${currencyOf(x.id) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
       <button class="btn bp bs" style="flex:0 0 auto" onclick="addExhItem('${escAttr(x.id)}')">추가</button>
     </div>`)}
 
@@ -349,7 +441,9 @@ function dBilling(x){
           <div class="bl-row bl-inv-hd">
             <span style="min-width:0;font-size:12px;font-weight:700${v.status === 'void' ? ';text-decoration:line-through' : ''}">${escapeHtml(v.title || '인보이스')}</span>
             ${v.status === 'void' ? '<span class="pill p-gray">무효</span>' : '<span></span>'}
-            <span class="bl-amt">${String(v.amount ?? '').trim() ? fmtMoney(v.amount, v.currency || 'KRW') : '<span style="color:var(--am);font-size:11px">금액 미입력</span>'}</span>
+            <input class="fi bl-amt-in" value="${escAttr(v.amount ?? '')}" placeholder="금액 미입력"
+              onchange="setInvField('${escAttr(v.id)}','amount',this.value)">
+            ${curSelect(v.currency, `setInvField('${escAttr(v.id)}','currency',this.value)`)}
             <button class="btn bs" onclick="toggleVoidInvoice('${escAttr(v.id)}')" title="${v.status === 'void' ? '되살리기' : '취소·대체됨으로 표시(합계에서 제외)'}">${v.status === 'void' ? '되살리기' : '무효'}</button>
             <button class="btn bs" onclick="delExhInvoice('${escAttr(v.id)}')">✕</button>
           </div>
@@ -370,6 +464,8 @@ function dBilling(x){
       <input class="fi" id="iv-t-${escAttr(x.id)}" placeholder="제목 (예: 부스+비품)" style="flex:1 1 140px;min-width:0;font-size:11.5px;padding:6px">
       <input class="fi" id="iv-a-${escAttr(x.id)}" placeholder="금액" style="flex:1 1 96px;min-width:0;font-size:11.5px;padding:6px;text-align:right"
         value="${items.length && !invs.length ? billedAmount(x.id) : ''}">
+      <select class="fi bl-cur" id="iv-cur-${escAttr(x.id)}">
+        ${CURRENCIES.map(c => `<option value="${c}"${currencyOf(x.id) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
       <button class="btn bp bs" style="flex:0 0 auto" onclick="addExhInvoice('${escAttr(x.id)}')">발행</button>
     </div>
     <div style="font-size:10.5px;color:var(--i5);margin-top:5px">
@@ -396,26 +492,72 @@ function dBilling(x){
 
   ${sct('입금 내역', `
     <div style="display:flex;flex-direction:column;gap:1px;margin-bottom:8px">
-      ${pays.length ? pays.map((p, i) => `
+      ${ins.length ? ins.map((p, i) => `
         <div class="bl-row bl-pay" style="padding:6px 8px;background:var(--i9);border-radius:6px">
-          <span class="pill ${p.kind === 'refund' ? 'p-red' : 'p-green'}" style="text-align:center">${p.kind === 'refund' ? '환불' : (pays.filter(q=>q.kind!=='refund').length > 1 ? `${i + 1}차` : '입금')}</span>
+          <span class="pill p-green" style="text-align:center">${ins.length > 1 ? `${i + 1}차` : '입금'}</span>
           <span style="font-size:11.5px;color:var(--i3)">${escapeHtml(p.paid_at || '')}</span>
           <span style="min-width:0;font-size:11px;color:var(--i4);overflow:hidden;text-overflow:ellipsis">${escapeHtml(p.method || '')}${p.note ? ' · ' + escapeHtml(p.note) : ''}</span>
-          <span class="bl-amt" style="color:${p.kind === 'refund' ? 'var(--re)' : 'inherit'}">${p.kind === 'refund' ? '−' : ''}${fmtMoney(p.amount, p.currency || 'KRW')}</span>
+          <input class="fi bl-amt-in" value="${escAttr(p.amount || '')}" placeholder="금액"
+            onchange="setPayField('${escAttr(p.id)}','amount',this.value)">
+          ${curSelect(p.currency, `setPayField('${escAttr(p.id)}','currency',this.value)`)}
           <button class="btn bs" onclick="delExhPayment('${escAttr(p.id)}')">✕</button>
         </div>`).join('') : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">입금 내역이 없어요</div>'}
     </div>
     <div class="bl-row bl-pay-add">
-      <select class="fi" id="py-k-${escAttr(x.id)}" style="flex:0 0 72px;min-width:0;font-size:11.5px;padding:6px">
-        <option value="in">입금</option><option value="refund">환불</option></select>
+      <span class="pill p-green" style="text-align:center">입금</span>
       <input type="date" class="fi" id="py-d-${escAttr(x.id)}" style="flex:1 1 130px;min-width:0;font-size:11.5px;padding:6px" value="${td()}">
       <input class="fi" id="py-m-${escAttr(x.id)}" placeholder="비고" style="flex:1 1 80px;min-width:0;font-size:11.5px;padding:6px">
       <input class="fi" id="py-a-${escAttr(x.id)}" placeholder="입금액" style="flex:1 1 100px;min-width:0;font-size:11.5px;padding:6px;text-align:right"
         value="${rest > 0 ? rest : ''}">
+      <select class="fi bl-cur" id="py-cur-${escAttr(x.id)}">
+        ${CURRENCIES.map(c => `<option value="${c}"${currencyOf(x.id) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
       <button class="btn bp bs" style="flex:0 0 auto" onclick="addExhPayment('${escAttr(x.id)}')">추가</button>
     </div>
     <div style="font-size:10.5px;color:var(--i5);margin-top:5px">
-      분할 입금이면 여러 번 추가하세요. 환불·차감은 종류를 "환불"로 고르면 합계에서 빠져요.</div>`)}
+      분할 입금이면 여러 번 추가하세요.</div>`)}
+
+  ${sct('환불 내역', `
+    <div style="display:flex;flex-direction:column;gap:1px;margin-bottom:8px">
+      ${refunds.length ? refunds.map(p => {
+        // 요청과 완료를 나눈다 — 완료된 것만 입금 합계에서 빠진다.
+        // 체크를 누르면 완료로 바뀌면서 그때 비로소 잔액에 반영된다.
+        const pend = isPendingRefund(p);
+        return `
+        <div class="bl-row bl-pay" style="padding:6px 8px;background:${pend ? 'var(--ab)' : 'var(--i9)'};border-radius:6px">
+          <button onclick="toggleRefundDone('${escAttr(p.id)}')"
+            title="${pend ? '환불 완료로 표시 (합계에서 차감됩니다)' : '환불 요청 상태로 되돌리기'}"
+            style="display:flex;align-items:center;gap:5px;border:none;background:none;padding:0;font-size:10px;font-weight:700;color:${pend ? 'var(--am)' : 'var(--re)'}">
+            <span style="width:16px;height:16px;border-radius:4px;flex-shrink:0;line-height:1;
+              border:1.5px solid ${pend ? 'var(--am)' : 'var(--re)'};background:${pend ? 'transparent' : 'var(--re)'};
+              color:#fff;display:flex;align-items:center;justify-content:center">${pend ? '' : '✓'}</span>
+            ${pend ? '요청' : '완료'}
+          </button>
+          <input type="date" class="fi" style="padding:3px 6px;font-size:11px" value="${escAttr(pend ? (p.requested_at || '') : (p.paid_at || ''))}"
+            title="${pend ? '요청일' : '환불일'}"
+            onchange="setPayField('${escAttr(p.id)}','${pend ? 'requested_at' : 'paid_at'}',this.value)">
+          <input class="fi" style="min-width:0;font-size:11px;padding:3px 6px" placeholder="사유"
+            value="${escAttr(p.reason || p.note || '')}"
+            onchange="setPayField('${escAttr(p.id)}','reason',this.value)">
+          <input class="fi bl-amt-in" value="${escAttr(p.amount || '')}" placeholder="금액" style="color:var(--re)"
+            onchange="setPayField('${escAttr(p.id)}','amount',this.value)">
+          ${curSelect(p.currency, `setPayField('${escAttr(p.id)}','currency',this.value)`)}
+          <button class="btn bs" onclick="delExhPayment('${escAttr(p.id)}')">✕</button>
+        </div>`;
+      }).join('') : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">환불 내역이 없어요</div>'}
+    </div>
+    <div class="bl-row bl-pay-add">
+      <span class="pill p-red" style="text-align:center">환불</span>
+      <input type="date" class="fi" id="rf-d-${escAttr(x.id)}" style="flex:1 1 130px;min-width:0;font-size:11.5px;padding:6px" value="${td()}">
+      <input class="fi" id="rf-r-${escAttr(x.id)}" placeholder="사유 (예: 부스 축소)" style="flex:1 1 100px;min-width:0;font-size:11.5px;padding:6px">
+      <input class="fi" id="rf-a-${escAttr(x.id)}" placeholder="환불액" style="flex:1 1 100px;min-width:0;font-size:11.5px;padding:6px;text-align:right">
+      <select class="fi bl-cur" id="rf-cur-${escAttr(x.id)}">
+        ${CURRENCIES.map(c => `<option value="${c}"${currencyOf(x.id) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
+      <button class="btn bs" style="flex:0 0 auto" onclick="addExhRefund('${escAttr(x.id)}')">요청</button>
+    </div>
+    <div style="font-size:10.5px;color:var(--i5);margin-top:5px">
+      환불은 <b>요청</b> 상태로 들어가고, 실제로 보낸 뒤 왼쪽 체크를 누르면 <b>완료</b>가 되면서
+      그때 입금 합계에서 빠져요 — 아직 안 보낸 돈이 나간 것처럼 보이지 않게요.
+      ${pendingRf.length ? `<br><b style="color:var(--am)">보내야 할 환불 ${pendingRf.length}건</b>` : ''}</div>`)}
   `;
 }
 
@@ -605,7 +747,7 @@ export async function addExhItem(exhId){
   await addRow(EXH_ITEMS, {
     id: localId('XI-'), exhibitor_id: exhId, category: val(`it-cat-${exhId}`) || 'etc',
     name, qty: val(`it-qty-${exhId}`), unit_price: val(`it-up-${exhId}`), amount,
-    currency: currencyOf(exhId), note: '',
+    currency: val(`it-cur-${exhId}`) || currencyOf(exhId), note: '',
     sort_order: String(itemsFor(exhId).length + 1),
   }, saveExhItem);
   clear(`it-nm-${exhId}`, `it-qty-${exhId}`, `it-up-${exhId}`, `it-amt-${exhId}`);
@@ -632,12 +774,71 @@ export async function addExhInvoice(exhId){
   const amount = val(`iv-a-${exhId}`);
   if(!amount){ alert('금액을 입력해주세요.'); return; }
   await addRow(EXH_INVOICES, {
-    id: localId('XV-'), exhibitor_id: exhId, title, amount, currency: currencyOf(exhId),
+    id: localId('XV-'), exhibitor_id: exhId, title, amount, currency: val(`iv-cur-${exhId}`) || currencyOf(exhId),
     created_at: td(), sent_at: '', due_date: '', note: '',
   }, saveExhInvoice);
   clear(`iv-t-${exhId}`, `iv-a-${exhId}`);
 }
 export const delExhInvoice = (id) => removeRow(EXH_INVOICES, id, deleteExhInvoice);
+
+/* 금액·통화를 줄에서 바로 고친다. 기록에도 무엇이 어떻게 바뀌었는지 남긴다 —
+   금액은 나중에 "왜 이 숫자가 됐지"를 되짚어야 할 일이 가장 많은 값이다. */
+async function setRowField(list, saver, label, id, field, value){
+  const r = list.find(o => o.id === id);
+  if(!r) return;
+  const before = r[field];
+  r[field] = value;
+  refreshExhViews();
+  const res = await saver({ id, [field]: value });
+  if(!res.ok){ r[field] = before; refreshExhViews(); alert('저장에 실패했어요.'); return; }
+  const x = getExhibitorById(r.exhibitor_id);
+  const fl = { amount: '금액', currency: '통화' }[field] || field;
+  trackAction('edit', label + ' 수정', x?.company_name || '',
+    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(r.name || r.title || label)} ${escapeHtml(fl)} ${escapeHtml(String(before || '(없음)'))} → ${escapeHtml(String(value || '(없음)'))}`);
+}
+
+export const setItemField = (id, field, value) =>
+  setRowField(EXH_ITEMS, saveExhItem, '금액 항목', id, field, value);
+export const setPayField = (id, field, value) =>
+  setRowField(EXH_PAYMENTS, saveExhPayment, '입금', id, field, value);
+
+/* 환불은 요청으로 먼저 들어간다 — 이 시점에는 합계를 건드리지 않는다 */
+export async function addExhRefund(exhId){
+  const amount = val(`rf-a-${exhId}`);
+  if(!amount){ alert('환불액을 입력해주세요.'); return; }
+  const reason = val(`rf-r-${exhId}`);
+  const ok = await addRow(EXH_PAYMENTS, {
+    id: localId('XP-'), exhibitor_id: exhId, invoice_id: '',
+    paid_at: '', requested_at: val(`rf-d-${exhId}`) || td(),
+    amount, currency: val(`rf-cur-${exhId}`) || currencyOf(exhId),
+    kind: 'refund', status: 'requested', reason, method: '', note: '',
+  }, saveExhPayment);
+  if(ok){
+    clear(`rf-a-${exhId}`); clear(`rf-r-${exhId}`);
+    const x = getExhibitorById(exhId);
+    trackAction('status', '환불 요청', x?.company_name || '',
+      `<b>${escapeHtml(x?.company_name || '')}</b> 환불 요청 ${escapeHtml(String(amount))}${reason ? ` — ${escapeHtml(reason)}` : ''}`);
+  }
+}
+
+/* 실제로 보냈으면 완료로 바꾼다. 이때부터 입금 합계에서 빠진다. */
+export async function toggleRefundDone(id){
+  const p = EXH_PAYMENTS.find(o => o.id === id);
+  if(!p) return;
+  const wasPending = p.status === 'requested';
+  const before = { status: p.status, paid_at: p.paid_at };
+  p.status = wasPending ? 'done' : 'requested';
+  if(wasPending && !p.paid_at) p.paid_at = td();
+  refreshExhViews();
+  const res = await saveExhPayment({ id, status: p.status, paid_at: p.paid_at });
+  if(!res.ok){
+    Object.assign(p, before); refreshExhViews();
+    alert('저장에 실패했어요.'); return;
+  }
+  const x = getExhibitorById(p.exhibitor_id);
+  trackAction('status', wasPending ? '환불 완료' : '환불 요청으로 되돌림', x?.company_name || '',
+    `<b>${escapeHtml(x?.company_name || '')}</b> 환불 ${escapeHtml(String(p.amount || ''))} ${wasPending ? '지급 완료' : '요청 상태로 되돌림'}`);
+}
 
 export async function setInvField(id, field, value){
   const v = EXH_INVOICES.find(i => i.id === id);
@@ -655,8 +856,8 @@ export async function addExhPayment(exhId){
   const invs = invoicesFor(exhId);
   const ok = await addRow(EXH_PAYMENTS, {
     id: localId('XP-'), exhibitor_id: exhId, invoice_id: invs[0]?.id || '',
-    paid_at: val(`py-d-${exhId}`) || td(), amount, currency: currencyOf(exhId),
-    kind: val(`py-k-${exhId}`) || 'in',
+    paid_at: val(`py-d-${exhId}`) || td(), amount, currency: val(`py-cur-${exhId}`) || currencyOf(exhId),
+    kind: 'in',
     method: val(`py-m-${exhId}`), note: '',
   }, saveExhPayment);
   if(ok){
@@ -821,6 +1022,10 @@ window.addItemFromEquip = addItemFromEquip;
 window.addExhInvoice = addExhInvoice;
 window.delExhInvoice = delExhInvoice;
 window.setInvField = setInvField;
+window.setItemField = setItemField;
+window.setPayField = setPayField;
+window.addExhRefund = addExhRefund;
+window.toggleRefundDone = toggleRefundDone;
 window.addExhPayment = addExhPayment;
 window.delExhPayment = delExhPayment;
 window.addExhLog = addExhLog;
