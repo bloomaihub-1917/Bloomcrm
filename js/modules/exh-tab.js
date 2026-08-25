@@ -665,7 +665,8 @@ function renderBoothView(list){
     + (unconfirmed ? `<span class="pill p-amber">배정 미확정 ${unconfirmed}</span>` : '')
     + (qtyOdd.length ? `<span class="pill p-red" title="${escAttr(qtyOdd.map(x => `${x.company_name} ${x.booth_no}(${parseBooth(x.booth_no).count}칸) ↔ 수량 ${x.booth_qty}`).join(', '))}">수량 불일치 ${qtyOdd.length}</span>` : '')
     + `<span class="pill p-blue">독립부스 ${selfN}</span>`
-    + pillsOf(countBy(rows, x => x.booth_type));
+    + pillsOf(countBy(rows, x => x.booth_type))
+    + '<span style="font-size:10.5px;color:var(--i5);margin-left:2px">부스 번호·층·수량은 행을 눌러 상세에서 고쳐요</span>';
 
   if(isMobile()) return viewShell(pills, rows.map(x => `
     <div onclick="openExhDr('${escAttr(x.id)}','progress')" style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
@@ -694,22 +695,20 @@ function renderBoothView(list){
     ${rows.map(x => {
       const self = x.booth_type === SELF_BUILD_TYPE;
       const done = x.booth_confirmed === 'yes' || !!x.booth_confirmed_at;
-      return `<tr>
-        <td><input class="fi" style="width:58px;padding:3px 5px;font-size:11.5px;font-weight:700" value="${escAttr(x.booth_no || '')}"
-          placeholder="—" onchange="setExhField('${escAttr(x.id)}','booth_no',this.value,'부스 번호')">
+      return `<tr onclick="openExhDr('${escAttr(x.id)}','progress')" style="cursor:pointer"
+        title="부스 번호·층·수량은 여기서 열리는 상세에서 고칩니다">
+        <td style="font-size:12px;font-weight:700${x.booth_no ? '' : ';color:var(--i6)'}">${escapeHtml(x.booth_no || '—')}
           ${(() => { const b = parseBooth(x.booth_no);
-            return b.kind === 'range' ? `<div style="font-size:9.5px;color:var(--i4);margin-top:1px">${b.count}칸</div>`
-              : b.kind === 'split' ? `<div style="font-size:9.5px;color:var(--a);margin-top:1px">공동</div>` : ''; })()}</td>
+            return b.kind === 'range' ? `<div style="font-size:9.5px;color:var(--i4);font-weight:400;margin-top:1px">${b.count}칸</div>`
+              : b.kind === 'split' ? `<div style="font-size:9.5px;color:var(--a);font-weight:400;margin-top:1px">공동</div>` : ''; })()}</td>
         ${coCell(x, 'progress')}
-        <td><input class="fi" style="width:40px;padding:3px 5px;font-size:11.5px" value="${escAttr(x.booth_floor || '')}"
-          onchange="setExhField('${escAttr(x.id)}','booth_floor',this.value,'부스 층')"></td>
-        <td><select class="fi" style="width:126px;padding:3px 4px;font-size:11px"
+        <td style="font-size:11.5px;color:var(--i3)">${x.booth_floor ? escapeHtml(x.booth_floor) + '층' : '<span style="color:var(--i6)">—</span>'}</td>
+        <td><select class="fi" style="width:126px;padding:3px 4px;font-size:11px" onclick="event.stopPropagation()"
           onchange="setExhField('${escAttr(x.id)}','booth_type',this.value,'부스 타입')">${boothTypeOptions(x.booth_type)}</select></td>
-        <td><input class="fi" style="width:44px;padding:3px 5px;font-size:11.5px" value="${escAttr(x.booth_qty || '')}"
-          onchange="setExhField('${escAttr(x.id)}','booth_qty',this.value,'부스 수량')"></td>
+        <td style="font-size:11.5px;color:var(--i3);text-align:center">${x.booth_qty ? escapeHtml(x.booth_qty) : '<span style="color:var(--i6)">—</span>'}</td>
         <td>${x.grade ? `<span class="pill ${GRADE_CLS[x.grade] || 'p-gray'}">${escapeHtml(x.grade)}</span>` : '<span style="color:var(--i6)">—</span>'}</td>
         <td style="text-align:center">
-          <button onclick="toggleExhFlag('${escAttr(x.id)}','booth_confirmed','booth_confirmed_at','배정 확정')"
+          <button onclick="event.stopPropagation();toggleExhFlag('${escAttr(x.id)}','booth_confirmed','booth_confirmed_at','배정 확정')"
             title="${done ? '확정 해제' : '배정 확정으로 표시'}"
             style="width:20px;height:20px;border-radius:5px;line-height:1;cursor:pointer;
               border:1.5px solid ${done ? 'var(--g)' : 'var(--i6)'};background:${done ? 'var(--g)' : 'transparent'};
