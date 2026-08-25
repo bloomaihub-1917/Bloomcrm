@@ -43,7 +43,6 @@ import {
   EXH_LOGS,
   ORGS,
   auditLog,
-  COMPANY_INFO,
   COMPANY_SECTORS,
   DOMAINS,
   setDomains,
@@ -233,7 +232,7 @@ export async function loadFromSheets(hooks = {}){
   const headers = await authHeaders(); // 9개 요청이 같은 토큰을 쓰도록 한 번만 계산
 
   try {
-    const [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, companiesData, partTypesData,
+    const [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, partTypesData,
            orgsData,
            exhData, exhConData, exhItemData, exhInvData, exhPayData, exhLogData] = await Promise.all([
       safeFetch(base + 'contacts',       'contacts',       1, headers),
@@ -243,7 +242,6 @@ export async function loadFromSheets(hooks = {}){
       safeFetch(base + 'events',         'events',         1, headers),
       safeFetch(base + 'settings',       'settings',       1, headers),
       safeFetch(base + 'sectors',        'sectors',        1, headers),
-      safeFetch(base + 'companies',      'companies',      1, headers),
       safeFetch(base + 'part_types',     'part_types',     1, headers),
       safeFetch(base + 'orgs',           'orgs',           1, headers),
       safeFetch(base + 'exhibitors',         'exhibitors',         1, headers),
@@ -257,7 +255,7 @@ export async function loadFromSheets(hooks = {}){
     // ── 실패 감지 (신규) ──
     // safeFetch는 실패 시 예외 대신 null을 반환하므로, 여기서 null 개수를
     // 세지 않으면 "전 시트 로드 실패"도 성공으로 표시되는 버그가 있었다.
-    const _results = [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, companiesData, partTypesData,
+    const _results = [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, partTypesData,
       orgsData,
       exhData, exhConData, exhItemData, exhInvData, exhPayData, exhLogData];
     const _failed  = _results.filter(r => r === null).length;
@@ -394,19 +392,8 @@ export async function loadFromSheets(hooks = {}){
       });
     }
 
-    // ── companies 시트 → COMPANY_INFO (회사 단위 관리 정보: 섹터/HQ/메모) ──
-    for(const k in COMPANY_INFO) delete COMPANY_INFO[k];
-    if(companiesData && Array.isArray(companiesData)){
-      companiesData.forEach(r => {
-        if(!r.key) return;
-        COMPANY_INFO[r.key] = {
-          sector: r.sector || '', hq: r.hq || '', website: r.website || '', notes: r.notes || '',
-          catCode: r.catCode || '', country: r.country || '', abbr: r.abbr || '', source: r.source || '', updatedAt: r.updatedAt || '',
-          nameKo: r.nameKo || '', nameEn: r.nameEn || '',
-        };
-      });
-      console.log('[CRM] companies 시트 로드:', Object.keys(COMPANY_INFO).length, '개');
-    }
+    // companies 테이블은 더 이상 읽지 않는다 — orgs가 그 자리를 대신한다.
+    // (테이블 자체는 마이그레이션 이전 값이 남아 있어 그대로 둔다)
 
     // ── orgs → ORGS (기업 마스터) ──
     // 기업 화면(CO_DB)이 이걸 바탕으로 만들어지므로 companies보다 먼저 채운다.

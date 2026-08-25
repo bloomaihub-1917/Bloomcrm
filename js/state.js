@@ -3,7 +3,7 @@
    4900~4924행, 6258~6350행대에서 정리)
 
    설계 원칙
-   - 배열/객체(contacts, participations, CO_DB, COMPANY_INFO, ...)는
+   - 배열/객체(contacts, participations, CO_DB, ORGS, ...)는
      "참조"를 그대로 유지한 채 내용만 비우고 채우는 방식으로 갱신합니다.
      예) contacts.length = 0; contacts.push(...newData)
          또는 contacts.splice(0, contacts.length, ...newData)
@@ -118,9 +118,7 @@ export const ORG_STATUSES = ['활성', '휴면', '거래종료'];
    CO_DB — 기업 화면용 뷰 (ORGS + 연락처/행사/거래) (원본 1616~1620행)
 ══════════════════════════════════════════ */
 export const CO_DB = [];
-// key(회사명) → { sector, hq, website, notes, catCode, country, abbr, source, updatedAt, nameKo, nameEn }
-// companies 시트에서 로드된 회사 단위 관리 정보
-export const COMPANY_INFO = {};
+// (COMPANY_INFO 삭제 — 이름을 키로 쓰던 오버레이였고, 이제 ORGS가 그 자리를 대신한다)
 
 /* ══════════════════════════════════════════
    Upload / Merge meta-data (원본 1622~1627행, 2217~2241행, 2264행)
