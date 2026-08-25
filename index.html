@@ -225,7 +225,20 @@
       </div></div>
     </div>
   </div>
-  <div class="sb-ft">마지막 동기화<br><span id="last-sync-time">-</span></div>
+  <div class="sb-ft">
+    <!-- 로그아웃은 원래 마스터DB 툴바의 칩에만 달려 있었다. 툴바는 모바일에서
+         숨겨지고 다른 탭에는 아예 없어서, 사실상 닿을 수 없는 기능이었다.
+         사이드바 바닥은 모든 탭에 있고 모바일에서도 햄버거로 열리므로 여기로 옮긴다. -->
+    <button class="sb-acct" id="sb-acct" onclick="toggleUserMenu(event)" style="display:none" title="계정 메뉴">
+      <div class="user-av" id="sb-acct-av"></div>
+      <div style="flex:1;min-width:0;text-align:left">
+        <div class="sb-acct-nm" id="sb-acct-nm"></div>
+        <div class="sb-acct-em" id="sb-acct-em"></div>
+      </div>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px;flex-shrink:0;color:var(--i4)"><polyline points="18 15 12 9 6 15"/></svg>
+    </button>
+    <div style="margin-top:8px">마지막 동기화<br><span id="last-sync-time">-</span></div>
+  </div>
 </div>
 <div class="mn">
 <div id="sheets-warn" style="display:none;padding:9px 18px;background:var(--ab);border-bottom:1px solid #FDE68A;align-items:center;gap:9px;font-size:12px;color:var(--am)">

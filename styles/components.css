@@ -349,6 +349,20 @@ tr.row-sel{background:var(--ad)}
 .user-menu-item.danger{color:var(--re)}
 .user-menu-item.danger svg{color:var(--re)}
 
+/* ── 사이드바 계정 블록 (모든 탭·모바일에서 닿는 로그아웃 경로) ── */
+.sb-acct{
+  display:flex;align-items:center;gap:8px;width:100%;
+  padding:7px 8px;border-radius:var(--r-md);
+  background:var(--i9);border:1px solid var(--i6);
+  cursor:pointer;transition:background .12s;text-align:left;
+}
+.sb-acct:hover{background:var(--i7)}
+.sb-acct .user-av{width:26px;height:26px;font-size:10px}
+.sb-acct-nm{font-size:12px;font-weight:600;color:var(--i1);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-acct-em{font-size:10px;color:var(--i4);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
 /* ══════════════════════════════
    AUDIT LOG PAGE
 ══════════════════════════════ */

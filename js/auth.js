@@ -185,6 +185,16 @@ export function initAfterLogin(testMode){
   if(av){  av.style.background = currentUser.color; av.textContent = userInitials(currentUser.name); }
   if(nm)   nm.textContent = currentUser.name;
 
+  // 사이드바 계정 블록 — 모든 탭·모바일에서 닿는 유일한 경로다
+  const acct = document.getElementById('sb-acct');
+  if(acct) acct.style.display='flex';
+  const aav = document.getElementById('sb-acct-av');
+  if(aav){ aav.style.background = currentUser.color; aav.textContent = userInitials(currentUser.name); }
+  const anm = document.getElementById('sb-acct-nm');
+  if(anm) anm.textContent = currentUser.name;
+  const aem = document.getElementById('sb-acct-em');
+  if(aem) aem.textContent = currentUser.email;
+
   const ume = document.getElementById('um-email');
   const ums = document.getElementById('um-since');
   if(ume) ume.textContent = currentUser.email;
@@ -234,7 +244,26 @@ function showTestModeBanner(){
 
 export function toggleUserMenu(e){
   e.stopPropagation();
-  document.getElementById('user-menu').classList.toggle('on');
+  const menu = document.getElementById('user-menu');
+  if(!menu) return;
+  const willOpen = !menu.classList.contains('on');
+  menu.classList.toggle('on');
+  if(!willOpen) return;
+
+  /* 메뉴는 원래 툴바 오른쪽 위에 고정돼 있었다. 이제 사이드바 바닥에서도 열리므로
+     누른 자리를 기준으로 놓는다 — 화면 밖으로 나가지 않게 가장자리에서 접어준다. */
+  const trigger = e.currentTarget;
+  if(!(trigger instanceof Element)) return;
+  const r = trigger.getBoundingClientRect();
+  menu.style.position = 'fixed';
+  menu.style.right = 'auto';
+  const w = menu.offsetWidth || 200, h = menu.offsetHeight || 120;
+  const left = Math.min(r.left, window.innerWidth - w - 8);
+  // 아래 공간이 모자라면 트리거 위로 띄운다(사이드바 바닥에서 누른 경우)
+  const below = window.innerHeight - r.bottom;
+  const top = below >= h + 8 ? r.bottom + 6 : Math.max(8, r.top - h - 6);
+  menu.style.left = Math.max(8, left) + 'px';
+  menu.style.top  = top + 'px';
 }
 export function closeUserMenu(){
   document.getElementById('user-menu').classList.remove('on');
