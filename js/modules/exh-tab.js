@@ -18,7 +18,7 @@ import {
   exhibitorsForEvent, getExhibitorById, itemsFor, invoicesFor, paymentsFor,
   logsFor, openInquiriesFor, contactsFor, primaryContactFor,
   EVENT_LIST, contacts, participations, CO_DB, currentUser, API_BASE_URL, auditLog,
-  catalogItem, catalogFor, findCatalogByName, EQUIP_CATALOG,
+  catalogItem, catalogFor, findCatalogByName, EQUIP_CATALOG, getOrgById,
 } from '../state.js';
 import { td, escapeHtml, escAttr, isMobile, cleanEmail } from '../utils.js';
 export { cleanEmail };   // exh-drawer가 여기서 가져다 쓴다
@@ -46,6 +46,29 @@ export function cancelledExhibitors(evKey){
 
 /* 스폰서 등급별 배지색 — 'Exhibitor'(일반)는 배지를 달지 않는다 */
 const GRADE_CLS = { DIA: 'p-indigo', GOLD: 'p-gold', SILVER: 'p-gray', BRONZE: 'p-amber' };
+
+/* ── 기업 이름 ──
+   exhibitors.company_name은 등록할 때 찍힌 국문 스냅샷이라 영문이 없다. 해외
+   기업은 메일도 인보이스도 영문명으로 오가서, 화면에 국문만 있으면 "Labcorp가
+   어느 줄이지"를 눈으로 못 찾는다. 연결된 기업 레코드에서 영문명을 끌어와 함께
+   보여준다(연결이 없으면 스냅샷 그대로).
+
+   국문명이 아예 없는 기업은 영문을 제목 자리로 올린다 — 빈칸 아래 영문이
+   따라붙는 모양이 되지 않게. */
+export function exhNames(x){
+  const o = x && x.org_id ? getOrgById(x.org_id) : null;
+  const ko = (o && o.name_ko) || x?.company_name || '';
+  const en = (o && o.name_en) || '';
+  return { ko: ko || en, en: ko ? en : '' };
+}
+
+/* 한 줄에 국문 + 영문을 나란히 (표 칸처럼 세로 공간이 좁을 때) */
+function nameCell(x, opts = {}){
+  const { ko, en } = exhNames(x);
+  const off = opts.off ? ';text-decoration:line-through;opacity:.6' : '';
+  return `<span style="font-size:${opts.size || 12.5}px;font-weight:700${off}">${escapeHtml(ko)}</span>${
+    en ? `<span style="font-size:${(opts.size || 12.5) - 2}px;font-weight:400;color:var(--i4);margin-left:5px">${escapeHtml(en)}</span>` : ''}`;
+}
 
 /* 체크리스트 표의 열 정의. key는 exhibitors 컬럼, 또는 파생 계산(calc). */
 const STEPS = [
@@ -481,7 +504,8 @@ function renderInquiryPanel(){
       ${open.slice(0, 8).map(({ l, x }) => {
         const d = daysSince(l.ts);
         return `<div onclick="openExhDr('${escAttr(x.id)}',3)" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;cursor:pointer;background:var(--i9)">
-          <span style="font-weight:700;font-size:12px;min-width:120px">${escapeHtml(x.company_name || '')}</span>
+          <span style="font-weight:700;font-size:12px;min-width:120px">${escapeHtml(exhNames(x).ko)}${
+            exhNames(x).en ? `<span style="font-weight:400;color:var(--i4);font-size:10.5px;margin-left:4px">${escapeHtml(exhNames(x).en)}</span>` : ''}</span>
           <span style="font-size:12px;color:var(--i2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(l.subject || l.body || '(내용 없음)')}</span>
           ${l.status === 'hold' ? '<span class="pill p-gray">확인 중</span>' : ''}
           <span class="pill ${d >= 3 ? 'p-amber' : 'p-gray'}">${d === 0 ? '오늘' : d + '일 경과'}</span>
@@ -531,7 +555,8 @@ const emptyView = (msg) => `<div class="empty" style="padding:40px 20px;text-ali
 /* 기업 이름 칸 — 어느 보기에서든 클릭하면 그 기업 드로어로 간다 */
 const coCell = (x, tab) => `<td style="min-width:150px">
   <span onclick="openExhDr('${escAttr(x.id)}',${tab})" style="cursor:pointer;font-size:12.5px;font-weight:600${
-    x.status === CANCELLED ? ';text-decoration:line-through;opacity:.6' : ''}">${escapeHtml(x.company_name || '')}</span></td>`;
+    x.status === CANCELLED ? ';text-decoration:line-through;opacity:.6' : ''}">${escapeHtml(exhNames(x).ko)}</span>${
+    exhNames(x).en ? `<div style="font-size:10.5px;color:var(--i4);font-weight:400">${escapeHtml(exhNames(x).en)}</div>` : ''}</td>`;
 
 /* ── 부스 현황 ──
    부스 번호로 정렬해 배치도를 훑듯 볼 수 있게 한다. 독립부스는 시공사가 따로
@@ -573,9 +598,10 @@ function renderBoothView(list){
     <div onclick="openExhDr('${escAttr(x.id)}',0)" style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
         <span class="pill ${x.booth_no ? 'p-blue' : 'p-red'}">${x.booth_no ? '부스 ' + escapeHtml(x.booth_no) : '미배정'}</span>
-        <span style="font-size:13px;font-weight:700;flex:1;min-width:0">${escapeHtml(x.company_name || '')}</span>
+        <span style="font-size:13px;font-weight:700;flex:1;min-width:0">${escapeHtml(exhNames(x).ko)}</span>
         ${x.booth_confirmed === 'yes' || x.booth_confirmed_at ? '<span class="pill p-green">확정</span>' : '<span class="pill p-amber">미확정</span>'}
       </div>
+      ${exhNames(x).en ? `<div style="font-size:11px;color:var(--i4);margin:-2px 0 3px">${escapeHtml(exhNames(x).en)}</div>` : ''}
       <div style="font-size:11px;color:var(--i4)">${[x.booth_floor && x.booth_floor + '층', x.booth_type, x.booth_qty && x.booth_qty + '부스', x.grade].filter(Boolean).map(escapeHtml).join(' · ') || '정보 없음'}</div>
       ${x.builder ? `<div style="font-size:11px;color:var(--i3);margin-top:3px">🔧 ${escapeHtml(x.builder)}${x.builder_mobile ? ' · ' + escapeHtml(x.builder_mobile) : ''}</div>` : ''}
     </div>`).join(''));
@@ -759,7 +785,9 @@ function renderEquipView(list){
     <div style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px">
       <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px">
         ${x.booth_no ? `<span class="pill p-blue">부스 ${escapeHtml(x.booth_no)}</span>` : ''}
-        <span onclick="openExhDr('${escAttr(x.id)}',1)" style="cursor:pointer;font-size:13px;font-weight:700;flex:1;min-width:0">${escapeHtml(x.company_name || '')}</span>
+        <span onclick="openExhDr('${escAttr(x.id)}',1)" style="cursor:pointer;flex:1;min-width:0">
+          <span style="font-size:13px;font-weight:700">${escapeHtml(exhNames(x).ko)}</span>${
+          exhNames(x).en ? `<span style="font-size:11px;color:var(--i4);margin-left:5px">${escapeHtml(exhNames(x).en)}</span>` : ''}</span>
         <span style="font-size:11px;color:var(--i4)">${items.length}종</span>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:5px">
@@ -816,7 +844,9 @@ function renderGraphicView(list){
     const g = graphicState(x);
     return `<div onclick="openExhDr('${escAttr(x.id)}',2)" style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
-        <span style="font-size:13px;font-weight:700;flex:1;min-width:0">${escapeHtml(x.company_name || '')}</span>
+        <span style="flex:1;min-width:0">
+          <span style="font-size:13px;font-weight:700">${escapeHtml(exhNames(x).ko)}</span>${
+          exhNames(x).en ? `<span style="font-size:11px;color:var(--i4);margin-left:5px">${escapeHtml(exhNames(x).en)}</span>` : ''}</span>
         <span class="pill ${x.graphic_type === 'design' ? 'p-blue' : 'p-gray'}">${x.graphic_type === 'design' ? '제작' : x.graphic_type === 'print' ? '출력' : '유형 미정'}</span>
         <span class="pill ${g.state === 'done' ? 'p-green' : g.state === 'warn' ? 'p-red' : 'p-amber'}">${escapeHtml(stageOf(x))}</span>
       </div>
@@ -970,7 +1000,8 @@ export function openNewGraphicOrder(){
   modalShell('new-gr-modal', '그래픽 주문 추가', `
     <div class="fg"><label class="fl">기업</label>
       <select class="fi" id="ngr-co">${cos.map(x =>
-        `<option value="${escAttr(x.id)}">${escapeHtml(x.company_name || '')}${x.booth_no ? ` · 부스 ${escapeHtml(x.booth_no)}` : ''}</option>`).join('')}</select></div>
+        `<option value="${escAttr(x.id)}">${escapeHtml(exhNames(x).ko)}${
+          exhNames(x).en ? ` (${escapeHtml(exhNames(x).en)})` : ''}${x.booth_no ? ` · 부스 ${escapeHtml(x.booth_no)}` : ''}</option>`).join('')}</select></div>
     <div class="fgr">
       <div class="fg"><label class="fl">유형</label>
         <select class="fi" id="ngr-type">
@@ -1206,7 +1237,9 @@ function renderDashboard(all){
 function attnRow(x, kind, text, days, tab){
   return `<div onclick="openExhDr('${escAttr(x.id)}',${tab})"
     style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:6px;cursor:pointer;background:var(--i9);margin-bottom:4px">
-    <span style="font-weight:700;font-size:11.5px;flex:0 0 104px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(x.company_name || '')}</span>
+    <span style="flex:0 0 128px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+      <span style="font-weight:700;font-size:11.5px">${escapeHtml(exhNames(x).ko)}</span>${
+      exhNames(x).en ? `<span style="font-size:10px;color:var(--i4);margin-left:4px">${escapeHtml(exhNames(x).en)}</span>` : ''}</span>
     <span class="pill p-gray" style="flex:0 0 auto">${escapeHtml(kind)}</span>
     <span style="font-size:11.5px;color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(text)}</span>
     ${days !== null && days > 0 ? `<span class="pill ${days >= 3 ? 'p-amber' : 'p-gray'}" style="flex:0 0 auto">${days}일</span>` : ''}
@@ -1247,7 +1280,8 @@ function renderChecklistCards(list, all){
       return `<div onclick="openExhDr('${escAttr(x.id)}')"
         style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:12px 13px;margin-bottom:8px;cursor:pointer${off ? ';opacity:.55' : ''}">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <span style="font-size:14px;font-weight:700${off ? ';text-decoration:line-through' : ''}">${escapeHtml(x.company_name || '')}</span>
+          <span style="font-size:14px;font-weight:700${off ? ';text-decoration:line-through' : ''}">${escapeHtml(exhNames(x).ko)}</span>${
+            exhNames(x).en ? `<span style="font-size:11px;color:var(--i4);font-weight:400">${escapeHtml(exhNames(x).en)}</span>` : ''}
           ${off ? '<span class="pill p-gray">참가 취소</span>' : ''}
           ${x.grade && x.grade !== 'Exhibitor' ? `<span class="pill ${GRADE_CLS[x.grade] || 'p-gray'}">${escapeHtml(x.grade)}</span>` : ''}
           ${openN ? `<span class="pill p-amber" style="margin-left:auto"
@@ -1313,7 +1347,8 @@ function renderChecklistTable(list, all){
       const off = x.status === CANCELLED;
       return `<tr style="cursor:pointer${off ? ';opacity:.5' : ''}" onclick="openExhDr('${escAttr(x.id)}')">
         <td><div style="display:flex;align-items:center;gap:5px">
-              <span style="font-weight:700;font-size:12px${off ? ';text-decoration:line-through' : ''}">${escapeHtml(x.company_name || '')}</span>
+              <span style="font-weight:700;font-size:12px${off ? ';text-decoration:line-through' : ''}">${escapeHtml(exhNames(x).ko)}</span>${
+                exhNames(x).en ? `<span style="font-size:10.5px;color:var(--i4);margin-left:4px">${escapeHtml(exhNames(x).en)}</span>` : ''}
               ${off ? '<span class="pill p-gray">참가 취소</span>' : ''}
               ${x.grade && x.grade !== 'Exhibitor' ? `<span class="pill ${GRADE_CLS[x.grade] || 'p-gray'}">${escapeHtml(x.grade)}</span>` : ''}
             </div>

@@ -25,7 +25,7 @@ import {
 import { trackAction } from './audit-tab.js';
 import {
   billedAmount, paidAmount, graphicState, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
-  isPendingRefund, boothTypeOptions, SELF_BUILD_TYPE,
+  isPendingRefund, boothTypeOptions, SELF_BUILD_TYPE, exhNames,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar,
   settleState, liveInvoices, payDueDate,
 } from './exh-tab.js';
@@ -63,7 +63,8 @@ export function renderExhDr(){
   const h = document.getElementById('exh-drh');
   if(h) h.innerHTML = `
     <div style="flex:1;min-width:0">
-      <div class="drnm" style="${x.status === CANCELLED ? 'text-decoration:line-through;opacity:.65' : ''}">${escapeHtml(x.company_name || '')}${
+      <div class="drnm" style="${x.status === CANCELLED ? 'text-decoration:line-through;opacity:.65' : ''}">${escapeHtml(exhNames(x).ko)}${
+        exhNames(x).en ? `<span style="font-size:12px;font-weight:400;color:var(--i4);margin-left:6px">${escapeHtml(exhNames(x).en)}</span>` : ''}${
         x.status === CANCELLED ? ' <span class="pill p-gray" style="vertical-align:middle">참가 취소</span>' : ''}</div>
       <div class="drmt">${x.booth_no ? `부스 ${escapeHtml(x.booth_no)}${x.booth_floor ? `(${escapeHtml(x.booth_floor)}층)` : ''}` : ''}${
         (() => { const p = exhContact(x); return (p.name || p.email) ? ` · 담당자 ${escapeHtml(p.name || p.email)}` : ''; })()
