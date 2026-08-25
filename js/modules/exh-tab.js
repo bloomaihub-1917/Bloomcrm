@@ -623,6 +623,13 @@ function renderBoothView(list){
    발주는 기업별이 아니라 품목별로 한다 — "테이블 몇 개, 의자 몇 개"를 알아야
    주문서를 쓸 수 있는데, 지금은 51개 기업을 하나씩 열어 더해야 했다.
    품목별 합계를 먼저 보여주고, 아래에 어느 기업이 무엇을 신청했는지 붙인다. */
+/* 품목별 합계에서 펼쳐 둔 줄 — 클릭한 품목의 신청 기업 목록을 그 아래 보여준다 */
+let equipOpen = new Set();
+export function toggleEquipRow(key){
+  equipOpen.has(key) ? equipOpen.delete(key) : equipOpen.add(key);
+  renderExh();
+}
+
 function renderEquipView(list){
   const rows = list.map(x => ({ x, items: itemsFor(x.id).filter(i => (i.category || '') === 'equip') }))
     .filter(r => r.items.length);
@@ -636,53 +643,110 @@ function renderEquipView(list){
     const cat = i.catalog_id ? catalogItem(i.catalog_id) : null;
     const k = cat ? cat.id : String(i.name || '(이름 없음)').trim();
     if(!byName.has(k)) byName.set(k, {
-      name: cat ? `${cat.code} ${cat.name_ko}` : String(i.name || '(이름 없음)').trim(),
-      spec: cat ? cat.spec : '', offCatalog: !cat,
-      qty: 0, cos: [], amt: {},
+      key: k,
+      code:   cat ? cat.code : '',
+      nameKo: cat ? cat.name_ko : String(i.name || '(이름 없음)').trim(),
+      nameEn: cat ? cat.name_en : '',
+      spec:   cat ? cat.spec : '',
+      offCatalog: !cat,
+      qty: 0, cos: [], krw: 0, usd: 0,
     });
     const g = byName.get(k);
     const q = Number(String(i.qty || '').replace(/[^0-9.-]/g, '')) || 0;
+    const amt = Number(String(i.amount || '').replace(/[^0-9.-]/g, '')) || 0;
     g.qty += q || 1;   // 수량을 안 적었으면 1개로 센다
-    g.cos.push({ name: x.company_name, qty: q || 1, booth: x.booth_no });
-    const c = i.currency || 'KRW';
-    g.amt[c] = (g.amt[c] || 0) + (Number(String(i.amount || '').replace(/[^0-9.-]/g, '')) || 0);
+    g.cos.push({ id: x.id, name: x.company_name, booth: x.booth_no, qty: q || 1,
+      amt, cur: i.currency || 'KRW', raw: i.name });
+    // 통화별로 나눠 담는다 — 합치면 원화와 달러를 더한 숫자가 된다
+    if((i.currency || 'KRW') === 'USD') g.usd += amt; else g.krw += amt;
   }));
   const groups = [...byName.values()].sort((a, b) => b.qty - a.qty);
-  const money2 = (amt) => Object.keys(amt).filter(k => amt[k]).map(k => fmtMoney(amt[k], k)).join(' + ') || '-';
 
   const offN = groups.filter(g => g.offCatalog).length;
+  const totKrw = groups.reduce((a, g) => a + g.krw, 0);
+  const totUsd = groups.reduce((a, g) => a + g.usd, 0);
   const pills = `<span class="pill p-gray">신청 기업 ${rows.length}</span>`
     + `<span class="pill p-blue">품목 ${groups.length}종</span>`
     + `<span class="pill p-gray">총 ${groups.reduce((a, g) => a + g.qty, 0)}개</span>`
+    + (totKrw ? `<span class="pill p-gray">${fmtMoney(totKrw, 'KRW')}</span>` : '')
+    + (totUsd ? `<span class="pill p-gray">${fmtMoney(totUsd, 'USD')}</span>` : '')
     + (offN ? `<span class="pill p-amber" title="카탈로그에 없는 품목 — 그래픽·전기처럼 다른 분류일 수 있어요">카탈로그 외 ${offN}종</span>` : '');
 
-  /* 좁은 화면에서는 표를 쓰지 않는다 — 헤더가 숨겨지면서 25 / 7곳 / 187,000원이
-     각각 무슨 숫자인지 알 수 없게 된다. 값마다 이름을 붙여 카드로 그린다. */
+  /* 어느 기업이 신청했는지 — 품목을 클릭하면 펼친다.
+     발주하다 "이 의자 25개가 어디로 가는 거지"를 확인해야 할 때, 표 밖으로
+     나가지 않고 그 자리에서 본다. */
+  const coList = (g) => g.cos.slice().sort((a, b) => b.qty - a.qty).map(c => `
+    <div onclick="event.stopPropagation();openExhDr('${escAttr(c.id)}',1)"
+      style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:11.5px">
+      <span class="pill p-gray" style="min-width:52px;text-align:center">${c.booth ? '부스 ' + escapeHtml(c.booth) : '미배정'}</span>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(c.name)}</span>
+      <span style="color:var(--i3)">${c.qty}개</span>
+      <span style="min-width:88px;text-align:right;font-weight:600">${c.amt ? fmtMoney(c.amt, c.cur) : '-'}</span>
+    </div>`).join('');
+
   const summaryBody = isMobile()
-    ? groups.map(g => `<div style="padding:8px 0;border-bottom:1px solid var(--i8)">
-        <div style="display:flex;align-items:baseline;gap:7px">
-          <span style="font-size:12.5px;font-weight:600;flex:1;min-width:0">${escapeHtml(g.name)}</span>
-          <span style="font-size:15px;font-weight:800">${g.qty}<span style="font-size:10px;font-weight:400;color:var(--i4)">개</span></span>
+    /* 좁은 화면에서는 표를 쓰지 않는다 — 헤더가 숨겨지면서 25 / 7곳 / 187,000원이
+       각각 무슨 숫자인지 알 수 없게 된다. 값마다 이름을 붙여 카드로 그린다. */
+    ? groups.map(g => {
+      const open = equipOpen.has(g.key);
+      return `<div style="padding:8px 0;border-bottom:1px solid var(--i8)">
+        <div onclick="toggleEquipRow('${escAttr(g.key)}')" style="cursor:pointer">
+          <div style="display:flex;align-items:baseline;gap:7px">
+            ${g.code ? `<span class="pill p-blue" style="font-size:9px">${escapeHtml(g.code)}</span>` : ''}
+            <span style="font-size:12.5px;font-weight:600;flex:1;min-width:0">${escapeHtml(g.nameKo)}</span>
+            <span style="font-size:15px;font-weight:800">${g.qty}<span style="font-size:10px;font-weight:400;color:var(--i4)">개</span></span>
+          </div>
+          ${g.nameEn ? `<div style="font-size:10.5px;color:var(--i4)">${escapeHtml(g.nameEn)}</div>` : ''}
+          <div style="font-size:10.5px;color:var(--i4);margin-top:2px">
+            ${g.spec ? escapeHtml(g.spec) + ' · ' : ''}${g.cos.length}개사 신청
+            ${g.krw ? ' · ' + escapeHtml(fmtMoney(g.krw, 'KRW')) : ''}${g.usd ? ' · ' + escapeHtml(fmtMoney(g.usd, 'USD')) : ''}
+            <span style="color:var(--a)"> ${open ? '▲ 접기' : '▼ 신청 기업'}</span>
+          </div>
         </div>
-        <div style="font-size:10.5px;color:var(--i4);margin-top:2px">${g.spec ? escapeHtml(g.spec) + ' · ' : ''}${g.cos.length}개사 신청 · ${escapeHtml(money2(g.amt))}</div>
-      </div>`).join('')
+        ${open ? `<div style="margin-top:5px;padding-left:6px;border-left:2px solid var(--i6)">${coList(g)}</div>` : ''}
+      </div>`;
+    }).join('')
+
     : `<div class="tw" style="overflow:visible"><table><thead><tr>
-        <th style="min-width:180px">품목</th><th style="min-width:110px">규격</th>
-        <th style="min-width:60px;text-align:right">수량</th>
-        <th style="min-width:70px;text-align:right">신청 기업</th><th style="min-width:110px;text-align:right">금액</th>
+        <th style="min-width:66px">품목코드</th>
+        <th style="min-width:150px">품명(국문)</th>
+        <th style="min-width:150px">품명(영문)</th>
+        <th style="min-width:110px">규격</th>
+        <th style="min-width:56px;text-align:right">수량</th>
+        <th style="min-width:62px;text-align:right">기업</th>
+        <th style="min-width:104px;text-align:right">KRW</th>
+        <th style="min-width:88px;text-align:right">USD</th>
       </tr></thead><tbody>
-        ${groups.map(g => `<tr>
-          <td style="font-size:12.5px;font-weight:600">${escapeHtml(g.name)}
-            ${g.offCatalog ? '<span class="pill p-amber" style="font-size:9px;margin-left:4px" title="카탈로그에 없는 품목 — 직접 입력됐어요">카탈로그 외</span>' : ''}</td>
-          <td style="font-size:11px;color:var(--i4)">${escapeHtml(g.spec || '-')}</td>
-          <td style="text-align:right;font-weight:700">${g.qty}</td>
-          <td style="text-align:right;color:var(--i4)" title="${escAttr(g.cos.map(c => `${c.name} ${c.qty}`).join(', '))}">${g.cos.length}곳</td>
-          <td style="text-align:right">${money2(g.amt)}</td>
-        </tr>`).join('')}
-      </tbody></table></div>`;
+        ${groups.map(g => {
+          const open = equipOpen.has(g.key);
+          return `<tr onclick="toggleEquipRow('${escAttr(g.key)}')" style="cursor:pointer${open ? ';background:var(--ad)' : ''}"
+            title="클릭하면 신청한 기업을 볼 수 있어요">
+            <td style="font-size:11.5px;font-weight:700;color:var(--i2)">
+              <span style="color:var(--a)">${open ? '▾' : '▸'}</span> ${escapeHtml(g.code || '—')}</td>
+            <td style="font-size:12.5px;font-weight:600">${escapeHtml(g.nameKo)}
+              ${g.offCatalog ? '<span class="pill p-amber" style="font-size:9px;margin-left:4px" title="카탈로그에 없는 품목 — 직접 입력됐어요">카탈로그 외</span>' : ''}</td>
+            <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(g.nameEn || '-')}</td>
+            <td style="font-size:11px;color:var(--i4)">${escapeHtml(g.spec || '-')}</td>
+            <td style="text-align:right;font-weight:700">${g.qty}</td>
+            <td style="text-align:right;color:var(--i4)">${g.cos.length}곳</td>
+            <td style="text-align:right">${g.krw ? escapeHtml(fmtMoney(g.krw, 'KRW')) : '<span style="color:var(--i6)">-</span>'}</td>
+            <td style="text-align:right">${g.usd ? escapeHtml(fmtMoney(g.usd, 'USD')) : '<span style="color:var(--i6)">-</span>'}</td>
+          </tr>
+          ${open ? `<tr><td colspan="8" style="padding:8px 12px 12px;background:var(--i9)">
+            <div style="font-size:10.5px;color:var(--i4);margin-bottom:4px">신청 기업 ${g.cos.length}곳 — 클릭하면 그 기업 정산 탭으로 갑니다</div>
+            ${coList(g)}</td></tr>` : ''}`;
+        }).join('')}
+      </tbody>
+      <tfoot><tr style="border-top:2px solid var(--i5);font-weight:800">
+        <td colspan="4" style="font-size:12px">합계 ${groups.length}종</td>
+        <td style="text-align:right">${groups.reduce((a, g) => a + g.qty, 0)}</td>
+        <td></td>
+        <td style="text-align:right">${totKrw ? escapeHtml(fmtMoney(totKrw, 'KRW')) : '-'}</td>
+        <td style="text-align:right">${totUsd ? escapeHtml(fmtMoney(totUsd, 'USD')) : '-'}</td>
+      </tr></tfoot></table></div>`;
 
   const summary = `<div class="uc" style="margin-bottom:14px">
-    <div class="uc-ttl">품목별 합계 <span style="font-weight:400;color:var(--i4);font-size:10px">— 발주서에 쓰는 숫자예요</span></div>
+    <div class="uc-ttl">품목별 합계 <span style="font-weight:400;color:var(--i4);font-size:10px">— 발주서에 쓰는 숫자예요. 품목을 클릭하면 신청 기업이 보입니다</span></div>
     ${summaryBody}</div>`;
 
   const detail = rows.map(({ x, items }) => `
@@ -1326,6 +1390,7 @@ export function setExhDateWithFlag(id, dateField, flag, value, label){
 window.setExhEvent2 = setExhEvent2;
 window.setExhFilter = setExhFilter;
 window.setExhView = setExhView;
+window.toggleEquipRow = toggleEquipRow;
 window.renderExh = renderExh;
 window.openExhImport = openExhImport;
 window.closeExhImport = closeExhImport;
