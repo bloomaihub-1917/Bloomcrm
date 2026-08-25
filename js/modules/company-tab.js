@@ -723,9 +723,10 @@ export function openAddOrgModal(){
   if(document.getElementById('add-org-modal')) return;
   const el = document.createElement('div');
   el.id = 'add-org-modal';
-  el.className = 'mo on';
-  el.innerHTML = `<div class="mw" style="max-width:420px">
-    <div class="mh"><div class="mt">기업 추가</div><button class="mc" onclick="closeAddOrgModal()">✕</button></div>
+  el.className = 'mw on';
+  el.onclick = (e) => { if(e.target === el) closeAddOrgModal(); };   // 배경 클릭으로 닫기
+  el.innerHTML = `<div class="modal" style="max-width:420px">
+    <div class="mh"><div class="mt2">기업 추가</div><button class="mc" onclick="closeAddOrgModal()">✕</button></div>
     <div class="mb">
       <div style="font-size:11.5px;color:var(--i4);margin-bottom:12px;line-height:1.6">
         담당자를 아직 몰라도 기업을 먼저 등록할 수 있어요. 나중에 연락처를 넣으면 자동으로 이어집니다.</div>

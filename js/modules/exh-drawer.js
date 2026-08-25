@@ -43,6 +43,9 @@ export function openExhDr(id, tab){
   renderExhDr();
 }
 export function closeExhDr(){
+  // 다른 기업으로 옮길 때까지 통화 선택을 끌고 가지 않는다(분류는 유지해도
+  // 무리가 없지만 통화는 기업마다 다르다)
+  lastItemCur = null;
   drId = null;
   document.getElementById('exh-dr')?.classList.remove('on');
   document.getElementById('exh-bd')?.classList.remove('on');
@@ -242,7 +245,7 @@ export function pickCatalogItem(exhId){
   const cur = document.getElementById(`it-cur-${exhId}`);
   const cat = document.getElementById(`it-cat-${exhId}`);
   // 렌탈 가구는 전부 '비품'이다 — 고르는 순간 분류를 맞춰 둔다
-  if(cat) cat.value = 'equip';
+  if(cat){ cat.value = 'equip'; lastItemCat = 'equip'; }
   if(up && !up.value.trim()){
     up.value = (cur && cur.value === 'USD') ? (hit.price_usd || '') : (hit.price_krw || '');
   }
@@ -391,6 +394,19 @@ const CATS = [['booth', '부스'], ['equip', '비품'], ['graphic', '그래픽']
 const catLabel = (c) => (CATS.find(([k]) => k === c) || [null, '기타'])[1];
 
 const CURRENCIES = ['KRW', 'USD'];
+
+/* 항목을 추가하면 드로어가 다시 그려지면서 분류 선택이 첫 값(부스)으로 되돌아갔다.
+   비품을 열 줄 연달아 넣을 때 매번 다시 골라야 했고, 깜빡하면 비품이 부스로
+   저장돼 발주 집계에서 통째로 빠졌다(실제로 겪었다). 마지막에 고른 값을 기억해
+   그대로 둔다.
+
+   통화는 조금 다르다. 기본값(그 기업의 주 통화)이 대체로 맞아서, 사람이 직접
+   바꿨을 때만 기억한다 — 안 그러면 한 번 USD를 쓴 뒤 다른 기업으로 옮겨도
+   계속 USD가 따라붙는다. */
+let lastItemCat = null;
+let lastItemCur = null;
+export function rememberItemCat(v){ lastItemCat = v || null; }
+export function rememberItemCur(v){ lastItemCur = v || null; }
 const itemAmount = (i) => Number(String(i.amount || '').replace(/[^0-9.-]/g, '') || 0);
 
 /* 통화는 줄마다 다르다. 전에는 저장할 때 그 기업의 주 통화를 그대로 붙였는데,
@@ -499,8 +515,9 @@ function dBilling(x){
       </div>` : ''}
     </div>
     <div class="bl-row bl-item-add">
-      <select class="fi" id="it-cat-${escAttr(x.id)}" style="flex:0 0 72px;min-width:0;font-size:11.5px;padding:6px">
-        ${CATS.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select>
+      <select class="fi" id="it-cat-${escAttr(x.id)}" style="flex:0 0 72px;min-width:0;font-size:11.5px;padding:6px"
+        onchange="rememberItemCat(this.value)">
+        ${CATS.map(([k, l]) => `<option value="${k}"${(lastItemCat || CATS[0][0]) === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
       <input class="fi" id="it-nm-${escAttr(x.id)}" placeholder="항목명" style="flex:1 1 120px;min-width:0;font-size:11.5px;padding:6px"
         list="eqcat-${escAttr(x.id)}" oninput="pickCatalogItem('${escAttr(x.id)}')">
       ${catalogDatalist(x)}
@@ -509,8 +526,8 @@ function dBilling(x){
       <input class="fi" id="it-up-${escAttr(x.id)}" placeholder="단가" style="flex:1 1 78px;min-width:0;font-size:11.5px;padding:6px"
         oninput="calcItemAmount('${escAttr(x.id)}')">
       <input class="fi" id="it-amt-${escAttr(x.id)}" placeholder="금액" style="flex:1 1 88px;min-width:0;font-size:11.5px;padding:6px;text-align:right">
-      <select class="fi bl-cur" id="it-cur-${escAttr(x.id)}">
-        ${CURRENCIES.map(c => `<option value="${c}"${currencyOf(x.id) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
+      <select class="fi bl-cur" id="it-cur-${escAttr(x.id)}" onchange="rememberItemCur(this.value)">
+        ${CURRENCIES.map(c => `<option value="${c}"${(lastItemCur || currencyOf(x.id)) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
       <button class="btn bp bs" style="flex:0 0 auto" onclick="addExhItem('${escAttr(x.id)}')">추가</button>
     </div>`)}
 
@@ -827,6 +844,7 @@ export async function addExhItem(exhId){
 
   const category = val(`it-cat-${exhId}`) || 'etc';
   const currency = val(`it-cur-${exhId}`) || currencyOf(exhId);
+  lastItemCat = category;   // 다음 줄도 같은 분류일 가능성이 높다
   let catalogId = document.getElementById(`it-nm-${exhId}`)?.dataset.catalogId || '';
   // 비품인데 카탈로그에서 고르지 않았다면 품목마스터에 함께 올린다
   if(!catalogId && category === 'equip'){
@@ -1119,6 +1137,8 @@ window.setInvField = setInvField;
 window.setItemField = setItemField;
 window.setPayField = setPayField;
 window.pickCatalogItem = pickCatalogItem;
+window.rememberItemCat = rememberItemCat;
+window.rememberItemCur = rememberItemCur;
 window.addExhRefund = addExhRefund;
 window.toggleRefundDone = toggleRefundDone;
 window.addExhPayment = addExhPayment;

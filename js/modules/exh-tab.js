@@ -870,9 +870,13 @@ const modalShell = (id, title, body) => {
   if(document.getElementById(id)) return;
   const el = document.createElement('div');
   el.id = id;
-  el.className = 'mo on';
-  el.innerHTML = `<div class="mw" style="max-width:440px">
-    <div class="mh"><div class="mt">${escapeHtml(title)}</div>
+  /* 오버레이는 .mw(position:fixed + z-index), 안쪽 패널은 .modal이다.
+     전에 두 클래스를 뒤바꿔 써서 모달이 크기 0으로 깔려 화면에 보이지 않았다 —
+     함수는 정상이라 프로그램으로 부르면 동작했지만 사람은 누를 수가 없었다. */
+  el.className = 'mw on';
+  el.onclick = (e) => { if(e.target === el) el.remove(); };   // 배경 클릭으로 닫기
+  el.innerHTML = `<div class="modal" style="max-width:440px">
+    <div class="mh"><div class="mt2">${escapeHtml(title)}</div>
       <button class="mc" onclick="document.getElementById('${id}')?.remove()">✕</button></div>
     <div class="mb">${body}</div></div>`;
   document.body.appendChild(el);
