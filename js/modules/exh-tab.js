@@ -18,7 +18,7 @@ import {
   exhibitorsForEvent, getExhibitorById, itemsFor, invoicesFor, paymentsFor,
   logsFor, openInquiriesFor, contactsFor, primaryContactFor,
   EVENT_LIST, contacts, participations, CO_DB, currentUser, API_BASE_URL, auditLog,
-  catalogItem,
+  catalogItem, catalogFor, findCatalogByName, EQUIP_CATALOG,
 } from '../state.js';
 import { td, escapeHtml, escAttr, isMobile, cleanEmail } from '../utils.js';
 export { cleanEmail };   // exh-drawer가 여기서 가져다 쓴다
@@ -511,8 +511,10 @@ function renderChecklist(list, all){
 ══════════════════════════════════════════ */
 
 /* 표/카드 공통 껍데기 — 요약 배지 + 본문 */
-const viewShell = (pills, inner) => `<div style="padding:0 16px 16px">
-  <div style="display:flex;flex-wrap:wrap;gap:6px;margin:12px 0">${pills}</div>
+const viewShell = (pills, inner, actions = '') => `<div style="padding:0 16px 16px">
+  <div style="display:flex;flex-wrap:wrap;gap:6px;margin:12px 0;align-items:center">
+    ${pills}${actions ? `<span style="margin-left:auto;display:flex;gap:6px">${actions}</span>` : ''}
+  </div>
   ${inner}</div>`;
 
 const countBy = (list, fn) => {
@@ -766,7 +768,8 @@ function renderEquipView(list){
       ${x.extra_equipment ? `<div style="font-size:11px;color:var(--i4);margin-top:5px">메모: ${escapeHtml(x.extra_equipment)}</div>` : ''}
     </div>`).join('');
 
-  return viewShell(pills, summary + `<div class="sct">기업별 신청 내역</div>` + detail);
+  const actions = `<button class="btn bp bs" onclick="openNewCatalogItem()">+ 품목 추가</button>`;
+  return viewShell(pills, summary + `<div class="sct">기업별 신청 내역</div>` + detail, actions);
 }
 
 /* ── 그래픽 현황 ──
@@ -807,6 +810,8 @@ function renderGraphicView(list){
     return ks.length ? ks.map(k => fmtMoney(by[k], k)).join(' + ') : '-';
   };
 
+  const gActions = `<button class="btn bp bs" onclick="openNewGraphicOrder()">+ 그래픽 주문 추가</button>`;
+
   if(isMobile()) return viewShell(pills, rows.map(x => {
     const g = graphicState(x);
     return `<div onclick="openExhDr('${escAttr(x.id)}',2)" style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
@@ -817,7 +822,7 @@ function renderGraphicView(list){
       </div>
       <div style="font-size:11px;color:var(--i4)">주문 ${escapeHtml(x.graphic_ordered_at || '-')} · 금액 ${escapeHtml(gAmt(x))}</div>
     </div>`;
-  }).join(''));
+  }).join(''), gActions);
 
   return viewShell(pills, `<div class="tw"><table><thead><tr>
       <th style="min-width:150px">기업</th>
@@ -851,7 +856,185 @@ function renderGraphicView(list){
         <td style="text-align:right;font-size:11.5px;font-weight:600">${escapeHtml(gAmt(x))}</td>
       </tr>`;
     }).join('')}
-    </tbody></table></div>`);
+    </tbody></table></div>`, gActions);
+}
+
+/* ══════════════════════════════════════════
+   그 페이지에서 바로 새로 만들기
+
+   품목이나 그래픽 주문을 넣으려고 기업 드로어를 찾아 열고 정산 탭까지 들어가야
+   했다. 품목표를 손보는 일과 주문을 받아 적는 일은 그 화면을 보고 있을 때 생기니,
+   그 자리에서 끝낼 수 있어야 한다.
+══════════════════════════════════════════ */
+const modalShell = (id, title, body) => {
+  if(document.getElementById(id)) return;
+  const el = document.createElement('div');
+  el.id = id;
+  el.className = 'mo on';
+  el.innerHTML = `<div class="mw" style="max-width:440px">
+    <div class="mh"><div class="mt">${escapeHtml(title)}</div>
+      <button class="mc" onclick="document.getElementById('${id}')?.remove()">✕</button></div>
+    <div class="mb">${body}</div></div>`;
+  document.body.appendChild(el);
+};
+const mval = (id) => (document.getElementById(id) || {}).value?.trim() || '';
+
+/* ── 품목 추가 (행사 품목마스터) ── */
+const EQ_CATS = ['의자', '테이블', '진열대', '가전제품', '기타비품'];
+
+export function openNewCatalogItem(){
+  if(!exhEvent){ alert('행사를 먼저 선택해주세요.'); return; }
+  modalShell('new-eq-modal', '품목 추가', `
+    <div style="font-size:11.5px;color:var(--i4);margin-bottom:12px;line-height:1.6">
+      <b>${escapeHtml(exhEvent)}</b> 품목표에 추가됩니다. 다른 행사에는 영향이 없어요.</div>
+    <div class="fgr">
+      <div class="fg"><label class="fl">분류</label>
+        <select class="fi" id="neq-cat">${EQ_CATS.map(c => `<option value="${escAttr(c)}">${escapeHtml(c)}</option>`).join('')}</select></div>
+      <div class="fg"><label class="fl">품목코드</label>
+        <input class="fi" id="neq-code" placeholder="비우면 자동 (X-001…)"></div>
+    </div>
+    <div class="fg"><label class="fl">품명 (국문)</label><input class="fi" id="neq-ko" placeholder="예: 접이식 체어"></div>
+    <div class="fg"><label class="fl">품명 (영문)</label><input class="fi" id="neq-en" placeholder="예: Folding Chair"></div>
+    <div class="fg"><label class="fl">규격</label><input class="fi" id="neq-spec" placeholder="예: 500*420*750mmH"></div>
+    <div class="fgr">
+      <div class="fg"><label class="fl">단가 (KRW)</label><input class="fi" id="neq-krw" placeholder="11000"></div>
+      <div class="fg"><label class="fl">단가 (USD)</label><input class="fi" id="neq-usd" placeholder="11"></div>
+    </div>
+    <div id="neq-msg" style="font-size:11.5px;min-height:16px;margin-bottom:8px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn bs" onclick="document.getElementById('new-eq-modal')?.remove()">취소</button>
+      <button class="btn bp" id="neq-save" onclick="submitNewCatalogItem()">추가</button>
+    </div>`);
+  document.getElementById('neq-ko')?.focus();
+}
+
+export async function submitNewCatalogItem(){
+  const msg = document.getElementById('neq-msg');
+  const btn = document.getElementById('neq-save');
+  const ko = mval('neq-ko'), en = mval('neq-en');
+  const fail = (t) => { if(msg){ msg.style.color = 'var(--re)'; msg.textContent = t; }
+    if(btn){ btn.disabled = false; btn.textContent = '추가'; } };
+
+  if(!ko && !en) return fail('품명을 국문이나 영문 중 하나는 입력해주세요.');
+  if(btn){ btn.disabled = true; btn.textContent = '추가 중…'; }
+
+  // 같은 이름이 이미 있으면 새로 만들지 않는다 — 카탈로그를 둔 이유가 없어진다
+  const dup = findCatalogByName(exhEvent, ko || en);
+  if(dup) return fail(`이미 있는 품목이에요 — ${dup.code} ${dup.name_ko || dup.name_en}`);
+
+  let code = mval('neq-code').toUpperCase();
+  const used = new Set(catalogFor(exhEvent).map(c => String(c.code || '').toUpperCase()));
+  if(code && used.has(code)) return fail(`이미 쓰고 있는 코드예요 — ${code}`);
+  if(!code){
+    let n = 1;
+    while(used.has(`X-${String(n).padStart(3, '0')}`)) n++;
+    code = `X-${String(n).padStart(3, '0')}`;
+  }
+
+  const num = (v) => String(v || '').replace(/[^0-9.]/g, '');
+  const rec = {
+    id: `EC-${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+    event_id: exhEvent, category: mval('neq-cat') || '기타비품', code,
+    name_ko: ko, name_en: en, spec: mval('neq-spec'),
+    price_krw: num(mval('neq-krw')), price_usd: num(mval('neq-usd')),
+    note: '', active: '', sort_order: String(900 + catalogFor(exhEvent).length),
+  };
+
+  EQUIP_CATALOG.push(rec);
+  const { saveEquipCatalog } = await import('../api.js');
+  const r = await saveEquipCatalog(rec);
+  if(!r.ok){
+    const i = EQUIP_CATALOG.indexOf(rec);
+    if(i >= 0) EQUIP_CATALOG.splice(i, 1);
+    return fail('저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
+  }
+  if(r.id && r.id !== rec.id) rec.id = r.id;
+
+  trackAction('add', '품목 등록', exhEvent,
+    `<b>${escapeHtml(code)}</b> ${escapeHtml(ko || en)} — ${escapeHtml(exhEvent)} 품목표에 추가`);
+  document.getElementById('new-eq-modal')?.remove();
+  renderExh();
+}
+
+/* ── 그래픽 주문 추가 ── */
+export function openNewGraphicOrder(){
+  if(!exhEvent){ alert('행사를 먼저 선택해주세요.'); return; }
+  const cos = activeExhibitors(exhEvent)
+    .slice().sort((a, b) => String(a.company_name).localeCompare(String(b.company_name), 'ko'));
+  if(!cos.length){ alert('등록된 참가기업이 없어요.'); return; }
+
+  modalShell('new-gr-modal', '그래픽 주문 추가', `
+    <div class="fg"><label class="fl">기업</label>
+      <select class="fi" id="ngr-co">${cos.map(x =>
+        `<option value="${escAttr(x.id)}">${escapeHtml(x.company_name || '')}${x.booth_no ? ` · 부스 ${escapeHtml(x.booth_no)}` : ''}</option>`).join('')}</select></div>
+    <div class="fgr">
+      <div class="fg"><label class="fl">유형</label>
+        <select class="fi" id="ngr-type">
+          <option value="">미정</option>
+          <option value="design">제작 (초안→수정안→최종안)</option>
+          <option value="print">출력 (규격 확인만)</option>
+        </select></div>
+      <div class="fg"><label class="fl">주문일</label>
+        <input type="date" class="fi" id="ngr-date" value="${td()}"></div>
+    </div>
+    <div class="fg"><label class="fl">항목명</label>
+      <input class="fi" id="ngr-name" placeholder="예: 인포메이션 데스크 랩핑 (PET)"></div>
+    <div class="fgr">
+      <div class="fg"><label class="fl">금액</label><input class="fi" id="ngr-amt" placeholder="비우면 나중에"></div>
+      <div class="fg"><label class="fl">통화</label>
+        <select class="fi" id="ngr-cur"><option value="KRW">KRW</option><option value="USD">USD</option></select></div>
+    </div>
+    <div id="ngr-msg" style="font-size:11.5px;min-height:16px;margin-bottom:8px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn bs" onclick="document.getElementById('new-gr-modal')?.remove()">취소</button>
+      <button class="btn bp" id="ngr-save" onclick="submitNewGraphicOrder()">추가</button>
+    </div>`);
+  document.getElementById('ngr-name')?.focus();
+}
+
+export async function submitNewGraphicOrder(){
+  const msg = document.getElementById('ngr-msg');
+  const btn = document.getElementById('ngr-save');
+  const fail = (t) => { if(msg){ msg.style.color = 'var(--re)'; msg.textContent = t; }
+    if(btn){ btn.disabled = false; btn.textContent = '추가'; } };
+
+  const x = getExhibitorById(mval('ngr-co'));
+  if(!x) return fail('기업을 골라주세요.');
+  const name = mval('ngr-name');
+  if(!name) return fail('항목명을 입력해주세요.');
+  if(btn){ btn.disabled = true; btn.textContent = '추가 중…'; }
+
+  const amount = mval('ngr-amt').replace(/[^0-9.]/g, '');
+  const rec = {
+    id: `XI-${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+    exhibitor_id: x.id, category: 'graphic', name,
+    qty: '', unit_price: '', amount, currency: mval('ngr-cur') || 'KRW',
+    note: '', sort_order: String(itemsFor(x.id).length + 1), catalog_id: '',
+  };
+
+  EXH_ITEMS.push(rec);
+  const { saveExhItem } = await import('../api.js');
+  const r = await saveExhItem(rec);
+  if(!r.ok){
+    const i = EXH_ITEMS.indexOf(rec);
+    if(i >= 0) EXH_ITEMS.splice(i, 1);
+    return fail('저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
+  }
+  if(r.id && r.id !== rec.id) rec.id = r.id;
+
+  /* 주문일·유형은 참가기업 쪽에 있다. 여기서 함께 넣어 두지 않으면 항목만 생기고
+     그래픽 현황에는 '주문 안 함'으로 남아 화면과 데이터가 어긋난다.
+     이미 적혀 있으면 덮지 않는다 — 나중 주문이 처음 주문일을 지우면 안 된다. */
+  const patch = {};
+  if(!String(x.graphic_ordered_at || '').trim()) patch.graphic_ordered_at = mval('ngr-date') || td();
+  const type = mval('ngr-type');
+  if(type && !String(x.graphic_type || '').trim()) patch.graphic_type = type;
+  if(Object.keys(patch).length) await patchExh(x.id, patch, null);
+
+  trackAction('add', '그래픽 주문 추가', x.company_name || '',
+    `<b>${escapeHtml(x.company_name || '')}</b> ${escapeHtml(name)}${amount ? ` ${escapeHtml(fmtMoney(amount, rec.currency))}` : ''}`);
+  document.getElementById('new-gr-modal')?.remove();
+  renderExh();
 }
 
 /* ══════════════════════════════════════════
@@ -1395,6 +1578,13 @@ window.setExhEvent2 = setExhEvent2;
 window.setExhFilter = setExhFilter;
 window.setExhView = setExhView;
 window.toggleEquipRow = toggleEquipRow;
+window.openNewCatalogItem = openNewCatalogItem;
+// 뒤로가기로 닫을 수 있게 닫기 함수도 이름으로 내어 둔다(overlay-nav.js 참고)
+window.closeNewCatalogItem = () => document.getElementById('new-eq-modal')?.remove();
+window.closeNewGraphicOrder = () => document.getElementById('new-gr-modal')?.remove();
+window.submitNewCatalogItem = submitNewCatalogItem;
+window.openNewGraphicOrder = openNewGraphicOrder;
+window.submitNewGraphicOrder = submitNewGraphicOrder;
 window.renderExh = renderExh;
 window.openExhImport = openExhImport;
 window.closeExhImport = closeExhImport;

@@ -31,6 +31,8 @@ const OVERLAYS = [
   { open: 'openMDBBulkEditModal', close: 'closeMDBBulkEditModal',  isOpen: byId('mdb-bulk-modal') },
   { open: 'openAddContactModal',  close: 'closeAddContactModal',   isOpen: byId('add-contact-modal') },
   { open: 'openAddOrgModal',      close: 'closeAddOrgModal',       isOpen: byId('add-org-modal') },
+  { open: 'openNewCatalogItem',   close: 'closeNewCatalogItem',    isOpen: byId('new-eq-modal') },
+  { open: 'openNewGraphicOrder',  close: 'closeNewGraphicOrder',   isOpen: byId('new-gr-modal') },
   { open: 'openAddEvModal',       close: 'closeAddEvModal',        isOpen: byId('add-ev-modal') },
   { open: 'openAddCoEventModal',  close: 'closeAddEvModal',        isOpen: byId('add-ev-modal') },
   { open: null,                   close: 'closeCoSectorPopover',   isOpen: byId('co-sector-popover') },
