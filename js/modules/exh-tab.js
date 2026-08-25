@@ -645,10 +645,13 @@ function renderEquipView(list){
     if(!byName.has(k)) byName.set(k, {
       key: k,
       code:   cat ? cat.code : '',
-      nameKo: cat ? cat.name_ko : String(i.name || '(이름 없음)').trim(),
-      nameEn: cat ? cat.name_en : '',
+      nameKo: cat ? (cat.name_ko || cat.name_en) : String(i.name || '(이름 없음)').trim(),
+      nameEn: cat ? (cat.name_ko ? cat.name_en : '') : '',
       spec:   cat ? cat.spec : '',
       offCatalog: !cat,
+      // 신청하다 직접 적어 올린 품목 — 정식 카탈로그와 구분해 두면 나중에
+      // 렌탈사 카탈로그를 다시 받을 때 무엇을 확인해야 할지 알 수 있다
+      direct: !!(cat && cat.note === '직접 추가'),
       qty: 0, cos: [], krw: 0, usd: 0,
     });
     const g = byName.get(k);
@@ -692,7 +695,7 @@ function renderEquipView(list){
       return `<div style="padding:8px 0;border-bottom:1px solid var(--i8)">
         <div onclick="toggleEquipRow('${escAttr(g.key)}')" style="cursor:pointer">
           <div style="display:flex;align-items:baseline;gap:7px">
-            ${g.code ? `<span class="pill p-blue" style="font-size:9px">${escapeHtml(g.code)}</span>` : ''}
+            ${g.code ? `<span class="pill ${g.direct ? 'p-teal' : 'p-blue'}" style="font-size:9px">${escapeHtml(g.code)}</span>` : ''}
             <span style="font-size:12.5px;font-weight:600;flex:1;min-width:0">${escapeHtml(g.nameKo)}</span>
             <span style="font-size:15px;font-weight:800">${g.qty}<span style="font-size:10px;font-weight:400;color:var(--i4)">개</span></span>
           </div>
@@ -724,7 +727,8 @@ function renderEquipView(list){
             <td style="font-size:11.5px;font-weight:700;color:var(--i2)">
               <span style="color:var(--a)">${open ? '▾' : '▸'}</span> ${escapeHtml(g.code || '—')}</td>
             <td style="font-size:12.5px;font-weight:600">${escapeHtml(g.nameKo)}
-              ${g.offCatalog ? '<span class="pill p-amber" style="font-size:9px;margin-left:4px" title="카탈로그에 없는 품목 — 직접 입력됐어요">카탈로그 외</span>' : ''}</td>
+              ${g.offCatalog ? '<span class="pill p-amber" style="font-size:9px;margin-left:4px" title="카탈로그에 없는 품목 — 직접 입력됐어요">카탈로그 외</span>' : ''}
+              ${g.direct ? '<span class="pill p-teal" style="font-size:9px;margin-left:4px" title="신청하면서 직접 적어 품목마스터에 올린 품목이에요 — 단가·규격을 확인해주세요">직접 추가</span>' : ''}</td>
             <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(g.nameEn || '-')}</td>
             <td style="font-size:11px;color:var(--i4)">${escapeHtml(g.spec || '-')}</td>
             <td style="text-align:right;font-weight:700">${g.qty}</td>

@@ -14,12 +14,13 @@
 import {
   getExhibitorById, itemsFor, invoicesFor, paymentsFor, logsFor, openInquiriesFor,
   EXH_CONTACTS, EXH_ITEMS, EXH_INVOICES, EXH_PAYMENTS, EXH_LOGS, CO_DB, currentUser,
-  contactsFor, catalogFor, catalogItem,
+  contactsFor, catalogFor, catalogItem, EQUIP_CATALOG, findCatalogByName,
 } from '../state.js';
 import { td, escapeHtml, escAttr } from '../utils.js';
 import {
   saveExhContact, saveExhItem, saveExhInvoice, saveExhPayment, saveExhLog,
   deleteExhContact, deleteExhItem, deleteExhInvoice, deleteExhPayment, deleteExhLog,
+  saveEquipCatalog,
 } from '../api.js';
 import { trackAction } from './audit-tab.js';
 import {
@@ -172,6 +173,59 @@ function catalogDatalist(x){
   return `<datalist id="eqcat-${escAttr(x.id)}">${list.map(c =>
     `<option value="${escAttr(`${c.code} ${c.name_ko}`)}">${escapeHtml([c.name_en, c.spec, c.price_krw && money(c.price_krw) + '원'].filter(Boolean).join(' · '))}</option>`
   ).join('')}</datalist>`;
+}
+
+/* ── 직접 입력한 비품을 품목마스터에 올린다 ──
+   카탈로그에 없는 품목이 실제로 계속 들어온다(행사마다 새 품목, 렌탈사 추가
+   품목). 그때마다 이름만 적고 넘어가면 다음 기업이 같은 걸 신청할 때 또 손으로
+   적게 되고, 표기가 갈라져 발주 합계가 다시 흩어진다.
+
+   그래서 처음 적을 때 그 행사 품목마스터에 함께 올려 둔다. 다음부터는 목록에서
+   골라 쓸 수 있고, 단가도 따라온다. 사람이 확인한 정식 품목과 구분되도록
+   note에 '직접 추가'를 남긴다.
+
+   이미 있는 이름이면 새로 만들지 않고 그 품목에 잇는다 — 같은 의자가 두 줄로
+   생기면 애초에 카탈로그를 둔 이유가 없어진다. */
+async function registerDirectItem(x, name, unitPrice, currency){
+  const nm = String(name || '').trim();
+  if(!nm) return '';
+
+  const dup = findCatalogByName(x.event_id, nm);
+  if(dup) return dup.id;   // 표기만 다른 같은 품목
+
+  // 이름에 코드가 들어 있으면 그대로 쓰고, 없으면 직접 추가용 코드를 만든다
+  const m = nm.toUpperCase().match(/\b([A-Z]{1,2}-\d{2,4})\b/);
+  const used = new Set(catalogFor(x.event_id).map(c => String(c.code || '').toUpperCase()));
+  let code = m ? m[1] : '';
+  if(!code || used.has(code)){
+    let n = 1;
+    while(used.has(`X-${String(n).padStart(3, '0')}`)) n++;
+    code = `X-${String(n).padStart(3, '0')}`;
+  }
+
+  const isUsd = currency === 'USD';
+  const rec = {
+    id: localId('EC-'), event_id: x.event_id, category: '기타비품', code,
+    name_ko: /[가-힣]/.test(nm) ? nm : '',
+    name_en: /[가-힣]/.test(nm) ? '' : nm,
+    spec: '',
+    price_krw: isUsd ? '' : String(unitPrice || ''),
+    price_usd: isUsd ? String(unitPrice || '') : '',
+    note: '직접 추가', active: '',
+    sort_order: String(900 + catalogFor(x.event_id).length),
+  };
+
+  EQUIP_CATALOG.push(rec);
+  const r = await saveEquipCatalog(rec);
+  if(!r.ok){
+    const i = EQUIP_CATALOG.indexOf(rec);
+    if(i >= 0) EQUIP_CATALOG.splice(i, 1);
+    return '';   // 품목마스터 등록만 실패 — 신청 항목 자체는 그대로 저장된다
+  }
+  if(r.id && r.id !== rec.id) rec.id = r.id;
+  trackAction('add', '품목 등록', x.company_name || '',
+    `<b>${escapeHtml(code)}</b> ${escapeHtml(nm)} — 직접 입력으로 품목마스터에 추가`);
+  return rec.id;
 }
 
 /* 카탈로그에서 고른 값이면 단가·분류를 대신 채운다. 손으로 적던 값은 건드리지 않는다. */
@@ -770,11 +824,21 @@ export async function addExhItem(exhId){
   const qty = n(val(`it-qty-${exhId}`)), unit = n(val(`it-up-${exhId}`));
   const amount = val(`it-amt-${exhId}`) || String(qty && unit ? qty * unit : unit || '');
   if(!name){ alert('항목명을 입력해주세요.'); return; }
+
+  const category = val(`it-cat-${exhId}`) || 'etc';
+  const currency = val(`it-cur-${exhId}`) || currencyOf(exhId);
+  let catalogId = document.getElementById(`it-nm-${exhId}`)?.dataset.catalogId || '';
+  // 비품인데 카탈로그에서 고르지 않았다면 품목마스터에 함께 올린다
+  if(!catalogId && category === 'equip'){
+    const x = getExhibitorById(exhId);
+    if(x) catalogId = await registerDirectItem(x, name, val(`it-up-${exhId}`), currency);
+  }
+
   await addRow(EXH_ITEMS, {
-    id: localId('XI-'), exhibitor_id: exhId, category: val(`it-cat-${exhId}`) || 'etc',
-    catalog_id: document.getElementById(`it-nm-${exhId}`)?.dataset.catalogId || '',
+    id: localId('XI-'), exhibitor_id: exhId, category,
+    catalog_id: catalogId,
     name, qty: val(`it-qty-${exhId}`), unit_price: val(`it-up-${exhId}`), amount,
-    currency: val(`it-cur-${exhId}`) || currencyOf(exhId), note: '',
+    currency, note: '',
     sort_order: String(itemsFor(exhId).length + 1),
   }, saveExhItem);
   clear(`it-nm-${exhId}`, `it-qty-${exhId}`, `it-up-${exhId}`, `it-amt-${exhId}`);

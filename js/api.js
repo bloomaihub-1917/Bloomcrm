@@ -693,6 +693,8 @@ export const saveExhItem         = (o) => saveExhRow('exhibitor_items',    o, '�
 export const saveExhInvoice      = (o) => saveExhRow('exhibitor_invoices', o, '인보이스 저장');
 export const saveExhPayment      = (o) => saveExhRow('exhibitor_payments', o, '입금 내역 저장');
 export const saveExhLog          = (o) => saveExhRow('exhibitor_logs',     o, '문의/기록 저장');
+export const saveEquipCatalog    = (o) => saveExhRow('equip_catalog',      o, '품목 저장');
+export const deleteEquipCatalog  = (id) => deleteExhRow('equip_catalog',   id, '품목 삭제');
 
 export const deleteExhibitor     = (id) => deleteExhRow('exhibitors',         id, '전시 참가기업 삭제');
 export const deleteExhContact    = (id) => deleteExhRow('exhibitor_contacts', id, '담당자 삭제');

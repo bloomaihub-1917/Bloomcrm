@@ -174,6 +174,22 @@ export function catalogFor(evKey){
 }
 export function catalogItem(id){ return EQUIP_CATALOG.find(c => c.id === id) || null; }
 
+/* 이름으로 품목 찾기 — 표기 흔들림(공백·대소문자·괄호)을 눌러서 비교한다.
+   "C-040 Folding Chair"와 "접이식 체어"처럼 서로 다른 표기가 같은 품목을
+   가리킬 수 있어, 코드·국문명·영문명을 모두 훑는다. */
+export function findCatalogByName(evKey, name){
+  const norm = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9가-힣]/g, '');
+  const k = norm(name);
+  if(!k) return null;
+  const codeM = String(name || '').toUpperCase().match(/\b([A-Z]{1,2}-\d{2,4})\b/);
+  return EQUIP_CATALOG.find(c => {
+    if(c.event_id !== evKey) return false;
+    if(codeM && String(c.code || '').toUpperCase() === codeM[1]) return true;
+    return [c.name_ko, c.name_en, `${c.code} ${c.name_ko}`, `${c.code} ${c.name_en}`]
+      .filter(Boolean).some(n => norm(n) === k);
+  }) || null;
+}
+
 /* 전시 탭에서 지금 보고 있는 행사 (null = 미선택) */
 let exhEvent = null;
 export function setExhEvent(v){ exhEvent = v; }
