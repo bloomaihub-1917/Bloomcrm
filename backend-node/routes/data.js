@@ -12,7 +12,7 @@ const TABLES = {
     table: 'contacts', pk: 'id', idPrefix: '',
     columns: ['id', 'nameKo', 'nameEn', 'orgKo', 'orgEn', 'titleKo', 'titleEn', 'deptKo', 'deptEn',
       'country', 'cat', 'lang', 'source', 'date', 'status', 'email1', 'email2', 'phone1', 'phone2',
-      'beat', 'products', 'tags'],
+      'beat', 'products', 'tags', 'org_id'],
   },
   events: {
     table: 'events', pk: 'id', idPrefix: '',
@@ -45,12 +45,21 @@ const TABLES = {
     columns: ['key', 'label', 'cls'],
   },
 
+  /* 기업 마스터. companies(정규화된 이름이 키인 오버레이)를 대신한다 —
+     이름이 바뀌어도 id는 그대로라 연결이 끊기지 않는다. 컬럼이 많고 인라인
+     수정이 잦아 객체형 입력(data)을 쓴다. */
+  orgs: {
+    table: 'orgs', pk: 'id', idPrefix: 'O-',
+    columns: ['id', 'name_ko', 'name_en', 'abbr', 'aliases', 'kind', 'status', 'sectors',
+      'country', 'hq', 'website', 'biz_no', 'cat_code', 'notes', 'source', 'created_at', 'updated_at'],
+  },
+
   /* ── 전시 참가기업 진행관리 ──
      컬럼이 많고 부분 수정(체크 하나 누르기)이 잦아 위치 배열 대신 객체형
      입력(data/dataRows)을 쓴다 — 아래 POST 핸들러 참고. */
   exhibitors: {
     table: 'exhibitors', pk: 'id', idPrefix: 'X-',
-    columns: ['id', 'event_id', 'company_key', 'company_name', 'status', 'note', 'updated_at',
+    columns: ['id', 'event_id', 'org_id', 'company_key', 'company_name', 'status', 'note', 'updated_at',
       'manual_sent_at', 'manual_replied_at',
       'app_received', 'app_received_at', 'app_complete', 'app_missing', 'extra_equipment',
       'booth_no', 'booth_floor', 'booth_type', 'booth_qty', 'grade', 'booth_confirmed', 'booth_confirmed_at',
@@ -99,6 +108,15 @@ function chunk(arr, size) {
   const out = [];
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
   return out;
+}
+
+/* 위치 배열은 자기가 실제로 덮는 칸까지만 책임진다.
+   전에는 배열 끝을 넘어선 컬럼도 전부 null로 채웠는데, 그러면 나중에 뒤에
+   컬럼을 하나 붙이는 순간 옛 프론트가 보내던 짧은 배열이 그 컬럼을 매번
+   지워버린다(contacts에 org_id를 붙이면서 실제로 그럴 뻔했다). 배열 길이만큼만
+   컬럼을 잡아 두면 새 컬럼은 저장 대상에서 빠져 기존 값이 그대로 남는다. */
+function columnsCoveredBy(columns, row) {
+  return columns.slice(0, Math.max(1, Math.min(columns.length, (row || []).length)));
 }
 
 function rowToRecord(columns, row) {
@@ -261,19 +279,29 @@ router.post('/', async (req, res) => {
         // 객체 단건 — 넘어온 키만 갱신
         savedId = await upsertPartial(client, def, data);
       } else if (action === 'replaceAll') {
+        // 여기도 보낸 폭까지만 쓴다 — 섹터 정렬이 4컬럼만 보내면서 canonical을
+        // 매번 지우고 있었다(settings-tab.js의 주석이 기대하던 동작이 이것이다).
+        const widest = (rows || []).reduce((a, r) => Math.max(a, (r || []).length), 0);
+        const cols = columnsCoveredBy(def.columns, { length: widest });
         await client.query(`DELETE FROM ${def.table}`);
-        await bulkUpsert(client, def.table, def.pk, def.columns, (rows || []).map((r) => rowToRecord(def.columns, r)));
+        await bulkUpsert(client, def.table, def.pk, cols, (rows || []).map((r) => rowToRecord(cols, r)));
       } else if (action === 'batchAppend' || action === 'batchUpsert') {
         const onConflict = action === 'batchAppend' ? 'nothing' : 'update';
+        // 가장 긴 행을 기준으로 컬럼 폭을 잡는다 — 뒤에 새로 붙인 컬럼은 건드리지 않는다
+        const widest = (rows || []).reduce((a, r) => Math.max(a, (r || []).length), 0);
+        const cols = columnsCoveredBy(def.columns, { length: widest });
         const records = (rows || []).map((r) => {
-          const rec = rowToRecord(def.columns, r);
+          const rec = rowToRecord(cols, r);
           if (def.idPrefix !== null && !rec[def.pk]) rec[def.pk] = genId(def.idPrefix);
           return rec;
         });
-        await bulkUpsert(client, def.table, def.pk, def.columns, records, { onConflict });
+        await bulkUpsert(client, def.table, def.pk, cols, records, { onConflict });
       } else {
         // upsert(단건) / append(폴백) — 둘 다 실제로는 upsert로 처리해도 안전함
-        await upsertOne(client, def, rowToRecord(def.columns, row || []));
+        const cols = columnsCoveredBy(def.columns, row);
+        const rec = rowToRecord(cols, row || []);
+        if (def.idPrefix !== null && !rec[def.pk]) rec[def.pk] = genId(def.idPrefix);
+        await bulkUpsert(client, def.table, def.pk, cols, [rec]);
       }
     }
 

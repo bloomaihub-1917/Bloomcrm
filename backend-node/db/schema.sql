@@ -293,3 +293,49 @@ CREATE TABLE IF NOT EXISTS exhibitor_logs (
 );
 CREATE INDEX IF NOT EXISTS idx_exhibitor_logs_exh ON exhibitor_logs(exhibitor_id);
 CREATE INDEX IF NOT EXISTS idx_exhibitor_logs_open ON exhibitor_logs(kind, answered_at);
+
+/* ══════════════════════════════════════════════════════════════
+   orgs — 기업 마스터
+
+   전에는 기업이라는 레코드가 따로 없었다. 화면에 보이던 기업 목록은 매번
+   contacts의 소속 문자열을 정규화해 묶어 만든 파생물이었고, companies 테이블은
+   거기에 섹터·메모를 덧칠하는 오버레이였다. 이 구조에는 두 가지 문제가 있었다.
+
+   - 식별자가 이름 그 자체라, 이름을 고치면 키가 바뀌어 다른 회사가 된다.
+     실제로 '압타머사이언스 CRO 센터'를 '츌립앤사이언스'로 바꿨을 때 섹터와
+     메모를 담고 있던 오버레이가 옛 키에 남아 화면에서 사라졌다.
+   - 연락처가 없으면 기업이 존재할 수 없다. 아직 담당자를 모르는 잠재 고객사나
+     시공 벤더를 미리 등록해 둘 방법이 없었다.
+
+   그래서 기업을 이름과 무관한 안정 id를 가진 1급 레코드로 올리고, contacts와
+   exhibitors가 문자열이 아니라 이 id를 가리키게 한다. 이름 스냅샷(company_name
+   등)은 그대로 두되 표시는 orgs에서 읽는다 — 한 곳만 고치면 전부 따라온다.
+══════════════════════════════════════════════════════════════ */
+CREATE TABLE IF NOT EXISTS orgs (
+  id          TEXT PRIMARY KEY,   -- O-xxxxx. 이름과 무관하게 고정된다
+  name_ko     TEXT,
+  name_en     TEXT,
+  abbr        TEXT,
+  -- 예전 이름·표기 흔들림을 줄바꿈으로 모아둔다. 이름이 바뀌어도 옛 이름으로
+  -- 검색되고, 옛 이름으로 들어온 업로드를 같은 회사로 붙일 수 있다.
+  aliases     TEXT,
+  kind        TEXT,   -- 전시참가기업 | 잠재고객사 | 벤더시공사
+  status      TEXT,   -- 활성 | 휴면 | 거래종료
+  sectors     TEXT,   -- 복수 섹터를 구분자로 이어 붙인 값(기존 companies.sector와 동일 형식)
+  country     TEXT,
+  hq          TEXT,
+  website     TEXT,
+  biz_no      TEXT,   -- 사업자등록번호 — 세금계산서에 필요한데 지금은 적어둘 곳이 없다
+  cat_code    TEXT,
+  notes       TEXT,
+  source      TEXT,
+  created_at  TEXT,
+  updated_at  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_orgs_kind ON orgs(kind);
+
+-- 기존 두 테이블이 orgs를 가리키게 한다(FK는 다른 참조와 같은 이유로 걸지 않는다)
+ALTER TABLE contacts   ADD COLUMN IF NOT EXISTS org_id TEXT;
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS org_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_contacts_org   ON contacts(org_id);
+CREATE INDEX IF NOT EXISTS idx_exhibitors_org ON exhibitors(org_id);
