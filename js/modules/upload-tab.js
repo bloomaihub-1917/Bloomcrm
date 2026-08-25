@@ -46,7 +46,7 @@ import {
   contacts,
   participations,
   CO_DB,
-  COMPANY_INFO,
+  getOrgById,
   EVENT_LIST,
   COMPANY_SECTORS,
   CATMAPS,
@@ -57,7 +57,7 @@ import {
 import { CL } from '../constants.js';
 import { normalizeCat, normalizeCountry, escapeHtml, escAttr, scopedSectorName, slugifySectorName, sectorRowValues, sectorKey } from '../utils.js';
 import { postToSheet, saveCatmap } from '../api.js';
-import { buildCoDB, buildCoCAT, batchUpsertCompanies } from './company-tab.js';
+import { buildCoDB, buildCoCAT, batchUpsertCompanies, ensureOrgsForNames, orgIdForName } from './company-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
 import { trackAction } from './audit-tab.js';
 
@@ -1099,6 +1099,21 @@ export async function runValidationStep(newRows, dupRows){
     evAddedCount++;
   });
 
+  /* ── 새로 등장한 기업을 먼저 등록한다 ──
+     기업은 더 이상 연락처에서 파생되지 않고 저장된 레코드다. 여기서 만들어
+     두지 않으면 연락처만 들어오고 기업DB에서는 통째로 빠져 보인다. 등록한 뒤
+     연락처마다 org_id를 붙여 이름이 아니라 id로 이어지게 한다. */
+  try {
+    const ensured = await ensureOrgsForNames([...touchedCompanyKeys]);
+    if(ensured.created) addAiLog('ok', '새 기업 ' + ensured.created + '개를 등록했어요.');
+    addedContacts.forEach(c => { c.org_id = orgIdForName(c.orgKo || c.orgEn) || ''; });
+    const unlinked = addedContacts.filter(c => (c.orgKo || c.orgEn) && !c.org_id).length;
+    if(unlinked) addAiLog('warn', unlinked + '건은 기업 연결에 실패했어요 — 기업DB에서 직접 연결해주세요.');
+  } catch(e){
+    console.warn('[upload-tab] 기업 등록 실패:', e);
+    addAiLog('warn', '기업 등록에 실패했어요 — 연락처는 저장되지만 기업DB 연결은 나중에 해야 해요.');
+  }
+
   try {
     buildCoDB(); buildCoCAT(); renderMDB(); buildMDBEvList();
   } catch(e){ console.warn('[upload-tab] 업로드 후 화면 갱신 실패:', e); }
@@ -1116,8 +1131,9 @@ export async function runValidationStep(newRows, dupRows){
   touchedCompanyKeys.forEach(rawKey => {
     const co = CO_DB.find(x => x.key === rawKey || x.branches?.includes(rawKey) || x.nameKo === rawKey || x.nameEn === rawKey);
     if(!co) return;
-    const hasExistingRow = COMPANY_INFO[co.key] || (co.branches||[]).some(b => COMPANY_INFO[b]);
-    if(hasExistingRow) return; // 이미 시트에 있음 — website/note 갱신은 아래 companyUpdates에서 처리
+    // ensureOrgsForNames가 이미 만들어 뒀으므로 새로 저장할 건 없다.
+    // website/note 갱신만 아래 companyUpdates에서 처리한다.
+    if(getOrgById(co.key)) return;
     companiesToSave.set(co.key, co);
   });
 
@@ -1148,7 +1164,7 @@ export async function runValidationStep(newRows, dupRows){
     if(addedContacts.length){
       const contactRows = addedContacts.map(r => [r.id, r.nameKo, r.nameEn, r.orgKo, r.orgEn, r.titleKo, r.titleEn, r.deptKo, r.deptEn,
             r.country, r.cat, r.lang, r.source, r.date, r.status, r.email1, r.email2, r.phone1, r.phone2,
-            r.beat||'', r.products||'', r.tags||'']);
+            r.beat||'', r.products||'', r.tags||'', r.org_id||'']);   // 맨 뒤가 org_id — 기업과의 연결
       const res = await postToSheet(
         { sheet: 'contacts', action: 'batchAppend', rows: contactRows }, '연락처 업로드');
       if(!res.ok){

@@ -76,7 +76,46 @@ export function contactEvents(c){
 }
 
 /* ══════════════════════════════════════════
-   CO_DB — 기업 마스터 (Company DB 탭용) (원본 1616~1620행)
+   ORGS — 기업 마스터 (서버 orgs 테이블과 1:1)
+
+   전에는 기업이 contacts의 소속 문자열에서 매번 파생되는 값이었다. 이름이
+   식별자였던 탓에 이름을 고치면 다른 회사가 되어 섹터·메모가 끊겼고, 연락처가
+   없는 기업(잠재 고객사, 시공 벤더)은 아예 등록할 수 없었다. 이제 기업은
+   이름과 무관한 id를 가진 저장된 레코드이고, contacts.org_id와
+   exhibitors.org_id가 그 id를 가리킨다.
+
+   CO_DB는 여전히 화면용 뷰다 — ORGS를 바탕으로 연락처·행사·거래를 붙여
+   buildCoDB()가 만든다(company-tab.js). 다른 점은 이제 그 바탕이 문자열이
+   아니라 진짜 레코드라는 것이다.
+══════════════════════════════════════════ */
+export const ORGS = [];
+
+export function getOrgById(id){ return ORGS.find(o => o.id === id); }
+
+/* 이름으로 기업 찾기 — 현재 이름과 옛 이름(aliases)을 함께 본다.
+   업로드로 들어온 옛 표기를 같은 회사로 이어 붙일 때 쓴다. */
+export function findOrgByName(name, normalize){
+  const t = String(name || '').trim();
+  if(!t) return null;
+  const k = normalize ? normalize(t) : t.toLowerCase();
+  return ORGS.find(o => {
+    const names = [o.name_ko, o.name_en, ...String(o.aliases || '').split('\n')].filter(Boolean);
+    return names.some(n => (normalize ? normalize(n) : n.toLowerCase()) === k);
+  }) || null;
+}
+
+export const orgName = (o) => (o ? (o.name_ko || o.name_en || '') : '');
+
+/* 기업 종류 — 무엇을 관리하는지에 따라 화면에서 다르게 다룬다 */
+export const ORG_KINDS = [
+  { key: '전시참가기업', label: '전시 참가기업', cls: 'p-blue' },
+  { key: '잠재고객사',   label: '잠재 고객사',   cls: 'p-amber' },
+  { key: '벤더시공사',   label: '벤더·시공사',   cls: 'p-teal' },
+];
+export const ORG_STATUSES = ['활성', '휴면', '거래종료'];
+
+/* ══════════════════════════════════════════
+   CO_DB — 기업 화면용 뷰 (ORGS + 연락처/행사/거래) (원본 1616~1620행)
 ══════════════════════════════════════════ */
 export const CO_DB = [];
 // key(회사명) → { sector, hq, website, notes, catCode, country, abbr, source, updatedAt, nameKo, nameEn }

@@ -41,6 +41,7 @@ import {
   EXH_INVOICES,
   EXH_PAYMENTS,
   EXH_LOGS,
+  ORGS,
   auditLog,
   COMPANY_INFO,
   COMPANY_SECTORS,
@@ -233,6 +234,7 @@ export async function loadFromSheets(hooks = {}){
 
   try {
     const [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, companiesData, partTypesData,
+           orgsData,
            exhData, exhConData, exhItemData, exhInvData, exhPayData, exhLogData] = await Promise.all([
       safeFetch(base + 'contacts',       'contacts',       1, headers),
       safeFetch(base + 'participations', 'participations', 1, headers),
@@ -243,6 +245,7 @@ export async function loadFromSheets(hooks = {}){
       safeFetch(base + 'sectors',        'sectors',        1, headers),
       safeFetch(base + 'companies',      'companies',      1, headers),
       safeFetch(base + 'part_types',     'part_types',     1, headers),
+      safeFetch(base + 'orgs',           'orgs',           1, headers),
       safeFetch(base + 'exhibitors',         'exhibitors',         1, headers),
       safeFetch(base + 'exhibitor_contacts', 'exhibitor_contacts', 1, headers),
       safeFetch(base + 'exhibitor_items',    'exhibitor_items',    1, headers),
@@ -255,6 +258,7 @@ export async function loadFromSheets(hooks = {}){
     // safeFetch는 실패 시 예외 대신 null을 반환하므로, 여기서 null 개수를
     // 세지 않으면 "전 시트 로드 실패"도 성공으로 표시되는 버그가 있었다.
     const _results = [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, companiesData, partTypesData,
+      orgsData,
       exhData, exhConData, exhItemData, exhInvData, exhPayData, exhLogData];
     const _failed  = _results.filter(r => r === null).length;
     if(_failed === _results.length){
@@ -402,6 +406,13 @@ export async function loadFromSheets(hooks = {}){
         };
       });
       console.log('[CRM] companies 시트 로드:', Object.keys(COMPANY_INFO).length, '개');
+    }
+
+    // ── orgs → ORGS (기업 마스터) ──
+    // 기업 화면(CO_DB)이 이걸 바탕으로 만들어지므로 companies보다 먼저 채운다.
+    if(orgsData && Array.isArray(orgsData)){
+      ORGS.splice(0, ORGS.length, ...orgsData);
+      console.log('[CRM] orgs 로드:', ORGS.length, '개');
     }
 
     // ── part_types 시트 → PART_TYPES (행사 참가 유형, 설정에서 추가/삭제 가능) ──

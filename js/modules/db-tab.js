@@ -37,7 +37,7 @@ import {
 import { CP, CL, RP, ROLE_TO_CAT, COUNTRIES, avB, avF } from '../constants.js';
 import { ab, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseTags, joinTags, isMobile, cleanEmail } from '../utils.js';
 import { postToSheet } from '../api.js';
-import { buildCoDB } from './company-tab.js';
+import { buildCoDB, ensureOrgsForNames, orgIdForName } from './company-tab.js';
 import { domainOfSector, domainName, findSectorByName, UNASSIGNED_DOMAIN } from './settings-tab.js';
 import { trackAction } from './audit-tab.js';
 
@@ -353,7 +353,7 @@ export async function applyMDBBulkEdit(){
   ids.forEach(id => {
     const c = getContactById(id);
     if(!c) return;
-    backup.push({ c, orgKo: c.orgKo, orgEn: c.orgEn, cat: c.cat, status: c.status, tags: c.tags });
+    backup.push({ c, orgKo: c.orgKo, orgEn: c.orgEn, cat: c.cat, status: c.status, tags: c.tags, org_id: c.org_id });
     if(org){ c.orgKo = org; if(!c.orgEn) c.orgEn = org; }
     if(cat) c.cat = cat;
     if(status) c.status = status;
@@ -363,15 +363,25 @@ export async function applyMDBBulkEdit(){
   closeMDBBulkEditModal();
   if(!changed.length) return;
 
+  /* 소속을 바꿨으면 기업 연결도 새 소속을 따라가야 한다 — 안 그러면 화면에는
+     새 회사 이름이 뜨는데 기업DB에서는 옛 회사에 그대로 매달려 있게 된다. */
+  if(org){
+    try {
+      await ensureOrgsForNames([org]);
+      const oid = orgIdForName(org);
+      changed.forEach(c => { c.org_id = oid || c.org_id || ''; });
+    } catch(e){ console.warn('[db-tab] 기업 재연결 실패:', e); }
+  }
+
   const r = await postToSheet({
     sheet: 'contacts', action: 'batchUpsert',
     rows: changed.map(c => [c.id,c.nameKo,c.nameEn,c.orgKo,c.orgEn,c.titleKo,c.titleEn,c.deptKo,c.deptEn,
-      c.country,c.cat,c.lang,c.source,c.date,c.status,c.email1,c.email2,c.phone1,c.phone2,c.beat,c.products,c.tags||'']),
+      c.country,c.cat,c.lang,c.source,c.date,c.status,c.email1,c.email2,c.phone1,c.phone2,c.beat,c.products,c.tags||'',c.org_id||'']),
   }, '연락처 일괄 변경');
   if(!r.ok){
     // 기업 병합(mergeCompanies)과 동일한 원칙 — 저장 실패 시 로컬 변경을 되돌려서
     // 화면엔 바뀐 것처럼 보이는데 새로고침하면 원복되는 거짓 성공을 막는다.
-    backup.forEach(b => { b.c.orgKo = b.orgKo; b.c.orgEn = b.orgEn; b.c.cat = b.cat; b.c.status = b.status; b.c.tags = b.tags; });
+    backup.forEach(b => { b.c.orgKo = b.orgKo; b.c.orgEn = b.orgEn; b.c.cat = b.cat; b.c.status = b.status; b.c.tags = b.tags; b.c.org_id = b.org_id; });
     buildCoDB();
     mdbSelected.clear();
     renderMDB();
@@ -1517,6 +1527,17 @@ export async function saveNewContact(){
     products:'',
   };
 
+  /* 소속을 적었으면 그 기업이 있는지 보고 없으면 만든다.
+     기업은 이제 연락처에서 파생되지 않으므로, 여기서 만들어 두지 않으면
+     연락처만 생기고 기업DB에는 나타나지 않는다. */
+  const orgNm = c.orgKo || c.orgEn;
+  if(orgNm){
+    try {
+      await ensureOrgsForNames([orgNm]);
+      c.org_id = orgIdForName(orgNm) || '';
+    } catch(e){ console.warn('[db-tab] 기업 연결 실패:', e); }
+  }
+
   // 로컬 추가
   contacts.push(c);
   try { buildCoDB(); renderMDB(); buildMDBEvList(); } catch(e){}
@@ -1526,7 +1547,7 @@ export async function saveNewContact(){
     sheet: 'contacts',
     row: [c.id,c.nameKo,c.nameEn,c.orgKo,c.orgEn,c.titleKo,c.titleEn,c.deptKo,c.deptEn,
           c.country,c.cat,c.lang,c.source,c.date,c.status,c.email1,c.email2,c.phone1,c.phone2,
-          c.beat,c.products,c.tags||''],
+          c.beat,c.products,c.tags||'',c.org_id||''],
   }, '연락처 추가', { silent: true });
   if(!r.ok){
     const idx = contacts.findIndex(x => x.id === c.id);

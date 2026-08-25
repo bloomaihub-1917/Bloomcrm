@@ -29,7 +29,6 @@
 import {
   currentUser,
   CO_DB,
-  COMPANY_INFO,
   contacts,
   participations,
   EVENT_LIST,
@@ -50,6 +49,13 @@ import {
   setCoCountryF,
   evColor,
   evShort,
+  ORGS,
+  API_BASE_URL,
+  getOrgById,
+  findOrgByName,
+  orgName,
+  ORG_KINDS,
+  EXHIBITORS,
 } from '../state.js';
 import { RP, avB, avF } from '../constants.js';
 import { escapeHtml, escAttr, levenshteinDist, parseSectorScope, sectorKey, countryName } from '../utils.js';
@@ -57,6 +63,7 @@ import { postToSheet } from '../api.js';
 import { parseSectors, joinSectors, mainSectors, sectorNamesInDomain, domainName, domainOfSector, UNASSIGNED_DOMAIN } from './settings-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
 import { trackAction } from './audit-tab.js';
+import { billedAmount, paidAmount, currencyOf, exhibitorTradeFor } from './exh-tab.js';
 
 /* ══════════════════════════════════════════
    섹터 관련 로컬 헬퍼 (원본 6278~6305행대, 설정 탭과 공유하던 것)
@@ -143,119 +150,143 @@ export function normalizeCompanyKey(raw){
   return s;
 }
 
+/* 기업 종류 배지 */
+export const orgKindOf = (kind) => ORG_KINDS.find(k => k.key === kind) || null;
+
+/* ══════════════════════════════════════════
+   buildCoDB — 화면용 기업 뷰를 만든다
+
+   전에는 이 함수가 기업 목록 자체를 만들어냈다(contacts의 소속 문자열을
+   정규화해 묶는 방식). 그래서 연락처가 없으면 기업이 사라지고, 이름을 고치면
+   다른 회사가 됐다. 이제 기업은 ORGS에 저장된 레코드이고, 이 함수는 거기에
+   연락처·행사 참가·전시 거래를 붙여 화면이 쓰기 좋은 모양으로 펼치기만 한다.
+
+   연결은 org_id로 한다. 아직 org_id가 없는 옛 연락처는 이름으로 한 번 더
+   맞춰본다 — 마이그레이션 전에 들어온 업로드가 화면에서 통째로 빠지지 않도록.
+══════════════════════════════════════════ */
 export function buildCoDB(){
-  CO_DB.splice(0, CO_DB.length); // 초기화
+  CO_DB.splice(0, CO_DB.length);
+  if(!ORGS.length) return;
 
-  if(!contacts.length) return;
-
-  // ── 기업별로 contacts 그룹핑 (표기 차이를 흡수한 정규화 키 기준) ──
-  const orgMap = {};
+  /* 연락처를 기업별로 모은다. org_id가 우선, 없으면 이름으로 폴백. */
+  const byOrg = new Map();
+  ORGS.forEach(o => byOrg.set(o.id, []));
   contacts.forEach(c => {
-    const rawKey = (c.orgKo || c.orgEn || '').trim();
-    if(!rawKey) return;
-    const key = normalizeCompanyKey(rawKey) || rawKey.toLowerCase();
-    if(!orgMap[key]) orgMap[key] = { contacts:[], nameKo:'', nameEn:'', branchCounts:{} };
-    orgMap[key].contacts.push(c);
-    orgMap[key].branchCounts[rawKey] = (orgMap[key].branchCounts[rawKey]||0) + 1;
-    if(!orgMap[key].nameKo && c.orgKo) orgMap[key].nameKo = c.orgKo;
-    if(!orgMap[key].nameEn && c.orgEn) orgMap[key].nameEn = c.orgEn;
+    let oid = c.org_id;
+    if(!oid || !byOrg.has(oid)){
+      const o = findOrgByName(c.orgKo || c.orgEn, normalizeCompanyKey);
+      oid = o ? o.id : null;
+    }
+    if(oid && byOrg.has(oid)) byOrg.get(oid).push(c);
   });
 
-  // ── 기업별로 participations 집계 ──
-  Object.entries(orgMap).forEach(([key, co]) => {
-    const cIds = new Set(co.contacts.map(c => c.id));
+  /* 전시 참가도 같은 방식으로 */
+  const exhByOrg = new Map();
+  EXHIBITORS.forEach(x => {
+    let oid = x.org_id;
+    if(!oid || !byOrg.has(oid)){
+      const o = findOrgByName(x.company_name, normalizeCompanyKey);
+      oid = o ? o.id : null;
+    }
+    if(!oid) return;
+    if(!exhByOrg.has(oid)) exhByOrg.set(oid, []);
+    exhByOrg.get(oid).push(x);
+  });
+
+  ORGS.forEach(o => {
+    const coContacts = byOrg.get(o.id) || [];
+    const cIds = new Set(coContacts.map(c => c.id));
     const parts = participations.filter(p => cIds.has(p.contactId));
 
-    // 행사별 집계
+    // ── 행사별 참가 집계 ──
     const evMap = {};
     parts.forEach(p => {
-      const ev = EVENT_LIST.find(e => e.key === p.eventId) || { key: p.eventId, short: p.eventId, name: p.eventId, color:'#9C9890', date:'' };
+      const ev = EVENT_LIST.find(e => e.key === p.eventId)
+        || { key: p.eventId, short: p.eventId, name: p.eventId, color:'#9C9890', date:'' };
       if(!evMap[p.eventId]) evMap[p.eventId] = {
-        name: ev.name || ev.key,   // 풀네임 우선
+        key: p.eventId,
+        name: ev.name || ev.key,
         short: ev.short || ev.key,
-        year: (ev.date||'').slice(0,4) || new Date().getFullYear(),
-        date: ev.date || '',
-        loc: '',
-        color: ev.color || '#9C9890',
-        roles: [],
-        people: [],
-        note: '',
+        year: (ev.date||'').slice(0,4) || String(new Date().getFullYear()),
+        date: ev.date || '', loc: '', color: ev.color || '#9C9890',
+        roles: [], people: [], note: '',
       };
       const role = p.role || '참가자';
       if(!evMap[p.eventId].roles.includes(role)) evMap[p.eventId].roles.push(role);
-      // 담당자 이름
       const c = contacts.find(x => x.id === p.contactId);
-      if(c){
-        const nm = c.nameKo || c.nameEn || '';
-        if(nm && !evMap[p.eventId].people.includes(nm)) evMap[p.eventId].people.push(nm);
+      const nm = c ? (c.nameKo || c.nameEn || '') : '';
+      if(nm && !evMap[p.eventId].people.includes(nm)) evMap[p.eventId].people.push(nm);
+    });
+
+    // ── 전시 거래 — 행사별 부스·청구·입금 ──
+    // 전시 탭에만 쌓여 있어 기업 화면에서 안 보이던 값들이다.
+    const trade = (exhByOrg.get(o.id) || []).map(x => exhibitorTradeFor(x));
+    trade.forEach(t => {
+      // 전시로만 참가한 행사도 참가 이력에 나타나게 한다
+      if(!evMap[t.eventId]){
+        const ev = EVENT_LIST.find(e => e.key === t.eventId)
+          || { key: t.eventId, short: t.eventId, name: t.eventId, color:'#9C9890', date:'' };
+        evMap[t.eventId] = { key: t.eventId, name: ev.name || ev.key, short: ev.short || ev.key,
+          year: (ev.date||'').slice(0,4), date: ev.date || '', loc: '', color: ev.color || '#9C9890',
+          roles: ['전시참가기업'], people: [], note: '' };
       }
     });
 
-    // contacts 담당자 목록 — id 기준 중복 제거
-    const seenIds = new Set();
-    const coContacts = co.contacts
-      .filter(c => {
-        if(seenIds.has(c.id)) return false;
-        seenIds.add(c.id);
-        return true;
-      })
-      .map(c => ({
-        id:     c.id,
-        name:   c.nameKo || c.nameEn || '',
-        nameEn: c.nameEn || '',
-        title:  c.titleKo || c.titleEn || '',
-        cats:   [c.cat].filter(Boolean),
-        // 이 사람이 참여한 모든 행사 (participations 기준)
-        events: participations.filter(p => p.contactId === c.id).map(p => p.eventId),
-      }));
-
-    // 가장 많이 쓰인 원문 표기 (표시용 이름/약어 기본값)
-    const branches   = Object.entries(co.branchCounts).sort((a,b)=>b[1]-a[1]).map(([b])=>b);
-    const mainBranch = branches[0] || key;
-
-    // 약어 생성 (최대 2자)
-    const nm = co.nameKo || co.nameEn || mainBranch;
-    const abbr = nm.length <= 2 ? nm
-      : /[가-힣]/.test(nm) ? nm.slice(0,2)
-      : nm.split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
-
-    // 섹터(산업 분류)는 beat 필드(실제 산업 섹터)만 사용 — 참가 역할(cat)로 대신 추측하지 않는다.
-    const beatVal = co.contacts.find(c=>c.beat)?.beat || '';
-    const sectors = beatVal ? parseSectors(beatVal) : [];
-    const sector  = sectors[0] || 'General / Others';
-
-    // companies 시트에 저장된 회사 단위 정보가 있으면 우선 적용 (정규화 키 우선, 옛 원문 키도 폴백 조회)
-    const info = COMPANY_INFO[key] || branches.map(b=>COMPANY_INFO[b]).find(Boolean);
-    const infoSectors = info && info.sector ? parseSectors(info.sector) : [];
+    const sectors = o.sectors ? parseSectors(o.sectors) : [];
+    const name = orgName(o);
 
     CO_DB.push({
-      key,
-      nameKo:     (info && info.nameKo) || co.nameKo || mainBranch,   // 수동으로 이름을 바꿨으면 그걸 우선
-      nameEn:     (info && info.nameEn) || co.nameEn || '',
-      abbr:       (info && info.abbr) || abbr,
-      sector:     infoSectors[0] || sector,     // 대표 섹터
-      sectors:    infoSectors.length ? infoSectors : sectors,    // 복수 섹터 배열
-      hq:         (info && info.hq) || co.contacts[0]?.country || '',
-      website:    (info && info.website) || '',
-      notes:      (info && info.notes) || '',
-      catCode:    (info && info.catCode) || '',
-      country:    (info && info.country) || '',
-      source:     (info && info.source) || '',
-      updatedAt:  (info && info.updatedAt) || '',
-      branches,
-      mainBranch,
-      events:     Object.values(evMap),
-      contacts:   coContacts,
+      // key는 화면 곳곳이 기업을 지목할 때 쓰는 값 — 이제 안정 id다.
+      // 이름을 고쳐도 선택 상태나 링크가 끊기지 않는다.
+      key:      o.id,
+      org:      o,
+      nameKo:   o.name_ko || name,
+      nameEn:   o.name_en || '',
+      abbr:     o.abbr || abbrOf(name),
+      aliases:  String(o.aliases || '').split('\n').filter(Boolean),
+      kind:     o.kind || '',
+      orgStatus: o.status || '활성',
+      sector:   sectors[0] || 'General / Others',
+      sectors,
+      hq:       o.hq || coContacts.find(c => c.country)?.country || '',
+      country:  o.country || '',
+      website:  o.website || '',
+      bizNo:    o.biz_no || '',
+      notes:    o.notes || '',
+      catCode:  o.cat_code || '',
+      source:   o.source || '',
+      updatedAt: o.updated_at || '',
+      branches: [...new Set(coContacts.map(c => (c.orgKo || c.orgEn || '').trim()).filter(Boolean))],
+      mainBranch: name,
+      events:   Object.values(evMap),
+      contacts: coContacts.map(c => ({
+        id: c.id,
+        name: c.nameKo || c.nameEn || '',
+        nameEn: c.nameEn || '',
+        title: c.titleKo || c.titleEn || '',
+        email: c.email1 || '',
+        phone: c.phone1 || '',
+        cats: [c.cat].filter(Boolean),
+        events: participations.filter(p => p.contactId === c.id).map(p => p.eventId),
+      })),
+      trade,
     });
   });
 
-  // 이름순 정렬
   CO_DB.sort((a,b) => (a.nameKo||a.nameEn).localeCompare(b.nameKo||b.nameEn));
 
   try {
     const dashEl = document.getElementById('co-dash');
     if(dashEl && dashEl.style.display !== 'none' && !selCo) renderCoDashboard();
   } catch(e){}
+}
+
+/* 약어 자동 생성 (최대 2자) — 기업에 약어를 안 적었을 때 아바타에 쓴다 */
+function abbrOf(nm){
+  if(!nm) return '?';
+  if(nm.length <= 2) return nm;
+  return /[가-힣]/.test(nm) ? nm.slice(0,2)
+    : nm.split(/\s+/).map(w => w[0]).join('').slice(0,2).toUpperCase();
 }
 
 /* ══════════════════════════════════════════
@@ -931,45 +962,135 @@ export function switchCoT(k){
 }
 
 /* ══════════════════════════════════════════
-   companies 시트 동기화 (원본 4248~4267행) — 저장 로직 원본 그대로 유지
+   기업 저장 — orgs 테이블
+
+   전에는 companies 시트에 "정규화된 이름"을 키로 저장했다. 이름을 고치면 키가
+   바뀌어 옛 키의 값이 고아가 됐다(실제로 그렇게 섹터·메모를 잃은 적이 있다).
+   이제 id로 저장하므로 이름은 그냥 하나의 필드다.
+
+   부분 저장(data)을 쓴다 — 섹터만 고칠 때 메모까지 함께 실어 보내지 않으므로,
+   두 화면에서 동시에 다른 필드를 고쳐도 서로를 덮어쓰지 않는다.
 ══════════════════════════════════════════ */
-export async function upsertCompanyRow(c){
-  c.updatedAt = new Date().toISOString();
-  COMPANY_INFO[c.key] = {
-    sector: joinSectors(c.sectors||[]), hq: c.hq||'', website: c.website||'', notes: c.notes||'',
-    catCode: c.catCode||'', country: c.country||'', abbr: c.abbr||'', source: c.source||'', updatedAt: c.updatedAt,
-    nameKo: c.nameKo||'', nameEn: c.nameEn||'',
-  };
-  return postToSheet({
-    sheet: 'companies',
-    action: 'upsert',
-    row: [c.key, joinSectors(c.sectors||[]), c.hq||'', c.website||'', c.notes||'',
-          c.catCode||'', c.country||'', c.abbr||'', c.source||'', c.updatedAt, c.nameKo||'', c.nameEn||''],
-  }, '기업 정보 저장');
+const ORG_FIELDS = {
+  nameKo:'name_ko', nameEn:'name_en', abbr:'abbr', kind:'kind', orgStatus:'status',
+  country:'country', hq:'hq', website:'website', bizNo:'biz_no', catCode:'cat_code',
+  notes:'notes', source:'source',
+};
+
+/* 화면용 기업 객체(c)에서 바뀐 필드만 서버 컬럼명으로 옮겨 담는다.
+   fields를 주면 그 필드만, 안 주면 전부 보낸다. */
+function orgPatch(c, fields){
+  const patch = { id: c.key, updated_at: new Date().toISOString() };
+  const keys = fields || Object.keys(ORG_FIELDS);
+  keys.forEach(k => { if(ORG_FIELDS[k]) patch[ORG_FIELDS[k]] = c[k] || ''; });
+  if(!fields || fields.includes('sectors')) patch.sectors = joinSectors(c.sectors || []);
+  if(!fields || fields.includes('aliases')) patch.aliases = (c.aliases || []).join('\n');
+  return patch;
 }
 
-/* 여러 기업을 한 번에 저장 (신규 — 원본에는 없던 기능).
-   업로드 직후처럼 한 번에 수십~수백 개 회사를 저장해야 할 때, upsertCompanyRow를
-   회사마다 개별 POST로 부르면 Apps Script가 수백 개 동시 요청을 감당하지 못해
-   일부가 실패하고 브라우저에는 CORS 에러로 나타난다(실제 원인은 서버 과부하).
-   batchUpsert 액션 하나로 묶어서 요청 횟수를 1번으로 줄인다. */
+/* 로컬 ORGS 레코드도 함께 맞춰둔다 — 다음 buildCoDB가 이걸 읽는다 */
+function applyOrgLocal(patch){
+  const o = getOrgById(patch.id);
+  if(o) Object.assign(o, patch);
+}
+
+export async function upsertCompanyRow(c, fields){
+  const patch = orgPatch(c, fields);
+  applyOrgLocal(patch);
+  c.updatedAt = patch.updated_at;
+  return postToSheet({ sheet: 'orgs', action: 'upsert', data: patch }, '기업 정보 저장');
+}
+
+/* 여러 기업을 한 번에 저장 — 업로드 직후처럼 수십~수백 개를 저장할 때
+   기업마다 개별 POST를 보내면 요청이 몰려 일부가 실패한다. 한 번으로 묶는다. */
 export async function batchUpsertCompanies(companies){
   if(!companies.length) return;
-  const now = new Date().toISOString();
-  companies.forEach(c => {
-    c.updatedAt = now;
-    COMPANY_INFO[c.key] = {
-      sector: joinSectors(c.sectors||[]), hq: c.hq||'', website: c.website||'', notes: c.notes||'',
-      catCode: c.catCode||'', country: c.country||'', abbr: c.abbr||'', source: c.source||'', updatedAt: now,
-      nameKo: c.nameKo||'', nameEn: c.nameEn||'',
-    };
+  const rows = companies.map(c => { const p = orgPatch(c); applyOrgLocal(p); c.updatedAt = p.updated_at; return p; });
+  return postToSheet({ sheet: 'orgs', action: 'batchUpsert', dataRows: rows }, '기업 일괄 저장');
+}
+
+/* ── 업로드가 데려온 새 기업을 등록한다 ──
+   전에는 기업이 연락처 소속 문자열에서 파생됐기 때문에, 업로드하면 기업이
+   저절로 "생겼다". 이제 기업은 저장된 레코드라 없으면 만들어 줘야 한다.
+   만들지 않으면 연락처만 들어오고 기업DB에서는 통째로 빠져 보인다.
+
+   이름(옛 이름 포함)으로 먼저 찾아보고 없는 것만 만든다 — 같은 회사가 표기만
+   다르게 두 번 등록되는 걸 막는다. id는 서버가 만들어 주므로 저장 후 다시
+   읽어와 이름 → id 표를 돌려준다. */
+export async function ensureOrgsForNames(names, kind){
+  const table = new Map();   // 정규화 이름 → org id
+  const missing = new Map(); // 정규화 이름 → 원문(대표 표기)
+
+  (names || []).forEach(raw => {
+    const t = String(raw || '').trim();
+    if(!t) return;
+    const k = normalizeCompanyKey(t) || t.toLowerCase();
+    if(table.has(k) || missing.has(k)) return;
+    const found = findOrgByName(t, normalizeCompanyKey);
+    if(found) table.set(k, found.id);
+    else missing.set(k, t);
   });
-  return postToSheet({
-    sheet: 'companies',
-    action: 'batchUpsert',
-    rows: companies.map(c => [c.key, joinSectors(c.sectors||[]), c.hq||'', c.website||'', c.notes||'',
-          c.catCode||'', c.country||'', c.abbr||'', c.source||'', c.updatedAt, c.nameKo||'', c.nameEn||'']),
-  }, '기업 일괄 저장');
+
+  if(missing.size){
+    const now = new Date().toISOString();
+    const rows = [...missing.values()].map(nm => ({
+      name_ko: /[가-힣]/.test(nm) ? nm : '', name_en: /[가-힣]/.test(nm) ? '' : nm,
+      abbr: abbrOf(nm), aliases: '',
+      kind: kind || '잠재고객사', status: '활성',
+      sectors: '', country: '', hq: '', website: '', biz_no: '', cat_code: '',
+      notes: '', source: '업로드', created_at: now, updated_at: now,
+    }));
+    const r = await postToSheet({ sheet: 'orgs', action: 'batchUpsert', dataRows: rows }, '신규 기업 등록');
+    if(!r.ok) return { ok: false, table };
+    await reloadOrgs();
+    missing.forEach((nm, k) => {
+      const o = findOrgByName(nm, normalizeCompanyKey);
+      if(o) table.set(k, o.id);
+    });
+  }
+  return { ok: true, table, created: missing.size };
+}
+
+/* 저장 직후 서버가 만든 id를 받아오려면 다시 읽어야 한다 */
+export async function reloadOrgs(){
+  if(!API_BASE_URL || !currentUser) return;
+  const { safeFetch, authHeaders } = await import('../api.js');
+  const rows = await safeFetch(API_BASE_URL + '/api/data?sheet=orgs', 'orgs', 1, await authHeaders());
+  if(Array.isArray(rows)) ORGS.splice(0, ORGS.length, ...rows);
+}
+
+/* 연락처의 소속 이름으로 org id를 찾아준다 — 업로드/수동 추가가 함께 쓴다 */
+export function orgIdForName(name){
+  const o = findOrgByName(name, normalizeCompanyKey);
+  return o ? o.id : '';
+}
+
+/* ── 기업 신규 등록 ──
+   전에는 기업이 연락처에서 파생됐기 때문에, 담당자를 모르는 회사는 등록할 방법이
+   아예 없었다. 잠재 고객사나 시공 벤더를 먼저 적어두고 나중에 사람을 붙일 수 있게
+   한다. 이름이 같은 기업(옛 이름 포함)이 이미 있으면 새로 만들지 않고 알린다. */
+export async function createOrg({ nameKo, nameEn, kind, sectors, country, website, bizNo, notes }){
+  const name = (nameKo || nameEn || '').trim();
+  if(!name) return { ok: false, error: '기업명을 입력해주세요.' };
+
+  const dup = findOrgByName(name, normalizeCompanyKey);
+  if(dup) return { ok: false, error: `이미 등록된 기업이에요 — ${orgName(dup)}`, org: dup };
+
+  const now = new Date().toISOString();
+  const rec = {
+    name_ko: nameKo || '', name_en: nameEn || '', abbr: abbrOf(name), aliases: '',
+    kind: kind || '잠재고객사', status: '활성',
+    sectors: joinSectors(sectors || []), country: country || '', hq: country || '',
+    website: website || '', biz_no: bizNo || '', cat_code: '', notes: notes || '',
+    source: '수동 등록', created_at: now, updated_at: now,
+  };
+  const r = await postToSheet({ sheet: 'orgs', action: 'upsert', data: rec }, '기업 등록');
+  if(!r.ok) return { ok: false, error: '저장에 실패했어요.' };
+
+  ORGS.push({ id: r.id, ...rec });
+  buildCoDB(); buildCoCAT(); renderCoList();
+  trackAction('add', '기업 등록', name, `<b>${escapeHtml(name)}</b> 등록`);
+  return { ok: true, id: r.id };
 }
 
 // ── 카테고리 코드 부여 (PREFIX-NNN, 이미 있으면 재계산하지 않음) (원본 4269~4281행) ──

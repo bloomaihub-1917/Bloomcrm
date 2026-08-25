@@ -142,6 +142,32 @@ export function settleState(x){
   return { state:'unpaid', billed, paid, balance, cur, due, overdue };
 }
 
+/* 이 참가 건의 거래 요약 — 기업DB가 "이 회사와 얼마나 거래했나"를 보여줄 때 쓴다.
+   부스·청구·입금·미답변 문의가 전부 전시 탭에만 쌓여 있어 기업 화면에서는
+   하나도 안 보였다. 판정 기준을 새로 만들지 않고 settleState를 그대로 쓴다 —
+   전시 탭과 기업 탭이 서로 다른 금액을 말하면 안 된다. */
+export function exhibitorTradeFor(x){
+  const st = settleState(x);
+  return {
+    exhibitorId: x.id,
+    eventId:     x.event_id,
+    company:     x.company_name || '',
+    booth:       x.booth_no || '',
+    boothType:   x.booth_type || '',
+    grade:       x.grade || '',
+    billed:      st.billed,
+    paid:        st.paid,
+    balance:     st.balance,
+    cur:         st.cur,
+    state:       st.state,
+    due:         st.due,
+    overdue:     st.overdue,
+    cancelled:   x.status === CANCELLED,
+    openInquiries: openInquiriesFor(x.id).length,
+    updatedAt:   x.updated_at || '',
+  };
+}
+
 /* 금액 표시 — 통화 기호를 붙인다 */
 export function fmtMoney(v, cur){
   return (cur === 'USD' ? '$' : '') + money(v) + (cur === 'USD' ? '' : '원');
