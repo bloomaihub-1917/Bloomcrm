@@ -309,6 +309,7 @@ button{font-family:inherit;cursor:pointer}input,select,textarea{font-family:inhe
 
   /* ── Drawer: full-width on mobile ── */
   .dr { width: 100%; border-left: none; border-top: 1px solid var(--i6); top: auto; height: 88dvh; border-radius: 16px 16px 0 0; }
+  .dr-resize { display: none; }
   .dr.on { transform: translateX(0); }
   .drh { padding: 14px 16px 12px; border-radius: 16px 16px 0 0; }
   /* drag handle */

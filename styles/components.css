@@ -144,8 +144,11 @@ tr.row-sel{background:var(--ad)}
 .tact{padding:4px 10px;border-radius:5px;border:1px solid var(--i6);background:var(--W);font-size:10px;font-weight:500;color:var(--i2);cursor:pointer;transition:all .1s}
 .tact:hover{background:var(--a);color:#fff;border-color:var(--a)}
 .bd{position:fixed;inset:0;background:rgba(0,0,0,.16);z-index:100;display:none}.bd.on{display:block}
-.dr{position:fixed;right:0;top:0;bottom:0;width:468px;background:var(--W);border-left:1px solid var(--i6);z-index:101;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .2s cubic-bezier(.4,0,.2,1);box-shadow:-12px 0 40px rgba(0,0,0,.08)}
+.dr{position:fixed;right:0;top:0;bottom:0;width:var(--dr-w,560px);background:var(--W);border-left:1px solid var(--i6);z-index:101;display:flex;flex-direction:column;transform:translateX(100%);transition:transform .2s cubic-bezier(.4,0,.2,1);box-shadow:-12px 0 40px rgba(0,0,0,.08)}
 .dr.on{transform:translateX(0)}
+/* 왼쪽 가장자리를 끌어 너비를 조절한다(사이드바의 .sb-resize와 같은 방식) */
+.dr-resize{position:absolute;left:-3px;top:0;width:6px;height:100%;cursor:col-resize;z-index:5;background:transparent}
+.dr-resize:hover,.dr-resize.dragging{background:var(--a)}
 .drh{padding:14px 17px 12px;border-bottom:1px solid var(--i6);display:flex;align-items:flex-start;gap:10px;flex-shrink:0;background:var(--i9)}
 .drav{width:40px;height:40px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0}
 .drnm{font-size:15px;font-weight:800;color:var(--i0);letter-spacing:-.01em;line-height:1.2;margin-bottom:3px}

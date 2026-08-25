@@ -142,6 +142,71 @@ export function initSidebarLayout(){
   });
 }
 
+/* ══════════════════════════════════════════
+   드로어 너비 — 데스크톱
+
+   468px 고정이었다. 연락처 드로어에는 충분했지만, 전시 참가기업 드로어의 정산
+   탭에는 금액 항목·인보이스·입금이 각각 여러 줄로 들어가서(항목명/수량/단가/
+   금액/통화) 한 줄이 접히고 버튼이 밀렸다. 관리 화면인데 읽기도 고치기도 불편했다.
+
+   기본값을 넓히고, 사이드바와 같은 방식으로 가장자리를 끌어 조절할 수 있게 한다.
+   조절한 너비는 기억한다 — 매번 다시 끌어야 하면 안 하느니만 못하다.
+══════════════════════════════════════════ */
+const DR_WIDTH_KEY = 'crm_dr_width';
+const DR_MIN_W = 380;
+/* 화면 대부분을 덮으면 뒤의 목록에서 맥락을 잃는다 — 목록이 최소 360px는 남게 한다 */
+const drMaxW = () => Math.max(DR_MIN_W, window.innerWidth - 360);
+/* 기본값은 넓게 잡되 좁은 노트북에서도 목록이 남도록 화면에 맞춰 줄인다 */
+const drDefaultW = () => Math.min(680, drMaxW());
+
+export function applyDrawerWidth(){
+  if(isMobile()) return;   // 모바일은 전체 너비 + 바텀시트라 이 값과 무관하다
+  const saved = parseInt(localStorage.getItem(DR_WIDTH_KEY), 10);
+  const w = Math.max(DR_MIN_W, Math.min(drMaxW(), saved || drDefaultW()));
+  document.documentElement.style.setProperty('--dr-w', w + 'px');
+}
+
+export function initDrawerResize(){
+  applyDrawerWidth();
+  // 창을 줄이면 드로어가 화면을 넘어설 수 있어 경계를 다시 잡는다
+  window.addEventListener('resize', applyDrawerWidth);
+  if(isMobile()) return;
+
+  document.querySelectorAll('.dr').forEach(dr => {
+    if(dr.querySelector('.dr-resize')) return;
+    const handle = document.createElement('div');
+    handle.className = 'dr-resize';
+    handle.title = '드래그해서 너비 조절 (더블클릭하면 기본값)';
+    dr.appendChild(handle);
+
+    let dragging = false;
+    handle.addEventListener('mousedown', e => {
+      dragging = true;
+      handle.classList.add('dragging');
+      document.body.style.userSelect = 'none';
+      e.preventDefault();
+    });
+    // 드로어는 오른쪽에 붙어 있으므로 왼쪽 가장자리를 끌면 너비가 반대로 움직인다
+    document.addEventListener('mousemove', e => {
+      if(!dragging) return;
+      const w = Math.max(DR_MIN_W, Math.min(drMaxW(), window.innerWidth - e.clientX));
+      document.documentElement.style.setProperty('--dr-w', w + 'px');
+    });
+    document.addEventListener('mouseup', () => {
+      if(!dragging) return;
+      dragging = false;
+      handle.classList.remove('dragging');
+      document.body.style.userSelect = '';
+      const w = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--dr-w'), 10);
+      if(w) localStorage.setItem(DR_WIDTH_KEY, w);
+    });
+    handle.addEventListener('dblclick', () => {
+      localStorage.removeItem(DR_WIDTH_KEY);
+      applyDrawerWidth();
+    });
+  });
+}
+
 window.switchApp = switchApp;
 window.switchCrmV = switchCrmV;
 window.toggleSb = toggleSb;
