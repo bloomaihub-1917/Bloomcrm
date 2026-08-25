@@ -240,7 +240,10 @@ export function buildCoDB(){
       // 이름을 고쳐도 선택 상태나 링크가 끊기지 않는다.
       key:      o.id,
       org:      o,
-      nameKo:   o.name_ko || name,
+      /* 국문·영문 중 한쪽만 있는 기업이 있다. 빈 칸을 다른 언어 이름으로 채우면
+         상세 화면에 같은 이름이 두 번 찍히고, 국문명을 새로 적을 자리도 사라진다.
+         비어 있으면 비워 두고, 보여줄 때만 있는 쪽으로 넘어간다(displayName). */
+      nameKo:   o.name_ko || '',
       nameEn:   o.name_en || '',
       // 사명이 바뀌면 옛 이름으로 만들어 둔 약어가 남아 아바타가 엉뚱한 글자를
       // 보여준다(압타머사이언스 → 츌립앤사이언스인데 약어는 '압타'). 지금 이름의
@@ -681,7 +684,8 @@ export function renderCoList(q2=''){
       draggable="true" ondragstart="this.classList.add('co-dragging');onCoDragStart(event,'${escAttr(c.key)}')" ondragend="this.classList.remove('co-dragging')" title="드래그해서 왼쪽 섹터로 이동">
       <div class="co-av" style="background:${avB(i)};color:${avF(i)}">${escapeHtml(c.abbr)}</div>
       <div style="flex:1;min-width:0">
-        <div class="co-rn">${escapeHtml(c.nameKo||c.nameEn)}</div>
+        <div class="co-rn">${escapeHtml(c.nameKo || c.nameEn)}</div>
+        ${c.nameKo && c.nameEn ? `<div style="font-size:10px;color:var(--i4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(c.nameEn)}</div>` : ''}
         <div class="co-rm" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">
           <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(c.sector||'미분류')}</span>
           ${(() => { const t = tradeTotals(c); return t.balance > 0
@@ -998,8 +1002,8 @@ export function renderCoDetail(c){
     <div class="cdt2">
       <div class="cdl" style="background:${avB(i)};color:${avF(i)}">${escapeHtml(c.abbr)}</div>
       <div style="flex:1"><div class="cdn">
-          <span id="co-nameKo-${escapeHtml(c.key)}" style="cursor:pointer" onclick="editCoNameKo('${escAttr(c.key)}')" title="클릭하여 회사명(국문) 편집">${escapeHtml(c.nameKo)}</span>
-          <span style="font-size:13px;font-weight:400;color:var(--i4);cursor:pointer" id="co-nameEn-${escapeHtml(c.key)}" onclick="editCoNameEn('${escAttr(c.key)}')" title="클릭하여 회사명(영문) 편집">${escapeHtml(c.nameEn)}</span>
+          <span id="co-nameKo-${escapeHtml(c.key)}" style="cursor:pointer${c.nameKo ? '' : ';color:var(--i5);font-weight:400;font-size:13px'}" onclick="editCoNameKo('${escAttr(c.key)}')" title="클릭하여 회사명(국문) 편집">${escapeHtml(c.nameKo || '국문명 추가')}</span>
+          <span style="font-size:${c.nameKo ? '13px' : '17px'};font-weight:${c.nameKo ? '400' : '800'};color:var(--${c.nameKo ? 'i4' : 'i0'});cursor:pointer" id="co-nameEn-${escapeHtml(c.key)}" onclick="editCoNameEn('${escAttr(c.key)}')" title="클릭하여 회사명(영문) 편집">${escapeHtml(c.nameEn || (c.nameKo ? '' : ''))}</span>
         </div>
         <div class="cdmt">
           ${(() => { const k = orgKindOf(c.kind); return k
@@ -1223,7 +1227,7 @@ const CO_TEXT_FIELDS = {
   country: { placeholder: '예: 한국',                          multiline: false, empty: '국가 추가' },
   abbr:    { placeholder: '예: SK',                            multiline: false, empty: '약어 추가' },
   source:  { placeholder: '예: 홈페이지 조사',                  multiline: false, empty: '출처 추가' },
-  nameKo:  { placeholder: '회사명(국문)',                       multiline: false, empty: '이름 없음' },
+  nameKo:  { placeholder: '회사명(국문)',                       multiline: false, empty: '국문명 추가' },
   nameEn:  { placeholder: '회사명(영문)',                       multiline: false, empty: '영문명 추가' },
   // 세금계산서를 끊을 때 필요한데 지금까지 적어둘 곳이 없어 메모에 섞여 있었다
   bizNo:   { placeholder: '000-00-00000',                     multiline: false, empty: '사업자번호 추가' },

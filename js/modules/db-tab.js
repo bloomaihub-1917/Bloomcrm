@@ -522,7 +522,9 @@ export function updateMDBBadges(pairs){
       : contacts.map(c=>({c,p:null}));
     if(mdbStat) bp=bp.filter(({c})=>c.status===mdbStat);
     const q=(document.getElementById('mdb-q')||{}).value||'';
-    if(q){ const lq=q.toLowerCase(); bp=bp.filter(({c})=>[c.nameKo,c.nameEn,c.orgKo,c.titleKo,c.titleEn].some(v=>v&&v.toLowerCase().includes(lq))); }
+    // orgEn이 빠져 있어 영문 기업명으로 검색하면 목록에는 나오는데 배지 숫자는
+    // 달랐다 — 목록(getMDBPairs)과 같은 필드를 본다
+    if(q){ const lq=q.toLowerCase(); bp=bp.filter(({c})=>[c.nameKo,c.nameEn,c.orgKo,c.orgEn,c.titleKo,c.titleEn].some(v=>v&&v.toLowerCase().includes(lq))); }
     return bp;
   })();
 

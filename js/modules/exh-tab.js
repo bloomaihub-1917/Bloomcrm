@@ -544,64 +544,12 @@ function renderDashboard(all){
   const STATE_PILLS = [['완납','paid','p-green'],['완납 처리','settled','p-green'],['부분 입금','partial','p-amber'],
     ['미납','unpaid','p-gray'],['초과 입금','over','p-red'],['청구 전','none','p-gray']];
 
-  return `<div style="padding:12px 16px 20px;display:flex;flex-direction:column;gap:12px">
+  /* ── 카드 조각 ──
+     아래 격자에 순서대로 놓기 위해 각 카드를 먼저 만들어 둔다. 순서는
+     한눈에 보는 것(요약 → 부스 → 단계 → 정산) 다음에 해야 할 일(처리 필요)과
+     방금 무슨 일이 있었나(최근 변경)로 간다. */
 
-    <div class="cost" style="margin:0">
-      ${card('참가기업', n + '곳', cancelledExhibitors(exhEvent).length ? ('취소 ' + cancelledExhibitors(exhEvent).length) : '')}
-      ${card('평균 진행률', avg + '%')}
-      ${card('미수금', curs.length ? curs.map(c => fmtMoney(cash[c].billed - cash[c].paid, c)).join(' + ') : '-',
-        '', dueTotal > 0 ? 'var(--am)' : 'var(--g)')}
-      ${card('처리 필요', todo + '건',
-        '문의 ' + openInq.length + ' · 기한 ' + overdue.length + ' · 정산 ' + attention.length,
-        todo ? 'var(--re)' : 'var(--g)')}
-    </div>
-
-    ${todo ? `<div class="uc" style="border-left:3px solid var(--am)">
-      <div class="uc-ttl">처리 필요 <span class="pill p-amber">${todo}건</span></div>
-      ${openInq.slice(0, 5).map(o => attnRow(o.x, '미답변 문의', o.l.subject || o.l.body || '', daysSince(o.l.ts), 3)).join('')}
-      ${overdue.slice(0, 5).map(o => attnRow(o.x, '입금 기한', fmtMoney(o.s.balance, o.s.cur) + ' 미납', daysSince(o.s.due), 1)).join('')}
-      ${attention.slice(0, 5).map(o => attnRow(o.x, '정산 확인', o.why, null, 1)).join('')}
-      ${todo > 15 ? `<div style="font-size:11px;color:var(--i4);padding:6px 2px">외 ${todo - 15}건 — 왼쪽 필터에서 전체를 볼 수 있어요</div>` : ''}
-    </div>` : `<div class="uc" style="border-left:3px solid var(--g)">
-      <div class="uc-ttl">처리 필요</div>
-      <div style="font-size:12px;color:var(--g)">지금 처리할 게 없어요</div></div>`}
-
-    <div class="uc">
-      <div class="uc-ttl">단계별 진행</div>
-      ${STEPS.map(st => {
-        const done = all.filter(x => cellState(x, st).state === 'done').length;
-        const warn = all.filter(x => cellState(x, st).state === 'warn').length;
-        return stepRow(st.label.replace(/<br>/g, ''), done, warn);
-      }).join('')}
-    </div>
-
-    <div class="uc">
-      <div class="uc-ttl">정산 현황</div>
-      ${curs.length ? curs.map(cashRow).join('') : '<div style="font-size:11.5px;color:var(--i5)">아직 청구 내역이 없어요</div>'}
-      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">
-        ${STATE_PILLS.filter(p => byState[p[1]]).map(p => `<span class="pill ${p[2]}">${p[0]} ${byState[p[1]]}</span>`).join('')}
-      </div>
-    </div>
-
-    ${(() => {
-      // 누가 무엇을 고쳤는지 — 계정 기준으로 최근 변경을 보여준다
-      const names = new Set(all.map(x => x.company_name).filter(Boolean));
-      const recent = auditLog.filter(l => names.has(l.target)).slice(0, 8);
-      if(!recent.length) return `<div class="uc"><div class="uc-ttl">최근 변경</div>
-        <div style="font-size:11.5px;color:var(--i5)">아직 변경 이력이 없어요</div></div>`;
-      return `<div class="uc">
-        <div class="uc-ttl">최근 변경</div>
-        ${recent.map(l => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--i8)">
-          <span style="width:22px;height:22px;border-radius:50%;background:${escAttr(l.color || '#9C9890')};color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${escapeHtml((l.name || '?').slice(0,2))}</span>
-          <span style="font-size:11px;color:var(--i3);flex:0 0 auto">${escapeHtml(l.name || '')}</span>
-          <span style="font-size:11.5px;color:var(--i2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(l.detail || '').replace(/<[^>]+>/g, '')}</span>
-          <span style="font-size:10px;color:var(--i5);flex:0 0 auto">${escapeHtml(String(l.ts || '').slice(5,10))}</span>
-        </div>`).join('')}
-        <div style="font-size:10.5px;color:var(--i5);margin-top:7px">전체 이력은 <b>로그</b> 탭에서 볼 수 있어요</div>
-      </div>`;
-    })()}
-
-    <div class="uc">
+  const cardBooth = `<div class="uc">
       <div class="uc-ttl">부스 현황</div>
       ${[['booth_floor','층'],['booth_type','타입'],['grade','등급']].map(f => {
         const cnt = {};
@@ -613,8 +561,79 @@ function renderDashboard(all){
           <div style="display:flex;flex-wrap:wrap;gap:5px">
             ${ks.map(k => `<span class="pill ${f[0] === 'grade' ? (GRADE_CLS[k] || 'p-gray') : 'p-gray'}">${escapeHtml(k)}${f[0] === 'booth_floor' ? '층' : ''} ${cnt[k]}</span>`).join('')}
           </div></div>`;
+      }).join('') || '<div style="font-size:11.5px;color:var(--i5)">아직 부스 정보가 없어요</div>'}
+    </div>`;
+
+  const cardSteps = `<div class="uc">
+      <div class="uc-ttl">단계별 진행</div>
+      ${STEPS.map(st => {
+        const done = all.filter(x => cellState(x, st).state === 'done').length;
+        const warn = all.filter(x => cellState(x, st).state === 'warn').length;
+        return stepRow(st.label.replace(/<br>/g, ''), done, warn);
       }).join('')}
+    </div>`;
+
+  const cardCash = `<div class="uc">
+      <div class="uc-ttl">정산 현황</div>
+      ${curs.length ? curs.map(cashRow).join('') : '<div style="font-size:11.5px;color:var(--i5)">아직 청구 내역이 없어요</div>'}
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">
+        ${STATE_PILLS.filter(p => byState[p[1]]).map(p => `<span class="pill ${p[2]}">${p[0]} ${byState[p[1]]}</span>`).join('')}
+      </div>
+    </div>`;
+
+  const cardTodo = todo ? `<div class="uc" style="border-left:3px solid var(--am)">
+      <div class="uc-ttl">처리 필요 <span class="pill p-amber">${todo}건</span></div>
+      ${openInq.slice(0, 5).map(o => attnRow(o.x, '미답변 문의', o.l.subject || o.l.body || '', daysSince(o.l.ts), 3)).join('')}
+      ${overdue.slice(0, 5).map(o => attnRow(o.x, '입금 기한', fmtMoney(o.s.balance, o.s.cur) + ' 미납', daysSince(o.s.due), 1)).join('')}
+      ${attention.slice(0, 5).map(o => attnRow(o.x, '정산 확인', o.why, null, 1)).join('')}
+      ${todo > 15 ? `<div style="font-size:11px;color:var(--i4);padding:6px 2px">외 ${todo - 15}건 — 왼쪽 필터에서 전체를 볼 수 있어요</div>` : ''}
+    </div>` : `<div class="uc" style="border-left:3px solid var(--g)">
+      <div class="uc-ttl">처리 필요</div>
+      <div style="font-size:12px;color:var(--g)">지금 처리할 게 없어요</div></div>`;
+
+  const cardRecent = (() => {
+    // 누가 무엇을 고쳤는지 — 계정 기준으로 최근 변경을 보여준다
+    const names = new Set(all.map(x => x.company_name).filter(Boolean));
+    const recent = auditLog.filter(l => names.has(l.target)).slice(0, 8);
+    if(!recent.length) return `<div class="uc"><div class="uc-ttl">최근 변경</div>
+      <div style="font-size:11.5px;color:var(--i5)">아직 변경 이력이 없어요</div></div>`;
+    return `<div class="uc">
+      <div class="uc-ttl">최근 변경</div>
+      ${recent.map(l => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--i8)">
+        <span style="width:22px;height:22px;border-radius:50%;background:${escAttr(l.color || '#9C9890')};color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${escapeHtml((l.name || '?').slice(0,2))}</span>
+        <span style="font-size:11px;color:var(--i3);flex:0 0 auto">${escapeHtml(l.name || '')}</span>
+        <span style="font-size:11.5px;color:var(--i2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(l.detail || '').replace(/<[^>]+>/g, '')}</span>
+        <span style="font-size:10px;color:var(--i5);flex:0 0 auto">${escapeHtml(String(l.ts || '').slice(5,10))}</span>
+      </div>`).join('')}
+      <div style="font-size:10.5px;color:var(--i5);margin-top:7px">전체 이력은 <b>로그</b> 탭에서 볼 수 있어요</div>
+    </div>`;
+  })();
+
+  /* ── 배치 ──
+     세로로만 쌓으면 넓은 화면에서 오른쪽이 통째로 비고, 부스·단계·정산처럼
+     짧은 요약 카드를 보려고 스크롤을 계속 내려야 한다. 12칸 격자에 올려
+     중요도와 내용 길이에 따라 폭을 다르게 준다(exh-dash-* 클래스는
+     components.css에서 폭에 따라 3분할 → 2분할 → 1단으로 접힌다).
+
+     화면 폭이 아니라 이 영역 자신의 폭을 봐야 한다 — 사이드바를 접거나
+     너비를 조절하면 화면 크기는 그대로인데 이 안쪽만 넓어지기 때문이다. */
+  return `<div class="exh-dash">
+
+    <div class="cost exh-dash-kpi" style="margin:0">
+      ${card('참가기업', n + '곳', cancelledExhibitors(exhEvent).length ? ('취소 ' + cancelledExhibitors(exhEvent).length) : '')}
+      ${card('평균 진행률', avg + '%')}
+      ${card('미수금', curs.length ? curs.map(c => fmtMoney(cash[c].billed - cash[c].paid, c)).join(' + ') : '-',
+        '', dueTotal > 0 ? 'var(--am)' : 'var(--g)')}
+      ${card('처리 필요', todo + '건',
+        '문의 ' + openInq.length + ' · 기한 ' + overdue.length + ' · 정산 ' + attention.length,
+        todo ? 'var(--re)' : 'var(--g)')}
     </div>
+
+    <div class="exh-dash-third">${cardBooth}</div>
+    <div class="exh-dash-third">${cardSteps}</div>
+    <div class="exh-dash-third">${cardCash}</div>
+    <div class="exh-dash-wide">${cardTodo}</div>
+    <div class="exh-dash-side">${cardRecent}</div>
   </div>`;
 }
 

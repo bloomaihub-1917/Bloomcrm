@@ -56,6 +56,8 @@ const orgId = (n) => 'O-' + String(n).padStart(5, '0');
     // 이름 변경 매핑 — 옛 키를 새 키로 읽는다
     const renameTo = new Map(RENAMES.map((r) => [r.from, r.to]));
     const canon = (k) => renameTo.get(k) || k;
+    const oldKeys = new Set(RENAMES.map((r) => r.from));
+    const isOldName = (n) => oldKeys.has(normalizeCompanyKey(n));
 
     /* ── 1) 세 소스를 정규화 키로 모은다 ── */
     const bucket = new Map();   // 정규화 키 → 모아둔 재료
@@ -92,18 +94,17 @@ const orgId = (n) => 'O-' + String(n).padStart(5, '0');
     for(const b of bucket.values()){
       const co = b.company;
       /* 대표 이름은 "현재 이름"이어야 한다. 이름이 바뀐 회사는 옛 이름도 같은
-         바구니에 들어와 있는데, 옛 오버레이(companies)가 옛 이름을 들고 있어
-         그대로 쓰면 바꾸기 전 이름으로 되돌아간다. 그래서 자기 자신이 이 키로
-         정규화되는 이름 — 즉 이름을 바꾼 뒤의 표기 — 만 후보로 본다. */
-      const isCurrent = (n) => normalizeCompanyKey(n) === b.key || String(n).toLowerCase() === b.key;
-      const current = [...b.names.entries()].filter(([n]) => isCurrent(n)).sort((a, c) => c[1] - a[1]);
-      const topName = current[0]?.[0]
-        || [...b.names.entries()].sort((a, c) => c[1] - a[1])[0]?.[0]
+         바구니에 들어와 있고, 옛 오버레이(companies)가 옛 이름을 들고 있어서
+         그냥 쓰면 바꾸기 전 이름으로 되돌아간다. 걸러야 할 건 "옛 이름"이지
+         "다른 언어의 이름"이 아니다 — 국문 키로 묶인 회사의 영문명은 당연히
+         키와 다르게 정규화되므로, 키와 대조하는 방식으로 거르면 영문명이 통째로
+         날아간다(실제로 51개 전부 그렇게 잃었다). RENAMES에 적힌 옛 이름만 뺀다. */
+      const pick = (vals) => vals.find((v) => v && !isOldName(v)) || '';
+      const ko = pick([co?.nameKo, ...b.contacts.map((c) => c.orgKo)])
+        || [...b.names.entries()].filter(([n]) => !isOldName(n)).sort((a, c) => c[1] - a[1])[0]?.[0]
         || b.key;
-
-      const pick = (vals) => vals.find((v) => v && isCurrent(v)) || '';
-      const ko = pick([co?.nameKo, ...b.contacts.map((c) => c.orgKo)]) || topName;
       const en = pick([co?.nameEn, ...b.contacts.map((c) => c.orgEn)]);
+      const topName = ko;
 
       // 옛 이름 + 표기 흔들림을 alias로 모은다(대표 이름 자체는 제외)
       const aliases = new Set();
