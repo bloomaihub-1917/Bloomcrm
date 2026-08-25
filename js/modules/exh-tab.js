@@ -581,9 +581,34 @@ export function boothTypeOptions(current){
   return `<option value=""${cur ? '' : ' selected'}>— 미지정 —</option>`
     + list.map(t => `<option value="${escAttr(t)}"${cur === t ? ' selected' : ''}>${escapeHtml(t)}</option>`).join('');
 }
+/* ── 부스 번호 읽기 ──
+   번호에 하이픈이 두 가지 뜻으로 쓰인다.
+     10-11, 44-46  연속된 부스를 여러 개 쓴다 (2개, 3개)
+     39-1, 39-2    부스 하나를 두 기업이 나눠 쓴다
+   뒤 숫자가 앞보다 크면 범위, 작으면 분할 번호다. 실제 데이터가 그렇게 되어
+   있고 달리 구분할 방법이 없다.
+
+   전에는 숫자만 뽑아 이어 붙여서 "10-11"을 1011로 읽었다. 그래서 1 다음에
+   10-11이 오고 2가 그 뒤에 오는 식으로 순서가 뒤죽박죽이었다. */
+export function parseBooth(no){
+  const t = String(no || '').trim();
+  const m = t.match(/^(\d+)\s*[-~]\s*(\d+)$/);
+  if(m){
+    const a = +m[1], b = +m[2];
+    return b > a
+      ? { first: a, last: b, sub: 0, count: b - a + 1, kind: 'range' }
+      : { first: a, last: a, sub: b, count: 1, kind: 'split' };
+  }
+  const n = parseInt(t.replace(/[^0-9]/g, ''), 10);
+  return Number.isFinite(n)
+    ? { first: n, last: n, sub: 0, count: 1, kind: 'single' }
+    : { first: Infinity, last: Infinity, sub: 0, count: 0, kind: 'none' };
+}
+
+/* 앞 번호가 우선, 같으면 분할 번호 순. 번호 없는 기업은 맨 뒤로. */
 const boothSortKey = (x) => {
-  const n = parseInt(String(x.booth_no || '').replace(/[^0-9]/g, ''), 10);
-  return Number.isFinite(n) ? n : 1e9;   // 번호 없는 기업은 맨 뒤로
+  const b = parseBooth(x.booth_no);
+  return b.first === Infinity ? Infinity : b.first * 100 + b.sub;
 };
 
 function renderBoothView(list){
@@ -593,16 +618,29 @@ function renderBoothView(list){
   const selfN = rows.filter(x => x.booth_type === SELF_BUILD_TYPE).length;
   const unconfirmed = rows.filter(x => x.booth_confirmed !== 'yes' && !x.booth_confirmed_at).length;
 
-  const pills = `<span class="pill p-gray">전체 ${rows.length}</span>`
+  /* 번호에서 읽은 부스 수와 적어둔 수량이 다르면 알린다 — 10-11이면 2부스인데
+     수량이 1로 적혀 있으면 청구액이 절반으로 잡힌다. */
+  const qtyOdd = rows.filter(x => {
+    const b = parseBooth(x.booth_no);
+    const q = Number(String(x.booth_qty || '').replace(/[^0-9]/g, ''));
+    return b.kind === 'range' && q && q !== b.count;
+  });
+  const totalBooths = rows.reduce((a, x) => a + parseBooth(x.booth_no).count, 0);
+
+  const pills = `<span class="pill p-gray">기업 ${rows.length}</span>`
+    + `<span class="pill p-gray">부스 ${totalBooths}칸</span>`
     + (noBooth ? `<span class="pill p-red">번호 미배정 ${noBooth}</span>` : '')
     + (unconfirmed ? `<span class="pill p-amber">배정 미확정 ${unconfirmed}</span>` : '')
+    + (qtyOdd.length ? `<span class="pill p-red" title="${escAttr(qtyOdd.map(x => `${x.company_name} ${x.booth_no}(${parseBooth(x.booth_no).count}칸) ↔ 수량 ${x.booth_qty}`).join(', '))}">수량 불일치 ${qtyOdd.length}</span>` : '')
     + `<span class="pill p-blue">독립부스 ${selfN}</span>`
     + pillsOf(countBy(rows, x => x.booth_type));
 
   if(isMobile()) return viewShell(pills, rows.map(x => `
     <div onclick="openExhDr('${escAttr(x.id)}',0)" style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
-        <span class="pill ${x.booth_no ? 'p-blue' : 'p-red'}">${x.booth_no ? '부스 ' + escapeHtml(x.booth_no) : '미배정'}</span>
+        <span class="pill ${x.booth_no ? 'p-blue' : 'p-red'}">${x.booth_no ? '부스 ' + escapeHtml(x.booth_no) : '미배정'}${
+          (() => { const b = parseBooth(x.booth_no);
+            return b.kind === 'range' ? ` (${b.count}칸)` : b.kind === 'split' ? ' 공동' : ''; })()}</span>
         <span style="font-size:13px;font-weight:700;flex:1;min-width:0">${escapeHtml(exhNames(x).ko)}</span>
         ${x.booth_confirmed === 'yes' || x.booth_confirmed_at ? '<span class="pill p-green">확정</span>' : '<span class="pill p-amber">미확정</span>'}
       </div>
@@ -626,7 +664,10 @@ function renderBoothView(list){
       const done = x.booth_confirmed === 'yes' || !!x.booth_confirmed_at;
       return `<tr>
         <td><input class="fi" style="width:58px;padding:3px 5px;font-size:11.5px;font-weight:700" value="${escAttr(x.booth_no || '')}"
-          placeholder="—" onchange="setExhField('${escAttr(x.id)}','booth_no',this.value,'부스 번호')"></td>
+          placeholder="—" onchange="setExhField('${escAttr(x.id)}','booth_no',this.value,'부스 번호')">
+          ${(() => { const b = parseBooth(x.booth_no);
+            return b.kind === 'range' ? `<div style="font-size:9.5px;color:var(--i4);margin-top:1px">${b.count}칸</div>`
+              : b.kind === 'split' ? `<div style="font-size:9.5px;color:var(--a);margin-top:1px">공동</div>` : ''; })()}</td>
         ${coCell(x, 0)}
         <td><input class="fi" style="width:40px;padding:3px 5px;font-size:11.5px" value="${escAttr(x.booth_floor || '')}"
           onchange="setExhField('${escAttr(x.id)}','booth_floor',this.value,'부스 층')"></td>
@@ -690,9 +731,13 @@ function renderEquipView(list){
     const g = byName.get(k);
     const q = Number(String(i.qty || '').replace(/[^0-9.-]/g, '')) || 0;
     const amt = Number(String(i.amount || '').replace(/[^0-9.-]/g, '')) || 0;
-    g.qty += q || 1;   // 수량을 안 적었으면 1개로 센다
-    g.cos.push({ id: x.id, name: x.company_name, booth: x.booth_no, qty: q || 1,
-      amt, cur: i.currency || 'KRW', raw: i.name });
+    /* 공동 부스에서 비용만 나눠 낸 줄은 수량을 세지 않는다. 실물은 상대 기업이
+       주문하므로 여기서 또 세면 없는 의자를 발주하게 된다. 금액은 센다. */
+    const shareOnly = !!String(i.shared_ref || '').trim();
+    if(!shareOnly) g.qty += q || 1;   // 수량을 안 적었으면 1개로 센다
+    else g.shared = true;
+    g.cos.push({ id: x.id, name: x.company_name, booth: x.booth_no, qty: shareOnly ? 0 : (q || 1),
+      amt, cur: i.currency || 'KRW', raw: i.name, shareOnly });
     // 통화별로 나눠 담는다 — 합치면 원화와 달러를 더한 숫자가 된다.
     // 청구에서 뺀 항목은 수량은 세되 금액은 더하지 않는다 — 발주는 해야 하지만
     // 우리 청구액은 아니다.
@@ -719,7 +764,7 @@ function renderEquipView(list){
       style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:11.5px">
       <span class="pill p-gray" style="min-width:52px;text-align:center">${c.booth ? '부스 ' + escapeHtml(c.booth) : '미배정'}</span>
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(c.name)}</span>
-      <span style="color:var(--i3)">${c.qty}개</span>
+      <span style="color:var(--i3)">${c.shareOnly ? '<span class="pill p-blue" style="font-size:9px">비용 분담</span>' : c.qty + '개'}</span>
       <span style="min-width:88px;text-align:right;font-weight:600">${c.amt ? fmtMoney(c.amt, c.cur) : '-'}</span>
     </div>`).join('');
 

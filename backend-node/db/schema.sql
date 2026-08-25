@@ -400,3 +400,12 @@ ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS catalog_id TEXT;
    남아야 한다 — 몇 장을 신청했는지는 현장에서 필요한 정보다. 다만 금액은 우리
    청구액에 들어가면 안 된다. 지우는 대신 합계에서만 뺀다. */
 ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS billable TEXT;  -- '' | 'no'(청구 제외)
+
+/* ── 공동 부스 분담 항목 ──
+   부스 하나를 두 기업이 나눠 쓰면, 인보이스는 양쪽에 같은 품목을 적고 금액만
+   반씩 청구한다. 그대로 넣으면 발주 집계에서 의자 4개가 8개가 되어 없는 의자를
+   주문하게 된다.
+
+   그래서 "실물 주문은 저쪽에 있다"는 사실을 적어 둔다. 값이 있으면 금액은 세되
+   수량은 발주 집계에서 빼고, 화면에는 어느 부스와 나눠 쓰는지 보여준다. */
+ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS shared_ref TEXT;  -- 실물 수량을 들고 있는 참가기업 id
