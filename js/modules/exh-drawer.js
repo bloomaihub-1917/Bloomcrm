@@ -25,7 +25,7 @@ import {
 import { trackAction } from './audit-tab.js';
 import {
   billedAmount, paidAmount, graphicState, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
-  isPendingRefund, boothTypeOptions, SELF_BUILD_TYPE, exhNames,
+  isPendingRefund, boothTypeOptions, SELF_BUILD_TYPE, exhNames, isBillable,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar,
   settleState, liveInvoices, payDueDate,
 } from './exh-tab.js';
@@ -422,7 +422,16 @@ const curSelect = (cur, onchange) =>
    실제로 있어서(포트리아 등) 한 숫자로 합치면 거짓말이 된다. */
 function sumByCurrency(list){
   const by = {};
-  list.forEach(i => {
+  list.filter(isBillable).forEach(i => {
+    const c = i.currency || 'KRW';
+    by[c] = (by[c] || 0) + itemAmount(i);
+  });
+  return by;
+}
+/* 청구에서 뺀 항목만 따로 — 얼마가 빠졌는지 보이지 않으면 합계가 틀린 것처럼 보인다 */
+function excludedSum(list){
+  const by = {};
+  list.filter(i => !isBillable(i)).forEach(i => {
     const c = i.currency || 'KRW';
     by[c] = (by[c] || 0) + itemAmount(i);
   });
@@ -491,8 +500,11 @@ function dBilling(x){
         if(!g.length) return '';
         return g.map(i => `
         <div class="bl-row bl-item" style="padding:6px 8px;background:var(--i9);border-radius:6px">
-          <span class="pill p-gray" style="text-align:center">${escapeHtml(l)}</span>
-          <span style="min-width:0;font-size:12px;font-weight:600;word-break:break-all">${escapeHtml(i.name || '')}</span>
+          <span class="pill ${isBillable(i) ? 'p-gray' : 'p-amber'}" style="text-align:center;cursor:pointer"
+            onclick="toggleItemBillable('${escAttr(i.id)}')"
+            title="${isBillable(i) ? '클릭하면 청구에서 제외합니다' : '청구에서 빠져 있어요 — 클릭하면 되돌립니다'}">${
+            isBillable(i) ? escapeHtml(l) : '제외'}</span>
+          <span style="min-width:0;font-size:12px;font-weight:600;word-break:break-all${isBillable(i) ? '' : ';color:var(--i5)'}">${escapeHtml(i.name || '')}</span>
           <span class="bl-qty" style="font-size:11px;color:var(--i4)">${escapeHtml(i.qty || '')}${i.qty && i.unit_price ? ' × ' : ''}${i.unit_price ? money(i.unit_price) : ''}</span>
           <input class="fi bl-amt-in" value="${escAttr(i.amount || '')}" placeholder="금액"
             onchange="setItemField('${escAttr(i.id)}','amount',this.value)">
@@ -513,7 +525,14 @@ function dBilling(x){
         <span class="bl-qty"></span>
         <span class="bl-amt" style="font-size:13px">${sumText(sumByCurrency(items))}</span>
         <span></span><span></span>
-      </div>` : ''}
+      </div>
+      ${(() => {
+        const ex = excludedSum(items);
+        const ks = Object.keys(ex).filter(k => ex[k]);
+        return ks.length ? `<div style="font-size:10.5px;color:var(--i4);padding:4px 8px 0;text-align:right">
+          청구 제외 ${ks.map(k => fmtMoney(ex[k], k)).join(' + ')}
+          <span style="color:var(--i5)">— 추가 배지처럼 우리가 청구하지 않는 항목이에요</span></div>` : '';
+      })()}` : ''}
     </div>
     <div class="bl-row bl-item-add">
       <select class="fi" id="it-cat-${escAttr(x.id)}" style="flex:0 0 72px;min-width:0;font-size:11.5px;padding:6px"
@@ -953,6 +972,21 @@ export async function toggleRefundDone(id){
     `<b>${escapeHtml(x?.company_name || '')}</b> 환불 ${escapeHtml(String(p.amount || ''))} ${wasPending ? '지급 완료' : '요청 상태로 되돌림'}`);
 }
 
+/* 청구에 넣을지 말지 — 추가 배지처럼 주최 측에 따로 내는 항목을 빼둔다.
+   지우지 않는 이유는 몇 장을 신청했는지가 현장에서 필요한 정보라서다. */
+export async function toggleItemBillable(id){
+  const r = EXH_ITEMS.find(o => o.id === id);
+  if(!r) return;
+  const before = r.billable;
+  r.billable = isBillable(r) ? 'no' : '';
+  refreshExhViews();
+  const res = await saveExhItem({ id, billable: r.billable });
+  if(!res.ok){ r.billable = before; refreshExhViews(); alert('저장에 실패했어요.'); return; }
+  const x = getExhibitorById(r.exhibitor_id);
+  trackAction('edit', '청구 포함 여부 변경', x?.company_name || '',
+    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(r.name || '')} ${r.billable === 'no' ? '청구 제외' : '청구 포함'}`);
+}
+
 export async function setInvField(id, field, value){
   const v = EXH_INVOICES.find(i => i.id === id);
   if(!v) return;
@@ -1137,6 +1171,7 @@ window.delExhInvoice = delExhInvoice;
 window.setInvField = setInvField;
 window.setItemField = setItemField;
 window.setPayField = setPayField;
+window.toggleItemBillable = toggleItemBillable;
 window.pickCatalogItem = pickCatalogItem;
 window.rememberItemCat = rememberItemCat;
 window.rememberItemCur = rememberItemCur;

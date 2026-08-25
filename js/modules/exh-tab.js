@@ -128,10 +128,15 @@ export function mixedCurrency(exhId){
 }
 
 /* 청구액: 유효한 인보이스 합계. 아직 한 장도 없으면 금액 항목 합계를 예상액으로 쓴다. */
+/* 추가 배지처럼 우리가 청구하지 않는 항목은 합계에서 뺀다. 신청 내역에는 남는다 —
+   몇 장을 신청했는지는 현장에서 필요한 정보라 지울 수 없다. */
+export const isBillable = (i) => i.billable !== 'no';
+export function billableItems(exhId){ return itemsFor(exhId).filter(isBillable); }
+
 export function billedAmount(exhId){
   const cur = currencyOf(exhId);
   const inv = liveInvoices(exhId);
-  return inv.length ? sumIn(inv, cur) : sumIn(itemsFor(exhId), cur);
+  return inv.length ? sumIn(inv, cur) : sumIn(billableItems(exhId), cur);
 }
 /* 입금액: 입금 − 환불 */
 /* 환불은 요청받은 시점과 실제로 보낸 시점이 다르다. 요청만 들어온 건을 바로
@@ -688,8 +693,11 @@ function renderEquipView(list){
     g.qty += q || 1;   // 수량을 안 적었으면 1개로 센다
     g.cos.push({ id: x.id, name: x.company_name, booth: x.booth_no, qty: q || 1,
       amt, cur: i.currency || 'KRW', raw: i.name });
-    // 통화별로 나눠 담는다 — 합치면 원화와 달러를 더한 숫자가 된다
-    if((i.currency || 'KRW') === 'USD') g.usd += amt; else g.krw += amt;
+    // 통화별로 나눠 담는다 — 합치면 원화와 달러를 더한 숫자가 된다.
+    // 청구에서 뺀 항목은 수량은 세되 금액은 더하지 않는다 — 발주는 해야 하지만
+    // 우리 청구액은 아니다.
+    if(isBillable(i)){ if((i.currency || 'KRW') === 'USD') g.usd += amt; else g.krw += amt; }
+    else g.excluded = true;
   }));
   const groups = [...byName.values()].sort((a, b) => b.qty - a.qty);
 
@@ -755,6 +763,7 @@ function renderEquipView(list){
             <td style="font-size:11.5px;font-weight:700;color:var(--i2)">
               <span style="color:var(--a)">${open ? '▾' : '▸'}</span> ${escapeHtml(g.code || '—')}</td>
             <td style="font-size:12.5px;font-weight:600">${escapeHtml(g.nameKo)}
+              ${g.excluded ? '<span class="pill p-amber" style="font-size:9px;margin-left:4px" title="우리가 청구하지 않는 항목이라 금액 합계에서 빠져 있어요">청구 제외</span>' : ''}
               ${g.offCatalog ? '<span class="pill p-amber" style="font-size:9px;margin-left:4px" title="카탈로그에 없는 품목 — 직접 입력됐어요">카탈로그 외</span>' : ''}
               ${g.direct ? '<span class="pill p-teal" style="font-size:9px;margin-left:4px" title="신청하면서 직접 적어 품목마스터에 올린 품목이에요 — 단가·규격을 확인해주세요">직접 추가</span>' : ''}</td>
             <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(g.nameEn || '-')}</td>

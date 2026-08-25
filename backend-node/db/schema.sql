@@ -394,3 +394,9 @@ CREATE INDEX IF NOT EXISTS idx_equip_catalog_code  ON equip_catalog(event_id, co
 /* 신청 내역이 카탈로그의 어느 품목인지 가리킨다. 이름만 적혀 있으면 표기가
    흔들려 집계가 갈라지므로, 고른 품목의 id를 남긴다(직접 입력한 항목은 빈 값). */
 ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS catalog_id TEXT;
+
+/* ── 청구에서 빼는 항목 ──
+   추가 배지처럼 우리가 청구하지 않는(주최 측에 따로 내는) 항목이 신청 내역에는
+   남아야 한다 — 몇 장을 신청했는지는 현장에서 필요한 정보다. 다만 금액은 우리
+   청구액에 들어가면 안 된다. 지우는 대신 합계에서만 뺀다. */
+ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS billable TEXT;  -- '' | 'no'(청구 제외)
