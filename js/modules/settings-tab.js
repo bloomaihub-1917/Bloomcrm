@@ -1510,6 +1510,13 @@ export function renderCodeList(){
         return `<option value="${escAttr(k)}"${prev === k ? ' selected' : ''}>${escapeHtml(k)} 전용</option>`;
       }).join('') : '');
   if(!def.perEvent) sel.value = '';
+  // 고른 범위에 아무것도 없고 다른 범위에 들어 있으면 그쪽을 연다 — 실제로는
+  // 행사 전용으로 들어 있는 목록을 "공통"으로 열어 텅 빈 화면을 보여주면
+  // 목록이 없는 줄 안다
+  if(def.perEvent && !clRowsOf(key, sel.value).length){
+    const has = CODE_LISTS.find(c => c.list_key === key && c.event_id);
+    if(has && [...sel.options].some(o => o.value === has.event_id)) sel.value = has.event_id;
+  }
 
   const scope = clScope();
   const rows = clRowsOf(key, scope);
