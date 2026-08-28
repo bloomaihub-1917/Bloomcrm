@@ -26,7 +26,7 @@ import { trackAction } from './audit-tab.js';
 import {
   billedAmount, paidAmount, graphicState, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
   isPendingRefund, boothTypeOptions, SELF_BUILD_TYPE, exhNames, isBillable,
-  TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge,
+  TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar,
   settleState, liveInvoices, payDueDate,
 } from './exh-tab.js';
@@ -49,6 +49,7 @@ const TABS = [
   { key: 'progress', label: '진행' },
   { key: 'billing',  label: '정산' },
   { key: 'graphic',  label: '그래픽' },
+  { key: 'book',     label: '프로그램북' },
   { key: 'logs',     label: '문의·기록' },
 ];
 /* 옛 번호로 부르는 곳이 남아 있어도 맞는 탭이 열리게 한다 */
@@ -97,16 +98,18 @@ export function renderExhDr(){
 
   // 신청서가 아직 안 왔거나 정보가 빠졌으면 탭에서 바로 보이게 한다
   const appNeedsWork = !(x.app_received === 'yes' || x.app_received_at) || x.app_complete === 'no';
+  const bookMiss = bookMissing(x);   // 도록에 낼 정보 중 아직 안 받은 칸
 
   const tabsEl = document.getElementById('exh-drtabs');
   if(tabsEl) tabsEl.innerHTML = TABS.map((tb) =>
     `<button class="drtab${drTab === tb.key ? ' on' : ''}" onclick="switchExhDT('${tb.key}')">${tb.label}${
       tb.key === 'logs' && openN ? ` <span class="pill p-amber">${openN}</span>` : ''}${
-      tb.key === 'apply' && appNeedsWork ? ' <span class="pill p-amber">확인</span>' : ''}</button>`).join('');
+      tb.key === 'apply' && appNeedsWork ? ' <span class="pill p-amber">확인</span>' : ''}${
+      tb.key === 'book' && bookMiss.length ? ` <span class="pill p-amber">${bookMiss.length}</span>` : ''}</button>`).join('');
 
   const b = document.getElementById('exh-drbd');
   const VIEW = { contact: dContactTab, apply: dApply, progress: dProgress,
-    billing: dBilling, graphic: dGraphic, logs: dLogs };
+    billing: dBilling, graphic: dGraphic, book: dBook, logs: dLogs };
   if(b) b.innerHTML = (VIEW[drTab] || dContactTab)(x);
 }
 
@@ -426,6 +429,60 @@ function dApply(x){
   `;
 }
 
+/* ── 프로그램북 탭 ──
+   도록에 실을 정보는 기업마다 따로 받아야 하고, 편집 마감에 맞춰 빠진 칸을
+   재촉해야 한다. 무엇이 왔고 무엇이 비었는지 한 화면에서 보이게 한다.
+
+   회사소개 글자수는 저장하지 않고 늘 다시 센다 — 지면이 정해져 있어 이 숫자로
+   편집 가능 여부를 판단하는데, 세어 둔 값은 본문을 고치는 순간 어긋난다. */
+function dBook(x){
+  const miss = bookMissing(x);
+  const n = introLen(x.book_intro);
+  const row = (f, label, ph) => `<div class="fg"><label class="fl">${escapeHtml(label)}</label>
+    <input class="fi" style="font-size:12px" value="${escAttr(x[f] || '')}" placeholder="${escAttr(ph)}"
+      onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')"></div>`;
+
+  return `
+  ${sct('게재 정보', `
+    ${miss.length
+      ? `<div style="font-size:11.5px;color:var(--am);background:var(--ab);padding:7px 9px;border-radius:6px;margin-bottom:10px">
+          아직 못 받은 항목 ${miss.length}개 — <b>${escapeHtml(miss.join(', '))}</b></div>`
+      : `<div style="font-size:11.5px;color:var(--g);background:var(--gb);padding:7px 9px;border-radius:6px;margin-bottom:10px">
+          도록에 낼 정보가 모두 채워졌어요</div>`}
+    <div class="fgr">
+      <div class="fg"><label class="fl">게재 순서</label>
+        <input class="fi" style="font-size:12px" value="${escAttr(x.book_order || '')}" placeholder="예: 1"
+          onchange="setExhField('${escAttr(x.id)}','book_order',this.value,'도록 순서')"></div>
+      <div class="fg"><label class="fl">로고</label>
+        <div class="stbs" style="margin-top:4px">
+          ${[['', '미확인'], ['yes', '받음'], ['no', '없음']].map(([v, l]) =>
+            `<button class="stb${(x.book_logo || '') === v ? ' on' : ''}"
+              onclick="setExhField('${escAttr(x.id)}','book_logo','${v}','로고')">${l}</button>`).join('')}
+        </div></div>
+    </div>
+    ${row('book_address', '주소', '예: 서울시 강남구 …')}
+    <div class="fgr">
+      ${row('book_phone', '연락처', '예: 02-000-0000')}
+      ${row('book_website', '웹사이트', 'https://')}
+    </div>`,
+    miss.length ? `<span class="pill p-amber">${miss.length}개 미수령</span>` : '<span class="pill p-green">완료</span>')}
+
+  ${sct('회사소개', `
+    <textarea class="fi" rows="8" style="font-size:12.5px;line-height:1.7"
+      placeholder="도록에 실을 회사소개를 붙여넣으세요"
+      oninput="this.nextElementSibling.querySelector('b').textContent = this.value.trim().length"
+      onchange="setExhField('${escAttr(x.id)}','book_intro',this.value,'회사소개')">${escapeHtml(x.book_intro || '')}</textarea>
+    <div style="font-size:11.5px;color:var(--i4);margin-top:6px">
+      띄어쓰기 포함 <b style="color:var(--i1);font-size:13px">${n}</b>자
+      <span style="color:var(--i5)"> · 지면에 맞는지 확인하고 넘치면 기업에 줄여 달라고 요청하세요</span></div>`,
+    n ? `<span class="pill p-gray">${n}자</span>` : '<span class="pill p-red">없음</span>')}
+
+  ${sct('자료 수신',
+    flagRow(x, 'directory_received', 'directory_received_at', '자료 수신', '회사소개·로고·제품정보') +
+    textRow(x, 'directory_note', '메모', '받은 자료나 누락 항목', true))}
+  `;
+}
+
 function dProgress(x){
   return `
   ${sct('매뉴얼', dateRow(x, 'manual_sent_at', '매뉴얼 발송') + dateRow(x, 'manual_replied_at', '매뉴얼 회신'))}
@@ -453,10 +510,6 @@ function dProgress(x){
         ${GRADES.map(g => `<option value="${escAttr(g)}"${(x.grade || '') === g ? ' selected' : ''}>${g || '— 없음 —'}</option>`).join('')}
       </select></div>` +
     flagRow(x, 'booth_confirmed', 'booth_confirmed_at', '배정 확정'))}
-
-  ${sct('도록 / 디렉토리',
-    flagRow(x, 'directory_received', 'directory_received_at', '자료 수신', '회사소개·로고·제품정보') +
-    textRow(x, 'directory_note', '메모', '받은 자료나 누락 항목', true))}
 
   ${sct('현장',
     dateRow(x, 'movein_at', '반입 / 설치') +

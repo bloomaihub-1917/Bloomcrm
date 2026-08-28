@@ -507,7 +507,7 @@ export function renderExh(){
      담당이 갈리고 마감도 달라서, 기업별 드로어를 51번 열지 않고 한 화면에서
      끝낼 수 있어야 한다. */
   const VIEWS = [['dash','대시보드'], ['list','체크리스트'],
-    ['booth','부스 현황'], ['equip','비품 현황'], ['graphic','그래픽 현황']];
+    ['booth','부스 현황'], ['equip','비품 현황'], ['graphic','그래픽 현황'], ['book','프로그램북']];
   const seg = `<div class="tbar" style="padding:10px 16px 0">
     <div class="seg" style="flex-wrap:wrap">
       ${VIEWS.map(([k, l]) => `<button class="seg-b${exhView === k ? ' on' : ''}" onclick="setExhView('${k}')">${l}</button>`).join('')}
@@ -518,6 +518,7 @@ export function renderExh(){
     : exhView === 'booth'   ? renderBoothView(list)
     : exhView === 'equip'   ? renderEquipView(list)
     : exhView === 'graphic' ? renderGraphicView(list)
+    : exhView === 'book'    ? renderBookView(list)
     : renderInquiryPanel() + renderChecklist(list, all);
   el.innerHTML = seg + bodyHtml;
 }
@@ -1032,6 +1033,173 @@ export async function rewindStage(id, field){
   trackAction('status', `${STAGE_NAME[field]} 단계`, x.company_name || '',
     `<b>${escapeHtml(x.company_name || '')}</b> ${escapeHtml(STAGE_NAME[field])} ${escapeHtml(cur.label)} → ${escapeHtml(prev.label)} (되돌림)`);
 }
+
+/* ══════════════════════════════════════════
+   프로그램북 현황
+
+   도록에 실을 정보를 기업마다 받아 정리한다. 자료를 받았는지만 체크하던 것으로는
+   무엇이 왔고 무엇이 비었는지 알 수 없어 매번 메일을 다시 열어야 했다.
+
+   회사소개는 지면이 정해져 있어 글자수가 곧 편집 가능 여부다. 저장은 원문 그대로
+   하고 글자수는 화면에서 센다 — 세어 둔 숫자를 저장하면 본문을 고쳤을 때 어긋난다.
+   띄어쓰기와 줄바꿈은 그대로 세되, 앞뒤 공백만 덜어낸다(편집에서 의미가 없다).
+══════════════════════════════════════════ */
+export const introLen = (v) => String(v ?? '').trim().length;
+
+const BOOK_FIELDS = [
+  ['book_address', '주소'],
+  ['book_phone',   '연락처'],
+  ['book_website', '웹사이트'],
+];
+
+/* 도록에 낼 정보를 다 채웠나 — 빠진 칸을 모아 알려준다 */
+export function bookMissing(x){
+  const miss = [];
+  if(x.book_logo !== 'yes') miss.push('로고');
+  BOOK_FIELDS.forEach(([f, l]) => { if(!String(x[f] || '').trim()) miss.push(l); });
+  if(!introLen(x.book_intro)) miss.push('회사소개');
+  return miss;
+}
+
+function renderBookView(list){
+  if(!list.length) return emptyView('표시할 기업이 없어요');
+
+  /* 순서를 적어 뒀으면 그 순서로, 없으면 부스 번호순으로 세운다 — 도록은 보통
+     부스 배치 순으로 싣기 때문에 그게 기본값으로 쓸 만하다. */
+  const rows = [...list].sort((a, b) => {
+    const ao = Number(String(a.book_order || '').replace(/[^0-9]/g, '')) || 0;
+    const bo = Number(String(b.book_order || '').replace(/[^0-9]/g, '')) || 0;
+    if(ao || bo) return (ao || 1e9) - (bo || 1e9);
+    return boothSortKey(a) - boothSortKey(b);
+  });
+
+  const done = rows.filter(x => !bookMissing(x).length).length;
+  const noLogo = rows.filter(x => x.book_logo !== 'yes').length;
+  const noIntro = rows.filter(x => !introLen(x.book_intro)).length;
+  const lens = rows.map(x => introLen(x.book_intro)).filter(Boolean);
+
+  const pills = `<span class="pill p-gray">기업 ${rows.length}</span>`
+    + `<span class="pill ${done === rows.length ? 'p-green' : 'p-amber'}">완성 ${done}/${rows.length}</span>`
+    + (noLogo ? `<span class="pill p-red">로고 미확보 ${noLogo}</span>` : '')
+    + (noIntro ? `<span class="pill p-red">회사소개 없음 ${noIntro}</span>` : '')
+    + (lens.length ? `<span class="pill p-gray" title="띄어쓰기 포함">소개 ${Math.min(...lens)}~${Math.max(...lens)}자</span>` : '')
+    + `<span style="font-size:10.5px;color:var(--i5);margin-left:2px">글자수는 띄어쓰기를 포함해 셉니다</span>`;
+
+  const actions = `<button class="btn bs" onclick="fillBookOrder()" title="지금 부스 번호순으로 1번부터 다시 매깁니다">순서 자동 매기기</button>`;
+
+  const logoBtn = (x) => `<button
+    onclick="event.stopPropagation();cycleBookLogo('${escAttr(x.id)}')"
+    title="${x.book_logo === 'yes' ? '로고 받음' : x.book_logo === 'no' ? '로고 없음 — 요청 필요' : '아직 확인 안 함'}"
+    style="border:none;background:none;padding:0;cursor:pointer;font-size:14px;line-height:1">
+    ${x.book_logo === 'yes' ? '<span style="color:var(--g)">✓</span>'
+      : x.book_logo === 'no' ? '<span style="color:var(--re)">✕</span>'
+      : '<span style="color:var(--i6)">—</span>'}</button>`;
+
+  const introCell = (x) => {
+    const n = introLen(x.book_intro);
+    return `<span class="pill ${n ? 'p-gray' : 'p-red'}" style="cursor:pointer"
+      onclick="event.stopPropagation();openBookIntro('${escAttr(x.id)}')"
+      title="클릭하면 회사소개를 보고 고칠 수 있어요">${n ? n + '자' : '없음'}</span>`;
+  };
+
+  if(isMobile()) return viewShell(pills, rows.map(x => {
+    const miss = bookMissing(x);
+    return `<div onclick="openExhDr('${escAttr(x.id)}','book')" style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
+        <span class="pill p-gray">${escapeHtml(x.book_order || '-')}</span>
+        <span style="font-size:13px;font-weight:700;flex:1;min-width:0">${escapeHtml(exhNames(x).ko)}</span>
+        ${x.booth_no ? `<span class="pill p-blue">부스 ${escapeHtml(x.booth_no)}</span>` : ''}
+      </div>
+      <div style="font-size:11px;color:var(--i4)">회사소개 ${introLen(x.book_intro)}자 · 로고 ${
+        x.book_logo === 'yes' ? '있음' : x.book_logo === 'no' ? '없음' : '미확인'}</div>
+      ${miss.length
+        ? `<div style="font-size:11px;color:var(--re);margin-top:3px">빠짐: ${escapeHtml(miss.join(', '))}</div>`
+        : '<div style="font-size:11px;color:var(--g);margin-top:3px">모두 채워졌어요</div>'}
+    </div>`;
+  }).join(''), actions);
+
+  const cell = (x, f, w) => `<td><input class="fi" style="width:${w};padding:3px 5px;font-size:11.5px"
+    value="${escAttr(x[f] || '')}" onclick="event.stopPropagation()"
+    onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr((BOOK_FIELDS.find(b => b[0] === f) || ['', f])[1])}')"></td>`;
+
+  return viewShell(pills, `<div class="tw"><table><thead><tr>
+      <th style="min-width:48px">순서</th>
+      <th style="min-width:44px;text-align:center">로고</th>
+      <th style="min-width:150px">기업명</th>
+      <th style="min-width:56px">부스</th>
+      <th style="min-width:170px">주소</th>
+      <th style="min-width:110px">연락처</th>
+      <th style="min-width:140px">웹사이트</th>
+      <th style="min-width:70px;text-align:center">회사소개</th>
+      <th style="min-width:80px">빠진 항목</th>
+    </tr></thead><tbody>
+    ${rows.map(x => {
+      const miss = bookMissing(x);
+      return `<tr onclick="openExhDr('${escAttr(x.id)}','book')" style="cursor:pointer">
+        <td><input class="fi" style="width:42px;padding:3px 5px;font-size:11.5px;text-align:center;font-weight:700"
+          value="${escAttr(x.book_order || '')}" onclick="event.stopPropagation()"
+          onchange="setExhField('${escAttr(x.id)}','book_order',this.value,'도록 순서')"></td>
+        <td style="text-align:center">${logoBtn(x)}</td>
+        ${coCell(x, 'book')}
+        <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
+        ${cell(x, 'book_address', '164px')}
+        ${cell(x, 'book_phone', '104px')}
+        ${cell(x, 'book_website', '134px')}
+        <td style="text-align:center">${introCell(x)}</td>
+        <td>${miss.length
+          ? `<span class="pill p-amber" title="${escAttr(miss.join(', '))}">${miss.length}개</span>`
+          : '<span class="pill p-green">완료</span>'}</td>
+      </tr>`;
+    }).join('')}
+    </tbody></table></div>`, actions);
+}
+
+/* 로고는 받음 / 없음 / 미확인 셋뿐이라 눌러서 돌린다 */
+export async function cycleBookLogo(id){
+  const x = getExhibitorById(id);
+  if(!x) return;
+  const next = { '': 'yes', yes: 'no', no: '' }[x.book_logo || ''];
+  await patchExh(id, { book_logo: next }, null);
+}
+
+/* 지금 목록을 부스 번호순으로 1번부터 다시 매긴다 */
+export async function fillBookOrder(){
+  const rows = [...visibleList()].sort((a, b) => boothSortKey(a) - boothSortKey(b));
+  if(!rows.length) return;
+  if(!confirm(`${rows.length}개 기업의 도록 순서를 부스 번호순으로 다시 매길까요? 이미 적어둔 순서는 덮어씁니다.`)) return;
+  for(let i = 0; i < rows.length; i++){
+    if(String(rows[i].book_order || '') === String(i + 1)) continue;
+    await patchExh(rows[i].id, { book_order: String(i + 1) }, null);
+  }
+  renderExh();
+}
+
+/* 회사소개는 길어서 표 칸에 안 들어간다 — 눌러서 따로 연다.
+   고치는 동안 글자수가 바로 따라 움직여야 몇 자를 줄여야 하는지 보인다. */
+export function openBookIntro(id){
+  const x = getExhibitorById(id);
+  if(!x) return;
+  modalShell('book-intro-modal', `회사소개 — ${exhNames(x).ko}`, `
+    <textarea class="fi" id="bi-text" rows="12" style="font-size:12.5px;line-height:1.7"
+      oninput="document.getElementById('bi-count').textContent = this.value.trim().length"
+      placeholder="도록에 실을 회사소개를 붙여넣으세요">${escapeHtml(x.book_intro || '')}</textarea>
+    <div style="font-size:11.5px;color:var(--i4);margin:8px 0 12px">
+      띄어쓰기 포함 <b id="bi-count" style="color:var(--i1);font-size:13px">${introLen(x.book_intro)}</b>자</div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn bs" onclick="closeBookIntro()">취소</button>
+      <button class="btn bp" onclick="saveBookIntro('${escAttr(id)}')">저장</button>
+    </div>`);
+  document.getElementById('bi-text')?.focus();
+}
+
+export async function saveBookIntro(id){
+  const el = document.getElementById('bi-text');
+  if(!el) return;
+  await patchExh(id, { book_intro: el.value.trim() }, null);
+  closeBookIntro();
+  renderExh();
+}
+export const closeBookIntro = () => document.getElementById('book-intro-modal')?.remove();
 
 const modalShell = (id, title, body) => {
   if(document.getElementById(id)) return;
@@ -1789,6 +1957,11 @@ window.setExhFilter = setExhFilter;
 window.setExhView = setExhView;
 window.toggleEquipRow = toggleEquipRow;
 window.advanceStage = advanceStage;
+window.cycleBookLogo = cycleBookLogo;
+window.fillBookOrder = fillBookOrder;
+window.openBookIntro = openBookIntro;
+window.saveBookIntro = saveBookIntro;
+window.closeBookIntro = closeBookIntro;
 window.rewindStage = rewindStage;
 window.openNewCatalogItem = openNewCatalogItem;
 // 뒤로가기로 닫을 수 있게 닫기 함수도 이름으로 내어 둔다(overlay-nav.js 참고)

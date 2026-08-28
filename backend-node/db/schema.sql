@@ -441,3 +441,21 @@ ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS graphic_received_at TEXT;  -- �
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS graphic_to_team_at  TEXT;  -- 그래픽팀에 넘긴 날
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS graphic_team_ok_at  TEXT;  -- 그래픽팀이 확인한 날
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS graphic_replied_at  TEXT;  -- 기업에 회신한 날
+
+/* ══════════════════════════════════════════════════════════════
+   프로그램북(도록) 게재 정보
+
+   참가기업마다 도록에 실을 정보를 따로 받아 정리한다. 지금은 자료를 받았는지
+   여부(directory_received)와 메모 한 칸뿐이라, 무엇이 왔고 무엇이 비었는지
+   메일을 다시 열어봐야 했다.
+
+   회사소개는 지면이 정해져 있어 글자수가 곧 편집 가능 여부다. 넘치면 기업에
+   줄여 달라고 요청해야 하므로, 저장은 원문 그대로 하고 글자수는 화면에서 센다
+   — 세어 둔 숫자를 저장하면 본문을 고쳤을 때 어긋난다.
+══════════════════════════════════════════════════════════════ */
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS book_order   TEXT;  -- 게재 순서
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS book_logo    TEXT;  -- '' | 'yes'(받음) | 'no'(없음)
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS book_address TEXT;
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS book_phone   TEXT;
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS book_website TEXT;
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS book_intro   TEXT;  -- 회사소개 원문
