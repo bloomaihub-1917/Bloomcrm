@@ -26,7 +26,7 @@ import { trackAction } from './audit-tab.js';
 import {
   billedAmount, paidAmount, graphicState, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
   isPendingRefund, boothTypeOptions, SELF_BUILD_TYPE, exhNames, isBillable,
-  TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing,
+  TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing, introOver, BOOK_LIMIT,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar,
   settleState, liveInvoices, payDueDate,
 } from './exh-tab.js';
@@ -435,9 +435,24 @@ function dApply(x){
 
    회사소개 글자수는 저장하지 않고 늘 다시 센다 — 지면이 정해져 있어 이 숫자로
    편집 가능 여부를 판단하는데, 세어 둔 값은 본문을 고치는 순간 어긋난다. */
+/* 글자수·단어수와 한도를 한 줄로 — 넘치면 얼마나 줄여야 하는지까지 적는다 */
+function introMeter(v){
+  const o = introOver(v);
+  return `<span style="color:${o.isOver ? 'var(--re)' : 'var(--i4)'}">
+      띄어쓰기 포함 <b style="font-size:13px">${o.chars}</b>자 · <b style="font-size:13px">${o.words}</b>단어</span>
+    <span style="color:var(--i5)"> / 한도 ${BOOK_LIMIT.chars.toLocaleString()}자 · ${BOOK_LIMIT.words}단어</span>
+    ${o.isOver ? `<div style="color:var(--re);font-weight:700;margin-top:3px">${o.over.join(', ')} 초과 — 기업에 줄여 달라고 요청하세요</div>`
+      : o.chars ? `<div style="color:var(--g);margin-top:3px">지면에 들어갑니다 (${BOOK_LIMIT.chars - o.chars}자 여유)</div>` : ''}`;
+}
+export function drawIntroMeter(id){
+  const ta = document.getElementById(`bk-intro-${id}`);
+  const el = document.getElementById(`bk-meter-${id}`);
+  if(ta && el) el.innerHTML = introMeter(ta.value);
+}
+
 function dBook(x){
   const miss = bookMissing(x);
-  const n = introLen(x.book_intro);
+  const o = introOver(x.book_intro);
   const row = (f, label, ph) => `<div class="fg"><label class="fl">${escapeHtml(label)}</label>
     <input class="fi" style="font-size:12px" value="${escAttr(x[f] || '')}" placeholder="${escAttr(ph)}"
       onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')"></div>`;
@@ -468,14 +483,13 @@ function dBook(x){
     miss.length ? `<span class="pill p-amber">${miss.length}개 미수령</span>` : '<span class="pill p-green">완료</span>')}
 
   ${sct('회사소개', `
-    <textarea class="fi" rows="8" style="font-size:12.5px;line-height:1.7"
+    <textarea class="fi" id="bk-intro-${escAttr(x.id)}" rows="8" style="font-size:12.5px;line-height:1.7"
       placeholder="도록에 실을 회사소개를 붙여넣으세요"
-      oninput="this.nextElementSibling.querySelector('b').textContent = this.value.trim().length"
+      oninput="drawIntroMeter('${escAttr(x.id)}')"
       onchange="setExhField('${escAttr(x.id)}','book_intro',this.value,'회사소개')">${escapeHtml(x.book_intro || '')}</textarea>
-    <div style="font-size:11.5px;color:var(--i4);margin-top:6px">
-      띄어쓰기 포함 <b style="color:var(--i1);font-size:13px">${n}</b>자
-      <span style="color:var(--i5)"> · 지면에 맞는지 확인하고 넘치면 기업에 줄여 달라고 요청하세요</span></div>`,
-    n ? `<span class="pill p-gray">${n}자</span>` : '<span class="pill p-red">없음</span>')}
+    <div id="bk-meter-${escAttr(x.id)}" style="font-size:11.5px;margin-top:6px">${introMeter(x.book_intro)}</div>`,
+    o.chars ? `<span class="pill ${o.isOver ? 'p-red' : 'p-green'}">${o.chars}자${o.isOver ? ' 초과' : ''}</span>`
+      : '<span class="pill p-red">없음</span>')}
 
   ${sct('자료 수신',
     flagRow(x, 'directory_received', 'directory_received_at', '자료 수신', '회사소개·로고·제품정보') +
@@ -1310,6 +1324,7 @@ export async function holdExhLog(id){
 window.openExhDr = openExhDr;
 window.closeExhDr = closeExhDr;
 window.switchExhDT = switchExhDT;
+window.drawIntroMeter = drawIntroMeter;
 window.renderExhDr = renderExhDr;
 window.addExhItem = addExhItem;
 window.delExhItem = delExhItem;

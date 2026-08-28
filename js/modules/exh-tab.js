@@ -1046,6 +1046,24 @@ export async function rewindStage(id, field){
 ══════════════════════════════════════════ */
 export const introLen = (v) => String(v ?? '').trim().length;
 
+/* 단어수 — 영문 소개가 대부분이라 공백으로 끊어 센다.
+   지면 기준이 1,354자(189단어)로 잡혀 있어 여유를 두고 1,300자 / 200단어를
+   한도로 쓴다. 둘 중 하나만 넘어도 지면을 넘길 수 있으므로 각각 본다. */
+export const introWords = (v) => {
+  const t = String(v ?? '').trim();
+  return t ? t.split(/\s+/).length : 0;
+};
+export const BOOK_LIMIT = { chars: 1300, words: 200 };
+
+/* 넘쳤나 — 넘긴 쪽과 얼마나 넘겼는지 함께 돌려준다 */
+export function introOver(v){
+  const c = introLen(v), w = introWords(v);
+  const over = [];
+  if(c > BOOK_LIMIT.chars) over.push(`${c - BOOK_LIMIT.chars}자`);
+  if(w > BOOK_LIMIT.words) over.push(`${w - BOOK_LIMIT.words}단어`);
+  return { chars: c, words: w, over, isOver: over.length > 0 };
+}
+
 const BOOK_FIELDS = [
   ['book_address', '주소'],
   ['book_phone',   '연락처'],
@@ -1077,13 +1095,16 @@ function renderBookView(list){
   const noLogo = rows.filter(x => x.book_logo !== 'yes').length;
   const noIntro = rows.filter(x => !introLen(x.book_intro)).length;
   const lens = rows.map(x => introLen(x.book_intro)).filter(Boolean);
+  const overRows = rows.map(x => ({ x, o: introOver(x.book_intro) })).filter(r => r.o.isOver);
+  const overN = overRows.length;
 
   const pills = `<span class="pill p-gray">기업 ${rows.length}</span>`
     + `<span class="pill ${done === rows.length ? 'p-green' : 'p-amber'}">완성 ${done}/${rows.length}</span>`
     + (noLogo ? `<span class="pill p-red">로고 미확보 ${noLogo}</span>` : '')
     + (noIntro ? `<span class="pill p-red">회사소개 없음 ${noIntro}</span>` : '')
     + (lens.length ? `<span class="pill p-gray" title="띄어쓰기 포함">소개 ${Math.min(...lens)}~${Math.max(...lens)}자</span>` : '')
-    + `<span style="font-size:10.5px;color:var(--i5);margin-left:2px">글자수는 띄어쓰기를 포함해 셉니다</span>`;
+    + (overN ? `<span class="pill p-red" title="${escAttr(overRows.map(o => `${exhNames(o.x).ko} ${o.o.chars}자`).join(', '))}">한도 초과 ${overN}</span>` : '')
+    + `<span style="font-size:10.5px;color:var(--i5);margin-left:2px">한도 ${BOOK_LIMIT.chars.toLocaleString()}자 · ${BOOK_LIMIT.words}단어 (띄어쓰기 포함)</span>`;
 
   const actions = `<button class="btn bs" onclick="fillBookOrder()" title="지금 부스 번호순으로 1번부터 다시 매깁니다">순서 자동 매기기</button>`;
 
@@ -1096,10 +1117,14 @@ function renderBookView(list){
       : '<span style="color:var(--i6)">—</span>'}</button>`;
 
   const introCell = (x) => {
-    const n = introLen(x.book_intro);
-    return `<span class="pill ${n ? 'p-gray' : 'p-red'}" style="cursor:pointer"
+    const o = introOver(x.book_intro);
+    if(!o.chars) return `<span class="pill p-red" style="cursor:pointer"
+      onclick="event.stopPropagation();openBookIntro('${escAttr(x.id)}')">없음</span>`;
+    return `<span class="pill ${o.isOver ? 'p-red' : 'p-green'}" style="cursor:pointer"
       onclick="event.stopPropagation();openBookIntro('${escAttr(x.id)}')"
-      title="클릭하면 회사소개를 보고 고칠 수 있어요">${n ? n + '자' : '없음'}</span>`;
+      title="${o.chars}자 / ${o.words}단어 · 한도 ${BOOK_LIMIT.chars}자 · ${BOOK_LIMIT.words}단어${
+        o.isOver ? ` — ${o.over.join(', ')} 초과` : ''}">${o.chars}자${
+        o.isOver ? ` <b>+${o.over[0]}</b>` : ''}</span>`;
   };
 
   if(isMobile()) return viewShell(pills, rows.map(x => {
@@ -1110,8 +1135,10 @@ function renderBookView(list){
         <span style="font-size:13px;font-weight:700;flex:1;min-width:0">${escapeHtml(exhNames(x).ko)}</span>
         ${x.booth_no ? `<span class="pill p-blue">부스 ${escapeHtml(x.booth_no)}</span>` : ''}
       </div>
-      <div style="font-size:11px;color:var(--i4)">회사소개 ${introLen(x.book_intro)}자 · 로고 ${
-        x.book_logo === 'yes' ? '있음' : x.book_logo === 'no' ? '없음' : '미확인'}</div>
+      ${(() => { const o = introOver(x.book_intro);
+        return `<div style="font-size:11px;color:${o.isOver ? 'var(--re)' : 'var(--i4)'}">회사소개 ${o.chars}자 · ${o.words}단어${
+          o.isOver ? ` (${o.over.join(', ')} 초과)` : ''} · 로고 ${
+          x.book_logo === 'yes' ? '있음' : x.book_logo === 'no' ? '없음' : '미확인'}</div>`; })()}
       ${miss.length
         ? `<div style="font-size:11px;color:var(--re);margin-top:3px">빠짐: ${escapeHtml(miss.join(', '))}</div>`
         : '<div style="font-size:11px;color:var(--g);margin-top:3px">모두 채워졌어요</div>'}
@@ -1181,15 +1208,29 @@ export function openBookIntro(id){
   if(!x) return;
   modalShell('book-intro-modal', `회사소개 — ${exhNames(x).ko}`, `
     <textarea class="fi" id="bi-text" rows="12" style="font-size:12.5px;line-height:1.7"
-      oninput="document.getElementById('bi-count').textContent = this.value.trim().length"
+      oninput="updateIntroCount()"
       placeholder="도록에 실을 회사소개를 붙여넣으세요">${escapeHtml(x.book_intro || '')}</textarea>
-    <div style="font-size:11.5px;color:var(--i4);margin:8px 0 12px">
-      띄어쓰기 포함 <b id="bi-count" style="color:var(--i1);font-size:13px">${introLen(x.book_intro)}</b>자</div>
+    <div id="bi-meter" style="font-size:11.5px;margin:8px 0 12px"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn bs" onclick="closeBookIntro()">취소</button>
       <button class="btn bp" onclick="saveBookIntro('${escAttr(id)}')">저장</button>
     </div>`);
+  updateIntroCount();
   document.getElementById('bi-text')?.focus();
+}
+
+/* 고치는 동안 남은 글자수가 따라 움직여야 몇 자를 줄여야 하는지 보인다 */
+export function updateIntroCount(){
+  const ta = document.getElementById('bi-text');
+  const el = document.getElementById('bi-meter');
+  if(!ta || !el) return;
+  const o = introOver(ta.value);
+  const bad = o.isOver;
+  el.innerHTML = `<span style="color:${bad ? 'var(--re)' : 'var(--i4)'}">
+      띄어쓰기 포함 <b style="font-size:13px">${o.chars}</b>자 · <b style="font-size:13px">${o.words}</b>단어</span>
+    <span style="color:var(--i5)"> / 한도 ${BOOK_LIMIT.chars.toLocaleString()}자 · ${BOOK_LIMIT.words}단어</span>
+    ${bad ? `<div style="color:var(--re);font-weight:700;margin-top:3px">${o.over.join(', ')} 초과 — 줄여야 실립니다</div>`
+      : `<div style="color:var(--g);margin-top:3px">지면에 들어갑니다 (${BOOK_LIMIT.chars - o.chars}자 여유)</div>`}`;
 }
 
 export async function saveBookIntro(id){
@@ -1961,6 +2002,7 @@ window.cycleBookLogo = cycleBookLogo;
 window.fillBookOrder = fillBookOrder;
 window.openBookIntro = openBookIntro;
 window.saveBookIntro = saveBookIntro;
+window.updateIntroCount = updateIntroCount;
 window.closeBookIntro = closeBookIntro;
 window.rewindStage = rewindStage;
 window.openNewCatalogItem = openNewCatalogItem;
