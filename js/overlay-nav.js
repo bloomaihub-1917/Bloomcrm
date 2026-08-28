@@ -34,6 +34,7 @@ const OVERLAYS = [
   { open: 'openNewCatalogItem',   close: 'closeNewCatalogItem',    isOpen: byId('new-eq-modal') },
   { open: 'openNewGraphicOrder',  close: 'closeNewGraphicOrder',   isOpen: byId('new-gr-modal') },
   { open: 'openBookIntro',        close: 'closeBookIntro',         isOpen: byId('book-intro-modal') },
+  { open: 'openNewContact',       close: 'closeNewContact',        isOpen: byId('new-contact-modal') },
   { open: 'openAddEvModal',       close: 'closeAddEvModal',        isOpen: byId('add-ev-modal') },
   { open: 'openAddCoEventModal',  close: 'closeAddEvModal',        isOpen: byId('add-ev-modal') },
   { open: null,                   close: 'closeCoSectorPopover',   isOpen: byId('co-sector-popover') },

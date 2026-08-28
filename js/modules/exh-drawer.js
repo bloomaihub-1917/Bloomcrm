@@ -15,6 +15,7 @@ import {
   getExhibitorById, itemsFor, invoicesFor, paymentsFor, logsFor, openInquiriesFor,
   EXH_CONTACTS, EXH_ITEMS, EXH_INVOICES, EXH_PAYMENTS, EXH_LOGS, CO_DB, currentUser,
   contactsFor, catalogFor, catalogItem, EQUIP_CATALOG, findCatalogByName,
+  contacts, getOrgById,
 } from '../state.js';
 import { td, escapeHtml, escAttr } from '../utils.js';
 import {
@@ -25,7 +26,7 @@ import {
 import { trackAction } from './audit-tab.js';
 import {
   billedAmount, paidAmount, graphicState, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
-  isPendingRefund, boothTypeOptions, SELF_BUILD_TYPE, exhNames, isBillable,
+  isPendingRefund, boothTypeOptions, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
   TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing, introOver, BOOK_LIMIT,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar,
   settleState, liveInvoices, payDueDate,
@@ -364,21 +365,140 @@ function dContact(x){
 
   return `
   <div style="font-size:11px;color:var(--i5);margin-bottom:8px">
-    우리가 실제로 연락하는 기업측 담당자예요. 실무·정산·현장이 다르면 여러 명 등록할 수 있어요.</div>
+    이 전시에서 우리가 연락하는 사람들이에요. 실무·정산·현장이 다르면 여러 명 배정할 수 있어요.</div>
 
-  ${list.length ? list.map(card).join('') : '<div style="font-size:11.5px;color:var(--i5);padding:6px 2px;margin-bottom:6px">등록된 담당자가 없어요</div>'}
+  ${list.length ? list.map(card).join('')
+    : '<div style="font-size:11.5px;color:var(--i5);padding:6px 2px;margin-bottom:6px">아직 배정된 담당자가 없어요 — 아래에서 고르세요</div>'}
 
-  <div style="display:flex;gap:5px;align-items:center;margin-top:8px">
-    <select class="fi" id="exc-pick-${escAttr(x.id)}" style="flex:1;font-size:11.5px;padding:6px">
-      <option value="">— 마스터DB에서 고르기 —</option>
-      ${free.map(c => `<option value="${escAttr(String(c.id))}">${escapeHtml((c.nameKo || c.nameEn || '이름 없음')
-        + (c.titleKo ? ` · ${c.titleKo}` : '') + (c.email1 ? ` · ${cleanEmail(c.email1)}` : ''))}</option>`).join('')}
-    </select>
-    <button class="btn bp bs" onclick="addExhContact('${escAttr(x.id)}')">추가</button>
-    <button class="btn bs" onclick="addExhContact('${escAttr(x.id)}',true)" title="마스터DB에 없는 사람">직접 입력</button>
+  <div style="display:flex;align-items:center;gap:8px;margin:16px 0 7px;padding-top:12px;border-top:1px solid var(--i7)">
+    <span style="font-size:11px;font-weight:700;color:var(--i3)">이 기업의 마스터DB 연락처</span>
+    <span style="font-size:10.5px;color:var(--i5)">${cands.length}명</span>
+    <button class="btn bp bs" style="margin-left:auto;font-size:11px" onclick="openNewContact('${escAttr(x.id)}')">+ 직접 입력</button>
   </div>
-  ${!free.length && cands.length ? '<div style="font-size:10.5px;color:var(--i5);margin-top:4px">이 기업의 마스터DB 연락처는 모두 등록했어요</div>' : ''}
-  ${!cands.length ? '<div style="font-size:10.5px;color:var(--am);margin-top:4px">이 기업 연락처가 마스터DB에 없어요 — "직접 입력"으로 추가하세요</div>' : ''}`;
+
+  ${cands.length ? cands.map(c => {
+    const on = usedIds.has(String(c.id));
+    const sub = [c.titleKo || c.titleEn, c.deptKo || c.deptEn, cleanEmail(c.email1)].filter(Boolean).join(' · ');
+    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;margin-bottom:4px;
+      background:${on ? 'var(--ad)' : 'var(--W)'};border:1px solid ${on ? 'var(--a)' : 'var(--i7)'}">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12.5px;font-weight:600">${escapeHtml(c.nameKo || c.nameEn || '이름 없음')}${
+          c.nameKo && c.nameEn ? `<span style="font-weight:400;color:var(--i4);margin-left:5px">${escapeHtml(c.nameEn)}</span>` : ''}</div>
+        ${sub ? `<div style="font-size:10.5px;color:var(--i4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(sub)}</div>` : ''}
+      </div>
+      <button class="btn ${on ? 'bs' : 'bp bs'}" style="flex:0 0 auto;font-size:10.5px"
+        onclick="${on ? `unassignExhContact('${escAttr(x.id)}','${escAttr(String(c.id))}')`
+                      : `assignExhContact('${escAttr(x.id)}','${escAttr(String(c.id))}')`}"
+        title="${on ? '이 전시 담당자에서 뺍니다 (마스터DB에는 그대로 남아요)' : '이 전시 담당자로 넣습니다'}">${
+        on ? '배정 해제' : '배정'}</button>
+    </div>`;
+  }).join('')
+  : `<div style="font-size:11.5px;color:var(--am);padding:8px 2px">
+      이 기업 연락처가 마스터DB에 없어요 — <b>직접 입력</b>으로 추가하면 마스터DB에도 함께 등록됩니다</div>`}`;
+}
+
+/* ── 담당자 직접 입력 ──
+   여기서 적은 사람은 마스터DB(연락처)에도 함께 등록한다. 전시에만 적어 두면
+   다음 행사에서 같은 사람을 또 손으로 적게 되고, 기업DB에서도 안 보인다.
+
+   성명·직함·부서를 국문·영문으로 나눠 받는다 — 해외 기업은 영문만, 국내는
+   국문만 오는 일이 많아 한 칸에 몰아넣으면 나중에 갈라내야 한다. */
+export function openNewContact(exhId){
+  const x = getExhibitorById(exhId);
+  if(!x) return;
+  const pair = (a, b, la, lb, pa, pb) => `<div class="fgr">
+    <div class="fg"><label class="fl">${la}</label><input class="fi" id="nc-${a}" placeholder="${pa}"></div>
+    <div class="fg"><label class="fl">${lb}</label><input class="fi" id="nc-${b}" placeholder="${pb}"></div>
+  </div>`;
+  modalShell('new-contact-modal', `담당자 추가 — ${exhNames(x).ko}`, `
+    <div style="font-size:11.5px;color:var(--i4);margin-bottom:12px;line-height:1.6">
+      마스터DB에도 함께 등록되고, 이 전시 담당자로 바로 배정됩니다.</div>
+    ${pair('nameKo', 'nameEn', '성명 (국문)', '성명 (영문)', '예: 이호진', '예: Hojin Lee')}
+    ${pair('titleKo', 'titleEn', '직함 (국문)', '직함 (영문)', '예: 팀장', '예: Manager')}
+    ${pair('deptKo', 'deptEn', '부서 (국문)', '부서 (영문)', '예: 마케팅팀', '예: Marketing')}
+    ${pair('email', 'phone', '이메일', '연락처', 'name@company.com', '010-0000-0000')}
+    <div class="fg"><label class="fl">이 전시에서의 역할</label>
+      <select class="fi" id="nc-role">${C_ROLES.map(v => `<option${v === '실무' ? ' selected' : ''}>${v}</option>`).join('')}</select></div>
+    <div id="nc-msg" style="font-size:11.5px;min-height:16px;margin-bottom:8px"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn bs" onclick="closeNewContact()">취소</button>
+      <button class="btn bp" id="nc-save" onclick="submitNewContact('${escAttr(exhId)}')">추가</button>
+    </div>`);
+  document.getElementById('nc-nameKo')?.focus();
+}
+export const closeNewContact = () => document.getElementById('new-contact-modal')?.remove();
+
+export async function submitNewContact(exhId){
+  const v = (id) => (document.getElementById('nc-' + id) || {}).value?.trim() || '';
+  const msg = document.getElementById('nc-msg');
+  const btn = document.getElementById('nc-save');
+  const fail = (t) => { if(msg){ msg.style.color = 'var(--re)'; msg.textContent = t; }
+    if(btn){ btn.disabled = false; btn.textContent = '추가'; } };
+
+  const nameKo = v('nameKo'), nameEn = v('nameEn');
+  if(!nameKo && !nameEn) return fail('성명을 국문이나 영문 중 하나는 입력해주세요.');
+  if(btn){ btn.disabled = true; btn.textContent = '추가 중…'; }
+
+  const x = getExhibitorById(exhId);
+  const org = x?.org_id ? getOrgById(x.org_id) : null;
+  const today = new Date().toISOString().slice(0, 10);
+  const c = {
+    id: Date.now() + Math.floor(Math.random() * 10000),
+    nameKo, nameEn,
+    orgKo: org?.name_ko || x?.company_name || '', orgEn: org?.name_en || '',
+    titleKo: v('titleKo'), titleEn: v('titleEn'),
+    deptKo: v('deptKo'), deptEn: v('deptEn'),
+    country: org?.country || '', cat: 'exhibitor', lang: nameKo ? 'KO' : 'EN',
+    source: `${x?.event_id || ''} 전시 담당자`, date: today, status: 'new',
+    email1: v('email'), email2: '', phone1: v('phone'), phone2: '',
+    beat: '', products: '', tags: '', org_id: x?.org_id || '',
+  };
+
+  /* 마스터DB에 먼저 넣는다 — 저장이 실패하면 전시 쪽도 만들지 않는다.
+     반쪽만 생기면 어느 쪽이 맞는지 알 수 없게 된다. */
+  contacts.push(c);
+  const { postToSheet } = await import('../api.js');
+  const r = await postToSheet({
+    sheet: 'contacts',
+    row: [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
+      c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
+      c.beat, c.products, c.tags, c.org_id],
+  }, '담당자 추가', { silent: true });
+  if(!r.ok){
+    const i = contacts.indexOf(c);
+    if(i >= 0) contacts.splice(i, 1);
+    return fail('마스터DB 저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
+  }
+
+  const ok = await assignExhContact(exhId, String(c.id), v('role'));
+  if(!ok) return fail('마스터DB에는 등록됐지만 전시 배정에 실패했어요 — 아래 목록에서 다시 배정해주세요.');
+
+  trackAction('add', '담당자 추가', x?.company_name || '',
+    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(nameKo || nameEn)} 마스터DB 등록 + 전시 배정`);
+  closeNewContact();
+  try { const { buildCoDB } = await import('./company-tab.js'); buildCoDB(); } catch(e){}
+  refreshExhViews();
+}
+
+/* 마스터DB 연락처를 이 전시 담당자로 넣는다 */
+export async function assignExhContact(exhId, contactId, role){
+  const already = contactsFor(exhId).some(c => String(c.contact_id) === String(contactId));
+  if(already) return true;
+  const first = contactsFor(exhId).length === 0;
+  return addRow(EXH_CONTACTS, {
+    id: localId('XC-'), exhibitor_id: exhId, contact_id: String(contactId),
+    name: '', email: '', phone: '', role: role || '실무',
+    is_primary: first ? 'yes' : '',   // 첫 담당자는 자동으로 메인
+    note: '',
+  }, saveExhContact);
+}
+
+/* 이 전시 담당자에서만 뺀다 — 마스터DB 연락처는 건드리지 않는다.
+   행사가 끝나도 그 사람은 그 기업 연락처로 남아야 다음에 다시 쓸 수 있다. */
+export async function unassignExhContact(exhId, contactId){
+  const row = contactsFor(exhId).find(c => String(c.contact_id) === String(contactId));
+  if(!row) return;
+  await delExhContact(row.id);
 }
 
 /* ══════════════════════════════════════════
@@ -1324,6 +1444,11 @@ export async function holdExhLog(id){
 window.openExhDr = openExhDr;
 window.closeExhDr = closeExhDr;
 window.switchExhDT = switchExhDT;
+window.openNewContact = openNewContact;
+window.closeNewContact = closeNewContact;
+window.submitNewContact = submitNewContact;
+window.assignExhContact = assignExhContact;
+window.unassignExhContact = unassignExhContact;
 window.drawIntroMeter = drawIntroMeter;
 window.renderExhDr = renderExhDr;
 window.addExhItem = addExhItem;

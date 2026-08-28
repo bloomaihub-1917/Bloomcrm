@@ -311,11 +311,17 @@ export function exhContact(x){
 }
 
 /* 이 기업의 마스터DB 연락처 후보 — 드로어 드롭다운에 쓴다 */
+/* 이 기업의 마스터DB 연락처 — 기업 연결(org_id)이 있으면 그걸 쓴다.
+   이름 문자열로 맞추면 표기가 조금만 달라도 사람이 통째로 빠진다. 아직 연결이
+   없는 옛 연락처를 위해 이름 대조도 남겨 둔다. */
 export function contactsForExhibitor(x){
+  if(!x) return [];
   const key = x.company_key || '';
+  const nameKey = normalizeCompanyKey(x.company_name || '');
   return contacts.filter(c => {
+    if(x.org_id && c.org_id) return c.org_id === x.org_id;
     const k = normalizeCompanyKey(c.orgKo || c.orgEn || '');
-    return k && (k === key || k === normalizeCompanyKey(x.company_name || ''));
+    return k && (k === key || k === nameKey);
   });
 }
 
@@ -1242,7 +1248,7 @@ export async function saveBookIntro(id){
 }
 export const closeBookIntro = () => document.getElementById('book-intro-modal')?.remove();
 
-const modalShell = (id, title, body) => {
+export const modalShell = (id, title, body) => {
   if(document.getElementById(id)) return;
   const el = document.createElement('div');
   el.id = id;
