@@ -724,7 +724,12 @@ export function openAddOrgModal(){
   const el = document.createElement('div');
   el.id = 'add-org-modal';
   el.className = 'mw on';
-  el.onclick = (e) => { if(e.target === el) closeAddOrgModal(); };   // 배경 클릭으로 닫기
+  /* 배경을 눌러 닫되, 누르기 시작한 곳이 패널 안이면 닫지 않는다.
+     글자를 드래그로 선택하다 패널 밖에서 손을 떼면 click의 target이 배경이 되는데,
+     그것까지 닫아 버리면 복사하려다 입력하던 내용을 통째로 잃는다. */
+  let downOnBg = false;
+  el.addEventListener('mousedown', (e) => { downOnBg = (e.target === el); });
+  el.addEventListener('click', (e) => { if(e.target === el && downOnBg) closeAddOrgModal(); });
   el.innerHTML = `<div class="modal" style="max-width:420px">
     <div class="mh"><div class="mt2">기업 추가</div><button class="mc" onclick="closeAddOrgModal()">✕</button></div>
     <div class="mb">

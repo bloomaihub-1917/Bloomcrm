@@ -1,6 +1,6 @@
 // 순수 헬퍼 함수 모음 — 원본 곳곳에 흩어져 있던 유틸 함수를 이 파일 하나로 통합
 
-import { COUNTRIES } from './constants.js';
+import { COUNTRIES, CAT_KEYS } from './constants.js';
 import { COMPANY_SECTORS } from './state.js';
 
 /* 이름에서 이니셜 추출 (한글/영문 대문자 최대 2글자) */
@@ -160,13 +160,21 @@ export function normalizeCat(raw){
   if(!raw) return '';
   const t  = String(raw).trim();
   const tl = t.toLowerCase().replace(/\s+/g,'');
+
+  /* 이미 정식 카테고리 키면 그대로 둔다 — 정규화는 자유 입력을 정리하는 일이지
+     이미 정해진 값을 바꾸는 일이 아니다.
+
+     이 검사가 없어서, 화면에서 '전시참가기업'으로 저장해 둔 연락처가 다음 로드에
+     'attendee'로 되돌아갔다(아래 표에 'exhibitor':'attendee'가 있고 그게 먼저
+     걸린다). 실제로 54건이 매번 조용히 덮어써지고 있었다. 아래 표는 업로드로
+     들어오는 자유 문구를 굵게 묶는 용도로 그대로 둔다. */
+  if(CAT_KEYS.includes(tl)) return tl;
+
   if(CAT_NORMALIZE_MAP[t])  return CAT_NORMALIZE_MAP[t];
   if(CAT_NORMALIZE_MAP[tl]) return CAT_NORMALIZE_MAP[tl];
   for(const [k,v] of Object.entries(CAT_NORMALIZE_MAP)){
     if(tl.includes(k.toLowerCase().replace(/\s+/g,''))) return v;
   }
-  const valid=['speaker','vip','attendee'];
-  if(valid.includes(tl)) return tl;
   return '';
 }
 

@@ -14,6 +14,14 @@ export const RP = {스폰서:'p-green',전시참가기업:'p-purple',연사:'p-b
   전시기업:'p-purple',주최:'p-indigo'};
 export const CP = {speaker:'p-blue',sponsor:'p-green',investor:'p-amber',buyer:'p-teal',bd:'p-teal',exhibitor:'p-purple',press:'p-red',attendee:'p-gray',vip:'p-gold',organizer:'p-indigo'};
 export const CL = {speaker:'연사',sponsor:'스폰서',investor:'투자자',buyer:'바이어',bd:'BD',exhibitor:'전시참가기업',press:'기자',attendee:'일반참가자',vip:'VIP',organizer:'주최'};
+/* 카테고리 선택지 — 화면에서 고를 수 있는 순서대로.
+   전에는 세 화면(연락처 추가·드로어 편집·일괄 변경)이 각자
+   ['speaker','vip','attendee'] 셋만 하드코딩하고 있었다. 그래서 CL에는 있고
+   데이터에도 54건이나 들어 있는 '전시참가기업'을 화면에서 고를 수가 없었다.
+   목록을 한 곳에 두어 표시(CL)와 선택지가 갈라지지 않게 한다. */
+export const CAT_KEYS = ['attendee', 'exhibitor', 'speaker', 'sponsor', 'buyer',
+  'investor', 'bd', 'press', 'vip', 'organizer'];
+
 export const SC = {미접촉:'#9C9890',컨택중:'#3B5BDB',협의중:'#C97B0A',확정:'#16A34A',보류:'#DC2626'};
 export const LC = {이메일:'#6D28D9',전화:'#16A34A',미팅:'#3B5BDB',메모:'#9C9890',계약:'#16A34A'};
 export const BG = ['#EEF2FF','#F0FDF4','#FFFBEB','#F5F3FF','#F0FDFA','#FEF2F2'];

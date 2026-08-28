@@ -1256,7 +1256,12 @@ export const modalShell = (id, title, body) => {
      전에 두 클래스를 뒤바꿔 써서 모달이 크기 0으로 깔려 화면에 보이지 않았다 —
      함수는 정상이라 프로그램으로 부르면 동작했지만 사람은 누를 수가 없었다. */
   el.className = 'mw on';
-  el.onclick = (e) => { if(e.target === el) el.remove(); };   // 배경 클릭으로 닫기
+  /* 배경을 눌러 닫되, 누르기 시작한 곳이 패널 안이면 닫지 않는다.
+     글자를 드래그로 선택하다 패널 밖에서 손을 떼면 click의 target이 배경이 되는데,
+     그것까지 닫아 버리면 복사하려다 입력하던 내용을 통째로 잃는다. */
+  let downOnBg = false;
+  el.addEventListener('mousedown', (e) => { downOnBg = (e.target === el); });
+  el.addEventListener('click', (e) => { if(e.target === el && downOnBg) el.remove(); });
   el.innerHTML = `<div class="modal" style="max-width:440px">
     <div class="mh"><div class="mt2">${escapeHtml(title)}</div>
       <button class="mc" onclick="document.getElementById('${id}')?.remove()">✕</button></div>
@@ -1807,7 +1812,10 @@ export function openExhImport(){
   const pop = document.createElement('div');
   pop.id = 'exh-import-modal';
   pop.className = 'mw on';
-  pop.onclick = (e) => { if(e.target === pop) closeExhImport(); };
+  /* 위 modalShell과 같은 이유 — 드래그 선택이 배경에서 끝나도 닫지 않는다 */
+  let popDownOnBg = false;
+  pop.addEventListener('mousedown', (e) => { popDownOnBg = (e.target === pop); });
+  pop.addEventListener('click', (e) => { if(e.target === pop && popDownOnBg) closeExhImport(); });
   pop.innerHTML = `<div class="modal" style="max-width:560px">
     <div class="mh"><div class="mt2">참가기업 불러오기</div>
       <div class="mc">기업DB에 "전시참가기업"으로 기록된 기업을 골라 진행관리에 등록해요</div></div>

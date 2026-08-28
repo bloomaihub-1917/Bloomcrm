@@ -34,7 +34,7 @@ import {
   TAGS,
   mdbSelected,
 } from '../state.js';
-import { CP, CL, RP, ROLE_TO_CAT, COUNTRIES, avB, avF } from '../constants.js';
+import { CP, CL, RP, CAT_KEYS, ROLE_TO_CAT, COUNTRIES, avB, avF } from '../constants.js';
 import { ab, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseTags, joinTags, isMobile, cleanEmail } from '../utils.js';
 import { postToSheet } from '../api.js';
 import { buildCoDB, ensureOrgsForNames, orgIdForName } from './company-tab.js';
@@ -64,10 +64,13 @@ function isCLevelContact(c){
   const t = `${c.titleKo||''} ${c.titleEn||''}`.toLowerCase();
   return C_LEVEL_KEYWORDS.some(k => t.includes(k));
 }
-/* mdbCat이 speaker/vip/attendee가 아니면(그리고 'all'도 아니면) 등록된
-   태그(TAGS) 키를 가리키는 것으로 취급한다 — 태그는 cat과 달리 서로/다른
-   카테고리와 배타적이지 않다(BD이면서 동시에 attendee일 수 있음). */
-const MDB_CAT_VALUES = ['speaker','vip','attendee'];
+/* mdbCat이 카테고리 키가 아니면(그리고 'all'도 아니면) 등록된 태그(TAGS) 키를
+   가리키는 것으로 취급한다 — 태그는 cat과 달리 다른 카테고리와 배타적이지 않다
+   (BD이면서 동시에 attendee일 수 있음).
+
+   전에는 이 목록이 speaker·vip·attendee 셋뿐이라, 사이드바에서 스폰서·투자자·
+   바이어로 거르면 카테고리가 아니라 태그로 오인돼 아무것도 안 나왔다. */
+const MDB_CAT_VALUES = CAT_KEYS;
 function matchesTagFilter(c, tagKey){
   return tagKey === 'clevel' ? isCLevelContact(c) : hasTag(c, tagKey);
 }
@@ -284,7 +287,7 @@ export function openMDBBulkEditModal(){
       </div>
       <div class="fg" style="margin-top:8px"><label class="fl">카테고리 — 유지하려면 선택 안 함</label>
         <select class="fi" id="mdb-bulk-cat"><option value="">변경 안 함</option>
-          ${['speaker','vip','attendee'].map(k=>`<option value="${k}">${CL[k]}</option>`).join('')}
+          ${CAT_KEYS.map(k=>`<option value="${k}">${CL[k]}</option>`).join('')}
         </select></div>
       <div class="fg" style="margin-top:8px"><label class="fl">상태 — 유지하려면 선택 안 함</label>
         <select class="fi" id="mdb-bulk-status"><option value="">변경 안 함</option>
@@ -1320,7 +1323,7 @@ export function contactEditForm(c){
       </div>
       <div class="fg"><label class="fl">카테고리</label>
         <select class="fi" id="ce-cat">
-          ${['speaker','vip','attendee'].map(k=>`<option value="${k}"${c.cat===k?' selected':''}>${CL[k]}</option>`).join('')}
+          ${CAT_KEYS.map(k=>`<option value="${k}"${c.cat===k?' selected':''}>${CL[k]}</option>`).join('')}
         </select>
       </div>
     </div>
@@ -1426,7 +1429,7 @@ export async function saveContactEdit(){
    연락처 직접 추가 모달 (원본 6121~6252행)
 ══════════════════════════════════════════ */
 export function openAddContactModal(){
-  const catOpts = ['speaker','vip','attendee'].map(k =>
+  const catOpts = CAT_KEYS.map(k =>
     `<option value="${k}">${CL[k]}</option>`).join('');
   const countryOpts = COUNTRIES.map(c =>
     `<option value="${c.nameKo}">${c.nameKo}</option>`).join('');
