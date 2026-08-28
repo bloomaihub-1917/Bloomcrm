@@ -459,3 +459,33 @@ ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS book_address TEXT;
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS book_phone   TEXT;
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS book_website TEXT;
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS book_intro   TEXT;  -- 회사소개 원문
+
+/* ══════════════════════════════════════════════════════════════
+   code_lists — 화면에서 고르는 짧은 목록들
+
+   부스 타입·스폰서 등급·비품 분류처럼 "고르는 값"이 코드에 박혀 있었다. 행사가
+   바뀌면 목록도 바뀌는데(2026 KIC의 부스 타입 6종은 이 행사 것이고, DIA/GOLD/
+   SILVER/BRONZE도 이 행사 등급이다) 그때마다 개발자가 코드를 고쳐야 했다.
+
+   part_types가 이미 같은 모양(key/label/cls)으로 테이블에 있어 그 방식을 넓혔다.
+   목록마다 테이블을 따로 두면 열 개가 넘으므로 list_key로 한 테이블에 담는다.
+
+   event_id가 비어 있으면 모든 행사 공통, 값이 있으면 그 행사 전용이다. 조회할 때
+   그 행사 것이 있으면 그걸 쓰고 없으면 공통을 쓴다 — 행사마다 다른 부스 타입은
+   덮어쓰고, 통화처럼 안 바뀌는 건 공통 하나만 두면 된다.
+
+   지우는 대신 active='no'로 내린다. 지우면 이미 그 값으로 저장된 데이터가
+   무엇을 가리키는지 알 수 없게 된다(단종 비품과 같은 이유).
+══════════════════════════════════════════════════════════════ */
+CREATE TABLE IF NOT EXISTS code_lists (
+  id         TEXT PRIMARY KEY,
+  list_key   TEXT,   -- contact_cat | booth_type | grade | item_cat | contact_role | currency | org_kind | equip_cat
+  event_id   TEXT,   -- '' = 공통, 값이 있으면 그 행사 전용
+  code       TEXT,   -- 저장되는 값
+  label      TEXT,   -- 화면에 보이는 이름
+  cls        TEXT,   -- 배지 색상 (p-blue 등)
+  note       TEXT,
+  active     TEXT,   -- '' | 'no'(목록에서 숨김)
+  sort_order TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_code_lists_key ON code_lists(list_key, event_id);

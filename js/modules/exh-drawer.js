@@ -15,7 +15,7 @@ import {
   getExhibitorById, itemsFor, invoicesFor, paymentsFor, logsFor, openInquiriesFor,
   EXH_CONTACTS, EXH_ITEMS, EXH_INVOICES, EXH_PAYMENTS, EXH_LOGS, CO_DB, currentUser,
   contactsFor, catalogFor, catalogItem, EQUIP_CATALOG, findCatalogByName,
-  contacts, getOrgById,
+  contacts, getOrgById, codeList, codeLabel,
 } from '../state.js';
 import { td, escapeHtml, escAttr } from '../utils.js';
 import {
@@ -194,8 +194,12 @@ function textRow(x, field, label, placeholder = '', multi = false){
 /* 기업 담당자 — 마스터DB의 연락처를 가리키게 하고, 이름/이메일/연락처는
    거기서 실시간으로 읽어 보여준다(값을 복사해두면 마스터DB에서 고쳐도 여기가
    옛 값으로 남는다). 마스터DB에 없는 사람은 직접 입력으로 적는다. */
-const C_ROLES = ['실무', '정산', '현장', '기타'];
-const GRADES = ['', 'DIA', 'GOLD', 'SILVER', 'BRONZE', 'Exhibitor'];
+/* 담당자 역할·등급은 설정에서 고친다(code_lists). 아래는 서버 목록이 아직
+   안 왔을 때만 쓰는 기본값이다. */
+const cRoles = () => codeList('contact_role', null,
+  ['실무', '정산', '현장', '기타'].map(c => ({ code: c, label: c })));
+const grades = (evKey) => codeList('grade', evKey,
+  ['DIA', 'GOLD', 'SILVER', 'BRONZE', 'Exhibitor'].map(c => ({ code: c, label: c })));
 
 /* ── 독립부스 시공사 ──
    자체 시공 업체는 부스를 직접 짓기 때문에, 반입 당일 현장에서 우리가 연락할
@@ -339,7 +343,7 @@ function dContact(x){
         ${p.primary ? '<span class="pill p-blue">메인</span>' : ''}
         <select class="fi" style="width:74px;padding:2px 5px;font-size:10.5px;margin-left:auto"
           onchange="setExhContactField('${escAttr(r.id)}','role',this.value)">
-          ${C_ROLES.map(v => `<option${(r.role || '기타') === v ? ' selected' : ''}>${v}</option>`).join('')}
+          ${cRoles().map(v => `<option value="${escAttr(v.code)}"${(r.role || '기타') === v.code ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}
         </select>
       </div>
       <div style="font-size:11.5px;color:var(--i3);display:flex;flex-direction:column;gap:2px">
@@ -418,7 +422,7 @@ export function openNewContact(exhId){
     ${pair('deptKo', 'deptEn', '부서 (국문)', '부서 (영문)', '예: 마케팅팀', '예: Marketing')}
     ${pair('email', 'phone', '이메일', '연락처', 'name@company.com', '010-0000-0000')}
     <div class="fg"><label class="fl">이 전시에서의 역할</label>
-      <select class="fi" id="nc-role">${C_ROLES.map(v => `<option${v === '실무' ? ' selected' : ''}>${v}</option>`).join('')}</select></div>
+      <select class="fi" id="nc-role">${cRoles().map(v => `<option value="${escAttr(v.code)}"${v.code === '실무' ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}</select></div>
     <div id="nc-msg" style="font-size:11.5px;min-height:16px;margin-bottom:8px"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn bs" onclick="closeNewContact()">취소</button>
@@ -641,7 +645,7 @@ function dProgress(x){
     </div>
     <div class="fg"><label class="fl">스폰서 등급</label>
       <select class="fi" style="font-size:12px" onchange="setExhField('${escAttr(x.id)}','grade',this.value,'등급')">
-        ${GRADES.map(g => `<option value="${escAttr(g)}"${(x.grade || '') === g ? ' selected' : ''}>${g || '— 없음 —'}</option>`).join('')}
+        <option value=""${x.grade ? '' : ' selected'}>— 없음 —</option>${grades(x.event_id).map(g => `<option value="${escAttr(g.code)}"${(x.grade || '') === g.code ? ' selected' : ''}>${escapeHtml(g.label)}</option>`).join('')}
       </select></div>` +
     flagRow(x, 'booth_confirmed', 'booth_confirmed_at', '배정 확정'))}
 
@@ -671,10 +675,13 @@ function dProgress(x){
 /* ══════════════════════════════════════════
    2) 정산 — 금액 항목 / 인보이스 / 세금계산서 / 입금
 ══════════════════════════════════════════ */
-const CATS = [['booth', '부스'], ['equip', '비품'], ['graphic', '그래픽'], ['etc', '기타']];
-const catLabel = (c) => (CATS.find(([k]) => k === c) || [null, '기타'])[1];
+const itemCats = () => codeList('item_cat', null,
+  [['booth', '부스'], ['equip', '비품'], ['graphic', '그래픽'], ['etc', '기타']]
+    .map(([c, l]) => ({ code: c, label: l })));
+const catLabel = (c) => codeLabel('item_cat', null, c) || '기타';
 
-const CURRENCIES = ['KRW', 'USD'];
+const currencies = () => codeList('currency', null,
+  ['KRW', 'USD'].map(c => ({ code: c, label: c }))).map(c => c.code);
 
 /* 항목을 추가하면 드로어가 다시 그려지면서 분류 선택이 첫 값(부스)으로 되돌아갔다.
    비품을 열 줄 연달아 넣을 때 매번 다시 골라야 했고, 깜빡하면 비품이 부스로
@@ -695,7 +702,7 @@ const itemAmount = (i) => Number(String(i.amount || '').replace(/[^0-9.-]/g, '')
    고칠 방법이 없었다 — 줄에서 바로 고르게 한다. */
 const curSelect = (cur, onchange) =>
   `<select class="fi bl-cur" onchange="${onchange}" title="통화">
-    ${CURRENCIES.map(c => `<option value="${c}"${(cur || 'KRW') === c ? ' selected' : ''}>${c}</option>`).join('')}
+    ${currencies().map(c => `<option value="${c}"${(cur || 'KRW') === c ? ' selected' : ''}>${c}</option>`).join('')}
   </select>`;
 
 /* 통화별로 더한다. 한 기업 안에서도 부스는 달러, 비품은 원화처럼 섞이는 일이
@@ -719,9 +726,9 @@ function excludedSum(list){
 }
 /* 통화가 하나면 그대로, 섞였으면 끊어서 적는다 */
 const sumText = (by) => {
-  // 순서를 CURRENCIES에 맞춘다 — 줄마다 원화가 먼저 왔다 나중에 왔다 하면
+  // 순서를 통화 목록에 맞춘다 — 줄마다 원화가 먼저 왔다 나중에 왔다 하면
   // 같은 자리 숫자를 비교하기 어렵다
-  const ks = [...CURRENCIES, ...Object.keys(by)].filter((k, i, a) => a.indexOf(k) === i && by[k]);
+  const ks = [...currencies(), ...Object.keys(by)].filter((k, i, a) => a.indexOf(k) === i && by[k]);
   return ks.length ? ks.map(k => fmtMoney(by[k], k)).join(' + ') : fmtMoney(0, 'KRW');
 };
 
@@ -773,7 +780,7 @@ function dBilling(x){
 
   ${sct('금액 항목', `
     <div style="display:flex;flex-direction:column;gap:1px;margin-bottom:8px">
-      ${items.length ? CATS.map(([k, l]) => {
+      ${items.length ? itemCats().map(({ code: k, label: l }) => {
         // 분류별로 묶어서 소계를 붙인다 — 부스와 비품이 섞여 있으면 어느 쪽이
         // 얼마인지 세어보기 전엔 알 수 없다. 항목이 없는 분류는 건너뛴다.
         const g = items.filter(i => (i.category || 'etc') === k);
@@ -817,7 +824,7 @@ function dBilling(x){
     <div class="bl-row bl-item-add">
       <select class="fi" id="it-cat-${escAttr(x.id)}" style="flex:0 0 72px;min-width:0;font-size:11.5px;padding:6px"
         onchange="rememberItemCat(this.value)">
-        ${CATS.map(([k, l]) => `<option value="${k}"${(lastItemCat || CATS[0][0]) === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
+        ${itemCats().map(({ code: k, label: l }, i) => `<option value="${escAttr(k)}"${(lastItemCat || itemCats()[0]?.code) === k ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('')}</select>
       <input class="fi" id="it-nm-${escAttr(x.id)}" placeholder="항목명" style="flex:1 1 120px;min-width:0;font-size:11.5px;padding:6px"
         list="eqcat-${escAttr(x.id)}" oninput="pickCatalogItem('${escAttr(x.id)}')">
       ${catalogDatalist(x)}
@@ -827,7 +834,7 @@ function dBilling(x){
         oninput="calcItemAmount('${escAttr(x.id)}')">
       <input class="fi" id="it-amt-${escAttr(x.id)}" placeholder="금액" style="flex:1 1 88px;min-width:0;font-size:11.5px;padding:6px;text-align:right">
       <select class="fi bl-cur" id="it-cur-${escAttr(x.id)}" onchange="rememberItemCur(this.value)">
-        ${CURRENCIES.map(c => `<option value="${c}"${(lastItemCur || currencyOf(x.id)) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
+        ${currencies().map(c => `<option value="${c}"${(lastItemCur || currencyOf(x.id)) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
       <button class="btn bp bs" style="flex:0 0 auto" onclick="addExhItem('${escAttr(x.id)}')">추가</button>
     </div>`)}
 
@@ -862,7 +869,7 @@ function dBilling(x){
       <input class="fi" id="iv-a-${escAttr(x.id)}" placeholder="금액" style="flex:1 1 96px;min-width:0;font-size:11.5px;padding:6px;text-align:right"
         value="${items.length && !invs.length ? billedAmount(x.id) : ''}">
       <select class="fi bl-cur" id="iv-cur-${escAttr(x.id)}">
-        ${CURRENCIES.map(c => `<option value="${c}"${currencyOf(x.id) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
+        ${currencies().map(c => `<option value="${c}"${currencyOf(x.id) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
       <button class="btn bp bs" style="flex:0 0 auto" onclick="addExhInvoice('${escAttr(x.id)}')">발행</button>
     </div>
     <div style="font-size:10.5px;color:var(--i5);margin-top:5px">
@@ -908,7 +915,7 @@ function dBilling(x){
       <input class="fi" id="py-a-${escAttr(x.id)}" placeholder="입금액" style="flex:1 1 100px;min-width:0;font-size:11.5px;padding:6px;text-align:right"
         value="${rest > 0 ? rest : ''}">
       <select class="fi bl-cur" id="py-cur-${escAttr(x.id)}">
-        ${CURRENCIES.map(c => `<option value="${c}"${currencyOf(x.id) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
+        ${currencies().map(c => `<option value="${c}"${currencyOf(x.id) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
       <button class="btn bp bs" style="flex:0 0 auto" onclick="addExhPayment('${escAttr(x.id)}')">추가</button>
     </div>
     <div style="font-size:10.5px;color:var(--i5);margin-top:5px">
@@ -949,7 +956,7 @@ function dBilling(x){
       <input class="fi" id="rf-r-${escAttr(x.id)}" placeholder="사유 (예: 부스 축소)" style="flex:1 1 100px;min-width:0;font-size:11.5px;padding:6px">
       <input class="fi" id="rf-a-${escAttr(x.id)}" placeholder="환불액" style="flex:1 1 100px;min-width:0;font-size:11.5px;padding:6px;text-align:right">
       <select class="fi bl-cur" id="rf-cur-${escAttr(x.id)}">
-        ${CURRENCIES.map(c => `<option value="${c}"${currencyOf(x.id) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
+        ${currencies().map(c => `<option value="${c}"${currencyOf(x.id) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
       <button class="btn bs" style="flex:0 0 auto" onclick="addExhRefund('${escAttr(x.id)}')">요청</button>
     </div>
     <div style="font-size:10.5px;color:var(--i5);margin-top:5px">
@@ -1027,8 +1034,11 @@ function dGraphic(x){
 /* ══════════════════════════════════════════
    4) 문의·기록
 ══════════════════════════════════════════ */
-const CHANNELS = ['이메일', '전화', '카톡', '미팅', '현장'];
-const LOG_CATS = ['부스', '비품', '그래픽', '정산', '현장', '기타'];
+/* 문의 채널·분류도 설정에서 고친다(code_lists) */
+const channels = () => codeList('log_channel', null,
+  ['이메일', '전화', '카톡', '미팅', '현장'].map(c => ({ code: c, label: c })));
+const logCats = () => codeList('log_cat', null,
+  ['부스', '비품', '그래픽', '정산', '현장', '기타'].map(c => ({ code: c, label: c })));
 
 function dLogs(x){
   const logs = logsFor(x.id);
@@ -1072,9 +1082,9 @@ function dLogs(x){
       <select class="fi" id="lg-kind-${escAttr(x.id)}" style="width:84px;font-size:11.5px;padding:6px">
         <option value="inquiry">문의</option><option value="note">기록</option></select>
       <select class="fi" id="lg-ch-${escAttr(x.id)}" style="width:82px;font-size:11.5px;padding:6px">
-        ${CHANNELS.map(c => `<option>${c}</option>`).join('')}</select>
+        ${channels().map(c => `<option value="${escAttr(c.code)}">${escapeHtml(c.label)}</option>`).join('')}</select>
       <select class="fi" id="lg-cat-${escAttr(x.id)}" style="width:82px;font-size:11.5px;padding:6px">
-        ${LOG_CATS.map(c => `<option>${c}</option>`).join('')}</select>
+        ${logCats().map(c => `<option value="${escAttr(c.code)}">${escapeHtml(c.label)}</option>`).join('')}</select>
       <input class="fi" id="lg-who-${escAttr(x.id)}" placeholder="문의한 사람" list="lg-people-${escAttr(x.id)}" style="flex:1;min-width:100px;font-size:11.5px;padding:6px">
       <datalist id="lg-people-${escAttr(x.id)}">${people.map(p => `<option value="${escAttr(p)}">`).join('')}</datalist>
     </div>

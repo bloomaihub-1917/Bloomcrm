@@ -19,6 +19,7 @@ import {
   logsFor, openInquiriesFor, contactsFor, primaryContactFor,
   EVENT_LIST, contacts, participations, CO_DB, currentUser, API_BASE_URL, auditLog,
   catalogItem, catalogFor, findCatalogByName, EQUIP_CATALOG, getOrgById,
+  codeList, codeLabel, codeCls,
 } from '../state.js';
 import { td, escapeHtml, escAttr, isMobile, cleanEmail } from '../utils.js';
 export { cleanEmail };   // exh-drawer가 여기서 가져다 쓴다
@@ -45,7 +46,9 @@ export function cancelledExhibitors(evKey){
 }
 
 /* 스폰서 등급별 배지색 — 'Exhibitor'(일반)는 배지를 달지 않는다 */
-const GRADE_CLS = { DIA: 'p-indigo', GOLD: 'p-gold', SILVER: 'p-gray', BRONZE: 'p-amber' };
+/* 등급 색상도 행사마다 다를 수 있어 설정에서 읽는다(code_lists.grade).
+   목록에 없는 등급은 회색으로 떨어진다. */
+const gradeCls = (g, evKey) => codeCls('grade', evKey || exhEvent, g);
 
 /* ── 기업 이름 ──
    exhibitors.company_name은 등록할 때 찍힌 국문 스냅샷이라 영문이 없다. 해외
@@ -609,16 +612,23 @@ const coCell = (x, tab) => `<td style="min-width:150px">
    조금씩 다르게 적을 수 있어 집계가 갈라진다 — 골라 쓰게 한다.
    드로어와 부스 현황 두 곳이 같은 목록을 써야 해서 여기(단방향 상류)에 둔다. */
 export const SELF_BUILD_TYPE = 'Self-Construction';
-export const BOOTH_TYPES = [SELF_BUILD_TYPE, 'Block System A', 'Block System B', 'Block System C',
-  'Lighting Booth', 'Octanium (Standard)'];
+
+/* 부스 타입은 행사마다 다르다 — 설정에서 고친다(code_lists.booth_type).
+   아래 값은 서버 목록이 아직 안 왔을 때만 쓰는 기본값이다. */
+const BOOTH_TYPE_FALLBACK = [SELF_BUILD_TYPE, 'Block System A', 'Block System B',
+  'Block System C', 'Lighting Booth', 'Octanium (Standard)'].map(c => ({ code: c, label: c }));
+export const boothTypes = (evKey) => codeList('booth_type', evKey || exhEvent, BOOTH_TYPE_FALLBACK);
 
 /* 목록에 없는 값이 이미 들어 있으면(옛 데이터·행사마다 다른 타입) 그 값도 함께
    보여준다 — 고정 목록으로 바꿨다는 이유로 저장돼 있던 값이 조용히 사라지면 안 된다. */
-export function boothTypeOptions(current){
+export function boothTypeOptions(current, evKey){
   const cur = String(current || '').trim();
-  const list = BOOTH_TYPES.includes(cur) || !cur ? BOOTH_TYPES : [...BOOTH_TYPES, cur];
+  const list = boothTypes(evKey).map(t => [t.code, t.label]);
+  // 목록에 없는 값이 이미 저장돼 있으면 그 값도 보기에 넣는다 — 목록을 고쳤다는
+  // 이유로 저장돼 있던 값이 조용히 사라지면 안 된다
+  if(cur && !list.some(([c]) => c === cur)) list.push([cur, cur + ' (목록에 없음)']);
   return `<option value=""${cur ? '' : ' selected'}>— 미지정 —</option>`
-    + list.map(t => `<option value="${escAttr(t)}"${cur === t ? ' selected' : ''}>${escapeHtml(t)}</option>`).join('');
+    + list.map(([c, l]) => `<option value="${escAttr(c)}"${cur === c ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('');
 }
 /* ── 부스 번호 읽기 ──
    번호에 하이픈이 두 가지 뜻으로 쓰인다.
@@ -713,7 +723,7 @@ function renderBoothView(list){
         <td><select class="fi" style="width:126px;padding:3px 4px;font-size:11px" onclick="event.stopPropagation()"
           onchange="setExhField('${escAttr(x.id)}','booth_type',this.value,'부스 타입')">${boothTypeOptions(x.booth_type)}</select></td>
         <td style="font-size:11.5px;color:var(--i3);text-align:center">${x.booth_qty ? escapeHtml(x.booth_qty) : '<span style="color:var(--i6)">—</span>'}</td>
-        <td>${x.grade ? `<span class="pill ${GRADE_CLS[x.grade] || 'p-gray'}">${escapeHtml(x.grade)}</span>` : '<span style="color:var(--i6)">—</span>'}</td>
+        <td>${x.grade ? `<span class="pill ${gradeCls(x.grade)}">${escapeHtml(x.grade)}</span>` : '<span style="color:var(--i6)">—</span>'}</td>
         <td style="text-align:center">
           <button onclick="event.stopPropagation();toggleExhFlag('${escAttr(x.id)}','booth_confirmed','booth_confirmed_at','배정 확정')"
             title="${done ? '확정 해제' : '배정 확정으로 표시'}"
@@ -1271,7 +1281,9 @@ export const modalShell = (id, title, body) => {
 const mval = (id) => (document.getElementById(id) || {}).value?.trim() || '';
 
 /* ── 품목 추가 (행사 품목마스터) ── */
-const EQ_CATS = ['의자', '테이블', '진열대', '가전제품', '기타비품'];
+/* 비품 분류는 렌탈사마다 달라 행사별로 둔다(code_lists.equip_cat) */
+const eqCats = () => codeList('equip_cat', exhEvent,
+  ['의자', '테이블', '진열대', '가전제품', '기타비품'].map(c => ({ code: c, label: c })));
 
 export function openNewCatalogItem(){
   if(!exhEvent){ alert('행사를 먼저 선택해주세요.'); return; }
@@ -1280,7 +1292,7 @@ export function openNewCatalogItem(){
       <b>${escapeHtml(exhEvent)}</b> 품목표에 추가됩니다. 다른 행사에는 영향이 없어요.</div>
     <div class="fgr">
       <div class="fg"><label class="fl">분류</label>
-        <select class="fi" id="neq-cat">${EQ_CATS.map(c => `<option value="${escAttr(c)}">${escapeHtml(c)}</option>`).join('')}</select></div>
+        <select class="fi" id="neq-cat">${eqCats().map(c => `<option value="${escAttr(c.code)}">${escapeHtml(c.label)}</option>`).join('')}</select></div>
       <div class="fg"><label class="fl">품목코드</label>
         <input class="fi" id="neq-code" placeholder="비우면 자동 (X-001…)"></div>
     </div>
@@ -1538,7 +1550,7 @@ function renderDashboard(all){
         return `<div style="margin-bottom:8px">
           <div style="font-size:10.5px;color:var(--i4);margin-bottom:3px">${f[1]}</div>
           <div style="display:flex;flex-wrap:wrap;gap:5px">
-            ${ks.map(k => `<span class="pill ${f[0] === 'grade' ? (GRADE_CLS[k] || 'p-gray') : 'p-gray'}">${escapeHtml(k)}${f[0] === 'booth_floor' ? '층' : ''} ${cnt[k]}</span>`).join('')}
+            ${ks.map(k => `<span class="pill ${f[0] === 'grade' ? (gradeCls(k)) : 'p-gray'}">${escapeHtml(k)}${f[0] === 'booth_floor' ? '층' : ''} ${cnt[k]}</span>`).join('')}
           </div></div>`;
       }).join('') || '<div style="font-size:11.5px;color:var(--i5)">아직 부스 정보가 없어요</div>'}
     </div>`;
@@ -1672,7 +1684,7 @@ function renderChecklistCards(list, all){
           <span style="font-size:14px;font-weight:700${off ? ';text-decoration:line-through' : ''}">${escapeHtml(exhNames(x).ko)}</span>${
             exhNames(x).en ? `<span style="font-size:11px;color:var(--i4);font-weight:400">${escapeHtml(exhNames(x).en)}</span>` : ''}
           ${off ? '<span class="pill p-gray">참가 취소</span>' : ''}
-          ${x.grade && x.grade !== 'Exhibitor' ? `<span class="pill ${GRADE_CLS[x.grade] || 'p-gray'}">${escapeHtml(x.grade)}</span>` : ''}
+          ${x.grade && x.grade !== 'Exhibitor' ? `<span class="pill ${gradeCls(x.grade)}">${escapeHtml(x.grade)}</span>` : ''}
           ${openN ? `<span class="pill p-amber" style="margin-left:auto"
             onclick="event.stopPropagation();openExhDr('${escAttr(x.id)}','logs')">문의 ${openN}</span>` : ''}
         </div>
@@ -1739,7 +1751,7 @@ function renderChecklistTable(list, all){
               <span style="font-weight:700;font-size:12px${off ? ';text-decoration:line-through' : ''}">${escapeHtml(exhNames(x).ko)}</span>${
                 exhNames(x).en ? `<span style="font-size:10.5px;color:var(--i4);margin-left:4px">${escapeHtml(exhNames(x).en)}</span>` : ''}
               ${off ? '<span class="pill p-gray">참가 취소</span>' : ''}
-              ${x.grade && x.grade !== 'Exhibitor' ? `<span class="pill ${GRADE_CLS[x.grade] || 'p-gray'}">${escapeHtml(x.grade)}</span>` : ''}
+              ${x.grade && x.grade !== 'Exhibitor' ? `<span class="pill ${gradeCls(x.grade)}">${escapeHtml(x.grade)}</span>` : ''}
             </div>
             ${x.booth_no ? `<div style="font-size:10px;color:var(--i4)">부스 ${escapeHtml(x.booth_no)}${
               x.booth_floor ? ` · ${escapeHtml(x.booth_floor)}층` : ''}${

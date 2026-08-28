@@ -43,6 +43,7 @@ import {
   EXH_LOGS,
   ORGS,
   EQUIP_CATALOG,
+  CODE_LISTS, applyCodeLists,
   auditLog,
   COMPANY_SECTORS,
   DOMAINS,
@@ -235,7 +236,8 @@ export async function loadFromSheets(hooks = {}){
   try {
     const [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, partTypesData,
            orgsData,
-           exhData, exhConData, exhItemData, exhInvData, exhPayData, exhLogData, equipCatData] = await Promise.all([
+           exhData, exhConData, exhItemData, exhInvData, exhPayData, exhLogData, equipCatData,
+           codeListData] = await Promise.all([
       safeFetch(base + 'contacts',       'contacts',       1, headers),
       safeFetch(base + 'participations', 'participations', 1, headers),
       safeFetch(base + 'crm_targets',    'crm_targets',    1, headers),
@@ -252,6 +254,7 @@ export async function loadFromSheets(hooks = {}){
       safeFetch(base + 'exhibitor_payments', 'exhibitor_payments', 1, headers),
       safeFetch(base + 'exhibitor_logs',     'exhibitor_logs',     1, headers),
       safeFetch(base + 'equip_catalog',      'equip_catalog',      1, headers),
+      safeFetch(base + 'code_lists',         'code_lists',         1, headers),
     ]);
 
     // ── 실패 감지 (신규) ──
@@ -259,7 +262,8 @@ export async function loadFromSheets(hooks = {}){
     // 세지 않으면 "전 시트 로드 실패"도 성공으로 표시되는 버그가 있었다.
     const _results = [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, partTypesData,
       orgsData,
-      exhData, exhConData, exhItemData, exhInvData, exhPayData, exhLogData, equipCatData];
+      exhData, exhConData, exhItemData, exhInvData, exhPayData, exhLogData, equipCatData,
+      codeListData];
     const _failed  = _results.filter(r => r === null).length;
     if(_failed === _results.length){
       // 전부 실패 — 연결 안 됨으로 처리하고 기존(stale) 화면 유지
@@ -396,6 +400,13 @@ export async function loadFromSheets(hooks = {}){
 
     // companies 테이블은 더 이상 읽지 않는다 — orgs가 그 자리를 대신한다.
     // (테이블 자체는 마이그레이션 이전 값이 남아 있어 그대로 둔다)
+
+    // ── code_lists → CODE_LISTS (화면에서 고르는 짧은 목록들) ──
+    if(codeListData && Array.isArray(codeListData)){
+      CODE_LISTS.splice(0, CODE_LISTS.length, ...codeListData);
+      applyCodeLists();
+      console.log('[CRM] code_lists 로드:', CODE_LISTS.length, '개');
+    }
 
     // ── equip_catalog → EQUIP_CATALOG (행사별 렌탈 비품 품목표) ──
     if(equipCatData && Array.isArray(equipCatData)){

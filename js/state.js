@@ -17,7 +17,7 @@
      읽기만 하면 됩니다 — 라이브 바인딩이라 항상 최신값입니다.)
 ═══════════════════════════════════════════════════════════════ */
 
-import { EVENT_LIST_SEED } from './constants.js';
+import { EVENT_LIST_SEED, CL, CP, CAT_KEYS } from './constants.js';
 
 /* ── 백엔드 API 베이스 URL (Node/Express, backend-node/) ──
    Render 등에 배포한 뒤 이 값만 바꾸면 된다(과거 GS_URL과 동일한 역할).
@@ -88,6 +88,42 @@ export function contactEvents(c){
    buildCoDB()가 만든다(company-tab.js). 다른 점은 이제 그 바탕이 문자열이
    아니라 진짜 레코드라는 것이다.
 ══════════════════════════════════════════ */
+/* ══════════════════════════════════════════
+   CODE_LISTS — 화면에서 고르는 짧은 목록들
+
+   부스 타입·스폰서 등급·비품 분류처럼 고르는 값이 코드에 박혀 있었다. 행사가
+   바뀌면 목록도 바뀌는데 그때마다 개발자가 코드를 고쳐야 했다. 이제 서버에서
+   읽어 오고, 설정 화면에서 고칠 수 있다.
+
+   행사별 덮어쓰기: 그 행사 전용 목록이 있으면 그걸 쓰고, 없으면 공통을 쓴다.
+══════════════════════════════════════════ */
+export const CODE_LISTS = [];
+
+/* 고를 수 있는 항목 — 내린 것(active='no')은 뺀다.
+   서버 값이 아직 안 왔으면 fallback을 쓴다. 목록이 비어 화면이 텅 비는 것보다
+   코드에 남은 기본값이라도 보여주는 편이 낫다(로그인 직후 한순간). */
+export function codeList(listKey, evKey, fallback){
+  const all = CODE_LISTS.filter(c => c.list_key === listKey && c.active !== 'no');
+  const mine = evKey ? all.filter(c => c.event_id === evKey) : [];
+  const rows = (mine.length ? mine : all.filter(c => !c.event_id))
+    .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0));
+  return rows.length ? rows : (fallback || []);
+}
+
+/* 저장된 값 하나를 이름·색으로 옮긴다. 목록에서 내려간 값도 이름은 찾아준다 —
+   옛 데이터가 코드 그대로 노출되면 무슨 뜻인지 알 수 없다. */
+export function codeItem(listKey, evKey, code){
+  const c = String(code ?? '');
+  const pool = CODE_LISTS.filter(x => x.list_key === listKey);
+  return pool.find(x => x.code === c && x.event_id === evKey)
+    || pool.find(x => x.code === c && !x.event_id)
+    || null;
+}
+export const codeLabel = (listKey, evKey, code) =>
+  codeItem(listKey, evKey, code)?.label || String(code ?? '');
+export const codeCls = (listKey, evKey, code) =>
+  codeItem(listKey, evKey, code)?.cls || 'p-gray';
+
 export const ORGS = [];
 
 export function getOrgById(id){ return ORGS.find(o => o.id === id); }
@@ -113,6 +149,30 @@ export const ORG_KINDS = [
   { key: '벤더시공사',   label: '벤더·시공사',   cls: 'p-teal' },
 ];
 export const ORG_STATUSES = ['활성', '휴면', '거래종료'];
+
+/* ── 서버 목록을 코드 상수에 덮어씌운다 ──────────────────────────
+   ORG_KINDS·CL·CP·CAT_KEYS는 20곳 넘는 화면이 직접 import해 쓴다. 호출부를
+   전부 함수로 바꾸는 대신, 목록을 읽어 온 뒤 '같은 객체 안의 내용만' 갈아끼운다
+   (배열·객체 참조를 유지하는 기존 규약 그대로). 서버에 그 목록이 없으면
+   코드에 있던 기본값을 그대로 둔다 — 목록이 비어 선택지가 사라지면 안 된다. */
+export function applyCodeLists(){
+  const kinds = CODE_LISTS.filter(c => c.list_key === 'org_kind' && c.active !== 'no');
+  if(kinds.length) ORG_KINDS.splice(0, ORG_KINDS.length,
+    ...kinds.sort(byOrder).map(c => ({ key: c.code, label: c.label, cls: c.cls || 'p-gray' })));
+
+  const st = CODE_LISTS.filter(c => c.list_key === 'org_status' && c.active !== 'no');
+  if(st.length) ORG_STATUSES.splice(0, ORG_STATUSES.length, ...st.sort(byOrder).map(c => c.code));
+
+  const cats = CODE_LISTS.filter(c => c.list_key === 'contact_cat' && c.active !== 'no');
+  if(cats.length){
+    const rows = cats.sort(byOrder);
+    CAT_KEYS.splice(0, CAT_KEYS.length, ...rows.map(c => c.code));
+    // 이름·색은 지우지 않고 덮어쓰기만 한다. 목록에서 내린 카테고리라도 옛
+    // 데이터에는 남아 있어서, 이름을 잃으면 화면에 코드가 그대로 노출된다
+    rows.forEach(c => { CL[c.code] = c.label; if(c.cls) CP[c.code] = c.cls; });
+  }
+}
+const byOrder = (a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0);
 
 /* ══════════════════════════════════════════
    CO_DB — 기업 화면용 뷰 (ORGS + 연락처/행사/거래) (원본 1616~1620행)

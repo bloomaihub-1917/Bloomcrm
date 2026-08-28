@@ -38,6 +38,8 @@ import {
   DOMAINS,
   TAGS,
   PART_TYPES,
+  CODE_LISTS,
+  applyCodeLists,
 } from '../state.js';
 
 import {
@@ -1378,7 +1380,7 @@ export function switchArchTab(tab){
   const sysnav = document.getElementById('sbp-arch-sysnav');
   if(sysnav) sysnav.style.display = tab==='sys' ? 'block' : 'none';
   if(tab==='ev')     { renderEvMgr(); }
-  if(tab==='sector') { renderSectorList(); renderPartTypeList(); renderTagList(); }
+  if(tab==='sector') { renderSectorList(); renderPartTypeList(); renderTagList(); renderCodeListPicker(); }
 }
 
 // archV는 이 탭에서만 쓰는 로컬 UI 상태라 state.js로 옮기지 않고 모듈 스코프에 둠
@@ -1442,3 +1444,175 @@ window.removeDomain           = removeDomain;
 window.addTag                 = addTag;
 window.renameTag              = renameTag;
 window.removeTag              = removeTag;
+
+/* ══════════════════════════════════════════
+   선택 목록(code_lists) 관리
+
+   부스 타입·스폰서 등급·통화처럼 드롭다운으로 고르는 짧은 목록들. 전에는 코드에
+   박혀 있어서 행사가 바뀔 때마다 개발자가 고쳐야 했다.
+
+   두 가지를 지킨다.
+   ① 행사별 덮어쓰기 — 그 행사 전용 목록이 있으면 그걸 쓰고 없으면 공통을 쓴다.
+      지난 행사 목록은 남아 있어서 옛 데이터가 무엇을 가리키는지 잃지 않는다.
+   ② 삭제 대신 숨김 — 이미 저장된 값의 이름표를 지우면 화면에 코드가 그대로
+      노출된다. active='no'로 내려 새로 고르지만 못 하게 한다.
+══════════════════════════════════════════ */
+const CL_DEFS = [
+  { key: 'contact_cat',  label: '연락처 카테고리',    perEvent: false },
+  { key: 'org_kind',     label: '기업 종류',          perEvent: false },
+  { key: 'org_status',   label: '기업 상태',          perEvent: false },
+  { key: 'contact_role', label: '전시 담당자 역할',   perEvent: false },
+  { key: 'item_cat',     label: '금액 항목 분류',     perEvent: false },
+  { key: 'currency',     label: '통화',               perEvent: false },
+  { key: 'log_channel',  label: '문의 채널',          perEvent: false },
+  { key: 'log_cat',      label: '문의 분류',          perEvent: false },
+  { key: 'booth_type',   label: '부스 타입',          perEvent: true  },
+  { key: 'grade',        label: '스폰서 등급',        perEvent: true  },
+  { key: 'equip_cat',    label: '비품 카탈로그 분류', perEvent: true  },
+];
+const CL_COLORS = [['', '— 없음 —'], ['p-blue', '파랑'], ['p-green', '초록'], ['p-amber', '주황'],
+  ['p-teal', '청록'], ['p-purple', '보라'], ['p-red', '빨강'], ['p-gray', '회색'],
+  ['p-gold', '금색'], ['p-indigo', '남색']];
+
+const clDef = (k) => CL_DEFS.find(d => d.key === k) || CL_DEFS[0];
+const clKey = () => document.getElementById('cl-key')?.value || CL_DEFS[0].key;
+const clScope = () => document.getElementById('cl-scope')?.value || '';
+const clSlug = (v) => String(v).replace(/[^A-Za-z0-9가-힣]/g, '').slice(0, 24);
+
+/* 지금 고른 목록·범위의 행 — 숨긴 것도 포함해 순서대로 */
+function clRowsOf(key, scope){
+  return CODE_LISTS.filter(c => c.list_key === key && (c.event_id || '') === scope)
+    .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0));
+}
+
+export function renderCodeListPicker(){
+  const kel = document.getElementById('cl-key');
+  if(!kel) return;
+  const cur = kel.value || CL_DEFS[0].key;
+  kel.innerHTML = CL_DEFS.map(d =>
+    `<option value="${escAttr(d.key)}"${cur === d.key ? ' selected' : ''}>${escapeHtml(d.label)}</option>`).join('');
+  renderCodeList();
+}
+
+export function renderCodeList(){
+  const key = clKey(), def = clDef(key);
+  const sel = document.getElementById('cl-scope');
+  const el = document.getElementById('cl-rows');
+  if(!sel || !el) return;
+
+  // 행사별로 나뉘지 않는 목록은 범위 선택을 잠근다 — 고를 수 있게 두면 값이
+  // 어디에 저장됐는지 헷갈린다
+  const prev = sel.value;
+  sel.disabled = !def.perEvent;
+  sel.innerHTML = '<option value="">공통 (모든 행사)</option>'
+    + (def.perEvent ? EVENT_LIST.map(e => {
+        const k = e.key || e.name || e;
+        return `<option value="${escAttr(k)}"${prev === k ? ' selected' : ''}>${escapeHtml(k)} 전용</option>`;
+      }).join('') : '');
+  if(!def.perEvent) sel.value = '';
+
+  const scope = clScope();
+  const rows = clRowsOf(key, scope);
+  const inherited = def.perEvent && scope && !rows.length;
+
+  el.innerHTML = (inherited
+    ? `<div style="font-size:11px;color:var(--i4);margin-bottom:8px">이 행사 전용 목록이 없어 <b>공통 목록</b>을 씁니다. 아래에서 항목을 추가하면 이 행사 전용 목록이 새로 만들어지고, 그때부터 공통 대신 이 목록만 쓰입니다.</div>
+       <div style="opacity:.55;pointer-events:none">${clRowsHtml(clRowsOf(key, ''), true)}</div>`
+    : clRowsHtml(rows, false))
+    + `<div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--i6)">
+      <div style="flex:1;min-width:140px"><div class="mlbl">저장값</div>
+        <input class="fi" id="cl-new-code" placeholder="예: Block System D" style="width:100%"
+          onkeydown="if(event.key==='Enter')addCodeListRow()"></div>
+      <div style="flex:1;min-width:140px"><div class="mlbl">화면에 보일 이름</div>
+        <input class="fi" id="cl-new-label" placeholder="비우면 저장값 그대로" style="width:100%"
+          onkeydown="if(event.key==='Enter')addCodeListRow()"></div>
+      <div style="min-width:120px"><div class="mlbl">색상</div>
+        <select class="fi" id="cl-new-cls" style="width:100%">${CL_COLORS.map(([v, l]) =>
+          `<option value="${v}">${l}</option>`).join('')}</select></div>
+      <button class="btn bp" onclick="addCodeListRow()" style="min-width:60px;height:36px">추가</button>
+    </div>`;
+}
+
+function clRowsHtml(rows, readonly){
+  if(!rows.length) return '<div style="font-size:12px;color:var(--i4)">아직 항목이 없어요.</div>';
+  return rows.map(c => {
+    const off = c.active === 'no';
+    return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--i7)${off ? ';opacity:.5' : ''}">
+      <span class="pill ${escAttr(c.cls || 'p-gray')}" style="min-width:80px;text-align:center">${escapeHtml(c.label || c.code)}</span>
+      <code style="font-size:11px;color:var(--i4);min-width:110px">${escapeHtml(c.code)}</code>
+      ${readonly ? '' : `
+      <input class="fi" value="${escAttr(c.label || '')}" placeholder="이름" style="flex:1;min-width:120px"
+        onchange="editCodeListRow('${escAttr(c.id)}','label',this.value)">
+      <select class="fi" style="min-width:100px" onchange="editCodeListRow('${escAttr(c.id)}','cls',this.value)">
+        ${CL_COLORS.map(([v, l]) => `<option value="${v}"${(c.cls || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
+      <input class="fi" type="number" value="${escAttr(c.sort_order || '')}" title="순서" style="width:70px"
+        onchange="editCodeListRow('${escAttr(c.id)}','sort_order',this.value)">
+      <button class="btn" onclick="toggleCodeListRow('${escAttr(c.id)}')"
+        style="height:32px;font-size:11px">${off ? '되살리기' : '숨김'}</button>`}
+    </div>`;
+  }).join('');
+}
+
+/* 한 행만 고치므로 객체형(upsertPartial) 경로를 쓴다 — 위치 배열로 보내면
+   컬럼이 늘었을 때 안 보낸 칸이 비워진다 */
+const saveCodeRow = (row, label) =>
+  postToSheet({ sheet: 'code_lists', action: 'upsertPartial', data: row }, label);
+
+export async function addCodeListRow(){
+  const key = clKey(), scope = clScope();
+  const code = (document.getElementById('cl-new-code')?.value || '').trim();
+  if(!code){ document.getElementById('cl-new-code')?.focus(); return; }
+  if(clRowsOf(key, scope).some(c => c.code === code)){ alert('이미 있는 값이에요.'); return; }
+
+  const rows = clRowsOf(key, scope);
+  const row = {
+    id: `CD-${key}-${scope ? clSlug(scope) + '-' : ''}${clSlug(code)}-${Math.random().toString(36).slice(2, 6)}`,
+    list_key: key, event_id: scope, code,
+    label: (document.getElementById('cl-new-label')?.value || '').trim() || code,
+    cls: document.getElementById('cl-new-cls')?.value || '', note: '', active: '',
+    sort_order: String((Number(rows[rows.length - 1]?.sort_order) || rows.length * 10) + 10),
+  };
+  CODE_LISTS.push(row);
+  const r = await saveCodeRow(row, '선택 목록 추가');
+  if(!r.ok){ CODE_LISTS.pop(); renderCodeList(); return; }   // 실패하면 되돌린다
+  applyCodeLists();
+  trackAction('edit', '선택 목록 추가', row.label,
+    `${clDef(key).label}${scope ? `(${scope})` : ''}에 "${row.label}" 추가`);
+  renderCodeList();
+}
+
+export async function editCodeListRow(id, field, value){
+  const c = CODE_LISTS.find(x => x.id === id);
+  if(!c) return;
+  const prev = c[field] || '';
+  const v = String(value ?? '').trim();
+  if(v === prev) return;
+  c[field] = v;
+  const r = await saveCodeRow({ id, [field]: v }, '선택 목록 수정');
+  if(!r.ok){ c[field] = prev; renderCodeList(); return; }
+  applyCodeLists();
+  trackAction('edit', '선택 목록 수정', c.label || c.code,
+    `${clDef(c.list_key).label} "${c.code}" ${field}: ${prev || '(빈값)'} → ${v || '(빈값)'}`);
+  renderCodeList();
+}
+
+export async function toggleCodeListRow(id){
+  const c = CODE_LISTS.find(x => x.id === id);
+  if(!c) return;
+  const off = c.active === 'no';
+  if(!off && !confirm(`"${c.label || c.code}"을(를) 숨길까요?\n앞으로 새로 고를 수 없지만, 이미 이 값으로 저장된 데이터는 그대로 남고 이름도 계속 보입니다.`)) return;
+  const prev = c.active || '';
+  c.active = off ? '' : 'no';
+  const r = await saveCodeRow({ id, active: c.active }, off ? '선택 목록 되살리기' : '선택 목록 숨김');
+  if(!r.ok){ c.active = prev; renderCodeList(); return; }
+  applyCodeLists();
+  trackAction('edit', off ? '선택 목록 되살리기' : '선택 목록 숨김', c.label || c.code,
+    `${clDef(c.list_key).label} "${c.label || c.code}" ${off ? '되살림' : '숨김'}`);
+  renderCodeList();
+}
+
+window.renderCodeListPicker = renderCodeListPicker;
+window.renderCodeList       = renderCodeList;
+window.addCodeListRow       = addCodeListRow;
+window.editCodeListRow      = editCodeListRow;
+window.toggleCodeListRow    = toggleCodeListRow;

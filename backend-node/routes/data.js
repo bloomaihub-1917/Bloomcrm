@@ -45,6 +45,13 @@ const TABLES = {
     columns: ['key', 'label', 'cls'],
   },
 
+  /* 화면에서 고르는 짧은 목록들 — 부스 타입·등급·분류 등. list_key로 나누고
+     event_id로 행사별 덮어쓰기를 한다(schema.sql 주석 참고). */
+  code_lists: {
+    table: 'code_lists', pk: 'id', idPrefix: 'CD-',
+    columns: ['id', 'list_key', 'event_id', 'code', 'label', 'cls', 'note', 'active', 'sort_order'],
+  },
+
   /* 기업 마스터. companies(정규화된 이름이 키인 오버레이)를 대신한다 —
      이름이 바뀌어도 id는 그대로라 연결이 끊기지 않는다. 컬럼이 많고 인라인
      수정이 잦아 객체형 입력(data)을 쓴다. */
