@@ -391,6 +391,28 @@ export function setDomains(arr){
 export const CATMAPS = {};
 
 /* ══════════════════════════════════════════
+   EXH_CFG — 행사별 전시 설정 (settings 시트 key='exh_cfg_<행사키>' JSON)
+
+     { due: { 단계키: 'YYYY-MM-DD' },      // 단계별 마감일
+       book: { chars, words } }            // 프로그램북 글자수 한도
+
+   행사가 바뀌면 마감일도 도록 판형도 같이 바뀐다. 뜻풀이는 전시 탭이 하고
+   여기서는 담아만 둔다 — api.js가 전시 탭을 import하면 순환 참조가 된다.
+══════════════════════════════════════════ */
+export const EXH_CFG = {};
+export function loadExhCfg(settingsRows){
+  for(const k in EXH_CFG) delete EXH_CFG[k];
+  (settingsRows || []).forEach(r => {
+    const k = String(r.key || '');
+    if(!k.startsWith('exh_cfg_')) return;
+    try {
+      const v = JSON.parse(r.value);
+      if(v && typeof v === 'object') EXH_CFG[k.slice('exh_cfg_'.length)] = v;
+    } catch(e){ console.warn('[CRM] 행사 설정 파싱 실패:', k, e); }
+  });
+}
+
+/* ══════════════════════════════════════════
    COMPANY_SECTORS — 기업 섹터 트리 (원본 6258~6276행)
    { id, name, parent: null or parent_id, domain: ''|분야id }
    - parent: 메인(null) → 서브(부모 id)의 2단계 계층

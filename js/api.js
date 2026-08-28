@@ -44,6 +44,7 @@ import {
   ORGS,
   EQUIP_CATALOG,
   CODE_LISTS, applyCodeLists,
+  loadExhCfg,
   auditLog,
   COMPANY_SECTORS,
   DOMAINS,
@@ -355,6 +356,9 @@ export async function loadFromSheets(hooks = {}){
         saveTags();
       }
 
+      // ── settings 시트 → 행사별 전시 설정 (마감일·프로그램북 한도) ──
+      loadExhCfg(settingsData);
+
       // ── settings 시트 → CATMAPS (업로드 카테고리 값별 매핑, key='catmap_<행사key>') ──
       for(const k in CATMAPS) delete CATMAPS[k];
       settingsData.forEach(row => {
@@ -612,6 +616,18 @@ export async function saveDomains(){
     row:    ['domains', JSON.stringify(DOMAINS)],
   }, '분야 목록 저장');
   if(r.ok) console.log('[CRM] domains 저장 완료:', DOMAINS.length, '개');
+  return r;
+}
+
+/* 행사별 전시 설정 저장 — settings 시트 key='exh_cfg_<행사키>' JSON.
+   마감일·프로그램북 한도를 행사당 한 줄로 담는다. */
+export async function saveExhCfgToSheet(evKey, cfg){
+  const r = await postToSheet({
+    sheet:  'settings',
+    action: 'upsert',
+    row:    ['exh_cfg_' + evKey, JSON.stringify(cfg || {})],
+  }, '행사 설정 저장');
+  if(r.ok) console.log('[CRM] 행사 설정 저장:', evKey);
   return r;
 }
 

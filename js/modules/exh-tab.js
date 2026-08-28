@@ -13,7 +13,7 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import {
-  EXHIBITORS, EXH_ITEMS, EXH_INVOICES, EXH_PAYMENTS, EXH_LOGS,
+  EXHIBITORS, EXH_ITEMS, EXH_INVOICES, EXH_PAYMENTS, EXH_LOGS, EXH_CFG,
   exhEvent, setExhEvent,
   exhibitorsForEvent, getExhibitorById, itemsFor, invoicesFor, paymentsFor,
   logsFor, openInquiriesFor, contactsFor, primaryContactFor,
@@ -27,7 +27,7 @@ import {
   postToSheet,
   saveExhibitor, saveExhItem, saveExhInvoice, saveExhPayment, saveExhLog,
   deleteExhItem, deleteExhInvoice, deleteExhPayment, deleteExhLog,
-  batchCreateExhibitors,
+  batchCreateExhibitors, saveExhCfgToSheet,
 } from '../api.js';
 import { trackAction } from './audit-tab.js';
 import { normalizeCompanyKey } from './company-tab.js';
@@ -249,20 +249,61 @@ export function fmtMoney(v, cur){
   return (cur === 'USD' ? '$' : '') + money(v) + (cur === 'USD' ? '' : '원');
 }
 
-/* 행사 공통 마감일 — settings 시트에 exh_due_<행사키>로 저장한다.
-   기업별 지정이 없을 때의 기본값이며, 기업별 값이 있으면 그쪽이 이긴다. */
-export function eventDeadlines(evKey){
-  try {
-    const row = SETTINGS_CACHE.get('exh_due_' + evKey);
-    return row ? JSON.parse(row) : {};
-  } catch(e){ return {}; }
+/* ══════════════════════════════════════════
+   행사별 설정 — settings 시트에 exh_cfg_<행사키> 한 줄(JSON)로 담는다
+
+     { due: { manual_replied_at: '2026-01-15', ... },   // 단계별 마감일
+       book: { chars: 1300, words: 200 } }              // 프로그램북 글자수 한도
+
+   행사가 바뀌면 마감일도 도록 판형도 같이 바뀐다. 설정을 단계마다 따로 저장하면
+   행사 하나 추가할 때 settings에 열 몇 개가 생기므로, 행사당 한 줄로 묶는다.
+══════════════════════════════════════════ */
+export function exhCfg(evKey){ return EXH_CFG[evKey || exhEvent] || {}; }
+export function setExhCfg(evKey, cfg){ EXH_CFG[evKey] = cfg || {}; }
+
+/* ── 프로그램북 글자수 한도 ──
+   지면 기준이 행사마다 다르다(2026 KIC은 1,354자·189단어라 여유를 둬 1,300/200).
+   설정이 없으면 이 기본값을 쓴다. */
+export const BOOK_LIMIT_DEFAULT = { chars: 1300, words: 200 };
+export function bookLimit(evKey){
+  const b = exhCfg(evKey).book || {};
+  return {
+    chars: Number(b.chars) > 0 ? Number(b.chars) : BOOK_LIMIT_DEFAULT.chars,
+    words: Number(b.words) > 0 ? Number(b.words) : BOOK_LIMIT_DEFAULT.words,
+  };
 }
-const SETTINGS_CACHE = new Map();
-export function setEventDeadlines(evKey, obj){ SETTINGS_CACHE.set('exh_due_' + evKey, JSON.stringify(obj)); }
-export function loadEventDeadlines(settingsRows){
-  (settingsRows || []).forEach(r => {
-    if(String(r.key || '').startsWith('exh_due_')) SETTINGS_CACHE.set(r.key, r.value);
-  });
+
+/* ── 단계별 마감일 ──
+   마감을 걸 만한 단계만 고른다. "매뉴얼 발송"처럼 우리가 언제든 할 수 있는 일이
+   아니라, 기업에서 받아내야 해서 늦으면 행사 준비가 밀리는 것들이다.
+   키는 STEPS의 키와 같아야 체크리스트 칸에 그대로 붙는다. */
+export const DUE_STEPS = [
+  ['manual_replied_at',     '매뉴얼 회신'],
+  ['app_received_at',       '신청서 접수'],
+  ['booth_confirmed_at',    '부스 확정'],
+  ['calc:payment',          '입금'],
+  ['calc:graphic',          '그래픽 확정'],
+  ['directory_received_at', '도록 정보'],
+  ['movein_at',             '반입·설치'],
+];
+
+/* 마감을 놓친 줄을 눌렀을 때 열 드로어 탭 — 바로 처리할 수 있는 자리로 보낸다 */
+const DUE_TAB = {
+  'manual_replied_at': 'progress', 'app_received_at': 'apply',
+  'booth_confirmed_at': 'progress', 'calc:payment': 'billing',
+  'calc:graphic': 'graphic', 'directory_received_at': 'book', 'movein_at': 'progress',
+};
+
+export const eventDeadlines = (evKey) => exhCfg(evKey).due || {};
+
+/* 오늘 기준 남은 날 — 마감이 없으면 null.
+   days > 0 남음, 0 오늘, 음수면 지났다. */
+export function dueInfo(stepKey, evKey){
+  const date = String(eventDeadlines(evKey)[stepKey] || '').trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const d = new Date(date + 'T00:00:00');
+  return { date, days: Math.round((d - today) / 86400000) };
 }
 
 /* 그래픽 진행 상태 — 주문 안 했으면 해당 없음, 출력/제작에 따라 완료 기준이 다르다 */
@@ -351,7 +392,22 @@ export function daysSince(dateStr){
 }
 
 /* 셀 상태 계산 — 완료(done) / 미완(todo) / 주의(warn) */
-function cellState(x, step){
+/* 아직 못 끝낸 단계에 마감일이 걸려 있으면 그 사실을 칸에 얹는다.
+   지난 건 눈에 띄게 경고로 올리고, 임박한 건 색을 바꾸지 않고 남은 날만 붙인다 —
+   아직 늦지 않은 걸 빨갛게 칠하면 진짜 늦은 것과 구분이 안 된다. */
+const DUE_SOON_DAYS = 7;
+function withDue(c, x, step){
+  if(c.state === 'done' || c.state === 'na') return c;
+  const d = dueInfo(step.key, x.event_id);
+  if(!d) return c;
+  if(d.days < 0) return { ...c, state: 'warn', due: d, text: c.text || `${-d.days}일 지남` };
+  if(d.days <= DUE_SOON_DAYS) return { ...c, due: d, text: c.text || (d.days === 0 ? '오늘 마감' : `D-${d.days}`) };
+  return { ...c, due: d };
+}
+
+function cellState(x, step){ return withDue(rawCellState(x, step), x, step); }
+
+function rawCellState(x, step){
   if(step.key === 'calc:invoice'){
     const inv = invoicesFor(x.id).filter(i => i.status !== 'void');
     if(!inv.length) return { state: 'todo' };
@@ -1069,15 +1125,15 @@ export const introWords = (v) => {
   const t = String(v ?? '').trim();
   return t ? t.split(/\s+/).length : 0;
 };
-export const BOOK_LIMIT = { chars: 1300, words: 200 };
-
-/* 넘쳤나 — 넘긴 쪽과 얼마나 넘겼는지 함께 돌려준다 */
-export function introOver(v){
+/* 넘쳤나 — 넘긴 쪽과 얼마나 넘겼는지, 그때 쓴 한도까지 함께 돌려준다.
+   한도가 행사별 설정이라 부르는 쪽이 따로 다시 찾지 않아도 되게 같이 준다. */
+export function introOver(v, evKey){
+  const lim = bookLimit(evKey);
   const c = introLen(v), w = introWords(v);
   const over = [];
-  if(c > BOOK_LIMIT.chars) over.push(`${c - BOOK_LIMIT.chars}자`);
-  if(w > BOOK_LIMIT.words) over.push(`${w - BOOK_LIMIT.words}단어`);
-  return { chars: c, words: w, over, isOver: over.length > 0 };
+  if(c > lim.chars) over.push(`${c - lim.chars}자`);
+  if(w > lim.words) over.push(`${w - lim.words}단어`);
+  return { chars: c, words: w, over, isOver: over.length > 0, lim };
 }
 
 const BOOK_FIELDS = [
@@ -1120,7 +1176,7 @@ function renderBookView(list){
     + (noIntro ? `<span class="pill p-red">회사소개 없음 ${noIntro}</span>` : '')
     + (lens.length ? `<span class="pill p-gray" title="띄어쓰기 포함">소개 ${Math.min(...lens)}~${Math.max(...lens)}자</span>` : '')
     + (overN ? `<span class="pill p-red" title="${escAttr(overRows.map(o => `${exhNames(o.x).ko} ${o.o.chars}자`).join(', '))}">한도 초과 ${overN}</span>` : '')
-    + `<span style="font-size:10.5px;color:var(--i5);margin-left:2px">한도 ${BOOK_LIMIT.chars.toLocaleString()}자 · ${BOOK_LIMIT.words}단어 (띄어쓰기 포함)</span>`;
+    + `<span style="font-size:10.5px;color:var(--i5);margin-left:2px">한도 ${bookLimit().chars.toLocaleString()}자 · ${bookLimit().words}단어 (띄어쓰기 포함)</span>`;
 
   const actions = `<button class="btn bs" onclick="fillBookOrder()" title="지금 부스 번호순으로 1번부터 다시 매깁니다">순서 자동 매기기</button>`;
 
@@ -1138,7 +1194,7 @@ function renderBookView(list){
       onclick="event.stopPropagation();openBookIntro('${escAttr(x.id)}')">없음</span>`;
     return `<span class="pill ${o.isOver ? 'p-red' : 'p-green'}" style="cursor:pointer"
       onclick="event.stopPropagation();openBookIntro('${escAttr(x.id)}')"
-      title="${o.chars}자 / ${o.words}단어 · 한도 ${BOOK_LIMIT.chars}자 · ${BOOK_LIMIT.words}단어${
+      title="${o.chars}자 / ${o.words}단어 · 한도 ${o.lim.chars}자 · ${o.lim.words}단어${
         o.isOver ? ` — ${o.over.join(', ')} 초과` : ''}">${o.chars}자${
         o.isOver ? ` <b>+${o.over[0]}</b>` : ''}</span>`;
   };
@@ -1244,9 +1300,9 @@ export function updateIntroCount(){
   const bad = o.isOver;
   el.innerHTML = `<span style="color:${bad ? 'var(--re)' : 'var(--i4)'}">
       띄어쓰기 포함 <b style="font-size:13px">${o.chars}</b>자 · <b style="font-size:13px">${o.words}</b>단어</span>
-    <span style="color:var(--i5)"> / 한도 ${BOOK_LIMIT.chars.toLocaleString()}자 · ${BOOK_LIMIT.words}단어</span>
+    <span style="color:var(--i5)"> / 한도 ${o.lim.chars.toLocaleString()}자 · ${o.lim.words}단어</span>
     ${bad ? `<div style="color:var(--re);font-weight:700;margin-top:3px">${o.over.join(', ')} 초과 — 줄여야 실립니다</div>`
-      : `<div style="color:var(--g);margin-top:3px">지면에 들어갑니다 (${BOOK_LIMIT.chars - o.chars}자 여유)</div>`}`;
+      : `<div style="color:var(--g);margin-top:3px">지면에 들어갑니다 (${o.lim.chars - o.chars}자 여유)</div>`}`;
 }
 
 export async function saveBookIntro(id){
@@ -1469,6 +1525,22 @@ function renderDashboard(all){
   });
   overdue.sort((a, b) => daysSince(b.s.due) - daysSince(a.s.due));
 
+  /* 마감이 걸린 단계 중 아직 못 끝낸 것. 지난 것만 "처리 필요"에 올린다 —
+     아직 남은 건 재촉할 일이 아니라 단계별 진행에서 날짜로만 보여준다. */
+  const dueMiss = [];
+  DUE_STEPS.forEach(([key, label]) => {
+    const d = dueInfo(key, exhEvent);
+    if(!d || d.days >= 0) return;
+    const st = STEPS.find(s => s.key === key);
+    if(!st) return;
+    all.forEach(x => {
+      const c = rawCellState(x, st);
+      if(c.state === 'done' || c.state === 'na') return;
+      dueMiss.push({ x, label, days: -d.days, date: d.date, tab: DUE_TAB[key] || 'progress' });
+    });
+  });
+  dueMiss.sort((a, b) => b.days - a.days);
+
   const openInq = [];
   all.forEach(x => openInquiriesFor(x.id).forEach(l => openInq.push({ x, l })));
   openInq.sort((a, b) => String(a.l.ts || '').localeCompare(String(b.l.ts || '')));
@@ -1500,7 +1572,7 @@ function renderDashboard(all){
   waiting.sort((a, b) => (b.days || 0) - (a.days || 0));
 
   const avg = Math.round(all.reduce((s, x) => s + progressOf(x), 0) / n);
-  const todo = openInq.length + overdue.length + attention.length + myTurn.length;
+  const todo = openInq.length + overdue.length + attention.length + myTurn.length + dueMiss.length;
   const curs = Object.keys(cash).filter(c => cash[c].n);
   const dueTotal = curs.map(c => cash[c].billed - cash[c].paid).reduce((a, b) => a + b, 0);
 
@@ -1522,12 +1594,16 @@ function renderDashboard(all){
     </div>`;
   };
 
-  const stepRow = (label, done, warn) => {
+  const stepRow = (label, done, warn, due) => {
     const pct = Math.round(done / n * 100);
+    // 마감이 지났는데 다 못 끝냈으면 빨갛게, 남았으면 날짜만 조용히 붙인다
+    const late = due && due.days < 0 && done < n;
     return `<div style="display:flex;align-items:center;gap:9px;margin-bottom:7px">
       <span style="font-size:11.5px;color:var(--i3);flex:0 0 74px">${escapeHtml(label)}</span>
-      <div style="flex:1;min-width:0">${progressBar(pct, pct === 100 ? 'var(--g)' : 'var(--a)')}</div>
+      <div style="flex:1;min-width:0">${progressBar(pct, pct === 100 ? 'var(--g)' : late ? 'var(--re)' : 'var(--a)')}</div>
       <span style="font-size:11px;color:var(--i4);flex:0 0 48px;text-align:right">${done}/${n}</span>
+      <span style="flex:0 0 66px;text-align:right;font-size:10px;color:${late ? 'var(--re)' : 'var(--i5)'}">${
+        due ? escapeHtml(due.date.slice(5)) + (late ? ` ${-due.days}일↑` : '') : ''}</span>
       ${warn ? `<span class="pill p-amber" style="flex:0 0 auto">${warn}</span>` : '<span style="flex:0 0 24px"></span>'}
     </div>`;
   };
@@ -1556,12 +1632,15 @@ function renderDashboard(all){
     </div>`;
 
   const cardSteps = `<div class="uc">
-      <div class="uc-ttl">단계별 진행</div>
+      <div class="uc-ttl">단계별 진행
+        <button class="btn" onclick="openExhCfg()" style="float:right;height:24px;font-size:10.5px;padding:0 8px">마감일 설정</button></div>
       ${STEPS.map(st => {
-        const done = all.filter(x => cellState(x, st).state === 'done').length;
-        const warn = all.filter(x => cellState(x, st).state === 'warn').length;
-        return stepRow(st.label.replace(/<br>/g, ''), done, warn);
+        const done = all.filter(x => rawCellState(x, st).state === 'done').length;
+        const warn = all.filter(x => rawCellState(x, st).state === 'warn').length;
+        return stepRow(st.label.replace(/<br>/g, ''), done, warn, dueInfo(st.key, exhEvent));
       }).join('')}
+      ${Object.keys(eventDeadlines(exhEvent)).length ? '' :
+        `<div style="font-size:10.5px;color:var(--i5);margin-top:6px">마감일을 정해 두면 늦은 기업이 처리 필요에 모입니다</div>`}
     </div>`;
 
   const cardCash = `<div class="uc">
@@ -1577,6 +1656,7 @@ function renderDashboard(all){
       ${myTurn.slice(0, 5).map(o => attnRow(o.x, o.label, o.st.action, o.days, o.label === '그래픽' ? 'graphic' : 'billing')).join('')}
       ${openInq.slice(0, 5).map(o => attnRow(o.x, '미답변 문의', o.l.subject || o.l.body || '', daysSince(o.l.ts), 'logs')).join('')}
       ${overdue.slice(0, 5).map(o => attnRow(o.x, '입금 기한', fmtMoney(o.s.balance, o.s.cur) + ' 미납', daysSince(o.s.due), 'billing')).join('')}
+      ${dueMiss.slice(0, 8).map(o => attnRow(o.x, o.label + ' 마감', `${o.date} 마감 · 아직 안 됨`, o.days, o.tab)).join('')}
       ${attention.slice(0, 5).map(o => attnRow(o.x, '정산 확인', o.why, null, 'billing')).join('')}
       ${todo > 20 ? `<div style="font-size:11px;color:var(--i4);padding:6px 2px">외 ${todo - 20}건 — 왼쪽 필터에서 전체를 볼 수 있어요</div>` : ''}
       ${waiting.length ? `<div style="font-size:10.5px;color:var(--i4);margin-top:8px;padding-top:7px;border-top:1px solid var(--i8)">
@@ -1622,7 +1702,8 @@ function renderDashboard(all){
         '', dueTotal > 0 ? 'var(--am)' : 'var(--g)')}
       ${card('처리 필요', todo + '건',
         '문의 ' + openInq.length + ' · 기한 ' + overdue.length + ' · 정산 ' + attention.length
-        + (myTurn.length ? ' · 내 차례 ' + myTurn.length : ''),
+        + (myTurn.length ? ' · 내 차례 ' + myTurn.length : '')
+        + (dueMiss.length ? ' · 마감 지남 ' + dueMiss.length : ''),
         todo ? 'var(--re)' : 'var(--g)')}
     </div>
 
@@ -2047,3 +2128,88 @@ window.toggleExhDate = toggleExhDate;
 window.setExhField = setExhField;
 window.toggleExhFlag = toggleExhFlag;
 window.setExhDateWithFlag = setExhDateWithFlag;
+
+/* ══════════════════════════════════════════
+   행사 설정 모달 — 단계별 마감일 + 프로그램북 글자수 한도
+
+   행사가 바뀌면 마감일도 도록 판형도 바뀐다. 두 가지가 성격은 다르지만 둘 다
+   "이 행사는 이렇게 간다"는 약속이라 한 자리에서 정하게 둔다.
+
+   마감일은 행사 공통값이다. 기업마다 따로 봐주는 건 지금 필요가 없고, 있으면
+   어느 날짜가 진짜인지 두 군데를 봐야 한다.
+══════════════════════════════════════════ */
+export function openExhCfg(){
+  const cfg = exhCfg(exhEvent);
+  const due = cfg.due || {};
+  const lim = bookLimit(exhEvent);
+  const ev = exhEventOptions().find(e => e.key === exhEvent);
+
+  modalShell('exh-cfg-modal', `${ev ? (ev.short || ev.name) : exhEvent} 설정`, `
+    <div style="font-size:11.5px;color:var(--i4);margin-bottom:10px">
+      마감일을 지나도록 못 끝낸 기업은 <b>처리 필요</b>에 모이고, 체크리스트 칸이 빨갛게 바뀝니다.
+      비워 두면 그 단계는 마감을 보지 않습니다.</div>
+
+    ${DUE_STEPS.map(([key, label]) => `
+      <div class="fg" style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <label class="fl" style="flex:1;margin:0">${escapeHtml(label)}</label>
+        <input class="fi" type="date" id="cfg-due-${escAttr(key)}" style="width:160px"
+          value="${escAttr(due[key] || '')}">
+      </div>`).join('')}
+
+    <div style="font-size:12px;font-weight:700;color:var(--i2);margin:18px 0 4px">프로그램북 글자수 한도</div>
+    <div style="font-size:11.5px;color:var(--i4);margin-bottom:8px">
+      도록 지면에 맞춘 회사소개 한도입니다. 둘 중 하나만 넘어도 넘친 것으로 봅니다.
+      판형이 바뀌면 여기서 고치면 되고, 이미 받아 둔 소개글은 새 한도로 다시 셉니다.</div>
+    <div style="display:flex;gap:10px">
+      <div class="fg" style="flex:1"><label class="fl">글자수 (띄어쓰기 포함)</label>
+        <input class="fi" type="number" id="cfg-book-chars" value="${escAttr(lim.chars)}" min="1"></div>
+      <div class="fg" style="flex:1"><label class="fl">단어수</label>
+        <input class="fi" type="number" id="cfg-book-words" value="${escAttr(lim.words)}" min="1"></div>
+    </div>
+
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+      <button class="btn" onclick="closeExhCfg()">취소</button>
+      <button class="btn bp" onclick="saveExhCfg()">저장</button>
+    </div>`);
+}
+
+export async function saveExhCfg(){
+  const prev = JSON.parse(JSON.stringify(exhCfg(exhEvent)));
+
+  const due = {};
+  DUE_STEPS.forEach(([key]) => {
+    const v = (document.getElementById(`cfg-due-${key}`)?.value || '').trim();
+    if(v) due[key] = v;   // 빈 칸은 아예 안 담는다 — 마감 없음과 빈 문자열을 구분할 필요가 없다
+  });
+
+  const chars = Number(document.getElementById('cfg-book-chars')?.value);
+  const words = Number(document.getElementById('cfg-book-words')?.value);
+  if(!(chars > 0) || !(words > 0)){ alert('글자수·단어수 한도는 1 이상이어야 해요.'); return; }
+
+  const cfg = { ...prev, due, book: { chars, words } };
+  setExhCfg(exhEvent, cfg);
+  const r = await saveExhCfgToSheet(exhEvent, cfg);
+  if(!r.ok){ setExhCfg(exhEvent, prev); return; }   // 실패하면 되돌린다
+
+  // 무엇이 어떻게 바뀌었는지 남긴다 — 마감일은 나중에 "언제부터 이 날짜였나"를
+  // 따지게 되는 값이라 결과만 적어 두면 소용이 없다
+  const changed = [];
+  DUE_STEPS.forEach(([key, label]) => {
+    const a = (prev.due || {})[key] || '', b = due[key] || '';
+    if(a !== b) changed.push(`${label} ${a || '없음'} → ${b || '없음'}`);
+  });
+  const pl = prev.book || {};
+  if(pl.chars !== chars || pl.words !== words){
+    changed.push(`프로그램북 한도 ${pl.chars || BOOK_LIMIT_DEFAULT.chars}자·${pl.words || BOOK_LIMIT_DEFAULT.words}단어 → ${chars}자·${words}단어`);
+  }
+  if(changed.length) trackAction('edit', '행사 설정 변경', exhEvent, changed.join(' / '));
+
+  closeExhCfg();
+  renderExh();
+}
+
+export const closeExhCfg = () => document.getElementById('exh-cfg-modal')?.remove();
+
+window.openExhCfg  = openExhCfg;
+window.saveExhCfg  = saveExhCfg;
+window.closeExhCfg = closeExhCfg;

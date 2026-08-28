@@ -27,7 +27,7 @@ import { trackAction } from './audit-tab.js';
 import {
   billedAmount, paidAmount, graphicState, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
   isPendingRefund, boothTypeOptions, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
-  TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing, introOver, BOOK_LIMIT,
+  TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing, introOver,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar,
   settleState, liveInvoices, payDueDate,
 } from './exh-tab.js';
@@ -560,23 +560,23 @@ function dApply(x){
    회사소개 글자수는 저장하지 않고 늘 다시 센다 — 지면이 정해져 있어 이 숫자로
    편집 가능 여부를 판단하는데, 세어 둔 값은 본문을 고치는 순간 어긋난다. */
 /* 글자수·단어수와 한도를 한 줄로 — 넘치면 얼마나 줄여야 하는지까지 적는다 */
-function introMeter(v){
-  const o = introOver(v);
+function introMeter(v, evKey){
+  const o = introOver(v, evKey);
   return `<span style="color:${o.isOver ? 'var(--re)' : 'var(--i4)'}">
       띄어쓰기 포함 <b style="font-size:13px">${o.chars}</b>자 · <b style="font-size:13px">${o.words}</b>단어</span>
-    <span style="color:var(--i5)"> / 한도 ${BOOK_LIMIT.chars.toLocaleString()}자 · ${BOOK_LIMIT.words}단어</span>
+    <span style="color:var(--i5)"> / 한도 ${o.lim.chars.toLocaleString()}자 · ${o.lim.words}단어</span>
     ${o.isOver ? `<div style="color:var(--re);font-weight:700;margin-top:3px">${o.over.join(', ')} 초과 — 기업에 줄여 달라고 요청하세요</div>`
-      : o.chars ? `<div style="color:var(--g);margin-top:3px">지면에 들어갑니다 (${BOOK_LIMIT.chars - o.chars}자 여유)</div>` : ''}`;
+      : o.chars ? `<div style="color:var(--g);margin-top:3px">지면에 들어갑니다 (${o.lim.chars - o.chars}자 여유)</div>` : ''}`;
 }
 export function drawIntroMeter(id){
   const ta = document.getElementById(`bk-intro-${id}`);
   const el = document.getElementById(`bk-meter-${id}`);
-  if(ta && el) el.innerHTML = introMeter(ta.value);
+  if(ta && el) el.innerHTML = introMeter(ta.value, getExhibitorById(id)?.event_id);
 }
 
 function dBook(x){
   const miss = bookMissing(x);
-  const o = introOver(x.book_intro);
+  const o = introOver(x.book_intro, x.event_id);
   const row = (f, label, ph) => `<div class="fg"><label class="fl">${escapeHtml(label)}</label>
     <input class="fi" style="font-size:12px" value="${escAttr(x[f] || '')}" placeholder="${escAttr(ph)}"
       onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')"></div>`;
@@ -611,7 +611,7 @@ function dBook(x){
       placeholder="도록에 실을 회사소개를 붙여넣으세요"
       oninput="drawIntroMeter('${escAttr(x.id)}')"
       onchange="setExhField('${escAttr(x.id)}','book_intro',this.value,'회사소개')">${escapeHtml(x.book_intro || '')}</textarea>
-    <div id="bk-meter-${escAttr(x.id)}" style="font-size:11.5px;margin-top:6px">${introMeter(x.book_intro)}</div>`,
+    <div id="bk-meter-${escAttr(x.id)}" style="font-size:11.5px;margin-top:6px">${introMeter(x.book_intro, x.event_id)}</div>`,
     o.chars ? `<span class="pill ${o.isOver ? 'p-red' : 'p-green'}">${o.chars}자${o.isOver ? ' 초과' : ''}</span>`
       : '<span class="pill p-red">없음</span>')}
 
