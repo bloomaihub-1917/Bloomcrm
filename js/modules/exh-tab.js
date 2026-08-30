@@ -522,8 +522,13 @@ function updateExhBadge(){
   el.style.display = n ? 'block' : 'none';
 }
 
-export function setExhView(v){ exhView = v; renderExh(); }
-export function setExhEvent2(key){ setExhEvent(key); buildExhEvList(); renderExh(); }
+export function setExhView(v){
+  // 부스 타입으로 걸러 둔 채 다른 보기로 갔다가 돌아오면, 왜 목록이 짧은지
+  // 알 수 없다. 보기를 옮기거나 행사를 바꾸면 푼다.
+  if(v !== 'booth') boothTypeFil = '';
+  exhView = v; renderExh();
+}
+export function setExhEvent2(key){ boothTypeFil = ''; setExhEvent(key); buildExhEvList(); renderExh(); }
 export function setExhFilter(k){ exhFilter = k; buildExhFilters(); renderExh(); }
 
 /* ══════════════════════════════════════════
@@ -716,30 +721,56 @@ const boothSortKey = (x) => {
   return b.first === Infinity ? Infinity : b.first * 100 + b.sub;
 };
 
+/* ── 부스 타입 골라 보기 ──
+   "Block System A가 몇 곳이지"까지는 배지로 보이는데, 그게 어느 기업인지 알려면
+   51줄을 눈으로 훑어야 했다. 배지를 눌러 그 타입만 남긴다. 대시보드 부스 카드의
+   타입 배지도 같은 곳으로 보낸다 — 세어 둔 숫자를 눌렀는데 아무 일이 없으면
+   셀 수만 있고 쓸 수는 없는 숫자가 된다. */
+let boothTypeFil = '';
+export function setBoothTypeFil(t){
+  boothTypeFil = (boothTypeFil === t) ? '' : t;   // 같은 걸 또 누르면 해제
+  exhView = 'booth';                              // 대시보드에서 눌러도 부스 현황으로 간다
+  renderExh();
+}
+
 function renderBoothView(list){
   if(!list.length) return emptyView('표시할 기업이 없어요');
-  const rows = [...list].sort((a, b) => boothSortKey(a) - boothSortKey(b));
-  const noBooth = rows.filter(x => !String(x.booth_no || '').trim()).length;
-  const selfN = rows.filter(x => x.booth_type === SELF_BUILD_TYPE).length;
-  const unconfirmed = rows.filter(x => x.booth_confirmed !== 'yes' && !x.booth_confirmed_at).length;
+  const all0 = [...list].sort((a, b) => boothSortKey(a) - boothSortKey(b));
+  // 걸러도 배지의 숫자는 전체 기준을 유지한다 — 누를 때마다 숫자가 1로 바뀌면
+  // 다른 타입이 몇 곳인지 알 수 없어 옮겨 다닐 수가 없다
+  const rows = boothTypeFil ? all0.filter(x => (x.booth_type || '') === boothTypeFil) : all0;
+  const noBooth = all0.filter(x => !String(x.booth_no || '').trim()).length;
+  const selfN = all0.filter(x => x.booth_type === SELF_BUILD_TYPE).length;
+  const unconfirmed = all0.filter(x => x.booth_confirmed !== 'yes' && !x.booth_confirmed_at).length;
 
   /* 번호에서 읽은 부스 수와 적어둔 수량이 다르면 알린다 — 10-11이면 2부스인데
      수량이 1로 적혀 있으면 청구액이 절반으로 잡힌다. */
-  const qtyOdd = rows.filter(x => {
+  const qtyOdd = all0.filter(x => {
     const b = parseBooth(x.booth_no);
     const q = Number(String(x.booth_qty || '').replace(/[^0-9]/g, ''));
     return b.kind === 'range' && q && q !== b.count;
   });
   const totalBooths = rows.reduce((a, x) => a + parseBooth(x.booth_no).count, 0);
+  const typeCnt = countBy(all0, x => x.booth_type);
 
-  const pills = `<span class="pill p-gray">기업 ${rows.length}</span>`
+  const typePill = (t, n) => `<span class="pill ${boothTypeFil === t ? 'p-blue' : 'p-gray'}"
+    onclick="setBoothTypeFil('${escAttr(t)}')" style="cursor:pointer"
+    title="${boothTypeFil === t ? '다시 눌러 전체 보기' : escAttr(t) + ' 기업만 보기'}">${escapeHtml(t)} ${n}${
+      boothTypeFil === t ? ' ✕' : ''}</span>`;
+
+  const pills = `<span class="pill p-gray">기업 ${boothTypeFil ? `${rows.length}/${all0.length}` : all0.length}</span>`
     + `<span class="pill p-gray">부스 ${totalBooths}칸</span>`
     + (noBooth ? `<span class="pill p-red">번호 미배정 ${noBooth}</span>` : '')
     + (unconfirmed ? `<span class="pill p-amber">배정 미확정 ${unconfirmed}</span>` : '')
     + (qtyOdd.length ? `<span class="pill p-red" title="${escAttr(qtyOdd.map(x => `${x.company_name} ${x.booth_no}(${parseBooth(x.booth_no).count}칸) ↔ 수량 ${x.booth_qty}`).join(', '))}">수량 불일치 ${qtyOdd.length}</span>` : '')
     + `<span class="pill p-blue">독립부스 ${selfN}</span>`
-    + pillsOf(countBy(rows, x => x.booth_type))
-    + '<span style="font-size:10.5px;color:var(--i5);margin-left:2px">부스 번호·층·수량은 행을 눌러 상세에서 고쳐요</span>';
+    + Object.entries(typeCnt).sort((a, b) => b[1] - a[1]).map(([t, n]) => typePill(t, n)).join('')
+    + (boothTypeFil
+      ? `<span style="font-size:10.5px;color:var(--a);margin-left:2px;cursor:pointer" onclick="setBoothTypeFil('')">전체 보기로 돌아가기</span>`
+      : '<span style="font-size:10.5px;color:var(--i5);margin-left:2px">타입 배지를 누르면 그 부스 기업만 봐요 · 번호·층·수량은 행을 눌러 상세에서 고쳐요</span>');
+
+  if(!rows.length) return viewShell(pills,
+    emptyView(`"${boothTypeFil}" 부스를 쓰는 기업이 없어요`));
 
   if(isMobile()) return viewShell(pills, rows.map(x => `
     <div onclick="openExhDr('${escAttr(x.id)}','progress')" style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
@@ -1626,7 +1657,14 @@ function renderDashboard(all){
         return `<div style="margin-bottom:8px">
           <div style="font-size:10.5px;color:var(--i4);margin-bottom:3px">${f[1]}</div>
           <div style="display:flex;flex-wrap:wrap;gap:5px">
-            ${ks.map(k => `<span class="pill ${f[0] === 'grade' ? (gradeCls(k)) : 'p-gray'}">${escapeHtml(k)}${f[0] === 'booth_floor' ? '층' : ''} ${cnt[k]}</span>`).join('')}
+            ${ks.map(k => {
+              // 타입은 눌러서 그 부스 기업 목록으로 간다 — 센 숫자를 눌렀는데
+              // 아무 일이 없으면 셀 수만 있고 쓸 수는 없는 숫자가 된다
+              const clickable = f[0] === 'booth_type';
+              return `<span class="pill ${f[0] === 'grade' ? gradeCls(k) : clickable ? 'p-blue' : 'p-gray'}"${
+                clickable ? ` onclick="setBoothTypeFil('${escAttr(k)}')" style="cursor:pointer" title="${escAttr(k)} 부스 기업 보기"` : ''
+              }>${escapeHtml(k)}${f[0] === 'booth_floor' ? '층' : ''} ${cnt[k]}</span>`;
+            }).join('')}
           </div></div>`;
       }).join('') || '<div style="font-size:11.5px;color:var(--i5)">아직 부스 정보가 없어요</div>'}
     </div>`;
@@ -2103,6 +2141,7 @@ export function setExhDateWithFlag(id, dateField, flag, value, label){
 window.setExhEvent2 = setExhEvent2;
 window.setExhFilter = setExhFilter;
 window.setExhView = setExhView;
+window.setBoothTypeFil = setBoothTypeFil;
 window.toggleEquipRow = toggleEquipRow;
 window.advanceStage = advanceStage;
 window.cycleBookLogo = cycleBookLogo;
