@@ -392,9 +392,26 @@
 
 <!-- ③ Architecture -->
 <div class="page" id="page-arch" style="overflow-y:auto">
-  <div class="mob-title">설정</div>
+  <!-- 모바일 헤더 — 전에는 '시스템 구조' 탭 안에만 있어서, 나머지 탭에서는
+       햄버거가 없어 사이드바(=설정 탭 전환 버튼이 있는 곳)를 열 수 없었다.
+       페이지 최상단으로 올려 어느 탭에서든 나오게 한다. -->
+  <div class="mob-header" id="mob-h-arch">
+    <button class="mob-menu-btn" onclick="toggleSb()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+    <div class="mob-title" id="mob-arch-ttl">설정</div>
+  </div>
   <div class="tb">
-    <div class="tb-t">설정 <span class="tb-s">행사 관리 · 기업 섹터 · 시스템 구조</span></div>
+    <div class="tb-t">설정 <span class="tb-s">행사 관리 · 기업 섹터 · 설정값 · 시스템 구조</span></div>
+  </div>
+
+  <!-- 모바일 전용 탭 전환 — 사이드바를 열었다 닫지 않고 바로 옮겨 다닐 수 있게.
+       데스크톱에서는 사이드바에 같은 버튼이 있으므로 숨긴다(styles/layout.css). -->
+  <div class="arch-mtabs">
+    <div class="seg" style="width:100%">
+      <button class="seg-b on" id="arch-mtab-ev"     onclick="switchArchTab('ev')"     style="flex:1">행사</button>
+      <button class="seg-b"    id="arch-mtab-sector" onclick="switchArchTab('sector')" style="flex:1">섹터</button>
+      <button class="seg-b"    id="arch-mtab-val"    onclick="switchArchTab('val')"    style="flex:1">설정값</button>
+      <button class="seg-b"    id="arch-mtab-sys"    onclick="switchArchTab('sys')"    style="flex:1">구조</button>
+    </div>
   </div>
 
   <!-- ── 행사 관리 탭 ── -->
@@ -658,10 +675,6 @@
   <!-- ── 시스템 구조 탭 ── -->
   <div id="arch-pane-sys" style="display:none">
 
-<div class="mob-header" id="mob-h-arch">
-  <button class="mob-menu-btn" onclick="toggleSb()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
-  <div class="mob-title">시스템 구조</div>
-</div>
   <div class="tb"><div class="tb-t" id="arch-ttl">시스템 아키텍처 <span class="tb-s">구글시트 연동 구조</span></div></div>
   <div class="aw">
     <div id="av-arch">

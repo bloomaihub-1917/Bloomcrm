@@ -1376,7 +1376,10 @@ export function switchArchTab(tab){
   ['ev','sector','val','sys'].forEach(t => {
     const btn  = document.getElementById('arch-tab-'+t);
     const pane = document.getElementById('arch-pane-'+t);
+    // 모바일 본문 전환줄 — 사이드바 버튼과 같은 상태를 유지해야 지금 어느 탭인지 보인다
+    const mbtn = document.getElementById('arch-mtab-'+t);
     if(btn)  btn.classList.toggle('on', t===tab);
+    if(mbtn) mbtn.classList.toggle('on', t===tab);
     if(pane) pane.style.display = t===tab ? 'block' : 'none';
   });
   const sysnav = document.getElementById('sbp-arch-sysnav');
@@ -1548,18 +1551,24 @@ function clRowsHtml(rows, readonly){
   if(!rows.length) return '<div style="font-size:12px;color:var(--i4)">아직 항목이 없어요.</div>';
   return rows.map(c => {
     const off = c.active === 'no';
-    return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--i7)${off ? ';opacity:.5' : ''}">
-      <span class="pill ${escAttr(c.cls || 'p-gray')}" style="min-width:80px;text-align:center">${escapeHtml(c.label || c.code)}</span>
-      <code style="font-size:11px;color:var(--i4);min-width:110px">${escapeHtml(c.code)}</code>
+    return `<div class="clrow" style="padding:6px 0;border-bottom:1px solid var(--i7)${off ? ';opacity:.5' : ''}">
+      <div style="display:flex;gap:8px;align-items:center;min-width:0">
+        <span class="pill ${escAttr(c.cls || 'p-gray')}" style="min-width:80px;text-align:center">${escapeHtml(c.label || c.code)}</span>
+        <code style="font-size:11px;color:var(--i4);min-width:110px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.code)}</code>
+      </div>
       ${readonly ? '' : `
-      <input class="fi" value="${escAttr(c.label || '')}" placeholder="이름" style="flex:1;min-width:120px"
-        onchange="editCodeListRow('${escAttr(c.id)}','label',this.value)">
-      <select class="fi" style="min-width:100px" onchange="editCodeListRow('${escAttr(c.id)}','cls',this.value)">
-        ${CL_COLORS.map(([v, l]) => `<option value="${v}"${(c.cls || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
-      <input class="fi" type="number" value="${escAttr(c.sort_order || '')}" title="순서" style="width:70px"
-        onchange="editCodeListRow('${escAttr(c.id)}','sort_order',this.value)">
-      <button class="btn" onclick="toggleCodeListRow('${escAttr(c.id)}')"
-        style="height:32px;font-size:11px">${off ? '되살리기' : '숨김'}</button>`}
+      <label class="clf clf-grow"><span class="clf-l">이름</span>
+        <input class="fi" value="${escAttr(c.label || '')}" placeholder="이름" style="min-width:120px"
+          onchange="editCodeListRow('${escAttr(c.id)}','label',this.value)"></label>
+      <label class="clf"><span class="clf-l">색상</span>
+        <select class="fi" style="min-width:100px" onchange="editCodeListRow('${escAttr(c.id)}','cls',this.value)">
+          ${CL_COLORS.map(([v, l]) => `<option value="${v}"${(c.cls || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+      <label class="clf"><span class="clf-l">순서</span>
+        <input class="fi" type="number" value="${escAttr(c.sort_order || '')}" title="순서" style="width:70px"
+          onchange="editCodeListRow('${escAttr(c.id)}','sort_order',this.value)"></label>
+      <span class="clf"><span class="clf-l"></span>
+        <button class="btn" onclick="toggleCodeListRow('${escAttr(c.id)}')"
+          style="height:32px;font-size:11px">${off ? '되살리기' : '숨김'}</button></span>`}
     </div>`;
   }).join('');
 }
@@ -1665,14 +1674,16 @@ export function renderAliasList(){
 
   el.innerHTML = (rows.length ? rows.map(c => {
     const off = c.active === 'no';
-    return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--i7)${off ? ';opacity:.5' : ''}">
-      <input class="fi" value="${escAttr(c.code)}" placeholder="업로드에 적힌 표기" style="flex:1;min-width:150px"
-        onchange="editCodeListRow('${escAttr(c.id)}','code',this.value)">
-      <span style="color:var(--i4);font-size:12px">→</span>
-      <select class="fi" style="min-width:130px" onchange="editCodeListRow('${escAttr(c.id)}','label',this.value)">
-        ${catOpts(c.label)}</select>
-      <button class="btn" onclick="toggleCodeListRow('${escAttr(c.id)}')"
-        style="height:32px;font-size:11px">${off ? '되살리기' : '숨김'}</button>
+    return `<div class="clrow" style="padding:6px 0;border-bottom:1px solid var(--i7)${off ? ';opacity:.5' : ''}">
+      <label class="clf clf-grow"><span class="clf-l">표기</span>
+        <input class="fi" value="${escAttr(c.code)}" placeholder="업로드에 적힌 표기" style="min-width:150px"
+          onchange="editCodeListRow('${escAttr(c.id)}','code',this.value)"></label>
+      <label class="clf"><span class="clf-l">→ 분류</span>
+        <select class="fi" style="min-width:130px" onchange="editCodeListRow('${escAttr(c.id)}','label',this.value)">
+          ${catOpts(c.label)}</select></label>
+      <span class="clf"><span class="clf-l"></span>
+        <button class="btn" onclick="toggleCodeListRow('${escAttr(c.id)}')"
+          style="height:32px;font-size:11px">${off ? '되살리기' : '숨김'}</button></span>
     </div>`;
   }).join('') : '<div style="font-size:12px;color:var(--i4)">아직 덮어쓴 표기가 없어요 — 전부 기본 표대로 처리됩니다.</div>')
     + `<div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--i6)">
