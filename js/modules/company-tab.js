@@ -58,7 +58,7 @@ import {
   EXHIBITORS,
 } from '../state.js';
 import { RP, avB, avF } from '../constants.js';
-import { escapeHtml, escAttr, levenshteinDist, parseSectorScope, sectorKey, countryName } from '../utils.js';
+import { escapeHtml, escAttr, levenshteinDist, parseSectorScope, sectorKey, countryName, isMobile } from '../utils.js';
 import { postToSheet } from '../api.js';
 import { parseSectors, joinSectors, mainSectors, sectorNamesInDomain, domainName, domainOfSector, UNASSIGNED_DOMAIN } from './settings-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
@@ -654,11 +654,26 @@ export function renderCoList(q2=''){
   if(!listEl) return;
   const q=q2||(document.getElementById('co-si')||{}).value||'';
   let list=[...CO_DB];
-  // 옛 이름으로도 찾을 수 있어야 한다 — 사명이 바뀐 회사를 옛 이름으로 기억하는 사람이 있다
-  if(q){
-    const lq = q.toLowerCase();
-    list = list.filter(c => [c.nameKo, c.nameEn, c.sector, ...(c.aliases||[])]
-      .some(v => v && String(v).toLowerCase().includes(lq)));
+  /* 옛 이름으로도 찾을 수 있어야 한다 — 사명이 바뀐 회사를 옛 이름으로 기억하는
+     사람이 있다. 국문·영문 어느 쪽으로 쳐도 같은 기업이 나와야 하고(한쪽만 있는
+     기업도 있다), 연락처에 적힌 표기(branches)로도 찾혀야 한다.
+
+     견줄 때는 양쪽을 같은 모양으로 눌러서 본다. 앞뒤 공백만 들어가도 못 찾거나
+     '(주)메디라마'를 '주메디라마'로 쳐서 못 찾는 일이 실제로 있었다. */
+  if(q && q.trim()){
+    const lq = q.trim().toLowerCase();
+    const squash = (v) => String(v || '').toLowerCase()
+      .replace(/\(주\)|\(유\)|주식회사|㈜|inc\.?|corp\.?|co\.?|ltd\.?|llc\.?/g, '')
+      .replace(/[^a-z0-9가-힣]/g, '');
+    const sq = squash(lq);
+    list = list.filter(c => {
+      const fields = [c.nameKo, c.nameEn, c.sector, c.abbr, c.mainBranch,
+        ...(c.aliases || []), ...(c.branches || [])];
+      // 친 그대로 걸리면 그걸로 됐고(부분어·띄어쓰기 포함 검색),
+      // 아니면 기호·법인격을 눌러 없앤 뒤 다시 견준다
+      return fields.some(v => v && String(v).toLowerCase().includes(lq))
+        || (sq && fields.some(v => v && squash(v).includes(sq)));
+    });
   }
   if(coKindF) list = list.filter(c => c.kind === coKindF);
   if(coCatF)list=list.filter(c=>(c.sectors||[c.sector]).some(s=>s===coCatF));
@@ -778,10 +793,30 @@ export async function submitAddOrg(){
 }
 
 export function searchCo(v){renderCoList(v)}
-export function searchCoM(v){renderCoList(v)}
+export function searchCoM(v){
+  renderCoList(v);
+  // 본문 검색칸과 사이드바 검색칸이 서로 다른 값을 들고 있으면, 어느 쪽을 믿어야
+  // 할지 알 수 없다 — 한쪽에 치면 다른 쪽도 같은 값으로 맞춘다
+  const si = document.getElementById('co-si');
+  if(si && si.value !== v) si.value = v;
+}
+
+/* 모바일 기업 검색 — 검색칸과 결과 목록이 둘 다 사이드바(화면 밖 서랍) 안에 있다.
+   헤더의 돋보기는 서랍을 열지 않고 그 칸에 포커스만 줘서, 눌러도 아무 일이
+   일어나지 않는 것처럼 보였다. 서랍을 열고 나서 포커스를 준다. */
+export function openCoSearch(){
+  const si = document.getElementById('co-si');
+  if(!isMobile()){ si?.focus(); si?.select(); return; }
+  const sb = document.querySelector('.sb');
+  if(sb && !sb.classList.contains('sb-open')) window.toggleSb?.();
+  // 서랍이 밀려 들어오는 동안(.22s) 포커스를 주면 위치가 튄다
+  setTimeout(() => { si?.focus(); si?.select(); }, 240);
+}
 
 export function selectCo(key){
   setSelCo(key); setCoTab(0); renderCoList();
+  // 모바일에서는 목록이 서랍 안이라, 고르고 나면 닫아야 상세가 보인다
+  if(isMobile()) window.closeSb?.();
   const c=CO_DB.find(x=>x.key===key);if(!c)return;
   const dashEl = document.getElementById('co-dash'); if(dashEl) dashEl.style.display='none';
   const cdtEl  = document.getElementById('cdt');      if(cdtEl)  cdtEl.style.display='flex';
@@ -1796,6 +1831,7 @@ window.setCoDomain = setCoDomain;
 window.toggleCoDomain = toggleCoDomain;
 window.searchCo = searchCo;
 window.searchCoM = searchCoM;
+window.openCoSearch = openCoSearch;
 window.switchCoT = switchCoT;
 window.editCoSector = editCoSector;
 window.editCoNameKo = editCoNameKo;
