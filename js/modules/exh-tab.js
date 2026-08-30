@@ -1003,11 +1003,24 @@ function renderGraphicView(list){
   const doneN  = rows.filter(x => graphicState(x).state === 'done').length;
   const warnN  = rows.filter(x => graphicState(x).state === 'warn').length;
 
+  /* 무엇을 받았나 — 항목마다 따로 온다. 기업 단위 단계(graphic_stage)만으로는
+     세 개 중 둘만 온 경우를 담지 못해, 항목 기준으로 따로 센다. */
+  const gGot = (x) => {
+    const gi = itemsFor(x.id).filter(i => (i.category || '') === 'graphic');
+    return { n: gi.length, got: gi.filter(i => i.received_at).length };
+  };
+
+
   const pills = `<span class="pill p-gray">주문 ${rows.length}</span>`
     + `<span class="pill p-blue">제작 ${design.length}</span>`
     + `<span class="pill p-gray">출력 ${print.length}</span>`
     + `<span class="pill p-green">완료 ${doneN}</span>`
-    + (warnN ? `<span class="pill p-red">규격 확인 ${warnN}</span>` : '');
+    + (warnN ? `<span class="pill p-red">규격 확인 ${warnN}</span>` : '')
+    + (() => {
+      const t = rows.reduce((a, x) => { const g = gGot(x); a.n += g.n; a.got += g.got; return a; }, { n: 0, got: 0 });
+      if(!t.n) return '';
+      return `<span class="pill ${t.got === t.n ? 'p-green' : 'p-amber'}" title="주문한 그래픽 항목 중 파일을 받은 것">파일 받음 ${t.got}/${t.n}</span>`;
+    })();
 
   const stageLabel = (x) => {
     if(x.graphic_type === 'print') return x.graphic_spec_ok === 'yes' ? '규격 확인됨'
@@ -1040,6 +1053,9 @@ function renderGraphicView(list){
         <span class="pill ${g.state === 'done' ? 'p-green' : g.state === 'warn' ? 'p-red' : 'p-amber'}">${escapeHtml(stageLabel(x))}</span>
       </div>
       <div style="font-size:11px;color:var(--i4)">주문 ${escapeHtml(x.graphic_ordered_at || '-')} · 금액 ${escapeHtml(gAmt(x))}</div>
+      ${(() => { const g = gGot(x); if(!g.n) return '';
+        return `<div style="font-size:11px;margin-top:3px;color:${g.got === g.n ? 'var(--g)' : 'var(--am)'}">
+          파일 ${g.got}/${g.n} 받음${g.got < g.n ? ` · 미수령 ${g.n - g.got}건` : ''}</div>`; })()}
     </div>`;
   }).join(''), gActions);
 
@@ -1049,6 +1065,7 @@ function renderGraphicView(list){
       <th style="min-width:80px">유형</th>
       <th style="min-width:96px">시안</th>
       <th style="min-width:150px">확인 진행</th>
+      <th style="min-width:84px">받은 파일</th>
       <th style="min-width:104px">초안</th>
       <th style="min-width:104px">수정안</th>
       <th style="min-width:104px">최종안</th>
@@ -1071,6 +1088,12 @@ function renderGraphicView(list){
         </select></td>
         <td><span class="pill ${g.state === 'done' ? 'p-green' : g.state === 'warn' ? 'p-red' : 'p-amber'}">${escapeHtml(stageLabel(x))}</span></td>
         <td>${stageCell(x, 'graphic_stage', GRAPHIC_STAGES)}</td>
+        <td>${(() => { const g = gGot(x);
+          if(!g.n) return '<span style="color:var(--i6)">-</span>';
+          return `<span class="pill ${g.got === g.n ? 'p-green' : g.got ? 'p-amber' : 'p-gray'}"
+            title="${escAttr(itemsFor(x.id).filter(i => (i.category || '') === 'graphic')
+              .map(i => `${i.received_at ? '✓' : '·'} ${i.name || ''}${i.received_note ? ` (${i.received_note})` : ''}`).join(' / '))}"
+            >${g.got}/${g.n}</span>`; })()}</td>
         ${dateCell('graphic_draft_at')}
         ${dateCell('graphic_revised_at')}
         ${dateCell('graphic_final_at')}

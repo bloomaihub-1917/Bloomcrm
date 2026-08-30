@@ -489,3 +489,9 @@ CREATE TABLE IF NOT EXISTS code_lists (
   sort_order TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_code_lists_key ON code_lists(list_key, event_id);
+
+/* 그래픽은 "무엇을 주문했나"와 "무엇을 받았나"가 따로 논다. 백월·행잉배너를
+   함께 주문해도 파일은 따로, 며칠 간격으로 온다. 항목마다 받은 날을 남겨
+   무엇이 아직 안 왔는지 알 수 있게 한다. 그래픽 말고도 쓸 수 있게 항목 표에 둔다. */
+ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS received_at TEXT;    -- 받은 날 (YYYY-MM-DD)
+ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS received_note TEXT;  -- 받은 것 설명(파일명·형식 등)

@@ -88,7 +88,7 @@ const TABLES = {
   exhibitor_items: {
     table: 'exhibitor_items', pk: 'id', idPrefix: 'XI-',
     columns: ['id', 'exhibitor_id', 'category', 'name', 'qty', 'unit_price', 'amount', 'currency', 'note', 'sort_order',
-      'catalog_id', 'billable', 'shared_ref'],
+      'catalog_id', 'billable', 'shared_ref', 'received_at', 'received_note'],
   },
 
   /* 렌탈 비품 품목표 — 행사별로 따로 둔다(단가가 행사마다 다르다) */

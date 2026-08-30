@@ -1054,6 +1054,72 @@ export async function delGraphicFeedback(id){
   await removeRow(EXH_LOGS, id, deleteExhLog);
 }
 
+/* ══════════════════════════════════════════
+   그래픽 항목 — 무엇을 주문했고, 무엇을 받았나
+
+   둘은 따로 논다. 백월·행잉배너·부스 그래픽을 한 번에 주문해도 파일은 따로,
+   며칠 간격으로 온다. 전에는 "그래픽 항목 3건 · 합계 120만원" 한 줄뿐이라
+   무엇이 아직 안 왔는지 알 수 없었다 — 단계(graphic_stage)는 기업 단위라
+   "기업 전달"로 넘겨도 세 개 중 둘만 온 경우를 담지 못한다.
+
+   항목마다 받은 날과 받은 것 설명을 따로 남긴다. 금액 항목과 같은 줄을 쓰므로
+   정산 탭에서 추가한 그래픽이 그대로 여기 나온다 — 두 군데에 또 적지 않는다.
+══════════════════════════════════════════ */
+function graphicItemsBlock(x){
+  const gi = itemsFor(x.id).filter(i => i.category === 'graphic');
+  if(!gi.length){
+    return `<div style="font-size:11.5px;color:var(--i5);margin-bottom:8px">등록된 그래픽 항목이 없어요</div>
+      <div style="font-size:11px;color:var(--i4);margin-bottom:8px">
+        정산 탭에서 <b>그래픽</b> 분류로 항목을 추가하면 여기 나옵니다.</div>
+      <button class="btn bs" onclick="switchExhDT('billing')">정산 탭으로 이동</button>`;
+  }
+
+  const total = gi.reduce((s, i) => s + Number(String(i.amount || '').replace(/[^0-9.-]/g, '') || 0), 0);
+  const got = gi.filter(i => i.received_at).length;
+
+  return `<div style="font-size:11px;color:var(--i4);margin-bottom:8px">
+      주문한 항목은 정산 탭의 <b>그래픽</b> 분류에서 가져옵니다. 여기서는 <b>무엇을 받았는지</b>만 표시해요.</div>
+
+    ${gi.map(i => {
+      const on = !!i.received_at;
+      return `<div style="padding:9px 0;border-bottom:1px solid var(--i8)">
+        <div style="display:flex;align-items:center;gap:9px">
+          <button onclick="toggleItemReceived('${escAttr(i.id)}')"
+            title="${on ? '받음 표시를 지웁니다' : '오늘 받은 것으로 표시합니다'}"
+            style="width:20px;height:20px;border-radius:5px;border:1.5px solid ${on ? 'var(--g)' : 'var(--i6)'};background:${on ? 'var(--g)' : 'transparent'};color:#fff;font-size:12px;font-weight:800;cursor:pointer;flex-shrink:0;line-height:1">${on ? '✓' : ''}</button>
+          <span style="flex:1;min-width:0">
+            <span style="font-size:12.5px;font-weight:${on ? 600 : 500};color:${on ? 'var(--i1)' : 'var(--i3)'}">${escapeHtml(i.name || '(이름 없음)')}</span>
+            <span style="font-size:10.5px;color:var(--i4)">${i.qty ? ` · ${escapeHtml(String(i.qty))}개` : ''}${
+              i.amount ? ` · ${escapeHtml(fmtMoney(i.amount, i.currency))}` : ''}</span>
+          </span>
+          <input type="date" class="fi" style="width:136px;padding:4px 8px;font-size:11.5px"
+            value="${escAttr(i.received_at || '')}"
+            onchange="setItemField('${escAttr(i.id)}','received_at',this.value)">
+        </div>
+        <div style="display:flex;gap:9px;align-items:center;margin-top:5px;padding-left:29px">
+          <span style="font-size:10.5px;color:var(--i5);flex:0 0 auto">받은 것</span>
+          <input class="fi" style="flex:1;min-width:0;padding:4px 8px;font-size:11.5px"
+            value="${escAttr(i.received_note || '')}" placeholder="예: 백월_최종.ai · CMYK · 재단선 포함"
+            onchange="setItemField('${escAttr(i.id)}','received_note',this.value)">
+        </div>
+      </div>`;
+    }).join('')}
+
+    <div style="display:flex;justify-content:space-between;align-items:baseline;padding:9px 2px 0;font-size:12px">
+      <span style="color:var(--i4)">${gi.length}건 · 받음 ${got}건${got < gi.length ? ` · <b style="color:var(--am)">미수령 ${gi.length - got}건</b>` : ''}</span>
+      <span>합계 <b>${money(total)}</b>원</span>
+    </div>
+    <button class="btn bs" onclick="switchExhDT('billing')" style="margin-top:8px">정산 탭에서 항목 추가·수정</button>`;
+}
+
+/* 받음 체크 — 누르면 오늘 날짜가 들어가고, 다시 누르면 지운다.
+   지울 때는 원래 날짜를 기록에 남긴다(잘못 눌러 지운 값을 되찾을 수 있게). */
+export async function toggleItemReceived(id){
+  const i = EXH_ITEMS.find(r => r.id === id);
+  if(!i) return;
+  await setItemField(id, 'received_at', i.received_at ? '' : td());
+}
+
 function dGraphic(x){
   const ordered = !!x.graphic_ordered_at;
   const g = graphicState(x);
@@ -1102,20 +1168,12 @@ function dGraphic(x){
   ${sct('피드백', graphicFeedbackBlock(x),
     (() => { const n = graphicFeedback(x.id).length; return n ? `<span class="pill p-gray">${n}</span>` : ''; })())}
 
-  ${sct('그래픽 정산', `
-    <div style="font-size:11.5px;color:var(--i4);margin-bottom:8px">
-      그래픽 금액은 정산 탭에서 <b>그래픽</b> 분류로 항목을 추가하고,
-      필요하면 그래픽만 따로 인보이스를 발행하세요.
-    </div>
-    ${(() => {
-      const gi = itemsFor(x.id).filter(i => i.category === 'graphic');
-      const total = gi.reduce((s, i) => s + Number(String(i.amount || '').replace(/[^0-9.-]/g, '') || 0), 0);
-      return gi.length
-        ? `<div style="padding:8px 10px;background:var(--i9);border-radius:7px;font-size:12px">
-            그래픽 항목 ${gi.length}건 · 합계 <b>${money(total)}</b>원</div>`
-        : '<div style="font-size:11.5px;color:var(--i5)">등록된 그래픽 금액 항목이 없어요</div>';
-    })()}
-    <button class="btn bs" onclick="switchExhDT('billing')" style="margin-top:8px">정산 탭으로 이동</button>`)}
+  ${sct('그래픽 항목', graphicItemsBlock(x), (() => {
+    const gi = itemsFor(x.id).filter(i => i.category === 'graphic');
+    if(!gi.length) return '';
+    const got = gi.filter(i => i.received_at).length;
+    return `<span class="pill ${got === gi.length ? 'p-green' : got ? 'p-amber' : 'p-gray'}">받음 ${got}/${gi.length}</span>`;
+  })())}
   `;
 }
 
@@ -1305,7 +1363,8 @@ async function setRowField(list, saver, label, id, field, value){
   const res = await saver({ id, [field]: value });
   if(!res.ok){ r[field] = before; refreshExhViews(); alert('저장에 실패했어요.'); return; }
   const x = getExhibitorById(r.exhibitor_id);
-  const fl = { amount: '금액', currency: '통화' }[field] || field;
+  const fl = { amount: '금액', currency: '통화',
+    received_at: '받은 날', received_note: '받은 것' }[field] || field;
   trackAction('edit', label + ' 수정', x?.company_name || '',
     `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(r.name || r.title || label)} ${escapeHtml(fl)} ${escapeHtml(String(before || '(없음)'))} → ${escapeHtml(String(value || '(없음)'))}`);
 }
@@ -1539,6 +1598,7 @@ export async function holdExhLog(id){
   if(!r.ok){ l.status = before; refreshExhViews(); alert('저장에 실패했어요.'); }
 }
 
+window.toggleItemReceived = toggleItemReceived;
 window.addGraphicFeedback = addGraphicFeedback;
 window.delGraphicFeedback = delGraphicFeedback;
 window.openExhDr = openExhDr;
