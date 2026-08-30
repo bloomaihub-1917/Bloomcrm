@@ -40,6 +40,7 @@ import {
   PART_TYPES,
   CODE_LISTS,
   applyCodeLists,
+  EXH_CFG,
 } from '../state.js';
 
 import {
@@ -57,6 +58,7 @@ import {
 } from '../api.js';
 import { trackAction } from './audit-tab.js';
 
+import { CL, CAT_KEYS } from '../constants.js';
 import { slugifySectorName, escapeHtml, escAttr, countryName, scopedSectorName, parseSectorScope, sectorRowValues, sectorKey, parseDomains, joinDomains } from '../utils.js';
 import { buildCoDB, buildCoCAT, renderCoDashboard, setCoCat } from './company-tab.js';
 import { renderMDB, buildMDBEvList, buildMDBTagList } from './db-tab.js';
@@ -1371,7 +1373,7 @@ export async function splitMixedOrgNames(){
    (JS 로직은 사실상 이 전환 함수 하나뿐).
 ══════════════════════════════════════════ */
 export function switchArchTab(tab){
-  ['ev','sector','sys'].forEach(t => {
+  ['ev','sector','val','sys'].forEach(t => {
     const btn  = document.getElementById('arch-tab-'+t);
     const pane = document.getElementById('arch-pane-'+t);
     if(btn)  btn.classList.toggle('on', t===tab);
@@ -1380,7 +1382,8 @@ export function switchArchTab(tab){
   const sysnav = document.getElementById('sbp-arch-sysnav');
   if(sysnav) sysnav.style.display = tab==='sys' ? 'block' : 'none';
   if(tab==='ev')     { renderEvMgr(); }
-  if(tab==='sector') { renderSectorList(); renderPartTypeList(); renderTagList(); renderCodeListPicker(); }
+  if(tab==='sector') { renderSectorList(); renderPartTypeList(); renderTagList(); }
+  if(tab==='val')    { renderCodeListPicker(); renderAliasList(); renderEvCfgList(); }
 }
 
 // archV는 이 탭에서만 쓰는 로컬 UI 상태라 state.js로 옮기지 않고 모듈 스코프에 둠
@@ -1474,7 +1477,8 @@ const CL_COLORS = [['', '— 없음 —'], ['p-blue', '파랑'], ['p-green', '�
   ['p-teal', '청록'], ['p-purple', '보라'], ['p-red', '빨강'], ['p-gray', '회색'],
   ['p-gold', '금색'], ['p-indigo', '남색']];
 
-const clDef = (k) => CL_DEFS.find(d => d.key === k) || CL_DEFS[0];
+const clDef = (k) => CL_DEFS.find(d => d.key === k)
+  || (k === 'cat_alias' ? { key: k, label: '업로드 표기 매핑', perEvent: false } : CL_DEFS[0]);
 const clKey = () => document.getElementById('cl-key')?.value || CL_DEFS[0].key;
 const clScope = () => document.getElementById('cl-scope')?.value || '';
 const clSlug = (v) => String(v).replace(/[^A-Za-z0-9가-힣]/g, '').slice(0, 24);
@@ -1588,6 +1592,12 @@ export async function addCodeListRow(){
   renderCodeList();
 }
 
+/* 고친 줄이 속한 편집기를 다시 그린다 — 두 편집기가 같은 표를 나눠 쓴다.
+   전에는 늘 renderCodeList()만 불러, 표기 매핑을 고치면 화면이 그대로였다. */
+function reRenderFor(listKey){
+  if(listKey === 'cat_alias') renderAliasList(); else renderCodeList();
+}
+
 export async function editCodeListRow(id, field, value){
   const c = CODE_LISTS.find(x => x.id === id);
   if(!c) return;
@@ -1596,26 +1606,32 @@ export async function editCodeListRow(id, field, value){
   if(v === prev) return;
   c[field] = v;
   const r = await saveCodeRow({ id, [field]: v }, '선택 목록 수정');
-  if(!r.ok){ c[field] = prev; renderCodeList(); return; }
+  if(!r.ok){ c[field] = prev; reRenderFor(c.list_key); return; }
   applyCodeLists();
   trackAction('edit', '선택 목록 수정', c.label || c.code,
     `${clDef(c.list_key).label} "${c.code}" ${field}: ${prev || '(빈값)'} → ${v || '(빈값)'}`);
-  renderCodeList();
+  reRenderFor(c.list_key);
 }
 
 export async function toggleCodeListRow(id){
   const c = CODE_LISTS.find(x => x.id === id);
   if(!c) return;
   const off = c.active === 'no';
-  if(!off && !confirm(`"${c.label || c.code}"을(를) 숨길까요?\n앞으로 새로 고를 수 없지만, 이미 이 값으로 저장된 데이터는 그대로 남고 이름도 계속 보입니다.`)) return;
+  // 표기 매핑은 저장된 값이 아니라 규칙이라, 끄면 벌어지는 일이 다르다
+  const msg = c.list_key === 'cat_alias'
+    ? `"${c.code}" 표기 매핑을 끌까요?
+다음 업로드부터 기본 표대로 처리되고, 이미 저장된 연락처는 그대로입니다.`
+    : `"${c.label || c.code}"을(를) 숨길까요?
+앞으로 새로 고를 수 없지만, 이미 이 값으로 저장된 데이터는 그대로 남고 이름도 계속 보입니다.`;
+  if(!off && !confirm(msg)) return;
   const prev = c.active || '';
   c.active = off ? '' : 'no';
   const r = await saveCodeRow({ id, active: c.active }, off ? '선택 목록 되살리기' : '선택 목록 숨김');
-  if(!r.ok){ c.active = prev; renderCodeList(); return; }
+  if(!r.ok){ c.active = prev; reRenderFor(c.list_key); return; }
   applyCodeLists();
   trackAction('edit', off ? '선택 목록 되살리기' : '선택 목록 숨김', c.label || c.code,
     `${clDef(c.list_key).label} "${c.label || c.code}" ${off ? '되살림' : '숨김'}`);
-  renderCodeList();
+  reRenderFor(c.list_key);
 }
 
 window.renderCodeListPicker = renderCodeListPicker;
@@ -1623,3 +1639,115 @@ window.renderCodeList       = renderCodeList;
 window.addCodeListRow       = addCodeListRow;
 window.editCodeListRow      = editCodeListRow;
 window.toggleCodeListRow    = toggleCodeListRow;
+
+/* ══════════════════════════════════════════
+   업로드 표기 → 카테고리 매핑 (code_lists.cat_alias)
+
+   업로드한 명단의 역할 칸에는 행사마다 다른 자유 문구가 온다("Exhibitor Pass",
+   "세션좌장", "일반참가자(사전등록)"…). utils.js에 90여 가지를 묶어 둔 기본 표가
+   있지만, 새 표기가 나오거나 같은 표기를 다르게 분류하고 싶을 때가 있다.
+
+   기본 표를 통째로 DB에 옮기지는 않는다 — 편집 화면이 90줄이 되면 정작 고쳐야
+   할 줄이 묻힌다. 여기에는 기본값을 덮어쓰는 줄만 둔다.
+
+   code에 표기, label에 카테고리 키를 담는다(utils.js normalizeCat이 그렇게 읽는다).
+══════════════════════════════════════════ */
+const aliasRows = () => CODE_LISTS
+  .filter(c => c.list_key === 'cat_alias')
+  .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0));
+
+export function renderAliasList(){
+  const el = document.getElementById('alias-rows');
+  if(!el) return;
+  const rows = aliasRows();
+  const catOpts = (sel) => CAT_KEYS.map(k =>
+    `<option value="${escAttr(k)}"${sel === k ? ' selected' : ''}>${escapeHtml(CL[k] || k)}</option>`).join('');
+
+  el.innerHTML = (rows.length ? rows.map(c => {
+    const off = c.active === 'no';
+    return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--i7)${off ? ';opacity:.5' : ''}">
+      <input class="fi" value="${escAttr(c.code)}" placeholder="업로드에 적힌 표기" style="flex:1;min-width:150px"
+        onchange="editCodeListRow('${escAttr(c.id)}','code',this.value)">
+      <span style="color:var(--i4);font-size:12px">→</span>
+      <select class="fi" style="min-width:130px" onchange="editCodeListRow('${escAttr(c.id)}','label',this.value)">
+        ${catOpts(c.label)}</select>
+      <button class="btn" onclick="toggleCodeListRow('${escAttr(c.id)}')"
+        style="height:32px;font-size:11px">${off ? '되살리기' : '숨김'}</button>
+    </div>`;
+  }).join('') : '<div style="font-size:12px;color:var(--i4)">아직 덮어쓴 표기가 없어요 — 전부 기본 표대로 처리됩니다.</div>')
+    + `<div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--i6)">
+      <div style="flex:1;min-width:150px"><div class="mlbl">업로드에 적힌 표기</div>
+        <input class="fi" id="alias-new-code" placeholder="예: Exhibitor Pass" style="width:100%"
+          onkeydown="if(event.key==='Enter')addAliasRow()"></div>
+      <div style="min-width:150px"><div class="mlbl">이 카테고리로</div>
+        <select class="fi" id="alias-new-cat" style="width:100%">${catOpts('attendee')}</select></div>
+      <button class="btn bp" onclick="addAliasRow()" style="min-width:60px;height:36px">추가</button>
+    </div>
+    <div style="font-size:10.5px;color:var(--i5);margin-top:8px">대소문자와 띄어쓰기는 무시하고 견줍니다. 바꾼 값은 <b>다음 업로드부터</b> 적용되고, 이미 저장된 연락처는 그대로입니다.</div>`;
+}
+
+export async function addAliasRow(){
+  const code = (document.getElementById('alias-new-code')?.value || '').trim();
+  if(!code){ document.getElementById('alias-new-code')?.focus(); return; }
+  const norm = (v) => String(v).toLowerCase().replace(/\s+/g, '');
+  if(aliasRows().some(c => norm(c.code) === norm(code))){ alert('이미 있는 표기예요.'); return; }
+
+  const rows = aliasRows();
+  const row = {
+    id: `CD-cat_alias-${code.replace(/[^A-Za-z0-9가-힣]/g, '').slice(0, 24)}-${Math.random().toString(36).slice(2, 6)}`,
+    list_key: 'cat_alias', event_id: '', code,
+    label: document.getElementById('alias-new-cat')?.value || 'attendee',
+    cls: '', note: '', active: '',
+    sort_order: String((Number(rows[rows.length - 1]?.sort_order) || rows.length * 10) + 10),
+  };
+  CODE_LISTS.push(row);
+  const r = await postToSheet({ sheet: 'code_lists', action: 'upsertPartial', data: row }, '표기 매핑 추가');
+  if(!r.ok){ CODE_LISTS.pop(); renderAliasList(); return; }   // 실패하면 되돌린다
+  trackAction('edit', '업로드 표기 매핑 추가', code, `"${code}" → ${CL[row.label] || row.label}`);
+  const inp = document.getElementById('alias-new-code'); if(inp) inp.value = '';
+  renderAliasList();
+}
+
+/* ══════════════════════════════════════════
+   행사별 설정 요약 — 마감일·프로그램북 한도
+
+   고치는 건 전시 탭에서 한다(그 행사를 고른 상태여야 어느 행사를 손대는지가
+   분명하다). 여기서는 어느 행사에 무엇이 정해져 있는지 한눈에 보여준다 —
+   설정값을 찾으러 여기 왔을 때 "여긴 없다"로 끝나면 안 된다.
+══════════════════════════════════════════ */
+export function renderEvCfgList(){
+  const el = document.getElementById('evcfg-rows');
+  if(!el) return;
+  const keys = Object.keys(EXH_CFG);
+  if(!keys.length){
+    el.innerHTML = `<div style="font-size:12px;color:var(--i4)">아직 정해 둔 행사가 없어요 —
+      <b>전시</b> 탭 › 대시보드 › 단계별 진행 카드의 <b>마감일 설정</b>에서 정합니다.</div>`;
+    return;
+  }
+  el.innerHTML = keys.map(k => {
+    const cfg = EXH_CFG[k] || {};
+    const due = Object.entries(cfg.due || {});
+    const b = cfg.book || {};
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--i7)">
+      <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">${escapeHtml(k)}</div>
+      <div style="font-size:11px;color:var(--i3)">
+        ${due.length ? due.map(([sk, v]) =>
+          `<span class="pill p-gray" style="margin:2px 3px 2px 0">${escapeHtml(DUE_LABEL[sk] || sk)} ${escapeHtml(v)}</span>`).join('')
+          : '<span style="color:var(--i5)">마감일 없음</span>'}
+      </div>
+      <div style="font-size:11px;color:var(--i4);margin-top:3px">프로그램북 한도 ${
+        b.chars ? `${Number(b.chars).toLocaleString()}자 · ${b.words}단어` : '기본값(1,300자 · 200단어)'}</div>
+    </div>`;
+  }).join('')
+    + `<div style="font-size:10.5px;color:var(--i5);margin-top:8px">고치려면 <b>전시</b> 탭에서 그 행사를 고른 뒤 <b>마감일 설정</b>을 누르세요.</div>`;
+}
+
+/* 전시 탭의 DUE_STEPS와 같은 이름표 — 그쪽을 import하면 순환 참조가 된다 */
+const DUE_LABEL = {
+  'manual_replied_at': '매뉴얼 회신', 'app_received_at': '신청서', 'booth_confirmed_at': '부스',
+  'calc:payment': '입금', 'calc:graphic': '그래픽', 'directory_received_at': '도록', 'movein_at': '반입',
+};
+
+window.renderAliasList = renderAliasList;
+window.addAliasRow     = addAliasRow;
+window.renderEvCfgList = renderEvCfgList;

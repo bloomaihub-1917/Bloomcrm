@@ -1,7 +1,7 @@
 // 순수 헬퍼 함수 모음 — 원본 곳곳에 흩어져 있던 유틸 함수를 이 파일 하나로 통합
 
 import { COUNTRIES, CAT_KEYS } from './constants.js';
-import { COMPANY_SECTORS } from './state.js';
+import { COMPANY_SECTORS, CODE_LISTS } from './state.js';
 
 /* 이름에서 이니셜 추출 (한글/영문 대문자 최대 2글자) */
 export function ab(n){ const m=n.match(/[가-힣A-Z]/g); return (m||[]).slice(0,2).join('').toUpperCase() || n.slice(0,2).toUpperCase(); }
@@ -169,6 +169,14 @@ export function normalizeCat(raw){
      걸린다). 실제로 54건이 매번 조용히 덮어써지고 있었다. 아래 표는 업로드로
      들어오는 자유 문구를 굵게 묶는 용도로 그대로 둔다. */
   if(CAT_KEYS.includes(tl)) return tl;
+
+  /* 설정에서 정한 표기가 먼저다(code_lists.cat_alias). 아래 표는 업로드로 들어오는
+     자유 문구를 굵게 묶어 둔 기본값인데, 행사마다 새 표기가 튀어나오고 같은 표기를
+     다르게 분류하고 싶을 때도 있다. 그때마다 코드를 고치지 않게 설정이 이긴다.
+     label에 대상 카테고리 키를 담는다. */
+  const ov = CODE_LISTS.find(c => c.list_key === 'cat_alias' && c.active !== 'no'
+    && (c.code === t || String(c.code || '').toLowerCase().replace(/\s+/g, '') === tl));
+  if(ov && CAT_KEYS.includes(ov.label)) return ov.label;
 
   if(CAT_NORMALIZE_MAP[t])  return CAT_NORMALIZE_MAP[t];
   if(CAT_NORMALIZE_MAP[tl]) return CAT_NORMALIZE_MAP[tl];
