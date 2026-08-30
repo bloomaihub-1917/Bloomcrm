@@ -476,7 +476,7 @@ export async function loadFromSheets(hooks = {}){
           assignee:r.assignee||'', currentStage:+r.currentStage||1,
           lastActivity:r.lastActivity||'',
           branches:[r.name], mainBranch:r.name,
-          contacts:[], eventHistory:[], log:logArr,
+          log:logArr,
         };
       }));
       console.log('targets loaded:', targets.length);

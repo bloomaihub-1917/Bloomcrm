@@ -266,17 +266,53 @@ export function dLog(t) {
       <div class="lit"><div class="ltr"><div class="ld" style="background:${l.color}"></div>${k < t.log.length - 1 ? '<div class="lln"></div>' : ''}</div>
       <div class="lb2"><div class="lty" style="color:${l.color}">${escapeHtml(l.type)}</div><div class="ltx">${escapeHtml(l.text)}</div><div class="lda">${escapeHtml(l.date)}</div></div></div>`).join('')}</div>`;
 }
+/* ══════════════════════════════════════════
+   타겟 ↔ 기업DB 잇기
+
+   담당자·행사 이력을 타겟에 복사해 두지 않는다. 같은 사실을 두 군데 적으면
+   기업DB에서 연락처를 고쳐도 CRM 쪽은 옛날 값을 계속 보여준다. 볼 때마다
+   기업DB에서 가져온다 — 이미 CO_DB가 필요한 모양 그대로 들고 있다.
+
+   잇는 기준은 이름이다. crm_targets에는 기업 id가 없고(예전에 이름으로만
+   만들었다), 통합 기업명(branches)에 옛 사명·영문명이 함께 들어 있어서
+   그중 하나만 맞아도 찾아낸다. */
+const nameKey = (v) => String(v || '').toLowerCase()
+  .replace(/\(주\)|주식회사|㈜|inc\.?|corp\.?|co\.?|ltd\.?/gi, '')
+  .replace(/[^a-z0-9가-힣]/g, '');
+
+function coOf(t){
+  if(!t) return null;
+  const keys = new Set([t.name, t.nameEn, t.mainBranch, ...(t.branches || [])]
+    .map(nameKey).filter(Boolean));
+  if(!keys.size) return null;
+  return CO_DB.find(c => [c.nameKo, c.nameEn, c.mainBranch, ...(c.aliases || []), ...(c.branches || [])]
+    .some(n => keys.has(nameKey(n)))) || null;
+}
+
+/* 화면에 쓸 담당자·행사 이력 — 기업DB에 없으면 빈 배열 */
+const conOf = (t) => coOf(t)?.contacts || [];
+const evOf  = (t) => {
+  const evs = coOf(t)?.events || [];
+  // 최근 행사부터 — 이력은 최근 것이 먼저 보여야 쓸모가 있다
+  return [...evs].sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+};
+
 export function dEv(t) {
-  if (!t.eventHistory.length) return `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><p>행사 참여 이력 없음</p></div>`;
-  return t.eventHistory.map(e => `<div class="evc2"><div class="evc2tp"><div class="evnm">${escapeHtml(e.name)}</div><div class="evdt">${escapeHtml(e.date)}</div></div>
+  const evs = evOf(t);
+  if (!evs.length) return `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><p>행사 참여 이력 없음</p>${
+    coOf(t) ? '' : '<p style="font-size:11px;color:var(--i5)">기업DB에서 같은 이름의 기업을 못 찾았어요</p>'}</div>`;
+  return evs.map(e => `<div class="evc2"><div class="evc2tp"><div class="evnm">${escapeHtml(e.name)}</div><div class="evdt">${escapeHtml(e.date)}</div></div>
     <div style="font-size:10px;color:var(--i4);margin-bottom:5px">📍 ${escapeHtml(e.loc)}</div>
     <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:5px">${e.roles.map(r => `<span class="pill ${RP[r] || 'p-gray'}">${escapeHtml(r)}</span>`).join('')}</div>
     ${e.people.map(p => `<div style="font-size:11px;color:var(--i3);padding:2px 0">👤 ${escapeHtml(p)}</div>`).join('')}
     ${e.note ? `<div class="evno">${escapeHtml(e.note)}</div>` : ''}</div>`).join('');
 }
 export function dCon(t) {
-  if (!t.contacts.length) return `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><p>담당자 없음</p></div>`;
-  return t.contacts.map(p => `<div class="conc"><div class="conav">${escapeHtml(p.name.slice(0, 2))}</div><div style="flex:1"><div class="connm">${escapeHtml(p.name)}</div><div class="conti">${escapeHtml(p.title)}</div><div class="conps">${p.events.map(e => `<span class="pill p-gray">${escapeHtml(e)}</span>`).join('')}</div></div><div style="display:flex;flex-direction:column;gap:3px">${p.cats.map(c => `<span class="pill ${RP[c] || 'p-gray'}">${escapeHtml(c)}</span>`).join('')}</div></div>`).join('');
+  const cons = conOf(t);
+  if (!cons.length) return `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><p>담당자 없음</p>${
+    coOf(t) ? '<p style="font-size:11px;color:var(--i5)">기업DB에 이 기업의 연락처가 아직 없어요</p>'
+            : '<p style="font-size:11px;color:var(--i5)">기업DB에서 같은 이름의 기업을 못 찾았어요</p>'}</div>`;
+  return cons.map(p => `<div class="conc"><div class="conav">${escapeHtml(p.name.slice(0, 2))}</div><div style="flex:1"><div class="connm">${escapeHtml(p.name)}</div><div class="conti">${escapeHtml(p.title)}</div><div class="conps">${p.events.map(e => `<span class="pill p-gray">${escapeHtml(e)}</span>`).join('')}</div></div><div style="display:flex;flex-direction:column;gap:3px">${p.cats.map(c => `<span class="pill ${RP[c] || 'p-gray'}">${escapeHtml(c)}</span>`).join('')}</div></div>`).join('');
 }
 /* setStg/chgStD/addLog — 원본은 이 세 함수를 정의한 뒤 auth/audit 섹션에서
    window.setStg = function(...){ 원본함수(...); trackAction(...); } 식으로
@@ -448,8 +484,6 @@ export async function addTarget() {
     lastActivity: td(),
     branches: [mSel.name, mSel.nameEn].filter(Boolean),
     mainBranch: mSel.name,
-    contacts: [],
-    eventHistory: [],
     log: [document.getElementById('m-note').value
       ? { type: '메모', text: document.getElementById('m-note').value, date: td(), color: '#9C9890' }
       : null].filter(Boolean),
