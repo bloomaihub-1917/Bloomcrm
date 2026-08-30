@@ -969,6 +969,91 @@ function dBilling(x){
 /* ══════════════════════════════════════════
    3) 그래픽 — 출력 / 제작 분기
 ══════════════════════════════════════════ */
+/* ══════════════════════════════════════════
+   그래픽 피드백
+
+   그래픽은 네 단계를 오가며 사람이 세 번 바뀐다(기업 → 담당자 → 그래픽팀 →
+   담당자). "해상도가 부족하다", "재단선을 다시 받아야 한다" 같은 말이 그때마다
+   오가는데, 적어 둘 자리가 없어 메신저와 메일로 흩어졌다.
+
+   기록을 새 표에 담지 않고 기존 문의·기록(exhibitor_logs)을 쓴다. 작성자와
+   시각이 이미 붙고, 문의·기록 탭에서 다른 연락과 한 줄기로 보인다 — 그래픽
+   피드백만 따로 모아 두면 "이 기업과 무슨 얘기가 오갔나"를 두 군데서 봐야 한다.
+
+   어느 단계에서 남긴 말인지 subject에 적어 둔다. 나중에 읽을 때 "그래픽팀
+   확인 중에 나온 말"과 "회신 뒤에 나온 말"은 뜻이 다르다.
+══════════════════════════════════════════ */
+export const graphicFeedback = (exhId) =>
+  logsFor(exhId).filter(l => l.category === '그래픽' && l.kind === 'note');
+
+function graphicFeedbackBlock(x){
+  const rows = graphicFeedback(x.id);
+  const cur = stageOf(GRAPHIC_STAGES, x.graphic_stage);
+  const me = currentUser?.email || '';
+
+  return `<div style="font-size:11px;color:var(--i4);margin-bottom:7px">
+      지금 단계는 <b>${escapeHtml(cur.label)}</b>이고, 남기는 사람은
+      <b>${escapeHtml(currentUser?.name || currentUser?.email || '(로그인 정보 없음)')}</b>으로 적힙니다.
+      여기 적은 내용은 <b>문의·기록</b> 탭에도 함께 남아요.</div>
+
+    <textarea class="fi" id="gfb-${escAttr(x.id)}" rows="2" placeholder="예: 로고 해상도가 낮아 재전달 요청했습니다"
+      style="width:100%;resize:vertical;font-size:12px"></textarea>
+    <div style="display:flex;justify-content:flex-end;margin-top:6px">
+      <button class="btn bp bs" onclick="addGraphicFeedback('${escAttr(x.id)}')">피드백 남기기</button>
+    </div>
+
+    ${rows.length ? `<div style="margin-top:10px">${rows.map(l => `
+      <div style="padding:8px 0;border-top:1px solid var(--i8)">
+        <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap">
+          <span style="font-size:11.5px;font-weight:700">${escapeHtml(l.author_name || l.author_email || '알 수 없음')}</span>
+          ${l.subject ? `<span class="pill p-gray" style="font-size:9px">${escapeHtml(l.subject)}</span>` : ''}
+          <span style="font-size:10px;color:var(--i5)">${escapeHtml(l.ts || '')}</span>
+          ${l.author_email && l.author_email === me
+            ? `<button class="btn bs" style="margin-left:auto;font-size:10px;padding:1px 6px"
+                onclick="delGraphicFeedback('${escAttr(l.id)}')">삭제</button>` : ''}
+        </div>
+        <div style="font-size:12px;color:var(--i2);white-space:pre-wrap;margin-top:3px">${escapeHtml(l.body || '')}</div>
+      </div>`).join('')}</div>`
+      : '<div style="font-size:11.5px;color:var(--i5);margin-top:10px">아직 남긴 피드백이 없어요</div>'}`;
+}
+
+export async function addGraphicFeedback(exhId){
+  const ta = document.getElementById(`gfb-${exhId}`);
+  const body = ta?.value.trim() || '';
+  if(!body){ ta?.focus(); return; }
+  const x = getExhibitorById(exhId);
+  const cur = stageOf(GRAPHIC_STAGES, x?.graphic_stage);
+
+  const ok = await addRow(EXH_LOGS, {
+    id: localId('XL-'), exhibitor_id: exhId, kind: 'note', ts: td(),
+    direction: '', channel: '', counterpart: '', category: '그래픽',
+    // 어느 단계에서 남긴 말인지 — 나중에 읽을 때 뜻이 달라진다
+    subject: cur.label || '', body, answered_at: '', answer: '', status: 'done',
+    author_email: currentUser?.email || '', author_name: currentUser?.name || '',
+  }, saveExhLog);
+
+  // 저장에 실패하면 화면을 다시 그리면서 입력칸이 새로 만들어져 적은 글이
+  // 사라진다. 실패했을 때야말로 다시 눌러야 하므로 적은 내용을 돌려놓는다.
+  const el = document.getElementById(`gfb-${exhId}`);
+  if(!ok){ if(el){ el.value = body; el.focus(); } return; }
+
+  if(el) el.value = '';
+  trackAction('log', '그래픽 피드백', x?.company_name || '',
+    `<b>${escapeHtml(x?.company_name || '')}</b> 그래픽 피드백(${escapeHtml(cur.label || '')}): ${escapeHtml(body.slice(0, 40))}`);
+}
+
+/* 남의 글은 지우지 못한다 — 버튼 자체를 내 글에만 붙이지만, 눌리는 경로가
+   생기더라도 여기서 한 번 더 막는다 */
+export async function delGraphicFeedback(id){
+  const l = EXH_LOGS.find(r => r.id === id);
+  if(!l) return;
+  if(l.author_email && currentUser?.email && l.author_email !== currentUser.email){
+    alert('내가 남긴 피드백만 지울 수 있어요.'); return;
+  }
+  if(!confirm('이 피드백을 지울까요? 문의·기록 탭에서도 함께 사라집니다.')) return;
+  await removeRow(EXH_LOGS, id, deleteExhLog);
+}
+
 function dGraphic(x){
   const ordered = !!x.graphic_ordered_at;
   const g = graphicState(x);
@@ -1013,6 +1098,9 @@ function dGraphic(x){
   : ''}
 
   ${!x.graphic_type ? '<div style="font-size:11.5px;color:var(--am);padding:4px 2px">유형을 먼저 선택해주세요</div>' : ''}
+
+  ${sct('피드백', graphicFeedbackBlock(x),
+    (() => { const n = graphicFeedback(x.id).length; return n ? `<span class="pill p-gray">${n}</span>` : ''; })())}
 
   ${sct('그래픽 정산', `
     <div style="font-size:11.5px;color:var(--i4);margin-bottom:8px">
@@ -1451,6 +1539,8 @@ export async function holdExhLog(id){
   if(!r.ok){ l.status = before; refreshExhViews(); alert('저장에 실패했어요.'); }
 }
 
+window.addGraphicFeedback = addGraphicFeedback;
+window.delGraphicFeedback = delGraphicFeedback;
 window.openExhDr = openExhDr;
 window.closeExhDr = closeExhDr;
 window.switchExhDT = switchExhDT;
