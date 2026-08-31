@@ -327,6 +327,30 @@ export function pickCatalogItem(exhId){
   nameEl.dataset.catalogId = hit.id;
 }
 
+/* ── 남의 회사 사람이 들어왔는지 본다 ──
+
+   실제로 셀타스퀘어 담당자 세 명이 시믹코리아 담당자로 들어간 적이 있다.
+   드로어 머리에 기업명이 떠 있어도, 메일에서 이름·주소를 옮겨 적다 보면
+   지금 누구 화면인지 놓친다. 사람이 알아채기를 기다리는 대신 화면이 먼저 묻는다.
+
+   판단 근거는 이 기업의 마스터DB 연락처가 쓰는 도메인이다. 근거가 없으면
+   (마스터DB에 이메일이 하나도 없으면) 아무 말도 하지 않는다 — 모르면서
+   경고하면 다들 무시하게 된다. 회사 메일이 아닌 곳(gmail 등)도 넘어간다. */
+const FREE_MAIL = ['gmail.com', 'naver.com', 'daum.net', 'hanmail.net', 'kakao.com',
+  'outlook.com', 'hotmail.com', 'icloud.com', 'yahoo.com'];
+const mailDomain = (v) => {
+  const m = String(v || '').match(/@([^\s>,;]+)/);
+  return m ? m[1].toLowerCase().replace(/[^a-z0-9.-]/g, '') : '';
+};
+
+function foreignDomain(email, cands){
+  const d = mailDomain(email);
+  if(!d || FREE_MAIL.includes(d)) return '';
+  const own = new Set(cands.map(c => mailDomain(c.email1)).filter(x => x && !FREE_MAIL.includes(x)));
+  if(!own.size) return '';           // 견줄 근거가 없으면 말하지 않는다
+  return own.has(d) ? '' : [...own].join(', ');
+}
+
 function dContact(x){
   const list = exhContacts(x);
   const cands = contactsForExhibitor(x);
@@ -347,7 +371,11 @@ function dContact(x){
         </select>
       </div>
       <div style="font-size:11.5px;color:var(--i3);display:flex;flex-direction:column;gap:2px">
-        ${p.email ? `<div>✉ <a href="mailto:${escAttr(p.email)}" style="color:var(--a)">${escapeHtml(p.email)}</a></div>` : ''}
+        ${p.email ? `<div>✉ <a href="mailto:${escAttr(p.email)}" style="color:var(--a)">${escapeHtml(p.email)}</a>${
+          (() => { const own = foreignDomain(p.email, cands);
+            return own ? `<span class="pill p-amber" style="margin-left:5px;cursor:help"
+              title="이 기업의 마스터DB 연락처는 ${escAttr(own)} 도메인을 씁니다. 다른 회사 사람을 잘못 넣은 건 아닌지 확인해주세요.">다른 도메인</span>` : ''; })()
+        }</div>` : ''}
         ${p.phone ? `<div>☎ ${escapeHtml(p.phone)}</div>` : ''}
         ${!p.linked ? `
           <div class="fgr" style="margin-top:5px">
