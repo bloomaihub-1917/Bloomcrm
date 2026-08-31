@@ -372,9 +372,17 @@ function dContact(x){
       </div>
       <div style="font-size:11.5px;color:var(--i3);display:flex;flex-direction:column;gap:2px">
         ${p.email ? `<div>✉ <a href="mailto:${escAttr(p.email)}" style="color:var(--a)">${escapeHtml(p.email)}</a>${
-          (() => { const own = foreignDomain(p.email, cands);
-            return own ? `<span class="pill p-amber" style="margin-left:5px;cursor:help"
-              title="이 기업의 마스터DB 연락처는 ${escAttr(own)} 도메인을 씁니다. 다른 회사 사람을 잘못 넣은 건 아닌지 확인해주세요.">다른 도메인</span>` : ''; })()
+          (() => {
+            // 사유를 적어 둔 줄은 더 묻지 않는다 — 대행사가 대신 진행하는 기업처럼
+            // 도메인이 다른 게 맞는 경우가 있고, 계속 경고하면 다들 무시하게 된다
+            const memo = String(r.note || '').trim();
+            if(memo) return `<span class="pill p-gray" style="margin-left:5px;cursor:help"
+              title="${escAttr(memo)}">${escapeHtml(memo.length > 14 ? memo.slice(0, 14) + '…' : memo)}</span>`;
+            const own = foreignDomain(p.email, cands);
+            return own ? `<span class="pill p-amber" style="margin-left:5px;cursor:pointer"
+              onclick="noteExhContact('${escAttr(r.id)}')"
+              title="이 기업의 마스터DB 연락처는 ${escAttr(own)} 도메인을 씁니다. 다른 회사 사람을 잘못 넣은 건 아닌지 확인해주세요. 맞다면 눌러서 이유를 적어 두세요.">다른 도메인</span>` : '';
+          })()
         }</div>` : ''}
         ${p.phone ? `<div>☎ ${escapeHtml(p.phone)}</div>` : ''}
         ${!p.linked ? `
@@ -1672,6 +1680,15 @@ export async function answerExhLog(id){
 /* ── 기업 담당자 (여러 명) ── */
 export const delExhContact = (id) => removeRow(EXH_CONTACTS, id, deleteExhContact);
 
+/* 도메인이 다른 이유를 적어 둔다 — 적어 두면 다음부터 안 묻는다 */
+export async function noteExhContact(id){
+  const r = EXH_CONTACTS.find(c => c.id === id);
+  if(!r) return;
+  const v = prompt('이 사람이 왜 다른 도메인을 쓰는지 적어 주세요. 예: 대행사 컴비뉴', r.note || '');
+  if(v === null) return;
+  await setExhContactField(id, 'note', v.trim());
+}
+
 export async function setExhContactField(id, field, value){
   const r = EXH_CONTACTS.find(c => c.id === id);
   if(!r) return;
@@ -1681,7 +1698,7 @@ export async function setExhContactField(id, field, value){
   const res = await saveExhContact({ id, [field]: value });
   if(!res.ok){ r[field] = before; refreshExhViews(); alert('저장에 실패했어요.'); return; }
   const x = getExhibitorById(r.exhibitor_id);
-  const lbl = { name:'이름', email:'이메일', phone:'연락처', role:'역할' }[field] || field;
+  const lbl = { name:'이름', email:'이메일', phone:'연락처', role:'역할', note:'메모' }[field] || field;
   trackAction('edit', '기업 담당자 수정', x?.company_name || '',
     `<b>${escapeHtml(x?.company_name || '')}</b> 담당자 ${escapeHtml(lbl)} ${escapeHtml(String(before||'(없음)'))} → ${escapeHtml(String(value||'(없음)'))}`);
 }
@@ -1757,6 +1774,7 @@ window.delExhLog = delExhLog;
 window.answerExhLog = answerExhLog;
 window.holdExhLog = holdExhLog;
 window.promoteExhContact = promoteExhContact;
+window.noteExhContact = noteExhContact;
 window.delExhContact = delExhContact;
 window.setExhContactField = setExhContactField;
 window.setPrimaryExhContact = setPrimaryExhContact;
