@@ -1213,9 +1213,19 @@ function renderBookView(list){
   const rows = [...list].sort((a, b) => {
     const ao = Number(String(a.book_order || '').replace(/[^0-9]/g, '')) || 0;
     const bo = Number(String(b.book_order || '').replace(/[^0-9]/g, '')) || 0;
-    if(ao || bo) return (ao || 1e9) - (bo || 1e9);
+    // 순번이 같은 자리가 실제로 있다 — 한 부스를 나눠 쓰는 두 기관이 도록에는
+    // 각각 실리면서 번호는 하나로 받아 온다(39-1 서울대·39-2 분당서울대).
+    // 그대로 두면 둘의 앞뒤가 그때그때 달라져 교정 볼 때마다 순서가 바뀐다.
+    if(ao !== bo) return (ao || 1e9) - (bo || 1e9);
     return boothSortKey(a) - boothSortKey(b);
   });
+
+  /* 번호가 겹치는 순번 — 실수인지 일부러인지 화면에서 알 수 있어야 한다 */
+  const dupOrders = (() => {
+    const c = {};
+    rows.forEach(x => { const o = String(x.book_order || '').trim(); if(o) c[o] = (c[o] || 0) + 1; });
+    return new Set(Object.keys(c).filter(k => c[k] > 1));
+  })();
 
   const done = rows.filter(x => !bookMissing(x).length).length;
   const noLogo = rows.filter(x => x.book_logo !== 'yes').length;
@@ -1230,6 +1240,8 @@ function renderBookView(list){
     + (noIntro ? `<span class="pill p-red">회사소개 없음 ${noIntro}</span>` : '')
     + (lens.length ? `<span class="pill p-gray" title="띄어쓰기 포함">소개 ${Math.min(...lens)}~${Math.max(...lens)}자</span>` : '')
     + (overN ? `<span class="pill p-red" title="${escAttr(overRows.map(o => `${exhNames(o.x).ko} ${o.o.chars}자`).join(', '))}">한도 초과 ${overN}</span>` : '')
+    + (dupOrders.size ? `<span class="pill p-amber" title="${escAttr([...dupOrders].map(o =>
+        `${o}번: ${rows.filter(r => String(r.book_order || '').trim() === o).map(r => exhNames(r).ko).join(' · ')}`).join(' / '))}">겹친 순번 ${dupOrders.size}</span>` : '')
     + `<span style="font-size:10.5px;color:var(--i5);margin-left:2px">한도 ${bookLimit().chars.toLocaleString()}자 · ${bookLimit().words}단어 (띄어쓰기 포함)</span>`;
 
   const actions = `<button class="btn bs" onclick="fillBookOrder()" title="지금 부스 번호순으로 1번부터 다시 매깁니다">순서 자동 매기기</button>`;
@@ -1257,7 +1269,9 @@ function renderBookView(list){
     const miss = bookMissing(x);
     return `<div onclick="openExhDr('${escAttr(x.id)}','book')" style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
-        <span class="pill p-gray">${escapeHtml(x.book_order || '-')}</span>
+        <span class="pill ${dupOrders.has(String(x.book_order || '').trim()) ? 'p-amber' : 'p-gray'}"${
+          dupOrders.has(String(x.book_order || '').trim()) ? ' title="같은 순번을 쓰는 기업이 또 있어요 — 한 부스를 나눠 쓰는 경우입니다"' : ''
+        }>${escapeHtml(x.book_order || '-')}${dupOrders.has(String(x.book_order || '').trim()) ? ' ⚠' : ''}</span>
         <span style="font-size:13px;font-weight:700;flex:1;min-width:0">${escapeHtml(exhNames(x).ko)}</span>
         ${x.booth_no ? `<span class="pill p-blue">부스 ${escapeHtml(x.booth_no)}</span>` : ''}
       </div>
@@ -1291,7 +1305,9 @@ function renderBookView(list){
       return `<tr onclick="openExhDr('${escAttr(x.id)}','book')" style="cursor:pointer">
         <td><input class="fi" style="width:42px;padding:3px 5px;font-size:11.5px;text-align:center;font-weight:700"
           value="${escAttr(x.book_order || '')}" onclick="event.stopPropagation()"
-          onchange="setExhField('${escAttr(x.id)}','book_order',this.value,'도록 순서')"></td>
+          onchange="setExhField('${escAttr(x.id)}','book_order',this.value,'도록 순서')"
+          ${dupOrders.has(String(x.book_order || '').trim())
+            ? 'style="width:52px;padding:3px 5px;font-size:11px;border-color:var(--am)" title="같은 순번을 쓰는 기업이 또 있어요 — 한 부스를 나눠 쓰는 경우입니다"' : ''}></td>
         <td style="text-align:center">${logoBtn(x)}</td>
         ${coCell(x, 'book')}
         <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
