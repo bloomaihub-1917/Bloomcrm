@@ -15,7 +15,7 @@ import {
   getExhibitorById, itemsFor, invoicesFor, paymentsFor, logsFor, openInquiriesFor,
   EXH_CONTACTS, EXH_ITEMS, EXH_INVOICES, EXH_PAYMENTS, EXH_LOGS, CO_DB, currentUser,
   contactsFor, catalogFor, catalogItem, EQUIP_CATALOG, findCatalogByName,
-  contacts, getOrgById, codeList, codeLabel,
+  contacts, participations, getOrgById, codeList, codeLabel,
 } from '../state.js';
 import { td, escapeHtml, escAttr } from '../utils.js';
 import {
@@ -359,8 +359,13 @@ function dContact(x){
           <input class="fi" style="font-size:11.5px;padding:5px;margin-top:4px" placeholder="연락처" value="${escAttr(r.phone || '')}"
             onchange="setExhContactField('${escAttr(r.id)}','phone',this.value)">` : ''}
       </div>
-      <div style="display:flex;gap:5px;margin-top:7px;align-items:center">
-        <span style="font-size:10px;color:${p.linked ? 'var(--a)' : 'var(--i5)'}">${p.linked ? '마스터DB 연결됨' : '직접 입력'}</span>
+      <div style="display:flex;gap:5px;margin-top:7px;align-items:center;flex-wrap:wrap">
+        <span style="font-size:10px;color:${p.linked ? 'var(--a)' : 'var(--am)'}"
+          title="${p.linked ? '' : '이 사람은 이 전시에만 적혀 있어요 — 마스터DB에 없어서 다음 행사에 다시 쓸 수 없고, 행사 참여 이력에도 안 잡힙니다'}"
+          >${p.linked ? '마스터DB 연결됨' : '마스터DB에 없음'}</span>
+        ${!p.linked ? `<button class="btn bp bs" style="font-size:10px"
+          onclick="promoteExhContact('${escAttr(x.id)}','${escAttr(r.id)}')"
+          title="이 사람을 마스터DB 연락처로 등록하고 이 행사 참여로도 남깁니다">마스터DB로 올리기</button>` : ''}
         ${!p.primary ? `<button class="btn bs" style="margin-left:auto;font-size:10px" onclick="setPrimaryExhContact('${escAttr(r.id)}')">메인으로</button>` : '<span style="margin-left:auto"></span>'}
         <button class="btn bs" style="font-size:10px;opacity:.6" onclick="delExhContact('${escAttr(r.id)}')">삭제</button>
       </div>
@@ -477,11 +482,116 @@ export async function submitNewContact(exhId){
   const ok = await assignExhContact(exhId, String(c.id), v('role'));
   if(!ok) return fail('마스터DB에는 등록됐지만 전시 배정에 실패했어요 — 아래 목록에서 다시 배정해주세요.');
 
+  /* 이 행사에 참여하는 것으로도 남긴다.
+     여기서 만든 사람은 "그 행사 전시 담당자"라서 행사 참여가 곧 사실인데,
+     전에는 마스터DB에만 들어가 참여 이력이 비어 있었다. 그러면 기업DB의
+     행사별 집계와 CRM의 참여 이력에서 이 사람이 통째로 빠진다. */
+  await addExhParticipation(c.id, x?.event_id, v('role'));
+
   trackAction('add', '담당자 추가', x?.company_name || '',
     `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(nameKo || nameEn)} 마스터DB 등록 + 전시 배정`);
   closeNewContact();
   try { const { buildCoDB } = await import('./company-tab.js'); buildCoDB(); } catch(e){}
   refreshExhViews();
+}
+
+/* ── 예전에 이 전시에만 적어 둔 담당자를 마스터DB로 올린다 ──
+
+   전에는 담당자를 이 전시 안에서만 적을 수 있었다(exhibitor_contacts에 이름·
+   이메일을 직접 넣는 방식). 그렇게 넣은 사람은 마스터DB에 없어서 다음 행사에
+   다시 쓸 수 없고, 기업DB의 행사별 집계와 CRM 참여 이력에서도 통째로 빠진다.
+   지금 '직접 입력'은 마스터DB에 넣고 연결하는 방식으로 바뀌었지만, 예전 방식으로
+   들어간 줄이 남아 있어서 그 줄을 올릴 길을 둔다.
+
+   이름도 이메일도 없는 줄은 올릴 게 없다 — 먼저 채우게 한다. */
+export async function promoteExhContact(exhId, rowId){
+  const r = EXH_CONTACTS.find(o => o.id === rowId);
+  if(!r) return;
+  if(r.contact_id){ alert('이미 마스터DB에 연결된 담당자예요.'); return; }
+
+  const nm = String(r.name || '').trim();
+  const em = cleanEmail(r.email || '');
+  if(!nm && !em){ alert('이름이나 이메일 중 하나는 적어야 마스터DB에 올릴 수 있어요.'); return; }
+
+  const x = getExhibitorById(exhId);
+  const org = x?.org_id ? getOrgById(x.org_id) : null;
+  const today = new Date().toISOString().slice(0, 10);
+  // 이름 칸에 "메디라마 (MediRama)"처럼 기업명이 들어간 줄이 있다. 그대로 두면
+  // 사람 이름이 기업명이 되므로, 한글이 있으면 국문 이름으로만 넣는다.
+  const c = {
+    id: Date.now() + Math.floor(Math.random() * 10000),
+    nameKo: /[가-힣]/.test(nm) ? nm : '', nameEn: /[가-힣]/.test(nm) ? '' : nm,
+    orgKo: org?.name_ko || x?.company_name || '', orgEn: org?.name_en || '',
+    titleKo: '', titleEn: '', deptKo: '', deptEn: '',
+    country: org?.country || '', cat: 'exhibitor', lang: /[가-힣]/.test(nm) ? 'KO' : 'EN',
+    source: `${x?.event_id || ''} 전시 담당자(옮김)`, date: today, status: 'new',
+    email1: em, email2: '', phone1: String(r.phone || '').trim(), phone2: '',
+    beat: '', products: '', tags: '', org_id: x?.org_id || '',
+  };
+
+  contacts.push(c);
+  const { postToSheet } = await import('../api.js');
+  const res = await postToSheet({
+    sheet: 'contacts',
+    row: [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
+      c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
+      c.beat, c.products, c.tags, c.org_id],
+  }, '담당자 마스터DB 등록', { silent: true });
+  if(!res.ok){
+    const i = contacts.indexOf(c);
+    if(i >= 0) contacts.splice(i, 1);
+    alert('마스터DB 저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
+    return;
+  }
+
+  // 이 줄을 그 연락처에 연결한다 — 새 줄을 만들지 않아야 역할·메인 표시가 남는다
+  const before = { contact_id: r.contact_id, name: r.name, email: r.email, phone: r.phone };
+  r.contact_id = String(c.id);
+  refreshExhViews();
+  const r2 = await saveExhContact({ id: r.id, contact_id: r.contact_id });
+  if(!r2.ok){ Object.assign(r, before); refreshExhViews(); alert('연결에 실패했어요.'); return; }
+
+  await addExhParticipation(c.id, x?.event_id, r.role);
+
+  trackAction('add', '담당자 마스터DB 등록', x?.company_name || '',
+    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(nm || em)} — 전시에만 있던 담당자를 마스터DB로 옮김`);
+  try { const { buildCoDB } = await import('./company-tab.js'); buildCoDB(); } catch(e){}
+  refreshExhViews();
+}
+
+/* 행사 참여 기록 — 전시 담당자로 넣은 사람은 그 행사에 오는 사람이다.
+
+   실패해도 담당자 등록 자체는 되돌리지 않는다. 참여 이력이 빠진 건 나중에
+   기업DB에서 채울 수 있지만, 방금 적은 이름·이메일을 통째로 잃는 건 되돌리기가
+   어렵다. 대신 무엇이 빠졌는지 로그에 남긴다. */
+async function addExhParticipation(contactId, eventId, role){
+  if(!eventId) return false;
+  const dup = participations.some(p =>
+    String(p.contactId) === String(contactId) && p.eventId === eventId);
+  if(dup) return true;
+
+  const part = {
+    id: 'P-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+    eventId, event: eventId, contactId: String(contactId), contact: '',
+    role: '전시참가기업', note: role ? `전시 ${role}` : '',
+    matched: '✅ 전시 담당자 등록',
+  };
+  participations.push(part);
+
+  const { postToSheet } = await import('../api.js');
+  const r = await postToSheet({
+    sheet: 'participations',
+    row: [part.id, part.eventId, '', part.contactId, '', '', '', part.role, part.note, part.matched],
+  }, '행사 참여 추가', { silent: true });
+
+  if(!r.ok){
+    const i = participations.indexOf(part);
+    if(i >= 0) participations.splice(i, 1);
+    trackAction('add', '행사 참여 저장 실패', eventId,
+      `담당자를 등록했지만 <b>${escapeHtml(eventId)}</b> 참여 기록은 저장되지 않았어요 — 기업DB에서 직접 추가해주세요`);
+    return false;
+  }
+  return true;
 }
 
 /* 마스터DB 연락처를 이 전시 담당자로 넣는다 */
@@ -1532,20 +1642,6 @@ export async function answerExhLog(id){
 }
 
 /* ── 기업 담당자 (여러 명) ── */
-export async function addExhContact(exhId, manual){
-  const sel = document.getElementById(`exc-pick-${exhId}`);
-  const contactId = manual ? '' : (sel?.value || '');
-  if(!manual && !contactId){ alert('추가할 연락처를 고르거나 "직접 입력"을 눌러주세요.'); return; }
-
-  const first = contactsFor(exhId).length === 0;
-  const ok = await addRow(EXH_CONTACTS, {
-    id: localId('XC-'), exhibitor_id: exhId, contact_id: contactId,
-    name: '', email: '', phone: '', role: '실무',
-    is_primary: first ? 'yes' : '',   // 첫 담당자는 자동으로 메인
-    note: '',
-  }, saveExhContact);
-  if(ok && sel) sel.value = '';
-}
 export const delExhContact = (id) => removeRow(EXH_CONTACTS, id, deleteExhContact);
 
 export async function setExhContactField(id, field, value){
@@ -1632,7 +1728,7 @@ window.addExhLog = addExhLog;
 window.delExhLog = delExhLog;
 window.answerExhLog = answerExhLog;
 window.holdExhLog = holdExhLog;
-window.addExhContact = addExhContact;
+window.promoteExhContact = promoteExhContact;
 window.delExhContact = delExhContact;
 window.setExhContactField = setExhContactField;
 window.setPrimaryExhContact = setPrimaryExhContact;
