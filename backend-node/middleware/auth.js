@@ -32,7 +32,8 @@ async function requireAuth(req, res, next) {
     if (!decoded.email || !decoded.email.endsWith(ALLOWED_DOMAIN)) {
       return res.status(403).json({ ok: false, error: 'domain not allowed' });
     }
-    req.user = { email: decoded.email };
+    // 보낸 메일 기록에 누가 보냈는지 적으려면 이름도 필요하다
+    req.user = { email: decoded.email, name: decoded.name || '' };
     next();
   } catch (e) {
     res.status(401).json({ ok: false, error: 'invalid token' });

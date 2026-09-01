@@ -5,6 +5,7 @@ const rateLimit = require('express-rate-limit');
 
 const { requireAuth } = require('./middleware/auth');
 const dataRoutes = require('./routes/data');
+const mailRoutes = require('./routes/mail');
 
 /* 로컬(server.js)과 Vercel 서버리스(api/index.js)가 이 app을 그대로
    공유한다 — app.listen()은 각 진입점에서 따로 한다(서버리스는 안 함). */
@@ -32,6 +33,8 @@ app.use('/api', rateLimit({ windowMs: 60 * 1000, max: 120 }));
 app.get('/health', (req, res) => res.json({ ok: true }));
 
 app.use('/api/data', requireAuth, dataRoutes);
+// 메일 발송 — 로그인한 사람만. 보낸 이력이 남아야 해서 인증을 거른다.
+app.use('/api/mail', requireAuth, mailRoutes);
 
 // 에러 스택을 클라이언트에 노출하지 않는다 (기존 code.gs:349,398 문제 보완)
 app.use((err, req, res, next) => {
