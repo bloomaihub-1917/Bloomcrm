@@ -534,6 +534,29 @@ export function setExhFilter(k){ exhFilter = k; buildExhFilters(); renderExh(); 
 /* ══════════════════════════════════════════
    메인 — 미답변 문의 패널 + 체크리스트 표
 ══════════════════════════════════════════ */
+/* ── 참가기업 이름 검색 ──
+   전에는 company_name(국문) 하나만 봤다. 국문명이 아예 없고 영문만 있는 기업이
+   있어서(화면에는 영문이 뜬다) 보이는 이름 그대로 쳐도 안 걸렸다.
+
+   기업DB 검색과 같은 규칙을 쓴다 — 친 그대로 먼저 견주고(부분어·띄어쓰기 포함
+   검색을 살린다), 안 걸리면 양쪽에서 법인격 표기와 기호·공백을 눌러 없앤 뒤
+   다시 견준다. 옛 사명(별칭)으로도 찾을 수 있어야 한다. */
+function matchExhName(x, q){
+  const lq = String(q || '').trim().toLowerCase();
+  if(!lq) return true;
+  const squash = (v) => String(v || '').toLowerCase()
+    .replace(/\(주\)|\(유\)|주식회사|㈜|유한회사|inc\.?|corp\.?|co\.?|ltd\.?|llc\.?/g, '')
+    .replace(/[^a-z0-9가-힣]/g, '');
+  const sq = squash(lq);
+
+  const o = x.org_id ? getOrgById(x.org_id) : null;
+  const fields = [x.company_name, o?.name_ko, o?.name_en, o?.abbr,
+    ...String(o?.aliases || '').split('\n')].filter(Boolean);
+
+  return fields.some(v => String(v).toLowerCase().includes(lq))
+    || (!!sq && fields.some(v => squash(v).includes(sq)));
+}
+
 function visibleList(){
   const q = (document.getElementById('exh-q')?.value || '').trim().toLowerCase();
   let list = exhFilter === 'cancelled' ? cancelledExhibitors(exhEvent) : activeExhibitors(exhEvent);
@@ -543,7 +566,7 @@ function visibleList(){
     return s.state === 'over' || mixedCurrency(x.id) ||
       invoicesFor(x.id).some(i => i.status !== 'void' && String(i.amount ?? '').trim() === ''); });
   if(exhFilter === 'inquiry')    list = list.filter(x => openInquiriesFor(x.id).length);
-  if(q) list = list.filter(x => String(x.company_name || '').toLowerCase().includes(q));
+  if(q) list = list.filter(x => matchExhName(x, q));
   return list.sort((a, b) => String(a.company_name || '').localeCompare(String(b.company_name || ''), 'ko'));
 }
 
@@ -985,7 +1008,12 @@ function renderEquipView(list){
       ${x.extra_equipment ? `<div style="font-size:11px;color:var(--i4);margin-top:5px">메모: ${escapeHtml(x.extra_equipment)}</div>` : ''}
     </div>`).join('');
 
-  const actions = `<button class="btn bp bs" onclick="openNewCatalogItem()">+ 품목 추가</button>`;
+  /* 내보내기는 exh-export.js가 소유한다 — 이 파일이 그쪽을 import하면 순환
+     참조가 되므로(내보내기가 여기 집계 함수를 쓴다) window 경유로 부른다.
+     드로어를 다루는 방식과 같다. */
+  const actions = `<button class="btn bs" id="exh-export-btn" onclick="exportEquipLedger()"
+      title="쓰던 「비품 신청 종합관리대장」 형식(품목표 + 기업×코드 교차표)으로 받습니다">엑셀 내보내기</button>`
+    + `<button class="btn bp bs" onclick="openNewCatalogItem()">+ 품목 추가</button>`;
   return viewShell(pills, summary + `<div class="sct">기업별 신청 내역</div>` + detail, actions);
 }
 
