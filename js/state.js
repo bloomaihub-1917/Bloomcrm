@@ -228,8 +228,11 @@ export const EQUIP_CATALOG = [];
 
 /* 이 행사에서 고를 수 있는 품목 — 내린 품목(active='no')은 뺀다.
    다만 이미 신청에 쓰인 품목은 이름을 보여줘야 하므로 조회는 따로 한다. */
-export function catalogFor(evKey){
-  return EQUIP_CATALOG.filter(c => c.event_id === evKey && c.active !== 'no')
+/* kind를 주면 그 종류만 — 비어 있는 옛 행은 비품으로 본다(전부 비품이었다) */
+export function catalogFor(evKey, kind){
+  return EQUIP_CATALOG
+    .filter(c => c.event_id === evKey && c.active !== 'no')
+    .filter(c => !kind || (c.kind || 'equip') === kind)
     .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0));
 }
 export function catalogItem(id){ return EQUIP_CATALOG.find(c => c.id === id) || null; }

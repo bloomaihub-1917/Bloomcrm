@@ -495,3 +495,8 @@ CREATE INDEX IF NOT EXISTS idx_code_lists_key ON code_lists(list_key, event_id);
    무엇이 아직 안 왔는지 알 수 있게 한다. 그래픽 말고도 쓸 수 있게 항목 표에 둔다. */
 ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS received_at TEXT;    -- 받은 날 (YYYY-MM-DD)
 ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS received_note TEXT;  -- 받은 것 설명(파일명·형식 등)
+
+/* 품목표는 비품만 담다가 그래픽(사인물)까지 담게 됐다. 표를 새로 만들지 않고
+   종류만 나눈다 — 고르는 화면도, 이름으로 찾는 규칙도, 설정 편집기도 같다.
+   빈 값은 비품으로 본다(예전 행이 전부 비품이라 되메우지 않아도 맞다). */
+ALTER TABLE equip_catalog ADD COLUMN IF NOT EXISTS kind TEXT;  -- '' | 'equip' | 'graphic'

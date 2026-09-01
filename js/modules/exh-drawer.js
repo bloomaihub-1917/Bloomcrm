@@ -248,7 +248,9 @@ function catalogDatalist(x){
   const list = catalogFor(x.event_id);
   if(!list.length) return '';
   return `<datalist id="eqcat-${escAttr(x.id)}">${list.map(c =>
-    `<option value="${escAttr(`${c.code} ${c.name_ko}`)}">${escapeHtml([c.name_en, c.spec, c.price_krw && money(c.price_krw) + '원'].filter(Boolean).join(' · '))}</option>`
+    `<option value="${escAttr(`${c.code} ${c.name_ko}`)}">${escapeHtml([
+      (c.kind || 'equip') === 'graphic' ? '그래픽' : '비품',
+      c.name_en, c.spec, c.price_krw && money(c.price_krw) + '원'].filter(Boolean).join(' · '))}</option>`
   ).join('')}</datalist>`;
 }
 
@@ -263,12 +265,17 @@ function catalogDatalist(x){
 
    이미 있는 이름이면 새로 만들지 않고 그 품목에 잇는다 — 같은 의자가 두 줄로
    생기면 애초에 카탈로그를 둔 이유가 없어진다. */
-async function registerDirectItem(x, name, unitPrice, currency){
+async function registerDirectItem(x, name, unitPrice, currency, itemCat){
   const nm = String(name || '').trim();
   if(!nm) return '';
 
   const dup = findCatalogByName(x.event_id, nm);
   if(dup) return dup.id;   // 표기만 다른 같은 품목
+
+  // 그래픽으로 적은 항목은 그래픽 품목표에 올린다 — 비품 목록에 섞이면
+  // 발주할 때 렌탈사에 그래픽을 주문하게 된다
+  const kind = itemCat === 'graphic' ? 'graphic' : 'equip';
+  const pre = kind === 'graphic' ? 'XG' : 'X';
 
   // 이름에 코드가 들어 있으면 그대로 쓰고, 없으면 직접 추가용 코드를 만든다
   const m = nm.toUpperCase().match(/\b([A-Z]{1,2}-\d{2,4})\b/);
@@ -276,13 +283,14 @@ async function registerDirectItem(x, name, unitPrice, currency){
   let code = m ? m[1] : '';
   if(!code || used.has(code)){
     let n = 1;
-    while(used.has(`X-${String(n).padStart(3, '0')}`)) n++;
-    code = `X-${String(n).padStart(3, '0')}`;
+    while(used.has(`${pre}-${String(n).padStart(3, '0')}`)) n++;
+    code = `${pre}-${String(n).padStart(3, '0')}`;
   }
 
   const isUsd = currency === 'USD';
   const rec = {
-    id: localId('EC-'), event_id: x.event_id, category: '기타비품', code,
+    id: localId('EC-'), event_id: x.event_id, kind,
+    category: kind === 'graphic' ? '기타그래픽' : '기타비품', code,
     name_ko: /[가-힣]/.test(nm) ? nm : '',
     name_en: /[가-힣]/.test(nm) ? '' : nm,
     spec: '',
@@ -318,8 +326,9 @@ export function pickCatalogItem(exhId){
   const up = document.getElementById(`it-up-${exhId}`);
   const cur = document.getElementById(`it-cur-${exhId}`);
   const cat = document.getElementById(`it-cat-${exhId}`);
-  // 렌탈 가구는 전부 '비품'이다 — 고르는 순간 분류를 맞춰 둔다
-  if(cat){ cat.value = 'equip'; lastItemCat = 'equip'; }
+  // 품목표에 비품과 그래픽이 함께 있다 — 고른 품목의 종류대로 분류를 맞춰 둔다
+  const kind = (hit.kind || 'equip') === 'graphic' ? 'graphic' : 'equip';
+  if(cat){ cat.value = kind; lastItemCat = kind; }
   if(up && !up.value.trim()){
     up.value = (cur && cur.value === 'USD') ? (hit.price_usd || '') : (hit.price_krw || '');
   }
@@ -1454,7 +1463,7 @@ export async function addExhItem(exhId){
   // 비품인데 카탈로그에서 고르지 않았다면 품목마스터에 함께 올린다
   if(!catalogId && category === 'equip'){
     const x = getExhibitorById(exhId);
-    if(x) catalogId = await registerDirectItem(x, name, val(`it-up-${exhId}`), currency);
+    if(x) catalogId = await registerDirectItem(x, name, val(`it-up-${exhId}`), currency, val(`it-cat-${exhId}`));
   }
 
   await addRow(EXH_ITEMS, {

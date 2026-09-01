@@ -1780,6 +1780,7 @@ window.renderEvCfgList = renderEvCfgList;
 
    행사별로 나뉘므로 어느 행사의 품목표인지 먼저 고른다.
 ══════════════════════════════════════════ */
+let eqKind = 'equip';    // 비품 / 그래픽 — 한 표에 함께 담겨 있다
 let eqEvent = '';        // 보고 있는 행사
 let eqCatFil = '';       // 분류 필터
 let eqQuery = '';        // 검색어
@@ -1792,6 +1793,7 @@ const eqUsedBy = (id) => EXH_ITEMS.filter(i => i.catalog_id === id).length;
 
 const eqRows = () => EQUIP_CATALOG
   .filter(c => c.event_id === eqEvent)
+  .filter(c => (c.kind || 'equip') === eqKind)
   .filter(c => !eqCatFil || (c.category || '') === eqCatFil)
   .filter(c => {
     if(!eqQuery) return true;
@@ -1810,7 +1812,7 @@ export function renderEquipCatalog(){
   const evs = [...new Set(EQUIP_CATALOG.map(c => c.event_id).filter(Boolean))];
   if(!eqEvent) eqEvent = evs[0] || (EVENT_LIST[0]?.key || '');
 
-  const all = EQUIP_CATALOG.filter(c => c.event_id === eqEvent);
+  const all = EQUIP_CATALOG.filter(c => c.event_id === eqEvent && (c.kind || 'equip') === eqKind);
   const cats = [...new Set(all.map(c => c.category || '').filter(Boolean))];
 
   el.innerHTML = `
@@ -1819,6 +1821,11 @@ export function renderEquipCatalog(){
         <select class="fi" style="width:100%" onchange="setEqEvent(this.value)">
           ${(evs.length ? evs : EVENT_LIST.map(e => e.key)).map(k =>
             `<option value="${escAttr(k)}"${k === eqEvent ? ' selected' : ''}>${escapeHtml(k)}</option>`).join('')}
+        </select></div>
+      <div style="min-width:120px"><div class="mlbl">종류</div>
+        <select class="fi" style="width:100%" onchange="setEqKind(this.value)">
+          <option value="equip"${eqKind === 'equip' ? ' selected' : ''}>비품</option>
+          <option value="graphic"${eqKind === 'graphic' ? ' selected' : ''}>그래픽</option>
         </select></div>
       <div style="min-width:130px"><div class="mlbl">분류</div>
         <select class="fi" style="width:100%" onchange="setEqCatFil(this.value)">
@@ -1883,6 +1890,7 @@ function eqRowHtml(c){
   </div>`;
 }
 
+export function setEqKind(v){ eqKind = v; eqCatFil = ''; eqQuery = ''; renderEquipCatalog(); }
 export function setEqEvent(v){ eqEvent = v; eqCatFil = ''; renderEquipCatalog(); }
 export function setEqCatFil(v){ eqCatFil = v; renderEquipCatalog(); }
 export function setEqQuery(v){
@@ -1898,10 +1906,10 @@ export function setEqQuery(v){
 }
 /* 개수 안내 — 검색할 때 목록만 갈아 끼우면 이 줄이 옛 숫자로 남는다 */
 const eqCountHtml = () => {
-  const all = EQUIP_CATALOG.filter(c => c.event_id === eqEvent);
+  const all = EQUIP_CATALOG.filter(c => c.event_id === eqEvent && (c.kind || 'equip') === eqKind);
   const hidden = all.filter(c => c.active === 'no').length;
   const shown = eqRows().length;
-  return `${escapeHtml(eqEvent)} 품목 ${all.length}개${hidden ? ` (숨김 ${hidden}개 포함)` : ''}`
+  return `${escapeHtml(eqEvent)} ${eqKind === 'graphic' ? '그래픽' : '비품'} ${all.length}개${hidden ? ` (숨김 ${hidden}개 포함)` : ''}`
     + (shown !== all.length ? ` · 지금 보이는 것 ${shown}개` : '');
 };
 
@@ -1974,7 +1982,7 @@ export async function addEquipItem(){
   const ko = g('eq-new-ko'), en = g('eq-new-en');
   if(!ko && !en){ say('품명을 국문이나 영문 중 하나는 입력해주세요.'); return; }
 
-  const mine = EQUIP_CATALOG.filter(c => c.event_id === eqEvent);
+  const mine = EQUIP_CATALOG.filter(c => c.event_id === eqEvent && (c.kind || 'equip') === eqKind);
   // 같은 이름이 이미 있으면 새로 만들지 않는다 — 품목표를 둔 이유가 없어진다
   const key = (v) => String(v || '').toLowerCase().replace(/\s+/g, '');
   const dup = mine.find(c => (ko && key(c.name_ko) === key(ko)) || (en && key(c.name_en) === key(en)));
@@ -1985,13 +1993,15 @@ export async function addEquipItem(){
   if(code && used.has(code)){ say(`이미 쓰고 있는 코드예요 — ${code}`); return; }
   if(!code){
     let n = 1;
-    while(used.has(`X-${String(n).padStart(3, '0')}`)) n++;
-    code = `X-${String(n).padStart(3, '0')}`;
+    const pre = eqKind === 'graphic' ? 'XG' : 'X';
+    while(used.has(`${pre}-${String(n).padStart(3, '0')}`)) n++;
+    code = `${pre}-${String(n).padStart(3, '0')}`;
   }
 
   const rec = {
     id: `EC-${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-    event_id: eqEvent, category: g('eq-new-cat') || '기타비품', code,
+    event_id: eqEvent, kind: eqKind,
+    category: g('eq-new-cat') || (eqKind === 'graphic' ? '기타그래픽' : '기타비품'), code,
     name_ko: ko, name_en: en, spec: '',
     price_krw: eqNum(g('eq-new-krw')), price_usd: eqNum(g('eq-new-usd')),
     note: '', active: '', sort_order: String(900 + mine.length),
@@ -2011,6 +2021,7 @@ export async function addEquipItem(){
 }
 
 window.renderEquipCatalog = renderEquipCatalog;
+window.setEqKind    = setEqKind;
 window.setEqEvent   = setEqEvent;
 window.setEqCatFil  = setEqCatFil;
 window.setEqQuery   = setEqQuery;
