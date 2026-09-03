@@ -626,7 +626,8 @@ export function renderExh(){
      담당이 갈리고 마감도 달라서, 기업별 드로어를 51번 열지 않고 한 화면에서
      끝낼 수 있어야 한다. */
   const VIEWS = [['dash','대시보드'], ['list','체크리스트'],
-    ['booth','부스 현황'], ['equip','비품 현황'], ['graphic','그래픽 현황'], ['book','프로그램북']];
+    ['booth','부스 현황'], ['equip','비품 현황'], ['graphic','그래픽 현황'],
+    ['money','금액 현황'], ['book','프로그램북']];
   const seg = `<div class="tbar" style="padding:10px 16px 0">
     <div class="seg" style="flex-wrap:wrap">
       ${VIEWS.map(([k, l]) => `<button class="seg-b${exhView === k ? ' on' : ''}" onclick="setExhView('${k}')">${l}</button>`).join('')}
@@ -637,6 +638,7 @@ export function renderExh(){
     : exhView === 'booth'   ? renderBoothView(list)
     : exhView === 'equip'   ? renderEquipView(list)
     : exhView === 'graphic' ? renderGraphicView(list)
+    : exhView === 'money'   ? renderMoneyView(list)
     : exhView === 'book'    ? renderBookView(list)
     : renderInquiryPanel() + renderChecklist(list, all);
   el.innerHTML = seg + bodyHtml;
@@ -886,6 +888,142 @@ let equipOpen = new Set();
 export function toggleEquipRow(key){
   equipOpen.has(key) ? equipOpen.delete(key) : equipOpen.add(key);
   renderExh();
+}
+
+/* ══════════════════════════════════════════
+   금액 현황 — 기업별로 부스·비품·그래픽을 나눠 보고, 아래에서 합친다
+
+   대시보드는 행사 전체 합계만 보여준다. 그런데 실무에서 묻는 건 두 가지다.
+   "이번 행사 그래픽이 얼마인가"(합계)와 "이 회사는 부스가 얼마인가"(기업별).
+   앞엣것만 있으면 뒤엣것을 알려고 51개 기업을 하나씩 열어야 한다.
+
+   통화를 섞지 않는다. 기업마다 원화·달러가 갈려서 한 표에 더하면 뜻 없는 숫자가
+   된다. 통화별로 표를 따로 그리고, 각 표 맨 아래에 그 통화의 합계를 둔다.
+
+   여기 숫자는 금액 항목 기준이라 '무엇을 얼마어치 신청했나'다. 인보이스는 여러
+   분류를 한 장에 합쳐 발행해 분류별로 가를 수 없어서, 청구액과는 다를 수 있다.
+   그래서 청구·입금·잔액을 오른쪽에 함께 두어 어긋나면 눈에 띄게 한다.
+══════════════════════════════════════════ */
+const MONEY_CATS = [['booth', '부스'], ['equip', '비품'], ['graphic', '그래픽'], ['etc', '기타']];
+
+/* 기업 하나의 분류별 금액 — 통화별로 갈라 담는다 */
+function moneyRowsFor(x){
+  const by = {};
+  billableItems(x.id).forEach(i => {
+    const cur = i.currency || 'KRW';
+    const cat = ['booth', 'equip', 'graphic'].includes(i.category) ? i.category : 'etc';
+    if(!by[cur]) by[cur] = { booth: 0, equip: 0, graphic: 0, etc: 0, 합계: 0 };
+    const v = num(i.amount);
+    by[cur][cat] += v;
+    by[cur].합계 += v;
+  });
+  return by;
+}
+
+function renderMoneyView(list){
+  const rows = list.map(x => ({ x, by: moneyRowsFor(x) })).filter(r => Object.keys(r.by).length);
+  if(!rows.length) return emptyView('아직 등록된 금액 항목이 없어요');
+
+  const curs = [...new Set(rows.flatMap(r => Object.keys(r.by)))].sort();
+  const total = billedByCategory(list);
+
+  const pills = `<span class="pill p-gray">기업 ${rows.length}</span>`
+    + curs.map(c => `<span class="pill p-blue">${escapeHtml(c)} ${escapeHtml(fmtMoney(total[c]?.합계 || 0, c))}</span>`).join('')
+    + '<span style="font-size:10.5px;color:var(--i5);margin-left:2px">금액 항목 기준(신청 금액)이라 청구액과 다를 수 있어요 — 오른쪽에 함께 뒀어요</span>';
+
+  /* 통화별로 표를 하나씩. 그 통화로 청구한 기업만 담는다. */
+  const table = (cur) => {
+    const mine = rows.filter(r => r.by[cur] && r.by[cur].합계);
+    if(!mine.length) return '';
+    const sum = total[cur] || { booth: 0, equip: 0, graphic: 0, etc: 0, 합계: 0 };
+    const used = MONEY_CATS.filter(([k]) => sum[k]);        // 아무도 안 쓴 분류는 열을 만들지 않는다
+    const money = (v) => v ? escapeHtml(fmtMoney(v, cur)) : '<span style="color:var(--i6)">-</span>';
+
+    return `<div style="margin-bottom:18px">
+      <div class="sct">${escapeHtml(cur)} · ${mine.length}곳</div>
+      <div class="tw"><table><thead><tr>
+        <th style="min-width:150px">기업</th>
+        <th style="min-width:56px">부스번호</th>
+        ${used.map(([, l]) => `<th style="min-width:98px;text-align:right">${l}</th>`).join('')}
+        <th style="min-width:104px;text-align:right">신청 합계</th>
+        <th style="min-width:104px;text-align:right">청구액</th>
+        <th style="min-width:104px;text-align:right">입금</th>
+        <th style="min-width:104px;text-align:right">잔액</th>
+      </tr></thead><tbody>
+        ${mine.map(({ x, by }) => {
+          const m = by[cur];
+          const s = settleState(x);
+          // 청구 통화가 이 표의 통화와 같을 때만 청구·입금을 나란히 둔다.
+          // 다르면 숫자를 나란히 놓는 것 자체가 오해를 만든다.
+          const same = (s.cur || 'KRW') === cur;
+          return `<tr>
+            ${coCell(x, 'billing')}
+            <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
+            ${used.map(([k]) => `<td style="text-align:right">${money(m[k])}</td>`).join('')}
+            <td style="text-align:right;font-weight:700">${money(m.합계)}</td>
+            <td style="text-align:right">${same ? money(s.billed) : `<span style="color:var(--i6)" title="이 기업은 ${escAttr(s.cur || 'KRW')}로 청구돼 있어요">${escapeHtml(s.cur || '')}</span>`}</td>
+            <td style="text-align:right">${same ? money(s.paid) : ''}</td>
+            <td style="text-align:right;color:${same && s.balance > 0 ? 'var(--am)' : 'var(--i3)'}">${same ? money(s.balance) : ''}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+      <tfoot><tr style="border-top:2px solid var(--i5);font-weight:800">
+        <td colspan="2" style="font-size:12px">${escapeHtml(cur)} 합계 ${mine.length}곳</td>
+        ${used.map(([k]) => `<td style="text-align:right">${money(sum[k])}</td>`).join('')}
+        <td style="text-align:right">${money(sum.합계)}</td>
+        <td colspan="3"></td>
+      </tr>
+      <tr style="font-weight:400">
+        <td colspan="2" style="font-size:10.5px;color:var(--i4)">비중</td>
+        ${used.map(([k]) => `<td style="text-align:right;font-size:10.5px;color:var(--i4)">${
+          sum.합계 ? Math.round(sum[k] / sum.합계 * 100) + '%' : '-'}</td>`).join('')}
+        <td colspan="4"></td>
+      </tr></tfoot>
+      </table></div>
+    </div>`;
+  };
+
+  /* 좁은 화면에서는 표를 쓰지 않는다. layout.css가 표를 카드로 접으면서 헤더를
+     숨겨, 라벨 없는 숫자 아홉 개가 세로로 쌓인다 — 어느 게 부스이고 어느 게
+     청구액인지 알 수 없다. 값마다 이름을 붙여 직접 그린다. */
+  if(isMobile()) return viewShell(pills, curs.map(cur => {
+    const mine = rows.filter(r => r.by[cur] && r.by[cur].합계);
+    if(!mine.length) return '';
+    const sum = total[cur] || { 합계: 0 };
+    const used = MONEY_CATS.filter(([k]) => sum[k]);
+    const won = (v) => escapeHtml(fmtMoney(v, cur));
+
+    return `<div class="sct">${escapeHtml(cur)} · ${mine.length}곳</div>
+      ${mine.map(({ x, by }) => {
+        const m = by[cur];
+        const s = settleState(x);
+        const same = (s.cur || 'KRW') === cur;
+        return `<div onclick="openExhDr('${escAttr(x.id)}','billing')"
+          style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+            <span class="pill ${x.booth_no ? 'p-blue' : 'p-gray'}">${escapeHtml(x.booth_no || '미배정')}</span>
+            <span style="font-size:13px;font-weight:700;flex:1;min-width:0">${escapeHtml(exhNames(x).ko)}</span>
+            <span style="font-size:13px;font-weight:800">${won(m.합계)}</span>
+          </div>
+          ${used.map(([k, l]) => m[k] ? `
+            <div style="display:flex;justify-content:space-between;font-size:11.5px;padding:2px 0">
+              <span style="color:var(--i4)">${l}</span><span>${won(m[k])}</span>
+            </div>` : '').join('')}
+          ${same ? `<div style="display:flex;justify-content:space-between;font-size:11px;margin-top:5px;padding-top:5px;border-top:1px solid var(--i8)">
+            <span style="color:var(--i4)">청구 ${won(s.billed)} · 입금 ${won(s.paid)}</span>
+            <span style="color:${s.balance > 0 ? 'var(--am)' : 'var(--g)'}">${s.balance > 0 ? '잔액 ' + won(s.balance) : '완납'}</span>
+          </div>` : ''}
+        </div>`;
+      }).join('')}
+      <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:800;padding:8px 2px 14px;border-top:2px solid var(--i5)">
+        <span>${escapeHtml(cur)} 합계</span><span>${won(sum.합계)}</span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin:-8px 0 16px">
+        ${used.map(([k, l]) => `<span class="pill p-gray">${l} ${won(sum[k])}</span>`).join('')}
+      </div>`;
+  }).join(''));
+
+  return viewShell(pills, curs.map(table).join(''));
 }
 
 function renderEquipView(list){
