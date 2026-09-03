@@ -99,6 +99,7 @@ export function getAuditFiltered(){
       (e.detail||'').toLowerCase().includes(lq)
     );
   }
+  list.sort((a,b)=> new Date(b.ts) - new Date(a.ts));
   return list;
 }
 

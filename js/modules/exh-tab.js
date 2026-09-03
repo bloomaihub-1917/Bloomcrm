@@ -2005,7 +2005,8 @@ function renderDashboard(all){
   const cardRecent = (() => {
     // 누가 무엇을 고쳤는지 — 계정 기준으로 최근 변경을 보여준다
     const names = new Set(all.map(x => x.company_name).filter(Boolean));
-    const recent = auditLog.filter(l => names.has(l.target)).slice(0, 8);
+    const recent = auditLog.filter(l => names.has(l.target))
+      .sort((a, b) => new Date(b.ts) - new Date(a.ts)).slice(0, 8);
     if(!recent.length) return `<div class="uc"><div class="uc-ttl">최근 변경</div>
       <div style="font-size:11.5px;color:var(--i5)">아직 변경 이력이 없어요</div></div>`;
     return `<div class="uc">
