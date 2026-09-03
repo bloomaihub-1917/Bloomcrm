@@ -141,6 +141,32 @@ export function billedAmount(exhId){
   const inv = liveInvoices(exhId);
   return inv.length ? sumIn(inv, cur) : sumIn(billableItems(exhId), cur);
 }
+/* ── 분류별 청구액 (부스 / 비품 / 그래픽 / 기타) ──
+
+   총액만 보면 "이번 행사 그래픽이 얼마나 나갔나"를 알 수 없다. 발주도 정산 근거도
+   분류 단위로 움직인다 — 부스는 시공사, 비품은 렌탈사, 그래픽은 출력소로 간다.
+
+   인보이스가 아니라 금액 항목을 센다. 인보이스는 여러 분류를 한 장에 합쳐 발행해
+   분류별로 가를 수가 없다. 그래서 여기 숫자는 '무엇을 얼마어치 신청했나'이고,
+   청구 총액(billedAmount)과는 다를 수 있다 — 인보이스에 할인·조정이 붙으면 갈린다.
+
+   통화를 섞지 않는다. 기업마다 원화·달러가 갈려서 더하면 뜻 없는 숫자가 된다.
+   { KRW: {booth: n, equip: n, ...}, USD: {...} } 꼴로 돌려준다. */
+export function billedByCategory(list){
+  const out = {};
+  (list || []).forEach(x => {
+    billableItems(x.id).forEach(i => {
+      const cur = i.currency || 'KRW';
+      const cat = ['booth', 'equip', 'graphic'].includes(i.category) ? i.category : 'etc';
+      if(!out[cur]) out[cur] = { booth: 0, equip: 0, graphic: 0, etc: 0, 합계: 0 };
+      const v = num(i.amount);
+      out[cur][cat] += v;
+      out[cur].합계 += v;
+    });
+  });
+  return out;
+}
+
 /* 입금액: 입금 − 환불 */
 /* 환불은 요청받은 시점과 실제로 보낸 시점이 다르다. 요청만 들어온 건을 바로
    빼버리면 아직 나가지 않은 돈이 이미 나간 것처럼 보여서, 잔액을 보고 판단하는
@@ -1748,9 +1774,30 @@ function renderDashboard(all){
         `<div style="font-size:10.5px;color:var(--i5);margin-top:6px">마감일을 정해 두면 늦은 기업이 처리 필요에 모입니다</div>`}
     </div>`;
 
+  /* 분류별로 얼마어치 신청됐나 — 발주가 분류 단위로 갈린다 */
+  const byCat = billedByCategory(all);
+  const CAT_ROWS = [['booth', '부스'], ['equip', '비품'], ['graphic', '그래픽'], ['etc', '기타']];
+  const catBlock = Object.keys(byCat).map(cur => {
+    const m = byCat[cur];
+    if(!m.합계) return '';
+    return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i8)">
+      <div style="font-size:10.5px;color:var(--i4);margin-bottom:4px">${escapeHtml(cur)} 신청 금액</div>
+      ${CAT_ROWS.filter(([k]) => m[k]).map(([k, l]) => `
+        <div style="display:flex;justify-content:space-between;font-size:11.5px;padding:2px 0">
+          <span style="color:var(--i3)">${l}</span>
+          <span>${escapeHtml(fmtMoney(m[k], cur))}<span style="color:var(--i5);font-size:10px;margin-left:4px">${
+            Math.round(m[k] / m.합계 * 100)}%</span></span>
+        </div>`).join('')}
+      <div style="display:flex;justify-content:space-between;font-size:11.5px;font-weight:800;padding:3px 0 0;border-top:1px solid var(--i8);margin-top:3px">
+        <span>합계</span><span>${escapeHtml(fmtMoney(m.합계, cur))}</span>
+      </div>
+    </div>`;
+  }).join('');
+
   const cardCash = `<div class="uc">
       <div class="uc-ttl">정산 현황</div>
       ${curs.length ? curs.map(cashRow).join('') : '<div style="font-size:11.5px;color:var(--i5)">아직 청구 내역이 없어요</div>'}
+      ${catBlock}
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">
         ${STATE_PILLS.filter(p => byState[p[1]]).map(p => `<span class="pill ${p[2]}">${p[0]} ${byState[p[1]]}</span>`).join('')}
       </div>
