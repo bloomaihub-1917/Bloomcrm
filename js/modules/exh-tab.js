@@ -1932,10 +1932,55 @@ function renderDashboard(all){
     </div>`;
   }).join('');
 
+  /* 부스 타입별 부스 금액 — 시공은 타입 단위로 발주한다. "Block System A가
+     몇 곳"까지는 부스 현황에서 보이는데 그게 얼마인지는 어디에도 없었다.
+     부스 분류 항목만 센다. 비품·그래픽까지 더하면 타입과 무관한 돈이 섞인다. */
+  const boothByType = (() => {
+    const t = {};
+    all.forEach(x => {
+      const k = String(x.booth_type || '').trim() || '(타입 미지정)';
+      billableItems(x.id).filter(i => i.category === 'booth').forEach(i => {
+        const cur = i.currency || 'KRW';
+        if(!t[k]) t[k] = { n: 0, cur: {} };
+        t[k].cur[cur] = (t[k].cur[cur] || 0) + num(i.amount);
+      });
+      if(t[k]) t[k].n = (t[k].n || 0);
+    });
+    // 기업 수는 금액이 있든 없든 그 타입을 쓰는 곳 전부로 센다
+    all.forEach(x => {
+      const k = String(x.booth_type || '').trim() || '(타입 미지정)';
+      if(t[k]) t[k].n++;
+    });
+    return t;
+  })();
+
+  const typeBlock = (() => {
+    const ks = Object.keys(boothByType)
+      .sort((a, b) => (boothByType[b].cur.KRW || 0) - (boothByType[a].cur.KRW || 0));
+    if(!ks.length) return '';
+    return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i8)">
+      <div style="font-size:10.5px;color:var(--i4);margin-bottom:4px">부스 타입별 부스 금액</div>
+      ${ks.map(k => {
+        const m = boothByType[k];
+        const amt = Object.keys(m.cur).filter(c => m.cur[c])
+          .map(c => escapeHtml(fmtMoney(m.cur[c], c))).join(' + ') || '-';
+        // 타입이 안 정해진 곳은 눌러도 걸 필터가 없다 — 누르는 시늉만 하면 안 된다
+        const on = k !== '(타입 미지정)';
+        return `<div${on ? ` onclick="setBoothTypeFil('${escAttr(k)}')" title="${escAttr(k)} 기업만 보기" style="cursor:pointer;` : ' style="'}${
+          'display:flex;justify-content:space-between;gap:6px;font-size:11.5px;padding:2px 0"'}>
+          <span style="color:var(--i3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(k)}
+            <span style="color:var(--i5);font-size:10px">${m.n}곳</span></span>
+          <span style="flex:0 0 auto">${amt}</span>
+        </div>`;
+      }).join('')}
+    </div>`;
+  })();
+
   const cardCash = `<div class="uc">
       <div class="uc-ttl">정산 현황</div>
       ${curs.length ? curs.map(cashRow).join('') : '<div style="font-size:11.5px;color:var(--i5)">아직 청구 내역이 없어요</div>'}
       ${catBlock}
+      ${typeBlock}
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">
         ${STATE_PILLS.filter(p => byState[p[1]]).map(p => `<span class="pill ${p[2]}">${p[0]} ${byState[p[1]]}</span>`).join('')}
       </div>
