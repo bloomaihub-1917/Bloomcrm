@@ -29,7 +29,7 @@ import {
   EQUIP_CATALOG, catalogItem, itemsFor,
   exhEvent, EVENT_LIST,
 } from '../state.js';
-import { activeExhibitors, exhNames, exhContact, isBillable } from './exh-tab.js';
+import { activeExhibitors, exhNames, exhContact, currencyOf, isBillable } from './exh-tab.js';
 import { showSaveErrorToast } from '../api.js';
 import { trackAction } from './audit-tab.js';
 
@@ -77,6 +77,17 @@ const num = (v) => { const n = Number(String(v ?? '').replace(/[^0-9.-]/g, ''));
 const LEDGER_CATS = ['equip', 'graphic'];
 const CAT_LABEL = { equip: '비품', graphic: '그래픽' };
 
+/* ── 통화 ──
+   같은 품목을 어떤 기업은 원화로, 어떤 기업은 달러로 청구받는다(2026 KIC은
+   원화 23곳 · 달러 16곳). 통화를 적지 않고 원화로 환산해 버리면, 달러로 청구한
+   기업의 숫자가 실제 청구액과 다른 채로 대장에 남는다.
+
+   그래서 한 줄은 한 통화만 담는다. 두 통화가 섞인 기업(신청서는 원화, 그래픽
+   추가분은 달러 — 실제로 3곳)은 통화별로 줄을 나눈다. 억지로 한 줄에 합치면
+   원화와 달러를 더한 숫자가 되고, 어느 쪽으로 환산해도 실제 청구액이 아니다. */
+const CURRENCIES = ['KRW', 'USD'];
+const curOf = (i) => (i.currency === 'USD' ? 'USD' : 'KRW');
+
 export function buildLedger(evKey){
   const exhs = activeExhibitors(evKey).slice().sort((a, b) => {
     const an = exhNames(a), bn = exhNames(b);
@@ -87,11 +98,11 @@ export function buildLedger(evKey){
      내린 품목(active='no')이라도 이미 신청에 쓰였으면 열을 남긴다. 열이 없으면
      그 기업의 수량이 대장에서 소리 없이 사라진다. */
   const used = new Set();
-  const offCatalog = [];        // 카탈로그에 잇지 못한 신청 — 교차표에 담을 자리가 없다
-  const qtyByExh = new Map();   // exhId → Map(catalogId → 수량)
+  const offCatalog = [];   // 카탈로그에 잇지 못한 신청 — 교차표에 담을 자리가 없다
+  const rows = [];         // 대장의 한 줄 = 한 기업 × 한 통화
 
   exhs.forEach(x => {
-    const m = new Map();
+    const byCur = new Map();   // 통화 → Map(catalogId → 수량)
     itemsFor(x.id).forEach(i => {
       if(!LEDGER_CATS.includes(i.category || '')) return;
       const cat = i.catalog_id ? catalogItem(i.catalog_id) : null;
@@ -101,9 +112,22 @@ export function buildLedger(evKey){
          기업이 주문하므로 여기서 또 세면 없는 의자를 발주하게 된다.
          (비품 현황 화면과 같은 규칙) */
       if(String(i.shared_ref || '').trim()) return;
+      const c = curOf(i);
+      if(!byCur.has(c)) byCur.set(c, new Map());
+      const m = byCur.get(c);
       m.set(cat.id, (m.get(cat.id) || 0) + (num(i.qty) || 1));
     });
-    qtyByExh.set(x.id, m);
+
+    if(!byCur.size){
+      /* 아직 아무것도 신청하지 않은 기업. 줄은 남긴다 — 누가 안 냈는지가
+         대장에서 보여야 한다. 통화는 화면과 같은 규칙으로 정한다(인보이스 우선). */
+      rows.push({ x, cur: currencyOf(x.id), qty: new Map(), split: false, empty: true });
+      return;
+    }
+    const present = CURRENCIES.filter(c => byCur.has(c));
+    present.forEach(c => rows.push({
+      x, cur: c, qty: byCur.get(c), split: present.length > 1, empty: false,
+    }));
   });
 
   const cols = EQUIP_CATALOG
@@ -118,7 +142,7 @@ export function buildLedger(evKey){
     });
 
   return {
-    exhs, cols, qtyByExh, offCatalog,
+    exhs, rows, cols, offCatalog,
     equipCols:   cols.filter(c => (c.kind || 'equip') !== 'graphic'),
     graphicCols: cols.filter(c => (c.kind || 'equip') === 'graphic'),
   };
@@ -136,7 +160,8 @@ function colLetter(n){
 }
 
 const CAT_SHEET = '카탈로그_단가표';
-const PRICE_COL = 'F';   // 카탈로그 시트의 단가(KRW) 열 — 대장 3행이 이걸 참조한다
+/* 카탈로그 시트의 단가 열 — 대장의 숨긴 단가 행이 통화별로 이걸 참조한다 */
+const PRICE_COL = { KRW: 'F', USD: 'G' };
 
 function drawCatalogSheet(wb, cols){
   const ws = wb.addWorksheet(CAT_SHEET, { views: [{ state: 'frozen', ySplit: 1 }] });
@@ -169,10 +194,10 @@ function drawCatalogSheet(wb, cols){
 }
 
 function drawLedgerSheet(wb, data, meta){
-  const { exhs, cols, equipCols, graphicCols, qtyByExh, offCatalog } = data;
+  const { rows, cols, equipCols, graphicCols, offCatalog } = data;
   const ws = wb.addWorksheet('종합비품신청관리대장');
 
-  const INFO    = 6;                        // No. ~ 담당자
+  const INFO    = 7;                        // No. ~ 통화
   const cEquip0 = INFO + 1;                 // 첫 가구비품 열
   const cEquip1 = INFO + equipCols.length;
   const cEqSub  = cEquip1 + 1;              // 가구비품 소계
@@ -192,6 +217,7 @@ function drawLedgerSheet(wb, data, meta){
   ws.getColumn(4).width = 24;
   ws.getColumn(5).width = 26;
   ws.getColumn(6).width = 18;
+  ws.getColumn(7).width = 7;                // 통화
   equipCols.forEach((c, i) => { ws.getColumn(cEquip0 + i).width = 7; });
   graphicCols.forEach((c, i) => { ws.getColumn(cGra0 + i).width = 14; });
   ws.getColumn(cEqSub).width = 13;
@@ -203,21 +229,23 @@ function drawLedgerSheet(wb, data, meta){
   r1.getCell(1).value       = '업체 정보';
   r1.getCell(cEquip0).value = '가구비품 신청 수량 (코드별)';
   if(graphicCols.length) r1.getCell(cGra0).value = '그래픽·부대시설 신청 수량';
-  r1.getCell(cTotal).value  = '총 신청금액\n(원)';
+  /* 금액 머리글에 "(원)"을 박지 않는다 — 줄마다 통화가 다르다. 통화는 G열이
+     말하고, 셀 표시형식이 원/달러를 따라간다. */
+  r1.getCell(cTotal).value  = '총 신청금액';
   r1.height = 20;
 
   /* 2행 — 열 머리글. 가구비품은 코드만(80개 가까이라 이름까지 넣으면 읽히지
      않는다 — 이름은 카탈로그 시트에 있다), 그래픽은 코드+품명(몇 개뿐이고
      이름을 봐야 무엇인지 안다). */
   const r2 = ws.getRow(2);
-  ['No.', '부스타입', '부스번호', '업체명(국문)', '업체명(영문)', '담당자']
+  ['No.', '부스타입', '부스번호', '업체명(국문)', '업체명(영문)', '담당자', '통화']
     .forEach((v, i) => { r2.getCell(i + 1).value = v; });
   equipCols.forEach((c, i) => { r2.getCell(cEquip0 + i).value = c.code || ''; });
-  r2.getCell(cEqSub).value = '가구비품\n소계(원)';
+  r2.getCell(cEqSub).value = '가구비품\n소계';
   graphicCols.forEach((c, i) => {
     r2.getCell(cGra0 + i).value = `${c.code || ''}\n${c.name_ko || c.name_en || ''}`;
   });
-  if(graphicCols.length) r2.getCell(cGraSub).value = '그래픽·부대시설\n소계(원)';
+  if(graphicCols.length) r2.getCell(cGraSub).value = '그래픽·부대시설\n소계';
   r2.height = graphicCols.length ? 46 : 26;
 
   for(let c = 1; c <= cTotal; c++){
@@ -229,31 +257,36 @@ function drawLedgerSheet(wb, data, meta){
   if(graphicCols.length) ws.mergeCells(1, cGra0, 1, cGraSub);
   ws.mergeCells(1, cTotal, 2, cTotal);
 
-  /* 3행 — 단가 보조행(숨김).
+  /* 3·4행 — 단가 보조행(숨김). 통화마다 한 줄씩 둔다.
      카탈로그 시트를 참조로 걸어 두면, 단가가 개정돼 그 시트만 고쳐도 대장 전체
      금액이 따라온다. 값으로 박아 두면 두 시트가 갈라진다. */
-  const r3 = ws.getRow(3);
-  r3.getCell(INFO).value = '단가(원)';
-  r3.getCell(INFO).font  = { ...FONT, italic: true };
-  cols.forEach((c, i) => {
-    const cell = r3.getCell(colAt(i));
-    cell.value  = { formula: `${CAT_SHEET}!$${PRICE_COL}$${i + 2}` };
-    cell.numFmt = '#,##0';
-    cell.font   = FONT;
+  const PRICE_ROW = { KRW: 3, USD: 4 };
+  const NUM_FMT   = { KRW: '#,##0"원"', USD: '"$"#,##0' };
+  CURRENCIES.forEach(cur => {
+    const rp = ws.getRow(PRICE_ROW[cur]);
+    rp.getCell(INFO).value = `단가(${cur})`;
+    rp.getCell(INFO).font  = { ...FONT, italic: true };
+    cols.forEach((c, i) => {
+      const cell = rp.getCell(colAt(i));
+      cell.value  = { formula: `${CAT_SHEET}!$${PRICE_COL[cur]}$${i + 2}` };
+      cell.numFmt = NUM_FMT[cur];
+      cell.font   = FONT;
+    });
+    rp.hidden = true;
   });
-  r3.hidden = true;
 
-  /* 4행부터 — 기업별 신청 수량. 신청이 없는 기업도 한 줄 둔다(누가 아직
-     신청하지 않았는지가 대장에서 보여야 한다). */
-  const first = 4;
-  exhs.forEach((x, idx) => {
+  /* 5행부터 — 한 줄 = 한 기업 × 한 통화. 신청이 없는 기업도 한 줄 둔다(누가
+     아직 신청하지 않았는지가 대장에서 보여야 한다). */
+  const first = 5;
+  rows.forEach((row, idx) => {
+    const { x, cur, qty, split } = row;
     const rn = first + idx;
     const n  = exhNames(x);
     /* 담당자는 exhibitor_contacts 줄을 그대로 읽으면 안 된다 — 마스터DB로 이관된
        사람은 그 줄에 contact_id만 남고 이름·이메일 칸이 비어 있다. 화면이 쓰는
        리졸버(exhContact)를 그대로 써서 마스터DB에서 실시간으로 읽는다. */
     const pc = exhContact(x);
-    const qm = qtyByExh.get(x.id) || new Map();
+    const pr = PRICE_ROW[cur];
     const r  = ws.getRow(rn);
 
     r.getCell(1).value = idx + 1;
@@ -262,16 +295,18 @@ function drawLedgerSheet(wb, data, meta){
     r.getCell(4).value = n.ko || '';
     r.getCell(5).value = n.en || '';
     r.getCell(6).value = pc.name || pc.email || '';
+    r.getCell(7).value = cur;
     cols.forEach((c, i) => {
-      const q = qm.get(c.id) || 0;
+      const q = qty.get(c.id) || 0;
       if(q) r.getCell(colAt(i)).value = q;
     });
 
+    /* 소계는 이 줄의 통화에 맞는 단가 행과 곱한다 — 원화 줄은 3행, 달러 줄은 4행. */
     r.getCell(cEqSub).value = equipCols.length
-      ? { formula: `SUMPRODUCT(${L(cEquip0)}${rn}:${L(cEquip1)}${rn},${L(cEquip0)}$3:${L(cEquip1)}$3)` }
+      ? { formula: `SUMPRODUCT(${L(cEquip0)}${rn}:${L(cEquip1)}${rn},${L(cEquip0)}$${pr}:${L(cEquip1)}$${pr})` }
       : 0;
     if(graphicCols.length) r.getCell(cGraSub).value =
-      { formula: `SUMPRODUCT(${L(cGra0)}${rn}:${L(cGra1)}${rn},${L(cGra0)}$3:${L(cGra1)}$3)` };
+      { formula: `SUMPRODUCT(${L(cGra0)}${rn}:${L(cGra1)}${rn},${L(cGra0)}$${pr}:${L(cGra1)}$${pr})` };
     r.getCell(cTotal).value = graphicCols.length
       ? { formula: `${L(cEqSub)}${rn}+${L(cGraSub)}${rn}` }
       : { formula: `${L(cEqSub)}${rn}` };
@@ -283,42 +318,64 @@ function drawLedgerSheet(wb, data, meta){
       cell.border    = { bottom: BORDER, right: BORDER };
       cell.alignment = { vertical: 'middle', horizontal: nameCol ? 'left' : 'center', wrapText: nameCol };
     }
+    /* 두 통화로 나뉜 기업은 통화 칸을 굵게 — 같은 회사가 두 줄인 이유가
+       그 칸에 있다는 걸 바로 알아채게 한다. */
+    if(split) r.getCell(7).font = { ...FONT, bold: true, color: { argb: 'FFC0504D' } };
     [cEqSub, graphicCols.length ? cGraSub : null, cTotal].filter(Boolean).forEach(c => {
       const cell = r.getCell(c);
       cell.fill      = fill(C_SUBTOT);
-      cell.numFmt    = c === cTotal ? '#,##0"원"' : '#,##0';
+      cell.numFmt    = NUM_FMT[cur];
       cell.alignment = { vertical: 'middle', horizontal: 'right' };
     });
   });
 
-  /* 합계행 — 발주서에 그대로 옮겨 적는 숫자다. 화면(비품 현황)의 품목별 합계와
-     같은 값이 나와야 한다. */
-  const last   = first + exhs.length - 1;
-  const totRow = last + 1;
-  const tot    = ws.getRow(totRow);
-  tot.getCell(1).value = '합계';
-  for(let c = cEquip0; c <= cTotal; c++){
-    tot.getCell(c).value = { formula: `SUM(${L(c)}${first}:${L(c)}${last})` };
-  }
-  for(let c = 1; c <= cTotal; c++){
-    const cell = tot.getCell(c);
-    cell.font      = { ...FONT, bold: true };
-    cell.fill      = fill(C_TOTROW);
-    cell.border    = { top: { style: 'medium', color: { argb: C_HEAD } }, bottom: BORDER };
-    cell.alignment = { vertical: 'middle', horizontal: 'center' };
-  }
-  ws.mergeCells(totRow, 1, totRow, INFO);
-  [cEqSub, graphicCols.length ? cGraSub : null, cTotal].filter(Boolean).forEach(c => {
-    tot.getCell(c).numFmt    = c === cTotal ? '#,##0"원"' : '#,##0';
-    tot.getCell(c).alignment = { vertical: 'middle', horizontal: 'right' };
+  /* 합계 ─ 수량은 통화와 무관하니 전부 더하고(발주서에 그대로 옮겨 적는 숫자다),
+     금액은 원화와 달러를 더할 수 없으니 통화별로 나눠 센다. */
+  const last = first + rows.length - 1;
+  const CUR = L(7);
+  const totRows = [
+    { label: '합계 (수량)', qty: true,  cur: null },
+    ...CURRENCIES.map(c => ({ label: `합계 (${c})`, qty: false, cur: c })),
+  ];
+  totRows.forEach((t, i) => {
+    const rn  = last + 1 + i;
+    const tot = ws.getRow(rn);
+    tot.getCell(1).value = t.label;
+    if(t.qty){
+      for(let c = cEquip0; c <= cTotal; c++){
+        if(c === cEqSub || c === cGraSub || c === cTotal) continue;
+        tot.getCell(c).value = { formula: `SUM(${L(c)}${first}:${L(c)}${last})` };
+      }
+    } else {
+      [cEqSub, graphicCols.length ? cGraSub : null, cTotal].filter(Boolean).forEach(c => {
+        const cell = tot.getCell(c);
+        cell.value = { formula:
+          `SUMIF(${CUR}${first}:${CUR}${last},"${t.cur}",${L(c)}${first}:${L(c)}${last})` };
+        cell.numFmt    = NUM_FMT[t.cur];
+        cell.alignment = { vertical: 'middle', horizontal: 'right' };
+      });
+    }
+    for(let c = 1; c <= cTotal; c++){
+      const cell = tot.getCell(c);
+      cell.font   = { ...FONT, bold: true };
+      cell.fill   = fill(C_TOTROW);
+      cell.border = i === 0
+        ? { top: { style: 'medium', color: { argb: C_HEAD } }, bottom: BORDER }
+        : { bottom: BORDER };
+      if(!cell.alignment) cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    }
+    ws.mergeCells(rn, 1, rn, INFO);
   });
+  const totRow = last + totRows.length;
 
   /* 아래 주석 — 이 숫자가 어디서 왔고 무엇을 빼고 세었는지. 표만 넘겨받은
      사람이 되물어야 알 수 있는 것들을 표 안에 남긴다. */
   const notes = [
     `※ ${meta.eventLabel} · CRM 「전시 → 비품 현황」의 신청 내역을 ${meta.stamp}에 그대로 집계한 표입니다. 품목 코드·단가는 「${CAT_SHEET}」 시트를 참조합니다.`,
     '※ 공동 부스에서 비용만 나눠 낸 줄(실물은 상대 기업이 주문)은 수량에서 뺐습니다 — 두 번 세면 없는 물건을 발주하게 됩니다.',
-    `※ 소계·총액은 「${CAT_SHEET}」의 원화 단가 × 수량입니다. 3행은 그 단가를 수량과 같은 가로 방향으로 깔아 둔 계산용 보조행(숨김)이라 지우면 소계·총액이 계산되지 않습니다. USD로 청구된 기업의 실제 청구액은 해당 인보이스를 따릅니다.`,
+    `※ 소계·총액은 「${CAT_SHEET}」의 단가 × 수량이며, G열 「통화」가 그 줄의 통화입니다(KRW는 원, USD는 달러 단가). 3·4행은 그 단가를 수량과 같은 가로 방향으로 통화별로 깔아 둔 계산용 보조행(숨김)이라 지우면 소계·총액이 계산되지 않습니다.`,
+    '※ 한 줄에는 한 통화만 담습니다. 원화와 달러를 함께 신청한 기업은 통화별로 줄을 나눴습니다(업체명이 두 줄인 경우) — 한 줄에 합치면 원화와 달러를 더한 숫자가 됩니다.',
+    '※ 맨 아래 합계는 수량 한 줄과 통화별 금액 두 줄입니다. 수량은 통화와 무관하므로 전부 더하고, 금액은 통화가 다르면 더할 수 없어 나눠 셉니다.',
   ];
   if(offCatalog.length) notes.push(
     `※ 카탈로그에 없는 신청 ${offCatalog.length}건은 실을 열이 없어 「카탈로그 외 신청내역」 시트에 따로 담았습니다 — 발주 전 확인이 필요합니다.`);
@@ -332,7 +389,7 @@ function drawLedgerSheet(wb, data, meta){
 
   /* 업체 정보와 머리글을 고정한다 — 80개 열을 오른쪽으로 밀고 나면 어느 회사
      줄인지 알 수 없어진다. */
-  ws.views = [{ state: 'frozen', xSplit: INFO, ySplit: 3 }];
+  ws.views = [{ state: 'frozen', xSplit: INFO, ySplit: 4 }];
   return ws;
 }
 
