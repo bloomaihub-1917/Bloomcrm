@@ -262,6 +262,7 @@ function drawLedgerSheet(wb, data, meta){
      금액이 따라온다. 값으로 박아 두면 두 시트가 갈라진다. */
   const PRICE_ROW = { KRW: 3, USD: 4 };
   const NUM_FMT   = { KRW: '#,##0"원"', USD: '"$"#,##0' };
+  const CUR_COL   = L(7);   // 통화 열 — 소계 수식과 합계가 이 열을 읽는다
   CURRENCIES.forEach(cur => {
     const rp = ws.getRow(PRICE_ROW[cur]);
     rp.getCell(INFO).value = `단가(${cur})`;
@@ -286,7 +287,6 @@ function drawLedgerSheet(wb, data, meta){
        사람은 그 줄에 contact_id만 남고 이름·이메일 칸이 비어 있다. 화면이 쓰는
        리졸버(exhContact)를 그대로 써서 마스터DB에서 실시간으로 읽는다. */
     const pc = exhContact(x);
-    const pr = PRICE_ROW[cur];
     const r  = ws.getRow(rn);
 
     r.getCell(1).value = idx + 1;
@@ -301,12 +301,17 @@ function drawLedgerSheet(wb, data, meta){
       if(q) r.getCell(colAt(i)).value = q;
     });
 
-    /* 소계는 이 줄의 통화에 맞는 단가 행과 곱한다 — 원화 줄은 3행, 달러 줄은 4행. */
-    r.getCell(cEqSub).value = equipCols.length
-      ? { formula: `SUMPRODUCT(${L(cEquip0)}${rn}:${L(cEquip1)}${rn},${L(cEquip0)}$${pr}:${L(cEquip1)}$${pr})` }
-      : 0;
-    if(graphicCols.length) r.getCell(cGraSub).value =
-      { formula: `SUMPRODUCT(${L(cGra0)}${rn}:${L(cGra1)}${rn},${L(cGra0)}$${pr}:${L(cGra1)}$${pr})` };
+    /* 소계는 G열 「통화」를 보고 그 통화의 단가 행과 곱한다 — 원화면 3행,
+       달러면 4행. 내보낼 때의 통화를 수식에 박지 않고 G열을 읽게 해 두면,
+       표를 받은 사람이 통화를 고쳐도 금액이 따라온다(수량을 고쳤을 때 소계가
+       따라오는 것과 같은 이유다). */
+    const sub = (c0, c1) => ({ formula:
+      `IF($${CUR_COL}${rn}="USD"`
+      + `,SUMPRODUCT(${L(c0)}${rn}:${L(c1)}${rn},${L(c0)}$${PRICE_ROW.USD}:${L(c1)}$${PRICE_ROW.USD})`
+      + `,SUMPRODUCT(${L(c0)}${rn}:${L(c1)}${rn},${L(c0)}$${PRICE_ROW.KRW}:${L(c1)}$${PRICE_ROW.KRW}))` });
+
+    r.getCell(cEqSub).value = equipCols.length ? sub(cEquip0, cEquip1) : 0;
+    if(graphicCols.length) r.getCell(cGraSub).value = sub(cGra0, cGra1);
     r.getCell(cTotal).value = graphicCols.length
       ? { formula: `${L(cEqSub)}${rn}+${L(cGraSub)}${rn}` }
       : { formula: `${L(cEqSub)}${rn}` };
@@ -324,15 +329,32 @@ function drawLedgerSheet(wb, data, meta){
     [cEqSub, graphicCols.length ? cGraSub : null, cTotal].filter(Boolean).forEach(c => {
       const cell = r.getCell(c);
       cell.fill      = fill(C_SUBTOT);
-      cell.numFmt    = NUM_FMT[cur];
+      /* 기본 표시형식은 원화로 두고, 달러는 아래 조건부 서식이 G열을 보고
+         바꾼다 — 통화를 고치면 숫자와 함께 통화 기호도 따라온다. */
+      cell.numFmt    = NUM_FMT.KRW;
       cell.alignment = { vertical: 'middle', horizontal: 'right' };
     });
   });
 
+  const last = first + rows.length - 1;
+
+  /* 금액 칸의 통화 기호도 G열을 따라가게 한다. 표시형식은 셀에 박히는 값이라
+     수식처럼 다른 칸을 볼 수 없어서, 조건부 서식으로 "G가 USD면 달러 표기"를
+     걸어 둔다. 기본형식은 원화이므로 G를 KRW로 되돌리면 원 표기로 돌아온다. */
+  /* priority는 시트 안에서 겹치지 않게 준다 — 겹치면 엑셀이 파일을 복구
+     대상으로 본다. */
+  if(rows.length) [cEqSub, graphicCols.length ? cGraSub : null, cTotal]
+    .filter(Boolean).forEach((c, i) => {
+      ws.addConditionalFormatting({
+        ref: `${L(c)}${first}:${L(c)}${last}`,
+        rules: [{ type: 'expression', priority: i + 1,
+          formulae: [`$${CUR_COL}${first}="USD"`],
+          style: { numFmt: NUM_FMT.USD } }],
+      });
+    });
+
   /* 합계 ─ 수량은 통화와 무관하니 전부 더하고(발주서에 그대로 옮겨 적는 숫자다),
      금액은 원화와 달러를 더할 수 없으니 통화별로 나눠 센다. */
-  const last = first + rows.length - 1;
-  const CUR = L(7);
   const totRows = [
     { label: '합계 (수량)', qty: true,  cur: null },
     ...CURRENCIES.map(c => ({ label: `합계 (${c})`, qty: false, cur: c })),
@@ -350,7 +372,7 @@ function drawLedgerSheet(wb, data, meta){
       [cEqSub, graphicCols.length ? cGraSub : null, cTotal].filter(Boolean).forEach(c => {
         const cell = tot.getCell(c);
         cell.value = { formula:
-          `SUMIF(${CUR}${first}:${CUR}${last},"${t.cur}",${L(c)}${first}:${L(c)}${last})` };
+          `SUMIF(${CUR_COL}${first}:${CUR_COL}${last},"${t.cur}",${L(c)}${first}:${L(c)}${last})` };
         cell.numFmt    = NUM_FMT[t.cur];
         cell.alignment = { vertical: 'middle', horizontal: 'right' };
       });
