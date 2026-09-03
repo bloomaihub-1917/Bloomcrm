@@ -1835,7 +1835,7 @@ function renderDashboard(all){
 
   const avg = Math.round(all.reduce((s, x) => s + progressOf(x), 0) / n);
   const todo = openInq.length + overdue.length + attention.length + myTurn.length + dueMiss.length;
-  const curs = Object.keys(cash).filter(c => cash[c].n);
+  const curs = Object.keys(cash).filter(c => cash[c].n);   // 상단 KPI(미수금)가 쓰는 값
   const dueTotal = curs.map(c => cash[c].billed - cash[c].paid).reduce((a, b) => a + b, 0);
 
   const card = (label, value, sub, color) => `<div class="cosi" style="flex:1 1 128px">
@@ -1843,16 +1843,55 @@ function renderDashboard(all){
     <div class="cosl">${label}</div>
     ${sub ? `<div style="font-size:9.5px;color:var(--i5);margin-top:2px">${sub}</div>` : ''}</div>`;
 
+  /* ── 돈이 어디까지 왔나 — 전체 → 청구 → 입금 ──
+
+     전체는 신청된 금액 항목을 다 더한 것이고, 청구는 세금계산서를 발행한 금액,
+     입금은 실제로 들어온 돈(환불 차감)이다. 세 숫자를 같은 자에 얹어 놓으면
+     어디서 막혀 있는지가 길이로 보인다.
+
+     세금계산서를 아직 몇 곳만 발행해서 청구가 입금보다 작을 수 있다. 그건 오류가
+     아니라 사실이라 숨기지 않는다 — 대신 몇 곳 발행했는지를 옆에 적어, 작은
+     숫자를 보고 계산이 틀렸다고 오해하지 않게 한다. */
+  const money3 = (() => {
+    const out = {};
+    const put = (cur, key, v) => {
+      if(!out[cur]) out[cur] = { 전체: 0, 청구: 0, 입금: 0, n: 0, taxN: 0 };
+      out[cur][key] += v;
+    };
+    all.forEach(x => {
+      billableItems(x.id).forEach(i => put(i.currency || 'KRW', '전체', num(i.amount)));
+      const s = settleState(x);
+      const cur = s.cur || 'KRW';
+      // 세금계산서 금액에는 통화 칸이 없다 — 그 기업의 청구 통화를 따른다
+      const tax = num(x.tax_amount);
+      if(tax){ put(cur, '청구', tax); out[cur].taxN++; }
+      if(s.paid) put(cur, '입금', s.paid);
+      if(s.billed || tax) out[cur].n++;
+    });
+    return out;
+  })();
+
   const cashRow = (c) => {
-    const m = cash[c], rest = m.billed - m.paid;
-    return `<div style="margin-bottom:10px">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:11.5px;margin-bottom:3px">
-        <span style="color:var(--i4)">${c} 청구 ${m.n}곳</span>
-        <span><b>${fmtMoney(m.paid, c)}</b><span style="color:var(--i5)"> / ${fmtMoney(m.billed, c)}</span></span>
+    const m = money3[c];
+    if(!m || !m.전체 && !m.청구 && !m.입금) return '';
+    const base = Math.max(m.전체, m.청구, m.입금) || 1;   // 가장 긴 것을 100%로 삼는다
+    const bar = (label, v, color, sub) => `
+      <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:11px;margin-bottom:2px">
+        <span style="color:var(--i4)">${label}${sub ? `<span style="color:var(--i5)"> ${sub}</span>` : ''}</span>
+        <span style="font-weight:700;color:${color}">${escapeHtml(fmtMoney(v, c))}</span>
       </div>
-      ${progressBar(m.billed ? m.paid / m.billed * 100 : 0, rest <= 0 ? 'var(--g)' : 'var(--a)')}
+      <div class="br" style="margin:0 0 7px">
+        <div class="brt"><div class="brf" style="width:${Math.round(v / base * 100)}%;background:${color}"></div></div>
+      </div>`;
+
+    const rest = m.전체 - m.입금;
+    return `<div style="margin-bottom:12px">
+      <div style="font-size:10.5px;color:var(--i4);margin-bottom:4px">${escapeHtml(c)} · ${m.n}곳</div>
+      ${bar('전체 금액', m.전체, 'var(--i5)')}
+      ${bar('청구한 금액', m.청구, 'var(--a)', `세금계산서 ${m.taxN}곳`)}
+      ${bar('입금 완료', m.입금, 'var(--g)')}
       <div style="font-size:10.5px;color:${rest > 0 ? 'var(--am)' : 'var(--g)'}">
-        ${rest > 0 ? ('미수금 ' + fmtMoney(rest, c)) : '전액 입금'}</div>
+        ${rest > 0 ? '남은 금액 ' + escapeHtml(fmtMoney(rest, c)) : '전액 입금'}</div>
     </div>`;
   };
 
@@ -1919,16 +1958,13 @@ function renderDashboard(all){
     const m = byCat[cur];
     if(!m.합계) return '';
     return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i8)">
-      <div style="font-size:10.5px;color:var(--i4);margin-bottom:4px">${escapeHtml(cur)} 신청 금액</div>
+      <div style="font-size:10.5px;color:var(--i4);margin-bottom:4px">${escapeHtml(cur)} 전체 금액의 내역</div>
       ${CAT_ROWS.filter(([k]) => m[k]).map(([k, l]) => `
         <div style="display:flex;justify-content:space-between;font-size:11.5px;padding:2px 0">
           <span style="color:var(--i3)">${l}</span>
           <span>${escapeHtml(fmtMoney(m[k], cur))}<span style="color:var(--i5);font-size:10px;margin-left:4px">${
             Math.round(m[k] / m.합계 * 100)}%</span></span>
         </div>`).join('')}
-      <div style="display:flex;justify-content:space-between;font-size:11.5px;font-weight:800;padding:3px 0 0;border-top:1px solid var(--i8);margin-top:3px">
-        <span>합계</span><span>${escapeHtml(fmtMoney(m.합계, cur))}</span>
-      </div>
     </div>`;
   }).join('');
 
@@ -1978,7 +2014,9 @@ function renderDashboard(all){
 
   const cardCash = `<div class="uc">
       <div class="uc-ttl">정산 현황</div>
-      ${curs.length ? curs.map(cashRow).join('') : '<div style="font-size:11.5px;color:var(--i5)">아직 청구 내역이 없어요</div>'}
+      ${(() => { const ks = Object.keys(money3).filter(c => money3[c].전체 || money3[c].입금);
+        return ks.length ? ks.sort().map(cashRow).join('')
+          : '<div style="font-size:11.5px;color:var(--i5)">아직 금액 내역이 없어요</div>'; })()}
       ${catBlock}
       ${typeBlock}
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">
