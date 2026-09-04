@@ -887,6 +887,20 @@ const sumText = (by) => {
   return ks.length ? ks.map(k => fmtMoney(by[k], k)).join(' + ') : fmtMoney(0, 'KRW');
 };
 
+/* 결제 수단 — 설정에서 고친다(code_lists.pay_method).
+   계좌이체와 엑스렌탈 카드 결제가 한 덩어리로 보이면 얼마가 어디로 들어왔는지
+   알 수 없다. 줄마다 수단을 적고 합계도 갈라 보여준다. */
+const payMethods = () => codeList('pay_method', null,
+  [['계좌이체', 'p-green'], ['카드(엑스렌탈)', 'p-blue'], ['카드', 'p-blue'], ['외화송금', 'p-green']]
+    .map(([c, cls]) => ({ code: c, label: c, cls })));
+
+const payPill = (m) => {
+  const t = String(m || '').trim();
+  if(!t) return { label: '입금', cls: 'p-gray' };
+  const hit = payMethods().find(o => o.code === t);
+  return { label: hit ? hit.label : t, cls: hit ? (hit.cls || 'p-green') : 'p-gray' };
+};
+
 function dBilling(x){
   const items = itemsFor(x.id);
   const invs = invoicesFor(x.id);
@@ -908,6 +922,27 @@ function dBilling(x){
     </div>
     <div style="margin:8px 0 4px">${progressBar(billed ? paid / billed * 100 : 0,
       paid >= billed && billed > 0 ? 'var(--g)' : 'var(--am)')}</div>
+    ${(() => {
+      /* 입금이 어떤 수단으로 얼마씩 들어왔나. 계좌이체와 엑스렌탈 카드 결제가
+         한 숫자로 합쳐져 있으면 어느 쪽이 얼마인지 알 수 없다. 수단이 하나뿐이면
+         굳이 나누지 않는다 — 대부분은 계좌이체 한 줄이다. */
+      const by = {};
+      ins.forEach(p => {
+        const k = String(p.method || '').trim() || '(수단 미기재)';
+        const c = p.currency || 'KRW';
+        const v = Number(String(p.amount ?? '').replace(/[^0-9.-]/g, '')) || 0;
+        (by[k] = by[k] || {})[c] = (by[k][c] || 0) + v;
+      });
+      const ks = Object.keys(by);
+      if(ks.length < 2) return '';
+      return `<div style="margin:6px 0 2px;padding:6px 8px;background:var(--i9);border-radius:6px">
+        ${ks.map(k => { const b = payPill(k === '(수단 미기재)' ? '' : k);
+          return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;padding:1px 0">
+            <span class="pill ${b.cls}" style="font-size:9px">${escapeHtml(k === '(수단 미기재)' ? '수단 미기재' : b.label)}</span>
+            <span style="color:var(--i2)">${Object.keys(by[k]).map(c => escapeHtml(fmtMoney(by[k][c], c))).join(' · ')}</span>
+          </div>`; }).join('')}
+      </div>`;
+    })()}
     ${mixedCurrency(x.id) ? `<div style="font-size:11px;color:var(--i3);background:var(--i9);padding:6px 8px;border-radius:6px;margin:6px 0">
       이 기업은 <b>${mixedCurrency(x.id).join(' / ')}</b>가 함께 있어요.
       인보이스는 원화로 받고 엑스렌탈은 해외 카드로 결제하는 경우가 있어 <b>정상</b>입니다.
@@ -1054,9 +1089,11 @@ function dBilling(x){
     <div style="display:flex;flex-direction:column;gap:1px;margin-bottom:8px">
       ${ins.length ? ins.map((p, i) => `
         <div class="bl-row bl-pay" style="padding:6px 8px;background:var(--i9);border-radius:6px">
-          <span class="pill p-green" style="text-align:center">${ins.length > 1 ? `${i + 1}차` : '입금'}</span>
+          ${(() => { const b = payPill(p.method);
+            return `<span class="pill ${b.cls}" style="text-align:center" title="${escAttr(p.method || '수단이 적혀 있지 않아요')}">${escapeHtml(b.label)}</span>`; })()}
           <span style="font-size:11.5px;color:var(--i3)">${escapeHtml(p.paid_at || '')}</span>
-          <span style="min-width:0;font-size:11px;color:var(--i4);overflow:hidden;text-overflow:ellipsis">${escapeHtml(p.method || '')}${p.note ? ' · ' + escapeHtml(p.note) : ''}</span>
+          <span style="min-width:0;font-size:11px;color:var(--i4);overflow:hidden;text-overflow:ellipsis">${
+            ins.length > 1 ? `${i + 1}차 · ` : ''}${escapeHtml(p.note || '')}</span>
           <input class="fi bl-amt-in" value="${escAttr(p.amount || '')}" placeholder="금액"
             onchange="setPayField('${escAttr(p.id)}','amount',this.value)">
           ${curSelect(p.currency, `setPayField('${escAttr(p.id)}','currency',this.value)`)}
@@ -1064,9 +1101,11 @@ function dBilling(x){
         </div>`).join('') : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">입금 내역이 없어요</div>'}
     </div>
     <div class="bl-row bl-pay-add">
-      <span class="pill p-green" style="text-align:center">입금</span>
-      <input type="date" class="fi" id="py-d-${escAttr(x.id)}" style="flex:1 1 130px;min-width:0;font-size:11.5px;padding:6px" value="${td()}">
-      <input class="fi" id="py-m-${escAttr(x.id)}" placeholder="비고" style="flex:1 1 80px;min-width:0;font-size:11.5px;padding:6px">
+      <select class="fi" id="py-m-${escAttr(x.id)}" style="flex:0 0 116px;font-size:11px;padding:6px" title="결제 수단">
+        ${payMethods().map(o => `<option value="${escAttr(o.code)}">${escapeHtml(o.label)}</option>`).join('')}
+      </select>
+      <input type="date" class="fi" id="py-d-${escAttr(x.id)}" style="flex:1 1 120px;min-width:0;font-size:11.5px;padding:6px" value="${td()}">
+      <input class="fi" id="py-n-${escAttr(x.id)}" placeholder="비고(승인번호 등)" style="flex:1 1 90px;min-width:0;font-size:11.5px;padding:6px">
       <input class="fi" id="py-a-${escAttr(x.id)}" placeholder="입금액" style="flex:1 1 100px;min-width:0;font-size:11.5px;padding:6px;text-align:right"
         value="${rest > 0 ? rest : ''}">
       <select class="fi bl-cur" id="py-cur-${escAttr(x.id)}">
@@ -1600,10 +1639,10 @@ export async function addExhPayment(exhId){
     id: localId('XP-'), exhibitor_id: exhId, invoice_id: invs[0]?.id || '',
     paid_at: val(`py-d-${exhId}`) || td(), amount, currency: val(`py-cur-${exhId}`) || currencyOf(exhId),
     kind: 'in',
-    method: val(`py-m-${exhId}`), note: '',
+    method: val(`py-m-${exhId}`), note: val(`py-n-${exhId}`),
   }, saveExhPayment);
   if(ok){
-    clear(`py-m-${exhId}`);
+    clear(`py-n-${exhId}`);
     const x = getExhibitorById(exhId);
     trackAction('status', '입금 확인', x?.company_name || '',
       `<b>${escapeHtml(x?.company_name || '')}</b> 입금 ${money(amount)}원 확인`);
