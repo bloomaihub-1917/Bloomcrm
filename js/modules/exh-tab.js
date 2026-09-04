@@ -198,6 +198,16 @@ export function pendingRefunds(exhId){
 
    청구액은 인보이스가 한 장이라도 있으면 인보이스를, 없으면 금액 항목을 쓴다 —
    settleState와 같은 기준이라 두 숫자가 어긋나지 않는다. */
+/* 결제 수단을 두 갈래로 묶는다. 통장에 찍히는 돈(계좌이체·외화송금)과 카드로
+   나간 돈(카드·엑스렌탈 카드)은 대사하는 곳이 달라서, 한 숫자로 합쳐 두면
+   통장과 맞출 때 매번 다시 갈라야 한다. 수단이 안 적힌 옛 건은 따로 둔다 —
+   둘 중 하나로 밀어 넣으면 어느 쪽 합계가 틀렸는지 알 수 없다. */
+export function payGroup(method){
+  const t = String(method || '').trim();
+  if(!t) return 'etc';
+  return t.includes('카드') ? 'card' : 'bank';
+}
+
 export function settleByCurrency(exhId){
   const inv = liveInvoices(exhId);
   const src = inv.length ? inv : billableItems(exhId);
@@ -206,12 +216,16 @@ export function settleByCurrency(exhId){
 
   const out = {};
   const put = (cur, key, v) => {
-    if(!out[cur]) out[cur] = { billed: 0, paid: 0, balance: 0 };
+    if(!out[cur]) out[cur] = { billed: 0, paid: 0, bank: 0, card: 0, etc: 0, balance: 0 };
     out[cur][key] += v;
   };
   src.forEach(r => put(r.currency || 'KRW', 'billed', num(r.amount)));
-  pays.forEach(p => put(p.currency || 'KRW', 'paid',
-    p.kind === 'refund' ? -num(p.amount) : num(p.amount)));
+  pays.forEach(p => {
+    const cur = p.currency || 'KRW';
+    const v = p.kind === 'refund' ? -num(p.amount) : num(p.amount);
+    put(cur, 'paid', v);
+    put(cur, payGroup(p.method), v);   // 계좌이체와 카드 결제를 갈라서도 담아 둔다
+  });
   Object.keys(out).forEach(c => { out[c].balance = out[c].billed - out[c].paid; });
   return out;
 }
@@ -1020,12 +1034,17 @@ function renderMoneyView(list){
   rows.forEach(({ x }) => {
     const st = settleByCurrency(x.id);
     Object.keys(st).forEach(c => {
-      if(!settleTotal[c]) settleTotal[c] = { billed: 0, paid: 0, balance: 0 };
-      settleTotal[c].billed  += st[c].billed;
-      settleTotal[c].paid    += st[c].paid;
-      settleTotal[c].balance += st[c].balance;
+      if(!settleTotal[c]) settleTotal[c] = { billed: 0, paid: 0, bank: 0, card: 0, etc: 0, balance: 0 };
+      ['billed', 'paid', 'bank', 'card', 'etc', 'balance'].forEach(k => { settleTotal[c][k] += st[c][k]; });
     });
   });
+
+  /* 입금을 통장에 찍히는 돈과 카드로 나간 돈으로 갈라 보여준다. 수단이 안 적힌
+     옛 건은 세 번째 칸으로 뺀다 — 둘 중 하나에 얹으면 통장과 맞출 때 어느 쪽
+     합계가 틀렸는지 알 수 없고, 아예 빼면 두 칸의 합이 잔액과 안 맞는다.
+     미확인이 하나도 없으면 그 칸은 만들지 않는다. */
+  const payCols = [['bank', '입금·계좌이체'], ['card', '입금·카드']]
+    .concat(Object.values(settleTotal).some(s => s.etc) ? [['etc', '입금·미확인']] : []);
 
   if(isMobile()) return viewShell(pills, rows.map(({ x, by }) => {
     const st = settleByCurrency(x.id);
@@ -1052,7 +1071,14 @@ function renderMoneyView(list){
       </div>
       <div style="font-size:11px;margin-top:3px;color:var(--i4)">청구 ${line('billed')}</div>
       <div style="display:flex;justify-content:space-between;font-size:11px">
-        <span style="color:var(--i4)">입금 ${line('paid')}</span>
+        <span style="color:var(--i4)">입금 ${line('paid')}${
+          sc.some(c => st[c].bank || st[c].card || st[c].etc)
+            ? `<span style="color:var(--i5);font-size:10px"> (${
+                [['bank', '계좌'], ['card', '카드'], ['etc', '미확인']]
+                  .filter(([k]) => sc.some(c => st[c][k]))
+                  .map(([k, l]) => `${l} ${sc.filter(c => st[c][k]).map(c => amt(c, st[c][k])).join(' · ')}`)
+                  .join(' / ')})</span>`
+            : ''}</span>
         <span style="color:${owing ? 'var(--am)' : 'var(--g)'}">${owing ? '잔액 ' + line('balance') : '완납'}</span>
       </div>
     </div>`;
@@ -1065,7 +1091,7 @@ function renderMoneyView(list){
       ${used.map(([, l]) => `<th style="min-width:104px;text-align:right">${l}</th>`).join('')}
       <th style="min-width:110px;text-align:right">신청 합계</th>
       <th style="min-width:110px;text-align:right">청구액</th>
-      <th style="min-width:104px;text-align:right">입금</th>
+      ${payCols.map(([, l]) => `<th style="min-width:104px;text-align:right">${l}</th>`).join('')}
       <th style="min-width:104px;text-align:right">잔액</th>
     </tr></thead><tbody>
       ${rows.map(({ x, by }) => {
@@ -1082,7 +1108,7 @@ function renderMoneyView(list){
           <td style="text-align:right;font-weight:700">${
             curs.filter(c => by[c]?.합계).map(c => amt(c, by[c].합계)).join('<br>') || '-'}</td>
           <td style="text-align:right">${col('billed')}</td>
-          <td style="text-align:right">${col('paid')}</td>
+          ${payCols.map(([k]) => `<td style="text-align:right">${col(k)}</td>`).join('')}
           <td style="text-align:right;color:${owing ? 'var(--am)' : 'var(--i3)'}">${col('balance')}</td>
         </tr>`;
       }).join('')}
@@ -1099,7 +1125,7 @@ function renderMoneyView(list){
           <td style="text-align:right">${amt(c, m.합계)}</td>
           ${(() => { const s = settleTotal[c] || { billed: 0, paid: 0, balance: 0 };
             return `<td style="text-align:right">${amt(c, s.billed)}</td>
-              <td style="text-align:right;color:var(--g)">${amt(c, s.paid)}</td>
+              ${payCols.map(([k]) => `<td style="text-align:right;color:var(--g)">${amt(c, s[k])}</td>`).join('')}
               <td style="text-align:right;color:${s.balance > 0 ? 'var(--am)' : 'var(--g)'}">${
                 s.balance ? amt(c, s.balance) : '<span style="font-weight:400">완납</span>'}</td>`; })()}
         </tr>
@@ -1107,7 +1133,7 @@ function renderMoneyView(list){
           <td colspan="3" style="font-size:10.5px;color:var(--i4)">${escapeHtml(c)} 비중</td>
           ${used.map(([k]) => `<td style="text-align:right;font-size:10.5px;color:var(--i4)">${
             m.합계 ? Math.round(m[k] / m.합계 * 100) + '%' : '-'}</td>`).join('')}
-          <td colspan="4"></td>
+          <td colspan="${3 + payCols.length}"></td>
         </tr>`;
       }).join('')}
     </tfoot>
