@@ -1004,6 +1004,19 @@ function renderMoneyView(list){
   // 아무도 안 쓴 분류는 열을 만들지 않는다
   const used = MONEY_CATS.filter(([k]) => curs.some(c => total[c] && total[c][k]));
 
+  /* 청구·입금·잔액도 통화별로 다 더해 둔다. 신청 금액만 합계가 있으면
+     "그래서 얼마 받았고 얼마 남았나"를 표 밖에서 다시 세게 된다. */
+  const settleTotal = {};
+  rows.forEach(({ x }) => {
+    const st = settleByCurrency(x.id);
+    Object.keys(st).forEach(c => {
+      if(!settleTotal[c]) settleTotal[c] = { billed: 0, paid: 0, balance: 0 };
+      settleTotal[c].billed  += st[c].billed;
+      settleTotal[c].paid    += st[c].paid;
+      settleTotal[c].balance += st[c].balance;
+    });
+  });
+
   if(isMobile()) return viewShell(pills, rows.map(({ x, by }) => {
     const st = settleByCurrency(x.id);
     const sc = Object.keys(st).sort();
@@ -1074,7 +1087,11 @@ function renderMoneyView(list){
               rows.filter(r => r.by[c]?.합계).length}곳</span></td>
           ${used.map(([k]) => `<td style="text-align:right">${amt(c, m[k])}</td>`).join('')}
           <td style="text-align:right">${amt(c, m.합계)}</td>
-          <td colspan="3"></td>
+          ${(() => { const s = settleTotal[c] || { billed: 0, paid: 0, balance: 0 };
+            return `<td style="text-align:right">${amt(c, s.billed)}</td>
+              <td style="text-align:right;color:var(--g)">${amt(c, s.paid)}</td>
+              <td style="text-align:right;color:${s.balance > 0 ? 'var(--am)' : 'var(--g)'}">${
+                s.balance ? amt(c, s.balance) : '<span style="font-weight:400">완납</span>'}</td>`; })()}
         </tr>
         <tr style="font-weight:400">
           <td colspan="3" style="font-size:10.5px;color:var(--i4)">${escapeHtml(c)} 비중</td>
