@@ -1089,11 +1089,16 @@ function dBilling(x){
     <div style="display:flex;flex-direction:column;gap:1px;margin-bottom:8px">
       ${ins.length ? ins.map((p, i) => `
         <div class="bl-row bl-pay" style="padding:6px 8px;background:var(--i9);border-radius:6px">
-          ${(() => { const b = payPill(p.method);
-            return `<span class="pill ${b.cls}" style="text-align:center" title="${escAttr(p.method || '수단이 적혀 있지 않아요')}">${escapeHtml(b.label)}</span>`; })()}
-          <span style="font-size:11.5px;color:var(--i3)">${escapeHtml(p.paid_at || '')}</span>
-          <span style="min-width:0;font-size:11px;color:var(--i4);overflow:hidden;text-overflow:ellipsis">${
-            ins.length > 1 ? `${i + 1}차 · ` : ''}${escapeHtml(p.note || '')}</span>
+          <select class="fi" style="font-size:10px;padding:3px 2px;min-width:0"
+            title="결제 수단" onchange="setPayField('${escAttr(p.id)}','method',this.value)">
+            <option value=""${p.method ? '' : ' selected'}>미기재</option>
+            ${payMethods().map(o => `<option value="${escAttr(o.code)}"${p.method === o.code ? ' selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}
+          </select>
+          <input type="date" class="fi" style="font-size:11px;padding:3px 4px;min-width:0" value="${escAttr(p.paid_at || '')}"
+            onchange="setPayField('${escAttr(p.id)}','paid_at',this.value)">
+          <input class="fi" style="font-size:11px;padding:3px 6px;min-width:0" value="${escAttr(p.note || '')}"
+            placeholder="${ins.length > 1 ? `${i + 1}차 · ` : ''}비고 (대납·승인번호 등)"
+            onchange="setPayField('${escAttr(p.id)}','note',this.value)">
           <input class="fi bl-amt-in" value="${escAttr(p.amount || '')}" placeholder="금액"
             onchange="setPayField('${escAttr(p.id)}','amount',this.value)">
           ${curSelect(p.currency, `setPayField('${escAttr(p.id)}','currency',this.value)`)}
@@ -1558,7 +1563,8 @@ async function setRowField(list, saver, label, id, field, value){
   if(!res.ok){ r[field] = before; refreshExhViews(); alert('저장에 실패했어요.'); return; }
   const x = getExhibitorById(r.exhibitor_id);
   const fl = { amount: '금액', currency: '통화',
-    received_at: '받은 날', received_note: '받은 것' }[field] || field;
+    received_at: '받은 날', received_note: '받은 것',
+    method: '결제 수단', note: '비고', paid_at: '입금일' }[field] || field;
   trackAction('edit', label + ' 수정', x?.company_name || '',
     `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(r.name || r.title || label)} ${escapeHtml(fl)} ${escapeHtml(String(before || '(없음)'))} → ${escapeHtml(String(value || '(없음)'))}`);
 }
