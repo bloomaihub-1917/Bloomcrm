@@ -77,7 +77,7 @@ const TABLES = {
       'graphic_ordered_at', 'graphic_type', 'graphic_spec_ok', 'graphic_spec_note',
       'graphic_draft_at', 'graphic_revised_at', 'graphic_final_at',
       'directory_received', 'directory_received_at', 'directory_note',
-      'book_order', 'book_logo', 'book_address', 'book_phone', 'book_website', 'book_intro',
+      'apply_order', 'book_order', 'book_logo', 'book_address', 'book_phone', 'book_website', 'book_intro',
       'movein_at', 'builder', 'builder_contact', 'builder_tel', 'builder_mobile', 'builder_email',
       'badge_count', 'badge_issued_at', 'onsite_note'],
   },

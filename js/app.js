@@ -20,6 +20,7 @@ import './modules/exh-export.js';
 
 import { initMobileNav, initDrawerSwipe, initSidebarLayout, initDrawerResize } from './router.js';
 import { initOverlayNav } from './overlay-nav.js';
+import { initTableSort } from './table-sort.js';
 import { initAuth, initAfterLogin, closeUserMenu } from './auth.js';
 import { isMobile } from './utils.js';
 import { buildCoDB, buildCoCAT } from './modules/company-tab.js';
@@ -41,6 +42,7 @@ initAuth((loggedIn) => {
 buildCoDB(); buildCoCAT(); buildEvFil(); populateUploadEvDropdown();
 
 // 모바일 하단 네비 초기 상태 + 드로어 스와이프-닫기 (원본 6683~6696행)
+initTableSort();   // 표 머리 클릭 정렬 — 문서에 한 번만 건다
 initMobileNav();
 initDrawerSwipe();
 initSidebarLayout();

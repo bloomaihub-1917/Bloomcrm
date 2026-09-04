@@ -711,6 +711,11 @@ const pillsOf = (cnt, cls = 'p-gray') => Object.entries(cnt)
 
 const emptyView = (msg) => `<div class="empty" style="padding:40px 20px;text-align:center;color:var(--i4);font-size:13px">${escapeHtml(msg)}</div>`;
 
+/* 신청순 칸 — 참가 신청을 받은 순서. 프로그램북 순번과 다른 값이라 따로 둔다.
+   신청 뒤에 합류한 곳(부스를 나눠 쓰는 분당서울대)은 번호가 없다. */
+const applyCell = (x) => `<td style="min-width:44px;text-align:right;font-size:11.5px;color:var(--i4)">${
+  x.apply_order ? escapeHtml(x.apply_order) : '<span style="color:var(--i6)">-</span>'}</td>`;
+
 /* 기업 이름 칸 — 어느 보기에서든 클릭하면 그 기업 드로어로 간다 */
 const coCell = (x, tab) => `<td style="min-width:150px">
   <span onclick="openExhDr('${escAttr(x.id)}','${tab}')" style="cursor:pointer;font-size:12.5px;font-weight:600${
@@ -838,6 +843,7 @@ function renderBoothView(list){
     </div>`).join(''));
 
   return viewShell(pills, `<div class="tw"><table><thead><tr>
+      <th style="min-width:44px;text-align:right">신청순</th>
       <th style="min-width:64px">부스</th>
       <th style="min-width:150px">기업</th>
       <th style="min-width:46px">층</th>
@@ -852,6 +858,7 @@ function renderBoothView(list){
       const done = x.booth_confirmed === 'yes' || !!x.booth_confirmed_at;
       return `<tr onclick="openExhDr('${escAttr(x.id)}','progress')" style="cursor:pointer"
         title="부스 번호·층·수량은 여기서 열리는 상세에서 고칩니다">
+        ${applyCell(x)}
         <td style="font-size:12px;font-weight:700${x.booth_no ? '' : ';color:var(--i6)'}">${escapeHtml(x.booth_no || '—')}
           ${(() => { const b = parseBooth(x.booth_no);
             return b.kind === 'range' ? `<div style="font-size:9.5px;color:var(--i4);font-weight:400;margin-top:1px">${b.count}칸</div>`
@@ -942,6 +949,7 @@ function renderMoneyView(list){
     return `<div style="margin-bottom:18px">
       <div class="sct">${escapeHtml(cur)} · ${mine.length}곳</div>
       <div class="tw"><table><thead><tr>
+        <th style="min-width:44px;text-align:right">신청순</th>
         <th style="min-width:150px">기업</th>
         <th style="min-width:56px">부스번호</th>
         ${used.map(([, l]) => `<th style="min-width:98px;text-align:right">${l}</th>`).join('')}
@@ -957,6 +965,7 @@ function renderMoneyView(list){
           // 다르면 숫자를 나란히 놓는 것 자체가 오해를 만든다.
           const same = (s.cur || 'KRW') === cur;
           return `<tr>
+            ${applyCell(x)}
             ${coCell(x, 'billing')}
             <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
             ${used.map(([k]) => `<td style="text-align:right">${money(m[k])}</td>`).join('')}
@@ -968,13 +977,13 @@ function renderMoneyView(list){
         }).join('')}
       </tbody>
       <tfoot><tr style="border-top:2px solid var(--i5);font-weight:800">
-        <td colspan="2" style="font-size:12px">${escapeHtml(cur)} 합계 ${mine.length}곳</td>
+        <td colspan="3" style="font-size:12px">${escapeHtml(cur)} 합계 ${mine.length}곳</td>
         ${used.map(([k]) => `<td style="text-align:right">${money(sum[k])}</td>`).join('')}
         <td style="text-align:right">${money(sum.합계)}</td>
         <td colspan="3"></td>
       </tr>
       <tr style="font-weight:400">
-        <td colspan="2" style="font-size:10.5px;color:var(--i4)">비중</td>
+        <td colspan="3" style="font-size:10.5px;color:var(--i4)">비중</td>
         ${used.map(([k]) => `<td style="text-align:right;font-size:10.5px;color:var(--i4)">${
           sum.합계 ? Math.round(sum[k] / sum.합계 * 100) + '%' : '-'}</td>`).join('')}
         <td colspan="4"></td>

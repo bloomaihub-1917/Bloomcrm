@@ -500,3 +500,8 @@ ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS received_note TEXT;  -- 받
    종류만 나눈다 — 고르는 화면도, 이름으로 찾는 규칙도, 설정 편집기도 같다.
    빈 값은 비품으로 본다(예전 행이 전부 비품이라 되메우지 않아도 맞다). */
 ALTER TABLE equip_catalog ADD COLUMN IF NOT EXISTS kind TEXT;  -- '' | 'equip' | 'graphic'
+
+/* 신청순 번호 — 참가 신청을 받은 순서다. 프로그램북 순번(book_order)과는 다르다.
+   도록 번호는 지면 사정으로 바뀌고(서울대·분당서울대를 44/45로 나눈 것처럼),
+   신청순은 사실 기록이라 바뀌지 않는다. 그래서 한 칸에 담지 않는다. */
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS apply_order TEXT;
