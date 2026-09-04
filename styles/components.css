@@ -521,10 +521,20 @@ tr.row-sel{background:var(--ad)}
 .bl-total .bl-amt{font-weight:800;color:var(--i0)}
 
 /* 금액은 줄에서 바로 고친다 — 잘못 들어간 값을 지우고 다시 넣으려고
-   삭제·재입력할 필요가 없다 */
+   삭제·재입력할 필요가 없다.
+
+   폭이 좁아 격자가 안 걸릴 때는 flex로 접힌다. 그때 width:100%를 주면 금액과
+   통화가 각각 한 줄을 통째로 차지해, 통화가 금액에서 멀리 떨어진다. 좁을 때는
+   금액이 남는 폭을 먹고 통화는 세 글자만큼만 차지하게 둔다. */
 .bl-amt-in{
   font-size:12px;font-weight:700;text-align:right;
-  padding:4px 6px;min-width:0;width:100%;
+  padding:4px 6px;min-width:0;flex:1 1 90px;
 }
 /* 통화 칸은 좁게 — 세 글자면 충분하다 */
-.bl-cur{font-size:10.5px;padding:4px 2px;min-width:0;width:100%;text-align:center}
+.bl-cur{font-size:10.5px;padding:4px 2px;min-width:0;flex:0 0 56px;text-align:center}
+
+/* 넓어져 격자가 걸리면 칸을 꽉 채운다 — 칸 경계가 위아래로 이어져야
+   어느 칸이 무엇인지 눈으로 따라갈 수 있다 */
+@container exhdr (min-width: 560px) {
+  .bl-amt-in, .bl-cur{width:100%;flex:none}
+}
