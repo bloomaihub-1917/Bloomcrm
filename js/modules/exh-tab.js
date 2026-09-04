@@ -187,6 +187,35 @@ export function pendingRefunds(exhId){
   return paymentsFor(exhId).filter(isPendingRefund);
 }
 
+/* ── 통화별 청구·입금 ──
+
+   settleState는 통화를 하나만 골라 그 통화 건만 더한다. 합계를 하나로 내야 하는
+   자리(정산 상태·미수금 판정)에서는 그게 맞지만, 표에 적을 때는 나머지 통화가
+   통째로 사라진다.
+
+   인보이스는 원화로 받고 엑스렌탈은 해외 카드로 결제하는 경우가 있어 한 기업에
+   원화와 달러가 함께 남는다. 그럴 때 둘 다 보여야 한다.
+
+   청구액은 인보이스가 한 장이라도 있으면 인보이스를, 없으면 금액 항목을 쓴다 —
+   settleState와 같은 기준이라 두 숫자가 어긋나지 않는다. */
+export function settleByCurrency(exhId){
+  const inv = liveInvoices(exhId);
+  const src = inv.length ? inv : billableItems(exhId);
+  const pays = paymentsFor(exhId).filter(hasAmount)
+    .filter(p => p.kind !== 'refund' || isDoneRefund(p));
+
+  const out = {};
+  const put = (cur, key, v) => {
+    if(!out[cur]) out[cur] = { billed: 0, paid: 0, balance: 0 };
+    out[cur][key] += v;
+  };
+  src.forEach(r => put(r.currency || 'KRW', 'billed', num(r.amount)));
+  pays.forEach(p => put(p.currency || 'KRW', 'paid',
+    p.kind === 'refund' ? -num(p.amount) : num(p.amount)));
+  Object.keys(out).forEach(c => { out[c].balance = out[c].billed - out[c].paid; });
+  return out;
+}
+
 /* 이 기업의 입금 기한 — 기업별 지정이 없으면 행사 공통 기한, 그것도 없으면
    인보이스에 적힌 기한을 쓴다. */
 export function payDueDate(x){
@@ -958,8 +987,10 @@ function renderMoneyView(list){
   const used = MONEY_CATS.filter(([k]) => curs.some(c => total[c] && total[c][k]));
 
   if(isMobile()) return viewShell(pills, rows.map(({ x, by }) => {
-    const s = settleState(x);
-    const sCur = s.cur || 'KRW';
+    const st = settleByCurrency(x.id);
+    const sc = Object.keys(st).sort();
+    const line = (key) => sc.filter(c => st[c][key]).map(c => amt(c, st[c][key])).join(' · ') || '-';
+    const owing = sc.some(c => st[c].balance > 0);
     return `<div onclick="openExhDr('${escAttr(x.id)}','billing')"
       style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
@@ -978,9 +1009,10 @@ function renderMoneyView(list){
         <span>신청 합계</span>
         <span>${curs.filter(c => by[c]?.합계).map(c => amt(c, by[c].합계)).join(' · ')}</span>
       </div>
-      <div style="display:flex;justify-content:space-between;font-size:11px;margin-top:3px">
-        <span style="color:var(--i4)">청구 ${amt(sCur, s.billed)} · 입금 ${amt(sCur, s.paid)}</span>
-        <span style="color:${s.balance > 0 ? 'var(--am)' : 'var(--g)'}">${s.balance > 0 ? '잔액 ' + amt(sCur, s.balance) : '완납'}</span>
+      <div style="font-size:11px;margin-top:3px;color:var(--i4)">청구 ${line('billed')}</div>
+      <div style="display:flex;justify-content:space-between;font-size:11px">
+        <span style="color:var(--i4)">입금 ${line('paid')}</span>
+        <span style="color:${owing ? 'var(--am)' : 'var(--g)'}">${owing ? '잔액 ' + line('balance') : '완납'}</span>
       </div>
     </div>`;
   }).join(''));
@@ -996,8 +1028,11 @@ function renderMoneyView(list){
       <th style="min-width:104px;text-align:right">잔액</th>
     </tr></thead><tbody>
       ${rows.map(({ x, by }) => {
-        const s = settleState(x);
-        const sCur = s.cur || 'KRW';
+        // 청구·입금도 통화별로 갈라 적는다 — 한 통화만 더하면 나머지가 사라진다
+        const st = settleByCurrency(x.id);
+        const sc = Object.keys(st).sort();
+        const col = (key) => sc.filter(c => st[c][key]).map(c => amt(c, st[c][key])).join('<br>') || '-';
+        const owing = sc.some(c => st[c].balance > 0);
         return `<tr>
           ${applyCell(x)}
           ${coCell(x, 'billing')}
@@ -1005,9 +1040,9 @@ function renderMoneyView(list){
           ${used.map(([k]) => `<td style="text-align:right">${cell(by, k)}</td>`).join('')}
           <td style="text-align:right;font-weight:700">${
             curs.filter(c => by[c]?.합계).map(c => amt(c, by[c].합계)).join('<br>') || '-'}</td>
-          <td style="text-align:right">${amt(sCur, s.billed)}</td>
-          <td style="text-align:right">${amt(sCur, s.paid)}</td>
-          <td style="text-align:right;color:${s.balance > 0 ? 'var(--am)' : 'var(--i3)'}">${amt(sCur, s.balance)}</td>
+          <td style="text-align:right">${col('billed')}</td>
+          <td style="text-align:right">${col('paid')}</td>
+          <td style="text-align:right;color:${owing ? 'var(--am)' : 'var(--i3)'}">${col('balance')}</td>
         </tr>`;
       }).join('')}
     </tbody>
