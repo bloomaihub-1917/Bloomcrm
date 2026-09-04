@@ -947,16 +947,17 @@ function renderMoneyView(list){
     const money = (v) => v ? escapeHtml(fmtMoney(v, cur)) : '<span style="color:var(--i6)">-</span>';
 
     return `<div style="margin-bottom:18px">
-      <div class="sct">${escapeHtml(cur)} · ${mine.length}곳</div>
+      <div class="sct">${escapeHtml(cur)}로 청구하는 ${mine.length}곳
+        <span style="font-weight:400;color:var(--i5);font-size:10.5px">— 아래 금액은 모두 ${escapeHtml(cur)}</span></div>
       <div class="tw"><table><thead><tr>
         <th style="min-width:44px;text-align:right">신청순</th>
         <th style="min-width:150px">기업</th>
         <th style="min-width:56px">부스번호</th>
-        ${used.map(([, l]) => `<th style="min-width:98px;text-align:right">${l}</th>`).join('')}
-        <th style="min-width:104px;text-align:right">신청 합계</th>
-        <th style="min-width:104px;text-align:right">청구액</th>
-        <th style="min-width:104px;text-align:right">입금</th>
-        <th style="min-width:104px;text-align:right">잔액</th>
+        ${used.map(([, l]) => `<th style="min-width:98px;text-align:right">${l} (${escapeHtml(cur)})</th>`).join('')}
+        <th style="min-width:104px;text-align:right">신청 합계 (${escapeHtml(cur)})</th>
+        <th style="min-width:104px;text-align:right">청구액 (${escapeHtml(cur)})</th>
+        <th style="min-width:104px;text-align:right">입금 (${escapeHtml(cur)})</th>
+        <th style="min-width:104px;text-align:right">잔액 (${escapeHtml(cur)})</th>
       </tr></thead><tbody>
         ${mine.map(({ x, by }) => {
           const m = by[cur];
@@ -964,9 +965,17 @@ function renderMoneyView(list){
           // 청구 통화가 이 표의 통화와 같을 때만 청구·입금을 나란히 둔다.
           // 다르면 숫자를 나란히 놓는 것 자체가 오해를 만든다.
           const same = (s.cur || 'KRW') === cur;
+          // 한 기업이 원화와 달러로 나뉘어 신청한 경우가 있다. 그러면 이 기업이
+          // 두 표에 각각 일부 금액만 들고 나타나서, 한 표만 보면 적게 보인다.
+          const others = Object.keys(by).filter(c => c !== cur && by[c].합계);
           return `<tr>
             ${applyCell(x)}
-            ${coCell(x, 'billing')}
+            <td style="min-width:150px">
+              <span onclick="openExhDr('${escAttr(x.id)}','billing')" style="cursor:pointer;font-size:12.5px;font-weight:600">${escapeHtml(exhNames(x).ko)}</span>
+              ${others.length ? `<span class="pill p-amber" style="margin-left:4px;font-size:9px"
+                title="이 기업은 ${escAttr(others.join(', '))}로 신청한 항목도 있어요 — 그 금액은 ${escAttr(others.join(', '))} 표에 있습니다">${escapeHtml(others.join(', '))}도 있음</span>` : ''}
+              ${exhNames(x).en ? `<div style="font-size:10.5px;color:var(--i4);font-weight:400">${escapeHtml(exhNames(x).en)}</div>` : ''}
+            </td>
             <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
             ${used.map(([k]) => `<td style="text-align:right">${money(m[k])}</td>`).join('')}
             <td style="text-align:right;font-weight:700">${money(m.합계)}</td>
@@ -1002,7 +1011,7 @@ function renderMoneyView(list){
     const used = MONEY_CATS.filter(([k]) => sum[k]);
     const won = (v) => escapeHtml(fmtMoney(v, cur));
 
-    return `<div class="sct">${escapeHtml(cur)} · ${mine.length}곳</div>
+    return `<div class="sct">${escapeHtml(cur)}로 청구하는 ${mine.length}곳</div>
       ${mine.map(({ x, by }) => {
         const m = by[cur];
         const s = settleState(x);
@@ -1016,7 +1025,8 @@ function renderMoneyView(list){
           </div>
           ${used.map(([k, l]) => m[k] ? `
             <div style="display:flex;justify-content:space-between;font-size:11.5px;padding:2px 0">
-              <span style="color:var(--i4)">${l}</span><span>${won(m[k])}</span>
+              <span style="color:var(--i4)">${l} <span style="color:var(--i5);font-size:10px">${escapeHtml(cur)}</span></span>
+              <span>${won(m[k])}</span>
             </div>` : '').join('')}
           ${same ? `<div style="display:flex;justify-content:space-between;font-size:11px;margin-top:5px;padding-top:5px;border-top:1px solid var(--i8)">
             <span style="color:var(--i4)">청구 ${won(s.billed)} · 입금 ${won(s.paid)}</span>
