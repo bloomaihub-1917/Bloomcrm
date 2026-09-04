@@ -33,16 +33,25 @@ function keyOf(cell){
   const t = (cell?.innerText || '').trim();
   if(!t || t === '-' || t === '—' || t === '·') return { empty: true };
 
+  // 한 칸에 두 줄이 들어가는 경우가 있다(원화·달러를 함께 적은 금액). 첫 줄을 대표로 삼는다.
+  const first = t.split('\n')[0].trim();
+
   // 부스 번호 10-11 · 44-46 → 앞 번호로
-  const range = t.match(/^(\d+)\s*-\s*\d+$/);
+  const range = first.match(/^(\d+)\s*-\s*\d+$/);
   if(range) return { n: Number(range[1]) };
 
   // 날짜는 글자 그대로가 곧 순서다 (YYYY-MM-DD)
-  if(/^\d{4}-\d{2}-\d{2}$/.test(t)) return { s: t };
+  if(/^\d{4}-\d{2}-\d{2}$/.test(first)) return { s: first };
+
+  /* 통화가 앞에 붙은 금액 — "KRW 3,000,000", "USD 88".
+     글자로 비교하면 470,000이 3,000,000보다 크게 잡힌다(쉼표에서 숫자가 끊긴다).
+     통화가 다르면 더해도 뜻이 없으므로 통화로 먼저 묶고 값으로 센다. */
+  const cm = first.match(/^([A-Z]{3})\s*([\d,.]+)$/);
+  if(cm) return { cur: cm[1], n: Number(cm[2].replace(/,/g, '')) };
 
   // 숫자가 섞인 값 — 3,000,000원 · $2,388 · 12곳 · 45%
-  const num = t.replace(/[^\d.-]/g, '');
-  if(num && /\d/.test(num) && /^[^A-Za-z가-힣]*[\d,.\s원$₩%곳개건-]+[^A-Za-z가-힣]*$/.test(t)){
+  const num = first.replace(/[^\d.-]/g, '');
+  if(num && /\d/.test(num) && /^[^A-Za-z가-힣]*[\d,.\s원$₩%곳개건-]+[^A-Za-z가-힣]*$/.test(first)){
     const v = Number(num.replace(/(?!^)-/g, ''));
     if(!isNaN(v)) return { n: v };
   }
@@ -65,7 +74,9 @@ function sortTable(table, idx, dir){
       if(x.empty) return 1;            // 빈 칸은 방향과 무관하게 아래로
       if(y.empty) return -1;
       let c;
-      if('n' in x && 'n' in y) c = x.n - y.n;
+      // 통화가 다르면 통화로 먼저 가른다 — 원화와 달러를 한 줄에 세워 비교할 수 없다
+      if(x.cur && y.cur && x.cur !== y.cur) c = x.cur.localeCompare(y.cur);
+      else if('n' in x && 'n' in y) c = x.n - y.n;
       else c = String(x.s ?? x.n).localeCompare(String(y.s ?? y.n), 'ko', { numeric: true });
       return dir * c;
     });
