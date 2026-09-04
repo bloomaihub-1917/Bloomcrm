@@ -2036,19 +2036,33 @@ function renderDashboard(all){
   /* 분류별로 얼마어치 신청됐나 — 발주가 분류 단위로 갈린다 */
   const byCat = billedByCategory(all);
   const CAT_ROWS = [['booth', '부스'], ['equip', '비품'], ['graphic', '그래픽'], ['etc', '기타']];
-  const catBlock = Object.keys(byCat).map(cur => {
-    const m = byCat[cur];
-    if(!m.합계) return '';
+  /* 분류를 세로로, 통화를 가로로 놓는다. 통화별로 표를 따로 그리면 "부스가
+     원화로 얼마, 달러로 얼마"를 두 군데서 찾아 맞춰야 한다. 한 줄에서 읽힌다. */
+  const catBlock = (() => {
+    // 통화 순서를 고정한다 — 원화가 먼저 왔다 나중에 왔다 하면 열이 흔들린다
+    const cs = ['KRW', 'USD', ...Object.keys(byCat)]
+      .filter((c, i, a) => a.indexOf(c) === i && byCat[c] && byCat[c].합계);
+    if(!cs.length) return '';
+    const rows = CAT_ROWS.filter(([k]) => cs.some(c => byCat[c][k]));
+    const cell = (v, c) => v
+      ? escapeHtml(fmtMoney(v, c))
+      : '<span style="color:var(--i6)">-</span>';
+    const line = (label, get, strong) => `
+      <div style="display:grid;grid-template-columns:44px repeat(${cs.length}, 1fr);gap:6px;
+        font-size:11.5px;padding:3px 0${strong ? ';font-weight:800;border-top:1px solid var(--i7);margin-top:2px' : ''}">
+        <span style="color:var(--i3)">${label}</span>
+        ${cs.map(c => `<span style="text-align:right">${get(c)}</span>`).join('')}
+      </div>`;
+
     return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i8)">
-      <div style="font-size:10.5px;color:var(--i4);margin-bottom:4px">${escapeHtml(cur)} 전체 금액의 내역</div>
-      ${CAT_ROWS.filter(([k]) => m[k]).map(([k, l]) => `
-        <div style="display:flex;justify-content:space-between;font-size:11.5px;padding:2px 0">
-          <span style="color:var(--i3)">${l}</span>
-          <span>${escapeHtml(fmtMoney(m[k], cur))}<span style="color:var(--i5);font-size:10px;margin-left:4px">${
-            Math.round(m[k] / m.합계 * 100)}%</span></span>
-        </div>`).join('')}
+      <div style="display:grid;grid-template-columns:44px repeat(${cs.length}, 1fr);gap:6px;
+        font-size:10px;color:var(--i5);padding-bottom:2px">
+        <span>내역</span>${cs.map(c => `<span style="text-align:right">${escapeHtml(c)}</span>`).join('')}
+      </div>
+      ${rows.map(([k, l]) => line(l, (c) => cell(byCat[c][k], c))).join('')}
+      ${line('합계', (c) => cell(byCat[c].합계, c), true)}
     </div>`;
-  }).join('');
+  })();
 
   /* 부스 타입별 부스 금액 — 시공은 타입 단위로 발주한다. "Block System A가
      몇 곳"까지는 부스 현황에서 보이는데 그게 얼마인지는 어디에도 없었다.
