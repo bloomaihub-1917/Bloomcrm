@@ -433,3 +433,12 @@ button{font-family:inherit;cursor:pointer}input,select,textarea{font-family:inhe
   .clrow > .clf > .clf-l { display: none; }
   .clrow > .clf.clf-grow > .fi { width: 100%; }
 }
+
+/* 전시 탭 모바일 검색 — 상단바(.tb)가 모바일에서 숨겨져 검색창이 통째로
+   사라졌다. 헤더 아래에 따로 둔다. 데스크톱에서는 상단바에 있으므로 숨긴다. */
+.exh-msrch { display: none; }
+@media (max-width: 768px) {
+  .exh-msrch { display: block; padding: 10px 14px 0; flex-shrink: 0; }
+  .exh-msrch .srch input { width: 100%; padding: 8px 10px 8px 30px; font-size: 13px; }
+  .exh-msrch .srch svg { left: 11px; width: 14px; height: 14px; }
+}

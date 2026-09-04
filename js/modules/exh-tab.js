@@ -612,8 +612,18 @@ function matchExhName(x, q){
     || (!!sq && fields.some(v => squash(v).includes(sq)));
 }
 
+/* 모바일 검색칸 — 데스크톱 칸과 값을 맞춰 두고 다시 그린다. 둘이 서로 다른
+   값을 들고 있으면 어느 쪽이 지금 걸린 조건인지 알 수 없다. */
+export function searchExhM(v){
+  const d = document.getElementById('exh-q');
+  if(d) d.value = v;
+  renderExh();
+}
+
 function visibleList(){
-  const q = (document.getElementById('exh-q')?.value || '').trim().toLowerCase();
+  // 데스크톱 칸이 숨어 있는 모바일에서는 모바일 칸을 본다
+  const q = ((document.getElementById('exh-q')?.value
+    || document.getElementById('exh-q-m')?.value || '')).trim().toLowerCase();
   let list = exhFilter === 'cancelled' ? cancelledExhibitors(exhEvent) : activeExhibitors(exhEvent);
   if(exhFilter === 'incomplete') list = list.filter(x => progressOf(x) < 100);
   if(exhFilter === 'unpaid')     list = list.filter(x => ['unpaid','partial'].includes(settleState(x).state));
@@ -2600,6 +2610,7 @@ export function setExhDateWithFlag(id, dateField, flag, value, label){
 window.setExhEvent2 = setExhEvent2;
 window.setExhFilter = setExhFilter;
 window.setExhView = setExhView;
+window.searchExhM = searchExhM;
 window.setBoothTypeFil = setBoothTypeFil;
 window.toggleEquipRow = toggleEquipRow;
 window.advanceStage = advanceStage;

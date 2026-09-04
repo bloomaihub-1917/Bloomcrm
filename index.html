@@ -811,6 +811,16 @@
   <div class="mob-title" id="mob-exh-ttl">전시 진행관리</div>
   <button class="mob-action-btn primary" onclick="openExhImport()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
 </div>
+  <!-- 모바일 검색 — .tb(상단바)가 모바일에서 통째로 숨겨져 데스크톱 검색창을
+       쓸 수 없다. 본문(#exh-body) 밖에 둬야 글자를 칠 때마다 다시 그려도
+       포커스를 잃지 않는다. -->
+  <div class="exh-msrch">
+    <div class="srch" style="width:100%">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input type="text" id="exh-q-m" placeholder="기업명·영문명 검색…" style="width:100%"
+        oninput="searchExhM(this.value)">
+    </div>
+  </div>
   <div class="tb">
     <div class="tb-t" id="exh-ttl">전시 진행관리 <span class="tb-s">참가기업 준비 현황</span></div>
     <div class="srch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" placeholder="기업명·영문명 검색…" oninput="renderExh()" id="exh-q"></div>
