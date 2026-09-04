@@ -740,10 +740,28 @@ const pillsOf = (cnt, cls = 'p-gray') => Object.entries(cnt)
 
 const emptyView = (msg) => `<div class="empty" style="padding:40px 20px;text-align:center;color:var(--i4);font-size:13px">${escapeHtml(msg)}</div>`;
 
+/* 받침에 따라 '와/과'를 고른다 — 기업명이 값이라 문장에 그대로 이어 붙는다 */
+function wa(name){
+  const ch = String(name || '').trim().slice(-1);
+  const code = ch.charCodeAt(0);
+  if(code >= 0xAC00 && code <= 0xD7A3) return (code - 0xAC00) % 28 ? '과' : '와';
+  return '와';   // 영문·숫자로 끝나면 읽는 대로 갈리므로 기본값
+}
+
 /* 신청순 칸 — 참가 신청을 받은 순서. 프로그램북 순번과 다른 값이라 따로 둔다.
-   신청 뒤에 합류한 곳(부스를 나눠 쓰는 분당서울대)은 번호가 없다. */
-const applyCell = (x) => `<td style="min-width:44px;text-align:right;font-size:11.5px;color:var(--i4)">${
-  x.apply_order ? escapeHtml(x.apply_order) : '<span style="color:var(--i6)">-</span>'}</td>`;
+
+   한 번호를 두 곳이 함께 쓰는 자리가 있다. 부스를 나눠 쓰는 서울대학교병원과
+   분당서울대학교병원이 한 건으로 신청했기 때문인데, 행은 따로 두고 번호만 같다.
+   실수로 보이지 않게 그 줄에 표시를 남긴다 — 없으면 다음 사람이 고치려 든다. */
+const applyCell = (x) => {
+  if(!x.apply_order) return '<td style="min-width:44px;text-align:right;font-size:11.5px;color:var(--i6)">-</td>';
+  const same = activeExhibitors(x.event_id)
+    .filter(o => o.id !== x.id && String(o.apply_order || '') === String(x.apply_order))
+    .map(o => exhNames(o).ko);
+  return `<td style="min-width:44px;text-align:right;font-size:11.5px;color:var(--i4)"${
+    same.length ? ` title="${escAttr(same.join(', '))}${wa(same[same.length - 1])} 같은 신청 건이에요 — 부스를 나눠 써서 번호를 함께 씁니다"` : ''
+  }>${escapeHtml(x.apply_order)}${same.length ? '<span style="color:var(--a);font-size:9px">*</span>' : ''}</td>`;
+};
 
 /* 기업 이름 칸 — 어느 보기에서든 클릭하면 그 기업 드로어로 간다 */
 const coCell = (x, tab) => `<td style="min-width:150px">
