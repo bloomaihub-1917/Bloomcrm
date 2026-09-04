@@ -2198,9 +2198,20 @@ function renderChecklistCards(list, all){
           <div style="flex:1">${progressBar(p, p === 100 ? 'var(--g)' : 'var(--a)')}</div>
           <span style="font-size:11px;font-weight:700;color:var(--i3);min-width:32px;text-align:right">${p}%</span>
         </div>
-        ${billed ? `<div style="font-size:11.5px;margin-bottom:7px">
-          입금 <b style="color:${paid >= billed ? 'var(--g)' : 'var(--am)'}">${fmtMoney(paid, cur)}</b>
-          <span style="color:var(--i5)"> / ${fmtMoney(billed, cur)}</span></div>` : ''}
+        ${(() => {
+          if(!billed) return '';
+          // 통화가 둘이면 줄을 나눠 둘 다, 하나면 그대로 한 줄
+          const st = settleByCurrency(x.id);
+          const sc = Object.keys(st).filter(c => st[c].billed || st[c].paid).sort();
+          if(sc.length < 2) return `<div style="font-size:11.5px;margin-bottom:7px">
+            입금 <b style="color:${paid >= billed ? 'var(--g)' : 'var(--am)'}">${fmtMoney(paid, cur)}</b>
+            <span style="color:var(--i5)"> / ${fmtMoney(billed, cur)}</span></div>`;
+          return `<div style="font-size:11.5px;margin-bottom:7px">
+            ${sc.map(c => `<div>입금 <b style="color:${st[c].balance <= 0 ? 'var(--g)' : 'var(--am)'}">${fmtMoney(st[c].paid, c)}</b>
+              <span style="color:var(--i5)"> / ${fmtMoney(st[c].billed, c)}</span></div>`).join('')}
+            <div style="font-size:10px;color:var(--i5)">결제 수단이 달라 통화가 갈렸어요</div>
+          </div>`;
+        })()}
         <div style="display:flex;flex-wrap:wrap;gap:4px">${STEPS.map(s => stat(x, s)).join('')}</div>
       </div>`;
     }).join('')}
@@ -2278,13 +2289,21 @@ function renderChecklistTable(list, all){
           if(!s.billed) return '<td style="text-align:right;font-size:11px;color:var(--i6)">-</td>';
           const col = (s.state==='paid'||s.state==='settled') ? 'var(--g)'
             : (s.state==='over' ? 'var(--re)' : 'var(--i2)');
+          /* 통화가 둘이면 둘 다 적는다. 하나면 통화 표시 없이 그대로 둔다 —
+             대부분이 원화라, 다 붙이면 읽을 게 늘기만 한다. */
+          const st = settleByCurrency(x.id);
+          const sc = Object.keys(st).filter(c => st[c].billed || st[c].paid).sort();
+          const two = sc.length > 1;
           return `<td style="text-align:right;font-size:11px">
-            <span style="font-weight:700;color:${col}">${s.cur==='USD'?'$':''}${money(s.paid)}</span>
-            <span style="color:var(--i5)"> / ${money(s.billed)}</span>
+            ${two ? sc.map(c => `<div><span style="font-size:9px;color:var(--i5);margin-right:2px">${escapeHtml(c)}</span>
+                <span style="font-weight:700;color:${st[c].balance <= 0 ? 'var(--g)' : 'var(--i2)'}">${money(st[c].paid)}</span>
+                <span style="color:var(--i5)"> / ${money(st[c].billed)}</span></div>`).join('')
+            : `<span style="font-weight:700;color:${col}">${s.cur==='USD'?'$':''}${money(s.paid)}</span>
+            <span style="color:var(--i5)"> / ${money(s.billed)}</span>`}
             ${s.state==='over' ? `<div style="font-size:9.5px;color:var(--re)">초과 ${fmtMoney(-s.balance, s.cur)}</div>` : ''}
             ${s.state==='settled' ? '<div style="font-size:9.5px;color:var(--g)">완납 처리</div>' : ''}
             ${s.overdue && s.balance>0 ? `<div style="font-size:9.5px;color:var(--am)">기한 ${daysSince(s.due)}일 지남</div>` : ''}
-            ${mixedCurrency(x.id) ? `<div title="인보이스는 원화, 엑스렌탈은 해외 카드로 결제해 통화가 갈릴 수 있어요 — 여기 금액은 ${escAttr(currencyOf(x.id))} 건만 더한 값입니다" style="font-size:9.5px;color:var(--i4)">${escapeHtml(mixedCurrency(x.id).join('+'))} 병기</div>` : ''}
+            ${two ? '<div title="인보이스는 원화로 받고 엑스렌탈은 해외 카드로 결제해 통화가 갈릴 수 있어요 — 정상입니다" style="font-size:9px;color:var(--i5)">결제 수단이 달라요</div>' : ''}
           </td>`;
         })()}
       </tr>`;
