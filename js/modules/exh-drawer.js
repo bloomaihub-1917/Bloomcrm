@@ -908,10 +908,10 @@ function dBilling(x){
     </div>
     <div style="margin:8px 0 4px">${progressBar(billed ? paid / billed * 100 : 0,
       paid >= billed && billed > 0 ? 'var(--g)' : 'var(--am)')}</div>
-    ${mixedCurrency(x.id) ? `<div style="font-size:11px;color:var(--re);background:var(--rb);padding:6px 8px;border-radius:6px;margin:6px 0">
-      ⚠ 인보이스·입금에 <b>${mixedCurrency(x.id).join(' / ')}</b>가 섞여 있어요.
-      위 합계는 <b>${currencyOf(x.id)}</b> 건만 더한 값이라 정확하지 않습니다 —
-      아래 목록에서 통화를 하나로 맞춰주세요.</div>` : ''}
+    ${mixedCurrency(x.id) ? `<div style="font-size:11px;color:var(--i3);background:var(--i9);padding:6px 8px;border-radius:6px;margin:6px 0">
+      이 기업은 <b>${mixedCurrency(x.id).join(' / ')}</b>가 함께 있어요.
+      인보이스는 원화로 받고 엑스렌탈은 해외 카드로 결제하는 경우가 있어 <b>정상</b>입니다.
+      위 합계는 <b>${currencyOf(x.id)}</b> 건만 더한 값이니, 나머지는 아래 목록에서 통화별로 확인하세요.</div>` : ''}
     <div style="font-size:11px;color:${
       st.state === 'over' ? 'var(--re)' : (rest > 0 ? 'var(--am)' : 'var(--i4)')}">
       ${st.state === 'settled' ? `완납 처리됨${x.settled_note ? ` — ${escapeHtml(x.settled_note)}` : ''}`

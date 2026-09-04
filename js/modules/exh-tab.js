@@ -528,7 +528,7 @@ function buildExhFilters(){
     const unpaid = list.filter(x => ['unpaid','partial'].includes(settleState(x).state)).length;
     const cancelled = cancelledExhibitors(exhEvent).length;
     // 초과 입금·통화 혼재·금액 미입력처럼 사람이 봐야 하는 정산 건
-    const attention = list.filter(x => settleState(x).state === 'over' || mixedCurrency(x.id) ||
+    const attention = list.filter(x => settleState(x).state === 'over' ||
       invoicesFor(x.id).some(i => i.status !== 'void' && String(i.amount ?? '').trim() === '')).length;
     const f = (k, label, n) => `<button class="nr${exhFilter === k ? ' on' : ''}" onclick="setExhFilter('${k}')">${label}<span class="nbg">${n}</span></button>`;
     el.innerHTML = f('all', '전체', list.length) + f('incomplete', '진행 중', incomplete)
@@ -589,7 +589,7 @@ function visibleList(){
   if(exhFilter === 'incomplete') list = list.filter(x => progressOf(x) < 100);
   if(exhFilter === 'unpaid')     list = list.filter(x => ['unpaid','partial'].includes(settleState(x).state));
   if(exhFilter === 'billing')    list = list.filter(x => { const s = settleState(x);
-    return s.state === 'over' || mixedCurrency(x.id) ||
+    return s.state === 'over' ||
       invoicesFor(x.id).some(i => i.status !== 'void' && String(i.amount ?? '').trim() === ''); });
   if(exhFilter === 'inquiry')    list = list.filter(x => openInquiriesFor(x.id).length);
   if(q) list = list.filter(x => matchExhName(x, q));
@@ -949,7 +949,10 @@ function renderMoneyView(list){
 
   const pills = `<span class="pill p-gray">기업 ${rows.length}</span>`
     + curs.map(c => `<span class="pill p-blue">${escapeHtml(c)} ${money(total[c]?.합계 || 0)}</span>`).join('')
-    + '<span style="font-size:10.5px;color:var(--i5);margin-left:2px">금액 항목 기준(신청 금액)이라 청구액과 다를 수 있어요 — 오른쪽에 함께 뒀어요</span>';
+    + '<span style="font-size:10.5px;color:var(--i5);margin-left:2px">금액 항목 기준(신청 금액)이라 청구액과 다를 수 있어요 — 오른쪽에 함께 뒀어요</span>'
+    + (curs.length > 1
+      ? '<div style="font-size:10.5px;color:var(--i4);margin-top:4px">한 칸에 두 통화가 함께 적힌 곳은 결제 수단이 갈린 경우예요 — 인보이스는 원화로 받고 엑스렌탈은 해외 카드로 결제하면 이렇게 나옵니다. 더할 수 없으니 그대로 병기합니다.</div>'
+      : '');
 
   // 아무도 안 쓴 분류는 열을 만들지 않는다
   const used = MONEY_CATS.filter(([k]) => curs.some(c => total[c] && total[c][k]));
@@ -1786,9 +1789,12 @@ function renderDashboard(all){
     }
     if(s.overdue && s.balance > 0) overdue.push({ x, s });
     const noAmt = invoicesFor(x.id).some(i => i.status !== 'void' && String(i.amount ?? '').trim() === '');
-    if(s.state === 'over' || mixedCurrency(x.id) || noAmt){
+    /* 통화가 섞인 건 처리 필요에 넣지 않는다. 인보이스는 원화로 받고 엑스렌탈은
+       해외 카드로 결제하는 경우가 있어 정상이다 — 매번 처리하라고 띄우면 정작
+       할 일이 묻힌다. 섞여 있다는 사실은 정산 탭과 체크리스트에 그대로 보인다. */
+    if(s.state === 'over' || noAmt){
       attention.push({ x, why: s.state === 'over' ? ('초과 입금 ' + fmtMoney(-s.balance, s.cur))
-        : mixedCurrency(x.id) ? '통화 혼재' : '인보이스 금액 미입력' });
+        : '인보이스 금액 미입력' });
     }
   });
   overdue.sort((a, b) => daysSince(b.s.due) - daysSince(a.s.due));
@@ -2243,7 +2249,7 @@ function renderChecklistTable(list, all){
             ${s.state==='over' ? `<div style="font-size:9.5px;color:var(--re)">초과 ${fmtMoney(-s.balance, s.cur)}</div>` : ''}
             ${s.state==='settled' ? '<div style="font-size:9.5px;color:var(--g)">완납 처리</div>' : ''}
             ${s.overdue && s.balance>0 ? `<div style="font-size:9.5px;color:var(--am)">기한 ${daysSince(s.due)}일 지남</div>` : ''}
-            ${mixedCurrency(x.id) ? '<div title="통화가 섞여 합계가 정확하지 않아요" style="font-size:9.5px;color:var(--re)">⚠ 통화 혼재</div>' : ''}
+            ${mixedCurrency(x.id) ? `<div title="인보이스는 원화, 엑스렌탈은 해외 카드로 결제해 통화가 갈릴 수 있어요 — 여기 금액은 ${escAttr(currencyOf(x.id))} 건만 더한 값입니다" style="font-size:9.5px;color:var(--i4)">${escapeHtml(mixedCurrency(x.id).join('+'))} 병기</div>` : ''}
           </td>`;
         })()}
       </tr>`;
