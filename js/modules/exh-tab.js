@@ -2073,14 +2073,22 @@ function renderDashboard(all){
   })();
 
   const typeBlock = (() => {
-    const ks = Object.keys(boothByType)
-      .sort((a, b) => (boothByType[b].cur.KRW || 0) - (boothByType[a].cur.KRW || 0));
+    /* 금액 큰 순이 아니라 부스 타입 순으로 늘어놓는다. 순서는 설정값의 부스 타입
+       목록을 따른다 — 화면마다 순서가 다르면 같은 표를 다시 읽게 되고, 순서를
+       바꾸고 싶을 때 코드를 고치지 않아도 된다.
+       목록에 없는 타입(옛 데이터)은 뒤에 이름순으로 붙인다. */
+    const order = boothTypes(exhEvent).map(t => t.code);
+    const rank = (k) => { const i = order.indexOf(k); return i < 0 ? 999 : i; };
+    const ks = Object.keys(boothByType).sort((a, b) =>
+      rank(a) - rank(b) || a.localeCompare(b, 'ko'));
     if(!ks.length) return '';
     return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i8)">
       <div style="font-size:10.5px;color:var(--i4);margin-bottom:4px">부스 타입별 부스 금액</div>
       ${ks.map(k => {
         const m = boothByType[k];
-        const amt = Object.keys(m.cur).filter(c => m.cur[c])
+        // 통화 순서를 고정한다 — 줄마다 원화가 먼저 왔다 나중에 왔다 하면 읽기 어렵다
+        const amt = ['KRW', 'USD', ...Object.keys(m.cur)]
+          .filter((c, i, a) => a.indexOf(c) === i && m.cur[c])
           .map(c => escapeHtml(fmtMoney(m.cur[c], c))).join(' + ') || '-';
         // 타입이 안 정해진 곳은 눌러도 걸 필터가 없다 — 누르는 시늉만 하면 안 된다
         const on = k !== '(타입 미지정)';
