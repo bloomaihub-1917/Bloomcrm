@@ -8,12 +8,12 @@
 
    그래서 그 엑셀을 CRM 데이터에서 그대로 찍어낸다. 형식은 쓰던 것을 따른다:
 
-     [카탈로그_단가표]        품목표 그대로 (코드·규격·단가)
-     [종합비품신청관리대장]   가로=품목코드, 세로=참가기업인 교차표
-                              3행(숨김)에 단가를 가로로 깔고 SUMPRODUCT로 소계
-     [카탈로그 외 신청내역]   교차표에 열이 없는 항목 (있을 때만)
+     [카탈로그_단가표]        품목표 그대로 (코드·규격·단가 KRW/USD)
+     [종합비품신청관리대장]   가로=품목코드, 세로=참가기업×통화인 교차표
+                              3·4행(숨김)에 통화별 단가를 깔고 SUMPRODUCT로 소계
+     [카탈로그 외 신청내역]   교차표에 열이 없는 항목의 품목별 내역 (있을 때만)
 
-   ── 왜 단가를 3행에 숨겨 두나 ──
+   ── 왜 단가를 숨긴 행에 깔아 두나 ──
    소계를 값으로 박아 넣으면 엑셀에서 수량을 고쳤을 때 금액이 따라오지 않는다.
    단가를 수량과 같은 방향(가로)으로 깔아 두면 SUMPRODUCT가 바로 먹고, 표를
    받은 사람이 수량 한 칸을 고쳐도 소계·총액이 스스로 맞는다.
@@ -102,31 +102,47 @@ export function buildLedger(evKey){
   const rows = [];         // 대장의 한 줄 = 한 기업 × 한 통화
 
   exhs.forEach(x => {
-    const byCur = new Map();   // 통화 → Map(catalogId → 수량)
+    /* 통화 → { qty: Map(catalogId→수량), direct: 수량×단가로 낼 수 없는 금액 } */
+    const byCur = new Map();
+    const bucket = (c) => {
+      if(!byCur.has(c)) byCur.set(c, { qty: new Map(), direct: 0 });
+      return byCur.get(c);
+    };
     itemsFor(x.id).forEach(i => {
       if(!LEDGER_CATS.includes(i.category || '')) return;
+      const c = curOf(i);
       const cat = i.catalog_id ? catalogItem(i.catalog_id) : null;
-      if(!cat || cat.event_id !== evKey){ offCatalog.push({ x, i }); return; }
+
+      /* 카탈로그 밖의 항목(디자인 제작비·전기 인입처럼 렌탈 품목표에 없는 것)은
+         교차표에 세울 열이 없다. 그래도 인보이스에는 함께 나가므로 금액은
+         「카탈로그 외·분담」 칸에 담아 총액에 넣는다 — 여기서 빼면 대장 총액이
+         청구서와 어긋난다. 무엇이었는지는 별도 시트에 품목별로 남는다. */
+      if(!cat || cat.event_id !== evKey){
+        offCatalog.push({ x, i });
+        if(isBillable(i)) bucket(c).direct += num(i.amount);
+        return;
+      }
       used.add(cat.id);
       /* 공동 부스에서 비용만 나눠 낸 줄은 수량을 세지 않는다 — 실물은 상대
          기업이 주문하므로 여기서 또 세면 없는 의자를 발주하게 된다.
-         (비품 현황 화면과 같은 규칙) */
-      if(String(i.shared_ref || '').trim()) return;
-      const c = curOf(i);
-      if(!byCur.has(c)) byCur.set(c, new Map());
-      const m = byCur.get(c);
-      m.set(cat.id, (m.get(cat.id) || 0) + (num(i.qty) || 1));
+         (비품 현황 화면과 같은 규칙) 다만 그 기업이 내는 돈이라 금액은 남긴다. */
+      if(String(i.shared_ref || '').trim()){
+        if(isBillable(i)) bucket(c).direct += num(i.amount);
+        return;
+      }
+      bucket(c).qty.set(cat.id, (bucket(c).qty.get(cat.id) || 0) + (num(i.qty) || 1));
     });
 
     if(!byCur.size){
       /* 아직 아무것도 신청하지 않은 기업. 줄은 남긴다 — 누가 안 냈는지가
          대장에서 보여야 한다. 통화는 화면과 같은 규칙으로 정한다(인보이스 우선). */
-      rows.push({ x, cur: currencyOf(x.id), qty: new Map(), split: false, empty: true });
+      rows.push({ x, cur: currencyOf(x.id), qty: new Map(), direct: 0, split: false, empty: true });
       return;
     }
     const present = CURRENCIES.filter(c => byCur.has(c));
     present.forEach(c => rows.push({
-      x, cur: c, qty: byCur.get(c), split: present.length > 1, empty: false,
+      x, cur: c, qty: byCur.get(c).qty, direct: byCur.get(c).direct,
+      split: present.length > 1, empty: false,
     }));
   });
 
@@ -204,7 +220,10 @@ function drawLedgerSheet(wb, data, meta){
   const cGra0   = cEqSub + 1;
   const cGra1   = cEqSub + graphicCols.length;
   const cGraSub = cGra1 + 1;                // 그래픽·부대시설 소계
-  const cTotal  = graphicCols.length ? cGraSub + 1 : cEqSub + 1;
+  /* 수량×단가로 낼 수 없는 금액 — 카탈로그 밖 품목과 공동부스 분담분.
+     인보이스에는 함께 나가므로 총액에 넣되, 어디서 온 금액인지 갈라 둔다. */
+  const cDirect = (graphicCols.length ? cGraSub : cEqSub) + 1;
+  const cTotal  = cDirect + 1;
   const L = colLetter;
 
   /* 카탈로그 순서(cols)의 i번째 품목이 대장에서 몇 번째 열인가 —
@@ -222,6 +241,7 @@ function drawLedgerSheet(wb, data, meta){
   graphicCols.forEach((c, i) => { ws.getColumn(cGra0 + i).width = 14; });
   ws.getColumn(cEqSub).width = 13;
   if(graphicCols.length) ws.getColumn(cGraSub).width = 15;
+  ws.getColumn(cDirect).width = 15;
   ws.getColumn(cTotal).width = 14;
 
   /* 1행 — 그룹 머리글 */
@@ -231,6 +251,7 @@ function drawLedgerSheet(wb, data, meta){
   if(graphicCols.length) r1.getCell(cGra0).value = '그래픽·부대시설 신청 수량';
   /* 금액 머리글에 "(원)"을 박지 않는다 — 줄마다 통화가 다르다. 통화는 G열이
      말하고, 셀 표시형식이 원/달러를 따라간다. */
+  r1.getCell(cDirect).value = '카탈로그 외·분담\n(직접 금액)';
   r1.getCell(cTotal).value  = '총 신청금액';
   r1.height = 20;
 
@@ -255,6 +276,7 @@ function drawLedgerSheet(wb, data, meta){
   ws.mergeCells(1, 1, 1, INFO);
   ws.mergeCells(1, cEquip0, 1, cEqSub);
   if(graphicCols.length) ws.mergeCells(1, cGra0, 1, cGraSub);
+  ws.mergeCells(1, cDirect, 2, cDirect);
   ws.mergeCells(1, cTotal, 2, cTotal);
 
   /* 3·4행 — 단가 보조행(숨김). 통화마다 한 줄씩 둔다.
@@ -280,7 +302,7 @@ function drawLedgerSheet(wb, data, meta){
      아직 신청하지 않았는지가 대장에서 보여야 한다). */
   const first = 5;
   rows.forEach((row, idx) => {
-    const { x, cur, qty, split } = row;
+    const { x, cur, qty, direct, split } = row;
     const rn = first + idx;
     const n  = exhNames(x);
     /* 담당자는 exhibitor_contacts 줄을 그대로 읽으면 안 된다 — 마스터DB로 이관된
@@ -312,9 +334,10 @@ function drawLedgerSheet(wb, data, meta){
 
     r.getCell(cEqSub).value = equipCols.length ? sub(cEquip0, cEquip1) : 0;
     if(graphicCols.length) r.getCell(cGraSub).value = sub(cGra0, cGra1);
-    r.getCell(cTotal).value = graphicCols.length
-      ? { formula: `${L(cEqSub)}${rn}+${L(cGraSub)}${rn}` }
-      : { formula: `${L(cEqSub)}${rn}` };
+    if(direct) r.getCell(cDirect).value = direct;
+    r.getCell(cTotal).value = { formula:
+      [cEqSub, graphicCols.length ? cGraSub : null, cDirect]
+        .filter(Boolean).map(c => `${L(c)}${rn}`).join('+') };
 
     for(let c = 1; c <= cTotal; c++){
       const cell = r.getCell(c);
@@ -326,7 +349,7 @@ function drawLedgerSheet(wb, data, meta){
     /* 두 통화로 나뉜 기업은 통화 칸을 굵게 — 같은 회사가 두 줄인 이유가
        그 칸에 있다는 걸 바로 알아채게 한다. */
     if(split) r.getCell(7).font = { ...FONT, bold: true, color: { argb: 'FFC0504D' } };
-    [cEqSub, graphicCols.length ? cGraSub : null, cTotal].filter(Boolean).forEach(c => {
+    [cEqSub, graphicCols.length ? cGraSub : null, cDirect, cTotal].filter(Boolean).forEach(c => {
       const cell = r.getCell(c);
       cell.fill      = fill(C_SUBTOT);
       /* 기본 표시형식은 원화로 두고, 달러는 아래 조건부 서식이 G열을 보고
@@ -343,7 +366,7 @@ function drawLedgerSheet(wb, data, meta){
      걸어 둔다. 기본형식은 원화이므로 G를 KRW로 되돌리면 원 표기로 돌아온다. */
   /* priority는 시트 안에서 겹치지 않게 준다 — 겹치면 엑셀이 파일을 복구
      대상으로 본다. */
-  if(rows.length) [cEqSub, graphicCols.length ? cGraSub : null, cTotal]
+  if(rows.length) [cEqSub, graphicCols.length ? cGraSub : null, cDirect, cTotal]
     .filter(Boolean).forEach((c, i) => {
       ws.addConditionalFormatting({
         ref: `${L(c)}${first}:${L(c)}${last}`,
@@ -365,11 +388,11 @@ function drawLedgerSheet(wb, data, meta){
     tot.getCell(1).value = t.label;
     if(t.qty){
       for(let c = cEquip0; c <= cTotal; c++){
-        if(c === cEqSub || c === cGraSub || c === cTotal) continue;
+        if(c === cEqSub || c === cGraSub || c === cDirect || c === cTotal) continue;
         tot.getCell(c).value = { formula: `SUM(${L(c)}${first}:${L(c)}${last})` };
       }
     } else {
-      [cEqSub, graphicCols.length ? cGraSub : null, cTotal].filter(Boolean).forEach(c => {
+      [cEqSub, graphicCols.length ? cGraSub : null, cDirect, cTotal].filter(Boolean).forEach(c => {
         const cell = tot.getCell(c);
         cell.value = { formula:
           `SUMIF(${CUR_COL}${first}:${CUR_COL}${last},"${t.cur}",${L(c)}${first}:${L(c)}${last})` };
@@ -399,8 +422,9 @@ function drawLedgerSheet(wb, data, meta){
     '※ 한 줄에는 한 통화만 담습니다. 원화와 달러를 함께 신청한 기업은 통화별로 줄을 나눴습니다(업체명이 두 줄인 경우) — 한 줄에 합치면 원화와 달러를 더한 숫자가 됩니다.',
     '※ 맨 아래 합계는 수량 한 줄과 통화별 금액 두 줄입니다. 수량은 통화와 무관하므로 전부 더하고, 금액은 통화가 다르면 더할 수 없어 나눠 셉니다.',
   ];
+  notes.push('※ 「카탈로그 외·분담(직접 금액)」은 수량×단가로 낼 수 없는 금액입니다 — 카탈로그에 없는 품목(디자인 제작비·전기 인입 등)과 공동 부스 분담분. 인보이스에는 함께 나가므로 총액에 넣었습니다. 교차표에 세울 열이 없어 수량은 잡히지 않습니다.');
   if(offCatalog.length) notes.push(
-    `※ 카탈로그에 없는 신청 ${offCatalog.length}건은 실을 열이 없어 「카탈로그 외 신청내역」 시트에 따로 담았습니다 — 발주 전 확인이 필요합니다.`);
+    `※ 그중 카탈로그에 없는 신청 ${offCatalog.length}건의 품목별 내역은 「카탈로그 외 신청내역」 시트에 있습니다 — 발주 전 확인이 필요합니다.`);
 
   notes.forEach((t, i) => {
     const cell = ws.getRow(totRow + 2 + i).getCell(1);
