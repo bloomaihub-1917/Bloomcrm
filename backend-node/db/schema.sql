@@ -561,3 +561,18 @@ ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS change_kind TEXT;  -- 추�
 ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS prev_qty    TEXT;
 ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS prev_amount TEXT;
 ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS voided_at   TEXT;
+
+/* ── 독립부스 도면 검토 ──
+   자체 시공(Self-Construction)은 부스를 업체가 직접 짓는다. 그래서 시공사
+   연락처만 있으면 될 것 같지만, 실제로는 "무엇을 지을 것인가"도 우리가 본다 —
+   높이 제한, 인접 부스 가림, 통로 침범, 소방 규정. 도면을 받아 확인하고 고쳐
+   달라고 하는 일이 2026 KIC만 18곳에서 벌어진다.
+
+   그런데 그 과정을 적을 자리가 없어서 메일과 메신저로 흩어졌다. 받았는지,
+   봤는지, 뭐라고 했는지를 남긴다. 오간 말은 새 표를 만들지 않고 문의·기록
+   (exhibitor_logs, category='부스도면')에 담는다 — 그래픽 피드백과 같은 이유로,
+   이 기업과 무슨 얘기가 오갔나를 두 군데서 보지 않게. */
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS booth_design_received_at TEXT;
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS booth_design_checked_at  TEXT;
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS booth_design_result      TEXT;  -- 'ok'(적합) | 'fix'(수정 필요) | ''
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS booth_design_note        TEXT;  -- 확인 결과 메모

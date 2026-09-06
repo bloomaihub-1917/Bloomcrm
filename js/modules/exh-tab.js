@@ -438,6 +438,17 @@ export function dueInfo(stepKey, evKey){
 }
 
 /* 그래픽 진행 상태 — 주문 안 했으면 해당 없음, 출력/제작에 따라 완료 기준이 다르다 */
+/* ── 독립부스 도면이 어디까지 왔나 ──
+   자체 시공은 부스를 업체가 직접 짓지만 무엇을 지을지는 우리가 본다(높이 제한,
+   통로 침범, 인접 부스 가림). 부스 현황·드로어가 같은 정의를 쓰게 한곳에 둔다. */
+export function boothDesignState(x){
+  if(!x.booth_design_received_at) return { state: 'none', text: '미수령' };
+  if(!x.booth_design_checked_at)  return { state: 'todo', text: '확인 대기' };
+  if(x.booth_design_result === 'fix') return { state: 'warn', text: '수정 요청' };
+  if(x.booth_design_result === 'ok')  return { state: 'done', text: '적합' };
+  return { state: 'todo', text: '결과 미기재' };
+}
+
 export function graphicState(x){
   if(!x.graphic_ordered_at) return { state: 'none' };
   if(x.graphic_type === 'print'){
@@ -1168,6 +1179,13 @@ function renderBoothView(list){
     + (unconfirmed ? `<span class="pill p-amber">배정 미확정 ${unconfirmed}</span>` : '')
     + (qtyOdd.length ? `<span class="pill p-red" title="${escAttr(qtyOdd.map(x => `${x.company_name} ${x.booth_no}(${parseBooth(x.booth_no).count}칸) ↔ 수량 ${x.booth_qty}`).join(', '))}">수량 불일치 ${qtyOdd.length}</span>` : '')
     + `<span class="pill p-blue">독립부스 ${selfN}</span>`
+    + (() => {
+      const self = all0.filter(x => x.booth_type === SELF_BUILD_TYPE);
+      const wait = self.filter(x => ['none', 'todo'].includes(boothDesignState(x).state)).length;
+      const fix  = self.filter(x => boothDesignState(x).state === 'warn').length;
+      return (wait ? `<span class="pill p-amber" title="도면을 못 받았거나 아직 확인하지 않은 독립부스예요">도면 확인 필요 ${wait}</span>` : '')
+        + (fix ? `<span class="pill p-red" title="수정 요청한 뒤 아직 정리되지 않은 도면이에요">도면 수정 요청 ${fix}</span>` : '');
+    })()
     + Object.entries(typeCnt).sort((a, b) => b[1] - a[1]).map(([t, n]) => typePill(t, n)).join('')
     + (boothTypeFil
       ? `<span style="font-size:10.5px;color:var(--a);margin-left:2px;cursor:pointer" onclick="setBoothTypeFil('')">전체 보기로 돌아가기</span>`
@@ -1188,6 +1206,11 @@ function renderBoothView(list){
       ${exhNames(x).en ? `<div style="font-size:11px;color:var(--i4);margin:-2px 0 3px">${escapeHtml(exhNames(x).en)}</div>` : ''}
       <div style="font-size:11px;color:var(--i4)">${[x.booth_floor && x.booth_floor + '층', x.booth_type, x.booth_qty && x.booth_qty + '부스', x.grade].filter(Boolean).map(escapeHtml).join(' · ') || '정보 없음'}</div>
       ${x.builder ? `<div style="font-size:11px;color:var(--i3);margin-top:3px">🔧 ${escapeHtml(x.builder)}${x.builder_mobile ? ' · ' + escapeHtml(x.builder_mobile) : ''}</div>` : ''}
+      ${x.booth_type === SELF_BUILD_TYPE ? (() => {
+        const d = boothDesignState(x);
+        const cls = { none: 'p-gray', todo: 'p-amber', warn: 'p-red', done: 'p-green' }[d.state];
+        return `<div style="margin-top:4px"><span class="pill ${cls}" style="font-size:9.5px">도면 ${escapeHtml(d.text)}</span></div>`;
+      })() : ''}
     </div>`).join(''));
 
   return viewShell(pills, `<div class="tw"><table><thead><tr>
@@ -1200,6 +1223,7 @@ function renderBoothView(list){
       <th style="min-width:70px">등급</th>
       <th style="min-width:60px;text-align:center">확정</th>
       <th style="min-width:180px">시공사 (독립부스)</th>
+      <th style="min-width:110px">부스 도면</th>
     </tr></thead><tbody>
     ${rows.map(x => {
       const self = x.booth_type === SELF_BUILD_TYPE;
@@ -1229,6 +1253,14 @@ function renderBoothView(list){
                <div style="font-size:10.5px;color:var(--i4)">${[x.builder_contact, x.builder_mobile || x.builder_tel].filter(Boolean).map(escapeHtml).join(' · ')}</div>`
             : `<button class="btn bs" style="font-size:10.5px" onclick="openExhDr('${escAttr(x.id)}','progress')">시공사 입력</button>`)
           : '<span style="color:var(--i6);font-size:11px">—</span>'}</td>
+        <td>${self ? (() => {
+          /* 자체 시공은 무엇을 지을지도 우리가 본다 — 도면을 받았는지, 봤는지,
+             고쳐 달라고 했는지가 시공사 연락처만큼 중요하다. */
+          const d = boothDesignState(x);
+          const cls = { none: 'p-gray', todo: 'p-amber', warn: 'p-red', done: 'p-green' }[d.state];
+          return `<span class="pill ${cls}">${escapeHtml(d.text)}</span>${
+            x.booth_design_received_at ? `<div style="font-size:9.5px;color:var(--i4);margin-top:2px">받음 ${escapeHtml(x.booth_design_received_at)}</div>` : ''}`;
+        })() : '<span style="color:var(--i6);font-size:11px">—</span>'}</td>
       </tr>`;
     }).join('')}
     </tbody></table></div>`);

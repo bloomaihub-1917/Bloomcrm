@@ -52,7 +52,7 @@ import { trackAction } from './audit-tab.js';
 import {
   billedAmount, paidAmount, graphicState, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
   isPendingRefund, boothTypeOptions, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
-  TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing, introOver,
+  TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing, introOver, boothDesignState,
   guardWrite, exhLocked, exhLockNotice,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar, needsReissue,
   settleState, liveInvoices, payDueDate,
@@ -264,6 +264,115 @@ function builderBlock(x){
     <div class="fgr">${row('builder_contact', '시공 담당자', '')}${row('builder_tel', '유선번호', '02-000-0000')}</div>
     <div class="fgr">${row('builder_mobile', '휴대폰', '010-0000-0000')}${row('builder_email', '이메일', '')}</div>
   </div>`;
+}
+
+/* ══════════════════════════════════════════
+   독립부스 도면 검토
+
+   자체 시공은 부스를 업체가 직접 짓는다. 그래서 시공사 연락처만 있으면 될 것
+   같지만, 실제로는 "무엇을 지을 것인가"도 우리가 본다 — 높이 제한, 인접 부스
+   가림, 통로 침범, 소방 규정. 2026 KIC만 18곳이 자체 시공이다.
+
+   받았는지 · 봤는지 · 뭐라고 했는지 셋을 남긴다. 오간 말은 새 표를 만들지 않고
+   문의·기록에 담는다(그래픽 피드백과 같은 방식) — 도면 얘기만 따로 모아 두면
+   이 기업과 무슨 얘기가 오갔나를 두 군데서 봐야 한다.
+══════════════════════════════════════════ */
+export const boothDesignFeedback = (exhId) =>
+  logsFor(exhId).filter(l => l.category === '부스도면' && l.kind === 'note');
+
+function boothDesignBlock(x){
+  const isSelf = (x.booth_type || '') === SELF_BUILD_TYPE;
+  const has = x.booth_design_received_at || x.booth_design_checked_at
+    || x.booth_design_note || boothDesignFeedback(x.id).length;
+  /* 조립부스는 우리가 짓는 것이라 도면을 받을 일이 없다. 다만 이미 적어둔 게
+     있으면 타입을 나중에 고쳤어도 숨지 않게 그대로 보여준다. */
+  if(!isSelf && !has) return '';
+
+  const st = boothDesignState(x);
+  const rows = boothDesignFeedback(x.id);
+  const me = currentUser?.email || '';
+  const dateCell = (f, label) => `<div class="fg"><label class="fl">${label}</label>
+    <input type="date" class="fi" style="font-size:12px" value="${escAttr(x[f] || '')}"
+      onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${label}')"></div>`;
+
+  return `<div style="padding:9px 11px;background:var(--i9);border-radius:8px;border-left:3px solid ${
+      st.state === 'warn' ? 'var(--re)' : st.state === 'done' ? 'var(--g)' : 'var(--a)'};margin-bottom:10px">
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:7px">
+      <span style="font-size:11px;font-weight:700;color:var(--i2)">부스 도면 검토</span>
+      <span class="pill ${{ none: 'p-gray', todo: 'p-amber', warn: 'p-red', done: 'p-green' }[st.state]}"
+        style="font-size:9px">${escapeHtml(st.text)}</span>
+      ${isSelf ? '' : '<span style="font-size:10px;color:var(--i5)">부스 타입은 자체 시공이 아니에요</span>'}
+    </div>
+
+    <div class="fgr">${dateCell('booth_design_received_at', '도면 받은 날')}${dateCell('booth_design_checked_at', '확인한 날')}</div>
+
+    <div style="margin-top:2px">
+      <label class="fl">확인 결과</label>
+      <div class="stbs" style="margin:4px 0 8px">
+        ${[['', '미확인'], ['ok', '적합'], ['fix', '수정 필요']].map(([v, l]) =>
+          `<button class="stb${(x.booth_design_result || '') === v ? ' on' : ''}"
+            onclick="setBoothDesignResult('${escAttr(x.id)}','${v}')">${l}</button>`).join('')}
+      </div>
+      ${textRow(x, 'booth_design_note', '확인 메모 — 무엇을 봤나요',
+        '예: 높이 3.5m 초과, 통로 쪽 벽면 후퇴 필요', true)}
+    </div>
+
+    <div style="border-top:1px solid var(--i7);margin-top:8px;padding-top:8px">
+      <div style="font-size:11px;color:var(--i4);margin-bottom:6px">
+        오간 말은 <b>문의·기록</b> 탭에도 함께 남아요. 남기는 사람은
+        <b>${escapeHtml(currentUser?.name || currentUser?.email || '(로그인 정보 없음)')}</b>으로 적힙니다.</div>
+      <textarea class="fi" id="bdf-${escAttr(x.id)}" rows="2"
+        placeholder="예: 시공사에 3.5m 이하로 낮춰 재도면 요청, 9/10까지 회신 약속"
+        style="width:100%;resize:vertical;font-size:12px"></textarea>
+      <div style="display:flex;justify-content:flex-end;margin-top:6px">
+        <button class="btn bp bs" onclick="addBoothDesignFeedback('${escAttr(x.id)}')">피드백 남기기</button>
+      </div>
+      ${rows.length ? rows.map(l => `
+        <div style="padding:7px 0;border-top:1px solid var(--i8)">
+          <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap">
+            <span style="font-size:11.5px;font-weight:700">${escapeHtml(l.author_name || l.author_email || '알 수 없음')}</span>
+            ${l.subject ? `<span class="pill p-gray" style="font-size:9px">${escapeHtml(l.subject)}</span>` : ''}
+            <span style="font-size:10px;color:var(--i5)">${escapeHtml(l.ts || '')}</span>
+            ${l.author_email && l.author_email === me
+              ? `<button class="btn bs" style="margin-left:auto;font-size:10px;padding:1px 6px"
+                  onclick="delGraphicFeedback('${escAttr(l.id)}')">삭제</button>` : ''}
+          </div>
+          <div style="font-size:12px;color:var(--i2);white-space:pre-wrap;margin-top:3px">${escapeHtml(l.body || '')}</div>
+        </div>`).join('')
+        : '<div style="font-size:11.5px;color:var(--i5);margin-top:8px">아직 남긴 피드백이 없어요</div>'}
+    </div>
+  </div>`;
+}
+
+/* 결과를 누르면 확인한 날도 함께 채운다 — 결과를 적었다는 건 본 것이다.
+   날짜를 따로 누르게 하면 절반은 비어 있게 된다. */
+export async function setBoothDesignResult(exhId, v){
+  const x = getExhibitorById(exhId);
+  if(!x) return;
+  const patch = { booth_design_result: v };
+  if(v && !x.booth_design_checked_at) patch.booth_design_checked_at = td();
+  await patchExh(x, patch, '부스 도면 확인');
+}
+
+export async function addBoothDesignFeedback(exhId){
+  const ta = document.getElementById(`bdf-${exhId}`);
+  const body = ta?.value.trim() || '';
+  if(!body){ ta?.focus(); return; }
+  const x = getExhibitorById(exhId);
+  const st = boothDesignState(x || {});
+
+  const ok = await addRow(EXH_LOGS, {
+    id: localId('XL-'), exhibitor_id: exhId, kind: 'note', ts: td(),
+    direction: '', channel: '', counterpart: '', category: '부스도면',
+    subject: st.text || '', body, answered_at: '', answer: '', status: 'done',
+    author_email: currentUser?.email || '', author_name: currentUser?.name || '',
+  }, saveExhLog);
+
+  const el = document.getElementById(`bdf-${exhId}`);
+  if(!ok){ if(el){ el.value = body; el.focus(); } return; }
+  if(el) el.value = '';
+  trackAction('log', '부스 도면 피드백', x?.company_name || '',
+    `<b>${escapeHtml(x?.company_name || '')}</b> 부스 도면(${escapeHtml(st.text)}): ${escapeHtml(body.slice(0, 40))}`);
 }
 
 /* ── 렌탈 비품 카탈로그 ──
@@ -987,6 +1096,7 @@ function dProgress(x){
   ${sct('현장',
     dateRow(x, 'movein_at', '반입 / 설치') +
     builderBlock(x) +
+    boothDesignBlock(x) +
     `<div class="fgr">
       <div class="fg"><label class="fl">출입증 매수</label>
         <input class="fi" style="font-size:12px" value="${escAttr(x.badge_count || '')}"
@@ -2039,6 +2149,8 @@ window.delExhApp = delExhApp;
 window.closeExhApp = closeExhApp;
 window.reopenExhApp = reopenExhApp;
 window.voidExhItem = voidExhItem;
+window.setBoothDesignResult = setBoothDesignResult;
+window.addBoothDesignFeedback = addBoothDesignFeedback;
 window.setPayField = setPayField;
 window.toggleItemBillable = toggleItemBillable;
 window.pickCatalogItem = pickCatalogItem;
