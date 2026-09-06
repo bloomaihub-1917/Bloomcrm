@@ -105,7 +105,7 @@ export function buildLedger(evKey){
     /* 통화 → { qty: Map(catalogId→수량), direct: 수량×단가로 낼 수 없는 금액 } */
     const byCur = new Map();
     const bucket = (c) => {
-      if(!byCur.has(c)) byCur.set(c, { qty: new Map(), direct: 0 });
+      if(!byCur.has(c)) byCur.set(c, { qty: new Map(), direct: 0, free: new Map() });
       return byCur.get(c);
     };
     itemsFor(x.id).forEach(i => {
@@ -130,18 +130,25 @@ export function buildLedger(evKey){
         if(isBillable(i)) bucket(c).direct += num(i.amount);
         return;
       }
-      bucket(c).qty.set(cat.id, (bucket(c).qty.get(cat.id) || 0) + (num(i.qty) || 1));
+      const q = num(i.qty) || 1;
+      const b = bucket(c);
+      b.qty.set(cat.id, (b.qty.get(cat.id) || 0) + q);
+      /* 무상 제공(청구 제외) 항목. 수량은 그대로 세야 한다 — 돈은 안 받아도
+         물건은 만들어야 하니 발주 대상이다. 다만 소계가 수량×단가로 계산되는
+         구조라 금액이 저절로 붙으므로, 그만큼을 「기타 금액」에서 뺀다. */
+      if(!isBillable(i)) b.free.set(cat.id, (b.free.get(cat.id) || 0) + q);
     });
 
     if(!byCur.size){
       /* 아직 아무것도 신청하지 않은 기업. 줄은 남긴다 — 누가 안 냈는지가
          대장에서 보여야 한다. 통화는 화면과 같은 규칙으로 정한다(인보이스 우선). */
-      rows.push({ x, cur: currencyOf(x.id), qty: new Map(), direct: 0, split: false, empty: true });
+      rows.push({ x, cur: currencyOf(x.id), qty: new Map(), direct: 0, free: new Map(),
+        split: false, empty: true });
       return;
     }
     const present = CURRENCIES.filter(c => byCur.has(c));
     present.forEach(c => rows.push({
-      x, cur: c, qty: byCur.get(c).qty, direct: byCur.get(c).direct,
+      x, cur: c, qty: byCur.get(c).qty, direct: byCur.get(c).direct, free: byCur.get(c).free,
       split: present.length > 1, empty: false,
     }));
   });
@@ -220,8 +227,9 @@ function drawLedgerSheet(wb, data, meta){
   const cGra0   = cEqSub + 1;
   const cGra1   = cEqSub + graphicCols.length;
   const cGraSub = cGra1 + 1;                // 그래픽·부대시설 소계
-  /* 수량×단가로 낼 수 없는 금액 — 카탈로그 밖 품목과 공동부스 분담분.
-     인보이스에는 함께 나가므로 총액에 넣되, 어디서 온 금액인지 갈라 둔다. */
+  /* 수량×단가로 낼 수 없는 금액 — 카탈로그 밖 품목·공동부스 분담분(+)과
+     무상 제공분 차감(−). 인보이스에는 함께 나가므로 총액에 넣되, 어디서 온
+     금액인지 갈라 둔다. */
   const cDirect = (graphicCols.length ? cGraSub : cEqSub) + 1;
   const cTotal  = cDirect + 1;
   const L = colLetter;
@@ -241,7 +249,7 @@ function drawLedgerSheet(wb, data, meta){
   graphicCols.forEach((c, i) => { ws.getColumn(cGra0 + i).width = 14; });
   ws.getColumn(cEqSub).width = 13;
   if(graphicCols.length) ws.getColumn(cGraSub).width = 15;
-  ws.getColumn(cDirect).width = 15;
+  ws.getColumn(cDirect).width = 17;
   ws.getColumn(cTotal).width = 14;
 
   /* 1행 — 그룹 머리글 */
@@ -251,7 +259,7 @@ function drawLedgerSheet(wb, data, meta){
   if(graphicCols.length) r1.getCell(cGra0).value = '그래픽·부대시설 신청 수량';
   /* 금액 머리글에 "(원)"을 박지 않는다 — 줄마다 통화가 다르다. 통화는 G열이
      말하고, 셀 표시형식이 원/달러를 따라간다. */
-  r1.getCell(cDirect).value = '카탈로그 외·분담\n(직접 금액)';
+  r1.getCell(cDirect).value = '기타 금액\n(카탈로그 외·분담·무상)';
   r1.getCell(cTotal).value  = '총 신청금액';
   r1.height = 20;
 
@@ -302,7 +310,7 @@ function drawLedgerSheet(wb, data, meta){
      아직 신청하지 않았는지가 대장에서 보여야 한다). */
   const first = 5;
   rows.forEach((row, idx) => {
-    const { x, cur, qty, direct, split } = row;
+    const { x, cur, qty, direct, free, split } = row;
     const rn = first + idx;
     const n  = exhNames(x);
     /* 담당자는 exhibitor_contacts 줄을 그대로 읽으면 안 된다 — 마스터DB로 이관된
@@ -334,7 +342,17 @@ function drawLedgerSheet(wb, data, meta){
 
     r.getCell(cEqSub).value = equipCols.length ? sub(cEquip0, cEquip1) : 0;
     if(graphicCols.length) r.getCell(cGraSub).value = sub(cGra0, cGra1);
-    if(direct) r.getCell(cDirect).value = direct;
+    /* 기타 금액 = 카탈로그 밖 품목·분담분(+) − 무상 제공분(−).
+       빼는 쪽은 수량은 내가 알지만 단가는 시트가 알아야 한다 — 단가 행을 참조해
+       두면 카탈로그 단가가 바뀌거나 통화를 고쳐도 차감액이 따라온다. */
+    const minus = [...free.entries()].map(([id, q]) => {
+      const i = cols.findIndex(c => c.id === id);
+      if(i < 0) return '';
+      const cc = L(colAt(i));
+      return `${q}*IF($${CUR_COL}${rn}="USD",${cc}$${PRICE_ROW.USD},${cc}$${PRICE_ROW.KRW})`;
+    }).filter(Boolean);
+    if(minus.length) r.getCell(cDirect).value = { formula: `${direct}-${minus.join('-')}` };
+    else if(direct)  r.getCell(cDirect).value = direct;
     r.getCell(cTotal).value = { formula:
       [cEqSub, graphicCols.length ? cGraSub : null, cDirect]
         .filter(Boolean).map(c => `${L(c)}${rn}`).join('+') };
@@ -422,7 +440,8 @@ function drawLedgerSheet(wb, data, meta){
     '※ 한 줄에는 한 통화만 담습니다. 원화와 달러를 함께 신청한 기업은 통화별로 줄을 나눴습니다(업체명이 두 줄인 경우) — 한 줄에 합치면 원화와 달러를 더한 숫자가 됩니다.',
     '※ 맨 아래 합계는 수량 한 줄과 통화별 금액 두 줄입니다. 수량은 통화와 무관하므로 전부 더하고, 금액은 통화가 다르면 더할 수 없어 나눠 셉니다.',
   ];
-  notes.push('※ 「카탈로그 외·분담(직접 금액)」은 수량×단가로 낼 수 없는 금액입니다 — 카탈로그에 없는 품목(디자인 제작비·전기 인입 등)과 공동 부스 분담분. 인보이스에는 함께 나가므로 총액에 넣었습니다. 교차표에 세울 열이 없어 수량은 잡히지 않습니다.');
+  notes.push('※ 「기타 금액」은 수량×단가로 낼 수 없는 금액입니다 — 카탈로그에 없는 품목(디자인 제작비·전기 인입 등)과 공동 부스 분담분을 더하고, 무상 제공 항목은 뺍니다. 인보이스에는 함께 나가므로 총액에 넣었습니다.');
+  notes.push('※ 무상 제공 항목은 수량은 그대로 세고(돈은 안 받아도 물건은 만들어야 하니 발주 대상입니다) 금액만 「기타 금액」에서 차감합니다 — 소계가 수량×단가로 계산되는 구조라 그냥 두면 없는 청구액이 붙습니다.');
   if(offCatalog.length) notes.push(
     `※ 그중 카탈로그에 없는 신청 ${offCatalog.length}건의 품목별 내역은 「카탈로그 외 신청내역」 시트에 있습니다 — 발주 전 확인이 필요합니다.`);
 
