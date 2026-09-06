@@ -43,6 +43,7 @@ import {
   EXH_CFG,
   EQUIP_CATALOG,
   EXH_ITEMS,
+  evParts,
 } from '../state.js';
 
 import {
@@ -59,10 +60,11 @@ import {
   saveTags,
   saveEquipCatalog,
   deleteEquipCatalog,
+  saveExhCfgToSheet,
 } from '../api.js';
 import { trackAction } from './audit-tab.js';
 
-import { CL, CAT_KEYS } from '../constants.js';
+import { CL, CAT_KEYS, EVENT_PARTS } from '../constants.js';
 import { slugifySectorName, escapeHtml, escAttr, countryName, scopedSectorName, parseSectorScope, sectorRowValues, sectorKey, parseDomains, joinDomains } from '../utils.js';
 import { buildCoDB, buildCoCAT, renderCoDashboard, setCoCat } from './company-tab.js';
 import { renderMDB, buildMDBEvList, buildMDBTagList } from './db-tab.js';
@@ -1168,7 +1170,8 @@ export function renderEvMgr(){
   }
 
   el.innerHTML = EVENT_LIST.map((e, i) => `
-    <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--W);border:1px solid var(--i6);border-radius:8px;margin-bottom:6px">
+    <div onclick="openEvDetail('${escAttr(e.key)}')" title="이 행사의 설정 열기"
+      style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--W);border:1px solid var(--i6);border-radius:8px;margin-bottom:6px;cursor:pointer">
       <div style="width:12px;height:12px;border-radius:50%;background:${e.color};flex-shrink:0"></div>
       <div style="flex:1;min-width:0">
         <div style="font-size:13px;font-weight:600;color:var(--i1)">${escapeHtml(e.name||e.key)}</div>
@@ -1178,8 +1181,11 @@ export function renderEvMgr(){
           ${e.date_start ? '· ' + escapeHtml(e.date_start) + (e.date_end ? ' ~ ' + escapeHtml(e.date_end) : '') : (e.date ? '· ' + escapeHtml(e.date) : '')}
           ${e.location ? '· 📍' + escapeHtml(e.location) : ''}
         </div>
+        <div style="margin-top:4px">${EVENT_PARTS.filter(p => evParts(e.key)[p.key])
+          .map(p => `<span class="pill p-blue" style="margin-right:3px">${escapeHtml(p.label)}</span>`).join('')
+          || '<span style="font-size:10.5px;color:var(--i5)">진행 파트 없음</span>'}</div>
       </div>
-      <button onclick="removeEventFromList(${i})"
+      <button onclick="event.stopPropagation();removeEventFromList(${i})"
         style="background:none;border:1px solid var(--i6);border-radius:5px;padding:3px 8px;
                font-size:11px;color:var(--i3);cursor:pointer"
         onmouseover="this.style.borderColor='var(--re)';this.style.color='var(--re)'"
@@ -1388,9 +1394,9 @@ export function switchArchTab(tab){
   });
   const sysnav = document.getElementById('sbp-arch-sysnav');
   if(sysnav) sysnav.style.display = tab==='sys' ? 'block' : 'none';
-  if(tab==='ev')     { renderEvMgr(); }
+  if(tab==='ev')     { closeEvDetail(); }   // 목록부터 — 상세는 카드를 눌러서 연다
   if(tab==='sector') { renderSectorList(); renderPartTypeList(); renderTagList(); }
-  if(tab==='val')    { renderCodeListPicker(); renderAliasList(); renderEquipCatalog(); renderEvCfgList(); }
+  if(tab==='val')    { renderCodeListPicker(); renderAliasList(); mountEquipCatalog('eqcat-rows', ''); renderEvCfgList(); }
 }
 
 // archV는 이 탭에서만 쓰는 로컬 UI 상태라 state.js로 옮기지 않고 모듈 스코프에 둠
@@ -1609,6 +1615,8 @@ export async function addCodeListRow(){
    전에는 늘 renderCodeList()만 불러, 표기 매핑을 고치면 화면이 그대로였다. */
 function reRenderFor(listKey){
   if(listKey === 'cat_alias') renderAliasList(); else renderCodeList();
+  // 행사 상세의 부스 칸도 같은 표를 본다 — 열려 있으면 함께 다시 그린다
+  if(evDetailKey) renderEvDetail();
 }
 
 export async function editCodeListRow(id, field, value){
@@ -1784,6 +1792,23 @@ let eqKind = 'equip';    // 비품 / 그래픽 — 한 표에 함께 담겨 있�
 let eqEvent = '';        // 보고 있는 행사
 let eqCatFil = '';       // 분류 필터
 let eqQuery = '';        // 검색어
+/* 같은 편집기를 두 자리가 나눠 쓴다 — 설정값 탭(eqcat-rows)과 행사 상세.
+   행사 상세에서는 어느 행사인지가 이미 정해져 있어 행사 선택을 잠근다. */
+let eqTarget = 'eqcat-rows';
+let eqLockEv = '';
+export function mountEquipCatalog(targetId, lockEv){
+  eqTarget = targetId || 'eqcat-rows';
+  eqLockEv = lockEv || '';
+  if(eqLockEv && eqEvent !== eqLockEv){ eqEvent = eqLockEv; eqCatFil = ''; eqQuery = ''; }
+  renderEquipCatalog();
+}
+/* 행사 상세에서 비품 칸을 떠날 때 — 다음 렌더가 사라진 자리를 찾지 않도록
+   설정값 탭 자리로만 돌려놓고 그리지는 않는다 */
+function mountEquipCatalogIdle(){
+  if(eqTarget === 'eqcat-rows') return;
+  eqTarget = 'eqcat-rows';
+  eqLockEv = '';
+}
 
 const eqNum = (v) => String(v ?? '').replace(/[^0-9.]/g, '');
 const eqMoney = (v) => { const n = Number(eqNum(v)); return n ? n.toLocaleString() : ''; };
@@ -1804,24 +1829,25 @@ const eqRows = () => EQUIP_CATALOG
     || String(a.code || '').localeCompare(String(b.code || '')));
 
 export function renderEquipCatalog(){
-  const el = document.getElementById('eqcat-rows');
+  const el = document.getElementById(eqTarget);
   if(!el) return;
 
   // 처음 열 때는 품목이 실제로 들어 있는 행사를 연다 — 빈 화면을 보여주면
   // 품목표가 없는 줄 안다(설정값 탭의 선택 목록과 같은 이유)
   const evs = [...new Set(EQUIP_CATALOG.map(c => c.event_id).filter(Boolean))];
-  if(!eqEvent) eqEvent = evs[0] || (EVENT_LIST[0]?.key || '');
+  if(eqLockEv) eqEvent = eqLockEv;
+  else if(!eqEvent) eqEvent = evs[0] || (EVENT_LIST[0]?.key || '');
 
   const all = EQUIP_CATALOG.filter(c => c.event_id === eqEvent && (c.kind || 'equip') === eqKind);
   const cats = [...new Set(all.map(c => c.category || '').filter(Boolean))];
 
   el.innerHTML = `
     <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-bottom:10px">
-      <div style="min-width:170px"><div class="mlbl">행사</div>
+      ${eqLockEv ? '' : `<div style="min-width:170px"><div class="mlbl">행사</div>
         <select class="fi" style="width:100%" onchange="setEqEvent(this.value)">
           ${(evs.length ? evs : EVENT_LIST.map(e => e.key)).map(k =>
             `<option value="${escAttr(k)}"${k === eqEvent ? ' selected' : ''}>${escapeHtml(k)}</option>`).join('')}
-        </select></div>
+        </select></div>`}
       <div style="min-width:120px"><div class="mlbl">종류</div>
         <select class="fi" style="width:100%" onchange="setEqKind(this.value)">
           <option value="equip"${eqKind === 'equip' ? ' selected' : ''}>비품</option>
@@ -1897,7 +1923,7 @@ export function setEqQuery(v){
   eqQuery = v;
   // 검색은 글자를 칠 때마다 다시 그리는데, 통째로 다시 그리면 입력칸이 포커스를
   // 잃는다. 목록만 갈아 끼우고 입력칸은 그대로 둔다.
-  const el = document.getElementById('eqcat-rows');
+  const el = document.getElementById(eqTarget);
   if(!el) return;
   const box = el.querySelector('#eqcat-list');
   const cnt = el.querySelector('#eqcat-count');
@@ -2028,3 +2054,394 @@ window.setEqQuery   = setEqQuery;
 window.editEquipItem = editEquipItem;
 window.removeEquipItem = removeEquipItem;
 window.addEquipItem = addEquipItem;
+
+
+/* ══════════════════════════════════════════
+   행사 상세 설정 — 설정 › 행사 관리에서 행사 하나를 고르면 열린다
+
+   전에는 행사 하나를 두고 정할 것이 세 군데에 흩어져 있었다. 행사 자체는 이 탭,
+   부스 타입·스폰서 등급은 설정값 탭의 선택 목록, 비품 품목표는 그 아래, 마감일은
+   전시 탭. "이 행사 설정 어디서 하죠"에 답을 하나로 만들려고 한자리에 모은다.
+
+   목록과 상세는 같은 자리(arch-pane-ev)를 나눠 쓴다. 모달로 띄우지 않은 이유는
+   안에 표가 들어가기 때문이다 — 470px 카드에 품목표를 넣으면 못 읽는다.
+
+   저장 위치는 settings 시트의 exh_cfg_<행사키> 한 줄이다. 행사당 한 줄인 구조를
+   그대로 두는 편이, 파트를 넣자고 events 테이블에 열을 늘리는 것보다 되돌리기 쉽다.
+══════════════════════════════════════════ */
+let evDetailKey = '';        // 보고 있는 행사 (빈 문자열 = 목록 뷰)
+let evDetailSeg = 'basic';
+
+const EV_SEGS = [['basic','기본 정보'], ['parts','진행 파트'],
+  ['booth','부스'], ['equip','비품'], ['due','일정']];
+
+/* 전시를 안 하는 행사에서는 부스·비품·일정이 뜻이 없다. 감추지 않고 잠그는 건
+   "왜 없지"로 끝나지 않게 하려는 것이다 — 켜는 자리를 같은 화면에서 알려준다. */
+const EV_SEG_NEEDS_EXH = ['booth', 'equip', 'due'];
+const evSegLocked = (seg, parts) => EV_SEG_NEEDS_EXH.includes(seg) && !parts.exh;
+
+export function openEvDetail(key){
+  evDetailKey = key;
+  evDetailSeg = 'basic';
+  const list = document.getElementById('ev-mgr-list-view');
+  const det  = document.getElementById('ev-mgr-detail-view');
+  if(list) list.style.display = 'none';
+  if(det)  det.style.display  = 'block';
+  renderEvDetail();
+}
+
+export function closeEvDetail(){
+  evDetailKey = '';
+  // 비품 편집기를 설정값 탭 자리로 돌려놓는다 — 안 그러면 그쪽에서 열었을 때
+  // 사라진 자리에 그리려 하고 화면이 빈 채로 남는다
+  mountEquipCatalogIdle();
+  const list = document.getElementById('ev-mgr-list-view');
+  const det  = document.getElementById('ev-mgr-detail-view');
+  if(det){  det.style.display  = 'none'; det.innerHTML = ''; }
+  if(list) list.style.display = 'block';
+  renderEvMgr();
+}
+
+export function setEvDetailSeg(seg){ evDetailSeg = seg; renderEvDetail(); }
+
+export function renderEvDetail(){
+  const el = document.getElementById('ev-mgr-detail-view');
+  if(!el || !evDetailKey) return;
+  const ev = EVENT_LIST.find(e => e.key === evDetailKey);
+  if(!ev){ closeEvDetail(); return; }        // 다른 곳에서 지워졌다
+
+  const parts = evParts(ev.key);
+  const locked = evSegLocked(evDetailSeg, parts);
+
+  const seg = EV_SEGS.map(([k, l]) => {
+    const off = evSegLocked(k, parts);
+    return `<button class="seg-b${evDetailSeg === k ? ' on' : ''}" onclick="setEvDetailSeg('${k}')"
+      style="${off ? 'opacity:.45' : ''}" ${off ? 'title="전시 파트를 켜면 쓸 수 있어요"' : ''}>${l}${off ? ' 🔒' : ''}</button>`;
+  }).join('');
+
+  const body = locked
+    ? `<div style="font-size:12px;color:var(--i4);padding:24px 0">
+         이 행사는 <b>전시</b> 파트가 꺼져 있어 ${escapeHtml(EV_SEGS.find(x => x[0] === evDetailSeg)[1])} 설정을 쓰지 않아요.
+         <button class="btn" style="margin-left:8px;font-size:11px" onclick="setEvDetailSeg('parts')">진행 파트에서 켜기</button>
+       </div>`
+    : evDetailSeg === 'parts' ? evPartsHtml(ev, parts)
+    : evDetailSeg === 'booth' ? evBoothHtml(ev)
+    : evDetailSeg === 'equip' ? '<div id="ev-eqcat-rows"></div>'
+    : evDetailSeg === 'due'   ? evDueHtml(ev)
+    : evBasicHtml(ev);
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <button class="btn" style="font-size:11px;height:28px" onclick="closeEvDetail()">← 행사 목록</button>
+      <div style="width:12px;height:12px;border-radius:50%;background:${escAttr(ev.color || '#3B5BDB')};flex-shrink:0"></div>
+      <div style="font-size:14px;font-weight:700;color:var(--i1)">${escapeHtml(ev.name || ev.key)}</div>
+      <span style="font-size:11px;color:var(--i4);background:var(--i7);border-radius:3px;padding:1px 5px;font-family:monospace">${escapeHtml(ev.key)}</span>
+    </div>
+    <div class="seg" style="flex-wrap:wrap;margin-bottom:14px">${seg}</div>
+    <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:16px">${body}</div>`;
+
+  // 비품 편집기는 문자열이 아니라 자기 함수가 그린다 — 자리를 만든 뒤 붙인다
+  if(evDetailSeg === 'equip' && !locked) mountEquipCatalog('ev-eqcat-rows', ev.key);
+  else mountEquipCatalogIdle();
+}
+
+/* ── 기본 정보 ──
+   행사는 지금까지 추가·삭제만 됐다. 오타 하나 고치려고 지웠다 다시 만들면
+   participations 연결이 끊기므로, 여기서 처음으로 고칠 수 있게 한다.
+   행사 ID(key)는 못 고친다 — 연결 키라서 바꾸면 참여 기록이 전부 떨어진다. */
+function evBasicHtml(ev){
+  return `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div><div class="mlbl">행사명 (풀네임)</div>
+        <input class="fi" id="evd-name" value="${escAttr(ev.name || ev.key)}" style="width:100%"></div>
+      <div><div class="mlbl">약칭</div>
+        <input class="fi" id="evd-short" value="${escAttr(ev.short || '')}" style="width:100%"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+      <div><div class="mlbl">시작일</div>
+        <input class="fi" id="evd-date-start" type="date" value="${escAttr(ev.date_start || '')}" style="width:100%"></div>
+      <div><div class="mlbl">종료일</div>
+        <input class="fi" id="evd-date-end" type="date" value="${escAttr(ev.date_end || '')}" style="width:100%"></div>
+      <div><div class="mlbl">색상</div>
+        <input type="color" id="evd-color" value="${escAttr(ev.color || '#3B5BDB')}"
+          style="width:100%;height:36px;border:1px solid var(--i6);border-radius:6px;cursor:pointer;padding:2px"></div>
+    </div>
+    <div style="margin-bottom:12px"><div class="mlbl">장소</div>
+      <input class="fi" id="evd-loc" value="${escAttr(ev.location || '')}" style="width:100%"></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn bp" onclick="saveEvBasic()" style="min-width:80px">저장</button>
+      <span id="evd-basic-msg" style="font-size:11px;color:var(--g)"></span>
+    </div>
+    <div style="font-size:10.5px;color:var(--i5);margin-top:10px">
+      행사 ID <code>${escapeHtml(ev.key)}</code>는 참여 기록·참가기업이 가리키는 키라 바꿀 수 없어요.
+    </div>`;
+}
+
+export async function saveEvBasic(){
+  const ev = EVENT_LIST.find(e => e.key === evDetailKey);
+  if(!ev) return;
+  const msg = document.getElementById('evd-basic-msg');
+  const say = (t, ok) => { if(msg){ msg.style.color = ok ? 'var(--g)' : 'var(--re)'; msg.textContent = t; } };
+  const g = (id) => (document.getElementById(id)?.value || '').trim();
+
+  const name = g('evd-name');
+  if(!name){ say('행사명은 비울 수 없어요.'); return; }
+
+  const prev = { ...ev };
+  const start = g('evd-date-start');
+  Object.assign(ev, {
+    name, short: g('evd-short') || name,
+    date_start: start, date: start,       // date는 하위 호환용 시작일
+    date_end: g('evd-date-end'), location: g('evd-loc'),
+    color: document.getElementById('evd-color')?.value || ev.color,
+  });
+
+  const r = await saveEventToSheet(ev);
+  if(r && r.ok === false){ Object.assign(ev, prev); say('저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.'); renderEvDetail(); return; }
+
+  const changed = ['name','short','date_start','date_end','location','color']
+    .filter(f => (prev[f] || '') !== (ev[f] || ''))
+    .map(f => `${f} ${prev[f] || '없음'} → ${ev[f] || '없음'}`);
+  if(changed.length) trackAction('edit', '행사 정보 수정', ev.key, changed.join(' / '));
+
+  try { buildMDBEvList(); populateUploadEvDropdown(); } catch(e){}
+  say('저장했어요.', true);
+  renderEvDetail();
+  setTimeout(() => { const m = document.getElementById('evd-basic-msg'); if(m) m.textContent = ''; }, 2000);
+}
+
+/* ── 진행 파트 ──
+   행사마다 무엇을 하는지가 다르다. 켜 둔 파트만 화면에 나오게 하는 게 목적이고,
+   지금은 전시만 실제로 잠금이 붙는다 — 나머지는 운영 화면이 아직 없다. */
+function evPartsHtml(ev, parts){
+  const exhSummary = () => {
+    const bt = clRowsOf('booth_type', ev.key).length || clRowsOf('booth_type', '').length;
+    const eq = EQUIP_CATALOG.filter(c => c.event_id === ev.key).length;
+    return `부스 타입 ${bt}종 · 비품 품목 ${eq}건`;
+  };
+  return EVENT_PARTS.map(p => {
+    const on = parts[p.key];
+    const sub = (on && p.key === 'exh') ? exhSummary() : '';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--i7)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;font-weight:600;color:var(--i1)">${escapeHtml(p.label)}</div>
+        <div style="font-size:11px;color:var(--i4);margin-top:2px">
+          ${sub ? escapeHtml(sub) : p.partTypes.map(t => `<span class="pill p-gray" style="margin-right:3px">${escapeHtml(t)}</span>`).join('')}
+        </div>
+      </div>
+      <button class="btn${on ? ' bp' : ''}" style="min-width:64px;height:30px;font-size:11px"
+        onclick="toggleEvPart('${escAttr(p.key)}')">${on ? '진행 중' : '안 함'}</button>
+    </div>`;
+  }).join('')
+  + `<div style="font-size:10.5px;color:var(--i5);margin-top:10px">
+      지금은 <b>전시</b>만 화면에 반영돼요 — 끄면 전시 탭에서 이 행사를 골라도 목록이 열리지 않습니다.
+      컨퍼런스·파트너링·후원은 여기 적어 두면 운영 화면이 생길 때 그대로 이어집니다.
+    </div>`;
+}
+
+export async function toggleEvPart(part){
+  const ev = EVENT_LIST.find(e => e.key === evDetailKey);
+  if(!ev) return;
+  const now = evParts(ev.key);
+  const def = EVENT_PARTS.find(p => p.key === part);
+  if(!def) return;
+
+  // 전시를 끄면 그 행사의 전시 화면이 통째로 잠긴다. 되돌릴 수 있는 설정이지만
+  // 사고로 누르기 쉬운 자리라 한 번 묻는다.
+  if(part === 'exh' && now.exh
+    && !confirm(`${ev.name || ev.key}의 전시 파트를 끌까요?\n전시 탭에서 이 행사가 열리지 않고, 부스·비품·일정 설정도 잠깁니다.\n(등록된 참가기업·품목 데이터는 그대로 남습니다)`)) return;
+
+  const ok = await saveEvParts(ev.key, { ...now, [part]: !now[part] });
+  if(!ok) return;
+  trackAction('edit', '진행 파트 변경', ev.key,
+    `${ev.name || ev.key} — ${def.label} ${now[part] ? '진행 중 → 안 함' : '안 함 → 진행 중'}`);
+  renderEvDetail();
+  window.renderExh?.();
+}
+
+/* parts만 갈아 끼우고 나머지(due·book)는 그대로 둔다 — settings의 한 줄을
+   통째로 덮어쓰는 저장이라, 읽어 온 것을 펼쳐서 다시 넣지 않으면 마감일이 날아간다 */
+async function saveEvParts(evKey, parts){
+  const prev = EXH_CFG[evKey] ? JSON.parse(JSON.stringify(EXH_CFG[evKey])) : undefined;
+  const cfg = { ...(prev || {}), parts };
+  EXH_CFG[evKey] = cfg;
+  const r = await saveExhCfgToSheet(evKey, cfg);
+  if(r && r.ok === false){
+    if(prev) EXH_CFG[evKey] = prev; else delete EXH_CFG[evKey];
+    alert('저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
+    renderEvDetail();
+    return false;
+  }
+  return true;
+}
+
+/* ── 부스 ──
+   부스 타입과 스폰서 등급은 code_lists에 들어 있고, 행사 전용 목록이 있으면
+   그걸 쓰고 없으면 공통을 쓴다(state.js codeList). 그 규칙이 화면에서 안 보이면
+   "고쳤는데 안 바뀐다"가 되므로, 지금 보고 있는 게 공통인지 이 행사 것인지를
+   머리말에 배지로 붙인다. */
+const EV_BOOTH_LISTS = [['booth_type','부스 타입'], ['grade','스폰서 등급']];
+
+function evBoothHtml(ev){
+  return EV_BOOTH_LISTS.map(([key, label]) => {
+    const mine = clRowsOf(key, ev.key);
+    const common = clRowsOf(key, '');
+    const inherited = !mine.length;
+    return `<div style="margin-bottom:22px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <div style="font-size:12px;font-weight:700;color:var(--i2)">${escapeHtml(label)}</div>
+        <span class="pill ${inherited ? 'p-gray' : 'p-blue'}">${inherited ? '공통' : '이 행사'}</span>
+      </div>
+      ${!inherited ? clRowsHtml(mine, false)
+        : common.length
+          ? `<div style="font-size:11px;color:var(--i4);margin-bottom:8px">이 행사 전용 목록이 없어 <b>공통 목록</b>을 씁니다. 아래에 항목을 추가하거나 공통을 복제하면, 그때부터 이 행사는 자기 목록만 씁니다.</div>
+             <div style="opacity:.55;pointer-events:none">${clRowsHtml(common, true)}</div>
+             <button class="btn" style="font-size:11px;margin-top:8px" onclick="cloneCommonCodeList('${escAttr(key)}')">공통 ${common.length}개를 이 행사로 복제</button>`
+          : `<div style="font-size:11px;color:var(--i4)">공통 목록에도 이 행사 전용으로도 아직 항목이 없어요. 아래에서 추가하면 이 행사 전용 목록이 만들어집니다.</div>`}
+      <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--i6)">
+        <div style="flex:1;min-width:140px"><div class="mlbl">저장값</div>
+          <input class="fi" id="evcl-code-${escAttr(key)}" placeholder="예: Block System D" style="width:100%"
+            onkeydown="if(event.key==='Enter')addEvCodeRow('${escAttr(key)}')"></div>
+        <div style="flex:1;min-width:140px"><div class="mlbl">화면에 보일 이름</div>
+          <input class="fi" id="evcl-label-${escAttr(key)}" placeholder="비우면 저장값 그대로" style="width:100%"
+            onkeydown="if(event.key==='Enter')addEvCodeRow('${escAttr(key)}')"></div>
+        <button class="btn bp" onclick="addEvCodeRow('${escAttr(key)}')" style="min-width:60px;height:36px">추가</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+export async function addEvCodeRow(listKey){
+  const ev = EVENT_LIST.find(e => e.key === evDetailKey);
+  if(!ev) return;
+  const code = (document.getElementById(`evcl-code-${listKey}`)?.value || '').trim();
+  if(!code){ document.getElementById(`evcl-code-${listKey}`)?.focus(); return; }
+  if(clRowsOf(listKey, ev.key).some(c => c.code === code)){ alert('이미 있는 값이에요.'); return; }
+
+  const rows = clRowsOf(listKey, ev.key);
+  const row = {
+    id: `CD-${listKey}-${clSlug(ev.key)}-${clSlug(code)}-${Math.random().toString(36).slice(2, 6)}`,
+    list_key: listKey, event_id: ev.key, code,
+    label: (document.getElementById(`evcl-label-${listKey}`)?.value || '').trim() || code,
+    cls: '', note: '', active: '',
+    sort_order: String((Number(rows[rows.length - 1]?.sort_order) || rows.length * 10) + 10),
+  };
+  CODE_LISTS.push(row);
+  const r = await saveCodeRow(row, '선택 목록 추가');
+  if(!r.ok){ CODE_LISTS.pop(); renderEvDetail(); return; }
+  applyCodeLists();
+  trackAction('edit', '선택 목록 추가', row.label, `${clDef(listKey).label}(${ev.key})에 "${row.label}" 추가`);
+  renderEvDetail();
+}
+
+/* 공통을 통째로 이 행사 것으로 옮겨 적는다. 한 줄만 고치고 싶어도 행사 전용
+   목록이 생기는 순간 공통은 안 쓰이므로, 나머지도 같이 넘겨야 목록이 줄지 않는다. */
+export async function cloneCommonCodeList(listKey){
+  const ev = EVENT_LIST.find(e => e.key === evDetailKey);
+  if(!ev) return;
+  const common = clRowsOf(listKey, '');
+  if(!common.length) return;
+  if(clRowsOf(listKey, ev.key).length){ renderEvDetail(); return; }
+  if(!confirm(`공통 ${clDef(listKey).label} ${common.length}개를 ${ev.key} 전용으로 복제할까요?\n복제한 뒤에는 이 행사만 따로 고칠 수 있고, 공통을 고쳐도 이 행사에는 반영되지 않습니다.`)) return;
+
+  const made = [];
+  for(const c of common){
+    const row = { ...c, event_id: ev.key,
+      id: `CD-${listKey}-${clSlug(ev.key)}-${clSlug(c.code)}-${Math.random().toString(36).slice(2, 6)}` };
+    CODE_LISTS.push(row);
+    const r = await saveCodeRow(row, '선택 목록 복제');
+    if(!r.ok){
+      // 중간에 끊기면 반쪽짜리 목록이 남는다 — 넣은 것만 되돌리고 멈춘다
+      [...made, row].forEach(x => { const i = CODE_LISTS.indexOf(x); if(i >= 0) CODE_LISTS.splice(i, 1); });
+      alert('복제 도중 저장에 실패했어요. 아무것도 바뀌지 않았습니다.');
+      applyCodeLists(); renderEvDetail(); return;
+    }
+    made.push(row);
+  }
+  applyCodeLists();
+  trackAction('edit', '선택 목록 복제', ev.key, `${clDef(listKey).label} 공통 ${made.length}개를 ${ev.key} 전용으로 복제`);
+  renderEvDetail();
+}
+
+/* ── 일정 ──
+   전에는 전시 탭 대시보드의 "마감일 설정"에서만 고칠 수 있었다. 설정을 찾으러
+   여기 온 사람을 전시 탭으로 돌려보내지 않으려고 같은 값을 여기서도 고친다.
+   담기는 자리(EXH_CFG.due / .book)는 그대로라 전시 탭과 늘 같은 값을 본다. */
+const EV_DUE_STEPS = Object.entries(DUE_LABEL);
+const EV_BOOK_DEFAULT = { chars: 1300, words: 200 };
+
+function evDueHtml(ev){
+  const cfg = EXH_CFG[ev.key] || {};
+  const due = cfg.due || {}, book = cfg.book || {};
+  return `
+    <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">단계별 마감일</div>
+    <div style="font-size:11px;color:var(--i4);margin-bottom:10px">기업에서 받아내야 해서 늦으면 준비가 밀리는 단계들이에요. 비워 두면 마감 없음입니다.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:18px">
+      ${EV_DUE_STEPS.map(([k, l]) => `<div><div class="mlbl">${escapeHtml(l)}</div>
+        <input class="fi" type="date" id="evd-due-${escAttr(k)}" value="${escAttr(due[k] || '')}" style="width:100%"></div>`).join('')}
+    </div>
+    <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">프로그램북 한도</div>
+    <div style="font-size:11px;color:var(--i4);margin-bottom:10px">지면 기준이 행사마다 달라요. 비워 두면 기본값(${EV_BOOK_DEFAULT.chars.toLocaleString()}자 · ${EV_BOOK_DEFAULT.words}단어)을 씁니다.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:320px;margin-bottom:14px">
+      <div><div class="mlbl">글자수</div>
+        <input class="fi" type="number" id="evd-book-chars" value="${escAttr(book.chars || EV_BOOK_DEFAULT.chars)}" style="width:100%"></div>
+      <div><div class="mlbl">단어수</div>
+        <input class="fi" type="number" id="evd-book-words" value="${escAttr(book.words || EV_BOOK_DEFAULT.words)}" style="width:100%"></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn bp" onclick="saveEvDue()" style="min-width:80px">저장</button>
+      <span id="evd-due-msg" style="font-size:11px;color:var(--g)"></span>
+    </div>`;
+}
+
+export async function saveEvDue(){
+  const ev = EVENT_LIST.find(e => e.key === evDetailKey);
+  if(!ev) return;
+  const msg = document.getElementById('evd-due-msg');
+  const say = (t, ok) => { if(msg){ msg.style.color = ok ? 'var(--g)' : 'var(--re)'; msg.textContent = t; } };
+
+  const chars = Number(document.getElementById('evd-book-chars')?.value);
+  const words = Number(document.getElementById('evd-book-words')?.value);
+  if(!(chars > 0) || !(words > 0)){ say('글자수·단어수 한도는 1 이상이어야 해요.'); return; }
+
+  const due = {};
+  EV_DUE_STEPS.forEach(([k]) => {
+    const v = (document.getElementById(`evd-due-${k}`)?.value || '').trim();
+    if(v) due[k] = v;   // 빈 칸은 안 담는다 — 마감 없음과 빈 문자열을 구분할 필요가 없다
+  });
+
+  const prev = EXH_CFG[ev.key] ? JSON.parse(JSON.stringify(EXH_CFG[ev.key])) : undefined;
+  const cfg = { ...(prev || {}), due, book: { chars, words } };
+  EXH_CFG[ev.key] = cfg;
+  const r = await saveExhCfgToSheet(ev.key, cfg);
+  if(r && r.ok === false){
+    if(prev) EXH_CFG[ev.key] = prev; else delete EXH_CFG[ev.key];
+    say('저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.'); renderEvDetail(); return;
+  }
+
+  const changed = [];
+  EV_DUE_STEPS.forEach(([k, l]) => {
+    const a = ((prev || {}).due || {})[k] || '', b = due[k] || '';
+    if(a !== b) changed.push(`${l} ${a || '없음'} → ${b || '없음'}`);
+  });
+  const pb = (prev || {}).book || {};
+  if(pb.chars !== chars || pb.words !== words){
+    changed.push(`프로그램북 한도 ${pb.chars || EV_BOOK_DEFAULT.chars}자·${pb.words || EV_BOOK_DEFAULT.words}단어 → ${chars}자·${words}단어`);
+  }
+  if(changed.length) trackAction('edit', '행사 설정 변경', ev.key, changed.join(' / '));
+
+  say('저장했어요.', true);
+  renderEvCfgList();
+  window.renderExh?.();
+  setTimeout(() => { const m = document.getElementById('evd-due-msg'); if(m) m.textContent = ''; }, 2000);
+}
+
+window.openEvDetail        = openEvDetail;
+window.closeEvDetail       = closeEvDetail;
+window.setEvDetailSeg      = setEvDetailSeg;
+window.renderEvDetail      = renderEvDetail;
+window.saveEvBasic         = saveEvBasic;
+window.toggleEvPart        = toggleEvPart;
+window.addEvCodeRow        = addEvCodeRow;
+window.cloneCommonCodeList = cloneCommonCodeList;
+window.saveEvDue           = saveEvDue;

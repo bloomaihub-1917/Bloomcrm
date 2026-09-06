@@ -17,7 +17,7 @@
      읽기만 하면 됩니다 — 라이브 바인딩이라 항상 최신값입니다.)
 ═══════════════════════════════════════════════════════════════ */
 
-import { EVENT_LIST_SEED, CL, CP, CAT_KEYS } from './constants.js';
+import { EVENT_LIST_SEED, CL, CP, CAT_KEYS, EVENT_PARTS } from './constants.js';
 
 /* ── 백엔드 API 베이스 URL (Node/Express, backend-node/) ──
    Render 등에 배포한 뒤 이 값만 바꾸면 된다(과거 GS_URL과 동일한 역할).
@@ -414,6 +414,24 @@ export function loadExhCfg(settingsRows){
     } catch(e){ console.warn('[CRM] 행사 설정 파싱 실패:', k, e); }
   });
 }
+
+/* ── 진행 파트 — EXH_CFG.parts ──
+   저장은 exh_cfg_<행사키> 안에 함께 담는다. 행사 하나가 settings에 한 줄인
+   구조를 그대로 두는 편이, 파트를 넣자고 events 테이블에 열을 늘리는 것보다
+   되돌리기 쉽다.
+
+   정해 둔 게 없는 행사는 EVENT_PARTS의 기본값을 쓴다 — 지금까지 만든 행사에는
+   parts가 없으므로, 여기서 전시를 켜 두지 않으면 멀쩡히 쓰던 전시 탭이
+   한꺼번에 잠긴다. */
+export function evParts(evKey){
+  const saved = (EXH_CFG[evKey] || {}).parts || {};
+  const out = {};
+  EVENT_PARTS.forEach(p => {
+    out[p.key] = (p.key in saved) ? !!saved[p.key] : p.dflt;
+  });
+  return out;
+}
+export function evPartOn(evKey, part){ return !!evParts(evKey)[part]; }
 
 /* ══════════════════════════════════════════
    COMPANY_SECTORS — 기업 섹터 트리 (원본 6258~6276행)

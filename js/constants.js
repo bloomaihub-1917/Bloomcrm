@@ -113,3 +113,19 @@ export const COUNTRIES = [
   {code:'MY', nameKo:'말레이시아', aliases:['malaysia','말레이시아']},
   {code:'OTHER', nameKo:'기타',  aliases:[]},
 ];
+
+/* ── EVENT_PARTS — 행사가 품는 파트(진행 여부) ──
+   행사마다 무엇을 하는지가 다르다. 전시만 하는 행사가 있고, 컨퍼런스와
+   파트너링을 같이 여는 행사도 있다. 전에는 이걸 적어 둘 곳이 없어서 화면이
+   늘 전부 켜져 있었다.
+
+   partTypes는 PART_TYPES_SEED의 key와 정확히 같아야 한다 — 나중에 파트별로
+   명단을 걸러 보여줄 때 이 문자열로 잇는다.
+   기본값(dflt)은 새 행사에 아무것도 안 정했을 때의 상태다. 전시는 이 앱이
+   지금까지 해 온 일이라 켜 두고, 나머지는 정한 뒤에 켜게 한다. */
+export const EVENT_PARTS = [
+  { key:'exh',        label:'전시',     dflt:true,  partTypes:['전시참가기업'] },
+  { key:'conf',       label:'컨퍼런스',  dflt:false, partTypes:['연사','참가자'] },
+  { key:'partnering', label:'파트너링',  dflt:false, partTypes:['비즈니스파트너링','바이어','BD'] },
+  { key:'sponsor',    label:'후원',     dflt:false, partTypes:['스폰서'] },
+];

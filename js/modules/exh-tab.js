@@ -20,6 +20,7 @@ import {
   EVENT_LIST, contacts, participations, CO_DB, currentUser, API_BASE_URL, auditLog,
   catalogItem, catalogFor, findCatalogByName, EQUIP_CATALOG, getOrgById,
   codeList, codeLabel, codeCls,
+  evPartOn,
 } from '../state.js';
 import { td, escapeHtml, escAttr, isMobile, cleanEmail } from '../utils.js';
 export { cleanEmail };   // exh-drawer가 여기서 가져다 쓴다
@@ -660,6 +661,17 @@ export function renderExh(){
   const mttl = document.getElementById('mob-exh-ttl');
   if(mttl) mttl.textContent = ev ? (ev.short || ev.name || '전시 진행관리') : '전시 진행관리';
   updateExhBadge();
+
+  // 이 행사가 전시를 안 하기로 돼 있으면 목록을 열지 않는다 — 참가기업이
+  // 남아 있어도 지금 다룰 일이 아니고, 여기서 손대면 설정과 화면이 어긋난다
+  if(exhEvent && !evPartOn(exhEvent, 'exh')){
+    el.innerHTML = `<div class="empty" style="padding:60px 20px;text-align:center">
+      <div style="font-size:30px;margin-bottom:10px">🚧</div>
+      <div style="font-weight:700;margin-bottom:6px">이 행사는 전시를 진행하지 않아요</div>
+      <div style="font-size:12px;color:var(--i4)">설정 › 행사 관리에서 이 행사를 고른 뒤
+        <b>진행 파트</b>에서 전시를 켜면 다시 열립니다.</div></div>`;
+    return;
+  }
 
   const list = visibleList();
   const all = activeExhibitors(exhEvent);
