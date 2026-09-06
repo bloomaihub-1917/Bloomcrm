@@ -739,6 +739,76 @@ function renderInquiryPanel(){
     </div></div>`;
 }
 
+/* ── 지난 행사와 견주기 (신규 · 재참가 · 이탈) ──
+   "이 회사가 작년에도 왔나"는 플래그로 적어 두면 왜 그런 판정인지 되짚을 수 없고
+   해마다 다시 적어야 한다. 지난 행사의 참가기업을 같은 모양(exhibitors)으로
+   넣어 두고 계산한다 — 근거가 데이터에 남고, "작년엔 왔는데 올해 안 온 곳"까지
+   덤으로 나온다(내년 영업 타겟이다).
+
+   어느 행사가 "지난 행사"인가는 설정(exh_cfg.prev)으로 정한다. 날짜로 자동
+   추정하면 날짜를 안 채운 행사에서 조용히 엉뚱한 곳을 가리킨다. */
+export function prevEventKey(evKey){
+  const ev = evKey || exhEvent;
+  const set = exhCfg(ev).prev;
+  if(set) return set;
+  /* 설정이 없으면 날짜가 이 행사보다 앞선 행사 중 가장 최근 것.
+     날짜가 없는 행사는 견줄 수 없으니 뺀다. */
+  const here = EVENT_LIST.find(e => e.key === ev);
+  const mine = here && here.date;
+  if(!mine) return null;
+  return EVENT_LIST
+    .filter(e => e.key !== ev && e.date && e.date < mine && exhibitorsForEvent(e.key).length)
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)))[0]?.key || null;
+}
+
+/* 지난 행사에 참가했던 기업(org_id) 집합. 기업 레코드를 키로 쓴다 —
+   이름으로 맞추면 사명이 바뀐 곳이 새 기업으로 보인다(압타머사이언스 →
+   츌립앤사이언스). 아직 기업에 연결되지 않은 옛 줄은 이름으로 한 번 더 본다. */
+export function prevOrgKeys(evKey){
+  const prev = prevEventKey(evKey);
+  if(!prev) return null;
+  const ids = new Set(), names = new Set();
+  exhibitorsForEvent(prev).forEach(x => {
+    if(x.org_id) ids.add(x.org_id);
+    const n = exhNames(x);
+    [n.ko, n.en, x.company_name].forEach(v => { const k = normalizeCompanyKey(v || ''); if(k) names.add(k); });
+  });
+  return { prev, ids, names };
+}
+
+/* 이 기업이 지난 행사에도 왔나. 지난 행사 자료가 없으면 null(모름) — 안 왔다와
+   구별해야 한다. 모르는 걸 "신규"로 세면 첫 행사가 전부 신규가 된다. */
+export function isReturning(x, keys){
+  if(!keys) return null;
+  if(x.org_id && keys.ids.has(x.org_id)) return true;
+  const n = exhNames(x);
+  return [n.ko, n.en, x.company_name]
+    .some(v => { const k = normalizeCompanyKey(v || ''); return k && keys.names.has(k); });
+}
+
+/* 지난 행사에는 있었는데 이번에 없는 기업 — 이탈. 취소한 곳도 이탈로 본다
+   (신청했다가 취소한 것은 따로 표시한다). */
+export function droppedFromPrev(evKey){
+  const prev = prevEventKey(evKey);
+  if(!prev) return [];
+  const here = exhibitorsForEvent(evKey || exhEvent);
+  const alive = here.filter(x => x.status !== CANCELLED);
+  const ids = new Set(alive.map(x => x.org_id).filter(Boolean));
+  const names = new Set();
+  alive.forEach(x => { const n = exhNames(x);
+    [n.ko, n.en, x.company_name].forEach(v => { const k = normalizeCompanyKey(v || ''); if(k) names.add(k); }); });
+  const cancelled = new Map();
+  here.filter(x => x.status === CANCELLED).forEach(x => {
+    if(x.org_id) cancelled.set(x.org_id, x);
+  });
+  return exhibitorsForEvent(prev).filter(x => {
+    if(x.org_id && ids.has(x.org_id)) return false;
+    const n = exhNames(x);
+    return ![n.ko, n.en, x.company_name]
+      .some(v => { const k = normalizeCompanyKey(v || ''); return k && names.has(k); });
+  }).map(x => ({ x, cancelled: x.org_id ? cancelled.get(x.org_id) : null }));
+}
+
 /* ── 참가기업 구성 요약 ──
    기업리스트는 "이 기업이 어디까지 왔나"를 한 줄씩 보는 화면이라, 51줄을 눈으로
    더하기 전에는 "몇 개국 몇 개사인지", "해외가 몇 부스인지"를 알 수 없었다.
@@ -783,6 +853,13 @@ function exhSummary(all){
     type:  sumBy(all, x => x.booth_type || '', boothQty),
     grade: countBy(all.filter(x => x.grade && x.grade !== 'Exhibitor'), x => x.grade),
     noBooth: all.filter(x => !String(x.booth_no || '').trim()).length,
+    prev: (() => {
+      const keys = prevOrgKeys();
+      if(!keys) return null;
+      const back = all.filter(x => isReturning(x, keys));
+      return { key: keys.prev, back: back.length, fresh: all.length - back.length,
+               dropped: droppedFromPrev().length };
+    })(),
   };
 }
 
@@ -817,6 +894,10 @@ function renderExhSummary(all){
 
       ${block('부스 타입', `<div style="display:flex;flex-wrap:wrap;gap:3px">${cnt(s.type, 'p-blue')}</div>
         ${sub('부스 수 기준')}`, 2)}
+
+      ${s.prev ? block('지난 행사 대비', `<div>${n(s.prev.back)}<span style="font-size:11px;color:var(--i4)"> 재참가</span>
+        <span style="color:var(--i6);margin:0 5px">·</span>${n(s.prev.fresh)}<span style="font-size:11px;color:var(--i4)"> 신규</span></div>
+        ${sub(`${escapeHtml(s.prev.key)} 대비${s.prev.dropped ? ` · <span style="color:var(--am)">이탈 ${s.prev.dropped}곳</span>` : ''}`)}`) : ''}
 
       ${Object.keys(s.grade).length
         ? block('스폰서 등급', `<div style="display:flex;flex-wrap:wrap;gap:3px">${
@@ -2344,6 +2425,9 @@ function attnRow(x, kind, text, days, tab){
 
 /* 모바일 — 기업당 카드 하나. 진행률과 "지금 뭐가 걸려있나"가 먼저 보이게 한다. */
 function renderChecklistCards(list, all){
+  const keys = prevOrgKeys();
+  const backBadge = (x) => isReturning(x, keys)
+    ? '<span class="pill p-teal" style="font-size:9px">재참가</span>' : '';
   const stat = (x, s) => {
     const c = cellState(x, s);
     if(c.state === 'na') return '';
@@ -2380,6 +2464,7 @@ function renderChecklistCards(list, all){
           <span style="font-size:14px;font-weight:700${off ? ';text-decoration:line-through' : ''}">${escapeHtml(exhNames(x).ko)}</span>${
             exhNames(x).en ? `<span style="font-size:11px;color:var(--i4);font-weight:400">${escapeHtml(exhNames(x).en)}</span>` : ''}
           ${off ? '<span class="pill p-gray">참가 취소</span>' : ''}
+          ${backBadge(x)}
           ${x.grade && x.grade !== 'Exhibitor' ? `<span class="pill ${gradeCls(x.grade)}">${escapeHtml(x.grade)}</span>` : ''}
           ${openN ? `<span class="pill p-amber" style="margin-left:auto"
             onclick="event.stopPropagation();openExhDr('${escAttr(x.id)}','logs')">문의 ${openN}</span>` : ''}
@@ -2414,6 +2499,11 @@ function renderChecklistCards(list, all){
 }
 
 function renderChecklistTable(list, all){
+  /* 지난 행사에도 왔던 곳에만 배지를 단다. 신규에는 달지 않는다 —
+     51줄 중 20줄에 배지가 붙으면 배지가 아니라 배경이 된다. */
+  const keys = prevOrgKeys();
+  const backBadge = (x) => isReturning(x, keys)
+    ? `<span class="pill p-teal" style="font-size:9px" title="${escAttr(keys.prev)}에도 참가한 기업이에요">재참가</span>` : '';
   const cell = (x, s) => {
     const c = cellState(x, s);
     const map = {
@@ -2459,6 +2549,7 @@ function renderChecklistTable(list, all){
               <span style="font-weight:700;font-size:12px${off ? ';text-decoration:line-through' : ''}">${escapeHtml(exhNames(x).ko)}</span>${
                 exhNames(x).en ? `<span style="font-size:10.5px;color:var(--i4);margin-left:4px">${escapeHtml(exhNames(x).en)}</span>` : ''}
               ${off ? '<span class="pill p-gray">참가 취소</span>' : ''}
+              ${backBadge(x)}
               ${x.grade && x.grade !== 'Exhibitor' ? `<span class="pill ${gradeCls(x.grade)}">${escapeHtml(x.grade)}</span>` : ''}
             </div>
             ${x.booth_no ? `<div style="font-size:10px;color:var(--i4)">부스 ${escapeHtml(x.booth_no)}${
