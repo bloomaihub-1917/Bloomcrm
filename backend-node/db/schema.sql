@@ -22,6 +22,9 @@ CREATE TABLE IF NOT EXISTS sectors (
   canonical TEXT
 );
 
+-- 행사. 아래 profile 계열 7개는 "어떤 행사였나"를 적어 두는 칸이다 —
+-- 이름과 기간만으로는 몇 해 지난 뒤 이 행사가 무엇이었는지 아무도 모른다.
+-- 기존 DB에는 db/add-event-profile.js가 같은 컬럼을 붙인다.
 CREATE TABLE IF NOT EXISTS events (
   id         TEXT PRIMARY KEY,
   name       TEXT NOT NULL,
@@ -29,7 +32,15 @@ CREATE TABLE IF NOT EXISTS events (
   date_start TEXT,
   date_end   TEXT,
   location   TEXT,
-  color      TEXT
+  color      TEXT,
+  host       TEXT,   -- 주최
+  organizer  TEXT,   -- 주관
+  our_role   TEXT,   -- 우리가 맡은 일 (운영대행/부스시공/…)
+  theme      TEXT,   -- 대주제
+  scale      TEXT,   -- 규모 (참가사·관람객 등 자유 표기)
+  homepage   TEXT,
+  summary    TEXT,   -- 행사 성격 — 어떤 행사였나
+  outcome    TEXT    -- 성과·비고 — 다음에 참고할 것
 );
 
 CREATE TABLE IF NOT EXISTS part_types (

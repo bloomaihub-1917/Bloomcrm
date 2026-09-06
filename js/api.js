@@ -447,6 +447,15 @@ export async function loadFromSheets(hooks = {}){
         date_start: r.date_start || r.date || '',
         date_end:   r.date_end   || '',
         location:   r.location   || '',
+        // 행사 개요 — 행사 탭에서 채운다. 없는 서버(구버전)면 전부 빈 값이 된다
+        host:       r.host       || '',
+        organizer:  r.organizer  || '',
+        our_role:   r.our_role   || '',
+        theme:      r.theme      || '',
+        scale:      r.scale      || '',
+        homepage:   r.homepage   || '',
+        summary:    r.summary    || '',
+        outcome:    r.outcome    || '',
       })).filter(e => e.key));
       console.log('[CRM] events loaded:', EVENT_LIST.length, '건');
     }
@@ -456,6 +465,9 @@ export async function loadFromSheets(hooks = {}){
     // participations 업데이트 — 필드명 정규화 적용(핵심 개선사항)
     if(partsData && Array.isArray(partsData)){
       participations.splice(0, participations.length, ...partsData.map(normalizeParticipationRow));
+      // 행사 탭이 참여자를 미리 세어 두고 있다 — 새로 읽었으면 다시 세게 한다
+      // (window 경유 — event-tab이 이 파일을 import하므로 직접 부르면 순환이 된다)
+      window.invalidateEvRows?.();
       console.log('participations loaded:', participations.length);
     }
 
@@ -575,7 +587,10 @@ export async function saveEventToSheet(ev){
   const r = await postToSheet({
     sheet:  'events',
     action: 'upsert',
-    row: [ev.key, ev.name, ev.short, ev.date_start||ev.date||'', ev.date_end||'', ev.location||'', ev.color],
+    // 위치 배열이라 data.js의 events.columns와 순서가 정확히 같아야 한다
+    row: [ev.key, ev.name, ev.short, ev.date_start||ev.date||'', ev.date_end||'', ev.location||'', ev.color,
+      ev.host||'', ev.organizer||'', ev.our_role||'', ev.theme||'',
+      ev.scale||'', ev.homepage||'', ev.summary||'', ev.outcome||''],
   }, '행사 저장');
   if(r.ok) console.log('[CRM] event saved:', ev.key);
   return r;
