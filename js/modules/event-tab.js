@@ -346,17 +346,34 @@ export async function saveEvDbProfile(){
 }
 
 /* ── 참여자 ── */
-function roleChips(evKey){
-  const rows = evPeople(evKey);
+/* 역할 칩 — 세는 대상이 탭마다 다르다.
+   참여자 탭은 사람을, 기업 탭은 기업을 센다. 전에는 둘 다 사람으로 세서,
+   4명이 온 기업이 한 줄로 잘 접혀 있는데도 머리에는 "전체 76"이 떠 있었다.
+   목록과 숫자가 다른 것을 세면 접기가 안 된 줄 안다.
+   단위(명·개사)를 붙여 두 번 다시 헷갈리지 않게 한다. */
+function roleChips(evKey, byOrg){
   const cnt = {};
-  rows.forEach(r => r.roles.forEach(k => { cnt[k] = (cnt[k] || 0) + 1; }));
+  let total;
+  if(byOrg){
+    const orgs = evOrgs(evKey);
+    total = orgs.length;
+    // 한 기업이 여러 역할을 걸칠 수 있다(연사도 보내고 부스도 낸 곳) —
+    // 그 기업은 양쪽 칩에 한 번씩 잡힌다. 기업 하나가 두 번 세어지지는 않는다.
+    orgs.forEach(o => o.roles.forEach(k => { cnt[k] = (cnt[k] || 0) + 1; }));
+  } else {
+    const rows = evPeople(evKey);
+    total = rows.length;
+    rows.forEach(r => r.roles.forEach(k => { cnt[k] = (cnt[k] || 0) + 1; }));
+  }
+  const unit = byOrg ? '개사' : '명';
+
   const order = PART_TYPES.map(p => p.key).filter(k => cnt[k]);
   Object.keys(cnt).forEach(k => { if(!order.includes(k)) order.push(k); });
 
   return `<div class="seg" style="flex-wrap:wrap">
-    <button class="seg-b${!evdbRoleFil ? ' on' : ''}" onclick="setEvDbRole('')">전체 ${rows.length}</button>
+    <button class="seg-b${!evdbRoleFil ? ' on' : ''}" onclick="setEvDbRole('')">전체 ${total}${unit}</button>
     ${order.map(k => `<button class="seg-b${evdbRoleFil === k ? ' on' : ''}"
-      onclick="setEvDbRole('${escAttr(k)}')">${escapeHtml(k)} ${cnt[k]}</button>`).join('')}
+      onclick="setEvDbRole('${escAttr(k)}')">${escapeHtml(k)} ${cnt[k]}${unit}</button>`).join('')}
   </div>`;
 }
 
@@ -416,7 +433,7 @@ function peopleRowsHtml(){
 /* ── 기업 ──
    이 화면이 이 탭을 만든 이유다. 행사에서 만난 기업을 골라 타겟으로 보낸다. */
 function orgsHtml(ev){
-  return `<div style="padding:10px 16px 0">${roleChips(ev.key)}</div>
+  return `<div style="padding:10px 16px 0">${roleChips(ev.key, true)}</div>
     <div style="padding:10px 16px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       ${searchBoxHtml('기업명 검색…')}
       <button class="btn" style="font-size:11px" onclick="toggleEvDbAll()">전체 선택/해제</button>
