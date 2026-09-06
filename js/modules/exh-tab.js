@@ -22,7 +22,7 @@ import {
   codeList, codeLabel, codeCls,
   evPartOn,
 } from '../state.js';
-import { td, escapeHtml, escAttr, isMobile, cleanEmail } from '../utils.js';
+import { td, escapeHtml, escAttr, isMobile, cleanEmail, countryName } from '../utils.js';
 export { cleanEmail };   // exh-drawer가 여기서 가져다 쓴다
 import {
   postToSheet,
@@ -602,7 +602,7 @@ export function setExhEvent2(key){ boothTypeFil = ''; setExhEvent(key); buildExh
 export function setExhFilter(k){ exhFilter = k; buildExhFilters(); renderExh(); }
 
 /* ══════════════════════════════════════════
-   메인 — 미답변 문의 패널 + 체크리스트 표
+   메인 — 미답변 문의 패널 + 기업리스트 표
 ══════════════════════════════════════════ */
 /* ── 참가기업 이름 검색 ──
    전에는 company_name(국문) 하나만 봤다. 국문명이 아예 없고 영문만 있는 기업이
@@ -686,11 +686,11 @@ export function renderExh(){
     return;
   }
 
-  /* 보기 전환 — 진행 전체를 보는 두 가지(대시보드·체크리스트) 다음에,
+  /* 보기 전환 — 진행 전체를 보는 두 가지(대시보드·기업리스트) 다음에,
      실무를 품목 단위로 처리하는 세 가지를 둔다. 부스·비품·그래픽은 각각
      담당이 갈리고 마감도 달라서, 기업별 드로어를 51번 열지 않고 한 화면에서
      끝낼 수 있어야 한다. */
-  const VIEWS = [['dash','대시보드'], ['list','체크리스트'],
+  const VIEWS = [['dash','대시보드'], ['list','기업리스트'],
     ['booth','부스 현황'], ['equip','비품 현황'], ['graphic','그래픽 현황'],
     ['money','금액 현황'], ['book','프로그램북']];
   const seg = `<div class="tbar" style="padding:10px 16px 0">
@@ -736,6 +736,94 @@ function renderInquiryPanel(){
         </div>`;
       }).join('')}
       ${open.length > 8 ? `<div style="font-size:11px;color:var(--i4);padding:6px 10px">외 ${open.length - 8}건</div>` : ''}
+    </div></div>`;
+}
+
+/* ── 참가기업 구성 요약 ──
+   기업리스트는 "이 기업이 어디까지 왔나"를 한 줄씩 보는 화면이라, 51줄을 눈으로
+   더하기 전에는 "몇 개국 몇 개사인지", "해외가 몇 부스인지"를 알 수 없었다.
+   주최사 보고와 홍보 문구("12개국 51개사 60부스")에 매번 쓰는 숫자인데 그때마다
+   엑셀로 옮겨 세고 있었다.
+
+   기업 수와 부스 수를 따로 센다 — 한 기업이 두세 부스를 쓰는 곳이 있어서
+   둘이 같지 않다(2026 KIC은 51개사 60부스). 발주·도면·안내는 부스 수로 움직이고
+   초청·등록은 기업 수로 움직여서, 둘 중 하나만 있으면 늘 다시 세게 된다. */
+const isDomestic = (c) => countryName(c) === '대한민국';
+/* countBy와 같은데 1씩이 아니라 weight만큼 더한다(기업 수가 아니라 부스 수) */
+const sumBy = (list, key, weight) => {
+  const c = {};
+  list.forEach(x => { const k = key(x); if(k) c[k] = (c[k] || 0) + weight(x); });
+  return c;
+};
+/* 부스 수 — 안 적힌 곳은 1부스로 본다(대부분 1부스라 비워 두고 넘어간다) */
+const boothQty = (x) => Math.max(1, num(x.booth_qty) || 1);
+
+function exhSummary(all){
+  const of = (x) => {
+    const o = x.org_id ? getOrgById(x.org_id) : null;
+    return (o && o.country) || '';
+  };
+  const g = { home: [], away: [], unknown: [] };
+  all.forEach(x => {
+    const c = of(x);
+    (!c ? g.unknown : isDomestic(c) ? g.home : g.away).push(x);
+  });
+  const boothsOf = (arr) => arr.reduce((a, x) => a + boothQty(x), 0);
+  const countries = new Set(all.map(of).filter(Boolean).map(countryName));
+
+  return {
+    all, countries,
+    co:    { home: g.home.length, away: g.away.length, unknown: g.unknown.length },
+    booth: { home: boothsOf(g.home), away: boothsOf(g.away), unknown: boothsOf(g.unknown),
+             total: boothsOf(all) },
+    /* 층과 부스 타입은 부스 수로 센다 — 도면·안내·조립부스 발주가 전부 부스
+       단위로 움직인다. 한 기업이 두 부스를 쓰면 조립도 두 벌이다.
+       등급은 스폰서 계약이라 기업 수로 센다. */
+    floor: sumBy(all, x => (x.booth_floor ? x.booth_floor + '층' : ''), boothQty),
+    type:  sumBy(all, x => x.booth_type || '', boothQty),
+    grade: countBy(all.filter(x => x.grade && x.grade !== 'Exhibitor'), x => x.grade),
+    noBooth: all.filter(x => !String(x.booth_no || '').trim()).length,
+  };
+}
+
+/* 요약 카드. 숫자 하나를 크게 놓고 그 아래에 무엇을 나눈 값인지 적는다 —
+   "23"만 있으면 기업 수인지 부스 수인지 알 수 없다. */
+function renderExhSummary(all){
+  if(!all.length) return '';
+  const s = exhSummary(all);
+  const n = (v) => `<b style="font-size:17px;font-weight:800">${v}</b>`;
+  const sub = (t) => `<div style="font-size:10.5px;color:var(--i4);margin-top:2px">${t}</div>`;
+
+  let nth = 0;
+  const block = (title, body, grow = 1) => `<div style="flex:${grow};min-width:${grow > 1 ? 210 : 140}px;padding:0 12px${
+    nth++ ? ';border-left:1px solid var(--i7)' : ''}">
+    <div style="font-size:10px;color:var(--i5);font-weight:600;letter-spacing:.02em">${title}</div>
+    <div style="margin-top:3px">${body}</div></div>`;
+
+  const cnt = (obj, cls) => Object.entries(obj).sort((x, y) => y[1] - x[1])
+    .map(([k, v]) => `<span class="pill ${cls}" style="font-size:9.5px">${escapeHtml(k)} ${v}</span>`).join('');
+
+  return `<div class="uc" style="margin:12px 0 10px;padding:11px 4px">
+    <div style="display:flex;flex-wrap:wrap;gap:10px 0;align-items:flex-start">
+      ${block('참가기업', `${n(s.all.length)}<span style="font-size:11px;color:var(--i4)"> 개사</span>
+        <span style="color:var(--i6);margin:0 5px">·</span>${n(s.countries.size)}<span style="font-size:11px;color:var(--i4)"> 개국</span>
+        ${sub(`국내 ${s.co.home} · 해외 ${s.co.away}${s.co.unknown ? ` · 국가 미확인 ${s.co.unknown}` : ''}`)}`)}
+
+      ${block('부스', `${n(s.booth.total)}<span style="font-size:11px;color:var(--i4)"> 부스</span>
+        ${sub(`국내 ${s.booth.home} · 해외 ${s.booth.away}${s.booth.unknown ? ` · 미확인 ${s.booth.unknown}` : ''}`)}`)}
+
+      ${block('층', `<div style="display:flex;flex-wrap:wrap;gap:3px">${cnt(s.floor, 'p-gray')}</div>
+        ${sub(s.noBooth ? `<span style="color:var(--am)">부스 미배정 ${s.noBooth}곳</span>` : '부스 수 기준')}`)}
+
+      ${block('부스 타입', `<div style="display:flex;flex-wrap:wrap;gap:3px">${cnt(s.type, 'p-blue')}</div>
+        ${sub('부스 수 기준')}`, 2)}
+
+      ${Object.keys(s.grade).length
+        ? block('스폰서 등급', `<div style="display:flex;flex-wrap:wrap;gap:3px">${
+            Object.entries(s.grade).sort((a, b) => b[1] - a[1])
+              .map(([k, v]) => `<span class="pill ${gradeCls(k)}" style="font-size:9.5px">${escapeHtml(k)} ${v}</span>`).join('')
+          }</div>${sub(`일반 ${s.all.length - Object.values(s.grade).reduce((a, b) => a + b, 0)}곳`)}`)
+        : ''}
     </div></div>`;
 }
 
@@ -2272,6 +2360,7 @@ function renderChecklistCards(list, all){
   };
 
   return `<div style="padding:10px 12px 16px">
+    ${renderExhSummary(all)}
     <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">
       ${STEPS.map(s => {
         const n = all.filter(x => cellState(x, s).state === 'done').length;
@@ -2348,6 +2437,7 @@ function renderChecklistTable(list, all){
   }));
 
   return `<div style="padding:0 16px 16px">
+    ${renderExhSummary(all)}
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin:12px 0">
       ${stats.map(s => `<span class="pill ${s.n === all.length ? 'p-green' : 'p-gray'}">${escapeHtml(s.label)} ${s.n}/${all.length}</span>`).join('')}
     </div>
@@ -2693,7 +2783,7 @@ export function openExhCfg(){
 
   modalShell('exh-cfg-modal', `${ev ? (ev.short || ev.name) : exhEvent} 설정`, `
     <div style="font-size:11.5px;color:var(--i4);margin-bottom:10px">
-      마감일을 지나도록 못 끝낸 기업은 <b>처리 필요</b>에 모이고, 체크리스트 칸이 빨갛게 바뀝니다.
+      마감일을 지나도록 못 끝낸 기업은 <b>처리 필요</b>에 모이고, 기업리스트 칸이 빨갛게 바뀝니다.
       비워 두면 그 단계는 마감을 보지 않습니다.</div>
 
     ${DUE_STEPS.map(([key, label]) => `
