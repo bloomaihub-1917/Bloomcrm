@@ -126,13 +126,16 @@ export function renderExhDr(){
   // 신청서가 아직 안 왔거나 정보가 빠졌으면 탭에서 바로 보이게 한다
   const appNeedsWork = !(x.app_received === 'yes' || x.app_received_at) || x.app_complete === 'no';
   const bookMiss = bookMissing(x);   // 도록에 낼 정보 중 아직 안 받은 칸
+  // 아직 안 받은 그래픽 — 탭을 열어 보기 전에 받을 게 남았는지 알려 준다
+  const gLeft = graphicUnreceived(x.id);
 
   const tabsEl = document.getElementById('exh-drtabs');
   if(tabsEl) tabsEl.innerHTML = TABS.map((tb) =>
     `<button class="drtab${drTab === tb.key ? ' on' : ''}" onclick="switchExhDT('${tb.key}')">${tb.label}${
       tb.key === 'logs' && openN ? ` <span class="pill p-amber">${openN}</span>` : ''}${
       tb.key === 'apply' && appNeedsWork ? ' <span class="pill p-amber">확인</span>' : ''}${
-      tb.key === 'book' && bookMiss.length ? ` <span class="pill p-amber">${bookMiss.length}</span>` : ''}</button>`).join('');
+      tb.key === 'book' && bookMiss.length ? ` <span class="pill p-amber">${bookMiss.length}</span>` : ''}${
+      tb.key === 'graphic' && gLeft ? ` <span class="pill p-amber">${gLeft}</span>` : ''}</button>`).join('');
 
   const b = document.getElementById('exh-drbd');
   const VIEW = { contact: dContactTab, apply: dApply, progress: dProgress,
@@ -1574,8 +1577,17 @@ export async function delGraphicFeedback(id){
    항목마다 받은 날과 받은 것 설명을 따로 남긴다. 금액 항목과 같은 줄을 쓰므로
    정산 탭에서 추가한 그래픽이 그대로 여기 나온다 — 두 군데에 또 적지 않는다.
 ══════════════════════════════════════════ */
+/* 정산에 들어간 그래픽 항목 — 취소(voided)된 줄은 받을 것이 아니다.
+   드로어 탭 배지와 그래픽 탭이 같은 목록을 봐야 숫자가 어긋나지 않는다. */
+function graphicItems(exhId){
+  return liveItemsFor(exhId).filter(i => (i.category || '') === 'graphic');
+}
+export function graphicUnreceived(exhId){
+  return graphicItems(exhId).filter(i => !i.received_at).length;
+}
+
 function graphicItemsBlock(x){
-  const gi = itemsFor(x.id).filter(i => i.category === 'graphic');
+  const gi = graphicItems(x.id);
   if(!gi.length){
     return `<div style="font-size:11.5px;color:var(--i5);margin-bottom:8px">등록된 그래픽 항목이 없어요</div>
       <div style="font-size:11px;color:var(--i4);margin-bottom:8px">
@@ -1587,7 +1599,8 @@ function graphicItemsBlock(x){
   const got = gi.filter(i => i.received_at).length;
 
   return `<div style="font-size:11px;color:var(--i4);margin-bottom:8px">
-      주문한 항목은 정산 탭의 <b>그래픽</b> 분류에서 가져옵니다. 여기서는 <b>무엇을 받았는지</b>만 표시해요.</div>
+      정산 탭의 <b>그래픽</b> 분류에서 그대로 가져옵니다 — 여기서 항목을 늘리거나 지우지는 않아요.
+      기업에서 파일을 받으면 왼쪽 칸에 체크하고, 받은 파일이 무엇이었는지 적어 두세요.</div>
 
     ${gi.map(i => {
       const on = !!i.received_at;
@@ -1630,7 +1643,12 @@ export async function toggleItemReceived(id){
 }
 
 function dGraphic(x){
-  const ordered = !!x.graphic_ordered_at;
+  /* 정산에 그래픽 항목이 들어갔다는 건 이미 주문을 받았다는 뜻이다. 전에는
+     graphic_ordered_at을 따로 눌러 줘야 이 탭이 열려서, 정산에 항목을 넣어 놓고도
+     "그래픽 주문 없음"을 보게 됐다 — 받아야 할 파일이 있는데 그 목록이 잠겨 있었다.
+     항목이 있으면 주문일 없이도 연다(주문일은 언제 받았나를 적는 칸으로 남는다). */
+  const gItems = graphicItems(x.id);
+  const ordered = !!x.graphic_ordered_at || gItems.length > 0;
   const g = graphicState(x);
   const invs = invoicesFor(x.id);
 
@@ -1638,12 +1656,23 @@ function dGraphic(x){
     return `<div style="text-align:center;padding:40px 20px">
       <div style="font-size:28px;margin-bottom:8px">🎨</div>
       <div style="font-size:13px;font-weight:600;margin-bottom:4px">그래픽 주문 없음</div>
-      <div style="font-size:11.5px;color:var(--i4);margin-bottom:16px">추가로 그래픽을 주문하면 여기서 관리해요</div>
-      <button class="btn bp" onclick="toggleExhDate('${escAttr(x.id)}','graphic_ordered_at','그래픽 주문')">그래픽 주문 등록</button>
+      <div style="font-size:11.5px;color:var(--i4);margin-bottom:16px">
+        정산 탭에서 <b>그래픽</b> 분류로 항목을 넣으면 여기가 자동으로 열려요.<br>
+        항목 없이 먼저 잡아 두려면 아래에서 주문일만 등록할 수도 있어요.</div>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <button class="btn bp" onclick="switchExhDT('billing')">정산 탭에서 항목 넣기</button>
+        <button class="btn" onclick="toggleExhDate('${escAttr(x.id)}','graphic_ordered_at','그래픽 주문')">주문일만 등록</button>
+      </div>
     </div>`;
   }
 
   return `
+  ${sct('받을 그래픽', graphicItemsBlock(x), (() => {
+    if(!gItems.length) return '';
+    const got = gItems.filter(i => i.received_at).length;
+    return `<span class="pill ${got === gItems.length ? 'p-green' : got ? 'p-amber' : 'p-amber'}">받음 ${got}/${gItems.length}</span>`;
+  })())}
+
   ${sct('주문', dateRow(x, 'graphic_ordered_at', '그래픽 주문일') +
     `<div style="padding:10px 0 0"><label class="fl">유형</label>
       <div class="stbs" style="margin-top:4px">
@@ -1677,12 +1706,6 @@ function dGraphic(x){
   ${sct('피드백', graphicFeedbackBlock(x),
     (() => { const n = graphicFeedback(x.id).length; return n ? `<span class="pill p-gray">${n}</span>` : ''; })())}
 
-  ${sct('그래픽 항목', graphicItemsBlock(x), (() => {
-    const gi = itemsFor(x.id).filter(i => i.category === 'graphic');
-    if(!gi.length) return '';
-    const got = gi.filter(i => i.received_at).length;
-    return `<span class="pill ${got === gi.length ? 'p-green' : got ? 'p-amber' : 'p-gray'}">받음 ${got}/${gi.length}</span>`;
-  })())}
   `;
 }
 
