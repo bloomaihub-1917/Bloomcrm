@@ -100,6 +100,9 @@ const STEPS = [
     warn: (x) => ((x.app_received_at || x.app_received === 'yes') && x.app_complete === 'no')
       || !!openAppFor(x.id) },
   { key: 'booth_confirmed_at',   label: '부스', flag: 'booth_confirmed' },
+  /* 독립부스만 해당한다 — 조립부스는 우리가 짓는 것이라 받을 도면이 없어
+     'na'(·)로 비운다. 51곳 중 18곳이라 열 하나를 더 세울 값어치가 있다. */
+  { key: 'calc:design',          label: '부스<br>도면' },
   { key: 'calc:invoice',         label: '인보이스' },
   { key: 'tax_sent_at',          label: '세금<br>계산서' },
   { key: 'calc:payment',         label: '입금' },
@@ -383,6 +386,7 @@ export const DUE_STEPS = [
   ['manual_replied_at',     '매뉴얼 회신'],
   ['app_received_at',       '신청서 접수'],
   ['booth_confirmed_at',    '부스 확정'],
+  ['calc:design',           '부스 도면 (독립부스)'],
   ['calc:payment',          '입금'],
   ['calc:graphic',          '그래픽 확정'],
   ['directory_received_at', '도록 정보'],
@@ -421,7 +425,7 @@ export function guardWrite(fn){
 /* 마감을 놓친 줄을 눌렀을 때 열 드로어 탭 — 바로 처리할 수 있는 자리로 보낸다 */
 const DUE_TAB = {
   'manual_replied_at': 'progress', 'app_received_at': 'apply',
-  'booth_confirmed_at': 'progress', 'calc:payment': 'billing',
+  'booth_confirmed_at': 'progress', 'calc:design': 'progress', 'calc:payment': 'billing',
   'calc:graphic': 'graphic', 'directory_received_at': 'book', 'movein_at': 'progress',
 };
 
@@ -572,6 +576,11 @@ function rawCellState(x, step){
     const g = graphicState(x);
     if(g.state === 'none') return { state: 'na' };
     return g;
+  }
+  if(step.key === 'calc:design'){
+    if((x.booth_type || '') !== SELF_BUILD_TYPE) return { state: 'na' };
+    const d = boothDesignState(x);
+    return d.state === 'none' ? { state: 'todo' } : d;
   }
   const v = x[step.key];
   // 관리대장에 O/X만 있고 날짜가 없는 항목이 많다. 날짜를 지어내지 않되
@@ -2187,6 +2196,14 @@ export async function submitNewGraphicOrder(){
    대시보드 — 기업 하나하나가 아니라 행사 전체를 본다.
    "어디까지 왔나 / 돈은 얼마나 들어왔나 / 오늘 뭘 처리해야 하나" 세 가지에 답한다.
 ══════════════════════════════════════════ */
+/* 단계 완료 수 — 해당 없는 기업(na)은 분모에서 뺀다.
+   부스 도면은 독립부스에만, 그래픽은 주문한 곳에만 해당한다. 전체를 분모로
+   두면 51곳 중 18곳짜리 단계가 영영 "0/51"로 남아 늘 밀린 것처럼 보인다. */
+export function stepTally(all, step){
+  const live = all.filter(x => cellState(x, step).state !== 'na');
+  return { n: live.filter(x => cellState(x, step).state === 'done').length, of: live.length };
+}
+
 function renderDashboard(all){
   if(!all.length) return '';
   const n = all.length;
@@ -2322,14 +2339,16 @@ function renderDashboard(all){
     </div>`;
   };
 
-  const stepRow = (label, done, warn, due) => {
-    const pct = Math.round(done / n * 100);
+  /* of는 그 단계에 해당하는 기업 수다. 부스 도면은 독립부스에만, 그래픽은
+     주문한 곳에만 해당해서 전체(n)를 분모로 두면 영영 100%가 안 된다. */
+  const stepRow = (label, done, warn, due, of = n) => {
+    const pct = of ? Math.round(done / of * 100) : 0;
     // 마감이 지났는데 다 못 끝냈으면 빨갛게, 남았으면 날짜만 조용히 붙인다
-    const late = due && due.days < 0 && done < n;
+    const late = due && due.days < 0 && done < of;
     return `<div style="display:flex;align-items:center;gap:9px;margin-bottom:7px">
       <span style="font-size:11.5px;color:var(--i3);flex:0 0 74px">${escapeHtml(label)}</span>
       <div style="flex:1;min-width:0">${progressBar(pct, pct === 100 ? 'var(--g)' : late ? 'var(--re)' : 'var(--a)')}</div>
-      <span style="font-size:11px;color:var(--i4);flex:0 0 48px;text-align:right">${done}/${n}</span>
+      <span style="font-size:11px;color:var(--i4);flex:0 0 48px;text-align:right">${done}/${of}</span>
       <span style="flex:0 0 66px;text-align:right;font-size:10px;color:${late ? 'var(--re)' : 'var(--i5)'}">${
         due ? escapeHtml(due.date.slice(5)) + (late ? ` ${-due.days}일↑` : '') : ''}</span>
       ${warn ? `<span class="pill p-amber" style="flex:0 0 auto">${warn}</span>` : '<span style="flex:0 0 24px"></span>'}
@@ -2370,9 +2389,11 @@ function renderDashboard(all){
       <div class="uc-ttl">단계별 진행
         <button class="btn" onclick="openExhCfg()" style="float:right;height:24px;font-size:10.5px;padding:0 8px">마감일 설정</button></div>
       ${STEPS.map(st => {
-        const done = all.filter(x => rawCellState(x, st).state === 'done').length;
-        const warn = all.filter(x => rawCellState(x, st).state === 'warn').length;
-        return stepRow(st.label.replace(/<br>/g, ''), done, warn, dueInfo(st.key, exhEvent));
+        const live = all.filter(x => rawCellState(x, st).state !== 'na');
+        if(!live.length) return '';
+        const done = live.filter(x => rawCellState(x, st).state === 'done').length;
+        const warn = live.filter(x => rawCellState(x, st).state === 'warn').length;
+        return stepRow(st.label.replace(/<br>/g, ''), done, warn, dueInfo(st.key, exhEvent), live.length);
       }).join('')}
       ${Object.keys(eventDeadlines(exhEvent)).length ? '' :
         `<div style="font-size:10.5px;color:var(--i5);margin-top:6px">마감일을 정해 두면 늦은 기업이 처리 필요에 모입니다</div>`}
@@ -2575,8 +2596,9 @@ function renderChecklistCards(list, all){
     ${renderExhSummary(all)}
     <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">
       ${STEPS.map(s => {
-        const n = all.filter(x => cellState(x, s).state === 'done').length;
-        return `<span class="pill ${n === all.length ? 'p-green' : 'p-gray'}">${escapeHtml(s.label.replace(/<br>/g, ''))} ${n}/${all.length}</span>`;
+        const t = stepTally(all, s);
+        if(!t.of) return '';
+        return `<span class="pill ${t.n === t.of ? 'p-green' : 'p-gray'}">${escapeHtml(s.label.replace(/<br>/g, ''))} ${t.n}/${t.of}</span>`;
       }).join('')}
     </div>
     ${list.map(x => {
@@ -2651,13 +2673,13 @@ function renderChecklistTable(list, all){
 
   const stats = STEPS.map(s => ({
     label: s.label.replace(/<br>/g, ''),
-    n: all.filter(x => cellState(x, s).state === 'done').length,
-  }));
+    ...stepTally(all, s),
+  })).filter(s => s.of);
 
   return `<div style="padding:0 16px 16px">
     ${renderExhSummary(all)}
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin:12px 0">
-      ${stats.map(s => `<span class="pill ${s.n === all.length ? 'p-green' : 'p-gray'}">${escapeHtml(s.label)} ${s.n}/${all.length}</span>`).join('')}
+      ${stats.map(s => `<span class="pill ${s.n === s.of ? 'p-green' : 'p-gray'}">${escapeHtml(s.label)} ${s.n}/${s.of}</span>`).join('')}
     </div>
     <div class="tw"><table><thead><tr>
       <th style="min-width:150px">기업</th>
