@@ -844,7 +844,8 @@ function dApply(x){
         ${items.map(i => `<div class="bl-row bl-item" style="padding:6px 8px;background:var(--i9);border-radius:6px">
           <span class="pill p-gray" style="text-align:center">비품</span>
           <span style="min-width:0;font-size:12px;font-weight:600;word-break:break-all">${escapeHtml(i.name || '')}</span>
-          <span class="bl-qty" style="font-size:11px;color:var(--i4)">${escapeHtml(i.qty || '')}${i.qty && i.unit_price ? ' × ' : ''}${i.unit_price ? money(i.unit_price) : ''}</span>
+          <span class="bl-qty">${escapeHtml(i.qty || '')}${
+            i.unit_price ? `<span class="bl-up">${i.qty ? ' × ' : ''}${money(i.unit_price)}</span>` : ''}</span>
           <span class="bl-amt">${fmtMoney(i.amount, i.currency || 'KRW')}</span>
           <span></span><span></span>
         </div>`).join('')}
@@ -1143,22 +1144,24 @@ function dBilling(x){
             onclick="toggleItemBillable('${escAttr(i.id)}')"
             title="${isBillable(i) ? '클릭하면 청구에서 제외합니다' : '청구에서 빠져 있어요 — 클릭하면 되돌립니다'}">${
             isBillable(i) ? escapeHtml(l) : '제외'}</span>
-          <span style="min-width:0;font-size:12px;font-weight:600;word-break:break-all${
-            isVoided(i) ? ';color:var(--i5);text-decoration:line-through' : isBillable(i) ? '' : ';color:var(--i5)'}">${escapeHtml(i.name || '')}${appMark(i)}</span>
-          <span class="bl-qty" style="font-size:11px;color:var(--i4)">${escapeHtml(i.qty || '')}${i.qty && i.unit_price ? ' × ' : ''}${i.unit_price ? money(i.unit_price) : ''}</span>
+          <span class="bl-nm" style="${
+            isVoided(i) ? 'color:var(--i5);text-decoration:line-through' : isBillable(i) ? '' : 'color:var(--i5)'}"
+            title="${escAttr(i.name || '')}">${escapeHtml(i.name || '')}${appMark(i)}</span>
+          <span class="bl-qty">${escapeHtml(i.qty || '')}${
+            i.unit_price ? `<span class="bl-up">${i.qty ? ' × ' : ''}${money(i.unit_price)}</span>` : ''}</span>
           <input class="fi bl-amt-in" value="${escAttr(i.amount || '')}" placeholder="금액"
             onchange="setItemField('${escAttr(i.id)}','amount',this.value)">
           ${curSelect(i.currency, `setItemField('${escAttr(i.id)}','currency',this.value)`)}
-          <button class="btn bs" onclick="voidExhItem('${escAttr(i.id)}')"
-            title="${isVoided(i) ? '취소를 되돌립니다' : '취소 처리 — 지우지 않고 내려서 이력이 남아요'}">${isVoided(i) ? '↩' : '취소'}</button>
-          <button class="btn bs" onclick="delExhItem('${escAttr(i.id)}')" title="완전히 삭제 — 잘못 넣은 줄에만 쓰세요">✕</button>
+          <button class="btn bs bl-mini" onclick="voidExhItem('${escAttr(i.id)}')"
+            title="${isVoided(i) ? '취소를 되돌립니다' : '취소 처리 — 지우지 않고 내려서 이력이 남아요'}">${isVoided(i) ? '↩' : '⊘'}</button>
+          <button class="btn bs bl-mini" onclick="delExhItem('${escAttr(i.id)}')" title="완전히 삭제 — 잘못 넣은 줄에만 쓰세요">✕</button>
         </div>`).join('')
         + `<div class="bl-row bl-item bl-subtotal">
             <span></span>
             <span style="min-width:0;font-size:11px;color:var(--i4)">${escapeHtml(l)} 소계 <span style="color:var(--i5)">${g.length}건</span></span>
             <span class="bl-qty"></span>
             <span class="bl-amt" style="font-size:12px">${sumText(sumByCurrency(g))}</span>
-            <span></span><span></span>
+            <span></span><span></span><span></span>
           </div>`;
       }).join('') : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">아직 항목이 없어요</div>'}
       ${items.length ? `<div class="bl-row bl-item bl-total">
@@ -1166,7 +1169,7 @@ function dBilling(x){
         <span style="min-width:0;font-size:12px;font-weight:700">총계 <span style="font-weight:400;color:var(--i4)">${items.length}건</span></span>
         <span class="bl-qty"></span>
         <span class="bl-amt" style="font-size:13px">${sumText(sumByCurrency(items))}</span>
-        <span></span><span></span>
+        <span></span><span></span><span></span>
       </div>
       ${(() => {
         const ex = excludedSum(items);
