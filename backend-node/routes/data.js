@@ -89,7 +89,16 @@ const TABLES = {
   exhibitor_items: {
     table: 'exhibitor_items', pk: 'id', idPrefix: 'XI-',
     columns: ['id', 'exhibitor_id', 'category', 'name', 'qty', 'unit_price', 'amount', 'currency', 'note', 'sort_order',
-      'catalog_id', 'billable', 'shared_ref', 'received_at', 'received_note'],
+      'catalog_id', 'billable', 'shared_ref', 'received_at', 'received_note',
+      'app_id', 'change_kind', 'prev_qty', 'prev_amount', 'voided_at'],
+  },
+
+  /* 신청서 접수 이력. 파일로 온 것만이 아니라 메일·유선으로 받은 변경도
+     한 줄이다 — 경로가 달라도 접수는 접수다. */
+  exhibitor_apps: {
+    table: 'exhibitor_apps', pk: 'id', idPrefix: 'XA-',
+    columns: ['id', 'exhibitor_id', 'seq', 'received_at', 'channel', 'kind', 'reason',
+      'file_name', 'complete', 'missing', 'handled_at', 'handler', 'summary', 'note'],
   },
 
   /* 렌탈 비품 품목표 — 행사별로 따로 둔다(단가가 행사마다 다르다) */

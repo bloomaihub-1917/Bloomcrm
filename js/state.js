@@ -221,6 +221,7 @@ export const EXH_ITEMS    = [];  // 금액 항목 (부스/비품/그래픽/기�
 export const EXH_INVOICES = [];  // 인보이스 (여러 장 발행 가능)
 export const EXH_PAYMENTS = [];  // 입금 내역 (분할 입금 대응)
 export const EXH_LOGS     = [];  // 문의사항(kind='inquiry') + 자유 기록(kind='note')
+export const EXH_APPS     = [];  // 신청서 접수 이력 (최초 + 변경/취소 재접수)
 
 /* 렌탈 비품 품목표 — 행사별로 다르다(렌탈사와 단가가 행사마다 바뀐다).
    신청 항목(EXH_ITEMS.catalog_id)이 여기의 id를 가리킨다. */
@@ -275,6 +276,22 @@ export function primaryContactFor(exhId){
   return list.find(c => c.is_primary === 'yes') || list[0] || null;
 }
 export function itemsFor(exhId){ return EXH_ITEMS.filter(i => i.exhibitor_id === exhId); }
+/* 살아 있는 품목 — 취소된 줄은 뺀다. 발주·정산·대장은 전부 이걸 본다.
+   취소를 지우지 않고 내리는 이유는 이미 나간 인보이스를 설명해야 하기 때문. */
+export const isVoided = (i) => !!String(i.voided_at || '').trim();
+export function liveItemsFor(exhId){ return itemsFor(exhId).filter(i => !isVoided(i)); }
+
+/* 신청서 접수 이력 — 받은 순서대로(차수 오름차순) */
+export function appsFor(exhId){
+  return EXH_APPS.filter(a => a.exhibitor_id === exhId)
+    .sort((a, b) => (Number(a.seq) || 0) - (Number(b.seq) || 0)
+      || String(a.received_at || '').localeCompare(String(b.received_at || '')));
+}
+/* 아직 반영 중인 접수 건. 이게 열려 있으면 그동안 고친 품목이 여기 달린다 —
+   사람이 "추가인가 변경인가"를 매번 고르게 하면 안 적히거나 틀리게 적힌다. */
+export function openAppFor(exhId){
+  return appsFor(exhId).filter(a => !String(a.handled_at || '').trim()).pop() || null;
+}
 export function invoicesFor(exhId){ return EXH_INVOICES.filter(i => i.exhibitor_id === exhId); }
 export function paymentsFor(exhId){ return EXH_PAYMENTS.filter(p => p.exhibitor_id === exhId); }
 export function logsFor(exhId){

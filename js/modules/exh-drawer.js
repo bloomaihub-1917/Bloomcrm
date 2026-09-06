@@ -16,11 +16,12 @@ import {
   EXH_CONTACTS, EXH_ITEMS, EXH_INVOICES, EXH_PAYMENTS, EXH_LOGS, CO_DB, currentUser,
   contactsFor, catalogFor, catalogItem, EQUIP_CATALOG, findCatalogByName,
   contacts, participations, getOrgById, codeList, codeLabel,
+  EXH_APPS, appsFor, openAppFor, isVoided, liveItemsFor,
 } from '../state.js';
 import { td, escapeHtml, escAttr } from '../utils.js';
 import {
-  saveExhContact, saveExhItem, saveExhInvoice, saveExhPayment, saveExhLog,
-  deleteExhContact, deleteExhItem, deleteExhInvoice, deleteExhPayment, deleteExhLog,
+  saveExhContact, saveExhItem, saveExhInvoice, saveExhPayment, saveExhLog, saveExhApp,
+  deleteExhContact, deleteExhItem, deleteExhInvoice, deleteExhPayment, deleteExhLog, deleteExhApp,
   saveEquipCatalog,
 } from '../api.js';
 import { trackAction } from './audit-tab.js';
@@ -28,7 +29,7 @@ import {
   billedAmount, paidAmount, graphicState, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
   isPendingRefund, boothTypeOptions, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
   TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing, introOver,
-  patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar,
+  patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar, needsReissue,
   settleState, liveInvoices, payDueDate,
 } from './exh-tab.js';
 
@@ -668,6 +669,150 @@ function dContactTab(x){
   return `${sct('기업 담당자', dContact(x))}`;
 }
 
+/* ══════════════════════════════════════════
+   신청서 접수 이력
+
+   기업은 신청서를 한 번만 보내지 않는다. 프로그램북 소개글을 고쳐 다시 보내고,
+   전시패스를 더 달라고 메일 본문으로 알려 오고, 의자를 빼달라고 전화한다.
+   접수일 칸이 하나였을 때는 덮어쓰면 최초 접수일이 사라지고, 안 고치면 변경이
+   안 남았다 — 실제로 변경이 품목 비고에 손으로 적혀 있었다.
+
+   ── 추가인지 변경인지 사람이 고르지 않는다 ──
+   접수 건을 "반영 중"으로 열어 두면, 그동안 고친 품목이 자동으로 그 건에
+   달린다. 매번 사람이 판단해 고르게 하면 안 적히거나 틀리게 적힌다.
+   무엇이 달라졌는지는 데이터가 이미 알고 있다.
+══════════════════════════════════════════ */
+
+/* 버튼 문구는 받침에 따라 조사가 달라 함께 적어 둔다 — "유선로"가 된다 */
+const APP_CHANNELS = [['신청서', '신청서로 접수'], ['메일', '메일로 접수'],
+  ['유선', '유선으로 접수'], ['현장', '현장에서 접수']];
+const APP_KINDS    = ['최초', '변경', '취소'];
+
+/* 접수를 한 줄 연다. 첫 줄이면 최초, 아니면 변경으로 시작한다. */
+export async function addExhApp(exhId, preset = {}){
+  const prev = appsFor(exhId);
+  const open = openAppFor(exhId);
+  if(open && !preset.force){
+    alert('아직 반영 중인 접수가 있어요. 그 건을 먼저 닫아주세요.');
+    return;
+  }
+  const rec = {
+    id: localId('XA-'), exhibitor_id: exhId,
+    seq: String(prev.length + 1),
+    received_at: preset.received_at || td(),
+    channel: preset.channel || '신청서',
+    kind: preset.kind || (prev.length ? '변경' : '최초'),
+    reason: preset.reason || '', file_name: preset.file_name || '',
+    complete: '', missing: '', handled_at: '', handler: '', summary: '', note: '',
+  };
+  if(!await addRow(EXH_APPS, rec, saveExhApp)) return;
+  /* 최초 접수는 체크리스트가 보는 칸도 함께 채운다 — 두 곳이 갈라지지 않게. */
+  const x = getExhibitorById(exhId);
+  if(x && rec.kind === '최초' && !x.app_received_at){
+    await patchExh(x, { app_received: 'yes', app_received_at: rec.received_at }, '신청서 수신');
+  }
+  trackAction('add', '신청서 접수', x?.company_name || '',
+    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(rec.seq)}차 접수 (${escapeHtml(rec.kind)} · ${escapeHtml(rec.channel)})`);
+  refreshExhViews();
+}
+
+export const setAppField = (id, field, value) =>
+  setRowField(EXH_APPS, saveExhApp, '신청서 접수', id, field, value);
+export const delExhApp = (id) => removeRow(EXH_APPS, id, deleteExhApp);
+
+/* 이 접수 건에 달린 품목 변경을 사람이 읽는 한 줄로 만든다.
+   닫을 때 한 번 만들어 summary에 넣는다 — 나중에 품목을 또 고쳐도 그때
+   무엇이 달라졌었는지는 그대로 남아야 한다. */
+export function appDiffLines(appId, exhId){
+  return itemsFor(exhId).filter(i => i.app_id === appId).map(i => {
+    const q = i.qty || '1';
+    if(i.change_kind === '취소') return `− ${i.name} ${q}개 취소`;
+    if(i.change_kind === '변경') return `~ ${i.name} ${i.prev_qty || '?'} → ${q}`;
+    return `+ ${i.name} ${q}개 추가`;
+  });
+}
+
+/* 반영 완료 — 무엇이 달라졌는지 적어 두고 닫는다. */
+export async function closeExhApp(exhId, appId){
+  const a = EXH_APPS.find(r => r.id === appId);
+  if(!a) return;
+  const lines = appDiffLines(appId, exhId);
+  const who = currentUser?.name || '';
+  await setRowField(EXH_APPS, saveExhApp, '신청서 접수', appId, 'summary',
+    lines.length ? lines.join(' · ') : '품목 변경 없음');
+  await setRowField(EXH_APPS, saveExhApp, '신청서 접수', appId, 'handler', who);
+  await setRowField(EXH_APPS, saveExhApp, '신청서 접수', appId, 'handled_at', td());
+  refreshExhViews();
+}
+export const reopenExhApp = (appId) =>
+  setRowField(EXH_APPS, saveExhApp, '신청서 접수', appId, 'handled_at', '');
+
+/* 품목을 취소한다. 지우지 않고 내린다 — 이미 나간 인보이스가 왜 그 금액이었는지
+   설명할 수 있어야 한다. 발주·정산·대장에서는 빠진다. */
+export async function voidExhItem(id){
+  const i = EXH_ITEMS.find(r => r.id === id);
+  if(!i) return;
+  if(isVoided(i)){ await setItemField(id, 'voided_at', ''); return; }
+  if(!confirm(`"${i.name}"을(를) 취소 처리할까요?\n지우지 않고 내려서 이력은 남습니다.`)) return;
+  const open = openAppFor(i.exhibitor_id);
+  if(open){ await setItemField(id, 'app_id', open.id); await setItemField(id, 'change_kind', '취소'); }
+  await setItemField(id, 'voided_at', td());
+}
+
+/* 품목이 몇 차 접수에서 어떻게 됐는지 — 이름 옆 배지 */
+function appMark(i){
+  if(!i.app_id) return '';
+  const a = EXH_APPS.find(r => r.id === i.app_id);
+  if(!a) return '';
+  const cls = i.change_kind === '취소' ? 'p-red' : i.change_kind === '변경' ? 'p-amber' : 'p-teal';
+  return ` <span class="pill ${cls}" style="font-size:9px" title="${escAttr(
+    (a.received_at || '') + (a.reason ? ' · ' + a.reason : ''))}">${escapeHtml(a.seq)}차 ${escapeHtml(i.change_kind || '추가')}</span>`;
+}
+
+/* 접수 이력 화면 */
+function appsSection(x){
+  const list = appsFor(x.id);
+  const open = openAppFor(x.id);
+  const add = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+    ${APP_CHANNELS.map(([c, l]) => `<button class="btn bs" onclick="addExhApp('${escAttr(x.id)}',{channel:'${c}'})">+ ${l}</button>`).join('')}
+  </div>`;
+
+  if(!list.length) return sct('신청서 접수 이력',
+    `<div style="font-size:11.5px;color:var(--i4)">아직 접수 기록이 없어요. 신청서를 받은 날짜부터 남겨두면 변경이 몇 번 있었는지 그대로 따라옵니다.</div>${add}`);
+
+  const rows = list.map(a => {
+    const live = !String(a.handled_at || '').trim();
+    const diff = live ? appDiffLines(a.id, x.id) : [];
+    return `<div style="border:1px solid ${live ? 'var(--a)' : 'var(--i7)'};border-radius:8px;padding:9px 10px;margin-bottom:6px;background:${live ? 'var(--ad)' : 'var(--W)'}">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <span class="pill ${a.kind === '최초' ? 'p-blue' : a.kind === '취소' ? 'p-red' : 'p-amber'}">${escapeHtml(a.seq)}차 · ${escapeHtml(a.kind || '')}</span>
+        <span class="pill p-gray">${escapeHtml(a.channel || '')}</span>
+        <input type="date" class="fi" style="width:132px;font-size:11px" value="${escAttr(a.received_at || '')}"
+          onchange="setAppField('${escAttr(a.id)}','received_at',this.value)">
+        ${live ? '<span class="pill p-amber">반영 중</span>'
+               : `<span style="font-size:10.5px;color:var(--i4)">반영 ${escapeHtml(a.handled_at)}${a.handler ? ' · ' + escapeHtml(a.handler) : ''}</span>`}
+        <span style="margin-left:auto;display:flex;gap:4px">
+          ${live ? `<button class="btn bs" onclick="closeExhApp('${escAttr(x.id)}','${escAttr(a.id)}')">반영 완료</button>`
+                 : `<button class="btn bs" onclick="reopenExhApp('${escAttr(a.id)}')">다시 열기</button>`}
+          <button class="btn bs" onclick="delExhApp('${escAttr(a.id)}')">삭제</button>
+        </span>
+      </div>
+      <input class="fi" style="margin-top:6px;font-size:11.5px" placeholder="왜 다시 받았나요 — 예: 프북 수정, 전시패스 추가"
+        value="${escAttr(a.reason || '')}" onchange="setAppField('${escAttr(a.id)}','reason',this.value)">
+      ${a.file_name ? `<div style="font-size:10.5px;color:var(--i4);margin-top:4px">📄 ${escapeHtml(a.file_name)}</div>` : ''}
+      ${live && diff.length ? `<div style="font-size:11px;color:var(--i2);margin-top:6px;padding:6px 8px;background:var(--W);border-radius:6px">
+          ${diff.map(d => escapeHtml(d)).join('<br>')}</div>` : ''}
+      ${!live && a.summary ? `<div style="font-size:11px;color:var(--i3);margin-top:5px">${escapeHtml(a.summary)}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  const hint = open
+    ? `<div style="font-size:11px;color:var(--a);margin-top:2px">${escapeHtml(open.seq)}차 접수를 반영하는 중이에요 — 지금 고치는 품목이 이 접수 건에 기록됩니다.</div>`
+    : '';
+  return sct('신청서 접수 이력', rows + hint + add,
+    list.length > 1 ? `<span class="pill p-amber">변경 ${list.length - 1}회</span>` : '');
+}
+
 /* ── 신청항목 탭 ──
    신청서를 받았는지, 받았다면 빠진 게 없는지, 무엇을 더 신청했는지를 한 화면에서
    본다. 신청 내역을 정산의 금액 항목으로 옮기는 버튼도 여기 둔다 — 적어둔 내역과
@@ -676,6 +821,8 @@ function dApply(x){
   const appIssue = x.app_received_at && x.app_complete === 'no';
   const items = itemsFor(x.id).filter(i => (i.category || '') === 'equip');
   return `
+  ${appsSection(x)}
+
   ${sct('신청서',
     flagRow(x, 'app_received', 'app_received_at', '신청서 수신') +
     `<div style="padding:10px 0 2px">
@@ -902,7 +1049,10 @@ const payPill = (m) => {
 };
 
 function dBilling(x){
-  const items = itemsFor(x.id);
+  /* 목록에는 취소된 줄도 보여준다 — 왜 빠졌는지 여기서 확인해야 한다.
+     합계는 살아 있는 것만 센다. */
+  const allItems = itemsFor(x.id);
+  const items = allItems.filter(i => !isVoided(i));
   const invs = invoicesFor(x.id);
   const pays = paymentsFor(x.id);
   // 입금과 환불은 성격이 달라 따로 본다 — 환불은 요청/완료 상태까지 따라간다
@@ -968,12 +1118,24 @@ function dBilling(x){
       <button class="btn bs" onclick="unsettleExh('${escAttr(x.id)}')">완납 처리 해제</button></div>` : ''}
   </div>
 
+  ${(() => {
+    const r = needsReissue(x.id);
+    return r ? `<div class="uc" style="border-left:3px solid var(--re);margin-bottom:10px">
+      <div style="font-size:12px;font-weight:700;color:var(--re)">인보이스 발행 뒤에 신청이 바뀌었어요</div>
+      <div style="font-size:11px;color:var(--i3);margin-top:4px">
+        마지막 인보이스 ${escapeHtml(r.last)} 이후 접수 ${r.apps.length}건 —
+        ${r.apps.map(a => escapeHtml(`${a.seq}차 ${a.received_at}${a.reason ? ' (' + a.reason + ')' : ''}`)).join(' · ')}
+      </div>
+      <div style="font-size:10.5px;color:var(--i4);margin-top:4px">청구액이 맞는지 보고, 다르면 옛 인보이스를 무효로 두고 다시 발행하세요.</div>
+    </div>` : '';
+  })()}
+
   ${sct('금액 항목', `
     <div style="display:flex;flex-direction:column;gap:1px;margin-bottom:8px">
-      ${items.length ? itemCats().map(({ code: k, label: l }) => {
+      ${allItems.length ? itemCats().map(({ code: k, label: l }) => {
         // 분류별로 묶어서 소계를 붙인다 — 부스와 비품이 섞여 있으면 어느 쪽이
         // 얼마인지 세어보기 전엔 알 수 없다. 항목이 없는 분류는 건너뛴다.
-        const g = items.filter(i => (i.category || 'etc') === k);
+        const g = allItems.filter(i => (i.category || 'etc') === k);
         if(!g.length) return '';
         return g.map(i => `
         <div class="bl-row bl-item" style="padding:6px 8px;background:var(--i9);border-radius:6px">
@@ -981,12 +1143,15 @@ function dBilling(x){
             onclick="toggleItemBillable('${escAttr(i.id)}')"
             title="${isBillable(i) ? '클릭하면 청구에서 제외합니다' : '청구에서 빠져 있어요 — 클릭하면 되돌립니다'}">${
             isBillable(i) ? escapeHtml(l) : '제외'}</span>
-          <span style="min-width:0;font-size:12px;font-weight:600;word-break:break-all${isBillable(i) ? '' : ';color:var(--i5)'}">${escapeHtml(i.name || '')}</span>
+          <span style="min-width:0;font-size:12px;font-weight:600;word-break:break-all${
+            isVoided(i) ? ';color:var(--i5);text-decoration:line-through' : isBillable(i) ? '' : ';color:var(--i5)'}">${escapeHtml(i.name || '')}${appMark(i)}</span>
           <span class="bl-qty" style="font-size:11px;color:var(--i4)">${escapeHtml(i.qty || '')}${i.qty && i.unit_price ? ' × ' : ''}${i.unit_price ? money(i.unit_price) : ''}</span>
           <input class="fi bl-amt-in" value="${escAttr(i.amount || '')}" placeholder="금액"
             onchange="setItemField('${escAttr(i.id)}','amount',this.value)">
           ${curSelect(i.currency, `setItemField('${escAttr(i.id)}','currency',this.value)`)}
-          <button class="btn bs" onclick="delExhItem('${escAttr(i.id)}')" title="삭제">✕</button>
+          <button class="btn bs" onclick="voidExhItem('${escAttr(i.id)}')"
+            title="${isVoided(i) ? '취소를 되돌립니다' : '취소 처리 — 지우지 않고 내려서 이력이 남아요'}">${isVoided(i) ? '↩' : '취소'}</button>
+          <button class="btn bs" onclick="delExhItem('${escAttr(i.id)}')" title="완전히 삭제 — 잘못 넣은 줄에만 쓰세요">✕</button>
         </div>`).join('')
         + `<div class="bl-row bl-item bl-subtotal">
             <span></span>
@@ -1510,11 +1675,15 @@ export async function addExhItem(exhId){
     if(x) catalogId = await registerDirectItem(x, name, val(`it-up-${exhId}`), currency, val(`it-cat-${exhId}`));
   }
 
+  /* 반영 중인 접수 건이 있으면 이 품목이 그 건으로 들어온 것으로 적는다 —
+     사람이 "추가인가 변경인가"를 따로 고르지 않아도 남는다. */
+  const openApp = openAppFor(exhId);
   await addRow(EXH_ITEMS, {
     id: localId('XI-'), exhibitor_id: exhId, category,
     catalog_id: catalogId,
     name, qty: val(`it-qty-${exhId}`), unit_price: val(`it-up-${exhId}`), amount,
     currency, note: '',
+    app_id: openApp ? openApp.id : '', change_kind: openApp ? '추가' : '',
     sort_order: String(itemsFor(exhId).length + 1),
   }, saveExhItem);
   clear(`it-nm-${exhId}`, `it-qty-${exhId}`, `it-up-${exhId}`, `it-amt-${exhId}`);
@@ -1569,8 +1738,23 @@ async function setRowField(list, saver, label, id, field, value){
     `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(r.name || r.title || label)} ${escapeHtml(fl)} ${escapeHtml(String(before || '(없음)'))} → ${escapeHtml(String(value || '(없음)'))}`);
 }
 
-export const setItemField = (id, field, value) =>
-  setRowField(EXH_ITEMS, saveExhItem, '금액 항목', id, field, value);
+/* 수량·금액을 고치면 그것도 접수 건의 "변경"이다. 바뀌기 전 값을 한 번만
+   붙잡아 둔다 — 같은 접수 건 안에서 두 번 고쳐도 처음 값이 기준이어야
+   "1 → 3"이 나온다. */
+const TRACKED = ['qty', 'amount', 'unit_price'];
+export async function setItemField(id, field, value){
+  const i = EXH_ITEMS.find(r => r.id === id);
+  const open = i ? openAppFor(i.exhibitor_id) : null;
+  if(i && open && TRACKED.includes(field) && String(i[field] ?? '') !== String(value ?? '')){
+    if(i.app_id !== open.id){
+      await setRowField(EXH_ITEMS, saveExhItem, '금액 항목', id, 'prev_qty', i.qty || '');
+      await setRowField(EXH_ITEMS, saveExhItem, '금액 항목', id, 'prev_amount', i.amount || '');
+      await setRowField(EXH_ITEMS, saveExhItem, '금액 항목', id, 'app_id', open.id);
+      await setRowField(EXH_ITEMS, saveExhItem, '금액 항목', id, 'change_kind', '변경');
+    }
+  }
+  return setRowField(EXH_ITEMS, saveExhItem, '금액 항목', id, field, value);
+}
 export const setPayField = (id, field, value) =>
   setRowField(EXH_PAYMENTS, saveExhPayment, '입금', id, field, value);
 
@@ -1814,6 +1998,12 @@ window.addExhInvoice = addExhInvoice;
 window.delExhInvoice = delExhInvoice;
 window.setInvField = setInvField;
 window.setItemField = setItemField;
+window.addExhApp = addExhApp;
+window.setAppField = setAppField;
+window.delExhApp = delExhApp;
+window.closeExhApp = closeExhApp;
+window.reopenExhApp = reopenExhApp;
+window.voidExhItem = voidExhItem;
 window.setPayField = setPayField;
 window.toggleItemBillable = toggleItemBillable;
 window.pickCatalogItem = pickCatalogItem;

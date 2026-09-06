@@ -41,6 +41,7 @@ import {
   EXH_INVOICES,
   EXH_PAYMENTS,
   EXH_LOGS,
+  EXH_APPS,
   ORGS,
   EQUIP_CATALOG,
   CODE_LISTS, applyCodeLists,
@@ -237,7 +238,7 @@ export async function loadFromSheets(hooks = {}){
   try {
     const [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, partTypesData,
            orgsData,
-           exhData, exhConData, exhItemData, exhInvData, exhPayData, exhLogData, equipCatData,
+           exhData, exhConData, exhItemData, exhInvData, exhPayData, exhLogData, exhAppData, equipCatData,
            codeListData] = await Promise.all([
       safeFetch(base + 'contacts',       'contacts',       1, headers),
       safeFetch(base + 'participations', 'participations', 1, headers),
@@ -254,6 +255,7 @@ export async function loadFromSheets(hooks = {}){
       safeFetch(base + 'exhibitor_invoices', 'exhibitor_invoices', 1, headers),
       safeFetch(base + 'exhibitor_payments', 'exhibitor_payments', 1, headers),
       safeFetch(base + 'exhibitor_logs',     'exhibitor_logs',     1, headers),
+      safeFetch(base + 'exhibitor_apps',     'exhibitor_apps',     1, headers),
       safeFetch(base + 'equip_catalog',      'equip_catalog',      1, headers),
       safeFetch(base + 'code_lists',         'code_lists',         1, headers),
     ]);
@@ -263,7 +265,7 @@ export async function loadFromSheets(hooks = {}){
     // 세지 않으면 "전 시트 로드 실패"도 성공으로 표시되는 버그가 있었다.
     const _results = [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, partTypesData,
       orgsData,
-      exhData, exhConData, exhItemData, exhInvData, exhPayData, exhLogData, equipCatData,
+      exhData, exhConData, exhItemData, exhInvData, exhPayData, exhLogData, exhAppData, equipCatData,
       codeListData];
     const _failed  = _results.filter(r => r === null).length;
     if(_failed === _results.length){
@@ -506,6 +508,7 @@ export async function loadFromSheets(hooks = {}){
     if(exhItemData && Array.isArray(exhItemData)) EXH_ITEMS.splice(0, EXH_ITEMS.length, ...exhItemData);
     if(exhInvData  && Array.isArray(exhInvData))  EXH_INVOICES.splice(0, EXH_INVOICES.length, ...exhInvData);
     if(exhPayData  && Array.isArray(exhPayData))  EXH_PAYMENTS.splice(0, EXH_PAYMENTS.length, ...exhPayData);
+    if(exhAppData  && Array.isArray(exhAppData))  EXH_APPS.splice(0, EXH_APPS.length, ...exhAppData);
     if(exhLogData  && Array.isArray(exhLogData)){
       EXH_LOGS.splice(0, EXH_LOGS.length, ...exhLogData);
       const open = EXH_LOGS.filter(l => l.kind === 'inquiry' && !l.answered_at).length;
@@ -735,6 +738,7 @@ export const saveExhItem         = (o) => saveExhRow('exhibitor_items',    o, '�
 export const saveExhInvoice      = (o) => saveExhRow('exhibitor_invoices', o, '인보이스 저장');
 export const saveExhPayment      = (o) => saveExhRow('exhibitor_payments', o, '입금 내역 저장');
 export const saveExhLog          = (o) => saveExhRow('exhibitor_logs',     o, '문의/기록 저장');
+export const saveExhApp          = (o) => saveExhRow('exhibitor_apps',     o, '신청서 접수 저장');
 export const saveEquipCatalog    = (o) => saveExhRow('equip_catalog',      o, '품목 저장');
 export const deleteEquipCatalog  = (id) => deleteExhRow('equip_catalog',   id, '품목 삭제');
 
@@ -744,6 +748,7 @@ export const deleteExhItem       = (id) => deleteExhRow('exhibitor_items',    id
 export const deleteExhInvoice    = (id) => deleteExhRow('exhibitor_invoices', id, '인보이스 삭제');
 export const deleteExhPayment    = (id) => deleteExhRow('exhibitor_payments', id, '입금 내역 삭제');
 export const deleteExhLog        = (id) => deleteExhRow('exhibitor_logs',     id, '문의/기록 삭제');
+export const deleteExhApp        = (id) => deleteExhRow('exhibitor_apps',     id, '신청서 접수 삭제');
 
 /* 참가기업 일괄 등록 — 기업DB에서 전시참가기업을 뽑아 한 번에 만든다. */
 export async function batchCreateExhibitors(rows){

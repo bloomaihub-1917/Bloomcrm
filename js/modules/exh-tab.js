@@ -18,7 +18,8 @@ import {
   exhibitorsForEvent, getExhibitorById, itemsFor, invoicesFor, paymentsFor,
   logsFor, openInquiriesFor, contactsFor, primaryContactFor,
   EVENT_LIST, contacts, participations, CO_DB, currentUser, API_BASE_URL, auditLog,
-  catalogItem, catalogFor, findCatalogByName, EQUIP_CATALOG, getOrgById,
+  catalogItem, catalogFor, findCatalogByName, EQUIP_CATALOG, getOrgById, liveItemsFor,
+  appsFor, openAppFor,
   codeList, codeLabel, codeCls,
   evPartOn,
 } from '../state.js';
@@ -79,7 +80,10 @@ const STEPS = [
   { key: 'manual_sent_at',       label: '매뉴얼<br>발송' },
   { key: 'manual_replied_at',    label: '매뉴얼<br>회신' },
   { key: 'app_received_at',      label: '신청서',   flag: 'app_received',
-    warn: (x) => (x.app_received_at || x.app_received === 'yes') && x.app_complete === 'no' },
+    /* 아직 반영하지 않은 접수가 있으면 경고다 — 받아만 두고 품목에 옮기지
+       않으면 발주가 옛 내용으로 나간다. 정보 누락도 같은 자리에서 본다. */
+    warn: (x) => ((x.app_received_at || x.app_received === 'yes') && x.app_complete === 'no')
+      || !!openAppFor(x.id) },
   { key: 'booth_confirmed_at',   label: '부스', flag: 'booth_confirmed' },
   { key: 'calc:invoice',         label: '인보이스' },
   { key: 'tax_sent_at',          label: '세금<br>계산서' },
@@ -117,7 +121,7 @@ export const liveInvoices = (exhId) =>
    서로 다른 통화가 섞이면 합계를 낼 수 없으므로 하나를 고르고 경고를 띄운다. */
 export function currencyOf(exhId){
   const src = liveInvoices(exhId);
-  const hit = (src.length ? src : itemsFor(exhId)).find(r => r.currency);
+  const hit = (src.length ? src : liveItemsFor(exhId)).find(r => r.currency);
   return (hit && hit.currency) || 'KRW';
 }
 const sumIn = (rows, cur) => rows
@@ -135,7 +139,20 @@ export function mixedCurrency(exhId){
 /* 추가 배지처럼 우리가 청구하지 않는 항목은 합계에서 뺀다. 신청 내역에는 남는다 —
    몇 장을 신청했는지는 현장에서 필요한 정보라 지울 수 없다. */
 export const isBillable = (i) => i.billable !== 'no';
-export function billableItems(exhId){ return itemsFor(exhId).filter(isBillable); }
+export function billableItems(exhId){ return liveItemsFor(exhId).filter(isBillable); }
+
+/* ── 인보이스 발행 뒤에 온 변경 ──
+   신청이 바뀌면 청구액도 바뀌는데, 인보이스는 이미 나가 있다. 이걸 놓치면
+   받을 돈과 청구한 돈이 갈린 채로 행사가 끝난다. 마지막 유효 인보이스보다
+   늦게 반영된 접수가 있으면 알린다. */
+export function needsReissue(exhId){
+  const inv = liveInvoices(exhId).map(i => i.sent_at || i.created_at || '').filter(Boolean).sort();
+  if(!inv.length) return null;
+  const last = inv[inv.length - 1];
+  const after = appsFor(exhId).filter(a => a.kind !== '최초'
+    && String(a.received_at || '') > last);
+  return after.length ? { last, apps: after } : null;
+}
 
 export function billedAmount(exhId){
   const cur = currencyOf(exhId);
@@ -1323,7 +1340,7 @@ function renderMoneyView(list){
 
 
 function renderEquipView(list){
-  const rows = list.map(x => ({ x, items: itemsFor(x.id).filter(i => (i.category || '') === 'equip') }))
+  const rows = list.map(x => ({ x, items: liveItemsFor(x.id).filter(i => (i.category || '') === 'equip') }))
     .filter(r => r.items.length);
   if(!rows.length) return emptyView('신청된 비품이 없어요');
 
@@ -1483,7 +1500,7 @@ function renderEquipView(list){
    걸려 있는지 봐야 다음 연락처를 정할 수 있다. */
 function renderGraphicView(list){
   const rows = list.filter(x => x.graphic_ordered_at || x.graphic_type
-    || itemsFor(x.id).some(i => (i.category || '') === 'graphic'));
+    || liveItemsFor(x.id).some(i => (i.category || '') === 'graphic'));
   if(!rows.length) return emptyView('그래픽을 주문한 기업이 없어요');
 
   const design = rows.filter(x => x.graphic_type === 'design');
@@ -1494,7 +1511,7 @@ function renderGraphicView(list){
   /* 무엇을 받았나 — 항목마다 따로 온다. 기업 단위 단계(graphic_stage)만으로는
      세 개 중 둘만 온 경우를 담지 못해, 항목 기준으로 따로 센다. */
   const gGot = (x) => {
-    const gi = itemsFor(x.id).filter(i => (i.category || '') === 'graphic');
+    const gi = liveItemsFor(x.id).filter(i => (i.category || '') === 'graphic');
     return { n: gi.length, got: gi.filter(i => i.received_at).length };
   };
 
@@ -1520,7 +1537,7 @@ function renderGraphicView(list){
   };
   const gAmt = (x) => {
     const by = {};
-    itemsFor(x.id).filter(i => (i.category || '') === 'graphic').forEach(i => {
+    liveItemsFor(x.id).filter(i => (i.category || '') === 'graphic').forEach(i => {
       const c = i.currency || 'KRW';
       by[c] = (by[c] || 0) + (Number(String(i.amount || '').replace(/[^0-9.-]/g, '')) || 0);
     });
@@ -1579,7 +1596,7 @@ function renderGraphicView(list){
         <td>${(() => { const g = gGot(x);
           if(!g.n) return '<span style="color:var(--i6)">-</span>';
           return `<span class="pill ${g.got === g.n ? 'p-green' : g.got ? 'p-amber' : 'p-gray'}"
-            title="${escAttr(itemsFor(x.id).filter(i => (i.category || '') === 'graphic')
+            title="${escAttr(liveItemsFor(x.id).filter(i => (i.category || '') === 'graphic')
               .map(i => `${i.received_at ? '✓' : '·'} ${i.name || ''}${i.received_note ? ` (${i.received_note})` : ''}`).join(' / '))}"
             >${g.got}/${g.n}</span>`; })()}</td>
         ${dateCell('graphic_draft_at')}

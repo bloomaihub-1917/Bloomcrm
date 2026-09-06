@@ -26,7 +26,7 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import {
-  EQUIP_CATALOG, catalogItem, itemsFor,
+  EQUIP_CATALOG, catalogItem, liveItemsFor,
   exhEvent, EVENT_LIST,
 } from '../state.js';
 import { activeExhibitors, exhNames, exhContact, currencyOf, isBillable } from './exh-tab.js';
@@ -108,7 +108,7 @@ export function buildLedger(evKey){
       if(!byCur.has(c)) byCur.set(c, { qty: new Map(), direct: 0, free: new Map() });
       return byCur.get(c);
     };
-    itemsFor(x.id).forEach(i => {
+    liveItemsFor(x.id).forEach(i => {
       if(!LEDGER_CATS.includes(i.category || '')) return;
       const c = curOf(i);
       const cat = i.catalog_id ? catalogItem(i.catalog_id) : null;

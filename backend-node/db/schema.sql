@@ -516,3 +516,48 @@ ALTER TABLE equip_catalog ADD COLUMN IF NOT EXISTS kind TEXT;  -- '' | 'equip' |
    도록 번호는 지면 사정으로 바뀌고(서울대·분당서울대를 44/45로 나눈 것처럼),
    신청순은 사실 기록이라 바뀌지 않는다. 그래서 한 칸에 담지 않는다. */
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS apply_order TEXT;
+
+/* ══════════════════════════════════════════════════════════════
+   exhibitor_apps — 신청서 접수 이력
+
+   전에는 접수일 칸이 하나(exhibitors.app_received_at)였다. 그런데 기업은
+   신청서를 한 번만 보내지 않는다 — 프로그램북 소개글을 고쳐 다시 보내고,
+   전시패스를 더 달라고 메일 본문으로 알려 오고, 의자를 빼달라고 전화한다.
+   칸이 하나라 덮어쓰면 최초 접수일이 사라지고, 안 고치면 변경이 안 남는다.
+   실제로 변경 이력이 품목 비고에 손으로 적혀 있었다("2026-08-25 추가 신청").
+
+   그래서 접수를 줄로 쌓는다. 파일로 온 것만이 아니라 메일·유선으로 받은
+   변경도 같은 표에 한 줄이다 — 경로가 달라도 접수는 접수고, "8/28 통화로
+   의자 2개 추가"가 근거로 남아야 한다.
+
+   원본 파일은 여기 담지 않는다. 신청서는 원드라이브에 모여 있고 폴더가 곧
+   접수 기록이라(같은 기업 파일이 둘이면 두 번 받은 것) 파일명만 적어 두고
+   폴더를 훑어 채운다(db/import-apply-files.js).
+══════════════════════════════════════════════════════════════ */
+CREATE TABLE IF NOT EXISTS exhibitor_apps (
+  id           TEXT PRIMARY KEY,   -- XA-xxxxx
+  exhibitor_id TEXT,
+  seq          TEXT,   -- 몇 차 접수인가 (1, 2, 3 …)
+  received_at  TEXT,   -- 받은 날
+  channel      TEXT,   -- 신청서 | 메일 | 유선 | 현장
+  kind         TEXT,   -- 최초 | 변경 | 취소
+  reason       TEXT,   -- 왜 다시 받았나 (프북 수정 · 전시패스 추가 …)
+  file_name    TEXT,   -- 원드라이브 파일명 (파일로 왔을 때만)
+  complete     TEXT,   -- 'yes' | 'no' | ''  필수정보 완비
+  missing      TEXT,   -- 누락 항목
+  -- 비어 있으면 "아직 반영 중". 이 동안 고친 품목이 이 접수 건에 달린다.
+  handled_at   TEXT,
+  handler      TEXT,
+  summary      TEXT,   -- 무엇이 달라졌나 (반영을 닫을 때 자동으로 만든다)
+  note         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_exhibitor_apps_exh ON exhibitor_apps(exhibitor_id);
+
+/* 품목이 어느 접수 건으로 들어왔고 무엇이 바뀌었나.
+   취소를 진짜 삭제로 하면 이미 나간 인보이스가 왜 그 금액이었는지 설명할 수
+   없다. voided_at으로 내리면 발주·정산·대장에서는 빠지고 이력은 남는다. */
+ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS app_id      TEXT;
+ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS change_kind TEXT;  -- 추가 | 변경 | 취소
+ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS prev_qty    TEXT;
+ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS prev_amount TEXT;
+ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS voided_at   TEXT;
