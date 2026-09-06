@@ -2611,6 +2611,7 @@ function renderChecklistCards(list, all){
       return `<div onclick="openExhDr('${escAttr(x.id)}')"
         style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:12px 13px;margin-bottom:8px;cursor:pointer${off ? ';opacity:.55' : ''}">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span class="pill p-gray">${escapeHtml(x.apply_order || '-')}</span>
           <span style="font-size:14px;font-weight:700${off ? ';text-decoration:line-through' : ''}">${escapeHtml(exhNames(x).ko)}</span>${
             exhNames(x).en ? `<span style="font-size:11px;color:var(--i4);font-weight:400">${escapeHtml(exhNames(x).en)}</span>` : ''}
           ${off ? '<span class="pill p-gray">참가 취소</span>' : ''}
@@ -2682,6 +2683,7 @@ function renderChecklistTable(list, all){
       ${stats.map(s => `<span class="pill ${s.n === s.of ? 'p-green' : 'p-gray'}">${escapeHtml(s.label)} ${s.n}/${s.of}</span>`).join('')}
     </div>
     <div class="tw"><table><thead><tr>
+      <th style="min-width:44px;text-align:right">신청순</th>
       <th style="min-width:150px">기업</th>
       <th style="min-width:88px">기업 담당자</th>
       <th style="min-width:70px">진행률</th>
@@ -2695,6 +2697,7 @@ function renderChecklistTable(list, all){
       const billed = billedAmount(x.id), paid = paidAmount(x.id);
       const off = x.status === CANCELLED;
       return `<tr style="cursor:pointer${off ? ';opacity:.5' : ''}" onclick="openExhDr('${escAttr(x.id)}')">
+        ${applyCell(x)}
         <td><div style="display:flex;align-items:center;gap:5px">
               <span style="font-weight:700;font-size:12px${off ? ';text-decoration:line-through' : ''}">${escapeHtml(exhNames(x).ko)}</span>${
                 exhNames(x).en ? `<span style="font-size:10.5px;color:var(--i4);margin-left:4px">${escapeHtml(exhNames(x).en)}</span>` : ''}
