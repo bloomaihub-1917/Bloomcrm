@@ -124,8 +124,22 @@ export const COUNTRIES = [
    기본값(dflt)은 새 행사에 아무것도 안 정했을 때의 상태다. 전시는 이 앱이
    지금까지 해 온 일이라 켜 두고, 나머지는 정한 뒤에 켜게 한다. */
 export const EVENT_PARTS = [
-  { key:'exh',        label:'전시',     dflt:true,  partTypes:['전시참가기업'] },
-  { key:'conf',       label:'컨퍼런스',  dflt:false, partTypes:['연사','참가자'] },
-  { key:'partnering', label:'파트너링',  dflt:false, partTypes:['비즈니스파트너링','바이어','BD'] },
-  { key:'sponsor',    label:'후원',     dflt:false, partTypes:['스폰서'] },
+  { key:'exh',        label:'전시',     dflt:'doing', partTypes:['전시참가기업'] },
+  { key:'conf',       label:'컨퍼런스',  dflt:'none',  partTypes:['연사','참가자'] },
+  { key:'partnering', label:'파트너링',  dflt:'none',  partTypes:['비즈니스파트너링','바이어','BD'] },
+  { key:'sponsor',    label:'후원',     dflt:'none',  partTypes:['스폰서'] },
 ];
+
+/* ── 파트의 진행 상태 ──
+   전에는 켜고 끄는 둘뿐이었다. 그런데 끝난 행사를 "안 함"으로 돌리면 없던 일이
+   되고, "진행 중"으로 두면 끝난 기록을 계속 고칠 수 있다. 둘 다 틀리다.
+
+   done은 지나간 일이라 열람만 된다. 잠그는 이유는 실수를 막으려는 것이지
+   못 고치게 하려는 게 아니라서, 되돌리는 건 설정에서 한 번 누르면 된다
+   (정산 입금이 늦게 들어오는 일이 실제로 있다). */
+export const PART_STATES = [
+  { key:'none',  label:'안 함',    cls:'p-gray'  },
+  { key:'doing', label:'진행 중',  cls:'p-blue'  },
+  { key:'done',  label:'진행 완료', cls:'p-green' },
+];
+export const partStateOf = (v) => PART_STATES.find(s => s.key === v) || PART_STATES[0];

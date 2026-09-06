@@ -20,15 +20,40 @@ import {
 } from '../state.js';
 import { td, escapeHtml, escAttr } from '../utils.js';
 import {
-  saveExhContact, saveExhItem, saveExhInvoice, saveExhPayment, saveExhLog, saveExhApp,
-  deleteExhContact, deleteExhItem, deleteExhInvoice, deleteExhPayment, deleteExhLog, deleteExhApp,
-  saveEquipCatalog,
+  saveExhContact as _saveExhContact, saveExhItem as _saveExhItem, saveExhInvoice as _saveExhInvoice, saveExhPayment as _saveExhPayment, saveExhLog as _saveExhLog, saveExhApp as _saveExhApp,
+  deleteExhContact as _deleteExhContact, deleteExhItem as _deleteExhItem, deleteExhInvoice as _deleteExhInvoice, deleteExhPayment as _deleteExhPayment, deleteExhLog as _deleteExhLog, deleteExhApp as _deleteExhApp,
+  saveEquipCatalog as _saveEquipCatalog,
 } from '../api.js';
+
+/* 진행 완료된 행사는 열람만 — exh-tab의 가드를 그대로 쓴다.
+   판단 기준이 두 군데면 한쪽만 고치는 날이 온다. */
+const saveExhContact = guardWrite(_saveExhContact);
+const saveExhItem = guardWrite(_saveExhItem);
+const saveExhInvoice = guardWrite(_saveExhInvoice);
+const saveExhPayment = guardWrite(_saveExhPayment);
+const saveExhLog = guardWrite(_saveExhLog);
+const saveExhApp = guardWrite(_saveExhApp);
+const deleteExhContact = guardWrite(_deleteExhContact);
+const deleteExhItem = guardWrite(_deleteExhItem);
+const deleteExhInvoice = guardWrite(_deleteExhInvoice);
+const deleteExhPayment = guardWrite(_deleteExhPayment);
+const deleteExhLog = guardWrite(_deleteExhLog);
+const deleteExhApp = guardWrite(_deleteExhApp);
+const saveEquipCatalog = guardWrite(_saveEquipCatalog);
+
+/* 저장이 안 됐을 때 왜 안 됐는지 갈라 말한다. 잠금은 고장이 아닌데
+   "네트워크를 확인하세요"라고 하면 엉뚱한 데를 들여다보게 된다.
+   잠금은 guardWrite가 이미 이유를 알렸으므로 여기서는 조용히 넘어간다. */
+function saveFailed(res, msg){
+  if(res && res.locked) return;
+  alert(msg || '저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
+}
 import { trackAction } from './audit-tab.js';
 import {
   billedAmount, paidAmount, graphicState, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
   isPendingRefund, boothTypeOptions, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
   TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing, introOver,
+  guardWrite, exhLocked, exhLockNotice,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar, needsReissue,
   settleState, liveInvoices, payDueDate,
 } from './exh-tab.js';
@@ -112,7 +137,11 @@ export function renderExhDr(){
   const b = document.getElementById('exh-drbd');
   const VIEW = { contact: dContactTab, apply: dApply, progress: dProgress,
     billing: dBilling, graphic: dGraphic, book: dBook, logs: dLogs };
-  if(b) b.innerHTML = (VIEW[drTab] || dContactTab)(x);
+  if(b){
+    // 끝난 행사는 드로어도 열람만 — 목록은 잠갔는데 드로어에서 고쳐지면 소용없다
+    b.classList.toggle('ro', exhLocked());
+    b.innerHTML = (VIEW[drTab] || dContactTab)(x);
+  }
 }
 
 /* ── 진행 단계 막대 ──
@@ -484,6 +513,7 @@ export function openNewContact(exhId){
 export const closeNewContact = () => document.getElementById('new-contact-modal')?.remove();
 
 export async function submitNewContact(exhId){
+  if(exhLocked()){ exhLockNotice(); return; }
   const v = (id) => (document.getElementById('nc-' + id) || {}).value?.trim() || '';
   const msg = document.getElementById('nc-msg');
   const btn = document.getElementById('nc-save');
@@ -551,6 +581,7 @@ export async function submitNewContact(exhId){
 
    이름도 이메일도 없는 줄은 올릴 게 없다 — 먼저 채우게 한다. */
 export async function promoteExhContact(exhId, rowId){
+  if(exhLocked()){ exhLockNotice(); return; }
   const r = EXH_CONTACTS.find(o => o.id === rowId);
   if(!r) return;
   if(r.contact_id){ alert('이미 마스터DB에 연결된 담당자예요.'); return; }
@@ -586,7 +617,7 @@ export async function promoteExhContact(exhId, rowId){
   if(!res.ok){
     const i = contacts.indexOf(c);
     if(i >= 0) contacts.splice(i, 1);
-    alert('마스터DB 저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
+    saveFailed(res, '마스터DB 저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
     return;
   }
 
@@ -611,6 +642,7 @@ export async function promoteExhContact(exhId, rowId){
    기업DB에서 채울 수 있지만, 방금 적은 이름·이메일을 통째로 잃는 건 되돌리기가
    어렵다. 대신 무엇이 빠졌는지 로그에 남긴다. */
 async function addExhParticipation(contactId, eventId, role){
+  if(exhLocked()){ exhLockNotice(); return; }
   if(!eventId) return false;
   const dup = participations.some(p =>
     String(p.contactId) === String(contactId) && p.eventId === eventId);
@@ -1629,7 +1661,7 @@ async function addRow(arr, rec, saveFn, label){
     const i = arr.indexOf(rec);
     if(i >= 0) arr.splice(i, 1);
     refreshExhViews();
-    alert('저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
+    saveFailed(r);
     return false;
   }
   if(r.id && r.id !== rec.id) rec.id = r.id; // 서버가 만든 id로 맞춘다
@@ -1732,7 +1764,7 @@ async function setRowField(list, saver, label, id, field, value){
   r[field] = value;
   refreshExhViews();
   const res = await saver({ id, [field]: value });
-  if(!res.ok){ r[field] = before; refreshExhViews(); alert('저장에 실패했어요.'); return; }
+  if(!res.ok){ r[field] = before; refreshExhViews(); saveFailed(res, '저장에 실패했어요.'); return; }
   const x = getExhibitorById(r.exhibitor_id);
   const fl = { amount: '금액', currency: '통화',
     received_at: '받은 날', received_note: '받은 것',
@@ -1792,7 +1824,7 @@ export async function toggleRefundDone(id){
   const res = await saveExhPayment({ id, status: p.status, paid_at: p.paid_at });
   if(!res.ok){
     Object.assign(p, before); refreshExhViews();
-    alert('저장에 실패했어요.'); return;
+    saveFailed(res, '저장에 실패했어요.'); return;
   }
   const x = getExhibitorById(p.exhibitor_id);
   trackAction('status', wasPending ? '환불 완료' : '환불 요청으로 되돌림', x?.company_name || '',
@@ -1808,7 +1840,7 @@ export async function toggleItemBillable(id){
   r.billable = isBillable(r) ? 'no' : '';
   refreshExhViews();
   const res = await saveExhItem({ id, billable: r.billable });
-  if(!res.ok){ r.billable = before; refreshExhViews(); alert('저장에 실패했어요.'); return; }
+  if(!res.ok){ r.billable = before; refreshExhViews(); saveFailed(res, '저장에 실패했어요.'); return; }
   const x = getExhibitorById(r.exhibitor_id);
   trackAction('edit', '청구 포함 여부 변경', x?.company_name || '',
     `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(r.name || '')} ${r.billable === 'no' ? '청구 제외' : '청구 포함'}`);
@@ -1821,7 +1853,7 @@ export async function setInvField(id, field, value){
   v[field] = value;
   refreshExhViews();
   const r = await saveExhInvoice({ id, [field]: value });
-  if(!r.ok){ v[field] = before; refreshExhViews(); alert('저장에 실패했어요.'); }
+  if(!r.ok){ v[field] = before; refreshExhViews(); saveFailed(r, '저장에 실패했어요.'); }
 }
 
 export async function addExhPayment(exhId){
@@ -1859,7 +1891,7 @@ export async function toggleVoidInvoice(id){
   v.void_note = wasVoid ? '' : note;
   refreshExhViews();
   const r = await saveExhInvoice({ id, status: v.status, void_note: v.void_note });
-  if(!r.ok){ Object.assign(v, before); refreshExhViews(); alert('저장에 실패했어요.'); return; }
+  if(!r.ok){ Object.assign(v, before); refreshExhViews(); saveFailed(r, '저장에 실패했어요.'); return; }
   const x = getExhibitorById(v.exhibitor_id);
   trackAction('edit', wasVoid ? '인보이스 무효 해제' : '인보이스 무효 처리', x?.company_name || '',
     `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(v.title || '')} ${wasVoid ? '되살림' : '무효 처리'}${note ? ` — ${escapeHtml(note)}` : ''}`);
@@ -1912,7 +1944,7 @@ export async function answerExhLog(id){
   Object.assign(l, { answered_at: td(), answer, status: 'done' });
   refreshExhViews();
   const r = await saveExhLog({ id, answered_at: l.answered_at, answer, status: 'done' });
-  if(!r.ok){ Object.assign(l, before); refreshExhViews(); alert('저장에 실패했어요.'); return; }
+  if(!r.ok){ Object.assign(l, before); refreshExhViews(); saveFailed(r, '저장에 실패했어요.'); return; }
   const x = getExhibitorById(l.exhibitor_id);
   trackAction('log', '문의 답변', x?.company_name || '',
     `<b>${escapeHtml(x?.company_name || '')}</b> 문의에 답변했어요: ${escapeHtml(l.subject || '')}`);
@@ -1937,7 +1969,7 @@ export async function setExhContactField(id, field, value){
   r[field] = value;
   refreshExhViews();
   const res = await saveExhContact({ id, [field]: value });
-  if(!res.ok){ r[field] = before; refreshExhViews(); alert('저장에 실패했어요.'); return; }
+  if(!res.ok){ r[field] = before; refreshExhViews(); saveFailed(res, '저장에 실패했어요.'); return; }
   const x = getExhibitorById(r.exhibitor_id);
   const lbl = { name:'이름', email:'이메일', phone:'연락처', role:'역할', note:'메모' }[field] || field;
   trackAction('edit', '기업 담당자 수정', x?.company_name || '',
@@ -1977,7 +2009,7 @@ export async function holdExhLog(id){
   l.status = next;
   refreshExhViews();
   const r = await saveExhLog({ id, status: next });
-  if(!r.ok){ l.status = before; refreshExhViews(); alert('저장에 실패했어요.'); }
+  if(!r.ok){ l.status = before; refreshExhViews(); saveFailed(r, '저장에 실패했어요.'); }
 }
 
 window.toggleItemReceived = toggleItemReceived;

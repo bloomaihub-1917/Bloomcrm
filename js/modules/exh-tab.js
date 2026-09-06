@@ -21,16 +21,31 @@ import {
   catalogItem, catalogFor, findCatalogByName, EQUIP_CATALOG, getOrgById, liveItemsFor,
   appsFor, openAppFor,
   codeList, codeLabel, codeCls,
-  evPartOn,
+  evPartOn, evPartDone,
 } from '../state.js';
 import { td, escapeHtml, escAttr, isMobile, cleanEmail, countryName } from '../utils.js';
 export { cleanEmail };   // exh-drawer가 여기서 가져다 쓴다
 import {
-  postToSheet,
-  saveExhibitor, saveExhItem, saveExhInvoice, saveExhPayment, saveExhLog,
-  deleteExhItem, deleteExhInvoice, deleteExhPayment, deleteExhLog,
-  batchCreateExhibitors, saveExhCfgToSheet,
+  postToSheet as _postToSheet,
+  saveExhibitor as _saveExhibitor, saveExhItem as _saveExhItem, saveExhInvoice as _saveExhInvoice, saveExhPayment as _saveExhPayment, saveExhLog as _saveExhLog,
+  deleteExhItem as _deleteExhItem, deleteExhInvoice as _deleteExhInvoice, deleteExhPayment as _deleteExhPayment, deleteExhLog as _deleteExhLog,
+  batchCreateExhibitors as _batchCreateExhibitors, saveExhCfgToSheet as _saveExhCfgToSheet,
 } from '../api.js';
+
+/* 진행 완료된 행사에서는 저장을 아예 보내지 않는다. 감싸는 자리를 하나로
+   둬야 새 저장 지점이 생겨도 가드에서 빠지지 않는다. */
+const postToSheet = guardWrite(_postToSheet);
+const saveExhibitor = guardWrite(_saveExhibitor);
+const saveExhItem = guardWrite(_saveExhItem);
+const saveExhInvoice = guardWrite(_saveExhInvoice);
+const saveExhPayment = guardWrite(_saveExhPayment);
+const saveExhLog = guardWrite(_saveExhLog);
+const deleteExhItem = guardWrite(_deleteExhItem);
+const deleteExhInvoice = guardWrite(_deleteExhInvoice);
+const deleteExhPayment = guardWrite(_deleteExhPayment);
+const deleteExhLog = guardWrite(_deleteExhLog);
+const batchCreateExhibitors = guardWrite(_batchCreateExhibitors);
+const saveExhCfgToSheet = guardWrite(_saveExhCfgToSheet);
 import { trackAction } from './audit-tab.js';
 import { normalizeCompanyKey } from './company-tab.js';
 
@@ -374,6 +389,35 @@ export const DUE_STEPS = [
   ['movein_at',             '반입·설치'],
 ];
 
+/* ══════════════════════════════════════════
+   진행 완료 잠금
+
+   끝난 행사는 열어 볼 수는 있어야 하고, 고쳐지면 안 된다. 화면에서 입력칸을
+   비활성하는 것만으로는 부족하다 — 남은 인라인 핸들러나 콘솔로 값이 들어가면
+   끝난 행사의 기록이 조용히 바뀐다. 실제로 데이터를 지키는 건 저장 가드다.
+
+   가드는 exh-drawer도 함께 쓴다(같은 행사를 다루므로 판단 기준이 하나여야 한다).
+══════════════════════════════════════════ */
+export const exhLocked = () => !!exhEvent && evPartDone(exhEvent, 'exh');
+
+let _lockToastAt = 0;
+/* 막혔다는 걸 알린다. 연달아 누르면 알림이 쌓이므로 잠깐 사이엔 한 번만. */
+export function exhLockNotice(){
+  const now = Date.now();
+  if(now - _lockToastAt < 1500) return;
+  _lockToastAt = now;
+  alert('진행 완료된 행사예요 — 열람만 됩니다.\n고치려면 설정 › 행사 관리 › 진행 파트에서 "진행 중"으로 되돌리세요.');
+}
+
+/* 저장 함수를 감싸 잠긴 행사면 아예 보내지 않는다. api.js 쓰기 함수를 이
+   모듈과 드로어가 나눠 쓰므로, 감싸는 자리를 하나로 둬야 빠지는 길이 없다. */
+export function guardWrite(fn){
+  return async (...args) => {
+    if(exhLocked()){ exhLockNotice(); return { ok: false, locked: true }; }
+    return fn(...args);
+  };
+}
+
 /* 마감을 놓친 줄을 눌렀을 때 열 드로어 탭 — 바로 처리할 수 있는 자리로 보낸다 */
 const DUE_TAB = {
   'manual_replied_at': 'progress', 'app_received_at': 'apply',
@@ -690,16 +734,28 @@ export function renderExh(){
     return;
   }
 
+  /* 끝난 행사임을 화면 맨 위에 못박아 둔다 — 입력이 안 먹는 이유를 모른 채
+     헤매게 두면 안 된다. 참가기업이 하나도 없을 때도 보여야 해서 빈 화면보다
+     앞에 둔다. */
+  const banner = exhLocked() ? `<div style="display:flex;align-items:center;gap:9px;margin:10px 16px 0;
+      background:var(--i8);border:1px solid var(--i6);border-left:3px solid var(--g);border-radius:8px;padding:9px 13px">
+    <span class="pill p-green">진행 완료</span>
+    <span style="font-size:11.5px;color:var(--i3)">끝난 행사라 열람만 됩니다. 고치려면 설정 › 행사 관리 › 진행 파트에서 <b>진행 중</b>으로 되돌리세요.</span>
+  </div>` : '';
+
   const list = visibleList();
   const all = activeExhibitors(exhEvent);
 
   if(!all.length){
-    el.innerHTML = `<div class="empty" style="padding:60px 20px;text-align:center">
+    el.innerHTML = banner + `<div class="empty" style="padding:60px 20px;text-align:center">
       <div style="font-size:30px;margin-bottom:10px">🏢</div>
       <div style="font-weight:700;margin-bottom:6px">등록된 참가기업이 없어요</div>
-      <div style="font-size:12px;color:var(--i4);margin-bottom:14px">
-        기업DB에 "전시참가기업"으로 기록된 기업을 불러오거나 직접 추가할 수 있어요</div>
-      <button class="btn bp" onclick="openExhImport()">참가기업 불러오기</button></div>`;
+      ${exhLocked()
+        ? '<div style="font-size:12px;color:var(--i4)">진행 완료된 행사예요 — 참가기업 없이 끝났거나, 기록이 다른 행사에 들어가 있을 수 있어요.</div>'
+        : `<div style="font-size:12px;color:var(--i4);margin-bottom:14px">
+             기업DB에 "전시참가기업"으로 기록된 기업을 불러오거나 직접 추가할 수 있어요</div>
+           <button class="btn bp" onclick="openExhImport()">참가기업 불러오기</button>`}
+    </div>`;
     return;
   }
 
@@ -723,7 +779,8 @@ export function renderExh(){
     : exhView === 'money'   ? renderMoneyView(list)
     : exhView === 'book'    ? renderBookView(list)
     : renderInquiryPanel() + renderChecklist(list, all);
-  el.innerHTML = seg + bodyHtml;
+  el.innerHTML = seg + banner
+    + (exhLocked() ? `<div class="ro">${bodyHtml}</div>` : bodyHtml);
 }
 
 /* 미답변 문의 패널 — 프로세스와 무관하게 들어오는 문의를 놓치지 않는 게 목적이라
@@ -2706,6 +2763,11 @@ export async function confirmExhImport(){
     .map(cb => cands[+cb.dataset.i]).filter(Boolean);
 
   if(!picked.length){ alert('등록할 기업을 선택해주세요.'); return; }
+  // 여기서는 고른 행사가 지금 보고 있는 행사와 다를 수 있어 따로 본다
+  if(evPartDone(evKey, 'exh')){
+    alert('진행 완료된 행사에는 참가기업을 넣을 수 없어요.\n설정 › 행사 관리 › 진행 파트에서 "진행 중"으로 되돌리세요.');
+    return;
+  }
   const btn = document.getElementById('exh-imp-btn');
   if(btn){ btn.disabled = true; btn.textContent = '등록 중…'; }
 
@@ -2793,7 +2855,9 @@ export async function patchExh(id, patch, label){
   if(!r.ok){
     Object.assign(x, backup); // 저장 실패 시 되돌린다 — 화면만 바뀌는 거짓 성공 방지
     refreshExhViews();
-    alert('저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
+    // 잠금으로 막힌 건 고장이 아니다 — 네트워크를 확인하라고 하면 엉뚱한 데를 본다
+    // (가드가 이미 이유를 알렸으므로 여기서 또 띄우지 않는다)
+    if(!r.locked) alert('저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
     return r;
   }
   x.updated_at = td();

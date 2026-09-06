@@ -17,7 +17,7 @@
      읽기만 하면 됩니다 — 라이브 바인딩이라 항상 최신값입니다.)
 ═══════════════════════════════════════════════════════════════ */
 
-import { EVENT_LIST_SEED, CL, CP, CAT_KEYS, EVENT_PARTS } from './constants.js';
+import { EVENT_LIST_SEED, CL, CP, CAT_KEYS, EVENT_PARTS, PART_STATES } from './constants.js';
 
 /* ── 백엔드 API 베이스 URL (Node/Express, backend-node/) ──
    Render 등에 배포한 뒤 이 값만 바꾸면 된다(과거 GS_URL과 동일한 역할).
@@ -440,15 +440,31 @@ export function loadExhCfg(settingsRows){
    정해 둔 게 없는 행사는 EVENT_PARTS의 기본값을 쓴다 — 지금까지 만든 행사에는
    parts가 없으므로, 여기서 전시를 켜 두지 않으면 멀쩡히 쓰던 전시 탭이
    한꺼번에 잠긴다. */
+const PART_STATE_KEYS = PART_STATES.map(s => s.key);
+
+/* 옛 값은 참/거짓이었다 — true는 진행 중, false는 안 함으로 읽는다.
+   저장된 걸 통째로 고치지 않고 읽을 때 옮기는 이유는, 한 번도 안 연 행사의
+   설정까지 건드릴 일이 없기 때문이다. */
+const toPartState = (v, dflt) => {
+  if(v === true)  return 'doing';
+  if(v === false) return 'none';
+  return PART_STATE_KEYS.includes(v) ? v : dflt;
+};
+
 export function evParts(evKey){
   const saved = (EXH_CFG[evKey] || {}).parts || {};
   const out = {};
   EVENT_PARTS.forEach(p => {
-    out[p.key] = (p.key in saved) ? !!saved[p.key] : p.dflt;
+    out[p.key] = (p.key in saved) ? toPartState(saved[p.key], p.dflt) : p.dflt;
   });
   return out;
 }
-export function evPartOn(evKey, part){ return !!evParts(evKey)[part]; }
+export function evPartState(evKey, part){ return evParts(evKey)[part]; }
+
+/* 화면을 보여줄지 — 끝난 파트도 들여다볼 수는 있어야 한다 */
+export function evPartOn(evKey, part){ return evPartState(evKey, part) !== 'none'; }
+/* 고칠 수 있는지 — 끝난 파트는 열람만 */
+export function evPartDone(evKey, part){ return evPartState(evKey, part) === 'done'; }
 
 /* ══════════════════════════════════════════
    COMPANY_SECTORS — 기업 섹터 트리 (원본 6258~6276행)

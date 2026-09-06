@@ -22,9 +22,9 @@
 
 import {
   EVENT_LIST, contacts, participations, targets,
-  EXHIBITORS, exhibitorsForEvent, PART_TYPES, evParts, getOrgById,
+  EXHIBITORS, exhibitorsForEvent, PART_TYPES, evParts, evPartDone, getOrgById,
 } from '../state.js';
-import { RP, EVENT_PARTS } from '../constants.js';
+import { RP, EVENT_PARTS, partStateOf } from '../constants.js';
 import { td, escapeHtml, escAttr, countryName, isMobile } from '../utils.js';
 import { saveEventToSheet, batchCreateExhibitors } from '../api.js';
 import { saveTargetToSheet, buildEvFil, renderCrm, updBadges } from './crm-tab.js';
@@ -311,8 +311,10 @@ function profileHtml(ev){
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
         <span class="pill p-gray">${escapeHtml(ev.date_start || ev.date || '기간 미정')}${ev.date_end ? ' ~ ' + escapeHtml(ev.date_end) : ''}</span>
         ${ev.location ? `<span class="pill p-gray">📍 ${escapeHtml(ev.location)}</span>` : ''}
-        ${EVENT_PARTS.filter(p => parts[p.key]).map(p =>
-          `<span class="pill p-blue">${escapeHtml(p.label)}</span>`).join('')}
+        ${EVENT_PARTS.filter(p => parts[p.key] !== 'none').map(p => {
+          const st = partStateOf(parts[p.key]);
+          return `<span class="pill ${escAttr(st.cls)}">${escapeHtml(p.label)} · ${escapeHtml(st.label)}</span>`;
+        }).join('')}
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
@@ -647,6 +649,8 @@ export async function confirmEvDbSend(){
   const fromName = fromEv?.short || fromEv?.name || evdbEvent;
 
   if(evdbDest === 'exh'){
+    // 끝난 행사에 새 참가기업이 생기면 그때의 기록이 아니게 된다
+    if(evPartDone(toEv, 'exh')){ say('그 행사는 전시가 진행 완료라 새로 넣을 수 없어요.'); return; }
     // 이미 그 행사에 등록된 곳은 빼고 보낸다 — 같은 기업이 두 줄이 되면
     // 체크리스트가 갈려서 어느 쪽이 진짜인지 알 수 없다
     const have = exhKeysOf(toEv);

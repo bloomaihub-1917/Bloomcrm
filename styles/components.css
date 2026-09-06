@@ -581,3 +581,17 @@ tr.row-sel{background:var(--ad)}
   .bl-nm, .bl-qty, .bl-mini{flex:none}
   .bl-mini{padding:4px 8px}
 }
+
+
+/* ── 열람 전용(.ro) ──
+   진행 완료된 행사의 화면. 입력칸과 체크박스를 눌리지 않게 해서 "고쳤는데
+   저장이 안 된다"가 아니라 애초에 손이 안 가게 한다. 실제로 데이터를 막는 건
+   저장 가드이고(exh-tab.js guardWrite), 이건 그 앞에서 헛손질을 줄이는 층이다.
+
+   버튼은 살려 둔다 — 보기 전환·드로어 열기처럼 읽기만 하는 것이 대부분이고,
+   고치는 버튼은 눌러도 가드가 막고 이유를 알려 준다. */
+.ro input, .ro select, .ro textarea {
+  pointer-events: none; opacity: .62; background: var(--i8);
+}
+.ro input[type="checkbox"], .ro input[type="radio"] { opacity: .45; }
+.ro [contenteditable] { pointer-events: none; opacity: .62; }

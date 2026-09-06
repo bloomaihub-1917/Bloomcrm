@@ -44,6 +44,7 @@ import {
   EQUIP_CATALOG,
   EXH_ITEMS,
   evParts,
+  evPartDone,
 } from '../state.js';
 
 import {
@@ -64,7 +65,7 @@ import {
 } from '../api.js';
 import { trackAction } from './audit-tab.js';
 
-import { CL, CAT_KEYS, EVENT_PARTS } from '../constants.js';
+import { CL, CAT_KEYS, EVENT_PARTS, PART_STATES, partStateOf } from '../constants.js';
 import { slugifySectorName, escapeHtml, escAttr, countryName, scopedSectorName, parseSectorScope, sectorRowValues, sectorKey, parseDomains, joinDomains } from '../utils.js';
 import { buildCoDB, buildCoCAT, renderCoDashboard, setCoCat } from './company-tab.js';
 import { renderMDB, buildMDBEvList, buildMDBTagList } from './db-tab.js';
@@ -1181,8 +1182,10 @@ export function renderEvMgr(){
           ${e.date_start ? '· ' + escapeHtml(e.date_start) + (e.date_end ? ' ~ ' + escapeHtml(e.date_end) : '') : (e.date ? '· ' + escapeHtml(e.date) : '')}
           ${e.location ? '· 📍' + escapeHtml(e.location) : ''}
         </div>
-        <div style="margin-top:4px">${EVENT_PARTS.filter(p => evParts(e.key)[p.key])
-          .map(p => `<span class="pill p-blue" style="margin-right:3px">${escapeHtml(p.label)}</span>`).join('')
+        <div style="margin-top:4px">${EVENT_PARTS.filter(p => evParts(e.key)[p.key] !== 'none')
+          .map(p => { const st = partStateOf(evParts(e.key)[p.key]);
+            return `<span class="pill ${escAttr(st.cls)}" style="margin-right:3px"
+              title="${escAttr(st.label)}">${escapeHtml(p.label)}${st.key === 'done' ? ' ✓' : ''}</span>`; }).join('')
           || '<span style="font-size:10.5px;color:var(--i5)">진행 파트 없음</span>'}</div>
       </div>
       <button onclick="event.stopPropagation();removeEventFromList(${i})"
@@ -2112,6 +2115,9 @@ export function renderEvDetail(){
 
   const parts = evParts(ev.key);
   const locked = evSegLocked(evDetailSeg, parts);
+  /* 진행 완료된 전시는 설정도 손대지 않는다 — 끝난 행사의 부스 타입이나 단가가
+     바뀌면 그때 무엇으로 청구했는지가 지금 값으로 덮인다. */
+  const readonly = evPartDone(ev.key, 'exh');
 
   const seg = EV_SEGS.map(([k, l]) => {
     const off = evSegLocked(k, parts);
@@ -2138,7 +2144,14 @@ export function renderEvDetail(){
       <span style="font-size:11px;color:var(--i4);background:var(--i7);border-radius:3px;padding:1px 5px;font-family:monospace">${escapeHtml(ev.key)}</span>
     </div>
     <div class="seg" style="flex-wrap:wrap;margin-bottom:14px">${seg}</div>
-    <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:16px">${body}</div>`;
+    ${readonly && EV_SEG_NEEDS_EXH.includes(evDetailSeg) ? `<div style="display:flex;align-items:center;gap:8px;
+        background:var(--i8);border:1px solid var(--i6);border-left:3px solid var(--g);border-radius:8px;
+        padding:9px 12px;margin-bottom:10px">
+      <span class="pill p-green">진행 완료</span>
+      <span style="font-size:11.5px;color:var(--i3)">끝난 전시라 열람만 됩니다. 고치려면 <b>진행 파트</b>에서 진행 중으로 되돌리세요.</span>
+    </div>` : ''}
+    <div class="${readonly && EV_SEG_NEEDS_EXH.includes(evDetailSeg) ? 'ro' : ''}"
+      style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:16px">${body}</div>`;
 
   // 비품 편집기는 문자열이 아니라 자기 함수가 그린다 — 자리를 만든 뒤 붙인다
   if(evDetailSeg === 'equip' && !locked) mountEquipCatalog('ev-eqcat-rows', ev.key);
@@ -2220,43 +2233,53 @@ function evPartsHtml(ev, parts){
     return `부스 타입 ${bt}종 · 비품 품목 ${eq}건`;
   };
   return EVENT_PARTS.map(p => {
-    const on = parts[p.key];
-    const sub = (on && p.key === 'exh') ? exhSummary() : '';
-    return `<div style="display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--i7)">
-      <div style="flex:1;min-width:0">
+    const st = parts[p.key];
+    const sub = (st !== 'none' && p.key === 'exh') ? exhSummary() : '';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--i7);flex-wrap:wrap">
+      <div style="flex:1;min-width:150px">
         <div style="font-size:13px;font-weight:600;color:var(--i1)">${escapeHtml(p.label)}</div>
         <div style="font-size:11px;color:var(--i4);margin-top:2px">
           ${sub ? escapeHtml(sub) : p.partTypes.map(t => `<span class="pill p-gray" style="margin-right:3px">${escapeHtml(t)}</span>`).join('')}
         </div>
       </div>
-      <button class="btn${on ? ' bp' : ''}" style="min-width:64px;height:30px;font-size:11px"
-        onclick="toggleEvPart('${escAttr(p.key)}')">${on ? '진행 중' : '안 함'}</button>
+      <div class="seg" style="flex-wrap:wrap">
+        ${PART_STATES.map(x => `<button class="seg-b${st === x.key ? ' on' : ''}"
+          onclick="setEvPart('${escAttr(p.key)}','${escAttr(x.key)}')">${escapeHtml(x.label)}</button>`).join('')}
+      </div>
     </div>`;
   }).join('')
-  + `<div style="font-size:10.5px;color:var(--i5);margin-top:10px">
-      지금은 <b>전시</b>만 화면에 반영돼요 — 끄면 전시 탭에서 이 행사를 골라도 목록이 열리지 않습니다.
-      컨퍼런스·파트너링·후원은 여기 적어 두면 운영 화면이 생길 때 그대로 이어집니다.
+  + `<div style="font-size:10.5px;color:var(--i5);margin-top:12px;line-height:1.7">
+      <b>안 함</b> — 그 파트를 열지 않는 행사예요. 전시를 안 함으로 두면 전시 탭에서 이 행사가 열리지 않습니다.<br>
+      <b>진행 중</b> — 지금 챙기는 중. 고칠 수 있어요.<br>
+      <b>진행 완료</b> — 끝난 일이라 <b>열람만</b> 됩니다. 데이터는 그대로 두고 고치는 것만 막아요.
+      정산 입금이 늦게 들어오는 것처럼 손봐야 할 일이 생기면 다시 <b>진행 중</b>으로 되돌리면 됩니다.<br>
+      지금 화면에 반영되는 건 <b>전시</b>뿐이에요 — 컨퍼런스·파트너링·후원은 여기 적어 두면 운영 화면이 생길 때 그대로 이어집니다.
     </div>`;
 }
 
-export async function toggleEvPart(part){
+export async function setEvPart(part, state){
   const ev = EVENT_LIST.find(e => e.key === evDetailKey);
   if(!ev) return;
   const now = evParts(ev.key);
   const def = EVENT_PARTS.find(p => p.key === part);
-  if(!def) return;
+  if(!def || now[part] === state) return;
 
-  // 전시를 끄면 그 행사의 전시 화면이 통째로 잠긴다. 되돌릴 수 있는 설정이지만
-  // 사고로 누르기 쉬운 자리라 한 번 묻는다.
-  if(part === 'exh' && now.exh
-    && !confirm(`${ev.name || ev.key}의 전시 파트를 끌까요?\n전시 탭에서 이 행사가 열리지 않고, 부스·비품·일정 설정도 잠깁니다.\n(등록된 참가기업·품목 데이터는 그대로 남습니다)`)) return;
+  /* 무엇이 잠기는지 누르기 전에 말해 준다. 전시만 화면이 걸려 있어 전시만 묻는다.
+     되돌릴 수 있는 설정이지만, 눌러 보고 알게 하면 늦다. */
+  const ask = part !== 'exh' ? ''
+    : state === 'none' ? `${ev.name || ev.key}의 전시를 "안 함"으로 둘까요?\n전시 탭에서 이 행사가 열리지 않고, 부스·비품·일정 설정도 잠깁니다.\n(등록된 참가기업·품목 데이터는 그대로 남습니다)`
+    : state === 'done' ? `${ev.name || ev.key}의 전시를 "진행 완료"로 둘까요?\n전시 탭을 볼 수는 있지만 고칠 수 없게 됩니다.\n(다시 "진행 중"으로 되돌리면 언제든 고칠 수 있어요)`
+    : '';
+  if(ask && !confirm(ask)) return;
 
-  const ok = await saveEvParts(ev.key, { ...now, [part]: !now[part] });
+  const ok = await saveEvParts(ev.key, { ...now, [part]: state });
   if(!ok) return;
   trackAction('edit', '진행 파트 변경', ev.key,
-    `${ev.name || ev.key} — ${def.label} ${now[part] ? '진행 중 → 안 함' : '안 함 → 진행 중'}`);
+    `${ev.name || ev.key} — ${def.label} ${partStateOf(now[part]).label} → ${partStateOf(state).label}`);
   renderEvDetail();
+  renderEvMgr();
   window.renderExh?.();
+  window.renderEvDb?.();
 }
 
 /* parts만 갈아 끼우고 나머지(due·book)는 그대로 둔다 — settings의 한 줄을
@@ -2441,7 +2464,7 @@ window.closeEvDetail       = closeEvDetail;
 window.setEvDetailSeg      = setEvDetailSeg;
 window.renderEvDetail      = renderEvDetail;
 window.saveEvBasic         = saveEvBasic;
-window.toggleEvPart        = toggleEvPart;
+window.setEvPart           = setEvPart;
 window.addEvCodeRow        = addEvCodeRow;
 window.cloneCommonCodeList = cloneCommonCodeList;
 window.saveEvDue           = saveEvDue;
