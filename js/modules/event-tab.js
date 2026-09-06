@@ -47,44 +47,67 @@ const VIEWS = [['profile', '개요'], ['people', '참여자'], ['orgs', '기업'
    연락처를 매번 찾아 붙이므로 한 번 만들어 두고 화면 세 개가 나눠 쓴다.
    행사가 바뀔 때만 다시 만든다(참여자가 수천 명이면 매 렌더가 아깝다).
 ══════════════════════════════════════════ */
-let _rowsCache = { key: null, rows: [] };
+let _cache = { key: null, people: [], recs: 0, noOrg: [] };
 
-function evRows(evKey){
-  if(_rowsCache.key === evKey) return _rowsCache.rows;
+/* 사람 단위로 센다. participations는 "참여 기록"이라 한 사람이 한 행사에 두 역할로
+   들어오면(연사 겸 스폰서) 줄이 둘이다 — 그걸 그대로 세면 두 명이 된다.
+   참여자는 몇 명이 왔느냐지 기록이 몇 줄이냐가 아니므로 contactId로 접는다.
+   역할은 잃지 않고 모아 둔다(한 사람이 여러 역할일 수 있다).
+
+   contactId가 비어 있는 옛 기록은 접을 근거가 없으니 각자 한 명으로 둔다 —
+   전부 한 명으로 뭉치는 것보다 낫다. */
+function evPeople(evKey){
+  if(_cache.key === evKey) return _cache.people;
   const byId = new Map(contacts.map(c => [c.id, c]));
-  const rows = participations
-    .filter(p => p.eventId === evKey)
-    .map(p => {
+  const map = new Map();
+  let recs = 0;
+
+  participations.filter(p => p.eventId === evKey).forEach(p => {
+    recs++;
+    const key = p.contactId != null ? `c${p.contactId}` : `p${p.id}`;
+    if(!map.has(key)){
       const c = byId.get(p.contactId) || {};
       const org = (c.orgKo || c.orgEn || '').trim();
-      return {
-        pid: p.id, role: p.role || '', note: p.note || '',
-        cid: c.id, name: c.nameKo || c.nameEn || p.contact || '',
+      map.set(key, {
+        cid: c.id, roles: new Set(), recs: 0,
+        name: c.nameKo || c.nameEn || p.contact || '',
         nameEn: c.nameEn || '', title: c.titleKo || c.titleEn || '',
         org, orgEn: c.orgEn || '', orgKey: normalizeCompanyKey(org || c.orgEn),
         country: c.country || '', email: c.email1 || c.email2 || '',
         sector: c.beat || '',
-      };
-    });
-  _rowsCache = { key: evKey, rows };
-  return rows;
-}
-/* 참여 기록이 바뀌면(업로드·수정) 다음 렌더에서 다시 센다 */
-export function invalidateEvRows(){ _rowsCache = { key: null, rows: [] }; }
+      });
+    }
+    const m = map.get(key);
+    m.recs++;
+    if(p.role) m.roles.add(p.role);
+  });
 
-/* 기업 단위로 접기 — 같은 회사에서 여러 명이 오는 게 보통이라,
-   타겟은 기업으로 잡고 그 행사에서 만난 사람을 딸려 보낸다. */
+  const people = [...map.values()];
+  _cache = { key: evKey, people, recs, noOrg: people.filter(r => !r.orgKey) };
+  return people;
+}
+/* 참여 기록 줄 수 — 사람 수와 다르면 화면에 그 사실을 적는다 */
+const evRecCount = (evKey) => { evPeople(evKey); return _cache.recs; };
+/* 소속이 비어 기업으로 묶지 못한 사람 — 세는 데서 빠지므로 어디 갔는지 밝힌다 */
+const evNoOrg = (evKey) => { evPeople(evKey); return _cache.noOrg; };
+
+/* 참여 기록이 바뀌면(업로드·수정) 다음 렌더에서 다시 센다 */
+export function invalidateEvRows(){ _cache = { key: null, people: [], recs: 0, noOrg: [] }; }
+
+/* 참여 기업으로 접기 — 한 기업에서 몇 명이 오든 기업은 하나다.
+   기업명 표기가 흔들려도("(주)가온솔루션" / "가온솔루션 주식회사") 같은 곳으로
+   보도록 normalizeCompanyKey로 맞춘 뒤 묶는다. */
 function evOrgs(evKey){
   const map = new Map();
-  evRows(evKey).forEach(r => {
-    if(!r.orgKey) return;   // 소속 없는 줄은 기업으로 묶을 수 없다
+  evPeople(evKey).forEach(r => {
+    if(!r.orgKey) return;   // 소속이 비면 어느 기업인지 알 수 없다 — evNoOrg가 따로 챙긴다
     if(!map.has(r.orgKey)) map.set(r.orgKey, {
       key: r.orgKey, name: r.org, nameEn: r.orgEn,
       country: r.country, sector: r.sector, people: [], roles: new Set(),
     });
     const o = map.get(r.orgKey);
     o.people.push(r);
-    if(r.role) o.roles.add(r.role);
+    r.roles.forEach(v => o.roles.add(v));
     if(!o.nameEn && r.orgEn) o.nameEn = r.orgEn;
     if(!o.country && r.country) o.country = r.country;
     if(!o.sector && r.sector) o.sector = r.sector;
@@ -183,11 +206,19 @@ export function renderEvDb(){
    위는 자동으로 세는 것, 아래는 사람이 적는 것. 세는 값을 사람이 적게 하면
    틀리고, 성격을 자동으로 뽑으려 하면 헛말이 된다. 갈라 둔다. */
 function profileHtml(ev){
-  const rows = evRows(ev.key);
+  const rows = evPeople(ev.key);
   const orgs = evOrgs(ev.key);
+  const recs = evRecCount(ev.key);
+  const noOrg = evNoOrg(ev.key);
+  /* 역할별 사람 수. 한 사람이 두 역할이면 양쪽에 들어가므로 합이 참여자보다
+     클 수 있다 — 그 경우 아래에 그렇게 적는다. */
   const roleCnt = {};
-  rows.forEach(r => { const k = r.role || '(역할 없음)'; roleCnt[k] = (roleCnt[k] || 0) + 1; });
+  rows.forEach(r => {
+    if(!r.roles.size){ roleCnt['(역할 없음)'] = (roleCnt['(역할 없음)'] || 0) + 1; return; }
+    r.roles.forEach(k => { roleCnt[k] = (roleCnt[k] || 0) + 1; });
+  });
   const topRoles = Object.entries(roleCnt).sort((a, b) => b[1] - a[1]);
+  const roleSum = topRoles.reduce((a, b) => a + b[1], 0);
 
   const cntry = {};
   rows.forEach(r => { const k = countryName(r.country) || '(미상)'; cntry[k] = (cntry[k] || 0) + 1; });
@@ -198,9 +229,15 @@ function profileHtml(ev){
   const already = orgs.filter(o => tgtKeys.has(o.key)).length;
   const parts = evParts(ev.key);
 
-  const stat = (v, l) => `<div style="flex:1;min-width:104px;background:var(--W);border:1px solid var(--i6);border-radius:9px;padding:11px 13px">
+  const stat = (v, l, sub) => `<div style="flex:1;min-width:118px;background:var(--W);border:1px solid var(--i6);border-radius:9px;padding:11px 13px">
     <div style="font-size:19px;font-weight:700;color:var(--i1);line-height:1.1">${v}</div>
-    <div style="font-size:10.5px;color:var(--i4);margin-top:3px">${l}</div></div>`;
+    <div style="font-size:10.5px;color:var(--i4);margin-top:3px">${l}</div>
+    ${sub ? `<div style="font-size:10px;color:var(--i5);margin-top:3px">${sub}</div>` : ''}</div>`;
+
+  /* 참여자와 참여 기업이 같은 수로 나오면 안 접힌 것처럼 보인다. 실제로 1기업
+     1명인 행사(전시 신청 목록이 그렇다)가 있으므로, 몇 명이 한 기업으로 접혔는지
+     숫자로 밝혀 둔다 — 의심하지 않아도 되게. */
+  const avg = orgs.length ? (rows.length - noOrg.length) / orgs.length : 0;
 
   const fld = (id, label, val, ph) => `<div><div class="mlbl">${label}</div>
     <input class="fi" id="evdb-${id}" value="${escAttr(val || '')}" placeholder="${escAttr(ph || '')}" style="width:100%"></div>`;
@@ -211,8 +248,10 @@ function profileHtml(ev){
   return `<div style="padding:14px 16px 40px;max-width:900px">
 
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
-      ${stat(rows.length.toLocaleString(), '참여자')}
-      ${stat(orgs.length.toLocaleString(), '기업·기관')}
+      ${stat(rows.length.toLocaleString(), '참여자 (사람)',
+        recs !== rows.length ? `참여 기록 ${recs.toLocaleString()}건 — 여러 역할로 들어온 사람이 있어요` : '')}
+      ${stat(orgs.length.toLocaleString(), '참여 기업',
+        orgs.length ? `1개사당 평균 ${avg.toFixed(1)}명` + (noOrg.length ? ` · 소속 없음 ${noOrg.length}명 제외` : '') : '')}
       ${stat(exhN.toLocaleString(), '전시 참가기업')}
       ${stat(already.toLocaleString(), 'CRM 타겟으로 잡힌 기업')}
     </div>
@@ -226,6 +265,8 @@ function profileHtml(ev){
             <div style="height:100%;width:${Math.round(n / rows.length * 100)}%;background:var(--i4)"></div></div>
           <span style="font-size:11px;color:var(--i3);min-width:34px;text-align:right">${n}명</span>
         </div>`).join('') : '<div style="font-size:11.5px;color:var(--i4)">참여 기록이 없어요.</div>'}
+        ${roleSum > rows.length ? `<div style="font-size:10px;color:var(--i5);margin-top:6px">
+          합이 참여자보다 많아요 — 한 사람이 여러 역할로 온 경우가 있습니다.</div>` : ''}
       </div>
       <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:13px 15px">
         <div style="font-size:11px;font-weight:700;color:var(--i2);margin-bottom:8px">국가</div>
@@ -306,9 +347,9 @@ export async function saveEvDbProfile(){
 
 /* ── 참여자 ── */
 function roleChips(evKey){
-  const rows = evRows(evKey);
+  const rows = evPeople(evKey);
   const cnt = {};
-  rows.forEach(r => { const k = r.role || ''; if(k) cnt[k] = (cnt[k] || 0) + 1; });
+  rows.forEach(r => r.roles.forEach(k => { cnt[k] = (cnt[k] || 0) + 1; }));
   const order = PART_TYPES.map(p => p.key).filter(k => cnt[k]);
   Object.keys(cnt).forEach(k => { if(!order.includes(k)) order.push(k); });
 
@@ -319,9 +360,13 @@ function roleChips(evKey){
   </div>`;
 }
 
+/* 한 사람이 여러 역할일 수 있다 — 하나만 보여주면 나머지를 못 본다 */
+const roleBadges = (r) => [...r.roles]
+  .map(v => `<span class="pill ${escAttr(RP[v] || 'p-gray')}" style="margin-right:3px">${escapeHtml(v)}</span>`).join('');
+
 function filteredRows(){
-  let l = evRows(evdbEvent);
-  if(evdbRoleFil) l = l.filter(r => r.role === evdbRoleFil);
+  let l = evPeople(evdbEvent);
+  if(evdbRoleFil) l = l.filter(r => r.roles.has(evdbRoleFil));
   const q = evdbQuery.trim().toLowerCase();
   if(q) l = l.filter(r => [r.name, r.nameEn, r.org, r.orgEn, r.title, r.email]
     .some(v => String(v || '').toLowerCase().includes(q)));
@@ -347,7 +392,7 @@ function peopleRowsHtml(){
   if(isMobile()) return l.map(r => `<div style="background:var(--W);border:1px solid var(--i6);border-radius:8px;padding:10px 12px;margin-bottom:6px">
     <div style="display:flex;align-items:center;gap:7px">
       <span style="font-size:13px;font-weight:600;color:var(--i1)">${escapeHtml(r.name)}</span>
-      ${r.role ? `<span class="pill ${escAttr(RP[r.role] || 'p-gray')}">${escapeHtml(r.role)}</span>` : ''}
+      ${roleBadges(r)}
     </div>
     <div style="font-size:11px;color:var(--i3);margin-top:3px">${escapeHtml(r.org)}${r.title ? ' · ' + escapeHtml(r.title) : ''}</div>
     <div style="font-size:10.5px;color:var(--i4);margin-top:2px">${escapeHtml(countryName(r.country) || '')}${r.email ? ' · ' + escapeHtml(r.email) : ''}</div>
@@ -361,7 +406,7 @@ function peopleRowsHtml(){
       <td><span style="font-weight:600">${escapeHtml(r.name)}</span>${r.nameEn ? `<div style="font-size:10.5px;color:var(--i4)">${escapeHtml(r.nameEn)}</div>` : ''}</td>
       <td>${escapeHtml(r.org)}${r.orgEn && r.orgEn !== r.org ? `<div style="font-size:10.5px;color:var(--i4)">${escapeHtml(r.orgEn)}</div>` : ''}</td>
       <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(r.title)}</td>
-      <td>${r.role ? `<span class="pill ${escAttr(RP[r.role] || 'p-gray')}">${escapeHtml(r.role)}</span>` : ''}</td>
+      <td>${roleBadges(r)}</td>
       <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(countryName(r.country) || '')}</td>
       <td style="font-size:11px;color:var(--i4)">${escapeHtml(r.email)}</td>
     </tr>`).join('')}
@@ -391,7 +436,8 @@ function filteredOrgs(){
 
 function orgsRowsHtml(){
   const l = filteredOrgs();
-  if(!l.length) return '<div style="font-size:12px;color:var(--i4);padding:20px 0">해당하는 기업이 없어요.</div>';
+  const tail = noOrgNoteHtml();
+  if(!l.length) return '<div style="font-size:12px;color:var(--i4);padding:20px 0">해당하는 기업이 없어요.</div>' + tail;
   const tgt = targetKeys();
   const exh = exhKeysOf(evdbEvent);
 
@@ -417,7 +463,24 @@ function orgsRowsHtml(){
         </div>
       </div>
     </label>`;
-  }).join('');
+  }).join('') + tail;
+}
+
+/* 소속이 비어 기업으로 묶지 못한 사람 — 참여자 수와 기업별 인원 합이 안 맞는
+   이유가 여기 있다. 안 보이면 데이터가 샜다고 오해한다. */
+function noOrgNoteHtml(){
+  const l = evNoOrg(evdbEvent);
+  if(!l.length) return '';
+  const names = l.slice(0, 8).map(r => r.name).filter(Boolean);
+  return `<div style="margin-top:12px;padding:10px 12px;border:1px dashed var(--i6);border-radius:8px;background:var(--i8)">
+    <div style="font-size:11.5px;font-weight:600;color:var(--i2)">소속이 비어 기업으로 묶지 못한 ${l.length}명</div>
+    <div style="font-size:10.5px;color:var(--i4);margin-top:4px">
+      ${escapeHtml(names.join(', '))}${l.length > names.length ? ` 외 ${l.length - names.length}명` : ''}
+    </div>
+    <div style="font-size:10px;color:var(--i5);margin-top:5px">
+      참여 기업 수에서 빠져 있고 타겟으로도 보낼 수 없어요 — 마스터DB에서 소속을 채우면 여기 올라옵니다.
+    </div>
+  </div>`;
 }
 
 export function pickEvDbOrg(key, on){
