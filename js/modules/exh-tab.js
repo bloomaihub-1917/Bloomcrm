@@ -21,7 +21,7 @@ import {
   catalogItem, catalogFor, findCatalogByName, EQUIP_CATALOG, getOrgById, liveItemsFor,
   appsFor, openAppFor,
   codeList, codeLabel, codeCls,
-  evPartOn, evPartDone,
+  evPartOn, evPartDone, evPartState,
 } from '../state.js';
 import { td, escapeHtml, escAttr, isMobile, cleanEmail, countryName } from '../utils.js';
 export { cleanEmail };   // exh-drawer가 여기서 가져다 쓴다
@@ -606,20 +606,42 @@ export function buildExhEvList(){
   const el = document.getElementById('exh-ev-list');
   if(!el) return;
   const opts = exhEventOptions();
-  // 참가기업이 등록됐거나 전시 대상이 있는 행사를 위로, 나머지는 아래로
+
+  /* 지금 챙길 것만 위에 둔다. 끝난 행사도 열어 봐야 할 때가 있으니 지우지 않고
+     아래로 내린다 — 목록이 길어지면 정작 오늘 볼 행사를 눈으로 찾아야 한다.
+
+     EVENT_LIST에 없는 느슨한 행사(참여 기록에만 있는 것)는 설정이 없어
+     기본값인 진행 중으로 잡힌다. */
   const hasWork = (k) => exhibitorsForEvent(k).length || exhibitorCandidates(k).length;
-  const list = opts.filter(e => hasWork(e.key));
-  const rest = opts.filter(e => !hasWork(e.key));
-  if((!exhEvent || !opts.some(e => e.key === exhEvent)) && list.length) setExhEvent(list[0].key);
+  const stateOf = (e) => evPartState(e.key, 'exh');
+
+  const doing = opts.filter(e => stateOf(e) === 'doing' && hasWork(e.key));
+  const done  = opts.filter(e => stateOf(e) === 'done');
+  const off   = opts.filter(e => stateOf(e) === 'none');
+  const empty = opts.filter(e => stateOf(e) === 'doing' && !hasWork(e.key));
+
+  // 처음 열 때는 진행 중인 행사를 고른다 — 끝난 행사가 먼저 열리면 손댈 수 없는
+  // 화면부터 보게 된다
+  if(!exhEvent || !opts.some(e => e.key === exhEvent)){
+    const first = doing[0] || done[0] || empty[0] || off[0];
+    if(first) setExhEvent(first.key);
+  }
 
   const row = (e, n) => `<button class="nr${exhEvent === e.key ? ' on' : ''}" onclick="setExhEvent2('${escAttr(e.key)}')">
       <span class="ev-pill-dot" style="background:${escAttr(e.color || '#9C9890')}"></span>${escapeHtml(e.short || e.name || e.key)}
       ${n ? `<span class="nbg">${n}</span>` : ''}</button>`;
 
-  el.innerHTML = (list.map(e => row(e, activeExhibitors(e.key).length)).join('')
-    + (rest.length ? `<div style="font-size:10px;color:var(--i4);margin:8px 0 4px;padding-left:2px">전시 대상 없음</div>`
-        + rest.map(e => row(e, 0)).join('') : ''))
-    || '<div style="font-size:11px;color:var(--i4);padding:6px 2px">등록된 행사가 없어요</div>';
+  const head = (t) => `<div style="font-size:10px;color:var(--i4);margin:10px 0 4px;padding-left:2px">${t}</div>`;
+  const group = (arr, title, withCount) => arr.length
+    ? (title ? head(title) : '') + arr.map(e => row(e, withCount ? activeExhibitors(e.key).length : 0)).join('')
+    : '';
+
+  el.innerHTML = (
+      group(doing, '', true)
+    + group(done,  '진행 완료', true)
+    + group(off,   '전시 안 함', false)
+    + group(empty, '전시 대상 없음', false)
+  ) || '<div style="font-size:11px;color:var(--i4);padding:6px 2px">등록된 행사가 없어요</div>';
 
   buildExhFilters();
 }
