@@ -22,7 +22,7 @@
 
 import {
   EVENT_LIST, contacts, participations, targets,
-  EXHIBITORS, exhibitorsForEvent, PART_TYPES, evParts,
+  EXHIBITORS, exhibitorsForEvent, PART_TYPES, evParts, getOrgById,
 } from '../state.js';
 import { RP, EVENT_PARTS } from '../constants.js';
 import { td, escapeHtml, escAttr, countryName, isMobile } from '../utils.js';
@@ -112,6 +112,30 @@ function evOrgs(evKey){
     if(!o.country && r.country) o.country = r.country;
     if(!o.sector && r.sector) o.sector = r.sector;
   });
+  /* 참가기업(exhibitors)도 이 목록의 원천이다.
+     전에는 연락처(participations)만 봤다. 그래서 담당자를 아직 등록하지 않은
+     기업은 이 화면에 아예 없었다 — 지난 행사 명부처럼 "누가 왔었다"만 아는
+     기업은 통째로 비어 보인다(2025 KIC 48곳이 0곳으로 나왔다).
+     행사에서 만난 기업을 골라 타겟으로 보내는 화면이라, 담당자를 모르는 기업이
+     빠지면 이 화면을 만든 이유가 없어진다. */
+  exhibitorsForEvent(evKey).forEach(x => {
+    const o = x.org_id ? getOrgById(x.org_id) : null;
+    const name   = (o && o.name_ko) || x.company_name || (o && o.name_en) || '';
+    const nameEn = (o && o.name_en) || '';
+    const key = x.company_key || normalizeCompanyKey(name || nameEn);
+    if(!key) return;
+    if(!map.has(key)) map.set(key, {
+      key, name: name || nameEn, nameEn,
+      country: (o && o.country) || '', sector: (o && o.sectors) || '',
+      people: [], roles: new Set(),
+    });
+    const g = map.get(key);
+    g.roles.add('전시참가기업');
+    g.exhibitor = true;
+    if(!g.nameEn && nameEn) g.nameEn = nameEn;
+    if(!g.country && o && o.country) g.country = o.country;
+  });
+
   return [...map.values()].sort((a, b) => b.people.length - a.people.length
     || a.name.localeCompare(b.name));
 }
@@ -476,7 +500,9 @@ function orgsRowsHtml(){
           ${escapeHtml(countryName(o.country) || '')}
         </div>
         <div style="font-size:10.5px;color:var(--i5);margin-top:3px">
-          ${o.people.length}명 — ${escapeHtml(people.join(', '))}${o.people.length > 3 ? ` 외 ${o.people.length - 3}명` : ''}
+          ${o.people.length
+            ? `${o.people.length}명 — ${escapeHtml(people.join(', '))}${o.people.length > 3 ? ` 외 ${o.people.length - 3}명` : ''}`
+            : '<span style="color:var(--i5)">담당자 미등록 — 참가기업 명부에서 왔어요</span>'}
         </div>
       </div>
     </label>`;
