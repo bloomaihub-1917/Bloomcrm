@@ -56,14 +56,16 @@ import {
   orgName,
   ORG_KINDS,
   EXHIBITORS,
+  exhibitorsForEvent,
 } from '../state.js';
 import { RP, avB, avF } from '../constants.js';
-import { escapeHtml, escAttr, levenshteinDist, parseSectorScope, sectorKey, countryName, isMobile } from '../utils.js';
-import { postToSheet } from '../api.js';
+import { escapeHtml, escAttr, levenshteinDist, parseSectorScope, sectorKey, countryName, isMobile, td } from '../utils.js';
+import { postToSheet, batchCreateExhibitors } from '../api.js';
 import { parseSectors, joinSectors, mainSectors, sectorNamesInDomain, domainName, domainOfSector, UNASSIGNED_DOMAIN } from './settings-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
 import { trackAction } from './audit-tab.js';
-import { billedAmount, paidAmount, currencyOf, exhibitorTradeFor, fmtMoney } from './exh-tab.js';
+import { billedAmount, paidAmount, currencyOf, exhibitorTradeFor, fmtMoney,
+  EXH_ROLES, reloadExhibitors } from './exh-tab.js';
 
 /* ══════════════════════════════════════════
    섹터 관련 로컬 헬퍼 (원본 6278~6305행대, 설정 탭과 공유하던 것)
@@ -1574,9 +1576,11 @@ export function openAddCoEventModal(key){
   const evOpts = EVENT_LIST.length
     ? EVENT_LIST.map(e => `<option value="${e.key}">${escapeHtml(e.short||e.name)} (${e.date||''})</option>`).join('')
     : '<option value="">등록된 행사 없음</option>';
-  const contactOpts = c.contacts.length
-    ? c.contacts.map(p => `<option value="${p.id}">${escapeHtml(p.name||p.nameEn||'이름없음')}${p.title?(' · '+escapeHtml(p.title)):''}</option>`).join('')
-    : '<option value="">담당자 없음</option>';
+  /* 담당자를 모르는 기업도 전시에는 넣어야 한다 — 전시 참가기업은 기업 단위
+     레코드라 사람이 없어도 성립한다. 그래서 "없음"을 늘 고를 수 있게 둔다.
+     연사·스폰서처럼 사람 단위인 역할은 아래 저장 단계에서 막는다. */
+  const contactOpts = '<option value="">— 담당자 없음 —</option>'
+    + c.contacts.map(p => `<option value="${p.id}">${escapeHtml(p.name||p.nameEn||'이름없음')}${p.title?(' · '+escapeHtml(p.title)):''}</option>`).join('');
   const roleOpts = PART_TYPES.map(t => `<option value="${t.key}">${escapeHtml(t.label)}</option>`).join('');
 
   const html = `
@@ -1587,7 +1591,9 @@ export function openAddCoEventModal(key){
         <div style="font-size:11px;color:var(--i4);margin-bottom:14px">${escapeHtml(c.nameKo||c.nameEn)}</div>
 
         <div class="mlbl">담당자</div>
-        <select class="fi" id="co-ev-add-contact" style="width:100%;margin-bottom:10px">${contactOpts}</select>
+        <select class="fi" id="co-ev-add-contact" style="width:100%;margin-bottom:3px">${contactOpts}</select>
+        <div style="font-size:10.5px;color:var(--i5);margin-bottom:10px">
+          전시참가기업은 담당자 없이도 등록됩니다. 연사·스폰서처럼 사람 단위 역할은 담당자가 필요해요.</div>
 
         <div class="mlbl">행사</div>
         <select class="fi" id="co-ev-add-event" style="width:100%;margin-bottom:10px">${evOpts}</select>
@@ -1607,6 +1613,45 @@ export function openAddCoEventModal(key){
   document.body.insertAdjacentHTML('beforeend', html);
 }
 
+/* 전시 참가기업 줄을 만든다. 전시 탭의 직접 추가와 같은 모양으로 넣어야
+   두 화면이 같은 회사를 다르게 보지 않는다. */
+async function addExhibitorFromCo(c, evId, note){
+  /* CO_DB의 key는 기업 id(orgs.id)다. 그런데 exhibitors.company_key는 이름을
+     눌러 만든 옛 키라 서로 다른 값이다 — 둘 다로 견줘야 중복이 안 생긴다. */
+  const name = c.nameKo || c.nameEn;
+  const nameKey = normalizeCompanyKey(name);
+  const already = exhibitorsForEvent(evId).some(x =>
+    (x.org_id && x.org_id === c.key)
+    || (x.company_key && x.company_key === nameKey)
+    || normalizeCompanyKey(x.company_name || '') === nameKey);
+  if(already){ alert('이미 그 행사에 참가기업으로 등록돼 있어요.'); return false; }
+
+  const rec = {
+    event_id: evId, org_id: String(c.key || ''),
+    company_key: nameKey, company_name: name,
+    status: '준비중', note, updated_at: td(),
+  };
+  const r = await batchCreateExhibitors([rec]);
+  if(!r.ok){ alert('전시 등록에 실패했어요. 네트워크 확인 후 다시 시도해주세요.'); return false; }
+  /* 서버가 id를 만들어 주므로 저장 직후 다시 읽어 맞춘다(전시 탭과 같은 방식) */
+  await reloadExhibitors();
+  trackAction('add', '전시 참가기업 추가', name,
+    `<b>${escapeHtml(name)}</b>를 <b>${escapeHtml(evId)}</b> 참가기업으로 추가`);
+  return true;
+}
+
+/* 모달을 닫고 화면들을 다시 그린다 — 두 경로(전시만 / 참여 이력까지)가 함께 쓴다 */
+function finishAddCoEvent(key, c, what){
+  document.getElementById('co-event-modal')?.remove();
+  buildCoDB(); buildCoCAT();
+  const updated = CO_DB.find(x => x.key === key);
+  if(updated){ setSelCo(key); renderCoDetail(updated); }
+  try { renderMDB(); buildMDBEvList(); } catch(e){}
+  try { window.renderExh?.(); } catch(e){}
+  trackAction('status', '행사 참여 추가', c.nameKo || c.nameEn,
+    `<b>${escapeHtml(c.nameKo || c.nameEn)}</b>에 ${escapeHtml(what)}`);
+}
+
 export async function submitAddCoEvent(key){
   const c = CO_DB.find(x => x.key === key);
   if(!c) return;
@@ -1622,7 +1667,23 @@ export async function submitAddCoEvent(key){
   const note = noteEl ? noteEl.value.trim() : '';
 
   if(!evId){ alert('행사를 선택하세요. 등록된 행사가 없으면 설정 → 행사 관리에서 먼저 추가해주세요.'); return; }
-  if(!cid){ alert('담당자를 선택하세요.'); return; }
+
+  /* ── 전시 참가기업은 기업 단위 레코드다 ──
+     전시는 사람이 아니라 회사가 부스를 낸다. 그래서 담당자를 아직 모르는
+     기업도 넣을 수 있어야 하는데, 참여 이력이 연락처(participations)에만
+     매여 있어서 담당자가 없으면 아예 등록할 방법이 없었다.
+
+     전시참가기업을 고르면 exhibitors에 기업 줄을 만든다 — 전시 탭이 보는
+     실체가 그거다. 담당자를 함께 골랐으면 참여 이력도 같이 남긴다. */
+  if(EXH_ROLES.includes(role)){
+    const done = await addExhibitorFromCo(c, evId, note);
+    if(!done) return;
+    if(!cid){ finishAddCoEvent(key, c, `${evId} 전시 참가기업으로 등록`); return; }
+  } else if(!cid){
+    alert('연사·스폰서처럼 사람 단위 역할은 담당자가 필요해요.\n담당자 탭에서 먼저 추가하거나, 참가 유형을 전시참가기업으로 골라주세요.');
+    return;
+  }
+
   if(participations.some(p => p.contactId === cid && p.eventId === evId && p.role === role)){
     alert('이미 이 담당자는 해당 행사에 같은 참가 유형으로 등록되어 있어요.');
     return;
@@ -1645,12 +1706,7 @@ export async function submitAddCoEvent(key){
     return;
   }
 
-  document.getElementById('co-event-modal')?.remove();
-  buildCoDB(); buildCoCAT();
-  const updated = CO_DB.find(x => x.key === key);
-  if(updated){ setSelCo(key); renderCoDetail(updated); }
-  try { renderMDB(); buildMDBEvList(); } catch(e){}
-  trackAction('status', '행사 참여 추가', c.nameKo||c.nameEn, `<b>${escapeHtml(c.nameKo||c.nameEn)}</b>에 행사 참여 이력을 추가했어요`);
+  finishAddCoEvent(key, c, '행사 참여 이력을 추가했어요');
 }
 
 /* ══════════════════════════════════════════

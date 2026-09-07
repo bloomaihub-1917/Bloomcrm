@@ -51,7 +51,7 @@ import { trackAction } from './audit-tab.js';
 import { normalizeCompanyKey, createOrg, reloadOrgs } from './company-tab.js';
 
 /* 전시 참가기업으로 취급할 참가 역할 — 데이터에 표기 흔들림이 있어 함께 본다 */
-const EXH_ROLES = ['전시참가기업', '전시기업', '전시참가'];
+export const EXH_ROLES = ['전시참가기업', '전시기업', '전시참가'];
 
 /* 참가 취소된 기업은 지우지 않고 상태로 남긴다 — 왜 빠졌는지 나중에 알 수 있어야 하고,
    그동안 주고받은 문의·정산 기록도 보존해야 하기 때문. 기본 목록과 집계에서는 빠진다. */
@@ -3091,7 +3091,7 @@ export async function confirmExhImport(){
 
 /* 서버가 id를 생성하는 일괄 등록 직후에만 쓰는 재조회 — 화면 전체를 다시 그리는
    loadFromSheets 대신 exhibitors만 가볍게 다시 읽는다. */
-async function reloadExhibitors(){
+export async function reloadExhibitors(){
   if(!API_BASE_URL || !currentUser) return;
   const { safeFetch, authHeaders } = await import('../api.js');
   const rows = await safeFetch(API_BASE_URL + '/api/data?sheet=exhibitors', 'exhibitors', 1, await authHeaders());
