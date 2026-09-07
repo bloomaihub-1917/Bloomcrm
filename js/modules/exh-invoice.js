@@ -275,11 +275,14 @@ function pickTemplate(){
   });
 }
 
-/* 보내기 전에 봐야 하는 어긋남 — 파일은 나가지만 조용히 두면 안 되는 값들 */
-function invoiceWarnings(doc){
+/* 보내기 전에 봐야 하는 어긋남 — 파일은 나가지만 조용히 두면 안 되는 값들.
+   통화 경고는 '발행'에서는 빼 준다: 그쪽은 통화마다 한 장씩 이미 내고 있어서
+   "빠졌어요"가 사실이 아니다. */
+function invoiceWarnings(doc, { allCurrencies = false } = {}){
   const w = [];
   if(doc.over) w.push(`항목이 ${doc.rows.length}건인데 양식은 ${CAPACITY}줄까지예요 — 뒤 ${doc.over}건이 빠졌습니다`);
-  if(doc.otherCur) w.push(`${doc.cur}가 아닌 항목 ${doc.otherCur}건은 빠졌어요 — 통화가 다르면 따로 발행하세요`);
+  if(doc.otherCur && !allCurrencies)
+    w.push(`${doc.cur}가 아닌 항목 ${doc.otherCur}건은 빠졌어요 — 통화가 다르면 따로 발행하세요`);
   if(doc.invAmount != null && Math.round(doc.invAmount) !== Math.round(doc.itemSum))
     w.push(`인보이스에 적은 금액(${doc.invAmount.toLocaleString('ko-KR')})과 항목 합계(${doc.itemSum.toLocaleString('ko-KR')})가 달라요 — 양식에는 항목 합계가 들어갑니다`);
   return w;
@@ -385,28 +388,41 @@ async function putInvoiceFile(doc, blob){
   }
 }
 
-/* 저장 결과와 어긋남을 한 번에 알린다 */
-function reportSave(doc, res){
+/* 저장 결과와 어긋남을 한 줄로 — 여러 장을 낼 때는 부르는 쪽이 모아서 한 번에
+   띄운다(알림 칸이 하나뿐이라 연달아 띄우면 앞의 것이 지워진다). */
+function reportSave(doc, res, opts){
   const nm = fileNames(doc);
   const where = res.how === 'folder'
-    ? `${res.at}에 저장했어요`
+    ? `${res.at}에 저장`
     : res.why === 'no-folder'
       ? '저장 폴더가 없어 다운로드로 받았어요 — 폴더를 지정하면 바로 저장됩니다'
       : res.why === 'unsupported'
         ? '이 브라우저는 폴더 저장을 지원하지 않아 다운로드로 받았어요 (Chrome·Edge 데스크톱)'
         : `폴더에 쓰지 못해 다운로드로 받았어요 (${res.why})`;
-  showSaveErrorToast([`${doc.no} ${where}`, ...invoiceWarnings(doc)].join(' · '));
   trackAction('add', '인보이스 양식', nm.company,
     `${doc.no} · ${doc.rows.length}건 · ${res.how === 'folder' ? res.at : '다운로드'}`);
+  return [`${doc.no} ${where}`, ...invoiceWarnings(doc, opts)].join(' · ');
 }
 
-/* 버튼을 잠근다 — 만드는 동안 두 번 눌리면 파일이 두 개 떨어진다 */
+/* 버튼을 잠근다 — 만드는 동안 두 번 눌리면 파일이 두 개 떨어진다.
+
+   버튼만 잠그는 것으로는 모자란다: 발행은 인보이스 줄을 만들고, 그러면 화면이
+   다시 그려져 잠가 둔 버튼이 새 버튼으로 갈린다. 두 번 눌리면 번호가 다른
+   인보이스가 두 장 생기고, 그건 기업에 나간 뒤에야 보인다. 그래서 자물쇠를
+   버튼이 아니라 여기에 둔다. */
+const busy = new Set();
 async function withButton(id, fn){
+  if(busy.has(id)) return showSaveErrorToast('아직 만드는 중이에요 — 조금만 기다려주세요');
+  busy.add(id);
   const btn = document.getElementById(id);
   const label = btn ? btn.innerHTML : '';
   if(btn){ btn.disabled = true; btn.textContent = '만드는 중…'; }
   try { return await fn(); }
-  finally { if(btn){ btn.disabled = false; btn.innerHTML = label; } }
+  finally {
+    busy.delete(id);
+    const now = document.getElementById(id);   // 다시 그려져 갈렸을 수 있다
+    if(now){ now.disabled = false; if(now === btn) now.innerHTML = label; }
+  }
 }
 
 /* ══════════════════════════════════════════
@@ -423,7 +439,7 @@ export async function exportExhInvoice(invId){
   await withButton(`inv-xls-${invId}`, async () => {
     try {
       const blob = await buildInvoiceFile(doc);
-      reportSave(doc, await putInvoiceFile(doc, blob));
+      showSaveErrorToast(reportSave(doc, await putInvoiceFile(doc, blob)));
     } catch(err){
       console.error('[exh-invoice] 내보내기 실패', err);
       showSaveErrorToast('내보내기 실패: ' + (err && err.message ? err.message : err));
@@ -453,7 +469,7 @@ export async function issueExhInvoice(exhId){
   const curs = [...new Set(billable.map(i => i.currency || 'KRW'))];
 
   await withButton(`inv-issue-${exhId}`, async () => {
-    const done = [];
+    const msgs = [];
     for(const cur of curs){
       try {
         const sum = billable.filter(i => (i.currency || 'KRW') === cur)
@@ -469,14 +485,14 @@ export async function issueExhInvoice(exhId){
         if(!inv) return;                    // 저장 실패 — createInvoiceRow가 이미 알렸다
         const doc = invoiceDoc(inv);
         const blob = await buildInvoiceFile(doc);
-        reportSave(doc, await putInvoiceFile(doc, blob));
-        done.push(doc.no);
+        msgs.push(reportSave(doc, await putInvoiceFile(doc, blob), { allCurrencies: true }));
       } catch(err){
         console.error('[exh-invoice] 발행 실패', err);
-        showSaveErrorToast(`${cur} 인보이스 발행 실패: ` + (err && err.message ? err.message : err));
+        msgs.push(`${cur} 발행 실패: ` + (err && err.message ? err.message : err));
       }
     }
-    if(done.length > 1) showSaveErrorToast(`통화가 섞여 ${done.length}장으로 발행했어요 — ${done.join(' / ')}`);
+    if(msgs.length) showSaveErrorToast(
+      (curs.length > 1 ? `통화가 갈려 ${curs.length}장으로 발행했어요 · ` : '') + msgs.join(' / '));
   });
 }
 
