@@ -1364,6 +1364,11 @@ function dBilling(x){
               onchange="setInvField('${escAttr(v.id)}','due_date',this.value)">
             ${!v.sent_at ? '<span class="pill p-amber">미발송</span>'
               : (v.due_date && daysSince(v.due_date) > 0 && paid < billed) ? `<span class="pill p-red" style="background:var(--rb);color:var(--re)">${daysSince(v.due_date)}일 지남</span>` : ''}
+            ${/* 양식 내려받기는 exh-invoice.js가 소유한다 — 여기서는 window 경유로만
+                 부른다(exh-export와 같은 방식). 금액 항목을 그대로 양식에 옮긴다. */''}
+            <button class="btn bs" id="inv-xls-${escAttr(v.id)}" style="margin-left:auto;flex:0 0 auto"
+              onclick="exportExhInvoice('${escAttr(v.id)}')"
+              title="정산의 금액 항목을 인보이스 양식(국문·영문)에 채워 엑셀로 내려받습니다">양식 내려받기</button>
           </div>
         </div>`).join('') : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">발행한 인보이스가 없어요</div>'}
     </div>
