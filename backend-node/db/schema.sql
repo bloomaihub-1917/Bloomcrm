@@ -441,6 +441,10 @@ ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS shared_ref TEXT;  -- 실물
      to_team     그래픽팀에 확인 요청  → 그래픽팀 차례
      team_ok     그래픽팀 확인 완료    → 우리 차례(회신)
      replied     기업에 확인 회신함
+
+   세금계산서는 이후 exhibitor_tax_invoices로 1:N 전환됐다(파일 끝 참고) —
+   아래 exhibitors 칼럼은 그 전환 전까지만 쓰였고 지금은 지워져 있다.
+   그래픽은 인보이스처럼 나눠 발행할 일이 없어 1:N으로 옮기지 않았다.
 ══════════════════════════════════════════════════════════════ */
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS tax_stage           TEXT;
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS tax_requested_at    TEXT;  -- 기업이 요청한 날
@@ -589,3 +593,49 @@ ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS booth_design_note        TEXT;  
    어느 쪽을 뺄지는 사람이 정한다 — 부스를 대표해 신청한 쪽이 남고 나머지가
    빠지는데, 그건 데이터로 알 수 없다. */
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS booth_shared TEXT;  -- 'yes'(부스 수 집계에서 제외) | ''
+
+/* ══════════════════════════════════════════════════════════════
+   세금계산서 1:N 전환
+
+   exhibitors에 tax_stage/tax_sent_at/tax_amount 한 칸씩만 있었는데, 실제로는
+   부스+비품 따로 한 장, 그래픽 나중에 한 장처럼 나눠 발행하는 일이 있고
+   (exhibitor_invoices가 이미 1:N인 이유와 같다), 통화·금액을 잘못 적어 다시
+   발행하는 일도 있다. 한 칸으로는 두 번째 건을 적을 곳이 없어 그때마다 첫
+   건을 덮어써서 이력이 사라졌다.
+
+   exhibitor_invoices와 같은 모양으로 1:N 테이블을 두고, 진행 단계(요청→재무팀
+   →발행완료)는 인보이스에 없던 것이라 stage 계열 칼럼을 그대로 옮긴다.
+   무효 처리도 인보이스와 같은 이유로 둔다(지우면 왜 두 장인지 설명이 안 된다).
+
+   기존 값은 옮기고 exhibitors의 옛 칸은 지운다 — 담당자 정보(tax_contact_*)는
+   기업당 한 명이라 그대로 둔다. */
+CREATE TABLE IF NOT EXISTS exhibitor_tax_invoices (
+  id            TEXT PRIMARY KEY,   -- XT-xxxxx
+  exhibitor_id  TEXT,
+  title         TEXT,
+  stage         TEXT,   -- '' | 'requested'(기업요청) | 'to_finance'(재무팀요청) | 'done'(발행완료)
+  requested_at  TEXT,
+  to_finance_at TEXT,
+  sent_at       TEXT,   -- 발행 완료일
+  amount        TEXT,
+  currency      TEXT,   -- 'KRW' | 'USD' (비우면 KRW)
+  status        TEXT,   -- '' (유효) | 'void' (취소·수정 발행됨 — 잘못 발행해 다시 낸 경우)
+  void_note     TEXT,
+  note          TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_exhibitor_tax_invoices_exh ON exhibitor_tax_invoices(exhibitor_id);
+
+-- 기존 1건짜리 값을 옮긴다(하나라도 값이 있는 기업만). id를 exhibitor_id에서
+-- 고정 유도해 두 번 실행해도 같은 행에 부딪혀 중복이 생기지 않는다.
+INSERT INTO exhibitor_tax_invoices (id, exhibitor_id, title, stage, requested_at, to_finance_at, sent_at, amount, currency, status)
+SELECT 'XT-' || id, id, '세금계산서', tax_stage, tax_requested_at, tax_to_finance_at, tax_sent_at, tax_amount, 'KRW', ''
+  FROM exhibitors
+ WHERE COALESCE(tax_stage,'') <> '' OR COALESCE(tax_sent_at,'') <> '' OR COALESCE(tax_amount,'') <> ''
+    OR COALESCE(tax_requested_at,'') <> '' OR COALESCE(tax_to_finance_at,'') <> ''
+ON CONFLICT (id) DO NOTHING;
+
+ALTER TABLE exhibitors DROP COLUMN IF EXISTS tax_stage;
+ALTER TABLE exhibitors DROP COLUMN IF EXISTS tax_sent_at;
+ALTER TABLE exhibitors DROP COLUMN IF EXISTS tax_amount;
+ALTER TABLE exhibitors DROP COLUMN IF EXISTS tax_requested_at;
+ALTER TABLE exhibitors DROP COLUMN IF EXISTS tax_to_finance_at;

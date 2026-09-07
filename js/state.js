@@ -219,6 +219,7 @@ export const EXHIBITORS   = [];  // 기업×행사 1건 (체크리스트 본체)
 export const EXH_CONTACTS = [];  // 기업측 담당자 (한 기업에 여러 명)
 export const EXH_ITEMS    = [];  // 금액 항목 (부스/비품/그래픽/기타)
 export const EXH_INVOICES = [];  // 인보이스 (여러 장 발행 가능)
+export const EXH_TAX      = [];  // 세금계산서 (여러 장 발행·수정 발행 가능)
 export const EXH_PAYMENTS = [];  // 입금 내역 (분할 입금 대응)
 export const EXH_LOGS     = [];  // 문의사항(kind='inquiry') + 자유 기록(kind='note')
 export const EXH_APPS     = [];  // 신청서 접수 이력 (최초 + 변경/취소 재접수)
@@ -293,6 +294,7 @@ export function openAppFor(exhId){
   return appsFor(exhId).filter(a => !String(a.handled_at || '').trim()).pop() || null;
 }
 export function invoicesFor(exhId){ return EXH_INVOICES.filter(i => i.exhibitor_id === exhId); }
+export function taxInvoicesFor(exhId){ return EXH_TAX.filter(i => i.exhibitor_id === exhId); }
 export function paymentsFor(exhId){ return EXH_PAYMENTS.filter(p => p.exhibitor_id === exhId); }
 export function logsFor(exhId){
   return EXH_LOGS.filter(l => l.exhibitor_id === exhId)

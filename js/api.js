@@ -39,6 +39,7 @@ import {
   EXH_CONTACTS,
   EXH_ITEMS,
   EXH_INVOICES,
+  EXH_TAX,
   EXH_PAYMENTS,
   EXH_LOGS,
   EXH_APPS,
@@ -238,7 +239,7 @@ export async function loadFromSheets(hooks = {}){
   try {
     const [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, partTypesData,
            orgsData,
-           exhData, exhConData, exhItemData, exhInvData, exhPayData, exhLogData, exhAppData, equipCatData,
+           exhData, exhConData, exhItemData, exhInvData, exhTaxData, exhPayData, exhLogData, exhAppData, equipCatData,
            codeListData] = await Promise.all([
       safeFetch(base + 'contacts',       'contacts',       1, headers),
       safeFetch(base + 'participations', 'participations', 1, headers),
@@ -253,6 +254,7 @@ export async function loadFromSheets(hooks = {}){
       safeFetch(base + 'exhibitor_contacts', 'exhibitor_contacts', 1, headers),
       safeFetch(base + 'exhibitor_items',    'exhibitor_items',    1, headers),
       safeFetch(base + 'exhibitor_invoices', 'exhibitor_invoices', 1, headers),
+      safeFetch(base + 'exhibitor_tax_invoices', 'exhibitor_tax_invoices', 1, headers),
       safeFetch(base + 'exhibitor_payments', 'exhibitor_payments', 1, headers),
       safeFetch(base + 'exhibitor_logs',     'exhibitor_logs',     1, headers),
       safeFetch(base + 'exhibitor_apps',     'exhibitor_apps',     1, headers),
@@ -265,7 +267,7 @@ export async function loadFromSheets(hooks = {}){
     // 세지 않으면 "전 시트 로드 실패"도 성공으로 표시되는 버그가 있었다.
     const _results = [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, partTypesData,
       orgsData,
-      exhData, exhConData, exhItemData, exhInvData, exhPayData, exhLogData, exhAppData, equipCatData,
+      exhData, exhConData, exhItemData, exhInvData, exhTaxData, exhPayData, exhLogData, exhAppData, equipCatData,
       codeListData];
     const _failed  = _results.filter(r => r === null).length;
     if(_failed === _results.length){
@@ -507,6 +509,7 @@ export async function loadFromSheets(hooks = {}){
     if(exhConData  && Array.isArray(exhConData))  EXH_CONTACTS.splice(0, EXH_CONTACTS.length, ...exhConData);
     if(exhItemData && Array.isArray(exhItemData)) EXH_ITEMS.splice(0, EXH_ITEMS.length, ...exhItemData);
     if(exhInvData  && Array.isArray(exhInvData))  EXH_INVOICES.splice(0, EXH_INVOICES.length, ...exhInvData);
+    if(exhTaxData  && Array.isArray(exhTaxData))  EXH_TAX.splice(0, EXH_TAX.length, ...exhTaxData);
     if(exhPayData  && Array.isArray(exhPayData))  EXH_PAYMENTS.splice(0, EXH_PAYMENTS.length, ...exhPayData);
     if(exhAppData  && Array.isArray(exhAppData))  EXH_APPS.splice(0, EXH_APPS.length, ...exhAppData);
     if(exhLogData  && Array.isArray(exhLogData)){
@@ -736,6 +739,7 @@ export const saveExhibitor       = (o) => saveExhRow('exhibitors',         o, '�
 export const saveExhContact      = (o) => saveExhRow('exhibitor_contacts', o, '담당자 저장');
 export const saveExhItem         = (o) => saveExhRow('exhibitor_items',    o, '금액 항목 저장');
 export const saveExhInvoice      = (o) => saveExhRow('exhibitor_invoices', o, '인보이스 저장');
+export const saveExhTax          = (o) => saveExhRow('exhibitor_tax_invoices', o, '세금계산서 저장');
 export const saveExhPayment      = (o) => saveExhRow('exhibitor_payments', o, '입금 내역 저장');
 export const saveExhLog          = (o) => saveExhRow('exhibitor_logs',     o, '문의/기록 저장');
 export const saveExhApp          = (o) => saveExhRow('exhibitor_apps',     o, '신청서 접수 저장');
@@ -746,6 +750,7 @@ export const deleteExhibitor     = (id) => deleteExhRow('exhibitors',         id
 export const deleteExhContact    = (id) => deleteExhRow('exhibitor_contacts', id, '담당자 삭제');
 export const deleteExhItem       = (id) => deleteExhRow('exhibitor_items',    id, '금액 항목 삭제');
 export const deleteExhInvoice    = (id) => deleteExhRow('exhibitor_invoices', id, '인보이스 삭제');
+export const deleteExhTax        = (id) => deleteExhRow('exhibitor_tax_invoices', id, '세금계산서 삭제');
 export const deleteExhPayment    = (id) => deleteExhRow('exhibitor_payments', id, '입금 내역 삭제');
 export const deleteExhLog        = (id) => deleteExhRow('exhibitor_logs',     id, '문의/기록 삭제');
 export const deleteExhApp        = (id) => deleteExhRow('exhibitor_apps',     id, '신청서 접수 삭제');

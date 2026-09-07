@@ -13,9 +13,9 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import {
-  EXHIBITORS, EXH_ITEMS, EXH_INVOICES, EXH_PAYMENTS, EXH_LOGS, EXH_CFG,
+  EXHIBITORS, EXH_ITEMS, EXH_INVOICES, EXH_TAX, EXH_PAYMENTS, EXH_LOGS, EXH_CFG,
   exhEvent, setExhEvent,
-  exhibitorsForEvent, getExhibitorById, itemsFor, invoicesFor, paymentsFor,
+  exhibitorsForEvent, getExhibitorById, itemsFor, invoicesFor, taxInvoicesFor, paymentsFor,
   logsFor, openInquiriesFor, contactsFor, primaryContactFor,
   EVENT_LIST, contacts, participations, CO_DB, currentUser, API_BASE_URL, auditLog,
   catalogItem, catalogFor, findCatalogByName, EQUIP_CATALOG, getOrgById, liveItemsFor,
@@ -104,7 +104,7 @@ const STEPS = [
      'na'(·)로 비운다. 51곳 중 18곳이라 열 하나를 더 세울 값어치가 있다. */
   { key: 'calc:design',          label: '부스<br>도면' },
   { key: 'calc:invoice',         label: '인보이스' },
-  { key: 'tax_sent_at',          label: '세금<br>계산서' },
+  { key: 'calc:tax',             label: '세금<br>계산서' },
   { key: 'calc:payment',         label: '입금' },
   { key: 'calc:graphic',         label: '그래픽' },
   { key: 'directory_received_at',label: '도록', flag: 'directory_received' },
@@ -316,11 +316,14 @@ export function settleState(x){
 
    who는 지금 움직여야 할 쪽이다. 'us'인 것만 모으면 오늘 할 일이 된다.
 ══════════════════════════════════════════ */
+/* exhibitor_tax_invoices의 한 줄(v)을 대상으로 한다 — 세금계산서가 1:N으로
+   바뀌면서 exhibitors.tax_stage 같은 단일 칼럼이 아니라 그 줄의 requested_at/
+   to_finance_at/sent_at을 가리킨다(exh-drawer.js의 taxStageBar 참고). */
 export const TAX_STAGES = [
-  { key: '',           label: '요청 전',     who: '',      at: null,                 next: 'requested',  action: '기업이 요청함' },
-  { key: 'requested',  label: '기업 요청',   who: 'us',    at: 'tax_requested_at',   next: 'to_finance', action: '재무팀에 요청' },
-  { key: 'to_finance', label: '재무팀 요청', who: 'team',  at: 'tax_to_finance_at',  next: 'done',       action: '발행 완료' },
-  { key: 'done',       label: '발행 완료',   who: '',      at: 'tax_sent_at',        next: null,         action: '' },
+  { key: '',           label: '요청 전',     who: '',      at: null,             next: 'requested',  action: '기업이 요청함' },
+  { key: 'requested',  label: '기업 요청',   who: 'us',    at: 'requested_at',   next: 'to_finance', action: '재무팀에 요청' },
+  { key: 'to_finance', label: '재무팀 요청', who: 'team',  at: 'to_finance_at',  next: 'done',       action: '발행 완료' },
+  { key: 'done',       label: '발행 완료',   who: '',      at: 'sent_at',        next: null,         action: '' },
 ];
 
 export const GRAPHIC_STAGES = [
@@ -577,6 +580,18 @@ function rawCellState(x, step){
     if(!sent.length) return { state: 'warn', text: '미발송' };
     // 금액이 안 적힌 인보이스가 있으면 청구액이 실제보다 적게 잡힌다 — 눈에 띄게 한다
     if(inv.some(i => String(i.amount ?? '').trim() === '')) return { state: 'warn', text: '금액 미입력' };
+    return { state: 'done', text: sent.length > 1 ? `${sent.length}건` : sent[0].sent_at };
+  }
+  if(step.key === 'calc:tax'){
+    // 발행 완료의 기준은 (예전부터 그랬듯) 발행일이 적혀 있느냐다 — 단계값(stage)은
+    // 재촉 대상을 가리는 용도일 뿐이라, 단계를 안 넘기고 날짜만 적어도 완료로 본다.
+    // 여기서 stage만 보게 바꿨다가 날짜는 있는데 단계가 안 넘어간 건들이 전부
+    // "완료"에서 빠지는 회귀가 있었다.
+    const tx = taxInvoicesFor(x.id).filter(t => t.status !== 'void');
+    if(!tx.length) return { state: 'todo' };
+    const sent = tx.filter(t => t.sent_at);
+    if(!sent.length) return { state: 'warn', text: stageOf(TAX_STAGES, tx[0].stage).label };
+    if(tx.some(t => String(t.amount ?? '').trim() === '')) return { state: 'warn', text: '금액 미입력' };
     return { state: 'done', text: sent.length > 1 ? `${sent.length}건` : sent[0].sent_at };
   }
   if(step.key === 'calc:payment'){
@@ -1811,8 +1826,11 @@ export function stageCell(x, field, defs){
   </div>`;
 }
 
-const STAGE_DEFS = { tax_stage: TAX_STAGES, graphic_stage: GRAPHIC_STAGES };
-const STAGE_NAME = { tax_stage: '세금계산서', graphic_stage: '그래픽' };
+/* 세금계산서는 1:N 전환 후 exh-drawer.js의 advanceTaxStage/rewindTaxStage가
+   따로 다룬다(exhibitors 한 행이 아니라 exhibitor_tax_invoices의 줄 단위라
+   이 아래의 범용 advanceStage/rewindStage — exhibitors 전용 — 틀에 맞지 않는다). */
+const STAGE_DEFS = { graphic_stage: GRAPHIC_STAGES };
+const STAGE_NAME = { graphic_stage: '그래픽' };
 
 /* 다음 단계로. 넘어간 날짜를 함께 찍어 두면 어디서 며칠 묶여 있었는지 남는다. */
 export async function advanceStage(id, field){
@@ -2330,24 +2348,35 @@ function renderDashboard(all){
      우리 손을 떠나 있어서, 섞어 두면 정작 내가 할 일이 묻힌다. */
   const myTurn = [];
   all.forEach(x => {
-    [['tax_stage', TAX_STAGES, '세금계산서'], ['graphic_stage', GRAPHIC_STAGES, '그래픽']]
+    [['graphic_stage', GRAPHIC_STAGES, '그래픽']]
       .forEach(([f, defs, label]) => {
         const st = stageOf(defs, x[f]);
         if(st.who !== 'us') return;
         myTurn.push({ x, label, st, days: stageAge(x, defs, f) });
       });
+    // 세금계산서는 여러 장일 수 있어 exhibitor_tax_invoices 각 줄을 본다
+    taxInvoicesFor(x.id).filter(t => t.status !== 'void').forEach(t => {
+      const st = stageOf(TAX_STAGES, t.stage);
+      if(st.who !== 'us') return;
+      myTurn.push({ x, label: '세금계산서', st, days: st.at && t[st.at] ? daysSince(t[st.at]) : null });
+    });
   });
   myTurn.sort((a, b) => (b.days || 0) - (a.days || 0));
 
   /* 남에게 넘겨 둔 건 — 오래 머물면 재촉해야 하니 따로 센다 */
   const waiting = [];
   all.forEach(x => {
-    [['tax_stage', TAX_STAGES, '세금계산서'], ['graphic_stage', GRAPHIC_STAGES, '그래픽']]
+    [['graphic_stage', GRAPHIC_STAGES, '그래픽']]
       .forEach(([f, defs, label]) => {
         const st = stageOf(defs, x[f]);
         if(st.who !== 'team') return;
         waiting.push({ x, label, st, days: stageAge(x, defs, f) });
       });
+    taxInvoicesFor(x.id).filter(t => t.status !== 'void').forEach(t => {
+      const st = stageOf(TAX_STAGES, t.stage);
+      if(st.who !== 'team') return;
+      waiting.push({ x, label: '세금계산서', st, days: st.at && t[st.at] ? daysSince(t[st.at]) : null });
+    });
   });
   waiting.sort((a, b) => (b.days || 0) - (a.days || 0));
 
@@ -2379,12 +2408,17 @@ function renderDashboard(all){
     all.forEach(x => {
       billableItems(x.id).forEach(i => put(i.currency || 'KRW', '전체', num(i.amount)));
       const s = settleState(x);
-      const cur = s.cur || 'KRW';
-      // 세금계산서 금액에는 통화 칸이 없다 — 그 기업의 청구 통화를 따른다
-      const tax = num(x.tax_amount);
-      if(tax){ put(cur, '청구', tax); out[cur].taxN++; }
-      if(s.paid) put(cur, '입금', s.paid);
-      if(s.billed || tax) out[cur].n++;
+      // 세금계산서는 이제 줄마다 통화를 갖는다(1:N 전환) — 각 줄 통화를 그대로 쓴다
+      let taxTotal = 0;
+      taxInvoicesFor(x.id).filter(t => t.status !== 'void').forEach(t => {
+        const amt = num(t.amount);
+        if(!amt) return;
+        put(t.currency || 'KRW', '청구', amt);
+        out[t.currency || 'KRW'].taxN++;
+        taxTotal += amt;
+      });
+      if(s.paid) put(s.cur || 'KRW', '입금', s.paid);
+      if(s.billed || taxTotal) out[s.cur || 'KRW'].n++;
     });
     return out;
   })();
@@ -2961,7 +2995,6 @@ const FIELD_LABEL = {
   builder:'시공사명', builder_contact:'시공 담당자', builder_tel:'시공사 유선', builder_mobile:'시공사 휴대폰', builder_email:'시공사 이메일',
   grade:'등급', booth_confirmed:'부스 확정', booth_confirmed_at:'부스 확정일',
   settled:'완납 처리', settled_note:'완납 사유', pay_due_date:'입금 기한',
-  tax_sent_at:'세금계산서 발송', tax_amount:'세금계산서 금액',
   tax_contact_name:'세금계산서 담당자', tax_contact_email:'세금계산서 이메일', tax_contact_phone:'세금계산서 연락처',
   graphic_ordered_at:'그래픽 주문', graphic_type:'그래픽 유형', graphic_spec_ok:'그래픽 규격',
   graphic_spec_note:'규격 메모', graphic_draft_at:'초안', graphic_revised_at:'수정안', graphic_final_at:'최종안',
