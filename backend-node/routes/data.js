@@ -74,8 +74,7 @@ const TABLES = {
       'booth_design_received_at', 'booth_design_checked_at', 'booth_design_result', 'booth_design_note',
       'booth_shared',
       'settled', 'settled_note', 'pay_due_date',
-      'tax_sent_at', 'tax_amount', 'tax_contact_name', 'tax_contact_email', 'tax_contact_phone',
-      'tax_stage', 'tax_requested_at', 'tax_to_finance_at',
+      'tax_contact_name', 'tax_contact_email', 'tax_contact_phone',
       'graphic_stage', 'graphic_received_at', 'graphic_to_team_at', 'graphic_team_ok_at', 'graphic_replied_at',
       'graphic_ordered_at', 'graphic_type', 'graphic_spec_ok', 'graphic_spec_note',
       'graphic_draft_at', 'graphic_revised_at', 'graphic_final_at',
@@ -113,6 +112,13 @@ const TABLES = {
     table: 'exhibitor_invoices', pk: 'id', idPrefix: 'XV-',
     columns: ['id', 'exhibitor_id', 'title', 'created_at', 'sent_at', 'due_date', 'amount', 'currency',
       'status', 'void_note', 'note'],
+  },
+  /* 세금계산서 — exhibitors 한 칸짜리(tax_stage/tax_sent_at/tax_amount)였다가
+     인보이스처럼 나눠·수정 발행하는 일이 있어 1:N으로 옮겼다(schema.sql 참고). */
+  exhibitor_tax_invoices: {
+    table: 'exhibitor_tax_invoices', pk: 'id', idPrefix: 'XT-',
+    columns: ['id', 'exhibitor_id', 'title', 'stage', 'requested_at', 'to_finance_at', 'sent_at',
+      'amount', 'currency', 'status', 'void_note', 'note'],
   },
   exhibitor_payments: {
     table: 'exhibitor_payments', pk: 'id', idPrefix: 'XP-',

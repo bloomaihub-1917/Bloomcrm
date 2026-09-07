@@ -12,16 +12,16 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import {
-  getExhibitorById, itemsFor, invoicesFor, paymentsFor, logsFor, openInquiriesFor,
-  EXH_CONTACTS, EXH_ITEMS, EXH_INVOICES, EXH_PAYMENTS, EXH_LOGS, CO_DB, currentUser,
+  getExhibitorById, itemsFor, invoicesFor, taxInvoicesFor, paymentsFor, logsFor, openInquiriesFor,
+  EXH_CONTACTS, EXH_ITEMS, EXH_INVOICES, EXH_TAX, EXH_PAYMENTS, EXH_LOGS, CO_DB, currentUser,
   contactsFor, catalogFor, catalogItem, EQUIP_CATALOG, findCatalogByName,
   contacts, participations, getOrgById, codeList, codeLabel,
   EXH_APPS, appsFor, openAppFor, isVoided, liveItemsFor, exhEvent,
 } from '../state.js';
 import { td, escapeHtml, escAttr } from '../utils.js';
 import {
-  saveExhContact as _saveExhContact, saveExhItem as _saveExhItem, saveExhInvoice as _saveExhInvoice, saveExhPayment as _saveExhPayment, saveExhLog as _saveExhLog, saveExhApp as _saveExhApp,
-  deleteExhContact as _deleteExhContact, deleteExhItem as _deleteExhItem, deleteExhInvoice as _deleteExhInvoice, deleteExhPayment as _deleteExhPayment, deleteExhLog as _deleteExhLog, deleteExhApp as _deleteExhApp,
+  saveExhContact as _saveExhContact, saveExhItem as _saveExhItem, saveExhInvoice as _saveExhInvoice, saveExhTax as _saveExhTax, saveExhPayment as _saveExhPayment, saveExhLog as _saveExhLog, saveExhApp as _saveExhApp,
+  deleteExhContact as _deleteExhContact, deleteExhItem as _deleteExhItem, deleteExhInvoice as _deleteExhInvoice, deleteExhTax as _deleteExhTax, deleteExhPayment as _deleteExhPayment, deleteExhLog as _deleteExhLog, deleteExhApp as _deleteExhApp,
   saveEquipCatalog as _saveEquipCatalog,
 } from '../api.js';
 
@@ -30,12 +30,14 @@ import {
 const saveExhContact = guardWrite(_saveExhContact);
 const saveExhItem = guardWrite(_saveExhItem);
 const saveExhInvoice = guardWrite(_saveExhInvoice);
+const saveExhTax = guardWrite(_saveExhTax);
 const saveExhPayment = guardWrite(_saveExhPayment);
 const saveExhLog = guardWrite(_saveExhLog);
 const saveExhApp = guardWrite(_saveExhApp);
 const deleteExhContact = guardWrite(_deleteExhContact);
 const deleteExhItem = guardWrite(_deleteExhItem);
 const deleteExhInvoice = guardWrite(_deleteExhInvoice);
+const deleteExhTax = guardWrite(_deleteExhTax);
 const deleteExhPayment = guardWrite(_deleteExhPayment);
 const deleteExhLog = guardWrite(_deleteExhLog);
 const deleteExhApp = guardWrite(_deleteExhApp);
@@ -179,6 +181,40 @@ function stageBar(x, field, defs, who){
         onclick="advanceStage('${escAttr(x.id)}','${field}')">${escapeHtml(cur.action)} →</button>` : ''}
       ${cur.key ? `<button class="btn bs" style="${cur.next ? '' : 'margin-left:auto;'}font-size:10.5px"
         onclick="rewindStage('${escAttr(x.id)}','${field}')">↩ 되돌리기</button>` : ''}
+    </div>
+  </div>`;
+}
+
+/* 세금계산서 전용 단계 막대 — stageBar와 같은 모양이지만, exhibitors 한 행이
+   아니라 exhibitor_tax_invoices의 한 줄(v)을 대상으로 한다(여러 장 발행 가능해져
+   field가 항상 'stage' 하나뿐이라 advanceTaxStage/rewindTaxStage는 id만 받는다). */
+function taxStageBar(v){
+  const cur = stageOf(TAX_STAGES, v.stage);
+  const i = TAX_STAGES.findIndex(d => d.key === cur.key);
+  const days = cur.at && v[cur.at] ? daysSince(v[cur.at]) : null;
+
+  return `<div>
+    <div style="display:flex;gap:3px;margin-bottom:6px">
+      ${TAX_STAGES.slice(1).map((d, k) => {
+        const done = k + 1 <= i;
+        const now = k + 1 === i;
+        return `<div style="flex:1;text-align:center;padding:4px 3px;border-radius:5px;font-size:9.5px;line-height:1.3;
+          background:${now ? (d.who === 'us' ? 'var(--rb)' : d.who === 'team' ? 'var(--ab)' : 'var(--gb)') : done ? 'var(--gb)' : 'var(--i8)'};
+          color:${now ? (d.who === 'us' ? 'var(--re)' : d.who === 'team' ? 'var(--am)' : 'var(--g)') : done ? 'var(--g)' : 'var(--i5)'};
+          font-weight:${now || done ? 700 : 400}">
+          ${done && !now ? '✓ ' : ''}${escapeHtml(d.label)}
+          ${d.at && v[d.at] ? `<div style="font-size:8.5px;font-weight:400;opacity:.75">${escapeHtml(String(v[d.at]).slice(5))}</div>` : ''}
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <span style="font-size:10.5px;color:${cur.who === 'us' ? 'var(--re)' : cur.who === 'team' ? 'var(--am)' : 'var(--i4)'};font-weight:${cur.who ? 700 : 400}">
+        ${cur.who === 'us' ? '내 차례' : cur.who === 'team' ? '재무팀 확인 중' : cur.key ? '완료' : '아직 시작 전'}
+        ${days ? ` · ${days}일째` : ''}</span>
+      ${cur.next ? `<button class="btn bp bs" style="margin-left:auto;font-size:10px;padding:2px 7px"
+        onclick="advanceTaxStage('${escAttr(v.id)}')">${escapeHtml(cur.action)} →</button>` : ''}
+      ${cur.key ? `<button class="btn bs" style="${cur.next ? '' : 'margin-left:auto;'}font-size:9.5px;padding:2px 6px"
+        onclick="rewindTaxStage('${escAttr(v.id)}')">↩</button>` : ''}
     </div>
   </div>`;
 }
@@ -1269,6 +1305,7 @@ function dBilling(x){
   const allItems = itemsFor(x.id);
   const items = allItems.filter(i => !isVoided(i));
   const invs = invoicesFor(x.id);
+  const taxes = taxInvoicesFor(x.id);
   const pays = paymentsFor(x.id);
   // 입금과 환불은 성격이 달라 따로 본다 — 환불은 요청/완료 상태까지 따라간다
   const ins = pays.filter(p => p.kind !== 'refund');
@@ -1455,21 +1492,42 @@ function dBilling(x){
         ? `저장 폴더(<b>${escapeHtml(window.invoiceFolderName(exhEvent))}</b>)의 기업 폴더에 바로 저장돼요`
         : '다운로드로 받아요 — <b>신청항목</b> 탭에서 저장 폴더를 지정하면 폴더에 바로 저장됩니다'}.</div>`)}
 
-  ${sct('세금계산서',
-    stageBar(x, 'tax_stage', TAX_STAGES, '재무팀') +
-    dateRow(x, 'tax_sent_at', '발행 완료일') +
-    `<div class="fgr bl-tax" style="margin-top:8px">
-      <div class="fg"><label class="fl">금액</label>
-        <input class="fi" style="font-size:12px" value="${escAttr(x.tax_amount || '')}"
-          onchange="setExhField('${escAttr(x.id)}','tax_amount',this.value,'세금계산서 금액')"></div>
+  ${sct('세금계산서', `
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px">
+      ${taxes.length ? taxes.map(v => `
+        <div style="padding:8px 10px;background:var(--i9);border-radius:7px${v.status === 'void' ? ';opacity:.55' : ''}">
+          <div class="bl-row bl-inv-hd">
+            <span style="min-width:0;font-size:12px;font-weight:700${v.status === 'void' ? ';text-decoration:line-through' : ''}">${escapeHtml(v.title || '세금계산서')}</span>
+            ${v.status === 'void' ? '<span class="pill p-gray">무효</span>' : '<span></span>'}
+            <input class="fi bl-amt-in" value="${escAttr(v.amount ?? '')}" placeholder="금액 미입력"
+              onchange="setTaxField('${escAttr(v.id)}','amount',this.value)">
+            ${curSelect(v.currency, `setTaxField('${escAttr(v.id)}','currency',this.value)`)}
+            <button class="btn bs" onclick="toggleVoidTax('${escAttr(v.id)}')" title="${v.status === 'void' ? '되살리기' : '취소·수정 발행됨으로 표시(합계에서 제외)'}">${v.status === 'void' ? '되살리기' : '무효'}</button>
+            <button class="btn bs" onclick="delExhTax('${escAttr(v.id)}')">✕</button>
+          </div>
+          ${v.status === 'void' && v.void_note ? `<div style="font-size:10.5px;color:var(--i5);margin-top:3px">${escapeHtml(v.void_note)}</div>` : ''}
+          <div style="margin-top:6px">${taxStageBar(v)}</div>
+        </div>`).join('') : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">발행한 세금계산서가 없어요</div>'}
+    </div>
+    <div class="bl-row bl-inv-add">
+      <input class="fi" id="tx-t-${escAttr(x.id)}" placeholder="제목 (예: 부스+비품)" style="flex:1 1 140px;min-width:0;font-size:11.5px;padding:6px">
+      <input class="fi" id="tx-a-${escAttr(x.id)}" placeholder="금액" style="flex:1 1 96px;min-width:0;font-size:11.5px;padding:6px;text-align:right">
+      <select class="fi bl-cur" id="tx-cur-${escAttr(x.id)}">
+        ${currencies().map(c => `<option value="${c}"${currencyOf(x.id) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
+      <button class="btn bp bs" style="flex:0 0 auto" onclick="addExhTax('${escAttr(x.id)}')">추가</button>
+    </div>
+    <div style="font-size:10.5px;color:var(--i5);margin:5px 0 10px">
+      인보이스처럼 나눠 발행하거나(부스+비품 먼저, 그래픽 나중), 통화·금액 오류로 다시 발행할 때는
+      옛 건을 무효로 두고 새로 추가하세요 — 지우면 왜 두 장인지 이력이 사라져요.</div>
+    <div class="fgr bl-tax">
       <div class="fg"><label class="fl">담당자</label>
         <input class="fi" style="font-size:12px" value="${escAttr(x.tax_contact_name || '')}"
           onchange="setExhField('${escAttr(x.id)}','tax_contact_name',this.value,'세금계산서 담당자')"></div>
-    </div>
-    <div class="fgr bl-tax">
       <div class="fg"><label class="fl">이메일</label>
         <input class="fi" style="font-size:12px" value="${escAttr(x.tax_contact_email || '')}"
           onchange="setExhField('${escAttr(x.id)}','tax_contact_email',this.value,'세금계산서 담당자')"></div>
+    </div>
+    <div class="fgr bl-tax">
       <div class="fg"><label class="fl">연락처</label>
         <input class="fi" style="font-size:12px" value="${escAttr(x.tax_contact_phone || '')}"
           onchange="setExhField('${escAttr(x.id)}','tax_contact_phone',this.value,'세금계산서 담당자')"></div>
@@ -2119,6 +2177,89 @@ export async function toggleVoidInvoice(id){
     `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(v.title || '')} ${wasVoid ? '되살림' : '무효 처리'}${note ? ` — ${escapeHtml(note)}` : ''}`);
 }
 
+/* 세금계산서 — 인보이스와 같은 1:N 패턴(추가/삭제/필드수정/무효처리)에
+   더해, 발행 진행 단계(요청→재무팀→완료)가 있어 advance/rewind가 따로 있다. */
+export async function addExhTax(exhId){
+  const title = val(`tx-t-${exhId}`) || '세금계산서';
+  const amount = val(`tx-a-${exhId}`);
+  await addRow(EXH_TAX, {
+    id: localId('XT-'), exhibitor_id: exhId, title, amount,
+    currency: val(`tx-cur-${exhId}`) || currencyOf(exhId),
+    stage: '', requested_at: '', to_finance_at: '', sent_at: '', status: '', void_note: '', note: '',
+  }, saveExhTax);
+  clear(`tx-t-${exhId}`, `tx-a-${exhId}`);
+}
+export const delExhTax = (id) => removeRow(EXH_TAX, id, deleteExhTax);
+
+export async function setTaxField(id, field, value){
+  const v = EXH_TAX.find(i => i.id === id);
+  if(!v) return;
+  const before = v[field];
+  v[field] = value;
+  refreshExhViews();
+  const r = await saveExhTax({ id, [field]: value });
+  if(!r.ok){ v[field] = before; refreshExhViews(); saveFailed(r, '저장에 실패했어요.'); }
+}
+
+export async function toggleVoidTax(id){
+  const v = EXH_TAX.find(i => i.id === id);
+  if(!v) return;
+  const wasVoid = v.status === 'void';
+  let note = v.void_note || '';
+  if(!wasVoid){
+    note = prompt('무효 사유를 적어주세요 (예: 통화 오류로 재발행)', note) ?? null;
+    if(note === null) return;   // 취소
+  }
+  const before = { status: v.status, void_note: v.void_note };
+  v.status = wasVoid ? '' : 'void';
+  v.void_note = wasVoid ? '' : note;
+  refreshExhViews();
+  const r = await saveExhTax({ id, status: v.status, void_note: v.void_note });
+  if(!r.ok){ Object.assign(v, before); refreshExhViews(); saveFailed(r, '저장에 실패했어요.'); return; }
+  const x = getExhibitorById(v.exhibitor_id);
+  trackAction('edit', wasVoid ? '세금계산서 무효 해제' : '세금계산서 무효 처리', x?.company_name || '',
+    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(v.title || '')} ${wasVoid ? '되살림' : '무효 처리'}${note ? ` — ${escapeHtml(note)}` : ''}`);
+}
+
+/* 다음 단계로. 넘어간 날짜를 함께 찍어 둔다(exh-tab.js의 advanceStage와 같은
+   이유) — 어느 단계에 며칠 머물렀는지가 나중에 막힌 곳을 찾는 단서가 된다. */
+export async function advanceTaxStage(id){
+  const v = EXH_TAX.find(i => i.id === id);
+  if(!v) return;
+  const st = stageOf(TAX_STAGES, v.stage);
+  if(!st.next) return;
+  const nx = stageOf(TAX_STAGES, st.next);
+  const atField = nx.at;
+  const patch = { stage: nx.key };
+  if(atField && !String(v[atField] || '').trim()) patch[atField] = td();
+  const before = { ...v };
+  Object.assign(v, patch);
+  refreshExhViews();
+  const r = await saveExhTax({ id, ...patch });
+  if(!r.ok){ Object.assign(v, before); refreshExhViews(); saveFailed(r, '저장에 실패했어요.'); return; }
+  const x = getExhibitorById(v.exhibitor_id);
+  trackAction('status', '세금계산서 단계', x?.company_name || '',
+    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(v.title || '세금계산서')} ${escapeHtml(st.label)} → ${escapeHtml(nx.label)}`);
+}
+
+/* 잘못 넘겼을 때 되돌린다 — 날짜는 지우지 않는다(exh-tab.js의 rewindStage와 같은 이유,
+   실수로 한 번 누른 것만으로 실제 발행일 기록이 사라지면 안 된다). */
+export async function rewindTaxStage(id){
+  const v = EXH_TAX.find(i => i.id === id);
+  if(!v) return;
+  const i = TAX_STAGES.findIndex(s => s.key === (v.stage || ''));
+  if(i <= 0) return;
+  const cur = TAX_STAGES[i], prev = TAX_STAGES[i - 1];
+  const before = v.stage;
+  v.stage = prev.key;
+  refreshExhViews();
+  const r = await saveExhTax({ id, stage: prev.key });
+  if(!r.ok){ v.stage = before; refreshExhViews(); saveFailed(r, '저장에 실패했어요.'); return; }
+  const x = getExhibitorById(v.exhibitor_id);
+  trackAction('status', '세금계산서 단계', x?.company_name || '',
+    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(v.title || '세금계산서')} ${escapeHtml(cur.label)} → ${escapeHtml(prev.label)} (되돌림)`);
+}
+
 /* 완납 처리 — 송금 수수료 차액처럼 실무상 더 받을 수 없는 잔액을 사유와 함께 닫는다.
    금액을 조작하지 않고 "닫았다"는 사실만 남겨 나중에 근거를 볼 수 있다. */
 export async function settleExh(exhId){
@@ -2283,5 +2424,11 @@ window.setExhContactField = setExhContactField;
 window.setPrimaryExhContact = setPrimaryExhContact;
 window.toggleExhCancel = toggleExhCancel;
 window.toggleVoidInvoice = toggleVoidInvoice;
+window.addExhTax = addExhTax;
+window.delExhTax = delExhTax;
+window.setTaxField = setTaxField;
+window.toggleVoidTax = toggleVoidTax;
+window.advanceTaxStage = advanceTaxStage;
+window.rewindTaxStage = rewindTaxStage;
 window.settleExh = settleExh;
 window.unsettleExh = unsettleExh;
