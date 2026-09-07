@@ -32,6 +32,14 @@ const EVENT = arg('--event') || '2026 KIC';
 
 const CATEGORY = '부대시설';
 
+/* sort_order는 분류별 번호가 아니라 품목표 전체를 관통하는 일련번호다
+   (의자 1~22 → 테이블 23~36 → 진열대 37~55 → 가전 56~66 → 기타 67~978).
+   목록이 이 번호 하나로만 정렬되므로, 번호가 곧 분류의 묶음이 된다.
+
+   처음에 10·20·30·40을 줬다가 의자와 테이블 사이에 흩어져 박혔다. 기존 번호가
+   쓰지 않는 뒤쪽에 자리를 잡아 부대시설끼리 붙어 있게 한다. */
+const SORT_BASE = 1000;
+
 /* 엑스렌탈 Subsidiary Facilities 품목.
    usd는 엑스렌탈 상품 페이지의 금액 그대로. 원화는 아래에서 ×1000 한다.
 
@@ -72,7 +80,7 @@ const ITEMS = [
         id, event_id: EVENT, kind: 'equip', category: CATEGORY,
         code: it.code, name_ko: it.ko, name_en: it.en, spec: it.spec || '',
         price_krw: String(it.usd * 1000), price_usd: String(it.usd),
-        note: '', active: '', sort_order: String((i + 1) * 10),
+        note: '', active: '', sort_order: String(SORT_BASE + (i + 1) * 10),
       };
       existing.has(it.code) ? updated++ : added++;
 
