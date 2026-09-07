@@ -829,6 +829,7 @@
 <div class="mob-header" id="mob-h-exh">
   <button class="mob-menu-btn" onclick="toggleSb()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
   <div class="mob-title" id="mob-exh-ttl">전시 진행관리</div>
+  <button class="mob-action-btn" onclick="openExhAdd()" aria-label="참가기업 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 8v6M23 11h-6"/><path d="M9 7a4 4 0 1 0 0 8 4 4 0 0 0 0-8M2 21v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1"/></svg></button>
   <button class="mob-action-btn primary" onclick="openExhImport()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
 </div>
   <!-- 모바일 검색 — .tb(상단바)가 모바일에서 통째로 숨겨져 데스크톱 검색창을
@@ -843,6 +844,7 @@
   </div>
   <div class="tb">
     <div class="tb-t" id="exh-ttl">전시 진행관리 <span class="tb-s">참가기업 준비 현황</span></div>
+    <button class="btn bs" onclick="openExhAdd()" title="기업DB에 없는 기업도 여기서 바로 등록해요"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>참가기업 추가</button>
     <div class="srch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" placeholder="기업명·영문명 검색…" oninput="renderExh()" id="exh-q"></div>
     <button class="btn bp bs" onclick="openExhImport()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>참가기업 불러오기</button>
   </div>

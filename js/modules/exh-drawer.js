@@ -16,7 +16,7 @@ import {
   EXH_CONTACTS, EXH_ITEMS, EXH_INVOICES, EXH_TAX, EXH_PAYMENTS, EXH_LOGS, CO_DB, currentUser,
   contactsFor, catalogFor, catalogItem, EQUIP_CATALOG, findCatalogByName,
   contacts, participations, getOrgById, codeList, codeLabel,
-  EXH_APPS, appsFor, openAppFor, isVoided, liveItemsFor,
+  EXH_APPS, appsFor, openAppFor, isVoided, liveItemsFor, exhEvent,
 } from '../state.js';
 import { td, escapeHtml, escAttr } from '../utils.js';
 import {
@@ -994,6 +994,60 @@ function appsSection(x){
     list.length > 1 ? `<span class="pill p-amber">변경 ${list.length - 1}회</span>` : '');
 }
 
+/* ── 인보이스 발행 ──
+   신청 내역이 금액 항목으로 옮겨져 있으면 인보이스에 담길 내용은 이미 정해져
+   있다. 그런데 지금까지는 정산 탭으로 건너가 줄을 만들고(금액을 손으로 옮겨
+   적고), 그 줄에서 양식을 뽑고, 떨어진 파일을 폴더로 옮기는 세 걸음이었다.
+   신청 내역을 보고 있는 자리에서 한 번에 끝낸다.
+
+   실제 만드는 일은 exh-invoice.js가 한다 — 여기서는 window 경유로만 부른다
+   (그쪽이 이 파일을 import하므로 반대로 부르면 순환 참조가 된다). */
+function invoiceIssueSection(x){
+  const items = liveItemsFor(x.id).filter(i => i.billable !== 'no');
+  const invs = invoicesFor(x.id).filter(v => v.status !== 'void');
+  const by = {};
+  items.forEach(i => {
+    const c = i.currency || 'KRW';
+    by[c] = (by[c] || 0) + (Number(String(i.amount ?? '').replace(/[^0-9.-]/g, '')) || 0);
+  });
+  const curs = Object.keys(by);
+  const folder = window.invoiceFolderName?.(exhEvent) || null;
+  const canFolder = window.folderSupported?.() ?? false;
+
+  if(!items.length) return sct('인보이스 발행',
+    `<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">
+      청구할 금액 항목이 아직 없어요 — 위에서 신청 내역을 금액 항목으로 옮기거나
+      <b>정산</b> 탭에서 항목을 넣으면 여기서 바로 발행할 수 있어요.</div>`);
+
+  return sct('인보이스 발행', `
+    <div style="padding:8px 10px;background:var(--i9);border-radius:7px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+        <span style="font-size:11px;color:var(--i4)">담길 내용</span>
+        <b style="font-size:13px">${curs.map(c => escapeHtml(fmtMoney(by[c], c))).join(' + ')}</b>
+      </div>
+      <div style="font-size:10.5px;color:var(--i5);margin-top:3px">
+        청구 항목 ${items.length}건${curs.length > 1
+          ? ` · 통화가 <b>${curs.join(' / ')}</b>로 갈려 있어 ${curs.length}장으로 나눠 발행해요` : ''}</div>
+    </div>
+    ${invs.length ? `<div style="font-size:11px;color:var(--am);margin-bottom:8px">
+      이미 발행한 인보이스가 ${invs.length}장 있어요 — 누르면 <b>새 번호로 한 장 더</b> 만듭니다.
+      금액만 고쳐 다시 보내는 거라면 옛 건을 <b>정산</b> 탭에서 무효로 두세요.</div>` : ''}
+    <button class="btn bp" id="inv-issue-${escAttr(x.id)}" onclick="issueExhInvoice('${escAttr(x.id)}')"
+      title="인보이스 줄을 만들고 양식을 채워 저장합니다">인보이스 발행${curs.length > 1 ? ` (${curs.length}장)` : ''}</button>
+    <div style="font-size:10.5px;color:var(--i5);margin-top:7px">
+      ${!canFolder
+        ? '이 브라우저는 폴더 저장을 지원하지 않아 다운로드로 받아요 (Chrome·Edge 데스크톱에서 폴더 저장 가능)'
+        : folder
+          ? `저장 위치 <b>${escapeHtml(folder)}</b> 안의 기업 폴더
+             <button class="btn bs bl-mini" onclick="pickInvoiceFolder('${escAttr(exhEvent || '')}')">바꾸기</button>
+             <button class="btn bs bl-mini" onclick="forgetInvoiceFolder('${escAttr(exhEvent || '')}')">해제</button>`
+          : `지금은 다운로드로 받아요.
+             <button class="btn bs bl-mini" onclick="pickInvoiceFolder('${escAttr(exhEvent || '')}')">저장 폴더 지정</button>
+             — 이 행사의 <b>Invoice</b> 폴더를 고르면 그 뒤로는 바로 저장됩니다`}
+    </div>`,
+    invs.length ? `<span class="pill p-gray">발행 ${invs.length}장</span>` : '');
+}
+
 /* ── 신청항목 탭 ──
    신청서를 받았는지, 받았다면 빠진 게 없는지, 무엇을 더 신청했는지를 한 화면에서
    본다. 신청 내역을 정산의 금액 항목으로 옮기는 버튼도 여기 둔다 — 적어둔 내역과
@@ -1019,6 +1073,8 @@ function dApply(x){
   ${sct('추가 비품 신청',
     textRow(x, 'extra_equipment', '신청 내역 (받은 그대로)', '예: 추가 테이블 2, 전기 3kW', true) +
     `<button class="btn bs" onclick="addItemFromEquip('${escAttr(x.id)}')" style="margin-top:2px">이 내역을 비품 금액 항목으로 추가</button>`)}
+
+  ${invoiceIssueSection(x)}
 
   ${sct('등록된 비품', items.length
     ? `<div style="display:flex;flex-direction:column;gap:1px">
@@ -1431,7 +1487,10 @@ function dBilling(x){
       <button class="btn bp bs" style="flex:0 0 auto" onclick="addExhInvoice('${escAttr(x.id)}')">발행</button>
     </div>
     <div style="font-size:10.5px;color:var(--i5);margin-top:5px">
-      금액 항목 합계가 기본값으로 들어가요. 부스+비품 따로, 그래픽 따로 나눠 발행해도 됩니다.</div>`)}
+      금액 항목 합계가 기본값으로 들어가요. 부스+비품 따로, 그래픽 따로 나눠 발행해도 됩니다.<br>
+      <b>양식 내려받기</b>는 ${window.invoiceFolderName?.(exhEvent)
+        ? `저장 폴더(<b>${escapeHtml(window.invoiceFolderName(exhEvent))}</b>)의 기업 폴더에 바로 저장돼요`
+        : '다운로드로 받아요 — <b>신청항목</b> 탭에서 저장 폴더를 지정하면 폴더에 바로 저장됩니다'}.</div>`)}
 
   ${sct('세금계산서', `
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px">
@@ -1963,6 +2022,18 @@ export async function addExhInvoice(exhId){
   clear(`iv-t-${exhId}`, `iv-a-${exhId}`);
 }
 export const delExhInvoice = (id) => removeRow(EXH_INVOICES, id, deleteExhInvoice);
+
+/* 화면 입력칸을 거치지 않고 인보이스 줄을 만든다 — exh-invoice.js의 '발행'이
+   쓴다(신청 내역에서 곧바로 발행할 때는 사람이 금액을 두드리지 않는다).
+   쓰기는 여기 모여 있어야 한다: 잠금(guardWrite)과 실패 되돌리기가 여기 있다. */
+export async function createInvoiceRow(exhId, { title, amount, currency }){
+  const rec = {
+    id: localId('XV-'), exhibitor_id: exhId, title: title || '인보이스', amount,
+    currency: currency || currencyOf(exhId),
+    created_at: td(), sent_at: td(), due_date: '', note: '',
+  };
+  return (await addRow(EXH_INVOICES, rec, saveExhInvoice)) ? rec : null;
+}
 
 /* 금액·통화를 줄에서 바로 고친다. 기록에도 무엇이 어떻게 바뀌었는지 남긴다 —
    금액은 나중에 "왜 이 숫자가 됐지"를 되짚어야 할 일이 가장 많은 값이다. */

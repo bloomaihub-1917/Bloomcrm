@@ -22,6 +22,7 @@ import {
   appsFor, openAppFor,
   codeList, codeLabel, codeCls,
   evPartOn, evPartDone, evPartState,
+  findOrgByName, orgName,
 } from '../state.js';
 import { td, escapeHtml, escAttr, isMobile, cleanEmail, countryName } from '../utils.js';
 export { cleanEmail };   // exh-drawer가 여기서 가져다 쓴다
@@ -47,7 +48,7 @@ const deleteExhLog = guardWrite(_deleteExhLog);
 const batchCreateExhibitors = guardWrite(_batchCreateExhibitors);
 const saveExhCfgToSheet = guardWrite(_saveExhCfgToSheet);
 import { trackAction } from './audit-tab.js';
-import { normalizeCompanyKey } from './company-tab.js';
+import { normalizeCompanyKey, createOrg, reloadOrgs } from './company-tab.js';
 
 /* 전시 참가기업으로 취급할 참가 역할 — 데이터에 표기 흔들림이 있어 함께 본다 */
 const EXH_ROLES = ['전시참가기업', '전시기업', '전시참가'];
@@ -733,7 +734,15 @@ export function setExhView(v){
   if(v !== 'list') stepFil = null;
   exhView = v; renderExh();
 }
-export function setExhEvent2(key){ boothTypeFil = ''; setExhEvent(key); buildExhEvList(); renderExh(); }
+export function setExhEvent2(key){
+  boothTypeFil = '';
+  setExhEvent(key);
+  buildExhEvList();
+  renderExh();
+  /* 인보이스 저장 폴더는 행사마다 다르다 — 어느 폴더에 저장되는지 화면에 적으려면
+     행사를 바꿀 때 다시 읽어야 한다(exh-invoice.js가 소유, window 경유). */
+  window.initInvoiceFolder?.(key);
+}
 export function setExhFilter(k){ exhFilter = k; stepFil = null; buildExhFilters(); renderExh(); }
 
 /* ══════════════════════════════════════════
@@ -836,6 +845,7 @@ export function renderExh(){
         ? '<div style="font-size:12px;color:var(--i4)">진행 완료된 행사예요 — 참가기업 없이 끝났거나, 기록이 다른 행사에 들어가 있을 수 있어요.</div>'
         : `<div style="font-size:12px;color:var(--i4);margin-bottom:14px">
              기업DB에 "전시참가기업"으로 기록된 기업을 불러오거나 직접 추가할 수 있어요</div>
+           <button class="btn" onclick="openExhAdd()">참가기업 추가</button>
            <button class="btn bp" onclick="openExhImport()">참가기업 불러오기</button>`}
     </div>`;
     return;
@@ -2854,6 +2864,113 @@ function renderChecklistTable(list, all){
 }
 
 /* ══════════════════════════════════════════
+   참가기업 직접 추가
+
+   불러오기는 기업DB에 이미 있는 기업만 데려온다. 행사 도중 새로 신청하는
+   기업은 기업DB에도 없어서, 지금까지는 기업DB에서 먼저 만들고 연락처에
+   전시참가기업 역할을 붙인 뒤 돌아와 불러와야 했다. 세 화면을 거치는 동안
+   기업명 표기가 갈리기도 했다.
+
+   그래서 한 자리에서 둘 다 만든다. 기업DB에 같은 이름이 이미 있으면 새로
+   만들지 않고 그 기업에 잇는다 — 여기서 또 만들면 기업DB에 같은 회사가
+   두 줄 생기고, 지난 행사 이력이 갈린다.
+══════════════════════════════════════════ */
+export function openExhAdd(){
+  closeExhAdd();
+  if(exhLocked()){
+    alert('진행 완료된 행사예요.\n설정 › 행사 관리 › 진행 파트에서 "진행 중"으로 되돌리세요.');
+    return;
+  }
+  const pop = document.createElement('div');
+  pop.id = 'exh-add-modal';
+  pop.className = 'mw on';
+  let downOnBg = false;
+  pop.addEventListener('mousedown', (e) => { downOnBg = (e.target === pop); });
+  pop.addEventListener('click', (e) => { if(e.target === pop && downOnBg) closeExhAdd(); });
+
+  // 신청순은 다음 번호를 미리 넣어 둔다 — 새로 신청한 곳이니 대개 맨 뒤다.
+  // 고칠 수 있게 열어 두는 건, 늦게 입력했지만 신청은 먼저 받은 경우가 있어서다.
+  const next = Math.max(0, ...activeExhibitors(exhEvent)
+    .map(x => Number(x.apply_order) || 0)) + 1;
+
+  pop.innerHTML = `<div class="modal" style="max-width:480px">
+    <div class="mh"><div class="mt2">참가기업 추가</div>
+      <div class="mc">기업DB에 없는 기업도 여기서 바로 등록해요 — 기업DB에도 함께 만들어집니다</div></div>
+    <div class="mb">
+      <div class="fg"><label class="fl">기업명 (국문) *</label>
+        <input class="fi" id="exh-add-ko" placeholder="예) 주식회사 블룸" autocomplete="off"></div>
+      <div class="fg"><label class="fl">기업명 (영문)</label>
+        <input class="fi" id="exh-add-en" placeholder="예) Bloom Co., Ltd." autocomplete="off"></div>
+      <div class="fg"><label class="fl">국가</label>
+        <input class="fi" id="exh-add-country" placeholder="비우면 국내로 봅니다" autocomplete="off"></div>
+      <div class="fg"><label class="fl">신청순</label>
+        <input class="fi" id="exh-add-order" value="${next}" inputmode="numeric"></div>
+      <div id="exh-add-msg" style="font-size:11.5px;color:var(--i4);min-height:16px"></div>
+    </div>
+    <div class="mf2">
+      <button class="btn" onclick="closeExhAdd()">취소</button>
+      <button class="btn bp" onclick="confirmExhAdd()" id="exh-add-btn">추가</button>
+    </div></div>`;
+  document.body.appendChild(pop);
+  document.getElementById('exh-add-ko')?.focus();
+}
+export function closeExhAdd(){ document.getElementById('exh-add-modal')?.remove(); }
+
+export async function confirmExhAdd(){
+  const v = (id) => String(document.getElementById(id)?.value || '').trim();
+  const msg = document.getElementById('exh-add-msg');
+  const say = (t, bad) => { if(msg){ msg.textContent = t; msg.style.color = bad ? 'var(--re)' : 'var(--i4)'; } };
+
+  const nameKo = v('exh-add-ko'), nameEn = v('exh-add-en');
+  const name = nameKo || nameEn;
+  if(!name) return say('기업명을 입력해주세요.', true);
+
+  const key = normalizeCompanyKey(name);
+  const dupExh = exhibitorsForEvent(exhEvent).find(x => x.company_key === key);
+  if(dupExh) return say(`이미 이 행사에 등록된 기업이에요 — ${exhNames(dupExh).ko}`, true);
+
+  const btn = document.getElementById('exh-add-btn');
+  if(btn){ btn.disabled = true; btn.textContent = '추가 중…'; }
+  const fail = (t) => { if(btn){ btn.disabled = false; btn.textContent = '추가'; } say(t, true); };
+
+  /* ① 기업DB — 같은 이름이 있으면 그 기업을 쓴다.
+     createOrg는 중복이면 ok:false와 함께 그 기업(org)을 돌려준다. */
+  let orgId = '';
+  const existing = findOrgByName(name, normalizeCompanyKey);
+  if(existing){
+    orgId = existing.id;
+    say(`기업DB에 이미 있는 «${orgName(existing)}»에 이어 붙였어요.`);
+  } else {
+    const r = await createOrg({
+      nameKo, nameEn, kind: '전시참가기업',
+      country: v('exh-add-country'),
+      notes: `${exhEvent} 전시 참가기업으로 등록`,
+    });
+    if(!r.ok && !r.org) return fail(r.error || '기업DB 등록에 실패했어요.');
+    orgId = r.ok ? r.id : r.org.id;
+  }
+
+  /* ② 전시 참가기업 — 이름은 기업DB에 넣은 그대로 쓴다. 여기서 다르게 적으면
+     같은 회사가 화면마다 다른 이름으로 보인다. */
+  const rec = {
+    event_id: exhEvent, org_id: String(orgId || ''),
+    company_key: key, company_name: nameKo || nameEn,
+    status: '준비중', apply_order: v('exh-add-order'), updated_at: td(),
+  };
+  const res = await batchCreateExhibitors([rec]);
+  if(!res.ok) return fail('전시 등록에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
+
+  await reloadExhibitors();
+  await reloadOrgs();
+  closeExhAdd();
+  buildExhEvList();
+  renderExh();
+  trackAction('add', '전시 참가기업 추가', name,
+    `<b>${escapeHtml(name)}</b>를 ${escapeHtml(exhEvent)} 참가기업으로 추가${
+      existing ? ' (기업DB의 기존 기업에 연결)' : ' — 기업DB에도 새로 등록'}`);
+}
+
+/* ══════════════════════════════════════════
    참가기업 불러오기 — 트래킹 대상 확보
 
    participations에서 이 행사의 "전시참가기업" 역할을 뽑아 기업 단위로 묶는다.
@@ -3102,6 +3219,9 @@ window.setExhView = setExhView;
 window.searchExhM = searchExhM;
 window.setBoothTypeFil = setBoothTypeFil;
 window.setStepFil = setStepFil;
+window.openExhAdd = openExhAdd;
+window.closeExhAdd = closeExhAdd;
+window.confirmExhAdd = confirmExhAdd;
 window.toggleEquipRow = toggleEquipRow;
 window.advanceStage = advanceStage;
 window.cycleBookLogo = cycleBookLogo;
