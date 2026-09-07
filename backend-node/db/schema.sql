@@ -576,3 +576,16 @@ ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS booth_design_received_at TEXT;
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS booth_design_checked_at  TEXT;
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS booth_design_result      TEXT;  -- 'ok'(적합) | 'fix'(수정 필요) | ''
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS booth_design_note        TEXT;  -- 확인 결과 메모
+
+/* ── 공동 부스 ──
+   한 부스를 두 기관이 나눠 쓰는 일이 있다(2026 KIC 부스 39 — 서울대학교병원과
+   분당서울대학교병원). 기업은 둘이지만 부스는 하나다. 그런데 각각 booth_qty=1로
+   적혀 있어서 부스 수가 2로 세어졌다 — 주최사 보고에 나가는 숫자가 한 칸 늘고,
+   조립부스 발주도 한 벌 더 잡힌다.
+
+   기업 수는 그대로 둔다. 초청·등록·정산은 기업 단위로 움직이고, 실제로 두
+   기관이 각자 담당자를 두고 비용을 나눠 낸다. 부스 수에서만 뺀다.
+
+   어느 쪽을 뺄지는 사람이 정한다 — 부스를 대표해 신청한 쪽이 남고 나머지가
+   빠지는데, 그건 데이터로 알 수 없다. */
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS booth_shared TEXT;  -- 'yes'(부스 수 집계에서 제외) | ''

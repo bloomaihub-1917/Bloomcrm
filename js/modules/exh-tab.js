@@ -966,8 +966,14 @@ const sumBy = (list, key, weight) => {
   list.forEach(x => { const k = key(x); if(k) c[k] = (c[k] || 0) + weight(x); });
   return c;
 };
-/* 부스 수 — 안 적힌 곳은 1부스로 본다(대부분 1부스라 비워 두고 넘어간다) */
-const boothQty = (x) => Math.max(1, num(x.booth_qty) || 1);
+/* ── 부스 수 ──
+   안 적힌 곳은 1부스로 본다(대부분 1부스라 비워 두고 넘어간다).
+
+   공동 부스로 표시된 기업은 0으로 센다. 한 부스를 두 기관이 나눠 쓰면 기업은
+   둘이지만 부스는 하나다 — 둘 다 1로 세면 주최사 보고 숫자가 한 칸 늘고
+   조립부스 발주도 한 벌 더 잡힌다. 기업 수에서는 빼지 않는다. */
+export const isSharedBooth = (x) => x.booth_shared === 'yes';
+const boothQty = (x) => (isSharedBooth(x) ? 0 : Math.max(1, num(x.booth_qty) || 1));
 
 function exhSummary(all){
   const of = (x) => {
@@ -994,6 +1000,7 @@ function exhSummary(all){
     type:  sumBy(all, x => x.booth_type || '', boothQty),
     grade: countBy(all.filter(x => x.grade && x.grade !== 'Exhibitor'), x => x.grade),
     noBooth: all.filter(x => !String(x.booth_no || '').trim()).length,
+    shared: all.filter(isSharedBooth).length,
     prev: (() => {
       const keys = prevOrgKeys();
       if(!keys) return null;
@@ -1028,7 +1035,8 @@ function renderExhSummary(all){
         ${sub(`국내 ${s.co.home} · 해외 ${s.co.away}${s.co.unknown ? ` · 국가 미확인 ${s.co.unknown}` : ''}`)}`)}
 
       ${block('부스', `${n(s.booth.total)}<span style="font-size:11px;color:var(--i4)"> 부스</span>
-        ${sub(`국내 ${s.booth.home} · 해외 ${s.booth.away}${s.booth.unknown ? ` · 미확인 ${s.booth.unknown}` : ''}`)}`)}
+        ${sub(`국내 ${s.booth.home} · 해외 ${s.booth.away}${s.booth.unknown ? ` · 미확인 ${s.booth.unknown}` : ''}`)}
+        ${s.shared ? sub(`<span title="한 부스를 나눠 쓰는 기업이에요 — 기업 수에는 있고 부스 수에는 없습니다">공동 부스 ${s.shared}곳 제외</span>`) : ''}`)}
 
       ${block('층', `<div style="display:flex;flex-wrap:wrap;gap:3px">${cnt(s.floor, 'p-gray')}</div>
         ${sub(s.noBooth ? `<span style="color:var(--am)">부스 미배정 ${s.noBooth}곳</span>` : '부스 수 기준')}`)}
@@ -1195,11 +1203,26 @@ function renderBoothView(list){
   /* 번호에서 읽은 부스 수와 적어둔 수량이 다르면 알린다 — 10-11이면 2부스인데
      수량이 1로 적혀 있으면 청구액이 절반으로 잡힌다. */
   const qtyOdd = all0.filter(x => {
+    if(isSharedBooth(x)) return false;   // 나눠 쓰는 부스는 번호와 수량이 안 맞는 게 정상
     const b = parseBooth(x.booth_no);
     const q = Number(String(x.booth_qty || '').replace(/[^0-9]/g, ''));
     return b.kind === 'range' && q && q !== b.count;
   });
-  const totalBooths = rows.reduce((a, x) => a + parseBooth(x.booth_no).count, 0);
+  /* 공동 부스는 번호가 같은 두 줄로 들어와 있어 번호로 세면 두 번 잡힌다 */
+  const totalBooths = rows.reduce((a, x) => a + (isSharedBooth(x) ? 0 : parseBooth(x.booth_no).count), 0);
+  const sharedN = all0.filter(isSharedBooth).length;
+  /* 「공동」 토글은 번호가 겹치는 줄에만 붙인다. 모든 줄에 달면 1부스짜리
+     50줄에도 눌 일 없는 버튼이 생겨 표가 어수선해진다. 이미 켜 둔 줄은
+     번호를 나중에 고쳤어도 계속 보여준다(끌 수 있어야 한다). */
+  const dupBooth = new Set();
+  {
+    const seen = new Set();
+    all0.forEach(x => {
+      const k = String(x.booth_no || '').trim();
+      if(!k) return;
+      if(seen.has(k)) dupBooth.add(k); else seen.add(k);
+    });
+  }
   const typeCnt = countBy(all0, x => x.booth_type);
 
   const typePill = (t, n) => `<span class="pill ${boothTypeFil === t ? 'p-blue' : 'p-gray'}"
@@ -1210,6 +1233,7 @@ function renderBoothView(list){
   const pills = `<span class="pill p-gray">기업 ${boothTypeFil ? `${rows.length}/${all0.length}` : all0.length}</span>`
     + `<span class="pill p-gray">부스 ${totalBooths}칸</span>`
     + (noBooth ? `<span class="pill p-red">번호 미배정 ${noBooth}</span>` : '')
+    + (sharedN ? `<span class="pill p-blue" title="한 부스를 나눠 쓰는 기업이에요 — 부스 수에서 빠집니다">공동 부스 ${sharedN}</span>` : '')
     + (unconfirmed ? `<span class="pill p-amber">배정 미확정 ${unconfirmed}</span>` : '')
     + (qtyOdd.length ? `<span class="pill p-red" title="${escAttr(qtyOdd.map(x => `${x.company_name} ${x.booth_no}(${parseBooth(x.booth_no).count}칸) ↔ 수량 ${x.booth_qty}`).join(', '))}">수량 불일치 ${qtyOdd.length}</span>` : '')
     + `<span class="pill p-blue">독립부스 ${selfN}</span>`
@@ -1236,6 +1260,7 @@ function renderBoothView(list){
             return b.kind === 'range' ? ` (${b.count}칸)` : b.kind === 'split' ? ' 공동' : ''; })()}</span>
         <span style="font-size:13px;font-weight:700;flex:1;min-width:0">${escapeHtml(exhNames(x).ko)}</span>
         ${x.booth_confirmed === 'yes' || x.booth_confirmed_at ? '<span class="pill p-green">확정</span>' : '<span class="pill p-amber">미확정</span>'}
+        ${isSharedBooth(x) ? '<span class="pill p-blue" title="부스 수에서 빠져요">공동 부스</span>' : ''}
       </div>
       ${exhNames(x).en ? `<div style="font-size:11px;color:var(--i4);margin:-2px 0 3px">${escapeHtml(exhNames(x).en)}</div>` : ''}
       <div style="font-size:11px;color:var(--i4)">${[x.booth_floor && x.booth_floor + '층', x.booth_type, x.booth_qty && x.booth_qty + '부스', x.grade].filter(Boolean).map(escapeHtml).join(' · ') || '정보 없음'}</div>
@@ -1267,8 +1292,15 @@ function renderBoothView(list){
         ${applyCell(x)}
         <td style="font-size:12px;font-weight:700${x.booth_no ? '' : ';color:var(--i6)'}">${escapeHtml(x.booth_no || '—')}
           ${(() => { const b = parseBooth(x.booth_no);
-            return b.kind === 'range' ? `<div style="font-size:9.5px;color:var(--i4);font-weight:400;margin-top:1px">${b.count}칸</div>`
-              : b.kind === 'split' ? `<div style="font-size:9.5px;color:var(--a);font-weight:400;margin-top:1px">공동</div>` : ''; })()}</td>
+            return b.kind === 'range' ? `<div style="font-size:9.5px;color:var(--i4);font-weight:400;margin-top:1px">${b.count}칸</div>` : ''; })()}
+          ${dupBooth.has(String(x.booth_no || '').trim()) || isSharedBooth(x)
+            ? `<div style="margin-top:2px"><span onclick="event.stopPropagation();toggleSharedBooth('${escAttr(x.id)}')"
+            title="${isSharedBooth(x) ? '부스 수에서 빠져 있어요 — 눌러서 되돌립니다' : '한 부스를 나눠 쓴다면 눌러서 부스 수에서 뺍니다'}"
+            style="cursor:pointer;font-size:9px;font-weight:400;padding:1px 5px;border-radius:4px;
+              border:1px solid ${isSharedBooth(x) ? 'var(--a)' : 'var(--i7)'};
+              background:${isSharedBooth(x) ? 'var(--ad)' : 'transparent'};
+              color:${isSharedBooth(x) ? 'var(--a)' : 'var(--i5)'}">공동${isSharedBooth(x) ? ' ✓' : ''}</span></div>`
+            : ''}</td>
         ${coCell(x, 'progress')}
         <td style="font-size:11.5px;color:var(--i3)">${x.booth_floor ? escapeHtml(x.booth_floor) + '층' : '<span style="color:var(--i6)">—</span>'}</td>
         <td><select class="fi" style="width:126px;padding:3px 4px;font-size:11px" onclick="event.stopPropagation()"
@@ -3009,6 +3041,16 @@ export function setExhField(id, field, value, label){
 }
 
 /* 여부 플래그 토글 — 끌 때는 날짜도 함께 지운다(체크는 꺼졌는데 날짜만 남는 상태 방지) */
+/* 공동 부스 켜고 끄기 — 어느 쪽을 뺄지는 사람이 정한다. 부스를 대표해 신청한
+   쪽이 남고 나머지가 빠지는데, 그건 데이터로 알 수 없다. */
+export async function toggleSharedBooth(id){
+  const x = getExhibitorById(id);
+  if(!x) return;
+  const on = !isSharedBooth(x);
+  await patchExh(x, { booth_shared: on ? 'yes' : '' },
+    on ? '공동 부스 — 부스 수 제외' : '공동 부스 해제');
+}
+
 export function toggleExhFlag(id, flag, dateField, label){
   const x = getExhibitorById(id);
   if(!x) return;
@@ -3051,6 +3093,7 @@ window.confirmExhImport = confirmExhImport;
 window.toggleExhDate = toggleExhDate;
 window.setExhField = setExhField;
 window.toggleExhFlag = toggleExhFlag;
+window.toggleSharedBooth = toggleSharedBooth;
 window.setExhDateWithFlag = setExhDateWithFlag;
 
 /* ══════════════════════════════════════════

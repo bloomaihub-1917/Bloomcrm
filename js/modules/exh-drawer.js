@@ -53,6 +53,7 @@ import {
   billedAmount, paidAmount, graphicState, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
   isPendingRefund, boothTypeOptions, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
   TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing, introOver, boothDesignState,
+  isSharedBooth,
   guardWrite, exhLocked, exhLockNotice,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar, needsReissue,
   settleState, liveInvoices, payDueDate,
@@ -1094,6 +1095,18 @@ function dProgress(x){
       <select class="fi" style="font-size:12px" onchange="setExhField('${escAttr(x.id)}','grade',this.value,'등급')">
         <option value=""${x.grade ? '' : ' selected'}>— 없음 —</option>${grades(x.event_id).map(g => `<option value="${escAttr(g.code)}"${(x.grade || '') === g.code ? ' selected' : ''}>${escapeHtml(g.label)}</option>`).join('')}
       </select></div>` +
+    `<div style="padding:8px 0 2px">
+      <label style="display:flex;align-items:flex-start;gap:7px;cursor:pointer">
+        <input type="checkbox" ${isSharedBooth(x) ? 'checked' : ''}
+          onchange="toggleSharedBooth('${escAttr(x.id)}')" style="margin-top:2px">
+        <span>
+          <span style="font-size:12px;font-weight:600">공동 부스 — 부스 수에서 뺀다</span>
+          <span style="display:block;font-size:10.5px;color:var(--i5);margin-top:2px">
+            한 부스를 두 기관이 나눠 쓸 때 한쪽만 켜세요. 기업 수·정산은 그대로 두고
+            부스 수와 조립부스 발주에서만 빠집니다.</span>
+        </span>
+      </label>
+    </div>` +
     flagRow(x, 'booth_confirmed', 'booth_confirmed_at', '배정 확정'))}
 
   ${sct('현장',

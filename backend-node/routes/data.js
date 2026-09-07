@@ -72,6 +72,7 @@ const TABLES = {
       'app_received', 'app_received_at', 'app_complete', 'app_missing', 'extra_equipment',
       'booth_no', 'booth_floor', 'booth_type', 'booth_qty', 'grade', 'booth_confirmed', 'booth_confirmed_at',
       'booth_design_received_at', 'booth_design_checked_at', 'booth_design_result', 'booth_design_note',
+      'booth_shared',
       'settled', 'settled_note', 'pay_due_date',
       'tax_sent_at', 'tax_amount', 'tax_contact_name', 'tax_contact_email', 'tax_contact_phone',
       'tax_stage', 'tax_requested_at', 'tax_to_finance_at',
