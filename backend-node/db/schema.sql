@@ -511,6 +511,11 @@ CREATE INDEX IF NOT EXISTS idx_code_lists_key ON code_lists(list_key, event_id);
 ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS received_at TEXT;    -- 받은 날 (YYYY-MM-DD)
 ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS received_note TEXT;  -- 받은 것 설명(파일명·형식 등)
 
+/* 받을 것을 세어 두는 것만으로는 관리가 안 된다. "언제까지 받아야 하나"가 없으면
+   미수령 목록이 그냥 길어지기만 하고, 누구부터 재촉할지 정할 근거가 없다.
+   항목마다 마감(받기로 한 날)을 잡아 지난 것·임박한 것을 갈라 본다. */
+ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS due_at TEXT;  -- 받기로 한 날 (YYYY-MM-DD)
+
 /* 품목표는 비품만 담다가 그래픽(사인물)까지 담게 됐다. 표를 새로 만들지 않고
    종류만 나눈다 — 고르는 화면도, 이름으로 찾는 규칙도, 설정 편집기도 같다.
    빈 값은 비품으로 본다(예전 행이 전부 비품이라 되메우지 않아도 맞다). */

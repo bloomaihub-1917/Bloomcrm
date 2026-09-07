@@ -90,7 +90,7 @@ const TABLES = {
   exhibitor_items: {
     table: 'exhibitor_items', pk: 'id', idPrefix: 'XI-',
     columns: ['id', 'exhibitor_id', 'category', 'name', 'qty', 'unit_price', 'amount', 'currency', 'note', 'sort_order',
-      'catalog_id', 'billable', 'shared_ref', 'received_at', 'received_note',
+      'catalog_id', 'billable', 'shared_ref', 'received_at', 'received_note', 'due_at',
       'app_id', 'change_kind', 'prev_qty', 'prev_amount', 'voided_at'],
   },
 

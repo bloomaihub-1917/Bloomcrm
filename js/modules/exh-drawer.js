@@ -52,13 +52,13 @@ function saveFailed(res, msg){
 }
 import { trackAction } from './audit-tab.js';
 import {
-  billedAmount, paidAmount, graphicState, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
+  billedAmount, paidAmount, graphicState, graphicDueInfo, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
   isPendingRefund, boothTypeOptions, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
   TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing, introOver, boothDesignState,
   isSharedBooth,
   guardWrite, exhLocked, exhLockNotice,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar, needsReissue,
-  settleState, liveInvoices, payDueDate,
+  settleState, liveInvoices, payDueDate, paidBreakdown, invoiceGap,
 } from './exh-tab.js';
 
 let drId = null;
@@ -1313,6 +1313,8 @@ function dBilling(x){
   const pendingRf = refunds.filter(isPendingRefund);
   const st = settleState(x);
   const billed = st.billed, paid = st.paid, rest = st.balance, cur = st.cur;
+  const pb = paidBreakdown(x.id);       // 총 입금 / 환불 / 순입금
+  const gap = invoiceGap(x.id);         // 인보이스 합계가 금액 항목과 어긋나는지
   const noAmount = invoicesFor(x.id).filter(i => i.status !== 'void' && String(i.amount ?? '').trim() === '');
 
   return `
@@ -1324,6 +1326,18 @@ function dBilling(x){
     </div>
     <div style="margin:8px 0 4px">${progressBar(billed ? paid / billed * 100 : 0,
       paid >= billed && billed > 0 ? 'var(--g)' : 'var(--am)')}</div>
+    ${/* 순입금 한 숫자만 보면 환불이 있었다는 사실이 사라진다. 통장·카드와 맞출 때는
+         들어온 돈과 돌려준 돈이 갈라져 있어야 한다. */''}
+    ${pb.refunded || pb.requested ? `<div style="margin:6px 0 2px;padding:6px 8px;background:var(--i9);border-radius:6px;font-size:11px">
+      <div style="display:flex;justify-content:space-between;padding:1px 0">
+        <span style="color:var(--i4)">총 입금</span><span style="color:var(--i2)">${escapeHtml(fmtMoney(pb.gross, cur))}</span></div>
+      ${pb.refunded ? `<div style="display:flex;justify-content:space-between;padding:1px 0">
+        <span style="color:var(--i4)">환불 완료</span><span style="color:var(--re)">−${escapeHtml(fmtMoney(pb.refunded, cur))}</span></div>` : ''}
+      <div style="display:flex;justify-content:space-between;padding:2px 0;border-top:1px solid var(--i8);margin-top:3px">
+        <span style="color:var(--i3)"><b>순입금</b></span><span style="color:var(--i1)"><b>${escapeHtml(fmtMoney(pb.net, cur))}</b></span></div>
+      ${pb.requested ? `<div style="display:flex;justify-content:space-between;padding:1px 0;color:var(--am)">
+        <span>보내야 할 환불</span><span>${escapeHtml(fmtMoney(pb.requested, cur))}</span></div>` : ''}
+    </div>` : ''}
     ${(() => {
       /* 입금이 어떤 수단으로 얼마씩 들어왔나. 계좌이체와 엑스렌탈 카드 결제가
          한 숫자로 합쳐져 있으면 어느 쪽이 얼마인지 알 수 없다. 수단이 하나뿐이면
@@ -1360,6 +1374,13 @@ function dBilling(x){
       입금 기한 ${escapeHtml(st.due)}${st.overdue && rest > 0 ? ` · ${daysSince(st.due)}일 지남` : ''}</div>` : ''}
     ${noAmount.length ? `<div style="font-size:11px;color:var(--am);margin-top:3px">
       ⚠ 금액이 안 적힌 인보이스 ${noAmount.length}건이 있어 청구액이 실제보다 적을 수 있어요</div>` : ''}
+    ${/* 청구액은 금액 항목 기준이다. 발행한 인보이스 합계가 여기서 어긋나면 재발행이
+         필요하거나 인보이스 줄이 빠진 결제가 있다는 뜻이라 갈라서 보여준다. */''}
+    ${gap ? `<div style="font-size:11px;color:var(--am);margin-top:3px">
+      ⚠ 발행한 인보이스 합계 ${escapeHtml(fmtMoney(gap.invoiced, gap.cur))} ·
+      금액 항목 합계 <b>${escapeHtml(fmtMoney(gap.billed, gap.cur))}</b>
+      (${gap.diff > 0 ? '+' : '−'}${escapeHtml(fmtMoney(Math.abs(gap.diff), gap.cur))}) —
+      위 청구액은 금액 항목 기준이에요. 인보이스 줄이 빠진 결제가 없는지 보고, 필요하면 다시 발행하세요.</div>` : ''}
     ${rest !== 0 && billed > 0 && st.state !== 'settled' ? `
       <div style="margin-top:8px;display:flex;gap:5px;flex-wrap:wrap;align-items:center">
         <input class="fi" id="stl-note-${escAttr(x.id)}" placeholder="완납 처리 사유 (예: 송금 수수료 차감)"
@@ -1732,10 +1753,12 @@ function graphicItemsBlock(x){
 
   const total = gi.reduce((s, i) => s + Number(String(i.amount || '').replace(/[^0-9.-]/g, '') || 0), 0);
   const got = gi.filter(i => i.received_at).length;
+  const late = gi.filter(i => !i.received_at && graphicDueInfo(i).late).length;
 
   return `<div style="font-size:11px;color:var(--i4);margin-bottom:8px">
       정산 탭의 <b>그래픽</b> 분류에서 그대로 가져옵니다 — 여기서 항목을 늘리거나 지우지는 않아요.
-      기업에서 파일을 받으면 왼쪽 칸에 체크하고, 받은 파일이 무엇이었는지 적어 두세요.</div>
+      기업에서 파일을 받으면 왼쪽 칸에 체크하고, 받은 파일이 무엇이었는지 적어 두세요.
+      <b>마감</b>은 이 파일을 언제까지 받기로 했나입니다 — 지난 것은 그래픽 현황에서 붉게 잡힙니다.</div>
 
     ${gi.map(i => {
       const on = !!i.received_at;
@@ -1754,6 +1777,14 @@ function graphicItemsBlock(x){
             onchange="setItemField('${escAttr(i.id)}','received_at',this.value)">
         </div>
         <div style="display:flex;gap:9px;align-items:center;margin-top:5px;padding-left:29px">
+          <span style="font-size:10.5px;color:var(--i5);flex:0 0 auto">마감</span>
+          <input type="date" class="fi" style="width:136px;padding:4px 8px;font-size:11.5px"
+            value="${escAttr(i.due_at || '')}"
+            onchange="setItemField('${escAttr(i.id)}','due_at',this.value)">
+          ${(() => { const d = graphicDueInfo(i);
+            return on ? '' : `<span class="pill ${d.cls}">${escapeHtml(d.text)}</span>`; })()}
+        </div>
+        <div style="display:flex;gap:9px;align-items:center;margin-top:5px;padding-left:29px">
           <span style="font-size:10.5px;color:var(--i5);flex:0 0 auto">받은 것</span>
           <input class="fi" style="flex:1;min-width:0;padding:4px 8px;font-size:11.5px"
             value="${escAttr(i.received_note || '')}" placeholder="예: 백월_최종.ai · CMYK · 재단선 포함"
@@ -1763,7 +1794,8 @@ function graphicItemsBlock(x){
     }).join('')}
 
     <div style="display:flex;justify-content:space-between;align-items:baseline;padding:9px 2px 0;font-size:12px">
-      <span style="color:var(--i4)">${gi.length}건 · 받음 ${got}건${got < gi.length ? ` · <b style="color:var(--am)">미수령 ${gi.length - got}건</b>` : ''}</span>
+      <span style="color:var(--i4)">${gi.length}건 · 받음 ${got}건${got < gi.length ? ` · <b style="color:var(--am)">미수령 ${gi.length - got}건</b>` : ''}${
+        late ? ` · <b style="color:var(--re)">마감 지남 ${late}건</b>` : ''}</span>
       <span>합계 <b>${money(total)}</b>원</span>
     </div>
     <button class="btn bs" onclick="switchExhDT('billing')" style="margin-top:8px">정산 탭에서 항목 추가·수정</button>`;

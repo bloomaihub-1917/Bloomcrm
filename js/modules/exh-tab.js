@@ -131,6 +131,15 @@ export function setStepFil(key){
 }
 let exhView = 'dash';        // dash | list | booth | equip | graphic
 
+/* 그래픽 현황 안의 보기와 거르개. 그래픽은 기업 한 줄로 볼 일(단계 진행)과
+   파일 한 줄로 볼 일(무엇이 안 왔나)이 갈린다 — 화면 하나에 둘 다 넣으면
+   어느 쪽도 제대로 안 보여서 나눠 두고 전환한다. */
+let gView = 'item';          // item(받을 파일) | co(기업별 진행)
+let gFil  = 'all';           // all | todo | late | none | got
+
+export function setGraphicView(v){ gView = v; renderExh(); }
+export function setGraphicFil(v){ gFil = gFil === v && v !== 'all' ? 'all' : v; renderExh(); }
+
 /* 드로어는 exh-drawer.js가 소유한다. 이 파일이 그쪽을 import하면 순환 참조가
    되므로(드로어가 여기 집계 함수를 쓴다) window 경유로만 호출한다 —
    기존 모듈들이 window.switchApp?.() 를 쓰는 것과 같은 방식. */
@@ -152,11 +161,12 @@ const hasAmount = (r) => String(r.amount ?? '').trim() !== '';
 export const liveInvoices = (exhId) =>
   invoicesFor(exhId).filter(i => i.status !== 'void' && hasAmount(i));
 
-/* 이 기업의 청구 통화. 유효한 인보이스를 우선으로 보고, 없으면 금액 항목을 본다.
+/* 이 기업의 청구 통화. 금액 항목을 우선으로 보고, 항목이 아직 없으면 인보이스를 본다 —
+   청구액(billedAmount)과 같은 순서라 통화와 합계가 서로 다른 곳을 가리키지 않는다.
    서로 다른 통화가 섞이면 합계를 낼 수 없으므로 하나를 고르고 경고를 띄운다. */
 export function currencyOf(exhId){
-  const src = liveInvoices(exhId);
-  const hit = (src.length ? src : liveItemsFor(exhId)).find(r => r.currency);
+  const src = liveItemsFor(exhId);
+  const hit = (src.length ? src : liveInvoices(exhId)).find(r => r.currency);
   return (hit && hit.currency) || 'KRW';
 }
 const sumIn = (rows, cur) => rows
@@ -170,7 +180,19 @@ export function mixedCurrency(exhId){
   return cs.size > 1 ? [...cs] : null;
 }
 
-/* 청구액: 유효한 인보이스 합계. 아직 한 장도 없으면 금액 항목 합계를 예상액으로 쓴다. */
+/* 청구액: 금액 항목 합계.
+
+   인보이스 합계를 쓰지 않는다. 인보이스는 발행한 시점에 멈춰 있는 문서고, 신청은
+   그 뒤로도 계속 바뀐다 — 취소한 품목은 지워지고 추가 결제는 엑스렌탈 카드로 먼저
+   빠져나간다. 인보이스를 기준으로 삼으면 뒤늦은 변경이 반영되지 않아 받을 돈과
+   화면의 숫자가 갈린 채로 행사가 끝난다.
+
+   실제로 그렇게 됐다: 포트리아는 인보이스 3장 합계가 4,368인데 그 뒤 엑스렌탈로
+   385·55가 더 결제되고 528·66이 환불돼, 실제 받을 돈은 금액 항목 합계인 4,214였다.
+   인보이스 줄이 없는 결제가 있으니 인보이스 합계는 어느 쪽으로도 맞지 않는다.
+
+   금액 항목은 변경이 있을 때마다 갱신되니 언제 봐도 지금 사실이다. 인보이스 합계가
+   여기서 어긋나면 재발행이 필요하다는 뜻이므로 invoiceGap()으로 따로 알린다. */
 /* 추가 배지처럼 우리가 청구하지 않는 항목은 합계에서 뺀다. 신청 내역에는 남는다 —
    몇 장을 신청했는지는 현장에서 필요한 정보라 지울 수 없다. */
 export const isBillable = (i) => i.billable !== 'no';
@@ -191,8 +213,21 @@ export function needsReissue(exhId){
 
 export function billedAmount(exhId){
   const cur = currencyOf(exhId);
+  const items = billableItems(exhId);
+  /* 금액 항목이 아직 하나도 없는 초기 상태에서는 발행한 인보이스를 예상액으로 쓴다 —
+     안 그러면 청구액 0으로 보여 '금액 항목을 추가해주세요'만 뜬다. */
+  return items.length ? sumIn(items, cur) : sumIn(liveInvoices(exhId), cur);
+}
+
+/* 인보이스 합계와 금액 항목 합계의 격차 — 있으면 재발행이나 누락된 인보이스가 있다.
+   청구액 판정에는 쓰지 않고 화면에 알리기만 한다. */
+export function invoiceGap(exhId){
   const inv = liveInvoices(exhId);
-  return inv.length ? sumIn(inv, cur) : sumIn(billableItems(exhId), cur);
+  const items = billableItems(exhId);
+  if(!inv.length || !items.length) return null;
+  const cur = currencyOf(exhId);
+  const invoiced = sumIn(inv, cur), billed = sumIn(items, cur);
+  return invoiced === billed ? null : { invoiced, billed, diff: billed - invoiced, cur };
 }
 /* ── 분류별 청구액 (부스 / 비품 / 그래픽 / 기타) ──
 
@@ -200,8 +235,8 @@ export function billedAmount(exhId){
    분류 단위로 움직인다 — 부스는 시공사, 비품은 렌탈사, 그래픽은 출력소로 간다.
 
    인보이스가 아니라 금액 항목을 센다. 인보이스는 여러 분류를 한 장에 합쳐 발행해
-   분류별로 가를 수가 없다. 그래서 여기 숫자는 '무엇을 얼마어치 신청했나'이고,
-   청구 총액(billedAmount)과는 다를 수 있다 — 인보이스에 할인·조정이 붙으면 갈린다.
+   분류별로 가를 수가 없다. billedAmount도 같은 금액 항목을 세니 분류 합계를 다 더하면
+   청구 총액과 맞는다.
 
    통화를 섞지 않는다. 기업마다 원화·달러가 갈려서 더하면 뜻 없는 숫자가 된다.
    { KRW: {booth: n, equip: n, ...}, USD: {...} } 꼴로 돌려준다. */
@@ -235,6 +270,17 @@ export function paidAmount(exhId){
     .reduce((s, p) => s + (p.kind === 'refund' ? -num(p.amount) : num(p.amount)), 0);
 }
 
+/* 순입금 한 숫자만 보면 4,214가 처음부터 4,214 들어온 것처럼 보인다. 실제로는
+   4,808이 들어오고 594가 환불된 결과다 — 대사할 때는 갈라진 숫자가 필요하다. */
+export function paidBreakdown(exhId){
+  const cur = currencyOf(exhId);
+  const rows = paymentsFor(exhId).filter(p => (p.currency || 'KRW') === cur);
+  const gross = rows.filter(p => p.kind !== 'refund').reduce((s, p) => s + num(p.amount), 0);
+  const refunded = rows.filter(isDoneRefund).reduce((s, p) => s + num(p.amount), 0);
+  const requested = rows.filter(isPendingRefund).reduce((s, p) => s + num(p.amount), 0);
+  return { gross, refunded, requested, net: gross - refunded, cur };
+}
+
 /* 아직 안 보낸 환불 — 처리 필요 목록에 올리기 위해 따로 센다 */
 export function pendingRefunds(exhId){
   return paymentsFor(exhId).filter(isPendingRefund);
@@ -249,8 +295,7 @@ export function pendingRefunds(exhId){
    인보이스는 원화로 받고 엑스렌탈은 해외 카드로 결제하는 경우가 있어 한 기업에
    원화와 달러가 함께 남는다. 그럴 때 둘 다 보여야 한다.
 
-   청구액은 인보이스가 한 장이라도 있으면 인보이스를, 없으면 금액 항목을 쓴다 —
-   settleState와 같은 기준이라 두 숫자가 어긋나지 않는다. */
+   청구액은 금액 항목을 쓴다 — settleState와 같은 기준이라 두 숫자가 어긋나지 않는다. */
 /* 결제 수단을 두 갈래로 묶는다. 통장에 찍히는 돈(계좌이체·외화송금)과 카드로
    나간 돈(카드·엑스렌탈 카드)은 대사하는 곳이 달라서, 한 숫자로 합쳐 두면
    통장과 맞출 때 매번 다시 갈라야 한다. 수단이 안 적힌 옛 건은 따로 둔다 —
@@ -262,8 +307,8 @@ export function payGroup(method){
 }
 
 export function settleByCurrency(exhId){
-  const inv = liveInvoices(exhId);
-  const src = inv.length ? inv : billableItems(exhId);
+  const items = billableItems(exhId);
+  const src = items.length ? items : liveInvoices(exhId);   // billedAmount와 같은 기준
   const pays = paymentsFor(exhId).filter(hasAmount)
     .filter(p => p.kind !== 'refund' || isDoneRefund(p));
 
@@ -1705,6 +1750,365 @@ function renderGraphicView(list){
     || liveItemsFor(x.id).some(i => (i.category || '') === 'graphic'));
   if(!rows.length) return emptyView('그래픽을 주문한 기업이 없어요');
 
+  /* 보기 전환 — 기업별은 "이 회사가 어느 단계인가", 항목별은 "무엇이 아직 안 왔나".
+     그래픽은 한 기업이 백월·행잉배너·데스크 랩핑을 함께 주문하므로 기업 한 줄로는
+     무엇을 받았는지 체크할 자리가 없다. 그래서 받을 파일 목록을 기본으로 둔다. */
+  const seg = `<div style="padding:12px 16px 0"><div class="seg">
+    ${[['item', '받을 파일'], ['kind', '품목별'], ['co', '기업별 진행']].map(([k, l]) =>
+      `<button class="seg-b${gView === k ? ' on' : ''}" onclick="setGraphicView('${k}')">${l}</button>`).join('')}
+  </div></div>`;
+
+  return seg + (gView === 'co' ? renderGraphicCoView(rows)
+    : gView === 'kind' ? renderGraphicKindView(rows)
+    : renderGraphicItemView(rows));
+}
+
+/* ── 받을 파일 계획 ──
+   기업 단위 단계(graphic_stage)는 "기업 전달"까지밖에 못 담는다 — 셋 중 둘만 온
+   경우가 그 칸에 안 들어간다. 받아야 할 파일 하나를 한 줄로 놓고, 언제까지 받기로
+   했는지(due_at)를 함께 잡는다. 마감이 없으면 미수령 목록은 길어지기만 하고
+   누구부터 재촉할지 정할 근거가 없다. */
+export function graphicItemsOf(exhId){
+  return liveItemsFor(exhId).filter(i => (i.category || '') === 'graphic');
+}
+
+/* 마감 읽기. 받은 항목은 마감이 지났어도 늦은 게 아니다 — 이미 끝난 일이다.
+   rank는 정렬용이다(급한 것이 위로). */
+export function graphicDueInfo(i){
+  if(i.received_at) return { cls: 'p-green', text: '받음', rank: 4 };
+  const d = String(i.due_at || '').trim();
+  if(!d) return { cls: 'p-gray', text: '마감 미정', rank: 3 };
+  const over = daysSince(d);
+  if(over > 0)   return { cls: 'p-red', text: `${over}일 지남`, rank: 0, late: true };
+  if(over === 0) return { cls: 'p-red', text: '오늘 마감',      rank: 0, late: true };
+  return -over <= DUE_SOON_DAYS
+    ? { cls: 'p-amber', text: `D-${-over}`, rank: 1, soon: true }
+    : { cls: 'p-gray',  text: `D-${-over}`, rank: 2 };
+}
+
+function graphicPlanRows(list){
+  const out = [];
+  list.forEach(x => graphicItemsOf(x.id).forEach(i => out.push({ x, i, d: graphicDueInfo(i) })));
+  /* 급한 것부터. 같은 급함 안에서는 마감이 빠른 순, 그다음 기업 이름 순 —
+     한 기업 파일이 흩어지지 않아야 연락 한 번에 함께 물어볼 수 있다. */
+  out.sort((a, b) => a.d.rank - b.d.rank
+    || String(a.i.due_at || '9999').localeCompare(String(b.i.due_at || '9999'))
+    || exhNames(a.x).ko.localeCompare(exhNames(b.x).ko, 'ko'));
+  return out;
+}
+
+function renderGraphicItemView(list){
+  const all = graphicPlanRows(list);
+  if(!all.length) return emptyView('정산 탭에서 그래픽 분류로 항목을 넣으면 여기에 받을 파일로 잡혀요');
+
+  const got  = all.filter(r => r.i.received_at);
+  const todo = all.filter(r => !r.i.received_at);
+  const late = todo.filter(r => r.d.late);
+  const soon = todo.filter(r => r.d.soon);
+  const none = todo.filter(r => !String(r.i.due_at || '').trim());
+
+  const shown = gFil === 'todo' ? todo
+    : gFil === 'late' ? todo.filter(r => r.d.late || r.d.soon)
+    : gFil === 'none' ? none
+    : gFil === 'got'  ? got : all;
+
+  const fpill = (k, l, n, cls) => `<button class="pill ${gFil === k ? cls : 'p-gray'}"
+    style="border:0;cursor:pointer${gFil === k ? ';outline:2px solid var(--i5)' : ''}"
+    onclick="setGraphicFil('${k}')">${l} ${n}</button>`;
+  const pills = fpill('all', '전체', all.length, 'p-blue')
+    + fpill('todo', '미수령', todo.length, 'p-amber')
+    + fpill('late', '지남·임박', late.length + soon.length, 'p-red')
+    + fpill('none', '마감 미정', none.length, 'p-amber')
+    + fpill('got', '받음', got.length, 'p-green');
+
+  /* 마감 일괄 잡기 — 계획은 보통 "이 기업들 다 며칟날까지"로 세운다. 지금 걸러 놓은
+     미수령 항목에만 넣는다(이미 받은 것은 건드리지 않는다). */
+  const actions = `<input type="date" id="g-bulk-due" class="fi" style="width:140px;padding:4px 7px;font-size:11.5px">
+    <button class="btn bs" onclick="applyGraphicDue()"
+      title="지금 보고 있는 미수령 항목의 마감일을 한꺼번에 정합니다">마감 일괄 지정</button>
+    <button class="btn bp bs" onclick="openNewGraphicOrder()">+ 그래픽 주문 추가</button>`;
+
+  const chk = (r) => `<button onclick="event.stopPropagation();toggleItemReceived('${escAttr(r.i.id)}')"
+    title="${r.i.received_at ? '받음 표시를 지웁니다' : '오늘 받은 것으로 표시합니다'}"
+    style="width:20px;height:20px;border-radius:5px;line-height:1;flex-shrink:0;cursor:pointer;font-size:12px;font-weight:800;color:#fff;border:1.5px solid ${
+      r.i.received_at ? 'var(--g)' : 'var(--i6)'};background:${r.i.received_at ? 'var(--g)' : 'transparent'}">${r.i.received_at ? '✓' : ''}</button>`;
+
+  if(isMobile()) return viewShell(pills, shown.map(r => `
+    <div style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px">
+      <div style="display:flex;align-items:center;gap:8px">
+        ${chk(r)}
+        <span style="flex:1;min-width:0" onclick="openExhDr('${escAttr(r.x.id)}','graphic')">
+          <div style="font-size:12.5px;font-weight:600">${escapeHtml(r.i.name || '(이름 없음)')}</div>
+          <div style="font-size:11px;color:var(--i4)">${escapeHtml(exhNames(r.x).ko)}${
+            r.x.booth_no ? ` · 부스 ${escapeHtml(r.x.booth_no)}` : ''}</div>
+        </span>
+        <span class="pill ${r.d.cls}">${escapeHtml(r.d.text)}</span>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;margin-top:7px">
+        <span style="font-size:10.5px;color:var(--i5)">마감</span>
+        <input type="date" class="fi" style="width:130px;padding:4px 7px;font-size:11.5px" value="${escAttr(r.i.due_at || '')}"
+          onchange="setItemField('${escAttr(r.i.id)}','due_at',this.value)">
+      </div>
+      <input class="fi" style="width:100%;margin-top:5px;padding:4px 8px;font-size:11.5px"
+        value="${escAttr(r.i.received_note || '')}" placeholder="받은 것 — 예: 백월_최종.ai"
+        onchange="setItemField('${escAttr(r.i.id)}','received_note',this.value)">
+    </div>`).join('') || emptyView('해당하는 항목이 없어요'), actions);
+
+  return viewShell(pills, `<div class="tw"><table><thead><tr>
+      <th style="min-width:30px"></th>
+      <th style="min-width:150px">기업</th>
+      <th style="min-width:56px">부스</th>
+      <th style="min-width:180px">받을 파일</th>
+      <th style="min-width:44px;text-align:right">수량</th>
+      <th style="min-width:118px">마감</th>
+      <th style="min-width:88px">상태</th>
+      <th style="min-width:100px">받은 날</th>
+      <th style="min-width:190px">받은 것</th>
+      <th style="min-width:96px;text-align:right">금액</th>
+    </tr></thead><tbody>
+    ${shown.map(r => `<tr${r.i.received_at ? ' style="opacity:.72"' : ''}>
+      <td>${chk(r)}</td>
+      ${coCell(r.x, 'graphic')}
+      <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(r.x.booth_no || '—')}</td>
+      <td style="font-size:12px">${escapeHtml(r.i.name || '(이름 없음)')}</td>
+      <td style="text-align:right;font-size:11.5px">${escapeHtml(String(r.i.qty || ''))}</td>
+      <td><input type="date" class="fi" style="width:110px;padding:3px 5px;font-size:11px" value="${escAttr(r.i.due_at || '')}"
+        onchange="setItemField('${escAttr(r.i.id)}','due_at',this.value)"></td>
+      <td><span class="pill ${r.d.cls}">${escapeHtml(r.d.text)}</span></td>
+      <td><input type="date" class="fi" style="width:106px;padding:3px 5px;font-size:11px" value="${escAttr(r.i.received_at || '')}"
+        onchange="setItemField('${escAttr(r.i.id)}','received_at',this.value)"></td>
+      <td><input class="fi" style="width:180px;padding:3px 6px;font-size:11px" value="${escAttr(r.i.received_note || '')}"
+        placeholder="예: 백월_최종.ai · CMYK" onchange="setItemField('${escAttr(r.i.id)}','received_note',this.value)"></td>
+      <td style="text-align:right;font-size:11.5px">${r.i.amount ? escapeHtml(fmtMoney(r.i.amount, r.i.currency || 'KRW')) : '-'}</td>
+    </tr>`).join('') || '<tr><td colspan="10" style="text-align:center;color:var(--i4);padding:24px">해당하는 항목이 없어요</td></tr>'}
+    </tbody></table></div>`, actions);
+}
+
+/* 지금 걸러 놓은 미수령 항목에 마감을 한 번에 넣는다. 이미 받은 항목은 빼고,
+   이미 마감이 잡힌 항목이 몇 건 덮이는지 먼저 알려 준다 — 계획을 다시 잡는 일도
+   있지만, 실수로 남의 마감을 밀어 버리면 되돌릴 방법이 없다. */
+export async function applyGraphicDue(){
+  const v = (document.getElementById('g-bulk-due')?.value || '').trim();
+  if(!v){ alert('마감일을 먼저 고르세요.'); return; }
+  const base = graphicPlanRows(visibleList()).filter(r => !r.i.received_at);
+  const target = gFil === 'none' ? base.filter(r => !String(r.i.due_at || '').trim())
+    : gFil === 'late' ? base.filter(r => r.d.late || r.d.soon)
+    : gFil === 'got'  ? [] : base;
+  if(!target.length){ alert('마감을 넣을 미수령 항목이 없어요.'); return; }
+  const over = target.filter(r => String(r.i.due_at || '').trim() && r.i.due_at !== v).length;
+  if(!confirm(`미수령 ${target.length}건의 마감을 ${v}로 정합니다.`
+    + (over ? `\n이미 마감이 잡힌 ${over}건도 이 날짜로 바뀝니다.` : ''))) return;
+  for(const r of target) await window.setItemField?.(r.i.id, 'due_at', v);
+}
+
+/* ── 품목별 ──
+   비품은 "의자 몇 개"를 알아야 발주서를 쓴다. 그래픽도 같다 — 출력소에 넘길 때는
+   기업이 아니라 "백월 12장, 데스크 랩핑 9장"으로 넘어간다. 여기에 하나가 더 붙는데,
+   그래픽은 물량이 아니라 파일이 걸림돌이라 품목마다 몇 장이 아직 안 왔는지를 함께
+   본다 — 백월만 다 모이면 그것부터 먼저 걸 수 있다.
+
+   묶는 규칙은 비품과 같다: 카탈로그에 이어진 항목은 그 id로, 나머지는 이름으로.
+   기업마다 "Wall graphic print", "백월 출력"처럼 다르게 적어 보내도 한 줄이 된다. */
+function graphicKindGroups(list){
+  const by = new Map();
+  list.forEach(x => graphicItemsOf(x.id).forEach(i => {
+    const cat = i.catalog_id ? catalogItem(i.catalog_id) : null;
+    const k = cat ? cat.id : String(i.name || '(이름 없음)').trim();
+    if(!by.has(k)) by.set(k, {
+      key: k,
+      code:   cat ? cat.code : '',
+      nameKo: cat ? (cat.name_ko || cat.name_en) : String(i.name || '(이름 없음)').trim(),
+      nameEn: cat ? (cat.name_ko ? cat.name_en : '') : '',
+      spec:   cat ? cat.spec : '',
+      offCatalog: !cat,
+      qty: 0, cos: [], krw: 0, usd: 0, got: 0, late: 0,
+    });
+    const g = by.get(k);
+    const q = Number(String(i.qty || '').replace(/[^0-9.-]/g, '')) || 0;
+    const amt = Number(String(i.amount || '').replace(/[^0-9.-]/g, '')) || 0;
+    const d = graphicDueInfo(i);
+    g.qty += q || 1;                       // 수량을 안 적었으면 1장으로 센다
+    if(i.received_at) g.got++;
+    if(d.late) g.late++;
+    g.cos.push({ x, i, d, qty: q || 1, amt, cur: i.currency || 'KRW' });
+    if(isBillable(i)){ if((i.currency || 'KRW') === 'USD') g.usd += amt; else g.krw += amt; }
+    else g.excluded = true;
+  }));
+  /* 안 온 파일이 많은 품목이 위로. 발주를 막고 있는 게 무엇인지가 먼저다 —
+     같으면 물량이 큰 순서(그래야 발주서 순서와 얼추 맞는다). */
+  return [...by.values()].sort((a, b) =>
+    (b.cos.length - b.got) - (a.cos.length - a.got) || b.qty - a.qty);
+}
+
+function renderGraphicKindView(list){
+  const groups = graphicKindGroups(list);
+  if(!groups.length) return emptyView('정산 탭에서 그래픽 분류로 항목을 넣으면 여기에 품목으로 잡혀요');
+
+  const totQty  = groups.reduce((a, g) => a + g.qty, 0);
+  const totN    = groups.reduce((a, g) => a + g.cos.length, 0);
+  const totGot  = groups.reduce((a, g) => a + g.got, 0);
+  const totLate = groups.reduce((a, g) => a + g.late, 0);
+  const totKrw  = groups.reduce((a, g) => a + g.krw, 0);
+  const totUsd  = groups.reduce((a, g) => a + g.usd, 0);
+
+  const pills = `<span class="pill p-blue">품목 ${groups.length}종</span>`
+    + `<span class="pill p-gray">총 ${totQty}장</span>`
+    + `<span class="pill ${totGot === totN ? 'p-green' : 'p-amber'}" title="주문한 그래픽 항목 중 파일을 받은 것">파일 받음 ${totGot}/${totN}</span>`
+    + (totLate ? `<span class="pill p-red">마감 지남 ${totLate}</span>` : '')
+    + (totKrw ? `<span class="pill p-gray">${fmtMoney(totKrw, 'KRW')}</span>` : '')
+    + (totUsd ? `<span class="pill p-gray">${fmtMoney(totUsd, 'USD')}</span>` : '');
+
+  /* 한 품목씩 펼쳐 보는 것과, 전부 펼쳐 놓고 훑는 것은 쓰임이 다르다 —
+     발주 전에 "누가 무엇을 몇 장" 한 번에 확인할 때는 접힌 표가 오히려 불편하다. */
+  const allOpen = groups.every(g => equipOpen.has(g.key));
+  const actions = `<button class="btn bs" onclick="toggleGraphicKindAll()">${allOpen ? '모두 접기' : '모두 펼치기'}</button>`
+    + `<button class="btn bp bs" onclick="openNewGraphicOrder()">+ 그래픽 주문 추가</button>`;
+
+  /* 펼치면 그 품목을 주문한 기업이 나온다. 여기서도 바로 체크하고 마감을 넣는다 —
+     "백월 다 모였나"를 보다가 한 곳만 안 왔으면 그 자리에서 처리해야지,
+     받을 파일 보기로 되돌아가 다시 찾게 하면 안 된다. */
+  const coList = (g) => g.cos.slice()
+    .sort((a, b) => a.d.rank - b.d.rank || String(a.i.due_at || '9999').localeCompare(String(b.i.due_at || '9999')))
+    .map(c => `
+    <div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:11.5px">
+      <button onclick="event.stopPropagation();toggleItemReceived('${escAttr(c.i.id)}')"
+        title="${c.i.received_at ? '받음 표시를 지웁니다' : '오늘 받은 것으로 표시합니다'}"
+        style="width:18px;height:18px;border-radius:5px;line-height:1;flex-shrink:0;cursor:pointer;font-size:11px;font-weight:800;color:#fff;border:1.5px solid ${
+          c.i.received_at ? 'var(--g)' : 'var(--i6)'};background:${c.i.received_at ? 'var(--g)' : 'transparent'}">${c.i.received_at ? '✓' : ''}</button>
+      <span class="pill p-gray" style="min-width:52px;text-align:center">${c.x.booth_no ? '부스 ' + escapeHtml(c.x.booth_no) : '미배정'}</span>
+      <span onclick="event.stopPropagation();openExhDr('${escAttr(c.x.id)}','graphic')"
+        style="flex:1;min-width:0;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(exhNames(c.x).ko)}</span>
+      <span style="color:var(--i4)">${c.qty}장</span>
+      <input type="date" class="fi" style="width:124px;padding:3px 6px;font-size:11px" value="${escAttr(c.i.due_at || '')}"
+        onclick="event.stopPropagation()" onchange="setItemField('${escAttr(c.i.id)}','due_at',this.value)">
+      <span class="pill ${c.d.cls}" style="min-width:64px;text-align:center">${escapeHtml(c.d.text)}</span>
+      <span style="min-width:88px;text-align:right;font-weight:600">${c.amt ? escapeHtml(fmtMoney(c.amt, c.cur)) : '-'}</span>
+    </div>`).join('');
+
+  /* 받음 진행 막대 — 숫자만 보면 8/12가 얼마나 남은 건지 한눈에 안 들어온다 */
+  const bar = (g) => {
+    const pct = g.cos.length ? Math.round(g.got / g.cos.length * 100) : 0;
+    return `<div style="display:flex;align-items:center;gap:6px">
+      <div style="flex:1;min-width:44px;height:5px;border-radius:3px;background:var(--i7);overflow:hidden">
+        <div style="width:${pct}%;height:100%;background:${g.got === g.cos.length ? 'var(--g)' : 'var(--am)'}"></div></div>
+      <span style="font-size:11px;font-weight:700;color:${g.got === g.cos.length ? 'var(--g)' : 'var(--i3)'}">${g.got}/${g.cos.length}</span>
+    </div>`;
+  };
+
+  if(isMobile()) return viewShell(pills, groups.map(g => {
+    const open = equipOpen.has(g.key);
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--i8)">
+      <div onclick="toggleEquipRow('${escAttr(g.key)}')" style="cursor:pointer">
+        <div style="display:flex;align-items:baseline;gap:7px">
+          ${g.code ? `<span class="pill p-blue" style="font-size:9px">${escapeHtml(g.code)}</span>` : ''}
+          <span style="font-size:12.5px;font-weight:600;flex:1;min-width:0">${escapeHtml(g.nameKo)}</span>
+          <span style="font-size:15px;font-weight:800">${g.qty}<span style="font-size:10px;font-weight:400;color:var(--i4)">장</span></span>
+        </div>
+        <div style="margin-top:5px">${bar(g)}</div>
+        <div style="font-size:10.5px;color:var(--i4);margin-top:3px">
+          ${g.cos.length}개사${g.late ? ` · <b style="color:var(--re)">마감 지남 ${g.late}</b>` : ''}
+          ${g.krw ? ' · ' + escapeHtml(fmtMoney(g.krw, 'KRW')) : ''}${g.usd ? ' · ' + escapeHtml(fmtMoney(g.usd, 'USD')) : ''}
+          <span style="color:var(--a)"> ${open ? '▲ 접기' : '▼ 주문 기업'}</span>
+        </div>
+      </div>
+      ${open ? `<div style="margin-top:5px;padding-left:6px;border-left:2px solid var(--i6)">${coList(g)}</div>` : ''}
+    </div>`;
+  }).join('') + `<div class="sct">기업별 주문 내역</div>` + graphicCoDetail(list), actions);
+
+  return viewShell(pills, `<div class="uc"><div class="uc-ttl">품목별 합계
+      <span style="font-weight:400;color:var(--i4);font-size:10px">— 출력소에 넘기는 숫자예요. 품목을 클릭하면 주문 기업이 보이고, 거기서 바로 체크할 수 있습니다</span></div>
+    <div class="tw" style="overflow:visible"><table><thead><tr>
+      <th style="min-width:66px">품목코드</th>
+      <th style="min-width:170px">품명(국문)</th>
+      <th style="min-width:150px">품명(영문)</th>
+      <th style="min-width:110px">규격</th>
+      <th style="min-width:56px;text-align:right">수량</th>
+      <th style="min-width:62px;text-align:right">기업</th>
+      <th style="min-width:130px">파일 받음</th>
+      <th style="min-width:78px;text-align:right">마감 지남</th>
+      <th style="min-width:104px;text-align:right">KRW</th>
+      <th style="min-width:88px;text-align:right">USD</th>
+    </tr></thead><tbody>
+      ${groups.map(g => {
+        const open = equipOpen.has(g.key);
+        return `<tr onclick="toggleEquipRow('${escAttr(g.key)}')" style="cursor:pointer${open ? ';background:var(--ad)' : ''}"
+          title="클릭하면 주문한 기업을 볼 수 있어요">
+          <td style="font-size:11.5px;font-weight:700;color:var(--i2)">
+            <span style="color:var(--a)">${open ? '▾' : '▸'}</span> ${escapeHtml(g.code || '—')}</td>
+          <td style="font-size:12.5px;font-weight:600">${escapeHtml(g.nameKo)}
+            ${g.excluded ? '<span class="pill p-amber" style="font-size:9px;margin-left:4px" title="우리가 청구하지 않는 항목이라 금액 합계에서 빠져 있어요">청구 제외</span>' : ''}
+            ${g.offCatalog ? '<span class="pill p-amber" style="font-size:9px;margin-left:4px" title="품목표에 없는 항목 — 이름으로 묶었어요">품목표 외</span>' : ''}</td>
+          <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(g.nameEn || '-')}</td>
+          <td style="font-size:11px;color:var(--i4)">${escapeHtml(g.spec || '-')}</td>
+          <td style="text-align:right;font-weight:700">${g.qty}</td>
+          <td style="text-align:right;color:var(--i4)">${g.cos.length}곳</td>
+          <td>${bar(g)}</td>
+          <td style="text-align:right">${g.late ? `<span class="pill p-red">${g.late}</span>` : '<span style="color:var(--i6)">-</span>'}</td>
+          <td style="text-align:right">${g.krw ? escapeHtml(fmtMoney(g.krw, 'KRW')) : '<span style="color:var(--i6)">-</span>'}</td>
+          <td style="text-align:right">${g.usd ? escapeHtml(fmtMoney(g.usd, 'USD')) : '<span style="color:var(--i6)">-</span>'}</td>
+        </tr>
+        ${open ? `<tr><td colspan="10" style="padding:8px 12px 12px;background:var(--i9)">
+          <div style="font-size:10.5px;color:var(--i4);margin-bottom:4px">주문 기업 ${g.cos.length}곳 — 왼쪽 칸을 누르면 파일 받음으로 표시됩니다</div>
+          ${coList(g)}</td></tr>` : ''}`;
+      }).join('')}
+    </tbody>
+    <tfoot><tr style="border-top:2px solid var(--i5);font-weight:800">
+      <td colspan="4" style="font-size:12px">합계 ${groups.length}종</td>
+      <td style="text-align:right">${totQty}</td>
+      <td style="text-align:right;font-weight:400;color:var(--i4)">${totN}건</td>
+      <td style="font-size:12px">${totGot}/${totN}</td>
+      <td style="text-align:right">${totLate || '-'}</td>
+      <td style="text-align:right">${totKrw ? escapeHtml(fmtMoney(totKrw, 'KRW')) : '-'}</td>
+      <td style="text-align:right">${totUsd ? escapeHtml(fmtMoney(totUsd, 'USD')) : '-'}</td>
+    </tr></tfoot></table></div></div>`
+    + `<div class="sct">기업별 주문 내역</div>` + graphicCoDetail(list), actions);
+}
+
+/* 품목별 합계가 "무엇을 몇 장"이라면, 이건 "이 회사에 무엇을 받아야 하나"다.
+   비품 현황도 합계 아래 같은 자리에 기업별 신청 내역을 둔다 — 발주서를 쓰다가
+   한 기업 것만 확인하고 싶을 때 표를 접었다 폈다 하지 않게. 여기서는 받은 것에
+   ✓를 붙여, 펼치지 않고도 어느 회사가 무엇을 아직 안 보냈는지 알아볼 수 있다. */
+function graphicCoDetail(list){
+  const rows = list.map(x => ({ x, items: graphicItemsOf(x.id) })).filter(r => r.items.length);
+  if(!rows.length) return '';
+  return rows.map(({ x, items }) => {
+    const got = items.filter(i => i.received_at).length;
+    const late = items.filter(i => !i.received_at && graphicDueInfo(i).late).length;
+    return `<div style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px">
+      <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px">
+        ${x.booth_no ? `<span class="pill p-blue">부스 ${escapeHtml(x.booth_no)}</span>` : ''}
+        <span onclick="openExhDr('${escAttr(x.id)}','graphic')" style="cursor:pointer;flex:1;min-width:0">
+          <span style="font-size:13px;font-weight:700">${escapeHtml(exhNames(x).ko)}</span>${
+          exhNames(x).en ? `<span style="font-size:11px;color:var(--i4);margin-left:5px">${escapeHtml(exhNames(x).en)}</span>` : ''}</span>
+        <span class="pill ${got === items.length ? 'p-green' : got ? 'p-amber' : 'p-gray'}">받음 ${got}/${items.length}</span>
+        ${late ? `<span class="pill p-red">마감 지남 ${late}</span>` : ''}
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px">
+        ${items.map(i => { const d = graphicDueInfo(i);
+          return `<span class="pill ${i.received_at ? 'p-green' : d.cls}"
+            title="${escAttr(`${fmtMoney(i.amount, i.currency || 'KRW')}${i.due_at ? ` · 마감 ${i.due_at}` : ''}${
+              i.received_at ? ` · ${i.received_at} 받음` : ''}${i.received_note ? ` · ${i.received_note}` : ''}`)}"
+            >${i.received_at ? '✓ ' : ''}${escapeHtml(i.name || '(이름 없음)')}${i.qty ? ' ×' + escapeHtml(String(i.qty)) : ''}${
+              !i.received_at && i.due_at ? ` · ${escapeHtml(d.text)}` : ''}</span>`; }).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* 모두 펼치기 / 모두 접기. 지금 화면에 있는 품목만 다룬다 — 다른 행사에서 펼쳐 둔
+   줄까지 건드리면 행사를 옮겼을 때 왜 펼쳐져 있는지 알 수 없다. */
+export function toggleGraphicKindAll(){
+  const keys = graphicKindGroups(visibleList()).map(g => g.key);
+  const allOpen = keys.every(k => equipOpen.has(k));
+  keys.forEach(k => allOpen ? equipOpen.delete(k) : equipOpen.add(k));
+  renderExh();
+}
+
+/* ── 기업별 진행 ──
+   제작(디자인)은 초안 → 수정안 → 최종안으로 왔다 갔다 하고, 출력은 규격이
+   맞는지만 보면 된다. 두 흐름이 섞여 있어 한 표에서 지금 누가 어느 단계에
+   걸려 있는지 봐야 다음 연락처를 정할 수 있다. */
+function renderGraphicCoView(rows){
   const design = rows.filter(x => x.graphic_type === 'design');
   const print  = rows.filter(x => x.graphic_type === 'print');
   const doneN  = rows.filter(x => graphicState(x).state === 'done').length;
@@ -1713,10 +2117,10 @@ function renderGraphicView(list){
   /* 무엇을 받았나 — 항목마다 따로 온다. 기업 단위 단계(graphic_stage)만으로는
      세 개 중 둘만 온 경우를 담지 못해, 항목 기준으로 따로 센다. */
   const gGot = (x) => {
-    const gi = liveItemsFor(x.id).filter(i => (i.category || '') === 'graphic');
-    return { n: gi.length, got: gi.filter(i => i.received_at).length };
+    const gi = graphicItemsOf(x.id);
+    return { n: gi.length, got: gi.filter(i => i.received_at).length,
+      late: gi.filter(i => !i.received_at && graphicDueInfo(i).late).length };
   };
-
 
   const pills = `<span class="pill p-gray">주문 ${rows.length}</span>`
     + `<span class="pill p-blue">제작 ${design.length}</span>`
@@ -1724,9 +2128,11 @@ function renderGraphicView(list){
     + `<span class="pill p-green">완료 ${doneN}</span>`
     + (warnN ? `<span class="pill p-red">규격 확인 ${warnN}</span>` : '')
     + (() => {
-      const t = rows.reduce((a, x) => { const g = gGot(x); a.n += g.n; a.got += g.got; return a; }, { n: 0, got: 0 });
+      const t = rows.reduce((a, x) => { const g = gGot(x); a.n += g.n; a.got += g.got; a.late += g.late; return a; },
+        { n: 0, got: 0, late: 0 });
       if(!t.n) return '';
-      return `<span class="pill ${t.got === t.n ? 'p-green' : 'p-amber'}" title="주문한 그래픽 항목 중 파일을 받은 것">파일 받음 ${t.got}/${t.n}</span>`;
+      return `<span class="pill ${t.got === t.n ? 'p-green' : 'p-amber'}" title="주문한 그래픽 항목 중 파일을 받은 것">파일 받음 ${t.got}/${t.n}</span>`
+        + (t.late ? `<span class="pill p-red" title="받기로 한 날이 지난 파일">마감 지남 ${t.late}</span>` : '');
     })();
 
   const stageLabel = (x) => {
@@ -1739,12 +2145,24 @@ function renderGraphicView(list){
   };
   const gAmt = (x) => {
     const by = {};
-    liveItemsFor(x.id).filter(i => (i.category || '') === 'graphic').forEach(i => {
+    graphicItemsOf(x.id).forEach(i => {
       const c = i.currency || 'KRW';
       by[c] = (by[c] || 0) + (Number(String(i.amount || '').replace(/[^0-9.-]/g, '')) || 0);
     });
     const ks = Object.keys(by).filter(k => by[k]);
     return ks.length ? ks.map(k => fmtMoney(by[k], k)).join(' + ') : '-';
+  };
+
+  /* 받은 파일 칸 — 개수만이 아니라 무엇이 안 왔고 마감이 언제인지 함께 띄운다.
+     기업 한 줄이라 여기서 체크는 못 한다. 체크는 받을 파일 보기에서 한다. */
+  const gotCell = (x) => {
+    const gi = graphicItemsOf(x.id);
+    if(!gi.length) return '<span style="color:var(--i6)">-</span>';
+    const g = gGot(x);
+    return `<span class="pill ${g.got === g.n ? 'p-green' : g.got ? 'p-amber' : 'p-gray'}"
+      title="${escAttr(gi.map(i => `${i.received_at ? '✓' : '·'} ${i.name || ''}${
+        !i.received_at && i.due_at ? ` (마감 ${i.due_at})` : ''}${i.received_note ? ` (${i.received_note})` : ''}`).join(' / '))}"
+      >${g.got}/${g.n}</span>${g.late ? ` <span class="pill p-red" title="받기로 한 날이 지났어요">지남 ${g.late}</span>` : ''}`;
   };
 
   const gActions = `<button class="btn bp bs" onclick="openNewGraphicOrder()">+ 그래픽 주문 추가</button>`;
@@ -1761,9 +2179,10 @@ function renderGraphicView(list){
         <span class="pill ${g.state === 'done' ? 'p-green' : g.state === 'warn' ? 'p-red' : 'p-amber'}">${escapeHtml(stageLabel(x))}</span>
       </div>
       <div style="font-size:11px;color:var(--i4)">주문 ${escapeHtml(x.graphic_ordered_at || '-')} · 금액 ${escapeHtml(gAmt(x))}</div>
-      ${(() => { const g = gGot(x); if(!g.n) return '';
-        return `<div style="font-size:11px;margin-top:3px;color:${g.got === g.n ? 'var(--g)' : 'var(--am)'}">
-          파일 ${g.got}/${g.n} 받음${g.got < g.n ? ` · 미수령 ${g.n - g.got}건` : ''}</div>`; })()}
+      ${(() => { const gt = gGot(x); if(!gt.n) return '';
+        return `<div style="font-size:11px;margin-top:3px;color:${gt.got === gt.n ? 'var(--g)' : 'var(--am)'}">
+          파일 ${gt.got}/${gt.n} 받음${gt.got < gt.n ? ` · 미수령 ${gt.n - gt.got}건` : ''}${
+            gt.late ? ` · 마감 지남 ${gt.late}건` : ''}</div>`; })()}
     </div>`;
   }).join(''), gActions);
 
@@ -1774,7 +2193,7 @@ function renderGraphicView(list){
       <th style="min-width:80px">유형</th>
       <th style="min-width:96px">시안</th>
       <th style="min-width:150px">확인 진행</th>
-      <th style="min-width:84px">받은 파일</th>
+      <th style="min-width:110px">받은 파일</th>
       <th style="min-width:104px">초안</th>
       <th style="min-width:104px">수정안</th>
       <th style="min-width:104px">최종안</th>
@@ -1798,12 +2217,7 @@ function renderGraphicView(list){
         </select></td>
         <td><span class="pill ${g.state === 'done' ? 'p-green' : g.state === 'warn' ? 'p-red' : 'p-amber'}">${escapeHtml(stageLabel(x))}</span></td>
         <td>${stageCell(x, 'graphic_stage', GRAPHIC_STAGES)}</td>
-        <td>${(() => { const g = gGot(x);
-          if(!g.n) return '<span style="color:var(--i6)">-</span>';
-          return `<span class="pill ${g.got === g.n ? 'p-green' : g.got ? 'p-amber' : 'p-gray'}"
-            title="${escAttr(liveItemsFor(x.id).filter(i => (i.category || '') === 'graphic')
-              .map(i => `${i.received_at ? '✓' : '·'} ${i.name || ''}${i.received_note ? ` (${i.received_note})` : ''}`).join(' / '))}"
-            >${g.got}/${g.n}</span>`; })()}</td>
+        <td>${gotCell(x)}</td>
         ${dateCell('graphic_draft_at')}
         ${dateCell('graphic_revised_at')}
         ${dateCell('graphic_final_at')}
@@ -3216,6 +3630,10 @@ export function setExhDateWithFlag(id, dateField, flag, value, label){
 window.setExhEvent2 = setExhEvent2;
 window.setExhFilter = setExhFilter;
 window.setExhView = setExhView;
+window.setGraphicView = setGraphicView;
+window.setGraphicFil = setGraphicFil;
+window.toggleGraphicKindAll = toggleGraphicKindAll;
+window.applyGraphicDue = applyGraphicDue;
 window.searchExhM = searchExhM;
 window.setBoothTypeFil = setBoothTypeFil;
 window.setStepFil = setStepFil;
