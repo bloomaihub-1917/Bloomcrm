@@ -112,6 +112,22 @@ const STEPS = [
 ];
 
 let exhFilter = 'all';       // all | incomplete | unpaid | inquiry | billing | cancelled
+
+/* 단계별 집계 알약을 누르면 그 단계만 걸러 본다. "신청서 47/51"에서 못 채운
+   네 곳이 어디인지 보려면 지금은 51줄을 눈으로 훑어야 한다.
+
+   한 번 더 누르면 완료 → 미완료 → 전체로 돌아간다. 두 방향을 다 보고 싶은데
+   알약을 셋으로 늘리면 열한 단계가 서른셋이 되어 알약 줄이 화면을 덮는다.
+
+   해당 없는 곳(부스 도면이 없는 조립부스 같은)은 어느 쪽에도 넣지 않는다 —
+   집계의 분모에서도 빠져 있어서, 여기서만 끼면 개수가 안 맞는다. */
+let stepFil = null;          // { key, mode: 'done' | 'todo' }
+
+export function setStepFil(key){
+  stepFil = !stepFil || stepFil.key !== key ? { key, mode: 'done' }
+    : stepFil.mode === 'done' ? { key, mode: 'todo' } : null;
+  renderExh();
+}
 let exhView = 'dash';        // dash | list | booth | equip | graphic
 
 /* 드로어는 exh-drawer.js가 소유한다. 이 파일이 그쪽을 import하면 순환 참조가
@@ -699,10 +715,11 @@ export function setExhView(v){
   // 부스 타입으로 걸러 둔 채 다른 보기로 갔다가 돌아오면, 왜 목록이 짧은지
   // 알 수 없다. 보기를 옮기거나 행사를 바꾸면 푼다.
   if(v !== 'booth') boothTypeFil = '';
+  if(v !== 'list') stepFil = null;
   exhView = v; renderExh();
 }
 export function setExhEvent2(key){ boothTypeFil = ''; setExhEvent(key); buildExhEvList(); renderExh(); }
-export function setExhFilter(k){ exhFilter = k; buildExhFilters(); renderExh(); }
+export function setExhFilter(k){ exhFilter = k; stepFil = null; buildExhFilters(); renderExh(); }
 
 /* ══════════════════════════════════════════
    메인 — 미답변 문의 패널 + 기업리스트 표
@@ -749,6 +766,14 @@ function visibleList(){
     return s.state === 'over' ||
       invoicesFor(x.id).some(i => i.status !== 'void' && String(i.amount ?? '').trim() === ''); });
   if(exhFilter === 'inquiry')    list = list.filter(x => openInquiriesFor(x.id).length);
+  if(stepFil){
+    const step = STEPS.find(s => s.key === stepFil.key);
+    if(step) list = list.filter(x => {
+      const st = cellState(x, step).state;
+      if(st === 'na') return false;                 // 해당 없는 곳은 양쪽 다 아니다
+      return stepFil.mode === 'done' ? st === 'done' : st !== 'done';
+    });
+  }
   if(q) list = list.filter(x => matchExhName(x, q));
   return list.sort((a, b) => String(a.company_name || '').localeCompare(String(b.company_name || ''), 'ko'));
 }
@@ -1671,6 +1696,7 @@ function renderGraphicView(list){
     const g = graphicState(x);
     return `<div onclick="openExhDr('${escAttr(x.id)}','graphic')" style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
+        <span class="pill p-gray">${escapeHtml(x.apply_order || '-')}</span>
         <span style="flex:1;min-width:0">
           <span style="font-size:13px;font-weight:700">${escapeHtml(exhNames(x).ko)}</span>${
           exhNames(x).en ? `<span style="font-size:11px;color:var(--i4);margin-left:5px">${escapeHtml(exhNames(x).en)}</span>` : ''}</span>
@@ -1685,6 +1711,7 @@ function renderGraphicView(list){
   }).join(''), gActions);
 
   return viewShell(pills, `<div class="tw"><table><thead><tr>
+      <th style="min-width:44px;text-align:right">신청순</th>
       <th style="min-width:150px">기업</th>
       <th style="min-width:56px">부스</th>
       <th style="min-width:80px">유형</th>
@@ -1703,6 +1730,7 @@ function renderGraphicView(list){
         : `<td><input type="date" class="fi" style="width:100px;padding:3px 5px;font-size:11px" value="${escAttr(x[f] || '')}"
             onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr({graphic_draft_at:'초안',graphic_revised_at:'수정안',graphic_final_at:'최종안'}[f])}')"></td>`;
       return `<tr>
+        ${applyCell(x)}
         ${coCell(x, 'graphic')}
         <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
         <td><select class="fi" style="width:74px;padding:3px 4px;font-size:11px"
@@ -2199,6 +2227,20 @@ export async function submitNewGraphicOrder(){
 /* 단계 완료 수 — 해당 없는 기업(na)은 분모에서 뺀다.
    부스 도면은 독립부스에만, 그래픽은 주문한 곳에만 해당한다. 전체를 분모로
    두면 51곳 중 18곳짜리 단계가 영영 "0/51"로 남아 늘 밀린 것처럼 보인다. */
+/* 집계 알약 하나 — 지금 걸려 있는 쪽을 색과 꼬리표로 알린다 */
+function stepPill(s, t){
+  const on = stepFil && stepFil.key === s.key;
+  const label = escapeHtml(s.label.replace(/<br>/g, ''));
+  const cls = on ? (stepFil.mode === 'done' ? 'p-blue' : 'p-amber')
+    : t.n === t.of ? 'p-green' : 'p-gray';
+  const tip = on ? (stepFil.mode === 'done' ? '완료한 곳만 보는 중 — 한 번 더 누르면 미완료만'
+    : '미완료만 보는 중 — 한 번 더 누르면 전체') : '눌러서 완료한 곳만 보기';
+  return `<button class="pill ${cls}" title="${escAttr(tip)}"
+    style="border:0;cursor:pointer;font:inherit" onclick="setStepFil('${escAttr(s.key)}')">${label} ${
+    on ? (stepFil.mode === 'done' ? `${t.n}곳` : `${t.of - t.n}곳`) : `${t.n}/${t.of}`}${
+    on ? `<span style="margin-left:3px">${stepFil.mode === 'done' ? '완료' : '미완료'} ✕</span>` : ''}</button>`;
+}
+
 export function stepTally(all, step){
   const live = all.filter(x => cellState(x, step).state !== 'na');
   return { n: live.filter(x => cellState(x, step).state === 'done').length, of: live.length };
@@ -2595,11 +2637,7 @@ function renderChecklistCards(list, all){
   return `<div style="padding:10px 12px 16px">
     ${renderExhSummary(all)}
     <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">
-      ${STEPS.map(s => {
-        const t = stepTally(all, s);
-        if(!t.of) return '';
-        return `<span class="pill ${t.n === t.of ? 'p-green' : 'p-gray'}">${escapeHtml(s.label.replace(/<br>/g, ''))} ${t.n}/${t.of}</span>`;
-      }).join('')}
+      ${STEPS.map(s => { const t = stepTally(all, s); return t.of ? stepPill(s, t) : ''; }).join('')}
     </div>
     ${list.map(x => {
       const p = progressOf(x);
@@ -2672,15 +2710,12 @@ function renderChecklistTable(list, all){
       </div></td>`;
   };
 
-  const stats = STEPS.map(s => ({
-    label: s.label.replace(/<br>/g, ''),
-    ...stepTally(all, s),
-  })).filter(s => s.of);
+  const stats = STEPS.map(s => ({ step: s, ...stepTally(all, s) })).filter(s => s.of);
 
   return `<div style="padding:0 16px 16px">
     ${renderExhSummary(all)}
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin:12px 0">
-      ${stats.map(s => `<span class="pill ${s.n === s.of ? 'p-green' : 'p-gray'}">${escapeHtml(s.label)} ${s.n}/${s.of}</span>`).join('')}
+      ${stats.map(s => stepPill(s.step, s)).join('')}
     </div>
     <div class="tw"><table><thead><tr>
       <th style="min-width:44px;text-align:right">신청순</th>
@@ -2991,6 +3026,7 @@ window.setExhFilter = setExhFilter;
 window.setExhView = setExhView;
 window.searchExhM = searchExhM;
 window.setBoothTypeFil = setBoothTypeFil;
+window.setStepFil = setStepFil;
 window.toggleEquipRow = toggleEquipRow;
 window.advanceStage = advanceStage;
 window.cycleBookLogo = cycleBookLogo;

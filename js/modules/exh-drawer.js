@@ -354,7 +354,7 @@ export async function setBoothDesignResult(exhId, v){
   if(!x) return;
   const patch = { booth_design_result: v };
   if(v && !x.booth_design_checked_at) patch.booth_design_checked_at = td();
-  await patchExh(x, patch, '부스 도면 확인');
+  await patchExh(exhId, patch, '부스 도면 확인');
 }
 
 export async function addBoothDesignFeedback(exhId){
@@ -853,7 +853,7 @@ export async function addExhApp(exhId, preset = {}){
   /* 최초 접수는 체크리스트가 보는 칸도 함께 채운다 — 두 곳이 갈라지지 않게. */
   const x = getExhibitorById(exhId);
   if(x && rec.kind === '최초' && !x.app_received_at){
-    await patchExh(x, { app_received: 'yes', app_received_at: rec.received_at }, '신청서 수신');
+    await patchExh(exhId, { app_received: 'yes', app_received_at: rec.received_at }, '신청서 수신');
   }
   trackAction('add', '신청서 접수', x?.company_name || '',
     `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(rec.seq)}차 접수 (${escapeHtml(rec.kind)} · ${escapeHtml(rec.channel)})`);
