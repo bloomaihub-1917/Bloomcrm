@@ -68,8 +68,12 @@ function sortTable(table, idx, dir){
   if(dir === 0){
     rows.sort((a, b) => Number(a.dataset.origIdx) - Number(b.dataset.origIdx));
   } else {
+    /* 키를 미리 한 번만 뽑는다. 비교 함수 안에서 innerText를 읽으면 51줄짜리
+       표에서 수백 번 레이아웃을 다시 재게 되고, 이제 다시 그릴 때마다
+       정렬을 되걸기 때문에 그 값이 그대로 체감된다. */
+    const keys = new Map(rows.map(r => [r, keyOf(r.cells[idx])]));
     rows.sort((a, b) => {
-      const x = keyOf(a.cells[idx]), y = keyOf(b.cells[idx]);
+      const x = keys.get(a), y = keys.get(b);
       if(x.empty && y.empty) return 0;
       if(x.empty) return 1;            // 빈 칸은 방향과 무관하게 아래로
       if(y.empty) return -1;
@@ -100,7 +104,57 @@ function mark(head, th, dir){
   }
 }
 
+/* ── 다시 그려도 정렬을 유지한다 ──
+   정렬 상태를 표 자신의 data 속성에만 담고 있었다. 그런데 화면을 다시 그리면
+   innerHTML이 통째로 바뀌면서 그 표가 사라진다 — 기업 하나를 고치면 뒤에 있던
+   목록이 원래 순서로 돌아가 버렸다.
+
+   표에는 id가 없고 그리는 쪽을 건드리지 않는 게 이 모듈의 전제라, 표가 놓인
+   자리(가장 가까운 id)와 머리글 글자를 이어 붙여 이름을 만든다. 화면마다
+   머리글이 다르므로 같은 자리에 있는 다른 표(부스 현황 ↔ 기업리스트)도 갈린다. */
+const sortState = new Map();
+/* 머리글을 이어 붙일 때 쓰는 구분자 — 머리글 글자에 나올 일이 없어야 한다 */
+const SEP = '|~|';
+
+function tableKey(table){
+  const head = table.tHead?.rows?.[0];
+  if(!head) return '';
+  const sig = [...head.children].map(th => {
+    /* 정렬 화살표(▲▼)는 우리가 넣은 것이라 이름에서 빼야 한다 —
+       넣는 순간 이름이 바뀌어 다음에 못 찾는다. */
+    const c = th.cloneNode(true);
+    c.querySelectorAll('.ts-mark').forEach(n => n.remove());
+    return (c.textContent || '').replace(/\s+/g, ' ').trim();
+  }).join(SEP);
+  return (table.closest('[id]')?.id || '') + '|' + sig;
+}
+
+/* 새로 그려진 표에 기억해 둔 정렬을 되건다 */
+function reapply(table){
+  const st = sortState.get(tableKey(table));
+  if(!st || !sortable(table)) return;
+  const head = table.tHead?.rows?.[0];
+  const th = head?.children[st.idx];
+  if(!th) return;
+  table.dataset.sortCol = String(st.idx);
+  table.dataset.sortDir = String(st.dir);
+  sortTable(table, st.idx, st.dir);
+  mark(head, th, st.dir);
+}
+
 export function initTableSort(){
+  /* 화면을 다시 그리면 표가 새로 생긴다. 그때 정렬을 되걸어 준다 —
+      그리는 쪽 여덟 곳을 고치지 않고 여기 한 곳에서 받는다. */
+  new MutationObserver(muts => {
+    const seen = new Set();
+    for(const m of muts) for(const n of m.addedNodes){
+      if(n.nodeType !== 1) continue;
+      if(n.tagName === 'TABLE') seen.add(n);
+      n.querySelectorAll?.('table').forEach(t => seen.add(t));
+    }
+    seen.forEach(reapply);
+  }).observe(document.body, { childList: true, subtree: true });
+
   document.addEventListener('click', (e) => {
     const th = e.target.closest?.('thead th');
     if(!th) return;
@@ -118,6 +172,11 @@ export function initTableSort(){
     const dir = was === 1 ? -1 : was === -1 ? 0 : 1;
     table.dataset.sortCol = String(idx);
     table.dataset.sortDir = String(dir);
+
+    /* 원래 순서로 돌아가면 기억을 지운다 — 다시 그렸을 때 되걸 게 없다 */
+    const key = tableKey(table);
+    if(dir === 0) sortState.delete(key);
+    else sortState.set(key, { idx, dir });
 
     sortTable(table, idx, dir);
     mark(head, th, dir);
