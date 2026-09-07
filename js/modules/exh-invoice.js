@@ -44,6 +44,10 @@ import {
   EXH_INVOICES, EVENT_LIST, exhEvent,
 } from '../state.js';
 import { exhNames, isBillable, currencyOf } from './exh-tab.js';
+import { createInvoiceRow } from './exh-drawer.js';
+import {
+  supported, pickFolder, delHandle, readyFolder, folderLabel, subFolder, writeFile,
+} from './local-folder.js';
 import { showSaveErrorToast } from '../api.js';
 import { trackAction } from './audit-tab.js';
 
@@ -281,6 +285,133 @@ function invoiceWarnings(doc){
   return w;
 }
 
+/* 파일 이름·폴더 이름 — 지금 손으로 쓰는 규칙을 따른다.
+   폴더: "42-43. Parexel"  파일: "2026 KIC Exhibition Invoice_Parexel_EX-42-43-02.xlsx" */
+const BAD_CHARS = /[\\/:*?"<>|]/g;
+const evLabelNow = () => {
+  const ev = EVENT_LIST.find(e => e.key === exhEvent);
+  return (ev && (ev.short || ev.key)) || exhEvent || '';
+};
+function fileNames(doc){
+  const name = (doc.to.en || doc.to.ko).replace(BAD_CHARS, ' ').trim();
+  const ev = evLabelNow();
+  return {
+    file: `${ev ? ev + ' ' : ''}Exhibition Invoice_${name}_${doc.no}.xlsx`,
+    dir: (doc.booth ? `${doc.booth}. ${name}` : name).replace(BAD_CHARS, ' ').trim(),
+    dirPrefix: doc.booth ? `${doc.booth}.` : '',
+    company: name,
+  };
+}
+
+/* 채운 워크북을 파일 하나로 — 만드는 일과 어디에 두는 일을 갈라 둔다 */
+async function buildInvoiceFile(doc){
+  const [ExcelJS, buf] = await Promise.all([loadExcelJs(), loadTemplate()]);
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.load(buf);
+  fillInvoiceWorkbook(wb, doc);
+  const out = await wb.xlsx.writeBuffer();
+  return new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+
+function download(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/* ══════════════════════════════════════════
+   저장 폴더 — 행사마다 하나
+══════════════════════════════════════════ */
+
+/* 행사 폴더 아래의 Invoice 폴더를 행사별로 기억한다. 행사가 바뀌면 경로도
+   바뀌므로 한 폴더를 통째로 쓰지 않는다. */
+const folderKey = (evKey) => `invoice:${evKey || ''}`;
+
+/* 화면은 그리는 중에 기다릴 수 없어서(그리기는 동기) 폴더 이름을 미리 읽어 둔다.
+   지정·해제한 뒤에 다시 읽고 화면을 다시 그린다. */
+const folderNames = {};
+export const invoiceFolderName = (evKey) => folderNames[folderKey(evKey)] || null;
+export const folderSupported = supported;
+
+async function refreshFolderName(evKey){
+  folderNames[folderKey(evKey)] = await folderLabel(folderKey(evKey));
+  return folderNames[folderKey(evKey)];
+}
+/* 앱이 뜨면 지금 보고 있는 행사의 폴더 이름을 한 번 읽어 둔다. 행사를 바꿀 때는
+   전시 탭이 다시 그려지므로 그때 없으면 다음 그리기에서 채워진다. */
+export async function initInvoiceFolder(evKey){
+  await refreshFolderName(evKey);
+  window.renderExhDr?.();
+}
+
+export async function pickInvoiceFolder(evKey){
+  const key = folderKey(evKey || exhEvent);
+  try {
+    const h = await pickFolder(key);
+    if(!h) return;                                  // 취소
+    await refreshFolderName(evKey || exhEvent);
+    showSaveErrorToast(`저장 폴더를 '${h.name}'로 정했어요 — 이제 발행하면 이 폴더에 바로 저장됩니다`);
+  } catch(err){
+    showSaveErrorToast('폴더를 지정하지 못했어요: ' + (err && err.message ? err.message : err));
+  }
+  window.renderExhDr?.();
+}
+
+export async function forgetInvoiceFolder(evKey){
+  const key = folderKey(evKey || exhEvent);
+  await delHandle(key);
+  await refreshFolderName(evKey || exhEvent);
+  showSaveErrorToast('저장 폴더를 잊었어요 — 이제 다운로드로 받습니다');
+  window.renderExhDr?.();
+}
+
+/* 폴더에 저장하고, 폴더가 없거나 권한을 못 받으면 다운로드로 되돌아간다.
+   되돌아간 것을 조용히 두면 "폴더에 저장됐다"고 믿은 채 파일을 잃는다. */
+async function putInvoiceFile(doc, blob){
+  const nm = fileNames(doc);
+  if(!supported()) { download(blob, nm.file); return { how: 'download', why: 'unsupported' }; }
+  const dir = await readyFolder(folderKey(exhEvent));
+  if(!dir) { download(blob, nm.file); return { how: 'download', why: 'no-folder' }; }
+  try {
+    const sub = await subFolder(dir, nm.dir, nm.dirPrefix);
+    await writeFile(sub, nm.file, blob);
+    return { how: 'folder', at: `${dir.name}/${sub.name}` };
+  } catch(err){
+    download(blob, nm.file);
+    return { how: 'download', why: err && err.message ? err.message : String(err) };
+  }
+}
+
+/* 저장 결과와 어긋남을 한 번에 알린다 */
+function reportSave(doc, res){
+  const nm = fileNames(doc);
+  const where = res.how === 'folder'
+    ? `${res.at}에 저장했어요`
+    : res.why === 'no-folder'
+      ? '저장 폴더가 없어 다운로드로 받았어요 — 폴더를 지정하면 바로 저장됩니다'
+      : res.why === 'unsupported'
+        ? '이 브라우저는 폴더 저장을 지원하지 않아 다운로드로 받았어요 (Chrome·Edge 데스크톱)'
+        : `폴더에 쓰지 못해 다운로드로 받았어요 (${res.why})`;
+  showSaveErrorToast([`${doc.no} ${where}`, ...invoiceWarnings(doc)].join(' · '));
+  trackAction('add', '인보이스 양식', nm.company,
+    `${doc.no} · ${doc.rows.length}건 · ${res.how === 'folder' ? res.at : '다운로드'}`);
+}
+
+/* 버튼을 잠근다 — 만드는 동안 두 번 눌리면 파일이 두 개 떨어진다 */
+async function withButton(id, fn){
+  const btn = document.getElementById(id);
+  const label = btn ? btn.innerHTML : '';
+  if(btn){ btn.disabled = true; btn.textContent = '만드는 중…'; }
+  try { return await fn(); }
+  finally { if(btn){ btn.disabled = false; btn.innerHTML = label; } }
+}
+
+/* ══════════════════════════════════════════
+   1) 이미 있는 인보이스 줄의 양식을 다시 뽑는다
+══════════════════════════════════════════ */
 export async function exportExhInvoice(invId){
   const inv = EXH_INVOICES.find(i => i.id === invId);
   if(!inv) return showSaveErrorToast('인보이스를 찾지 못했어요');
@@ -289,37 +420,76 @@ export async function exportExhInvoice(invId){
   if(!doc.rows.length) return showSaveErrorToast(
     `정산에 ${doc.cur} 금액 항목이 없어요 — 항목을 먼저 넣으면 인보이스 양식에 담깁니다`);
 
-  const btn = document.getElementById(`inv-xls-${invId}`);
-  const label = btn ? btn.innerHTML : '';
-  if(btn){ btn.disabled = true; btn.textContent = '만드는 중…'; }
+  await withButton(`inv-xls-${invId}`, async () => {
+    try {
+      const blob = await buildInvoiceFile(doc);
+      reportSave(doc, await putInvoiceFile(doc, blob));
+    } catch(err){
+      console.error('[exh-invoice] 내보내기 실패', err);
+      showSaveErrorToast('내보내기 실패: ' + (err && err.message ? err.message : err));
+    }
+  });
+}
 
-  try {
-    const [ExcelJS, buf] = await Promise.all([loadExcelJs(), loadTemplate()]);
-    const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(buf);
-    fillInvoiceWorkbook(wb, doc);
+/* ══════════════════════════════════════════
+   2) 신청 내역만 있는 기업에서 한 번에 발행한다
 
-    const out = await wb.xlsx.writeBuffer();
-    const ev = EVENT_LIST.find(e => e.key === exhEvent);
-    const evLabel = (ev && (ev.short || ev.key)) || exhEvent || '';
-    const name = (doc.to.en || doc.to.ko).replace(/[\\/:*?"<>|]/g, ' ').trim();
-    const url = URL.createObjectURL(new Blob([out],
-      { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${evLabel ? evLabel + ' ' : ''}Exhibition Invoice_${name}_${doc.no}.xlsx`;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+   지금까지는 정산 탭에서 인보이스 줄을 만들고(금액을 손으로 넣고), 그 줄에서
+   양식을 뽑고, 떨어진 파일을 폴더로 옮기는 세 걸음이었다. 신청 내역이 다 적혀
+   있으면 그 세 걸음의 답은 이미 정해져 있다 — 한 번에 한다.
 
-    trackAction('add', '인보이스 양식 내보내기', name, `${doc.no} · ${doc.rows.length}건`);
-    const warn = invoiceWarnings(doc);
-    if(warn.length) showSaveErrorToast(warn.join(' · '));
-  } catch(err){
-    console.error('[exh-invoice] 내보내기 실패', err);
-    showSaveErrorToast('내보내기 실패: ' + (err && err.message ? err.message : err));
-  } finally {
-    if(btn){ btn.disabled = false; btn.innerHTML = label; }
-  }
+   통화가 섞인 기업은 통화마다 한 장이다. 어느 쪽을 낼지 사람이 고르는 게 아니라
+   둘 다 내야 하는 것이라, 통화별로 인보이스 줄과 파일을 각각 만든다.
+══════════════════════════════════════════ */
+export async function issueExhInvoice(exhId){
+  const x = getExhibitorById(exhId);
+  if(!x) return showSaveErrorToast('참가기업을 찾지 못했어요');
+
+  const billable = liveItemsFor(exhId).filter(isBillable);
+  if(!billable.length) return showSaveErrorToast(
+    '청구할 금액 항목이 없어요 — 신청 내역을 금액 항목으로 옮긴 뒤 발행하세요');
+
+  /* 통화 순서는 항목에 나온 순서대로 — 주 통화가 먼저 나오는 게 자연스럽다 */
+  const curs = [...new Set(billable.map(i => i.currency || 'KRW'))];
+
+  await withButton(`inv-issue-${exhId}`, async () => {
+    const done = [];
+    for(const cur of curs){
+      try {
+        const sum = billable.filter(i => (i.currency || 'KRW') === cur)
+          .reduce((s, i) => s + num(i.amount), 0);
+        /* 제목은 무엇이 담겼는지 — 정산 탭 목록에서 이 줄이 무슨 청구인지 알아야 한다 */
+        const cats = GROUPS.filter(g => billable.some(i =>
+          (i.currency || 'KRW') === cur && (CATS.includes(i.category) ? i.category : 'etc') === g.cat));
+        const inv = await createInvoiceRow(exhId, {
+          title: cats.map(g => g.ko).join('+') || '인보이스',
+          amount: String(sum),
+          currency: cur,
+        });
+        if(!inv) return;                    // 저장 실패 — createInvoiceRow가 이미 알렸다
+        const doc = invoiceDoc(inv);
+        const blob = await buildInvoiceFile(doc);
+        reportSave(doc, await putInvoiceFile(doc, blob));
+        done.push(doc.no);
+      } catch(err){
+        console.error('[exh-invoice] 발행 실패', err);
+        showSaveErrorToast(`${cur} 인보이스 발행 실패: ` + (err && err.message ? err.message : err));
+      }
+    }
+    if(done.length > 1) showSaveErrorToast(`통화가 섞여 ${done.length}장으로 발행했어요 — ${done.join(' / ')}`);
+  });
 }
 
 window.exportExhInvoice = exportExhInvoice;
+window.issueExhInvoice = issueExhInvoice;
+window.pickInvoiceFolder = pickInvoiceFolder;
+window.forgetInvoiceFolder = forgetInvoiceFolder;
+/* 화면(exh-drawer)이 그리는 중에 읽는다 — 그쪽이 이 파일을 import하면 순환
+   참조가 되므로 window 경유로만 준다. */
+window.invoiceFolderName = invoiceFolderName;
+window.folderSupported = folderSupported;
+window.initInvoiceFolder = initInvoiceFolder;
+
+/* 이미 고른 행사가 있는 채로 새로고침한 경우 — 폴더 이름을 한 번 읽어 둔다.
+   권한은 묻지 않는다(사람이 누르지 않았는데 권한 창이 뜨면 안 된다). */
+if(exhEvent) initInvoiceFolder(exhEvent);
