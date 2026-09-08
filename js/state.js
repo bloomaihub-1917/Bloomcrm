@@ -475,22 +475,37 @@ export function evPartDone(evKey, part){ return evPartState(evKey, part) === 'do
    - domain: 메인 섹터에만 저장되는 분야 참조 (서브는 런타임에 부모를 따라감)
 ══════════════════════════════════════════ */
 export const COMPANY_SECTORS = [
-  {id:'pharma-global',    name:'글로벌 제약사',          parent:null},
-  {id:'pharma-big',       name:'Big Pharma & Bio',       parent:'pharma-global'},
-  {id:'pharma-spec',      name:'Specialized Pharma',     parent:'pharma-global'},
-  {id:'biotech',          name:'Biotech',                parent:null},
-  {id:'biotech-platform', name:'Biotech & Platform',     parent:'biotech'},
-  {id:'ai',               name:'Artificial Intelligence',parent:null},
-  {id:'vc',               name:'Venture Capital',        parent:null},
-  {id:'assoc',            name:'학회 / 협회',             parent:null},
-  {id:'gov',              name:'정부 / 공공기관',          parent:null},
-  {id:'univ',             name:'대학 / 연구소',            parent:null},
-  {id:'hospital',         name:'병원 / 의료기관',          parent:null},
-  {id:'mice',             name:'MICE / Event',           parent:null},
-  {id:'global-partner',   name:'Global Partners',        parent:null},
-  {id:'bio-service',      name:'Bio Service & Logi',     parent:null},
-  {id:'embassy',          name:'Embassy',                parent:null},
-  {id:'others',           name:'General / Others',       parent:null},
+  /* 서버(sectors 표)에서 읽어 통째로 갈아 끼운다 — 아래는 아직 안 왔을 때 쓰는
+     기본값이라, db/seed-sectors.js가 심는 목록과 같아야 한다. 예전에는 여기에
+     BIO KOREA 시절 트리(글로벌 제약사·VC·Embassy…)가 박혀 있었는데, 저장된 값과
+     하나도 맞지 않아 섹터 필터가 아무것도 걸러내지 못했다.
+
+     분야(domain)로 갈라 둔다. 우리가 하는 행사가 두 갈래이기 때문이다 —
+     바이오·임상 행사에서 만나는 회사와 이벤트 산업 행사에서 만나는 회사는
+     업종 목록이 아예 다르다. */
+  {id:'cro',      name:'CRO',              parent:null, domain:'bio'},
+  {id:'smo',      name:'SMO',              parent:null, domain:'bio'},
+  {id:'lab',      name:'분석·중앙실험실',   parent:null, domain:'bio'},
+  {id:'cdmo',     name:'CDMO',             parent:null, domain:'bio'},
+  {id:'pharma',   name:'제약·바이오텍',     parent:null, domain:'bio'},
+  {id:'ctit',     name:'임상 IT·데이터',    parent:null, domain:'bio'},
+  {id:'img',      name:'영상·이미징',       parent:null, domain:'bio'},
+  {id:'hosp',     name:'의료기관',          parent:null, domain:'bio'},
+  {id:'reg',      name:'규제·컨설팅',       parent:null, domain:'bio'},
+  {id:'booth',    name:'부스시공·전시장치', parent:null, domain:'mice'},
+  {id:'av',       name:'무대·음향·조명',    parent:null, domain:'mice'},
+  {id:'rental',   name:'렌탈·비품',         parent:null, domain:'mice'},
+  {id:'sign',     name:'그래픽·인쇄',       parent:null, domain:'mice'},
+  {id:'agency',   name:'행사대행(PCO)',     parent:null, domain:'mice'},
+  {id:'venue',    name:'전시장·컨벤션',     parent:null, domain:'mice'},
+  {id:'staff',    name:'인력·의전',         parent:null, domain:'mice'},
+  {id:'micetech', name:'MICE 솔루션',       parent:null, domain:'mice'},
+  {id:'gov',      name:'정부·공공기관',     parent:null, domain:'common'},
+  {id:'assoc',    name:'학회·협회',         parent:null, domain:'common'},
+  {id:'acad',     name:'대학·연구소',       parent:null, domain:'common'},
+  {id:'invest',   name:'투자·금융',         parent:null, domain:'common'},
+  {id:'media',    name:'미디어',            parent:null, domain:'common'},
+  {id:'etc',      name:'기타',              parent:null, domain:'common'},
 ];
 // COMPANY_SECTORS 전체를 통째로 갈아끼워야 하는 경우(원본 loadSectors()의
 // `COMPANY_SECTORS = parsed;` 처럼 재할당하던 자리) 참조를 유지한 채

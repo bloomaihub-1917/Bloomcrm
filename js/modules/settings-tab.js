@@ -1488,6 +1488,7 @@ const CL_DEFS = [
   { key: 'booth_type',   label: '부스 타입',          perEvent: true  },
   { key: 'grade',        label: '스폰서 등급',        perEvent: true  },
   { key: 'equip_cat',    label: '비품 카탈로그 분류', perEvent: true  },
+  { key: 'graphic_cat',  label: '그래픽 품목 분류',   perEvent: true  },
 ];
 const CL_COLORS = [['', '— 없음 —'], ['p-blue', '파랑'], ['p-green', '초록'], ['p-amber', '주황'],
   ['p-teal', '청록'], ['p-purple', '보라'], ['p-red', '빨강'], ['p-gray', '회색'],

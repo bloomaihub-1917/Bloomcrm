@@ -682,7 +682,7 @@ function applyColumnMap(colMap){
       // 예전에 있던 기자 전용 취재분야 코드(BEATS) 정규화 분기는 더 이상 쓰이지 않는다.
       beat: colMap.beat ? String(r[colMap.beat]||'').trim() : '',
       products: colMap.products ? String(r[colMap.products]||'').trim() : '',
-      // website/note는 연락처가 아니라 "기업" 속성 — runValidationStep()에서 companies 시트로 반영하고 contact 저장 시엔 제거한다.
+      // website/note는 연락처가 아니라 "기업" 속성 — runValidationStep()에서 기업 마스터(orgs)로 반영하고 contact 저장 시엔 제거한다.
       _companyWebsite: colMap.website ? String(r[colMap.website]||'').trim() : '',
       _companyNote: colMap.note ? String(r[colMap.note]||'').trim() : '',
       email1: colMap.email1 ? String(r[colMap.email1]||'').trim() : '',
@@ -998,8 +998,8 @@ export async function runValidationStep(newRows, dupRows){
 
   // 1) 화면(Master DB)에 즉시 반영 — 중복 id 방지
   const newParts = [];
-  const companyUpdates = []; // 업로드된 website/note를 기업(companies) 단위로 반영할 목록
-  const touchedCompanyKeys = new Set(); // 이번 업로드에 등장한 회사(원문 표기) — companies 시트에 최초 저장 대상 확인용
+  const companyUpdates = []; // 업로드된 website/note를 기업(orgs) 단위로 반영할 목록
+  const touchedCompanyKeys = new Set(); // 이번 업로드에 등장한 회사(원문 표기) — 기업 마스터에 최초 저장 대상 확인용
   const existingIds = new Set(contacts.map(c => c.id));
   const addedContacts = []; // 시트 저장 실패 시 롤백용
   newRows.forEach(r => {
@@ -1027,7 +1027,7 @@ export async function runValidationStep(newRows, dupRows){
     const coKey = (clean.orgKo || clean.orgEn || '').trim();
     if(coKey) touchedCompanyKeys.add(coKey);
 
-    // 업로드 파일의 website/note는 연락처가 아니라 소속 기업 속성 → companies 시트로 반영
+    // 업로드 파일의 website/note는 연락처가 아니라 소속 기업 속성 → 기업 마스터(orgs)로 반영
     if(_companyWebsite || _companyNote){
       if(coKey) companyUpdates.push({ key: coKey, website: _companyWebsite||'', notes: _companyNote||'' });
     }
@@ -1118,7 +1118,7 @@ export async function runValidationStep(newRows, dupRows){
     buildCoDB(); buildCoCAT(); renderMDB(); buildMDBEvList();
   } catch(e){ console.warn('[upload-tab] 업로드 후 화면 갱신 실패:', e); }
 
-  // ── companies 시트 저장 대상 모으기 ──
+  // ── 기업 마스터(orgs) 저장 대상 모으기 ──
   // (원본의 버그: 업로드 파일에 website/note 컬럼이 있는 회사만 저장되고,
   // 그 외 새 회사는 화면(기업DB 탭)에는 보이지만 구글시트에는 저장되지 않고
   // 있었음 — 아래에서 시트에 아직 없는 회사도 함께 저장 대상에 넣는다)
@@ -1150,7 +1150,7 @@ export async function runValidationStep(newRows, dupRows){
     const newCount = companiesToSave.size;
     batchUpsertCompanies([...companiesToSave.values()])
       .catch(e => console.warn('companies 일괄 저장 실패:', e));
-    addAiLog('ok', '기업 ' + newCount + '개를 companies 시트에 저장했어요.');
+    addAiLog('ok', '기업 ' + newCount + '개를 기업DB에 저장했어요.');
   }
 
   console.log('[upload-tab] 업로드 확정 — newParts.length:', newParts.length, '| API_BASE_URL:', !!API_BASE_URL, '| currentUser:', !!currentUser);

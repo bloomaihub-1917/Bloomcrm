@@ -1988,6 +1988,8 @@ function renderGraphicKindView(list){
      발주 전에 "누가 무엇을 몇 장" 한 번에 확인할 때는 접힌 표가 오히려 불편하다. */
   const allOpen = groups.every(g => equipOpen.has(g.key));
   const actions = `<button class="btn bs" onclick="toggleGraphicKindAll()">${allOpen ? '모두 접기' : '모두 펼치기'}</button>`
+    + `<button class="btn bs" onclick="openNewCatalogItem('graphic')"
+        title="출력소 품목표에 새 그래픽 품목을 추가합니다">+ 품목 추가</button>`
     + `<button class="btn bp bs" onclick="openNewGraphicOrder()">+ 그래픽 주문 추가</button>`;
 
   /* 펼치면 그 품목을 주문한 기업이 나온다. 여기서도 바로 체크하고 마감을 넣는다 —
@@ -2687,24 +2689,35 @@ export const modalShell = (id, title, body) => {
 const mval = (id) => (document.getElementById(id) || {}).value?.trim() || '';
 
 /* ── 품목 추가 (행사 품목마스터) ── */
-/* 비품 분류는 렌탈사마다 달라 행사별로 둔다(code_lists.equip_cat) */
-const eqCats = () => codeList('equip_cat', exhEvent,
-  ['의자', '테이블', '진열대', '가전제품', '기타비품'].map(c => ({ code: c, label: c })));
+/* 분류는 행사마다 다르다 — 렌탈사와 출력소가 바뀌면 품목도 분류도 따라 바뀐다.
+   비품과 그래픽은 목록을 나눠 둔다. 한 목록에 담아 뒀더니 그래픽 품목을 넣을 때
+   '의자·테이블'밖에 안 떠서, 사람이 목록 밖의 값을 손으로 적어 넣었다 —
+   그렇게 족자봉·폼보드가 의자와 같은 칸에 섞였다. */
+const eqCats = (kind) => kind === 'graphic'
+  ? codeList('graphic_cat', exhEvent,
+      ['벽면 랩핑', '인포데스크 랩핑', '족자봉', '기타그래픽'].map(c => ({ code: c, label: c })))
+  : codeList('equip_cat', exhEvent,
+      ['의자', '테이블', '진열대', '가전제품', '기타비품'].map(c => ({ code: c, label: c })));
 
-export function openNewCatalogItem(){
+/* kind는 부른 화면이 정한다 — 비품 현황에서 열면 비품, 그래픽 현황에서 열면
+   그래픽. 전에는 어디서 열든 비품으로 저장돼서, 그래픽 품목표에 넣은 줄이
+   비품 목록에 나타났다. */
+export function openNewCatalogItem(kind){
   if(!exhEvent){ alert('행사를 먼저 선택해주세요.'); return; }
-  modalShell('new-eq-modal', '품목 추가', `
+  const isG = kind === 'graphic';
+  modalShell('new-eq-modal', isG ? '그래픽 품목 추가' : '품목 추가', `
     <div style="font-size:11.5px;color:var(--i4);margin-bottom:12px;line-height:1.6">
-      <b>${escapeHtml(exhEvent)}</b> 품목표에 추가됩니다. 다른 행사에는 영향이 없어요.</div>
+      <b>${escapeHtml(exhEvent)}</b> ${isG ? '그래픽' : '비품'} 품목표에 추가됩니다. 다른 행사에는 영향이 없어요.</div>
+    <input type="hidden" id="neq-kind" value="${escAttr(isG ? 'graphic' : 'equip')}">
     <div class="fgr">
       <div class="fg"><label class="fl">분류</label>
-        <select class="fi" id="neq-cat">${eqCats().map(c => `<option value="${escAttr(c.code)}">${escapeHtml(c.label)}</option>`).join('')}</select></div>
+        <select class="fi" id="neq-cat">${eqCats(kind).map(c => `<option value="${escAttr(c.code)}">${escapeHtml(c.label)}</option>`).join('')}</select></div>
       <div class="fg"><label class="fl">품목코드</label>
         <input class="fi" id="neq-code" placeholder="비우면 자동 (X-001…)"></div>
     </div>
-    <div class="fg"><label class="fl">품명 (국문)</label><input class="fi" id="neq-ko" placeholder="예: 접이식 체어"></div>
-    <div class="fg"><label class="fl">품명 (영문)</label><input class="fi" id="neq-en" placeholder="예: Folding Chair"></div>
-    <div class="fg"><label class="fl">규격</label><input class="fi" id="neq-spec" placeholder="예: 500*420*750mmH"></div>
+    <div class="fg"><label class="fl">품명 (국문)</label><input class="fi" id="neq-ko" placeholder="${isG ? '예: 벽면 랩핑 (PVC)' : '예: 접이식 체어'}"></div>
+    <div class="fg"><label class="fl">품명 (영문)</label><input class="fi" id="neq-en" placeholder="${isG ? '예: Wall Wrapping' : '예: Folding Chair'}"></div>
+    <div class="fg"><label class="fl">규격</label><input class="fi" id="neq-spec" placeholder="${isG ? '예: 970*2390mm/패널' : '예: 500*420*750mmH'}"></div>
     <div class="fgr">
       <div class="fg"><label class="fl">단가 (KRW)</label><input class="fi" id="neq-krw" placeholder="11000"></div>
       <div class="fg"><label class="fl">단가 (USD)</label><input class="fi" id="neq-usd" placeholder="11"></div>
@@ -2731,19 +2744,22 @@ export async function submitNewCatalogItem(){
   const dup = findCatalogByName(exhEvent, ko || en);
   if(dup) return fail(`이미 있는 품목이에요 — ${dup.code} ${dup.name_ko || dup.name_en}`);
 
+  const kind = mval('neq-kind') === 'graphic' ? 'graphic' : 'equip';
   let code = mval('neq-code').toUpperCase();
   const used = new Set(catalogFor(exhEvent).map(c => String(c.code || '').toUpperCase()));
   if(code && used.has(code)) return fail(`이미 쓰고 있는 코드예요 — ${code}`);
   if(!code){
     let n = 1;
-    while(used.has(`X-${String(n).padStart(3, '0')}`)) n++;
-    code = `X-${String(n).padStart(3, '0')}`;
+    const pre = kind === 'graphic' ? 'XG' : 'X';   // 설정 › 품목표와 같은 규칙
+    while(used.has(`${pre}-${String(n).padStart(3, '0')}`)) n++;
+    code = `${pre}-${String(n).padStart(3, '0')}`;
   }
 
   const num = (v) => String(v || '').replace(/[^0-9.]/g, '');
   const rec = {
     id: `EC-${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-    event_id: exhEvent, category: mval('neq-cat') || '기타비품', code,
+    event_id: exhEvent, kind,
+    category: mval('neq-cat') || (kind === 'graphic' ? '기타그래픽' : '기타비품'), code,
     name_ko: ko, name_en: en, spec: mval('neq-spec'),
     price_krw: num(mval('neq-krw')), price_usd: num(mval('neq-usd')),
     note: '', active: '', sort_order: String(900 + catalogFor(exhEvent).length),

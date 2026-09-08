@@ -255,7 +255,7 @@ export function buildCoDB(){
       aliases:  String(o.aliases || '').split('\n').filter(Boolean),
       kind:     o.kind || '',
       orgStatus: o.status || '활성',
-      sector:   sectors[0] || 'General / Others',
+      sector:   sectors[0] || '미분류',
       sectors,
       hq:       o.hq || coContacts.find(c => c.country)?.country || '',
       country:  o.country || '',
@@ -420,7 +420,7 @@ function uniqueCompanyCountFor(main, subs){
   const nameKeys = new Set([sectorKey(main.name), ...subs.map(s => sectorKey(s.name))]);
   const keys = new Set();
   CO_DB.forEach(c => {
-    const secs = c.sectors && c.sectors.length ? c.sectors : [c.sector||'General / Others'];
+    const secs = c.sectors && c.sectors.length ? c.sectors : [c.sector||'미분류'];
     if(secs.some(s => nameKeys.has(sectorKey(s)))) keys.add(c.key);
   });
   return keys.size;
@@ -452,7 +452,7 @@ export function buildCoCAT(){
   // 복수 섹터 집계
   const sectorCounts = {};
   CO_DB.forEach(c => {
-    (c.sectors && c.sectors.length ? c.sectors : [c.sector||'General / Others'])
+    (c.sectors && c.sectors.length ? c.sectors : [c.sector||'미분류'])
       .forEach(s => { sectorCounts[s] = (sectorCounts[s]||0) + 1; });
   });
 
@@ -465,7 +465,7 @@ export function buildCoCAT(){
   const domainCompanyCount = names => {
     const keys = new Set();
     CO_DB.forEach(c => {
-      const secs = c.sectors && c.sectors.length ? c.sectors : [c.sector||'General / Others'];
+      const secs = c.sectors && c.sectors.length ? c.sectors : [c.sector||'미분류'];
       if(secs.some(s => names.has(sectorKey(s)))) keys.add(c.key);
     });
     return keys.size;
@@ -594,7 +594,7 @@ export function coDomainNameSet(){
   if(coDomainF === UNASSIGNED_DOMAIN){
     const sectorCounts = {};
     CO_DB.forEach(c => {
-      (c.sectors && c.sectors.length ? c.sectors : [c.sector||'General / Others'])
+      (c.sectors && c.sectors.length ? c.sectors : [c.sector||'미분류'])
         .forEach(s => { sectorCounts[s] = 1; });
     });
     return new Set(unassignedSectorNames(sectorCounts).map(sectorKey));
@@ -682,7 +682,7 @@ export function renderCoList(q2=''){
   if(coDomainF){
     const names = coDomainNameSet();
     if(names) list = list.filter(c =>
-      (c.sectors && c.sectors.length ? c.sectors : [c.sector||'General / Others']).some(s => names.has(sectorKey(s))));
+      (c.sectors && c.sectors.length ? c.sectors : [c.sector||'미분류']).some(s => names.has(sectorKey(s))));
   }
   if(coCodeF)list=list.filter(c=>c.catCode && c.catCode.startsWith(coCodeF+'-'));
   if(coCountryF)list=list.filter(c=>companyCountryGroup(c)===coCountryF);
@@ -848,7 +848,7 @@ function computeSectorDashboard(list){
   });
 
   src.forEach(c => {
-    const secs = (c.sectors && c.sectors.length) ? c.sectors : [c.sector || 'General / Others'];
+    const secs = (c.sectors && c.sectors.length) ? c.sectors : [c.sector || '미분류'];
     secs.forEach(secName => {
       const parentName = subParentName[sectorKey(secName)];
       const mName  = parentName || secName;
@@ -896,7 +896,7 @@ export function renderCoDashboard(){
   if(coDomainF){
     const names = coDomainNameSet() || new Set();
     const list = baseCoDb.filter(c =>
-      (c.sectors&&c.sectors.length?c.sectors:[c.sector||'General / Others']).some(s=>names.has(sectorKey(s))));
+      (c.sectors&&c.sectors.length?c.sectors:[c.sector||'미분류']).some(s=>names.has(sectorKey(s))));
     const label = domainName(coDomainF);
     el.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
@@ -980,7 +980,7 @@ export function renderCoDashboard(){
     });
     const keys = new Set();
     baseCoDb.forEach(c => {
-      const secs = c.sectors && c.sectors.length ? c.sectors : [c.sector||'General / Others'];
+      const secs = c.sectors && c.sectors.length ? c.sectors : [c.sector||'미분류'];
       if(secs.some(s => nameKeys.has(sectorKey(s)))) keys.add(c.key);
     });
     return keys.size;

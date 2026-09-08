@@ -36,11 +36,17 @@ const TABLES = {
     table: 'sectors', pk: 'id', idPrefix: null, // sectors도 id(slug)를 클라이언트가 직접 정함
     columns: ['id', 'name', 'parent', 'domain', 'canonical'],
   },
-  companies: {
-    table: 'companies', pk: 'key', idPrefix: null, // companies도 key를 클라이언트가 직접 정함
-    columns: ['key', 'sector', 'hq', 'website', 'notes', 'catCode', 'country', 'abbr', 'source',
-      'updatedAt', 'nameKo', 'nameEn'],
-  },
+  /* companies는 내렸다 — orgs가 그 자리를 대신한다.
+
+     companies는 "정규화된 회사 이름"이 키인 오버레이였다. 이름을 고치면 키가
+     바뀌어 섹터·메모가 옛 키에 남아 사라졌고, 연락처가 없는 회사는 아예 등록할
+     수 없었다. orgs로 옮긴 뒤로 화면은 이미 companies를 읽지도 쓰지도 않는다
+     (js/api.js는 목록에서 뺐고, 저장은 전부 sheet:'orgs'로 간다).
+
+     여기서까지 내려야 지금 열려 있는 통로가 없어진다. 표와 값은 그대로 두었다 —
+     옮기기 전 상태를 되짚어야 할 일이 남아 있다. 다시 열 일이 없다고 확신이
+     서면 그때 표를 지운다.
+  */
   part_types: {
     table: 'part_types', pk: 'key', idPrefix: null,
     columns: ['key', 'label', 'cls'],

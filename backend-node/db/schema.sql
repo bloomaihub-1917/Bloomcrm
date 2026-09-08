@@ -49,6 +49,9 @@ CREATE TABLE IF NOT EXISTS part_types (
   cls   TEXT
 );
 
+-- ⚠ 동결(2026-09-08). orgs가 이 표를 대신한다 — 화면도 API도 더 이상 읽거나
+-- 쓰지 않는다(routes/data.js에서 내렸다). 값은 옮기기 전 상태로 남겨 둔 것이라
+-- 새 기업은 여기 들어오지 않는다. 기업을 다루는 코드는 orgs를 쓸 것.
 CREATE TABLE IF NOT EXISTS companies (
   key          TEXT PRIMARY KEY,
   sector       TEXT,
