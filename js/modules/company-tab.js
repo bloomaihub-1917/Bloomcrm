@@ -1044,47 +1044,79 @@ export function renderCoDetail(c){
     </div>
     <div class="cdt2">
       <div class="cdl" style="background:${avB(i)};color:${avF(i)}">${escapeHtml(c.abbr)}</div>
-      <div style="flex:1"><div class="cdn">
-          <span id="co-nameKo-${escapeHtml(c.key)}" style="cursor:pointer${c.nameKo ? '' : ';color:var(--i5);font-weight:400;font-size:13px'}" onclick="editCoNameKo('${escAttr(c.key)}')" title="클릭하여 회사명(국문) 편집">${escapeHtml(c.nameKo || '국문명 추가')}</span>
-          <span style="font-size:${c.nameKo ? '13px' : '17px'};font-weight:${c.nameKo ? '400' : '800'};color:var(--${c.nameKo ? 'i4' : 'i0'});cursor:pointer" id="co-nameEn-${escapeHtml(c.key)}" onclick="editCoNameEn('${escAttr(c.key)}')" title="클릭하여 회사명(영문) 편집">${escapeHtml(c.nameEn || (c.nameKo ? '' : ''))}</span>
-        </div>
+      <div style="flex:1;min-width:0">
+        ${(() => {
+          /* 이름 — 있는 쪽을 제목으로 삼는다. 전에는 국문이 없으면 '국문명 추가'라는
+             안내가 제목 자리에 앉고 영문 사명이 그 뒤에 붙어, 회사 이름이
+             "국문명 추가 SML Meditree"로 읽혔다. 없는 것은 아래 줄로 내린다. */
+          const ko = c.nameKo || '', en = c.nameEn || '';
+          const edKo = `editCoNameKo('${escAttr(c.key)}')`, edEn = `editCoNameEn('${escAttr(c.key)}')`;
+          /* 인라인 편집기가 #co-nameKo-<key> / #co-nameEn-<key> 를 찾아 그 자리를
+             입력칸으로 바꾼다 — 이름이 어느 줄에 있든 id는 따라다녀야 한다. */
+          const fid = (f) => `co-${f}-${escapeHtml(c.key)}`;
+          const title = (f, txt, on) => `<div class="cdn"><span id="${fid(f)}" style="cursor:pointer" onclick="${on}">${escapeHtml(txt)}</span></div>`;
+          const sub = (f, txt, on) => `<div style="font-size:12.5px;color:var(--i4);margin-bottom:2px"><span id="${fid(f)}" style="cursor:pointer" onclick="${on}">${escapeHtml(txt)}</span></div>`;
+          const add = (f, txt, on) => `<div style="font-size:11px;color:var(--i5);margin-bottom:2px">＋ <span id="${fid(f)}" style="cursor:pointer" onclick="${on}">${escapeHtml(txt)}</span></div>`;
+          if(ko && en) return title('nameKo', ko, edKo) + sub('nameEn', en, edEn);
+          if(ko)       return title('nameKo', ko, edKo) + add('nameEn', '영문명 추가', edEn);
+          if(en)       return title('nameEn', en, edEn) + add('nameKo', '국문명 추가', edKo);
+          return title('nameKo', '(이름 없음)', edKo) + add('nameEn', '영문명 추가', edEn);
+        })()}
+
         <div class="cdmt">
           ${(() => { const k = orgKindOf(c.kind); return k
-            ? `<span class="pill ${k.cls}" style="cursor:pointer" onclick="editCoKind('${escAttr(c.key)}')" title="클릭하여 기업 종류 변경">${escapeHtml(k.label)} ✎</span>`
-            : `<span class="pill p-gray" style="cursor:pointer" onclick="editCoKind('${escAttr(c.key)}')">종류 지정 ✎</span>`; })()}
+            ? `<span class="pill ${k.cls}" style="cursor:pointer" onclick="editCoKind('${escAttr(c.key)}')" title="클릭하여 기업 종류 변경">${escapeHtml(k.label)}</span>`
+            : `<span class="pill p-gray" style="cursor:pointer" onclick="editCoKind('${escAttr(c.key)}')">종류 지정</span>`; })()}
+          <span class="pill ${c.sector ? 'p-blue' : 'p-gray'}" style="cursor:pointer" onclick="editCoSector('${escAttr(c.key)}')" title="클릭하여 섹터 변경">
+            <span id="co-sector-${escapeHtml(c.key)}">${escapeHtml(c.sectors && c.sectors.length ? c.sectors.join(' · ') : '미분류')}</span></span>
+          ${c.catCode ? `<span class="btag main" id="co-catcode-${escapeHtml(c.key)}">${escapeHtml(c.catCode)}</span>`
+            : `<span id="co-catcode-${escapeHtml(c.key)}"></span>`}
           ${c.aliases.length
             // 사명이 바뀐 회사는 옛 이름으로 찾는 사람이 있다 — 여기 남겨두면 헛걸음하지 않는다
-            ? `<span style="color:var(--i4);font-size:11px" title="예전 이름 — 이 이름으로도 검색됩니다">↩ ${escapeHtml(c.aliases.join(', '))}</span>`
+            ? `<span style="color:var(--i4)" title="예전 이름 — 이 이름으로도 검색됩니다">↩ ${escapeHtml(c.aliases.join(', '))}</span>`
             : ''}
-          <span>📍 ${escapeHtml(c.hq)}</span>
-          <span style="cursor:pointer" onclick="editCoSector('${escAttr(c.key)}')" title="클릭하여 섹터 변경">
-            🏭 <span id="co-sector-${escapeHtml(c.key)}">${escapeHtml(c.sector||'미분류')}</span> ✎
-          </span>
-          <span style="cursor:pointer" onclick="editCoWebsite('${escAttr(c.key)}')" title="클릭하여 웹사이트 편집">
-            🔗 <span id="co-website-${escapeHtml(c.key)}">${c.website ? `<a href="${escapeHtml(c.website)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(c.website)}</a>` : '웹사이트 추가'}</span> ✎
-          </span>
-          <span style="cursor:pointer" onclick="editCoNotes('${escAttr(c.key)}')" title="클릭하여 메모 편집">
-            📝 <span id="co-notes-${escapeHtml(c.key)}">${escapeHtml(c.notes||'메모 추가')}</span> ✎
-          </span>
-          <span style="cursor:pointer" onclick="editCoCountry('${escAttr(c.key)}')" title="클릭하여 국가 편집">
-            🌍 <span id="co-country-${escapeHtml(c.key)}">${escapeHtml(c.country||'국가 추가')}</span> ✎
-          </span>
-          <span style="cursor:pointer" onclick="editCoAbbr('${escAttr(c.key)}')" title="클릭하여 약어 편집">
-            🔤 <span id="co-abbr-${escapeHtml(c.key)}">${escapeHtml(c.abbr||'약어 추가')}</span> ✎
-          </span>
-          <span style="cursor:pointer" onclick="editCoSource('${escAttr(c.key)}')" title="클릭하여 출처 편집">
-            📌 <span id="co-source-${escapeHtml(c.key)}">${escapeHtml(c.source||'출처 추가')}</span> ✎
-          </span>
-          <span style="cursor:pointer" onclick="editCoBizNo('${escAttr(c.key)}')" title="클릭하여 사업자등록번호 편집">
-            🧾 <span id="co-bizNo-${escapeHtml(c.key)}">${escapeHtml(c.bizNo||'사업자번호 추가')}</span> ✎
-          </span>
-          <span id="co-catcode-${escapeHtml(c.key)}">
-            ${c.catCode
-              ? `<span class="btag main">${escapeHtml(c.catCode)}</span>`
-              : `<button class="btn bs" style="font-size:11px;padding:2px 8px" onclick="showAssignCatCodeUI('${escAttr(c.key)}')">코드 부여</button>`}
-          </span>
-          <span style="color:var(--i4);font-size:11px" title="${escAttr(c.updatedAt || '')}">🕒 ${escapeHtml(shortDate(c.updatedAt) || '-')}</span>
         </div>
+
+        ${(() => {
+          /* 아래 줄은 "적어 둔 것"만 보여준다. 전에는 빈 칸까지 전부 늘어놓아
+             웹사이트·메모·국가·약어·출처·사업자번호 여섯 개의 '추가' 안내가
+             실제 값과 같은 무게로 섞였다 — 화면의 대부분이 아직 없는 정보였다.
+             비어 있는 것은 맨 끝 '＋ 정보 추가'에 접어 두고, 누르면 그 자리에서 편다. */
+          const F = [
+            ['website', '웹사이트', c.website, `editCoWebsite('${escAttr(c.key)}')`, true],
+            ['country', '국가',     c.country, `editCoCountry('${escAttr(c.key)}')`, false],
+            ['hq',      '본사',     c.hq,      '', false],
+            ['bizNo',   '사업자번호', c.bizNo,  `editCoBizNo('${escAttr(c.key)}')`, false],
+            ['abbr',    '약어',     c.abbr,    `editCoAbbr('${escAttr(c.key)}')`, false],
+            ['source',  '출처',     c.source,  `editCoSource('${escAttr(c.key)}')`, false],
+            ['notes',   '메모',     c.notes,   `editCoNotes('${escAttr(c.key)}')`, false],
+          ];
+          const has = F.filter(f => String(f[2] || '').trim());
+          const gap = F.filter(f => !String(f[2] || '').trim() && f[3]);
+
+          const row = ([id, label, val, on, isLink]) => `
+            <div style="display:flex;gap:8px;align-items:baseline;padding:2px 0;font-size:11.5px">
+              <span style="flex:0 0 62px;color:var(--i5)">${escapeHtml(label)}</span>
+              <span style="flex:1;min-width:0;color:var(--i2);${on ? 'cursor:pointer' : ''}" ${on ? `onclick="${on}"` : ''}>
+                <span id="co-${id}-${escapeHtml(c.key)}">${
+                  isLink && val ? `<a href="${escapeHtml(val)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(val)}</a>`
+                    : val ? escapeHtml(val)
+                    /* 빈 줄은 누를 자리가 없으면 편집으로 들어갈 수 없다 — 옅은 안내를 둔다 */
+                    : `<span style="color:var(--i5)">입력</span>`}</span></span>
+            </div>`;
+
+          return `<div style="margin-top:7px">
+            ${has.map(row).join('')}
+            <div id="co-gaps-${escapeHtml(c.key)}" style="display:none">${gap.map(row).join('')}</div>
+            <div style="display:flex;align-items:center;gap:10px;margin-top:5px">
+              ${gap.length ? `<button id="co-gaps-btn-${escapeHtml(c.key)}" class="btn bs" style="font-size:10.5px;padding:2px 8px"
+                onclick="toggleCoGaps('${escAttr(c.key)}')">＋ 정보 추가 ${gap.length}</button>` : ''}
+              ${c.catCode ? '' : `<button class="btn bs" style="font-size:10.5px;padding:2px 8px"
+                onclick="showAssignCatCodeUI('${escAttr(c.key)}')">코드 부여</button>`}
+              <span style="margin-left:auto;color:var(--i5);font-size:10.5px" title="${escAttr(c.updatedAt || '')}">${escapeHtml(shortDate(c.updatedAt) || '')}</span>
+            </div>
+          </div>`;
+        })()}
       </div>
     </div>
     <div class="cost">
@@ -1103,6 +1135,17 @@ export function renderCoDetail(c){
   if(tabsEl) tabsEl.innerHTML=tabs.map((t,k)=>`<div class="cotab${coTab===k?' on':''}" onclick="switchCoT(${k})">${t}</div>`).join('');
   renderCoBody(c);
 }
+/* 비어 있는 항목 펼치기/접기 — 새로 들어온 회사는 대부분이 빈칸이라
+   기본은 접어 둔다. 채우려고 열었을 때만 보이면 된다. */
+export function toggleCoGaps(key){
+  const box = document.getElementById('co-gaps-' + key);
+  const btn = document.getElementById('co-gaps-btn-' + key);
+  if(!box) return;
+  const on = box.style.display === 'none';
+  box.style.display = on ? 'block' : 'none';
+  if(btn) btn.textContent = on ? '접기' : ('＋ 정보 추가 ' + box.children.length);
+}
+
 export function switchCoT(k){
   setCoTab(k);
   const c=CO_DB.find(x=>x.key===selCo);
@@ -1420,12 +1463,11 @@ async function saveCoTextField(key, field, rawValue){
     if(!c.aliases.includes(before)){ c.aliases = [...c.aliases, before]; fields.push('aliases'); }
   }
   await upsertCompanyRow(c, fields);
-  renderCoFieldDisplay(key, field);
-  if(field === 'abbr' || field === 'nameKo' || field === 'nameEn'){
-    // 약어/회사명은 아바타·리스트·상세 헤더 등 여러 곳에 함께 쓰여서 저장 후 다시 그린다
-    renderCoDetail(c);
-    renderCoList();
-  }
+  /* 헤더는 "적어 둔 것"만 줄로 보여주고 빈 칸은 접어 둔다 — 값이 생기거나
+     지워지면 그 줄이 어느 쪽에 속하는지가 바뀌므로 통째로 다시 그린다.
+     한 칸만 갈아 끼우면 방금 채운 값이 접힌 쪽에 남아 안 보인다. */
+  renderCoDetail(c);
+  if(field === 'abbr' || field === 'nameKo' || field === 'nameEn') renderCoList();
   if(field === 'nameKo' || field === 'nameEn'){
     // 기업 이름만 바꾸고 끝나면 마스터DB는 연락처 원본 orgKo/orgEn을 그대로
     // 보여주는 화면이라 반영이 안 된 것처럼 보인다 — mergeCompanies와 동일하게
@@ -2013,6 +2055,7 @@ window.editCoNotes = editCoNotes;
 window.editCoWebsite = editCoWebsite;
 window.editCoCountry = editCoCountry;
 window.editCoAbbr = editCoAbbr;
+window.toggleCoGaps = toggleCoGaps;
 window.editCoSource = editCoSource;
 window.editCoBizNo = editCoBizNo;
 window.setCoKind = setCoKind;
