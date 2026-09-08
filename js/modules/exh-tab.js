@@ -2358,6 +2358,112 @@ export function bookMissing(x){
   return miss;
 }
 
+/* ══════════════════════════════════════════
+   도록 순번 — 번호 하나에 자리 하나
+
+   순번을 그냥 적게 두면 두 기업이 같은 번호를 갖거나(지금 1번이 둘이다),
+   중간이 비거나(18번이 없다), 인쇄소에 넘길 때 순서가 안 정해진다. 순번은
+   값이 아니라 줄 세우기라, 하나를 옮기면 나머지가 밀려야 한다.
+
+   그래서 목록 전체를 1..N으로 다시 매긴다. 지금 보이는 줄만이 아니라 이 행사
+   참가기업 전부가 대상이다 — 검색으로 걸러 둔 채 3번으로 옮겼는데 화면 밖
+   3번이 그대로면, 인쇄 직전에야 겹친 걸 알게 된다.
+══════════════════════════════════════════ */
+
+/* 지금 저장된 값이 만드는 줄 세우기. 번호가 없는 곳은 뒤로 보내되 부스 순으로
+   둔다 — 새로 들어온 곳이 목록 맨 앞에 끼어들면 매번 다시 세워야 한다. */
+export function bookSeq(evKey){
+  return [...activeExhibitors(evKey)].sort((a, b) => {
+    const ao = Number(String(a.book_order || '').replace(/[^0-9]/g, '')) || 0;
+    const bo = Number(String(b.book_order || '').replace(/[^0-9]/g, '')) || 0;
+    if(ao !== bo) return (ao || 1e9) - (bo || 1e9);
+    return boothSortKey(a) - boothSortKey(b);
+  });
+}
+
+/* 한 줄을 원하는 자리로 옮기고 전부 다시 매긴다.
+   실제로 번호가 달라지는 줄만 저장한다 — 56줄을 통째로 보내면 바뀌지도 않은
+   줄에 수정 기록이 남아 로그에서 진짜 변경을 찾을 수 없다. */
+export async function moveBookOrder(id, toPos){
+  const x = getExhibitorById(id);
+  if(!x) return;
+  const seq = bookSeq(x.event_id);
+  const from = seq.findIndex(o => o.id === id);
+  if(from < 0) return;
+
+  let to = Math.round(Number(String(toPos).replace(/[^0-9]/g, '')));
+  if(!to || isNaN(to)) { renderExh(); return; }          // 숫자가 아니면 되돌린다
+  to = Math.min(Math.max(1, to), seq.length) - 1;
+  if(to === from) { renderExh(); return; }
+
+  seq.splice(to, 0, ...seq.splice(from, 1));
+  const changes = seq
+    .map((o, i) => ({ o, no: String(i + 1) }))
+    .filter(c => String(c.o.book_order || '') !== c.no);
+  if(!changes.length) { renderExh(); return; }
+
+  await saveBookOrders(changes, `${exhNames(x).ko} → ${to + 1}번`);
+}
+
+/* 한꺼번에 저장한다. patchExh를 줄마다 부르면 저장할 때마다 화면을 다시 그리고
+   수정 기록이 마흔 줄 남는다. 여기서는 화면을 한 번만 그리고 기록도 한 줄이다.
+   하나라도 실패하면 전부 되돌린다 — 절반만 밀린 순번은 안 민 것보다 나쁘다. */
+async function saveBookOrders(changes, what){
+  const backup = changes.map(c => ({ o: c.o, was: c.o.book_order || '' }));
+  changes.forEach(c => { c.o.book_order = c.no; });
+  refreshExhViews();
+
+  const { saveExhibitor } = await import('../api.js');
+  const res = await Promise.all(changes.map(c =>
+    saveExhibitor({ id: c.o.id, book_order: c.no, updated_at: td() })));
+
+  if(res.some(r => !r.ok)){
+    backup.forEach(b => { b.o.book_order = b.was; });
+    refreshExhViews();
+    alert('순서 저장에 실패했어요. 원래 순서로 되돌렸습니다.');
+    return;
+  }
+  trackAction('edit', '도록 순서 변경', what,
+    `<b>${escapeHtml(what)}</b> — ${changes.length}곳의 순번이 밀렸어요`);
+}
+
+/* 겹친 번호와 빈 번호만 없앤다. 지금 보이는 앞뒤는 그대로 두고 번호만 1..N으로
+   다시 붙인다 — «순서 자동 매기기»는 부스 순으로 줄을 새로 세우지만, 이건
+   사람이 잡아 둔 순서를 건드리지 않는다. */
+export async function renumberBook(){
+  const seq = bookSeq(exhEvent);
+  const changes = seq.map((o, i) => ({ o, no: String(i + 1) }))
+    .filter(c => String(c.o.book_order || '') !== c.no);
+  if(!changes.length){ alert('번호가 이미 1번부터 빠짐없이 붙어 있어요.'); return; }
+  if(!confirm(`${changes.length}곳의 번호가 바뀝니다. 앞뒤 순서는 그대로 두고 번호만 1~${seq.length}번으로 다시 붙일까요?`)) return;
+  await saveBookOrders(changes, `번호 정리 1~${seq.length}번`);
+}
+
+/* 끌어 옮기기. 줄 전체를 draggable로 두면 기업명을 긁어 복사하려다 끌려가고,
+   놓는 순간 드로어가 열린다. 손잡이를 누르고 있는 동안에만 켠다. */
+let bookDragId = '';
+export function bookDragOn(el){ const tr = el.closest('tr'); if(tr) tr.draggable = true; }
+export function bookDragStart(e, id){ bookDragId = id; e.dataTransfer.effectAllowed = 'move'; }
+export function bookDragEnd(el){ const tr = el.closest('tr'); if(tr) tr.draggable = false; bookDragId = ''; }
+export function bookDragOver(e, el){
+  if(!bookDragId) return;
+  e.preventDefault();
+  el.style.boxShadow = 'inset 0 2px 0 var(--a)';
+}
+export function bookDragLeave(el){ el.style.boxShadow = ''; }
+export async function bookDrop(e, id){
+  e.preventDefault();
+  const tr = e.currentTarget; if(tr) tr.style.boxShadow = '';
+  if(!bookDragId || bookDragId === id) return;
+  const seq = bookSeq(exhEvent);
+  const target = seq.findIndex(o => o.id === id);
+  const from = seq.findIndex(o => o.id === bookDragId);
+  if(target < 0 || from < 0) return;
+  // 아래로 끌면 놓은 줄의 자리를 차지하고, 위로 끌면 그 앞에 선다
+  await moveBookOrder(bookDragId, target + 1);
+  bookDragId = '';
+}
+
 function renderBookView(list){
   if(!list.length) return emptyView('표시할 기업이 없어요');
 
@@ -2397,7 +2503,8 @@ function renderBookView(list){
         `${o}번: ${rows.filter(r => String(r.book_order || '').trim() === o).map(r => exhNames(r).ko).join(' · ')}`).join(' / '))}">겹친 순번 ${dupOrders.size}</span>` : '')
     + `<span style="font-size:10.5px;color:var(--i5);margin-left:2px">한도 ${bookLimit().chars.toLocaleString()}자 · ${bookLimit().words}단어 (띄어쓰기 포함)</span>`;
 
-  const actions = `<button class="btn bs" onclick="fillBookOrder()" title="지금 부스 번호순으로 1번부터 다시 매깁니다">순서 자동 매기기</button>`;
+  const actions = `<button class="btn bs" onclick="fillBookOrder()" title="지금 부스 번호순으로 1번부터 다시 매깁니다">순서 자동 매기기</button>`
+    + `<button class="btn bs" onclick="renumberBook()" title="겹치거나 빈 번호를 지금 순서 그대로 1번부터 다시 매깁니다">번호 정리</button>`;
 
   const logoBtn = (x) => `<button
     onclick="event.stopPropagation();cycleBookLogo('${escAttr(x.id)}')"
@@ -2442,7 +2549,13 @@ function renderBookView(list){
     value="${escAttr(x[f] || '')}" onclick="event.stopPropagation()"
     onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr((BOOK_FIELDS.find(b => b[0] === f) || ['', f])[1])}')"></td>`;
 
+  /* 걸러 놓은 채로 끌어 옮기면, 화면 밖 줄과의 앞뒤를 사람이 알 수 없다.
+     번호를 적는 건 "전체에서 몇 번째"라는 뜻이라 걸러도 뜻이 분명하지만,
+     끌어 옮기기는 보이는 줄끼리의 앞뒤라서 그렇지 않다. */
+  const full = rows.length === activeExhibitors(exhEvent).length;
+
   return viewShell(pills, `<div class="tw"><table><thead><tr>
+      ${full ? '<th style="width:22px" title="끌어서 순서를 바꿀 수 있어요"></th>' : ''}
       <th style="min-width:48px">순서</th>
       <th style="min-width:44px;text-align:center">로고</th>
       <th style="min-width:150px">기업명</th>
@@ -2455,12 +2568,19 @@ function renderBookView(list){
     </tr></thead><tbody>
     ${rows.map(x => {
       const miss = bookMissing(x);
-      return `<tr onclick="openExhDr('${escAttr(x.id)}','book')" style="cursor:pointer">
-        <td><input class="fi" style="width:42px;padding:3px 5px;font-size:11.5px;text-align:center;font-weight:700"
+      const dup = dupOrders.has(String(x.book_order || '').trim());
+      return `<tr onclick="openExhDr('${escAttr(x.id)}','book')" style="cursor:pointer"
+        ${full ? `ondragstart="bookDragStart(event,'${escAttr(x.id)}')" ondragend="bookDragEnd(this)"
+          ondragover="bookDragOver(event,this)" ondragleave="bookDragLeave(this)"
+          ondrop="bookDrop(event,'${escAttr(x.id)}')"` : ''}>
+        ${full ? `<td style="padding:0 2px;text-align:center" onclick="event.stopPropagation()">
+          <span onmousedown="bookDragOn(this)" title="끌어서 옮기기"
+            style="cursor:grab;color:var(--i6);font-size:13px;line-height:1;user-select:none">⠿</span></td>` : ''}
+        <td><input class="fi" title="번호를 적으면 그 자리로 옮기고 나머지가 한 칸씩 밀려요"
+          style="width:42px;padding:3px 5px;font-size:11.5px;text-align:center;font-weight:700${
+            dup ? ';border-color:var(--am)' : ''}"
           value="${escAttr(x.book_order || '')}" onclick="event.stopPropagation()"
-          onchange="setExhField('${escAttr(x.id)}','book_order',this.value,'도록 순서')"
-          ${dupOrders.has(String(x.book_order || '').trim())
-            ? 'style="width:52px;padding:3px 5px;font-size:11px;border-color:var(--am)" title="같은 순번을 쓰는 기업이 또 있어요 — 한 부스를 나눠 쓰는 경우입니다"' : ''}></td>
+          onchange="moveBookOrder('${escAttr(x.id)}',this.value)"></td>
         <td style="text-align:center">${logoBtn(x)}</td>
         ${coCell(x, 'book')}
         <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
@@ -3666,6 +3786,14 @@ window.applyGraphicDue = applyGraphicDue;
 window.searchExhM = searchExhM;
 window.setBoothTypeFil = setBoothTypeFil;
 window.setStepFil = setStepFil;
+window.moveBookOrder = moveBookOrder;
+window.renumberBook = renumberBook;
+window.bookDragOn = bookDragOn;
+window.bookDragStart = bookDragStart;
+window.bookDragEnd = bookDragEnd;
+window.bookDragOver = bookDragOver;
+window.bookDragLeave = bookDragLeave;
+window.bookDrop = bookDrop;
 window.openExhAdd = openExhAdd;
 window.closeExhAdd = closeExhAdd;
 window.confirmExhAdd = confirmExhAdd;

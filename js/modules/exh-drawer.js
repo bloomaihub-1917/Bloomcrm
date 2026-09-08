@@ -1162,7 +1162,8 @@ function dBook(x){
     <div class="fgr">
       <div class="fg"><label class="fl">게재 순서</label>
         <input class="fi" style="font-size:12px" value="${escAttr(x.book_order || '')}" placeholder="예: 1"
-          onchange="setExhField('${escAttr(x.id)}','book_order',this.value,'도록 순서')"></div>
+          title="번호를 적으면 그 자리로 옮기고 나머지가 한 칸씩 밀려요"
+          onchange="moveBookOrder('${escAttr(x.id)}',this.value)"></div>
       <div class="fg"><label class="fl">로고</label>
         <div class="stbs" style="margin-top:4px">
           ${[['', '미확인'], ['yes', '받음'], ['no', '없음']].map(([v, l]) =>
