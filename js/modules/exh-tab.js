@@ -619,6 +619,8 @@ function withDue(c, x, step){
 function cellState(x, step){ return withDue(rawCellState(x, step), x, step); }
 
 function rawCellState(x, step){
+  // 프로그램북만 참가하는 곳은 도록 외에는 받을 것이 없다
+  if(isBookOnly(x) && step.key !== 'directory_received_at') return { state: 'na' };
   if(step.key === 'calc:invoice'){
     const inv = invoicesFor(x.id).filter(i => i.status !== 'void');
     if(!inv.length) return { state: 'todo' };
@@ -1043,7 +1045,29 @@ const sumBy = (list, key, weight) => {
    둘이지만 부스는 하나다 — 둘 다 1로 세면 주최사 보고 숫자가 한 칸 늘고
    조립부스 발주도 한 벌 더 잡힌다. 기업 수에서는 빼지 않는다. */
 export const isSharedBooth = (x) => x.booth_shared === 'yes';
-const boothQty = (x) => (isSharedBooth(x) ? 0 : Math.max(1, num(x.booth_qty) || 1));
+
+/* 프로그램북에만 이름을 올리는 참가. 모기업 부스에 얹힌 자회사처럼 주고받을
+   게 도록뿐인 곳이다.
+
+   일반 참가와 같은 체크리스트에 세우면 매뉴얼·신청서·인보이스·입금이 영영
+   미완료로 남는다. 안 받을 것을 못 받은 것으로 세면 "몇 곳 남았나"가 늘 틀리고,
+   틀린 숫자는 며칠 지나면 아무도 안 본다. 그래서 도록 말고는 해당 없음으로
+   비운다 — 지우는 게 아니라 분모에서 빼는 것이라, 유형을 되돌리면 그대로 살아난다.
+
+   부스도 세지 않는다. 부스는 모기업 것 하나뿐이다. */
+export const isBookOnly = (x) => x.scope === 'book';
+
+const boothQty = (x) => (isSharedBooth(x) || isBookOnly(x) ? 0 : Math.max(1, num(x.booth_qty) || 1));
+
+/* 누구의 부스에 얹혔는지까지 알려 준다 — "프로그램북만"이라는 말만으로는
+   왜 이 회사가 부스도 없이 목록에 있는지 설명이 안 된다. */
+function bookOnlyTip(x){
+  const host = String(x.host_key || '').trim()
+    ? exhibitorsForEvent(x.event_id).find(o => o.company_key === x.host_key) : null;
+  return host
+    ? `프로그램북에만 오르는 참가예요 — ${exhNames(host).ko}의 부스를 함께 씁니다. 부스 수와 체크리스트에서는 빠집니다.`
+    : '프로그램북에만 오르는 참가예요 — 부스 수와 체크리스트에서 빠집니다.';
+}
 
 function exhSummary(all){
   const of = (x) => {
@@ -1069,8 +1093,9 @@ function exhSummary(all){
     floor: sumBy(all, x => (x.booth_floor ? x.booth_floor + '층' : ''), boothQty),
     type:  sumBy(all, x => x.booth_type || '', boothQty),
     grade: countBy(all.filter(x => x.grade && x.grade !== 'Exhibitor'), x => x.grade),
-    noBooth: all.filter(x => !String(x.booth_no || '').trim()).length,
+    noBooth: all.filter(x => !isBookOnly(x) && !String(x.booth_no || '').trim()).length,
     shared: all.filter(isSharedBooth).length,
+    bookOnly: all.filter(isBookOnly).length,
     prev: (() => {
       const keys = prevOrgKeys();
       if(!keys) return null;
@@ -1106,7 +1131,8 @@ function renderExhSummary(all){
 
       ${block('부스', `${n(s.booth.total)}<span style="font-size:11px;color:var(--i4)"> 부스</span>
         ${sub(`국내 ${s.booth.home} · 해외 ${s.booth.away}${s.booth.unknown ? ` · 미확인 ${s.booth.unknown}` : ''}`)}
-        ${s.shared ? sub(`<span title="한 부스를 나눠 쓰는 기업이에요 — 기업 수에는 있고 부스 수에는 없습니다">공동 부스 ${s.shared}곳 제외</span>`) : ''}`)}
+        ${s.shared ? sub(`<span title="한 부스를 나눠 쓰는 기업이에요 — 기업 수에는 있고 부스 수에는 없습니다">공동 부스 ${s.shared}곳 제외</span>`) : ''}
+        ${s.bookOnly ? sub(`<span title="프로그램북에만 오르는 참가예요 — 부스도 체크리스트도 세지 않습니다">프로그램북만 ${s.bookOnly}곳 제외</span>`) : ''}`)}
 
       ${block('층', `<div style="display:flex;flex-wrap:wrap;gap:3px">${cnt(s.floor, 'p-gray')}</div>
         ${sub(s.noBooth ? `<span style="color:var(--am)">부스 미배정 ${s.noBooth}곳</span>` : '부스 수 기준')}`)}
@@ -3141,6 +3167,7 @@ function renderChecklistCards(list, all){
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <span class="pill p-gray">${escapeHtml(x.apply_order || '-')}</span>
           <span style="font-size:14px;font-weight:700${off ? ';text-decoration:line-through' : ''}">${escapeHtml(exhNames(x).ko)}</span>${
+            isBookOnly(x) ? '<span class="pill p-teal">프로그램북만</span>' : ''}${
             exhNames(x).en ? `<span style="font-size:11px;color:var(--i4);font-weight:400">${escapeHtml(exhNames(x).en)}</span>` : ''}
           ${off ? '<span class="pill p-gray">참가 취소</span>' : ''}
           ${backBadge(x)}
@@ -3227,6 +3254,7 @@ function renderChecklistTable(list, all){
               <span style="font-weight:700;font-size:12px${off ? ';text-decoration:line-through' : ''}">${escapeHtml(exhNames(x).ko)}</span>${
                 exhNames(x).en ? `<span style="font-size:10.5px;color:var(--i4);margin-left:4px">${escapeHtml(exhNames(x).en)}</span>` : ''}
               ${off ? '<span class="pill p-gray">참가 취소</span>' : ''}
+              ${isBookOnly(x) ? `<span class="pill p-teal" title="${escAttr(bookOnlyTip(x))}">프로그램북만</span>` : ''}
               ${backBadge(x)}
               ${x.grade && x.grade !== 'Exhibitor' ? `<span class="pill ${gradeCls(x.grade)}">${escapeHtml(x.grade)}</span>` : ''}
             </div>
@@ -3523,6 +3551,7 @@ const FIELD_LABEL = {
   app_received:'신청서 수신', app_received_at:'신청서 수신일', app_complete:'신청서 완비',
   app_missing:'누락 항목', extra_equipment:'추가 비품',
   booth_no:'부스 번호', booth_floor:'부스 층', booth_type:'부스 타입', booth_qty:'부스 수량',
+  scope:'참가 범위', host_key:'대표 기업',
   builder:'시공사명', builder_contact:'시공 담당자', builder_tel:'시공사 유선', builder_mobile:'시공사 휴대폰', builder_email:'시공사 이메일',
   grade:'등급', booth_confirmed:'부스 확정', booth_confirmed_at:'부스 확정일',
   settled:'완납 처리', settled_note:'완납 사유', pay_due_date:'입금 기한',

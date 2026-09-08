@@ -598,6 +598,12 @@ ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS booth_design_note        TEXT;  
    어느 쪽을 뺄지는 사람이 정한다 — 부스를 대표해 신청한 쪽이 남고 나머지가
    빠지는데, 그건 데이터로 알 수 없다. */
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS booth_shared TEXT;  -- 'yes'(부스 수 집계에서 제외) | ''
+-- 참가 범위. 모기업 부스에 이름만 올리는 자회사처럼, 프로그램북 말고는
+-- 주고받을 게 없는 참가가 있다. 그런 곳을 일반 참가와 같은 체크리스트에 세우면
+-- 매뉴얼·신청서·인보이스·입금이 영영 미완료로 남아 "몇 곳 남았나"가 늘 틀린다.
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS scope TEXT;         -- ''(전체) | 'book'(프로그램북만)
+-- 누구의 부스에 얹혔는지. 부스 번호만 같게 적어 두면 왜 같은지 알 수 없다.
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS host_key TEXT;      -- 대표 기업의 company_key
 
 /* ══════════════════════════════════════════════════════════════
    세금계산서 1:N 전환

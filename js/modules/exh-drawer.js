@@ -16,7 +16,7 @@ import {
   EXH_CONTACTS, EXH_ITEMS, EXH_INVOICES, EXH_TAX, EXH_PAYMENTS, EXH_LOGS, CO_DB, currentUser,
   contactsFor, catalogFor, catalogItem, EQUIP_CATALOG, findCatalogByName,
   contacts, participations, getOrgById, codeList, codeLabel,
-  EXH_APPS, appsFor, openAppFor, isVoided, liveItemsFor, exhEvent,
+  EXH_APPS, appsFor, openAppFor, isVoided, liveItemsFor, exhEvent, exhibitorsForEvent,
 } from '../state.js';
 import { td, escapeHtml, escAttr } from '../utils.js';
 import {
@@ -55,7 +55,7 @@ import {
   billedAmount, paidAmount, graphicState, graphicDueInfo, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
   isPendingRefund, boothTypeOptions, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
   TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing, introOver, boothDesignState,
-  isSharedBooth,
+  isSharedBooth, isBookOnly,
   guardWrite, exhLocked, exhLockNotice,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar, needsReissue,
   settleState, liveInvoices, payDueDate, paidBreakdown, invoiceGap,
@@ -1048,6 +1048,36 @@ function invoiceIssueSection(x){
     invs.length ? `<span class="pill p-gray">발행 ${invs.length}장</span>` : '');
 }
 
+/* 참가 범위 — 체크리스트 맨 앞에 둔다. 아래 칸이 전부 비어 있는 까닭이
+   여기 적혀 있어야, 다음 사람이 "빠뜨렸나" 하고 채우려 들지 않는다.
+
+   대표 기업은 같은 행사의 참가기업 중에서 고른다. 이름을 손으로 적게 하면
+   표기가 갈려서 나중에 누구 부스인지 되짚을 수 없다. */
+function scopeBlock(x){
+  const book = isBookOnly(x);
+  const peers = exhibitorsForEvent(x.event_id)
+    .filter(o => o.id !== x.id && !isBookOnly(o))
+    .sort((a, b) => String(a.company_name || '').localeCompare(String(b.company_name || ''), 'ko'));
+  return sct('참가 범위', `
+    <div class="fg"><label class="fl">유형</label>
+      <select class="fi" style="font-size:12px"
+        onchange="setExhField('${escAttr(x.id)}','scope',this.value,'참가 범위')">
+        <option value=""${book ? '' : ' selected'}>전체 진행 — 매뉴얼부터 현장까지</option>
+        <option value="book"${book ? ' selected' : ''}>프로그램북만 — 받을 것이 도록뿐</option>
+      </select>
+      <div style="font-size:10.5px;color:var(--i5);margin-top:3px">
+        «프로그램북만»으로 두면 도록 외 단계는 <b>해당 없음</b>이 되고 부스 수에서도 빠집니다.
+        지우는 게 아니라 집계에서 빼는 것이라, 유형을 되돌리면 적어 둔 값이 그대로 살아납니다.</div></div>
+    ${book ? `<div class="fg"><label class="fl">부스를 함께 쓰는 대표 기업</label>
+      <select class="fi" style="font-size:12px"
+        onchange="setExhField('${escAttr(x.id)}','host_key',this.value,'대표 기업')">
+        <option value=""${x.host_key ? '' : ' selected'}>— 지정 안 함 —</option>
+        ${peers.map(o => `<option value="${escAttr(o.company_key)}"${
+          (x.host_key || '') === o.company_key ? ' selected' : ''}>${escapeHtml(exhNames(o).ko)}${
+          o.booth_no ? ` (부스 ${escapeHtml(o.booth_no)})` : ''}</option>`).join('')}
+      </select></div>` : ''}`);
+}
+
 /* ── 신청항목 탭 ──
    신청서를 받았는지, 받았다면 빠진 게 없는지, 무엇을 더 신청했는지를 한 화면에서
    본다. 신청 내역을 정산의 금액 항목으로 옮기는 버튼도 여기 둔다 — 적어둔 내역과
@@ -1056,6 +1086,7 @@ function dApply(x){
   const appIssue = x.app_received_at && x.app_complete === 'no';
   const items = itemsFor(x.id).filter(i => (i.category || '') === 'equip');
   return `
+  ${scopeBlock(x)}
   ${appsSection(x)}
 
   ${sct('신청서',
