@@ -57,7 +57,7 @@ import {
 import { CL } from '../constants.js';
 import { normalizeCat, normalizeCountry, escapeHtml, escAttr, scopedSectorName, slugifySectorName, sectorRowValues, sectorKey } from '../utils.js';
 import { postToSheet, saveCatmap } from '../api.js';
-import { buildCoDB, buildCoCAT, batchUpsertCompanies, ensureOrgsForNames, orgIdForName } from './company-tab.js';
+import { buildCoDB, buildCoCAT, batchUpsertCompanies, ensureOrgsForNames, orgIdForName, suggestSector } from './company-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
 import { trackAction } from './audit-tab.js';
 
@@ -776,12 +776,25 @@ export function renderCategoryMappingUI(){
 
   const evKey = getSelectedUploadEventKey();
   const saved = (evKey && CATMAPS[evKey]) || {};
-  const hasSaved = values.some(([v]) => saved[v]);
+  const hasSaved = values.some(([v]) => v in saved);
   // 이전 매핑이 저장된 행사면 자동으로 토글 on
   if(hasSaved) _catmapOn = true;
 
   const sectorOptions = sel => COMPANY_SECTORS.map(s =>
     `<option value="${escapeHtml(s.name)}"${sel===s.name?' selected':''}>${s.parent?'　↳ ':''}${escapeHtml(s.name)}</option>`).join('');
+
+  /* 원문값마다 표준 섹터를 미리 골라 둔다. 명단은 보내 준 쪽 표기 그대로라
+     ('IT Soultion', 'Central Lab.') 사람이 값마다 손으로 고르게 하면 결국
+     '원문 유지'로 넘어가고, 그렇게 흩어진 값이 지금 기업DB에 쌓여 있다.
+     지난번에 저장해 둔 매핑이 있으면 그게 먼저다 — 사람이 내린 판단이 추천을
+     이긴다. */
+  const guessOf = {};
+  values.forEach(([v]) => {
+    if(v in saved) return;   // 사람이 정해 둔 값이 추천보다 우선
+    const g = suggestSector(v);
+    if(g.names.length) guessOf[v] = g;
+  });
+  const guessN = Object.keys(guessOf).length;
 
   wrap.innerHTML = `
     <div style="background:var(--i8);border:1px solid var(--i6);border-radius:8px;padding:10px 12px">
@@ -790,15 +803,30 @@ export function renderCategoryMappingUI(){
         카테고리 컬럼 값별 매핑 (${values.length}개 값)
         ${hasSaved ? '<span style="font-size:10px;color:var(--te);font-weight:600">이전 매핑 적용됨</span>' : ''}
       </label>
-      <div style="font-size:10px;color:var(--i4);margin:4px 0 0 20px">컬럼 "${escapeHtml(_lastColMap.beat)}"의 값별로 섹터를 배정합니다. 켜면 위의 일괄 카테고리 대신 행별 매핑이 적용돼요.</div>
+      <div style="font-size:10px;color:var(--i4);margin:4px 0 0 20px">컬럼 "${escapeHtml(_lastColMap.beat)}"의 값별로 섹터를 배정합니다. 켜면 위의 일괄 카테고리 대신 행별 매핑이 적용돼요.
+        ${guessN ? `<b style="color:var(--te)">${guessN}개 값은 표준 섹터를 자동으로 골라 뒀어요 — 맞는지만 확인해주세요.</b>` : ''}
+        판단이 안 서는 값은 <b>비워 둠</b>으로 두면 기업DB에서 '미분류'로 눈에 띕니다.</div>
       <div id="catmap-table" style="display:${_catmapOn?'block':'none'};margin-top:8px;max-height:220px;overflow-y:auto">
         ${values.map(([val, cnt]) => `
           <div style="display:flex;align-items:center;gap:8px;padding:3px 0">
             <span style="flex:1;min-width:0;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(val)}">${escapeHtml(val)} <span style="color:var(--i4)">(${cnt}건)</span></span>
             <select class="fi catmap-sel" data-val="${escapeHtml(val)}" style="width:55%;font-size:11px;padding:2px 4px">
-              <option value="__keep__">원문 유지</option>
-              ${evKey ? `<option value="__new__">＋ 새 행사 섹터로 생성</option>` : ''}
-              ${sectorOptions(saved[val] || '')}
+              ${(() => {
+                /* 고를 값은 셋 중 하나다 — 지난번에 사람이 정해 둔 것, 이번에 추천한 것,
+                   아무것도 아니면 '비워 둠'. 'CRO|영상·이미징'처럼 둘로 갈리는 값은
+                   섹터 목록에 없으니 그 줄을 따로 만들어 넣는다. */
+                const g = guessOf[val];
+                const gv = g ? g.names.join('|') : '';
+                const picked = (val in saved) ? saved[val] : gv;
+                const combo = (v, tail) => `<option value="${escapeHtml(v)}"${picked === v ? ' selected' : ''}
+                    >${escapeHtml(v.split('|').join(' + '))}${tail}</option>`;
+                return (gv ? combo(gv, ' ← 추천') : '')
+                  + (picked && picked !== gv && picked.includes('|') ? combo(picked, ' (지난 매핑)') : '')
+                  + `<option value="__blank__"${picked ? '' : ' selected'}>— 비워 둠 (나중에 고르기)</option>`
+                  + `<option value="__keep__">원문 그대로 (비표준)</option>`
+                  + (evKey ? `<option value="__new__">＋ 새 행사 섹터로 생성 (비표준)</option>` : '')
+                  + sectorOptions(picked && !picked.includes('|') ? picked : '');
+              })()}
             </select>
           </div>`).join('')}
       </div>
@@ -826,7 +854,9 @@ function collectCatMapFromUI(){
     const val = sel.getAttribute('data-val');
     if(!val || sel.value === '__keep__') return;
     if(sel.value === '__new__'){ newVals.push(val); return; }
-    map[val] = sel.value;
+    /* 비워 둠 — 원문을 흘려보내지 않는다. 목록에 없는 값이 데이터에 들어가면
+       그때부터 아무도 다시 안 본다(지금 기업DB의 'IT Soultion'이 그렇게 왔다). */
+    map[val] = sel.value === '__blank__' ? '' : sel.value;
   });
   return { map, newVals };
 }
@@ -1017,7 +1047,8 @@ export async function runValidationStep(newRows, dupRows){
     // 미매핑 값은 원문 유지), 꺼져 있으면 기존처럼 일괄 선택값 적용
     if(catSel){
       clean.beat = String(clean.beat||'').split('|').map(v=>v.trim()).filter(Boolean)
-        .map(v => catSel.map[v] || v).join('|');
+        .map(v => (v in catSel.map) ? catSel.map[v] : v)   // 빈 값으로 정한 것은 버린다
+        .filter(Boolean).join('|');
       if(!clean.beat && selectedSector) clean.beat = selectedSector; // 컬럼 값이 빈 행은 일괄값으로 보충
     } else if(selectedSector){
       clean.beat = selectedSector;
@@ -1104,8 +1135,20 @@ export async function runValidationStep(newRows, dupRows){
      두지 않으면 연락처만 들어오고 기업DB에서는 통째로 빠져 보인다. 등록한 뒤
      연락처마다 org_id를 붙여 이름이 아니라 id로 이어지게 한다. */
   try {
-    const ensured = await ensureOrgsForNames([...touchedCompanyKeys]);
+    /* 명단의 업종을 기업에도 붙인다. 전에는 연락처(beat)에만 붙어서, 명단에
+       업종이 적혀 있는데도 기업DB에는 '미분류'로 들어왔다. 한 회사에서 두 사람이
+       서로 다른 업종으로 들어오면 먼저 나온 값을 쓴다 — 드문 일이고, 어느 쪽도
+       비워 두는 것보다는 낫다(기업DB에서 고칠 수 있다). */
+    const orgSectors = new Map();
+    addedContacts.forEach(c => {
+      const nm = (c.orgKo || c.orgEn || '').trim();
+      if(!nm || !c.beat || orgSectors.has(nm)) return;
+      orgSectors.set(nm, c.beat);
+    });
+
+    const ensured = await ensureOrgsForNames([...touchedCompanyKeys], '', orgSectors);
     if(ensured.created) addAiLog('ok', '새 기업 ' + ensured.created + '개를 등록했어요.');
+    if(ensured.filled) addAiLog('ok', '업종이 비어 있던 기업 ' + ensured.filled + '곳을 명단 값으로 채웠어요.');
     addedContacts.forEach(c => { c.org_id = orgIdForName(c.orgKo || c.orgEn) || ''; });
     const unlinked = addedContacts.filter(c => (c.orgKo || c.orgEn) && !c.org_id).length;
     if(unlinked) addAiLog('warn', unlinked + '건은 기업 연결에 실패했어요 — 기업DB에서 직접 연결해주세요.');
