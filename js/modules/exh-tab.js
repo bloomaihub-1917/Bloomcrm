@@ -2387,6 +2387,11 @@ export function bookSeq(evKey){
 export async function moveBookOrder(id, toPos){
   const x = getExhibitorById(id);
   if(!x) return;
+  /* 옮기기 전에 서버 값을 다시 읽는다. 순번은 한 줄만 바꾸는 게 아니라 목록
+     전체를 다시 매기는 일이라, 화면에 뜬 값이 낡아 있으면 그 낡은 줄 세우기가
+     서버에 통째로 덮어써진다. 실제로 그렇게 52곳이 한 번에 뒤집힌 적이 있다.
+     (다른 칸은 자기 칸만 보내니 이 문제가 없다 — 여기서만 다시 읽는다.) */
+  await reloadExhibitors();
   const seq = bookSeq(x.event_id);
   const from = seq.findIndex(o => o.id === id);
   if(from < 0) return;
@@ -2431,6 +2436,7 @@ async function saveBookOrders(changes, what){
    다시 붙인다 — «순서 자동 매기기»는 부스 순으로 줄을 새로 세우지만, 이건
    사람이 잡아 둔 순서를 건드리지 않는다. */
 export async function renumberBook(){
+  await reloadExhibitors();          // 위와 같은 이유 — 낡은 줄 세우기로 덮어쓰지 않게
   const seq = bookSeq(exhEvent);
   const changes = seq.map((o, i) => ({ o, no: String(i + 1) }))
     .filter(c => String(c.o.book_order || '') !== c.no);
@@ -2606,6 +2612,7 @@ export async function cycleBookLogo(id){
 
 /* 지금 목록을 부스 번호순으로 1번부터 다시 매긴다 */
 export async function fillBookOrder(){
+  await reloadExhibitors();          // 위와 같은 이유 — 낡은 줄 세우기로 덮어쓰지 않게
   const rows = [...visibleList()].sort((a, b) => boothSortKey(a) - boothSortKey(b));
   if(!rows.length) return;
   if(!confirm(`${rows.length}개 기업의 도록 순서를 부스 번호순으로 다시 매길까요? 이미 적어둔 순서는 덮어씁니다.`)) return;
