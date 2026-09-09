@@ -151,7 +151,11 @@ async function loadDirectory(slug) {
                      x.company_name) AS name,
             COALESCE(NULLIF(x.booth_no, ''), h.booth_no) AS booth_no,
             x.grade, x.book_order,
-            x.book_address, x.book_phone, x.book_website, x.book_intro
+            x.book_address, x.book_phone, x.book_website, x.book_intro,
+            /* 화면에는 안 나오지만 검색으로 찾히게 할 이름들 — 아래 hay 참고.
+               o.abbr는 넣지 않는다. 앞 두 글자를 자른 값('드림씨아이에스' →
+               '드림')이 들어 있어 검색어로 쓸 만한 약칭이 아니다. */
+            CONCAT_WS('|', x.company_name, x.book_name_ko, o.name_ko, o.aliases) AS ko_terms
        FROM exhibitors x
        LEFT JOIN orgs o ON o.id = x.org_id
        LEFT JOIN exhibitors h ON h.event_id = x.event_id
@@ -203,9 +207,30 @@ function card(x, logo) {
   if (web) rows.push(['Website', `<a href="${esc(web.href)}" target="_blank" rel="noopener nofollow">${esc(web.text)}</a>`]);
 
   /* 검색은 브라우저가 이 칸의 글자로 거른다 — 이름·부스번호·소개글까지 한 번에.
-     등급도 넣어 'GOLD'로 스폰서를 뽑아 볼 수 있게 한다. */
-  const hay = [x.name, x.booth_no, sponsor && sponsor.label,
-    x.book_address, x.book_intro].filter(Boolean).join(' ').toLowerCase();
+     등급도 넣어 'GOLD'로 스폰서를 뽑아 볼 수 있게 한다.
+
+     화면은 영문이지만 찾는 사람은 국문으로 친다 — 우리 팀도, 국내 참가기업
+     담당자도 '셀타스퀘어'라고 입력한다. 국문 이름을 이 칸에만 넣어 두면
+     'SeltaSquare' 카드가 걸린다(화면에는 영문 이름만 남는다).
+
+     띄어쓰기는 지워서 담는다. '셀타 스퀘어'·'selta square'처럼 사람마다 다르게
+     끊어 치는데, 그때마다 못 찾으면 검색이 없는 것과 같다(아래 스크립트가
+     입력에서도 같은 방식으로 공백을 지워 견준다). */
+  const terms = [x.name, x.ko_terms, x.booth_no, sponsor && sponsor.label,
+    x.book_address, x.book_intro]
+    .filter(Boolean)
+    /* ko_terms는 여러 이름을 '|'로 이어 온다 — 다시 갈라 한 항목씩 담아야
+       이름끼리 맞닿는 자리가 생기지 않는다 */
+    .flatMap((v) => String(v).split('|'))
+    .map((v) => v.toLowerCase().replace(/\s+/g, ''))
+    .filter(Boolean);
+
+  /* 항목은 '|'로 나눠 담는다. 그냥 이어 붙이면 앞 항목의 끝과 뒤 항목의 앞이
+     맞닿아 없는 말이 걸린다('...셀타스퀘어' + '서울...' → '어서울').
+     입력에는 '|'가 들어올 일이 없으니 경계를 넘는 검색이 생기지 않는다.
+     같은 이름이 여러 칸에 들어 있는 경우가 많아(company_name과 name_ko가
+     대개 같다) 중복도 지운다. */
+  const hay = [...new Set(terms)].join('|');
 
   return `<article class="card${sponsor ? ` sponsor ${sponsor.cls}` : ''}" data-find="${esc(hay)}">
   <header>
@@ -347,7 +372,8 @@ ${listHtml(list, slug)}
   var shown = document.getElementById('shown');
   var empty = document.getElementById('empty');
   q.addEventListener('input', function () {
-    var v = q.value.trim().toLowerCase();
+    /* 담아 둔 칸이 공백을 지운 채라 입력도 같게 눌러야 견줄 수 있다 */
+    var v = q.value.toLowerCase().replace(/\\s+/g, '');
     var n = 0;
     /* 뒤에서부터 훑는다 — 구역 제목은 그 아래 카드가 하나라도 남았을 때만
        보여야 하고, 그건 제목보다 뒤에 오는 카드를 이미 판정한 뒤에야 안다.
