@@ -55,7 +55,7 @@ import {
   billedAmount, paidAmount, graphicState, graphicDueInfo, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
   isPendingRefund, boothTypeOptions, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
   TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing, introOver, boothDesignState,
-  isSharedBooth, isBookOnly, baseKind, BASE_KINDS, bookName,
+  isSharedBooth, isBookOnly, baseKind, BASE_KINDS, bookName, fasciaName,
   guardWrite, exhLocked, exhLockNotice,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar, needsReissue,
   settleState, liveInvoices, payDueDate, paidBreakdown, invoiceGap,
@@ -1056,13 +1056,15 @@ function baseWorkBlock(x){
   const v = BASE_KINDS[k];
   return sct(`기본 시공 — ${v.label}`,
     (k === 'fascia'
-      ? `<div class="fg"><label class="fl">간판명</label>
+      ? `<div class="fg"><label class="fl">간판명 (영문)</label>
           <input class="fi" style="font-size:12px" value="${escAttr(x.fascia_name || '')}"
-            placeholder="${escAttr(bookName(x).ko)}"
-            title="비우면 프로그램북 게재명을 그대로 씁니다 — 간판만 다르면 여기에 적으세요"
+            placeholder="${escAttr(bookName(x).en || '게재 영문명이 없어요')}"
+            title="비우면 프로그램북 게재 영문명을 그대로 씁니다 — 간판만 다르면 여기에 적으세요"
             onchange="setExhField('${escAttr(x.id)}','fascia_name',this.value,'간판명')">
-          <div style="font-size:10.5px;color:var(--i5);margin-top:3px">
-            프로그램북 게재명 «${escapeHtml(bookName(x).ko)}»을 그대로 씁니다.</div></div>
+          ${fasciaName(x)
+            ? `<div style="font-size:10.5px;color:var(--i5);margin-top:3px">간판에 나갈 이름 — <b>${escapeHtml(fasciaName(x))}</b>${
+                x.fascia_name ? ' (간판만 따로 적음)' : ' (프로그램북 게재 영문명)'}</div>`
+            : '<div style="font-size:10.5px;color:var(--re);margin-top:3px">게재 영문명이 비어 있어 간판을 만들 수 없어요 — 프로그램북 탭에서 넣거나 여기에 직접 적으세요.</div>'}</div>
         <div class="fg"><label class="fl">간판명 확정</label>
           <input type="date" class="fi" style="font-size:12px" value="${escAttr(x.base_recv_at || '')}"
             onchange="setExhField('${escAttr(x.id)}','base_recv_at',this.value,'간판명 확정')"></div>`

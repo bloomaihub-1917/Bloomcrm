@@ -557,6 +557,8 @@ export function baseState(x){
   if(!k) return { state: 'na' };
   /* 간판명은 도록 이름에서 자동으로 채워지니 «적혀 있다»가 «받았다»는 뜻이
      못 된다. 사람이 확정한 날(base_recv_at)로만 판단한다. */
+  // 간판은 영문명이 있어야 만든다. 확정 도장을 찍었어도 이름이 없으면 못 만든다.
+  if(k === 'fascia' && !fasciaName(x)) return { state: 'warn', text: '영문명 없음' };
   const got = x.base_recv_at;
   if(!got)            return { state: 'todo', text: '미수령' };
   if(!x.base_done_at) return { state: 'part', text: '수령 · 작업 전' };
@@ -2413,9 +2415,14 @@ export const bookName = (x) => ({
   custom: !!(String(x.book_name_ko || '').trim() || String(x.book_name_en || '').trim()),
 });
 
-/* 간판에 넣을 상호. 따로 안 적으면 도록 이름을 그대로 쓴다 — 같은 이름을 두 번
-   적게 하면 한쪽만 고쳐지고, 개막날 간판과 도록의 상호가 다르게 된다. */
-export const fasciaName = (x) => String(x.fascia_name || '').trim() || bookName(x).ko;
+/* 간판에 넣을 상호 — 영문이다. 따로 안 적으면 도록 영문명을 그대로 쓴다.
+   같은 이름을 두 번 적게 하면 한쪽만 고쳐지고, 개막날 간판과 도록의 상호가
+   다르게 된다.
+
+   국문으로 되돌리지 않는다. 영문명이 없으면 빈 값을 내보내 화면이 «영문명 없음»
+   으로 잡게 한다 — 국문을 대신 넣으면 그 부스만 한글 간판이 걸리는데, 그건
+   붙이고 나서야 보인다. */
+export const fasciaName = (x) => String(x.fascia_name || '').trim() || bookName(x).en;
 
 /* 도록에 낼 정보를 다 채웠나 — 빠진 칸을 모아 알려준다 */
 export function bookMissing(x){
@@ -2569,14 +2576,19 @@ function renderBaseView(list){
       ? `<span class="pill ${due.days < 0 ? 'p-red' : due.days <= 7 ? 'p-amber' : 'p-gray'}">수령 마감 ${escapeHtml(due.date)}${
           due.days < 0 ? ` · ${-due.days}일 지남` : due.days === 0 ? ' · 오늘' : ` · D-${due.days}`}</span>`
       : `<span class="pill p-gray" title="설정 › 행사 관리에서 «기본 시공» 마감을 넣으면 남은 날이 표시됩니다">수령 마감 미설정</span>`)
-    + '<span style="font-size:10.5px;color:var(--i5);margin-left:2px">추가 발주가 아니라 계약에 들어 있는 것들이에요 — 기업이 조용해도 우리가 만들어 세웁니다</span>';
+    + (() => { const no = rows.filter(x => baseKind(x) === 'fascia' && !fasciaName(x));
+        return no.length ? `<span class="pill p-red" title="${escAttr(no.map(x => exhNames(x).ko).join(', '))}">영문명 없음 ${no.length}</span>` : ''; })()
+    + '<span style="font-size:10.5px;color:var(--i5);margin-left:2px">간판은 영문으로 나갑니다 · 추가 발주가 아니라 계약에 들어 있는 것들이에요 — 기업이 조용해도 우리가 만들어 세웁니다</span>';
 
   /* 받는 것이 무엇인지가 부스 타입마다 달라, 칸 하나에 두 가지를 담는다.
      기본부스는 간판에 넣을 상호를 적는 것 자체가 «받음»이다. */
   const recvCell = (x) => baseKind(x) === 'fascia'
-    ? `<input class="fi" style="width:180px;padding:3px 6px;font-size:11.5px${x.fascia_name ? ';font-weight:600' : ''}"
-        placeholder="${escAttr(bookName(x).ko)}" value="${escAttr(x.fascia_name || '')}"
-        title="${escAttr(x.fascia_name ? '간판만 따로 적은 이름이에요' : '프로그램북 게재명을 그대로 씁니다 — 간판만 다르면 여기에 적으세요')}"
+    ? `<input class="fi" style="width:200px;padding:3px 6px;font-size:11.5px${x.fascia_name ? ';font-weight:600' : ''}${
+        fasciaName(x) ? '' : ';border-color:var(--re)'}"
+        placeholder="${escAttr(bookName(x).en || '게재 영문명이 없어요')}" value="${escAttr(x.fascia_name || '')}"
+        title="${escAttr(x.fascia_name ? '간판만 따로 적은 이름이에요'
+          : bookName(x).en ? '프로그램북 게재 영문명을 그대로 씁니다 — 간판만 다르면 여기에 적으세요'
+          : '게재 영문명이 비어 있어요 — 프로그램북 탭에서 넣거나 여기에 직접 적으세요')}"
         onclick="event.stopPropagation()"
         onchange="setExhField('${escAttr(x.id)}','fascia_name',this.value,'간판명')">`
     : `<input type="date" class="fi" style="width:124px;padding:3px 6px;font-size:11.5px"
