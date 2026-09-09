@@ -108,6 +108,8 @@ const STEPS = [
   { key: 'calc:tax',             label: '세금<br>계산서' },
   { key: 'calc:payment',         label: '입금' },
   { key: 'calc:graphic',         label: '그래픽' },
+  /* 기본부스·블록부스만 해당한다 — 독립부스는 업체가 직접 지어 우리가 만들 게 없다 */
+  { key: 'calc:base',            label: '기본<br>시공' },
   { key: 'directory_received_at',label: '도록', flag: 'directory_received' },
   { key: 'movein_at',            label: '현장' },
 ];
@@ -454,6 +456,7 @@ export const DUE_STEPS = [
   ['calc:design',           '부스 도면 (독립부스)'],
   ['calc:payment',          '입금'],
   ['calc:graphic',          '그래픽 확정'],
+  ['calc:base',             '기본 시공 (간판명·디자인)'],
   ['directory_received_at', '도록 정보'],
   ['movein_at',             '반입·설치'],
 ];
@@ -491,7 +494,8 @@ export function guardWrite(fn){
 const DUE_TAB = {
   'manual_replied_at': 'progress', 'app_received_at': 'apply',
   'booth_confirmed_at': 'progress', 'calc:design': 'progress', 'calc:payment': 'billing',
-  'calc:graphic': 'graphic', 'directory_received_at': 'book', 'movein_at': 'progress',
+  'calc:graphic': 'graphic', 'calc:base': 'progress',
+  'directory_received_at': 'book', 'movein_at': 'progress',
 };
 
 export const eventDeadlines = (evKey) => exhCfg(evKey).due || {};
@@ -516,6 +520,47 @@ export function boothDesignState(x){
   if(x.booth_design_result === 'fix') return { state: 'warn', text: '수정 요청' };
   if(x.booth_design_result === 'ok')  return { state: 'done', text: '적합' };
   return { state: 'todo', text: '결과 미기재' };
+}
+
+/* ══════════════════════════════════════════
+   기본 제공 시공 — 추가 발주와 다른 것
+
+   추가 발주는 기업이 신청하고 돈을 더 내는 것이라 안 하면 그만이다. 여기 것은
+   계약에 이미 들어 있어서, 기업이 아무 말을 안 해도 우리가 만들어 세워야 한다.
+   빠뜨리면 개막날 부스에 상호가 없다.
+
+   무엇을 해야 하는지는 부스 타입이 정한다 — 따로 적게 하면 타입을 고칠 때마다
+   두 군데를 맞춰야 하고, 어긋난 쪽이 조용히 틀린 값이 된다.
+
+     기본부스(Octanium)  간판명을 받아 → 우리가 간판을 만든다
+     블록·라이팅 부스     디자인을 받아 → 우리가 출력·시공한다
+     독립부스            해당 없음 (업체가 직접 짓는다)
+══════════════════════════════════════════ */
+export const BASE_KINDS = {
+  fascia: { label: '간판명', recv: '간판명 확정', done: '간판 제작', types: ['Octanium (Standard)', 'Octanium (Black)'] },
+  print:  { label: '출력·시공', recv: '디자인 수령', done: '출력 완료',
+            types: ['Block System A', 'Block System B', 'Block System C', 'Lighting Booth'] },
+};
+
+export function baseKind(x){
+  if(isBookOnly(x)) return '';
+  const t = String(x.booth_type || '').trim();
+  if(!t) return '';
+  return Object.keys(BASE_KINDS).find(k => BASE_KINDS[k].types.includes(t)) || '';
+}
+
+/* 어디까지 왔나. 받는 것과 만드는 것이 따로라 두 단계로 본다 —
+   "디자인은 왔는데 아직 안 뽑았다"가 제일 흔한 상태이고, 그걸 완료로 묶으면
+   출력소에 넘길 목록을 다시 손으로 세게 된다. */
+export function baseState(x){
+  const k = baseKind(x);
+  if(!k) return { state: 'na' };
+  const got = k === 'fascia'
+    ? (String(x.fascia_name || '').trim() ? (x.base_recv_at || 'yes') : '')
+    : x.base_recv_at;
+  if(!got)            return { state: 'todo', text: '미수령' };
+  if(!x.base_done_at) return { state: 'part', text: '수령 · 작업 전' };
+  return { state: 'done', text: BASE_KINDS[k].done };
 }
 
 export function graphicState(x){
@@ -656,6 +701,7 @@ function rawCellState(x, step){
     if(g.state === 'none') return { state: 'na' };
     return g;
   }
+  if(step.key === 'calc:base') return baseState(x);
   if(step.key === 'calc:design'){
     if((x.booth_type || '') !== SELF_BUILD_TYPE) return { state: 'na' };
     const d = boothDesignState(x);
@@ -904,6 +950,7 @@ export function renderExh(){
      끝낼 수 있어야 한다. */
   const VIEWS = [['dash','대시보드'], ['list','기업리스트'],
     ['booth','부스 현황'], ['equip','비품 현황'], ['graphic','그래픽 현황'],
+    ['base','기본 시공'],
     ['money','금액 현황'], ['book','프로그램북']];
   const seg = `<div class="tbar" style="padding:10px 16px 0">
     <div class="seg" style="flex-wrap:wrap">
@@ -915,6 +962,7 @@ export function renderExh(){
     : exhView === 'booth'   ? renderBoothView(list)
     : exhView === 'equip'   ? renderEquipView(list)
     : exhView === 'graphic' ? renderGraphicView(list)
+    : exhView === 'base'    ? renderBaseView(list)
     : exhView === 'money'   ? renderMoneyView(list)
     : exhView === 'book'    ? renderBookView(list)
     : renderInquiryPanel() + renderChecklist(list, all);
@@ -2476,6 +2524,107 @@ export async function bookDrop(e, id){
   // 아래로 끌면 놓은 줄의 자리를 차지하고, 위로 끌면 그 앞에 선다
   await moveBookOrder(bookDragId, target + 1);
   bookDragId = '';
+}
+
+/* ── 기본 시공 ──
+   추가 발주 화면과 나눠 둔 까닭은 성격이 달라서다. 저기는 기업이 신청한 것이라
+   안 오면 안 하면 되지만, 여기는 계약에 들어 있어 기업이 조용해도 우리가 만들어
+   세워야 한다. 같은 표에 섞으면 "주문 없음"과 "우리가 빠뜨림"이 같아 보인다.
+
+   부스 순으로 세운다 — 간판을 달고 벽면을 붙이는 일이 전시장을 한 바퀴 도는
+   일이라, 그 순서대로 있어야 한 번에 끝난다. */
+function renderBaseView(list){
+  const rows = list.filter(x => baseKind(x));
+  if(!rows.length) return emptyView('기본 시공 대상이 없어요 — 기본부스·블록부스·라이팅부스가 있어야 합니다');
+
+  const bk = (x) => { const k = boothSortKey(x); return k === Infinity ? 1e9 : k; };
+  rows.sort((a, b) => bk(a) - bk(b));
+
+  const due = dueInfo('calc:base', exhEvent);
+  const byKind = (k) => rows.filter(x => baseKind(x) === k);
+  const st = (x) => baseState(x);
+  const gotN  = rows.filter(x => st(x).state !== 'todo').length;
+  const doneN = rows.filter(x => st(x).state === 'done').length;
+
+  const pills = `<span class="pill p-gray">대상 ${rows.length}곳</span>`
+    + Object.entries(BASE_KINDS).map(([k, v]) => {
+        const g = byKind(k); if(!g.length) return '';
+        return `<span class="pill p-blue" title="${escAttr(v.types.join(', '))}">${v.label} ${g.length}</span>`;
+      }).join('')
+    + `<span class="pill ${gotN === rows.length ? 'p-green' : 'p-amber'}">수령 ${gotN}/${rows.length}</span>`
+    + `<span class="pill ${doneN === rows.length ? 'p-green' : 'p-gray'}">작업 완료 ${doneN}/${rows.length}</span>`
+    + (due
+      ? `<span class="pill ${due.days < 0 ? 'p-red' : due.days <= 7 ? 'p-amber' : 'p-gray'}">수령 마감 ${escapeHtml(due.date)}${
+          due.days < 0 ? ` · ${-due.days}일 지남` : due.days === 0 ? ' · 오늘' : ` · D-${due.days}`}</span>`
+      : `<span class="pill p-gray" title="설정 › 행사 관리에서 «기본 시공» 마감을 넣으면 남은 날이 표시됩니다">수령 마감 미설정</span>`)
+    + '<span style="font-size:10.5px;color:var(--i5);margin-left:2px">추가 발주가 아니라 계약에 들어 있는 것들이에요 — 기업이 조용해도 우리가 만들어 세웁니다</span>';
+
+  /* 받는 것이 무엇인지가 부스 타입마다 달라, 칸 하나에 두 가지를 담는다.
+     기본부스는 간판에 넣을 상호를 적는 것 자체가 «받음»이다. */
+  const recvCell = (x) => baseKind(x) === 'fascia'
+    ? `<input class="fi" style="width:150px;padding:3px 6px;font-size:11.5px" placeholder="간판에 넣을 상호"
+        value="${escAttr(x.fascia_name || '')}" onclick="event.stopPropagation()"
+        onchange="setExhField('${escAttr(x.id)}','fascia_name',this.value,'간판명')">`
+    : `<input type="date" class="fi" style="width:124px;padding:3px 6px;font-size:11.5px"
+        value="${escAttr(x.base_recv_at || '')}" onclick="event.stopPropagation()"
+        onchange="setExhField('${escAttr(x.id)}','base_recv_at',this.value,'디자인 수령')">`;
+
+  const dateCell = (x, f, label) => `<input type="date" class="fi" style="width:124px;padding:3px 6px;font-size:11.5px"
+    value="${escAttr(x[f] || '')}" onclick="event.stopPropagation()"
+    onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')">`;
+
+  const noteCell = (x) => `<input class="fi" style="width:100%;min-width:120px;padding:3px 6px;font-size:11.5px"
+    placeholder="비고" value="${escAttr(x.base_note || '')}" onclick="event.stopPropagation()"
+    onchange="setExhField('${escAttr(x.id)}','base_note',this.value,'기본 시공 비고')">`;
+
+  const mark = (x) => { const s = st(x);
+    const c = s.state === 'done' ? 'p-green' : s.state === 'part' ? 'p-amber' : 'p-red';
+    return `<span class="pill ${c}">${escapeHtml(s.text || '')}</span>`; };
+
+  if(isMobile()) return viewShell(pills, rows.map(x => {
+    const k = baseKind(x);
+    return `<div style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px">
+        <span class="pill p-gray">${x.booth_no ? '부스 ' + escapeHtml(x.booth_no) : '미배정'}</span>
+        <span onclick="openExhDr('${escAttr(x.id)}','progress')"
+          style="font-size:13px;font-weight:700;flex:1;min-width:0;cursor:pointer">${escapeHtml(exhNames(x).ko)}</span>
+        ${mark(x)}
+      </div>
+      <div style="font-size:11px;color:var(--i4);margin-bottom:4px">${escapeHtml(x.booth_type || '')} · ${escapeHtml(BASE_KINDS[k].label)}</div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+        <span style="font-size:11px;color:var(--i4);min-width:64px">${escapeHtml(BASE_KINDS[k].recv)}</span>${recvCell(x)}</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span style="font-size:11px;color:var(--i4);min-width:64px">${escapeHtml(BASE_KINDS[k].done)}</span>${dateCell(x, 'base_done_at', BASE_KINDS[k].done)}</div>
+    </div>`;
+  }).join(''));
+
+  return viewShell(pills, `<div class="tw"><table><thead><tr>
+      <th style="min-width:44px;text-align:right">신청순</th>
+      <th style="min-width:56px">부스</th>
+      <th style="min-width:150px">기업</th>
+      <th style="min-width:120px">부스 타입</th>
+      <th style="min-width:78px">해야 할 일</th>
+      <th style="min-width:156px">받을 것</th>
+      <th style="min-width:130px">우리 작업</th>
+      <th style="min-width:88px;text-align:center">상태</th>
+      <th style="min-width:140px">비고</th>
+    </tr></thead><tbody>
+    ${rows.map(x => {
+      const k = baseKind(x);
+      return `<tr>
+        ${applyCell(x)}
+        <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
+        ${coCell(x, 'progress')}
+        <td style="font-size:11px;color:var(--i4)">${escapeHtml(x.booth_type || '')}${
+          x.booth_qty && x.booth_qty !== '1' ? ` <span style="color:var(--i5)">×${escapeHtml(x.booth_qty)}</span>` : ''}</td>
+        <td><span class="pill p-blue">${escapeHtml(BASE_KINDS[k].label)}</span></td>
+        <td>${recvCell(x)}</td>
+        <td>${dateCell(x, 'base_done_at', BASE_KINDS[k].done)}</td>
+        <td style="text-align:center">${mark(x)}</td>
+        <td>${noteCell(x)}</td>
+      </tr>`;
+    }).join('')}
+    </tbody></table></div>`);
 }
 
 function renderBookView(list){

@@ -55,7 +55,7 @@ import {
   billedAmount, paidAmount, graphicState, graphicDueInfo, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
   isPendingRefund, boothTypeOptions, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
   TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing, introOver, boothDesignState,
-  isSharedBooth, isBookOnly,
+  isSharedBooth, isBookOnly, baseKind, BASE_KINDS,
   guardWrite, exhLocked, exhLockNotice,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar, needsReissue,
   settleState, liveInvoices, payDueDate, paidBreakdown, invoiceGap,
@@ -1048,6 +1048,30 @@ function invoiceIssueSection(x){
     invs.length ? `<span class="pill p-gray">발행 ${invs.length}장</span>` : '');
 }
 
+/* 기본 제공 시공 — 부스 타입이 정하는 일이라, 해당 없는 부스에서는 아예 안 보인다.
+   빈 칸을 늘어놓으면 독립부스에서도 뭔가 채워야 하나 싶어진다. */
+function baseWorkBlock(x){
+  const k = baseKind(x);
+  if(!k) return '';
+  const v = BASE_KINDS[k];
+  return sct(`기본 시공 — ${v.label}`,
+    (k === 'fascia'
+      ? `<div class="fg"><label class="fl">간판명 (간판에 넣을 상호)</label>
+          <input class="fi" style="font-size:12px" value="${escAttr(x.fascia_name || '')}"
+            placeholder="예) ㈜블룸 / BLOOM Co., Ltd."
+            onchange="setExhField('${escAttr(x.id)}','fascia_name',this.value,'간판명')"></div>`
+      : `<div class="fg"><label class="fl">디자인 수령일</label>
+          <input type="date" class="fi" style="font-size:12px" value="${escAttr(x.base_recv_at || '')}"
+            onchange="setExhField('${escAttr(x.id)}','base_recv_at',this.value,'디자인 수령')"></div>`)
+    + `<div class="fg"><label class="fl">${escapeHtml(v.done)}</label>
+        <input type="date" class="fi" style="font-size:12px" value="${escAttr(x.base_done_at || '')}"
+          onchange="setExhField('${escAttr(x.id)}','base_done_at',this.value,'${escAttr(v.done)}')"></div>
+      <div class="fg"><label class="fl">비고</label>
+        <input class="fi" style="font-size:12px" value="${escAttr(x.base_note || '')}"
+          placeholder="색상·재질·시공 메모" onchange="setExhField('${escAttr(x.id)}','base_note',this.value,'기본 시공 비고')"></div>
+      <div style="font-size:10.5px;color:var(--i5)">추가 발주가 아니라 계약에 들어 있는 항목이에요 — 기업이 조용해도 우리가 만들어 세웁니다.</div>`);
+}
+
 /* 참가 범위 — 체크리스트 맨 앞에 둔다. 아래 칸이 전부 비어 있는 까닭이
    여기 적혀 있어야, 다음 사람이 "빠뜨렸나" 하고 채우려 들지 않는다.
 
@@ -1232,6 +1256,8 @@ function dProgress(x){
       </label>
     </div>` +
     flagRow(x, 'booth_confirmed', 'booth_confirmed_at', '배정 확정'))}
+
+  ${baseWorkBlock(x)}
 
   ${sct('현장',
     dateRow(x, 'movein_at', '반입 / 설치') +

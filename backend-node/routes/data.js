@@ -79,6 +79,7 @@ const TABLES = {
       'booth_no', 'booth_floor', 'booth_type', 'booth_qty', 'grade', 'booth_confirmed', 'booth_confirmed_at',
       'booth_design_received_at', 'booth_design_checked_at', 'booth_design_result', 'booth_design_note',
       'booth_shared', 'scope', 'host_key',
+      'fascia_name', 'base_recv_at', 'base_done_at', 'base_note',
       'settled', 'settled_note', 'pay_due_date',
       'tax_contact_name', 'tax_contact_email', 'tax_contact_phone',
       'graphic_stage', 'graphic_received_at', 'graphic_to_team_at', 'graphic_team_ok_at', 'graphic_replied_at',
