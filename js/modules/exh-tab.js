@@ -1995,8 +1995,14 @@ function renderGraphicKindView(list){
   /* 펼치면 그 품목을 주문한 기업이 나온다. 여기서도 바로 체크하고 마감을 넣는다 —
      "백월 다 모였나"를 보다가 한 곳만 안 왔으면 그 자리에서 처리해야지,
      받을 파일 보기로 되돌아가 다시 찾게 하면 안 된다. */
+  /* 부스 번호순으로 세운다. 이 목록을 들고 하는 일이 현장을 도는 것이라
+     — 53번 벽면, 50번 인포데스크 — 부스 순서대로 있어야 한 바퀴에 끝난다.
+     마감이 급한 순으로 세우면 같은 품목을 붙이러 전시장을 왔다 갔다 하게 된다.
+     boothSortKey는 번호가 없으면 Infinity라, 빼면 NaN이 되어 정렬이 무너진다. */
+  const boothOf = (x) => { const k = boothSortKey(x); return k === Infinity ? 1e9 : k; };
   const coList = (g) => g.cos.slice()
-    .sort((a, b) => a.d.rank - b.d.rank || String(a.i.due_at || '9999').localeCompare(String(b.i.due_at || '9999')))
+    .sort((a, b) => boothOf(a.x) - boothOf(b.x)
+      || String(exhNames(a.x).ko).localeCompare(String(exhNames(b.x).ko), 'ko'))
     .map(c => `
     <div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:11.5px">
       <button onclick="event.stopPropagation();toggleItemReceived('${escAttr(c.i.id)}')"
