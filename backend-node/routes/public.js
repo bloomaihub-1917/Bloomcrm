@@ -20,10 +20,61 @@
    글이 먼저 보여야 하고(행사장 와이파이), 검색은 목록이 이미 손에 있으니
    브라우저에서 거르기만 하면 된다.
 ══════════════════════════════════════════════════════════════ */
+const fs = require('fs');
+const path = require('path');
 const express = require('express');
 const pool = require('../db/pool');
 
 const router = express.Router();
+
+/* ── 로고 ──────────────────────────────────────────────────────
+   로고 원본은 OneDrive에 ai·eps·jpg가 뒤섞여 있고, 브라우저는 ai도 eps도
+   못 읽는다. 그래서 그래픽팀이 웹용 PNG로 내려 준 것을 여기에 둔다.
+
+     public/logos/<행사슬러그>/<도록순번>.png     예: public/logos/2026-kic/1.png
+
+   번호로 짝을 짓는 건 로고 폴더가 이미 도록 순번을 쓰고 있어서다
+   (import-logos.js가 같은 규칙으로 "로고 받음"을 채운다).
+
+   내려 줄 규격 — 높이 200px 이상, 배경 투명, 여백 잘라낸 PNG.
+   화면에서는 높이를 맞춰 줄이므로 폭은 제한하지 않는다(가로형 로고가 많다).
+
+   파일이 없는 기업은 자리를 비우지 않고 아예 넣지 않는다 — 빈 사각형이 늘어선
+   화면은 "아직 안 받았다"를 관람객에게 보여주는 것과 같다. 파일을 폴더에 넣으면
+   코드를 고치지 않아도 다음 요청부터 뜬다. */
+const LOGO_ROOT = path.join(__dirname, '..', 'public', 'logos');
+
+/* 요청마다 폴더를 훑지 않는다 — 목록 한 장에 카드가 수십 개라 그만큼
+   readdir을 부르게 된다. 한 번 읽어 두고 짧게 재사용한다(페이지 캐시와 같은
+   5분). 파일을 새로 넣었을 때 늦어도 5분 뒤에는 뜬다. */
+const logoCache = new Map();
+function logoSet(slug) {
+  const hit = logoCache.get(slug);
+  if (hit && Date.now() - hit.at < 5 * 60 * 1000) return hit.set;
+  let set = new Set();
+  try {
+    set = new Set(fs.readdirSync(path.join(LOGO_ROOT, slug))
+      .filter((f) => /\.(png|svg|webp|jpe?g)$/i.test(f)));
+  } catch (e) { /* 폴더가 아직 없다 — 로고 없이 낸다 */ }
+  logoCache.set(slug, { at: Date.now(), set });
+  return set;
+}
+
+/* 도록 순번으로 파일을 찾는다. 확장자는 그래픽팀이 무엇으로 주든 받아들인다. */
+function logoFor(slug, order) {
+  const n = String(order || '').trim();
+  if (!n) return null;
+  const found = [...logoSet(slug)].find((f) => f.replace(/\.[^.]+$/, '') === n);
+  return found ? `/d/logos/${encodeURIComponent(slug)}/${encodeURIComponent(found)}` : null;
+}
+
+/* 정적 파일은 Express가 직접 흘린다. 이미지는 오래 캐시해도 안전하다 —
+   내용이 바뀌면 파일을 갈아 끼우는 게 아니라 새 파일로 넣게 된다. */
+router.use('/logos', express.static(LOGO_ROOT, {
+  index: false,
+  redirect: false,
+  setHeaders: (res) => res.set('Cache-Control', 'public, max-age=604800'),
+}));
 
 /* 행사 id는 '2026 KIC'처럼 공백과 대문자가 섞여 있어 URL에 그대로 못 쓴다.
    id와 약칭을 같은 규칙으로 눌러 슬러그를 만들고, 그걸로 찾는다 —
@@ -83,21 +134,35 @@ async function loadDirectory(slug) {
   const event = events.find((e) => slugify(e.id) === want || slugify(e.short) === want);
   if (!event) return null;
 
-  /* 기업명은 orgs.name_en을 먼저 쓴다. exhibitors.company_name은 전시 관리용
-     표시 이름이라 국문이고('㈜씨엔알리서치'), 영문 화면에 그대로 올릴 수 없다.
-     비어 있으면 국문 이름으로 물러선다 — 이름 없이 내보내는 것보다 낫다. */
+  /* 기업명은 프로그램북 표기(book_name_en)를 가장 먼저 쓴다 — 인쇄물과 웹이
+     같은 이름으로 불려야 한다(도록은 Almac, 우리 쪽은 Almac Group처럼 갈린다).
+     비어 있으면 orgs.name_en, 그마저 없으면 company_name으로 물러선다.
+     company_name은 전시 관리용 표시 이름이라 '㈜씨엔알리서치'처럼 국문이지만,
+     이름 없이 내보내는 것보다는 낫다.
+
+     부스번호가 없으면 대표 기업(host_key)의 것을 따라간다. 모기업 부스에 이름만
+     올리는 자회사는 booth_no를 비워 두는데(그러지 않으면 부스 수가 늘어난다),
+     관람객에게는 찾아갈 자리가 있어야 한다 — C&R Research의 가족사 다섯이
+     부스 44-46에 함께 서는 것처럼. 대표 기업의 부스가 바뀌면 같이 따라오므로
+     번호를 여섯 곳에 옮겨 적어 두는 것보다 어긋날 자리가 없다. */
   const { rows } = await pool.query(
-    `SELECT COALESCE(NULLIF(TRIM(o.name_en), ''), x.company_name) AS name,
-            x.booth_no, x.grade, x.book_order,
+    `SELECT COALESCE(NULLIF(TRIM(x.book_name_en), ''),
+                     NULLIF(TRIM(o.name_en), ''),
+                     x.company_name) AS name,
+            COALESCE(NULLIF(x.booth_no, ''), h.booth_no) AS booth_no,
+            x.grade, x.book_order,
             x.book_address, x.book_phone, x.book_website, x.book_intro
        FROM exhibitors x
        LEFT JOIN orgs o ON o.id = x.org_id
+       LEFT JOIN exhibitors h ON h.event_id = x.event_id
+                             AND NULLIF(x.host_key, '') IS NOT NULL
+                             AND h.company_key = x.host_key
       WHERE x.event_id = $1
         AND COALESCE(x.status, '') <> '취소'
         AND COALESCE(x.company_name, '') <> ''`,
     [event.id]);
 
-  return { event, list: rows.sort(bookSort) };
+  return { slug: want, event, list: rows.sort(bookSort) };
 }
 
 /* 행사 기간은 '2026-10-13'과 '2026-10-15'처럼 따로 들어 있다. 영문 화면이라
@@ -124,12 +189,17 @@ function periodText(a, b) {
    events.location을 영문으로 고치면 그때부터 저절로 나온다. */
 const dropKorean = (v) => (/[가-힣㄰-㆏]/.test(String(v || '')) ? '' : String(v || '').trim());
 
-function card(x) {
+/* 엑셀에서 온 여러 줄 값은 줄바꿈이 그대로 들어 있다. HTML은 줄바꿈을 공백
+   하나로 뭉개므로 '(General Inquiries) ... (Direct Number) ...'가 한 줄에
+   붙어 두 번호가 한 덩어리로 읽힌다. 원문의 줄을 그대로 살린다. */
+const nl2br = (v) => esc(v).replace(/\n/g, '<br>');
+
+function card(x, logo) {
   const web = webLink(x.book_website);
   const sponsor = sponsorOf(x);
   const rows = [];
-  if (x.book_address) rows.push(['Address', esc(x.book_address)]);
-  if (x.book_phone) rows.push(['Tel', esc(x.book_phone)]);
+  if (x.book_address) rows.push(['Address', nl2br(x.book_address)]);
+  if (x.book_phone) rows.push(['Tel', nl2br(x.book_phone)]);
   if (web) rows.push(['Website', `<a href="${esc(web.href)}" target="_blank" rel="noopener nofollow">${esc(web.text)}</a>`]);
 
   /* 검색은 브라우저가 이 칸의 글자로 거른다 — 이름·부스번호·소개글까지 한 번에.
@@ -140,11 +210,12 @@ function card(x) {
   return `<article class="card${sponsor ? ` sponsor ${sponsor.cls}` : ''}" data-find="${esc(hay)}">
   <header>
     ${x.book_order ? `<span class="no">${esc(x.book_order)}</span>` : ''}
+    ${logo ? `<img class="logo" src="${esc(logo)}" alt="${esc(x.name)}" loading="lazy">` : ''}
     <h3>${esc(x.name)}</h3>
     ${sponsor ? `<span class="grade">${sponsor.label}</span>` : ''}
     ${x.booth_no ? `<span class="booth">Booth ${esc(x.booth_no)}</span>` : ''}
   </header>
-  ${x.book_intro ? `<p class="intro">${esc(x.book_intro).replace(/\n/g, '<br>')}</p>` : ''}
+  ${x.book_intro ? `<p class="intro">${nl2br(x.book_intro)}</p>` : ''}
   ${rows.length ? `<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>` : ''}
 </article>`;
 }
@@ -153,7 +224,7 @@ function card(x) {
    눈에는 들어오지만, 어디까지가 스폰서인지는 글로 적어야 분명해진다.
    순서는 도록 순번 그대로다 — 스폰서가 이미 앞번호를 받았고, 인쇄물과 웹의
    순서가 어긋나면 번호로 찾는 사람이 헤맨다. */
-function listHtml(list) {
+function listHtml(list, slug) {
   const out = [];
   let seenSponsor = false;
   let seenPlain = false;
@@ -164,12 +235,12 @@ function listHtml(list) {
       out.push(`<h2 class="sec">${seenSponsor ? 'Exhibitors' : 'All Exhibitors'}</h2>`);
       seenPlain = true;
     }
-    out.push(card(x));
+    out.push(card(x, logoFor(slug, x.book_order)));
   });
   return out.join('\n');
 }
 
-function page({ event, list }) {
+function page({ slug, event, list }) {
   const title = `${event.name || event.id} — Exhibitor Directory`;
   const meta = [periodText(event.date_start, event.date_end), dropKorean(event.location)]
     .filter(Boolean).join(' · ');
@@ -199,8 +270,14 @@ function page({ event, list }) {
   .count { margin:14px 0 8px; color:var(--dim); font-size:13px; }
   .card { background:var(--panel); border:1px solid var(--line); border-radius:12px;
     padding:16px 18px; margin:0 0 10px; }
-  .card header { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+  .card header { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .card h3 { margin:0; font-size:16px; letter-spacing:-.2px; font-weight:600; }
+
+  /* 로고는 높이만 맞춘다 — 가로형·세로형이 섞여 있어 폭을 고정하면 찌그러진다.
+     투명 배경 PNG를 받기로 했지만 흰 배경으로 오는 것도 섞일 수 있어, 다크
+     모드에서는 흰 판을 깔아 로고가 어두운 바탕에 묻히지 않게 한다. */
+  .logo { height:24px; width:auto; max-width:150px; object-fit:contain; }
+  .sponsor .logo { height:34px; max-width:200px; }
   .sec { margin:26px 0 10px; font-size:12px; font-weight:600; letter-spacing:.08em;
     color:var(--dim); text-transform:uppercase; }
   .sec:first-child { margin-top:6px; }
@@ -236,6 +313,9 @@ function page({ event, list }) {
     .g-gold   { --gc:#fcd34d; --gbg:#42320c; --gline:#6b5210; }
     .g-silver { --gc:#cbd5e1; --gbg:#2a313b; --gline:#475569; }
     .g-bronze { --gc:#fdba74; --gbg:#452312; --gline:#7c3d1a; }
+    /* 로고가 검은 글자·흰 배경으로 오는 경우가 섞인다. 흰 판을 얇게 깔아
+       어느 쪽이 와도 읽히게 한다(투명 PNG도 이 판 위에서 그대로 보인다). */
+    .logo { background:#fff; border-radius:3px; padding:2px 4px; }
   }
 </style>
 </head>
@@ -250,7 +330,7 @@ function page({ event, list }) {
   </div>
   <p class="count"><span id="shown">${list.length}</span> companies</p>
   <main id="list">
-${listHtml(list)}
+${listHtml(list, slug)}
   </main>
   <p class="empty" id="empty">No matching companies.</p>
   <footer>

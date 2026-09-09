@@ -2647,6 +2647,41 @@ function renderBaseView(list){
     </tbody></table></div>`);
 }
 
+/* ── 웹디렉토리 주소 ──────────────────────────────────────────
+   프로그램북에 실린 정보를 그대로 보여주는 공개 페이지(backend의 /d/<슬러그>).
+   인쇄물에는 이 주소나 QR만 싣는다 — 지면과 달리 인쇄 뒤에도 고칠 수 있다.
+
+   슬러그를 저장해 두지 않고 행사 이름에서 만든다(백엔드 routes/public.js가
+   같은 규칙으로 되돌려 찾는다). 규칙이 두 곳에 있는 건 감수한다 — 슬러그
+   칸을 만들면 행사를 새로 열 때마다 사람이 채워야 하고, 비면 주소가 죽는다. */
+const dirSlug = (v) => String(v || '').toLowerCase().trim()
+  .replace(/[^a-z0-9가-힣]+/g, '-')
+  .replace(/^-+|-+$/g, '');
+
+export const webDirectoryUrl = (evKey) => {
+  const slug = dirSlug(evKey || exhEvent);
+  return slug && API_BASE_URL ? `${API_BASE_URL}/d/${slug}` : '';
+};
+
+function openWebDirectory(){
+  const url = webDirectoryUrl();
+  if(!url){ alert('행사를 먼저 고르세요.'); return; }
+  window.open(url, '_blank', 'noopener');
+}
+
+async function copyWebDirectoryUrl(){
+  const url = webDirectoryUrl();
+  if(!url){ alert('행사를 먼저 고르세요.'); return; }
+  /* 클립보드 API는 https나 localhost에서만 동작한다. 막히면 주소를 띄워
+     직접 복사할 수 있게 한다 — 조용히 실패하면 붙여넣기 때 빈 값이 된다. */
+  try {
+    await navigator.clipboard.writeText(url);
+    alert(`주소를 복사했어요.\n\n${url}`);
+  } catch (e) {
+    prompt('아래 주소를 복사하세요 (Ctrl+C)', url);
+  }
+}
+
 function renderBookView(list){
   if(!list.length) return emptyView('표시할 기업이 없어요');
 
@@ -2687,7 +2722,9 @@ function renderBookView(list){
     + `<span style="font-size:10.5px;color:var(--i5);margin-left:2px">한도 ${bookLimit().chars.toLocaleString()}자 · ${bookLimit().words}단어 (띄어쓰기 포함)</span>`;
 
   const actions = `<button class="btn bs" onclick="fillBookOrder()" title="지금 부스 번호순으로 1번부터 다시 매깁니다">순서 자동 매기기</button>`
-    + `<button class="btn bs" onclick="renumberBook()" title="겹치거나 빈 번호를 지금 순서 그대로 1번부터 다시 매깁니다">번호 정리</button>`;
+    + `<button class="btn bs" onclick="renumberBook()" title="겹치거나 빈 번호를 지금 순서 그대로 1번부터 다시 매깁니다">번호 정리</button>`
+    + `<button class="btn bs" onclick="openWebDirectory()" title="여기 있는 정보로 만든 공개 페이지를 새 창에서 엽니다 — 로그인 없이 누구나 열립니다">웹디렉토리 열기</button>`
+    + `<button class="btn bs" onclick="copyWebDirectoryUrl()" title="프로그램북에 싣거나 QR로 만들 주소를 복사합니다">주소 복사</button>`;
 
   const logoBtn = (x) => `<button
     onclick="event.stopPropagation();cycleBookLogo('${escAttr(x.id)}')"
@@ -4016,6 +4053,8 @@ window.toggleEquipRow = toggleEquipRow;
 window.advanceStage = advanceStage;
 window.cycleBookLogo = cycleBookLogo;
 window.fillBookOrder = fillBookOrder;
+window.openWebDirectory = openWebDirectory;
+window.copyWebDirectoryUrl = copyWebDirectoryUrl;
 window.openBookIntro = openBookIntro;
 window.saveBookIntro = saveBookIntro;
 window.updateIntroCount = updateIntroCount;
