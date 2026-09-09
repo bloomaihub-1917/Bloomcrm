@@ -555,9 +555,9 @@ export function baseKind(x){
 export function baseState(x){
   const k = baseKind(x);
   if(!k) return { state: 'na' };
-  const got = k === 'fascia'
-    ? (String(x.fascia_name || '').trim() ? (x.base_recv_at || 'yes') : '')
-    : x.base_recv_at;
+  /* 간판명은 도록 이름에서 자동으로 채워지니 «적혀 있다»가 «받았다»는 뜻이
+     못 된다. 사람이 확정한 날(base_recv_at)로만 판단한다. */
+  const got = x.base_recv_at;
   if(!got)            return { state: 'todo', text: '미수령' };
   if(!x.base_done_at) return { state: 'part', text: '수령 · 작업 전' };
   return { state: 'done', text: BASE_KINDS[k].done };
@@ -2405,6 +2405,18 @@ const BOOK_FIELDS = [
   ['book_website', '웹사이트'],
 ];
 
+/* 도록에 실을 이름. 안 적었으면 CRM 이름을 쓴다 — 대부분 같아서, 56줄을
+   다 채우게 하면 옮겨 적는 일만 늘고 오타가 는다. 다른 곳만 적으면 된다. */
+export const bookName = (x) => ({
+  ko: String(x.book_name_ko || '').trim() || exhNames(x).ko,
+  en: String(x.book_name_en || '').trim() || exhNames(x).en,
+  custom: !!(String(x.book_name_ko || '').trim() || String(x.book_name_en || '').trim()),
+});
+
+/* 간판에 넣을 상호. 따로 안 적으면 도록 이름을 그대로 쓴다 — 같은 이름을 두 번
+   적게 하면 한쪽만 고쳐지고, 개막날 간판과 도록의 상호가 다르게 된다. */
+export const fasciaName = (x) => String(x.fascia_name || '').trim() || bookName(x).ko;
+
 /* 도록에 낼 정보를 다 채웠나 — 빠진 칸을 모아 알려준다 */
 export function bookMissing(x){
   const miss = [];
@@ -2562,8 +2574,10 @@ function renderBaseView(list){
   /* 받는 것이 무엇인지가 부스 타입마다 달라, 칸 하나에 두 가지를 담는다.
      기본부스는 간판에 넣을 상호를 적는 것 자체가 «받음»이다. */
   const recvCell = (x) => baseKind(x) === 'fascia'
-    ? `<input class="fi" style="width:150px;padding:3px 6px;font-size:11.5px" placeholder="간판에 넣을 상호"
-        value="${escAttr(x.fascia_name || '')}" onclick="event.stopPropagation()"
+    ? `<input class="fi" style="width:180px;padding:3px 6px;font-size:11.5px${x.fascia_name ? ';font-weight:600' : ''}"
+        placeholder="${escAttr(bookName(x).ko)}" value="${escAttr(x.fascia_name || '')}"
+        title="${escAttr(x.fascia_name ? '간판만 따로 적은 이름이에요' : '프로그램북 게재명을 그대로 씁니다 — 간판만 다르면 여기에 적으세요')}"
+        onclick="event.stopPropagation()"
         onchange="setExhField('${escAttr(x.id)}','fascia_name',this.value,'간판명')">`
     : `<input type="date" class="fi" style="width:124px;padding:3px 6px;font-size:11.5px"
         value="${escAttr(x.base_recv_at || '')}" onclick="event.stopPropagation()"
@@ -2593,6 +2607,8 @@ function renderBaseView(list){
       <div style="font-size:11px;color:var(--i4);margin-bottom:4px">${escapeHtml(x.booth_type || '')} · ${escapeHtml(BASE_KINDS[k].label)}</div>
       <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
         <span style="font-size:11px;color:var(--i4);min-width:64px">${escapeHtml(BASE_KINDS[k].recv)}</span>${recvCell(x)}</div>
+      ${k === 'fascia' ? `<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+        <span style="font-size:11px;color:var(--i4);min-width:64px">확정</span>${dateCell(x, 'base_recv_at', '간판명 확정')}</div>` : ''}
       <div style="display:flex;gap:6px;align-items:center">
         <span style="font-size:11px;color:var(--i4);min-width:64px">${escapeHtml(BASE_KINDS[k].done)}</span>${dateCell(x, 'base_done_at', BASE_KINDS[k].done)}</div>
     </div>`;
@@ -2604,7 +2620,8 @@ function renderBaseView(list){
       <th style="min-width:150px">기업</th>
       <th style="min-width:120px">부스 타입</th>
       <th style="min-width:78px">해야 할 일</th>
-      <th style="min-width:156px">받을 것</th>
+      <th style="min-width:186px">받을 것</th>
+      <th style="min-width:130px">확정</th>
       <th style="min-width:130px">우리 작업</th>
       <th style="min-width:88px;text-align:center">상태</th>
       <th style="min-width:140px">비고</th>
@@ -2619,6 +2636,9 @@ function renderBaseView(list){
           x.booth_qty && x.booth_qty !== '1' ? ` <span style="color:var(--i5)">×${escapeHtml(x.booth_qty)}</span>` : ''}</td>
         <td><span class="pill p-blue">${escapeHtml(BASE_KINDS[k].label)}</span></td>
         <td>${recvCell(x)}</td>
+        <td>${k === 'fascia'
+          ? dateCell(x, 'base_recv_at', '간판명 확정')
+          : '<span style="font-size:11px;color:var(--i6)">·</span>'}</td>
         <td>${dateCell(x, 'base_done_at', BASE_KINDS[k].done)}</td>
         <td style="text-align:center">${mark(x)}</td>
         <td>${noteCell(x)}</td>
@@ -2695,9 +2715,10 @@ function renderBookView(list){
         <span class="pill ${dupOrders.has(String(x.book_order || '').trim()) ? 'p-amber' : 'p-gray'}"${
           dupOrders.has(String(x.book_order || '').trim()) ? ' title="같은 순번을 쓰는 기업이 또 있어요 — 한 부스를 나눠 쓰는 경우입니다"' : ''
         }>${escapeHtml(x.book_order || '-')}${dupOrders.has(String(x.book_order || '').trim()) ? ' ⚠' : ''}</span>
-        <span style="font-size:13px;font-weight:700;flex:1;min-width:0">${escapeHtml(exhNames(x).ko)}</span>
+        <span style="font-size:13px;font-weight:700;flex:1;min-width:0">${escapeHtml(bookName(x).ko)}</span>
         ${x.booth_no ? `<span class="pill p-blue">부스 ${escapeHtml(x.booth_no)}</span>` : ''}
       </div>
+      ${bookName(x).en ? `<div style="font-size:11px;color:var(--i4);margin-bottom:3px">${escapeHtml(bookName(x).en)}</div>` : ''}
       ${(() => { const o = introOver(x.book_intro);
         return `<div style="font-size:11px;color:${o.isOver ? 'var(--re)' : 'var(--i4)'}">회사소개 ${o.chars}자 · ${o.words}단어${
           o.isOver ? ` (${o.over.join(', ')} 초과)` : ''} · 로고 ${
@@ -2712,6 +2733,15 @@ function renderBookView(list){
     value="${escAttr(x[f] || '')}" onclick="event.stopPropagation()"
     onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr((BOOK_FIELDS.find(b => b[0] === f) || ['', f])[1])}')"></td>`;
 
+  /* 안 적은 칸에는 CRM 이름을 흐리게 미리 보여 준다 — 빈칸이면 도록에 이름이
+     안 나가는 줄 알고, 같은 이름을 56번 옮겨 적게 된다. 다른 곳만 고치면 된다. */
+  const nameCell = (x, f, shown, label) => `<td><input class="fi"
+    style="width:164px;padding:3px 5px;font-size:11.5px${x[f] ? ';font-weight:600' : ''}"
+    value="${escAttr(x[f] || '')}" placeholder="${escAttr(shown || '')}"
+    title="${escAttr(x[f] ? '직접 적은 이름이에요' : 'CRM 이름을 그대로 씁니다 — 다르면 여기에 적으세요')}"
+    onclick="event.stopPropagation()"
+    onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')"></td>`;
+
   /* 걸러 놓은 채로 끌어 옮기면, 화면 밖 줄과의 앞뒤를 사람이 알 수 없다.
      번호를 적는 건 "전체에서 몇 번째"라는 뜻이라 걸러도 뜻이 분명하지만,
      끌어 옮기기는 보이는 줄끼리의 앞뒤라서 그렇지 않다. */
@@ -2721,7 +2751,9 @@ function renderBookView(list){
       ${full ? '<th style="width:22px" title="끌어서 순서를 바꿀 수 있어요"></th>' : ''}
       <th style="min-width:48px">순서</th>
       <th style="min-width:44px;text-align:center">로고</th>
-      <th style="min-width:150px">기업명</th>
+      <th style="min-width:140px">기업 (CRM)</th>
+      <th style="min-width:170px" title="도록과 간판에 실제로 나가는 이름이에요">게재 국문명</th>
+      <th style="min-width:170px">게재 영문명</th>
       <th style="min-width:56px">부스</th>
       <th style="min-width:170px">주소</th>
       <th style="min-width:110px">연락처</th>
@@ -2746,6 +2778,8 @@ function renderBookView(list){
           onchange="moveBookOrder('${escAttr(x.id)}',this.value)"></td>
         <td style="text-align:center">${logoBtn(x)}</td>
         ${coCell(x, 'book')}
+        ${nameCell(x, 'book_name_ko', bookName(x).ko, '게재 국문명')}
+        ${nameCell(x, 'book_name_en', bookName(x).en, '게재 영문명')}
         <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
         ${cell(x, 'book_address', '164px')}
         ${cell(x, 'book_phone', '104px')}
@@ -3850,6 +3884,9 @@ const FIELD_LABEL = {
   app_missing:'누락 항목', extra_equipment:'추가 비품',
   booth_no:'부스 번호', booth_floor:'부스 층', booth_type:'부스 타입', booth_qty:'부스 수량',
   scope:'참가 범위', host_key:'대표 기업',
+  book_name_ko:'게재 국문명', book_name_en:'게재 영문명',
+  fascia_name:'간판명', base_recv_at:'간판명 확정·디자인 수령',
+  base_done_at:'간판 제작·출력 완료', base_note:'기본 시공 비고',
   builder:'시공사명', builder_contact:'시공 담당자', builder_tel:'시공사 유선', builder_mobile:'시공사 휴대폰', builder_email:'시공사 이메일',
   grade:'등급', booth_confirmed:'부스 확정', booth_confirmed_at:'부스 확정일',
   settled:'완납 처리', settled_note:'완납 사유', pay_due_date:'입금 기한',

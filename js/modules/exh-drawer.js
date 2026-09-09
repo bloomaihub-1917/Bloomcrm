@@ -55,7 +55,7 @@ import {
   billedAmount, paidAmount, graphicState, graphicDueInfo, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
   isPendingRefund, boothTypeOptions, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
   TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing, introOver, boothDesignState,
-  isSharedBooth, isBookOnly, baseKind, BASE_KINDS,
+  isSharedBooth, isBookOnly, baseKind, BASE_KINDS, bookName,
   guardWrite, exhLocked, exhLockNotice,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar, needsReissue,
   settleState, liveInvoices, payDueDate, paidBreakdown, invoiceGap,
@@ -1056,10 +1056,16 @@ function baseWorkBlock(x){
   const v = BASE_KINDS[k];
   return sct(`기본 시공 — ${v.label}`,
     (k === 'fascia'
-      ? `<div class="fg"><label class="fl">간판명 (간판에 넣을 상호)</label>
+      ? `<div class="fg"><label class="fl">간판명</label>
           <input class="fi" style="font-size:12px" value="${escAttr(x.fascia_name || '')}"
-            placeholder="예) ㈜블룸 / BLOOM Co., Ltd."
-            onchange="setExhField('${escAttr(x.id)}','fascia_name',this.value,'간판명')"></div>`
+            placeholder="${escAttr(bookName(x).ko)}"
+            title="비우면 프로그램북 게재명을 그대로 씁니다 — 간판만 다르면 여기에 적으세요"
+            onchange="setExhField('${escAttr(x.id)}','fascia_name',this.value,'간판명')">
+          <div style="font-size:10.5px;color:var(--i5);margin-top:3px">
+            프로그램북 게재명 «${escapeHtml(bookName(x).ko)}»을 그대로 씁니다.</div></div>
+        <div class="fg"><label class="fl">간판명 확정</label>
+          <input type="date" class="fi" style="font-size:12px" value="${escAttr(x.base_recv_at || '')}"
+            onchange="setExhField('${escAttr(x.id)}','base_recv_at',this.value,'간판명 확정')"></div>`
       : `<div class="fg"><label class="fl">디자인 수령일</label>
           <input type="date" class="fi" style="font-size:12px" value="${escAttr(x.base_recv_at || '')}"
             onchange="setExhField('${escAttr(x.id)}','base_recv_at',this.value,'디자인 수령')"></div>`)
@@ -1183,6 +1189,19 @@ function dBook(x){
           아직 못 받은 항목 ${miss.length}개 — <b>${escapeHtml(miss.join(', '))}</b></div>`
       : `<div style="font-size:11.5px;color:var(--g);background:var(--gb);padding:7px 9px;border-radius:6px;margin-bottom:10px">
           도록에 낼 정보가 모두 채워졌어요</div>`}
+    <div class="fgr">
+      <div class="fg"><label class="fl">게재 국문명</label>
+        <input class="fi" style="font-size:12px" value="${escAttr(x.book_name_ko || '')}"
+          placeholder="${escAttr(bookName(x).ko)}"
+          title="비우면 CRM 이름을 그대로 씁니다 — 신청서 표기가 다르면 여기에 적으세요"
+          onchange="setExhField('${escAttr(x.id)}','book_name_ko',this.value,'게재 국문명')"></div>
+      <div class="fg"><label class="fl">게재 영문명</label>
+        <input class="fi" style="font-size:12px" value="${escAttr(x.book_name_en || '')}"
+          placeholder="${escAttr(bookName(x).en)}"
+          onchange="setExhField('${escAttr(x.id)}','book_name_en',this.value,'게재 영문명')"></div>
+    </div>
+    <div style="font-size:10.5px;color:var(--i5);margin:-4px 0 8px">
+      도록과 <b>기본부스 간판</b>에 실제로 나가는 이름이에요. 비우면 CRM 이름을 씁니다.</div>
     <div class="fgr">
       <div class="fg"><label class="fl">게재 순서</label>
         <input class="fi" style="font-size:12px" value="${escAttr(x.book_order || '')}" placeholder="예: 1"

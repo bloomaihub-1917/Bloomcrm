@@ -608,7 +608,12 @@ ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS scope TEXT;         -- ''(전체
 -- 기본 제공 시공. 추가 발주와 달리 계약에 이미 들어 있어 돈을 더 받지 않는다.
 -- 기본부스(Octanium)는 간판명을 받아 우리가 만들고, 블록·라이팅 부스는 디자인을
 -- 받아 우리가 출력·시공한다. 무엇을 받는지는 부스 타입이 정하므로 따로 적지 않는다.
-ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS fascia_name TEXT;   -- 간판에 넣을 상호
+-- 도록에 실을 이름. CRM의 기업명과 다를 수 있다 — CRM은 우리가 찾기 좋게 줄여
+-- 부르는 이름이고(㈜씨엔알리서치), 도록에 나가는 건 신청서에 적어 보낸 정식
+-- 표기다. 간판명도 이 이름을 쓴다.
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS book_name_ko TEXT;
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS book_name_en TEXT;
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS fascia_name TEXT;   -- 간판에 넣을 상호(비우면 도록 이름)
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS base_recv_at TEXT;  -- 간판명 확정 / 디자인 수령
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS base_done_at TEXT;  -- 간판 제작 / 출력 완료
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS base_note TEXT;
