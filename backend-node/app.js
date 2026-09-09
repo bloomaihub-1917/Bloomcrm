@@ -6,6 +6,7 @@ const rateLimit = require('express-rate-limit');
 const { requireAuth } = require('./middleware/auth');
 const dataRoutes = require('./routes/data');
 const mailRoutes = require('./routes/mail');
+const publicRoutes = require('./routes/public');
 
 /* 로컬(server.js)과 Vercel 서버리스(api/index.js)가 이 app을 그대로
    공유한다 — app.listen()은 각 진입점에서 따로 한다(서버리스는 안 함). */
@@ -21,6 +22,12 @@ app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : true }));
 // 기본 100KB 제한으로는 수백 건짜리 일괄 업로드(batchAppend/batchUpsert)가
 // 바로 거부된다. 넉넉하게 늘려둔다(Vercel 서버리스 함수 자체 한도 내에서 안전).
 app.use(express.json({ limit: '10mb' }));
+
+/* 웹디렉토리는 인쇄물의 QR로 들어오는 공개 화면이라 로그인이 없다. 아래 no-store
+   미들웨어보다 앞에 두어 스스로 정한 캐시 지시를 지킨다 — 관람객 수백 명이 같은
+   페이지를 동시에 열어도 DB를 매번 두드릴 이유가 없다.
+   /api와 별도로 흐름을 막는다: 여기는 로그인한 팀원이 아니라 아무나 두드릴 수 있다. */
+app.use('/d', rateLimit({ windowMs: 60 * 1000, max: 300 }), publicRoutes);
 
 // CORS 헤더는 요청 Origin에 따라 매번 달라지므로, CDN/브라우저 등 어떤 계층도
 // 이 응답을 캐시해 다른 origin에 잘못된 Access-Control-Allow-Origin을
