@@ -54,6 +54,20 @@ function bookSort(a, b) {
   return String(a.company_name || '').localeCompare(String(b.company_name || ''), 'ko');
 }
 
+/* 스폰서는 돈을 더 낸 자리라 프로그램북에서도 앞장에 크게 실린다. 웹에서도
+   같아야 한다 — 등급 배지를 달고 카드를 도드라지게 한다.
+
+   순번 1~9가 지금 스폰서지만 번호로 가르지 않는다. 도록 번호는 지면 사정으로
+   바뀌고(서울대·분당서울대를 44/45로 나눈 것처럼), 등급이 곧 스폰서 여부다.
+   Exhibitor는 등급 칸에 있지만 스폰서가 아닌 일반 참가기업이다. */
+const SPONSOR_GRADES = {
+  DIA: { label: 'DIAMOND', cls: 'g-dia' },
+  GOLD: { label: 'GOLD', cls: 'g-gold' },
+  SILVER: { label: 'SILVER', cls: 'g-silver' },
+  BRONZE: { label: 'BRONZE', cls: 'g-bronze' },
+};
+const sponsorOf = (x) => SPONSOR_GRADES[String(x.grade || '').trim().toUpperCase()] || null;
+
 /* 슬러그로 행사를 찾고 그 행사의 게재 대상을 읽는다.
    취소된 기업은 뺀다 — 인쇄물에서도 빠진 자리다. */
 async function loadDirectory(slug) {
@@ -66,7 +80,8 @@ async function loadDirectory(slug) {
   if (!event) return null;
 
   const { rows } = await pool.query(
-    `SELECT company_name, booth_no, book_order, book_address, book_phone, book_website, book_intro
+    `SELECT company_name, booth_no, grade, book_order,
+            book_address, book_phone, book_website, book_intro
        FROM exhibitors
       WHERE event_id = $1
         AND COALESCE(status, '') <> '취소'
@@ -95,23 +110,47 @@ function periodText(a, b) {
 
 function card(x) {
   const web = webLink(x.book_website);
+  const sponsor = sponsorOf(x);
   const rows = [];
   if (x.book_address) rows.push(['주소', esc(x.book_address)]);
   if (x.book_phone) rows.push(['연락처', esc(x.book_phone)]);
   if (web) rows.push(['웹사이트', `<a href="${esc(web.href)}" target="_blank" rel="noopener nofollow">${esc(web.text)}</a>`]);
 
-  /* 검색은 브라우저가 이 칸의 글자로 거른다 — 이름·부스번호·소개글까지 한 번에 */
-  const hay = [x.company_name, x.booth_no, x.book_address, x.book_intro].join(' ').toLowerCase();
+  /* 검색은 브라우저가 이 칸의 글자로 거른다 — 이름·부스번호·소개글까지 한 번에.
+     등급도 넣어 'GOLD'로 스폰서를 뽑아 볼 수 있게 한다. */
+  const hay = [x.company_name, x.booth_no, sponsor && sponsor.label,
+    x.book_address, x.book_intro].filter(Boolean).join(' ').toLowerCase();
 
-  return `<article class="card" data-find="${esc(hay)}">
+  return `<article class="card${sponsor ? ` sponsor ${sponsor.cls}` : ''}" data-find="${esc(hay)}">
   <header>
     ${x.book_order ? `<span class="no">${esc(x.book_order)}</span>` : ''}
-    <h2>${esc(x.company_name)}</h2>
+    <h3>${esc(x.company_name)}</h3>
+    ${sponsor ? `<span class="grade">${sponsor.label}</span>` : ''}
     ${x.booth_no ? `<span class="booth">부스 ${esc(x.booth_no)}</span>` : ''}
   </header>
   ${x.book_intro ? `<p class="intro">${esc(x.book_intro).replace(/\n/g, '<br>')}</p>` : ''}
   ${rows.length ? `<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>` : ''}
 </article>`;
+}
+
+/* 스폰서와 일반 참가기업 사이에 제목을 한 줄 끼운다. 카드 모양만 달리 해도
+   눈에는 들어오지만, 어디까지가 스폰서인지는 글로 적어야 분명해진다.
+   순서는 도록 순번 그대로다 — 스폰서가 이미 앞번호를 받았고, 인쇄물과 웹의
+   순서가 어긋나면 번호로 찾는 사람이 헤맨다. */
+function listHtml(list) {
+  const out = [];
+  let seenSponsor = false;
+  let seenPlain = false;
+  list.forEach((x) => {
+    if (sponsorOf(x)) {
+      if (!seenSponsor) { out.push('<h2 class="sec">스폰서</h2>'); seenSponsor = true; }
+    } else if (!seenPlain) {
+      out.push(`<h2 class="sec">${seenSponsor ? '참가기업' : '참가기업 전체'}</h2>`);
+      seenPlain = true;
+    }
+    out.push(card(x));
+  });
+  return out.join('\n');
 }
 
 function page({ event, list }) {
@@ -144,7 +183,22 @@ function page({ event, list }) {
   .card { background:var(--panel); border:1px solid var(--line); border-radius:12px;
     padding:16px 18px; margin:0 0 10px; }
   .card header { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
-  .card h2 { margin:0; font-size:16px; letter-spacing:-.2px; }
+  .card h3 { margin:0; font-size:16px; letter-spacing:-.2px; font-weight:600; }
+  .sec { margin:26px 0 10px; font-size:12px; font-weight:600; letter-spacing:.08em;
+    color:var(--dim); text-transform:uppercase; }
+  .sec:first-child { margin-top:6px; }
+
+  /* 스폰서 카드 — 등급색 띠를 왼쪽에 두고 이름을 키운다. 배경까지 바꾸면
+     소개글 대비가 흐려져, 테두리와 글자 크기로만 도드라지게 한다. */
+  .sponsor { border-color:var(--gline); border-left:4px solid var(--gc); padding-left:15px; }
+  .sponsor h3 { font-size:18px; font-weight:700; }
+  .sponsor .no { color:var(--gc); font-weight:600; }
+  .grade { padding:2px 8px; border-radius:4px; background:var(--gbg); color:var(--gc);
+    font-size:11px; font-weight:700; letter-spacing:.06em; }
+  .g-dia    { --gc:#0e7490; --gbg:#cffafe; --gline:#a5f3fc; }
+  .g-gold   { --gc:#a16207; --gbg:#fef3c7; --gline:#fde68a; }
+  .g-silver { --gc:#475569; --gbg:#e2e8f0; --gline:#cbd5e1; }
+  .g-bronze { --gc:#9a3412; --gbg:#ffedd5; --gline:#fed7aa; }
   .no { min-width:26px; color:var(--dim); font-size:12px; font-variant-numeric:tabular-nums; }
   .booth { margin-left:auto; padding:2px 8px; border-radius:999px;
     background:var(--chip); color:var(--accent); font-size:12px; white-space:nowrap; }
@@ -159,6 +213,12 @@ function page({ event, list }) {
   @media (prefers-color-scheme: dark) {
     :root { --line:#27272a; --dim:#9ca3af; --ink:#f3f4f6; --accent:#93b4ff; --bg:#0b0d12;
       --panel:#14161c; --body:#d1d5db; --chip:#1b2440; }
+    /* 어두운 바탕에서는 밝은 배지 배경이 눈을 찌른다 — 글자를 밝히고 배경을 눌러
+       같은 등급색을 유지한다 */
+    .g-dia    { --gc:#67e8f9; --gbg:#0d3b45; --gline:#155e6b; }
+    .g-gold   { --gc:#fcd34d; --gbg:#42320c; --gline:#6b5210; }
+    .g-silver { --gc:#cbd5e1; --gbg:#2a313b; --gline:#475569; }
+    .g-bronze { --gc:#fdba74; --gbg:#452312; --gline:#7c3d1a; }
   }
 </style>
 </head>
@@ -173,7 +233,7 @@ function page({ event, list }) {
   </div>
   <p class="count"><span id="shown">${list.length}</span>개사</p>
   <main id="list">
-${list.map(card).join('\n')}
+${listHtml(list)}
   </main>
   <p class="empty" id="empty">찾는 기업이 없습니다.</p>
   <footer>
@@ -186,17 +246,27 @@ ${list.map(card).join('\n')}
    수십 개사라 글자만 견주면 즉시 걸러진다(행사장 네트워크가 느려도 반응한다). */
 (function () {
   var q = document.getElementById('q');
-  var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+  var nodes = Array.prototype.slice.call(document.querySelectorAll('#list > *'));
   var shown = document.getElementById('shown');
   var empty = document.getElementById('empty');
   q.addEventListener('input', function () {
     var v = q.value.trim().toLowerCase();
     var n = 0;
-    cards.forEach(function (c) {
-      var hit = !v || c.dataset.find.indexOf(v) >= 0;
-      c.hidden = !hit;
-      if (hit) n++;
-    });
+    /* 뒤에서부터 훑는다 — 구역 제목은 그 아래 카드가 하나라도 남았을 때만
+       보여야 하고, 그건 제목보다 뒤에 오는 카드를 이미 판정한 뒤에야 안다.
+       ('스폰서' 제목만 남고 아래가 텅 비는 자리를 없앤다) */
+    var groupHit = false;
+    for (var i = nodes.length - 1; i >= 0; i--) {
+      var el = nodes[i];
+      if (el.classList.contains('sec')) {
+        el.hidden = !groupHit;
+        groupHit = false;
+        continue;
+      }
+      var hit = !v || el.dataset.find.indexOf(v) >= 0;
+      el.hidden = !hit;
+      if (hit) { n++; groupHit = true; }
+    }
     shown.textContent = n;
     empty.style.display = n ? 'none' : 'block';
   });
@@ -212,6 +282,9 @@ const publicShape = (x) => ({
   order: x.book_order || '',
   name: x.company_name || '',
   booth: x.booth_no || '',
+  /* 스폰서 등급만 내보낸다 — 'Exhibitor'는 등급이 아니라 "스폰서가 아니다"는
+     표시라, 그대로 흘리면 읽는 쪽이 등급으로 오해한다 */
+  sponsor: sponsorOf(x) ? sponsorOf(x).label : '',
   address: x.book_address || '',
   phone: x.book_phone || '',
   website: x.book_website || '',
