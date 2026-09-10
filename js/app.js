@@ -20,6 +20,7 @@ import './modules/exh-export.js';
 import './modules/exh-invoice.js';
 import './modules/event-tab.js';
 import './modules/conf-tab.js';
+import './modules/speaker-drawer.js';
 
 import { initMobileNav, initDrawerSwipe, initSidebarLayout, initDrawerResize } from './router.js';
 import { initOverlayNav } from './overlay-nav.js';

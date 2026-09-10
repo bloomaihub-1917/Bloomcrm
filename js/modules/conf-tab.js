@@ -279,7 +279,7 @@ function sessionCard(ev, s, days, cfg){
     return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--i6)">
       ${roleChip(a.role)}
       <div style="flex:1;min-width:0">
-        <div style="font-size:12px">${escapeHtml(speakerName(a.speaker_id))}</div>
+        <div><span onclick="openSpeakerDr('${escAttr(a.speaker_id)}')" style="font-size:12px;cursor:pointer;color:var(--a)">${escapeHtml(speakerName(a.speaker_id))}</span></div>
         ${needsTalk
           ? `<div style="font-size:10.5px;color:${a.title_ko || a.title_en ? 'var(--i5)' : 'var(--i4)'}">
               ${escapeHtml(a.title_ko || a.title_en || '발제명 아직 없음')}</div>`
@@ -372,7 +372,7 @@ function peopleHtml(ev){
     const req = needs.filter(n => n.state === 'req').length;
     const asg = assignmentsFor(sp.id);
     return `<tr>
-      <td style="font-size:12px">${escapeHtml(sp.name_snapshot || sp.id)}</td>
+      <td><span onclick="openSpeakerDr('${escAttr(sp.id)}')" style="font-size:12px;font-weight:600;cursor:pointer;color:var(--a)">${escapeHtml(sp.name_snapshot || sp.id)}</span></td>
       <td>${roles.length ? roles.map(roleChip).join(' ') : '<span style="font-size:10.5px;color:var(--i4)">배정 없음</span>'}</td>
       <td style="font-size:11px;color:var(--i5)">${asg.length}건</td>
       <td style="font-size:11px;color:var(--i5)">${needs.length ? `${NEED_MARK.req} ${req} · ${NEED_MARK.opt} ${needs.length - req}` : '—'}</td>
