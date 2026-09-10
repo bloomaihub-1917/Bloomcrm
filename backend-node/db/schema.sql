@@ -703,6 +703,13 @@ CREATE TABLE IF NOT EXISTS speakers (
   event_id      TEXT,
   contact_id    TEXT,
   name_snapshot TEXT,
+  -- 소속·직함은 «발표 당시»의 것이다. 사람이 이직하면 마스터DB는 바뀌어야
+  -- 맞지만 작년 프로그램북의 소속은 그대로여야 한다 — 원래 다른 값이라
+  -- 연락처에서 끌어와 여기에 굳힌다.
+  org_ko        TEXT,
+  org_en        TEXT,
+  title_ko      TEXT,
+  title_en      TEXT,
   status        TEXT,   -- 섭외중 | 확정 | 취소 | 보류
   lang_pref     TEXT,   -- 'both' | 'en'   국가로 짐작하지 않는다
   note          TEXT,

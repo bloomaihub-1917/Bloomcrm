@@ -166,7 +166,10 @@ export function renderSpeakerDr(){
         ${roles.map(r => `<span class="pill ${(SPEAKER_ROLES.find(x => x.key === r) || {}).cls || 'p-gray'}"
           style="vertical-align:middle;font-size:10px">${escapeHtml(r)}</span>`).join(' ')}</div>
       <div class="drmt">${escapeHtml(sp.status || '섭외중')}${
-        con ? ` · ${escapeHtml(con.orgKo || con.orgEn || '')}${con.titleKo || con.titleEn ? ' ' + escapeHtml(con.titleKo || con.titleEn) : ''}` : ' · 연락처 연결 안 됨'}${
+        (sp.org_ko || sp.org_en || sp.title_ko || sp.title_en)
+          ? ` · ${escapeHtml([sp.org_ko || sp.org_en, sp.title_ko || sp.title_en].filter(Boolean).join(' '))}`
+          : ' · 소속·직함 없음'}${
+        con ? '' : ' · 연락처 연결 안 됨'}${
         assignmentsFor(sp.id).length ? ` · 세션 ${assignmentsFor(sp.id).length}` : ''}</div>
     </div>
     <button class="drcls" onclick="closeSpeakerDr()">✕</button>`;
@@ -214,7 +217,9 @@ const isReq = (evKey, roles, key) => needState(evKey, roles, key) === 'req';
 function missingBasic(sp, con, evKey){
   const roles = rolesOfSpeaker(sp.id);
   const out = [];
-  if(isReq(evKey, roles, 'profile') && !(con && (con.orgKo || con.orgEn))) out.push('소속');
+  /* 연락처가 아니라 스냅숏을 본다 — 프로그램북에 나가는 건 이쪽이고,
+     연락처를 연결하지 않은 연사도 소속을 적을 수 있어야 한다. */
+  if(isReq(evKey, roles, 'profile') && !(sp.org_ko || sp.org_en)) out.push('소속');
   if(isReq(evKey, roles, 'photo') && !sp.photo_received_at) out.push('사진');
   if(isReq(evKey, roles, 'consent') && !sp.consent_at) out.push('개인정보 제공 동의');
   return out;
@@ -278,6 +283,14 @@ function basicHtml(sp, con, evKey){
   const roles = rolesOfSpeaker(sp.id);
   const nOf = (k) => needState(evKey, roles, k);
 
+  /* 연락처는 «지금 어디 있는 사람인가»를 보여줄 뿐 여기서 고치지 않는다.
+     프로그램북에 나가는 값은 아래 스냅숏이다. 둘이 다르면 그 사실을 알려
+     끌어올지 사람이 정하게 한다 — 조용히 덮으면 손으로 고쳐 둔 직함이 날아간다. */
+  const diff = con && [
+    ['소속', con.orgKo || '', sp.org_ko || ''],
+    ['직함', con.titleKo || '', sp.title_ko || ''],
+  ].filter(([, a, b]) => a && a !== b).map(([k]) => k);
+
   const conBox = con
     ? `<div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px">
         <div style="font-size:12px;font-weight:600">${escapeHtml(con.nameKo || con.nameEn || con.id)}
@@ -286,12 +299,17 @@ function basicHtml(sp, con, evKey){
           ${escapeHtml([con.orgKo, con.titleKo].filter(Boolean).join(' · ') || '(소속·직함 없음)')}</div>
         ${con.orgEn || con.titleEn ? `<div style="font-size:10.5px;color:var(--i4)">${escapeHtml([con.orgEn, con.titleEn].filter(Boolean).join(' · '))}</div>` : ''}
         <div style="font-size:10.5px;color:var(--i4);margin-top:3px">${escapeHtml(con.email1 || '')}</div>
-        <button class="btn" style="font-size:10.5px;margin-top:7px" onclick="unlinkSpeakerContact()">연결 끊기</button>
+        ${diff.length ? `<div style="font-size:10.5px;color:var(--am);margin-top:5px">
+          마스터DB의 ${escapeHtml(diff.join('·'))}이 아래와 달라요 — 이직했다면 그대로 두세요</div>` : ''}
+        <div style="display:flex;gap:6px;margin-top:7px">
+          <button class="btn" style="font-size:10.5px" onclick="pullSpeakerProfile()">연락처에서 끌어오기</button>
+          <button class="btn" style="font-size:10.5px" onclick="unlinkSpeakerContact()">연결 끊기</button>
+        </div>
       </div>`
     : `<div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px">
         <div style="font-size:11.5px;color:var(--i3);line-height:1.6">
-          소속·직함은 마스터DB의 연락처에서 옵니다. 여기서 또 적으면 두 곳의 값이 갈려요 —
-          연락처를 찾아 연결하면 국·영문이 함께 따라옵니다.</div>
+          연락처를 연결하면 소속·직함을 한 번에 끌어옵니다. 연결하지 않아도
+          아래에 직접 적을 수 있어요.</div>
         <input class="fi" style="margin-top:7px" placeholder="이름·기업·메일로 검색…"
           oninput="searchSpeakerContact(this.value)">
         <div id="sp-con-hits" style="margin-top:5px"></div>
@@ -300,6 +318,16 @@ function basicHtml(sp, con, evKey){
   return `
     ${fg('성명 (프로그램에 나갈 이름)', txt(sp.name_snapshot, `spField('name_snapshot',this.value,'성명')`, '홍길동'),
       '연락처를 지워도 프로그램에서 이름이 사라지지 않도록 따로 굳혀 둡니다')}
+    <div class="fgr">
+      ${fg('소속 국문', txt(sp.org_ko, `spField('org_ko',this.value,'소속 국문')`, '○○대학교'))}
+      ${fg('소속 영문', txt(sp.org_en, `spField('org_en',this.value,'소속 영문')`, 'XX University'))}
+    </div>
+    <div class="fgr">
+      ${fg('직함 국문', txt(sp.title_ko, `spField('title_ko',this.value,'직함 국문')`, '교수'))}
+      ${fg('직함 영문', txt(sp.title_en, `spField('title_en',this.value,'직함 영문')`, 'Professor'))}
+    </div>
+    <div style="font-size:10px;color:var(--i4);margin:-4px 0 12px">
+      프로그램북에 나가는 값입니다 — 발표 당시의 소속이라, 나중에 이직해도 그대로 둡니다.</div>
     ${fg('연락처 연결' + (nOf('profile') ? ` ${NEED_MARK[nOf('profile')]}` : ''), conBox)}
     <div class="fgr">
       ${fg('섭외 상태', `<select class="fi" onchange="spField('status',this.value,'섭외 상태')">
@@ -352,9 +380,31 @@ export async function linkSpeakerContact(cid){
   /* 이름 스냅숏이 비어 있으면 연락처 이름으로 채운다. 이미 적혀 있으면
      건드리지 않는다 — 프로그램에 나갈 이름을 손으로 고쳐 뒀을 수 있다. */
   const patch = { contact_id: String(c.id) };
-  if(!sp.name_snapshot) patch.name_snapshot = c.nameKo || c.nameEn || '';
+  const fill = (field, v) => { if(!sp[field] && v) patch[field] = v; };
+  fill('name_snapshot', c.nameKo || c.nameEn);
+  fill('org_ko', c.orgKo); fill('org_en', c.orgEn);
+  fill('title_ko', c.titleKo); fill('title_en', c.titleEn);
   await patchSpeaker(patch, `연락처 연결 (${c.nameKo || c.nameEn || c.id})`);
 }
+/* 연락처의 값으로 스냅숏을 덮는다. 자동으로 하지 않는 이유는, 손으로 고쳐
+   둔 직함(«대표» → «Founder & CEO» 같은)이 조용히 날아가기 때문이다. */
+export async function pullSpeakerProfile(){
+  const sp = getSpeakerById(spId);
+  const c = sp && sp.contact_id ? contacts.find(x => String(x.id) === String(sp.contact_id)) : null;
+  if(!c) return;
+  const patch = {};
+  const set = (field, v) => { if((v || '') !== (sp[field] || '')) patch[field] = v || ''; };
+  set('org_ko', c.orgKo); set('org_en', c.orgEn);
+  set('title_ko', c.titleKo); set('title_en', c.titleEn);
+  if(!Object.keys(patch).length){ alert('연락처와 이미 같아요.'); return; }
+  const LABEL = { org_ko: '소속 국문', org_en: '소속 영문', title_ko: '직함 국문', title_en: '직함 영문' };
+  const lines = Object.entries(patch)
+    .map(([k, v]) => `${LABEL[k] || k}: ${sp[k] || '(비어 있음)'} → ${v || '(비움)'}`)
+    .join('\n');
+  if(!confirm(`연락처의 값으로 덮을까요?\n\n${lines}`)) return;
+  await patchSpeaker(patch, '연락처에서 소속·직함 끌어옴');
+}
+
 export async function unlinkSpeakerContact(){
   await patchSpeaker({ contact_id: '' }, '연락처 연결 끊기');
 }
@@ -741,6 +791,7 @@ window.asStamp              = asStamp;
 window.searchSpeakerContact = searchSpeakerContact;
 window.linkSpeakerContact   = linkSpeakerContact;
 window.unlinkSpeakerContact = unlinkSpeakerContact;
+window.pullSpeakerProfile   = pullSpeakerProfile;
 window.renderSpeakerDr      = renderSpeakerDr;
 window.addSpeakerContact    = addSpeakerContact;
 window.scField              = scField;

@@ -372,7 +372,8 @@ function peopleHtml(ev){
     const req = needs.filter(n => n.state === 'req').length;
     const asg = assignmentsFor(sp.id);
     return `<tr>
-      <td><span onclick="openSpeakerDr('${escAttr(sp.id)}')" style="font-size:12px;font-weight:600;cursor:pointer;color:var(--a)">${escapeHtml(sp.name_snapshot || sp.id)}</span></td>
+      <td><span onclick="openSpeakerDr('${escAttr(sp.id)}')" style="font-size:12px;font-weight:600;cursor:pointer;color:var(--a)">${escapeHtml(sp.name_snapshot || sp.id)}</span>
+        ${sp.org_ko || sp.org_en ? `<div style="font-size:10.5px;color:var(--i4)">${escapeHtml([sp.org_ko || sp.org_en, sp.title_ko || sp.title_en].filter(Boolean).join(' · '))}</div>` : ''}</td>
       <td>${roles.length ? roles.map(roleChip).join(' ') : '<span style="font-size:10.5px;color:var(--i4)">배정 없음</span>'}</td>
       <td style="font-size:11px;color:var(--i5)">${asg.length}건</td>
       <td style="font-size:11px;color:var(--i5)">${needs.length ? `${NEED_MARK.req} ${req} · ${NEED_MARK.opt} ${needs.length - req}` : '—'}</td>

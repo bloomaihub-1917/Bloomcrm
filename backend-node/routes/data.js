@@ -149,7 +149,9 @@ const TABLES = {
   },
   speakers: {
     table: 'speakers', pk: 'id', idPrefix: 'SP-',
-    columns: ['id', 'event_id', 'contact_id', 'name_snapshot', 'status', 'lang_pref', 'note', 'updated_at',
+    columns: ['id', 'event_id', 'contact_id', 'name_snapshot',
+      'org_ko', 'org_en', 'title_ko', 'title_en',
+      'status', 'lang_pref', 'note', 'updated_at',
       'invite_sent_at', 'invite_replied_at',
       'bio_pro_ko', 'bio_pro_en', 'bio_work_ko', 'bio_work_en', 'profile_received_at',
       'photo_file', 'photo_received_at',
