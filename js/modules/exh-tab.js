@@ -1776,7 +1776,7 @@ function renderEquipView(list){
             <td style="text-align:right">${g.krw ? escapeHtml(fmtMoney(g.krw, 'KRW')) : '<span style="color:var(--i6)">-</span>'}</td>
             <td style="text-align:right">${g.usd ? escapeHtml(fmtMoney(g.usd, 'USD')) : '<span style="color:var(--i6)">-</span>'}</td>
           </tr>
-          ${open ? `<tr><td colspan="8" style="padding:8px 12px 12px;background:var(--i9)">
+          ${open ? `<tr data-detail><td colspan="8" style="padding:8px 12px 12px;background:var(--i9)">
             <div style="font-size:10.5px;color:var(--i4);margin-bottom:4px">신청 기업 ${g.cos.length}곳 — 클릭하면 그 기업 정산 탭으로 갑니다</div>
             ${coList(g)}</td></tr>` : ''}`;
         }).join('')}
@@ -2266,7 +2266,7 @@ function renderGraphicKindView(list){
           <td style="text-align:right">${g.krw ? escapeHtml(fmtMoney(g.krw, 'KRW')) : '<span style="color:var(--i6)">-</span>'}</td>
           <td style="text-align:right">${g.usd ? escapeHtml(fmtMoney(g.usd, 'USD')) : '<span style="color:var(--i6)">-</span>'}</td>
         </tr>
-        ${open ? `<tr><td colspan="10" style="padding:8px 12px 12px;background:var(--i9)">
+        ${open ? `<tr data-detail><td colspan="10" style="padding:8px 12px 12px;background:var(--i9)">
           <div style="font-size:10.5px;color:var(--i4);margin-bottom:4px">주문 기업 ${g.cos.length}곳 — 왼쪽 칸을 누르면 파일 받음으로 표시됩니다</div>
           ${coList(g)}</td></tr>` : ''}`;
       }).join('')}

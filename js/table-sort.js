@@ -19,13 +19,29 @@
    정렬한 이유가 사라진다.
 ══════════════════════════════════════════════════════════════ */
 
-/* 이 표는 정렬하면 안 된다 — 줄이 짝을 이루고 있어 흩으면 뜻이 깨진다.
-   (비품 현황은 품목 줄 아래에 '신청 기업' 줄이 colspan으로 붙어 있다) */
+/* 딸린 줄 — 품목 줄 아래에 colspan으로 붙는 '신청 기업' 목록 같은 것.
+   앞 줄에 매달려 있어서, 따로 떼면 엉뚱한 품목 밑으로 간다. 그리는 쪽이
+   data-detail로 표시해 두면 여기서 대표 줄과 함께 옮긴다. */
+const isDetail = (r) => r.hasAttribute('data-detail');
+
+/* 표를 줄이 아니라 «묶음»으로 본다 — 대표 줄 하나에 딸린 줄 여럿.
+   딸린 줄이 없는 보통 표는 묶음마다 대표 줄 하나뿐이라 결과가 같다. */
+function unitsOf(body){
+  const units = [];
+  [...body.rows].forEach((r) => {
+    if(isDetail(r) && units.length) units[units.length - 1].kids.push(r);
+    else units.push({ head: r, kids: [] });
+  });
+  return units;
+}
+
+/* 정렬하면 뜻이 깨지는 표 — 표시가 없는데 colspan으로 여러 칸을 먹는 줄이
+   섞여 있으면 그 줄이 무엇에 딸린 것인지 알 수 없어 손대지 않는다. */
 function sortable(table){
   if(!table || !table.tBodies.length) return false;
-  const rows = [...table.tBodies[0].rows];
-  if(rows.length < 2) return false;
-  return !rows.some(r => [...r.cells].some(c => c.colSpan > 1));
+  const units = unitsOf(table.tBodies[0]);
+  if(units.length < 2) return false;
+  return !units.some(u => [...u.head.cells].some(c => c.colSpan > 1));
 }
 
 /* 보이는 글자에서 정렬용 값을 뽑는다 */
@@ -60,18 +76,18 @@ function keyOf(cell){
 
 function sortTable(table, idx, dir){
   const body = table.tBodies[0];
-  const rows = [...body.rows];
+  const rows = unitsOf(body);
 
   // 처음 정렬할 때 원래 순서를 적어 둔다 — 되돌릴 수 있어야 한다
-  rows.forEach((r, i) => { if(r.dataset.origIdx === undefined) r.dataset.origIdx = i; });
+  rows.forEach((u, i) => { if(u.head.dataset.origIdx === undefined) u.head.dataset.origIdx = i; });
 
   if(dir === 0){
-    rows.sort((a, b) => Number(a.dataset.origIdx) - Number(b.dataset.origIdx));
+    rows.sort((a, b) => Number(a.head.dataset.origIdx) - Number(b.head.dataset.origIdx));
   } else {
     /* 키를 미리 한 번만 뽑는다. 비교 함수 안에서 innerText를 읽으면 51줄짜리
        표에서 수백 번 레이아웃을 다시 재게 되고, 이제 다시 그릴 때마다
        정렬을 되걸기 때문에 그 값이 그대로 체감된다. */
-    const keys = new Map(rows.map(r => [r, keyOf(r.cells[idx])]));
+    const keys = new Map(rows.map(u => [u, keyOf(u.head.cells[idx])]));
     rows.sort((a, b) => {
       const x = keys.get(a), y = keys.get(b);
       if(x.empty && y.empty) return 0;
@@ -85,7 +101,8 @@ function sortTable(table, idx, dir){
       return dir * c;
     });
   }
-  rows.forEach(r => body.appendChild(r));
+  // 대표 줄 바로 뒤에 딸린 줄을 다시 붙인다 — 떼어 두면 펼친 목록이 남의 밑으로 간다
+  rows.forEach((u) => { body.appendChild(u.head); u.kids.forEach(k => body.appendChild(k)); });
 }
 
 function mark(head, th, dir){
