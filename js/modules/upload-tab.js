@@ -55,7 +55,7 @@ import {
   currentUser,
 } from '../state.js';
 import { CL } from '../constants.js';
-import { normalizeCat, normalizeCountry, escapeHtml, escAttr, scopedSectorName, slugifySectorName, sectorRowValues, sectorKey } from '../utils.js';
+import { td, normalizeCat, normalizeCountry, escapeHtml, escAttr, scopedSectorName, slugifySectorName, sectorRowValues, sectorKey } from '../utils.js';
 import { postToSheet, saveCatmap } from '../api.js';
 import { buildCoDB, buildCoCAT, batchUpsertCompanies, ensureOrgsForNames, orgIdForName, suggestSector } from './company-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
@@ -694,7 +694,7 @@ function applyColumnMap(colMap){
       cat: rowCat,
       lang: /[가-힣]/.test(name) ? 'KO' : 'EN',
       source: (document.getElementById('up-src')||{}).value || '직접 업로드',
-      date: new Date().toISOString().slice(0,10),
+      date: td(),
       status: 'new',
       _dup: isDup,
       _suspect: isSuspect,

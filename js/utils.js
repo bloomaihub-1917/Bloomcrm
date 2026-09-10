@@ -6,8 +6,16 @@ import { COMPANY_SECTORS, CODE_LISTS } from './state.js';
 /* 이름에서 이니셜 추출 (한글/영문 대문자 최대 2글자) */
 export function ab(n){ const m=n.match(/[가-힣A-Z]/g); return (m||[]).slice(0,2).join('').toUpperCase() || n.slice(0,2).toUpperCase(); }
 
-/* 오늘 날짜 문자열 (YYYY-MM-DD) */
-export function td(){ return new Date().toISOString().slice(0,10); }
+/* 오늘 날짜 문자열 (YYYY-MM-DD)
+
+   toISOString()은 UTC로 바꾼다. 한국은 UTC+9라 오전 9시 전에는 어제가 찍혔다 —
+   아침에 «받았다»고 체크하면 어제 받은 것으로 남는다. 우리가 적는 날짜는
+   모두 «달력에서 오늘»이므로 지역 시각으로 만든다. */
+export function td(){
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
 
 /* 국가코드 또는 국가명(영문/한글) → 한글 국가명 */
 export function countryName(val){

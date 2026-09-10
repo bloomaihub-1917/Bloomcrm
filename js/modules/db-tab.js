@@ -35,7 +35,7 @@ import {
   mdbSelected,
 } from '../state.js';
 import { CP, CL, RP, CAT_KEYS, ROLE_TO_CAT, COUNTRIES, avB, avF } from '../constants.js';
-import { ab, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseTags, joinTags, isMobile, cleanEmail } from '../utils.js';
+import { td, ab, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseTags, joinTags, isMobile, cleanEmail } from '../utils.js';
 import { postToSheet } from '../api.js';
 import { buildCoDB, ensureOrgsForNames, orgIdForName } from './company-tab.js';
 import { domainOfSector, domainName, findSectorByName, UNASSIGNED_DOMAIN } from './settings-tab.js';
@@ -1507,7 +1507,7 @@ export async function saveNewContact(){
   if(btn){ btn.disabled=true; btn.textContent='저장 중…'; }
 
   const newId = Date.now() + Math.floor(Math.random()*10000);
-  const today = new Date().toISOString().slice(0,10);
+  const today = td();
 
   const c = {
     id:      newId,

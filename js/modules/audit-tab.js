@@ -31,7 +31,7 @@ import {
   userColor,
 } from '../state.js';
 import { saveAuditToSheets } from '../api.js';
-import { escapeHtml, escAttr, userInitials } from '../utils.js';
+import { td, escapeHtml, escAttr, userInitials } from '../utils.js';
 
 /* ══════════════════════════════════════════
    CSV 인젝션 방지 헬퍼 (신규 — 원본에는 없던 보안 개선)
@@ -216,7 +216,7 @@ export function exportAuditCSV(){
   const csv = [h,...rows].map(r=>r.map(v=>`"${sanitizeForCsv(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);
-  a.download = `activity_log_${new Date().toISOString().slice(0,10)}.csv`;
+  a.download = `activity_log_${td()}.csv`;
   a.click();
 }
 

@@ -676,7 +676,7 @@ export async function submitNewContact(exhId){
 
   const x = getExhibitorById(exhId);
   const org = x?.org_id ? getOrgById(x.org_id) : null;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = td();
   const c = {
     id: Date.now() + Math.floor(Math.random() * 10000),
     nameKo, nameEn,
@@ -742,7 +742,7 @@ export async function promoteExhContact(exhId, rowId){
 
   const x = getExhibitorById(exhId);
   const org = x?.org_id ? getOrgById(x.org_id) : null;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = td();
   // 이름 칸에 "메디라마 (MediRama)"처럼 기업명이 들어간 줄이 있다. 그대로 두면
   // 사람 이름이 기업명이 되므로, 한글이 있으면 국문 이름으로만 넣는다.
   const c = {
