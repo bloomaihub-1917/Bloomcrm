@@ -248,6 +248,24 @@ tr.row-sel{background:var(--ad)}
 /* ── matrix view sticky column ── */
 .tw > div { height:100%; }
 
+/* ── 표 머리 고정 ──
+   thead th에는 예전부터 position:sticky가 걸려 있는데, 세로 스크롤을 페이지가
+   맡는 화면(전시·행사·시스템 구조·기업 대시보드)에서는 듣지 않았다. sticky는
+   가장 가까운 스크롤 컨테이너 안에서 붙는데, .tw가 overflow:auto라서 그 자리를
+   차지한다. 그런데 .tw는 세로로 넘치는 일이 없으니(높이가 내용만큼 늘어난다)
+   붙을 데가 없어 그냥 같이 밀려 올라간다.
+
+   그래서 이 화면들에서는 .tw를 스크롤 컨테이너에서 뺀다. 넓은 표의 가로
+   스크롤은 페이지가 대신 맡는다 — 스크롤 막대가 하나로 줄어드는 이점도 있다.
+
+   .tw가 flex:1로 자기 높이를 갖는 화면(기업DB·CRM·마스터DB)은 이미 .tw 안에서
+   제대로 붙으므로 건드리지 않는다.
+
+   모바일은 표가 카드로 바뀌면서 thead 자체를 감추므로 해당 없다. */
+@media (min-width: 769px){
+  #exh-body .tw, #evdb-body .tw, #page-arch .tw, .co-dash .tw { overflow: visible; }
+}
+
 @media(max-width:768px){
   .grp-hd{padding:10px 14px 7px}
   .grp-hd-nm{font-size:13px}
