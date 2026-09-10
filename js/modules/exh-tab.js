@@ -4195,7 +4195,15 @@ export function toggleExhFlag(id, flag, dateField, label){
   const x = getExhibitorById(id);
   if(!x) return;
   const on = x[flag] === 'yes' || !!x[dateField];
-  patchExh(id, on ? { [flag]: '', [dateField]: '' } : { [flag]: 'yes' }, label);
+  /* 켤 때 오늘 날짜를 함께 찍는다. 전에는 'yes'만 써서 체크는 됐는데 날짜가
+     비었고, 화면은 그걸 "날짜 미상"으로 표시했다 — 코드가 그 상태를 예상해
+     안내까지 달아 뒀는데 정작 토글이 매번 그 상태를 만들고 있었다.
+     반대 방향(setExhDateWithFlag)은 날짜를 넣으면 체크를 켜 주고 있었다.
+
+     언제 받았는지가 마감을 따지는 근거라, 나중에 손으로 채우게 두면 대개 빈다.
+     날짜를 다르게 적어야 하면 옆 칸에서 바로 고칠 수 있다. */
+  patchExh(id, on ? { [flag]: '', [dateField]: '' }
+                  : { [flag]: 'yes', [dateField]: td() }, label);
 }
 /* 날짜를 넣으면 여부도 함께 켠다 */
 export function setExhDateWithFlag(id, dateField, flag, value, label){
