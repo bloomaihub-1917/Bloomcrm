@@ -4,13 +4,25 @@
    비품과 같은 표(equip_catalog)에 kind='graphic'으로 담는다. 표를 새로 만들면
    고르는 화면도, 이름으로 찾는 규칙도, 설정 편집기도 전부 두 벌이 된다.
 
-   원본은 "구분 / 세부 항목 / 재질 / 사이즈 / 단가(KRW) / 단가(USD) / 비고"다.
-   구분이 분류, 구분+세부 항목이 품명이 된다 — 같은 '족자봉'이라도 1패널·1면,
-   PET·현수막이 단가가 다 달라서 세부 항목까지 붙여야 한 품목으로 갈린다.
-   재질과 사이즈는 규격 한 칸에 합친다.
+   ── 왜 표를 그대로 적어 두는가 ──
+   전에는 엑스렌탈 원본의 "구분 / 세부 항목"에서 품명을 조립하고, 코드는 줄
+   순서 × 10으로 만들어냈다. 그게 두 가지를 깨뜨렸다.
 
-   단가는 "154,000원/패널", "$154/Panel"처럼 단위가 붙어 있다. 숫자만 남기되
-   단위는 비고로 옮긴다 — 패널당인지 개당인지가 수량 산정의 근거다.
+   하나. 코드가 위치에서 나오니 줄을 하나 끼우면 그 아래 코드가 전부 밀린다.
+   id도 코드에서 만들기 때문에 신청 항목이 가리키던 품목이 다른 물건이 된다.
+
+   둘. 조립한 품명은 화면에서 다듬은 이름을 덮었다. 실제로 DB에는
+   '벽면 랩핑 (PVC 켈지) 1패널'이 들어 있는데 스크립트는
+   '벽면 랩핑 · 패널당 랩핑'을 만들어, 다시 돌리는 순간 되돌아갔다. 영문명도
+   구분의 괄호에서만 뽑아 대부분 빈 값이 됐다.
+
+   그래서 조립을 버리고 최종값을 그대로 적는다. 코드는 손으로 정한다 —
+   같은 물건의 정면·사이드가 붙어 있어야 목록에서 한 짝으로 보인다
+   (G-020/G-021 인포데스크, G-030/G-031 하이 인포데스크).
+   순서(sort_order)는 코드의 숫자를 쓴다. 둘이 갈리면 목록 순서와 코드가 어긋난다.
+
+   여러 번 돌려도 안전하다 — (행사, 코드)가 같으면 덮어쓰고, 이미 신청에 쓰인
+   품목의 id는 코드에서 나오므로 그대로 유지된다.
 
      node db/import-graphic-catalog.js [--dry]
 ══════════════════════════════════════════════════════════════ */
@@ -20,103 +32,136 @@ const pool = require('./pool');
 const DRY = process.argv.includes('--dry');
 const EVENT = '2026 KIC';
 
-/* [구분, 세부 항목, 재질, 사이즈, 단가(KRW), 단가(USD), 비고] */
+/* 엑스렌탈 그래픽 품목표. 코드 순서가 곧 화면 순서다.
+   note의 앞부분(패널당·개당·1면당)은 수량 산정의 근거라 지우지 않는다. */
 const ROWS = [
-  ['벽면 랩핑 (Wall Wrapping)', '패널당 랩핑', 'PVC 켈지', '970 x 2390', '154,000원/패널', '$154/Panel', '시공·설치 포함. 벽 1면=3패널 기준으로 수량 산정'],
-  ['인포데스크 랩핑', '정면 (Standard)', 'PET', '1000 x 750', '88,000원/개', '$88/Panel', '정면만 해당(좌우 미포함), 데스크 수량만큼 산정'],
-  ['인포데스크 랩핑', '정면 (Premium)', 'PET', '1000 x 1000', '88,000원/개', '$88/Panel', '정면만 해당(좌우 미포함)'],
-  ['인포데스크 사이드패널 랩핑', 'Premium', 'PET', '485 x 898', '88,000원/개', '$88/Panel', ''],
-  ['인포데스크 사이드패널 랩핑', 'Standard', 'PET', '485 x 748', '88,000원/개', '$88/Panel', ''],
-  ['족자봉 (Scroll Rods)', '1/2 패널 커버', 'PET', '950 x 1200', '88,000원/패널', '$88/Panel', '알루미늄봉+S고리 포함, 시공·설치 포함'],
-  ['족자봉 (Scroll Rods)', '1 패널 커버', 'PET', '950 x 2320', '154,000원/패널', '$154/Panel', '알루미늄봉+S고리 포함'],
-  ['족자봉 (Scroll Rods)', '1면 커버 (3패널)', 'PET', '2920 x 2320', '495,000원', '$495/Side', '알루미늄봉+S고리 포함'],
-  ['족자봉 (Scroll Rods)', '1 패널 커버', '현수막', '950 x 2320', '110,000원/패널', '$110/Panel', ''],
-  ['족자봉 (Scroll Rods)', '1면 커버 (3패널)', '현수막', '2920 x 2320', '363,000원', '$363/Panel', ''],
-  ['폼보드 (Foam Board)', '1면 커버 (3패널)', '폼보드+PVC켈지', '2950 x 2400', '880,000원/패널', '$880/Panel', '출력 후 폼보드 부착, 시공·설치 포함'],
-  ['X-배너 (X-Banner)', '1개', 'PET', '600 x 1800', '-', '$66/unit', '설치·철거 포함'],
+  { code: 'G-010', category: '벽면 랩핑',
+    nameKo: '벽면 랩핑 (PVC 켈지) 1패널',
+    nameEn: 'Wall Wrapping (PVC-vinyl paper) 1 Panel',
+    spec: 'PVC 켈지 · 970 x 2390', krw: '154000', usd: '154',
+    note: '패널당 · 시공·설치 포함. 벽 1면=3패널 기준으로 수량 산정' },
+  { code: 'G-020', category: '인포데스크 랩핑',
+    nameKo: '인포데스크 랩핑 · 정면',
+    nameEn: 'Information Desk Wrapping (PET)',
+    spec: 'PET · 1000 x 750', krw: '88000', usd: '88',
+    note: '개당 · 정면만 해당(좌우 미포함), 데스크 수량만큼 산정' },
+  { code: 'G-021', category: '인포데스크 랩핑',
+    nameKo: '인포데스크 랩핑 · 사이드',
+    nameEn: 'Information Desk Side Panel Wrapping (PET)',
+    spec: 'PET · 485 x 748', krw: '88000', usd: '88',
+    note: '개당' },
+  { code: 'G-030', category: '하이 인포데스크 랩핑',
+    nameKo: '하이 인포데스크 랩핑 · 정면',
+    nameEn: 'High Information Desk Wrapping (PET)',
+    spec: 'PET · 1000 x 1000', krw: '88000', usd: '88',
+    note: '개당 · 정면만 해당(좌우 미포함)' },
+  { code: 'G-031', category: '하이 인포데스크 랩핑',
+    nameKo: '하이 인포데스크 랩핑 · 사이드',
+    nameEn: 'High Information Desk Side Panel Wrapping (PET)',
+    spec: 'PET · 485 x 898', krw: '88000', usd: '88',
+    note: '개당' },
+  { code: 'G-060', category: '족자봉',
+    nameKo: '족자봉 · 1/2 패널 커버',
+    nameEn: 'Scroll Rods Cover ½ Panel (PET)',
+    spec: 'PET · 950 x 1200', krw: '88000', usd: '88',
+    note: '패널당 · 알루미늄봉+S고리 포함, 시공·설치 포함' },
+  { code: 'G-070', category: '족자봉',
+    nameKo: '족자봉 · 1 패널 커버 (PET)',
+    nameEn: 'Scroll Rods Cover 1 Panel (PET)',
+    spec: 'PET · 950 x 2320', krw: '154000', usd: '154',
+    note: '패널당 · 알루미늄봉+S고리 포함' },
+  { code: 'G-080', category: '족자봉',
+    nameKo: '족자봉 · 1면 커버 (3패널) (PET)',
+    nameEn: 'Scroll Rods Cover 1 side - 3 Panel (PET)',
+    spec: 'PET · 2920 x 2320', krw: '495000', usd: '495',
+    note: '1면당 · 알루미늄봉+S고리 포함' },
+  { code: 'G-090', category: '족자봉',
+    nameKo: '족자봉 · 1 패널 커버 (현수막)',
+    nameEn: 'Scroll Rods Cover 1 Panel (Banner)',
+    spec: '현수막 · 950 x 2320', krw: '110000', usd: '110',
+    note: '패널당' },
+  { code: 'G-100', category: '족자봉',
+    nameKo: '족자봉 · 1면 커버 (3패널) (현수막)',
+    nameEn: 'Scroll Rods Cover 1 side - 3 Panel (Banner)',
+    spec: '현수막 · 2920 x 2320', krw: '363000', usd: '363',
+    note: '패널당' },
+  { code: 'G-110', category: '폼보드',
+    nameKo: '폼보드 · 1면 커버 (3패널)',
+    nameEn: 'Form Board + PVC-vinyl paper Cover 1 side (3 Panel)',
+    spec: '폼보드+PVC켈지 · 2950 x 2400', krw: '880000', usd: '880',
+    note: '패널당 · 출력 후 폼보드 부착, 시공·설치 포함' },
+  { code: 'G-120', category: 'X-배너',
+    nameKo: 'X-배너 · 1개',
+    nameEn: 'X-Banner (PET)',
+    spec: 'PET · 600 x 1800', krw: '', usd: '66',
+    note: '개당 · 설치·철거 포함' },
+  /* 디자인 의뢰는 대상·범위마다 값이 달라 단가를 비워 둔다. 품목표 단가를
+     넣어 두면 항목을 넣을 때 자동으로 채워져 실제 청구액을 덮는다.
+     무엇을 디자인했는지는 항목의 note에 적는다(db/add-design-item.js). */
+  { code: 'G-130', category: '디자인',
+    nameKo: '부스 디자인 의뢰',
+    nameEn: 'Booth Design',
+    spec: '', krw: '', usd: '',
+    note: '단가는 대상·범위마다 달라 항목에서 직접 적습니다' },
 ];
 
-/* 괄호 안 영문은 영문 품명으로 따로 뽑는다 — 화면이 국문·영문을 나눠 보여준다 */
-function splitName(v){
-  const m = String(v || '').match(/^(.*?)\s*\(([^)]*[A-Za-z][^)]*)\)\s*$/);
-  return m ? { ko: m[1].trim(), en: m[2].trim() } : { ko: String(v || '').trim(), en: '' };
-}
-const num = (v) => {
-  const m = String(v || '').replace(/,/g, '').match(/(\d+(?:\.\d+)?)/);
-  return m ? m[1] : '';
-};
-/* "154,000원/패널" → "패널당" 처럼 단위만 남긴다 */
-function unitOf(krw, usd){
-  const m = String(krw || '').match(/\/\s*(\S+)$/) || String(usd || '').match(/\/\s*(\S+)$/);
-  if(!m) return '';
-  const u = m[1].toLowerCase();
-  return { '패널': '패널당', 'panel': '패널당', '개': '개당', 'unit': '개당', 'side': '1면당' }[u] || m[1];
-}
+/* 순서는 코드에서 뽑는다 — G-021이면 21. 따로 적으면 둘이 갈린다. */
+const sortOf = (code) => String(Number(String(code).replace(/[^0-9]/g, '')) || 0);
+const idOf = (code) => `EC-graphic-${EVENT.replace(/[^A-Za-z0-9가-힣]/g, '')}-${code}`;
 
 (async () => {
   const client = await pool.connect();
   try {
-    const { rows: exist } = await client.query(
-      `SELECT id, code, name_ko FROM equip_catalog WHERE event_id = $1 AND kind = 'graphic'`, [EVENT]);
-    const byCode = new Map(exist.map((r) => [r.code, r]));
-
-    /* 세부 항목의 괄호는 벗기지 않는다. '정면 (Standard)'와 '정면 (Premium)'은
-       괄호가 유일한 차이라서, 영문 표기인 줄 알고 떼면 두 품목이 같은 이름이 된다.
-       괄호를 벗기는 건 구분(벽면 랩핑 (Wall Wrapping))에서만 한다. */
-    const base = ROWS.map(([gubun, detail]) => {
-      const g = splitName(gubun);
-      return `${g.ko} · ${String(detail || '').trim()}`.trim();
-    });
-    const dupName = new Set(base.filter((v, i) => base.indexOf(v) !== i));
-
-    const plan = ROWS.map(([gubun, detail, mat, size, krw, usd, note], i) => {
-      const g = splitName(gubun);
-      const unit = unitOf(krw, usd);
-      const code = `G-${String((i + 1) * 10).padStart(3, '0')}`;
-      // 이름이 겹치면 재질로 가른다 — 족자봉 1패널은 PET와 현수막의 단가가 다르다
-      const nameKo = base[i] + (dupName.has(base[i]) && mat ? ` (${mat})` : '');
-      return {
-        id: `EC-graphic-${EVENT.replace(/[^A-Za-z0-9가-힣]/g, '')}-${code}`,
-        event_id: EVENT, kind: 'graphic',
-        category: g.ko,                                   // 구분이 분류
-        code,
-        name_ko: nameKo,
-        name_en: g.en,
-        spec: [mat, size].filter((v) => v && v !== '-').join(' · '),
-        price_krw: krw === '-' ? '' : num(krw),
-        price_usd: num(usd),
-        note: [unit, note].filter(Boolean).join(' · '),
-        active: '', sort_order: String((i + 1) * 10),
-      };
-    });
-
-    console.log(`그래픽 품목 ${plan.length}건 (이미 있는 것 ${exist.length}건)\n`);
-    plan.forEach((p) => console.log(
-      `   ${p.code} ${p.name_ko}\n        규격 ${p.spec || '-'}`
-      + ` | KRW ${p.price_krw ? Number(p.price_krw).toLocaleString() : '-'}`
-      + ` | USD ${p.price_usd || '-'}${p.note ? `\n        ${p.note}` : ''}`
-      + `${byCode.has(p.code) ? '   ← 덮어씀' : ''}`));
-
-    if (DRY) { console.log('\n--dry 라서 아무것도 바꾸지 않았습니다.'); return; }
-
     await client.query('BEGIN');
-    const cols = ['id', 'event_id', 'category', 'code', 'name_ko', 'name_en', 'spec',
-      'price_krw', 'price_usd', 'note', 'active', 'sort_order', 'kind'];
-    for (const p of plan) {
-      await client.query(
-        `INSERT INTO equip_catalog (${cols.map((c) => `"${c}"`).join(',')})
-         VALUES (${cols.map((_, i) => `$${i + 1}`).join(',')})
-         ON CONFLICT (id) DO UPDATE SET ${cols.filter((c) => c !== 'id')
-           .map((c) => `"${c}" = EXCLUDED."${c}"`).join(', ')}`,
-        cols.map((c) => p[c]));
+
+    const exist = new Map((await client.query(
+      "SELECT id, code, name_ko FROM equip_catalog WHERE event_id=$1 AND kind='graphic'", [EVENT]
+    )).rows.map((r) => [r.code, r]));
+
+    // 코드가 겹치면 뒤 줄이 앞 줄을 덮어 조용히 사라진다 — 먼저 막는다
+    const dupe = ROWS.map((r) => r.code).filter((c, i, a) => a.indexOf(c) !== i);
+    if (dupe.length) { console.error('코드가 겹칩니다:', [...new Set(dupe)].join(', ')); process.exit(1); }
+
+    let added = 0, updated = 0;
+    for (const r of ROWS) {
+      const rec = {
+        id: idOf(r.code), event_id: EVENT, kind: 'graphic',
+        category: r.category, code: r.code,
+        name_ko: r.nameKo, name_en: r.nameEn, spec: r.spec,
+        price_krw: r.krw, price_usd: r.usd, note: r.note,
+        active: '', sort_order: sortOf(r.code),
+      };
+      const was = exist.get(r.code);
+      was ? updated++ : added++;
+      console.log(`  ${was ? '갱신' : '신규'}  ${r.code}  ${r.nameKo}`
+        + (was && was.name_ko !== r.nameKo ? `   (전: ${was.name_ko})` : ''));
+
+      if (!DRY) {
+        const cols = Object.keys(rec);
+        await client.query(
+          `INSERT INTO equip_catalog (${cols.map((c) => `"${c}"`).join(',')})
+           VALUES (${cols.map((_, k) => `$${k + 1}`).join(',')})
+           ON CONFLICT (id) DO UPDATE SET ${cols.filter((c) => c !== 'id')
+            .map((c) => `"${c}" = EXCLUDED."${c}"`).join(', ')}`,
+          cols.map((c) => rec[c]));
+      }
     }
-    await client.query('COMMIT');
-    console.log(`\n반영 완료 — ${plan.length}건`);
+
+    /* 표에서 빠진 코드는 지우지 않고 알린다 — 이미 신청에 쓰였을 수 있고,
+       지우면 그 신청이 무엇이었는지 설명할 수 없다. */
+    const known = new Set(ROWS.map((r) => r.code));
+    const orphan = [...exist.keys()].filter((c) => !known.has(c));
+
+    if (DRY) await client.query('ROLLBACK'); else await client.query('COMMIT');
+
+    console.log(`\n${EVENT} 그래픽 품목표: 신규 ${added} / 갱신 ${updated}`);
+    if (orphan.length) console.log(`  ⚠ 이 표에 없는 코드가 품목표에 남아 있어요(지우지 않았습니다): ${orphan.join(', ')}`);
+    if (DRY) console.log('--dry — 실제로 넣지 않았습니다.');
   } catch (e) {
-    try { await client.query('ROLLBACK'); } catch (_) {}
-    console.error('실패 — 되돌렸습니다:', e.message);
-    process.exitCode = 1;
+    await client.query('ROLLBACK');
+    throw e;
   } finally {
     client.release();
+    await pool.end();
   }
-})();
+})().catch((e) => { console.error(e); process.exitCode = 1; });
