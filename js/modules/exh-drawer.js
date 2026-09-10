@@ -53,7 +53,7 @@ function saveFailed(res, msg){
 import { trackAction } from './audit-tab.js';
 import {
   billedAmount, paidAmount, graphicState, graphicDueInfo, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
-  isPendingRefund, boothTypeOptions, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
+  isPendingRefund, boothTypeOptions, boothTypes, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
   TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing, introOver, boothDesignState,
   isSharedBooth, isBookOnly, baseKind, BASE_KINDS, bookName, fasciaName,
   guardWrite, exhLocked, exhLockNotice,
@@ -1312,6 +1312,53 @@ const itemCats = () => codeList('item_cat', null,
     .map(([c, l]) => ({ code: c, label: l })));
 const catLabel = (c) => codeLabel('item_cat', null, c) || '기타';
 
+/* ══════════════════════════════════════════
+   디자인 의뢰 — 코드는 하나, 대상은 따로
+
+   부스 디자인 의뢰는 품목코드를 하나로 통일했다(G-130). 대상마다 코드를 나누면
+   "디자인 의뢰 올해 몇 건·얼마"를 세는 단위가 흩어진다.
+
+   대신 무엇을 디자인했는지는 항목의 note에 적는다. 이름에 붙이면 자유 텍스트라
+   표기가 흔들리고("블록시스템 C" / "블록 C" / "Block System C"), 나중에 대상별로
+   모아 볼 수 없다. 부스 타입과 품목표에서 골라 넣게 해 정본을 쓰게 한다.
+
+   판별은 카탈로그의 분류로 한다 — 코드를 코드에 박아 두면 디자인 품목이 늘 때
+   또 고쳐야 한다.
+══════════════════════════════════════════ */
+const DESIGN_CAT = '디자인';
+const isDesignItem = (i) => {
+  const c = i.catalog_id ? catalogItem(i.catalog_id) : null;
+  return !!c && (c.category || '') === DESIGN_CAT;
+};
+
+/* 고를 수 있는 대상 — 부스 타입과 품목표를 함께 준다.
+   부스 디자인이 대부분이지만 벽면 랩핑·족자봉 디자인도 의뢰가 온다.
+   디자인 품목 자체는 제 자신을 대상으로 고를 일이 없어 뺀다. */
+function designTargets(evKey){
+  const out = [];
+  boothTypes(evKey).forEach(t => out.push(t.code));
+  catalogFor(evKey).forEach(c => {
+    if((c.category || '') === DESIGN_CAT) return;
+    const nm = c.name_ko || c.name_en;
+    if(nm) out.push(`${c.code} ${nm}`);
+  });
+  return [...new Set(out)];
+}
+
+const designTargetList = (x) => `<datalist id="dsgt-${escAttr(x.id)}">${
+  designTargets(x.event_id).map(v => `<option value="${escAttr(v)}"></option>`).join('')}</datalist>`;
+
+/* 항목 줄 아래에 한 줄 더 — 칸이 일곱으로 고정된 격자를 건드리지 않는다 */
+const designTargetRow = (x, i) => !isDesignItem(i) ? '' : `
+  <div style="display:flex;gap:8px;align-items:center;padding:0 8px 7px;background:var(--i9);
+      border-radius:0 0 6px 6px;margin-top:-1px">
+    <span style="font-size:10.5px;color:var(--i5);flex:0 0 auto">무엇을 디자인했나</span>
+    <input class="fi" list="dsgt-${escAttr(x.id)}" value="${escAttr(i.note || '')}"
+      placeholder="부스 타입이나 품목을 고르세요 — 예: Block System C 1부스"
+      style="flex:1;min-width:0;padding:4px 8px;font-size:11.5px"
+      onchange="setItemField('${escAttr(i.id)}','note',this.value)">
+  </div>`;
+
 const currencies = () => codeList('currency', null,
   ['KRW', 'USD'].map(c => ({ code: c, label: c }))).map(c => c.code);
 
@@ -1506,7 +1553,7 @@ function dBilling(x){
           <button class="btn bs bl-mini" onclick="voidExhItem('${escAttr(i.id)}')"
             title="${isVoided(i) ? '취소를 되돌립니다' : '취소 처리 — 지우지 않고 내려서 이력이 남아요'}">${isVoided(i) ? '↩' : '⊘'}</button>
           <button class="btn bs bl-mini" onclick="delExhItem('${escAttr(i.id)}')" title="완전히 삭제 — 잘못 넣은 줄에만 쓰세요">✕</button>
-        </div>`).join('')
+        </div>${designTargetRow(x, i)}`).join('')
         + `<div class="bl-row bl-item bl-subtotal">
             <span></span>
             <span style="min-width:0;font-size:11px;color:var(--i4)">${escapeHtml(l)} 소계 <span style="color:var(--i5)">${g.length}건</span></span>
@@ -1536,7 +1583,7 @@ function dBilling(x){
         ${itemCats().map(({ code: k, label: l }, i) => `<option value="${escAttr(k)}"${(lastItemCat || itemCats()[0]?.code) === k ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('')}</select>
       <input class="fi" id="it-nm-${escAttr(x.id)}" placeholder="항목명" style="flex:1 1 120px;min-width:0;font-size:11.5px;padding:6px"
         list="eqcat-${escAttr(x.id)}" oninput="pickCatalogItem('${escAttr(x.id)}')">
-      ${catalogDatalist(x)}
+      ${catalogDatalist(x)}${designTargetList(x)}
       <input class="fi" id="it-qty-${escAttr(x.id)}" placeholder="수량" style="flex:1 1 54px;min-width:0;font-size:11.5px;padding:6px"
         oninput="calcItemAmount('${escAttr(x.id)}')">
       <input class="fi" id="it-up-${escAttr(x.id)}" placeholder="단가" style="flex:1 1 78px;min-width:0;font-size:11.5px;padding:6px"
@@ -1849,7 +1896,8 @@ function graphicItemsBlock(x){
           <span style="flex:1;min-width:0">
             <span style="font-size:12.5px;font-weight:${on ? 600 : 500};color:${on ? 'var(--i1)' : 'var(--i3)'}">${escapeHtml(i.name || '(이름 없음)')}</span>
             <span style="font-size:10.5px;color:var(--i4)">${i.qty ? ` · ${escapeHtml(String(i.qty))}개` : ''}${
-              i.amount ? ` · ${escapeHtml(fmtMoney(i.amount, i.currency))}` : ''}</span>
+              i.amount ? ` · ${escapeHtml(fmtMoney(i.amount, i.currency))}` : ''}</span>${
+              isDesignItem(i) && i.note ? `<div style="font-size:10.5px;color:var(--i4);margin-top:2px">디자인 대상 — <b>${escapeHtml(i.note)}</b></div>` : ''}
           </span>
           <input type="date" class="fi" style="width:136px;padding:4px 8px;font-size:11.5px"
             value="${escAttr(i.received_at || '')}"
