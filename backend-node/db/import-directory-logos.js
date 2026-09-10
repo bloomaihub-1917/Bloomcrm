@@ -3,7 +3,7 @@
 
    OneDrive의 Logo 폴더에 기업별 하위 폴더가 있고, 그 안에 ai·eps·jpg·png가
    뒤섞여 있다. 브라우저는 ai도 eps도 못 읽으므로 래스터(jpg·png)만 골라
-   웹용으로 줄여 backend-node/public/logos/<행사슬러그>/<도록순번>에 넣는다.
+   웹용으로 줄여 backend-node/assets/logos/<행사슬러그>/<도록순번>에 넣는다.
    routes/public.js가 그 폴더를 도록 순번으로 훑어 카드에 붙인다.
 
      node db/import-directory-logos.js [--event "2026 KIC"] [--dry]
@@ -33,7 +33,7 @@ const EVENT = arg('--event') || '2026 KIC';
 const LOGO_DIR = arg('--dir') || 'C:/Users/cdaky/OneDrive - STUDIO BLOOM/4.행사/2026년/'
   + '1013-1015 KoNECT International Conference/300. 전시/Logo';
 
-const OUT_ROOT = path.join(__dirname, '..', 'public', 'logos');
+const OUT_ROOT = path.join(__dirname, '..', 'assets', 'logos');
 
 /* 행사 id를 URL 슬러그로 — routes/public.js와 같은 규칙이어야 한다 */
 const slugify = (v) => String(v || '').toLowerCase().trim()

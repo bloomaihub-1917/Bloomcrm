@@ -4,9 +4,10 @@
     { "source": "/(.*)", "destination": "/api" }
   ],
   "//": "로고 파일을 함수 묶음에 함께 넣는다. Vercel은 코드에서 require로 이어지는 파일만 담으므로, fs로 읽는 이미지는 이렇게 적어 주지 않으면 배포본에 없다(로컬에서는 되는데 배포하면 로고만 안 뜨는 이유).",
+  "//2": "폴더 이름이 public이면 이 설정이 듣지 않는다 — Vercel이 public/을 정적 출력으로 빼내면서 함수에서 지운다. 그래서 assets/에 둔다.",
   "functions": {
     "api/index.js": {
-      "includeFiles": "public/**"
+      "includeFiles": "assets/**"
     }
   }
 }

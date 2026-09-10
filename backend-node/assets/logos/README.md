@@ -3,10 +3,10 @@
 웹디렉토리(`/d/<행사슬러그>`)가 기업명 옆에 띄우는 로고를 둔다.
 
 ```
-public/logos/<행사슬러그>/<도록순번>.<확장자>
+assets/logos/<행사슬러그>/<도록순번>.<확장자>
 
-  public/logos/2026-kic/1.png      → 순번 1번(SeltaSquare) 카드에 뜬다
-  public/logos/2026-kic/44.png     → 순번 44번
+  assets/logos/2026-kic/1.png      → 순번 1번(SeltaSquare) 카드에 뜬다
+  assets/logos/2026-kic/44.png     → 순번 44번
 ```
 
 파일을 넣으면 코드를 고치지 않아도 뜬다(최대 5분 뒤 — 폴더 목록을 그만큼

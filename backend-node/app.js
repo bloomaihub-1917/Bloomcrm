@@ -1,4 +1,6 @@
 require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
@@ -37,7 +39,24 @@ app.use((req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 // 토큰 하나로 무제한 접근 가능하던 기존 문제 보완 — IP당 분당 요청 수 제한
 app.use('/api', rateLimit({ windowMs: 60 * 1000, max: 120 }));
 
-app.get('/health', (req, res) => res.json({ ok: true }));
+/* 배포가 실제로 갈렸는지, 로고 파일이 함수와 함께 갔는지 한 번에 본다.
+   화면에 로고가 안 뜰 때 코드가 문제인지 배포가 문제인지 여기서 갈린다 —
+   그게 안 보여서 Vercel이 public/을 함수에서 지운다는 걸 늦게 알았다. */
+app.get('/health', (req, res) => {
+  let logos = null;
+  try {
+    const root = path.join(__dirname, 'assets', 'logos');
+    logos = {};
+    fs.readdirSync(root, { withFileTypes: true })
+      .filter((e) => e.isDirectory())          // 폴더 옆에 README.md가 같이 있다
+      .forEach((d) => { logos[d.name] = fs.readdirSync(path.join(root, d.name)).length; });
+  } catch (e) { logos = null; }   // 폴더가 배포본에 없다
+  res.json({
+    ok: true,
+    commit: (process.env.VERCEL_GIT_COMMIT_SHA || '').slice(0, 7) || 'local',
+    logos,
+  });
+});
 
 app.use('/api/data', requireAuth, dataRoutes);
 // 메일 발송 — 로그인한 사람만. 보낸 이력이 남아야 해서 인증을 거른다.

@@ -107,9 +107,9 @@ Informatics)이 이 방식으로 부스 44-46에 함께 선다. 대표 기업의
 
 ## 로고
 
-`public/logos/<행사슬러그>/<도록순번>.png`에 파일을 넣으면 기업명 왼쪽에 뜬다.
+`assets/logos/<행사슬러그>/<도록순번>.png`에 파일을 넣으면 기업명 왼쪽에 뜬다.
 없는 기업은 자리를 비우지 않고 아예 넣지 않는다. 규격과 이유는
-[`backend-node/public/logos/README.md`](../backend-node/public/logos/README.md)에
+[`backend-node/assets/logos/README.md`](../backend-node/assets/logos/README.md)에
 적어 뒀다.
 
 OneDrive의 로고 폴더에서 한 번에 만든다.
@@ -161,9 +161,11 @@ JSON에서도 `sponsor: ""`로 비운다 — 그대로 흘리면 읽는 쪽이 �
   스킴이 없으면 `https://`를 붙이고 그 밖의 것(`javascript:` 등)은 링크로
   만들지 않는다.
 - 로고는 저장소에 함께 담는다. 원본이 OneDrive에 있어 배포본이 읽을 수 없으므로,
-  웹용으로 줄인 것을 `public/logos/`에 넣어 커밋한다(1.5MB, 50장). Vercel은
+  웹용으로 줄인 것을 `assets/logos/`에 넣어 커밋한다(1.5MB, 50장). Vercel은
   `require`로 이어지는 파일만 함수에 담으므로 `vercel.json`의 `includeFiles`로
-  이 폴더를 함께 올린다 — 없으면 로컬에서는 되는데 배포하면 로고만 안 뜬다.
+  이 폴더를 함께 올린다. 폴더 이름이 `public`이면 그 설정도 듣지 않는다 —
+  Vercel이 `public/`을 정적 출력으로 빼내면서 함수에서 지운다. 배포됐는지는
+  `/health`가 알려준다(`commit`과 행사별 로고 장수).
 
 ## 로컬에서 확인하기
 
