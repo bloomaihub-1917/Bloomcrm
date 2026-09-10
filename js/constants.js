@@ -42,7 +42,7 @@ export const avF = i => FG[i % 6];
    식으로 attendee와 겹치는(비배타적) 보조 필터로 구현했다. */
 export const ROLE_TO_CAT = {
   'VIP':'vip', '연사':'speaker', 'BD':'attendee', '바이어':'attendee',
-  '전시참가기업':'attendee', '스폰서':'attendee', '주최사':'attendee', '참가자':'attendee',
+  '전시참가기업':'exhibitor', '스폰서':'attendee', '주최사':'attendee', '참가자':'attendee',
   '비즈니스파트너링':'attendee',
 };
 

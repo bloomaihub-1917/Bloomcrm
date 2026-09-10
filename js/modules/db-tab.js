@@ -531,8 +531,8 @@ export function updateMDBBadges(pairs){
     return bp;
   })();
 
-  const cats=['all','speaker','vip','attendee'];
-  const ids =['ct-all','ct-sp','ct-vip','ct-at'];
+  const cats=['all','speaker','vip','attendee','exhibitor'];
+  const ids =['ct-all','ct-sp','ct-vip','ct-at','ct-ex'];
   cats.forEach((cat,i)=>{
     const el=document.getElementById(ids[i]);if(!el)return;
     if(cat==='all'){ el.textContent=[...new Set(basePairs.map(({c})=>c.id))].length; return; }
