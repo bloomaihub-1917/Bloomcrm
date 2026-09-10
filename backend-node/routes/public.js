@@ -42,8 +42,9 @@ const router = express.Router();
    않아 설정 검증에서 실패한다). 배포본이 이 폴더를 보고 있는지는 /health가
    행사별 장수로 알려준다.
 
-   화면에서는 높이를 맞춰(일반 24px, 스폰서 34px) 줄이므로 폭은 제한하지 않는다
-   (가로형 로고가 많아 폭을 고정하면 찌그러진다).
+   화면에서는 크기가 같은 상자에 담아 그 안에서만 맞춘다(일반 30px, 스폰서 40px
+   높이). 비율은 건드리지 않으므로 납작한 로고든 홀쭉한 로고든 찌그러지지 않고,
+   차지하는 자리가 같아 이름과 배지가 줄줄이 맞는다.
 
    파일이 없는 기업은 자리를 비우지 않고 아예 넣지 않는다 — 빈 사각형이 늘어선
    화면은 "아직 안 받았다"를 관람객에게 보여주는 것과 같다. 파일을 폴더에 넣으면
@@ -250,17 +251,26 @@ function card(x, logo) {
      대개 같다) 중복도 지운다. */
   const hay = [...new Set(terms)].join('|');
 
-  /* 부스 배지와 꺾쇠는 한 묶음으로 오른쪽 끝에 붙인다. 따로 두면 부스번호가
-     없는 기업(모기업 부스에 얹힌 자회사)에서 꺾쇠가 이름 옆으로 따라와,
-     제목의 일부처럼 보인다. */
-  const head = (tail) => `${x.book_order ? `<span class="no">${esc(x.book_order)}</span>` : ''}
-    ${logo ? `<img class="logo" src="${esc(logo)}" alt="${esc(x.name)}" loading="lazy">` : ''}
+  /* 접힌 줄은 칸을 정해 세운다(아래 CSS의 grid-template-areas).
+     번호·로고·이름·배지·꺾쇠가 늘 같은 자리에서 시작해야 목록이 줄줄이 맞는다.
+
+     로고는 비율이 제각각이다 — 1500×160처럼 납작한 것과 109×160처럼 홀쭉한 것이
+     섞여 있어, 높이만 맞추면 차지하는 폭이 15px에서 150px까지 벌어진다. 그러면
+     이름이 줄마다 다른 자리에서 시작한다. 그래서 크기가 같은 상자(.logobox)에
+     넣고 그 안에서만 맞춘다. 로고가 없는 기업도 상자는 남겨 둔다 — 안 그러면
+     그 줄만 이름이 왼쪽으로 당겨진다.
+
+     배지는 한 묶음(.tail)으로 오른쪽에 붙여 부스번호의 끝을 맞춘다. 번호 길이가
+     'Booth 20'과 'Booth 44-46'으로 달라도 오른쪽 끝은 한 줄로 선다. */
+  const head = (tail) => `<span class="no">${x.book_order ? esc(x.book_order) : ''}</span>
+    <span class="logobox">${logo
+      ? `<img class="logo" src="${esc(logo)}" alt="${esc(x.name)}" loading="lazy">` : ''}</span>
     <h3>${esc(x.name)}</h3>
     <span class="tail">
-      ${sponsor ? `<span class="grade">${sponsor.label}</span>` : ''}
-      ${x.booth_no ? `<span class="booth">Booth ${esc(x.booth_no)}</span>` : ''}
-      ${tail}
-    </span>`;
+      <span class="grade-cell">${sponsor ? `<span class="grade">${sponsor.label}</span>` : ''}</span>
+      <span class="booth-cell">${x.booth_no ? `<span class="booth">Booth ${esc(x.booth_no)}</span>` : ''}</span>
+    </span>
+    ${tail}`;
 
   const body = `${x.book_intro ? `<p class="intro">${nl2br(x.book_intro)}</p>` : ''}
   ${rows.length ? `<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>` : ''}`;
@@ -347,12 +357,28 @@ function page({ slug, event, list }) {
 
   /* 접힌 줄. summary는 기본 삼각형 표지가 붙는데 브라우저마다 자리와 모양이
      달라, 지우고 오른쪽에 꺾쇠를 직접 둔다. */
-  /* 접힌 줄. 좁은 화면에서는 배지 묶음이 다음 줄로 내려가 두 줄이 된다 — 이름을
-     칸에 맞춰 접게 하면(min-width:0 + overflow-wrap) 낱말이 한 글자씩 쪼개져
-     'S e l t a…'가 되므로, 이름은 그대로 두고 줄바꿈을 허용한다. */
-  summary, .summary-like { display:flex; align-items:center; gap:8px 10px; flex-wrap:wrap;
-    list-style:none; cursor:pointer; }
-  .no, .logo, .grade, .tail, .chev { flex:none; }
+  /* 접힌 줄은 칸을 고정한다. 흐르게 두면 로고 폭에 따라 이름이 줄마다 다른
+     자리에서 시작하고, 배지도 밀렸다 안 밀렸다 해서 목록이 들쭉날쭉해 보인다.
+     칸을 정해 두면 번호·로고·이름·배지가 아래로 줄줄이 맞는다. */
+  summary, .summary-like { display:grid; align-items:center; cursor:pointer; list-style:none;
+    grid-template-columns:22px 104px 1fr auto 12px;
+    grid-template-areas:'no logo name tail chev';
+    column-gap:12px; }
+  .no { grid-area:no; }
+  .logobox { grid-area:logo; }
+  .card h3 { grid-area:name; }
+  .tail { grid-area:tail; }
+  .chev { grid-area:chev; }
+
+  /* 폰에서는 배지를 아랫줄로 내린다. 한 줄에 다 세우면 이름 칸이 100px 아래로
+     좁아져 두세 줄로 접힌다. 번호와 로고는 두 줄에 걸쳐 가운데 선다. */
+  @media (max-width: 560px) {
+    summary, .summary-like {
+      grid-template-columns:18px 76px 1fr 12px;
+      grid-template-areas:'no logo name chev'
+                          'no logo tail tail';
+      column-gap:8px; row-gap:4px; }
+  }
   .flat .summary-like { cursor:default; }        /* 펼칠 게 없으면 눌러도 안 열린다 */
   summary::-webkit-details-marker { display:none; }
   summary::marker { content:''; }
@@ -360,7 +386,13 @@ function page({ slug, event, list }) {
 
   /* 꺾쇠는 두 변만 그려 만든다 — 글꼴에 없는 글자를 쓰거나 이미지를 하나 더
      받으러 가지 않아도 된다. 펼치면 위를 향한다. */
-  .tail { margin-left:auto; display:flex; align-items:center; gap:10px; }
+  /* 배지도 칸을 고정한다. 오른쪽으로만 모으면 부스번호 길이에 따라('Booth 20'과
+     'Booth 44-46') 그 앞의 등급 배지가 줄마다 좌우로 흔들린다. 등급 칸과 부스 칸을
+     따로 잡아 두면 스폰서가 아닌 줄에서는 등급 칸이 비고, 부스는 어느 줄에서든
+     같은 자리에 선다. */
+  .tail { display:grid; grid-template-columns:74px 86px; column-gap:8px;
+    align-items:center; justify-items:end; }
+  .grade-cell, .booth-cell { display:flex; justify-content:flex-end; }
   .chev { width:7px; height:7px; flex:none;
     border-right:2px solid var(--dim); border-bottom:2px solid var(--dim);
     transform:rotate(45deg); transform-origin:60% 60%; transition:transform .15s; }
@@ -369,15 +401,15 @@ function page({ slug, event, list }) {
   /* 로고는 높이만 맞춘다 — 가로형·세로형이 섞여 있어 폭을 고정하면 찌그러진다.
      투명 배경 PNG를 받기로 했지만 흰 배경으로 오는 것도 섞일 수 있어, 다크
      모드에서는 흰 판을 깔아 로고가 어두운 바탕에 묻히지 않게 한다. */
-  .logo { height:24px; width:auto; max-width:150px; object-fit:contain; }
-  .sponsor .logo { height:34px; max-width:200px; }
-
-  /* 폰에서는 로고를 줄인다. 접힌 줄은 한눈에 넘길 수 있어야 하는데, 데스크톱
-     크기 그대로 두면 로고가 줄의 절반을 먹어 이름과 배지가 두세 줄로 흩어진다. */
-  @media (max-width: 480px) {
-    .logo { height:20px; max-width:96px; }
-    .sponsor .logo { height:26px; max-width:124px; }
-    .no { min-width:18px; }
+  /* 로고는 크기가 같은 상자 안에서만 맞춘다. 원본 비율이 1500×160(납작)에서
+     109×160(홀쭉)까지 벌어져, 높이만 맞추면 차지하는 폭이 15px~150px로 들쭉날쭉
+     하다. 상자를 고정하고 그 안에 담으면 어떤 로고든 같은 자리를 차지한다. */
+  .logobox { height:30px; display:flex; align-items:center; justify-content:center; }
+  .logo { max-width:100%; max-height:100%; object-fit:contain; }
+  .sponsor .logobox { height:40px; }
+  @media (max-width: 560px) {
+    .logobox { height:26px; }
+    .sponsor .logobox { height:32px; }
   }
   .sec { margin:26px 0 10px; font-size:12px; font-weight:600; letter-spacing:.08em;
     color:var(--dim); text-transform:uppercase; }
@@ -394,7 +426,7 @@ function page({ slug, event, list }) {
   .g-gold   { --gc:#a16207; --gbg:#fef3c7; --gline:#fde68a; }
   .g-silver { --gc:#475569; --gbg:#e2e8f0; --gline:#cbd5e1; }
   .g-bronze { --gc:#9a3412; --gbg:#ffedd5; --gline:#fed7aa; }
-  .no { min-width:26px; color:var(--dim); font-size:12px; font-variant-numeric:tabular-nums; }
+  .no { color:var(--dim); font-size:12px; font-variant-numeric:tabular-nums; }
   .booth { padding:2px 8px; border-radius:999px;
     background:var(--chip); color:var(--accent); font-size:12px; white-space:nowrap; }
   .detail { margin-top:12px; }
