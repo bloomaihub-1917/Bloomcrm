@@ -18,7 +18,7 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import {
-  contacts, EVENT_LIST,
+  contacts, EVENT_LIST, currentUser,
   SPEAKERS, SESSION_SPEAKERS, CONF_SESSIONS, SPEAKER_CONTACTS, SPEAKER_LOGS,
   getSpeakerById, assignmentsFor, rolesOfSpeaker,
   contactsOfSpeaker, logsOfSpeaker,
@@ -29,7 +29,7 @@ import { td, escapeHtml, escAttr } from '../utils.js';
 import {
   saveSpeaker, saveSessionSpeaker,
   saveSpeakerContact, deleteSpeakerContact,
-  sendMail,
+  saveSpeakerLog, sendMail,
 } from '../api.js';
 import { trackAction } from './audit-tab.js';
 import { confLocked, confLockNotice, renderConf, buildConfEvList } from './conf-tab.js';
@@ -41,6 +41,8 @@ const TABS = [
   { key: 'basic',  label: '기본' },
   { key: 'bio',    label: '이력' },
   { key: 'talk',   label: '발제' },
+  { key: 'offer',  label: '제공사항' },
+  { key: 'bank',   label: '계좌·여권' },
   { key: 'people', label: '연락 상대' },
   { key: 'mail',   label: '메일' },
 ];
@@ -49,6 +51,9 @@ const STATUSES = ['섭외중', '확정', '보류', '취소'];
 
 /* ── 여닫기 ── */
 export function openSpeakerDr(id, tab){
+  /* 다른 연사로 옮기면 계좌를 다시 가린다 — 한 번 연 게 다음 사람까지
+     따라오면 열람 기록과 실제로 본 것이 어긋난다. */
+  if(spId !== id) bankRevealed = false;
   spId = id;
   if(tab && TABS.some(t => t.key === tab)) spTab = tab;
   document.getElementById('sp-dr')?.classList.add('on');
@@ -56,6 +61,7 @@ export function openSpeakerDr(id, tab){
 }
 export function closeSpeakerDr(){
   spId = null;
+  bankRevealed = false;
   document.getElementById('sp-dr')?.classList.remove('on');
 }
 export function switchSpeakerDT(v){ spTab = v; renderSpeakerDr(); }
@@ -183,6 +189,8 @@ export function renderSpeakerDr(){
        탭에서 먼저 보이는 게 낫다 */
     people: mailTargets(sp.id).to.length ? 0 : 1,
     mail: 0,
+    offer: missingOffer(sp, evKey).length,
+    bank: missingBank(sp, evKey).length,
   };
   const tabsEl = document.getElementById('sp-drtabs');
   if(tabsEl) tabsEl.innerHTML = TABS.map(t =>
@@ -194,6 +202,8 @@ export function renderSpeakerDr(){
     b.classList.toggle('ro', confLocked());
     b.innerHTML = spTab === 'bio' ? bioHtml(sp, evKey)
       : spTab === 'talk' ? talkHtml(sp, evKey)
+      : spTab === 'offer' ? offerHtml(sp, evKey)
+      : spTab === 'bank' ? bankHtml(sp, evKey)
       : spTab === 'people' ? peopleTabHtml(sp)
       : spTab === 'mail' ? mailTabHtml(sp, evKey)
       : basicHtml(sp, con, evKey);
@@ -230,6 +240,28 @@ function missingBio(sp, evKey){
   if((isReq(evKey, roles, 'bio_pro') || isReq(evKey, roles, 'bio_work')) && !sp.profile_received_at) out.push('이력');
   return out;
 }
+/* 제공사항은 «우리가 챙길 것»이다. 연사료를 적어 놓고 안 준 것,
+   숙박·항공을 챙겨야 하는데 예약이 안 된 것만 센다. */
+function missingOffer(sp, evKey){
+  const roles = rolesOfSpeaker(sp.id);
+  const out = [];
+  if(sp.fee_amount && !sp.fee_paid_at) out.push('연사료 지급');
+  if(needState(evKey, roles, 'travel')){
+    if(sp.stay_hotel && sp.stay_booked !== 'yes') out.push('숙박 예약');
+    if(sp.air_route && !sp.air_ticketed_at) out.push('항공 발권');
+  }
+  return out;
+}
+function missingBank(sp, evKey){
+  const roles = rolesOfSpeaker(sp.id);
+  const out = [];
+  /* 연사료를 주기로 했으면 계좌가 있어야 한다. 금액이 없으면 무보수라
+     계좌를 묻지 않는다 — 안 줄 사람에게 계좌를 요구할 이유가 없다. */
+  if(isReq(evKey, roles, 'bank') && sp.fee_amount && !sp.bank_account) out.push('계좌');
+  if(isReq(evKey, roles, 'passport') && !sp.passport_received_at) out.push('여권');
+  return out;
+}
+
 function missingTalk(sp, evKey){
   const out = [];
   assignmentsFor(sp.id).forEach(a => {
@@ -780,6 +812,225 @@ export async function sendSpeakerMail(){
   renderSpeakerDr();
 }
 
+/* ══════════════════════════════════════════════════════════════
+   제공사항 — 연사료 · 숙박 · 항공
+
+   우리가 주는 것들이다. 받는 것(이력·초록)과 성격이 달라 탭을 나눴다 —
+   숙박을 확인하려고 열 때마다 초록 칸을 지나칠 이유가 없다.
+
+   원천징수는 칸만 두고 계산하지 않는다. 국내·해외, 사업소득·기타소득에
+   따라 세율이 갈리고 조세조약까지 걸리는데, 어설프게 계산해 두면 그 숫자를
+   믿고 지급해 버린다. 지금은 «어느 쪽인지»만 적어 둔다.
+
+   항공은 오는 편과 가는 편이 따로다. 한 줄로 적으면 어느 편이 언제인지
+   현장에서 다시 물어야 한다.
+══════════════════════════════════════════════════════════════ */
+
+const CURRENCIES = ['KRW', 'USD', 'EUR', 'JPY'];
+const TAX_TYPES = ['국내 사업소득', '국내 기타소득', '해외 거주자', '지급 없음'];
+const AIR_CLASSES = ['이코노미', '프리미엄 이코노미', '비즈니스'];
+
+/* 금액은 자릿수를 끊어 보여준다 — 0이 하나 더 붙은 걸 눈으로 잡으려면 필요하다 */
+const money = (v, cur) => {
+  const n = Number(String(v || '').replace(/[^\d.-]/g, ''));
+  if(!Number.isFinite(n) || !n) return '';
+  return `${n.toLocaleString('ko-KR')} ${cur || 'KRW'}`;
+};
+
+function offerHtml(sp, evKey){
+  const roles = rolesOfSpeaker(sp.id);
+  const nTravel = needState(evKey, roles, 'travel');
+  const feeNeed = needState(evKey, roles, 'bank');
+
+  const sel = (val, opts, handler, blank) => `<select class="fi" onchange="${handler}">
+    ${blank ? `<option value=""${!val ? ' selected' : ''}>${blank}</option>` : ''}
+    ${opts.map(o => `<option value="${escAttr(o)}"${val === o ? ' selected' : ''}>${escapeHtml(o)}</option>`).join('')}
+  </select>`;
+
+  const fee = `<div style="border:1px solid var(--i6);border-radius:9px;padding:11px 12px;margin-bottom:11px">
+    <div style="display:flex;align-items:baseline;gap:7px;margin-bottom:8px">
+      <div style="font-size:12px;font-weight:700">연사료</div>
+      ${sp.fee_amount ? `<div style="font-size:11px;color:var(--i3)">${escapeHtml(money(sp.fee_amount, sp.fee_currency))}</div>` : ''}
+      ${sp.fee_paid_at ? `<span class="pill p-green" style="font-size:10px">지급 ${escapeHtml(sp.fee_paid_at)}</span>`
+        : sp.fee_amount ? `<span class="pill p-amber" style="font-size:10px">미지급</span>` : ''}
+    </div>
+    <div class="fgr">
+      ${fg('금액', txt(sp.fee_amount, `spField('fee_amount',this.value,'연사료 금액')`, '500000'))}
+      ${fg('통화', sel(sp.fee_currency || 'KRW', CURRENCIES, `spField('fee_currency',this.value,'연사료 통화')`))}
+    </div>
+    <div class="fgr">
+      ${fg('원천징수 구분', sel(sp.fee_tax_type, TAX_TYPES, `spField('fee_tax_type',this.value,'원천징수 구분')`, '미정'),
+        '세액은 계산하지 않습니다 — 어느 쪽인지만 적어 두세요')}
+      ${fg('지급일', dateIn(sp.fee_paid_at, `spField('fee_paid_at',this.value,'연사료 지급일')`))}
+    </div>
+    ${feeNeed ? `<div style="font-size:10.5px;color:${sp.bank_account ? 'var(--i4)' : 'var(--am)'};margin:-2px 0 8px">
+      ${sp.bank_account ? '계좌는 «계좌·여권» 탭에 있어요' : '계좌를 아직 안 받았어요 — «계좌·여권» 탭에서 넣습니다'}</div>` : ''}
+    ${fg('메모', area(sp.fee_note, `spField('fee_note',this.value,'연사료 메모')`, '지급 조건, 정산 담당 등', 2))}
+  </div>`;
+
+  const stay = `<div style="border:1px solid var(--i6);border-radius:9px;padding:11px 12px;margin-bottom:11px">
+    <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
+      <div style="font-size:12px;font-weight:700">숙박</div>
+      <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--i3);margin-left:auto">
+        <input type="checkbox" ${sp.stay_booked === 'yes' ? 'checked' : ''}
+          onchange="spField('stay_booked',this.checked?'yes':'','숙박 예약 완료')"> 예약 완료
+      </label>
+    </div>
+    <div class="fgr">
+      ${fg('호텔', txt(sp.stay_hotel, `spField('stay_hotel',this.value,'호텔')`, '호텔명'))}
+      ${fg('객실', txt(sp.stay_room_type, `spField('stay_room_type',this.value,'객실')`, '싱글 / 더블'))}
+    </div>
+    <div class="fgr">
+      ${fg('체크인', dateIn(sp.stay_in, `spField('stay_in',this.value,'체크인')`))}
+      ${fg('체크아웃', dateIn(sp.stay_out, `spField('stay_out',this.value,'체크아웃')`))}
+    </div>
+    ${sp.stay_in && sp.stay_out && sp.stay_out <= sp.stay_in
+      ? `<div style="font-size:10.5px;color:var(--re);margin:-4px 0 8px">체크아웃이 체크인보다 빠르거나 같아요</div>` : ''}
+    ${fg('메모', area(sp.stay_note, `spField('stay_note',this.value,'숙박 메모')`, '조식 포함 여부, 연박 등', 2))}
+  </div>`;
+
+  const air = `<div style="border:1px solid var(--i6);border-radius:9px;padding:11px 12px;margin-bottom:11px">
+    <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
+      <div style="font-size:12px;font-weight:700">항공</div>
+      ${sp.air_ticketed_at ? `<span class="pill p-green" style="font-size:10px">발권 ${escapeHtml(sp.air_ticketed_at)}</span>` : ''}
+    </div>
+    <div class="fgr">
+      ${fg('구간', txt(sp.air_route, `spField('air_route',this.value,'항공 구간')`, 'ICN–NRT'))}
+      ${fg('좌석', sel(sp.air_class, AIR_CLASSES, `spField('air_class',this.value,'좌석 등급')`, '미정'))}
+    </div>
+    <div style="font-size:10.5px;font-weight:700;color:var(--i3);margin:6px 0 3px">오는 편</div>
+    <div class="fgr">
+      ${fg('편명', txt(sp.air_in_flight, `spField('air_in_flight',this.value,'오는 편명')`, 'KE001'))}
+      ${fg('일시', txt(sp.air_in_at, `spField('air_in_at',this.value,'오는 편 일시')`, '2026-06-01 14:30'))}
+    </div>
+    <div style="font-size:10.5px;font-weight:700;color:var(--i3);margin:6px 0 3px">가는 편</div>
+    <div class="fgr">
+      ${fg('편명', txt(sp.air_out_flight, `spField('air_out_flight',this.value,'가는 편명')`, 'KE002'))}
+      ${fg('일시', txt(sp.air_out_at, `spField('air_out_at',this.value,'가는 편 일시')`, '2026-06-03 09:10'))}
+    </div>
+    ${fg('발권일', dateIn(sp.air_ticketed_at, `spField('air_ticketed_at',this.value,'발권일')`))}
+    ${fg('메모', area(sp.air_note, `spField('air_note',this.value,'항공 메모')`, '경유, 마일리지, 좌석 요청 등', 2))}
+  </div>`;
+
+  const hint = !nTravel ? `<div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);
+    border-radius:7px;font-size:11.5px;color:var(--i3);line-height:1.6;margin-bottom:11px">
+    이 연사의 역할(${escapeHtml(roles.join(' · ') || '배정 없음')})은 숙박·항공을 챙기는 대상이 아니에요.
+    그래도 필요하면 아래에 적어 두세요.</div>` : '';
+
+  return hint + fee + stay + air;
+}
+
+/* ══════════════════════════════════════════
+   계좌 · 여권
+
+   연사료를 주려면 계좌가 있어야 하고, 해외 연사는 항공권을 끊으려면 여권이
+   필요하다. 둘 다 다른 정보와 성격이 다르다 — 숙박을 확인하러 열 때마다
+   계좌번호가 같이 보일 이유가 없다.
+
+   그래서 기본은 가려 두고, 「보기」를 눌러야 열리며 누가 언제 봤는지 남긴다.
+   가리는 것 자체가 보호는 아니다(값은 이미 브라우저에 와 있다). 보호하는 건
+   기록이다 — 누가 봤는지 남으면 함부로 열지 않는다.
+══════════════════════════════════════════ */
+let bankRevealed = false;   // 드로어를 닫거나 다른 연사로 옮기면 다시 가린다
+
+/* 뒷자리만 남긴다. 계좌를 «확인»하는 데는 뒷자리로 충분하고,
+   전체가 필요한 건 실제로 이체할 때뿐이다. */
+const mask = (v, keep) => {
+  const s = String(v || '').trim();
+  if(!s) return '';
+  const k = keep || 4;
+  if(s.length <= k) return '•'.repeat(s.length);
+  return '•'.repeat(Math.min(s.length - k, 12)) + s.slice(-k);
+};
+
+function bankHtml(sp, evKey){
+  const roles = rolesOfSpeaker(sp.id);
+  const nBank = needState(evKey, roles, 'bank');
+  const nPass = needState(evKey, roles, 'passport');
+  const has = sp.bank_account || sp.bank_holder || sp.bank_name;
+
+  if(!bankRevealed){
+    return `<div style="padding:14px;background:var(--i8);border:1px solid var(--i6);border-radius:9px">
+      <div style="font-size:12px;font-weight:700;margin-bottom:6px">계좌 · 여권</div>
+      <div style="font-size:11.5px;color:var(--i3);line-height:1.7">
+        ${has
+          ? `예금주 <b>${escapeHtml(sp.bank_holder || '(없음)')}</b> · ${escapeHtml(sp.bank_name || '은행 미상')}
+             <br>계좌 ${escapeHtml(mask(sp.bank_account))}`
+          : '아직 계좌를 받지 않았어요.'}
+        ${sp.passport_file ? `<br>여권 스캔 ${escapeHtml(sp.passport_received_at || '')} 받음` : ''}
+      </div>
+      <div style="font-size:10.5px;color:var(--i4);margin-top:8px;line-height:1.6">
+        전체를 보려면 아래를 누르세요. 누가 언제 열었는지 기록에 남습니다.</div>
+      <button class="btn" style="font-size:11px;margin-top:8px" onclick="revealBank()">전체 보기</button>
+    </div>`;
+  }
+
+  return `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <div style="font-size:11px;color:var(--am)">열람 중 — 기록에 남았습니다</div>
+      <button class="btn" style="font-size:10.5px;margin-left:auto" onclick="hideBank()">가리기</button>
+    </div>
+    <div style="border:1px solid var(--i6);border-radius:9px;padding:11px 12px;margin-bottom:11px">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px">계좌 ${nBank ? NEED_MARK[nBank] : ''}</div>
+      <div class="fgr">
+        ${fg('예금주', txt(sp.bank_holder, `spField('bank_holder',this.value,'예금주')`, '연사 본인 명의'))}
+        ${fg('은행', txt(sp.bank_name, `spField('bank_name',this.value,'은행')`))}
+      </div>
+      ${fg('계좌번호', txt(sp.bank_account, `spField('bank_account',this.value,'계좌번호')`))}
+      <div style="font-size:10.5px;color:var(--i4);margin:-4px 0 10px">
+        해외 송금이면 아래를 함께 받습니다 — 하나라도 빠지면 은행에서 되돌아옵니다.</div>
+      <div class="fgr">
+        ${fg('SWIFT / BIC', txt(sp.bank_swift, `spField('bank_swift',this.value,'SWIFT')`))}
+        ${fg('IBAN', txt(sp.bank_iban, `spField('bank_iban',this.value,'IBAN')`))}
+      </div>
+      <div class="fgr">
+        ${fg('은행 국가', txt(sp.bank_country, `spField('bank_country',this.value,'은행 국가')`))}
+        ${fg('은행 주소', txt(sp.bank_address, `spField('bank_address',this.value,'은행 주소')`))}
+      </div>
+    </div>
+    <div style="border:1px solid var(--i6);border-radius:9px;padding:11px 12px">
+      <div style="font-size:12px;font-weight:700;margin-bottom:8px">여권 ${nPass ? NEED_MARK[nPass] : ''}</div>
+      ${gotRow('여권 스캔 받음', sp.passport_received_at,
+        `spStamp('passport_received_at','여권 받음')`,
+        `spField('passport_received_at',this.value,'여권 받은 날')`, nPass || 'opt')}
+      ${fg('파일명', txt(sp.passport_file, `spField('passport_file',this.value,'여권 파일')`, '원드라이브 파일명'))}
+      <div style="font-size:10.5px;color:var(--i4);margin-top:-4px">
+        스캔본은 원드라이브에 두고 여기엔 파일명만 적습니다 — 이미지가 이 화면에 뜨면
+        누가 옆에서 봐도 그대로 보입니다.</div>
+    </div>`;
+}
+
+/* 열람을 기록에 남긴다. 저장이 실패하면 열지 않는다 — 기록 없이 보는 길이
+   생기면 기록이 있다는 사실 자체가 의미를 잃는다. */
+export async function revealBank(){
+  const sp = getSpeakerById(spId);
+  if(!sp) return;
+  const row = {
+    speaker_id: sp.id, kind: 'view', ts: td(),
+    direction: '', channel: '', counterpart: '', category: '계좌·여권 열람',
+    subject: '계좌·여권 전체 보기', body: '', answered_at: '', answer: '', status: 'done',
+    author_email: currentUser?.email || '', author_name: currentUser?.name || '',
+  };
+  const res = await saveSpeakerLog(row);
+  if(!res || res.ok === false){
+    if(res?.offline){
+      /* 테스트 모드는 서버가 없어 기록이 남지 않는다. 더미 데이터라 가릴
+         것도 없으니 열어 준다 — 대신 기록이 안 남는다고 알린다. */
+      bankRevealed = true;
+      SPEAKER_LOGS.push({ ...row, id: `SL-tmp-${Date.now()}` });
+      renderSpeakerDr();
+      return;
+    }
+    alert('열람 기록을 남기지 못해 열지 않았어요. 잠시 뒤 다시 해주세요.');
+    return;
+  }
+  SPEAKER_LOGS.push({ ...row, id: res.id || `SL-tmp-${Date.now()}` });
+  trackAction('view', '연사 계좌·여권', sp.event_id, sp.name_snapshot || sp.id);
+  bankRevealed = true;
+  renderSpeakerDr();
+}
+export function hideBank(){ bankRevealed = false; renderSpeakerDr(); }
+
 /* ── 노출 ── */
 window.openSpeakerDr        = openSpeakerDr;
 window.closeSpeakerDr       = closeSpeakerDr;
@@ -798,3 +1049,5 @@ window.scField              = scField;
 window.removeSpeakerContact = removeSpeakerContact;
 window.fillSpeakerMail      = fillSpeakerMail;
 window.sendSpeakerMail      = sendSpeakerMail;
+window.revealBank           = revealBank;
+window.hideBank             = hideBank;
