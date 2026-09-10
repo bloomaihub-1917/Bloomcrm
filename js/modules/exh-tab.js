@@ -1721,9 +1721,11 @@ function renderEquipView(list){
     <div onclick="event.stopPropagation();openExhDr('${escAttr(c.id)}','billing')"
       style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:11.5px">
       <span class="pill p-gray" style="min-width:52px;text-align:center">${c.booth ? '부스 ' + escapeHtml(c.booth) : '미배정'}</span>
-      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(c.name)}</span>
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${
+        isMobile() ? ';font-size:12.5px;font-weight:600' : ''}">${escapeHtml(c.name)}</span>
       <span style="color:var(--i3)">${c.shareOnly ? '<span class="pill p-blue" style="font-size:9px">비용 분담</span>' : c.qty + '개'}</span>
-      <span style="min-width:88px;text-align:right;font-weight:600">${c.amt ? fmtMoney(c.amt, c.cur) : '-'}</span>
+      ${isMobile() ? ''   /* 좁은 화면에서는 금액이 기업명 자리를 먹는다 — 합계는 위 품목 줄에 있다 */
+        : `<span style="min-width:88px;text-align:right;font-weight:600">${c.amt ? fmtMoney(c.amt, c.cur) : '-'}</span>`}
     </div>`).join('');
 
   const summaryBody = isMobile()
@@ -2185,21 +2187,47 @@ function renderGraphicKindView(list){
      마감이 급한 순으로 세우면 같은 품목을 붙이러 전시장을 왔다 갔다 하게 된다.
      boothSortKey는 번호가 없으면 Infinity라, 빼면 NaN이 되어 정렬이 무너진다. */
   const boothOf = (x) => { const k = boothSortKey(x); return k === Infinity ? 1e9 : k; };
-  const coList = (g) => g.cos.slice()
+  /* 받음 표시 단추 — 좁은 화면에서는 손가락이 닿아야 해서 조금 키운다 */
+  const gotBtn = (c, sz) => `<button onclick="event.stopPropagation();toggleItemReceived('${escAttr(c.i.id)}')"
+    title="${c.i.received_at ? '받음 표시를 지웁니다' : '오늘 받은 것으로 표시합니다'}"
+    style="width:${sz}px;height:${sz}px;border-radius:5px;line-height:1;flex-shrink:0;cursor:pointer;font-size:11px;font-weight:800;color:#fff;border:1.5px solid ${
+      c.i.received_at ? 'var(--g)' : 'var(--i6)'};background:${c.i.received_at ? 'var(--g)' : 'transparent'}">${c.i.received_at ? '✓' : ''}</button>`;
+  const dueIn = (c, w) => `<input type="date" class="fi" style="width:${w};padding:3px 6px;font-size:11px" value="${escAttr(c.i.due_at || '')}"
+    onclick="event.stopPropagation()" onchange="setItemField('${escAttr(c.i.id)}','due_at',this.value)">`;
+
+  const coSorted = (g) => g.cos.slice()
     .sort((a, b) => boothOf(a.x) - boothOf(b.x)
-      || String(exhNames(a.x).ko).localeCompare(String(exhNames(b.x).ko), 'ko'))
-    .map(c => `
+      || String(exhNames(a.x).ko).localeCompare(String(exhNames(b.x).ko), 'ko'));
+
+  /* 좁은 화면에서는 한 줄에 다 못 넣는다. 다 넣으려 하면 폭이 고정된 칸들
+     (날짜·마감·금액)이 자리를 차지하고, 하나뿐인 늘어나는 칸인 기업명이 0으로
+     찌그러져 아예 사라진다 — 정작 «부스 9가 어느 회사인지»가 이 목록을 보는
+     이유인데 그것만 없어진다.
+
+     그래서 두 줄로 나눈다. 첫 줄에 누가·몇 장인지, 둘째 줄에 언제까지인지.
+     금액은 뺀다 — 좁은 화면에서 이 목록을 볼 때 돈을 보지는 않는다(합계는
+     위 품목 줄에 이미 있다). */
+  const coList = (g) => coSorted(g).map(c => isMobile() ? `
+    <div style="padding:6px 0;border-bottom:1px solid var(--i8)">
+      <div style="display:flex;align-items:center;gap:8px">
+        ${gotBtn(c, 22)}
+        <span class="pill p-gray" style="flex-shrink:0">${c.x.booth_no ? '부스 ' + escapeHtml(c.x.booth_no) : '미배정'}</span>
+        <span onclick="event.stopPropagation();openExhDr('${escAttr(c.x.id)}','graphic')"
+          style="flex:1;min-width:0;font-size:12.5px;font-weight:600;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(exhNames(c.x).ko)}</span>
+        <span style="color:var(--i4);font-size:11.5px;flex-shrink:0">${c.qty}장</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin:5px 0 0 30px">
+        ${dueIn(c, '128px')}
+        <span class="pill ${c.d.cls}">${escapeHtml(c.d.text)}</span>
+      </div>
+    </div>` : `
     <div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:11.5px">
-      <button onclick="event.stopPropagation();toggleItemReceived('${escAttr(c.i.id)}')"
-        title="${c.i.received_at ? '받음 표시를 지웁니다' : '오늘 받은 것으로 표시합니다'}"
-        style="width:18px;height:18px;border-radius:5px;line-height:1;flex-shrink:0;cursor:pointer;font-size:11px;font-weight:800;color:#fff;border:1.5px solid ${
-          c.i.received_at ? 'var(--g)' : 'var(--i6)'};background:${c.i.received_at ? 'var(--g)' : 'transparent'}">${c.i.received_at ? '✓' : ''}</button>
+      ${gotBtn(c, 18)}
       <span class="pill p-gray" style="min-width:52px;text-align:center">${c.x.booth_no ? '부스 ' + escapeHtml(c.x.booth_no) : '미배정'}</span>
       <span onclick="event.stopPropagation();openExhDr('${escAttr(c.x.id)}','graphic')"
         style="flex:1;min-width:0;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(exhNames(c.x).ko)}</span>
       <span style="color:var(--i4)">${c.qty}장</span>
-      <input type="date" class="fi" style="width:124px;padding:3px 6px;font-size:11px" value="${escAttr(c.i.due_at || '')}"
-        onclick="event.stopPropagation()" onchange="setItemField('${escAttr(c.i.id)}','due_at',this.value)">
+      ${dueIn(c, '124px')}
       <span class="pill ${c.d.cls}" style="min-width:64px;text-align:center">${escapeHtml(c.d.text)}</span>
       <span style="min-width:88px;text-align:right;font-weight:600">${c.amt ? escapeHtml(fmtMoney(c.amt, c.cur)) : '-'}</span>
     </div>`).join('');
