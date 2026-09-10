@@ -136,7 +136,7 @@ let exhView = 'dash';        // dash | list | booth | equip | graphic
 /* 그래픽 현황 안의 보기와 거르개. 그래픽은 기업 한 줄로 볼 일(단계 진행)과
    파일 한 줄로 볼 일(무엇이 안 왔나)이 갈린다 — 화면 하나에 둘 다 넣으면
    어느 쪽도 제대로 안 보여서 나눠 두고 전환한다. */
-let gView = 'item';          // item(받을 파일) | co(기업별 진행)
+let gView = 'item';          // item(받을 파일) | kind(품목별) | co(기업별 진행) | self(독립부스)
 let gFil  = 'all';           // all | todo | late | none | got
 
 export function setGraphicView(v){ gView = v; renderExh(); }
@@ -1824,19 +1824,154 @@ function renderEquipView(list){
 function renderGraphicView(list){
   const rows = list.filter(x => x.graphic_ordered_at || x.graphic_type
     || liveItemsFor(x.id).some(i => (i.category || '') === 'graphic'));
-  if(!rows.length) return emptyView('그래픽을 주문한 기업이 없어요');
+  /* 독립부스는 우리에게 그래픽을 «주문»하지 않는다 — 자기들이 만들어 와서
+     우리는 받아 보기만 한다. 그래서 주문 목록(rows)이 아니라 부스 타입으로 잡는다.
+     주문이 하나도 없어도 이 보기는 열려야 한다. */
+  const selfRows = list.filter(x => (x.booth_type || '') === SELF_BUILD_TYPE);
+  if(!rows.length && !selfRows.length) return emptyView('그래픽을 주문한 기업이 없어요');
 
   /* 보기 전환 — 기업별은 "이 회사가 어느 단계인가", 항목별은 "무엇이 아직 안 왔나".
      그래픽은 한 기업이 백월·행잉배너·데스크 랩핑을 함께 주문하므로 기업 한 줄로는
      무엇을 받았는지 체크할 자리가 없다. 그래서 받을 파일 목록을 기본으로 둔다. */
   const seg = `<div style="padding:12px 16px 0"><div class="seg">
-    ${[['item', '받을 파일'], ['kind', '품목별'], ['co', '기업별 진행']].map(([k, l]) =>
+    ${[['item', '받을 파일'], ['kind', '품목별'], ['co', '기업별 진행'],
+       ['self', `독립부스${selfRows.length ? ` ${selfRows.length}` : ''}`]].map(([k, l]) =>
       `<button class="seg-b${gView === k ? ' on' : ''}" onclick="setGraphicView('${k}')">${l}</button>`).join('')}
   </div></div>`;
 
+  if(gView === 'self') return seg + renderSelfBoothView(selfRows);
+  if(!rows.length) return seg + emptyView('그래픽을 주문한 기업이 없어요');
   return seg + (gView === 'co' ? renderGraphicCoView(rows)
     : gView === 'kind' ? renderGraphicKindView(rows)
     : renderGraphicItemView(rows));
+}
+
+/* ── 독립부스 ──
+   자체 시공은 부스를 업체가 직접 짓는다. 우리가 만들 것은 없지만 그냥 두면
+   안 된다 — 높이 제한을 넘기거나 통로를 침범하거나 옆 부스를 가리는 도면이
+   개막 직전에 발견되면 그때는 고칠 시간이 없다.
+
+   그래서 세 가지를 받는다. 누가 짓는지(시공사), 무엇을 짓는지(도면·그래픽),
+   그리고 우리가 봤는지(확인). 셋이 한 줄에 있어야 "받았는데 아직 안 봤다"가
+   보인다 — 받은 것만 세면 그게 완료로 착각된다. */
+function renderSelfBoothView(rows){
+  if(!rows.length) return emptyView('독립부스(Self-Construction)로 신청한 기업이 없어요');
+
+  const bk = (x) => { const k = boothSortKey(x); return k === Infinity ? 1e9 : k; };
+  const list = [...rows].sort((a, b) => bk(a) - bk(b));
+
+  const hasBuilder = (x) => !!String(x.builder || '').trim();
+  const got  = (x) => !!x.booth_design_received_at;
+  const seen = (x) => !!x.booth_design_checked_at;
+  const nB = list.filter(hasBuilder).length;
+  const nG = list.filter(got).length;
+  const nS = list.filter(seen).length;
+  const nOk  = list.filter(x => x.booth_design_result === 'ok').length;
+  const nFix = list.filter(x => x.booth_design_result === 'fix').length;
+  const due = dueInfo('calc:design', exhEvent);
+
+  /* 숫자만 보면 12/18이 얼마나 남은 건지 안 들어온다 */
+  const bar = (v, of, color) => `<div style="display:flex;align-items:center;gap:6px;min-width:120px">
+    <div style="flex:1;height:5px;border-radius:3px;background:var(--i7);overflow:hidden">
+      <div style="width:${of ? Math.round(v / of * 100) : 0}%;height:100%;background:${v === of ? 'var(--g)' : color}"></div></div>
+    <span style="font-size:11px;font-weight:700;color:${v === of ? 'var(--g)' : 'var(--i3)'}">${v}/${of}</span></div>`;
+
+  const pills = `<span class="pill p-gray">독립부스 ${list.length}곳</span>`
+    + `<span class="pill ${nB === list.length ? 'p-green' : 'p-amber'}">시공사 ${nB}/${list.length}</span>`
+    + `<span class="pill ${nG === list.length ? 'p-green' : 'p-amber'}">도면 수령 ${nG}/${list.length}</span>`
+    + `<span class="pill ${nS === list.length ? 'p-green' : 'p-amber'}">확인 ${nS}/${list.length}</span>`
+    + (nFix ? `<span class="pill p-red" title="${escAttr(list.filter(x => x.booth_design_result === 'fix').map(x => exhNames(x).ko).join(', '))}">수정 요청 ${nFix}</span>` : '')
+    + (nOk ? `<span class="pill p-green">적합 ${nOk}</span>` : '')
+    + (due
+      ? `<span class="pill ${due.days < 0 ? 'p-red' : due.days <= 7 ? 'p-amber' : 'p-gray'}">수령 마감 ${escapeHtml(due.date)}${
+          due.days < 0 ? ` · ${-due.days}일 지남` : due.days === 0 ? ' · 오늘' : ` · D-${due.days}`}</span>`
+      : '');
+
+  const board = `<div class="uc" style="margin:12px 0 10px;padding:11px 14px">
+    <div style="display:flex;flex-wrap:wrap;gap:14px 26px">
+      ${[['시공사 정보', nB, 'var(--a)'], ['도면·그래픽 수령', nG, 'var(--am)'],
+         ['우리 확인', nS, 'var(--am)'], ['적합 판정', nOk, 'var(--g)']].map(([l, v, c]) =>
+        `<div style="min-width:150px">
+          <div style="font-size:10px;color:var(--i5);font-weight:600">${l}</div>
+          <div style="margin-top:4px">${bar(v, list.length, c)}</div></div>`).join('')}
+    </div>
+    ${nG > nS ? `<div style="font-size:11px;color:var(--am);margin-top:8px">받아 놓고 아직 안 본 도면이 <b>${nG - nS}건</b> 있어요 — 확인해야 적합·수정을 판정할 수 있습니다</div>` : ''}
+  </div>`;
+
+  const txt = (x, f, ph, label, w) => `<input class="fi" style="width:${w};padding:3px 6px;font-size:11.5px"
+    placeholder="${escAttr(ph)}" value="${escAttr(x[f] || '')}" onclick="event.stopPropagation()"
+    onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')">`;
+  const dt = (x, f, label) => `<input type="date" class="fi" style="width:124px;padding:3px 6px;font-size:11.5px"
+    value="${escAttr(x[f] || '')}" onclick="event.stopPropagation()"
+    onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')">`;
+
+  /* 확인 결과는 받아 보기 전에는 고를 수 없게 둔다 — 안 본 도면에 «적합»이
+     찍히면 그 부스는 아무도 다시 안 본다. */
+  const resultCell = (x) => !got(x)
+    ? '<span style="font-size:11px;color:var(--i6)">도면 수령 후</span>'
+    : `<select class="fi" style="width:104px;padding:3px 5px;font-size:11.5px" onclick="event.stopPropagation()"
+        onchange="setExhField('${escAttr(x.id)}','booth_design_result',this.value,'도면 확인 결과')">
+        ${[['', '미판정'], ['ok', '적합'], ['fix', '수정 요청']].map(([v, l]) =>
+          `<option value="${v}"${(x.booth_design_result || '') === v ? ' selected' : ''}>${l}</option>`).join('')}
+      </select>`;
+
+  const stateCell = (x) => { const s = boothDesignState(x);
+    const c = s.state === 'done' ? 'p-green' : s.state === 'warn' ? 'p-red'
+      : s.state === 'none' ? 'p-gray' : 'p-amber';
+    return `<span class="pill ${c}">${escapeHtml(s.text)}</span>`; };
+
+  /* 연락처는 칸을 다 벌리면 표가 안 읽힌다 — 있는지만 보이고 자세한 건 툴팁에 */
+  const contactOf = (x) => [x.builder_contact, x.builder_tel, x.builder_mobile, x.builder_email]
+    .map(v => String(v || '').trim()).filter(Boolean);
+
+  if(isMobile()) return viewShell(pills, board + list.map(x => `
+    <div style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px">
+        <span class="pill p-gray">${x.booth_no ? '부스 ' + escapeHtml(x.booth_no) : '미배정'}</span>
+        <span onclick="openExhDr('${escAttr(x.id)}','progress')"
+          style="font-size:13px;font-weight:700;flex:1;min-width:0;cursor:pointer">${escapeHtml(exhNames(x).ko)}</span>
+        ${stateCell(x)}
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+        <span style="font-size:11px;color:var(--i4);min-width:56px">시공사</span>${txt(x, 'builder', '업체명', '시공업체', '100%')}</div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+        <span style="font-size:11px;color:var(--i4);min-width:56px">수령</span>${dt(x, 'booth_design_received_at', '도면 수령')}</div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+        <span style="font-size:11px;color:var(--i4);min-width:56px">확인</span>${dt(x, 'booth_design_checked_at', '도면 확인')}</div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span style="font-size:11px;color:var(--i4);min-width:56px">결과</span>${resultCell(x)}</div>
+    </div>`).join(''));
+
+  return viewShell(pills, board + `<div class="tw"><table><thead><tr>
+      <th style="min-width:44px;text-align:right">신청순</th>
+      <th style="min-width:56px">부스</th>
+      <th style="min-width:150px">기업</th>
+      <th style="min-width:150px">시공사</th>
+      <th style="min-width:70px;text-align:center">연락처</th>
+      <th style="min-width:130px">도면·그래픽 수령</th>
+      <th style="min-width:130px">우리 확인</th>
+      <th style="min-width:110px">결과</th>
+      <th style="min-width:90px;text-align:center">상태</th>
+      <th style="min-width:150px">비고</th>
+    </tr></thead><tbody>
+    ${list.map(x => {
+      const c = contactOf(x);
+      return `<tr>
+        ${applyCell(x)}
+        <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
+        ${coCell(x, 'progress')}
+        <td>${txt(x, 'builder', '업체명', '시공업체', '142px')}</td>
+        <td style="text-align:center">${c.length
+          ? `<span class="pill p-green" title="${escAttr(c.join(' · '))}">있음</span>`
+          : '<span class="pill p-gray" title="기업 상세 › 현장에서 담당자·연락처를 넣을 수 있어요">없음</span>'}</td>
+        <td>${dt(x, 'booth_design_received_at', '도면 수령')}</td>
+        <td>${dt(x, 'booth_design_checked_at', '도면 확인')}</td>
+        <td>${resultCell(x)}</td>
+        <td style="text-align:center">${stateCell(x)}</td>
+        <td>${txt(x, 'booth_design_note', '수정 요청 내용 등', '도면 비고', '100%')}</td>
+      </tr>`;
+    }).join('')}
+    </tbody></table></div>`);
 }
 
 /* ── 받을 파일 계획 ──
