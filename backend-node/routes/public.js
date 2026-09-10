@@ -36,9 +36,11 @@ const router = express.Router();
      assets/logos/<행사슬러그>/<도록순번>.<확장자>
        예: assets/logos/2026-kic/1.png
 
-   public/이 아니라 assets/에 둔다. Vercel은 public/을 정적 출력으로 빼내면서
-   함수 묶음에서 지우고 includeFiles도 듣지 않는다 — 로컬에서는 뜨는데 배포하면
-   로고만 사라지던 이유였다. 예약되지 않은 이름이어야 파일이 함수와 함께 간다.
+   이 프로젝트는 Vercel의 express 프리셋으로 빌드되고, 프리셋이 루트 폴더를
+   함수와 함께 담는다 — vercel.json에 includeFiles를 적을 필요가 없다(적었다가
+   빌드가 죽었다: functions의 'api/index.js' 패턴이 프리셋이 만드는 함수와 맞지
+   않아 설정 검증에서 실패한다). 배포본이 이 폴더를 보고 있는지는 /health가
+   행사별 장수로 알려준다.
 
    화면에서는 높이를 맞춰(일반 24px, 스폰서 34px) 줄이므로 폭은 제한하지 않는다
    (가로형 로고가 많아 폭을 고정하면 찌그러진다).
@@ -202,12 +204,24 @@ const dropKorean = (v) => (/[가-힣㄰-㆏]/.test(String(v || '')) ? '' : Strin
    붙어 두 번호가 한 덩어리로 읽힌다. 원문의 줄을 그대로 살린다. */
 const nl2br = (v) => esc(v).replace(/\n/g, '<br>');
 
+/* 신청서 서식이 '(General Inquiries)'와 '(Direct Number)' 두 줄을 미리 깔아 두는
+   탓에, 한쪽만 적어 보낸 기업은 딱지만 남은 줄까지 함께 온다. 그대로 내보내면
+   번호가 없는 '(Direct Number)'가 공개 화면에 남는다(13곳이 그렇고, 노보텍·
+   파렉셀은 두 줄이 다 비어 있어 연락처 행 자체가 빠진다).
+
+   DB는 받은 그대로 두고 화면에서만 거른다 — 무엇을 받았는지도 기록이다. */
+const dropEmptyLabels = (v) => String(v || '').split('\n')
+  .filter((l) => /[0-9a-zA-Z가-힣]/.test(l.replace(/\([^)]*\)/g, '')))
+  .join('\n');
+
 function card(x, logo) {
   const web = webLink(x.book_website);
   const sponsor = sponsorOf(x);
   const rows = [];
-  if (x.book_address) rows.push(['Address', nl2br(x.book_address)]);
-  if (x.book_phone) rows.push(['Tel', nl2br(x.book_phone)]);
+  const address = dropEmptyLabels(x.book_address);
+  const phone = dropEmptyLabels(x.book_phone);
+  if (address) rows.push(['Address', nl2br(address)]);
+  if (phone) rows.push(['Tel', nl2br(phone)]);
   if (web) rows.push(['Website', `<a href="${esc(web.href)}" target="_blank" rel="noopener nofollow">${esc(web.text)}</a>`]);
 
   /* 검색은 브라우저가 이 칸의 글자로 거른다 — 이름·부스번호·소개글까지 한 번에.
@@ -236,16 +250,46 @@ function card(x, logo) {
      대개 같다) 중복도 지운다. */
   const hay = [...new Set(terms)].join('|');
 
-  return `<article class="card${sponsor ? ` sponsor ${sponsor.cls}` : ''}" data-find="${esc(hay)}">
-  <header>
-    ${x.book_order ? `<span class="no">${esc(x.book_order)}</span>` : ''}
+  /* 부스 배지와 꺾쇠는 한 묶음으로 오른쪽 끝에 붙인다. 따로 두면 부스번호가
+     없는 기업(모기업 부스에 얹힌 자회사)에서 꺾쇠가 이름 옆으로 따라와,
+     제목의 일부처럼 보인다. */
+  const head = (tail) => `${x.book_order ? `<span class="no">${esc(x.book_order)}</span>` : ''}
     ${logo ? `<img class="logo" src="${esc(logo)}" alt="${esc(x.name)}" loading="lazy">` : ''}
     <h3>${esc(x.name)}</h3>
-    ${sponsor ? `<span class="grade">${sponsor.label}</span>` : ''}
-    ${x.booth_no ? `<span class="booth">Booth ${esc(x.booth_no)}</span>` : ''}
-  </header>
-  ${x.book_intro ? `<p class="intro">${nl2br(x.book_intro)}</p>` : ''}
-  ${rows.length ? `<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>` : ''}
+    <span class="tail">
+      ${sponsor ? `<span class="grade">${sponsor.label}</span>` : ''}
+      ${x.booth_no ? `<span class="booth">Booth ${esc(x.booth_no)}</span>` : ''}
+      ${tail}
+    </span>`;
+
+  const body = `${x.book_intro ? `<p class="intro">${nl2br(x.book_intro)}</p>` : ''}
+  ${rows.length ? `<dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>` : ''}`;
+
+  const cls = `card${sponsor ? ` sponsor ${sponsor.cls}` : ''}`;
+
+  /* 접힌 채로 내려준다. 55곳이 소개글까지 펼쳐져 있으면 한 화면에 두세 곳밖에
+     안 들어와, 찾는 기업까지 한참 훑어야 한다. 로고와 이름만 세워 두면 목록을
+     눈으로 한 번에 넘길 수 있다.
+
+     <details>를 쓴다 — 여닫는 스크립트를 따로 두지 않아도 되고, 스크립트가 늦게
+     오거나 죽어도 눌러서 펼쳐진다(행사장 네트워크). 키보드·스크린리더도 그대로
+     동작한다.
+
+     펼칠 내용이 없는 기업은 <article>로 낸다. 눌러도 아무 일이 없는데 손가락
+     표시가 뜨면 고장으로 읽힌다 — 자료를 아직 못 받은 다섯 곳이 그렇다. */
+  return body.trim()
+    ? `<details class="${cls}" data-find="${esc(hay)}">
+  <summary>
+    ${head('<span class="chev" aria-hidden="true"></span>')}
+  </summary>
+  <div class="detail">
+  ${body}
+  </div>
+</details>`
+    : `<article class="${cls} flat" data-find="${esc(hay)}">
+  <div class="summary-like">
+    ${head('')}
+  </div>
 </article>`;
 }
 
@@ -299,14 +343,42 @@ function page({ slug, event, list }) {
   .count { margin:14px 0 8px; color:var(--dim); font-size:13px; }
   .card { background:var(--panel); border:1px solid var(--line); border-radius:12px;
     padding:16px 18px; margin:0 0 10px; }
-  .card header { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .card h3 { margin:0; font-size:16px; letter-spacing:-.2px; font-weight:600; }
+
+  /* 접힌 줄. summary는 기본 삼각형 표지가 붙는데 브라우저마다 자리와 모양이
+     달라, 지우고 오른쪽에 꺾쇠를 직접 둔다. */
+  /* 접힌 줄. 좁은 화면에서는 배지 묶음이 다음 줄로 내려가 두 줄이 된다 — 이름을
+     칸에 맞춰 접게 하면(min-width:0 + overflow-wrap) 낱말이 한 글자씩 쪼개져
+     'S e l t a…'가 되므로, 이름은 그대로 두고 줄바꿈을 허용한다. */
+  summary, .summary-like { display:flex; align-items:center; gap:8px 10px; flex-wrap:wrap;
+    list-style:none; cursor:pointer; }
+  .no, .logo, .grade, .tail, .chev { flex:none; }
+  .flat .summary-like { cursor:default; }        /* 펼칠 게 없으면 눌러도 안 열린다 */
+  summary::-webkit-details-marker { display:none; }
+  summary::marker { content:''; }
+  summary:focus-visible { outline:2px solid var(--accent); outline-offset:4px; border-radius:4px; }
+
+  /* 꺾쇠는 두 변만 그려 만든다 — 글꼴에 없는 글자를 쓰거나 이미지를 하나 더
+     받으러 가지 않아도 된다. 펼치면 위를 향한다. */
+  .tail { margin-left:auto; display:flex; align-items:center; gap:10px; }
+  .chev { width:7px; height:7px; flex:none;
+    border-right:2px solid var(--dim); border-bottom:2px solid var(--dim);
+    transform:rotate(45deg); transform-origin:60% 60%; transition:transform .15s; }
+  details[open] > summary .chev { transform:rotate(-135deg); }
 
   /* 로고는 높이만 맞춘다 — 가로형·세로형이 섞여 있어 폭을 고정하면 찌그러진다.
      투명 배경 PNG를 받기로 했지만 흰 배경으로 오는 것도 섞일 수 있어, 다크
      모드에서는 흰 판을 깔아 로고가 어두운 바탕에 묻히지 않게 한다. */
   .logo { height:24px; width:auto; max-width:150px; object-fit:contain; }
   .sponsor .logo { height:34px; max-width:200px; }
+
+  /* 폰에서는 로고를 줄인다. 접힌 줄은 한눈에 넘길 수 있어야 하는데, 데스크톱
+     크기 그대로 두면 로고가 줄의 절반을 먹어 이름과 배지가 두세 줄로 흩어진다. */
+  @media (max-width: 480px) {
+    .logo { height:20px; max-width:96px; }
+    .sponsor .logo { height:26px; max-width:124px; }
+    .no { min-width:18px; }
+  }
   .sec { margin:26px 0 10px; font-size:12px; font-weight:600; letter-spacing:.08em;
     color:var(--dim); text-transform:uppercase; }
   .sec:first-child { margin-top:6px; }
@@ -323,11 +395,13 @@ function page({ slug, event, list }) {
   .g-silver { --gc:#475569; --gbg:#e2e8f0; --gline:#cbd5e1; }
   .g-bronze { --gc:#9a3412; --gbg:#ffedd5; --gline:#fed7aa; }
   .no { min-width:26px; color:var(--dim); font-size:12px; font-variant-numeric:tabular-nums; }
-  .booth { margin-left:auto; padding:2px 8px; border-radius:999px;
+  .booth { padding:2px 8px; border-radius:999px;
     background:var(--chip); color:var(--accent); font-size:12px; white-space:nowrap; }
-  .intro { margin:10px 0 0; color:var(--body); }
+  .detail { margin-top:12px; }
+  .intro { margin:0; color:var(--body); }
   dl { display:grid; grid-template-columns:64px 1fr; gap:4px 12px;
     margin:12px 0 0; padding-top:12px; border-top:1px solid var(--line); font-size:13px; }
+  .intro:empty + dl, .detail > dl:first-child { margin-top:0; padding-top:0; border-top:0; }
   dt { color:var(--dim); }
   dd { margin:0; word-break:break-word; }
   a { color:var(--accent); }
