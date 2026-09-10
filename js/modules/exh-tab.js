@@ -2715,6 +2715,68 @@ export async function bookDrop(e, id){
 
    부스 순으로 세운다 — 간판을 달고 벽면을 붙이는 일이 전시장을 한 바퀴 도는
    일이라, 그 순서대로 있어야 한 번에 끝난다. */
+/* ── 기본 시공 일괄 처리 ──
+   간판은 기업이 이름만 주면 우리가 만든다. 그래서 스무 곳 서른 곳을 같은 날
+   한꺼번에 뽑아 놓고, 표로 돌아와 날짜를 하나하나 찍게 된다. 그 반복을 없앤다.
+
+   고른 것은 행사가 바뀌면 비운다 — 다른 행사 목록에서 남은 선택이 보이지 않는
+   채로 살아 있으면, 일괄 처리가 엉뚱한 곳에 걸린다. */
+let baseSel = new Set();
+let baseSelEvent = '';
+
+const baseSelSync = () => {
+  if(baseSelEvent !== exhEvent){ baseSel = new Set(); baseSelEvent = exhEvent; }
+};
+
+export function toggleBaseSel(id){
+  baseSelSync();
+  baseSel.has(id) ? baseSel.delete(id) : baseSel.add(id);
+  renderExh();
+}
+
+/* 지금 화면에 보이는 것만 다룬다 — 필터를 걸어 놓고 «모두»를 누르면 걸러낸
+   것까지 잡히면 안 된다. 하나라도 안 골라져 있으면 전체 선택, 다 골라져 있으면 해제. */
+export function toggleBaseSelAll(){
+  baseSelSync();
+  const ids = visibleList().filter(x => baseKind(x)).map(x => x.id);
+  const allOn = ids.length > 0 && ids.every(i => baseSel.has(i));
+  ids.forEach(i => allOn ? baseSel.delete(i) : baseSel.add(i));
+  renderExh();
+}
+
+/* 고른 곳의 «우리 작업» 날짜를 한 번에 찍는다. 날짜를 비워 두면 오늘이다 —
+   대개 만든 날 바로 표시하므로 그게 기본값이다.
+   이미 찍혀 있는 곳이 몇 곳 덮이는지 먼저 알려 준다. 되돌릴 방법이 없다. */
+export async function applyBaseDone(){
+  baseSelSync();
+  const rows = visibleList().filter(x => baseKind(x) && baseSel.has(x.id));
+  if(!rows.length){ alert('제작 완료로 표시할 곳을 먼저 고르세요.'); return; }
+
+  const v = (document.getElementById('base-bulk-date')?.value || '').trim() || td();
+  const over = rows.filter(x => String(x.base_done_at || '').trim() && x.base_done_at !== v);
+  const noName = rows.filter(x => baseKind(x) === 'fascia' && !fasciaName(x));
+
+  if(!confirm(`${rows.length}곳을 «제작 완료 ${v}»로 표시합니다.`
+    + (over.length ? `\n이미 날짜가 적힌 ${over.length}곳도 이 날짜로 바뀝니다.` : '')
+    + (noName.length ? `\n\n⚠ 간판에 넣을 영문명이 없는 곳이 ${noName.length}곳 있어요 — 이름 없이 완료로 표시됩니다.\n   ${noName.slice(0, 5).map(x => exhNames(x).ko).join(', ')}${noName.length > 5 ? ' 외' : ''}` : ''))) return;
+
+  for(const x of rows) await patchExh(x.id, { base_done_at: v }, BASE_KINDS[baseKind(x)].done);
+  baseSel.clear();
+  renderExh();
+}
+
+/* 잘못 찍었을 때 되돌리는 길도 같이 둔다 — 일괄로 넣을 수 있으면 일괄로 빼는
+   길도 있어야 한다. 없으면 스무 곳을 하나씩 지우게 된다. */
+export async function clearBaseDone(){
+  baseSelSync();
+  const rows = visibleList().filter(x => baseKind(x) && baseSel.has(x.id) && String(x.base_done_at || '').trim());
+  if(!rows.length){ alert('제작 완료가 적힌 곳을 골라 주세요.'); return; }
+  if(!confirm(`${rows.length}곳의 «제작 완료» 날짜를 지웁니다.`)) return;
+  for(const x of rows) await patchExh(x.id, { base_done_at: '' }, BASE_KINDS[baseKind(x)].done);
+  baseSel.clear();
+  renderExh();
+}
+
 function renderBaseView(list){
   const rows = list.filter(x => baseKind(x));
   if(!rows.length) return emptyView('기본 시공 대상이 없어요 — 기본부스·블록부스·라이팅부스가 있어야 합니다');
@@ -2770,10 +2832,28 @@ function renderBaseView(list){
     const c = s.state === 'done' ? 'p-green' : s.state === 'part' ? 'p-amber' : 'p-red';
     return `<span class="pill ${c}">${escapeHtml(s.text || '')}</span>`; };
 
+  baseSelSync();
+  const selN = rows.filter(x => baseSel.has(x.id)).length;
+  const allOn = rows.length > 0 && rows.every(x => baseSel.has(x.id));
+
+  const selBox = (x) => `<input type="checkbox" ${baseSel.has(x.id) ? 'checked' : ''}
+    onclick="event.stopPropagation();toggleBaseSel('${escAttr(x.id)}')"
+    title="일괄 처리에 넣습니다" style="cursor:pointer">`;
+
+  /* 날짜를 비워 두면 오늘로 찍는다 — 값을 미리 넣어 두면 «오늘»이 아니라
+     «화면을 연 날»이 되어, 창을 켜 둔 채 다음 날 누르면 어제로 들어간다. */
+  const actions = `<input type="date" id="base-bulk-date" class="fi"
+      style="width:136px;padding:4px 7px;font-size:11.5px" title="비우면 오늘 날짜로 찍습니다">
+    <button class="btn bp bs" onclick="applyBaseDone()"
+      title="고른 곳의 «우리 작업» 날짜를 한 번에 찍습니다">${selN ? `${selN}곳 ` : ''}제작 완료</button>
+    ${selN ? `<button class="btn bs" onclick="clearBaseDone()" title="고른 곳의 «우리 작업» 날짜를 지웁니다">완료 해제</button>` : ''}
+    <button class="btn bs" onclick="toggleBaseSelAll()">${allOn ? '모두 해제' : '모두 선택'}</button>`;
+
   if(isMobile()) return viewShell(pills, rows.map(x => {
     const k = baseKind(x);
     return `<div style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px">
+        ${selBox(x)}
         <span class="pill p-gray">${x.booth_no ? '부스 ' + escapeHtml(x.booth_no) : '미배정'}</span>
         <span onclick="openExhDr('${escAttr(x.id)}','progress')"
           style="font-size:13px;font-weight:700;flex:1;min-width:0;cursor:pointer">${escapeHtml(exhNames(x).ko)}</span>
@@ -2787,9 +2867,12 @@ function renderBaseView(list){
       <div style="display:flex;gap:6px;align-items:center">
         <span style="font-size:11px;color:var(--i4);min-width:64px">${escapeHtml(BASE_KINDS[k].done)}</span>${dateCell(x, 'base_done_at', BASE_KINDS[k].done)}</div>
     </div>`;
-  }).join(''));
+  }).join(''), actions);
 
   return viewShell(pills, `<div class="tw"><table><thead><tr>
+      <th style="min-width:26px"><input type="checkbox" ${allOn ? 'checked' : ''}
+        onclick="event.stopPropagation();toggleBaseSelAll()" title="지금 보이는 곳을 모두 선택/해제"
+        style="cursor:pointer"></th>
       <th style="min-width:44px;text-align:right">신청순</th>
       <th style="min-width:56px">부스</th>
       <th style="min-width:150px">기업</th>
@@ -2803,7 +2886,8 @@ function renderBaseView(list){
     </tr></thead><tbody>
     ${rows.map(x => {
       const k = baseKind(x);
-      return `<tr>
+      return `<tr${baseSel.has(x.id) ? ' style="background:var(--ad)"' : ''}>
+        <td style="text-align:center">${selBox(x)}</td>
         ${applyCell(x)}
         <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
         ${coCell(x, 'progress')}
@@ -2819,7 +2903,7 @@ function renderBaseView(list){
         <td>${noteCell(x)}</td>
       </tr>`;
     }).join('')}
-    </tbody></table></div>`);
+    </tbody></table></div>`, actions);
 }
 
 /* ── 웹디렉토리 주소 ──────────────────────────────────────────
@@ -4257,6 +4341,10 @@ window.renderExhImportList = renderExhImportList;
 window.confirmExhImport = confirmExhImport;
 window.toggleExhDate = toggleExhDate;
 window.setExhField = setExhField;
+window.toggleBaseSel    = toggleBaseSel;
+window.toggleBaseSelAll = toggleBaseSelAll;
+window.applyBaseDone    = applyBaseDone;
+window.clearBaseDone    = clearBaseDone;
 window.toggleExhFlag = toggleExhFlag;
 window.toggleSharedBooth = toggleSharedBooth;
 window.setExhDateWithFlag = setExhDateWithFlag;
