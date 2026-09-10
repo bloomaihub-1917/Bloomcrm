@@ -1505,6 +1505,49 @@ export function toggleEquipRow(key){
 ══════════════════════════════════════════ */
 const MONEY_CATS = [['booth', '부스'], ['equip', '비품'], ['graphic', '그래픽'], ['etc', '기타']];
 
+/* ══════════════════════════════════════════
+   분류별 받아야 할 돈 · 받은 돈 · 안 받은 돈
+
+   입금(exhibitor_payments)에는 분류가 없다. 돈은 "부스비 300만 입금"이 아니라
+   "○○사 400만 입금"으로 한 번에 들어오고, 인보이스도 기업 단위다. 그래서
+   부스비를 받았는지 비품비를 받았는지는 데이터로 갈라낼 수 없다.
+
+   기업 단위로 가른다. 완납한 기업이 낸 돈은 그 기업이 신청한 모든 분류를
+   덮은 것으로 보고, 미납 기업의 청구는 통째로 «안 받은 돈»에 넣는다.
+
+   그래서 부분 입금한 기업은 낸 만큼이 있어도 전액이 «안 받은 돈»에 잡힌다.
+   숫자를 얼버무리지 않으려고 그렇게 두고, 그런 기업이 몇 곳인지 화면에 함께
+   적는다 — 안 적으면 미수금이 실제보다 커 보이는 이유를 알 수 없다.
+
+   완납 판정은 통화별로 한다. 원화는 다 냈는데 달러가 남은 기업이 있어서,
+   기업 하나를 한 상태로 묶으면 어느 쪽이 남았는지가 사라진다. */
+export function catSettleByCurrency(list){
+  const out = {};
+  const partial = new Set();
+
+  (list || []).forEach(x => {
+    const st = settleByCurrency(x.id);
+    const by = moneyRowsFor(x);
+
+    Object.keys(by).forEach(cur => {
+      if(!out[cur]) out[cur] = {};
+      // 그 통화로 청구한 게 없으면 판단할 근거가 없다 — 미납으로 본다
+      const bal = st[cur] ? st[cur].balance : 0;
+      const paidUp = st[cur] ? bal <= 0 : false;
+      if(st[cur] && st[cur].paid > 0 && bal > 0) partial.add(x.id);
+
+      MONEY_CATS.forEach(([k]) => {
+        const v = by[cur][k] || 0;
+        if(!v) return;
+        if(!out[cur][k]) out[cur][k] = { billed: 0, paid: 0, unpaid: 0 };
+        out[cur][k].billed += v;
+        out[cur][k][paidUp ? 'paid' : 'unpaid'] += v;
+      });
+    });
+  });
+  return { out, partial: [...partial] };
+}
+
 /* 기업 하나의 분류별 금액 — 통화별로 갈라 담는다 */
 function moneyRowsFor(x){
   const by = {};
@@ -1567,7 +1610,58 @@ function renderMoneyView(list){
   const payCols = [['bank', '입금·계좌이체'], ['card', '입금·카드']]
     .concat(Object.values(settleTotal).some(s => s.etc) ? [['etc', '입금·미확인']] : []);
 
-  if(isMobile()) return viewShell(pills, rows.map(({ x, by }) => {
+  /* ── 분류별 대시보드 ──
+     표는 기업이 주인공이라 "부스비 얼마 남았나"를 한눈에 볼 수 없다. 그걸 위에
+     따로 올린다. 표는 그 아래 그대로 두고 세부를 본다. */
+  const { out: catS, partial } = catSettleByCurrency(list);
+  const catCards = Object.keys(catS).sort().map(cur => {
+    const cats = MONEY_CATS.filter(([k]) => catS[cur][k]);
+    if(!cats.length) return '';
+    const sum = cats.reduce((a, [k]) => {
+      const c = catS[cur][k];
+      a.billed += c.billed; a.paid += c.paid; a.unpaid += c.unpaid; return a;
+    }, { billed: 0, paid: 0, unpaid: 0 });
+
+    const bar = (c) => {
+      const pct = c.billed ? Math.round(c.paid / c.billed * 100) : 0;
+      return `<div style="height:5px;background:var(--i7);border-radius:3px;overflow:hidden;margin-top:6px">
+        <div style="height:100%;width:${pct}%;background:${pct >= 100 ? 'var(--g)' : 'var(--a)'}"></div></div>`;
+    };
+    const line = (label, c, strong) => `<div style="padding:9px 12px;border-top:1px solid var(--i8)${
+        strong ? ';background:var(--i9)' : ''}">
+      <div style="display:flex;align-items:baseline;gap:8px">
+        <span style="font-size:11.5px;font-weight:${strong ? 700 : 600};color:var(--i2);flex:1">${escapeHtml(label)}</span>
+        <span style="font-size:10px;color:var(--i5)">${c.billed ? Math.round(c.paid / c.billed * 100) : 0}%</span>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:3px;font-variant-numeric:tabular-nums">
+        <span style="flex:1;min-width:0"><span style="font-size:9.5px;color:var(--i5);display:block">받아야 할 돈</span>
+          <b style="font-size:12.5px">${money(c.billed)}</b></span>
+        <span style="flex:1;min-width:0"><span style="font-size:9.5px;color:var(--i5);display:block">받은 돈</span>
+          <b style="font-size:12.5px;color:var(--g)">${money(c.paid)}</b></span>
+        <span style="flex:1;min-width:0"><span style="font-size:9.5px;color:var(--i5);display:block">안 받은 돈</span>
+          <b style="font-size:12.5px;color:${c.unpaid ? 'var(--re)' : 'var(--i5)'}">${money(c.unpaid)}</b></span>
+      </div>
+      ${bar(c)}
+    </div>`;
+
+    return `<div style="flex:1 1 320px;min-width:0;background:var(--W);border:1px solid var(--i6);border-radius:10px;overflow:hidden">
+      <div style="padding:9px 12px;font-family:inherit">
+        <span class="pill p-blue">${escapeHtml(cur)}</span>
+        <span style="font-size:10.5px;color:var(--i5);margin-left:5px">분류별 수금 현황</span>
+      </div>
+      ${cats.map(([k, l]) => line(l, catS[cur][k], false)).join('')}
+      ${line('합계', sum, true)}
+    </div>`;
+  }).join('');
+
+  const catDash = catCards ? `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">${catCards}</div>
+    <div style="font-size:10.5px;color:var(--i4);margin:-4px 0 14px;line-height:1.6">
+      입금에는 분류가 없어요 — 돈은 기업 단위로 한 번에 들어옵니다. 그래서
+      <b>완납한 기업</b>의 청구를 «받은 돈»으로, <b>남은 기업</b>의 청구를 «안 받은 돈»으로 갈랐어요.
+      ${partial.length ? `<br><b style="color:var(--am)">일부만 낸 ${partial.length}곳</b>은 낸 금액이 있어도 전액이 «안 받은 돈»에 잡힙니다 — 아래 표에서 그 기업의 입금액을 보세요.` : ''}
+    </div>` : '';
+
+  if(isMobile()) return viewShell(pills, catDash + rows.map(({ x, by }) => {
     const st = settleByCurrency(x.id);
     const sc = Object.keys(st).sort();
     const line = (key) => sc.filter(c => st[c][key]).map(c => amt(c, st[c][key])).join(' · ') || '-';
@@ -1605,7 +1699,7 @@ function renderMoneyView(list){
     </div>`;
   }).join(''));
 
-  return viewShell(pills, `<div class="tw"><table><thead><tr>
+  return viewShell(pills, catDash + `<div class="sct">기업별 세부</div><div class="tw"><table><thead><tr>
       <th style="min-width:44px;text-align:right">신청순</th>
       <th style="min-width:150px">기업</th>
       <th style="min-width:56px">부스번호</th>
