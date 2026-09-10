@@ -13,6 +13,7 @@ import { switchArchTab } from './modules/settings-tab.js';
 import { populateUploadEvDropdown } from './modules/upload-tab.js';
 import { buildExhEvList, renderExh } from './modules/exh-tab.js';
 import { initEvDbTab } from './modules/event-tab.js';
+import { buildConfEvList, renderConf } from './modules/conf-tab.js';
 
 export function switchApp(app, btn){
   setCurApp(app);
@@ -33,6 +34,7 @@ export function switchApp(app, btn){
   if(app==='crm')    { buildEvFil(); renderCrm(); }
   if(app==='exh')    { buildExhEvList(); renderExh(); }
   if(app==='evdb')   { initEvDbTab(); }
+  if(app==='conf')   { buildConfEvList(); renderConf(); }
   if(app==='co')     { buildCoDB(); showCoDashboard(); }
   if(app==='mdb')    { buildMDBEvList(); renderMDB(); }
   if(app==='audit')  { buildAuditUserList(); renderAudit(); }
