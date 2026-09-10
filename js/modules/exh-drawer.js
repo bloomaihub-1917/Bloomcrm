@@ -794,8 +794,13 @@ export async function promoteExhContact(exhId, rowId){
 async function addExhParticipation(contactId, eventId, role){
   if(exhLocked()){ exhLockNotice(); return; }
   if(!eventId) return false;
+  /* 역할까지 봐야 한다. 사람+행사만 보면 이미 다른 역할로 등록된 사람에게
+     이 역할 줄이 만들어지지 않는다 — 참가기업 임원이 세션에서 발표하는 경우
+     그 사람이 행사 DB에서 «연사»로 잡히지 않는다.
+     company-tab·db-tab·upload-tab의 같은 검사는 처음부터 역할을 보고 있었다. */
   const dup = participations.some(p =>
-    String(p.contactId) === String(contactId) && p.eventId === eventId);
+    String(p.contactId) === String(contactId) && p.eventId === eventId
+    && p.role === '전시참가기업');
   if(dup) return true;
 
   const part = {

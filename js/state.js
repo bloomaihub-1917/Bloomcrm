@@ -17,7 +17,8 @@
      읽기만 하면 됩니다 — 라이브 바인딩이라 항상 최신값입니다.)
 ═══════════════════════════════════════════════════════════════ */
 
-import { EVENT_LIST_SEED, CL, CP, CAT_KEYS, EVENT_PARTS, PART_STATES } from './constants.js';
+import { EVENT_LIST_SEED, CL, CP, CAT_KEYS, EVENT_PARTS, PART_STATES,
+  SPEAKER_ROLES, SPEAKER_NEEDS } from './constants.js';
 
 /* ── 백엔드 API 베이스 URL (Node/Express, backend-node/) ──
    Render 등에 배포한 뒤 이 값만 바꾸면 된다(과거 GS_URL과 동일한 역할).
@@ -493,6 +494,77 @@ export function evPartState(evKey, part){ return evParts(evKey)[part]; }
 export function evPartOn(evKey, part){ return evPartState(evKey, part) !== 'none'; }
 /* 고칠 수 있는지 — 끝난 파트는 열람만 */
 export function evPartDone(evKey, part){ return evPartState(evKey, part) === 'done'; }
+
+/* ══════════════════════════════════════════
+   컨퍼런스 · 연사
+
+   설정은 EXH_CFG[행사키].conf 한 곳에 담는다 — parts·due·book이 이미 그 줄에
+   얹혀 있고, 쓰는 곳들이 모두 {...prev}로 저장하므로 모르는 키를 지우지 않는다.
+   키 이름이 exh_cfg_로 시작해 컨퍼런스 설정이 들어가는 게 어긋나 보이지만,
+   행사 설정이 한 줄에 모여 있는 이점이 더 크다.
+
+     conf = { days:[], slots:[{start,end,label}], tracks:[],
+              due:{항목키:날짜}, limits:{bio_pro,bio_work,abstract},
+              docs:{guide_ko,guide_en,form_ko,form_en}, folder:'',
+              roleNeeds:{역할:{항목키:'req'|'opt'|''}} }
+══════════════════════════════════════════ */
+export const CONF_SESSIONS   = [];
+export const SPEAKERS        = [];
+export const SESSION_SPEAKERS = [];
+export const SPEAKER_CONTACTS = [];
+export const SPEAKER_LOGS    = [];
+
+export function confCfg(evKey){ return (EXH_CFG[evKey] || {}).conf || {}; }
+
+/* 발표 일자 — 행사 기간에서 만들고, 설정에서 더한 날을 합친다.
+   기간을 이미 알고 있으니 손으로 다시 적게 하지 않는다. 사전행사처럼
+   기간 밖의 날만 conf.days에 더한다. */
+export function confDays(evKey){
+  const ev = EVENT_LIST.find(e => e.key === evKey) || {};
+  const out = [];
+  const s = ev.date_start || ev.date || '', e = ev.date_end || s;
+  if(s){
+    for(let d = new Date(s); d <= new Date(e); d.setDate(d.getDate() + 1)){
+      out.push(d.toISOString().slice(0, 10));
+      if(out.length > 60) break;   // 기간이 잘못 들어와도 멈춘다
+    }
+  }
+  (confCfg(evKey).days || []).forEach(d => { if(d && !out.includes(d)) out.push(d); });
+  return out.sort();
+}
+
+/* 이 역할이 이 항목을 받아야 하나 — 'req' | 'opt' | ''
+   행사별 덮어쓰기(conf.roleNeeds)가 있으면 그것을, 없으면 기본값을 쓴다.
+   덮어쓰기는 예외가 아니라 정규 경로다 — 패널의 초록이 행사마다 갈린다. */
+export function speakerNeed(evKey, role, needKey){
+  const over = (confCfg(evKey).roleNeeds || {})[role];
+  if(over && (needKey in over)) return over[needKey];
+  const def = SPEAKER_ROLES.find(r => r.key === role);
+  return def ? (def.needs[needKey] ?? '') : '';
+}
+/* 그 역할이 요구하는 항목만 — 화면이 물어볼 것을 여기서 받는다 */
+export function speakerNeedList(evKey, role){
+  return SPEAKER_NEEDS
+    .map(n => ({ ...n, state: speakerNeed(evKey, role, n.key) }))
+    .filter(n => n.state);
+}
+
+export const speakersForEvent   = (evKey) => SPEAKERS.filter(x => x.event_id === evKey);
+export const sessionsForEvent   = (evKey) => CONF_SESSIONS.filter(x => x.event_id === evKey)
+  .sort((a, b) => String(a.date || '').localeCompare(String(b.date || ''))
+    || String(a.start_at || '').localeCompare(String(b.start_at || ''))
+    || String(a.track || '').localeCompare(String(b.track || '')));
+export const assignmentsFor     = (speakerId) => SESSION_SPEAKERS.filter(x => x.speaker_id === speakerId);
+export const assignmentsOfSession = (sessionId) => SESSION_SPEAKERS.filter(x => x.session_id === sessionId)
+  .sort((a, b) => (Number(a.seq) || 0) - (Number(b.seq) || 0));
+export const getSpeakerById     = (id) => SPEAKERS.find(x => x.id === id);
+export const contactsOfSpeaker  = (speakerId) => SPEAKER_CONTACTS.filter(x => x.speaker_id === speakerId);
+export const logsOfSpeaker      = (speakerId) => SPEAKER_LOGS.filter(x => x.speaker_id === speakerId);
+
+/* 이 연사가 맡은 역할들 — 배정에서 모은다. 한 사람이 여러 역할일 수 있다. */
+export function rolesOfSpeaker(speakerId){
+  return [...new Set(assignmentsFor(speakerId).map(a => a.role).filter(Boolean))];
+}
 
 /* ══════════════════════════════════════════
    COMPANY_SECTORS — 기업 섹터 트리 (원본 6258~6276행)

@@ -138,6 +138,46 @@ const TABLES = {
     columns: ['id', 'exhibitor_id', 'kind', 'ts', 'direction', 'channel', 'counterpart', 'category',
       'subject', 'body', 'answered_at', 'answer', 'status', 'author_email', 'author_name'],
   },
+
+  /* ── 컨퍼런스 · 연사 관리 ──
+     사람(speakers)과 발표(session_speakers)를 나눈다. 일자·시간·트랙은
+     세션(conf_sessions)에만 두고, 역할은 배정 줄에 붙는다. */
+  conf_sessions: {
+    table: 'conf_sessions', pk: 'id', idPrefix: 'CS-',
+    columns: ['id', 'event_id', 'seq', 'title_ko', 'title_en',
+      'date', 'start_at', 'end_at', 'track', 'room', 'note'],
+  },
+  speakers: {
+    table: 'speakers', pk: 'id', idPrefix: 'SP-',
+    columns: ['id', 'event_id', 'contact_id', 'name_snapshot', 'status', 'lang_pref', 'note', 'updated_at',
+      'invite_sent_at', 'invite_replied_at',
+      'bio_pro_ko', 'bio_pro_en', 'bio_work_ko', 'bio_work_en', 'profile_received_at',
+      'photo_file', 'photo_received_at',
+      'fee_amount', 'fee_currency', 'fee_tax_type', 'fee_paid_at', 'fee_note',
+      'stay_hotel', 'stay_in', 'stay_out', 'stay_room_type', 'stay_booked', 'stay_note',
+      'air_route', 'air_in_flight', 'air_in_at', 'air_out_flight', 'air_out_at',
+      'air_class', 'air_ticketed_at', 'air_note',
+      'consent_basic', 'consent_photo', 'consent_abstract', 'consent_slides', 'consent_video',
+      'consent_at', 'consent_file', 'consent_note',
+      'passport_file', 'passport_received_at',
+      'bank_holder', 'bank_name', 'bank_account', 'bank_swift', 'bank_iban',
+      'bank_country', 'bank_address'],
+  },
+  session_speakers: {
+    table: 'session_speakers', pk: 'id', idPrefix: 'SS-',
+    columns: ['id', 'event_id', 'session_id', 'speaker_id', 'seq', 'role', 'lang', 'duration_min',
+      'title_ko', 'title_en', 'abstract_ko', 'abstract_en', 'abstract_received_at',
+      'slides_file', 'slides_received_at', 'slides_version', 'note'],
+  },
+  speaker_contacts: {
+    table: 'speaker_contacts', pk: 'id', idPrefix: 'SC-',
+    columns: ['id', 'speaker_id', 'contact_id', 'name', 'email', 'phone', 'kind', 'send', 'note'],
+  },
+  speaker_logs: {
+    table: 'speaker_logs', pk: 'id', idPrefix: 'SL-',
+    columns: ['id', 'speaker_id', 'kind', 'ts', 'direction', 'channel', 'counterpart', 'category',
+      'subject', 'body', 'answered_at', 'answer', 'status', 'author_email', 'author_name'],
+  },
 };
 
 let seq = 0;

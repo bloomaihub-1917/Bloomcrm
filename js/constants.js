@@ -143,3 +143,65 @@ export const PART_STATES = [
   { key:'done',  label:'진행 완료', cls:'p-green' },
 ];
 export const partStateOf = (v) => PART_STATES.find(s => s.key === v) || PART_STATES[0];
+
+/* ══════════════════════════════════════════
+   연사 역할과 «무엇을 받아야 하나»
+
+   역할은 사람에 붙지 않는다 — 세션에 배정하는 그 자리에 붙는다. 같은 사람이
+   오전엔 발표하고 오후엔 좌장을 맡기 때문이다.
+
+   그리고 역할이 받을 항목을 정한다. 좌장에게 초록을 독촉하지 않으려면 화면이
+   그걸 알아야 하는데, 사람이 머릿속에서 걸러 오면 언젠가 빠뜨린다.
+
+   값은 셋이다 — 'req' 받아야 함 · 'opt' 있으면 좋음 · '' 아예 묻지 않음.
+   여기 적은 것은 기본값이고, 행사마다 다르면 그 행사만 conf.roleNeeds로
+   덮어쓴다(부스 타입이 공통을 상속하는 것과 같은 방식). 패널의 초록이 실제로
+   그렇게 갈린다 — 어떤 행사는 받아 도록에 싣고 어떤 행사는 묻지 않는다.
+══════════════════════════════════════════ */
+export const SPEAKER_NEEDS = [
+  { key: 'profile',  label: '성명·소속·직함',           where: 'contacts' },
+  { key: 'bio_pro',  label: 'Professional experience',  where: 'bio_pro_ko · bio_pro_en' },
+  { key: 'bio_work', label: 'Working experience',       where: 'bio_work_ko · bio_work_en' },
+  { key: 'photo',    label: '프로필 사진',              where: 'photo_file' },
+  { key: 'title',    label: '발제명',                   where: 'title_ko · title_en' },
+  { key: 'abstract', label: '초록',                     where: 'abstract_ko · abstract_en' },
+  { key: 'slides',   label: '발표자료',                 where: 'slides_file' },
+  { key: 'consent',  label: '개인정보 제공 동의',       where: 'consent_*' },
+  { key: 'bank',     label: '계좌 정보',                where: 'bank_*' },
+  { key: 'passport', label: '여권 스캔',                where: 'passport_file' },
+  { key: 'travel',   label: '항공·숙박',                where: 'air_* · stay_*' },
+];
+
+/* 발제에 붙는 항목 — 배정 줄(session_speakers)에서 채운다.
+   나머지는 사람(speakers)에 붙는다. 화면이 어느 줄을 고쳐야 하는지 이걸로 안다. */
+export const SPEAKER_NEEDS_ON_TALK = ['title', 'abstract', 'slides'];
+
+export const SPEAKER_ROLES = [
+  { key: '연사', label: '연사', cls: 'p-blue', needs: {
+    profile: 'req', bio_pro: 'req', bio_work: 'req', photo: 'req',
+    title: 'req', abstract: 'req', slides: 'req',
+    consent: 'req', bank: 'req', passport: 'opt', travel: 'opt' } },
+  { key: '패널', label: '패널', cls: 'p-teal', needs: {
+    profile: 'req', bio_pro: 'req', bio_work: 'req', photo: 'req',
+    title: 'req', abstract: 'opt', slides: 'opt',
+    consent: 'req', bank: 'req', passport: 'opt', travel: 'opt' } },
+  /* 좌장은 발제 정보를 받지 않는다 — 세션을 진행하는 자리다.
+     이력·사진은 받는다(도록에 실린다). */
+  { key: '좌장', label: '좌장', cls: 'p-indigo', needs: {
+    profile: 'req', bio_pro: 'req', bio_work: 'req', photo: 'req',
+    title: '', abstract: '', slides: '',
+    consent: 'req', bank: 'req', passport: 'opt', travel: 'opt' } },
+  /* 사회는 우리가 섭외한다. 그래서 이력·사진이 선택이고 항공·숙박은 묻지 않는다.
+     동의와 계좌는 받는다 — 이름이 실리고 사례비가 나간다. */
+  { key: '사회', label: '사회', cls: 'p-gray', needs: {
+    profile: 'req', bio_pro: 'opt', bio_work: 'opt', photo: 'opt',
+    title: '', abstract: '', slides: '',
+    consent: 'req', bank: 'req', passport: '', travel: '' } },
+];
+
+export const speakerRoleOf = (v) => SPEAKER_ROLES.find(r => r.key === v) || null;
+
+/* 설정 화면에서 셀을 눌러 돌리는 차례 — 받아야 함 → 있으면 좋음 → 묻지 않음 */
+export const NEED_CYCLE = ['req', 'opt', ''];
+export const NEED_MARK = { req: '●', opt: '○', '': '—' };
+export const NEED_LABEL = { req: '받아야 함', opt: '있으면 좋음', '': '묻지 않음' };

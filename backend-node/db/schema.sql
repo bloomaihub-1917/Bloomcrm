@@ -665,3 +665,171 @@ ALTER TABLE exhibitors DROP COLUMN IF EXISTS tax_sent_at;
 ALTER TABLE exhibitors DROP COLUMN IF EXISTS tax_amount;
 ALTER TABLE exhibitors DROP COLUMN IF EXISTS tax_requested_at;
 ALTER TABLE exhibitors DROP COLUMN IF EXISTS tax_to_finance_at;
+
+-- ══════════════════════════════════════════
+--  컨퍼런스 · 연사 관리
+--
+--  사람은 한 줄(speakers), 발표는 배정 줄(session_speakers)이다. 한 연사가
+--  기조발표를 하고 오후 패널에도 앉는 일이 흔한데, 한 줄에 다 넣으면 그 사람을
+--  두 줄 만들어야 하고 연사료·계좌·동의서가 두 벌이 된다.
+--
+--  일자·시간·트랙은 세션(conf_sessions)에만 둔다. 배정 줄마다 적으면 같은
+--  세션의 시간이 사람마다 갈린다.
+--
+--  역할은 사람이 아니라 «그 세션의 그 자리»에 붙는다 — 그래서 배정 줄에 있다.
+--  그 역할이 무엇을 받아야 하는지를 정한다(constants.js SPEAKER_ROLES).
+-- ══════════════════════════════════════════
+
+-- 세션 하나. 일자·시간·트랙의 정본.
+CREATE TABLE IF NOT EXISTS conf_sessions (
+  id        TEXT PRIMARY KEY,
+  event_id  TEXT,
+  seq       TEXT,
+  title_ko  TEXT,
+  title_en  TEXT,
+  date      TEXT,
+  start_at  TEXT,   -- 'HH:MM'
+  end_at    TEXT,
+  track     TEXT,
+  room      TEXT,
+  note      TEXT
+);
+
+-- 연사 한 명 × 행사 하나. 사람에 붙는 모든 것.
+-- 성명·소속·직함은 contacts에서 읽는다(contact_id) — 베껴 두면 마스터DB에서
+-- 고쳐도 여기는 옛 값으로 남는다. name_snapshot은 연결이 끊겼을 때의 대비다.
+CREATE TABLE IF NOT EXISTS speakers (
+  id            TEXT PRIMARY KEY,
+  event_id      TEXT,
+  contact_id    TEXT,
+  name_snapshot TEXT,
+  status        TEXT,   -- 섭외중 | 확정 | 취소 | 보류
+  lang_pref     TEXT,   -- 'both' | 'en'   국가로 짐작하지 않는다
+  note          TEXT,
+  updated_at    TEXT,
+
+  -- 섭외 · 프로필
+  invite_sent_at      TEXT,
+  invite_replied_at   TEXT,
+  bio_pro_ko          TEXT,
+  bio_pro_en          TEXT,
+  bio_work_ko         TEXT,
+  bio_work_en         TEXT,
+  profile_received_at TEXT,
+  photo_file          TEXT,
+  photo_received_at   TEXT,
+
+  -- 연사료. 원천징수는 칸만 두고 계산하지 않는다(나중에 붙인다).
+  fee_amount   TEXT,
+  fee_currency TEXT,
+  fee_tax_type TEXT,
+  fee_paid_at  TEXT,
+  fee_note     TEXT,
+
+  -- 숙박
+  stay_hotel     TEXT,
+  stay_in        TEXT,
+  stay_out       TEXT,
+  stay_room_type TEXT,
+  stay_booked    TEXT,   -- 'yes' | ''
+  stay_note      TEXT,
+
+  -- 항공. 오는 편과 가는 편이 따로다.
+  air_route       TEXT,
+  air_in_flight   TEXT,
+  air_in_at       TEXT,
+  air_out_flight  TEXT,
+  air_out_at      TEXT,
+  air_class       TEXT,
+  air_ticketed_at TEXT,
+  air_note        TEXT,
+
+  -- 개인정보 제공 동의. 다섯 갈래로 따로 받는다 — 하나로 묶으면
+  -- "사진은 안 됩니다"라는 연사를 담을 칸이 없다. 'yes' | 'no' | ''
+  consent_basic    TEXT,
+  consent_photo    TEXT,
+  consent_abstract TEXT,
+  consent_slides   TEXT,
+  consent_video    TEXT,
+  consent_at       TEXT,
+  consent_file     TEXT,
+  consent_note     TEXT,
+
+  -- 여권은 스캔만 받는다. 번호·만료일을 칸으로 두지 않는 것이 가장 안전하다.
+  passport_file        TEXT,
+  passport_received_at TEXT,
+
+  -- 계좌. 화면에서 마스킹하고 펼쳐 본 것을 activity_log에 남긴다.
+  bank_holder  TEXT,
+  bank_name    TEXT,
+  bank_account TEXT,
+  bank_swift   TEXT,
+  bank_iban    TEXT,
+  bank_country TEXT,
+  bank_address TEXT
+);
+
+-- 배정 한 줄 = 세션 × 사람 × 역할. 발제 정보가 여기 붙는다.
+-- 좌장·사회는 발제 칸이 비어 있고 화면이 요구하지도 않는다.
+CREATE TABLE IF NOT EXISTS session_speakers (
+  id         TEXT PRIMARY KEY,
+  event_id   TEXT,
+  session_id TEXT,
+  speaker_id TEXT,
+  seq        TEXT,
+  role       TEXT,   -- code_lists.speaker_role
+  lang       TEXT,
+  duration_min TEXT,
+
+  title_ko    TEXT,
+  title_en    TEXT,
+  abstract_ko TEXT,
+  abstract_en TEXT,
+  abstract_received_at TEXT,
+
+  slides_file        TEXT,
+  slides_received_at TEXT,
+  slides_version     TEXT,
+
+  note TEXT
+);
+
+-- 연사 건마다 연락 상대를 줄로. 본인도 한 줄이다.
+-- 실무진에게 보내고 연사를 참조에 넣는 것이 기본 모양이라, 발송 자리를 갖는다.
+CREATE TABLE IF NOT EXISTS speaker_contacts (
+  id         TEXT PRIMARY KEY,
+  speaker_id TEXT,
+  contact_id TEXT,
+  name       TEXT,
+  email      TEXT,
+  phone      TEXT,
+  kind       TEXT,   -- 본인 | 실무진 | 비서 | 기타
+  send       TEXT,   -- 'to' 받는 사람 | 'cc' 참조 | '' 보내지 않음
+  note       TEXT
+);
+
+-- 주고받은 것. exhibitor_logs와 같은 칸 구성 — 메일을 보내면 한 줄 쌓인다.
+CREATE TABLE IF NOT EXISTS speaker_logs (
+  id           TEXT PRIMARY KEY,
+  speaker_id   TEXT,
+  kind         TEXT,
+  ts           TEXT,
+  direction    TEXT,
+  channel      TEXT,
+  counterpart  TEXT,
+  category     TEXT,
+  subject      TEXT,
+  body         TEXT,
+  answered_at  TEXT,
+  answer       TEXT,
+  status       TEXT,
+  author_email TEXT,
+  author_name  TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_speakers_event      ON speakers(event_id);
+CREATE INDEX IF NOT EXISTS idx_conf_sessions_event ON conf_sessions(event_id);
+CREATE INDEX IF NOT EXISTS idx_sess_sp_session     ON session_speakers(session_id);
+CREATE INDEX IF NOT EXISTS idx_sess_sp_speaker     ON session_speakers(speaker_id);
+CREATE INDEX IF NOT EXISTS idx_sp_contacts_speaker ON speaker_contacts(speaker_id);
+CREATE INDEX IF NOT EXISTS idx_sp_logs_speaker     ON speaker_logs(speaker_id);

@@ -32,6 +32,7 @@ import {
   authToken,
   setAuthToken,
   EVENT_LIST,
+  CONF_SESSIONS, SPEAKERS, SESSION_SPEAKERS, SPEAKER_CONTACTS, SPEAKER_LOGS,
   contacts,
   participations,
   targets,
@@ -240,7 +241,8 @@ export async function loadFromSheets(hooks = {}){
     const [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, partTypesData,
            orgsData,
            exhData, exhConData, exhItemData, exhInvData, exhTaxData, exhPayData, exhLogData, exhAppData, equipCatData,
-           codeListData] = await Promise.all([
+           codeListData,
+           confSessData, speakerData, sessSpData, spConData, spLogData] = await Promise.all([
       safeFetch(base + 'contacts',       'contacts',       1, headers),
       safeFetch(base + 'participations', 'participations', 1, headers),
       safeFetch(base + 'crm_targets',    'crm_targets',    1, headers),
@@ -260,6 +262,11 @@ export async function loadFromSheets(hooks = {}){
       safeFetch(base + 'exhibitor_apps',     'exhibitor_apps',     1, headers),
       safeFetch(base + 'equip_catalog',      'equip_catalog',      1, headers),
       safeFetch(base + 'code_lists',         'code_lists',         1, headers),
+      safeFetch(base + 'conf_sessions',      'conf_sessions',      1, headers),
+      safeFetch(base + 'speakers',           'speakers',           1, headers),
+      safeFetch(base + 'session_speakers',   'session_speakers',   1, headers),
+      safeFetch(base + 'speaker_contacts',   'speaker_contacts',   1, headers),
+      safeFetch(base + 'speaker_logs',       'speaker_logs',       1, headers),
     ]);
 
     // ── 실패 감지 (신규) ──
@@ -268,6 +275,7 @@ export async function loadFromSheets(hooks = {}){
     const _results = [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, partTypesData,
       orgsData,
       exhData, exhConData, exhItemData, exhInvData, exhTaxData, exhPayData, exhLogData, exhAppData, equipCatData,
+      confSessData, speakerData, sessSpData, spConData, spLogData,
       codeListData];
     const _failed  = _results.filter(r => r === null).length;
     if(_failed === _results.length){
@@ -518,6 +526,16 @@ export async function loadFromSheets(hooks = {}){
       if(open) console.log('[CRM] 미답변 문의:', open, '건');
     }
 
+    /* ── 컨퍼런스 · 연사 ──
+       서버 컬럼명(snake_case)을 그대로 쓰므로 변환 없이 통째로 담는다.
+       표가 아직 비어 있어도(연사를 안 넣은 행사) 배열만 비워 둔다. */
+    if(confSessData && Array.isArray(confSessData)) CONF_SESSIONS.splice(0, CONF_SESSIONS.length, ...confSessData);
+    if(speakerData  && Array.isArray(speakerData))  SPEAKERS.splice(0, SPEAKERS.length, ...speakerData);
+    if(sessSpData   && Array.isArray(sessSpData))   SESSION_SPEAKERS.splice(0, SESSION_SPEAKERS.length, ...sessSpData);
+    if(spConData    && Array.isArray(spConData))    SPEAKER_CONTACTS.splice(0, SPEAKER_CONTACTS.length, ...spConData);
+    if(spLogData    && Array.isArray(spLogData))    SPEAKER_LOGS.splice(0, SPEAKER_LOGS.length, ...spLogData);
+    if(SPEAKERS.length) console.log('[CRM] speakers loaded:', SPEAKERS.length, '· 배정', SESSION_SPEAKERS.length);
+
     // activity_log 업데이트
     if(logsData && Array.isArray(logsData)){
       // 구버전 행 복구: 예전 saveAuditToSheets가 6개 값을 한 칸씩 밀린 순서
@@ -601,6 +619,29 @@ export async function saveEventToSheet(ev){
   if(r.ok) console.log('[CRM] event saved:', ev.key);
   return r;
 }
+
+/* ══════════════════════════════════════════
+   컨퍼런스 · 연사 저장
+
+   전시와 같은 방식이다 — 칸이 많고 부분 수정(체크 하나)이 잦아 위치 배열 대신
+   객체형(upsertPartial)을 쓴다. 서버가 넘어온 키만 갱신하므로 바뀐 칸만 보내면
+   나머지는 그대로 남는다. 위치 배열로 보내면 안 보낸 칸이 비워진다.
+══════════════════════════════════════════ */
+const upsertPartial = (sheet, data, label) =>
+  postToSheet({ sheet, action: 'upsertPartial', data }, label);
+const removeRow = (sheet, id, label) =>
+  postToSheet({ sheet, action: 'delete', row: [id] }, label);
+
+export const saveConfSession    = (r) => upsertPartial('conf_sessions', r, '세션');
+export const deleteConfSession  = (id) => removeRow('conf_sessions', id, '세션 삭제');
+export const saveSpeaker        = (r) => upsertPartial('speakers', r, '연사');
+export const deleteSpeaker      = (id) => removeRow('speakers', id, '연사 삭제');
+export const saveSessionSpeaker = (r) => upsertPartial('session_speakers', r, '세션 배정');
+export const deleteSessionSpeaker = (id) => removeRow('session_speakers', id, '배정 해제');
+export const saveSpeakerContact = (r) => upsertPartial('speaker_contacts', r, '연사 연락 상대');
+export const deleteSpeakerContact = (id) => removeRow('speaker_contacts', id, '연락 상대 삭제');
+export const saveSpeakerLog     = (r) => upsertPartial('speaker_logs', r, '연사 기록');
+export const deleteSpeakerLog   = (id) => removeRow('speaker_logs', id, '연사 기록 삭제');
 
 export async function deleteEventFromSheet(key){
   const r = await postToSheet({ sheet: 'events', action: 'delete', row: [key] }, '행사 삭제');
