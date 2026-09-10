@@ -800,3 +800,40 @@ export const deleteExhApp        = (id) => deleteExhRow('exhibitor_apps',     id
 export async function batchCreateExhibitors(rows){
   return postToSheet({ sheet: 'exhibitors', action: 'batchUpsert', dataRows: rows }, '참가기업 일괄 등록');
 }
+
+/* ══════════════════════════════════════════
+   메일 보내기 — /api/mail/send
+
+   데이터 저장과 길이 다르다(postToSheet가 아니다). 보낸 사실은 서버가
+   기록에 남기므로, 어느 상대에게 보내는지를 exhibitor_id나 speaker_id로
+   함께 넘긴다 — 둘 중 하나가 없으면 메일은 나가지만 기록이 비어
+   «몇 번 독촉했나»를 다시 셀 수 없게 된다.
+
+   테스트 모드에서는 보내지 않는다. 더미 데이터로 실제 메일이 나가면
+   연습이 사고가 된다.
+══════════════════════════════════════════ */
+export async function sendMail(payload){
+  if(!API_BASE_URL || !currentUser){
+    return { ok: false, offline: true, error: '테스트 모드에서는 메일을 보내지 않아요' };
+  }
+  try {
+    const headers = { 'Content-Type': 'application/json', ...await authHeaders() };
+    const res = await fetch(API_BASE_URL + '/api/mail/send', {
+      method: 'POST', headers, body: JSON.stringify(payload),
+    });
+    const j = await res.json().catch(() => ({}));
+    if(!res.ok || j.ok === false) return { ok: false, error: j.error || `발송 실패 (${res.status})` };
+    return j;
+  } catch(e){
+    return { ok: false, error: `발송 실패: ${e.message}` };
+  }
+}
+
+/* 메일 설정이 됐는지 — 보내기 전에 왜 못 보내는지 알려주려고 쓴다 */
+export async function mailStatus(){
+  if(!API_BASE_URL || !currentUser) return { ok: false, offline: true };
+  try {
+    const res = await fetch(API_BASE_URL + '/api/mail/status', { headers: await authHeaders() });
+    return await res.json();
+  } catch(e){ return { ok: false, error: e.message }; }
+}

@@ -67,12 +67,18 @@ router.get('/status', async (req, res) => {
 });
 
 /* 메일 보내기
-   body: { to, subject, text, html?, cc?, exhibitor_id?, category?, kind? } */
+   body: { to, subject, text, html?, cc?, exhibitor_id?, speaker_id?, category?, kind? }
+
+   연사에게 보낼 때는 실무진이 수신, 연사가 참조인 경우가 흔하다. 누구를
+   수신으로 두는지는 화면에서 정하고, 여기서는 to·cc를 그대로 받아 보낸다.
+   기록은 상대에 따라 다른 표로 간다 — 전시는 exhibitor_logs, 연사는
+   speaker_logs. 한쪽에 몰아 두면 «이 연사에게 몇 번 독촉했나»를 다시 셀 수
+   없다. */
 router.post('/send', async (req, res) => {
   const t = transport();
   if (!t) return res.status(400).json({ ok: false, error: '메일 계정이 설정되지 않았어요' });
 
-  const { to, subject, text, html, cc, exhibitor_id, category, kind } = req.body || {};
+  const { to, subject, text, html, cc, exhibitor_id, speaker_id, category, kind } = req.body || {};
   const list = (v) => (Array.isArray(v) ? v : String(v || '').split(/[,;]/))
     .map((s) => String(s).trim()).filter(Boolean);
 
@@ -99,16 +105,25 @@ router.post('/send', async (req, res) => {
        돌려주되, 기록이 빠졌다는 걸 알려준다 — 조용히 넘어가면 독촉 이력이
        비어 있는 이유를 알 수 없다. */
     let logged = false, logError = null;
-    if (exhibitor_id) {
+    /* 참조까지 상대로 남긴다 — 연사 메일은 실무진이 수신, 연사가 참조인 경우가
+       많아 수신만 적으면 정작 연사에게 보낸 기록이 비어 보인다. */
+    const counterpart = [toList.join(', '), list(cc).length ? `(cc) ${list(cc).join(', ')}` : '']
+      .filter(Boolean).join(' ');
+    const target = exhibitor_id
+      ? { table: 'exhibitor_logs', col: 'exhibitor_id', id: exhibitor_id, prefix: 'XL' }
+      : speaker_id
+        ? { table: 'speaker_logs', col: 'speaker_id', id: speaker_id, prefix: 'SL' }
+        : null;
+    if (target) {
       try {
         await pool.query(
-          `INSERT INTO exhibitor_logs
-             (id, exhibitor_id, kind, ts, direction, channel, counterpart, category,
+          `INSERT INTO ${target.table}
+             (id, ${target.col}, kind, ts, direction, channel, counterpart, category,
               subject, body, answered_at, answer, status, author_email, author_name)
            VALUES ($1,$2,$3,$4,'out','이메일',$5,$6,$7,$8,'','','done',$9,$10)`,
-          [`XL-${Date.now()}-${Math.floor(Math.random() * 1000)}`, exhibitor_id,
+          [`${target.prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`, target.id,
             kind || 'note', new Date().toISOString().slice(0, 10),
-            toList.join(', '), category || '기타',
+            counterpart, category || '기타',
             String(subject || '').trim(), String(text || ''),
             req.user?.email || '', req.user?.name || '']);
         logged = true;
