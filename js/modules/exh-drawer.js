@@ -17,6 +17,7 @@ import {
   contactsFor, catalogFor, catalogItem, EQUIP_CATALOG, findCatalogByName,
   contacts, participations, getOrgById, codeList, codeLabel,
   EXH_APPS, appsFor, openAppFor, isVoided, liveItemsFor, exhEvent, exhibitorsForEvent,
+  nextItemSort,
 } from '../state.js';
 import { td, escapeHtml, escAttr } from '../utils.js';
 import {
@@ -2146,7 +2147,7 @@ export async function addExhItem(exhId){
     name, qty: val(`it-qty-${exhId}`), unit_price: val(`it-up-${exhId}`), amount,
     currency, note: '',
     app_id: openApp ? openApp.id : '', change_kind: openApp ? '추가' : '',
-    sort_order: String(itemsFor(exhId).length + 1),
+    sort_order: nextItemSort(exhId),
   }, saveExhItem);
   clear(`it-nm-${exhId}`, `it-qty-${exhId}`, `it-up-${exhId}`, `it-amt-${exhId}`);
   // 지난 선택이 남아 있으면 다음에 손으로 적은 항목에 엉뚱한 품목이 붙는다

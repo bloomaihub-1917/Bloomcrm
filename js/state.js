@@ -276,7 +276,33 @@ export function primaryContactFor(exhId){
   const list = contactsFor(exhId);
   return list.find(c => c.is_primary === 'yes') || list[0] || null;
 }
-export function itemsFor(exhId){ return EXH_ITEMS.filter(i => i.exhibitor_id === exhId); }
+/* 신청 항목 — 넣은 순서(sort_order)대로 세운다.
+
+   전에는 EXH_ITEMS 배열 순서를 그대로 썼다. 그 순서는 화면을 볼 때마다 달라진다 —
+   새로 추가하면 배열 끝에 붙고, 새로고침하면 서버의 id순으로 돌아온다. 그래서
+   기업을 펼칠 때마다 같은 항목이 다른 자리에 있었다.
+
+   sort_order는 항목을 넣을 때부터 채우고 있었는데 정렬에 쓰는 곳이 없었다.
+   값이 빈 옛 줄은 뒤로 보내고, 같은 번호는 id로 갈라 순서가 늘 하나로 정해지게 한다.
+   (빼기 비교에 Infinity를 쓰면 NaN이 되어 정렬이 무너지므로 큰 수를 쓴다) */
+export const itemSort = (i) => {
+  // Number('')는 0이라, 빈 값을 먼저 걸러야 번호 없는 줄이 맨 앞으로 오지 않는다
+  const v = String(i.sort_order ?? '').trim();
+  if(!v) return 1e9;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 1e9;
+};
+export function itemsFor(exhId){
+  return EXH_ITEMS.filter(i => i.exhibitor_id === exhId)
+    .sort((a, b) => itemSort(a) - itemSort(b) || String(a.id).localeCompare(String(b.id)));
+}
+
+/* 다음 순서 번호 — 개수+1로 매기면 중간을 지운 뒤 추가할 때 이미 있는 번호와
+   겹쳐 또 순서가 흔들린다. 가장 큰 번호 다음을 쓴다. */
+export function nextItemSort(exhId){
+  const rows = EXH_ITEMS.filter(i => i.exhibitor_id === exhId);
+  return String(rows.reduce((m, i) => Math.max(m, Number(i.sort_order) || 0), 0) + 1);
+}
 /* 살아 있는 품목 — 취소된 줄은 뺀다. 발주·정산·대장은 전부 이걸 본다.
    취소를 지우지 않고 내리는 이유는 이미 나간 인보이스를 설명해야 하기 때문. */
 export const isVoided = (i) => !!String(i.voided_at || '').trim();

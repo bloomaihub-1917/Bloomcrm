@@ -19,7 +19,7 @@ import {
   logsFor, openInquiriesFor, contactsFor, primaryContactFor,
   EVENT_LIST, contacts, participations, CO_DB, currentUser, API_BASE_URL, auditLog,
   catalogItem, catalogFor, findCatalogByName, EQUIP_CATALOG, getOrgById, liveItemsFor,
-  appsFor, openAppFor,
+  appsFor, openAppFor, nextItemSort,
   codeList, codeLabel, codeCls,
   evPartOn, evPartDone, evPartState,
   findOrgByName, orgName,
@@ -3208,7 +3208,7 @@ export async function submitNewGraphicOrder(){
     id: `XI-${Date.now()}_${Math.floor(Math.random() * 1000)}`,
     exhibitor_id: x.id, category: 'graphic', name,
     qty: '', unit_price: '', amount, currency: mval('ngr-cur') || 'KRW',
-    note: '', sort_order: String(itemsFor(x.id).length + 1), catalog_id: '',
+    note: '', sort_order: nextItemSort(x.id), catalog_id: '',
   };
 
   EXH_ITEMS.push(rec);
