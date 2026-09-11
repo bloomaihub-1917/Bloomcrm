@@ -37,6 +37,8 @@ import {
 } from '../api.js';
 import { trackAction } from './audit-tab.js';
 import { IMPORT_SHEETS, IMPORT_GUIDE } from '../conf-import-spec.js';
+import { trackColorOf, pickTrackColorIndex } from '../track-colors.js';
+import { saveConf } from './settings-tab.js';
 
 /* ── 모듈 상태 ── */
 let confEvent = '';
@@ -506,28 +508,9 @@ function assignFormHtml(ev, s){
    쓴다. 첨부한 프로그램북도 개막식을 그렇게 뽑았다.
 ══════════════════════════════════════════ */
 
-/* 트랙 색 — 설정의 트랙 순서를 따라 돌려 쓴다. 색을 사람이 고르게 하면
-   트랙을 더할 때마다 색부터 정해야 해서, 순서로 정하고 필요하면 그때 연다. */
-const TRACK_COLORS = [
-  { bg: '#E8F3E4', bd: '#8FBF7A' },   // 연두
-  { bg: '#FDF3DC', bd: '#E0B65C' },   // 노랑
-  { bg: '#FBE4E4', bd: '#DC8B8B' },   // 분홍
-  { bg: '#EAE4F5', bd: '#A38BD1' },   // 보라
-  { bg: '#DFEFF7', bd: '#6FAFCE' },   // 하늘
-  { bg: '#DCF0EC', bd: '#6FBCAB' },   // 청록
-  { bg: '#F0E7DE', bd: '#C49A75' },   // 갈색
-];
-function trackColor(evKey, track){
-  if(!track) return { bg: 'var(--i8)', bd: 'var(--i5)' };
-  const list = confCfg(evKey).tracks || [];
-  const i = list.indexOf(track);
-  if(i >= 0) return TRACK_COLORS[i % TRACK_COLORS.length];
-  /* 설정에서 지운 트랙이 세션에 남아 있어도 색이 있어야 한다 — 이름으로
-     자리를 정하면 목록이 바뀌어도 그 트랙의 색은 그대로다. */
-  let h = 0;
-  for(const ch of String(track)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return TRACK_COLORS[h % TRACK_COLORS.length];
-}
+/* 트랙 색은 track-colors.js가 정한다 — 설정 화면과 프로그램표가 같은 값을
+   봐야 «설정에서 본 색»과 «표의 색»이 같다. */
+const trackColor = (evKey, track) => trackColorOf(confCfg(evKey), track);
 
 /* 올리기 단추 — 표 화면과 프로그램 화면이 같이 쓴다.
    처음 열리는 화면에 없으면 탭을 옮겨야 보이고, 그러면 «어디서 올리지»가
@@ -1375,6 +1358,26 @@ export async function handleConfFile(e){
       SESSION_SPEAKERS.push({ ...row, id: res.id || `SS-tmp-${Date.now()}-${nA}` });
       nA++;
     }
+  }
+
+  /* 엑셀에 있던 트랙·장소를 설정에 등록한다. 세션에만 있고 설정에 없으면
+     고를 목록이 비어 다음부터 손으로 타이핑하게 되고, 색도 트랙마다 정해
+     두지 못한다 — 올린 사람이 나중에 설정을 다시 채울 일은 없다. */
+  const cfg = JSON.parse(JSON.stringify(confCfg(ev.key)));
+  const before = JSON.stringify([cfg.tracks || [], cfg.rooms || [], cfg.trackColors || {}]);
+  cfg.tracks = cfg.tracks || []; cfg.rooms = cfg.rooms || [];
+  cfg.trackColors = { ...(cfg.trackColors || {}) };
+  sessionsForEvent(ev.key).forEach(x => {
+    if(x.track && !cfg.tracks.includes(x.track)) cfg.tracks.push(x.track);
+    /* 장소는 순서가 곧 표의 열 순서다. 어디가 메인인지는 우리가 모르니
+       뒤에 붙이고, 순서는 설정에서 사람이 정한다. */
+    if(x.room && !cfg.rooms.includes(x.room)) cfg.rooms.push(x.room);
+  });
+  cfg.tracks.forEach(t => {
+    if(!Number.isInteger(cfg.trackColors[t])) cfg.trackColors[t] = pickTrackColorIndex(cfg);
+  });
+  if(JSON.stringify([cfg.tracks, cfg.rooms, cfg.trackColors]) !== before){
+    await saveConf(ev.key, cfg);
   }
 
   trackAction('add', '컨퍼런스 업로드', ev.key,

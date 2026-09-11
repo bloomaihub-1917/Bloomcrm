@@ -67,6 +67,7 @@ import {
 } from '../api.js';
 import { trackAction } from './audit-tab.js';
 
+import { TRACK_COLORS, trackColorOf, trackColorIndex, pickTrackColorIndex } from '../track-colors.js';
 import { CL, CAT_KEYS, EVENT_PARTS, PART_STATES, partStateOf,
   SPEAKER_ROLES, SPEAKER_NEEDS, SPEAKER_NEEDS_ON_TALK,
   NEED_CYCLE, NEED_MARK, NEED_LABEL } from '../constants.js';
@@ -2503,7 +2504,9 @@ window.saveEvDue           = saveEvDue;
 ══════════════════════════════════════════ */
 
 /* conf만 갈아 끼우고 나머지(parts·due·book)는 그대로 둔다 */
-async function saveConf(evKey, conf){
+/* 컨퍼런스 설정 저장. 엑셀 업로드가 트랙·장소를 등록할 때도 이 길을 쓴다 —
+   설정을 쓰는 자리가 둘이면 한쪽이 다른 키를 날린다. */
+export async function saveConf(evKey, conf){
   const prev = EXH_CFG[evKey] ? JSON.parse(JSON.stringify(EXH_CFG[evKey])) : undefined;
   const cfg = { ...(prev || {}), conf };
   EXH_CFG[evKey] = cfg;
@@ -2633,8 +2636,13 @@ function evConfHtml(ev){
 
     ${row('트랙', '동시에 여는 방', `
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">
-        ${tracks.length ? tracks.map((t, i) => `<span class="pill p-blue">${escapeHtml(t)}
-          <span onclick="removeConfTrack(${i})" style="cursor:pointer">✕</span></span>`).join('')
+        ${tracks.length ? tracks.map((t, i) => {
+          const c = trackColorOf(cfg, t);
+          return `<span class="pill" style="background:${c.bg};color:var(--i1);border:1px solid ${c.bd}">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${c.bd};margin-right:4px"></span>${escapeHtml(t)}
+            <span onclick="cycleTrackColor('${escAttr(t)}')" style="cursor:pointer;margin-left:3px" title="색 바꾸기">🎨</span>
+            <span onclick="removeConfTrack(${i})" style="cursor:pointer">✕</span></span>`;
+        }).join('')
           : '<span style="font-size:11.5px;color:var(--i5)">트랙이 하나면 비워 두세요</span>'}
       </div>
       <div style="display:flex;gap:6px;align-items:center">
@@ -2777,6 +2785,15 @@ export const moveConfRoom = (i, dir) => pushConf(c => {
   c.rooms = list;
 }, '장소 순서 변경');
 
+/* 트랙 색을 바꾼다 — 다음 색으로 한 칸 옮긴다. 색을 고르는 창을 띄우는
+   것보다, 눌러서 원하는 색이 나올 때까지 돌리는 게 빠르다. */
+export const cycleTrackColor = (track) => pushConf(c => {
+  const map = { ...(c.trackColors || {}) };
+  const cur = Number.isInteger(map[track]) ? map[track] : trackColorIndex(c, track);
+  map[track] = (cur + 1) % TRACK_COLORS.length;
+  c.trackColors = map;
+}, `트랙 «${track}» 색 변경`);
+
 export const addConfTrack = () => {
   const v = (document.getElementById('conf-track-add')?.value || '').trim();
   if(!v) return;
@@ -2784,6 +2801,9 @@ export const addConfTrack = () => {
     c.tracks = c.tracks || [];
     if(c.tracks.includes(v)) return false;
     c.tracks.push(v);
+    /* 색을 지금 정해 둔다. 목록 순서로 색을 정하면 트랙을 하나 더할 때마다
+       다른 트랙들의 색이 밀린다 — 트랙 하나에 색 하나를 붙여 둬야 한다. */
+    c.trackColors = { ...(c.trackColors || {}), [v]: pickTrackColorIndex(c) };
   }, `트랙 «${v}» 추가`);
 };
 export const removeConfTrack = (i) => pushConf(c => {
@@ -2827,6 +2847,7 @@ window.removeConfSlot    = removeConfSlot;
 window.addConfRoom       = addConfRoom;
 window.removeConfRoom    = removeConfRoom;
 window.moveConfRoom      = moveConfRoom;
+window.cycleTrackColor   = cycleTrackColor;
 window.addConfTrack      = addConfTrack;
 window.removeConfTrack   = removeConfTrack;
 window.saveEvConf        = saveEvConf;
