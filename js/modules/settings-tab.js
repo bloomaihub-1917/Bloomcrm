@@ -2522,6 +2522,7 @@ function evConfHtml(ev){
   const days = confDays(ev.key);
   const slots = cfg.slots || [];
   const tracks = cfg.tracks || [];
+  const rooms = cfg.rooms || [];
   const limits = cfg.limits || {};
   const docs = cfg.docs || {};
   const roles = codeList('speaker_role', ev.key, SPEAKER_ROLES.map(r => ({ code: r.key, label: r.label, cls: r.cls })));
@@ -2612,6 +2613,23 @@ function evConfHtml(ev){
         <input class="fi" id="conf-slot-l" placeholder="이름 (예: 오전 세션)" style="flex:1;min-width:120px">
         <button class="btn" style="font-size:11px" onclick="addConfSlot()">추가</button>
       </div>`)}
+
+    ${row('장소', '적은 순서가 표의 열 순서', `
+      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">
+        ${rooms.length ? rooms.map((t, i) => `<span class="pill p-teal">${escapeHtml(t)}
+          ${i > 0 ? `<span onclick="moveConfRoom(${i},-1)" style="cursor:pointer" title="왼쪽으로">◀</span>` : ''}
+          ${i < rooms.length - 1 ? `<span onclick="moveConfRoom(${i},1)" style="cursor:pointer" title="오른쪽으로">▶</span>` : ''}
+          <span onclick="removeConfRoom(${i})" style="cursor:pointer">✕</span></span>`).join('')
+          : '<span style="font-size:11.5px;color:var(--i5)">비워 두면 세션에 적힌 장소를 이름순으로 세웁니다</span>'}
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input class="fi" id="conf-room-add" placeholder="예: HALL C" style="width:180px"
+          onkeydown="if(event.key==='Enter')addConfRoom()">
+        <button class="btn" style="font-size:11px" onclick="addConfRoom()">추가</button>
+      </div>
+      <div style="font-size:10.5px;color:var(--i4);margin-top:5px;line-height:1.6">
+        메인 공간을 먼저 적으세요 — 프로그램표는 적은 순서대로 왼쪽부터 세웁니다.
+        이름순으로는 «어디가 메인인지»를 알 길이 없어요.</div>`)}
 
     ${row('트랙', '동시에 여는 방', `
       <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">
@@ -2737,6 +2755,28 @@ export const removeConfSlot = (i) => pushConf(c => {
   c.slots = (c.slots || []).filter((_, k) => k !== i);
 }, '시간대 삭제');
 
+export const addConfRoom = () => {
+  const v = (document.getElementById('conf-room-add')?.value || '').trim();
+  if(!v) return;
+  return pushConf(c => {
+    c.rooms = c.rooms || [];
+    if(c.rooms.includes(v)) return false;
+    c.rooms.push(v);
+  }, `장소 «${v}» 추가`);
+};
+export const removeConfRoom = (i) => pushConf(c => {
+  c.rooms = (c.rooms || []).filter((_, k) => k !== i);
+}, '장소 삭제');
+/* 순서가 곧 표의 열 순서라, 지웠다 다시 넣게 하면 순서를 바꿀 때마다
+   세션의 장소 이름과 어긋날 수 있다 — 자리만 맞바꾼다. */
+export const moveConfRoom = (i, dir) => pushConf(c => {
+  const list = c.rooms || [];
+  const j = i + dir;
+  if(j < 0 || j >= list.length) return false;
+  [list[i], list[j]] = [list[j], list[i]];
+  c.rooms = list;
+}, '장소 순서 변경');
+
 export const addConfTrack = () => {
   const v = (document.getElementById('conf-track-add')?.value || '').trim();
   if(!v) return;
@@ -2784,6 +2824,9 @@ window.addConfDay        = addConfDay;
 window.removeConfDay     = removeConfDay;
 window.addConfSlot       = addConfSlot;
 window.removeConfSlot    = removeConfSlot;
+window.addConfRoom       = addConfRoom;
+window.removeConfRoom    = removeConfRoom;
+window.moveConfRoom      = moveConfRoom;
 window.addConfTrack      = addConfTrack;
 window.removeConfTrack   = removeConfTrack;
 window.saveEvConf        = saveEvConf;

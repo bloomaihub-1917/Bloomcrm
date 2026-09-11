@@ -38,7 +38,7 @@ import { trackAction } from './audit-tab.js';
 
 /* ── 모듈 상태 ── */
 let confEvent = '';
-let confView = 'program';      // 'program' | 'people'
+let confView = 'pga';          // 'pga' | 'program' | 'people'
 let confOpenSession = '';      // 배정 칸이 열려 있는 세션
 let confEditSession = '';      // 수정 칸이 열려 있는 세션
 let confNewSession = false;    // 세션 추가 칸이 열려 있나
@@ -176,7 +176,7 @@ export function renderConf(){
     return;
   }
 
-  const segs = [['program', '프로그램'], ['pga', '한눈에'], ['people', '연사']];
+  const segs = [['pga', 'Program at a Glance'], ['program', 'Program'], ['people', 'Speakers']];
   const seg = `<div class="seg" style="margin:0 0 12px">
     ${segs.map(([k, l]) => `<button class="seg-b${confView === k ? ' on' : ''}" onclick="setConfView('${k}')">${l}</button>`).join('')}
   </div>`;
@@ -495,27 +495,6 @@ function trackColor(evKey, track){
   return TRACK_COLORS[h % TRACK_COLORS.length];
 }
 
-/* 세션 코드 S1, S2… — 일자·시각 순으로 매긴다.
-   화면에 보이는 순서와 코드가 어긋나면 «S7이 어디 있지»를 눈으로 찾게 된다. */
-function sessionCodes(evKey){
-  const map = new Map();
-  let n = 0;
-  /* 표는 왼쪽 위부터 읽는다 — 번호도 그 순서로 매겨야 «S7이 어디 있지»가
-     안 된다. sessionsForEvent는 트랙으로 마지막 정렬을 하므로 여기서
-     방 순서로 다시 세운다. */
-  const byGrid = sessionsForEvent(evKey).slice().sort((a, b) =>
-    String(a.date || '').localeCompare(String(b.date || ''))
-    || String(a.start_at || '').localeCompare(String(b.start_at || ''))
-    || String(a.room || '').localeCompare(String(b.room || ''), 'ko', { numeric: true }));
-  byGrid.forEach(ss => {
-    /* 장소가 없는 전체 행사(개막식·오찬)는 번호를 붙이지 않는다 —
-       프로그램북에서도 세션 번호는 «고를 수 있는 것»에만 붙는다. */
-    if(!ss.room) return;
-    map.set(ss.id, `S${++n}`);
-  });
-  return map;
-}
-
 function pgaHtml(ev){
   const sessions = sessionsForEvent(ev.key);
   if(!sessions.length){
@@ -526,26 +505,30 @@ function pgaHtml(ev){
       개막식처럼 한 줄을 통째로 씁니다.</div>`;
   }
 
-  const codes = sessionCodes(ev.key);
   /* 가로축은 장소. 세션에 실제로 적힌 장소만 세운다 — 설정에 있는 방까지
      세우면 쓰지도 않는 빈 칸이 표의 절반을 차지한다. */
-  /* 방 이름에 든 숫자를 숫자로 읽는다 — 글자로 세우면 307·308·317이
-     제자리에 서긴 하지만 «10호»가 «9호»보다 앞에 온다. */
-  const rooms = [...new Set(sessions.map(x => x.room).filter(Boolean))]
-    .sort((a, b) => String(a).localeCompare(String(b), 'ko', { numeric: true }));
+  /* 장소 순서는 설정에 적은 순서를 그대로 쓴다 — 어디가 메인 공간인지는
+     이름에서 나오지 않는다(코사이어티는 HALL C가 메인이고 B가 서브다).
+     설정에 없는 장소는 뒤에 붙이되 이름순으로 세운다. 숫자를 숫자로 읽어야
+     «10호»가 «9호» 뒤에 온다. */
+  const used = [...new Set(sessions.map(x => x.room).filter(Boolean))];
+  const order = confCfg(ev.key).rooms || [];
+  const rooms = [
+    ...order.filter(r => used.includes(r)),
+    ...used.filter(r => !order.includes(r))
+      .sort((a, b) => String(a).localeCompare(String(b), 'ko', { numeric: true })),
+  ];
   const days = [...new Set(sessions.map(x => x.date || ''))].sort();
   const noRoomOnly = !rooms.length;
 
   const cell = (ss) => {
     const c = trackColor(ev.key, ss.track);
-    const code = codes.get(ss.id);
     return `<div onclick="openPgaSession('${escAttr(ss.id)}')" title="${escAttr(
         [ss.title_ko, ss.title_en, timeLabel(ss.start_at, ss.end_at), ss.room].filter(Boolean).join(' · '))}"
       style="cursor:pointer;border:1px solid ${c.bd}33;border-radius:4px;overflow:hidden;margin-bottom:5px">
       ${ss.track ? `<div style="background:${c.bg};border-left:3px solid ${c.bd};padding:3px 6px;
         font-size:10.5px;font-weight:700;color:var(--i1)">${escapeHtml(ss.track)}</div>` : ''}
-      <div style="padding:6px 7px 8px;background:var(--W)">
-        ${code ? `<div style="font-size:10.5px;font-weight:700;color:var(--i3);margin-bottom:2px">${code}.</div>` : ''}
+      <div style="padding:6px 7px 8px;background:var(--W);overflow-wrap:anywhere">
         <div style="font-size:11px;line-height:1.45;color:var(--i1)">${escapeHtml(ss.title_ko || ss.title_en || '(세션명 없음)')}</div>
         ${ss.title_ko && ss.title_en ? `<div style="font-size:9.5px;color:var(--i4);line-height:1.4;margin-top:2px">${escapeHtml(ss.title_en)}</div>` : ''}
         ${(() => {
@@ -629,9 +612,14 @@ function pgaHtml(ev){
         title="표를 그대로 복사해 프로그램북·메일에 붙여 넣습니다">표 복사</button>
     </div>
     ${legend}${hint}
-    <div class="tw" id="pga-table"><table style="width:100%;border-collapse:collapse">
+    <div class="tw" id="pga-table"><table style="width:100%;border-collapse:collapse;table-layout:fixed">
+      <colgroup>
+        <col style="width:82px">
+        ${(rooms.length ? rooms : ['전체']).map(() =>
+          `<col style="width:${(100 / Math.max(1, rooms.length || 1)).toFixed(4)}%">`).join('')}
+      </colgroup>
       <thead><tr>
-        <th style="width:82px;text-align:left;font-size:10px">시간</th>
+        <th style="text-align:left;font-size:10px">시간</th>
         ${(rooms.length ? rooms : ['전체']).map(rm => `<th style="text-align:center;font-size:10.5px;
           border-left:1px solid var(--i7)">${escapeHtml(rm)}</th>`).join('')}
       </tr></thead>
