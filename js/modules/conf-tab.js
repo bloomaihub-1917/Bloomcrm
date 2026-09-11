@@ -176,7 +176,7 @@ export function renderConf(){
     return;
   }
 
-  const segs = [['program', '프로그램'], ['people', '연사']];
+  const segs = [['program', '프로그램'], ['pga', '한눈에'], ['people', '연사']];
   const seg = `<div class="seg" style="margin:0 0 12px">
     ${segs.map(([k, l]) => `<button class="seg-b${confView === k ? ' on' : ''}" onclick="setConfView('${k}')">${l}</button>`).join('')}
   </div>`;
@@ -186,7 +186,9 @@ export function renderConf(){
       🔒 끝난 컨퍼런스라 열람만 됩니다. 고치려면 <b>설정 › 행사 관리 › 진행 파트</b>에서 진행 중으로 되돌리세요.
     </div>` : '';
 
-  const inner = confView === 'people' ? peopleHtml(ev) : programHtml(ev);
+  const inner = confView === 'people' ? peopleHtml(ev)
+    : confView === 'pga' ? pgaHtml(ev)
+    : programHtml(ev);
   body.innerHTML = `<div style="padding:14px 16px 40px">${seg}${banner}`
     + (confLocked() ? `<div class="ro">${inner}</div>` : inner) + `</div>`;
 }
@@ -452,6 +454,228 @@ function assignFormHtml(ev, s){
       <span style="font-size:10.5px;color:var(--i4)">역할을 정하면 받을 것이 정해져요</span>
     </div>
   </div>`;
+}
+
+
+/* ══════════════════════════════════════════
+   PROGRAM AT A GLANCE — 프로그램표
+
+   프로그램북 앞에 늘 들어가는 한 장이다. 가로는 장소, 세로는 일자와 시간,
+   칸은 트랙 색으로 묶인 세션. 참가자는 이 한 장으로 «내가 갈 세션이 언제
+   어디서 열리는지»를 정한다.
+
+   우리가 따로 적어 넣는 게 아니라 세션 데이터에서 그대로 만든다 — 프로그램을
+   고치고 나서 이 표를 다시 그리는 일을 사람이 하면, 둘은 반드시 어긋난다.
+   실제로 프로그램북의 표와 현장 안내가 다른 사고는 거기서 난다.
+
+   장소가 없는 세션(개막식·기조연설처럼 전체가 모이는 것)은 한 줄을 통째로
+   쓴다. 첨부한 프로그램북도 개막식을 그렇게 뽑았다.
+══════════════════════════════════════════ */
+
+/* 트랙 색 — 설정의 트랙 순서를 따라 돌려 쓴다. 색을 사람이 고르게 하면
+   트랙을 더할 때마다 색부터 정해야 해서, 순서로 정하고 필요하면 그때 연다. */
+const TRACK_COLORS = [
+  { bg: '#E8F3E4', bd: '#8FBF7A' },   // 연두
+  { bg: '#FDF3DC', bd: '#E0B65C' },   // 노랑
+  { bg: '#FBE4E4', bd: '#DC8B8B' },   // 분홍
+  { bg: '#EAE4F5', bd: '#A38BD1' },   // 보라
+  { bg: '#DFEFF7', bd: '#6FAFCE' },   // 하늘
+  { bg: '#DCF0EC', bd: '#6FBCAB' },   // 청록
+  { bg: '#F0E7DE', bd: '#C49A75' },   // 갈색
+];
+function trackColor(evKey, track){
+  if(!track) return { bg: 'var(--i8)', bd: 'var(--i5)' };
+  const list = confCfg(evKey).tracks || [];
+  const i = list.indexOf(track);
+  if(i >= 0) return TRACK_COLORS[i % TRACK_COLORS.length];
+  /* 설정에서 지운 트랙이 세션에 남아 있어도 색이 있어야 한다 — 이름으로
+     자리를 정하면 목록이 바뀌어도 그 트랙의 색은 그대로다. */
+  let h = 0;
+  for(const ch of String(track)) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return TRACK_COLORS[h % TRACK_COLORS.length];
+}
+
+/* 세션 코드 S1, S2… — 일자·시각 순으로 매긴다.
+   화면에 보이는 순서와 코드가 어긋나면 «S7이 어디 있지»를 눈으로 찾게 된다. */
+function sessionCodes(evKey){
+  const map = new Map();
+  let n = 0;
+  /* 표는 왼쪽 위부터 읽는다 — 번호도 그 순서로 매겨야 «S7이 어디 있지»가
+     안 된다. sessionsForEvent는 트랙으로 마지막 정렬을 하므로 여기서
+     방 순서로 다시 세운다. */
+  const byGrid = sessionsForEvent(evKey).slice().sort((a, b) =>
+    String(a.date || '').localeCompare(String(b.date || ''))
+    || String(a.start_at || '').localeCompare(String(b.start_at || ''))
+    || String(a.room || '').localeCompare(String(b.room || ''), 'ko', { numeric: true }));
+  byGrid.forEach(ss => {
+    /* 장소가 없는 전체 행사(개막식·오찬)는 번호를 붙이지 않는다 —
+       프로그램북에서도 세션 번호는 «고를 수 있는 것»에만 붙는다. */
+    if(!ss.room) return;
+    map.set(ss.id, `S${++n}`);
+  });
+  return map;
+}
+
+function pgaHtml(ev){
+  const sessions = sessionsForEvent(ev.key);
+  if(!sessions.length){
+    return `<div style="padding:22px;background:var(--i8);border:1px solid var(--i6);border-radius:10px;
+      font-size:12px;color:var(--i5);line-height:1.7">
+      세션이 없어요. «프로그램»에서 세션을 만들면 여기에 프로그램표가 만들어집니다.<br>
+      표는 세션의 <b>일자 · 시각 · 장소 · 트랙</b>으로 그려져요 — 장소를 안 적은 세션은
+      개막식처럼 한 줄을 통째로 씁니다.</div>`;
+  }
+
+  const codes = sessionCodes(ev.key);
+  /* 가로축은 장소. 세션에 실제로 적힌 장소만 세운다 — 설정에 있는 방까지
+     세우면 쓰지도 않는 빈 칸이 표의 절반을 차지한다. */
+  /* 방 이름에 든 숫자를 숫자로 읽는다 — 글자로 세우면 307·308·317이
+     제자리에 서긴 하지만 «10호»가 «9호»보다 앞에 온다. */
+  const rooms = [...new Set(sessions.map(x => x.room).filter(Boolean))]
+    .sort((a, b) => String(a).localeCompare(String(b), 'ko', { numeric: true }));
+  const days = [...new Set(sessions.map(x => x.date || ''))].sort();
+  const noRoomOnly = !rooms.length;
+
+  const cell = (ss) => {
+    const c = trackColor(ev.key, ss.track);
+    const code = codes.get(ss.id);
+    return `<div onclick="openPgaSession('${escAttr(ss.id)}')" title="${escAttr(
+        [ss.title_ko, ss.title_en, timeLabel(ss.start_at, ss.end_at), ss.room].filter(Boolean).join(' · '))}"
+      style="cursor:pointer;border:1px solid ${c.bd}33;border-radius:4px;overflow:hidden;margin-bottom:5px">
+      ${ss.track ? `<div style="background:${c.bg};border-left:3px solid ${c.bd};padding:3px 6px;
+        font-size:10.5px;font-weight:700;color:var(--i1)">${escapeHtml(ss.track)}</div>` : ''}
+      <div style="padding:6px 7px 8px;background:var(--W)">
+        ${code ? `<div style="font-size:10.5px;font-weight:700;color:var(--i3);margin-bottom:2px">${code}.</div>` : ''}
+        <div style="font-size:11px;line-height:1.45;color:var(--i1)">${escapeHtml(ss.title_ko || ss.title_en || '(세션명 없음)')}</div>
+        ${ss.title_ko && ss.title_en ? `<div style="font-size:9.5px;color:var(--i4);line-height:1.4;margin-top:2px">${escapeHtml(ss.title_en)}</div>` : ''}
+        ${(() => {
+          const asg = assignmentsOfSession(ss.id);
+          return asg.length ? `<div style="font-size:9.5px;color:var(--i4);margin-top:4px">${
+            escapeHtml(asg.slice(0, 3).map(a => speakerName(a.speaker_id)).join(', '))}${
+            asg.length > 3 ? ` 외 ${asg.length - 3}` : ''}</div>` : '';
+        })()}
+      </div>
+    </div>`;
+  };
+
+  /* 한 줄을 통째로 쓰는 세션 — 장소를 안 적은 것. 개막식·오찬처럼 전체가
+     한자리에 모이는 일들이다. */
+  const wideCell = (ss) => {
+    const c = trackColor(ev.key, ss.track);
+    return `<div onclick="openPgaSession('${escAttr(ss.id)}')" title="${escAttr(ss.title_en || '')}"
+      style="cursor:pointer;background:${ss.track ? c.bg : 'var(--i8)'};border:1px solid ${ss.track ? c.bd + '55' : 'var(--i6)'};
+      border-radius:4px;padding:9px;text-align:center;margin-bottom:5px">
+      <div style="font-size:11.5px;font-weight:600">${escapeHtml(ss.title_ko || ss.title_en || '(세션명 없음)')}</div>
+      ${ss.title_en && ss.title_ko ? `<div style="font-size:9.5px;color:var(--i4);margin-top:2px">${escapeHtml(ss.title_en)}</div>` : ''}
+    </div>`;
+  };
+
+  const dayBlock = (d) => {
+    const mine = sessions.filter(x => (x.date || '') === d);
+    /* 세로는 시간대. 같은 시각에 시작하는 것이 한 줄이 된다 —
+       시각을 안 적은 세션은 맨 아래에 «시간 미정» 줄로 모은다. */
+    const slots = [...new Set(mine.map(x => x.start_at || ''))]
+      .sort((a, b) => (a ? 0 : 1) - (b ? 0 : 1) || a.localeCompare(b));
+
+    const rowFor = (slot) => {
+      const here = mine.filter(x => (x.start_at || '') === slot);
+      const wide = here.filter(x => !x.room);
+      const placed = here.filter(x => x.room);
+      const timeCol = `<td style="vertical-align:top;padding:7px 8px;font-size:10.5px;color:var(--i3);
+        white-space:nowrap;border-top:1px solid var(--i6)">${slot ? escapeHtml(timeLabel(slot,
+          // 그 시간대에서 가장 늦게 끝나는 것으로 폭을 적는다
+          here.map(x => x.end_at).filter(Boolean).sort().slice(-1)[0] || ''))
+          : '<span style="color:var(--i4)">시간 미정</span>'}</td>`;
+      const wideRow = wide.length
+        ? `<tr>${timeCol}<td colspan="${Math.max(1, rooms.length)}" style="padding:7px 8px;border-top:1px solid var(--i6)">
+            ${wide.map(wideCell).join('')}</td></tr>`
+        : '';
+      const placedRow = placed.length || !wide.length
+        ? `<tr>${wide.length ? `<td style="border-top:1px solid var(--i6)"></td>` : timeCol}
+            ${(rooms.length ? rooms : ['']).map(rm => `<td style="vertical-align:top;padding:7px 8px;
+              border-top:1px solid var(--i6);border-left:1px solid var(--i7)">
+              ${placed.filter(x => (x.room || '') === rm).map(cell).join('') || ''}</td>`).join('')}
+          </tr>`
+        : '';
+      return wideRow + placedRow;
+    };
+
+    return `<tr><td colspan="${rooms.length + 1}" style="padding:9px 8px 3px;background:var(--i8);
+        border-top:1px solid var(--i6);font-size:11.5px;font-weight:700">
+        ${escapeHtml(d ? dayLabel(d) : '날짜 미정')}
+        <span style="font-weight:400;color:var(--i4);margin-left:6px">세션 ${mine.length}</span></td></tr>`
+      + slots.map(rowFor).join('');
+  };
+
+  /* 트랙 범례 — 색만 보고는 무슨 트랙인지 모른다 */
+  const usedTracks = [...new Set(sessions.map(x => x.track).filter(Boolean))];
+  const legend = usedTracks.length ? `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+    ${usedTracks.map(t => {
+      const c = trackColor(ev.key, t);
+      return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--i3)">
+        <span style="width:11px;height:11px;border-radius:3px;background:${c.bg};border-left:3px solid ${c.bd}"></span>
+        ${escapeHtml(t)}</span>`;
+    }).join('')}
+  </div>` : '';
+
+  const hint = noRoomOnly ? `<div style="font-size:10.5px;color:var(--i4);margin-bottom:8px;line-height:1.6">
+    장소를 적은 세션이 없어 한 칸으로 그렸어요 — 세션에 «장소»를 넣으면 방별로 나뉩니다.</div>` : '';
+
+  return `<div style="display:flex;align-items:center;gap:9px;margin-bottom:8px;flex-wrap:wrap">
+      <div style="font-size:12.5px;font-weight:700">Program at a Glance</div>
+      <div style="font-size:10.5px;color:var(--i4)">세션 ${sessions.length} · ${days.length}일${
+        rooms.length ? ` · ${rooms.length}개 장소` : ''}</div>
+      <button class="btn" style="font-size:10.5px;margin-left:auto" onclick="copyPga()"
+        title="표를 그대로 복사해 프로그램북·메일에 붙여 넣습니다">표 복사</button>
+    </div>
+    ${legend}${hint}
+    <div class="tw" id="pga-table"><table style="width:100%;border-collapse:collapse">
+      <thead><tr>
+        <th style="width:82px;text-align:left;font-size:10px">시간</th>
+        ${(rooms.length ? rooms : ['전체']).map(rm => `<th style="text-align:center;font-size:10.5px;
+          border-left:1px solid var(--i7)">${escapeHtml(rm)}</th>`).join('')}
+      </tr></thead>
+      <tbody>${days.map(dayBlock).join('')}</tbody>
+    </table></div>
+    <div style="font-size:10px;color:var(--i4);margin-top:7px;line-height:1.6">
+      칸을 누르면 그 세션의 수정 칸이 열려요. 장소를 안 적은 세션은 개막식처럼 한 줄을 통째로 씁니다.
+    </div>`;
+}
+
+/* 표에서 세션을 누르면 프로그램으로 건너가 그 세션을 연다 —
+   여기서 바로 고치게 하면 같은 수정 칸이 두 군데 생긴다. */
+export function openPgaSession(sid){
+  confView = 'program';
+  confEditSession = sid;
+  renderConf();
+  setTimeout(() => {
+    document.getElementById(`es-${sid}-ko`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }, 60);
+}
+
+/* 표를 그대로 복사한다 — 프로그램북 원고와 메일이 이 표를 그대로 쓴다.
+   서식 있는 복사(text/html)와 글자 복사를 함께 담아, 붙여 넣는 곳이
+   무엇이든 형태가 남게 한다. */
+export async function copyPga(){
+  const el = document.getElementById('pga-table');
+  if(!el) return;
+  const html = el.innerHTML;
+  const text = [...el.querySelectorAll('tr')]
+    .map(tr => [...tr.children].map(td => td.innerText.replace(/\s*\n\s*/g, ' ').trim()).join('\t'))
+    .join('\n');
+  try {
+    if(navigator.clipboard && window.ClipboardItem){
+      await navigator.clipboard.write([new ClipboardItem({
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([text], { type: 'text/plain' }),
+      })]);
+    } else {
+      await navigator.clipboard.writeText(text);
+    }
+    alert('표를 복사했어요. 문서나 메일에 붙여 넣으세요.');
+  } catch(e){
+    alert(`복사하지 못했어요 (${e.message}).\n표를 끌어서 직접 선택해 복사해주세요.`);
+  }
 }
 
 /* ══════════════════════════════════════════
@@ -1146,6 +1370,8 @@ window.setConfView       = setConfView;
 window.setConfNeedFil    = setConfNeedFil;
 window.setConfRoleFil    = setConfRoleFil;
 window.setConfSessFil    = setConfSessFil;
+window.openPgaSession    = openPgaSession;
+window.copyPga           = copyPga;
 window.buildConfEvList   = buildConfEvList;
 window.renderConf        = renderConf;
 window.fillSessionSlot   = fillSessionSlot;
