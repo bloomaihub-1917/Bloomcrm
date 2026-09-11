@@ -23,10 +23,12 @@ import {
   confCfg, confDays,
   CONF_SESSIONS, SPEAKERS, SESSION_SPEAKERS,
   sessionsForEvent, speakersForEvent, assignmentsOfSession, assignmentsFor,
-  getSpeakerById, rolesOfSpeaker, speakerNeedList,
+  getSpeakerById, rolesOfSpeaker, speakerNeedList, speakerNeed,
+  contactsOfSpeaker,
 } from '../state.js';
-import { SPEAKER_ROLES, NEED_MARK } from '../constants.js';
+import { SPEAKER_ROLES, NEED_MARK, SPEAKER_NEEDS } from '../constants.js';
 import { escapeHtml, escAttr, isMobile } from '../utils.js';
+import { progressBar, shortCell } from './exh-tab.js';
 import {
   saveConfSession, deleteConfSession,
   saveSpeaker, deleteSpeaker,
@@ -40,6 +42,8 @@ let confView = 'program';      // 'program' | 'people'
 let confOpenSession = '';      // 배정 칸이 열려 있는 세션
 let confEditSession = '';      // 수정 칸이 열려 있는 세션
 let confNewSession = false;    // 세션 추가 칸이 열려 있나
+let confNeedFil = null;        // {key, mode:'done'|'todo'} — 받을 것 칩으로 거르기
+let confRoleFil = '';          // 역할로 거르기
 
 /* ══════════════════════════════════════════
    진행 완료 잠금
@@ -114,6 +118,8 @@ export function setConfEvent(key){
   confOpenSession = '';
   confEditSession = '';
   confNewSession = false;
+  confNeedFil = null;
+  confRoleFil = '';
   buildConfEvList();
   renderConf();
   if(isMobile()) window.closeSb?.();
@@ -395,54 +401,270 @@ function assignFormHtml(ev, s){
 }
 
 /* ══════════════════════════════════════════
-   연사 — 사람이 주인공. 맡은 역할과 받을 것의 수를 본다.
-   (칸을 채우는 드로어는 다음 단계)
+   연사 — 전시 진행관리와 같은 방식으로 본다
+
+   전시에서 51개 기업의 준비 상황을 한 표로 보는 이유가 여기도 그대로다.
+   연사가 스무 명이면 «누구에게 무엇이 안 왔나»를 사람마다 열어 볼 수 없다.
+   한 줄에 한 사람, 한 칸에 한 항목을 놓고, 칸의 색과 기호로 상태를 읽는다.
+
+   전시와 다른 점이 하나 있다. 전시는 모든 기업이 같은 단계를 밟지만 연사는
+   역할마다 받을 것이 다르다 — 좌장에게 초록은 «안 온 것»이 아니라 «묻지 않은
+   것»이다. 그래서 묻지 않는 칸은 빈칸(·)으로 두고 분모에서도 뺀다.
+   그러지 않으면 좌장은 영원히 진행률 70%에 머문다.
 ══════════════════════════════════════════ */
+
+/* 표에 세울 항목 — 받을 것 중에서 «칸으로 볼 수 있는 것»만 고른다.
+   순서는 실제로 받는 순서를 따랐다(사람 정보 → 발제 → 서류). */
+const SP_COLS = [
+  { key: 'profile',  label: '소속·직함' },
+  { key: 'bio_pro',  label: '이력' },
+  { key: 'photo',    label: '사진' },
+  { key: 'title',    label: '발제명' },
+  { key: 'abstract', label: '초록' },
+  { key: 'slides',   label: '발표자료' },
+  { key: 'consent',  label: '동의서' },
+  { key: 'bank',     label: '계좌' },
+  { key: 'passport', label: '여권' },
+  { key: 'travel',   label: '숙박·항공' },
+];
+
+/* 이 사람의 이 항목이 어떤 상태인가.
+   'na'  — 역할이 묻지 않는다(분모에서 뺀다)
+   'done'— 받았다      'part' — 일부만    'todo' — 아직
+   text는 칸 아래 작게 붙는 값(받은 날짜 등) */
+function spCell(sp, evKey, key){
+  const roles = rolesOfSpeaker(sp.id);
+  const asg = assignmentsFor(sp.id);
+  /* 역할이 여럿이면 센 쪽을 따른다 — 좌장이자 발표자면 발제도 받아야 한다 */
+  let need = '';
+  roles.forEach(r => {
+    const v = speakerNeed(evKey, r, key);
+    if(v === 'req') need = 'req';
+    else if(v === 'opt' && need !== 'req') need = 'opt';
+  });
+  if(!need) return { state: 'na' };
+
+  const done = (v, text) => ({ state: v ? 'done' : 'todo', text: v ? (text || v) : '', need });
+
+  switch(key){
+    case 'profile': {
+      const has = sp.org_ko || sp.org_en;
+      return { state: has ? 'done' : 'todo', text: has ? (sp.org_ko || sp.org_en) : '', need };
+    }
+    case 'bio_pro':  return done(sp.profile_received_at);
+    case 'photo':    return done(sp.photo_received_at);
+    case 'consent':  return done(sp.consent_at);
+    case 'bank':
+      /* 줄 돈이 없으면 계좌를 묻지 않는다 — 무보수 연사에게 계좌를 요구할
+         이유가 없고, 요구한 적 없는 걸 «안 받았다»고 세면 안 된다. */
+      if(!sp.fee_amount) return { state: 'na' };
+      return done(sp.bank_account, sp.bank_account ? '받음' : '');
+    case 'passport': return done(sp.passport_received_at);
+    case 'travel': {
+      /* 챙기기로 한 것만 센다. 숙박·항공 중 적어 둔 게 없으면 아직 정해지지
+         않은 것이라 «안 한 일»로 몰지 않는다. */
+      const items = [];
+      if(sp.stay_hotel) items.push(sp.stay_booked === 'yes');
+      if(sp.air_route) items.push(!!sp.air_ticketed_at);
+      if(!items.length) return { state: 'todo', text: '', need };
+      const n = items.filter(Boolean).length;
+      return { state: n === items.length ? 'done' : n ? 'part' : 'todo',
+        text: `${n}/${items.length}`, need };
+    }
+    /* 발제 셋은 배정 줄마다 따로 있다 — 두 세션에서 발표하면 초록도 둘이다.
+       그 역할이 묻는 배정만 센다(좌장 배정은 빼고 연사 배정만). */
+    case 'title': case 'abstract': case 'slides': {
+      const live = asg.filter(a => speakerNeed(evKey, a.role, key));
+      if(!live.length) return { state: 'na' };
+      const got = live.filter(a =>
+        key === 'title' ? (a.title_ko || a.title_en)
+        : key === 'abstract' ? a.abstract_received_at
+        : a.slides_received_at);
+      return { state: got.length === live.length ? 'done' : got.length ? 'part' : 'todo',
+        text: live.length > 1 ? `${got.length}/${live.length}` : '', need };
+    }
+  }
+  return { state: 'na' };
+}
+
+/* 진행률 — 묻는 것만 분모에 넣는다 */
+function spProgress(sp, evKey){
+  const cells = SP_COLS.map(c => spCell(sp, evKey, c.key)).filter(c => c.state !== 'na');
+  if(!cells.length) return { pct: 0, n: 0, of: 0 };
+  const n = cells.filter(c => c.state === 'done').length;
+  return { pct: Math.round(n / cells.length * 100), n, of: cells.length };
+}
+
+/* 칸 하나 — 전시 표와 같은 기호를 쓴다. 두 화면을 오가며 보는 사람이
+   기호를 두 번 배우지 않게. */
+function spCellHtml(c, colLabel, name){
+  const map = {
+    done: { bg: 'var(--gb)', fg: 'var(--g)',  mark: '✓' },
+    part: { bg: 'var(--ab)', fg: 'var(--am)', mark: '◐' },
+    todo: { bg: 'transparent', fg: 'var(--i5)', mark: '—' },
+    na:   { bg: 'transparent', fg: 'var(--i6)', mark: '·' },
+  }[c.state];
+  const tip = c.state === 'na'
+    ? `${name}의 역할은 ${colLabel}을(를) 받지 않아요`
+    : c.state === 'done' ? `${colLabel} 받음${c.text ? ` (${c.text})` : ''}`
+    : c.state === 'part' ? `${colLabel} 일부만 (${c.text})`
+    : `${colLabel} 아직${c.need === 'opt' ? ' — 있으면 좋음' : ''}`;
+  return `<td style="text-align:center;padding:5px 3px" title="${escAttr(tip)}">
+    <div style="display:inline-flex;flex-direction:column;align-items:center;gap:1px;min-width:40px;
+      padding:3px 4px;border-radius:5px;background:${map.bg}">
+      <span style="font-size:12px;font-weight:800;color:${map.fg};line-height:1">${map.mark}</span>
+      ${c.text ? `<span style="font-size:9px;color:${map.fg};line-height:1.1">${escapeHtml(shortCell(c.text))}</span>` : ''}
+    </div></td>`;
+}
+
+/* 항목별 집계 — «묻는 사람» 중 몇 명이 냈나 */
+function spTally(list, evKey, key){
+  const live = list.map(sp => spCell(sp, evKey, key)).filter(c => c.state !== 'na');
+  return { n: live.filter(c => c.state === 'done').length, of: live.length };
+}
+
+export function setConfNeedFil(key){
+  /* 전시의 단계 칩과 같은 순환 — 완료만 → 미완료만 → 전체 */
+  if(!confNeedFil || confNeedFil.key !== key) confNeedFil = { key, mode: 'done' };
+  else if(confNeedFil.mode === 'done') confNeedFil = { key, mode: 'todo' };
+  else confNeedFil = null;
+  renderConf();
+}
+export function setConfRoleFil(role){
+  confRoleFil = confRoleFil === role ? '' : role;
+  renderConf();
+}
+
 function peopleHtml(ev){
-  const list = speakersForEvent(ev.key)
-    .sort((a, b) => String(a.name_snapshot || '').localeCompare(String(b.name_snapshot || ''), 'ko'));
-  if(!list.length){
+  const all = speakersForEvent(ev.key);
+  if(!all.length){
     return `<div style="padding:22px;background:var(--i8);border:1px solid var(--i6);border-radius:10px;
       font-size:12px;color:var(--i5);line-height:1.7">
       아직 연사가 없어요. «프로그램»에서 세션을 만들고 사람을 배정하면 여기 쌓여요.</div>`;
   }
 
-  /* 받을 것은 역할에서 나온다. 한 사람이 여러 역할이면 요구가 합쳐지고,
-     더 센 쪽(받아야 함)이 이긴다 — 좌장이자 연사면 발제도 받아야 한다. */
-  const needsOf = (sp) => {
-    const roles = rolesOfSpeaker(sp.id);
-    const merged = new Map();
-    (roles.length ? roles : []).forEach(r => speakerNeedList(ev.key, r).forEach(n => {
-      const prev = merged.get(n.key);
-      if(!prev || (prev.state === 'opt' && n.state === 'req')) merged.set(n.key, n);
-    }));
-    return [...merged.values()];
-  };
+  let list = all.slice().sort((a, b) =>
+    String(a.name_snapshot || '').localeCompare(String(b.name_snapshot || ''), 'ko'));
+  if(confRoleFil) list = list.filter(sp => rolesOfSpeaker(sp.id).includes(confRoleFil));
+  if(confNeedFil){
+    list = list.filter(sp => {
+      const c = spCell(sp, ev.key, confNeedFil.key);
+      if(c.state === 'na') return false;
+      return confNeedFil.mode === 'done' ? c.state === 'done' : c.state !== 'done';
+    });
+  }
+
+  /* ── 위쪽 요약 — 전시의 카드 줄과 같은 자리 ── */
+  const byStatus = (v) => all.filter(sp => (sp.status || '섭외중') === v).length;
+  const noSession = all.filter(sp => !assignmentsFor(sp.id).length).length;
+  const avg = all.length
+    ? Math.round(all.reduce((n, sp) => n + spProgress(sp, ev.key).pct, 0) / all.length) : 0;
+  const feeLeft = all.filter(sp => sp.fee_amount && !sp.fee_paid_at).length;
+
+  const card = (label, value, sub) => `<div style="min-width:96px">
+    <div style="font-size:10px;color:var(--i4);margin-bottom:2px">${escapeHtml(label)}</div>
+    <div style="font-size:18px;font-weight:800;line-height:1.1">${value}</div>
+    ${sub ? `<div style="font-size:10px;color:var(--i4);margin-top:2px">${sub}</div>` : ''}
+  </div>`;
+
+  const summary = `<div style="display:flex;flex-wrap:wrap;gap:20px;padding:12px 14px;margin-bottom:10px;
+      background:var(--i8);border:1px solid var(--i6);border-radius:10px">
+    ${card('연사', `${all.length}<span style="font-size:11px;font-weight:600;color:var(--i4)">명</span>`,
+      `확정 ${byStatus('확정')} · 섭외중 ${byStatus('섭외중')}`)}
+    ${card('평균 진행률', `${avg}<span style="font-size:11px;font-weight:600;color:var(--i4)">%</span>`,
+      '역할이 묻는 항목만 셈')}
+    ${card('세션', `${sessionsForEvent(ev.key).length}<span style="font-size:11px;font-weight:600;color:var(--i4)">개</span>`,
+      noSession ? `<span style="color:var(--am)">배정 없는 연사 ${noSession}</span>` : '모두 배정됨')}
+    ${feeLeft ? card('연사료', `${feeLeft}<span style="font-size:11px;font-weight:600;color:var(--i4)">명</span>`, '아직 미지급') : ''}
+  </div>`;
+
+  /* ── 역할 칩 ── */
+  const roleChips = `<div class="seg" style="flex-wrap:wrap;margin-bottom:8px">
+    <button class="seg-b${!confRoleFil ? ' on' : ''}" onclick="setConfRoleFil('')">전체 ${all.length}명</button>
+    ${SPEAKER_ROLES.map(r => {
+      const n = all.filter(sp => rolesOfSpeaker(sp.id).includes(r.key)).length;
+      return n ? `<button class="seg-b${confRoleFil === r.key ? ' on' : ''}"
+        onclick="setConfRoleFil('${escAttr(r.key)}')">${escapeHtml(r.label)} ${n}명</button>` : '';
+    }).join('')}
+  </div>`;
+
+  /* ── 받을 것 칩 — 전시의 단계 칩과 같은 방식으로 누르면 걸러진다 ── */
+  const stats = SP_COLS.map(c => ({ col: c, ...spTally(all, ev.key, c.key) })).filter(x => x.of);
+  const needChips = `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+    ${stats.map(({ col, n, of }) => {
+      const on = confNeedFil && confNeedFil.key === col.key;
+      const cls = on ? (confNeedFil.mode === 'done' ? 'p-blue' : 'p-amber')
+        : n === of ? 'p-green' : 'p-gray';
+      const tip = on ? (confNeedFil.mode === 'done' ? '받은 사람만 보는 중 — 한 번 더 누르면 안 받은 사람만'
+        : '안 받은 사람만 보는 중 — 한 번 더 누르면 전체') : '눌러서 받은 사람만 보기';
+      return `<button class="pill ${cls}" title="${escAttr(tip)}" style="border:0;cursor:pointer;font:inherit"
+        onclick="setConfNeedFil('${escAttr(col.key)}')">${escapeHtml(col.label)} ${
+        on ? (confNeedFil.mode === 'done' ? `${n}명` : `${of - n}명`) : `${n}/${of}`}${
+        on ? `<span style="margin-left:3px">${confNeedFil.mode === 'done' ? '받음' : '안 받음'} ✕</span>` : ''}</button>`;
+    }).join('')}
+  </div>`;
+
+  if(!list.length){
+    return summary + roleChips + needChips
+      + `<div style="padding:20px;background:var(--i8);border:1px solid var(--i6);border-radius:10px;
+        font-size:12px;color:var(--i5)">이 조건에 맞는 연사가 없어요.</div>`;
+  }
 
   const row = (sp) => {
+    const name = sp.name_snapshot || sp.id;
     const roles = rolesOfSpeaker(sp.id);
-    const needs = needsOf(sp);
-    const req = needs.filter(n => n.state === 'req').length;
+    const pr = spProgress(sp, ev.key);
     const asg = assignmentsFor(sp.id);
-    return `<tr>
-      <td><span onclick="openSpeakerDr('${escAttr(sp.id)}')" style="font-size:12px;font-weight:600;cursor:pointer;color:var(--a)">${escapeHtml(sp.name_snapshot || sp.id)}</span>
-        ${sp.org_ko || sp.org_en ? `<div style="font-size:10.5px;color:var(--i4)">${escapeHtml([sp.org_ko || sp.org_en, sp.title_ko || sp.title_en].filter(Boolean).join(' · '))}</div>` : ''}</td>
-      <td>${roles.length ? roles.map(roleChip).join(' ') : '<span style="font-size:10.5px;color:var(--i4)">배정 없음</span>'}</td>
-      <td style="font-size:11px;color:var(--i5)">${asg.length}건</td>
-      <td style="font-size:11px;color:var(--i5)">${needs.length ? `${NEED_MARK.req} ${req} · ${NEED_MARK.opt} ${needs.length - req}` : '—'}</td>
-      <td style="text-align:right">
-        <button class="btn" style="font-size:10.5px" onclick="removeConfSpeaker('${escAttr(sp.id)}')">삭제</button>
-      </td>
+    const sess = asg.map(a => {
+      const ss = CONF_SESSIONS.find(x => x.id === a.session_id);
+      return ss ? (ss.title_ko || ss.title_en || '') : '';
+    }).filter(Boolean);
+    const to = contactsOfSpeaker(sp.id).filter(x => x.send === 'to' && x.email);
+
+    return `<tr style="cursor:pointer" onclick="openSpeakerDr('${escAttr(sp.id)}')">
+      <td><div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+          <span style="font-weight:700;font-size:12px">${escapeHtml(name)}</span>
+          ${roles.map(r => `<span class="pill ${(SPEAKER_ROLES.find(x => x.key === r) || {}).cls || 'p-gray'}"
+            style="font-size:9px">${escapeHtml(r)}</span>`).join('')}
+          ${sp.lang_pref === 'en' ? '<span class="pill p-gray" style="font-size:9px" title="영문만 받는 해외 연사예요">EN</span>' : ''}
+          ${sp.status && sp.status !== '확정' ? `<span class="pill ${sp.status === '취소' ? 'p-gray' : 'p-amber'}" style="font-size:9px">${escapeHtml(sp.status)}</span>` : ''}
+        </div>
+        ${sp.org_ko || sp.org_en ? `<div style="font-size:10px;color:var(--i4)">${escapeHtml(
+          [sp.org_ko || sp.org_en, sp.title_ko || sp.title_en].filter(Boolean).join(' · '))}</div>` : ''}</td>
+      <td style="max-width:170px">
+        ${sess.length ? `<div style="font-size:10.5px;color:var(--i3);white-space:nowrap;overflow:hidden;
+            text-overflow:ellipsis" title="${escAttr(sess.join(' / '))}">${escapeHtml(sess[0])}${
+            sess.length > 1 ? ` 외 ${sess.length - 1}` : ''}</div>`
+          : '<span style="font-size:10.5px;color:var(--am)">배정 없음</span>'}</td>
+      <td style="min-width:70px">
+        ${progressBar(pr.pct, pr.pct === 100 ? 'var(--g)' : 'var(--a)')}
+        <div style="font-size:9.5px;color:var(--i4);margin-top:2px">${pr.n}/${pr.of}</div></td>
+      ${SP_COLS.map(c => spCellHtml(spCell(sp, ev.key, c.key), c.label, name)).join('')}
+      <td style="text-align:center;font-size:10.5px;color:${to.length ? 'var(--i4)' : 'var(--am)'}"
+        title="${escAttr(to.length ? to.map(x => x.email).join(', ') : '메일 수신자가 정해지지 않았어요')}">
+        ${to.length ? '✓' : '—'}</td>
+      <td style="text-align:right;font-size:11px;white-space:nowrap">
+        ${sp.fee_amount
+          ? `<span style="color:${sp.fee_paid_at ? 'var(--g)' : 'var(--i2)'}">${
+              escapeHtml(Number(String(sp.fee_amount).replace(/[^\d.-]/g, '') || 0).toLocaleString('ko-KR'))}</span>
+             <div style="font-size:9.5px;color:${sp.fee_paid_at ? 'var(--g)' : 'var(--am)'}">${
+              sp.fee_paid_at ? '지급' : '미지급'}</div>`
+          : '<span style="color:var(--i6)">—</span>'}</td>
     </tr>`;
   };
 
-  return `<div style="font-size:11.5px;color:var(--i5);margin-bottom:8px">
-      연사 <b>${list.length}</b>명 · ${NEED_MARK.req} 받아야 함 / ${NEED_MARK.opt} 있으면 좋음
-    </div>
-    <div style="overflow-x:auto"><table style="width:100%;min-width:520px">
-      <thead><tr><th>성명</th><th>역할</th><th>배정</th><th>받을 것</th><th></th></tr></thead>
-      <tbody>${list.map(row).join('')}</tbody>
-    </table></div>`;
+  return summary + roleChips + needChips
+    + `<div class="tw"><table><thead><tr>
+        <th style="min-width:140px">연사</th>
+        <th style="min-width:120px">세션</th>
+        <th style="min-width:70px">진행률</th>
+        ${SP_COLS.map(c => `<th style="text-align:center;font-size:10px;line-height:1.2">${escapeHtml(c.label)}</th>`).join('')}
+        <th style="text-align:center;min-width:44px;font-size:10px">수신</th>
+        <th style="text-align:right;min-width:70px;font-size:10px">연사료</th>
+      </tr></thead><tbody>${list.map(row).join('')}</tbody></table></div>
+      <div style="font-size:10px;color:var(--i4);margin-top:7px;line-height:1.6">
+        ✓ 받음 · ◐ 일부 · — 아직 · <span style="color:var(--i6)">·</span> 그 역할은 묻지 않음(진행률에서 뺌)
+      </div>`;
 }
 
 /* ══════════════════════════════════════════
@@ -666,6 +888,8 @@ export async function removeConfSpeaker(spId){
 /* ── 인라인 핸들러용 노출 ── */
 window.setConfEvent      = setConfEvent;
 window.setConfView       = setConfView;
+window.setConfNeedFil    = setConfNeedFil;
+window.setConfRoleFil    = setConfRoleFil;
 window.buildConfEvList   = buildConfEvList;
 window.renderConf        = renderConf;
 window.fillSessionSlot   = fillSessionSlot;
