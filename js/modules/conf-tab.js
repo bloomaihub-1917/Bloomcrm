@@ -38,6 +38,7 @@ import { trackAction } from './audit-tab.js';
 let confEvent = '';
 let confView = 'program';      // 'program' | 'people'
 let confOpenSession = '';      // 배정 칸이 열려 있는 세션
+let confEditSession = '';      // 수정 칸이 열려 있는 세션
 let confNewSession = false;    // 세션 추가 칸이 열려 있나
 
 /* ══════════════════════════════════════════
@@ -111,6 +112,7 @@ export function buildConfEvList(){
 export function setConfEvent(key){
   confEvent = key;
   confOpenSession = '';
+  confEditSession = '';
   confNewSession = false;
   buildConfEvList();
   renderConf();
@@ -272,6 +274,7 @@ function newSessionHtml(ev, days, cfg){
 function sessionCard(ev, s, days, cfg){
   const asg = assignmentsOfSession(s.id);
   const open = confOpenSession === s.id;
+  const editing = confEditSession === s.id;
   const meta = [timeLabel(s.start_at, s.end_at), s.track, s.room].filter(Boolean).join(' · ');
 
   const asgRow = (a) => {
@@ -301,12 +304,62 @@ function sessionCard(ev, s, days, cfg){
         ${meta ? `<div style="font-size:10.5px;color:var(--i5);margin-top:2px">${escapeHtml(meta)}</div>` : ''}
       </div>
       <div style="display:flex;gap:5px;flex-shrink:0">
+        <button class="btn" style="font-size:10.5px" onclick="toggleEditSession('${escAttr(s.id)}')">${editing ? '닫기' : '수정'}</button>
         <button class="btn" style="font-size:10.5px" onclick="toggleAssign('${escAttr(s.id)}')">${open ? '닫기' : `배정 ${asg.length}`}</button>
         <button class="btn" style="font-size:10.5px" onclick="removeConfSession('${escAttr(s.id)}')">삭제</button>
       </div>
     </div>
+    ${editing ? editSessionHtml(s, days, cfg) : ''}
     ${asg.length ? `<div style="margin-top:6px">${asg.map(asgRow).join('')}</div>` : ''}
     ${open ? assignFormHtml(ev, s) : ''}
+  </div>`;
+}
+
+/* 세션 수정 칸 — 만들 때와 같은 칸을 같은 순서로 둔다. 같은 값을 두 가지
+   모양으로 적게 하면 어디를 고쳐야 하는지 매번 다시 찾게 된다.
+   칸 id에 세션 id를 붙인다 — 한 화면에 여러 세션의 칸이 동시에 열릴 수 있다. */
+function editSessionHtml(s, days, cfg){
+  const slots = cfg.slots || [];
+  const tracks = cfg.tracks || [];
+  const i = (k) => `es-${s.id}-${k}`;
+  /* 설정에서 지운 트랙·일자가 이 세션에는 남아 있을 수 있다 — 목록에 없다고
+     조용히 «없음»으로 바뀌면 저장하는 순간 값이 날아간다. */
+  const trackList = s.track && !tracks.includes(s.track) ? [...tracks, s.track] : tracks;
+  const dayList = s.date && !days.includes(s.date) ? [...days, s.date].sort() : days;
+
+  return `<div style="margin-top:9px;padding:10px;background:var(--i8);border-radius:8px">
+    <div style="font-size:11px;font-weight:600;margin-bottom:7px">세션 고치기</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:7px">
+      <div><div class="fl">일자</div>
+        <select class="fi" id="${i('date')}">
+          <option value=""${!s.date ? ' selected' : ''}>미정</option>
+          ${dayList.map(d => `<option value="${escAttr(d)}"${s.date === d ? ' selected' : ''}>${escapeHtml(d)}</option>`).join('')}
+        </select></div>
+      <div><div class="fl">시간대</div>
+        <select class="fi" id="${i('slot')}" onchange="fillEditSlot('${escAttr(s.id)}',this.value)">
+          <option value="">직접 입력</option>
+          ${slots.map((sl, k) => `<option value="${k}">${escapeHtml(`${sl.start}–${sl.end}${sl.label ? ' ' + sl.label : ''}`)}</option>`).join('')}
+        </select></div>
+      <div><div class="fl">시작</div><input class="fi" id="${i('start')}" type="time" value="${escAttr(s.start_at || '')}"></div>
+      <div><div class="fl">종료</div><input class="fi" id="${i('end')}" type="time" value="${escAttr(s.end_at || '')}"></div>
+      <div><div class="fl">트랙</div>
+        ${trackList.length
+          ? `<select class="fi" id="${i('track')}"><option value=""${!s.track ? ' selected' : ''}>없음</option>
+              ${trackList.map(t => `<option value="${escAttr(t)}"${s.track === t ? ' selected' : ''}>${escapeHtml(t)}</option>`).join('')}</select>`
+          : `<input class="fi" id="${i('track')}" value="${escAttr(s.track || '')}" placeholder="트랙">`}</div>
+      <div><div class="fl">장소</div><input class="fi" id="${i('room')}" value="${escAttr(s.room || '')}" placeholder="회의실"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:7px">
+      <div><div class="fl">세션명 (국문)</div><input class="fi" id="${i('ko')}" value="${escAttr(s.title_ko || '')}"></div>
+      <div><div class="fl">세션명 (영문)</div><input class="fi" id="${i('en')}" value="${escAttr(s.title_en || '')}"></div>
+    </div>
+    <div style="margin-top:7px"><div class="fl">메모</div>
+      <textarea class="fi" id="${i('note')}" rows="2" style="resize:vertical">${escapeHtml(s.note || '')}</textarea></div>
+    <div style="margin-top:8px;display:flex;gap:7px;align-items:center">
+      <button class="btn bp" style="font-size:11px" onclick="saveSessionEdit('${escAttr(s.id)}')">저장</button>
+      <button class="btn" style="font-size:11px" onclick="toggleEditSession('${escAttr(s.id)}')">취소</button>
+      <span id="es-msg-${escAttr(s.id)}" style="font-size:10.5px;color:var(--i4)"></span>
+    </div>
   </div>`;
 }
 
@@ -407,6 +460,65 @@ export function fillSessionSlot(idx){
 }
 
 export function toggleNewSession(){ confNewSession = !confNewSession; renderConf(); }
+export function toggleEditSession(sid){
+  confEditSession = confEditSession === sid ? '' : sid;
+  renderConf();
+}
+
+/* 수정 칸에서도 시간대를 고르면 시작·종료가 채워진다 */
+export function fillEditSlot(sid, idx){
+  const slot = (confCfg(confEvent).slots || [])[Number(idx)];
+  const st = document.getElementById(`es-${sid}-start`);
+  const en = document.getElementById(`es-${sid}-end`);
+  if(!slot || !st || !en) return;
+  st.value = slot.start || '';
+  en.value = slot.end || '';
+}
+
+export async function saveSessionEdit(sid){
+  if(confLocked()){ confLockNotice(); return; }
+  const s = CONF_SESSIONS.find(x => x.id === sid);
+  if(!s) return;
+  const g = (k) => (document.getElementById(`es-${sid}-${k}`)?.value || '').trim();
+  const msg = document.getElementById(`es-msg-${sid}`);
+  const say = (t, ok) => { if(msg){ msg.style.color = ok ? 'var(--g)' : 'var(--re)'; msg.textContent = t; } };
+
+  const si = g('slot');
+  const slots = confCfg(confEvent).slots || [];
+  const slot = si !== '' ? slots[Number(si)] : null;
+  const start = slot ? slot.start : g('start');
+  const end = slot ? slot.end : g('end');
+  const titleKo = g('ko'), titleEn = g('en');
+  if(!titleKo && !titleEn){ say('세션명을 넣어주세요 — 국문이나 영문 하나는 있어야 해요.', false); return; }
+  if(start && end && end <= start){ say('종료가 시작보다 빠르거나 같아요.', false); return; }
+
+  const patch = {
+    title_ko: titleKo, title_en: titleEn,
+    date: g('date'), start_at: start, end_at: end,
+    track: g('track'), room: g('room'), note: g('note'),
+  };
+  /* 바뀐 것이 없으면 보내지 않는다 — 저장할 때마다 같은 값을 밀어 넣으면
+     기록이 «고침»으로 채워져 정작 무엇이 바뀌었는지 안 보인다. */
+  const diff = Object.keys(patch).filter(k => String(s[k] ?? '') !== String(patch[k] ?? ''));
+  if(!diff.length){ confEditSession = ''; renderConf(); return; }
+
+  const backup = {};
+  diff.forEach(k => { backup[k] = s[k]; });
+  Object.assign(s, patch);
+  say('저장 중…', true);
+
+  const res = await gSaveSession({ id: sid, ...patch });
+  if(!res || res.ok === false){
+    Object.assign(s, backup);
+    renderConf();
+    if(!res?.locked) alert('세션을 고치지 못했어요. 잠시 뒤 다시 해주세요.');
+    return;
+  }
+  trackAction('edit', '컨퍼런스 세션', confEvent, `${titleKo || titleEn} — ${diff.join(', ')} 고침`);
+  confEditSession = '';
+  renderConf();
+}
+
 export function toggleAssign(sid){ confOpenSession = confOpenSession === sid ? '' : sid; renderConf(); }
 
 const gv = (id) => (document.getElementById(id)?.value || '').trim();
@@ -463,6 +575,7 @@ export async function removeConfSession(sid){
   if(res && res.ok === false){ if(!res.locked) alert('세션을 지우지 못했어요.'); renderConf(); return; }
   const i = CONF_SESSIONS.findIndex(x => x.id === sid);
   if(i >= 0) CONF_SESSIONS.splice(i, 1);
+  if(confEditSession === sid) confEditSession = '';
   trackAction('delete', '컨퍼런스 세션', confEvent, s.title_ko || s.title_en || sid);
   renderConf();
 }
@@ -558,6 +671,9 @@ window.renderConf        = renderConf;
 window.fillSessionSlot   = fillSessionSlot;
 window.toggleNewSession  = toggleNewSession;
 window.toggleAssign      = toggleAssign;
+window.toggleEditSession = toggleEditSession;
+window.fillEditSlot      = fillEditSlot;
+window.saveSessionEdit   = saveSessionEdit;
 window.addConfSession    = addConfSession;
 window.removeConfSession = removeConfSession;
 window.addAssign         = addAssign;
