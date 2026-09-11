@@ -1672,13 +1672,17 @@ function renderMoneyView(list){
       ${bar(c)}
     </div>`;
 
-    return `<div style="flex:1 1 320px;min-width:0;background:var(--W);border:1px solid var(--i6);border-radius:10px;overflow:hidden">
+    /* 통화마다 쓰는 분류 수가 달라(원화는 셋, 달러는 넷) 합계 줄이 서로 다른
+       높이에 앉는다. 카드를 세로 플렉스로 두고 합계를 아래로 밀어 두면, 카드가
+       같은 높이로 늘어나면서 합계끼리 같은 줄에서 맞는다 — 두 통화의 합계를
+       나란히 읽는 게 이 카드를 보는 이유다. */
+    return `<div style="flex:1 1 320px;min-width:0;background:var(--W);border:1px solid var(--i6);border-radius:10px;overflow:hidden;display:flex;flex-direction:column">
       <div style="padding:9px 12px;font-family:inherit">
         <span class="pill p-blue">${escapeHtml(cur)}</span>
         <span style="font-size:10.5px;color:var(--i5);margin-left:5px">분류별 수금 현황</span>
       </div>
       ${cats.map(([k, l]) => line(l, catS[cur][k], false)).join('')}
-      ${line('합계', sum, true)}
+      <div style="margin-top:auto">${line('합계', sum, true)}</div>
     </div>`;
   }).join('');
 
