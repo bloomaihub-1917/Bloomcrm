@@ -1237,7 +1237,7 @@ export async function runValidationStep(newRows, dupRows){
         action: 'upsert',
         row: [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
               c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
-              c.beat||'', c.products||'', c.tags||''],
+              c.beat||'', c.products||'', c.tags||'', c.org_id||''],
       }, '연락처 정보 보강');
     }
     // participations 구글시트 저장 — batchAppend로 한 번에

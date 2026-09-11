@@ -35,10 +35,10 @@ import {
   mdbSelected,
 } from '../state.js';
 import { CP, CL, RP, CAT_KEYS, ROLE_TO_CAT, COUNTRIES, avB, avF } from '../constants.js';
-import { td, ab, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseTags, joinTags, isMobile, cleanEmail } from '../utils.js';
+import { td, ab, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseSectorScope, parseTags, joinTags, isMobile, cleanEmail } from '../utils.js';
 import { postToSheet } from '../api.js';
-import { buildCoDB, ensureOrgsForNames, orgIdForName } from './company-tab.js';
-import { domainOfSector, domainName, findSectorByName, UNASSIGNED_DOMAIN } from './settings-tab.js';
+import { buildCoDB, ensureOrgsForNames, orgIdForName, applyCoSectors } from './company-tab.js';
+import { domainOfSector, domainName, findSectorByName, mainSectors, UNASSIGNED_DOMAIN } from './settings-tab.js';
 import { trackAction } from './audit-tab.js';
 
 /* BD/C-level — cat("연사/VIP/일반참가자")을 분리하지 않는 비배타적 보조 태그.
@@ -147,7 +147,9 @@ export function buildMDBDomainList(){
     </button>` +
     DOMAINS.map(d => {
       const cnt = countFor(d.id);
-      return `<button class="ev-chip${mdbDomainFilter===d.id?' on':''}" onclick="setMDBDomain('${escAttr(d.id)}')">`+
+      return `<button class="ev-chip${mdbDomainFilter===d.id?' on':''}" onclick="setMDBDomain('${escAttr(d.id)}')"`+
+        ` ondragover="onMDBDragOver(event,this)" ondragleave="onMDBDragLeave(this)"`+
+        ` ondrop="onMDBDropToDomain(event,'${escAttr(d.id)}',this)" title="여기에 끌어다 놓으면 이 분야로 옮겨요">`+
         `<span class="ev-chip-dot" style="background:var(--a)"></span>`+
         `<span class="ev-chip-nm">${escapeHtml(d.name)}</span>`+
         `<span class="ev-chip-ct">${cnt}명</span>`+
@@ -603,7 +605,8 @@ function mdbCard(c, p, { showOrg = true } = {}){
   const org = c.orgKo || c.orgEn || '';
   const title = [c.titleKo || c.titleEn, c.deptKo || c.deptEn].filter(Boolean).join(' · ');
 
-  return `<div class="mdbc${isSel ? ' sel' : ''}" onclick="openContactDr(${c.id})">
+  return `<div class="mdbc${isSel ? ' sel' : ''}" onclick="openContactDr(${c.id})"
+    draggable="true" ondragstart="onMDBDragStart(event,${c.id})" ondragend="onMDBDragEnd()">
     <div class="mdbc-top">
       <div class="tdav${isSel ? ' sel' : ''}" style="${isSel ? '' : `background:${avB(gi)};color:${avF(gi)}`}"
         onclick="event.stopPropagation();toggleMDBSelect(${c.id})" title="탭해서 선택/해제">${isSel ? '✓' : ab(c.nameKo || c.nameEn || '')}</div>
@@ -742,7 +745,8 @@ export function renderMDBFlat(pairs){
     const contactCell = [c.email1, c.phone1].filter(Boolean).map(v=>`<div style="font-size:10px;color:var(--i3);white-space:nowrap">${escapeHtml(v)}</div>`).join('') || '<span style="color:var(--i6)">—</span>';
 
     const isSel = mdbSelected.has(c.id);
-    return `<tr onclick="openContactDr(${c.id})" style="cursor:pointer" class="${isSel?'row-sel':''}">
+    return `<tr onclick="openContactDr(${c.id})" style="cursor:pointer" class="${isSel?'row-sel':''}"
+      draggable="true" ondragstart="onMDBDragStart(event,${c.id})" ondragend="onMDBDragEnd()">
       <td onclick="event.stopPropagation()" style="text-align:center"><input type="checkbox" ${isSel?'checked':''} onchange="toggleMDBSelect(${c.id})"></td>
       <td><div class="tdco">
         <div class="tdav${isSel?' sel':''}" onclick="event.stopPropagation();toggleMDBSelect(${c.id})" title="클릭해서 선택/해제">${isSel?'✓':ab(c.nameKo||c.nameEn||"")}</div>
@@ -1339,12 +1343,17 @@ export function contactEditForm(c){
     </div>
 
     <div id="ce-beat-field">
-      <div class="sec-t" style="margin:16px 0 8px">분야</div>
+      <div class="sec-t" style="margin:16px 0 8px">업종 메모</div>
       <div class="fg" style="margin-bottom:12px">
-        <label class="fl">분야 (산업/업종)</label>
+        <label class="fl">업종 메모 (자유 입력)</label>
         <input class="fi" id="ce-beat" value="${escapeHtml(c.beat||'')}" placeholder="예: Pharma, Biotech, Digital Health 등">
+        <div style="font-size:10px;color:var(--i4);margin-top:3px">
+          적어 두는 메모일 뿐, 왼쪽 «분야별 보기»와는 다릅니다 — 그건 아래
+          소속 기업의 섹터에서 정해져요.</div>
       </div>
     </div>
+
+    ${contactSectorField(c)}
 
     <div id="ce-products-field">
       <div class="sec-t" style="margin:16px 0 8px">전시 품목</div>
@@ -1404,6 +1413,9 @@ export async function saveContactEdit(){
   c.beat     = beatEl ? beatEl.value : (c.beat||'');
   c.products = productsEl ? productsEl.value.trim() : (c.products||'');
 
+  /* 섹터는 기업에 저장된다 — 연락처 저장과 별개의 길이라 따로 부른다 */
+  try { saveContactSectorField(c); } catch(e){ console.warn('[db-tab] 섹터 반영 실패:', e); }
+
   conEditMode = false;
   renderContactDr();
   try { renderMDB(); } catch(e){}
@@ -1412,9 +1424,12 @@ export async function saveContactEdit(){
   const r = await postToSheet({
     sheet:  'contacts',
     action: 'upsert',
+    /* org_id를 빼면 안 된다 — 위치 배열은 안 보낸 열을 비우기 때문에,
+       연락처를 고칠 때마다 기업 연결이 조용히 끊겼다. 분야는 기업의 섹터를
+       타고 오므로 연결이 끊기면 그 사람은 미분류로 떨어진다. */
     row: [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
           c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
-          c.beat, c.products, c.tags||''],
+          c.beat, c.products, c.tags||'', c.org_id||''],
   }, '연락처 수정');
   if(!r.ok){
     Object.assign(c, prev);
@@ -1612,3 +1627,252 @@ window.saveContactEdit = saveContactEdit;
 window.openAddContactModal = openAddContactModal;
 window.closeAddContactModal = closeAddContactModal;
 window.saveNewContact = saveNewContact;
+
+/* ══════════════════════════════════════════════════════════════
+   소속 기업 · 섹터 · 드래그&드롭
+
+   왜 필요했나
+   ----------
+   연락처가 «분야»를 갖는 길은 하나뿐이다.
+
+     연락처 → 소속 기업 → 그 기업의 섹터 → 섹터에 붙은 분야
+
+   그런데 연락처 편집 화면에는 기업 «이름»만 있었다. 이름을 적어도 기업DB의
+   기업과 묶이지 않으면(org_id) 사슬이 첫 칸에서 끊기고, 묶여도 그 기업에
+   섹터가 없으면 두 번째 칸에서 끊긴다. 그래서 «분야로 옮길 방법이 없다»는
+   말이 나온다 — 방법이 숨어 있는 게 아니라 실제로 길이 끊겨 있었다.
+
+   여기서 그 사슬을 한 화면에서 잇는다. 그리고 목록에서 끌어다 왼쪽
+   «분야»·«카테고리»에 떨어뜨리면 같은 일이 한 번에 된다.
+══════════════════════════════════════════════════════════════ */
+
+/* 이 연락처가 묶인 기업(기업DB의 줄). org_id가 먼저고, 없으면 이름으로 찾는다 */
+export function coOfContact(c){
+  if(!c) return null;
+  if(c.org_id){
+    const byId = CO_DB.find(x => String(x.org_id || x.id) === String(c.org_id));
+    if(byId) return byId;
+  }
+  return CO_DB.find(x => (x.contacts || []).some(p => String(p.id) === String(c.id))) || null;
+}
+
+/* 연락처가 지금 속한 분야 — 사슬을 그대로 따라간다 */
+export function domainsOfContact(c){
+  const co = coOfContact(c);
+  if(!co) return [];
+  const out = new Set();
+  ((co.sectors && co.sectors.length) ? co.sectors : [co.sector]).forEach(name => {
+    if(!name) return;
+    const sec = findSectorByName(name);
+    if(sec) domainOfSector(sec).forEach(d => out.add(d));
+  });
+  return [...out];
+}
+
+/* 편집 화면의 «소속 기업·섹터» 칸.
+   섹터는 연락처가 아니라 기업에 저장된다 — 같은 회사 사람 둘이 서로 다른
+   섹터를 가질 수는 없기 때문이다. 그래서 여기서 고치면 그 회사 전체가 바뀐다는
+   걸 화면에 적어 둔다. */
+export function contactSectorField(c){
+  const co = coOfContact(c);
+  const doms = domainsOfContact(c);
+  const mains = mainSectors().filter(s => !parseSectorScope(s.name).eventShort);
+
+  if(!co){
+    return `<div class="sec-t" style="margin:16px 0 8px">소속 기업 · 분야</div>
+      <div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;
+        font-size:11.5px;color:var(--i3);line-height:1.7;margin-bottom:12px">
+        아직 기업DB의 기업과 묶이지 않았어요. 분야는 <b>소속 기업의 섹터</b>에서 오기 때문에,
+        묶이기 전에는 어느 분야에도 들어가지 않아요.
+        <br>위 «기업 (국문)»에 이름을 적고 저장하면 기업DB에 만들어 묶어 드릴게요.
+      </div>`;
+  }
+
+  return `<div class="sec-t" style="margin:16px 0 8px">소속 기업 · 분야</div>
+    <div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:600">${escapeHtml(co.nameKo || co.nameEn || co.key)}</div>
+      <div style="font-size:10.5px;color:var(--i4);margin-top:2px">
+        이 기업에 묶인 연락처 ${(co.contacts || []).length}명
+      </div>
+      <div class="fg" style="margin:9px 0 0">
+        <label class="fl">섹터</label>
+        <select class="fi" id="ce-sector">
+          <option value="">미분류</option>
+          ${mains.map(s => `<option value="${escAttr(s.name)}"${
+            (co.sectors || []).includes(s.name) ? ' selected' : ''}>${escapeHtml(s.name)}${
+            domainOfSector(s).length ? ` — ${escapeHtml(domainOfSector(s).map(domainName).join('·'))}` : ' — 분야 없음'}</option>`).join('')}
+        </select>
+        <div style="font-size:10px;color:var(--i4);margin-top:3px">
+          섹터는 기업에 저장돼요 — 여기서 바꾸면 이 기업에 묶인 ${(co.contacts || []).length}명 모두가 함께 옮겨집니다.</div>
+      </div>
+      <div style="font-size:10.5px;color:var(--i3);margin-top:8px">
+        지금 분야: <b>${doms.length ? escapeHtml(doms.map(domainName).join(' · ')) : '미분류'}</b>
+      </div>
+    </div>`;
+}
+
+/* 편집 저장에서 불린다 — 섹터가 바뀌었으면 기업 쪽에 반영한다 */
+export function saveContactSectorField(c){
+  const el = document.getElementById('ce-sector');
+  if(!el) return false;
+  const co = coOfContact(c);
+  if(!co) return false;
+  const next = el.value ? [el.value] : [];
+  const cur = (co.sectors || []).filter(Boolean);
+  if(next.join('|') === cur.join('|')) return false;
+  applyCoSectors(co, next);
+  trackAction('edit', '기업 섹터 변경', co.nameKo || co.nameEn,
+    `«${co.nameKo || co.nameEn}» 섹터를 ${cur.join(', ') || '미분류'} → ${next.join(', ') || '미분류'}`);
+  return true;
+}
+
+/* ══════════════════════════════════════════
+   드래그 → 분야 · 카테고리에 떨어뜨리기
+
+   카테고리는 연락처에 바로 붙는 값이라 그대로 바꾸면 된다.
+   분야는 아니다 — 기업의 섹터를 타고 오므로, 어느 섹터로 보낼지를 정해야
+   한다. 분야에 섹터가 하나뿐이면 묻지 않고 그것으로 보내고, 여럿이면
+   고르게 한다. 우리가 대신 고르면 엉뚱한 업종에 꽂힌 걸 아무도 모른다.
+══════════════════════════════════════════ */
+let _dragIds = [];
+
+export function onMDBDragStart(e, id){
+  /* 끌기 시작한 줄이 선택돼 있으면 선택한 전부를 옮긴다 — 하나씩 끌게 하면
+     스무 명을 옮길 때 스무 번 끌어야 한다. */
+  _dragIds = mdbSelected.has(id) ? [...mdbSelected] : [id];
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', String(id));
+  document.body.classList.add('mdb-dragging');
+}
+export function onMDBDragEnd(){
+  _dragIds = [];
+  document.body.classList.remove('mdb-dragging');
+  document.querySelectorAll('.drop-on').forEach(el => el.classList.remove('drop-on'));
+}
+export function onMDBDragOver(e, el){
+  if(!_dragIds.length) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  if(el) el.classList.add('drop-on');
+}
+export function onMDBDragLeave(el){ if(el) el.classList.remove('drop-on'); }
+
+/* 카테고리로 떨어뜨리기 */
+export async function onMDBDropToCat(e, cat, el){
+  e.preventDefault();
+  if(el) el.classList.remove('drop-on');
+  const ids = _dragIds; onMDBDragEnd();
+  if(!ids.length || !cat || cat === 'all') return;
+
+  const list = ids.map(getContactById).filter(Boolean);
+  const already = list.filter(c => c.cat === cat);
+  if(already.length === list.length){ return; }   // 이미 다 그 카테고리다 — 조용히 넘긴다
+
+  const backup = list.map(c => ({ c, cat: c.cat }));
+  list.forEach(c => { c.cat = cat; });
+  renderMDB();
+
+  const r = await postToSheet({
+    sheet: 'contacts', action: 'batchUpsert',
+    rows: list.map(c => [c.id,c.nameKo,c.nameEn,c.orgKo,c.orgEn,c.titleKo,c.titleEn,c.deptKo,c.deptEn,
+      c.country,c.cat,c.lang,c.source,c.date,c.status,c.email1,c.email2,c.phone1,c.phone2,
+      c.beat,c.products,c.tags||'',c.org_id||'']),
+  }, '카테고리 이동(드래그)');
+  if(!r.ok){
+    backup.forEach(b => { b.c.cat = b.cat; });
+    renderMDB();
+    alert('카테고리 변경 저장에 실패해서 되돌렸어요.');
+    return;
+  }
+  trackAction('edit', '카테고리 이동(드래그)', `${list.length}명`,
+    `연락처 ${list.length}명을 «${CL[cat] || cat}»으로 옮김`);
+  mdbSelected.clear();
+  renderMDB();
+}
+
+/* 분야로 떨어뜨리기 */
+export function onMDBDropToDomain(e, domainId, el){
+  e.preventDefault();
+  if(el) el.classList.remove('drop-on');
+  const ids = _dragIds; onMDBDragEnd();
+  if(!ids.length || !domainId || domainId === UNASSIGNED_DOMAIN) return;
+
+  const list = ids.map(getContactById).filter(Boolean);
+  /* 기업에 묶이지 않은 사람은 옮길 수 없다 — 분야는 기업의 섹터에 붙는다.
+     조용히 빼면 «왜 몇 명만 옮겨졌지»가 되므로 누가 빠지는지 이름을 댄다. */
+  const withCo = [], without = [];
+  list.forEach(c => (coOfContact(c) ? withCo : without).push(c));
+  if(!withCo.length){
+    alert(`옮길 수 없어요 — 분야는 소속 기업의 섹터에서 오는데, `
+      + `${without.map(c => c.nameKo || c.nameEn).join(', ')}${without.length > 3 ? ' 등' : ''}`
+      + `은 기업DB의 기업과 묶여 있지 않아요.\n\n연락처를 열어 기업명을 적고 저장하면 묶입니다.`);
+    return;
+  }
+
+  const secs = mainSectors().filter(s => !parseSectorScope(s.name).eventShort
+    && domainOfSector(s).includes(domainId));
+  if(!secs.length){
+    alert(`«${domainName(domainId)}» 분야에 섹터가 하나도 없어요.\n`
+      + `설정 › 섹터 관리에서 섹터를 만들고 분야에 «${domainName(domainId)}»을 체크해주세요.`);
+    return;
+  }
+
+  const cos = [...new Map(withCo.map(c => [coOfContact(c).key, coOfContact(c)])).values()];
+  const note = without.length
+    ? `\n\n기업과 안 묶인 ${without.length}명은 빠집니다: ${without.map(c => c.nameKo || c.nameEn).slice(0, 5).join(', ')}`
+    : '';
+
+  if(secs.length === 1){
+    if(!confirm(`기업 ${cos.length}곳을 «${escapeHtmlPlain(secs[0].name)}» 섹터로 옮길까요?\n`
+      + `그 기업에 묶인 연락처 전원이 «${domainName(domainId)}» 분야로 들어갑니다.${note}`)) return;
+    return moveCosToSector(cos, secs[0].name, domainId);
+  }
+  openDomainSectorPicker(cos, secs, domainId, note);
+}
+
+/* 분야 안에 섹터가 여럿일 때 고르게 한다 */
+function openDomainSectorPicker(cos, secs, domainId, note){
+  const old = document.getElementById('mdb-sector-picker');
+  if(old) old.remove();
+  const wrap = document.createElement('div');
+  wrap.id = 'mdb-sector-picker';
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;'
+    + 'display:flex;align-items:center;justify-content:center;padding:16px';
+  wrap.onclick = (e) => { if(e.target === wrap) wrap.remove(); };
+  wrap.innerHTML = `<div style="background:var(--W);border-radius:12px;padding:20px;width:100%;max-width:420px;
+      max-height:80vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.2)">
+      <div style="font-size:14px;font-weight:700;margin-bottom:4px">«${escapeHtml(domainName(domainId))}» 어느 업종인가요</div>
+      <div style="font-size:11.5px;color:var(--i3);line-height:1.6;margin-bottom:12px">
+        기업 ${cos.length}곳을 옮깁니다. 그 기업에 묶인 연락처 전원이 함께 따라가요.${escapeHtml(note)}</div>
+      <div id="mdb-sector-picker-list">
+        ${secs.map(s => `<button class="btn" style="width:100%;justify-content:flex-start;margin-bottom:5px;font-size:12px"
+          data-sector="${escAttr(s.name)}">${escapeHtml(s.name)}</button>`).join('')}
+      </div>
+      <button class="btn bs" style="width:100%;justify-content:center;margin-top:8px"
+        onclick="document.getElementById('mdb-sector-picker').remove()">취소</button>
+    </div>`;
+  document.body.appendChild(wrap);
+  wrap.querySelectorAll('[data-sector]').forEach(b => {
+    b.onclick = () => { wrap.remove(); moveCosToSector(cos, b.dataset.sector, domainId); };
+  });
+}
+
+async function moveCosToSector(cos, sectorName, domainId){
+  cos.forEach(co => applyCoSectors(co, [sectorName]));
+  trackAction('edit', '분야 이동(드래그)', `${cos.length}곳`,
+    `기업 ${cos.length}곳을 «${sectorName}» 섹터로 옮겨 «${domainName(domainId)}» 분야에 넣음`);
+  try { buildCoDB(); } catch(e){}
+  mdbSelected.clear();
+  renderMDB();
+}
+
+/* 안내문에 쓰는 평문 — alert는 HTML을 그리지 않으므로 이스케이프하면 안 된다 */
+const escapeHtmlPlain = (s) => String(s == null ? '' : s);
+
+/* ── 인라인 핸들러용 노출 ── */
+window.onMDBDragStart    = onMDBDragStart;
+window.onMDBDragEnd      = onMDBDragEnd;
+window.onMDBDragOver     = onMDBDragOver;
+window.onMDBDragLeave    = onMDBDragLeave;
+window.onMDBDropToCat    = onMDBDropToCat;
+window.onMDBDropToDomain = onMDBDropToDomain;

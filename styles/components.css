@@ -613,3 +613,10 @@ tr.row-sel{background:var(--ad)}
 }
 .ro input[type="checkbox"], .ro input[type="radio"] { opacity: .45; }
 .ro [contenteditable] { pointer-events: none; opacity: .62; }
+
+/* 마스터DB에서 끌어다 분야·카테고리에 놓기.
+   끌고 있는 동안 놓을 수 있는 자리를 알려 준다 — 어디에 놓이는지 모르면
+   엉뚱한 칩에 떨어뜨리고도 알아채지 못한다. */
+.mdb-dragging #mdb-domain-list .ev-chip,
+.mdb-dragging .s-q .nr{outline:1px dashed var(--i5);outline-offset:-1px}
+.ev-chip.drop-on,.nr.drop-on{background:var(--ad);outline:2px solid var(--a);outline-offset:-2px}

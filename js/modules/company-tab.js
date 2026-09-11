@@ -432,7 +432,7 @@ export async function mergeCompanies(loserKey, winnerKey){
 
   if(changed.length){
     const rows = changed.map(c => [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
-      c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2, c.beat, c.products, c.tags||'']);
+      c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2, c.beat, c.products, c.tags||'', c.org_id||'']);
     const r = await postToSheet({ sheet: 'contacts', action: 'batchUpsert', rows }, '기업 병합');
     if(!r.ok){
       // 저장 실패 → 로컬 변경 롤백 (기존엔 실패해도 "합쳤어요"가 떠서 새로고침 시 원복되는 거짓 성공이었음)
@@ -1541,7 +1541,7 @@ async function saveCoTextField(key, field, rawValue){
         sheet: 'contacts', action: 'batchUpsert',
         rows: changed.map(ct => [ct.id,ct.nameKo,ct.nameEn,ct.orgKo,ct.orgEn,ct.titleKo,ct.titleEn,ct.deptKo,ct.deptEn,
           ct.country,ct.cat,ct.lang,ct.source,ct.date,ct.status,ct.email1,ct.email2,ct.phone1,ct.phone2,
-          ct.beat,ct.products,ct.tags||'']),
+          ct.beat,ct.products,ct.tags||'',ct.org_id||'']),
       }, '기업명 변경 - 연락처 반영');
       try { renderMDB(); } catch(e){}
     }
@@ -1689,7 +1689,7 @@ export function editCoSector(key){
 
 /* 기업의 섹터 배열을 교체하고 연락처 beat/companies 시트에 반영 — 섹터 선택
    팝오버 저장과 드래그&드롭 이동이 이 로직을 공유한다. */
-function applyCoSectors(c, newSectors){
+export function applyCoSectors(c, newSectors){
   c.sectors = newSectors;
   c.sector  = newSectors[0] || '';
   const el = document.getElementById('co-sector-' + c.key);
@@ -1714,7 +1714,7 @@ function applyCoSectors(c, newSectors){
         ct2.titleKo,ct2.titleEn,ct2.deptKo,ct2.deptEn,
         ct2.country,ct2.cat,ct2.lang,ct2.source,ct2.date,
         ct2.status,ct2.email1,ct2.email2,ct2.phone1,ct2.phone2,
-        ct2.beat,ct2.products,ct2.tags||'']),
+        ct2.beat,ct2.products,ct2.tags||'',ct2.org_id||'']),
     }, '기업 섹터 반영');
   }
   upsertCompanyRow(c);

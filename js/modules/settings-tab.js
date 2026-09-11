@@ -555,7 +555,7 @@ export async function mergeSectors(){
       sheet: 'contacts', action: 'batchUpsert',
       rows: changedContacts.map(c => [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
             c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
-            c.beat||'', c.products||'', c.tags||'']),
+            c.beat||'', c.products||'', c.tags||'', c.org_id||'']),
     }, '섹터 병합 - 연락처 반영');
     if(!r.ok){
       alert('연락처 반영 저장에 실패해서 병합을 중단했어요. 새로고침 후 다시 시도해주세요.');
@@ -1070,7 +1070,7 @@ export async function removeTag(key){
     const r = await postToSheet({
       sheet: 'contacts', action: 'batchUpsert',
       rows: affected.map(c => [c.id,c.nameKo,c.nameEn,c.orgKo,c.orgEn,c.titleKo,c.titleEn,c.deptKo,c.deptEn,
-        c.country,c.cat,c.lang,c.source,c.date,c.status,c.email1,c.email2,c.phone1,c.phone2,c.beat,c.products,c.tags||'']),
+        c.country,c.cat,c.lang,c.source,c.date,c.status,c.email1,c.email2,c.phone1,c.phone2,c.beat,c.products,c.tags||'',c.org_id||'']),
     }, '태그 삭제 - 연락처 반영');
     if(!r.ok){ affected.forEach((c,i) => { c.tags = prevValues[i]; }); return; } // 실패 시 롤백
   }
@@ -1372,7 +1372,7 @@ export async function splitMixedOrgNames(){
   if(msgEl) msgEl.textContent = `저장 중... (${targets.length}건)`;
   const rows = targets.map(c => [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
     c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
-    c.beat, c.products, c.tags||'']);
+    c.beat, c.products, c.tags||'', c.org_id||'']);
   const r = await postToSheet({ sheet: 'contacts', action: 'batchUpsert', rows }, '기업/직책/부서 분리');
   if(msgEl) msgEl.textContent = r.ok
     ? `완료: ${targets.length}건 분리했어요.`
