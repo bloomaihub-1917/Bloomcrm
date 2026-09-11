@@ -220,13 +220,7 @@ function programHtml(ev){
       세션 <b>${sessions.length}</b>건 · 배정 <b>${totalAssigned}</b>건 · 연사 <b>${speakersForEvent(ev.key).length}</b>명
     </div>
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <span id="conf-import-msg" style="font-size:10.5px;color:var(--i4)"></span>
-        <button class="btn" style="font-size:11px" onclick="downloadConfTemplate()"
-          title="세션·연사·배정 세 시트로 된 빈 양식을 받습니다">양식 받기</button>
-        <button class="btn" style="font-size:11px" onclick="pickConfFile()"
-          title="채운 양식을 올립니다 — 기존 것을 지우지 않고 더하거나 고칩니다">엑셀 올리기</button>
-        <input type="file" id="conf-xlsx-input" accept=".xlsx,.xls" style="display:none"
-          onchange="handleConfFile(event)">
+      ${importBtns()}
       <button class="btn" style="font-size:11px" onclick="toggleNewSession()">${confNewSession ? '닫기' : '+ 세션 만들기'}</button>
     </div>
   </div>`;
@@ -507,12 +501,33 @@ function trackColor(evKey, track){
   return TRACK_COLORS[h % TRACK_COLORS.length];
 }
 
+/* 올리기 단추 — 표 화면과 프로그램 화면이 같이 쓴다.
+   처음 열리는 화면에 없으면 탭을 옮겨야 보이고, 그러면 «어디서 올리지»가
+   된다. 실제로 그 말을 들었다. */
+function importBtns(){
+  return `<span id="conf-import-msg" style="font-size:10.5px;color:var(--i4)"></span>
+    <button class="btn" style="font-size:11px" onclick="downloadConfTemplate()"
+      title="세션·연사·배정 세 시트로 된 빈 양식을 받습니다">양식 받기</button>
+    <button class="btn" style="font-size:11px" onclick="pickConfFile()"
+      title="채운 양식을 올립니다 — 기존 것을 지우지 않고 더하거나 고칩니다">엑셀 올리기</button>
+    <input type="file" id="conf-xlsx-input" accept=".xlsx,.xls" style="display:none"
+      onchange="handleConfFile(event)">`;
+}
+
 function pgaHtml(ev){
   const sessions = sessionsForEvent(ev.key);
   if(!sessions.length){
-    return `<div style="padding:22px;background:var(--i8);border:1px solid var(--i6);border-radius:10px;
+    /* 올리기 단추를 함께 그린다 — 세션이 하나도 없을 때가 곧 엑셀로 한꺼번에
+       올리는 때다. 안내에 «위의 양식 받기»라고 적어 놓고 단추가 없으면
+       그게 제일 나쁘다. */
+    return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+        <div style="font-size:12.5px;font-weight:700">Program at a Glance</div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto">${importBtns()}</div>
+      </div>
+      <div style="padding:22px;background:var(--i8);border:1px solid var(--i6);border-radius:10px;
       font-size:12px;color:var(--i5);line-height:1.7">
-      세션이 없어요. «프로그램»에서 세션을 만들면 여기에 프로그램표가 만들어집니다.<br>
+      세션이 없어요. 위의 <b>양식 받기</b>로 엑셀 양식을 받아 채운 뒤 <b>엑셀 올리기</b>로
+      한 번에 넣거나, <b>Program</b> 탭에서 하나씩 만드세요.<br>
       표는 세션의 <b>일자 · 시각 · 장소 · 트랙</b>으로 그려져요 — 장소를 안 적은 세션은
       개막식처럼 한 줄을 통째로 씁니다.</div>`;
   }
@@ -620,8 +635,11 @@ function pgaHtml(ev){
       <div style="font-size:12.5px;font-weight:700">Program at a Glance</div>
       <div style="font-size:10.5px;color:var(--i4)">세션 ${sessions.length} · ${days.length}일${
         rooms.length ? ` · ${rooms.length}개 장소` : ''}</div>
-      <button class="btn" style="font-size:10.5px;margin-left:auto" onclick="copyPga()"
-        title="표를 그대로 복사해 프로그램북·메일에 붙여 넣습니다">표 복사</button>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto">
+        ${importBtns()}
+        <button class="btn" style="font-size:11px" onclick="copyPga()"
+          title="표를 그대로 복사해 프로그램북·메일에 붙여 넣습니다">표 복사</button>
+      </div>
     </div>
     ${legend}${hint}
     <div class="tw" id="pga-table"><table style="width:100%;border-collapse:collapse;table-layout:fixed">
