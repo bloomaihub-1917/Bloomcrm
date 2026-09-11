@@ -278,17 +278,40 @@ function newSessionHtml(ev, days, cfg){
 }
 
 function sessionCard(ev, s, days, cfg){
-  const asg = assignmentsOfSession(s.id);
+  /* 시간을 적은 줄은 시간 순으로 세운다 — 프로그램은 순서대로 읽는 물건이고,
+     시간을 적어 뒀는데 등록 순으로 늘어서면 현장 진행표로 못 쓴다.
+     시간이 없는 줄은 원래 순서를 지키며 뒤로 간다. */
+  const asg = assignmentsOfSession(s.id).slice().sort((x, y) => {
+    if(!!x.start_at !== !!y.start_at) return x.start_at ? -1 : 1;
+    return String(x.start_at || '').localeCompare(String(y.start_at || ''));
+  });
   const open = confOpenSession === s.id;
   const editing = confEditSession === s.id;
   const meta = [timeLabel(s.start_at, s.end_at), s.track, s.room].filter(Boolean).join(' · ');
 
-  const asgRow = (a) => {
+  /* 발표 시간이 세션 밖으로 나가면 알려 준다. 막지는 않는다 — 세션 시간을
+     아직 안 고쳤을 수도 있고, 막으면 둘 중 무엇을 먼저 고쳐야 하는지
+     사람이 판단할 수가 없다. */
+  const outOfSession = (a) => {
+    if(!a.start_at || !s.start_at || !s.end_at) return '';
+    if(a.start_at < s.start_at) return '세션 시작보다 이릅니다';
+    if((a.end_at || a.start_at) > s.end_at) return '세션 종료보다 늦습니다';
+    return '';
+  };
+
+  const asgRow = (a, idx) => {
     const needsTalk = speakerNeedList(ev.key, a.role).some(n => n.key === 'title');
-    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--i6)">
+    const warn = outOfSession(a);
+    /* 앞 사람이 끝나기 전에 시작하면 겹친다 — 같은 무대에 둘이 설 수는 없다 */
+    const prev = idx > 0 ? asg[idx - 1] : null;
+    const overlap = prev && prev.end_at && a.start_at && a.start_at < prev.end_at;
+    return `<div style="padding:6px 0;border-top:1px solid var(--i6)">
+      <div style="display:flex;align-items:center;gap:8px">
       ${roleChip(a.role)}
       <div style="flex:1;min-width:0">
-        <div><span onclick="openSpeakerDr('${escAttr(a.speaker_id)}')" style="font-size:12px;cursor:pointer;color:var(--a)">${escapeHtml(speakerName(a.speaker_id))}</span></div>
+        <div><span onclick="openSpeakerDr('${escAttr(a.speaker_id)}')" style="font-size:12px;cursor:pointer;color:var(--a)">${escapeHtml(speakerName(a.speaker_id))}</span>
+          ${a.start_at ? `<span style="font-size:10.5px;color:var(--i3);margin-left:6px">${
+            escapeHtml(timeLabel(a.start_at, a.end_at))}</span>` : ''}</div>
         ${needsTalk
           ? `<div style="font-size:10.5px;color:${a.title_ko || a.title_en ? 'var(--i5)' : 'var(--i4)'}">
               ${escapeHtml(a.title_ko || a.title_en || '발제명 아직 없음')}</div>`
@@ -299,6 +322,21 @@ function sessionCard(ev, s, days, cfg){
         ${SPEAKER_ROLES.map(r => `<option value="${escAttr(r.key)}"${a.role === r.key ? ' selected' : ''}>${escapeHtml(r.label)}</option>`).join('')}
       </select>
       <button class="btn" style="font-size:10.5px" onclick="removeAssign('${escAttr(a.id)}')">해제</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:4px;padding-left:2px;flex-wrap:wrap">
+        <span style="font-size:10px;color:var(--i4)">발표</span>
+        <input class="fi" type="time" style="width:96px;font-size:10.5px;padding:2px 5px"
+          value="${escAttr(a.start_at || '')}" onchange="setTalkTime('${escAttr(a.id)}','start_at',this.value)">
+        <span style="font-size:10px;color:var(--i4)">–</span>
+        <input class="fi" type="time" style="width:96px;font-size:10.5px;padding:2px 5px"
+          value="${escAttr(a.end_at || '')}" onchange="setTalkTime('${escAttr(a.id)}','end_at',this.value)">
+        <input class="fi" type="text" style="width:58px;font-size:10.5px;padding:2px 5px"
+          placeholder="분" value="${escAttr(a.duration_min || '')}"
+          onchange="setTalkTime('${escAttr(a.id)}','duration_min',this.value)"
+          title="분만 적어 두면 «시간 자동 배분»이 이 길이로 이어 붙입니다">
+        ${warn ? `<span style="font-size:10px;color:var(--am)">⚠ ${escapeHtml(warn)}</span>` : ''}
+        ${overlap ? `<span style="font-size:10px;color:var(--re)">⚠ 앞 발표와 겹쳐요</span>` : ''}
+      </div>
     </div>`;
   };
 
@@ -310,13 +348,15 @@ function sessionCard(ev, s, days, cfg){
         ${meta ? `<div style="font-size:10.5px;color:var(--i5);margin-top:2px">${escapeHtml(meta)}</div>` : ''}
       </div>
       <div style="display:flex;gap:5px;flex-shrink:0">
+        ${asg.length && s.start_at ? `<button class="btn" style="font-size:10.5px"
+          onclick="autoTalkTimes('${escAttr(s.id)}')" title="세션 시작부터 각 발표의 «분»만큼 이어 붙입니다">시간 배분</button>` : ''}
         <button class="btn" style="font-size:10.5px" onclick="toggleEditSession('${escAttr(s.id)}')">${editing ? '닫기' : '수정'}</button>
         <button class="btn" style="font-size:10.5px" onclick="toggleAssign('${escAttr(s.id)}')">${open ? '닫기' : `배정 ${asg.length}`}</button>
         <button class="btn" style="font-size:10.5px" onclick="removeConfSession('${escAttr(s.id)}')">삭제</button>
       </div>
     </div>
     ${editing ? editSessionHtml(s, days, cfg) : ''}
-    ${asg.length ? `<div style="margin-top:6px">${asg.map(asgRow).join('')}</div>` : ''}
+    ${asg.length ? `<div style="margin-top:6px">${asg.map((a, i) => asgRow(a, i)).join('')}</div>` : ''}
     ${open ? assignFormHtml(ev, s) : ''}
   </div>`;
 }
@@ -682,6 +722,98 @@ export function fillSessionSlot(idx){
 }
 
 export function toggleNewSession(){ confNewSession = !confNewSession; renderConf(); }
+/* ── 발표 시간 ──
+   세션 시간만으로는 연사에게 «몇 시에 올라가시면 됩니다»를 못 적는다.
+   시간은 사람이 아니라 배정에 붙는다 — 한 사람이 두 세션에서 발표하면
+   시간도 둘이다. */
+const toMin = (t) => {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(t || '').trim());
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+};
+const toHHMM = (n) => `${String(Math.floor(n / 60) % 24).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
+
+export async function setTalkTime(aid, field, value){
+  if(confLocked()){ confLockNotice(); return; }
+  const a = SESSION_SPEAKERS.find(x => x.id === aid);
+  if(!a) return;
+  const v = String(value || '').trim();
+  if(String(a[field] ?? '') === v) return;
+
+  const patch = { [field]: v };
+  /* 시작과 «분»이 다 있으면 종료를 채워 준다. 손으로 적어 둔 종료는 덮지
+     않는다 — 쉬는 시간을 끼워 일부러 다르게 둔 경우가 있다. */
+  if(field === 'start_at' || field === 'duration_min'){
+    const start = field === 'start_at' ? v : a.start_at;
+    const mins = Number(field === 'duration_min' ? v : a.duration_min);
+    const sm = toMin(start);
+    if(sm !== null && mins > 0 && !a.end_at) patch.end_at = toHHMM(sm + mins);
+  }
+  /* 종료를 직접 고치면 «분»도 따라간다 — 둘이 어긋난 채로 남으면 배분할 때
+     엉뚱한 길이로 이어 붙는다. */
+  if(field === 'end_at' && v){
+    const sm = toMin(a.start_at), em = toMin(v);
+    if(sm !== null && em !== null && em > sm) patch.duration_min = String(em - sm);
+  }
+
+  const backup = {};
+  Object.keys(patch).forEach(k => { backup[k] = a[k]; });
+  Object.assign(a, patch);
+  renderConf();
+
+  const res = await gSaveAssign({ id: aid, ...patch });
+  if(!res || res.ok === false){
+    Object.assign(a, backup);
+    renderConf();
+    if(!res?.locked) alert('발표 시간을 저장하지 못했어요.');
+    return;
+  }
+  trackAction('edit', '발표 시간', confEvent,
+    `${speakerName(a.speaker_id)} — ${patch.start_at || a.start_at || ''}${patch.end_at ? `–${patch.end_at}` : ''}`);
+}
+
+/* 세션 시작부터 각 발표의 «분»만큼 이어 붙인다.
+   «분»이 없는 줄은 건너뛴다 — 0분으로 잡아 버리면 뒤 순서가 전부 밀린다. */
+export async function autoTalkTimes(sid){
+  if(confLocked()){ confLockNotice(); return; }
+  const sess = CONF_SESSIONS.find(x => x.id === sid);
+  if(!sess || !sess.start_at) return;
+  const asg = assignmentsOfSession(sid);
+  const usable = asg.filter(a => Number(a.duration_min) > 0);
+  if(!usable.length){
+    alert('각 발표의 «분»을 먼저 적어주세요. 그 길이대로 세션 시작부터 이어 붙입니다.');
+    return;
+  }
+  const skipped = asg.length - usable.length;
+  let cur = toMin(sess.start_at);
+  const plan = usable.map(a => {
+    const st = toHHMM(cur);
+    cur += Number(a.duration_min);
+    return { a, start_at: st, end_at: toHHMM(cur) };
+  });
+  const endM = toMin(sess.end_at);
+  const over = endM !== null && cur > endM;
+
+  if(!confirm(`${sess.start_at}부터 이어 붙입니다.\n\n`
+    + plan.map(p => `${p.start_at}–${p.end_at}  ${speakerName(p.a.speaker_id)}`).join('\n')
+    + (skipped ? `\n\n«분»이 없는 ${skipped}명은 건너뜁니다.` : '')
+    + (over ? `\n\n⚠ 세션 종료(${sess.end_at})를 ${cur - endM}분 넘깁니다.` : ''))) return;
+
+  for(const p of plan){
+    const backup = { start_at: p.a.start_at, end_at: p.a.end_at };
+    p.a.start_at = p.start_at; p.a.end_at = p.end_at;
+    const res = await gSaveAssign({ id: p.a.id, start_at: p.start_at, end_at: p.end_at });
+    if(!res || res.ok === false){
+      Object.assign(p.a, backup);
+      renderConf();
+      if(!res?.locked) alert('시간 배분을 저장하지 못했어요.');
+      return;
+    }
+  }
+  trackAction('edit', '발표 시간 배분', confEvent,
+    `${sess.title_ko || sess.title_en || sid} — ${plan.length}명`);
+  renderConf();
+}
+
 export function toggleEditSession(sid){
   confEditSession = confEditSession === sid ? '' : sid;
   renderConf();
@@ -898,6 +1030,8 @@ window.toggleAssign      = toggleAssign;
 window.toggleEditSession = toggleEditSession;
 window.fillEditSlot      = fillEditSlot;
 window.saveSessionEdit   = saveSessionEdit;
+window.setTalkTime       = setTalkTime;
+window.autoTalkTimes     = autoTalkTimes;
 window.addConfSession    = addConfSession;
 window.removeConfSession = removeConfSession;
 window.addAssign         = addAssign;

@@ -507,7 +507,8 @@ function talkHtml(sp, evKey){
     const head = `<div style="display:flex;align-items:baseline;gap:7px;margin-bottom:7px">
       <span class="pill ${(SPEAKER_ROLES.find(r => r.key === a.role) || {}).cls || 'p-gray'}" style="font-size:10px">${escapeHtml(a.role || '역할 없음')}</span>
       <div style="font-size:12px;font-weight:600;min-width:0">${escapeHtml(s ? (s.title_ko || s.title_en || s.id) : '(삭제된 세션)')}</div>
-      <div style="font-size:10.5px;color:var(--i4)">${escapeHtml([s?.date, s?.start_at].filter(Boolean).join(' '))}</div>
+      <div style="font-size:10.5px;color:var(--i4)">${escapeHtml(
+        [s?.date, a.start_at ? `${a.start_at}${a.end_at ? '–' + a.end_at : ''}` : s?.start_at].filter(Boolean).join(' '))}</div>
     </div>`;
 
     if(!nTitle && !nAbs && !nSlides){
@@ -524,11 +525,19 @@ function talkHtml(sp, evKey){
         ${fg(`발제명 영문 ${NEED_MARK[nTitle]}`, txt(a.title_en, `asField('${escAttr(a.id)}','title_en',this.value,'발제명 영문')`))}
       </div>` : ''}
       <div class="fgr">
+        ${fg('발표 시작', `<input class="fi" type="time" value="${escAttr(a.start_at || '')}"
+          onchange="asField('${escAttr(a.id)}','start_at',this.value,'발표 시작')">`)}
+        ${fg('발표 종료', `<input class="fi" type="time" value="${escAttr(a.end_at || '')}"
+          onchange="asField('${escAttr(a.id)}','end_at',this.value,'발표 종료')">`)}
+      </div>
+      <div style="font-size:10px;color:var(--i4);margin:-6px 0 10px">
+        세션 시간이 아니라 이 사람이 올라가는 시각입니다 — 연사 안내와 프로그램북에 이 값이 나갑니다.</div>
+      <div class="fgr">
         ${fg('발표 언어', `<select class="fi" onchange="asField('${escAttr(a.id)}','lang',this.value,'발표 언어')">
           <option value=""${!a.lang ? ' selected' : ''}>미정</option>
           <option value="ko"${a.lang === 'ko' ? ' selected' : ''}>국문</option>
           <option value="en"${a.lang === 'en' ? ' selected' : ''}>영문</option></select>`)}
-        ${fg('발표 시간(분)', txt(a.duration_min, `asField('${escAttr(a.id)}','duration_min',this.value,'발표 시간')`, '20'))}
+        ${fg('길이(분)', txt(a.duration_min, `asField('${escAttr(a.id)}','duration_min',this.value,'발표 길이')`, '20'))}
       </div>
 
       ${nAbs ? `<div style="margin-top:6px">
@@ -736,7 +745,9 @@ export function fillSpeakerMail(kind){
 
   const sessions = asg.map(a => {
     const s = CONF_SESSIONS.find(x => x.id === a.session_id);
-    return `  · ${s ? (s.title_ko || s.title_en || s.id) : ''}${s?.date ? ` (${s.date}${s.start_at ? ' ' + s.start_at : ''})` : ''} — ${a.role}`;
+    /* 연사에게는 세션 시간이 아니라 «본인 발표 시각»을 알려야 한다 */
+    const when = a.start_at ? `${a.start_at}${a.end_at ? '–' + a.end_at : ''}` : (s?.start_at || '');
+    return `  · ${s ? (s.title_ko || s.title_en || s.id) : ''}${s?.date ? ` (${s.date}${when ? ' ' + when : ''})` : ''} — ${a.role}`;
   }).join('\n');
 
   const bodies = {

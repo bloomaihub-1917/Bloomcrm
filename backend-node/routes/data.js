@@ -167,7 +167,8 @@ const TABLES = {
   },
   session_speakers: {
     table: 'session_speakers', pk: 'id', idPrefix: 'SS-',
-    columns: ['id', 'event_id', 'session_id', 'speaker_id', 'seq', 'role', 'lang', 'duration_min',
+    columns: ['id', 'event_id', 'session_id', 'speaker_id', 'seq', 'role', 'lang',
+      'start_at', 'end_at', 'duration_min',
       'title_ko', 'title_en', 'abstract_ko', 'abstract_en', 'abstract_received_at',
       'slides_file', 'slides_received_at', 'slides_version', 'note'],
   },

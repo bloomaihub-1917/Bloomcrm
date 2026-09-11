@@ -786,6 +786,10 @@ CREATE TABLE IF NOT EXISTS session_speakers (
   seq        TEXT,
   role       TEXT,   -- code_lists.speaker_role
   lang       TEXT,
+  -- 세션 안에서 이 사람이 올라가는 시각. 사람이 아니라 배정에 붙는다 —
+  -- 한 사람이 두 세션에서 발표하면 시간도 둘이다.
+  start_at      TEXT,
+  end_at        TEXT,
   duration_min TEXT,
 
   title_ko    TEXT,
