@@ -340,7 +340,7 @@ function sessionCard(ev, s, days, cfg){
       <button class="btn" style="font-size:10.5px" onclick="removeAssign('${escAttr(a.id)}')">해제</button>
       </div>
       <div style="display:flex;align-items:center;gap:6px;margin-top:4px;padding-left:2px;flex-wrap:wrap">
-        <span style="font-size:10px;color:var(--i4)">발표</span>
+        <span style="font-size:10px;color:var(--i4);flex:0 0 auto">발표</span>
         <input class="fi" type="time" style="width:96px;font-size:10.5px;padding:2px 5px"
           value="${escAttr(a.start_at || '')}" onchange="setTalkTime('${escAttr(a.id)}','start_at',this.value)">
         <span style="font-size:10px;color:var(--i4)">–</span>
@@ -560,9 +560,11 @@ function pgaHtml(ev){
         ${ss.title_ko && ss.title_en ? `<div style="font-size:9.5px;color:var(--i4);line-height:1.4;margin-top:2px">${escapeHtml(ss.title_en)}</div>` : ''}
         ${(() => {
           const asg = assignmentsOfSession(ss.id);
-          return asg.length ? `<div style="font-size:9.5px;color:var(--i4);margin-top:4px">${
-            escapeHtml(asg.slice(0, 3).map(a => speakerName(a.speaker_id)).join(', '))}${
-            asg.length > 3 ? ` 외 ${asg.length - 3}` : ''}</div>` : '';
+          /* 한 사람이 좌장이면서 발표도 하면 배정이 둘이다 — 이름은 한 번만 */
+          const names = [...new Set(asg.map(a => speakerName(a.speaker_id)))];
+          return names.length ? `<div style="font-size:9.5px;color:var(--i4);margin-top:4px">${
+            escapeHtml(names.slice(0, 3).join(', '))}${
+            names.length > 3 ? ` 외 ${names.length - 3}` : ''}</div>` : '';
         })()}
       </div>
     </div>`;
@@ -616,6 +618,49 @@ function pgaHtml(ev){
         <span style="font-weight:400;color:var(--i4);margin-left:6px">세션 ${mine.length}</span></td></tr>`
       + slots.map(rowFor).join('');
   };
+
+  /* ── 모바일 ──
+     가로가 장소인 표는 좁은 화면에 들어가지 않는다. 옆으로 밀면 시간 열이
+     사라져 «몇 시 것인지»를 잃는다. 그래서 시간 순 목록으로 바꾼다 —
+     장소는 각 줄에 적어 둔다. 표가 하려던 일(언제·어디서·무엇을)은 남는다. */
+  if(isMobile()){
+    const line = (ss) => {
+      const c = trackColor(ev.key, ss.track);
+      const asg = assignmentsOfSession(ss.id);
+      return `<div onclick="openPgaSession('${escAttr(ss.id)}')"
+        style="cursor:pointer;background:var(--W);border:1px solid var(--i6);border-left:3px solid ${
+          ss.track ? c.bd : 'var(--i5)'};border-radius:8px;padding:9px 11px;margin-bottom:7px">
+        <div style="display:flex;gap:7px;align-items:baseline;flex-wrap:wrap">
+          <span style="font-size:11px;color:var(--i3);white-space:nowrap">${escapeHtml(timeLabel(ss.start_at, ss.end_at) || '시간 미정')}</span>
+          ${ss.room ? `<span class="pill p-gray" style="font-size:9px">${escapeHtml(ss.room)}</span>` : ''}
+          ${ss.track ? `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:${c.bg}">${escapeHtml(ss.track)}</span>` : ''}
+        </div>
+        <div style="font-size:12.5px;font-weight:600;margin-top:4px;line-height:1.45">${escapeHtml(ss.title_ko || ss.title_en || '(세션명 없음)')}</div>
+        ${ss.title_ko && ss.title_en ? `<div style="font-size:10px;color:var(--i4);line-height:1.4">${escapeHtml(ss.title_en)}</div>` : ''}
+        ${(() => {
+          const names = [...new Set(asg.map(a => speakerName(a.speaker_id)))];
+          return names.length ? `<div style="font-size:10.5px;color:var(--i4);margin-top:4px">${
+            escapeHtml(names.slice(0, 3).join(', '))}${
+            names.length > 3 ? ` 외 ${names.length - 3}` : ''}</div>` : '';
+        })()}
+      </div>`;
+    };
+    const byDay = (d) => {
+      const mine = sessions.filter(x => (x.date || '') === d)
+        .slice()
+        .sort((a, b) => String(a.start_at || '').localeCompare(String(b.start_at || ''))
+          || String(a.room || '').localeCompare(String(b.room || ''), 'ko', { numeric: true }));
+      return `<div style="font-size:12px;font-weight:700;margin:12px 0 6px">${escapeHtml(d ? dayLabel(d) : '날짜 미정')}
+          <span style="font-weight:400;color:var(--i4)">세션 ${mine.length}</span></div>
+        ${mine.map(line).join('')}`;
+    };
+    return `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
+        <div style="font-size:12.5px;font-weight:700">Program at a Glance</div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto">${importBtns()}</div>
+      </div>
+      <div style="font-size:10px;color:var(--i4);margin-bottom:2px">좁은 화면에서는 시간 순 목록으로 보여드려요</div>
+      ${days.map(byDay).join('')}`;
+  }
 
   /* 트랙 범례 — 색만 보고는 무슨 트랙인지 모른다 */
   const usedTracks = [...new Set(sessions.map(x => x.track).filter(Boolean))];
@@ -872,7 +917,7 @@ function peopleHtml(ev){
     ${sub ? `<div style="font-size:10px;color:var(--i4);margin-top:2px">${sub}</div>` : ''}
   </div>`;
 
-  const summary = `<div style="display:flex;flex-wrap:wrap;gap:20px;padding:12px 14px;margin-bottom:10px;
+  const summary = `<div style="display:flex;flex-wrap:wrap;gap:${isMobile() ? '14px 22px' : '20px'};padding:12px 14px;margin-bottom:10px;
       background:var(--i8);border:1px solid var(--i6);border-radius:10px">
     ${card('연사', `${all.length}<span style="font-size:11px;font-weight:600;color:var(--i4)">명</span>`,
       `확정 ${byStatus('확정')} · 섭외중 ${byStatus('섭외중')}`)}
@@ -893,8 +938,11 @@ function peopleHtml(ev){
     ${sessions.map(ss => {
       const n = all.filter(sp => assignmentsFor(sp.id).some(a => a.session_id === ss.id)).length;
       const when = [ss.date ? ss.date.slice(5) : '', ss.start_at].filter(Boolean).join(' ');
+      /* 세션명이 길다. 칩이 한 줄을 다 먹으면 그게 목록이 되고, 좁은 화면에서는
+         옆으로 밀려 나가 아무것도 고를 수 없게 된다 — 잘라서 담고 전체는 툴팁에 둔다. */
       return `<button class="seg-b${confSessFil === ss.id ? ' on' : ''}"
         onclick="setConfSessFil('${escAttr(ss.id)}')"
+        style="max-width:min(100%,260px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
         title="${escAttr([ss.title_ko, ss.title_en, ss.track, ss.room].filter(Boolean).join(' · '))}">${
         escapeHtml(ss.title_ko || ss.title_en || ss.id)}${
         when ? ` <span style="opacity:.6">${escapeHtml(when)}</span>` : ''} ${n}명</button>`;
@@ -933,6 +981,60 @@ function peopleHtml(ev){
     return summary + sessChips + roleChips + needChips
       + `<div style="padding:20px;background:var(--i8);border:1px solid var(--i6);border-radius:10px;
         font-size:12px;color:var(--i5)">이 조건에 맞는 연사가 없어요.</div>`;
+  }
+
+  /* ── 모바일 ──
+     칸을 열로 늘어놓는 표는 좁은 화면에서 성립하지 않는다. 열 열두 개를
+     담으려다 글자가 한 자씩 끊기고, 옆으로 밀려 나간 칸은 아예 못 본다.
+     그래서 사람마다 카드 하나로 바꾸고, «아직 안 받은 것»만 딱지로 보여준다 —
+     받은 것을 다 보여줄 자리는 없고, 실제로 찾는 것은 남은 쪽이다. */
+  if(isMobile()){
+    const card = (sp) => {
+      const pr = spProgress(sp, ev.key);
+      const roles = rolesOfSpeaker(sp.id);
+      const left = SP_COLS
+        .map(c => ({ c, st: spCell(sp, ev.key, c.key) }))
+        .filter(x => x.st.state !== 'na' && x.st.state !== 'done');
+      const sess = assignmentsFor(sp.id).map(a => {
+        const ss = CONF_SESSIONS.find(x => x.id === a.session_id);
+        return ss ? (ss.title_ko || ss.title_en || '') : '';
+      }).filter(Boolean);
+      return `<div onclick="openSpeakerDr('${escAttr(sp.id)}')"
+        style="background:var(--W);border:1px solid var(--i6);border-radius:10px;padding:11px 12px;
+        margin-bottom:8px;cursor:pointer">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span style="font-size:13px;font-weight:700">${escapeHtml(sp.name_snapshot || sp.id)}</span>
+          ${roles.map(r => `<span class="pill ${(SPEAKER_ROLES.find(x => x.key === r) || {}).cls || 'p-gray'}"
+            style="font-size:9px">${escapeHtml(r)}</span>`).join('')}
+          ${sp.lang_pref === 'en' ? '<span class="pill p-gray" style="font-size:9px">EN</span>' : ''}
+          ${sp.status && sp.status !== '확정' ? `<span class="pill p-amber" style="font-size:9px">${escapeHtml(sp.status)}</span>` : ''}
+        </div>
+        ${sp.org_ko || sp.org_en ? `<div style="font-size:11px;color:var(--i4);margin-top:2px">${escapeHtml(
+          [sp.org_ko || sp.org_en, sp.title_ko || sp.title_en].filter(Boolean).join(' · '))}</div>` : ''}
+        ${sess.length ? `<div style="font-size:11px;color:var(--i3);margin-top:4px;overflow:hidden;
+          text-overflow:ellipsis;white-space:nowrap">${escapeHtml(sess[0])}${
+          sess.length > 1 ? ` 외 ${sess.length - 1}` : ''}</div>`
+          : '<div style="font-size:11px;color:var(--am);margin-top:4px">배정 없음</div>'}
+        <div style="display:flex;align-items:center;gap:7px;margin-top:7px">
+          <div style="flex:1">${progressBar(pr.pct, pr.pct === 100 ? 'var(--g)' : 'var(--a)')}</div>
+          <span style="font-size:10.5px;color:var(--i4);white-space:nowrap">${pr.n}/${pr.of}</span>
+        </div>
+        ${left.length
+          ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:7px">
+              ${left.map(({ c, st }) => `<span style="font-size:10px;font-weight:600;padding:3px 7px;
+                border-radius:5px;white-space:nowrap;background:${st.state === 'part' ? 'var(--ab)' : 'var(--i8)'};
+                color:${st.state === 'part' ? 'var(--am)' : 'var(--i5)'}">${
+                st.state === 'part' ? '◐ ' : ''}${escapeHtml(c.label)}${st.text ? ` ${escapeHtml(st.text)}` : ''}</span>`).join('')}
+            </div>`
+          : `<div style="font-size:10.5px;color:var(--g);margin-top:7px">받을 것을 다 받았어요</div>`}
+        ${sp.fee_amount ? `<div style="font-size:10.5px;margin-top:6px;color:${sp.fee_paid_at ? 'var(--g)' : 'var(--am)'}">
+          연사료 ${escapeHtml(Number(String(sp.fee_amount).replace(/[^\d.-]/g, '') || 0).toLocaleString('ko-KR'))}
+          · ${sp.fee_paid_at ? '지급' : '미지급'}</div>` : ''}
+      </div>`;
+    };
+    return summary + sessChips + roleChips + needChips
+      + `<div style="font-size:10px;color:var(--i4);margin-bottom:7px">딱지는 아직 안 받은 것이에요 — 카드를 누르면 그 연사가 열립니다</div>`
+      + list.map(card).join('');
   }
 
   const row = (sp) => {
