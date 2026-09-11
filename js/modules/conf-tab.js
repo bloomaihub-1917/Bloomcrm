@@ -253,7 +253,8 @@ function programHtml(ev){
 
 function newSessionHtml(ev, days, cfg){
   const slots = cfg.slots || [];
-  const tracks = cfg.tracks || [];
+  const tracks = trackOptions(ev.key);
+  const roomList = roomOptions(ev.key);
   return `<div style="margin-bottom:16px;padding:12px;background:var(--i8);border:1px solid var(--i6);border-radius:10px">
     <div style="font-size:11px;font-weight:600;margin-bottom:8px">세션 만들기</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px">
@@ -274,7 +275,11 @@ function newSessionHtml(ev, days, cfg){
           ? `<select class="fi" id="ns-track"><option value="">없음</option>
               ${tracks.map(t => `<option value="${escAttr(t)}">${escapeHtml(t)}</option>`).join('')}</select>`
           : `<input class="fi" id="ns-track" placeholder="트랙">`}</div>
-      <div><div class="fl">장소</div><input class="fi" id="ns-room" placeholder="회의실"></div>
+      <div><div class="fl">장소</div>
+        ${roomList.length
+          ? `<select class="fi" id="ns-room"><option value="">없음</option>
+              ${roomList.map(r => `<option value="${escAttr(r)}">${escapeHtml(r)}</option>`).join('')}</select>`
+          : `<input class="fi" id="ns-room" placeholder="회의실">`}</div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
       <div><div class="fl">세션명 (국문)</div><input class="fi" id="ns-ko" placeholder="세션명"></div>
@@ -381,13 +386,32 @@ function sessionCard(ev, s, days, cfg){
 /* 세션 수정 칸 — 만들 때와 같은 칸을 같은 순서로 둔다. 같은 값을 두 가지
    모양으로 적게 하면 어디를 고쳐야 하는지 매번 다시 찾게 된다.
    칸 id에 세션 id를 붙인다 — 한 화면에 여러 세션의 칸이 동시에 열릴 수 있다. */
+/* 트랙·장소 후보 — 설정에 적은 것과 세션들이 실제로 쓰는 것을 합친다.
+
+   전에는 설정만 봤다. 그런데 엑셀로 올린 프로그램은 트랙이 세션에만 있고
+   설정에는 없어서, 고르는 목록이 비고 칸이 자유 입력으로 바뀌었다. 그러면
+   «임상개발 6»을 한 글자도 틀리지 않게 타이핑해야 하고, 틀리면 새 트랙이
+   되어 색이 따로 잡힌다 — 색이 안 붙는 세션이 생긴 경로가 이것이다. */
+function trackOptions(evKey, own){
+  const set = new Set(confCfg(evKey).tracks || []);
+  sessionsForEvent(evKey).forEach(x => { if(x.track) set.add(x.track); });
+  if(own) set.add(own);
+  return [...set];
+}
+function roomOptions(evKey, own){
+  const set = new Set(confCfg(evKey).rooms || []);
+  sessionsForEvent(evKey).forEach(x => { if(x.room) set.add(x.room); });
+  if(own) set.add(own);
+  return [...set];
+}
+
 function editSessionHtml(s, days, cfg){
   const slots = cfg.slots || [];
-  const tracks = cfg.tracks || [];
   const i = (k) => `es-${s.id}-${k}`;
   /* 설정에서 지운 트랙·일자가 이 세션에는 남아 있을 수 있다 — 목록에 없다고
      조용히 «없음»으로 바뀌면 저장하는 순간 값이 날아간다. */
-  const trackList = s.track && !tracks.includes(s.track) ? [...tracks, s.track] : tracks;
+  const trackList = trackOptions(confEvent, s.track);
+  const roomList = roomOptions(confEvent, s.room);
   const dayList = s.date && !days.includes(s.date) ? [...days, s.date].sort() : days;
 
   return `<div style="margin-top:9px;padding:10px;background:var(--i8);border-radius:8px">
@@ -410,7 +434,11 @@ function editSessionHtml(s, days, cfg){
           ? `<select class="fi" id="${i('track')}"><option value=""${!s.track ? ' selected' : ''}>없음</option>
               ${trackList.map(t => `<option value="${escAttr(t)}"${s.track === t ? ' selected' : ''}>${escapeHtml(t)}</option>`).join('')}</select>`
           : `<input class="fi" id="${i('track')}" value="${escAttr(s.track || '')}" placeholder="트랙">`}</div>
-      <div><div class="fl">장소</div><input class="fi" id="${i('room')}" value="${escAttr(s.room || '')}" placeholder="회의실"></div>
+      <div><div class="fl">장소</div>
+        ${roomList.length
+          ? `<select class="fi" id="${i('room')}"><option value=""${!s.room ? ' selected' : ''}>없음</option>
+              ${roomList.map(r => `<option value="${escAttr(r)}"${s.room === r ? ' selected' : ''}>${escapeHtml(r)}</option>`).join('')}</select>`
+          : `<input class="fi" id="${i('room')}" value="${escAttr(s.room || '')}" placeholder="회의실">`}</div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:7px">
       <div><div class="fl">세션명 (국문)</div><input class="fi" id="${i('ko')}" value="${escAttr(s.title_ko || '')}"></div>
@@ -664,6 +692,10 @@ function pgaHtml(ev){
 
   /* 트랙 범례 — 색만 보고는 무슨 트랙인지 모른다 */
   const usedTracks = [...new Set(sessions.map(x => x.track).filter(Boolean))];
+  /* 트랙이 빈 세션은 색이 안 붙는다. 개막식처럼 장소가 없는 것은 원래
+     그렇지만, 장소가 있는데 트랙만 빈 세션은 대개 빠뜨린 것이다 —
+     색을 찾기 전에 왜 없는지를 알 수 있게 세어 둔다. */
+  const noTrack = sessions.filter(x => x.room && !x.track);
   const legend = usedTracks.length ? `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
     ${usedTracks.map(t => {
       const c = trackColor(ev.key, t);
@@ -671,6 +703,9 @@ function pgaHtml(ev){
         <span style="width:11px;height:11px;border-radius:3px;background:${c.bg};border-left:3px solid ${c.bd}"></span>
         ${escapeHtml(t)}</span>`;
     }).join('')}
+    ${noTrack.length ? `<span style="font-size:10.5px;color:var(--am)"
+      title="${escAttr(noTrack.map(x => x.title_ko || x.title_en || x.id).join('\n'))}">
+      트랙 없는 세션 ${noTrack.length}개 — 색이 안 붙어요</span>` : ''}
   </div>` : '';
 
   const hint = noRoomOnly ? `<div style="font-size:10.5px;color:var(--i4);margin-bottom:8px;line-height:1.6">
