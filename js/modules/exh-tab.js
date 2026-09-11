@@ -1536,12 +1536,26 @@ export function catSettleByCurrency(list){
       const paidUp = st[cur] ? bal <= 0 : false;
       if(st[cur] && st[cur].paid > 0 && bal > 0) partial.add(x.id);
 
+      /* 받은 돈을 계좌이체와 카드로 갈라 둔다. 입금에 분류가 없듯 분류별
+         결제 수단도 없어서, 그 기업이 실제로 낸 수단 비율대로 나눈다 —
+         한 기업이 한 수단으로만 내는 경우가 대부분이라 그럴 때는 그대로 맞고,
+         섞어 낸 곳만 비율로 갈린다. 수단이 안 적힌 옛 건은 미확인으로 남긴다. */
+      const tot = paidUp && st[cur] && st[cur].paid > 0 ? st[cur].paid : 0;
+      const mix = tot
+        ? { bank: st[cur].bank / tot, card: st[cur].card / tot, unknown: st[cur].etc / tot }
+        : { bank: 0, card: 0, unknown: 0 };
+
       MONEY_CATS.forEach(([k]) => {
         const v = by[cur][k] || 0;
         if(!v) return;
-        if(!out[cur][k]) out[cur][k] = { billed: 0, paid: 0, unpaid: 0 };
+        if(!out[cur][k]) out[cur][k] = { billed: 0, paid: 0, unpaid: 0, bank: 0, card: 0, unknown: 0 };
         out[cur][k].billed += v;
         out[cur][k][paidUp ? 'paid' : 'unpaid'] += v;
+        if(paidUp){
+          out[cur][k].bank += v * mix.bank;
+          out[cur][k].card += v * mix.card;
+          out[cur][k].unknown += v * mix.unknown;
+        }
       });
     });
   });
@@ -1619,8 +1633,21 @@ function renderMoneyView(list){
     if(!cats.length) return '';
     const sum = cats.reduce((a, [k]) => {
       const c = catS[cur][k];
-      a.billed += c.billed; a.paid += c.paid; a.unpaid += c.unpaid; return a;
-    }, { billed: 0, paid: 0, unpaid: 0 });
+      a.billed += c.billed; a.paid += c.paid; a.unpaid += c.unpaid;
+      a.bank += c.bank; a.card += c.card; a.unknown += c.unknown; return a;
+    }, { billed: 0, paid: 0, unpaid: 0, bank: 0, card: 0, unknown: 0 });
+
+    /* 받은 돈 아래에 수단을 적는다 — 통장과 맞출 때 계좌와 카드는 보는 곳이 달라서
+       한 숫자로 합쳐 두면 매번 다시 갈라야 한다. 0인 수단은 적지 않는다. */
+    const payMix = (c) => {
+      const on = [['bank', '계좌'], ['card', '카드'], ['unknown', '미확인']]
+        .filter(([k]) => Math.round(c[k]) > 0);
+      if(!on.length) return '';
+      // 수단이 하나뿐이면 금액은 위에 적힌 것과 같다 — 이름만 적는다
+      const txt = on.length === 1 ? `전액 ${on[0][1]}`
+        : on.map(([k, l]) => `${l} ${money(Math.round(c[k]))}`).join(' · ');
+      return `<span style="display:block;font-size:9.5px;color:var(--i5);margin-top:1px">${txt}</span>`;
+    };
 
     const bar = (c) => {
       const pct = c.billed ? Math.round(c.paid / c.billed * 100) : 0;
@@ -1637,7 +1664,8 @@ function renderMoneyView(list){
         <span style="flex:1;min-width:0"><span style="font-size:9.5px;color:var(--i5);display:block">받아야 할 돈</span>
           <b style="font-size:12.5px">${money(c.billed)}</b></span>
         <span style="flex:1;min-width:0"><span style="font-size:9.5px;color:var(--i5);display:block">받은 돈</span>
-          <b style="font-size:12.5px;color:var(--g)">${money(c.paid)}</b></span>
+          <b style="font-size:12.5px;color:var(--g)">${money(c.paid)}</b>
+          ${payMix(c)}</span>
         <span style="flex:1;min-width:0"><span style="font-size:9.5px;color:var(--i5);display:block">안 받은 돈</span>
           <b style="font-size:12.5px;color:${c.unpaid ? 'var(--re)' : 'var(--i5)'}">${money(c.unpaid)}</b></span>
       </div>
