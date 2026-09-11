@@ -256,64 +256,53 @@ export function renderMDBSelectionBar(){
     <span style="font-size:12px;font-weight:600;color:var(--i1)">${n}명 선택됨</span>
     <button class="btn bp bs" onclick="openMDBBulkEditModal()">기업명/카테고리/상태 일괄 변경</button>
     <button class="btn bs" onclick="openMDBToCrmModal()"
-      title="선택한 사람들의 소속 기업을 CRM 타겟으로 올립니다">CRM 타겟으로 추가</button>
+      title="고른 사람들을 행사 참가자로 올리고, 소속 기업을 CRM 타겟으로 잡습니다">행사에 초청</button>
     <button class="btn bs" style="color:var(--re);border-color:var(--re)" onclick="bulkDeleteMDBContacts()">선택 삭제</button>
     <button class="btn bs" style="margin-left:auto" onclick="clearMDBSelection()">선택 해제</button>
   `;
 }
 
 /* ══════════════════════════════════════════
-   마스터DB 선택 → CRM 타겟
+   마스터DB 선택 → 행사에 초청
 
-   CRM은 사람이 아니라 기업을 쫓는다(crm_targets에는 이름·영문명·분야·본사만
-   있고 연락처 칸이 없다). 그래서 고른 사람들을 그대로 옮기지 않고 소속 기업으로
-   묶어 올린다 — 한 회사에서 세 명을 골라도 타겟은 하나다.
+   «이 사람을 이 행사에 부른다»가 한 건이다. 그래서 고른 사람을 기업으로 합치지
+   않는다 — 한 회사에서 세 명을 부르면 초청도 세 건이다. 합쳐 버리면 누구를
+   불렀는지가 사라지고, 나중에 두 명만 왔을 때 나머지 한 명을 짚을 수 없다.
 
-   행사는 반드시 고르게 한다. 타겟은 «어느 행사에 부를 기업인가»라서, 행사가
-   없으면 목록에서 걸러지지도 않고 나중에 무엇 때문에 올린 건지 알 수 없다.
+   두 가지가 만들어진다.
 
-   이미 그 행사에 올라 있는 기업은 건너뛴다. 같은 이름으로 하나 더 만들면
-   진행 단계와 기록이 두 줄로 갈려서, 어느 쪽이 최신인지 알 수 없게 된다.
+     ① 참가 이력(participations) — 사람마다 한 줄. 이게 초청 그 자체다.
+        마스터DB 행사별 보기, 기업DB 행사 이력, 전시 담당자 후보가 모두 여기를 본다.
+     ② CRM 타겟(crm_targets) — 소속 기업이 그 행사에 아직 없을 때만 한 줄.
+        CRM은 기업 단위로 진행 단계를 쫓는 화면이라(연락처 칸 자체가 없다) 사람
+        수만큼 만들면 같은 회사가 여러 줄로 갈린다. 사람은 ①에 남아 있고, CRM은
+        기업명으로 그 사람들을 되찾아 보여준다.
+
+   이미 그 행사에 있는 것은 건너뛴다. 초청을 두 번 적으면 참가자 수가 부풀고,
+   타겟이 두 줄이면 진행 단계가 갈려 어느 쪽이 최신인지 알 수 없다.
 ══════════════════════════════════════════ */
 
-/* 고른 사람들을 소속 기업으로 묶는다. 소속이 비어 있으면 올릴 데가 없다 */
-function mdbSelectedOrgs(){
-  const byKey = new Map();
-  [...mdbSelected].map(id => getContactById(id)).filter(Boolean).forEach(c => {
-    const name = String(c.orgKo || c.orgEn || '').trim();
-    if(!name) return;
-    const key = name.toLowerCase().replace(/[^a-z0-9가-힣]/g, '');
-    if(!byKey.has(key)){
-      const co = CO_DB.find(o => o.key === key);
-      byKey.set(key, {
-        name, key,
-        nameEn: String(c.orgEn || (co && co.nameEn) || '').trim(),
-        sector: (co && co.sector) || '',
-        hq:     (co && co.hq) || (co && co.country) || '',
-        people: [],
-      });
-    }
-    const who = c.nameKo || c.nameEn || c.email1 || '';
-    if(who && !byKey.get(key).people.includes(who)) byKey.get(key).people.push(who);
-  });
-  // 소속이 없어 못 올리는 사람도 세어 둔다 — 조용히 빠지면 숫자가 안 맞는다
-  const noOrg = [...mdbSelected].map(id => getContactById(id)).filter(Boolean)
-    .filter(c => !String(c.orgKo || c.orgEn || '').trim()).length;
-  return { orgs: [...byKey.values()].sort((a, b) => a.name.localeCompare(b.name, 'ko')), noOrg };
+const nameKeyOf = (v) => String(v || '').toLowerCase()
+  .replace(/\(주\)|주식회사|㈜|inc\.?|corp\.?|co\.?|ltd\.?/gi, '')
+  .replace(/[^a-z0-9가-힣]/g, '');
+
+/* 고른 사람들을 그대로 들고 온다. 소속은 CRM 타겟을 만들 때만 쓴다 —
+   소속이 없어도 사람은 행사에 부를 수 있다. */
+function mdbSelectedPeople(){
+  return [...mdbSelected].map(id => getContactById(id)).filter(Boolean)
+    .sort((a, b) => String(a.orgKo || a.orgEn || '').localeCompare(String(b.orgKo || b.orgEn || ''), 'ko')
+      || String(a.nameKo || a.nameEn || '').localeCompare(String(b.nameKo || b.nameEn || ''), 'ko'));
 }
 
-const crmHas = (name, ev) => targets.some(t =>
-  String(t.event || '') === ev &&
-  String(t.name || '').trim().toLowerCase() === String(name || '').trim().toLowerCase());
+const invitedAlready = (cid, ev) =>
+  participations.some(p => String(p.contactId) === String(cid) && String(p.eventId || p.event || '') === ev);
+
+const crmHasOrg = (name, ev) => !!name && targets.some(t =>
+  String(t.event || '') === ev && nameKeyOf(t.name) === nameKeyOf(name));
 
 export function openMDBToCrmModal(){
-  if(!mdbSelected.size){ alert('먼저 옮길 사람을 선택해주세요.'); return; }
+  if(!mdbSelected.size){ alert('먼저 초청할 사람을 선택해주세요.'); return; }
   closeMDBToCrmModal();
-  const { orgs, noOrg } = mdbSelectedOrgs();
-  if(!orgs.length){
-    alert('고른 사람들에게 소속 기업이 적혀 있지 않아요.\nCRM 타겟은 기업 단위라 소속이 있어야 올릴 수 있습니다.');
-    return;
-  }
 
   const pop = document.createElement('div');
   pop.id = 'mdb-tocrm-modal';
@@ -322,13 +311,12 @@ export function openMDBToCrmModal(){
   pop.addEventListener('mousedown', (e) => { downOnBg = (e.target === pop); });
   pop.addEventListener('click', (e) => { if(e.target === pop && downOnBg) closeMDBToCrmModal(); });
 
-  pop.innerHTML = `<div class="modal" style="max-width:560px">
-    <div class="mh"><div class="mt2">CRM 타겟으로 추가</div>
-      <div class="mc">고른 ${mdbSelected.size}명의 소속 기업 <b>${orgs.length}곳</b>을 타겟으로 올려요${
-        noOrg ? ` · 소속이 없는 ${noOrg}명은 빠집니다` : ''}</div></div>
+  pop.innerHTML = `<div class="modal" style="max-width:580px">
+    <div class="mh"><div class="mt2">행사에 초청</div>
+      <div class="mc">고른 ${mdbSelected.size}명을 행사 참가자로 올리고, 소속 기업을 CRM 타겟으로 함께 잡아요</div></div>
     <div class="mb">
       <div class="fgr">
-        <div class="fg"><label class="fl">타겟 행사 *</label>
+        <div class="fg"><label class="fl">초청할 행사 *</label>
           <select class="fi" id="tocrm-ev" onchange="renderMDBToCrmList()">
             ${EVENT_LIST.map(e => `<option value="${escAttr(e.key)}">${escapeHtml(e.short || e.key)}${
               e.date ? ` (${escapeHtml(e.date)})` : ''}</option>`).join('')}
@@ -336,7 +324,13 @@ export function openMDBToCrmModal(){
         <div class="fg"><label class="fl">참여 유형</label>
           <select class="fi parttype-select" id="tocrm-role"></select></div>
       </div>
-      <div class="fgr">
+      <label style="display:flex;align-items:flex-start;gap:7px;cursor:pointer;padding:2px 0 8px">
+        <input type="checkbox" id="tocrm-mk" checked onchange="renderMDBToCrmList()" style="margin-top:2px">
+        <span><span style="font-size:12px;font-weight:600">소속 기업을 CRM 타겟으로도 올리기</span>
+          <span style="display:block;font-size:10.5px;color:var(--i5);margin-top:2px">
+            CRM은 기업 단위로 진행 단계를 쫓아요. 이미 그 행사 타겟에 있는 기업은 건드리지 않습니다.</span></span>
+      </label>
+      <div class="fgr" id="tocrm-crmopts">
         <div class="fg"><label class="fl">우선순위</label>
           <select class="fi" id="tocrm-pri">
             <option value="high">높음</option><option value="mid" selected>중간</option><option value="low">낮음</option>
@@ -345,14 +339,14 @@ export function openMDBToCrmModal(){
           <input class="fi" id="tocrm-who" placeholder="담당자 이름"></div>
       </div>
       <div class="fg"><label class="fl">메모</label>
-        <input class="fi" id="tocrm-note" placeholder="왜 올리는지 — 첫 기록으로 남습니다"></div>
-      <div class="fg"><label class="fl">올릴 기업</label>
-        <div id="tocrm-list" style="max-height:240px;overflow-y:auto;border:1px solid var(--i7);border-radius:8px;padding:6px"></div></div>
+        <input class="fi" id="tocrm-note" placeholder="왜 부르는지 — 참가 이력과 타겟 첫 기록에 남습니다"></div>
+      <div class="fg"><label class="fl">초청할 사람</label>
+        <div id="tocrm-list" style="max-height:230px;overflow-y:auto;border:1px solid var(--i7);border-radius:8px;padding:6px"></div></div>
       <div id="tocrm-msg" style="font-size:11.5px;color:var(--i4);min-height:16px"></div>
     </div>
     <div class="mf2">
       <button class="btn" onclick="closeMDBToCrmModal()">취소</button>
-      <button class="btn bp" id="tocrm-btn" onclick="confirmMDBToCrm()">추가</button>
+      <button class="btn bp" id="tocrm-btn" onclick="confirmMDBToCrm()">초청</button>
     </div></div>`;
   document.body.appendChild(pop);
   window.populateUploadEvDropdown?.();   // 참여 유형 채우기
@@ -364,71 +358,119 @@ export function renderMDBToCrmList(){
   const el = document.getElementById('tocrm-list');
   if(!el) return;
   const ev = document.getElementById('tocrm-ev')?.value || '';
-  const { orgs } = mdbSelectedOrgs();
-  el._orgs = orgs;
+  const mkCrm = !!document.getElementById('tocrm-mk')?.checked;
+  const people = mdbSelectedPeople();
+  el._people = people;
 
-  el.innerHTML = orgs.map((o, i) => {
-    const dup = crmHas(o.name, ev);
+  const opts = document.getElementById('tocrm-crmopts');
+  if(opts) opts.style.display = mkCrm ? '' : 'none';
+
+  el.innerHTML = people.map((c, i) => {
+    const dup = invitedAlready(c.id, ev);
+    const org = String(c.orgKo || c.orgEn || '').trim();
     return `<label style="display:flex;align-items:center;gap:9px;padding:6px 7px;border-radius:6px;cursor:${dup ? 'default' : 'pointer'};opacity:${dup ? .45 : 1}">
       <input type="checkbox" class="tocrm-cb" data-i="${i}" ${dup ? 'disabled' : 'checked'}>
-      <span style="font-weight:600;font-size:12px;flex:1;min-width:0">${escapeHtml(o.name)}${
-        o.nameEn ? `<span style="font-weight:400;color:var(--i4);margin-left:5px">${escapeHtml(o.nameEn)}</span>` : ''}</span>
-      <span style="font-size:10px;color:var(--i4)">${escapeHtml(o.people.slice(0, 2).join(', '))}${
-        o.people.length > 2 ? ` 외 ${o.people.length - 2}` : ''}</span>
-      ${dup ? '<span class="pill p-gray">이미 있음</span>' : ''}
+      <span style="font-weight:600;font-size:12px;min-width:74px">${escapeHtml(c.nameKo || c.nameEn || '(이름 없음)')}</span>
+      <span style="font-size:11px;color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${
+        org ? escapeHtml(org) : '<span style="color:var(--i5)">소속 없음</span>'}</span>
+      ${dup ? '<span class="pill p-gray">이미 초청</span>' : ''}
     </label>`;
   }).join('');
 
-  const dupN = orgs.filter(o => crmHas(o.name, ev)).length;
+  // 이번에 새로 생길 CRM 타겟이 몇 곳인지 미리 알려 준다
+  const picked = people.filter(c => !invitedAlready(c.id, ev));
+  const newOrgs = [...new Set(picked.map(c => String(c.orgKo || c.orgEn || '').trim())
+    .filter(Boolean).filter(nm => !crmHasOrg(nm, ev)).map(nameKeyOf))].length;
+  const dupN = people.length - picked.length;
+  const noOrg = picked.filter(c => !String(c.orgKo || c.orgEn || '').trim()).length;
+
   const msg = document.getElementById('tocrm-msg');
-  if(msg) msg.textContent = dupN
-    ? `이 행사에 이미 올라 있는 ${dupN}곳은 건너뜁니다 — 같은 이름으로 하나 더 만들면 진행 기록이 두 줄로 갈립니다.`
-    : '';
+  if(msg) msg.innerHTML = [
+    dupN ? `이미 이 행사에 있는 <b>${dupN}명</b>은 건너뜁니다` : '',
+    mkCrm ? (newOrgs ? `CRM 타겟 <b>${newOrgs}곳</b>이 새로 생깁니다` : 'CRM 타겟은 모두 이미 있어요')
+          : 'CRM 타겟은 만들지 않습니다',
+    noOrg ? `소속이 안 적힌 <b>${noOrg}명</b>은 초청만 되고 타겟에는 안 잡혀요` : '',
+  ].filter(Boolean).join(' · ');
 }
 
 export async function confirmMDBToCrm(){
   const el = document.getElementById('tocrm-list');
   const ev = document.getElementById('tocrm-ev')?.value || '';
-  const orgs = (el && el._orgs) || [];
+  const people = (el && el._people) || [];
   const picked = [...document.querySelectorAll('.tocrm-cb')]
-    .filter(cb => cb.checked && !cb.disabled).map(cb => orgs[+cb.dataset.i]).filter(Boolean);
-  if(!ev){ alert('타겟 행사를 골라주세요.'); return; }
-  if(!picked.length){ alert('올릴 기업을 선택해주세요.'); return; }
+    .filter(cb => cb.checked && !cb.disabled).map(cb => people[+cb.dataset.i]).filter(Boolean);
+  if(!ev){ alert('초청할 행사를 골라주세요.'); return; }
+  if(!picked.length){ alert('초청할 사람을 선택해주세요.'); return; }
 
   const btn = document.getElementById('tocrm-btn');
-  if(btn){ btn.disabled = true; btn.textContent = '추가 중…'; }
+  if(btn){ btn.disabled = true; btn.textContent = '초청 중…'; }
 
-  /* crm-tab을 위에서 import하면 순환 참조가 된다 — 필요할 때만 불러온다 */
-  const { saveTargetToSheet, buildEvFil, updBadges, renderCrm } = await import('./crm-tab.js');
-  const note = document.getElementById('tocrm-note')?.value || '';
   const role = document.getElementById('tocrm-role')?.value || '';
-  const pri  = document.getElementById('tocrm-pri')?.value || 'mid';
-  const who  = document.getElementById('tocrm-who')?.value || '';
+  const note = document.getElementById('tocrm-note')?.value || '';
+  const mkCrm = !!document.getElementById('tocrm-mk')?.checked;
 
-  const made = picked.map((o, i) => ({
-    id: Date.now() + i,
-    name: o.name, nameEn: o.nameEn, sector: o.sector, hq: o.hq,
-    event: ev, role, status: '미접촉', priority: pri, assignee: who,
-    lastActivity: td(), currentStage: 1,
-    branches: [o.name, o.nameEn].filter(Boolean), mainBranch: o.name,
-    log: note ? [{ type: '메모', text: note, date: td(), color: '#9C9890' }] : [],
+  /* ① 초청 — 사람마다 한 줄 */
+  const parts = picked.map((c, i) => ({
+    id: `P-${Date.now()}-${i}`, eventId: ev, event: ev,
+    contactId: c.id, contact: '', role, note,
+    matched: '✅ 마스터DB에서 초청',
   }));
+  parts.forEach(p => participations.push(p));
+  const pRes = await Promise.all(parts.map(p => postToSheet({
+    sheet: 'participations',
+    row: [p.id, p.eventId, '', p.contactId, '', '', '', p.role, p.note, p.matched],
+  }, '행사 초청')));
+  const pBad = parts.filter((_, i) => !pRes[i].ok);
+  pBad.forEach(p => { const k = participations.indexOf(p); if(k >= 0) participations.splice(k, 1); });
+  const okParts = parts.filter(p => !pBad.includes(p));
 
-  // 화면에 먼저 얹고 저장한다. 실패한 줄만 도로 뺀다 — 절반만 올라간 채로
-  // 성공했다고 하면, 다음에 또 올리다가 중복이 생긴다.
-  made.forEach(t => targets.unshift(t));
-  const res = await Promise.all(made.map(t => saveTargetToSheet(t)));
-  const bad = made.filter((_, i) => !res[i].ok);
-  bad.forEach(t => { const k = targets.indexOf(t); if(k >= 0) targets.splice(k, 1); });
+  /* ② CRM 타겟 — 초청이 실제로 들어간 사람의 소속만, 그 행사에 없을 때만 */
+  const made = [];
+  if(mkCrm){
+    const okIds = new Set(okParts.map(p => String(p.contactId)));
+    const seen = new Set();
+    const pri = document.getElementById('tocrm-pri')?.value || 'mid';
+    const who = document.getElementById('tocrm-who')?.value || '';
+    picked.filter(c => okIds.has(String(c.id))).forEach((c, i) => {
+      const name = String(c.orgKo || c.orgEn || '').trim();
+      const key = nameKeyOf(name);
+      if(!key || seen.has(key) || crmHasOrg(name, ev)) return;
+      seen.add(key);
+      const co = CO_DB.find(o => o.key === key);
+      made.push({
+        id: Date.now() + i,
+        name, nameEn: String(c.orgEn || (co && co.nameEn) || '').trim(),
+        sector: (co && co.sector) || '', hq: (co && (co.hq || co.country)) || '',
+        event: ev, role, status: '미접촉', priority: pri, assignee: who,
+        lastActivity: td(), currentStage: 1,
+        branches: [name, c.orgEn].filter(Boolean), mainBranch: name,
+        log: note ? [{ type: '메모', text: note, date: td(), color: '#9C9890' }] : [],
+      });
+    });
+  }
+  let tBad = [];
+  if(made.length){
+    const { saveTargetToSheet } = await import('./crm-tab.js');
+    made.forEach(t => targets.unshift(t));
+    const tRes = await Promise.all(made.map(t => saveTargetToSheet(t)));
+    tBad = made.filter((_, i) => !tRes[i].ok);
+    tBad.forEach(t => { const k = targets.indexOf(t); if(k >= 0) targets.splice(k, 1); });
+  }
 
   closeMDBToCrmModal();
   clearMDBSelection();
-  buildEvFil(); renderCrm(); updBadges();
+  buildCoDB();
+  buildMDBEvList(); renderMDB();
+  /* crm-tab을 위에서 import하면 순환 참조가 된다 — 필요할 때만 불러온다 */
+  const crm = await import('./crm-tab.js');
+  crm.buildEvFil(); crm.renderCrm(); crm.updBadges();
 
-  const okN = made.length - bad.length;
-  if(okN) trackAction('add', 'CRM 타겟 추가', `${okN}개사`,
-    `마스터DB에서 <b>${escapeHtml(String(okN))}개사</b>를 <b>${escapeHtml(ev)}</b> 타겟으로 올렸어요`);
-  if(bad.length) alert(`${bad.length}곳은 저장에 실패해 목록에서 빼뒀어요. 네트워크 확인 후 다시 시도해주세요.`);
+  const okT = made.length - tBad.length;
+  if(okParts.length) trackAction('add', '행사 초청', `${okParts.length}명`,
+    `마스터DB에서 <b>${escapeHtml(String(okParts.length))}명</b>을 <b>${escapeHtml(ev)}</b>에 초청${
+      okT ? ` · CRM 타겟 ${okT}곳 추가` : ''}`);
+  const fail = pBad.length + tBad.length;
+  if(fail) alert(`${fail}건은 저장에 실패해 되돌렸어요. 네트워크 확인 후 다시 시도해주세요.`);
 }
 
 export function openMDBBulkEditModal(){
