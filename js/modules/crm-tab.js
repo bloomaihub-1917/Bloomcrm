@@ -312,7 +312,8 @@ export async function chgSt(id, val) {
     return;
   }
   trackAction('status', '상태 변경', targets[i].name,
-    `<b>${escapeHtml(targets[i].name)}</b>의 컨택 상태를 <b>${escapeHtml(prev.status)} → ${escapeHtml(val)}</b>로 변경`);
+    `<b>${escapeHtml(targets[i].name)}</b>의 컨택 상태를 <b>${escapeHtml(prev.status)} → ${escapeHtml(val)}</b>로 변경`,
+    { kind: 'target', id: targets[i].id });
 }
 
 /* ══════════════════════════════════════════
@@ -457,7 +458,8 @@ export async function setStg(id, stage) {
     return;
   }
   trackAction('stage', '단계 변경', targets[i].name,
-    `<b>${escapeHtml(targets[i].name)}</b>의 진행 단계를 <b>${escapeHtml(prevLabel)} → ${escapeHtml(STGS_KR[stage-1])}</b>로 변경`);
+    `<b>${escapeHtml(targets[i].name)}</b>의 진행 단계를 <b>${escapeHtml(prevLabel)} → ${escapeHtml(STGS_KR[stage-1])}</b>로 변경`,
+    { kind: 'target', id: targets[i].id });
 }
 export async function chgStD(id, val) {
   const i = targets.findIndex(x => x.id === id);
@@ -477,7 +479,8 @@ export async function chgStD(id, val) {
     return;
   }
   trackAction('status', '상태 변경', targets[i].name,
-    `<b>${escapeHtml(targets[i].name)}</b>의 컨택 상태를 <b>${escapeHtml(prev.status)} → ${escapeHtml(val)}</b>로 변경`);
+    `<b>${escapeHtml(targets[i].name)}</b>의 컨택 상태를 <b>${escapeHtml(prev.status)} → ${escapeHtml(val)}</b>로 변경`,
+    { kind: 'target', id: targets[i].id });
 }
 export async function addLog(id) {
   const i = targets.findIndex(x => x.id === id);
@@ -497,7 +500,8 @@ export async function addLog(id) {
     return;
   }
   trackAction('log', '컨택 기록 추가', targets[i].name,
-    `<b>${escapeHtml(targets[i].name)}</b>에 <b>${escapeHtml(type)}</b> 기록 추가: "${escapeHtml(text)}"`);
+    `<b>${escapeHtml(targets[i].name)}</b>에 <b>${escapeHtml(type)}</b> 기록 추가: "${escapeHtml(text)}"`,
+    { kind: 'target', id: targets[i].id });
 }
 
 /* ══════════════════════════════════════════
@@ -617,7 +621,8 @@ export async function addTarget() {
     updBadges();
     return;
   }
-  trackAction('add', '타겟 추가', t.name, `CRM 타겟 추가: ${t.name} / ${t.event}`);
+  trackAction('add', '타겟 추가', t.name, `CRM 타겟 추가: ${t.name} / ${t.event}`,
+    { kind: 'target', id: t.id });
 }
 
 /* ══════════════════════════════════════════

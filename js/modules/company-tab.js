@@ -1614,7 +1614,8 @@ export async function editCoKind(key){
     return;
   }
   trackAction('edit', '기업 종류 변경', c.nameKo || c.nameEn,
-    `<b>${escapeHtml(c.nameKo || c.nameEn)}</b> 종류 ${escapeHtml(orgKindOf(before)?.label || '없음')} → ${escapeHtml(next.label)}`);
+    `<b>${escapeHtml(c.nameKo || c.nameEn)}</b> 종류 ${escapeHtml(orgKindOf(before)?.label || '없음')} → ${escapeHtml(next.label)}`,
+    { kind: 'company', id: c.key, field: 'kind' });
   renderCoList();
 }
 
@@ -1753,7 +1754,8 @@ export function onCoDropToSector(e, sectorName){
   if(!c) return;
   applyCoSectors(c, [sectorName]);
   trackAction('edit', '기업 섹터 이동(드래그)', c.nameKo||c.nameEn,
-    `"${c.nameKo||c.nameEn}" 섹터를 드래그해서 "${parseSectorScope(sectorName).plainName}"(으)로 변경`);
+    `"${c.nameKo||c.nameEn}" 섹터를 드래그해서 "${parseSectorScope(sectorName).plainName}"(으)로 변경`,
+    { kind: 'company', id: c.key, field: 'sectors' });
   buildCoCAT();
   renderCoList();
   if(selCo === key) renderCoDetail(c);
@@ -1863,7 +1865,8 @@ function finishAddCoEvent(key, c, what){
   try { renderMDB(); buildMDBEvList(); } catch(e){}
   try { window.renderExh?.(); } catch(e){}
   trackAction('status', '행사 참여 추가', c.nameKo || c.nameEn,
-    `<b>${escapeHtml(c.nameKo || c.nameEn)}</b>에 ${escapeHtml(what)}`);
+    `<b>${escapeHtml(c.nameKo || c.nameEn)}</b>에 ${escapeHtml(what)}`,
+    { kind: 'company', id: key });
 }
 
 export async function submitAddCoEvent(key){

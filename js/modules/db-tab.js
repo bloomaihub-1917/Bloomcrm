@@ -1468,7 +1468,8 @@ export async function confirmAddEv(cid){
     renderContactDr(); buildCoDB(); renderMDB();
     return;
   }
-  trackAction('edit', '행사 추가', ev, `${contacts.find(x=>x.id===cid)?.nameKo||cid} → ${ev} (${role})`);
+  trackAction('edit', '행사 추가', ev, `${contacts.find(x=>x.id===cid)?.nameKo||cid} → ${ev} (${role})`,
+    { kind: 'contact', id: cid });
 }
 
 export async function removeParticipation(cid, partId, ev){
@@ -1494,7 +1495,8 @@ export async function removeParticipation(cid, partId, ev){
       renderContactDr(); buildCoDB(); renderMDB();
       return;
     }
-    trackAction('edit', '행사 삭제', ev, `${contacts.find(x=>x.id===cid)?.nameKo||cid} ← ${ev} 제거`);
+    trackAction('edit', '행사 삭제', ev, `${contacts.find(x=>x.id===cid)?.nameKo||cid} ← ${ev} 제거`,
+      { kind: 'contact', id: cid });
   }
 }
 
@@ -1713,7 +1715,8 @@ export async function saveContactEdit(){
     try { renderMDB(); } catch(e){}
     return;
   }
-  trackAction('status', '연락처 정보 수정', c.nameKo, '<b>'+c.nameKo+'</b>의 정보를 수정했어요');
+  trackAction('status', '연락처 정보 수정', c.nameKo, '<b>'+c.nameKo+'</b>의 정보를 수정했어요',
+    { kind: 'contact', id: c.id });
 }
 
 /* ══════════════════════════════════════════
@@ -1854,7 +1857,8 @@ export async function saveNewContact(){
     return;
   }
   trackAction('add','연락처 추가', c.nameKo||c.nameEn,
-    `${c.nameKo||c.nameEn} / ${c.orgKo||c.orgEn} 추가`);
+    `${c.nameKo||c.nameEn} / ${c.orgKo||c.orgEn} 추가`,
+    { kind: 'contact', id: c.id });
   closeAddContactModal();
 }
 
@@ -2002,7 +2006,8 @@ export function saveContactSectorField(c){
   if(next.join('|') === cur.join('|')) return false;
   applyCoSectors(co, next);
   trackAction('edit', '기업 섹터 변경', co.nameKo || co.nameEn,
-    `«${co.nameKo || co.nameEn}» 섹터를 ${cur.join(', ') || '미분류'} → ${next.join(', ') || '미분류'}`);
+    `«${co.nameKo || co.nameEn}» 섹터를 ${cur.join(', ') || '미분류'} → ${next.join(', ') || '미분류'}`,
+    { kind: 'company', id: co.key });
   return true;
 }
 

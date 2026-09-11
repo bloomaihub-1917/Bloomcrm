@@ -550,6 +550,14 @@ export async function loadFromSheets(hooks = {}){
         '연락처 정보 수정':'edit', '행사 추가':'edit', '행사 삭제':'edit',
         '파일 업로드':'upload',
       };
+      /* 예전 행에는 link 칸이 없고, 손으로 넣은 행에 엉뚱한 글자가 들어 있을 수도
+         있다. 못 읽으면 그냥 링크 없는 줄로 둔다 — 로그 목록이 통째로 안 뜨는
+         것보다 낫다. */
+      const parseAuditLink = (v) => {
+        if(!v) return null;
+        try { const o = JSON.parse(v); return o && o.kind && o.id ? o : null; }
+        catch(e){ return null; }
+      };
       const remoteLog = logsData.map(r=>{
         const legacy = /^\d{4}-\d{2}-\d{2}T/.test(String(r.id||'')) && !r.detail && !r.target;
         const row = legacy
@@ -563,6 +571,7 @@ export async function loadFromSheets(hooks = {}){
           type: row.type || ACTION_TYPE[row.action] || 'login',
           action: row.action||'', target: row.target||'',
           detail: row.detail||'',
+          extra: parseAuditLink(row.link),
         };
       });
       auditLog.splice(0, auditLog.length, ...remoteLog);
@@ -602,6 +611,9 @@ export async function saveAuditToSheets(entry){
       entry.ts, entry.email, entry.name,
       entry.type || '', entry.action, entry.target,
       String(entry.detail || '').replace(/<[^>]+>/g, ''),
+      /* 이 기록이 가리키는 곳 — 없으면 빈 칸. 새로 고친 뒤에도 로그에서
+         그 창으로 갈 수 있으려면 화면 메모리에만 두면 안 된다. */
+      entry.extra ? JSON.stringify(entry.extra) : '',
     ],
   }, '활동 로그', { silent: true }); // 로그 저장 실패는 업무 흐름을 막지 않음(콘솔에만 기록)
 }

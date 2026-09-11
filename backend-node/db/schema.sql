@@ -844,3 +844,7 @@ CREATE INDEX IF NOT EXISTS idx_sess_sp_session     ON session_speakers(session_i
 CREATE INDEX IF NOT EXISTS idx_sess_sp_speaker     ON session_speakers(speaker_id);
 CREATE INDEX IF NOT EXISTS idx_sp_contacts_speaker ON speaker_contacts(speaker_id);
 CREATE INDEX IF NOT EXISTS idx_sp_logs_speaker     ON speaker_logs(speaker_id);
+
+-- 활동 로그가 가리키는 곳(기업·연락처·세션 …). JSON 한 덩어리로 둔다 —
+-- 칸을 kind/id/tab/field로 쪼개 두면 가리키는 대상이 늘 때마다 칸을 또 만들게 된다.
+ALTER TABLE activity_log ADD COLUMN IF NOT EXISTS link TEXT;

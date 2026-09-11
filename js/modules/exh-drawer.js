@@ -413,7 +413,8 @@ export async function addBoothDesignFeedback(exhId){
   if(!ok){ if(el){ el.value = body; el.focus(); } return; }
   if(el) el.value = '';
   trackAction('log', '부스 도면 피드백', x?.company_name || '',
-    `<b>${escapeHtml(x?.company_name || '')}</b> 부스 도면(${escapeHtml(st.text)}): ${escapeHtml(body.slice(0, 40))}`);
+    `<b>${escapeHtml(x?.company_name || '')}</b> 부스 도면(${escapeHtml(st.text)}): ${escapeHtml(body.slice(0, 40))}`,
+    { kind: 'exhibitor', id: x?.id, tab: 'progress' });
 }
 
 /* ── 렌탈 비품 카탈로그 ──
@@ -489,7 +490,8 @@ async function registerDirectItem(x, name, unitPrice, currency, itemCat){
   }
   if(r.id && r.id !== rec.id) rec.id = r.id;
   trackAction('add', '품목 등록', x.company_name || '',
-    `<b>${escapeHtml(code)}</b> ${escapeHtml(nm)} — 직접 입력으로 품목마스터에 추가`);
+    `<b>${escapeHtml(code)}</b> ${escapeHtml(nm)} — 직접 입력으로 품목마스터에 추가`,
+    { kind: 'exhibitor', id: x?.id, tab: 'apply' });
   return rec.id;
 }
 
@@ -715,7 +717,8 @@ export async function submitNewContact(exhId){
   await addExhParticipation(c.id, x?.event_id, v('role'));
 
   trackAction('add', '담당자 추가', x?.company_name || '',
-    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(nameKo || nameEn)} 마스터DB 등록 + 전시 배정`);
+    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(nameKo || nameEn)} 마스터DB 등록 + 전시 배정`,
+    { kind: 'exhibitor', id: x?.id, tab: 'contact' });
   closeNewContact();
   try { const { buildCoDB } = await import('./company-tab.js'); buildCoDB(); } catch(e){}
   refreshExhViews();
@@ -781,7 +784,8 @@ export async function promoteExhContact(exhId, rowId){
   await addExhParticipation(c.id, x?.event_id, r.role);
 
   trackAction('add', '담당자 마스터DB 등록', x?.company_name || '',
-    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(nm || em)} — 전시에만 있던 담당자를 마스터DB로 옮김`);
+    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(nm || em)} — 전시에만 있던 담당자를 마스터DB로 옮김`,
+    { kind: 'exhibitor', id: x?.id, tab: 'contact' });
   try { const { buildCoDB } = await import('./company-tab.js'); buildCoDB(); } catch(e){}
   refreshExhViews();
 }
@@ -899,7 +903,8 @@ export async function addExhApp(exhId, preset = {}){
     await patchExh(exhId, { app_received: 'yes', app_received_at: rec.received_at }, '신청서 수신');
   }
   trackAction('add', '신청서 접수', x?.company_name || '',
-    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(rec.seq)}차 접수 (${escapeHtml(rec.kind)} · ${escapeHtml(rec.channel)})`);
+    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(rec.seq)}차 접수 (${escapeHtml(rec.kind)} · ${escapeHtml(rec.channel)})`,
+    { kind: 'exhibitor', id: x?.id, tab: 'progress' });
   refreshExhViews();
 }
 
@@ -1839,7 +1844,8 @@ export async function addGraphicFeedback(exhId){
 
   if(el) el.value = '';
   trackAction('log', '그래픽 피드백', x?.company_name || '',
-    `<b>${escapeHtml(x?.company_name || '')}</b> 그래픽 피드백(${escapeHtml(cur.label || '')}): ${escapeHtml(body.slice(0, 40))}`);
+    `<b>${escapeHtml(x?.company_name || '')}</b> 그래픽 피드백(${escapeHtml(cur.label || '')}): ${escapeHtml(body.slice(0, 40))}`,
+    { kind: 'exhibitor', id: x?.id, tab: 'graphic' });
 }
 
 /* 남의 글은 지우지 못한다 — 버튼 자체를 내 글에만 붙이지만, 눌리는 경로가
@@ -2215,7 +2221,8 @@ async function setRowField(list, saver, label, id, field, value){
     received_at: '받은 날', received_note: '받은 것',
     method: '결제 수단', note: '비고', paid_at: '입금일' }[field] || field;
   trackAction('edit', label + ' 수정', x?.company_name || '',
-    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(r.name || r.title || label)} ${escapeHtml(fl)} ${escapeHtml(String(before || '(없음)'))} → ${escapeHtml(String(value || '(없음)'))}`);
+    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(r.name || r.title || label)} ${escapeHtml(fl)} ${escapeHtml(String(before || '(없음)'))} → ${escapeHtml(String(value || '(없음)'))}`,
+    { kind: 'exhibitor', id: x?.id, tab: 'billing', field });
 }
 
 /* 수량·금액을 고치면 그것도 접수 건의 "변경"이다. 바뀌기 전 값을 한 번만
@@ -2253,7 +2260,8 @@ export async function addExhRefund(exhId){
     clear(`rf-a-${exhId}`); clear(`rf-r-${exhId}`);
     const x = getExhibitorById(exhId);
     trackAction('status', '환불 요청', x?.company_name || '',
-      `<b>${escapeHtml(x?.company_name || '')}</b> 환불 요청 ${escapeHtml(String(amount))}${reason ? ` — ${escapeHtml(reason)}` : ''}`);
+      `<b>${escapeHtml(x?.company_name || '')}</b> 환불 요청 ${escapeHtml(String(amount))}${reason ? ` — ${escapeHtml(reason)}` : ''}`,
+      { kind: 'exhibitor', id: x?.id, tab: 'billing' });
   }
 }
 
@@ -2273,7 +2281,8 @@ export async function toggleRefundDone(id){
   }
   const x = getExhibitorById(p.exhibitor_id);
   trackAction('status', wasPending ? '환불 완료' : '환불 요청으로 되돌림', x?.company_name || '',
-    `<b>${escapeHtml(x?.company_name || '')}</b> 환불 ${escapeHtml(String(p.amount || ''))} ${wasPending ? '지급 완료' : '요청 상태로 되돌림'}`);
+    `<b>${escapeHtml(x?.company_name || '')}</b> 환불 ${escapeHtml(String(p.amount || ''))} ${wasPending ? '지급 완료' : '요청 상태로 되돌림'}`,
+    { kind: 'exhibitor', id: x?.id, tab: 'billing' });
 }
 
 /* 청구에 넣을지 말지 — 추가 배지처럼 주최 측에 따로 내는 항목을 빼둔다.
@@ -2288,7 +2297,8 @@ export async function toggleItemBillable(id){
   if(!res.ok){ r.billable = before; refreshExhViews(); saveFailed(res, '저장에 실패했어요.'); return; }
   const x = getExhibitorById(r.exhibitor_id);
   trackAction('edit', '청구 포함 여부 변경', x?.company_name || '',
-    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(r.name || '')} ${r.billable === 'no' ? '청구 제외' : '청구 포함'}`);
+    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(r.name || '')} ${r.billable === 'no' ? '청구 제외' : '청구 포함'}`,
+    { kind: 'exhibitor', id: x?.id, tab: 'billing' });
 }
 
 export async function setInvField(id, field, value){
@@ -2315,7 +2325,8 @@ export async function addExhPayment(exhId){
     clear(`py-n-${exhId}`);
     const x = getExhibitorById(exhId);
     trackAction('status', '입금 확인', x?.company_name || '',
-      `<b>${escapeHtml(x?.company_name || '')}</b> 입금 ${money(amount)}원 확인`);
+      `<b>${escapeHtml(x?.company_name || '')}</b> 입금 ${money(amount)}원 확인`,
+      { kind: 'exhibitor', id: x?.id, tab: 'billing' });
   }
 }
 export const delExhPayment = (id) => removeRow(EXH_PAYMENTS, id, deleteExhPayment);
@@ -2339,7 +2350,8 @@ export async function toggleVoidInvoice(id){
   if(!r.ok){ Object.assign(v, before); refreshExhViews(); saveFailed(r, '저장에 실패했어요.'); return; }
   const x = getExhibitorById(v.exhibitor_id);
   trackAction('edit', wasVoid ? '인보이스 무효 해제' : '인보이스 무효 처리', x?.company_name || '',
-    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(v.title || '')} ${wasVoid ? '되살림' : '무효 처리'}${note ? ` — ${escapeHtml(note)}` : ''}`);
+    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(v.title || '')} ${wasVoid ? '되살림' : '무효 처리'}${note ? ` — ${escapeHtml(note)}` : ''}`,
+    { kind: 'exhibitor', id: x?.id, tab: 'billing' });
 }
 
 /* 세금계산서 — 인보이스와 같은 1:N 패턴(추가/삭제/필드수정/무효처리)에
@@ -2383,7 +2395,8 @@ export async function toggleVoidTax(id){
   if(!r.ok){ Object.assign(v, before); refreshExhViews(); saveFailed(r, '저장에 실패했어요.'); return; }
   const x = getExhibitorById(v.exhibitor_id);
   trackAction('edit', wasVoid ? '세금계산서 무효 해제' : '세금계산서 무효 처리', x?.company_name || '',
-    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(v.title || '')} ${wasVoid ? '되살림' : '무효 처리'}${note ? ` — ${escapeHtml(note)}` : ''}`);
+    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(v.title || '')} ${wasVoid ? '되살림' : '무효 처리'}${note ? ` — ${escapeHtml(note)}` : ''}`,
+    { kind: 'exhibitor', id: x?.id, tab: 'progress' });
 }
 
 /* 다음 단계로. 넘어간 날짜를 함께 찍어 둔다(exh-tab.js의 advanceStage와 같은
@@ -2404,7 +2417,8 @@ export async function advanceTaxStage(id){
   if(!r.ok){ Object.assign(v, before); refreshExhViews(); saveFailed(r, '저장에 실패했어요.'); return; }
   const x = getExhibitorById(v.exhibitor_id);
   trackAction('status', '세금계산서 단계', x?.company_name || '',
-    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(v.title || '세금계산서')} ${escapeHtml(st.label)} → ${escapeHtml(nx.label)}`);
+    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(v.title || '세금계산서')} ${escapeHtml(st.label)} → ${escapeHtml(nx.label)}`,
+    { kind: 'exhibitor', id: x?.id, tab: 'progress' });
 }
 
 /* 잘못 넘겼을 때 되돌린다 — 날짜는 지우지 않는다(exh-tab.js의 rewindStage와 같은 이유,
@@ -2422,7 +2436,8 @@ export async function rewindTaxStage(id){
   if(!r.ok){ v.stage = before; refreshExhViews(); saveFailed(r, '저장에 실패했어요.'); return; }
   const x = getExhibitorById(v.exhibitor_id);
   trackAction('status', '세금계산서 단계', x?.company_name || '',
-    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(v.title || '세금계산서')} ${escapeHtml(cur.label)} → ${escapeHtml(prev.label)} (되돌림)`);
+    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(v.title || '세금계산서')} ${escapeHtml(cur.label)} → ${escapeHtml(prev.label)} (되돌림)`,
+    { kind: 'exhibitor', id: x?.id, tab: 'progress' });
 }
 
 /* 완납 처리 — 송금 수수료 차액처럼 실무상 더 받을 수 없는 잔액을 사유와 함께 닫는다.
@@ -2458,7 +2473,8 @@ export async function addExhLog(exhId){
     if(el) el.value = '';
     const x = getExhibitorById(exhId);
     trackAction('log', kind === 'inquiry' ? '문의 접수' : '기록 추가', x?.company_name || '',
-      `<b>${escapeHtml(x?.company_name || '')}</b> ${kind === 'inquiry' ? '문의 접수' : '기록 추가'}: ${escapeHtml(subject || body.slice(0, 30))}`);
+      `<b>${escapeHtml(x?.company_name || '')}</b> ${kind === 'inquiry' ? '문의 접수' : '기록 추가'}: ${escapeHtml(subject || body.slice(0, 30))}`,
+      { kind: 'exhibitor', id: x?.id, tab: 'logs' });
   }
 }
 export const delExhLog = (id) => removeRow(EXH_LOGS, id, deleteExhLog);
@@ -2475,7 +2491,8 @@ export async function answerExhLog(id){
   if(!r.ok){ Object.assign(l, before); refreshExhViews(); saveFailed(r, '저장에 실패했어요.'); return; }
   const x = getExhibitorById(l.exhibitor_id);
   trackAction('log', '문의 답변', x?.company_name || '',
-    `<b>${escapeHtml(x?.company_name || '')}</b> 문의에 답변했어요: ${escapeHtml(l.subject || '')}`);
+    `<b>${escapeHtml(x?.company_name || '')}</b> 문의에 답변했어요: ${escapeHtml(l.subject || '')}`,
+    { kind: 'exhibitor', id: x?.id, tab: 'logs' });
 }
 
 /* ── 기업 담당자 (여러 명) ── */
@@ -2501,7 +2518,8 @@ export async function setExhContactField(id, field, value){
   const x = getExhibitorById(r.exhibitor_id);
   const lbl = { name:'이름', email:'이메일', phone:'연락처', role:'역할', note:'메모' }[field] || field;
   trackAction('edit', '기업 담당자 수정', x?.company_name || '',
-    `<b>${escapeHtml(x?.company_name || '')}</b> 담당자 ${escapeHtml(lbl)} ${escapeHtml(String(before||'(없음)'))} → ${escapeHtml(String(value||'(없음)'))}`);
+    `<b>${escapeHtml(x?.company_name || '')}</b> 담당자 ${escapeHtml(lbl)} ${escapeHtml(String(before||'(없음)'))} → ${escapeHtml(String(value||'(없음)'))}`,
+    { kind: 'exhibitor', id: x?.id, tab: 'contact', field });
 }
 
 /* 메인은 기업당 한 명이라, 새로 지정하면 나머지는 내려준다 */

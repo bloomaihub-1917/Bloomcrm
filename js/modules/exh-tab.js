@@ -138,9 +138,11 @@ let exhView = 'dash';        // dash | list | booth | equip | graphic
    어느 쪽도 제대로 안 보여서 나눠 두고 전환한다. */
 let gView = 'item';          // item(받을 파일) | kind(품목별) | co(기업별 진행) | self(독립부스)
 let gFil  = 'all';           // all | todo | late | none | got
+let payFil = 'all';          // all | paid | partial | unpaid | none — 금액 현황의 기업별 세부
 
 export function setGraphicView(v){ gView = v; renderExh(); }
 export function setGraphicFil(v){ gFil = gFil === v && v !== 'all' ? 'all' : v; renderExh(); }
+export function setPayFil(v){ payFil = payFil === v && v !== 'all' ? 'all' : v; renderExh(); }
 
 /* 드로어는 exh-drawer.js가 소유한다. 이 파일이 그쪽을 import하면 순환 참조가
    되므로(드로어가 여기 집계 함수를 쓴다) window 경유로만 호출한다 —
@@ -826,11 +828,13 @@ export function setExhView(v){
   // 부스 타입으로 걸러 둔 채 다른 보기로 갔다가 돌아오면, 왜 목록이 짧은지
   // 알 수 없다. 보기를 옮기거나 행사를 바꾸면 푼다.
   if(v !== 'booth') boothTypeFil = '';
+  if(v !== 'money') payFil = 'all';
   if(v !== 'list') stepFil = null;
   exhView = v; renderExh();
 }
 export function setExhEvent2(key){
   boothTypeFil = '';
+  payFil = 'all';
   setExhEvent(key);
   buildExhEvList();
   renderExh();
@@ -1390,7 +1394,17 @@ function renderBoothView(list){
       return (wait ? `<span class="pill p-amber" title="도면을 못 받았거나 아직 확인하지 않은 독립부스예요">도면 확인 필요 ${wait}</span>` : '')
         + (fix ? `<span class="pill p-red" title="수정 요청한 뒤 아직 정리되지 않은 도면이에요">도면 수정 요청 ${fix}</span>` : '');
     })()
-    + Object.entries(typeCnt).sort((a, b) => b[1] - a[1]).map(([t, n]) => typePill(t, n)).join('')
+    /* 타입 배지는 설정의 부스 타입 목록 순서로 세운다 — 대시보드의 부스 타입별
+       금액과 같은 순서라야 두 화면을 나란히 읽을 수 있다. 개수 많은 순으로 두면
+       기업이 한 곳 늘고 줄 때마다 배지 자리가 바뀌어, 누르려던 것을 놓친다.
+       목록에 없는 옛 타입은 뒤에 이름순으로 붙인다. */
+    + (() => {
+      const order = boothTypes(exhEvent).map(t => t.code);
+      const rank = (k) => { const i = order.indexOf(k); return i < 0 ? 999 : i; };
+      return Object.entries(typeCnt)
+        .sort((a, b) => rank(a[0]) - rank(b[0]) || a[0].localeCompare(b[0], 'ko'))
+        .map(([t, n]) => typePill(t, n)).join('');
+    })()
     + (boothTypeFil
       ? `<span style="font-size:10.5px;color:var(--a);margin-left:2px;cursor:pointer" onclick="setBoothTypeFil('')">전체 보기로 돌아가기</span>`
       : '<span style="font-size:10.5px;color:var(--i5);margin-left:2px">타입 배지를 누르면 그 부스 기업만 봐요 · 번호·층·수량은 행을 눌러 상세에서 고쳐요</span>');
@@ -1693,7 +1707,56 @@ function renderMoneyView(list){
       ${partial.length ? `<br><b style="color:var(--am)">일부만 낸 ${partial.length}곳</b>은 낸 금액이 있어도 전액이 «안 받은 돈»에 잡힙니다 — 아래 표에서 그 기업의 입금액을 보세요.` : ''}
     </div>` : '';
 
-  if(isMobile()) return viewShell(pills, catDash + rows.map(({ x, by }) => {
+  /* ── 완납·미납 고르기 ──
+     위 카드는 전체 그림이라 "누가 안 냈나"는 안 보인다. 아래 표를 그 기준으로
+     걸러 준다. 카드는 그대로 두는 게 맞다 — 걸러 놓고 보면 미납만 모은 카드의
+     «받은 돈»은 늘 0이라 볼 이유가 없고, 비교할 전체 숫자가 사라진다.
+
+     완납 판정은 통화별로 한다. 원화는 다 냈는데 달러가 남은 기업을 완납으로
+     묶으면 남은 돈이 화면에서 사라진다. 금액 자체는 통화를 넘어 더하지 않고
+     "낸 게 있나"만 본다. */
+  const payStateOf = (x) => {
+    const st = settleByCurrency(x.id);
+    const cs = Object.keys(st);
+    if(!cs.some(c => st[c].billed)) return 'none';
+    if(cs.every(c => st[c].balance <= 0)) return 'paid';
+    return cs.some(c => st[c].paid > 0) ? 'partial' : 'unpaid';
+  };
+  const marked = rows.map(r => ({ ...r, st: payStateOf(r.x) }));
+  const cnt = (k) => marked.filter(r => r.st === k).length;
+
+  const fpill = (k, l, n, cls) => n || k === 'all'
+    ? `<button class="pill ${payFil === k ? cls : 'p-gray'}"
+        style="border:0;cursor:pointer${payFil === k ? ';outline:2px solid var(--i5)' : ''}"
+        title="${payFil === k && k !== 'all' ? '다시 눌러 전체 보기' : ''}"
+        onclick="setPayFil('${k}')">${l} ${n}</button>`
+    : '';
+  const payFilBar = `<div style="display:flex;gap:5px;flex-wrap:wrap;margin:0 0 8px">
+    ${fpill('all', '전체', marked.length, 'p-blue')}
+    ${fpill('paid', '완납', cnt('paid'), 'p-green')}
+    ${fpill('partial', '일부만 냄', cnt('partial'), 'p-amber')}
+    ${fpill('unpaid', '미납', cnt('unpaid'), 'p-red')}
+    ${fpill('none', '청구 없음', cnt('none'), 'p-gray')}
+  </div>`;
+
+  const vrows = payFil === 'all' ? marked : marked.filter(r => r.st === payFil);
+
+  /* 표 아래 합계는 지금 걸러 놓은 기업만 더한다 — 위 카드가 전체를 보여주니
+     여기까지 전체를 더하면 «미납만 보고 있는데 받은 돈이 찍히는» 꼴이 된다. */
+  const vlist = vrows.map(r => r.x);
+  const vtotal = billedByCategory(vlist);
+  const vsettle = {};
+  vlist.forEach(x => {
+    const st = settleByCurrency(x.id);
+    Object.keys(st).forEach(c => {
+      if(!vsettle[c]) vsettle[c] = { billed: 0, paid: 0, bank: 0, card: 0, etc: 0, balance: 0 };
+      ['billed', 'paid', 'bank', 'card', 'etc', 'balance'].forEach(k => { vsettle[c][k] += st[c][k]; });
+    });
+  });
+
+  const noneMsg = emptyView('해당하는 기업이 없어요');
+
+  if(isMobile()) return viewShell(pills, catDash + payFilBar + (vrows.length ? '' : noneMsg) + vrows.map(({ x, by }) => {
     const st = settleByCurrency(x.id);
     const sc = Object.keys(st).sort();
     const line = (key) => sc.filter(c => st[c][key]).map(c => amt(c, st[c][key])).join(' · ') || '-';
@@ -1731,7 +1794,9 @@ function renderMoneyView(list){
     </div>`;
   }).join(''));
 
-  return viewShell(pills, catDash + `<div class="sct">기업별 세부</div><div class="tw"><table><thead><tr>
+  if(!vrows.length) return viewShell(pills, catDash + `<div class="sct">기업별 세부</div>` + payFilBar + noneMsg);
+
+  return viewShell(pills, catDash + `<div class="sct">기업별 세부</div>` + payFilBar + `<div class="tw"><table><thead><tr>
       <th style="min-width:44px;text-align:right">신청순</th>
       <th style="min-width:150px">기업</th>
       <th style="min-width:56px">부스번호</th>
@@ -1741,7 +1806,7 @@ function renderMoneyView(list){
       ${payCols.map(([, l]) => `<th style="min-width:104px;text-align:right">${l}</th>`).join('')}
       <th style="min-width:104px;text-align:right">잔액</th>
     </tr></thead><tbody>
-      ${rows.map(({ x, by }) => {
+      ${vrows.map(({ x, by }) => {
         // 청구·입금도 통화별로 갈라 적는다 — 한 통화만 더하면 나머지가 사라진다
         const st = settleByCurrency(x.id);
         const sc = Object.keys(st).sort();
@@ -1762,15 +1827,15 @@ function renderMoneyView(list){
     </tbody>
     <tfoot>
       ${curs.map(c => {
-        const m = total[c];
+        const m = vtotal[c];
         if(!m || !m.합계) return '';
         return `<tr style="border-top:2px solid var(--i5);font-weight:800">
           <td colspan="3" style="font-size:12px">${escapeHtml(c)} 합계
             <span style="font-weight:400;color:var(--i4);font-size:10.5px">${
-              rows.filter(r => r.by[c]?.합계).length}곳</span></td>
+              vrows.filter(r => r.by[c]?.합계).length}곳</span></td>
           ${used.map(([k]) => `<td style="text-align:right">${amt(c, m[k])}</td>`).join('')}
           <td style="text-align:right">${amt(c, m.합계)}</td>
-          ${(() => { const s = settleTotal[c] || { billed: 0, paid: 0, balance: 0 };
+          ${(() => { const s = vsettle[c] || { billed: 0, paid: 0, balance: 0 };
             return `<td style="text-align:right">${amt(c, s.billed)}</td>
               ${payCols.map(([k]) => `<td style="text-align:right;color:var(--g)">${amt(c, s[k])}</td>`).join('')}
               <td style="text-align:right;color:${s.balance > 0 ? 'var(--am)' : 'var(--g)'}">${
@@ -1806,6 +1871,12 @@ function renderEquipView(list){
       nameKo: cat ? (cat.name_ko || cat.name_en) : String(i.name || '(이름 없음)').trim(),
       nameEn: cat ? (cat.name_ko ? cat.name_en : '') : '',
       spec:   cat ? cat.spec : '',
+      /* 분류(의자·테이블·가전제품…)는 카탈로그가 들고 있다. 발주서를 쓸 때
+         의자 몇 개, 테이블 몇 개를 묶어 보게 되므로 화면에서도 갈라 준다.
+         카탈로그 밖 품목은 갈 데가 없어 따로 모은다 — 기타비품에 섞으면
+         진짜 기타비품과 구분이 안 돼 단가 확인을 빠뜨린다. */
+      cat:    cat ? (String(cat.category || '').trim() || '기타비품') : '카탈로그 외',
+      catOrd: cat ? (Number(cat.sort_order) || 9999) : 1e6,
       offCatalog: !cat,
       // 신청하다 직접 적어 올린 품목 — 정식 카탈로그와 구분해 두면 나중에
       // 렌탈사 카탈로그를 다시 받을 때 무엇을 확인해야 할지 알 수 있다
@@ -1828,7 +1899,30 @@ function renderEquipView(list){
     if(isBillable(i)){ if((i.currency || 'KRW') === 'USD') g.usd += amt; else g.krw += amt; }
     else g.excluded = true;
   }));
-  const groups = [...byName.values()].sort((a, b) => b.qty - a.qty);
+  /* 분류의 앞뒤도, 분류 안의 앞뒤도 카탈로그가 정한 순서를 따른다. 화면이 따로
+     순서를 정해 두면 설정에서 카탈로그를 다시 세워도 여기만 옛 순서로 남는다.
+
+     수량 많은 순이 아니라 품목 순이다 — 발주서와 렌탈사 카탈로그가 코드 순으로
+     적혀 있어서, 화면이 다른 순서면 한 줄씩 눈으로 찾아 맞춰야 한다. */
+  const catOrder = new Map();
+  [...byName.values()].forEach(g => {
+    const cur = catOrder.get(g.cat);
+    if(cur === undefined || g.catOrd < cur) catOrder.set(g.cat, g.catOrd);
+  });
+  const groups = [...byName.values()].sort((a, b) =>
+    (catOrder.get(a.cat) - catOrder.get(b.cat))
+    || (a.catOrd - b.catOrd)
+    || String(a.code || '힣').localeCompare(String(b.code || '힣'), 'ko', { numeric: true })
+    || String(a.nameKo || '').localeCompare(String(b.nameKo || ''), 'ko'));
+
+  /* 분류별 소계 — 발주서에 «의자 소계 60개»처럼 들어간다 */
+  const catBlocks = [...new Set(groups.map(g => g.cat))].map(c => {
+    const gs = groups.filter(g => g.cat === c);
+    return { cat: c, gs, kinds: gs.length,
+      qty: gs.reduce((a, g) => a + g.qty, 0),
+      krw: gs.reduce((a, g) => a + g.krw, 0),
+      usd: gs.reduce((a, g) => a + g.usd, 0) };
+  });
 
   const offN = groups.filter(g => g.offCatalog).length;
   const totKrw = groups.reduce((a, g) => a + g.krw, 0);
@@ -1838,7 +1932,9 @@ function renderEquipView(list){
     + `<span class="pill p-gray">총 ${groups.reduce((a, g) => a + g.qty, 0)}개</span>`
     + (totKrw ? `<span class="pill p-gray">${fmtMoney(totKrw, 'KRW')}</span>` : '')
     + (totUsd ? `<span class="pill p-gray">${fmtMoney(totUsd, 'USD')}</span>` : '')
-    + (offN ? `<span class="pill p-amber" title="카탈로그에 없는 품목 — 그래픽·전기처럼 다른 분류일 수 있어요">카탈로그 외 ${offN}종</span>` : '');
+    + (offN ? `<span class="pill p-amber" title="카탈로그에 없는 품목 — 그래픽·전기처럼 다른 분류일 수 있어요">카탈로그 외 ${offN}종</span>` : '')
+    + catBlocks.map(b => `<span class="pill p-gray" style="font-size:9.5px"
+        title="${escAttr(b.gs.map(g => `${g.nameKo} ${g.qty}개`).join(', '))}">${escapeHtml(b.cat)} ${b.qty}개</span>`).join('');
 
   /* 어느 기업이 신청했는지 — 품목을 클릭하면 펼친다.
      발주하다 "이 의자 25개가 어디로 가는 거지"를 확인해야 할 때, 표 밖으로
@@ -1857,7 +1953,13 @@ function renderEquipView(list){
   const summaryBody = isMobile()
     /* 좁은 화면에서는 표를 쓰지 않는다 — 헤더가 숨겨지면서 25 / 7곳 / 187,000원이
        각각 무슨 숫자인지 알 수 없게 된다. 값마다 이름을 붙여 카드로 그린다. */
-    ? groups.map(g => {
+    ? catBlocks.map(b => `
+      <div style="display:flex;align-items:baseline;gap:6px;padding:10px 0 4px;border-bottom:2px solid var(--i7);margin-top:6px">
+        <span style="font-size:12px;font-weight:800;color:var(--i2)">${escapeHtml(b.cat)}</span>
+        <span style="font-size:10.5px;color:var(--i4)">${b.kinds}종 · ${b.qty}개${
+          b.krw ? ' · ' + escapeHtml(fmtMoney(b.krw, 'KRW')) : ''}${
+          b.usd ? ' · ' + escapeHtml(fmtMoney(b.usd, 'USD')) : ''}</span>
+      </div>` + b.gs.map(g => {
       const open = equipOpen.has(g.key);
       return `<div style="padding:8px 0;border-bottom:1px solid var(--i8)">
         <div onclick="toggleEquipRow('${escAttr(g.key)}')" style="cursor:pointer">
@@ -1875,9 +1977,10 @@ function renderEquipView(list){
         </div>
         ${open ? `<div style="margin-top:5px;padding-left:6px;border-left:2px solid var(--i6)">${coList(g)}</div>` : ''}
       </div>`;
-    }).join('')
+    }).join('')).join('')
 
     : `<div class="tw" style="overflow:visible"><table><thead><tr>
+        <th style="min-width:74px">분류</th>
         <th style="min-width:66px">품목코드</th>
         <th style="min-width:150px">품명(국문)</th>
         <th style="min-width:150px">품명(영문)</th>
@@ -1887,10 +1990,17 @@ function renderEquipView(list){
         <th style="min-width:104px;text-align:right">KRW</th>
         <th style="min-width:88px;text-align:right">USD</th>
       </tr></thead><tbody>
-        ${groups.map(g => {
+        ${groups.map((g, gi) => {
           const open = equipOpen.has(g.key);
-          return `<tr onclick="toggleEquipRow('${escAttr(g.key)}')" style="cursor:pointer${open ? ';background:var(--ad)' : ''}"
+          /* 같은 분류가 이어지면 이름을 한 번만 쓴다 — 스물네 줄에 «의자»가 여덟 번
+             찍히면 글자가 많아 오히려 덩어리가 안 보인다. 머리글 줄을 따로 세우지
+             않은 건, 그러면 표 머리를 눌러 정렬하는 길이 막히기 때문이다. */
+          const first = groups.findIndex(z => z.cat === g.cat) === gi;
+          return `<tr onclick="toggleEquipRow('${escAttr(g.key)}')" style="cursor:pointer${open ? ';background:var(--ad)' : ''}${
+            first && gi ? ';border-top:2px solid var(--i6)' : ''}"
             title="클릭하면 신청한 기업을 볼 수 있어요">
+            <td style="font-size:11px;font-weight:${first ? '800' : '400'};color:var(${first ? '--i2' : '--i6'})">${
+              escapeHtml(g.cat)}</td>
             <td style="font-size:11.5px;font-weight:700;color:var(--i2)">
               <span style="color:var(--a)">${open ? '▾' : '▸'}</span> ${escapeHtml(g.code || '—')}</td>
             <td style="font-size:12.5px;font-weight:600">${escapeHtml(g.nameKo)}
@@ -1904,12 +2014,20 @@ function renderEquipView(list){
             <td style="text-align:right">${g.krw ? escapeHtml(fmtMoney(g.krw, 'KRW')) : '<span style="color:var(--i6)">-</span>'}</td>
             <td style="text-align:right">${g.usd ? escapeHtml(fmtMoney(g.usd, 'USD')) : '<span style="color:var(--i6)">-</span>'}</td>
           </tr>
-          ${open ? `<tr data-detail><td colspan="8" style="padding:8px 12px 12px;background:var(--i9)">
+          ${open ? `<tr data-detail><td colspan="9" style="padding:8px 12px 12px;background:var(--i9)">
             <div style="font-size:10.5px;color:var(--i4);margin-bottom:4px">신청 기업 ${g.cos.length}곳 — 클릭하면 그 기업 정산 탭으로 갑니다</div>
             ${coList(g)}</td></tr>` : ''}`;
         }).join('')}
       </tbody>
-      <tfoot><tr style="border-top:2px solid var(--i5);font-weight:800">
+      <tfoot>
+      ${catBlocks.length > 1 ? catBlocks.map(b => `<tr style="font-weight:600;color:var(--i3);background:var(--i9)">
+        <td colspan="4" style="font-size:11px">${escapeHtml(b.cat)} 소계 <span style="font-weight:400;color:var(--i4)">${b.kinds}종</span></td>
+        <td style="text-align:right">${b.qty}</td>
+        <td></td>
+        <td style="text-align:right">${b.krw ? escapeHtml(fmtMoney(b.krw, 'KRW')) : '-'}</td>
+        <td style="text-align:right">${b.usd ? escapeHtml(fmtMoney(b.usd, 'USD')) : '-'}</td>
+      </tr>`).join('') : ''}
+      <tr style="border-top:2px solid var(--i5);font-weight:800">
         <td colspan="4" style="font-size:12px">합계 ${groups.length}종</td>
         <td style="text-align:right">${groups.reduce((a, g) => a + g.qty, 0)}</td>
         <td></td>
@@ -2641,7 +2759,8 @@ export async function advanceStage(id, field){
   if(nx.at && !String(x[nx.at] || '').trim()) patch[nx.at] = td();
   await patchExh(id, patch, null);
   trackAction('status', `${STAGE_NAME[field]} 단계`, x.company_name || '',
-    `<b>${escapeHtml(x.company_name || '')}</b> ${escapeHtml(STAGE_NAME[field])} ${escapeHtml(st.label)} → ${escapeHtml(nx.label)}`);
+    `<b>${escapeHtml(x.company_name || '')}</b> ${escapeHtml(STAGE_NAME[field])} ${escapeHtml(st.label)} → ${escapeHtml(nx.label)}`,
+    { kind: 'exhibitor', id: x.id, tab: 'progress', field });
 }
 
 /* 잘못 넘겼을 때 되돌린다.
@@ -2657,7 +2776,8 @@ export async function rewindStage(id, field){
   const cur = defs[i], prev = defs[i - 1];
   await patchExh(id, { [field]: prev.key }, null);
   trackAction('status', `${STAGE_NAME[field]} 단계`, x.company_name || '',
-    `<b>${escapeHtml(x.company_name || '')}</b> ${escapeHtml(STAGE_NAME[field])} ${escapeHtml(cur.label)} → ${escapeHtml(prev.label)} (되돌림)`);
+    `<b>${escapeHtml(x.company_name || '')}</b> ${escapeHtml(STAGE_NAME[field])} ${escapeHtml(cur.label)} → ${escapeHtml(prev.label)} (되돌림)`,
+    { kind: 'exhibitor', id: x.id, tab: 'progress', field });
 }
 
 /* ══════════════════════════════════════════
@@ -3469,7 +3589,8 @@ export async function submitNewGraphicOrder(){
   if(Object.keys(patch).length) await patchExh(x.id, patch, null);
 
   trackAction('add', '그래픽 주문 추가', x.company_name || '',
-    `<b>${escapeHtml(x.company_name || '')}</b> ${escapeHtml(name)}${amount ? ` ${escapeHtml(fmtMoney(amount, rec.currency))}` : ''}`);
+    `<b>${escapeHtml(x.company_name || '')}</b> ${escapeHtml(name)}${amount ? ` ${escapeHtml(fmtMoney(amount, rec.currency))}` : ''}`,
+    { kind: 'exhibitor', id: x.id, tab: 'graphic' });
   document.getElementById('new-gr-modal')?.remove();
   renderExh();
 }
@@ -4324,6 +4445,7 @@ const shortVal = (v) => { const t = String(v ?? '').trim();
 
 export function logExhEdit(x, patch, backup){
   const parts = [];
+  const keys = [];          // 한 칸만 바뀐 경우에만 그 칸을 짚어 준다
   Object.keys(patch).forEach(k => {
     if(k === 'updated_at' || k === 'id') return;
     const b = String(backup[k] ?? '').trim(), a = String(patch[k] ?? '').trim();
@@ -4333,10 +4455,12 @@ export function logExhEdit(x, patch, backup){
        잘못 지웠을 때 무엇이 있었는지 알 방법이 없었다 — 그렇게 한 건을 잃었다. */
     parts.push(b && a ? `${lbl} ${shortVal(b)} → ${shortVal(a)}`
       : a ? `${lbl} ${shortVal(a)}` : `${lbl} ${shortVal(b)} 지움`);
+    keys.push(k);
   });
   if(!parts.length) return;
   trackAction('edit', '전시 정보 수정', x.company_name || '',
-    `<b>${escapeHtml(x.company_name || '')}</b> ${escapeHtml(parts.join(' / '))}`);
+    `<b>${escapeHtml(x.company_name || '')}</b> ${escapeHtml(parts.join(' / '))}`,
+    { kind: 'exhibitor', id: x.id, field: keys.length === 1 ? keys[0] : '' });
 }
 
 export async function patchExh(id, patch, label){
@@ -4426,6 +4550,7 @@ window.setExhFilter = setExhFilter;
 window.setExhView = setExhView;
 window.setGraphicView = setGraphicView;
 window.setGraphicFil = setGraphicFil;
+window.setPayFil = setPayFil;
 window.toggleGraphicKindAll = toggleGraphicKindAll;
 window.applyGraphicDue = applyGraphicDue;
 window.searchExhM = searchExhM;

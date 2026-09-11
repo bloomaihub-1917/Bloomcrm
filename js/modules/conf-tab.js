@@ -734,6 +734,13 @@ export function openPgaSession(sid){
   }, 60);
 }
 
+/* 활동 로그에서 건너올 때 — 다른 행사의 세션일 수 있으니 행사부터 맞춘다.
+   setConfEvent이 열린 수정 칸을 닫으므로 반드시 먼저 부른다. */
+export function openAuditSession(sid, ev){
+  if(ev && ev !== confEvent) setConfEvent(ev);
+  openPgaSession(sid);
+}
+
 /* 표를 그대로 복사한다 — 프로그램북 원고와 메일이 이 표를 그대로 쓴다.
    서식 있는 복사(text/html)와 글자 복사를 함께 담아, 붙여 넣는 곳이
    무엇이든 형태가 남게 한다. */
@@ -1448,7 +1455,8 @@ export async function setTalkTime(aid, field, value){
     return;
   }
   trackAction('edit', '발표 시간', confEvent,
-    `${speakerName(a.speaker_id)} — ${patch.start_at || a.start_at || ''}${patch.end_at ? `–${patch.end_at}` : ''}`);
+    `${speakerName(a.speaker_id)} — ${patch.start_at || a.start_at || ''}${patch.end_at ? `–${patch.end_at}` : ''}`,
+    { kind: 'session', id: a.session_id, ev: confEvent });
 }
 
 /* 세션 시작부터 각 발표의 «분»만큼 이어 붙인다.
@@ -1490,7 +1498,8 @@ export async function autoTalkTimes(sid){
     }
   }
   trackAction('edit', '발표 시간 배분', confEvent,
-    `${sess.title_ko || sess.title_en || sid} — ${plan.length}명`);
+    `${sess.title_ko || sess.title_en || sid} — ${plan.length}명`,
+    { kind: 'session', id: sid, ev: confEvent });
   renderConf();
 }
 
@@ -1618,7 +1627,8 @@ export async function saveSessionEdit(sid){
     if(!res?.locked) alert('세션을 고치지 못했어요. 잠시 뒤 다시 해주세요.');
     return;
   }
-  trackAction('edit', '컨퍼런스 세션', confEvent, `${titleKo || titleEn} — ${diff.join(', ')} 고침`);
+  trackAction('edit', '컨퍼런스 세션', confEvent, `${titleKo || titleEn} — ${diff.join(', ')} 고침`,
+    { kind: 'session', id: sid, ev: confEvent });
   confEditSession = '';
   renderConf();
 }
@@ -1654,7 +1664,8 @@ export async function addConfSession(){
   if(!res || res.ok === false){ if(!res?.locked) alert('세션을 만들지 못했어요. 잠시 뒤 다시 해주세요.'); return; }
 
   CONF_SESSIONS.push({ ...row, id: res.id || row.id || `CS-tmp-${Date.now()}` });
-  trackAction('add', '컨퍼런스 세션', ev.key, `${ev.name || ev.key} — ${titleKo || titleEn}`);
+  trackAction('add', '컨퍼런스 세션', ev.key, `${ev.name || ev.key} — ${titleKo || titleEn}`,
+    { kind: 'session', id: res.id || row.id, ev: ev.key });
   confNewSession = false;
   renderConf();
 }
@@ -1721,7 +1732,8 @@ export async function addAssign(sid){
   if(!res || res.ok === false){ if(!res?.locked) alert('배정하지 못했어요.'); return; }
   const made = { ...row, id: res.id || `SS-tmp-${Date.now()}` };
   SESSION_SPEAKERS.push(made);
-  trackAction('add', '세션 배정', ev.key, `${speakerName(spId)} — ${role}`);
+  trackAction('add', '세션 배정', ev.key, `${speakerName(spId)} — ${role}`,
+    { kind: 'session', id: sid, ev: ev.key });
 
   /* 고른 자리에 끼워 넣는다. 좌장은 대개 맨 앞이라, 넣고 나서 매번 끌어
      올리게 하면 그게 일이 된다. */
@@ -1742,7 +1754,8 @@ export async function setAssignRole(aid, role){
   const res = await gSaveAssign({ id: aid, role });
   if(!res || res.ok === false){ if(!res?.locked) alert('역할을 바꾸지 못했어요.'); renderConf(); return; }
   a.role = role;
-  trackAction('edit', '세션 배정', confEvent, `${speakerName(a.speaker_id)} — ${was} → ${role}`);
+  trackAction('edit', '세션 배정', confEvent, `${speakerName(a.speaker_id)} — ${was} → ${role}`,
+    { kind: 'session', id: a.session_id, ev: confEvent });
   renderConf();
 }
 
@@ -1784,6 +1797,7 @@ window.setConfNeedFil    = setConfNeedFil;
 window.setConfRoleFil    = setConfRoleFil;
 window.setConfSessFil    = setConfSessFil;
 window.openPgaSession    = openPgaSession;
+window.openAuditSession  = openAuditSession;
 window.copyPga           = copyPga;
 window.downloadConfTemplate = downloadConfTemplate;
 window.pickConfFile         = pickConfFile;

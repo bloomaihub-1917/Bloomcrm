@@ -26,7 +26,7 @@ const TABLES = {
   },
   activity_log: {
     table: 'activity_log', pk: 'id', idPrefix: '',
-    columns: ['id', 'ts', 'email', 'name', 'type', 'action', 'target', 'detail'],
+    columns: ['id', 'ts', 'email', 'name', 'type', 'action', 'target', 'detail', 'link'],
   },
   settings: {
     table: 'settings', pk: 'key', idPrefix: null, // settings는 key를 클라이언트가 직접 정함

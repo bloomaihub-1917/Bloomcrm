@@ -88,7 +88,8 @@ async function patchSpeaker(patch, label){
     return r || { ok: false };
   }
   sp.updated_at = td();
-  if(label) trackAction('edit', '연사', sp.event_id, `${sp.name_snapshot || sp.id} — ${label}`);
+  if(label) trackAction('edit', '연사', sp.event_id, `${sp.name_snapshot || sp.id} — ${label}`,
+    { kind: 'speaker', id: sp.id });
   renderConf();
   buildConfEvList();
   return r;
@@ -111,7 +112,8 @@ async function patchAssign(aid, patch, label){
     if(!r?.locked) alert('저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
     return r || { ok: false };
   }
-  if(label) trackAction('edit', '세션 배정', a.event_id, `${speakerLabel()} — ${label}`);
+  if(label) trackAction('edit', '세션 배정', a.event_id, `${speakerLabel()} — ${label}`,
+    { kind: 'speaker', id: a.speaker_id });
   renderConf();
   return r;
 }
@@ -662,7 +664,8 @@ export async function scField(id, field, value, label){
     if(!res?.locked) alert('저장에 실패했어요.');
     return;
   }
-  trackAction('edit', '연사 연락 상대', getSpeakerById(spId)?.event_id, `${speakerLabel()} — ${label || field}`);
+  trackAction('edit', '연사 연락 상대', getSpeakerById(spId)?.event_id, `${speakerLabel()} — ${label || field}`,
+    { kind: 'speaker', id: spId, field });
 }
 
 export async function removeSpeakerContact(id){
@@ -820,7 +823,8 @@ export async function sendSpeakerMail(){
     category, subject, body: text, answered_at: '', answer: '', status: 'done',
     author_email: '', author_name: '',
   });
-  trackAction('add', '연사 메일', sp.event_id, `${sp.name_snapshot || sp.id} — ${category}`);
+  trackAction('add', '연사 메일', sp.event_id, `${sp.name_snapshot || sp.id} — ${category}`,
+    { kind: 'speaker', id: sp.id });
   say(res.logged === false ? '보냈어요 — 다만 기록 저장에 실패했어요.' : '보냈어요.', true);
   renderSpeakerDr();
 }

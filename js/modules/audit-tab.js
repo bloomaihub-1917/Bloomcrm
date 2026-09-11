@@ -50,6 +50,11 @@ export function sanitizeForCsv(value){
    Apps Script 연동 시 이 함수만 수정하면 됨.
    (원본 5120~5145행)
 */
+/* extra는 "이 기록이 가리키는 곳"이다 — { kind, id, ev, tab, field }.
+   kind/id가 있으면 로그 줄을 눌러 그 창을 열 수 있고, field가 있으면 창을
+   연 뒤 그 칸을 잠깐 물들인다. 대상이 없는 기록(로그인, 일괄 작업처럼 창
+   하나로 좁혀지지 않는 것)은 extra를 비워 둔다 — 눌러도 갈 곳이 없는 줄을
+   누를 수 있게 해 두면 매번 헛손질을 하게 된다. */
 export function trackAction(type, action, target, detail, extra){
   if(!currentUser) return;
   const entry = {
@@ -127,7 +132,9 @@ export function renderAudit(){
     const ts = new Date(e.ts);
     const timeStr = ts.toLocaleDateString('ko-KR',{month:'short',day:'numeric'}) + ' ' +
                     ts.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
-    return `<div class="audit-item">
+    const go = e.extra && e.extra.kind && e.extra.id;
+    return `<div class="audit-item${go ? ' audit-go' : ''}"${
+      go ? ` onclick="openAuditTarget('${escAttr(String(e.id))}')" title="눌러서 바뀐 곳으로 갑니다"` : ''}>
       <div class="audit-av" style="background:${e.color}">${escapeHtml(userInitials(e.name))}</div>
       <div class="audit-main">
         <div class="audit-who">${escapeHtml(e.name)}<span class="audit-email">${escapeHtml(e.email)}</span></div>
@@ -139,6 +146,66 @@ export function renderAudit(){
       </div>
     </div>`;
   }).join('');
+}
+
+/* ══════════════════════════════════════════
+   로그에서 바뀐 곳으로 가기
+
+   기록만 읽어서는 "그래서 지금 어떻게 돼 있나"를 알 수 없어 매번 탭을 옮겨
+   대상을 다시 찾아야 했다. extra에 적어 둔 대상을 열어 주고, 어느 칸이
+   바뀐 것인지까지 짚어 준다.
+
+   창을 여는 함수들은 각 탭 모듈이 가지고 있다. 여기서 import하면 audit이
+   모든 탭을 끌어오게 되고 router.js가 audit을 import하므로 고리가 생긴다.
+   그래서 이미 window에 나와 있는 것을 쓴다(다른 탭들이 서로를 부를 때와 같은 방식).
+══════════════════════════════════════════ */
+const AUDIT_GO = {
+  exhibitor: (x) => { window.switchApp?.('exh');  window.openExhDr?.(x.id, x.tab); },
+  contact:   (x) => { window.switchApp?.('mdb');  window.openContactDr?.(x.id); },
+  target:    (x) => { window.switchApp?.('crm');  window.openDr?.(x.id); },
+  company:   (x) => { window.switchApp?.('co');   window.selectCo?.(x.id); },
+  speaker:   (x) => { window.switchApp?.('conf'); window.openSpeakerDr?.(x.id, x.tab); },
+  session:   (x) => { window.switchApp?.('conf'); window.openAuditSession?.(x.id, x.ev); },
+};
+
+export function openAuditTarget(entryId){
+  const e = auditLog.find(a => String(a.id) === String(entryId));
+  const x = e && e.extra;
+  if(!x || !AUDIT_GO[x.kind]) return;
+  AUDIT_GO[x.kind](x);
+  if(x.field) flashAuditField(x.field);
+}
+
+/* 바뀐 칸을 찾아 물들인다.
+
+   칸마다 표식을 새로 달지 않고, 이미 화면에 적혀 있는 것으로 찾는다 — 입력칸은
+   대부분 onchange="setX('booth_no', …)"처럼 자기가 어느 필드인지 말하고 있다.
+   그걸로도 못 찾으면 아무것도 하지 않는다. 엉뚱한 칸을 물들이는 것보다 낫다.
+
+   창은 눌린 직후에 그려지므로 몇 프레임 기다렸다 찾는다. */
+export function flashAuditField(field){
+  const f = String(field || '').replace(/[^A-Za-z0-9_]/g, '');
+  if(!f) return;
+  const sel = [`[data-af="${f}"]`, `[onchange*="'${f}'"]`, `[oninput*="'${f}'"]`,
+    `[onclick*="'${f}'"]`, `[onblur*="'${f}'"]`, `[name="${f}"]`, `[id$="-${f}"]`].join(',');
+
+  let tries = 0;
+  const hunt = () => {
+    // 열려 있는 창 안에서 먼저 찾는다 — 뒤에 깔린 목록에도 같은 이름이 있다
+    const scope = document.querySelector('.dr.on, #con-dr.on') || document;
+    const el = scope.querySelector(sel) || document.querySelector(sel);
+    if(!el){
+      if(++tries < 20) return requestAnimationFrame(hunt);
+      return;
+    }
+    const box = el.closest('.fld, .dr-row, tr, li') || el;
+    box.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    box.classList.remove('af-flash');
+    void box.offsetWidth;              // 같은 칸을 두 번 누를 때 다시 칠해지게
+    box.classList.add('af-flash');
+    setTimeout(() => box.classList.remove('af-flash'), 2200);
+  };
+  requestAnimationFrame(hunt);
 }
 
 /* (원본 5268~5278행) */
@@ -233,3 +300,5 @@ window.exportAuditCSV = exportAuditCSV;
 window.filterAudit    = filterAudit;
 window.renderAudit    = renderAudit;
 window.setAuditUser   = setAuditUser;
+window.openAuditTarget = openAuditTarget;
+window.flashAuditField = flashAuditField;

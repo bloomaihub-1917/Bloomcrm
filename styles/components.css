@@ -411,6 +411,21 @@ tr.row-sel{background:var(--ad)}
 }
 .audit-item:hover{background:var(--i9)}
 .audit-item:last-child{border-bottom:none}
+/* 열어 볼 대상이 붙은 줄 — 눌러서 그 창으로 갈 수 있다는 걸 보여준다.
+   대상이 없는 줄(로그인, 일괄 작업 등)은 그냥 두어 헛손질을 막는다. */
+.audit-item.audit-go{cursor:pointer}
+.audit-item.audit-go:hover{background:var(--i8)}
+.audit-item.audit-go .audit-what{text-decoration:underline;text-decoration-color:var(--i6);text-underline-offset:2px}
+
+/* 창이 열린 뒤 바뀐 자리를 잠깐 노랗게 물들인다. 창만 열어 주면 어느 칸이
+   바뀐 건지 다시 찾아야 한다. 2초 뒤 저절로 걷힌다 — 계속 칠해 두면 다음에
+   볼 때 무엇이 강조인지 알 수 없다. */
+@keyframes af-flash{
+  0%{background:var(--am);box-shadow:0 0 0 4px var(--am)}
+  70%{background:var(--am);box-shadow:0 0 0 4px var(--am)}
+  100%{background:transparent;box-shadow:0 0 0 4px transparent}
+}
+.af-flash{animation:af-flash 2s ease-out;border-radius:6px}
 .audit-av{
   width:34px;height:34px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;
