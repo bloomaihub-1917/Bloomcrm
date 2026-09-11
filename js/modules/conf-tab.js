@@ -24,7 +24,7 @@ import {
   CONF_SESSIONS, SPEAKERS, SESSION_SPEAKERS,
   sessionsForEvent, speakersForEvent, assignmentsOfSession, assignmentsFor,
   getSpeakerById, rolesOfSpeaker, speakerNeedList, speakerNeed,
-  contactsOfSpeaker,
+  contactsOfSpeaker, SPEAKER_CONTACTS,
 } from '../state.js';
 import { SPEAKER_ROLES, NEED_MARK, SPEAKER_NEEDS } from '../constants.js';
 import { escapeHtml, escAttr, isMobile } from '../utils.js';
@@ -33,8 +33,10 @@ import {
   saveConfSession, deleteConfSession,
   saveSpeaker, deleteSpeaker,
   saveSessionSpeaker, deleteSessionSpeaker,
+  saveSpeakerContact,
 } from '../api.js';
 import { trackAction } from './audit-tab.js';
+import { IMPORT_SHEETS, IMPORT_GUIDE } from '../conf-import-spec.js';
 
 /* ── 모듈 상태 ── */
 let confEvent = '';
@@ -217,7 +219,16 @@ function programHtml(ev){
     <div style="font-size:11.5px;color:var(--i5)">
       세션 <b>${sessions.length}</b>건 · 배정 <b>${totalAssigned}</b>건 · 연사 <b>${speakersForEvent(ev.key).length}</b>명
     </div>
-    <button class="btn" style="font-size:11px" onclick="toggleNewSession()">${confNewSession ? '닫기' : '+ 세션 만들기'}</button>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <span id="conf-import-msg" style="font-size:10.5px;color:var(--i4)"></span>
+        <button class="btn" style="font-size:11px" onclick="downloadConfTemplate()"
+          title="세션·연사·배정 세 시트로 된 빈 양식을 받습니다">양식 받기</button>
+        <button class="btn" style="font-size:11px" onclick="pickConfFile()"
+          title="채운 양식을 올립니다 — 기존 것을 지우지 않고 더하거나 고칩니다">엑셀 올리기</button>
+        <input type="file" id="conf-xlsx-input" accept=".xlsx,.xls" style="display:none"
+          onchange="handleConfFile(event)">
+      <button class="btn" style="font-size:11px" onclick="toggleNewSession()">${confNewSession ? '닫기' : '+ 세션 만들기'}</button>
+    </div>
   </div>`;
 
   const form = confNewSession ? newSessionHtml(ev, allDays, cfg) : '';
@@ -228,6 +239,7 @@ function programHtml(ev){
       아직 세션이 없어요. 세션을 만들고 사람을 배정해 역할을 정하면,
       역할에 따라 <b>무엇을 받아야 하는지</b>가 «연사» 화면에서 자동으로 잡혀요.
       ${days.length ? '' : '<br>발표 일자가 없네요 — 설정 › 행사 관리 › 컨퍼런스에서 일자를 먼저 정하면 고르기 쉬워요.'}
+      <br><br>엑셀로 짜 둔 프로그램이 있으면 위의 <b>양식 받기</b>로 받아 채운 뒤 <b>엑셀 올리기</b>로 한 번에 넣으세요.
     </div>`;
   }
 
@@ -962,6 +974,261 @@ function peopleHtml(ev){
       </div>`;
 }
 
+/* ══════════════════════════════════════════════════════════════
+   엑셀로 한 번에 올리기
+
+   프로그램은 보통 엑셀로 먼저 돈다 — 학술위원회가 세션을 짜고, 사무국이
+   연사를 채우고, 그 파일이 메일로 오간다. 그걸 화면에서 한 줄씩 다시
+   치게 하면 옮겨 적는 동안 오타가 생기고, 원본과 어긋난 순간부터 어느
+   쪽이 맞는지 아무도 모르게 된다.
+
+   지우지 않는다. 올려도 기존 세션·연사를 지우지 않고 더하거나 고칠 뿐이다 —
+   잘못 올렸을 때 되돌릴 것이 남아야 한다.
+══════════════════════════════════════════════════════════════ */
+
+/* 양식 내려받기 — 정의는 conf-import-spec.js 하나만 본다 */
+export function downloadConfTemplate(){
+  if(typeof XLSX === 'undefined'){ alert('엑셀 라이브러리를 불러오지 못했어요. 새로고침 후 다시 해주세요.'); return; }
+  const wb = XLSX.utils.book_new();
+  const guide = XLSX.utils.aoa_to_sheet(IMPORT_GUIDE);
+  guide['!cols'] = [{ wch: 14 }, { wch: 92 }];
+  XLSX.utils.book_append_sheet(wb, guide, '안내');
+  IMPORT_SHEETS.forEach(sh => {
+    const rows = [
+      sh.cols.map(c => c.label),
+      sh.cols.map(c => (c.hint ? `↳ ${c.hint}` : '')),
+      ...sh.sample,
+    ];
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = sh.cols.map(c => ({ wch: Math.max(12, Math.min(34, c.label.length * 2 + 8)) }));
+    XLSX.utils.book_append_sheet(wb, ws, sh.name);
+  });
+  const ev = EVENT_LIST.find(e => e.key === confEvent);
+  XLSX.writeFile(wb, `${(ev?.short || ev?.key || '컨퍼런스')}_업로드_양식.xlsx`);
+}
+
+/* 머리글로 칸을 찾는다 — 열 순서가 바뀌어도 읽히게. 사람이 열을 옮기는 건
+   흔한 일이고, 그걸로 못 읽으면 «양식대로 넣었는데»가 된다. */
+function readSheet(wb, sh){
+  const ws = wb.Sheets[sh.name];
+  if(!ws) return [];
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
+  if(!rows.length) return [];
+  const head = rows[0].map(v => String(v || '').trim());
+  const idx = {};
+  sh.cols.forEach(c => { idx[c.key] = head.indexOf(c.label); });
+  return rows.slice(1)
+    /* 2행은 우리가 넣은 설명 줄이다. «↳»로 시작하면 건너뛴다 —
+       지우고 쓰는 사람도 있고 남겨 두는 사람도 있다. */
+    .filter(r => !String(r[0] || '').trim().startsWith('↳'))
+    .map(r => {
+      const o = {};
+      sh.cols.forEach(c => { o[c.key] = idx[c.key] >= 0 ? String(r[idx[c.key]] ?? '').trim() : ''; });
+      return o;
+    })
+    .filter(o => Object.values(o).some(v => v));
+}
+
+/* 엑셀이 시각을 0.4687500…으로 바꿔 놓는 일이 잦다. 되돌려 준다 —
+   여기서 안 받아 주면 «시간이 다 비어서 들어왔다»가 된다. */
+function normTime(v){
+  const s = String(v || '').trim();
+  if(!s) return '';
+  const m = /^(\d{1,2}):(\d{2})/.exec(s);
+  if(m) return `${m[1].padStart(2, '0')}:${m[2]}`;
+  const n = Number(s);
+  if(Number.isFinite(n) && n > 0 && n < 1){
+    const mins = Math.round(n * 24 * 60);
+    return `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
+  }
+  return s;
+}
+function normDate(v){
+  const s = String(v || '').trim();
+  if(!s) return '';
+  const m = /^(\d{4})[-./](\d{1,2})[-./](\d{1,2})/.exec(s);
+  if(m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  /* 엑셀 일련번호(1900 기준) */
+  const n = Number(s);
+  if(Number.isFinite(n) && n > 20000 && n < 80000){
+    const d = new Date(Date.UTC(1899, 11, 30) + n * 86400000);
+    return d.toISOString().slice(0, 10);
+  }
+  return s;
+}
+
+export function pickConfFile(){
+  if(confLocked()){ confLockNotice(); return; }
+  document.getElementById('conf-xlsx-input')?.click();
+}
+
+export async function handleConfFile(e){
+  const file = e.target?.files?.[0];
+  if(e.target) e.target.value = '';   // 같은 파일을 다시 골라도 열리게
+  if(!file) return;
+  if(confLocked()){ confLockNotice(); return; }
+  const ev = EVENT_LIST.find(x => x.key === confEvent);
+  if(!ev) return;
+
+  let wb;
+  try {
+    const buf = await file.arrayBuffer();
+    wb = XLSX.read(buf, { type: 'array', cellText: true, cellDates: false });
+  } catch(err){ alert(`엑셀을 읽지 못했어요 (${err.message}).`); return; }
+
+  const spec = Object.fromEntries(IMPORT_SHEETS.map(sh => [sh.key, sh]));
+  const missing = IMPORT_SHEETS.filter(sh => !wb.Sheets[sh.name]).map(sh => sh.name);
+  if(missing.length === IMPORT_SHEETS.length){
+    alert(`«${IMPORT_SHEETS.map(s => s.name).join('», «')}» 시트를 찾지 못했어요.\n«양식 받기»로 받은 파일에 채워 올려주세요.`);
+    return;
+  }
+
+  const rowsS = readSheet(wb, spec.sessions);
+  const rowsP = readSheet(wb, spec.speakers);
+  const rowsA = readSheet(wb, spec.assignments);
+  if(!rowsS.length && !rowsP.length && !rowsA.length){ alert('채워진 줄이 없어요.'); return; }
+
+  /* 무엇이 새로 만들어지고 무엇이 이미 있는지 먼저 보여준다 — 올리고 나서
+     알려 주면 되돌릴 수 없다. */
+  const sessKey = (t) => String(t || '').trim().toLowerCase();
+  const haveSess = new Map();
+  sessionsForEvent(ev.key).forEach(x => {
+    if(x.title_ko) haveSess.set(sessKey(x.title_ko), x);
+    if(x.title_en) haveSess.set(sessKey(x.title_en), x);
+  });
+  const haveSp = new Map(speakersForEvent(ev.key).map(x => [sessKey(x.name_snapshot), x]));
+
+  const newSess = rowsS.filter(r => !haveSess.has(sessKey(r.title_ko)) && !haveSess.has(sessKey(r.title_en)));
+  const newSp = rowsP.filter(r => !haveSp.has(sessKey(r.name_snapshot)));
+  /* 배정이 가리키는 세션·연사가 이 파일이나 화면에 있는지 미리 본다 */
+  const willSess = new Set([...haveSess.keys(), ...rowsS.flatMap(r => [sessKey(r.title_ko), sessKey(r.title_en)]).filter(Boolean)]);
+  const willSp = new Set([...haveSp.keys(), ...rowsP.map(r => sessKey(r.name_snapshot)).filter(Boolean)]);
+  const orphan = rowsA.filter(r => !willSess.has(sessKey(r._session)) || !willSp.has(sessKey(r._speaker)));
+
+  const msg = `«${ev.short || ev.key}»에 올립니다.\n\n`
+    + `세션 ${rowsS.length}줄 — 새로 ${newSess.length}, 이미 있는 것 ${rowsS.length - newSess.length}\n`
+    + `연사 ${rowsP.length}줄 — 새로 ${newSp.length}, 이미 있는 것 ${rowsP.length - newSp.length}\n`
+    + `배정 ${rowsA.length}줄${orphan.length ? ` — 이 중 ${orphan.length}줄은 세션이나 연사를 못 찾아 건너뜁니다` : ''}\n\n`
+    + `이미 있는 것은 비어 있지 않은 칸만 덮어씁니다. 지우지 않습니다.`;
+  if(!confirm(msg)) return;
+
+  const msgEl = document.getElementById('conf-import-msg');
+  const say = (t, ok) => { if(msgEl){ msgEl.style.color = ok === false ? 'var(--re)' : 'var(--i4)'; msgEl.textContent = t; } };
+  const fail = (what) => { say(`${what}에서 멈췄어요 — 여기까지는 저장됐습니다.`, false); };
+
+  let nS = 0, nP = 0, nA = 0;
+  say('올리는 중…');
+
+  /* ── 세션 ── */
+  for(const r of rowsS){
+    const exist = haveSess.get(sessKey(r.title_ko)) || haveSess.get(sessKey(r.title_en));
+    const patch = {
+      date: normDate(r.date), start_at: normTime(r.start_at), end_at: normTime(r.end_at),
+      room: r.room, track: r.track, title_ko: r.title_ko, title_en: r.title_en, note: r.note,
+    };
+    /* 빈 칸은 덮지 않는다 — 엑셀에서 한 열만 채워 올리는 일이 흔한데,
+       그때 나머지가 지워지면 화면에서 채워 둔 값이 통째로 날아간다. */
+    Object.keys(patch).forEach(k => { if(!patch[k]) delete patch[k]; });
+    if(exist){
+      const diff = Object.keys(patch).filter(k => String(exist[k] ?? '') !== patch[k]);
+      if(!diff.length) continue;
+      const res = await gSaveSession({ id: exist.id, ...patch });
+      if(!res || res.ok === false){ fail('세션'); return; }
+      Object.assign(exist, patch); nS++;
+    } else {
+      const row = { event_id: ev.key, seq: String(sessionsForEvent(ev.key).length + 1),
+        title_ko: '', title_en: '', date: '', start_at: '', end_at: '', room: '', track: '', note: '', ...patch };
+      const res = await gSaveSession(row);
+      if(!res || res.ok === false){ fail('세션'); return; }
+      const made = { ...row, id: res.id || `CS-tmp-${Date.now()}-${nS}` };
+      CONF_SESSIONS.push(made);
+      if(made.title_ko) haveSess.set(sessKey(made.title_ko), made);
+      if(made.title_en) haveSess.set(sessKey(made.title_en), made);
+      nS++;
+    }
+  }
+
+  /* ── 연사 ── */
+  for(const r of rowsP){
+    if(!r.name_snapshot) continue;
+    const exist = haveSp.get(sessKey(r.name_snapshot));
+    const patch = {
+      name_snapshot: r.name_snapshot, org_ko: r.org_ko, org_en: r.org_en,
+      title_ko: r.title_ko, title_en: r.title_en, lang_pref: r.lang_pref,
+      status: r.status, fee_amount: r.fee_amount, fee_currency: r.fee_currency, note: r.note,
+    };
+    Object.keys(patch).forEach(k => { if(!patch[k]) delete patch[k]; });
+    let sp = exist;
+    if(sp){
+      const diff = Object.keys(patch).filter(k => String(sp[k] ?? '') !== patch[k]);
+      if(diff.length){
+        const res = await gSaveSpeaker({ id: sp.id, ...patch });
+        if(!res || res.ok === false){ fail('연사'); return; }
+        Object.assign(sp, patch); nP++;
+      }
+    } else {
+      const row = { event_id: ev.key, contact_id: '', status: '섭외중', lang_pref: '', note: '', ...patch };
+      const res = await gSaveSpeaker(row);
+      if(!res || res.ok === false){ fail('연사'); return; }
+      sp = { ...row, id: res.id || `SP-tmp-${Date.now()}-${nP}` };
+      SPEAKERS.push(sp);
+      haveSp.set(sessKey(sp.name_snapshot), sp);
+      nP++;
+    }
+    /* 메일을 적었으면 연락 상대(수신)로 만들어 둔다 — 연사에게 무엇을
+       보내려면 수신이 있어야 하고, 없으면 메일 칸이 열리지 않는다. */
+    if(r.email && !contactsOfSpeaker(sp.id).some(x => x.email === r.email)){
+      const c = { speaker_id: sp.id, contact_id: '', name: sp.name_snapshot,
+        email: r.email, phone: r.phone || '', kind: '연사 본인',
+        send: contactsOfSpeaker(sp.id).some(x => x.send === 'to') ? 'cc' : 'to', note: '' };
+      const res = await saveSpeakerContact(c);
+      if(res && res.ok !== false) SPEAKER_CONTACTS.push({ ...c, id: res.id || `SC-tmp-${Date.now()}` });
+    }
+  }
+
+  /* ── 배정 ── */
+  const seqBySession = {};
+  for(const r of rowsA){
+    const ss = haveSess.get(sessKey(r._session));
+    const sp = haveSp.get(sessKey(r._speaker));
+    if(!ss || !sp) continue;
+    const role = r.role || SPEAKER_ROLES[0].key;
+    const dup = assignmentsOfSession(ss.id).find(a => a.speaker_id === sp.id && a.role === role);
+    const patch = {
+      role, seq: r.seq || '', lang: r.lang,
+      start_at: normTime(r.start_at), end_at: normTime(r.end_at), duration_min: r.duration_min,
+      title_ko: r.title_ko, title_en: r.title_en, note: r.note,
+    };
+    Object.keys(patch).forEach(k => { if(!patch[k]) delete patch[k]; });
+    if(!patch.seq){
+      seqBySession[ss.id] = (seqBySession[ss.id] || assignmentsOfSession(ss.id).length) + 1;
+      patch.seq = String(seqBySession[ss.id]);
+    }
+    if(dup){
+      const diff = Object.keys(patch).filter(k => String(dup[k] ?? '') !== patch[k]);
+      if(!diff.length) continue;
+      const res = await gSaveAssign({ id: dup.id, ...patch });
+      if(!res || res.ok === false){ fail('배정'); return; }
+      Object.assign(dup, patch); nA++;
+    } else {
+      const row = { event_id: ev.key, session_id: ss.id, speaker_id: sp.id,
+        lang: '', duration_min: '', start_at: '', end_at: '',
+        title_ko: '', title_en: '', abstract_ko: '', abstract_en: '', abstract_received_at: '',
+        slides_file: '', slides_received_at: '', slides_version: '', note: '', ...patch };
+      const res = await gSaveAssign(row);
+      if(!res || res.ok === false){ fail('배정'); return; }
+      SESSION_SPEAKERS.push({ ...row, id: res.id || `SS-tmp-${Date.now()}-${nA}` });
+      nA++;
+    }
+  }
+
+  trackAction('add', '컨퍼런스 업로드', ev.key,
+    `${ev.name || ev.key} — 세션 ${nS} · 연사 ${nP} · 배정 ${nA}`);
+  say(`올렸어요 — 세션 ${nS} · 연사 ${nP} · 배정 ${nA}${orphan.length ? ` (건너뛴 배정 ${orphan.length})` : ''}`);
+  buildConfEvList();
+  renderConf();
+}
+
 /* ══════════════════════════════════════════
    쓰기
 ══════════════════════════════════════════ */
@@ -1360,6 +1627,9 @@ window.setConfRoleFil    = setConfRoleFil;
 window.setConfSessFil    = setConfSessFil;
 window.openPgaSession    = openPgaSession;
 window.copyPga           = copyPga;
+window.downloadConfTemplate = downloadConfTemplate;
+window.pickConfFile         = pickConfFile;
+window.handleConfFile       = handleConfFile;
 window.buildConfEvList   = buildConfEvList;
 window.renderConf        = renderConf;
 window.fillSessionSlot   = fillSessionSlot;
