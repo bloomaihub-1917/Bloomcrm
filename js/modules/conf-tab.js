@@ -44,6 +44,7 @@ let confEditSession = '';      // 수정 칸이 열려 있는 세션
 let confNewSession = false;    // 세션 추가 칸이 열려 있나
 let confNeedFil = null;        // {key, mode:'done'|'todo'} — 받을 것 칩으로 거르기
 let confRoleFil = '';          // 역할로 거르기
+let confSessFil = '';          // 세션으로 거르기
 
 /* ══════════════════════════════════════════
    진행 완료 잠금
@@ -120,6 +121,7 @@ export function setConfEvent(key){
   confNewSession = false;
   confNeedFil = null;
   confRoleFil = '';
+  confSessFil = '';
   buildConfEvList();
   renderConf();
   if(isMobile()) window.closeSb?.();
@@ -582,6 +584,10 @@ export function setConfNeedFil(key){
   else confNeedFil = null;
   renderConf();
 }
+export function setConfSessFil(id){
+  confSessFil = confSessFil === id ? '' : id;
+  renderConf();
+}
 export function setConfRoleFil(role){
   confRoleFil = confRoleFil === role ? '' : role;
   renderConf();
@@ -598,6 +604,11 @@ function peopleHtml(ev){
   let list = all.slice().sort((a, b) =>
     String(a.name_snapshot || '').localeCompare(String(b.name_snapshot || ''), 'ko'));
   if(confRoleFil) list = list.filter(sp => rolesOfSpeaker(sp.id).includes(confRoleFil));
+  /* '__none__'은 «배정 없음» — 세션에 안 들어간 사람이 남아 있는지 보려는
+     것이라 세션 하나를 고른 것과 성격이 같다. */
+  if(confSessFil === '__none__') list = list.filter(sp => !assignmentsFor(sp.id).length);
+  else if(confSessFil) list = list.filter(sp =>
+    assignmentsFor(sp.id).some(a => a.session_id === confSessFil));
   if(confNeedFil){
     list = list.filter(sp => {
       const c = spCell(sp, ev.key, confNeedFil.key);
@@ -630,6 +641,26 @@ function peopleHtml(ev){
     ${feeLeft ? card('연사료', `${feeLeft}<span style="font-size:11px;font-weight:600;color:var(--i4)">명</span>`, '아직 미지급') : ''}
   </div>`;
 
+  /* ── 세션 칩 ──
+     «이 세션 사람들만 보고 챙기기»가 실제 일하는 단위다. 일자·시각을 함께
+     적어 둔다 — 세션명만으로는 어느 날 것인지 구분이 안 되는 행사가 많다. */
+  const sessions = sessionsForEvent(ev.key);
+  const noSess = all.filter(sp => !assignmentsFor(sp.id).length).length;
+  const sessChips = (sessions.length || noSess) ? `<div class="seg" style="flex-wrap:wrap;margin-bottom:8px">
+    <button class="seg-b${!confSessFil ? ' on' : ''}" onclick="setConfSessFil('')">전체 세션</button>
+    ${sessions.map(ss => {
+      const n = all.filter(sp => assignmentsFor(sp.id).some(a => a.session_id === ss.id)).length;
+      const when = [ss.date ? ss.date.slice(5) : '', ss.start_at].filter(Boolean).join(' ');
+      return `<button class="seg-b${confSessFil === ss.id ? ' on' : ''}"
+        onclick="setConfSessFil('${escAttr(ss.id)}')"
+        title="${escAttr([ss.title_ko, ss.title_en, ss.track, ss.room].filter(Boolean).join(' · '))}">${
+        escapeHtml(ss.title_ko || ss.title_en || ss.id)}${
+        when ? ` <span style="opacity:.6">${escapeHtml(when)}</span>` : ''} ${n}명</button>`;
+    }).join('')}
+    ${noSess ? `<button class="seg-b${confSessFil === '__none__' ? ' on' : ''}"
+      onclick="setConfSessFil('__none__')" title="아직 어느 세션에도 안 들어간 연사예요">배정 없음 ${noSess}명</button>` : ''}
+  </div>` : '';
+
   /* ── 역할 칩 ── */
   const roleChips = `<div class="seg" style="flex-wrap:wrap;margin-bottom:8px">
     <button class="seg-b${!confRoleFil ? ' on' : ''}" onclick="setConfRoleFil('')">전체 ${all.length}명</button>
@@ -657,7 +688,7 @@ function peopleHtml(ev){
   </div>`;
 
   if(!list.length){
-    return summary + roleChips + needChips
+    return summary + sessChips + roleChips + needChips
       + `<div style="padding:20px;background:var(--i8);border:1px solid var(--i6);border-radius:10px;
         font-size:12px;color:var(--i5)">이 조건에 맞는 연사가 없어요.</div>`;
   }
@@ -705,7 +736,7 @@ function peopleHtml(ev){
     </tr>`;
   };
 
-  return summary + roleChips + needChips
+  return summary + sessChips + roleChips + needChips
     + `<div class="tw"><table><thead><tr>
         <th style="min-width:140px">연사</th>
         <th style="min-width:120px">세션</th>
@@ -1114,6 +1145,7 @@ window.setConfEvent      = setConfEvent;
 window.setConfView       = setConfView;
 window.setConfNeedFil    = setConfNeedFil;
 window.setConfRoleFil    = setConfRoleFil;
+window.setConfSessFil    = setConfSessFil;
 window.buildConfEvList   = buildConfEvList;
 window.renderConf        = renderConf;
 window.fillSessionSlot   = fillSessionSlot;

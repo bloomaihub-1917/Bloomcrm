@@ -57,12 +57,14 @@ export function openSpeakerDr(id, tab){
   spId = id;
   if(tab && TABS.some(t => t.key === tab)) spTab = tab;
   document.getElementById('sp-dr')?.classList.add('on');
+  document.getElementById('sp-bd')?.classList.add('on');
   renderSpeakerDr();
 }
 export function closeSpeakerDr(){
   spId = null;
   bankRevealed = false;
   document.getElementById('sp-dr')?.classList.remove('on');
+  document.getElementById('sp-bd')?.classList.remove('on');
 }
 export function switchSpeakerDT(v){ spTab = v; renderSpeakerDr(); }
 
