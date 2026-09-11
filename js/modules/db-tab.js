@@ -246,6 +246,67 @@ export function toggleMDBSelectAll(checked){
   else pairs.forEach(({c}) => mdbSelected.delete(c.id));
   renderMDB();
 }
+/* ══════════════════════════════════════════
+   모바일 — 길게 눌러 고르기
+
+   좁은 화면에서 고를 수 있는 자리는 이름 아바타 하나뿐이었다. 28px짜리 동그라미를
+   정확히 눌러야 하는데, 조금만 빗나가면 드로어가 열린다. 여러 명을 고르려면 그
+   실수를 사람 수만큼 반복하게 된다.
+
+   그래서 카드를 길게 누르면 골라진다. 한 명이라도 골라져 있으면 그때부터는 톡
+   누르는 것도 고르기다 — 휴대폰 사진첩과 같은 방식이라 따로 배울 게 없다.
+   다 풀면 톡 누르기는 다시 드로어를 연다.
+
+   손가락이 움직이면 취소한다. 목록을 넘기려고 쓸어내린 것을 «길게 누름»으로
+   잡으면, 스크롤할 때마다 엉뚱한 사람이 골라진다.
+══════════════════════════════════════════ */
+const LONG_PRESS_MS = 450;
+let lpTimer = null, lpSwallowClick = false;
+
+/* 인라인 핸들러가 ${c.id}를 따옴표 없이 넣으므로 id는 숫자다. dataset은 늘
+   문자열이라 되돌려 놓지 않으면 Set 안에서 다른 값이 된다. */
+const cidOf = (v) => (/^-?\d+$/.test(v) ? Number(v) : v);
+const mdbCardOf = (t) => (t && t.closest ? t.closest('.mdbc[data-cid]') : null);
+const cancelLongPress = () => { if(lpTimer){ clearTimeout(lpTimer); lpTimer = null; } };
+
+function initMDBLongPress(){
+  document.addEventListener('touchstart', (e) => {
+    if(!isMobile()) return;
+    const card = mdbCardOf(e.target);
+    if(!card) return;
+    cancelLongPress();
+    lpTimer = setTimeout(() => {
+      lpTimer = null;
+      lpSwallowClick = true;        // 손을 뗄 때 따라오는 click은 삼킨다
+      navigator.vibrate?.(15);
+      toggleMDBSelect(cidOf(card.dataset.cid));
+    }, LONG_PRESS_MS);
+  }, { passive: true });
+
+  ['touchmove', 'touchend', 'touchcancel'].forEach(ev =>
+    document.addEventListener(ev, cancelLongPress, { passive: true }));
+
+  document.addEventListener('click', (e) => {
+    if(lpSwallowClick){ lpSwallowClick = false; e.stopPropagation(); e.preventDefault(); return; }
+    if(!isMobile() || !mdbSelected.size) return;
+    const card = mdbCardOf(e.target);
+    if(!card) return;
+    // 아바타에는 이미 자기 핸들러가 있다 — 여기서 또 뒤집으면 두 번 눌린 셈이 된다
+    if(e.target.closest('.tdav')) return;
+    // 전화·메일 같은 바로가기는 고르기보다 우선한다
+    if(e.target.closest('a')) return;
+    e.stopPropagation(); e.preventDefault();
+    toggleMDBSelect(cidOf(card.dataset.cid));
+  }, true);
+
+  /* 길게 누를 때 뜨는 기본 메뉴(복사·공유)를 막는다 — 고르기와 겹쳐서
+     둘 다 제대로 안 된다 */
+  document.addEventListener('contextmenu', (e) => {
+    if(isMobile() && mdbCardOf(e.target)) e.preventDefault();
+  });
+}
+initMDBLongPress();
+
 export function renderMDBSelectionBar(){
   const el = document.getElementById('mdb-bulkbar');
   if(!el) return;
@@ -253,7 +314,8 @@ export function renderMDBSelectionBar(){
   if(!n){ el.style.display = 'none'; el.innerHTML=''; return; }
   el.style.display = 'flex';
   el.innerHTML = `
-    <span style="font-size:12px;font-weight:600;color:var(--i1)">${n}명 선택됨</span>
+    <span style="font-size:12px;font-weight:600;color:var(--i1)">${n}명 선택됨</span>${
+      isMobile() ? '<span style="font-size:10.5px;color:var(--i5)">탭하면 선택·해제 · 길게 눌러 시작</span>' : ''}
     <button class="btn bp bs" onclick="openMDBBulkEditModal()">기업명/카테고리/상태 일괄 변경</button>
     <button class="btn bs" onclick="openMDBToCrmModal()"
       title="고른 사람들을 행사 참가자로 올리고, 소속 기업을 CRM 타겟으로 잡습니다">행사에 초청</button>
@@ -819,7 +881,7 @@ function mdbCard(c, p, { showOrg = true } = {}){
   const org = c.orgKo || c.orgEn || '';
   const title = [c.titleKo || c.titleEn, c.deptKo || c.deptEn].filter(Boolean).join(' · ');
 
-  return `<div class="mdbc${isSel ? ' sel' : ''}" onclick="openContactDr(${c.id})"
+  return `<div class="mdbc${isSel ? ' sel' : ''}" data-cid="${escAttr(String(c.id))}" onclick="openContactDr(${c.id})"
     draggable="true" ondragstart="onMDBDragStart(event,${c.id})" ondragend="onMDBDragEnd()">
     <div class="mdbc-top">
       <div class="tdav${isSel ? ' sel' : ''}" style="${isSel ? '' : `background:${avB(gi)};color:${avF(gi)}`}"
