@@ -33,7 +33,7 @@ import {
   contacts,
 } from '../state.js';
 import { RP, SC, LC, EC, STGS, avB, avF } from '../constants.js';
-import { ab, td, escapeHtml, escAttr } from '../utils.js';
+import { ab, td, escapeHtml, escAttr, isMobile } from '../utils.js';
 import { trackAction } from './audit-tab.js';
 import { postToSheet } from '../api.js';
 
@@ -136,10 +136,120 @@ export function renderCrm() {
 /* ══════════════════════════════════════════
    파이프라인(칸반보드) 뷰 (원본 4662~4681행)
 ══════════════════════════════════════════ */
+/* ══════════════════════════════════════════
+   모바일 — 길게 눌러 고르고, 눌러서 옮긴다
+
+   칸반은 원래 카드를 끌어다 옮기는 화면인데, 손가락으로는 끌리지 않는다(HTML5
+   드래그는 터치에서 아예 시작되지 않는다). 그래서 휴대폰에서는 카드를 열어
+   드로어 안에서 상태 단추를 눌러야 했다 — 다섯 곳을 옮기려면 열고 누르고 닫기를
+   다섯 번 한다.
+
+   길게 눌러 고르고, 위에 뜨는 단추로 한꺼번에 옮긴다. 마스터DB와 같은 손짓이라
+   따로 배울 게 없다.
+
+   이미 그 상태인 카드는 건드리지 않는다. 안 바뀐 줄까지 저장하면 «상태 변경»
+   기록이 쌓여, 나중에 무엇이 실제로 움직였는지 찾을 수 없다.
+══════════════════════════════════════════ */
+export const crmSelected = new Set();
+
+const CRM_LP_MS = 450;
+let kLpTimer = null, kLpSwallow = false;
+const kCardOf = (t) => (t && t.closest ? t.closest('.kcard[data-tid]') : null);
+const tidOf = (v) => (/^-?\d+$/.test(v) ? Number(v) : v);
+const cancelKLp = () => { if(kLpTimer){ clearTimeout(kLpTimer); kLpTimer = null; } };
+
+function toggleCrmSelect(id){
+  if(crmSelected.has(id)) crmSelected.delete(id); else crmSelected.add(id);
+  renderPipeline();
+}
+export function clearCrmSelection(){ crmSelected.clear(); renderPipeline(); }
+
+export function renderCrmSelBar(){
+  const el = document.getElementById('crm-selbar');
+  if(!el) return;
+  const n = crmSelected.size;
+  if(!n){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = 'flex';
+  // 고른 것들이 이미 한 상태에 모여 있으면 그 단추는 눌러도 할 일이 없다
+  const picked = targets.filter(t => crmSelected.has(t.id));
+  el.innerHTML = `<span style="font-size:12px;font-weight:700">${n}개 선택됨</span>
+    <span style="font-size:10.5px;color:var(--i5)">옮길 곳을 누르세요</span>
+    <span style="display:flex;gap:4px;flex-wrap:wrap;margin-left:2px">
+      ${KCOLS.map(col => {
+        const same = picked.every(t => t.status === col.key);
+        return `<button class="btn bs" ${same ? 'disabled' : ''}
+          style="border-color:${col.c};color:${same ? 'var(--i5)' : col.c}${same ? ';opacity:.45' : ''}"
+          onclick="moveCrmSelected('${escAttr(col.key)}')">${escapeHtml(col.key)}</button>`;
+      }).join('')}
+    </span>
+    <button class="btn bs" style="margin-left:auto" onclick="clearCrmSelection()">선택 해제</button>`;
+}
+
+/* 고른 것을 한 상태로 옮긴다. 줄마다 저장하고 실패한 줄만 되돌린다 —
+   절반만 옮겨 놓고 성공이라고 하면, 다시 눌러 옮기다 기록이 두 번 남는다. */
+export async function moveCrmSelected(status){
+  const picked = targets.filter(t => crmSelected.has(t.id) && t.status !== status);
+  if(!picked.length){ crmSelected.clear(); renderPipeline(); return; }
+
+  const before = picked.map(t => ({ t, status: t.status, lastActivity: t.lastActivity }));
+  picked.forEach(t => { t.status = status; t.lastActivity = td(); });
+  crmSelected.clear();
+  renderCrm(); updBadges();
+
+  const res = await Promise.all(picked.map(t => saveTargetToSheet(t)));
+  const bad = before.filter((_, i) => !res[i].ok);
+  if(bad.length){
+    bad.forEach(b => Object.assign(b.t, { status: b.status, lastActivity: b.lastActivity }));
+    renderCrm(); updBadges();
+    alert(`${bad.length}건은 저장에 실패해 되돌렸어요. 네트워크 확인 후 다시 시도해주세요.`);
+  }
+  const ok = before.filter((_, i) => res[i].ok);
+  if(ok.length) trackAction('status', '상태 변경', `${ok.length}개사`,
+    `<b>${escapeHtml(String(ok.length))}개사</b>를 <b>${escapeHtml(status)}</b>로 옮김 — ${
+      ok.map(b => escapeHtml(b.t.name)).join(', ')}`);
+}
+
+function initCrmLongPress(){
+  document.addEventListener('touchstart', (e) => {
+    if(!isMobile()) return;
+    const card = kCardOf(e.target);
+    if(!card) return;
+    cancelKLp();
+    kLpTimer = setTimeout(() => {
+      kLpTimer = null;
+      kLpSwallow = true;              // 손을 뗄 때 따라오는 click은 삼킨다
+      navigator.vibrate?.(15);
+      toggleCrmSelect(tidOf(card.dataset.tid));
+    }, CRM_LP_MS);
+  }, { passive: true });
+
+  ['touchmove', 'touchend', 'touchcancel'].forEach(ev =>
+    document.addEventListener(ev, cancelKLp, { passive: true }));
+
+  document.addEventListener('click', (e) => {
+    if(kLpSwallow){ kLpSwallow = false; e.stopPropagation(); e.preventDefault(); return; }
+    if(!isMobile() || !crmSelected.size) return;
+    const card = kCardOf(e.target);
+    if(!card) return;
+    // 고르는 중에는 탭이 곧 고르기다 — 드로어는 다 푼 뒤에 연다
+    e.stopPropagation(); e.preventDefault();
+    toggleCrmSelect(tidOf(card.dataset.tid));
+  }, true);
+
+  document.addEventListener('contextmenu', (e) => {
+    if(isMobile() && kCardOf(e.target)) e.preventDefault();
+  });
+}
+initCrmLongPress();
+
 export function renderPipeline() {
   const list = crmFilt();
   const kanbanEl = document.getElementById('kanban');
   if (!kanbanEl) return;
+  // 화면에서 사라진 타겟이 골라진 채로 남으면, 옮기기 단추가 없는 것을 옮기려 든다
+  const alive = new Set(list.map(t => String(t.id)));
+  [...crmSelected].forEach(id => { if(!alive.has(String(id))) crmSelected.delete(id); });
+  renderCrmSelBar();
   kanbanEl.innerHTML = KCOLS.map(col => {
     const cards = list.filter(t => t.status === col.key);
     return `<div class="kcol"><div class="kch"><div class="kstr" style="background:${col.c}"></div><div class="klb">${escapeHtml(col.key)}</div><div class="kct">${cards.length}</div></div>
@@ -150,7 +260,9 @@ export function kCard(t) {
   const i = targets.findIndex(x => x.id === t.id);
   const pri = (t.priority || 'mid')[0] || 'm';
   const evShortName = (t.event || '').replace('KIC Silicon Valley', 'KIC SV').replace('KIC New York', 'KIC NY');
-  return `<div class="kcard" onclick="openDr(${t.id})">
+  const sel = crmSelected.has(t.id);
+  return `<div class="kcard${sel ? ' sel' : ''}" data-tid="${escAttr(String(t.id))}" onclick="openDr(${t.id})"${
+    sel ? ' style="outline:2px solid var(--a);outline-offset:-2px;background:var(--ad)"' : ''}>
     <div class="kct2"><div class="kav" style="background:${avB(i)};color:${avF(i)}">${escapeHtml(ab(t.name || '?'))}</div><div><div class="knm">${escapeHtml(t.name || '(이름없음)')}</div><div class="ksc">${escapeHtml(t.sector || '')}</div></div></div>
     <div class="kps"><span class="pill ${RP[t.role] || 'p-gray'}">${escapeHtml(t.role || '')}</span><span class="pill p-gray">${escapeHtml(evShortName)}</span></div>
     <div class="kft"><div class="pri p${pri}"></div><div class="kwh">${escapeHtml(t.assignee || '')}</div><div class="kdt">${escapeHtml(t.lastActivity || '')}</div></div>
@@ -527,6 +639,8 @@ window.switchCV = switchCV;
 window.renderCrm = renderCrm;
 window.tblF = tblF;
 window.chgSt = chgSt;
+window.clearCrmSelection = clearCrmSelection;
+window.moveCrmSelected = moveCrmSelected;
 window.openDr = openDr;
 window.closeDr = closeDr;
 window.switchDT = switchDT;

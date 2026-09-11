@@ -903,7 +903,7 @@
     <div class="srch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" placeholder="기업명 검색…" oninput="renderCrm()" id="crm-q"></div>
     <button class="btn bp bs" onclick="openModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>타겟 추가</button>
   </div>
-  <div class="view on" id="v-pipeline"><div class="kanban" id="kanban"></div></div>
+  <div class="view on" id="v-pipeline"><div id="crm-selbar" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 14px;border-bottom:1px solid var(--i7);background:var(--i9)"></div><div class="kanban" id="kanban"></div></div>
   <div class="view" id="v-table">
     <div class="tbar"><div class="seg"><button class="seg-b on" onclick="tblF('전체',this)">전체</button><button class="seg-b" onclick="tblF('미접촉',this)">미접촉</button><button class="seg-b" onclick="tblF('컨택중',this)">컨택중</button><button class="seg-b" onclick="tblF('협의중',this)">협의중</button><button class="seg-b" onclick="tblF('확정',this)">확정</button></div><span class="tct" id="tct"></span></div>
     <div class="tw"><table><thead><tr><th>기업</th><th>행사</th><th>유형</th><th>담당</th><th>컨택 상태</th><th>우선순위</th><th>최근 활동</th><th></th></tr></thead><tbody id="crm-tbody"></tbody></table></div>
