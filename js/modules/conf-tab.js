@@ -278,13 +278,11 @@ function newSessionHtml(ev, days, cfg){
 }
 
 function sessionCard(ev, s, days, cfg){
-  /* 시간을 적은 줄은 시간 순으로 세운다 — 프로그램은 순서대로 읽는 물건이고,
-     시간을 적어 뒀는데 등록 순으로 늘어서면 현장 진행표로 못 쓴다.
-     시간이 없는 줄은 원래 순서를 지키며 뒤로 간다. */
-  const asg = assignmentsOfSession(s.id).slice().sort((x, y) => {
-    if(!!x.start_at !== !!y.start_at) return x.start_at ? -1 : 1;
-    return String(x.start_at || '').localeCompare(String(y.start_at || ''));
-  });
+  /* 순서는 seq 하나로 정한다(assignmentsOfSession이 seq로 세운다).
+     전에는 시간이 있으면 시간 순으로 세웠는데, 그러면 사람이 끌어다 옮겨도
+     시간이 도로 끌고 가 버린다 — 순서를 정하는 주인이 둘일 수는 없다.
+     시간이 순서와 어긋나면 아래에서 경고로 알린다. */
+  const asg = assignmentsOfSession(s.id);
   const open = confOpenSession === s.id;
   const editing = confEditSession === s.id;
   const meta = [timeLabel(s.start_at, s.end_at), s.track, s.room].filter(Boolean).join(' · ');
@@ -305,8 +303,16 @@ function sessionCard(ev, s, days, cfg){
     /* 앞 사람이 끝나기 전에 시작하면 겹친다 — 같은 무대에 둘이 설 수는 없다 */
     const prev = idx > 0 ? asg[idx - 1] : null;
     const overlap = prev && prev.end_at && a.start_at && a.start_at < prev.end_at;
-    return `<div style="padding:6px 0;border-top:1px solid var(--i6)">
+    /* 순서는 끌어서 정하고 시간은 따로 적으니 둘이 어긋날 수 있다.
+       어느 쪽이 맞는지는 우리가 모른다 — 어긋났다는 사실만 알린다. */
+    const outOfOrder = !overlap && prev && prev.start_at && a.start_at && a.start_at < prev.start_at;
+    return `<div class="asg-row" style="padding:6px 0;border-top:1px solid var(--i6)"
+      draggable="true" ondragstart="onAsgDragStart(event,'${escAttr(a.id)}')" ondragend="onAsgDragEnd()"
+      ondragover="onAsgDragOver(event,this)" ondragleave="onAsgDragLeave(this)"
+      ondrop="onAsgDrop(event,'${escAttr(a.id)}',this)">
       <div style="display:flex;align-items:center;gap:8px">
+      <span style="cursor:grab;color:var(--i5);font-size:12px;line-height:1;user-select:none"
+        title="끌어서 순서를 바꿉니다">⠿</span>
       ${roleChip(a.role)}
       <div style="flex:1;min-width:0">
         <div><span onclick="openSpeakerDr('${escAttr(a.speaker_id)}')" style="font-size:12px;cursor:pointer;color:var(--a)">${escapeHtml(speakerName(a.speaker_id))}</span>
@@ -336,6 +342,7 @@ function sessionCard(ev, s, days, cfg){
           title="분만 적어 두면 «시간 자동 배분»이 이 길이로 이어 붙입니다">
         ${warn ? `<span style="font-size:10px;color:var(--am)">⚠ ${escapeHtml(warn)}</span>` : ''}
         ${overlap ? `<span style="font-size:10px;color:var(--re)">⚠ 앞 발표와 겹쳐요</span>` : ''}
+        ${outOfOrder ? `<span style="font-size:10px;color:var(--am)">⚠ 앞 사람보다 이른 시각이에요 — 순서나 시간 중 하나를 고쳐주세요</span>` : ''}
       </div>
     </div>`;
   };
@@ -431,6 +438,11 @@ function assignFormHtml(ev, s){
       <div><div class="fl">역할</div>
         <select class="fi" id="as-role">
           ${SPEAKER_ROLES.map(r => `<option value="${escAttr(r.key)}">${escapeHtml(r.label)}</option>`).join('')}
+        </select></div>
+      <div><div class="fl">자리</div>
+        <select class="fi" id="as-at">
+          <option value="">맨 뒤</option>
+          ${here.map((x, k) => `<option value="${k}">${k + 1}번째 — ${escapeHtml(speakerName(x.speaker_id))} 앞</option>`).join('')}
         </select></div>
     </div>
     <div style="margin-top:8px;display:flex;gap:7px;align-items:center">
@@ -814,6 +826,76 @@ export async function autoTalkTimes(sid){
   renderConf();
 }
 
+/* ── 순서 바꾸기 ──
+   좌장을 나중에 넣으면 맨 뒤에 붙는다. 프로그램은 순서대로 읽는 물건이라
+   좌장이 맨 아래 있으면 그대로는 못 쓴다. 지워서 다시 넣게 하면 발제 정보가
+   함께 날아가므로, 끌어서 옮긴다. */
+let _dragAsgId = null;
+
+export function onAsgDragStart(e, aid){
+  _dragAsgId = aid;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', aid);
+  e.stopPropagation();
+}
+export function onAsgDragEnd(){
+  _dragAsgId = null;
+  document.querySelectorAll('.asg-row.drop-on').forEach(el => el.classList.remove('drop-on'));
+}
+export function onAsgDragOver(e, el){
+  if(!_dragAsgId) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  if(el) el.classList.add('drop-on');
+}
+export function onAsgDragLeave(el){ if(el) el.classList.remove('drop-on'); }
+
+export async function onAsgDrop(e, overId, el){
+  e.preventDefault();
+  e.stopPropagation();
+  if(el) el.classList.remove('drop-on');
+  const from = _dragAsgId;
+  onAsgDragEnd();
+  if(!from || from === overId) return;
+
+  const moving = SESSION_SPEAKERS.find(x => x.id === from);
+  const target = SESSION_SPEAKERS.find(x => x.id === overId);
+  /* 다른 세션의 줄로는 옮기지 않는다 — 세션을 옮기는 건 순서 바꾸기가 아니라
+     배정을 다시 하는 일이고, 그때는 발제 정보를 어떻게 할지 정해야 한다. */
+  if(!moving || !target || moving.session_id !== target.session_id) return;
+
+  const list = assignmentsOfSession(moving.session_id).slice();
+  const fromIdx = list.findIndex(x => x.id === from);
+  const toIdx = list.findIndex(x => x.id === overId);
+  if(fromIdx < 0 || toIdx < 0) return;
+  list.splice(toIdx, 0, list.splice(fromIdx, 1)[0]);
+  await applyAsgOrder(list, `${speakerName(moving.speaker_id)} 순서 옮김`);
+}
+
+/* seq를 1부터 다시 매긴다. 바뀐 줄만 보낸다 — 다섯 줄 중 둘만 움직였는데
+   다섯 번 저장하면 기록이 «고침»으로 채워진다. */
+async function applyAsgOrder(list, label){
+  const changed = [];
+  list.forEach((a, i) => {
+    const next = String(i + 1);
+    if(String(a.seq ?? '') !== next) changed.push({ a, prev: a.seq, next });
+  });
+  if(!changed.length) return;
+  changed.forEach(c => { c.a.seq = c.next; });
+  renderConf();
+
+  for(const c of changed){
+    const res = await gSaveAssign({ id: c.a.id, seq: c.next });
+    if(!res || res.ok === false){
+      changed.forEach(x => { x.a.seq = x.prev; });
+      renderConf();
+      if(!res?.locked) alert('순서를 저장하지 못했어요.');
+      return;
+    }
+  }
+  trackAction('edit', '세션 배정 순서', confEvent, label);
+}
+
 export function toggleEditSession(sid){
   confEditSession = confEditSession === sid ? '' : sid;
   renderConf();
@@ -969,8 +1051,18 @@ export async function addAssign(sid){
   };
   const res = await gSaveAssign(row);
   if(!res || res.ok === false){ if(!res?.locked) alert('배정하지 못했어요.'); return; }
-  SESSION_SPEAKERS.push({ ...row, id: res.id || `SS-tmp-${Date.now()}` });
+  const made = { ...row, id: res.id || `SS-tmp-${Date.now()}` };
+  SESSION_SPEAKERS.push(made);
   trackAction('add', '세션 배정', ev.key, `${speakerName(spId)} — ${role}`);
+
+  /* 고른 자리에 끼워 넣는다. 좌장은 대개 맨 앞이라, 넣고 나서 매번 끌어
+     올리게 하면 그게 일이 된다. */
+  const at = (document.getElementById('as-at')?.value || '').trim();
+  if(at !== ''){
+    const list = assignmentsOfSession(sid).filter(x => x.id !== made.id);
+    list.splice(Number(at), 0, made);
+    await applyAsgOrder(list, `${speakerName(spId)} — ${Number(at) + 1}번째로 배정`);
+  }
   renderConf();
 }
 
@@ -1032,6 +1124,11 @@ window.fillEditSlot      = fillEditSlot;
 window.saveSessionEdit   = saveSessionEdit;
 window.setTalkTime       = setTalkTime;
 window.autoTalkTimes     = autoTalkTimes;
+window.onAsgDragStart    = onAsgDragStart;
+window.onAsgDragEnd      = onAsgDragEnd;
+window.onAsgDragOver     = onAsgDragOver;
+window.onAsgDragLeave    = onAsgDragLeave;
+window.onAsgDrop         = onAsgDrop;
 window.addConfSession    = addConfSession;
 window.removeConfSession = removeConfSession;
 window.addAssign         = addAssign;

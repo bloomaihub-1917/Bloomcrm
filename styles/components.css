@@ -620,3 +620,7 @@ tr.row-sel{background:var(--ad)}
 .mdb-dragging #mdb-domain-list .ev-chip,
 .mdb-dragging .s-q .nr{outline:1px dashed var(--i5);outline-offset:-1px}
 .ev-chip.drop-on,.nr.drop-on{background:var(--ad);outline:2px solid var(--a);outline-offset:-2px}
+
+/* 세션 안에서 배정 줄을 끌어 순서 바꾸기 */
+.asg-row.drop-on{background:var(--ad);box-shadow:inset 0 2px 0 var(--a)}
+.asg-row[draggable="true"]:hover{background:var(--i9)}
