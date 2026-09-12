@@ -425,14 +425,41 @@ export async function addBoothDesignFeedback(exhId){
 
    자유 입력도 그대로 둔다 — 카탈로그 밖의 품목(그래픽 랩핑, 전기 등)이 실제로
    들어오기 때문에 목록에 없다고 못 적게 하면 안 된다. */
+/* 고른 분류에 맞는 것만 보여준다. 예전에는 비품과 그래픽을 한 목록에 담아
+   놓고 분류와 상관없이 늘 같은 걸 띄웠다 — «부스»를 골라 놓고 의자 목록을
+   훑게 되고, 거기서 잘못 고르면 분류와 품목이 어긋난 줄이 저장된다.
+
+   차림은 품목코드 순이다. 발주서와 렌탈사 카탈로그가 코드 순이라, 다른
+   순서로 두면 눈으로 짚어 가며 맞춰야 한다.
+
+   부스는 카탈로그가 아니라 부스 타입 목록에서 온다(그게 실제로 청구하는
+   단위다). 기타는 목록을 주지 않는다 — 카탈로그 밖이라는 뜻이라서, 목록이
+   있으면 그게 곧 «여기 있는 걸 골라라»라는 말이 된다. */
+const byCode = (a, b) =>
+  String(a.code || '힣').localeCompare(String(b.code || '힣'), 'ko', { numeric: true });
+
+function itemCatalogFor(evKey, cat){
+  if(cat === 'booth') return boothTypes(evKey)
+    .map(t => ({ value: t.code, desc: t.label && t.label !== t.code ? t.label : '', code: t.code }));
+  if(cat === 'etc') return [];
+  return catalogFor(evKey, cat === 'graphic' ? 'graphic' : 'equip')
+    .slice().sort(byCode)
+    .map(c => ({
+      value: `${c.code} ${c.name_ko}`,
+      code: c.code,
+      desc: [c.name_en, c.spec, c.price_krw && money(c.price_krw) + '원'].filter(Boolean).join(' · '),
+    }));
+}
+
+const itemListId = (x, cat) => `eqcat-${escAttr(x.id)}-${cat}`;
+
 function catalogDatalist(x){
-  const list = catalogFor(x.event_id);
-  if(!list.length) return '';
-  return `<datalist id="eqcat-${escAttr(x.id)}">${list.map(c =>
-    `<option value="${escAttr(`${c.code} ${c.name_ko}`)}">${escapeHtml([
-      (c.kind || 'equip') === 'graphic' ? '그래픽' : '비품',
-      c.name_en, c.spec, c.price_krw && money(c.price_krw) + '원'].filter(Boolean).join(' · '))}</option>`
-  ).join('')}</datalist>`;
+  return itemCats().map(({ code: cat }) => {
+    const list = itemCatalogFor(x.event_id, cat);
+    if(!list.length) return '';
+    return `<datalist id="${itemListId(x, cat)}">${list.map(o =>
+      `<option value="${escAttr(o.value)}">${escapeHtml(o.desc)}</option>`).join('')}</datalist>`;
+  }).join('');
 }
 
 /* ── 직접 입력한 비품을 품목마스터에 올린다 ──
@@ -1384,6 +1411,16 @@ const currencies = () => codeList('currency', null,
 let lastItemCat = null;
 let lastItemCur = null;
 export function rememberItemCat(v){ lastItemCat = v || null; }
+
+/* 분류를 바꾸면 고를 수 있는 목록도 바뀐다. 적어 둔 이름은 지우지 않는다 —
+   분류만 잘못 골랐다가 되돌리는 일이 잦고, 그때마다 다시 치게 하면 안 된다. */
+export function swapItemList(exhId, cat){
+  const el = document.getElementById('it-nm-' + exhId);
+  if(!el) return;
+  const id = `eqcat-${exhId}-${cat}`;
+  if(document.getElementById(id)) el.setAttribute('list', id);
+  else el.removeAttribute('list');       // 기타 — 카탈로그 밖이라 고를 목록이 없다
+}
 export function rememberItemCur(v){ lastItemCur = v || null; }
 const itemAmount = (i) => Number(String(i.amount || '').replace(/[^0-9.-]/g, '') || 0);
 
@@ -1590,10 +1627,10 @@ function dBilling(x){
     </div>
     <div class="bl-row bl-item-add">
       <select class="fi" id="it-cat-${escAttr(x.id)}" style="flex:0 0 72px;min-width:0;font-size:11.5px;padding:6px"
-        onchange="rememberItemCat(this.value)">
+        onchange="rememberItemCat(this.value); swapItemList('${escAttr(x.id)}', this.value)">
         ${itemCats().map(({ code: k, label: l }, i) => `<option value="${escAttr(k)}"${(lastItemCat || itemCats()[0]?.code) === k ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('')}</select>
       <input class="fi" id="it-nm-${escAttr(x.id)}" placeholder="항목명" style="flex:1 1 120px;min-width:0;font-size:11.5px;padding:6px"
-        list="eqcat-${escAttr(x.id)}" oninput="pickCatalogItem('${escAttr(x.id)}')">
+        list="${itemListId(x, lastItemCat || itemCats()[0]?.code || 'equip')}" oninput="pickCatalogItem('${escAttr(x.id)}')">
       ${catalogDatalist(x)}${designTargetList(x)}
       <input class="fi" id="it-qty-${escAttr(x.id)}" placeholder="수량" style="flex:1 1 54px;min-width:0;font-size:11.5px;padding:6px"
         oninput="calcItemAmount('${escAttr(x.id)}')">
@@ -2591,6 +2628,7 @@ window.setPayField = setPayField;
 window.toggleItemBillable = toggleItemBillable;
 window.pickCatalogItem = pickCatalogItem;
 window.rememberItemCat = rememberItemCat;
+window.swapItemList = swapItemList;
 window.rememberItemCur = rememberItemCur;
 window.addExhRefund = addExhRefund;
 window.toggleRefundDone = toggleRefundDone;
