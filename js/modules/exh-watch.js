@@ -37,7 +37,19 @@ import {
 } from './local-folder.js';
 
 /* 폴더 손잡이는 브라우저마다 따로 산다. DB의 폴더 줄(id)을 열쇠로 삼아
-   이 PC에서 어느 실제 폴더를 가리키는지 IndexedDB에 매어 둔다. */
+   이 PC에서 어느 실제 폴더를 가리키는지 IndexedDB에 매어 둔다.
+
+   ── OneDrive라서 생기는 일 ──
+   같은 «300. 전시/Logo»라도 사람마다 실제 경로가 다르다. 누구는
+   «C:/Users/수현/OneDrive - STUDIO BLOOM/…», 누구는 회사 PC의 다른 자리다.
+   그래서 «어느 폴더를 매었나»는 DB에 있으면 안 된다 — 저장하는 순간 마지막에
+   맨 사람의 경로가 모두의 값이 되고, 다음 사람이 열 때 «폴더가 바뀌었다»고
+   잘못 판단한다(그 물음에는 기록을 지우는 선택지가 있다).
+
+   DB의 path_hint는 그래서 자동으로 안 적는다. 사람이 «300. 전시 ▸ Logo»처럼
+   적어 두는 길잡이다 — 다른 PC에서 처음 맬 때 어느 폴더를 고를지 알려면
+   그것 말고는 방법이 없다. 서로 다른 깊이를 고르면(한쪽은 300.전시, 한쪽은
+   그 안의 Logo) 파일 경로가 어긋나 모든 줄이 새 파일로 뜬다. */
 const handleKey = (folderId) => `watch:${folderId}`;
 
 const now = () => new Date().toISOString();
@@ -136,10 +148,12 @@ export async function bindWatchFolder(folderId){
     alert('이 브라우저는 폴더를 읽지 못해요.\nPC의 Chrome이나 Edge에서 한 번 매어 두면, 휴대폰에서는 결과만 보면 됩니다.');
     return;
   }
+  const was = String(await folderLabel(handleKey(folderId)) || '');
   try {
     const h = await pickFolder(handleKey(folderId));
     if(!h) return;                                   // 취소
-    const was = String(f.path_hint || '');
+    /* 견주는 대상은 이 PC가 전에 매던 폴더다. DB의 path_hint를 쓰면 다른
+       사람이 매어 둔 이름과 견주게 되어, 아무것도 안 바꿨는데 물음이 뜬다. */
     const files = WATCH_FILES.filter(w => w.folder_id === folderId);
 
     /* 다른 폴더를 골랐다 — 여기서 갈린다.
@@ -175,10 +189,6 @@ export async function bindWatchFolder(folderId){
     }
 
     boundNames[folderId] = h.name;
-    if(f.path_hint !== h.name){
-      f.path_hint = h.name;
-      await saveWatchFolder({ id: f.id, path_hint: h.name });
-    }
     renderWatchBodyIfOpen();
     await scanWatchFolder(folderId);                 // 매자마자 한 번 훑는다
   } catch(e){
@@ -198,6 +208,25 @@ export async function renameWatchFolder(folderId){
   if(!res.ok){ f.name = was; renderWatchBodyIfOpen(); alert('이름을 저장하지 못했어요.'); return; }
   trackAction('update', '지켜보는 폴더 이름', f.name,
     `«${escapeHtml(was)}» → <b>${escapeHtml(f.name)}</b>`);
+}
+
+/* 길잡이 — «어느 폴더를 골라야 하나»를 다른 PC의 사람에게 알려주는 글줄.
+   브라우저는 고른 폴더의 전체 경로를 알려주지 않는다(폴더 이름 한 토막이
+   전부다). 그래서 이건 사람이 적어야 한다. */
+export async function editWatchHint(folderId){
+  const f = WATCH_FOLDERS.find(x => x.id === folderId);
+  if(!f) return;
+  const v = prompt(
+    '다른 PC에서 이 폴더를 고를 사람에게 어디인지 알려주세요.\n'
+    + '예: 2026 KIC ▸ 300. 전시 ▸ Logo\n\n'
+    + '(OneDrive 경로는 사람마다 달라서, 같은 자리를 고르려면 이 안내가 필요해요)',
+    f.path_hint || '');
+  if(v === null || v.trim() === String(f.path_hint || '')) return;
+  const was = f.path_hint;
+  f.path_hint = v.trim();
+  renderWatchBodyIfOpen();
+  const res = await saveWatchFolder({ id: f.id, path_hint: f.path_hint });
+  if(!res.ok){ f.path_hint = was; renderWatchBodyIfOpen(); alert('길잡이를 저장하지 못했어요.'); }
 }
 
 export async function unbindWatchFolder(folderId){
@@ -486,11 +515,17 @@ function folderBlock(f, canScan){
               escAttr(bound ? `지금 «${bound}» 폴더를 보고 있어요` : '이 PC에서 볼 폴더를 고릅니다')}">${
               bound ? '폴더 바꾸기' : '폴더 고르기'}</button>` : ''}
         ${need ? `<button class="btn bs" onclick="checkAllInFolder('${escAttr(f.id)}')">모두 확인</button>` : ''}
+        <button class="btn bs" onclick="editWatchHint('${escAttr(f.id)}')"
+          title="다른 PC에서 어느 폴더를 골라야 하는지 적어 둡니다">길잡이</button>
         <button class="btn bs" onclick="removeWatchFolder('${escAttr(f.id)}')" title="목록에서 빼기">빼기</button>
       </span>
     </div>
     ${canScan && !bound ? `<div style="font-size:11px;color:var(--am);margin-top:6px">
-      이 PC에는 아직 폴더가 매여 있지 않아요 — 「폴더 고르기」를 누르면 훑기 시작합니다</div>` : ''}
+      이 PC에는 아직 폴더가 매여 있지 않아요 — 「폴더 고르기」를 누르면 훑기 시작합니다${
+        f.path_hint ? `<br><span style="color:var(--i4)">여기서 골라주세요: <b>${escapeHtml(f.path_hint)}</b>
+          — 다른 자리를 고르면 파일 경로가 어긋나 전부 새 파일로 떠요</span>` : ''}</div>` : ''}
+    ${f.path_hint && bound ? `<div style="font-size:10.5px;color:var(--i5);margin-top:5px">
+      길잡이: ${escapeHtml(f.path_hint)}</div>` : ''}
     ${!canScan && !f.scanned_at ? `<div style="font-size:11px;color:var(--i4);margin-top:6px">
       PC에서 한 번 훑어야 목록이 생겨요</div>` : ''}
     ${open && shown.length ? `<div style="margin-top:8px">${rows}</div>`
@@ -508,5 +543,6 @@ window.scanAllWatchFolders  = scanAllWatchFolders;
 window.checkWatchFile       = checkWatchFile;
 window.checkAllInFolder     = checkAllInFolder;
 window.renameWatchFolder    = renameWatchFolder;
+window.editWatchHint        = editWatchHint;
 window.setWatchFil          = setWatchFil;
 window.toggleWatchFolder    = toggleWatchFolder;
