@@ -114,3 +114,45 @@ export async function writeFile(dir, name, blob){
   try { await w.write(blob); } finally { await w.close(); }
   return fh;
 }
+
+/* ══════════════════════════════════════════
+   폴더 훑기 — 무엇이 들어와 있나
+
+   하위 폴더까지 내려간다. 로고 폴더는 「42-43. Parexel」처럼 기업별 폴더가
+   한 겹 있고, 그 안에 파일이 있다. 한 겹만 보면 아무것도 못 본다.
+
+   숨김 파일과 OneDrive가 만드는 찌꺼기는 뺀다 — 사람이 넣은 적 없는 파일이
+   «새로 들어왔다»고 뜨면, 그 목록은 곧 안 보게 된다.
+
+   깊이를 막아 둔다. 잘못 고른 폴더(예: OneDrive 루트)를 끝까지 훑다 브라우저가
+   멈추는 것보다, 덜 훑고 «너무 깊어요»라고 말하는 편이 낫다.
+══════════════════════════════════════════ */
+const SKIP_NAME = /^(~\$|\.|desktop\.ini$|thumbs\.db$)/i;
+const MAX_DEPTH = 4;
+const MAX_FILES = 3000;
+
+export async function scanFolder(dir, { maxDepth = MAX_DEPTH, maxFiles = MAX_FILES } = {}){
+  const out = [];
+  let truncated = false;
+
+  async function walk(d, prefix, depth){
+    if(depth > maxDepth || truncated) return;
+    for await (const [name, handle] of d.entries()){
+      if(SKIP_NAME.test(name)) continue;
+      if(out.length >= maxFiles){ truncated = true; return; }
+      const rel = prefix ? prefix + '/' + name : name;
+      if(handle.kind === 'directory'){ await walk(handle, rel, depth + 1); continue; }
+      try {
+        const f = await handle.getFile();
+        out.push({ rel, name, size: f.size, mtime: f.lastModified });
+      } catch(e){
+        /* 동기화 중이라 아직 못 읽는 파일이 있다. 건너뛰면 다음 훑기에서
+           잡히지만, 없어진 것으로 오해하면 안 되므로 표시해 둔다. */
+        out.push({ rel, name, size: null, mtime: null, unreadable: true });
+      }
+    }
+  }
+
+  await walk(dir, '', 1);
+  return { files: out, truncated };
+}

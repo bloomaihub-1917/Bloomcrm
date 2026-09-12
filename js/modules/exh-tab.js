@@ -48,6 +48,7 @@ const deleteExhLog = guardWrite(_deleteExhLog);
 const batchCreateExhibitors = guardWrite(_batchCreateExhibitors);
 const saveExhCfgToSheet = guardWrite(_saveExhCfgToSheet);
 import { trackAction } from './audit-tab.js';
+import { renderWatchView, initWatchFolders } from './exh-watch.js';
 import { normalizeCompanyKey, createOrg, reloadOrgs } from './company-tab.js';
 
 /* 전시 참가기업으로 취급할 참가 역할 — 데이터에 표기 흔들림이 있어 함께 본다 */
@@ -131,7 +132,7 @@ export function setStepFil(key){
     : stepFil.mode === 'done' ? { key, mode: 'todo' } : null;
   renderExh();
 }
-let exhView = 'dash';        // dash | list | booth | equip | graphic
+let exhView = 'dash';        // dash | list | booth | equip | graphic | watch
 
 /* 그래픽 현황 안의 보기와 거르개. 그래픽은 기업 한 줄로 볼 일(단계 진행)과
    파일 한 줄로 볼 일(무엇이 안 왔나)이 갈린다 — 화면 하나에 둘 다 넣으면
@@ -836,6 +837,8 @@ function updateExhBadge(){
 }
 
 export function setExhView(v){
+  // 폴더 이름은 권한을 묻지 않고 읽는다 — 그림을 그리다 권한 창이 뜨면 안 된다
+  if(v === 'watch') initWatchFolders(exhEvent);
   // 부스 타입으로 걸러 둔 채 다른 보기로 갔다가 돌아오면, 왜 목록이 짧은지
   // 알 수 없다. 보기를 옮기거나 행사를 바꾸면 푼다.
   if(v !== 'booth') boothTypeFil = '';
@@ -968,7 +971,7 @@ export function renderExh(){
   const VIEWS = [['dash','대시보드'], ['list','기업리스트'],
     ['booth','부스 현황'], ['equip','비품 현황'], ['graphic','그래픽 현황'],
     ['base','기본 시공'],
-    ['money','금액 현황'], ['book','프로그램북']];
+    ['money','금액 현황'], ['book','프로그램북'], ['watch','파일 감시']];
   const seg = `<div class="tbar" style="padding:10px 16px 0">
     <div class="seg" style="flex-wrap:wrap">
       ${VIEWS.map(([k, l]) => `<button class="seg-b${exhView === k ? ' on' : ''}" onclick="setExhView('${k}')">${l}</button>`).join('')}
@@ -982,6 +985,7 @@ export function renderExh(){
     : exhView === 'base'    ? renderBaseView(list)
     : exhView === 'money'   ? renderMoneyView(list)
     : exhView === 'book'    ? renderBookView(list)
+    : exhView === 'watch'   ? renderWatchView(exhEvent)
     : renderInquiryPanel() + renderChecklist(list, all);
   el.innerHTML = seg + banner
     + (exhLocked() ? `<div class="ro">${bodyHtml}</div>` : bodyHtml);

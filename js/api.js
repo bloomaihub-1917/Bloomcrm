@@ -46,6 +46,7 @@ import {
   EXH_APPS,
   ORGS,
   EQUIP_CATALOG,
+  WATCH_FOLDERS, WATCH_FILES,
   CODE_LISTS, applyCodeLists,
   loadExhCfg,
   auditLog,
@@ -242,7 +243,8 @@ export async function loadFromSheets(hooks = {}){
            orgsData,
            exhData, exhConData, exhItemData, exhInvData, exhTaxData, exhPayData, exhLogData, exhAppData, equipCatData,
            codeListData,
-           confSessData, speakerData, sessSpData, spConData, spLogData] = await Promise.all([
+           confSessData, speakerData, sessSpData, spConData, spLogData,
+           watchFolderData, watchFileData] = await Promise.all([
       safeFetch(base + 'contacts',       'contacts',       1, headers),
       safeFetch(base + 'participations', 'participations', 1, headers),
       safeFetch(base + 'crm_targets',    'crm_targets',    1, headers),
@@ -267,6 +269,8 @@ export async function loadFromSheets(hooks = {}){
       safeFetch(base + 'session_speakers',   'session_speakers',   1, headers),
       safeFetch(base + 'speaker_contacts',   'speaker_contacts',   1, headers),
       safeFetch(base + 'speaker_logs',       'speaker_logs',       1, headers),
+      safeFetch(base + 'watch_folders',      'watch_folders',      1, headers),
+      safeFetch(base + 'watch_files',        'watch_files',        1, headers),
     ]);
 
     // ── 실패 감지 (신규) ──
@@ -276,6 +280,7 @@ export async function loadFromSheets(hooks = {}){
       orgsData,
       exhData, exhConData, exhItemData, exhInvData, exhTaxData, exhPayData, exhLogData, exhAppData, equipCatData,
       confSessData, speakerData, sessSpData, spConData, spLogData,
+      watchFolderData, watchFileData,
       codeListData];
     const _failed  = _results.filter(r => r === null).length;
     if(_failed === _results.length){
@@ -422,6 +427,14 @@ export async function loadFromSheets(hooks = {}){
       CODE_LISTS.splice(0, CODE_LISTS.length, ...codeListData);
       applyCodeLists();
       console.log('[CRM] code_lists 로드:', CODE_LISTS.length, '개');
+    }
+
+    // ── watch_folders / watch_files → 지켜보는 폴더 ──
+    if(watchFolderData && Array.isArray(watchFolderData)){
+      WATCH_FOLDERS.splice(0, WATCH_FOLDERS.length, ...watchFolderData);
+    }
+    if(watchFileData && Array.isArray(watchFileData)){
+      WATCH_FILES.splice(0, WATCH_FILES.length, ...watchFileData);
     }
 
     // ── equip_catalog → EQUIP_CATALOG (행사별 렌탈 비품 품목표) ──
@@ -796,6 +809,11 @@ export const saveExhTax          = (o) => saveExhRow('exhibitor_tax_invoices', o
 export const saveExhPayment      = (o) => saveExhRow('exhibitor_payments', o, '입금 내역 저장');
 export const saveExhLog          = (o) => saveExhRow('exhibitor_logs',     o, '문의/기록 저장');
 export const saveExhApp          = (o) => saveExhRow('exhibitor_apps',     o, '신청서 접수 저장');
+export const saveWatchFolder     = (o) => saveExhRow('watch_folders',      o, '지켜보는 폴더 저장');
+export const deleteWatchFolder   = (id) => deleteExhRow('watch_folders',   id, '지켜보는 폴더 삭제');
+/* 훑을 때마다 수백 줄이 오간다 — 한 줄씩 보내면 그만큼 왕복한다 */
+export const saveWatchFiles      = (rows) => postToSheet(
+  { sheet: 'watch_files', action: 'batchUpsert', dataRows: rows }, '폴더 파일 일괄 기록');
 export const saveEquipCatalog    = (o) => saveExhRow('equip_catalog',      o, '품목 저장');
 export const deleteEquipCatalog  = (id) => deleteExhRow('equip_catalog',   id, '품목 삭제');
 

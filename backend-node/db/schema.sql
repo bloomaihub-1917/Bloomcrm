@@ -848,3 +848,47 @@ CREATE INDEX IF NOT EXISTS idx_sp_logs_speaker     ON speaker_logs(speaker_id);
 -- 활동 로그가 가리키는 곳(기업·연락처·세션 …). JSON 한 덩어리로 둔다 —
 -- 칸을 kind/id/tab/field로 쪼개 두면 가리키는 대상이 늘 때마다 칸을 또 만들게 된다.
 ALTER TABLE activity_log ADD COLUMN IF NOT EXISTS link TEXT;
+
+-- ══════════════════════════════════════════════════════════════
+-- 지켜보는 폴더 — OneDrive에 파일이 들어오면 여기에 한 줄이 쌓인다
+--
+-- 폴더를 훑는 일은 PC(Chrome·Edge)에서만 된다. 브라우저가 임의 경로를 읽지
+-- 못하기 때문이다. 그래서 훑은 결과를 여기 남겨 둔다 — 그래야 휴대폰에서도
+-- 무엇이 들어왔는지, 누가 확인했는지 볼 수 있다.
+--
+-- 폴더 손잡이(FileSystemDirectoryHandle) 자체는 여기 못 넣는다. 객체라서
+-- 브라우저의 IndexedDB에만 산다. 여기 있는 건 "무슨 폴더를 지켜보기로 했나"
+-- 라는 약속과, 훑어서 본 파일 목록이다.
+CREATE TABLE IF NOT EXISTS watch_folders (
+  id          TEXT PRIMARY KEY,
+  event_id    TEXT,
+  name        TEXT,          -- 화면에 쓰는 이름 (로고, 그래픽 …)
+  path_hint   TEXT,          -- 사람이 찾아갈 수 있게 적어 두는 실제 경로
+  note        TEXT,
+  active      TEXT,
+  sort_order  INTEGER,
+  scanned_at  TEXT,          -- 마지막으로 훑은 시각
+  scanned_by  TEXT,
+  created_at  TEXT
+);
+
+-- 훑어서 본 파일 한 개. 사라진 파일은 지우지 않고 gone_at을 적는다 —
+-- 확인했던 파일이 조용히 없어지면 그 사실 자체가 봐야 할 일이다.
+CREATE TABLE IF NOT EXISTS watch_files (
+  id           TEXT PRIMARY KEY,
+  folder_id    TEXT,
+  event_id     TEXT,
+  rel_path     TEXT,         -- 폴더 안에서의 경로 (하위 폴더 포함)
+  name         TEXT,
+  size         TEXT,
+  mtime        TEXT,         -- 파일의 수정 시각 — 이게 바뀌면 «바뀐 파일»
+  first_seen_at TEXT,
+  changed_at   TEXT,         -- 내용이 바뀐 걸 마지막으로 본 시각
+  gone_at      TEXT,
+  checked_at   TEXT,         -- 담당자가 확인한 시각. mtime이 바뀌면 비운다
+  checked_by   TEXT,
+  note         TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_watch_files_folder ON watch_files(folder_id);
+CREATE INDEX IF NOT EXISTS idx_watch_files_event  ON watch_files(event_id);

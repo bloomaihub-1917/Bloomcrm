@@ -225,6 +225,17 @@ export const EXH_PAYMENTS = [];  // 입금 내역 (분할 입금 대응)
 export const EXH_LOGS     = [];  // 문의사항(kind='inquiry') + 자유 기록(kind='note')
 export const EXH_APPS     = [];  // 신청서 접수 이력 (최초 + 변경/취소 재접수)
 
+/* 지켜보는 폴더와, 훑어서 본 파일들 — schema.sql 주석 참고.
+   폴더 손잡이는 여기 없다(브라우저 IndexedDB에만 산다). 여기 있는 건 «무슨
+   폴더를 지켜보기로 했나»와 «무엇이 들어와 있었나»다. */
+export const WATCH_FOLDERS = [];
+export const WATCH_FILES   = [];
+export const watchFoldersFor = (evKey) => WATCH_FOLDERS
+  .filter(f => String(f.event_id || '') === String(evKey || '') && f.active !== 'no')
+  .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0)
+    || String(a.name || '').localeCompare(String(b.name || ''), 'ko'));
+export const watchFilesFor = (folderId) => WATCH_FILES.filter(f => f.folder_id === folderId);
+
 /* 렌탈 비품 품목표 — 행사별로 다르다(렌탈사와 단가가 행사마다 바뀐다).
    신청 항목(EXH_ITEMS.catalog_id)이 여기의 id를 가리킨다. */
 export const EQUIP_CATALOG = [];

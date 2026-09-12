@@ -110,6 +110,19 @@ const TABLES = {
       'file_name', 'complete', 'missing', 'handled_at', 'handler', 'summary', 'note'],
   },
 
+  /* 지켜보는 폴더와 그 안에서 본 파일들 — schema.sql 주석 참고.
+     폴더를 훑는 일은 PC에서만 되지만, 결과는 여기 있어야 휴대폰에서도 본다. */
+  watch_folders: {
+    table: 'watch_folders', pk: 'id', idPrefix: 'WF-',
+    columns: ['id', 'event_id', 'name', 'path_hint', 'note', 'active', 'sort_order',
+      'scanned_at', 'scanned_by', 'created_at'],
+  },
+  watch_files: {
+    table: 'watch_files', pk: 'id', idPrefix: 'WFI-',
+    columns: ['id', 'folder_id', 'event_id', 'rel_path', 'name', 'size', 'mtime',
+      'first_seen_at', 'changed_at', 'gone_at', 'checked_at', 'checked_by', 'note'],
+  },
+
   /* 렌탈 비품 품목표 — 행사별로 따로 둔다(단가가 행사마다 다르다) */
   equip_catalog: {
     table: 'equip_catalog', pk: 'id', idPrefix: 'EC-',
