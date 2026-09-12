@@ -229,12 +229,6 @@ export async function editWatchHint(folderId){
   if(!res.ok){ f.path_hint = was; renderWatchBodyIfOpen(); alert('길잡이를 저장하지 못했어요.'); }
 }
 
-export async function unbindWatchFolder(folderId){
-  await delHandle(handleKey(folderId));
-  boundNames[folderId] = null;
-  renderWatchBodyIfOpen();
-}
-
 export async function removeWatchFolder(folderId){
   const f = WATCH_FOLDERS.find(x => x.id === folderId);
   if(!f) return;
@@ -242,6 +236,7 @@ export async function removeWatchFolder(folderId){
   if(!confirm(`«${f.name}» 폴더를 목록에서 뺄까요?\n`
     + `지금까지 본 파일 ${n}건의 확인 기록도 함께 사라집니다.\n`
     + `(실제 폴더와 파일은 그대로 있습니다)`)) return;
+  const ids = WATCH_FILES.filter(w => w.folder_id === folderId).map(w => w.id);
   const i = WATCH_FOLDERS.indexOf(f);
   if(i >= 0) WATCH_FOLDERS.splice(i, 1);
   for(let k = WATCH_FILES.length - 1; k >= 0; k--){
@@ -249,6 +244,10 @@ export async function removeWatchFolder(folderId){
   }
   await delHandle(handleKey(folderId));
   renderWatchBodyIfOpen();
+  /* 파일 줄도 지운다. 화면에서만 치우면 다음 새로고침 때 DB에서 그대로
+     되살아나 — 가리키는 폴더가 없는 채로 — 쌓인다. «기록도 함께 사라집니다»
+     라고 물어 놓고 안 지우면 그 말이 거짓말이 된다. */
+  if(ids.length) await deleteWatchFiles(ids);
   await deleteWatchFolder(folderId);
   trackAction('delete', '지켜보는 폴더 삭제', f.name, `<b>${escapeHtml(f.name)}</b> 폴더를 목록에서 뺐어요`);
 }
@@ -359,9 +358,19 @@ export async function scanWatchFolder(folderId, { quiet = false } = {}){
   }
 }
 
+/* 하나씩 권한을 물으면 창이 연달아 뜨는데, 두 번째부터는 «사람이 누른 직후»가
+   아니라서 조용히 거절당한다(거절로 기억되기도 한다). 그래서 여기서는 묻지
+   않고, 잠겨 있던 폴더만 모아서 한 번 알려준다. */
 export async function scanAllWatchFolders(evKey){
-  for(const f of watchFoldersFor(evKey)){
-    if(await readyFolder(handleKey(f.id))) await scanWatchFolder(f.id);
+  const folders = watchFoldersFor(evKey);
+  const locked = [];
+  for(const f of folders){
+    if(await readyFolderQuiet(handleKey(f.id))) await scanWatchFolder(f.id, { quiet: true });
+    else locked.push(f.name);
+  }
+  if(locked.length){
+    alert(`${locked.join(', ')} — 이 폴더는 잠겨 있어요.` + B + `n`
+      + `폴더마다 「다시 훑기」를 누르면 권한을 다시 물어봅니다.`);
   }
 }
 
@@ -409,9 +418,14 @@ export async function checkAllInFolder(folderId){
 let watchFil = 'need';        // need | all | gone
 export function setWatchFil(v){ watchFil = v; renderWatchBodyIfOpen(); }
 
-let openFolders = new Set();
+/* 펴고 접기 — 무엇을 담아 둘지가 갈린다.
+
+   처음에는 «확인할 게 있으면 펴 둔다»가 기본이라 편 것만 담았는데, 그러면
+   확인할 게 있는 폴더는 눌러도 안 접혔다(기본값이 늘 이겼다). 접은 것을
+   담으면 사람이 누른 쪽이 언제나 이긴다. */
+const collapsed = new Set();
 export function toggleWatchFolder(id){
-  if(openFolders.has(id)) openFolders.delete(id); else openFolders.add(id);
+  if(collapsed.has(id)) collapsed.delete(id); else collapsed.add(id);
   renderWatchBodyIfOpen();
 }
 
@@ -464,7 +478,7 @@ function folderBlock(f, canScan){
   const need  = files.filter(needsEye).length;
   const bound = boundNames[f.id];
   const busy  = scanning === f.id;
-  const open  = openFolders.has(f.id) || need > 0;
+  const open  = !collapsed.has(f.id);
 
   const shown = files.filter(w =>
       watchFil === 'need' ? needsEye(w)
@@ -536,7 +550,6 @@ function folderBlock(f, canScan){
 
 window.addWatchFolder       = addWatchFolder;
 window.bindWatchFolder      = bindWatchFolder;
-window.unbindWatchFolder    = unbindWatchFolder;
 window.removeWatchFolder    = removeWatchFolder;
 window.scanWatchFolder      = scanWatchFolder;
 window.scanAllWatchFolders  = scanAllWatchFolders;

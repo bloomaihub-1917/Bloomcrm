@@ -234,7 +234,6 @@ export const watchFoldersFor = (evKey) => WATCH_FOLDERS
   .filter(f => String(f.event_id || '') === String(evKey || '') && f.active !== 'no')
   .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0)
     || String(a.name || '').localeCompare(String(b.name || ''), 'ko'));
-export const watchFilesFor = (folderId) => WATCH_FILES.filter(f => f.folder_id === folderId);
 
 /* 렌탈 비품 품목표 — 행사별로 다르다(렌탈사와 단가가 행사마다 바뀐다).
    신청 항목(EXH_ITEMS.catalog_id)이 여기의 id를 가리킨다. */
