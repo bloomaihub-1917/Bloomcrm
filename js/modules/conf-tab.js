@@ -919,6 +919,12 @@ function peopleHtml(ev){
   /* '__none__'은 «배정 없음» — 세션에 안 들어간 사람이 남아 있는지 보려는
      것이라 세션 하나를 고른 것과 성격이 같다. */
   if(confSessFil === '__none__') list = list.filter(sp => !assignmentsFor(sp.id).length);
+  else if(confSessFil.startsWith('t:')){
+    /* 트랙 칩 — 그 트랙의 세션 아무 곳에나 들어가 있으면 남는다 */
+    const t = confSessFil.slice(2);
+    const ids = new Set(sessionsForEvent(ev.key).filter(x => (x.track || '') === t).map(x => x.id));
+    list = list.filter(sp => assignmentsFor(sp.id).some(a => ids.has(a.session_id)));
+  }
   else if(confSessFil) list = list.filter(sp =>
     assignmentsFor(sp.id).some(a => a.session_id === confSessFil));
   if(confNeedFil){
@@ -954,21 +960,42 @@ function peopleHtml(ev){
   </div>`;
 
   /* ── 세션 칩 ──
-     «이 세션 사람들만 보고 챙기기»가 실제 일하는 단위다. 일자·시각을 함께
-     적어 둔다 — 세션명만으로는 어느 날 것인지 구분이 안 되는 행사가 많다. */
+     세션명은 길다. 여덟 개가 늘어서면 칩 줄이 그대로 목록이 되어, 고르는
+     자리가 아니라 읽는 자리가 된다 — 좁은 화면에서는 화면 절반을 먹는다.
+
+     그래서 트랙이 있으면 트랙으로 묶는다. «이 트랙 사람들»이 실제로 챙기는
+     단위이기도 하고, 색도 프로그램 표와 같은 색을 써서 두 화면이 이어진다.
+     트랙이 없는 세션만 제 이름으로 남는다 — 묶을 데가 없으니 숨기면 아예
+     고를 수 없게 된다. 세션 하나하나는 툴팁에 일자·시각과 함께 적어 둔다. */
   const sessions = sessionsForEvent(ev.key);
   const noSess = all.filter(sp => !assignmentsFor(sp.id).length).length;
+  const headN = (ids) => all.filter(sp => assignmentsFor(sp.id).some(a => ids.has(a.session_id))).length;
+  const chipTracks = [...new Set(sessions.map(s => s.track).filter(Boolean))];
+  const looseSess = sessions.filter(s => !s.track);
   const sessChips = (sessions.length || noSess) ? `<div class="seg" style="flex-wrap:wrap;margin-bottom:8px">
     <button class="seg-b${!confSessFil ? ' on' : ''}" onclick="setConfSessFil('')">전체 세션</button>
-    ${sessions.map(ss => {
+    ${chipTracks.map(t => {
+      const ss = sessions.filter(x => x.track === t);
+      const key = 't:' + t;
+      const c = trackColor(ev.key, t);
+      const on = confSessFil === key;
+      return `<button class="seg-b${on ? ' on' : ''}"
+        onclick="setConfSessFil('${escAttr(key)}')"
+        style="max-width:min(100%,260px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap${
+          on ? '' : `;background:${c.bg};border-color:${c.bd}55`}"
+        title="${escAttr(ss.map(x => [x.date ? x.date.slice(5) : '', x.start_at,
+          x.title_ko || x.title_en || x.id].filter(Boolean).join(' ')).join('
+'))}">${
+        escapeHtml(t)} <span style="opacity:.6">${ss.length}세션</span> ${
+        headN(new Set(ss.map(x => x.id)))}명</button>`;
+    }).join('')}
+    ${looseSess.map(ss => {
       const n = all.filter(sp => assignmentsFor(sp.id).some(a => a.session_id === ss.id)).length;
       const when = [ss.date ? ss.date.slice(5) : '', ss.start_at].filter(Boolean).join(' ');
-      /* 세션명이 길다. 칩이 한 줄을 다 먹으면 그게 목록이 되고, 좁은 화면에서는
-         옆으로 밀려 나가 아무것도 고를 수 없게 된다 — 잘라서 담고 전체는 툴팁에 둔다. */
       return `<button class="seg-b${confSessFil === ss.id ? ' on' : ''}"
         onclick="setConfSessFil('${escAttr(ss.id)}')"
         style="max-width:min(100%,260px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-        title="${escAttr([ss.title_ko, ss.title_en, ss.track, ss.room].filter(Boolean).join(' · '))}">${
+        title="${escAttr([ss.title_ko, ss.title_en, ss.room].filter(Boolean).join(' · '))}">${
         escapeHtml(ss.title_ko || ss.title_en || ss.id)}${
         when ? ` <span style="opacity:.6">${escapeHtml(when)}</span>` : ''} ${n}명</button>`;
     }).join('')}
