@@ -685,6 +685,17 @@ function rawCellState(x, step){
     // 여기서 stage만 보게 바꿨다가 날짜는 있는데 단계가 안 넘어간 건들이 전부
     // "완료"에서 빠지는 회귀가 있었다.
     const tx = taxInvoicesFor(x.id).filter(t => t.status !== 'void');
+    /* 세금계산서는 국세청에 원화로 신고하는 서류다. 외화로 청구한 곳은 애초에
+       발행할 일이 없으니 «아직 안 한 일»로 세면 안 된다 — 50곳 중 17곳이 USD인
+       행사에서 16/50은 영원히 채워지지 않는 숫자가 된다.
+
+       통화가 섞인 곳은 빼지 않는다. 원화로 청구한 부분이 남아 있어서 발행할
+       일이 실제로 있다.
+
+       이미 한 장이라도 끊었으면 그것부터 보여준다 — 통화와 무관하게 발행한
+       기록이 있는데 화면에서 지워 버리면, 뭘 보냈는지 확인할 데가 없어진다. */
+    if(!tx.length && currencyOf(x.id) !== 'KRW' && !mixedCurrency(x.id))
+      return { state: 'na', text: '외화 청구' };
     if(!tx.length) return { state: 'todo' };
     const sent = tx.filter(t => t.sent_at);
     if(!sent.length) return { state: 'warn', text: stageOf(TAX_STAGES, tx[0].stage).label };
