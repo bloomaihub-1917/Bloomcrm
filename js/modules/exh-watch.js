@@ -30,7 +30,7 @@
 
 import { WATCH_FOLDERS, WATCH_FILES, watchFoldersFor, currentUser } from '../state.js';
 import { escapeHtml, escAttr } from '../utils.js';
-import { saveWatchFolder, deleteWatchFolder, saveWatchFiles } from '../api.js';
+import { saveWatchFolder, deleteWatchFolder, saveWatchFiles, deleteWatchFiles } from '../api.js';
 import { trackAction } from './audit-tab.js';
 import {
   supported, pickFolder, delHandle, readyFolder, readyFolderQuiet, folderLabel, scanFolder,
@@ -139,6 +139,41 @@ export async function bindWatchFolder(folderId){
   try {
     const h = await pickFolder(handleKey(folderId));
     if(!h) return;                                   // 취소
+    const was = String(f.path_hint || '');
+    const files = WATCH_FILES.filter(w => w.folder_id === folderId);
+
+    /* 다른 폴더를 골랐다 — 여기서 갈린다.
+
+       ① 같은 폴더가 옮겨지거나 이름만 바뀐 것: 안의 파일은 그대로다. 기록을
+          이어야 «누가 뭘 확인했나»가 산다. 경로가 같으니 훑어도 조용하다.
+       ② 아예 다른 폴더를 보기로 한 것(행사가 바뀌었다든지): 옛 파일은 이제
+          이 폴더에 없으므로 전부 «없어짐»으로 뜬다. 수백 줄이 한꺼번에
+          확인 필요로 올라오면 목록이 못 쓰게 된다.
+
+       둘은 폴더 이름만 봐서는 구분이 안 된다 — 사람만 안다. 그래서 묻는다.
+       묻지 않고 어느 한쪽으로 정해 두면, 반대쪽인 날에 조용히 망가진다. */
+    if(was && was !== h.name && files.length){
+      const fresh = confirm(
+        `전에 보던 폴더는 «${was}»였는데 «${h.name}»를 골랐어요.\n\n`
+        + `[확인] 새로 시작 — 지금까지 본 ${files.length}건의 기록을 지웁니다\n`
+        + `[취소] 이어서 보기 — 같은 폴더가 옮겨진 경우예요\n\n`
+        + `다른 폴더인데 «이어서»를 고르면, 옛 파일 ${files.length}건이 전부 `
+        + `«없어짐»으로 올라옵니다.`);
+      if(fresh){
+        const ids = files.map(w => w.id);
+        for(let k = WATCH_FILES.length - 1; k >= 0; k--){
+          if(WATCH_FILES[k].folder_id === folderId) WATCH_FILES.splice(k, 1);
+        }
+        await deleteWatchFiles(ids);
+        trackAction('update', '지켜보는 폴더 바꿈', f.name,
+          `<b>${escapeHtml(f.name)}</b> — «${escapeHtml(was)}» → «${escapeHtml(h.name)}»로 바꾸고 `
+          + `기록 ${ids.length}건을 지웠어요`);
+      } else {
+        trackAction('update', '지켜보는 폴더 바꿈', f.name,
+          `<b>${escapeHtml(f.name)}</b> — «${escapeHtml(was)}» → «${escapeHtml(h.name)}»로 옮겼어요 (기록 유지)`);
+      }
+    }
+
     boundNames[folderId] = h.name;
     if(f.path_hint !== h.name){
       f.path_hint = h.name;
@@ -149,6 +184,20 @@ export async function bindWatchFolder(folderId){
   } catch(e){
     alert('폴더를 열지 못했어요: ' + e.message);
   }
+}
+
+export async function renameWatchFolder(folderId){
+  const f = WATCH_FOLDERS.find(x => x.id === folderId);
+  if(!f) return;
+  const v = prompt('이 폴더를 뭐라고 부를까요?', f.name || '');
+  if(v === null || !v.trim() || v.trim() === f.name) return;
+  const was = f.name;
+  f.name = v.trim();
+  renderWatchBodyIfOpen();
+  const res = await saveWatchFolder({ id: f.id, name: f.name });
+  if(!res.ok){ f.name = was; renderWatchBodyIfOpen(); alert('이름을 저장하지 못했어요.'); return; }
+  trackAction('update', '지켜보는 폴더 이름', f.name,
+    `«${escapeHtml(was)}» → <b>${escapeHtml(f.name)}</b>`);
 }
 
 export async function unbindWatchFolder(folderId){
@@ -417,10 +466,13 @@ function folderBlock(f, canScan){
 
   return `<div style="border:1px solid var(--i6);border-radius:10px;padding:11px 13px;margin-bottom:10px;background:var(--i9)">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-      <span style="font-size:13px;font-weight:800;cursor:pointer" onclick="toggleWatchFolder('${escAttr(f.id)}')">${
+      <span style="font-size:13px;font-weight:800;cursor:pointer" onclick="toggleWatchFolder('${escAttr(f.id)}')"
+        ondblclick="renameWatchFolder('${escAttr(f.id)}')" title="두 번 누르면 이름을 고쳐요">${
         escapeHtml(f.name)}</span>
       ${need ? `<span class="pill p-blue">확인 필요 ${need}</span>`
              : `<span class="pill p-green">다 봤어요</span>`}
+      ${bound ? `<span style="font-size:10px;color:var(--i5);padding:1px 6px;border:1px solid var(--i7);border-radius:4px"
+        title="이 PC에서 지금 보고 있는 폴더예요">📁 ${escapeHtml(bound)}</span>` : ''}
       <span style="font-size:10.5px;color:var(--i5)">${files.length}개 파일${
         f.scanned_at ? ` · ${escapeHtml(fmtWhen(f.scanned_at))} 훑음` : ' · 아직 훑은 적 없어요'}${
         f.scanned_by ? ` (${escapeHtml(f.scanned_by)})` : ''}</span>
@@ -455,5 +507,6 @@ window.scanWatchFolder      = scanWatchFolder;
 window.scanAllWatchFolders  = scanAllWatchFolders;
 window.checkWatchFile       = checkWatchFile;
 window.checkAllInFolder     = checkAllInFolder;
+window.renameWatchFolder    = renameWatchFolder;
 window.setWatchFil          = setWatchFil;
 window.toggleWatchFolder    = toggleWatchFolder;

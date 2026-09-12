@@ -811,6 +811,8 @@ export const saveExhLog          = (o) => saveExhRow('exhibitor_logs',     o, '�
 export const saveExhApp          = (o) => saveExhRow('exhibitor_apps',     o, '신청서 접수 저장');
 export const saveWatchFolder     = (o) => saveExhRow('watch_folders',      o, '지켜보는 폴더 저장');
 export const deleteWatchFolder   = (id) => deleteExhRow('watch_folders',   id, '지켜보는 폴더 삭제');
+export const deleteWatchFiles    = (ids) => postToSheet(
+  { sheet: 'watch_files', action: 'delete', row: ids }, '폴더 파일 기록 삭제');
 /* 훑을 때마다 수백 줄이 오간다 — 한 줄씩 보내면 그만큼 왕복한다 */
 export const saveWatchFiles      = (rows) => postToSheet(
   { sheet: 'watch_files', action: 'batchUpsert', dataRows: rows }, '폴더 파일 일괄 기록');
