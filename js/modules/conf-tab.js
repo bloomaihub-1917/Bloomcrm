@@ -984,8 +984,7 @@ function peopleHtml(ev){
         style="max-width:min(100%,260px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap${
           on ? '' : `;background:${c.bg};border-color:${c.bd}55`}"
         title="${escAttr(ss.map(x => [x.date ? x.date.slice(5) : '', x.start_at,
-          x.title_ko || x.title_en || x.id].filter(Boolean).join(' ')).join('
-'))}">${
+          x.title_ko || x.title_en || x.id].filter(Boolean).join(' ')).join('\n'))}">${
         escapeHtml(t)} <span style="opacity:.6">${ss.length}세션</span> ${
         headN(new Set(ss.map(x => x.id)))}명</button>`;
     }).join('')}
