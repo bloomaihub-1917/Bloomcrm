@@ -33,7 +33,7 @@ import { escapeHtml, escAttr } from '../utils.js';
 import { saveWatchFolder, deleteWatchFolder, saveWatchFiles } from '../api.js';
 import { trackAction } from './audit-tab.js';
 import {
-  supported, pickFolder, delHandle, readyFolder, folderLabel, scanFolder,
+  supported, pickFolder, delHandle, readyFolder, readyFolderQuiet, folderLabel, scanFolder,
 } from './local-folder.js';
 
 /* 폴더 손잡이는 브라우저마다 따로 산다. DB의 폴더 줄(id)을 열쇠로 삼아
@@ -47,12 +47,32 @@ const whoAmI = () => (currentUser && (currentUser.name || currentUser.email)) ||
    (권한 창은 사람이 무언가를 누른 직후에만 뜰 수 있다). */
 const boundNames = {};
 
+/* 방금 훑은 폴더를 또 훑지 않게 — 탭을 오갈 때마다 수백 개를 다시 읽으면
+   화면이 버벅이고, 활동 기록에도 같은 줄이 쌓인다. */
+const lastAuto = {};
+const AUTO_GAP_MS = 60 * 1000;
+
 export async function initWatchFolders(evKey){
   if(!supported()) return;
-  await Promise.all(watchFoldersFor(evKey).map(async (f) => {
+  const folders = watchFoldersFor(evKey);
+  await Promise.all(folders.map(async (f) => {
     boundNames[f.id] = await folderLabel(handleKey(f.id));
   }));
   renderWatchBodyIfOpen();
+
+  /* 화면을 열면 알아서 훑는다 — 「다시 훑기」를 누르는 걸 잊으면 이 화면은
+     옛날 목록을 사실인 양 보여주게 된다. 그게 폴더를 직접 열어 보는 것보다
+     나쁘다.
+
+     이미 열려 있는 폴더만 훑는다. 권한이 잠들어 있으면 물어봐야 하는데, 그
+     물음은 사람이 누른 직후에만 뜰 수 있다 — 화면을 여는 것만으로는 못 뜬다.
+     그런 폴더는 「다시 훑기」를 누를 때 물어본다. */
+  for(const f of folders){
+    if(Date.now() - (lastAuto[f.id] || 0) < AUTO_GAP_MS) continue;
+    if(!(await readyFolderQuiet(handleKey(f.id)))) continue;
+    lastAuto[f.id] = Date.now();
+    await scanWatchFolder(f.id, { quiet: true });
+  }
 }
 
 /* ══ 파일 한 줄의 상태 ══
@@ -214,12 +234,15 @@ export function diffScan(before, files, stamp, folder){
 
 let scanning = '';
 
-export async function scanWatchFolder(folderId){
+/* quiet — 화면을 열며 저절로 훑는 경우. 말을 걸지 않는다: 사람이 부르지 않은
+   일로 경고창이 뜨면, 폴더가 잠깐 안 잡히는 날마다 창을 닫아야 한다. */
+export async function scanWatchFolder(folderId, { quiet = false } = {}){
   const f = WATCH_FOLDERS.find(x => x.id === folderId);
   if(!f || scanning) return;
-  const dir = await readyFolder(handleKey(folderId));
+  const dir = quiet ? await readyFolderQuiet(handleKey(folderId))
+                    : await readyFolder(handleKey(folderId));
   if(!dir){
-    alert('이 PC에 폴더가 매여 있지 않아요. 「폴더 고르기」로 한 번 골라주세요.');
+    if(!quiet) alert('이 PC에 폴더가 매여 있지 않아요. 「폴더 고르기」로 한 번 골라주세요.');
     return;
   }
 
@@ -241,16 +264,17 @@ export async function scanWatchFolder(folderId){
     await saveWatchFolder({ id: f.id, scanned_at: stamp, scanned_by: f.scanned_by });
     if(changed.length){
       const res = await saveWatchFiles(changed.map(w => ({ ...w })));
-      if(!res.ok) alert('훑기는 됐는데 기록을 저장하지 못했어요. 네트워크 확인 후 다시 훑어주세요.');
+      if(!res.ok && !quiet) alert('훑기는 됐는데 기록을 저장하지 못했어요. 네트워크 확인 후 다시 훑어주세요.');
     }
 
     if(nNew || nChg || nGone){
       trackAction('update', '폴더 훑기', f.name,
         `<b>${escapeHtml(f.name)}</b> — 새로 ${nNew}건 · 바뀜 ${nChg}건 · 없어짐 ${nGone}건`);
     }
-    if(truncated) alert('파일이 너무 많아 일부만 훑었어요. 더 좁은 폴더를 골라주세요.');
+    if(truncated && !quiet) alert('파일이 너무 많아 일부만 훑었어요. 더 좁은 폴더를 골라주세요.');
   } catch(e){
-    alert('훑는 중에 멈췄어요: ' + e.message);
+    if(!quiet) alert('훑는 중에 멈췄어요: ' + e.message);
+    else console.warn('[watch] 자동 훑기 실패:', e.message);
   } finally {
     scanning = '';
     renderWatchBodyIfOpen();
@@ -402,7 +426,8 @@ function folderBlock(f, canScan){
         f.scanned_by ? ` (${escapeHtml(f.scanned_by)})` : ''}</span>
       <span style="margin-left:auto;display:flex;gap:4px;flex-wrap:wrap">
         ${canScan && bound
-          ? `<button class="btn bs" ${busy ? 'disabled' : ''} onclick="scanWatchFolder('${escAttr(f.id)}')">${
+          ? `<button class="btn bs" ${busy ? 'disabled' : ''} onclick="scanWatchFolder('${escAttr(f.id)}')"
+              title="이 화면을 열 때도 저절로 훑어요 — 폴더가 잠겨 있었다면 이걸 누르세요">${
               busy ? '훑는 중…' : '다시 훑기'}</button>` : ''}
         ${canScan
           ? `<button class="btn bs" onclick="bindWatchFolder('${escAttr(f.id)}')" title="${

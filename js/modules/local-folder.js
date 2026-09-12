@@ -83,6 +83,19 @@ export async function readyFolder(key){
   return (await ensurePermission(h)) ? h : null;
 }
 
+/* 물어보지 않고, 이미 열려 있을 때만 돌려준다.
+
+   readyFolder는 권한이 잠들어 있으면 물어본다 — 그 물음은 사람이 무언가를
+   누른 직후에만 뜰 수 있어서, 화면을 그리다 부르면 조용히 거절당한다(그리고
+   브라우저에 따라 «거절»로 기억되기도 한다). 사람이 누른 적 없는 자리에서
+   폴더를 쓰려면 이쪽을 쓴다. */
+export async function readyFolderQuiet(key){
+  const h = await getHandle(key);
+  if(!h || !h.queryPermission) return null;
+  try { return (await h.queryPermission({ mode: 'readwrite' })) === 'granted' ? h : null; }
+  catch(e){ return null; }
+}
+
 /* 이름만 — 화면에 "어디에 저장되나"를 적으려고 쓴다. 권한을 묻지 않는다
    (그림을 그리는 중에 권한 창이 뜨면 안 된다). */
 export async function folderLabel(key){
