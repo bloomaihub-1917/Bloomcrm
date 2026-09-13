@@ -843,22 +843,7 @@ export function getMDBPairs(){
     }
   }
 
-  // stat filter
-  if(mdbStat) pairs = pairs.filter(({c}) => c.status === mdbStat);
-  /* 국가가 자료와 어긋나는 사람만 — 초청장 시차·비자 안내·쓸 언어가 이 칸에서
-     갈리는데, 기업 국가가 그대로 복사돼 들어온 값이 많다 */
-  if(mdbCtryOnly) pairs = pairs.filter(({c}) => !!ctryCheck(c));
-  if(mdbRegion) pairs = pairs.filter(({c}) => mdbRegion.startsWith('c:')
-    ? ctryOf(c) === mdbRegion.slice(2)
-    : regionOf(c) === mdbRegion);
-  // domain filter (분야별 보기) — 연락처 소속 기업이 속한 분야 기준
-  if(mdbDomainFilter){
-    const domainMap = buildContactDomainMap();
-    pairs = pairs.filter(({c}) => {
-      const doms = domainMap.get(c.id) || [];
-      return mdbDomainFilter === UNASSIGNED_DOMAIN ? doms.length === 0 : doms.includes(mdbDomainFilter);
-    });
-  }
+  pairs = mdbFilterPairs(pairs);
   // text search
   if(q){
     const lq = q.toLowerCase();
@@ -872,6 +857,33 @@ export function getMDBPairs(){
 /* ── Main render dispatcher (원본 1829~1842행) ── */
 let mdbCtryOnly = false;
 export function toggleMdbCtry(){ mdbCtryOnly = !mdbCtryOnly; renderMDB(); }
+
+/* ══════════════════════════════════════════
+   사이드바의 거르개들 — 한 군데서만 판단한다
+
+   목록을 만드는 자리가 셋이다: 전체 보기(getMDBPairs)와, 행사별 그룹 보기의
+   표와 카드. 그런데 그룹 보기 둘은 participations에서 제 목록을 따로 만들면서
+   상태와 검색어만 걸고 있었다. 그래서 지역·분야·국가 확인을 눌러도 아무 일도
+   안 일어났다 — 칩은 켜지는데 목록은 그대로라, 고장 난 줄도 모르고 그냥 안 쓰게 된다.
+
+   거르는 규칙을 여기 하나로 둔다. 거르개가 늘 때 세 곳을 고치는 일이 없어진다.
+══════════════════════════════════════════ */
+export function mdbFilterPairs(pairs){
+  let out = pairs;
+  if(mdbStat) out = out.filter(({ c }) => c.status === mdbStat);
+  if(mdbCtryOnly) out = out.filter(({ c }) => !!ctryCheck(c));
+  if(mdbRegion) out = out.filter(({ c }) => mdbRegion.startsWith('c:')
+    ? ctryOf(c) === mdbRegion.slice(2)
+    : regionOf(c) === mdbRegion);
+  if(mdbDomainFilter){
+    const domainMap = buildContactDomainMap();
+    out = out.filter(({ c }) => {
+      const doms = domainMap.get(c.id) || [];
+      return mdbDomainFilter === UNASSIGNED_DOMAIN ? doms.length === 0 : doms.includes(mdbDomainFilter);
+    });
+  }
+  return out;
+}
 
 export function renderMDB(){
   const pairs = getMDBPairs();
@@ -1054,8 +1066,7 @@ function renderMDBGroupedCards(pairs){
         const c = getContactById(p.contactId);
         return (c && c.cat === mdbCat) || ROLE_TO_CAT[p.role] === mdbCat;
       });
-      let members = evParts.map(p => ({ c: getContactById(p.contactId), p })).filter(x => x.c);
-      if(mdbStat) members = members.filter(({ c }) => c.status === mdbStat);
+      let members = mdbFilterPairs(evParts.map(p => ({ c: getContactById(p.contactId), p })).filter(x => x.c));
       if(q){
         const lq = q.toLowerCase();
         members = members.filter(({ c }) => [c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn]
@@ -1260,8 +1271,7 @@ export function renderMDBGrouped(pairs){
           return ROLE_TO_CAT[p.role]===mdbCat;
         });
       }
-      let members = evParts.map(p=>({c:getContactById(p.contactId),p})).filter(x=>x.c);
-      if(mdbStat) members=members.filter(({c})=>c.status===mdbStat);
+      let members = mdbFilterPairs(evParts.map(p=>({c:getContactById(p.contactId),p})).filter(x=>x.c));
       const q=(document.getElementById('mdb-q')||{}).value||'';
       if(q){ const lq=q.toLowerCase(); members=members.filter(({c})=>[c.nameKo,c.nameEn,c.orgKo,c.orgEn,c.titleKo,c.titleEn].some(v=>v&&v.toLowerCase().includes(lq))); }
       if(!members.length) return;
