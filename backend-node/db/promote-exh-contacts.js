@@ -45,6 +45,40 @@ function nameFromEmail(email){
   return parts.map((p) => p[0].toUpperCase() + p.slice(1)).join(' ');
 }
 
+/* ── 국가 ──
+   전시 신청서는 담당자 국가를 묻지 않는다(exhibitor_contacts에 칸 자체가 없다).
+   그래서 예전 이관에서는 열세 명이 빈 국가로 들어왔다.
+
+   기업 국가로 채우지는 않는다. 그렇게 채운 값이 이미 열아홉 명 틀려 있었다 —
+   「포트리아 코리아 유한회사」 담당자가 «미국»으로, 「시믹코리아」 담당자가
+   «일본»으로 적혀 있었다. 본사가 어디인지와 이 사람이 어디 있는지는 다른
+   질문이고, 전자로 후자를 메우면 틀린 값이 조용히 쌓인다.
+
+   대신 그 사람이 실제로 쓰는 것에서만 읽는다: 전화 국가번호와 이메일 국가
+   도메인. 둘 다 없으면 비워 두고 source에 적어 둔다 — 비어 있으면 마스터DB의
+   «국가 확인» 목록에 잡혀 나중에라도 채울 수 있지만, 틀린 값이 들어가면
+   틀렸다는 것조차 안 보인다. */
+const DIAL = { '82':'대한민국','65':'싱가포르','81':'일본','86':'중국','886':'대만','852':'홍콩',
+  '44':'영국','49':'독일','33':'프랑스','61':'호주','41':'스위스','31':'네덜란드','46':'스웨덴',
+  '91':'인도','60':'말레이시아','66':'태국','84':'베트남','62':'인도네시아' };
+const TLD = { kr:'대한민국', sg:'싱가포르', jp:'일본', cn:'중국', tw:'대만', hk:'홍콩', uk:'영국',
+  de:'독일', fr:'프랑스', au:'호주', ch:'스위스', nl:'네덜란드', se:'스웨덴', in:'인도',
+  vn:'베트남', th:'태국', my:'말레이시아', ca:'캐나다', it:'이탈리아', es:'스페인' };
+
+function guessCountry(email, phone, nameKo){
+  const s = String(phone || '').replace(/[^0-9+]/g, '');
+  if(s.startsWith('+')){
+    for(const len of [3, 2, 1]){
+      const hit = DIAL[s.slice(1, 1 + len)];
+      if(hit) return { country: hit, why: '전화 국가번호' };
+    }
+  }
+  const m = lower(email).match(/\.([a-z]{2})$/);
+  if(m && TLD[m[1]]) return { country: TLD[m[1]], why: '이메일 국가 도메인' };
+  if(/[가-힣]/.test(String(nameKo || ''))) return { country: '대한민국', why: '한글 이름' };
+  return null;
+}
+
 /* 이름 칸이 사람이 아니라 기업을 가리키나 */
 function looksLikeCompany(name, company, email){
   const squash = (v) => String(v || '').toLowerCase().replace(/[^a-z0-9가-힣]/g, '');
@@ -130,12 +164,14 @@ function splitTitle(name){
         derived = !!nameEn;
       }
 
-      plan.push({ r, email, nameKo, nameEn, titleKo, derived });
+      const ctry = guessCountry(email, r.phone, nameKo);
+      plan.push({ r, email, nameKo, nameEn, titleKo, derived, ctry });
     }
 
     const show = (t) => `${t.r.company_name} | ${t.nameKo || t.nameEn || '(이름 없음)'}`
       + `${t.titleKo ? ' ' + t.titleKo : ''} | ${t.email || '(이메일 없음)'}`
       + `${t.derived ? '   ← 이메일에서 이름을 뽑음' : ''}`
+      + `${t.ctry ? `   ← 국가 ${t.ctry.country} (${t.ctry.why})` : '   ← 국가 모름'}`
       + `${!t.nameKo && !t.nameEn ? '   ← 이름 비움(원래 값이 기업명)' : ''}`;
 
     console.log(`미연결 ${rows.length}건\n`);
@@ -179,11 +215,16 @@ function splitTitle(name){
       await client.query(
         `INSERT INTO contacts (id,"nameKo","nameEn","orgKo","orgEn","titleKo","titleEn","deptKo","deptEn",
            country,cat,lang,source,date,status,email1,email2,phone1,phone2,beat,products,tags,org_id)
-         VALUES ($1,$2,$3,$4,'',$5,'','','','',$6,$7,$8,$9,'new',$10,'',$11,'','','','',$12)`,
+         /* 자리로 넣는 문장이라 칸 순서와 값 순서가 한 칸도 어긋나면 안 된다.
+            country는 열째 칸이다: id·nameKo·nameEn·orgKo·orgEn·titleKo·titleEn·
+            deptKo·deptEn 다음. 처음에 한 칸 밀려 $13이 cat 자리에 들어갔었다. */
+         VALUES ($1,$2,$3,$4,'',$5,'','','',$13,$6,$7,$8,$9,'new',$10,'',$11,'','','','',$12)`,
         [id, t.nameKo, t.nameEn, t.r.company_name, t.titleKo, 'exhibitor',
           t.nameKo ? 'KO' : 'EN',
-          `${t.r.event_id || ''} 전시 담당자(일괄 이관)${t.derived ? ' · 이름은 이메일에서 추정' : ''}`,
-          today, t.email, t.r.phone || '', t.r.org_id || '']);
+          `${t.r.event_id || ''} 전시 담당자(일괄 이관)${t.derived ? ' · 이름은 이메일에서 추정' : ''}`
+            + (t.ctry ? ` · 국가는 ${t.ctry.why}에서 추정` : ' · 국가 미확인'),
+          today, t.email, t.r.phone || '', t.r.org_id || '',
+          t.ctry ? t.ctry.country : '']);
       await client.query('UPDATE exhibitor_contacts SET contact_id = $1 WHERE id = $2', [id, t.r.id]);
       await addPart(id, t.r.event_id, t.r.role);
       await audit('담당자 마스터DB 등록', t.r.company_name,

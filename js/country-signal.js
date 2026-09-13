@@ -110,6 +110,8 @@ function josa(word, withBatchim, without){
   return (code - 0xAC00) % 28 ? withBatchim : without;
 }
 const eun = (w) => w + josa(w, '은', '는');
+/* 다른 화면에서도 쓴다 — «미국예요»가 아니라 «미국이에요» */
+export const ieyo = (w) => w + josa(w, '이에요', '예요');
 const eul = (w) => w + josa(w, '을', '를');
 const ro  = (w) => {                       // «미국으로» / «싱가포르로»
   const ch = String(w || '').trim().slice(-1);

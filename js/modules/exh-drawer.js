@@ -19,7 +19,7 @@ import {
   EXH_APPS, appsFor, openAppFor, isVoided, liveItemsFor, exhEvent, exhibitorsForEvent,
   nextItemSort,
 } from '../state.js';
-import { td, escapeHtml, escAttr } from '../utils.js';
+import { td, escapeHtml, escAttr, countryOptions } from '../utils.js';
 import {
   saveExhContact as _saveExhContact, saveExhItem as _saveExhItem, saveExhInvoice as _saveExhInvoice, saveExhTax as _saveExhTax, saveExhPayment as _saveExhPayment, saveExhLog as _saveExhLog, saveExhApp as _saveExhApp,
   deleteExhContact as _deleteExhContact, deleteExhItem as _deleteExhItem, deleteExhInvoice as _deleteExhInvoice, deleteExhTax as _deleteExhTax, deleteExhPayment as _deleteExhPayment, deleteExhLog as _deleteExhLog, deleteExhApp as _deleteExhApp,
@@ -53,6 +53,7 @@ function saveFailed(res, msg){
   alert(msg || '저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
 }
 import { trackAction, changed, removed } from './audit-tab.js';
+import { ieyo } from '../country-signal.js';
 import {
   billedAmount, paidAmount, graphicState, graphicDueInfo, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
   isPendingRefund, boothTypeOptions, boothTypes, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
@@ -670,6 +671,7 @@ function dContact(x){
 export function openNewContact(exhId){
   const x = getExhibitorById(exhId);
   if(!x) return;
+  const org = x.org_id ? getOrgById(x.org_id) : null;
   const pair = (a, b, la, lb, pa, pb) => `<div class="fgr">
     <div class="fg"><label class="fl">${la}</label><input class="fi" id="nc-${a}" placeholder="${pa}"></div>
     <div class="fg"><label class="fl">${lb}</label><input class="fi" id="nc-${b}" placeholder="${pb}"></div>
@@ -681,8 +683,24 @@ export function openNewContact(exhId){
     ${pair('titleKo', 'titleEn', '직함 (국문)', '직함 (영문)', '예: 팀장', '예: Manager')}
     ${pair('deptKo', 'deptEn', '부서 (국문)', '부서 (영문)', '예: 마케팅팀', '예: Marketing')}
     ${pair('email', 'phone', '이메일', '연락처', 'name@company.com', '010-0000-0000')}
-    <div class="fg"><label class="fl">이 전시에서의 역할</label>
-      <select class="fi" id="nc-role">${cRoles().map(v => `<option value="${escAttr(v.code)}"${v.code === '실무' ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}</select></div>
+    <div class="fgr">
+      <div class="fg"><label class="fl">이 전시에서의 역할</label>
+        <select class="fi" id="nc-role">${cRoles().map(v => `<option value="${escAttr(v.code)}"${v.code === '실무' ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}</select></div>
+      <div class="fg"><label class="fl">국가 <span style="font-weight:400;color:var(--i5)">— 이 사람이 있는 곳</span></label>
+        <select class="fi" id="nc-country">
+          <option value="" selected>— 모르면 비워두세요</option>
+          ${countryOptions('')}
+        </select></div>
+    </div>
+    ${/* 기업 국가를 미리 골라 두지 않는다. 그렇게 채운 값이 열아홉 명 틀려 있었다 —
+         「포트리아 코리아 유한회사」 담당자가 «미국», 「시믹코리아」 담당자가 «일본».
+         본사가 어디인지와 이 사람이 어디 있는지는 다른 질문이다.
+
+         대신 기업 국가를 옆에 적어 준다. 같으면 고르면 되고, 다르면 다르게
+         고르면 된다 — 판단할 자료는 주되 대신 정해 주지는 않는다. */''}
+    <div style="font-size:10.5px;color:var(--i5);margin:-6px 0 12px">
+      ${org?.country ? `이 기업은 <b>${escapeHtml(org.country)}</b>${ieyo(org.country).slice(org.country.length)} — 담당자가 같은 곳에 있으면 그대로 고르세요.` : ''}
+      비워두면 나중에 마스터DB에서 채울 수 있어요.</div>
     <div id="nc-msg" style="font-size:11.5px;min-height:16px;margin-bottom:8px"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn bs" onclick="closeNewContact()">취소</button>
@@ -713,7 +731,9 @@ export async function submitNewContact(exhId){
     orgKo: org?.name_ko || x?.company_name || '', orgEn: org?.name_en || '',
     titleKo: v('titleKo'), titleEn: v('titleEn'),
     deptKo: v('deptKo'), deptEn: v('deptEn'),
-    country: org?.country || '', cat: 'exhibitor', lang: nameKo ? 'KO' : 'EN',
+    /* 기업 국가를 베끼지 않는다 — 사람이 고른 값만 넣고, 안 골랐으면 비운다.
+       빈 칸은 마스터DB의 «국가 확인» 목록에 잡혀 나중에라도 채울 수 있다. */
+    country: v('country'), cat: 'exhibitor', lang: nameKo ? 'KO' : 'EN',
     source: `${x?.event_id || ''} 전시 담당자`, date: today, status: 'new',
     email1: v('email'), email2: '', phone1: v('phone'), phone2: '',
     beat: '', products: '', tags: '', org_id: x?.org_id || '',
