@@ -32,6 +32,9 @@ import {
 } from '../state.js';
 import { saveAuditToSheets } from '../api.js';
 import { td, escapeHtml, escAttr, userInitials } from '../utils.js';
+/* restore.js도 이 파일의 trackAction을 쓴다 — 서로 부르지만 둘 다 함수를
+   실행할 때만 필요해서 고리가 되지 않는다(모듈을 읽는 중에 서로를 안 부른다). */
+import { canRestore, restorePlan, restoreFromLog } from './restore.js';
 
 /* ══════════════════════════════════════════
    CSV 인젝션 방지 헬퍼 (신규 — 원본에는 없던 보안 개선)
@@ -161,6 +164,9 @@ export function renderAudit(){
     const timeStr = ts.toLocaleDateString('ko-KR',{month:'short',day:'numeric'}) + ' ' +
                     ts.toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
     const go = e.extra && e.extra.kind && e.extra.id;
+    /* 되돌릴 재료가 있는 기록에만 단추를 단다. 없는 줄에 회색 단추를 달아 두면
+       눌러 보고 «안 되네»를 겪게 되고, 그러면 되는 줄에서도 안 누른다. */
+    const undo = canRestore(e);
     return `<div class="audit-item${go ? ' audit-go' : ''}"${
       go ? ` onclick="openAuditTarget('${escAttr(String(e.id))}')" title="눌러서 바뀐 곳으로 갑니다"` : ''}>
       <div class="audit-av" style="background:${e.color}">${escapeHtml(userInitials(e.name))}</div>
@@ -170,6 +176,8 @@ export function renderAudit(){
         <div class="audit-meta">
           ${TAG_MAP[e.type]||''}
           <span class="audit-time">${timeStr}</span>
+          ${undo ? `<button class="audit-undo" title="${escAttr(restorePlan(e).title)}"
+            onclick="event.stopPropagation();restoreFromLog('${escAttr(String(e.id))}')">되돌리기</button>` : ''}
         </div>
       </div>
     </div>`;
@@ -330,3 +338,5 @@ window.renderAudit    = renderAudit;
 window.setAuditUser   = setAuditUser;
 window.openAuditTarget = openAuditTarget;
 window.flashAuditField = flashAuditField;
+
+window.restoreFromLog = restoreFromLog;

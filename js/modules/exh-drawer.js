@@ -1065,7 +1065,7 @@ export async function addItemHere(exhId){
 
 export const setAppField = (id, field, value) =>
   setRowField(EXH_APPS, saveExhApp, '신청서 접수', id, field, value);
-export const delExhApp = (id) => removeRow(EXH_APPS, id, deleteExhApp, '신청서 접수');
+export const delExhApp = (id) => removeRow(EXH_APPS, id, deleteExhApp, '신청서 접수', 'exhibitor_apps');
 
 /* 이 접수 건에 달린 품목 변경을 사람이 읽는 한 줄로 만든다.
    닫을 때 한 번 만들어 summary에 넣는다 — 나중에 품목을 또 고쳐도 그때
@@ -2385,7 +2385,7 @@ async function addRow(arr, rec, saveFn, label){
    지워진 값을 통째로 적어 둔다. 이름만 적으면 «무엇을 지웠다»는 알아도
    되살릴 수는 없다 — 되살리는 데 필요한 건 금액·수량·통화다. */
 const ROW_LABEL = (r) => r.name || r.title || '';
-async function removeRow(arr, id, deleteFn, label = '줄'){
+async function removeRow(arr, id, deleteFn, label = '줄', table = ''){
   const i = arr.findIndex(r => r.id === id);
   if(i < 0) return;
   const [removed] = arr.splice(i, 1);
@@ -2406,7 +2406,7 @@ async function removeRow(arr, id, deleteFn, label = '줄'){
   trackAction('delete', label + ' 삭제', x?.company_name || '',
     `<b>${escapeHtml(x?.company_name || '')}</b> — ${escapeHtml(label)} <b>${escapeHtml(ROW_LABEL(removed))}</b> 지움`
     + (what ? ` <span style="color:#9C9890">(${escapeHtml(what)})</span>` : ''),
-    { kind: 'exhibitor', id: removed.exhibitor_id, tab: 'billing', row: id,
+    { kind: 'exhibitor', id: removed.exhibitor_id, tab: 'billing', table, row: id,
       op: 'delete', before: removed });
 }
 
@@ -2455,7 +2455,7 @@ export async function addExhItem(exhId){
   const nmEl = document.getElementById(`it-nm-${exhId}`);
   if(nmEl) delete nmEl.dataset.catalogId;
 }
-export const delExhItem = (id) => removeRow(EXH_ITEMS, id, deleteExhItem, '금액 항목');
+export const delExhItem = (id) => removeRow(EXH_ITEMS, id, deleteExhItem, '금액 항목', 'exhibitor_items');
 
 /* 신청서에 적은 추가 비품 내역을 금액 항목으로 옮겨 담는다 —
    적어둔 걸 다시 타이핑하지 않게 하려는 연결고리. */
@@ -2482,7 +2482,7 @@ export async function addExhInvoice(exhId){
   }, saveExhInvoice);
   clear(`iv-t-${exhId}`, `iv-a-${exhId}`);
 }
-export const delExhInvoice = (id) => removeRow(EXH_INVOICES, id, deleteExhInvoice, '인보이스');
+export const delExhInvoice = (id) => removeRow(EXH_INVOICES, id, deleteExhInvoice, '인보이스', 'exhibitor_invoices');
 
 /* 화면 입력칸을 거치지 않고 인보이스 줄을 만든다 — exh-invoice.js의 '발행'이
    쓴다(신청 내역에서 곧바로 발행할 때는 사람이 금액을 두드리지 않는다).
@@ -2504,6 +2504,7 @@ export async function createInvoiceRow(exhId, { title, amount, currency }){
    silent는 부르는 쪽이 제 말로 기록을 남길 때 쓴다. 두 줄이 쌓이면 하나는
    맥락이 없고(그냥 «금액 수정»), 나중에 세어 볼 때 두 번 센다. */
 async function setRowField(list, saver, label, id, field, value, opts = {}){
+  const table = opts.table || '';
   const r = list.find(o => o.id === id);
   if(!r) return false;
   const before = r[field];
@@ -2519,7 +2520,7 @@ async function setRowField(list, saver, label, id, field, value, opts = {}){
   trackAction('edit', label + ' 수정', x?.company_name || '',
     `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(r.name || r.title || label)} ${escapeHtml(fl)} ${escapeHtml(String(before || '(없음)'))} → ${escapeHtml(String(value || '(없음)'))}`,
     /* 값 자체도 담는다 — 문장만으로는 되돌릴 수 없다 */
-    { kind: 'exhibitor', id: x?.id, tab: 'billing', field, row: id,
+    { kind: 'exhibitor', id: x?.id, tab: 'billing', field, table, row: id,
       op: 'update', before: { [field]: before ?? '' }, after: { [field]: value ?? '' } });
   return true;
 }
@@ -2573,7 +2574,8 @@ export async function setItemField(id, field, value, opts = {}){
       await setRowField(EXH_ITEMS, saveExhItem, '금액 항목', id, 'change_kind', '변경');
     }
   }
-  return setRowField(EXH_ITEMS, saveExhItem, '금액 항목', id, field, value, opts);
+  return setRowField(EXH_ITEMS, saveExhItem, '금액 항목', id, field, value,
+    { table: 'exhibitor_items', ...opts });
 }
 export const setPayField = (id, field, value) =>
   setRowField(EXH_PAYMENTS, saveExhPayment, '입금', id, field, value);
@@ -2669,7 +2671,7 @@ export async function addExhPayment(exhId){
         table: 'exhibitor_payments', row: rec.id, op: 'create', after: rec });
   }
 }
-export const delExhPayment = (id) => removeRow(EXH_PAYMENTS, id, deleteExhPayment, '입금 내역');
+export const delExhPayment = (id) => removeRow(EXH_PAYMENTS, id, deleteExhPayment, '입금 내역', 'exhibitor_payments');
 
 /* 인보이스 무효 처리 — 통화 변경·금액 오류로 다시 발행할 때 옛 건을 지우지 않고
    합계에서만 뺀다(이력을 남겨야 나중에 왜 두 장인지 설명할 수 있다). */
@@ -2706,7 +2708,7 @@ export async function addExhTax(exhId){
   }, saveExhTax);
   clear(`tx-t-${exhId}`, `tx-a-${exhId}`);
 }
-export const delExhTax = (id) => removeRow(EXH_TAX, id, deleteExhTax, '세금계산서');
+export const delExhTax = (id) => removeRow(EXH_TAX, id, deleteExhTax, '세금계산서', 'exhibitor_tax_invoices');
 
 export async function setTaxField(id, field, value){
   const v = EXH_TAX.find(i => i.id === id);
@@ -2817,7 +2819,7 @@ export async function addExhLog(exhId){
       { kind: 'exhibitor', id: x?.id, tab: 'logs' });
   }
 }
-export const delExhLog = (id) => removeRow(EXH_LOGS, id, deleteExhLog, '문의·기록');
+export const delExhLog = (id) => removeRow(EXH_LOGS, id, deleteExhLog, '문의·기록', 'exhibitor_logs');
 
 export async function answerExhLog(id){
   const l = EXH_LOGS.find(r => r.id === id);
@@ -2836,7 +2838,7 @@ export async function answerExhLog(id){
 }
 
 /* ── 기업 담당자 (여러 명) ── */
-export const delExhContact = (id) => removeRow(EXH_CONTACTS, id, deleteExhContact, '담당자');
+export const delExhContact = (id) => removeRow(EXH_CONTACTS, id, deleteExhContact, '담당자', 'exhibitor_contacts');
 
 /* 도메인이 다른 이유를 적어 둔다 — 적어 두면 다음부터 안 묻는다 */
 export async function noteExhContact(id){

@@ -655,3 +655,13 @@ tr.row-sel{background:var(--ad)}
   display:inline-flex;align-items:center;justify-content:center;
   font-size:8.5px;font-weight:800;letter-spacing:-.2px;
 }
+
+/* 로그 줄의 되돌리기 단추 — 평소엔 조용히, 그 줄에 손이 가면 보인다.
+   기록을 읽는 게 먼저고 되돌리는 건 가끔이라, 늘 도드라지면 읽기를 방해한다. */
+.audit-undo{
+  margin-left:auto;padding:2px 8px;border:1px solid var(--i6);border-radius:999px;
+  background:var(--W);color:var(--i4);font:inherit;font-size:10px;cursor:pointer;
+  opacity:.55;transition:opacity .12s,border-color .12s,color .12s;
+}
+.audit-item:hover .audit-undo{opacity:1}
+.audit-undo:hover{border-color:var(--re);color:var(--re);opacity:1}
