@@ -23,6 +23,7 @@ import './modules/conf-tab.js';
 import './modules/speaker-drawer.js';
 
 import { initMobileNav, initDrawerSwipe, initSidebarLayout, initDrawerResize } from './router.js';
+import { initBackButton } from './back-button.js';
 import { initOverlayNav } from './overlay-nav.js';
 import { initTableSort } from './table-sort.js';
 import { initAuth, initAfterLogin, closeUserMenu } from './auth.js';
@@ -51,6 +52,9 @@ initMobileNav();
 initDrawerSwipe();
 initSidebarLayout();
 initDrawerResize();
+/* router.js가 window.switchApp을 내놓은 뒤에 부른다 — 그걸 감싸야
+   탭 옮기기도 «뒤로»가 되돌릴 한 칸이 된다 */
+initBackButton();
 
 // 뒤로가기로 드로어·모달·사이드바를 닫는다 (앱을 벗어나지 않게).
 // 각 탭 모듈이 window에 함수를 등록한 뒤에 감싸야 하므로 import 이후에 호출한다.

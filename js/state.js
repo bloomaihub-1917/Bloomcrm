@@ -380,7 +380,7 @@ export { auditFilter, auditUserFilter };
    앱 전역 탭 / 연동 상태 (원본 1738~1742행)
 ══════════════════════════════════════════ */
 let curApp = 'mdb';
-export function setCurApp(v){ curApp = v; }
+export function setCurApp(v){ curApp = v; window.curApp = v; }
 export { curApp };
 
 let sheetsConnected = false;

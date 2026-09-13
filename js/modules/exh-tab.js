@@ -539,6 +539,10 @@ export function boothDesignState(x){
      블록·라이팅 부스     디자인을 받아 → 우리가 출력·시공한다
      독립부스            해당 없음 (업체가 직접 짓는다)
 ══════════════════════════════════════════ */
+/* 어느 종류만 볼지 — 비어 있으면 전부 */
+let baseFil = '';
+export function setBaseFil(k){ baseFil = baseFil === k ? '' : k; renderExh(); }
+
 export const BASE_KINDS = {
   fascia: { label: '간판명', recv: '간판명 확정', done: '간판 제작', types: ['Octanium (Standard)', 'Octanium (Black)'] },
   print:  { label: '출력·시공', recv: '디자인 수령', done: '출력 완료',
@@ -1342,6 +1346,12 @@ const boothSortKey = (x) => {
   const b = parseBooth(x.booth_no);
   return b.first === Infinity ? Infinity : b.first * 100 + b.sub;
 };
+/* 부스 번호 글자만 있을 때 — 기업 줄이 아니라 «부스 26-27»처럼 값만 들고
+   다니는 목록에서 쓴다. 없는 부스는 맨 뒤로 보낸다. */
+export const boothKeyOf = (booth) => {
+  const k = boothSortKey({ booth_no: booth });
+  return k === Infinity ? 1e9 : k;
+};
 
 /* ── 부스 타입 골라 보기 ──
    "Block System A가 몇 곳이지"까지는 배지로 보이는데, 그게 어느 기업인지 알려면
@@ -1954,7 +1964,16 @@ function renderEquipView(list){
   /* 어느 기업이 신청했는지 — 품목을 클릭하면 펼친다.
      발주하다 "이 의자 25개가 어디로 가는 거지"를 확인해야 할 때, 표 밖으로
      나가지 않고 그 자리에서 본다. */
-  const coList = (g) => g.cos.slice().sort((a, b) => b.qty - a.qty).map(c => `
+  /* 부스 번호 순으로 세운다. 수량 많은 순이었는데, 이 목록을 여는 이유는
+     «이 의자를 어느 부스로 몇 개 보내나»이고 현장에서 도는 순서가 부스 순서다.
+     4개·3개·3개·3개…로 늘어놓으면 같은 수량끼리 순서가 뒤죽박죽이라 방금 본
+     부스를 다시 찾게 된다. 그래픽 현황도 같은 순서를 쓴다.
+
+     부스가 아직 없는 곳은 맨 뒤로 — 번호가 없다고 앞에 세우면 매번 걸린다. */
+  const coList = (g) => g.cos.slice()
+    .sort((a, b) => boothKeyOf(a.booth) - boothKeyOf(b.booth)
+      || String(a.name || '').localeCompare(String(b.name || ''), 'ko'))
+    .map(c => `
     <div onclick="event.stopPropagation();openExhDr('${escAttr(c.id)}','billing')"
       style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:11.5px">
       <span class="pill p-gray" style="min-width:52px;text-align:center">${c.booth ? '부스 ' + escapeHtml(c.booth) : '미배정'}</span>
@@ -3044,22 +3063,31 @@ export async function clearBaseDone(){
 }
 
 function renderBaseView(list){
-  const rows = list.filter(x => baseKind(x));
-  if(!rows.length) return emptyView('기본 시공 대상이 없어요 — 기본부스·블록부스·라이팅부스가 있어야 합니다');
+  const all = list.filter(x => baseKind(x));
+  if(!all.length) return emptyView('기본 시공 대상이 없어요 — 기본부스·블록부스·라이팅부스가 있어야 합니다');
+  /* 받는 것도 하는 일도 종류마다 다르다. 간판명은 상호를 받아 간판을 만들고,
+     출력·시공은 디자인 파일을 받아 출력한다 — 같은 날 같은 사람이 하는 일이
+     아니라, 한쪽만 보고 싶을 때가 대부분이다. */
+  const rows = baseFil ? all.filter(x => baseKind(x) === baseFil) : all;
 
   const bk = (x) => { const k = boothSortKey(x); return k === Infinity ? 1e9 : k; };
   rows.sort((a, b) => bk(a) - bk(b));
 
   const due = dueInfo('calc:base', exhEvent);
-  const byKind = (k) => rows.filter(x => baseKind(x) === k);
+  const byKind = (k) => all.filter(x => baseKind(x) === k);
   const st = (x) => baseState(x);
   const gotN  = rows.filter(x => st(x).state !== 'todo').length;
   const doneN = rows.filter(x => st(x).state === 'done').length;
 
-  const pills = `<span class="pill p-gray">대상 ${rows.length}곳</span>`
+  /* 알약을 눌러 그 종류만 본다. 같은 알약을 다시 누르면 전체로 — 다른 목록과
+     같은 손짓이라 따로 배울 게 없다. */
+  const pills = `<button class="pill ${baseFil ? 'p-gray' : 'p-blue'}" style="border:0;cursor:pointer;font:inherit"
+      onclick="setBaseFil('')" title="전부 보기">대상 ${all.length}곳</button>`
     + Object.entries(BASE_KINDS).map(([k, v]) => {
         const g = byKind(k); if(!g.length) return '';
-        return `<span class="pill p-blue" title="${escAttr(v.types.join(', '))}">${v.label} ${g.length}</span>`;
+        return `<button class="pill ${baseFil === k ? 'p-blue' : 'p-gray'}" style="border:0;cursor:pointer;font:inherit"
+          onclick="setBaseFil('${escAttr(k)}')"
+          title="${escAttr(v.types.join(', '))} — 눌러서 이것만 보기">${v.label} ${g.length}</button>`;
       }).join('')
     + `<span class="pill ${gotN === rows.length ? 'p-green' : 'p-amber'}">수령 ${gotN}/${rows.length}</span>`
     + `<span class="pill ${doneN === rows.length ? 'p-green' : 'p-gray'}">작업 완료 ${doneN}/${rows.length}</span>`
@@ -4581,6 +4609,7 @@ export function setExhDateWithFlag(id, dateField, flag, value, label){
 window.setExhEvent2 = setExhEvent2;
 window.setExhFilter = setExhFilter;
 window.setExhView = setExhView;
+window.setBaseFil = setBaseFil;
 window.setGraphicView = setGraphicView;
 window.setGraphicFil = setGraphicFil;
 window.setPayFil = setPayFil;
