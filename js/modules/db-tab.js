@@ -40,7 +40,15 @@ import { td, ab, countryName, countryOptions, escapeHtml, escAttr, sectorKey, pa
 import { postToSheet } from '../api.js';
 import { buildCoDB, ensureOrgsForNames, orgIdForName, applyCoSectors } from './company-tab.js';
 import { domainOfSector, domainName, findSectorByName, mainSectors, UNASSIGNED_DOMAIN } from './settings-tab.js';
-import { trackAction } from './audit-tab.js';
+/* removed는 removeParticipation 안의 지역 변수와 이름이 겹친다 — 별칭으로 들여온다 */
+import { trackAction, changed, removed as removedMeta } from './audit-tab.js';
+
+/* 바뀐 칸만 골라낸다 — 연락처는 칸이 스물세 개라, 통째로 담으면 이름만 고쳐도
+   기록 한 줄이 스물세 칸짜리가 된다. */
+const pickChanged = (before, after) => Object.keys(after).reduce((o, k) => {
+  if(typeof after[k] !== 'object' && String(before[k] ?? '') !== String(after[k] ?? '')) o[k] = after[k] ?? '';
+  return o;
+}, {});
 
 /* BD/C-level — cat("연사/VIP/일반참가자")을 분리하지 않는 비배타적 보조 태그.
    행사·역할이 바뀌어도 남아있어야(다음 행사 메일링 리스트에 재사용) 하므로
@@ -671,7 +679,11 @@ export async function applyMDBBulkEdit(){
   }
 
   const parts = [org&&'기업명', cat&&'카테고리', status&&'상태', ...tagOps.map(t=>`${t.label} ${t.op==='add'?'추가':'해제'}`)].filter(Boolean).join(', ');
-  trackAction('edit', '연락처 일괄 변경', `${changed.length}명`, `연락처 ${changed.length}명 일괄 변경(${parts})`);
+  /* 여러 명을 한꺼번에 바꾼 것 — 사람마다 이전값이 다르므로 줄마다 담는다 */
+  trackAction('edit', '연락처 일괄 변경', `${changed.length}명`, `연락처 ${changed.length}명 일괄 변경(${parts})`,
+    { table: 'contacts', op: 'update-many',
+      rows: backup.map(b => ({ row: b.c.id,
+        before: pickChanged(b.c, b), after: pickChanged(b, b.c) })) });
   mdbSelected.clear();
   buildCoDB();
   renderMDB();
@@ -683,7 +695,8 @@ export async function bulkDeleteMDBContacts(){
   if(!confirm(`선택한 ${ids.length}명의 연락처를 삭제할까요?\n관련 행사 참여 기록도 함께 삭제되며, 되돌릴 수 없습니다.`)) return;
 
   const idSet = new Set(ids);
-  const removedParts = participations.filter(p => idSet.has(p.contactId));
+  const removedParts = participations.filter(p => idSet.has(p.contactId)).map(p => ({ ...p }));
+  const goneContacts = contacts.filter(c => idSet.has(c.id)).map(c => ({ ...c }));
 
   // 로컬 먼저 반영(화면 즉시 갱신), 시트 삭제는 그 뒤 순차 처리
   for(let i = contacts.length-1; i >= 0; i--) if(idSet.has(contacts[i].id)) contacts.splice(i,1);
@@ -700,7 +713,10 @@ export async function bulkDeleteMDBContacts(){
   for(const p of removedParts){
     await postToSheet({ sheet:'participations', action:'delete', row:[p.id] }, '행사 참여 삭제');
   }
-  trackAction('edit', '연락처 일괄 삭제', `${ids.length}명`, `연락처 ${ids.length}명 삭제`);
+  /* 지운 연락처와 딸린 참여 기록을 통째로 담는다 — «되돌릴 수 없습니다»라고
+     물어 놓고 정말 아무것도 안 남기면, 잘못 지운 날 할 수 있는 게 없다. */
+  trackAction('edit', '연락처 일괄 삭제', `${ids.length}명`, `연락처 ${ids.length}명 삭제`,
+    removedMeta('contacts', ids.join(','), goneContacts, { also: removedParts }));
 }
 
 /* ── View toggle (원본 1767~1772행) ── */
@@ -1469,7 +1485,7 @@ export async function confirmAddEv(cid){
     return;
   }
   trackAction('edit', '행사 추가', ev, `${contacts.find(x=>x.id===cid)?.nameKo||cid} → ${ev} (${role})`,
-    { kind: 'contact', id: cid });
+    { kind: 'contact', id: cid, table: 'participations', row: part.id, op: 'create', after: part });
 }
 
 export async function removeParticipation(cid, partId, ev){
@@ -1496,7 +1512,7 @@ export async function removeParticipation(cid, partId, ev){
       return;
     }
     trackAction('edit', '행사 삭제', ev, `${contacts.find(x=>x.id===cid)?.nameKo||cid} ← ${ev} 제거`,
-      { kind: 'contact', id: cid });
+      removedMeta('participations', partId, removed || {}, { kind: 'contact', id: cid }));
   }
 }
 
@@ -1716,7 +1732,7 @@ export async function saveContactEdit(){
     return;
   }
   trackAction('status', '연락처 정보 수정', c.nameKo, '<b>'+c.nameKo+'</b>의 정보를 수정했어요',
-    { kind: 'contact', id: c.id });
+    changed('contacts', c.id, prev, pickChanged(prev, c), { kind: 'contact', id: c.id }));
 }
 
 /* ══════════════════════════════════════════
@@ -2007,7 +2023,8 @@ export function saveContactSectorField(c){
   applyCoSectors(co, next);
   trackAction('edit', '기업 섹터 변경', co.nameKo || co.nameEn,
     `«${co.nameKo || co.nameEn}» 섹터를 ${cur.join(', ') || '미분류'} → ${next.join(', ') || '미분류'}`,
-    { kind: 'company', id: co.key });
+    changed('orgs', co.key, { sector: cur.join(', ') }, { sector: next.join(', ') },
+      { kind: 'company', id: co.key }));
   return true;
 }
 
@@ -2070,7 +2087,9 @@ export async function onMDBDropToCat(e, cat, el){
     return;
   }
   trackAction('edit', '카테고리 이동(드래그)', `${list.length}명`,
-    `연락처 ${list.length}명을 «${CL[cat] || cat}»으로 옮김`);
+    `연락처 ${list.length}명을 «${CL[cat] || cat}»으로 옮김`,
+    { table: 'contacts', op: 'update-many',
+      rows: backup.map(b => ({ row: b.c.id, before: { cat: b.cat }, after: { cat } })) });
   mdbSelected.clear();
   renderMDB();
 }
@@ -2143,9 +2162,12 @@ function openDomainSectorPicker(cos, secs, domainId, note){
 }
 
 async function moveCosToSector(cos, sectorName, domainId){
+  const wasSectors = cos.map(co => ({ key: co.key, sector: (co.sectors || []).join(', ') }));
   cos.forEach(co => applyCoSectors(co, [sectorName]));
   trackAction('edit', '분야 이동(드래그)', `${cos.length}곳`,
-    `기업 ${cos.length}곳을 «${sectorName}» 섹터로 옮겨 «${domainName(domainId)}» 분야에 넣음`);
+    `기업 ${cos.length}곳을 «${sectorName}» 섹터로 옮겨 «${domainName(domainId)}» 분야에 넣음`,
+    { table: 'orgs', op: 'update-many',
+      rows: wasSectors.map(w => ({ row: w.key, before: { sector: w.sector }, after: { sector: sectorName } })) });
   try { buildCoDB(); } catch(e){}
   mdbSelected.clear();
   renderMDB();

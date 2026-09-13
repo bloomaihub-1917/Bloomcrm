@@ -63,7 +63,7 @@ import { escapeHtml, escAttr, levenshteinDist, parseSectorScope, sectorKey, coun
 import { postToSheet, batchCreateExhibitors } from '../api.js';
 import { parseSectors, joinSectors, mainSectors, sectorNamesInDomain, domainName, domainOfSector, UNASSIGNED_DOMAIN } from './settings-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
-import { trackAction } from './audit-tab.js';
+import { trackAction, changed } from './audit-tab.js';
 import { billedAmount, paidAmount, currencyOf, exhibitorTradeFor, fmtMoney,
   EXH_ROLES, reloadExhibitors } from './exh-tab.js';
 
@@ -1615,7 +1615,8 @@ export async function editCoKind(key){
   }
   trackAction('edit', '기업 종류 변경', c.nameKo || c.nameEn,
     `<b>${escapeHtml(c.nameKo || c.nameEn)}</b> 종류 ${escapeHtml(orgKindOf(before)?.label || '없음')} → ${escapeHtml(next.label)}`,
-    { kind: 'company', id: c.key, field: 'kind' });
+    changed('orgs', c.key, { kind: before }, { kind: next.key },
+      { kind: 'company', id: c.key, field: 'kind' }));
   renderCoList();
 }
 
@@ -1752,10 +1753,12 @@ export function onCoDropToSector(e, sectorName){
   if(!key || !sectorName) return;
   const c = CO_DB.find(x => x.key === key);
   if(!c) return;
+  const beforeSectors = (c.sectors || []).join(', ');
   applyCoSectors(c, [sectorName]);
   trackAction('edit', '기업 섹터 이동(드래그)', c.nameKo||c.nameEn,
     `"${c.nameKo||c.nameEn}" 섹터를 드래그해서 "${parseSectorScope(sectorName).plainName}"(으)로 변경`,
-    { kind: 'company', id: c.key, field: 'sectors' });
+    changed('orgs', c.key, { sector: beforeSectors }, { sector: sectorName },
+      { kind: 'company', id: c.key, field: 'sectors' }));
   buildCoCAT();
   renderCoList();
   if(selCo === key) renderCoDetail(c);

@@ -65,7 +65,7 @@ import {
   deleteEquipCatalog,
   saveExhCfgToSheet,
 } from '../api.js';
-import { trackAction } from './audit-tab.js';
+import { trackAction, changed, removed } from './audit-tab.js';
 
 import { TRACK_COLORS, trackColorOf, trackColorIndex, pickTrackColorIndex } from '../track-colors.js';
 import { CL, CAT_KEYS, EVENT_PARTS, PART_STATES, partStateOf,
@@ -972,7 +972,8 @@ export async function renameDomain(id){
   d.name = name.trim();
   const r = await saveDomains();
   if(!r.ok){ d.name = prev; renderDomainList(); return; }
-  trackAction('edit', '분야 이름 변경', d.name, `분야 이름: ${prev} → ${d.name}`);
+  trackAction('edit', '분야 이름 변경', d.name, `분야 이름: ${prev} → ${d.name}`,
+    changed('domains', d.id, { name: prev }, { name: d.name }));
   renderDomainList();
   renderSectorTree();
   try { buildCoCAT(); } catch(e){}
@@ -1000,7 +1001,10 @@ export async function removeDomain(id){
   if(idx >= 0) DOMAINS.splice(idx, 1);
   const r2 = await saveDomains();
   if(!r2.ok){ DOMAINS.splice(idx, 0, d); renderDomainList(); return; }
-  trackAction('edit', '분야 삭제', d.name, `분야 "${d.name}" 삭제 (섹터 ${affected.length}개 미분류로 이동)`);
+  /* 분야 줄과, 이 분야를 가리키던 섹터들의 이전값을 함께 담는다 — 분야만
+     되살리면 섹터는 미분류로 남는다 */
+  trackAction('edit', '분야 삭제', d.name, `분야 "${d.name}" 삭제 (섹터 ${affected.length}개 미분류로 이동)`,
+    removed('domains', id, d, { also: affected.map((s, i) => ({ row: s.id, domain: prevValues[i] })) }));
   renderDomainList();
   renderSectorTree();
   try { buildCoCAT(); } catch(e){}
@@ -1057,7 +1061,8 @@ export async function renameTag(key){
   t.label = label.trim();
   const r = await saveTags();
   if(!r.ok){ t.label = prev; renderTagList(); return; }
-  trackAction('edit', '태그 이름 변경', t.label, `태그 이름: ${prev} → ${t.label}`);
+  trackAction('edit', '태그 이름 변경', t.label, `태그 이름: ${prev} → ${t.label}`,
+    changed('tags', t.key, { label: prev }, { label: t.label }));
   renderTagList();
   try { buildMDBTagList(); renderMDB(); } catch(e){}
 }
@@ -1085,7 +1090,8 @@ export async function removeTag(key){
   if(idx >= 0) TAGS.splice(idx, 1);
   const r2 = await saveTags();
   if(!r2.ok){ TAGS.splice(idx, 0, t); renderTagList(); return; }
-  trackAction('edit', '태그 삭제', t.label, `태그 "${t.label}" 삭제 (연락처 ${affected.length}건에서 제거)`);
+  trackAction('edit', '태그 삭제', t.label, `태그 "${t.label}" 삭제 (연락처 ${affected.length}건에서 제거)`,
+    removed('tags', key, t, { also: affected.map((c, i) => ({ row: c.id, tags: prevValues[i] })) }));
   renderTagList();
   try { buildMDBTagList(); renderMDB(); } catch(e){}
 }
@@ -1270,7 +1276,8 @@ export function removeEventFromList(idx){
   try { buildMDBEvList(); populateUploadEvDropdown(); } catch(e){}
   deleteEventFromSheet(key);
   trackAction('edit', '행사 삭제', key, `행사 "${ev.name||key}" 삭제`
-    + (partCount ? ` (참여 기록 ${partCount}건 잔존)` : ''));
+    + (partCount ? ` (참여 기록 ${partCount}건 잔존)` : ''),
+    removed('events', key, ev));
 }
 
 function participationsCountForEvent(evKey){
@@ -1983,7 +1990,8 @@ export async function editEquipItem(id, field, value){
   const LBL = { name_ko: '국문 품명', name_en: '영문 품명', price_krw: 'KRW 단가', price_usd: 'USD 단가' };
   trackAction('edit', '품목 수정', eqEvent,
     `<b>${escapeHtml(c.code || '')}</b> ${escapeHtml(c.name_ko || c.name_en || '')} — ${LBL[field] || field}: ${
-      escapeHtml(prev || '(빈값)')} → ${escapeHtml(v || '(빈값)')}`);
+      escapeHtml(prev || '(빈값)')} → ${escapeHtml(v || '(빈값)')}`,
+    changed('equip_catalog', c.id, { [field]: prev ?? '' }, { [field]: v ?? '' }));
   renderEquipCatalog();
   window.renderExh?.();   // 전시 탭이 열려 있으면 단가가 바로 반영되게
 }
@@ -2009,7 +2017,8 @@ export async function removeEquipItem(id){
     c.active = 'no';
     const r = await saveEquipCatalog(c);
     if(!r.ok){ c.active = ''; renderEquipCatalog(); return; }
-    trackAction('edit', '품목 숨김', eqEvent, `<b>${escapeHtml(nm)}</b> 숨김 (신청 ${used}건은 유지)`);
+    trackAction('edit', '품목 숨김', eqEvent, `<b>${escapeHtml(nm)}</b> 숨김 (신청 ${used}건은 유지)`,
+      changed('equip_catalog', c.id, { active: '' }, { active: 'no' }));
     renderEquipCatalog(); return;
   }
 
@@ -2018,7 +2027,8 @@ export async function removeEquipItem(id){
   EQUIP_CATALOG.splice(i, 1);
   const r = await deleteEquipCatalog(c.id);
   if(!r.ok){ EQUIP_CATALOG.splice(i, 0, c); renderEquipCatalog(); return; }
-  trackAction('delete', '품목 삭제', eqEvent, `<b>${escapeHtml(nm)}</b> 품목표에서 삭제 (신청 내역 없음)`);
+  trackAction('delete', '품목 삭제', eqEvent, `<b>${escapeHtml(nm)}</b> 품목표에서 삭제 (신청 내역 없음)`,
+    removed('equip_catalog', c.id, c));
   renderEquipCatalog();
   window.renderExh?.();
 }

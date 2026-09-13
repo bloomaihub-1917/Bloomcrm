@@ -29,7 +29,8 @@ import { td, escapeHtml, escAttr, countryName, isMobile } from '../utils.js';
 import { saveEventToSheet, batchCreateExhibitors } from '../api.js';
 import { saveTargetToSheet, buildEvFil, renderCrm, updBadges } from './crm-tab.js';
 import { normalizeCompanyKey } from './company-tab.js';
-import { trackAction } from './audit-tab.js';
+/* changed는 이 파일의 지역 변수 이름과 겹친다 — 별칭으로 들여온다 */
+import { trackAction, changed as changeMeta } from './audit-tab.js';
 
 /* ── 모듈 상태 ──
    고른 행사와 보고 있는 화면. 다른 탭이 알 필요가 없어 state.js로 올리지 않는다. */
@@ -366,7 +367,9 @@ export async function saveEvDbProfile(){
   }
   // 무엇이 바뀌었는지만 남긴다 — 긴 글 두 개를 통째로 로그에 넣으면 못 읽는다
   trackAction('edit', '행사 개요 수정', ev.key,
-    `${ev.name || ev.key} — ${changed.join(', ')} 수정`);
+    `${ev.name || ev.key} — ${changed.join(', ')} 수정`,
+    changeMeta('events', ev.key, prev,
+      changed.reduce((o, f) => (o[f] = next[f], o), {})));
   say('저장했어요.', true);
   setTimeout(() => { const m = document.getElementById('evdb-prof-msg'); if(m) m.textContent = ''; }, 2000);
 }

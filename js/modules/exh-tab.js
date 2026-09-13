@@ -47,7 +47,7 @@ const deleteExhPayment = guardWrite(_deleteExhPayment);
 const deleteExhLog = guardWrite(_deleteExhLog);
 const batchCreateExhibitors = guardWrite(_batchCreateExhibitors);
 const saveExhCfgToSheet = guardWrite(_saveExhCfgToSheet);
-import { trackAction } from './audit-tab.js';
+import { trackAction, changed } from './audit-tab.js';
 import { renderWatchView, initWatchFolders } from './exh-watch.js';
 import { normalizeCompanyKey, createOrg, reloadOrgs } from './company-tab.js';
 
@@ -2927,8 +2927,13 @@ async function saveBookOrders(changes, what){
     alert('순서 저장에 실패했어요. 원래 순서로 되돌렸습니다.');
     return;
   }
+  /* 순번은 한 곳을 옮기면 수십 곳이 함께 밀린다 — 줄마다 이전 번호를 담아야
+     되돌릴 수 있다. 예전에 스크립트와 화면이 서로 덮어써 43곳이 밀린 적이 있다. */
   trackAction('edit', '도록 순서 변경', what,
-    `<b>${escapeHtml(what)}</b> — ${changes.length}곳의 순번이 밀렸어요`);
+    `<b>${escapeHtml(what)}</b> — ${changes.length}곳의 순번이 밀렸어요`,
+    { table: 'exhibitors', op: 'update-many',
+      rows: backup.map((b, i) => ({ row: b.o.id, before: { book_order: b.was },
+        after: { book_order: changes[i].no } })) });
 }
 
 /* 겹친 번호와 빈 번호만 없앤다. 지금 보이는 앞뒤는 그대로 두고 번호만 1..N으로

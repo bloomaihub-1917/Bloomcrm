@@ -34,7 +34,7 @@ import {
 } from '../state.js';
 import { RP, SC, LC, EC, STGS, avB, avF } from '../constants.js';
 import { ab, td, escapeHtml, escAttr, isMobile } from '../utils.js';
-import { trackAction } from './audit-tab.js';
+import { trackAction, changed } from './audit-tab.js';
 import { postToSheet } from '../api.js';
 
 /* ── 타겟 1건을 crm_targets 시트에 upsert (신규) ──
@@ -313,7 +313,7 @@ export async function chgSt(id, val) {
   }
   trackAction('status', '상태 변경', targets[i].name,
     `<b>${escapeHtml(targets[i].name)}</b>의 컨택 상태를 <b>${escapeHtml(prev.status)} → ${escapeHtml(val)}</b>로 변경`,
-    { kind: 'target', id: targets[i].id });
+    changed('crm_targets', targets[i].id, prev, { status: val }, { kind: 'target', id: targets[i].id }));
 }
 
 /* ══════════════════════════════════════════
@@ -459,7 +459,7 @@ export async function setStg(id, stage) {
   }
   trackAction('stage', '단계 변경', targets[i].name,
     `<b>${escapeHtml(targets[i].name)}</b>의 진행 단계를 <b>${escapeHtml(prevLabel)} → ${escapeHtml(STGS_KR[stage-1])}</b>로 변경`,
-    { kind: 'target', id: targets[i].id });
+    changed('crm_targets', targets[i].id, prev, { currentStage: stage }, { kind: 'target', id: targets[i].id }));
 }
 export async function chgStD(id, val) {
   const i = targets.findIndex(x => x.id === id);
@@ -480,7 +480,7 @@ export async function chgStD(id, val) {
   }
   trackAction('status', '상태 변경', targets[i].name,
     `<b>${escapeHtml(targets[i].name)}</b>의 컨택 상태를 <b>${escapeHtml(prev.status)} → ${escapeHtml(val)}</b>로 변경`,
-    { kind: 'target', id: targets[i].id });
+    changed('crm_targets', targets[i].id, prev, { status: val }, { kind: 'target', id: targets[i].id }));
 }
 export async function addLog(id) {
   const i = targets.findIndex(x => x.id === id);

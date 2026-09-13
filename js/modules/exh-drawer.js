@@ -51,7 +51,7 @@ function saveFailed(res, msg){
   if(res && res.locked) return;
   alert(msg || '저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
 }
-import { trackAction } from './audit-tab.js';
+import { trackAction, changed, removed } from './audit-tab.js';
 import {
   billedAmount, paidAmount, graphicState, graphicDueInfo, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
   isPendingRefund, boothTypeOptions, boothTypes, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
@@ -2459,7 +2459,8 @@ export async function setItemFieldDirect(id, field, value){
     `<b>${escapeHtml(x?.company_name || '')}</b> — ${escapeHtml(i.name || '')}의 ${escapeHtml(lbl)}을(를) `
     + `<b>${escapeHtml(was || '(빈값)')}</b> → <b>${escapeHtml(String(value ?? '') || '(빈값)')}</b>로 고쳤어요 `
     + `<span style="color:#9C9890">(신청서를 거치지 않은 변경)</span>`,
-    { kind: 'exhibitor', id: i.exhibitor_id, tab: 'billing' });
+    changed('exhibitor_items', id, { [field]: was }, { [field]: value ?? '' },
+      { kind: 'exhibitor', id: i.exhibitor_id, tab: 'billing', field }));
   refreshExhViews();
 }
 
@@ -2484,18 +2485,20 @@ export async function addExhRefund(exhId){
   const amount = val(`rf-a-${exhId}`);
   if(!amount){ alert('환불액을 입력해주세요.'); return; }
   const reason = val(`rf-r-${exhId}`);
-  const ok = await addRow(EXH_PAYMENTS, {
+  const rfRec = {
     id: localId('XP-'), exhibitor_id: exhId, invoice_id: '',
     paid_at: '', requested_at: val(`rf-d-${exhId}`) || td(),
     amount, currency: val(`rf-cur-${exhId}`) || currencyOf(exhId),
     kind: 'refund', status: 'requested', reason, method: '', note: '',
-  }, saveExhPayment);
+  };
+  const ok = await addRow(EXH_PAYMENTS, rfRec, saveExhPayment);
   if(ok){
     clear(`rf-a-${exhId}`); clear(`rf-r-${exhId}`);
     const x = getExhibitorById(exhId);
     trackAction('status', '환불 요청', x?.company_name || '',
       `<b>${escapeHtml(x?.company_name || '')}</b> 환불 요청 ${escapeHtml(String(amount))}${reason ? ` — ${escapeHtml(reason)}` : ''}`,
-      { kind: 'exhibitor', id: x?.id, tab: 'billing' });
+      { kind: 'exhibitor', id: x?.id, tab: 'billing',
+        table: 'exhibitor_payments', row: rfRec.id, op: 'create', after: rfRec });
   }
 }
 
@@ -2532,7 +2535,8 @@ export async function toggleItemBillable(id){
   const x = getExhibitorById(r.exhibitor_id);
   trackAction('edit', '청구 포함 여부 변경', x?.company_name || '',
     `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(r.name || '')} ${r.billable === 'no' ? '청구 제외' : '청구 포함'}`,
-    { kind: 'exhibitor', id: x?.id, tab: 'billing' });
+    changed('exhibitor_items', id, { billable: before ?? '' }, { billable: r.billable },
+      { kind: 'exhibitor', id: x?.id, tab: 'billing', field: 'billable' }));
 }
 
 export async function setInvField(id, field, value){
@@ -2549,18 +2553,22 @@ export async function addExhPayment(exhId){
   const amount = val(`py-a-${exhId}`);
   if(!amount){ alert('입금액을 입력해주세요.'); return; }
   const invs = invoicesFor(exhId);
-  const ok = await addRow(EXH_PAYMENTS, {
+  /* 만든 줄을 손에 쥐고 있어야 기록에 «어느 줄을 만들었나»를 적을 수 있다 */
+  const rec = {
     id: localId('XP-'), exhibitor_id: exhId, invoice_id: invs[0]?.id || '',
     paid_at: val(`py-d-${exhId}`) || td(), amount, currency: val(`py-cur-${exhId}`) || currencyOf(exhId),
     kind: 'in',
     method: val(`py-m-${exhId}`), note: val(`py-n-${exhId}`),
-  }, saveExhPayment);
+  };
+  const ok = await addRow(EXH_PAYMENTS, rec, saveExhPayment);
   if(ok){
     clear(`py-n-${exhId}`);
     const x = getExhibitorById(exhId);
     trackAction('status', '입금 확인', x?.company_name || '',
       `<b>${escapeHtml(x?.company_name || '')}</b> 입금 ${money(amount)}원 확인`,
-      { kind: 'exhibitor', id: x?.id, tab: 'billing' });
+      /* 새로 만든 줄은 되돌리는 게 «지우기»다 — 어느 줄인지만 알면 된다 */
+      { kind: 'exhibitor', id: x?.id, tab: 'billing',
+        table: 'exhibitor_payments', row: rec.id, op: 'create', after: rec });
   }
 }
 export const delExhPayment = (id) => removeRow(EXH_PAYMENTS, id, deleteExhPayment, '입금 내역');
@@ -2652,7 +2660,7 @@ export async function advanceTaxStage(id){
   const x = getExhibitorById(v.exhibitor_id);
   trackAction('status', '세금계산서 단계', x?.company_name || '',
     `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(v.title || '세금계산서')} ${escapeHtml(st.label)} → ${escapeHtml(nx.label)}`,
-    { kind: 'exhibitor', id: x?.id, tab: 'progress' });
+    changed('exhibitor_tax_invoices', id, before, patch, { kind: 'exhibitor', id: x?.id, tab: 'progress' }));
 }
 
 /* 잘못 넘겼을 때 되돌린다 — 날짜는 지우지 않는다(exh-tab.js의 rewindStage와 같은 이유,
@@ -2671,7 +2679,7 @@ export async function rewindTaxStage(id){
   const x = getExhibitorById(v.exhibitor_id);
   trackAction('status', '세금계산서 단계', x?.company_name || '',
     `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(v.title || '세금계산서')} ${escapeHtml(cur.label)} → ${escapeHtml(prev.label)} (되돌림)`,
-    { kind: 'exhibitor', id: x?.id, tab: 'progress' });
+    changed('exhibitor_tax_invoices', id, before, patch, { kind: 'exhibitor', id: x?.id, tab: 'progress' }));
 }
 
 /* 완납 처리 — 송금 수수료 차액처럼 실무상 더 받을 수 없는 잔액을 사유와 함께 닫는다.
@@ -2753,7 +2761,8 @@ export async function setExhContactField(id, field, value){
   const lbl = { name:'이름', email:'이메일', phone:'연락처', role:'역할', note:'메모' }[field] || field;
   trackAction('edit', '기업 담당자 수정', x?.company_name || '',
     `<b>${escapeHtml(x?.company_name || '')}</b> 담당자 ${escapeHtml(lbl)} ${escapeHtml(String(before||'(없음)'))} → ${escapeHtml(String(value||'(없음)'))}`,
-    { kind: 'exhibitor', id: x?.id, tab: 'contact', field });
+    changed('exhibitor_contacts', id, { [field]: before ?? '' }, { [field]: value ?? '' },
+      { kind: 'exhibitor', id: x?.id, tab: 'contact', field }));
 }
 
 /* 메인은 기업당 한 명이라, 새로 지정하면 나머지는 내려준다 */

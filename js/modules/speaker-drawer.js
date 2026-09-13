@@ -31,7 +31,7 @@ import {
   saveSpeakerContact, deleteSpeakerContact,
   saveSpeakerLog, sendMail,
 } from '../api.js';
-import { trackAction } from './audit-tab.js';
+import { trackAction, changed, removed } from './audit-tab.js';
 import { confLocked, confLockNotice, renderConf, buildConfEvList } from './conf-tab.js';
 
 let spId = null;
@@ -89,7 +89,7 @@ async function patchSpeaker(patch, label){
   }
   sp.updated_at = td();
   if(label) trackAction('edit', '연사', sp.event_id, `${sp.name_snapshot || sp.id} — ${label}`,
-    { kind: 'speaker', id: sp.id });
+    changed('speakers', sp.id, backup, patch, { kind: 'speaker', id: sp.id }));
   renderConf();
   buildConfEvList();
   return r;
@@ -113,7 +113,7 @@ async function patchAssign(aid, patch, label){
     return r || { ok: false };
   }
   if(label) trackAction('edit', '세션 배정', a.event_id, `${speakerLabel()} — ${label}`,
-    { kind: 'speaker', id: a.speaker_id });
+    changed('session_speakers', aid, backup, patch, { kind: 'speaker', id: a.speaker_id }));
   renderConf();
   return r;
 }
@@ -665,7 +665,8 @@ export async function scField(id, field, value, label){
     return;
   }
   trackAction('edit', '연사 연락 상대', getSpeakerById(spId)?.event_id, `${speakerLabel()} — ${label || field}`,
-    { kind: 'speaker', id: spId, field });
+    changed('speaker_contacts', id, { [field]: backup }, { [field]: value ?? '' },
+      { kind: 'speaker', id: spId, field }));
 }
 
 export async function removeSpeakerContact(id){
@@ -677,7 +678,8 @@ export async function removeSpeakerContact(id){
   if(res && res.ok === false){ if(!res.locked) alert('지우지 못했어요.'); return; }
   const i = SPEAKER_CONTACTS.findIndex(x => x.id === id);
   if(i >= 0) SPEAKER_CONTACTS.splice(i, 1);
-  trackAction('delete', '연사 연락 상대', getSpeakerById(spId)?.event_id, r.name || r.email || id);
+  trackAction('delete', '연사 연락 상대', getSpeakerById(spId)?.event_id, r.name || r.email || id,
+    removed('speaker_contacts', id, r, { kind: 'speaker', id: spId }));
   renderSpeakerDr();
 }
 

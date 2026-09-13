@@ -35,7 +35,7 @@ import {
   saveSessionSpeaker, deleteSessionSpeaker,
   saveSpeakerContact,
 } from '../api.js';
-import { trackAction } from './audit-tab.js';
+import { trackAction, changed, removed, created } from './audit-tab.js';
 import { IMPORT_SHEETS, IMPORT_GUIDE } from '../conf-import-spec.js';
 import { trackColorOf, pickTrackColorIndex } from '../track-colors.js';
 import { saveConf } from './settings-tab.js';
@@ -1482,7 +1482,7 @@ export async function setTalkTime(aid, field, value){
   }
   trackAction('edit', '발표 시간', confEvent,
     `${speakerName(a.speaker_id)} — ${patch.start_at || a.start_at || ''}${patch.end_at ? `–${patch.end_at}` : ''}`,
-    { kind: 'session', id: a.session_id, ev: confEvent });
+    changed('session_speakers', aid, backup, patch, { kind: 'session', id: a.session_id, ev: confEvent }));
 }
 
 /* 세션 시작부터 각 발표의 «분»만큼 이어 붙인다.
@@ -1654,7 +1654,8 @@ export async function saveSessionEdit(sid){
     return;
   }
   trackAction('edit', '컨퍼런스 세션', confEvent, `${titleKo || titleEn} — ${diff.join(', ')} 고침`,
-    { kind: 'session', id: sid, ev: confEvent });
+    changed('conf_sessions', sid, backup, diff.reduce((o, k) => (o[k] = patch[k] ?? '', o), {}),
+      { kind: 'session', id: sid, ev: confEvent }));
   confEditSession = '';
   renderConf();
 }
@@ -1706,6 +1707,7 @@ export async function removeConfSession(sid){
   if(!confirm(`«${s.title_ko || s.title_en || sid}» 세션을 지울까요?`
     + (asg.length ? `\n배정된 ${asg.length}명의 이 세션 역할도 함께 지워집니다 (연사 자체는 남아요).` : ''))) return;
 
+  const goneAssigns = asg.map(a => ({ ...a }));
   for(const a of asg){
     const r = await gDelAssign(a.id);
     if(r && r.ok === false) return;
@@ -1717,7 +1719,9 @@ export async function removeConfSession(sid){
   const i = CONF_SESSIONS.findIndex(x => x.id === sid);
   if(i >= 0) CONF_SESSIONS.splice(i, 1);
   if(confEditSession === sid) confEditSession = '';
-  trackAction('delete', '컨퍼런스 세션', confEvent, s.title_ko || s.title_en || sid);
+  /* 세션을 지우면 배정도 함께 없어진다 — 둘 다 담아야 되살릴 수 있다 */
+  trackAction('delete', '컨퍼런스 세션', confEvent, s.title_ko || s.title_en || sid,
+    removed('conf_sessions', sid, s, { kind: 'session', id: sid, also: goneAssigns }));
   renderConf();
 }
 
@@ -1781,7 +1785,8 @@ export async function setAssignRole(aid, role){
   if(!res || res.ok === false){ if(!res?.locked) alert('역할을 바꾸지 못했어요.'); renderConf(); return; }
   a.role = role;
   trackAction('edit', '세션 배정', confEvent, `${speakerName(a.speaker_id)} — ${was} → ${role}`,
-    { kind: 'session', id: a.session_id, ev: confEvent });
+    changed('session_speakers', aid, { role: was }, { role },
+      { kind: 'session', id: a.session_id, ev: confEvent }));
   renderConf();
 }
 
@@ -1793,7 +1798,8 @@ export async function removeAssign(aid){
   if(res && res.ok === false){ if(!res.locked) alert('배정을 해제하지 못했어요.'); return; }
   const i = SESSION_SPEAKERS.findIndex(x => x.id === aid);
   if(i >= 0) SESSION_SPEAKERS.splice(i, 1);
-  trackAction('delete', '세션 배정', confEvent, `${speakerName(a.speaker_id)} — ${a.role}`);
+  trackAction('delete', '세션 배정', confEvent, `${speakerName(a.speaker_id)} — ${a.role}`,
+    removed('session_speakers', aid, a, { kind: 'speaker', id: a.speaker_id }));
   renderConf();
 }
 
@@ -1811,7 +1817,8 @@ export async function removeConfSpeaker(spId){
   if(res && res.ok === false){ if(!res.locked) alert('연사를 지우지 못했어요.'); return; }
   const i = SPEAKERS.findIndex(x => x.id === spId);
   if(i >= 0) SPEAKERS.splice(i, 1);
-  trackAction('delete', '연사', confEvent, sp.name_snapshot || spId);
+  trackAction('delete', '연사', confEvent, sp.name_snapshot || spId,
+    removed('speakers', spId, sp));
   renderConf();
   buildConfEvList();
 }

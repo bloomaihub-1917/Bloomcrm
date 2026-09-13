@@ -31,7 +31,7 @@
 import { WATCH_FOLDERS, WATCH_FILES, watchFoldersFor, currentUser } from '../state.js';
 import { escapeHtml, escAttr } from '../utils.js';
 import { saveWatchFolder, deleteWatchFolder, saveWatchFiles, deleteWatchFiles } from '../api.js';
-import { trackAction } from './audit-tab.js';
+import { trackAction, changed, removed } from './audit-tab.js';
 import {
   supported, pickFolder, delHandle, readyFolder, readyFolderQuiet, folderLabel, scanFolder,
 } from './local-folder.js';
@@ -207,7 +207,8 @@ export async function renameWatchFolder(folderId){
   const res = await saveWatchFolder({ id: f.id, name: f.name });
   if(!res.ok){ f.name = was; renderWatchBodyIfOpen(); alert('이름을 저장하지 못했어요.'); return; }
   trackAction('update', '지켜보는 폴더 이름', f.name,
-    `«${escapeHtml(was)}» → <b>${escapeHtml(f.name)}</b>`);
+    `«${escapeHtml(was)}» → <b>${escapeHtml(f.name)}</b>`,
+    changed('watch_folders', f.id, { name: was }, { name: f.name }));
 }
 
 /* 길잡이 — «어느 폴더를 골라야 하나»를 다른 PC의 사람에게 알려주는 글줄.
@@ -236,7 +237,8 @@ export async function removeWatchFolder(folderId){
   if(!confirm(`«${f.name}» 폴더를 목록에서 뺄까요?\n`
     + `지금까지 본 파일 ${n}건의 확인 기록도 함께 사라집니다.\n`
     + `(실제 폴더와 파일은 그대로 있습니다)`)) return;
-  const ids = WATCH_FILES.filter(w => w.folder_id === folderId).map(w => w.id);
+  const gone = WATCH_FILES.filter(w => w.folder_id === folderId).map(w => ({ ...w }));
+  const ids = gone.map(w => w.id);
   const i = WATCH_FOLDERS.indexOf(f);
   if(i >= 0) WATCH_FOLDERS.splice(i, 1);
   for(let k = WATCH_FILES.length - 1; k >= 0; k--){
@@ -249,7 +251,9 @@ export async function removeWatchFolder(folderId){
      라고 물어 놓고 안 지우면 그 말이 거짓말이 된다. */
   if(ids.length) await deleteWatchFiles(ids);
   await deleteWatchFolder(folderId);
-  trackAction('delete', '지켜보는 폴더 삭제', f.name, `<b>${escapeHtml(f.name)}</b> 폴더를 목록에서 뺐어요`);
+  /* 폴더 줄과, 함께 지운 파일 기록을 통째로 담는다 */
+  trackAction('delete', '지켜보는 폴더 삭제', f.name, `<b>${escapeHtml(f.name)}</b> 폴더를 목록에서 뺐어요`,
+    removed('watch_folders', folderId, f, { also: gone }));
 }
 
 /* ══════════════════════════════════════════
