@@ -43,7 +43,7 @@ import { buildCoDB, ensureOrgsForNames, orgIdForName, applyCoSectors } from './c
 import { domainOfSector, domainName, findSectorByName, mainSectors, UNASSIGNED_DOMAIN } from './settings-tab.js';
 /* removed는 removeParticipation 안의 지역 변수와 이름이 겹친다 — 별칭으로 들여온다 */
 import { trackAction, changed, removed as removedMeta } from './audit-tab.js';
-import { countryCheck, countryCheckText } from '../country-signal.js';
+import { countryCheck, countryCheckText, continentOf, CONTINENT_ORDER } from '../country-signal.js';
 
 /* 이 사람의 국가가 자료와 어긋나는지 — 소속 기업 국가도 함께 넘겨야
    «기업에서 따라온 값 같아요»까지 말해 줄 수 있다 */
@@ -171,7 +171,10 @@ export const HOME_COUNTRY = '대한민국';
 const ctryOf = (c) => countryName(String(c.country || '').trim());
 export const regionOf = (c) => {
   const v = String(c.country || '').trim();
-  if(!v) return 'unknown';
+  /* «-»도 비어 있는 것이다. 불러올 때 빈 국가를 countryName이 «-»로 바꿔 놓는데
+     (화면에 «-»로 찍으려고), 그걸 나라 이름으로 보면 «해외 -  7명» 같은 줄이
+     생기고 «국가 미상»은 0이 된다 — 채워야 할 사람이 화면에서 사라진다. */
+  if(!v || v === '-') return 'unknown';
   return ctryOf(c) === HOME_COUNTRY ? 'home' : 'abroad';
 };
 
@@ -195,21 +198,24 @@ export function buildMDBRegionList(){
       <span class="ev-chip-ct">${cnt}명</span>
     </button>`;
 
-  /* 해외는 나라별로 펼친다 — 많은 나라부터. «해외 23명»만으로는 어느 나라에
-     몇 명인지 몰라 초청 계획을 못 세운다. */
-  const byCountry = new Map();
+  /* 해외는 대륙으로 묶는다. 나라별로 펼쳤더니 1명짜리가 열두 줄이었다 —
+     대만 1, 독일 1, 스위스 1, 싱가포르 1… 세어 볼 수는 있어도 «유럽에서 몇 명
+     오나»를 못 본다. 초청·항공·시차는 나라가 아니라 대륙 단위로 움직인다.
+
+     특정 나라를 찾을 일은 검색창이 받는다 — «국가:싱가포르»로 찾으면 된다. */
+  const byCont = new Map();
   base.filter(c => regionOf(c) === 'abroad').forEach(c => {
-    const k = ctryOf(c);
-    byCountry.set(k, (byCountry.get(k) || 0) + 1);
+    const k = continentOf(ctryOf(c));
+    byCont.set(k, (byCont.get(k) || 0) + 1);
   });
-  const countries = [...byCountry.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ko'));
+  const conts = CONTINENT_ORDER.filter(k => byCont.has(k));
   const unknown = n(c => regionOf(c) === 'unknown');
 
   el.innerHTML =
     chip(null, '전체', base.length, 'var(--i4)')
     + chip('home', '국내', n(c => regionOf(c) === 'home'), 'var(--a)')
     + chip('abroad', '해외', n(c => regionOf(c) === 'abroad'), 'var(--g)')
-    + countries.map(([name, cnt]) => chip('c:' + name, name, cnt, 'var(--g)', true)).join('')
+    + conts.map(k => chip('k:' + k, k, byCont.get(k), 'var(--g)', true)).join('')
     + (unknown ? chip('unknown', '국가 미상', unknown, 'var(--am)') : '');
 }
 
@@ -844,13 +850,7 @@ export function getMDBPairs(){
   }
 
   pairs = mdbFilterPairs(pairs);
-  // text search
-  if(q){
-    const lq = q.toLowerCase();
-    pairs = pairs.filter(({c}) =>
-      [c.nameKo,c.nameEn,c.orgKo,c.orgEn,c.titleKo,c.titleEn].some(v => v && v.toLowerCase().includes(lq))
-    );
-  }
+  if(q) pairs = pairs.filter(({ c }) => matchesQuery(c, q));
   return pairs;
 }
 
@@ -868,12 +868,56 @@ export function toggleMdbCtry(){ mdbCtryOnly = !mdbCtryOnly; renderMDB(); }
 
    거르는 규칙을 여기 하나로 둔다. 거르개가 늘 때 세 곳을 고치는 일이 없어진다.
 ══════════════════════════════════════════ */
+/* ══════════════════════════════════════════
+   검색 — 여러 낱말과 «칸:값»
+
+   이름·기업·직함만 훑고 있었다. 그래서 «싱가포르에 있는 사람»도 «gmail 쓰는
+   사람»도 못 찾았고, 낱말을 둘 넣으면 그 통짜 문장을 찾느라 아무것도 안 나왔다.
+
+   낱말은 띄어 쓰면 «그리고»다 — «파렉셀 팀장»은 둘 다 맞는 사람. 앞에 칸 이름을
+   붙이면 그 칸만 본다: «국가:싱가포르», «이메일:.kr», «태그:BD». 칸 이름은
+   한글로도 영문으로도 받는다 — 외우게 하지 않는다.
+
+   칸을 안 붙이면 사람에 관한 거의 모든 칸을 훑는다. 좁히고 싶을 때만 붙이면 된다.
+══════════════════════════════════════════ */
+const Q_FIELDS = {
+  이름: ['nameKo', 'nameEn'], name: ['nameKo', 'nameEn'],
+  기업: ['orgKo', 'orgEn'],   org: ['orgKo', 'orgEn'], company: ['orgKo', 'orgEn'],
+  국가: ['country'],          country: ['country'],
+  직함: ['titleKo', 'titleEn'], title: ['titleKo', 'titleEn'],
+  부서: ['deptKo', 'deptEn'], dept: ['deptKo', 'deptEn'],
+  이메일: ['email1', 'email2'], email: ['email1', 'email2'], mail: ['email1', 'email2'],
+  연락처: ['phone1', 'phone2'], phone: ['phone1', 'phone2'],
+  태그: ['tags'], tag: ['tags'],
+  분야: ['beat'], 품목: ['products'],
+  출처: ['source'], source: ['source'],
+  상태: ['status'], 언어: ['lang'],
+};
+const ALL_Q = ['nameKo', 'nameEn', 'orgKo', 'orgEn', 'titleKo', 'titleEn',
+  'deptKo', 'deptEn', 'country', 'email1', 'email2', 'phone1', 'phone2',
+  'tags', 'beat', 'products', 'source'];
+const hay = (c, keys) => keys.map(k => String(c[k] ?? '')).join(' ').toLowerCase();
+
+export function matchesQuery(c, q){
+  const terms = String(q || '').trim().split(/\s+/).filter(Boolean);
+  if(!terms.length) return true;
+  return terms.every(t => {
+    const m = t.match(/^([^:：]+)[:：](.*)$/);
+    if(m && Q_FIELDS[m[1]]){
+      const v = m[2].toLowerCase();
+      return !v || hay(c, Q_FIELDS[m[1]]).includes(v);   // «국가:»만 치면 거르지 않는다
+    }
+    return hay(c, ALL_Q).includes(t.toLowerCase());
+  });
+}
+
 export function mdbFilterPairs(pairs){
   let out = pairs;
   if(mdbStat) out = out.filter(({ c }) => c.status === mdbStat);
   if(mdbCtryOnly) out = out.filter(({ c }) => !!ctryCheck(c));
-  if(mdbRegion) out = out.filter(({ c }) => mdbRegion.startsWith('c:')
-    ? ctryOf(c) === mdbRegion.slice(2)
+  if(mdbRegion) out = out.filter(({ c }) =>
+      mdbRegion.startsWith('k:') ? regionOf(c) === 'abroad' && continentOf(ctryOf(c)) === mdbRegion.slice(2)
+    : mdbRegion.startsWith('c:') ? ctryOf(c) === mdbRegion.slice(2)
     : regionOf(c) === mdbRegion);
   if(mdbDomainFilter){
     const domainMap = buildContactDomainMap();
@@ -932,7 +976,7 @@ export function updateMDBBadges(pairs){
     const q=(document.getElementById('mdb-q')||{}).value||'';
     // orgEn이 빠져 있어 영문 기업명으로 검색하면 목록에는 나오는데 배지 숫자는
     // 달랐다 — 목록(getMDBPairs)과 같은 필드를 본다
-    if(q){ const lq=q.toLowerCase(); bp=bp.filter(({c})=>[c.nameKo,c.nameEn,c.orgKo,c.orgEn,c.titleKo,c.titleEn].some(v=>v&&v.toLowerCase().includes(lq))); }
+    if(q) bp = bp.filter(({c}) => matchesQuery(c, q));
     return bp;
   })();
 
@@ -1067,11 +1111,7 @@ function renderMDBGroupedCards(pairs){
         return (c && c.cat === mdbCat) || ROLE_TO_CAT[p.role] === mdbCat;
       });
       let members = mdbFilterPairs(evParts.map(p => ({ c: getContactById(p.contactId), p })).filter(x => x.c));
-      if(q){
-        const lq = q.toLowerCase();
-        members = members.filter(({ c }) => [c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn]
-          .some(v => v && v.toLowerCase().includes(lq)));
-      }
+      if(q) members = members.filter(({ c }) => matchesQuery(c, q));
       if(!members.length) return;
       html += `<div class="mdbc-grp" style="border-left:3px solid ${evObj.color};background:${evObj.color}0A">
         <span class="mdbc-grp-nm">${escapeHtml(evObj.key)}</span><span class="mdbc-grp-ct">${members.length}명</span>
@@ -1273,7 +1313,7 @@ export function renderMDBGrouped(pairs){
       }
       let members = mdbFilterPairs(evParts.map(p=>({c:getContactById(p.contactId),p})).filter(x=>x.c));
       const q=(document.getElementById('mdb-q')||{}).value||'';
-      if(q){ const lq=q.toLowerCase(); members=members.filter(({c})=>[c.nameKo,c.nameEn,c.orgKo,c.orgEn,c.titleKo,c.titleEn].some(v=>v&&v.toLowerCase().includes(lq))); }
+      if(q) members = members.filter(({c}) => matchesQuery(c, q));
       if(!members.length) return;
 
       // Event header
@@ -1327,7 +1367,7 @@ export function renderMDBGrouped(pairs){
     if(mdbCat!=='all') unassigned = unassigned.filter(c=>c.cat===mdbCat);
     if(mdbStat) unassigned = unassigned.filter(c=>c.status===mdbStat);
     const qU=(document.getElementById('mdb-q')||{}).value||'';
-    if(qU){ const lqU=qU.toLowerCase(); unassigned = unassigned.filter(c=>[c.nameKo,c.nameEn,c.orgKo,c.orgEn,c.titleKo,c.titleEn].some(v=>v&&v.toLowerCase().includes(lqU))); }
+    if(qU) unassigned = unassigned.filter(c => matchesQuery(c, qU));
 
     if(unassigned.length){
       rows += `<tr style="pointer-events:none"><td colspan="9" style="padding:0">
