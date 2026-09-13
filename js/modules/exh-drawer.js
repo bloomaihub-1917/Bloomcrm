@@ -935,9 +935,39 @@ export async function addExhApp(exhId, preset = {}){
   refreshExhViews();
 }
 
+/* 품목 한 줄을 넣는다. 열린 회차가 없으면 하나 열고 거기에 넣는다 —
+   두 걸음을 한 걸음으로.
+
+   접수를 열면 화면이 다시 그려지면서 적어 둔 칸이 새 칸으로 바뀐다. 그래서
+   값을 먼저 손에 쥐고, 새 칸에 도로 채워 넣은 뒤에 넣는다 — 안 그러면 회차만
+   열리고 품목은 «항목명을 입력해주세요»로 끝난다.
+
+   접수를 여는 데 실패하면 넣지 않는다: 회차 없이 들어간 품목은 나중에 어디서
+   왔는지 알 수 없다. */
+const ITEM_FIELDS = ['cat', 'nm', 'qty', 'up', 'amt', 'cur'];
+export async function addItemHere(exhId){
+  if(!openAppFor(exhId)){
+    const keep = {};
+    ITEM_FIELDS.forEach(k => { keep[k] = val(`it-${k}-${exhId}`); });
+    const catalogId = document.getElementById(`it-nm-${exhId}`)?.dataset.catalogId || '';
+    if(!keep.nm){ alert('항목명을 입력해주세요.'); return; }
+
+    await addExhApp(exhId, { channel: '신청서' });
+    if(!openAppFor(exhId)) return;
+
+    ITEM_FIELDS.forEach(k => {
+      const el = document.getElementById(`it-${k}-${exhId}`);
+      if(el && keep[k]) el.value = keep[k];
+    });
+    const nm = document.getElementById(`it-nm-${exhId}`);
+    if(nm && catalogId) nm.dataset.catalogId = catalogId;
+  }
+  return addExhItem(exhId);
+}
+
 export const setAppField = (id, field, value) =>
   setRowField(EXH_APPS, saveExhApp, '신청서 접수', id, field, value);
-export const delExhApp = (id) => removeRow(EXH_APPS, id, deleteExhApp);
+export const delExhApp = (id) => removeRow(EXH_APPS, id, deleteExhApp, '신청서 접수');
 
 /* 이 접수 건에 달린 품목 변경을 사람이 읽는 한 줄로 만든다.
    닫을 때 한 번 만들어 summary에 넣는다 — 나중에 품목을 또 고쳐도 그때
@@ -996,8 +1026,6 @@ function appsSection(x){
     ${APP_CHANNELS.map(([c, l]) => `<button class="btn bs" onclick="addExhApp('${escAttr(x.id)}',{channel:'${c}'})">+ ${l}</button>`).join('')}
   </div>`;
 
-  if(!list.length) return sct('신청서 접수 이력',
-    `<div style="font-size:11.5px;color:var(--i4)">아직 접수 기록이 없어요. 신청서를 받은 날짜부터 남겨두면 변경이 몇 번 있었는지 그대로 따라옵니다.</div>${add}`);
 
   const rows = list.map(a => {
     const live = !String(a.handled_at || '').trim();
@@ -1032,8 +1060,19 @@ function appsSection(x){
      쪼그라들었다 — «C-011 디자인 체어 (화이트)»가 두 글자만 보인다. 칸 너비는
      정산에 있을 때와 같아야 한다. 어느 회차에 들어가는지는 바로 위 글줄이
      말해 주므로, 카드 안에 있지 않아도 헷갈리지 않는다. */
-  const hint = open
-    ? `<div style="font-size:11px;color:var(--a);margin:6px 0 4px">${escapeHtml(open.seq)}차 접수를 반영하는 중이에요 — 여기서 넣는 품목이 이 접수 건에 기록됩니다.</div>
+  /* 추가 줄은 늘 보인다.
+
+     처음에는 회차를 먼저 열어야 줄이 나타나게 했는데, 하나 넣자고 접수 단추를
+     고르고 → 줄이 생기길 기다리고 → 적는 세 걸음이 됐다. 품목 하나 넣는 일은
+     하루에도 여러 번이라 그 한 걸음이 그대로 짐이 된다.
+
+     줄은 늘 두고, 회차가 없으면 단추가 «접수 열고 추가»가 된다 — 누르면 오늘
+     날짜로 접수를 하나 열고 거기에 넣는다. 모든 품목이 회차에 묶인다는 규칙은
+     그대로면서 누르는 횟수만 줄었다. 어느 회차에 들어갔는지는 바로 위 카드에
+     그대로 보인다. */
+  const hint = `<div style="font-size:11px;color:${open ? 'var(--a)' : 'var(--i4)'};margin:6px 0 4px">${
+    open ? `${escapeHtml(open.seq)}차 접수를 반영하는 중이에요 — 여기서 넣는 품목이 이 접수 건에 기록됩니다.`
+         : `품목을 넣으면 ${list.length + 1}차 접수가 열리면서 거기에 기록돼요 — 경로를 정해 열려면 아래 접수 단추를 쓰세요.`}</div>
     <div class="bl-row bl-item-add">
       <select class="fi" id="it-cat-${escAttr(x.id)}" style="flex:0 0 72px;min-width:0;font-size:11.5px;padding:6px"
         onchange="rememberItemCat(this.value); swapItemList('${escAttr(x.id)}', this.value)">
@@ -1048,9 +1087,16 @@ function appsSection(x){
       <input class="fi" id="it-amt-${escAttr(x.id)}" placeholder="금액" style="flex:1 1 88px;min-width:0;font-size:11.5px;padding:6px;text-align:right">
       <select class="fi bl-cur" id="it-cur-${escAttr(x.id)}" onchange="rememberItemCur(this.value)">
         ${currencies().map(c => `<option value="${c}"${(lastItemCur || currencyOf(x.id)) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
-      <button class="btn bp bs" style="flex:0 0 auto" onclick="addExhItem('${escAttr(x.id)}')">추가</button>
-    </div>`
-    : '';
+      <button class="btn bp bs" style="flex:0 0 auto" onclick="addItemHere('${escAttr(x.id)}')"
+        title="${escAttr(open ? `${open.seq}차 접수에 넣습니다` : '접수를 하나 열고 거기에 넣습니다')}">${
+        open ? '추가' : '접수 열고 추가'}</button>
+    </div>`;
+  /* 접수 기록이 아직 없어도 품목 줄은 보여준다 — 첫 품목을 넣는 순간 1차
+     접수가 열린다. 여기서 줄을 숨기면 «어디서 넣지»부터 막힌다. */
+  if(!list.length) return sct('신청서 접수 이력',
+    `<div style="font-size:11.5px;color:var(--i4)">아직 접수 기록이 없어요. 신청서를 받은 날짜부터 남겨두면 변경이 몇 번 있었는지 그대로 따라옵니다.</div>`
+    + hint + add);
+
   return sct('신청서 접수 이력', rows + hint + add,
     list.length > 1 ? `<span class="pill p-amber">변경 ${list.length - 1}회</span>` : '');
 }
@@ -2231,7 +2277,17 @@ async function addRow(arr, rec, saveFn, label){
   return true;
 }
 
-async function removeRow(arr, id, deleteFn){
+/* 지운 줄은 기록에 남긴다.
+
+   ㈜브레디스헬스케어의 부스 금액 165,000원이 사라진 적이 있는데, 활동 기록
+   어디에도 없었다 — 여기서 아무것도 안 적었기 때문이다. 무엇이 얼마였는지는
+   지우는 순간 세상에서 없어지고, 인보이스 금액을 거꾸로 짚어서야 되짚을 수
+   있었다.
+
+   지워진 값을 통째로 적어 둔다. 이름만 적으면 «무엇을 지웠다»는 알아도
+   되살릴 수는 없다 — 되살리는 데 필요한 건 금액·수량·통화다. */
+const ROW_LABEL = (r) => r.name || r.title || '';
+async function removeRow(arr, id, deleteFn, label = '줄'){
   const i = arr.findIndex(r => r.id === id);
   if(i < 0) return;
   const [removed] = arr.splice(i, 1);
@@ -2241,7 +2297,16 @@ async function removeRow(arr, id, deleteFn){
     arr.splice(i, 0, removed);
     refreshExhViews();
     alert('삭제에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
+    return;
   }
+  const x = getExhibitorById(removed.exhibitor_id);
+  const what = [removed.qty && `수량 ${removed.qty}`,
+    removed.amount !== undefined && removed.amount !== '' && `${removed.amount} ${removed.currency || 'KRW'}`,
+    removed.unit_price && `단가 ${removed.unit_price}`].filter(Boolean).join(' · ');
+  trackAction('delete', label + ' 삭제', x?.company_name || '',
+    `<b>${escapeHtml(x?.company_name || '')}</b> — ${escapeHtml(label)} <b>${escapeHtml(ROW_LABEL(removed))}</b> 지움`
+    + (what ? ` <span style="color:#9C9890">(${escapeHtml(what)})</span>` : ''),
+    { kind: 'exhibitor', id: removed.exhibitor_id, tab: 'billing' });
 }
 
 const val = (id) => (document.getElementById(id)?.value || '').trim();
@@ -2289,7 +2354,7 @@ export async function addExhItem(exhId){
   const nmEl = document.getElementById(`it-nm-${exhId}`);
   if(nmEl) delete nmEl.dataset.catalogId;
 }
-export const delExhItem = (id) => removeRow(EXH_ITEMS, id, deleteExhItem);
+export const delExhItem = (id) => removeRow(EXH_ITEMS, id, deleteExhItem, '금액 항목');
 
 /* 신청서에 적은 추가 비품 내역을 금액 항목으로 옮겨 담는다 —
    적어둔 걸 다시 타이핑하지 않게 하려는 연결고리. */
@@ -2316,7 +2381,7 @@ export async function addExhInvoice(exhId){
   }, saveExhInvoice);
   clear(`iv-t-${exhId}`, `iv-a-${exhId}`);
 }
-export const delExhInvoice = (id) => removeRow(EXH_INVOICES, id, deleteExhInvoice);
+export const delExhInvoice = (id) => removeRow(EXH_INVOICES, id, deleteExhInvoice, '인보이스');
 
 /* 화면 입력칸을 거치지 않고 인보이스 줄을 만든다 — exh-invoice.js의 '발행'이
    쓴다(신청 내역에서 곧바로 발행할 때는 사람이 금액을 두드리지 않는다).
@@ -2493,7 +2558,7 @@ export async function addExhPayment(exhId){
       { kind: 'exhibitor', id: x?.id, tab: 'billing' });
   }
 }
-export const delExhPayment = (id) => removeRow(EXH_PAYMENTS, id, deleteExhPayment);
+export const delExhPayment = (id) => removeRow(EXH_PAYMENTS, id, deleteExhPayment, '입금 내역');
 
 /* 인보이스 무효 처리 — 통화 변경·금액 오류로 다시 발행할 때 옛 건을 지우지 않고
    합계에서만 뺀다(이력을 남겨야 나중에 왜 두 장인지 설명할 수 있다). */
@@ -2530,7 +2595,7 @@ export async function addExhTax(exhId){
   }, saveExhTax);
   clear(`tx-t-${exhId}`, `tx-a-${exhId}`);
 }
-export const delExhTax = (id) => removeRow(EXH_TAX, id, deleteExhTax);
+export const delExhTax = (id) => removeRow(EXH_TAX, id, deleteExhTax, '세금계산서');
 
 export async function setTaxField(id, field, value){
   const v = EXH_TAX.find(i => i.id === id);
@@ -2641,7 +2706,7 @@ export async function addExhLog(exhId){
       { kind: 'exhibitor', id: x?.id, tab: 'logs' });
   }
 }
-export const delExhLog = (id) => removeRow(EXH_LOGS, id, deleteExhLog);
+export const delExhLog = (id) => removeRow(EXH_LOGS, id, deleteExhLog, '문의·기록');
 
 export async function answerExhLog(id){
   const l = EXH_LOGS.find(r => r.id === id);
@@ -2660,7 +2725,7 @@ export async function answerExhLog(id){
 }
 
 /* ── 기업 담당자 (여러 명) ── */
-export const delExhContact = (id) => removeRow(EXH_CONTACTS, id, deleteExhContact);
+export const delExhContact = (id) => removeRow(EXH_CONTACTS, id, deleteExhContact, '담당자');
 
 /* 도메인이 다른 이유를 적어 둔다 — 적어 두면 다음부터 안 묻는다 */
 export async function noteExhContact(id){
@@ -2756,6 +2821,7 @@ window.toggleItemBillable = toggleItemBillable;
 window.pickCatalogItem = pickCatalogItem;
 window.rememberItemCat = rememberItemCat;
 window.setItemFieldDirect = setItemFieldDirect;
+window.addItemHere = addItemHere;
 window.editItemRow = editItemRow;
 window.swapItemList = swapItemList;
 window.rememberItemCur = rememberItemCur;
