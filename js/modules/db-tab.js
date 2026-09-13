@@ -154,6 +154,65 @@ export function setMDBEv(ev){ setMdbEvFilter(ev); buildMDBEvList(); renderMDB();
    분야별 보기 (신규) — 행사별 보기와 같은 칩 UI 패턴.
    연락처 소속 기업의 섹터가 속한 분야(BIO/VC/... , DOMAINS)를 기준으로
    필터링한다. 행사별/카테고리/상태 필터와 함께(AND) 적용된다. */
+/* ══════════════════════════════════════════
+   지역별 보기 — 국내 / 해외 / 미상
+
+   국내와 해외는 일하는 방식이 통째로 갈린다. 초청장 언어, 비자 안내, 보내는
+   시각, 항공·숙박을 우리가 잡는지. 그래서 «해외만»을 한 번에 보는 자리가
+   먼저 필요하고, 그 안에서 나라를 가른다.
+
+   미상을 숨기지 않는다. 국가가 비어 있는 사람은 국내도 해외도 아닌 채로
+   국내 목록에도 해외 목록에도 안 나오는데, 안 보이면 영영 안 채워진다.
+
+   나라 이름은 적힌 값을 그대로 세지 않고 countryName으로 한 번 눌러서 센다 —
+   «Korea»와 «대한민국»과 «KR»이 서로 다른 줄로 갈리면 나라별로 세는 뜻이 없다.
+══════════════════════════════════════════ */
+export const HOME_COUNTRY = '대한민국';
+const ctryOf = (c) => countryName(String(c.country || '').trim());
+export const regionOf = (c) => {
+  const v = String(c.country || '').trim();
+  if(!v) return 'unknown';
+  return ctryOf(c) === HOME_COUNTRY ? 'home' : 'abroad';
+};
+
+let mdbRegion = null;          // null | 'home' | 'abroad' | 'unknown' | 'c:<나라이름>'
+export function setMDBRegion(v){
+  mdbRegion = mdbRegion === v ? null : v;
+  buildMDBRegionList();
+  renderMDB();
+}
+
+export function buildMDBRegionList(){
+  const el = document.getElementById('mdb-region-list');
+  if(!el) return;
+  const base = contacts;
+  const n = (f) => base.filter(f).length;
+  const chip = (key, label, cnt, dot, indent) =>
+    `<button class="ev-chip${mdbRegion === key ? ' on' : ''}" onclick="setMDBRegion(${key === null ? 'null' : `'${escAttr(key)}'`})"${
+      indent ? ' style="padding-left:20px"' : ''}>
+      <span class="ev-chip-dot" style="background:${dot}"></span>
+      <span class="ev-chip-nm">${escapeHtml(label)}</span>
+      <span class="ev-chip-ct">${cnt}명</span>
+    </button>`;
+
+  /* 해외는 나라별로 펼친다 — 많은 나라부터. «해외 23명»만으로는 어느 나라에
+     몇 명인지 몰라 초청 계획을 못 세운다. */
+  const byCountry = new Map();
+  base.filter(c => regionOf(c) === 'abroad').forEach(c => {
+    const k = ctryOf(c);
+    byCountry.set(k, (byCountry.get(k) || 0) + 1);
+  });
+  const countries = [...byCountry.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ko'));
+  const unknown = n(c => regionOf(c) === 'unknown');
+
+  el.innerHTML =
+    chip(null, '전체', base.length, 'var(--i4)')
+    + chip('home', '국내', n(c => regionOf(c) === 'home'), 'var(--a)')
+    + chip('abroad', '해외', n(c => regionOf(c) === 'abroad'), 'var(--g)')
+    + countries.map(([name, cnt]) => chip('c:' + name, name, cnt, 'var(--g)', true)).join('')
+    + (unknown ? chip('unknown', '국가 미상', unknown, 'var(--am)') : '');
+}
+
 export function buildMDBDomainList(){
   const el = document.getElementById('mdb-domain-list');
   if(!el) return;
@@ -789,6 +848,9 @@ export function getMDBPairs(){
   /* 국가가 자료와 어긋나는 사람만 — 초청장 시차·비자 안내·쓸 언어가 이 칸에서
      갈리는데, 기업 국가가 그대로 복사돼 들어온 값이 많다 */
   if(mdbCtryOnly) pairs = pairs.filter(({c}) => !!ctryCheck(c));
+  if(mdbRegion) pairs = pairs.filter(({c}) => mdbRegion.startsWith('c:')
+    ? ctryOf(c) === mdbRegion.slice(2)
+    : regionOf(c) === mdbRegion);
   // domain filter (분야별 보기) — 연락처 소속 기업이 속한 분야 기준
   if(mdbDomainFilter){
     const domainMap = buildContactDomainMap();
@@ -814,6 +876,7 @@ export function toggleMdbCtry(){ mdbCtryOnly = !mdbCtryOnly; renderMDB(); }
 export function renderMDB(){
   const pairs = getMDBPairs();
   renderCtryChip();
+  buildMDBRegionList();
   buildMDBDomainList();
   buildMDBTagList();
   renderMDBSelectionBar();
@@ -1951,6 +2014,8 @@ window.filterCat = filterCat;
 window.filterStat = filterStat;
 window.segCat = segCat;
 window.toggleMdbCtry = toggleMdbCtry;
+window.setMDBRegion = setMDBRegion;
+window.buildMDBRegionList = buildMDBRegionList;
 window.exportCSV = exportCSV;
 window.openContactDr = openContactDr;
 window.closeContactDr = closeContactDr;
