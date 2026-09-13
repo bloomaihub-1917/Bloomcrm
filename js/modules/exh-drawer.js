@@ -1021,8 +1021,19 @@ function appsSection(x){
       ${a.file_name ? `<div style="font-size:10.5px;color:var(--i4);margin-top:4px">📄 ${escapeHtml(a.file_name)}</div>` : ''}
       ${live && diff.length ? `<div style="font-size:11px;color:var(--i2);margin-top:6px;padding:6px 8px;background:var(--W);border-radius:6px">
           ${diff.map(d => escapeHtml(d)).join('<br>')}</div>` : ''}
-      ${open && a.id === open.id ? `<div style="margin-top:7px;padding-top:7px;border-top:1px dashed var(--i7)">
-        <div style="font-size:10.5px;color:var(--i4);margin-bottom:4px">이 회차에서 신청한 품목을 넣어요 — 정산의 금액 항목으로 바로 들어갑니다</div>
+
+      ${!live && a.summary ? `<div style="font-size:11px;color:var(--i3);margin-top:5px">${escapeHtml(a.summary)}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  /* 품목 넣는 줄은 카드 밖, 섹션 전체 너비에 둔다.
+
+     카드 안에 넣었더니 테두리와 안쪽 여백만큼 좁아져 항목명 칸이 113px까지
+     쪼그라들었다 — «C-011 디자인 체어 (화이트)»가 두 글자만 보인다. 칸 너비는
+     정산에 있을 때와 같아야 한다. 어느 회차에 들어가는지는 바로 위 글줄이
+     말해 주므로, 카드 안에 있지 않아도 헷갈리지 않는다. */
+  const hint = open
+    ? `<div style="font-size:11px;color:var(--a);margin:6px 0 4px">${escapeHtml(open.seq)}차 접수를 반영하는 중이에요 — 여기서 넣는 품목이 이 접수 건에 기록됩니다.</div>
     <div class="bl-row bl-item-add">
       <select class="fi" id="it-cat-${escAttr(x.id)}" style="flex:0 0 72px;min-width:0;font-size:11.5px;padding:6px"
         onchange="rememberItemCat(this.value); swapItemList('${escAttr(x.id)}', this.value)">
@@ -1038,14 +1049,7 @@ function appsSection(x){
       <select class="fi bl-cur" id="it-cur-${escAttr(x.id)}" onchange="rememberItemCur(this.value)">
         ${currencies().map(c => `<option value="${c}"${(lastItemCur || currencyOf(x.id)) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
       <button class="btn bp bs" style="flex:0 0 auto" onclick="addExhItem('${escAttr(x.id)}')">추가</button>
-    </div>
-      </div>` : ''}
-      ${!live && a.summary ? `<div style="font-size:11px;color:var(--i3);margin-top:5px">${escapeHtml(a.summary)}</div>` : ''}
-    </div>`;
-  }).join('');
-
-  const hint = open
-    ? `<div style="font-size:11px;color:var(--a);margin-top:2px">${escapeHtml(open.seq)}차 접수를 반영하는 중이에요 — 지금 고치는 품목이 이 접수 건에 기록됩니다.</div>`
+    </div>`
     : '';
   return sct('신청서 접수 이력', rows + hint + add,
     list.length > 1 ? `<span class="pill p-amber">변경 ${list.length - 1}회</span>` : '');
