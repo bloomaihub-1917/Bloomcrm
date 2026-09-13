@@ -1128,10 +1128,11 @@ function domainRoster(baseCoDb){
 
      같은 것을 두 화면에서 다른 모양으로 보여줄 이유도 없다 — 여기서 보던 줄이
      눌러 들어가도 그대로면, 어디를 보고 있는지 헷갈리지 않는다. */
-  const row = (c, i) => `<div class="co-rw" onclick="selectCo('${escAttr(c.key)}')"
+  /* 줄 사이에 테두리를 두르지 않는다 — 묶음 안에서 줄이 이어져 보여야
+     마스터DB와 같은 결이 된다. 칸은 아래 선 하나로만 나눈다. */
+  const row = (c, i) => `<div class="co-rw co-rw-flat" onclick="selectCo('${escAttr(c.key)}')"
     draggable="true" ondragstart="this.classList.add('co-dragging');onCoDragStart(event,'${escAttr(c.key)}')"
-    ondragend="this.classList.remove('co-dragging')" title="드래그해서 왼쪽 섹터로 이동"
-    style="cursor:pointer;border:1px solid var(--i6);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;background:var(--W)">
+    ondragend="this.classList.remove('co-dragging')" title="드래그해서 왼쪽 섹터로 이동">
     <div class="co-av" style="background:${avB(i)};color:${avF(i)}">${escapeHtml(c.abbr)}</div>
     <div style="flex:1;min-width:0">
       <div class="co-rn">${escapeHtml(c.nameKo || c.nameEn)}</div>
@@ -1140,17 +1141,24 @@ function domainRoster(baseCoDb){
     <div class="co-ct">${c.events.length}회</div>
   </div>`;
 
+  /* 마스터DB의 묶음 보기와 같은 짜임 — 접었다 펴는 게 아니라, 분야 머리줄과
+     기업 줄이 한 줄기로 이어져 내려간다. 머리줄은 스크롤해도 위에 붙어 있어
+     («.grp-hd»의 sticky) 한참 내려가도 지금 어느 분야를 보고 있는지 안 놓친다.
+
+     접어 두지 않는 쪽이 낫다. 접혀 있으면 어느 분야에 누가 있는지 보려고 매번
+     펴야 하는데, 이 화면은 그걸 보러 오는 자리다. */
   return `<div style="margin-bottom:18px">
     <div style="font-size:13px;font-weight:700;color:var(--i1);margin-bottom:2px">분야별 기업 명단</div>
-    <div style="font-size:11px;color:var(--i4);margin-bottom:10px">분야를 누르면 기업 이름이 펼쳐져요 · 기업을 누르면 그 기업으로 갑니다</div>
-    ${groups.map(g => `<details style="margin-bottom:6px">
-      <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--i2);padding:6px 0">
-        🗂 ${escapeHtml(g.name)} <span style="font-weight:400;color:var(--i4)">${g.list.length}개사</span>
-      </summary>
-      <div style="display:flex;flex-direction:column;gap:6px;padding:6px 0 12px">
-        ${g.list.map(row).join('')}
-      </div>
-    </details>`).join('')}
+    <div style="font-size:11px;color:var(--i4);margin-bottom:10px">기업을 누르면 그 기업으로 가요 · 끌어다 놓으면 섹터를 옮길 수 있어요</div>
+    <div style="border:1px solid var(--i6);border-radius:10px;overflow:hidden;background:var(--W)">
+      ${groups.map(g => `
+        <div class="grp-hd">
+          <span class="grp-hd-dot" style="background:var(--a)"></span>
+          <div class="grp-hd-nm">${escapeHtml(g.name)}</div>
+          <div class="grp-hd-ct">${g.list.length}개사</div>
+        </div>
+        ${g.list.map(row).join('')}`).join('')}
+    </div>
   </div>`;
 }
 
