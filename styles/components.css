@@ -615,7 +615,6 @@ tr.row-sel{background:var(--ad)}
   .bl-mini{padding:4px 8px}
 }
 
-
 /* ── 열람 전용(.ro) ──
    진행 완료된 행사의 화면. 입력칸과 체크박스를 눌리지 않게 해서 "고쳤는데
    저장이 안 된다"가 아니라 애초에 손이 안 가게 한다. 실제로 데이터를 막는 건
@@ -639,23 +638,6 @@ tr.row-sel{background:var(--ad)}
 /* 세션 안에서 배정 줄을 끌어 순서 바꾸기 */
 .asg-row.drop-on{background:var(--ad);box-shadow:inset 0 2px 0 var(--a)}
 .asg-row[draggable="true"]:hover{background:var(--i9)}
-
-/* ── 분야별 기업 명단의 이름 조각 ──
-   여든일곱 개가 한 화면에 깔리므로 줄 단위가 아니라 흐르는 조각으로 둔다.
-   줄로 두면 한 분야가 화면 하나를 다 먹어 «분야별»이라는 말이 무의미해진다. */
-.co-chip{
-  display:inline-flex;align-items:center;gap:5px;
-  padding:4px 9px 4px 4px;border:1px solid var(--i6);border-radius:999px;
-  background:var(--W);cursor:pointer;font:inherit;font-size:11.5px;color:var(--i2);
-  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-}
-.co-chip:hover{border-color:var(--a);color:var(--a)}
-.co-chip-av{
-  flex:0 0 auto;width:18px;height:18px;border-radius:50%;
-  display:inline-flex;align-items:center;justify-content:center;
-  font-size:8.5px;font-weight:800;letter-spacing:-.2px;
-}
-
 /* 로그 줄의 되돌리기 단추 — 평소엔 조용히, 그 줄에 손이 가면 보인다.
    기록을 읽는 게 먼저고 되돌리는 건 가끔이라, 늘 도드라지면 읽기를 방해한다. */
 .audit-undo{

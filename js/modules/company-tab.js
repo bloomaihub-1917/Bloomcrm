@@ -1120,10 +1120,25 @@ function domainRoster(baseCoDb){
   if(rest.length) groups.push({ id: UNASSIGNED_DOMAIN, name: '미분류', list: rest });
   if(!groups.length) return '';
 
-  const chip = (c, i) => `<button class="co-chip" onclick="selectCo('${escAttr(c.key)}')"
-    title="${escAttr((c.sectors || [c.sector]).join(', ') || '미분류')}">
-    <span class="co-chip-av" style="background:${avB(i)};color:${avF(i)}">${escapeHtml(c.abbr)}</span>
-    ${escapeHtml(c.nameKo || c.nameEn)}</button>`;
+  /* 섹터를 눌러 들어갔을 때 보이는 줄과 같은 모양으로 그린다.
+
+     처음에는 알약처럼 흘려 놓았는데, 이름 길이가 제각각이라 줄이 들쭉날쭉해지고
+     («나눔스페이스»와 «주식회사 단테비전»이 한 줄에 섞인다) 좁은 화면에서는
+     그 자체로 읽기 힘든 덩어리가 된다.
+
+     같은 것을 두 화면에서 다른 모양으로 보여줄 이유도 없다 — 여기서 보던 줄이
+     눌러 들어가도 그대로면, 어디를 보고 있는지 헷갈리지 않는다. */
+  const row = (c, i) => `<div class="co-rw" onclick="selectCo('${escAttr(c.key)}')"
+    draggable="true" ondragstart="this.classList.add('co-dragging');onCoDragStart(event,'${escAttr(c.key)}')"
+    ondragend="this.classList.remove('co-dragging')" title="드래그해서 왼쪽 섹터로 이동"
+    style="cursor:pointer;border:1px solid var(--i6);border-radius:8px;padding:10px 12px;display:flex;align-items:center;gap:10px;background:var(--W)">
+    <div class="co-av" style="background:${avB(i)};color:${avF(i)}">${escapeHtml(c.abbr)}</div>
+    <div style="flex:1;min-width:0">
+      <div class="co-rn">${escapeHtml(c.nameKo || c.nameEn)}</div>
+      <div style="font-size:11px;color:var(--i4)">${escapeHtml((c.sectors || [c.sector]).join(', ') || '미분류')}</div>
+    </div>
+    <div class="co-ct">${c.events.length}회</div>
+  </div>`;
 
   return `<div style="margin-bottom:18px">
     <div style="font-size:13px;font-weight:700;color:var(--i1);margin-bottom:2px">분야별 기업 명단</div>
@@ -1132,8 +1147,8 @@ function domainRoster(baseCoDb){
       <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--i2);padding:6px 0">
         🗂 ${escapeHtml(g.name)} <span style="font-weight:400;color:var(--i4)">${g.list.length}개사</span>
       </summary>
-      <div style="display:flex;flex-wrap:wrap;gap:5px;padding:6px 0 10px 4px">
-        ${g.list.map(chip).join('')}
+      <div style="display:flex;flex-direction:column;gap:6px;padding:6px 0 12px">
+        ${g.list.map(row).join('')}
       </div>
     </details>`).join('')}
   </div>`;
