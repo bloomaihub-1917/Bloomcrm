@@ -457,10 +457,16 @@ export async function removeSectorById(id){
       rows: linked.map(sectorRowValues),
     }, '섹터 연결 해제');
   }
+  const gone = COMPANY_SECTORS[idx];
   COMPANY_SECTORS.splice(idx, 1);
   renderSectorList();
   try { buildCoCAT(); populateUploadEvDropdown(); } catch(e){}
   await deleteSectorRow(id);
+  /* 지운 업종을 기록에 남긴다 — 여기서 아무것도 안 적고 있었다. 업종은 기업·
+     연락처가 가리키는 값이라, 지우고 나면 무엇이 있었는지 알 길이 없다. */
+  trackAction('delete', '업종 삭제', gone?.name || id,
+    `업종 <b>${escapeHtml(gone?.name || id)}</b> 삭제`,
+    { table: 'sectors', op: 'delete', row: id, before: gone || { id } });
 }
 
 // ── 구글시트 sectors 탭 행 순서를 "메인 → 그 서브섹터들" 순으로 재배열 (가독성 정리용, 원본 3844~3875행) ──
@@ -1143,6 +1149,9 @@ export async function removePartType(idx){
   PART_TYPES.splice(idx, 1);
   renderPartTypeList();
   await deletePartTypeRow(t.key);
+  trackAction('delete', '참가 유형 삭제', t.label || t.key,
+    `참가 유형 <b>${escapeHtml(t.label || t.key)}</b> 삭제 — 이 유형으로 저장된 참가 기록은 남아 있어요`,
+    { table: 'part_types', op: 'delete', row: t.key, before: t });
 }
 
 /* ══════════════════════════════════════════

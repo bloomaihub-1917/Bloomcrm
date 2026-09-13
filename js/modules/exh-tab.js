@@ -4473,10 +4473,23 @@ export function logExhEdit(x, patch, backup){
     keys.push(k);
   });
   if(!parts.length) return;
+  /* 사람이 읽는 문장과 별개로, 바뀐 값 자체를 그대로 담는다.
+
+     지금까지는 «그래픽 주문 2026-09-13 지움»처럼 문장으로만 남았다. 사람은
+     읽을 수 있지만 되돌릴 수는 없다 — 어느 표의 어느 줄이었는지, 지워진 값이
+     정확히 무엇이었는지를 문장에서 다시 캐내야 한다.
+
+     되돌리는 기능은 나중에 붙이더라도 재료는 오늘부터 쌓아야 한다. 오늘 안
+     남긴 값은 내일 만들 기능으로도 되살릴 수 없다. */
   trackAction('edit', '전시 정보 수정', x.company_name || '',
     `<b>${escapeHtml(x.company_name || '')}</b> ${escapeHtml(parts.join(' / '))}`,
-    { kind: 'exhibitor', id: x.id, field: keys.length === 1 ? keys[0] : '' });
+    { kind: 'exhibitor', id: x.id, field: keys.length === 1 ? keys[0] : '',
+      table: 'exhibitors', op: 'update',
+      before: pick(backup, keys), after: pick(patch, keys) });
 }
+
+/* 바뀐 칸만 골라 담는다 — 안 바뀐 칸까지 넣으면 기록이 몇 배로 불어난다 */
+const pick = (obj, keys) => keys.reduce((o, k) => (o[k] = obj[k] ?? '', o), {});
 
 export async function patchExh(id, patch, label){
   const x = getExhibitorById(id);

@@ -2303,10 +2303,13 @@ async function removeRow(arr, id, deleteFn, label = '줄'){
   const what = [removed.qty && `수량 ${removed.qty}`,
     removed.amount !== undefined && removed.amount !== '' && `${removed.amount} ${removed.currency || 'KRW'}`,
     removed.unit_price && `단가 ${removed.unit_price}`].filter(Boolean).join(' · ');
+  /* 지워진 줄은 통째로 담는다. 고친 것과 달리 «어느 칸이 무엇이었나»가 아니라
+     줄 전체가 없어진 거라, 되살리려면 모든 칸이 있어야 한다. */
   trackAction('delete', label + ' 삭제', x?.company_name || '',
     `<b>${escapeHtml(x?.company_name || '')}</b> — ${escapeHtml(label)} <b>${escapeHtml(ROW_LABEL(removed))}</b> 지움`
     + (what ? ` <span style="color:#9C9890">(${escapeHtml(what)})</span>` : ''),
-    { kind: 'exhibitor', id: removed.exhibitor_id, tab: 'billing' });
+    { kind: 'exhibitor', id: removed.exhibitor_id, tab: 'billing', row: id,
+      op: 'delete', before: removed });
 }
 
 const val = (id) => (document.getElementById(id)?.value || '').trim();
@@ -2417,7 +2420,9 @@ async function setRowField(list, saver, label, id, field, value, opts = {}){
     method: '결제 수단', note: '비고', paid_at: '입금일' }[field] || field;
   trackAction('edit', label + ' 수정', x?.company_name || '',
     `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(r.name || r.title || label)} ${escapeHtml(fl)} ${escapeHtml(String(before || '(없음)'))} → ${escapeHtml(String(value || '(없음)'))}`,
-    { kind: 'exhibitor', id: x?.id, tab: 'billing', field });
+    /* 값 자체도 담는다 — 문장만으로는 되돌릴 수 없다 */
+    { kind: 'exhibitor', id: x?.id, tab: 'billing', field, row: id,
+      op: 'update', before: { [field]: before ?? '' }, after: { [field]: value ?? '' } });
   return true;
 }
 

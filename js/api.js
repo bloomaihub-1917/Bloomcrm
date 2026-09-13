@@ -568,7 +568,15 @@ export async function loadFromSheets(hooks = {}){
          것보다 낫다. */
       const parseAuditLink = (v) => {
         if(!v) return null;
-        try { const o = JSON.parse(v); return o && o.kind && o.id ? o : null; }
+        try {
+          const o = JSON.parse(v);
+          if(!o || typeof o !== 'object') return null;
+          /* 두 가지가 여기 담긴다: 눌러서 갈 곳(kind·id)과 되돌릴 재료(table·before).
+             둘 중 하나만 있는 줄도 있다 — 설정 삭제는 갈 창이 없고, 옛 기록은
+             재료가 없다. 하나라도 있으면 살린다. 예전에는 kind·id가 둘 다
+             있어야 받아서, 재료만 담긴 줄이 읽을 때 통째로 버려졌다. */
+          return (o.kind && o.id) || o.table || o.before ? o : null;
+        }
         catch(e){ return null; }
       };
       const remoteLog = logsData.map(r=>{
