@@ -1063,6 +1063,7 @@ export function renderCoDashboard(){
   if(unassigned.length) domainGroups.push({ title: '미분류', items: unassigned });
 
   el.innerHTML = `
+    ${domainRoster(baseCoDb)}
     <div style="font-size:13px;font-weight:700;color:var(--i1);margin-bottom:2px">섹터별 기업 대시보드</div>
     <div style="font-size:11px;color:var(--i4);margin-bottom:16px">${coCountryF ? {domestic:'국내',overseas:'해외',unknown:'미확인'}[coCountryF] : '전체'} ${totalCo}개 기업 · 클릭하면 해당 섹터의 기업 리스트가 보여요</div>
     ${domainGroups.map(dg => `
@@ -1073,6 +1074,69 @@ export function renderCoDashboard(){
         ${dg.items.map(sectorCardHtml).join('')}
       </div>
     `).join('')}`;
+}
+
+/* ══════════════════════════════════════════
+   분야별 기업 명단
+
+   섹터별 대시보드는 «어느 섹터에 몇 개사»를 보여준다. 숫자는 알겠는데 «그래서
+   누가 있나»는 카드를 하나씩 눌러 봐야 알 수 있고, 한 분야를 훑으려면 그 안의
+   섹터를 전부 돌아야 한다.
+
+   그래서 대시보드 앞에 명단을 먼저 둔다. 분야 하나에 기업 이름이 한 줄로 깔려
+   있으면 «BIO에 누가 있더라»가 한눈에 끝난다. 숫자를 보기 전에 이름을 보는
+   순서가 실제로 일하는 순서다.
+
+   ── 한 기업이 여러 분야에 나온다 ──
+   섹터가 여러 분야에 걸쳐 있으면(Investor = BIO + VC) 그 기업도 양쪽에 나온다.
+   한쪽에만 넣으면 «VC 명단»에서 빠져 없는 기업이 되므로, 중복을 그대로 둔다.
+   대신 분야 안에서는 기업 key로 한 번 눌러 같은 기업이 두 번 안 나오게 한다.
+
+   ── 접어 둔다 ──
+   기업이 여든일곱 곳이라 다 펼치면 대시보드가 화면 밖으로 밀린다. 분야 이름과
+   개수만 보이고, 누르면 그 분야 명단이 열린다.
+══════════════════════════════════════════ */
+function domainRoster(baseCoDb){
+  if(!baseCoDb.length) return '';
+  const groups = [];
+  const seenKeys = new Set();
+
+  DOMAINS.forEach(d => {
+    const names = sectorNamesInDomain(d.id);
+    const list = [];
+    const inGroup = new Set();
+    baseCoDb.forEach(c => {
+      const secs = c.sectors && c.sectors.length ? c.sectors : [c.sector || '미분류'];
+      if(!secs.some(s => names.has(sectorKey(s)))) return;
+      if(inGroup.has(c.key)) return;
+      inGroup.add(c.key); seenKeys.add(c.key); list.push(c);
+    });
+    if(list.length) groups.push({ id: d.id, name: d.name, list });
+  });
+
+  /* 어느 분야에도 안 잡힌 기업 — 숨기면 명단의 합이 전체와 안 맞아, 빠진 게
+     있다는 것조차 모른다 */
+  const rest = baseCoDb.filter(c => !seenKeys.has(c.key));
+  if(rest.length) groups.push({ id: UNASSIGNED_DOMAIN, name: '미분류', list: rest });
+  if(!groups.length) return '';
+
+  const chip = (c, i) => `<button class="co-chip" onclick="selectCo('${escAttr(c.key)}')"
+    title="${escAttr((c.sectors || [c.sector]).join(', ') || '미분류')}">
+    <span class="co-chip-av" style="background:${avB(i)};color:${avF(i)}">${escapeHtml(c.abbr)}</span>
+    ${escapeHtml(c.nameKo || c.nameEn)}</button>`;
+
+  return `<div style="margin-bottom:18px">
+    <div style="font-size:13px;font-weight:700;color:var(--i1);margin-bottom:2px">분야별 기업 명단</div>
+    <div style="font-size:11px;color:var(--i4);margin-bottom:10px">분야를 누르면 기업 이름이 펼쳐져요 · 기업을 누르면 그 기업으로 갑니다</div>
+    ${groups.map(g => `<details style="margin-bottom:6px">
+      <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--i2);padding:6px 0">
+        🗂 ${escapeHtml(g.name)} <span style="font-weight:400;color:var(--i4)">${g.list.length}개사</span>
+      </summary>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;padding:6px 0 10px 4px">
+        ${g.list.map(chip).join('')}
+      </div>
+    </details>`).join('')}
+  </div>`;
 }
 
 /* ══════════════════════════════════════════
