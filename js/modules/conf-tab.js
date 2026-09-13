@@ -24,7 +24,7 @@ import {
   CONF_SESSIONS, SPEAKERS, SESSION_SPEAKERS,
   sessionsForEvent, speakersForEvent, assignmentsOfSession, assignmentsFor,
   getSpeakerById, rolesOfSpeaker, speakerNeedList, speakerNeed,
-  contactsOfSpeaker, SPEAKER_CONTACTS,
+  contactsOfSpeaker, SPEAKER_CONTACTS, SPEAKER_LOGS,
 } from '../state.js';
 import { SPEAKER_ROLES, NEED_MARK, SPEAKER_NEEDS } from '../constants.js';
 import { escapeHtml, escAttr, isMobile } from '../utils.js';
@@ -33,7 +33,7 @@ import {
   saveConfSession, deleteConfSession,
   saveSpeaker, deleteSpeaker,
   saveSessionSpeaker, deleteSessionSpeaker,
-  saveSpeakerContact,
+  saveSpeakerContact, deleteSpeakerContact, deleteSpeakerLog,
 } from '../api.js';
 import { trackAction, changed, removed, created } from './audit-tab.js';
 import { IMPORT_SHEETS, IMPORT_GUIDE } from '../conf-import-spec.js';
@@ -81,6 +81,8 @@ const gSaveSpeaker   = guardConf(saveSpeaker);
 const gDelSpeaker    = guardConf(deleteSpeaker);
 const gSaveAssign    = guardConf(saveSessionSpeaker);
 const gDelAssign     = guardConf(deleteSessionSpeaker);
+const gDelSpeakerContact = guardConf(deleteSpeakerContact);
+const gDelSpeakerLog     = guardConf(deleteSpeakerLog);
 
 /* ── 행사 목록 ──
    컨퍼런스를 하는 행사만 주인공이다. 안 하는 행사도 지우지 않고 아래로
@@ -1812,13 +1814,28 @@ export async function removeConfSpeaker(spId){
     alert(`이 연사는 세션 ${asg.length}건에 배정돼 있어요.\n먼저 «프로그램»에서 배정을 해제해주세요 — 배정을 남기고 사람을 지우면 프로그램에 이름 없는 줄이 남아요.`);
     return;
   }
-  if(!confirm(`«${sp.name_snapshot || spId}» 연사를 지울까요?\n이력·제공사항·계좌 정보가 함께 지워집니다.`)) return;
+  /* 연사 줄에 딸린 것들 — 연락 상대와 주고받은 기록. 연사 줄만 지워서 이것들이
+     없는 사람을 가리킨 채 DB에 남아 있었다(실제로 네 줄이 그랬다). 화면에서는
+     안 보이니 아무도 모르고, 계좌·여권을 열어 본 기록까지 주인 없이 떠돈다.
+     «이력·제공사항이 함께 지워집니다»라고 물어 놓고 안 지우면 그 말이 거짓이 된다. */
+  const goneCons = SPEAKER_CONTACTS.filter(c => c.speaker_id === spId).map(c => ({ ...c }));
+  const goneLogs = SPEAKER_LOGS.filter(l => l.speaker_id === spId).map(l => ({ ...l }));
+  if(!confirm(`«${sp.name_snapshot || spId}» 연사를 지울까요?\n이력·제공사항·계좌 정보가 함께 지워집니다.`
+    + (goneCons.length || goneLogs.length
+      ? `\n연락 상대 ${goneCons.length}명, 주고받은 기록 ${goneLogs.length}건도 함께 지워져요.` : ''))) return;
+
+  for(const c of goneCons) await gDelSpeakerContact(c.id);
+  for(const l of goneLogs) await gDelSpeakerLog(l.id);
+  [[SPEAKER_CONTACTS, goneCons], [SPEAKER_LOGS, goneLogs]].forEach(([arr, gone]) => {
+    gone.forEach(g => { const k = arr.findIndex(x => x.id === g.id); if(k >= 0) arr.splice(k, 1); });
+  });
+
   const res = await gDelSpeaker(spId);
   if(res && res.ok === false){ if(!res.locked) alert('연사를 지우지 못했어요.'); return; }
   const i = SPEAKERS.findIndex(x => x.id === spId);
   if(i >= 0) SPEAKERS.splice(i, 1);
   trackAction('delete', '연사', confEvent, sp.name_snapshot || spId,
-    removed('speakers', spId, sp));
+    removed('speakers', spId, sp, { also: [...goneCons, ...goneLogs] }));
   renderConf();
   buildConfEvList();
 }
