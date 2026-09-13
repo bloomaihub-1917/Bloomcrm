@@ -34,6 +34,7 @@ import {
   TAGS,
   mdbSelected,
   targets,
+  getOrgById,
 } from '../state.js';
 import { CP, CL, RP, CAT_KEYS, ROLE_TO_CAT, COUNTRIES, avB, avF } from '../constants.js';
 import { td, ab, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseSectorScope, parseTags, joinTags, isMobile, cleanEmail } from '../utils.js';
@@ -42,6 +43,20 @@ import { buildCoDB, ensureOrgsForNames, orgIdForName, applyCoSectors } from './c
 import { domainOfSector, domainName, findSectorByName, mainSectors, UNASSIGNED_DOMAIN } from './settings-tab.js';
 /* removed는 removeParticipation 안의 지역 변수와 이름이 겹친다 — 별칭으로 들여온다 */
 import { trackAction, changed, removed as removedMeta } from './audit-tab.js';
+import { countryCheck, countryCheckText } from '../country-signal.js';
+
+/* 이 사람의 국가가 자료와 어긋나는지 — 소속 기업 국가도 함께 넘겨야
+   «기업에서 따라온 값 같아요»까지 말해 줄 수 있다 */
+export function ctryCheck(c){
+  const org = c && c.org_id ? getOrgById(c.org_id) : null;
+  return countryCheck(c, org && (org.country || org.hq));
+}
+const ctryPill = (c) => {
+  const r = ctryCheck(c);
+  if(!r) return '';
+  return ` <span class="pill p-amber" style="font-size:9px;cursor:help"
+    title="${escAttr(countryCheckText(r))}">국가 확인</span>`;
+};
 
 /* 바뀐 칸만 골라낸다 — 연락처는 칸이 스물세 개라, 통째로 담으면 이름만 고쳐도
    기록 한 줄이 스물세 칸짜리가 된다. */
@@ -771,6 +786,9 @@ export function getMDBPairs(){
 
   // stat filter
   if(mdbStat) pairs = pairs.filter(({c}) => c.status === mdbStat);
+  /* 국가가 자료와 어긋나는 사람만 — 초청장 시차·비자 안내·쓸 언어가 이 칸에서
+     갈리는데, 기업 국가가 그대로 복사돼 들어온 값이 많다 */
+  if(mdbCtryOnly) pairs = pairs.filter(({c}) => !!ctryCheck(c));
   // domain filter (분야별 보기) — 연락처 소속 기업이 속한 분야 기준
   if(mdbDomainFilter){
     const domainMap = buildContactDomainMap();
@@ -790,8 +808,12 @@ export function getMDBPairs(){
 }
 
 /* ── Main render dispatcher (원본 1829~1842행) ── */
+let mdbCtryOnly = false;
+export function toggleMdbCtry(){ mdbCtryOnly = !mdbCtryOnly; renderMDB(); }
+
 export function renderMDB(){
   const pairs = getMDBPairs();
+  renderCtryChip();
   buildMDBDomainList();
   buildMDBTagList();
   renderMDBSelectionBar();
@@ -808,6 +830,20 @@ export function renderMDB(){
   else (mob ? renderMDBFlatCards : renderMDBFlat)(pairs);
 
   updateMDBBadges(pairs);
+}
+
+/* 몇 명이 걸리는지 세어 칩에 적는다 — 0명이면 칩을 아예 안 띄운다.
+   할 일이 없는 날에도 자리를 차지하면 그 줄 전체를 안 보게 된다. */
+function renderCtryChip(){
+  const el = document.getElementById('mdb-ctry-chip');
+  if(!el) return;
+  const n = contacts.filter(c => ctryCheck(c)).length;
+  if(!n && !mdbCtryOnly){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = '';
+  el.innerHTML = `<button class="pill ${mdbCtryOnly ? 'p-amber' : 'p-gray'}"
+    style="border:0;cursor:pointer;font:inherit"
+    title="전화 국가번호·이메일 국가 도메인이 적힌 국가와 다른 사람이에요. 눌러서 그 사람만 봅니다."
+    onclick="toggleMdbCtry()">국가 확인 ${n}</button>`;
 }
 
 /* 원본 1844~1876행 */
@@ -914,7 +950,7 @@ function mdbCard(c, p, { showOrg = true } = {}){
     </div>
     <div class="mdbc-pills">
       <span class="pill ${CP[roleKey] || 'p-gray'}">${escapeHtml(CL[roleKey] || roleKey || '미분류')}</span>
-      ${c.country ? `<span class="pill p-gray">${escapeHtml(countryName(c.country))}</span>` : ''}
+      ${c.country ? `<span class="pill p-gray">${escapeHtml(countryName(c.country))}</span>` : ''}${ctryPill(c)}
       ${mEvPills(c, p)}
     </div>
     ${mContactLinks(c)}
@@ -1531,7 +1567,10 @@ export function contactViewPanel(c){
     <div class="ig">
       <div class="ic"><div class="il">기업</div><div class="iv">${escapeHtml(c.orgKo)||'-'}</div></div>
       <div class="ic"><div class="il">영문 기업</div><div class="iv">${escapeHtml(c.orgEn)||'-'}</div></div>
-      <div class="ic"><div class="il">국가</div><div class="iv">${escapeHtml(countryName(c.country))}</div></div>
+      <div class="ic"><div class="il">국가</div><div class="iv">${escapeHtml(countryName(c.country)) || '-'}${
+        (() => { const r = ctryCheck(c); return r
+          ? `<div style="font-size:10.5px;color:var(--am);font-weight:400;margin-top:3px;line-height:1.5">${
+              escapeHtml(countryCheckText(r))}</div>` : ''; })()}</div></div>
       <div class="ic"><div class="il">카테고리</div><div class="iv"><span class="pill ${CP[c.cat]||'p-gray'}">${CL[c.cat]||c.cat}</span></div></div>
       <div class="ic"><div class="il">태그</div><div class="iv">
         ${isBDContact(c)?'<span class="pill p-teal" style="margin-right:4px">BD</span>':''}${isCLevelContact(c)?'<span class="pill p-gold">C-level</span>':''}${(!isBDContact(c)&&!isCLevelContact(c))?'<span style="color:var(--i4)">-</span>':''}
@@ -1911,6 +1950,7 @@ window.renderMDBMatrix = renderMDBMatrix;
 window.filterCat = filterCat;
 window.filterStat = filterStat;
 window.segCat = segCat;
+window.toggleMdbCtry = toggleMdbCtry;
 window.exportCSV = exportCSV;
 window.openContactDr = openContactDr;
 window.closeContactDr = closeContactDr;
