@@ -1021,6 +1021,25 @@ function appsSection(x){
       ${a.file_name ? `<div style="font-size:10.5px;color:var(--i4);margin-top:4px">📄 ${escapeHtml(a.file_name)}</div>` : ''}
       ${live && diff.length ? `<div style="font-size:11px;color:var(--i2);margin-top:6px;padding:6px 8px;background:var(--W);border-radius:6px">
           ${diff.map(d => escapeHtml(d)).join('<br>')}</div>` : ''}
+      ${open && a.id === open.id ? `<div style="margin-top:7px;padding-top:7px;border-top:1px dashed var(--i7)">
+        <div style="font-size:10.5px;color:var(--i4);margin-bottom:4px">이 회차에서 신청한 품목을 넣어요 — 정산의 금액 항목으로 바로 들어갑니다</div>
+    <div class="bl-row bl-item-add">
+      <select class="fi" id="it-cat-${escAttr(x.id)}" style="flex:0 0 72px;min-width:0;font-size:11.5px;padding:6px"
+        onchange="rememberItemCat(this.value); swapItemList('${escAttr(x.id)}', this.value)">
+        ${itemCats().map(({ code: k, label: l }, i) => `<option value="${escAttr(k)}"${(lastItemCat || itemCats()[0]?.code) === k ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('')}</select>
+      <input class="fi" id="it-nm-${escAttr(x.id)}" placeholder="항목명" style="flex:1 1 120px;min-width:0;font-size:11.5px;padding:6px"
+        list="${itemListId(x, lastItemCat || itemCats()[0]?.code || 'equip')}" oninput="pickCatalogItem('${escAttr(x.id)}')">
+      ${catalogDatalist(x)}${designTargetList(x)}
+      <input class="fi" id="it-qty-${escAttr(x.id)}" placeholder="수량" style="flex:1 1 54px;min-width:0;font-size:11.5px;padding:6px"
+        oninput="calcItemAmount('${escAttr(x.id)}')">
+      <input class="fi" id="it-up-${escAttr(x.id)}" placeholder="단가" style="flex:1 1 78px;min-width:0;font-size:11.5px;padding:6px"
+        oninput="calcItemAmount('${escAttr(x.id)}')">
+      <input class="fi" id="it-amt-${escAttr(x.id)}" placeholder="금액" style="flex:1 1 88px;min-width:0;font-size:11.5px;padding:6px;text-align:right">
+      <select class="fi bl-cur" id="it-cur-${escAttr(x.id)}" onchange="rememberItemCur(this.value)">
+        ${currencies().map(c => `<option value="${c}"${(lastItemCur || currencyOf(x.id)) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
+      <button class="btn bp bs" style="flex:0 0 auto" onclick="addExhItem('${escAttr(x.id)}')">추가</button>
+    </div>
+      </div>` : ''}
       ${!live && a.summary ? `<div style="font-size:11px;color:var(--i3);margin-top:5px">${escapeHtml(a.summary)}</div>` : ''}
     </div>`;
   }).join('');
@@ -1344,7 +1363,37 @@ function dProgress(x){
 
 /* ══════════════════════════════════════════
    2) 정산 — 금액 항목 / 인보이스 / 세금계산서 / 입금
+
+   ── 왜 정산이 읽기 전용인가 ──
+   품목이 들어오는 자리는 신청항목이다. 신청서를 받아 회차를 열고, 그 회차에서
+   무엇이 늘고 줄었는지가 기록된다. 정산에서도 바로 고칠 수 있으면 그 변경은
+   어느 회차에도 안 묶여, 나중에 금액을 설명할 자리가 없어진다.
+
+   다만 신청서를 안 거치는 변경이 실제로 있다 — 기업이 엑스렌탈과 직접 주고받는
+   경우다. 그래서 막지 않고, 연필을 눌러야 열리게 한다. 한 번에 한 줄만 연다.
+   여러 줄이 한꺼번에 열려 있으면 어디를 고치는 중인지 모른 채 지나간다.
 ══════════════════════════════════════════ */
+/* 지금 열어 둔 줄 — 한 번에 하나. 드로어를 다시 그리면 닫힌다(딴 데를 보다
+   돌아왔을 때 잠금이 풀린 채로 남지 않게). */
+let editingItem = null;
+export function editItemRow(id){
+  editingItem = editingItem === id ? null : id;
+  refreshExhViews();
+}
+export function closeItemEdit(){ editingItem = null; }
+
+/* 정산에서 고쳤다는 표 — 이 줄은 신청서가 아니라 여기서 바뀌었다 */
+function editMark(i){
+  if(!String(i.edited_at || '').trim()) return '';
+  return ` <span class="pill p-amber" style="font-size:9px" title="${escAttr(
+    `정산에서 직접 고침 — ${i.edited_at}${i.edited_by ? ' · ' + i.edited_by : ''}`)}">정산수정</span>`;
+}
+
+const editHintRow = (i) => `<div style="grid-column:1/-1;font-size:10.5px;color:var(--i4);padding:2px 8px 6px">
+  고치면 <b>청구액이 바뀝니다</b> — 이미 인보이스를 보냈다면 차액만큼 한 장 더 발행해야 해요.
+  ${i.edited_at ? `지난 수정 ${escapeHtml(i.edited_at)}${i.edited_by ? ' · ' + escapeHtml(i.edited_by) : ''}` : ''}</div>`;
+
+/* ══════════════════════════════════════════ */
 const itemCats = () => codeList('item_cat', null,
   [['booth', '부스'], ['equip', '비품'], ['graphic', '그래픽'], ['etc', '기타']]
     .map(([c, l]) => ({ code: c, label: l })));
@@ -1548,13 +1597,8 @@ function dBilling(x){
       입금 기한 ${escapeHtml(st.due)}${st.overdue && rest > 0 ? ` · ${daysSince(st.due)}일 지남` : ''}</div>` : ''}
     ${noAmount.length ? `<div style="font-size:11px;color:var(--am);margin-top:3px">
       ⚠ 금액이 안 적힌 인보이스 ${noAmount.length}건이 있어 청구액이 실제보다 적을 수 있어요</div>` : ''}
-    ${/* 청구액은 금액 항목 기준이다. 발행한 인보이스 합계가 여기서 어긋나면 재발행이
-         필요하거나 인보이스 줄이 빠진 결제가 있다는 뜻이라 갈라서 보여준다. */''}
-    ${gap ? `<div style="font-size:11px;color:var(--am);margin-top:3px">
-      ⚠ 발행한 인보이스 합계 ${escapeHtml(fmtMoney(gap.invoiced, gap.cur))} ·
-      금액 항목 합계 <b>${escapeHtml(fmtMoney(gap.billed, gap.cur))}</b>
-      (${gap.diff > 0 ? '+' : '−'}${escapeHtml(fmtMoney(Math.abs(gap.diff), gap.cur))}) —
-      위 청구액은 금액 항목 기준이에요. 인보이스 줄이 빠진 결제가 없는지 보고, 필요하면 다시 발행하세요.</div>` : ''}
+    ${/* 인보이스와 어긋난 금액은 바로 아래 «추가 발행 필요»에서 무엇을 해야 하는지까지
+         함께 말한다 — 같은 사실을 두 곳에서 말하면 한 곳만 고치게 된다. */''}
     ${rest !== 0 && billed > 0 && st.state !== 'settled' ? `
       <div style="margin-top:8px;display:flex;gap:5px;flex-wrap:wrap;align-items:center">
         <input class="fi" id="stl-note-${escAttr(x.id)}" placeholder="완납 처리 사유 (예: 송금 수수료 차감)"
@@ -1564,6 +1608,34 @@ function dBilling(x){
     ${st.state === 'settled' ? `<div style="margin-top:8px;text-align:right">
       <button class="btn bs" onclick="unsettleExh('${escAttr(x.id)}')">완납 처리 해제</button></div>` : ''}
   </div>
+
+  ${(() => {
+    /* 청구액이 바뀌었는데 그만큼 인보이스가 안 나갔다.
+
+       기업이 엑스렌탈과 직접 주고받아 품목이 바뀌면 정산에서 고치게 되는데,
+       그러면 이미 보낸 인보이스와 금액이 어긋난다. 그 차액만큼 한 장 더
+       보내야 하고, 보냈는지 안 보냈는지를 알 수 있어야 한다.
+
+       «발행함» 표를 따로 두지 않는다 — 그러면 표만 손으로 지우는 일이 생겨서
+       실제 금액과 어긋난다. 금액 항목 합계와 발행한 인보이스 합계를 견주면
+       발행하는 순간 저절로 사라진다. */
+    const sent = invoicesFor(x.id).filter(v => v.status !== 'void');
+    const edited = itemsFor(x.id).filter(i => String(i.edited_at || '').trim() && !isVoided(i));
+    if(!sent.length || !gap || !gap.diff) return '';
+    const more = gap.diff > 0;
+    return `<div class="uc" style="border-left:3px solid var(--${more ? 're' : 'am'});margin-bottom:10px">
+      <div style="font-size:12px;font-weight:700;color:var(--${more ? 're' : 'am'})">${
+        more ? '추가 발행 필요' : '발행액이 청구액보다 많아요'} ${escapeHtml(fmtMoney(Math.abs(gap.diff), gap.cur))}</div>
+      <div style="font-size:11px;color:var(--i3);margin-top:4px">
+        금액 항목 <b>${escapeHtml(fmtMoney(gap.billed, gap.cur))}</b> ·
+        발행한 인보이스 <b>${escapeHtml(fmtMoney(gap.invoiced, gap.cur))}</b>${
+        edited.length ? ` — 정산에서 직접 고친 항목 ${edited.length}건이 있어요` : ''}
+      </div>
+      <div style="font-size:10.5px;color:var(--i4);margin-top:4px">${
+        more ? '차액만큼 한 장 더 발행하면 이 알림은 사라져요 — 아래 인보이스에서 발행하세요.'
+             : '옛 인보이스를 무효로 두거나, 금액 항목이 빠지지 않았는지 보세요.'}</div>
+    </div>`;
+  })()}
 
   ${(() => {
     const r = needsReissue(x.id);
@@ -1584,24 +1656,45 @@ function dBilling(x){
         // 얼마인지 세어보기 전엔 알 수 없다. 항목이 없는 분류는 건너뛴다.
         const g = allItems.filter(i => (i.category || 'etc') === k);
         if(!g.length) return '';
-        return g.map(i => `
-        <div class="bl-row bl-item" style="padding:6px 8px;background:var(--i9);border-radius:6px">
-          <span class="pill ${isBillable(i) ? 'p-gray' : 'p-amber'}" style="text-align:center;cursor:pointer"
-            onclick="toggleItemBillable('${escAttr(i.id)}')"
-            title="${isBillable(i) ? '클릭하면 청구에서 제외합니다' : '청구에서 빠져 있어요 — 클릭하면 되돌립니다'}">${
+        return g.map(i => {
+          /* 정산은 보는 자리다. 품목은 신청서 접수(회차)를 거쳐 들어오고, 여기서
+             바로 고칠 수 있으면 그 변경은 어느 회차에도 안 묶인다 — 나중에
+             «이 금액이 왜 이런가»를 되짚을 자리가 없어진다.
+
+             그래도 고쳐야 할 때가 있다. 기업이 엑스렌탈과 직접 주고받아 바뀌는
+             경우다. 그건 신청서를 안 거치니 여기서 고치는 게 맞다. 대신 연필을
+             한 번 눌러야 열리고, 고친 것은 기록에 남는다. */
+          const open = editingItem === i.id;
+          return `
+        <div class="bl-row bl-item" style="padding:6px 8px;background:var(--i9);border-radius:6px${
+          open ? ';outline:2px solid var(--a);outline-offset:-2px' : ''}">
+          <span class="pill ${isBillable(i) ? 'p-gray' : 'p-amber'}" style="text-align:center;cursor:${open ? 'pointer' : 'default'}"
+            ${open ? `onclick="toggleItemBillable('${escAttr(i.id)}')"` : ''}
+            title="${open ? (isBillable(i) ? '클릭하면 청구에서 제외합니다' : '청구에서 빠져 있어요 — 클릭하면 되돌립니다')
+                          : (isBillable(i) ? '청구에 들어가는 항목이에요' : '청구에서 빠져 있어요')}">${
             isBillable(i) ? escapeHtml(l) : '제외'}</span>
           <span class="bl-nm" style="${
             isVoided(i) ? 'color:var(--i5);text-decoration:line-through' : isBillable(i) ? '' : 'color:var(--i5)'}"
-            title="${escAttr(i.name || '')}">${escapeHtml(i.name || '')}${appMark(i)}</span>
+            title="${escAttr(i.name || '')}">${escapeHtml(i.name || '')}${appMark(i)}${editMark(i)}</span>
           <span class="bl-qty">${escapeHtml(i.qty || '')}${
             i.unit_price ? `<span class="bl-up">${i.qty ? ' × ' : ''}${money(i.unit_price)}</span>` : ''}</span>
-          <input class="fi bl-amt-in" value="${escAttr(i.amount || '')}" placeholder="금액"
-            onchange="setItemField('${escAttr(i.id)}','amount',this.value)">
-          ${curSelect(i.currency, `setItemField('${escAttr(i.id)}','currency',this.value)`)}
-          <button class="btn bs bl-mini" onclick="voidExhItem('${escAttr(i.id)}')"
-            title="${isVoided(i) ? '취소를 되돌립니다' : '취소 처리 — 지우지 않고 내려서 이력이 남아요'}">${isVoided(i) ? '↩' : '⊘'}</button>
-          <button class="btn bs bl-mini" onclick="delExhItem('${escAttr(i.id)}')" title="완전히 삭제 — 잘못 넣은 줄에만 쓰세요">✕</button>
-        </div>${designTargetRow(x, i)}`).join('')
+          ${open
+            ? `<input class="fi bl-amt-in" value="${escAttr(i.amount || '')}" placeholder="금액"
+                 onchange="setItemFieldDirect('${escAttr(i.id)}','amount',this.value)">`
+            : `<span class="bl-amt-in" style="text-align:right;font-size:12px;padding:5px 2px">${
+                 i.amount ? escapeHtml(money(i.amount)) : '<span style="color:var(--am)">금액 미입력</span>'}</span>`}
+          ${open
+            ? curSelect(i.currency, `setItemFieldDirect('${escAttr(i.id)}','currency',this.value)`)
+            : `<span style="font-size:11px;color:var(--i5);text-align:center">${escapeHtml(i.currency || 'KRW')}</span>`}
+          ${open ? `
+            <button class="btn bs bl-mini" onclick="voidExhItem('${escAttr(i.id)}')"
+              title="${isVoided(i) ? '취소를 되돌립니다' : '취소 처리 — 지우지 않고 내려서 이력이 남아요'}">${isVoided(i) ? '↩' : '⊘'}</button>
+            <button class="btn bs bl-mini" onclick="delExhItem('${escAttr(i.id)}')" title="완전히 삭제 — 잘못 넣은 줄에만 쓰세요">✕</button>`
+            : `<button class="btn bs bl-mini" onclick="editItemRow('${escAttr(i.id)}')"
+                 title="정산에서 직접 고칩니다 — 신청서를 거치지 않은 변경이라 기록에 남아요">✎</button>
+               <span></span>`}
+        </div>${designTargetRow(x, i)}${open ? editHintRow(i) : ''}`;
+        }).join('')
         + `<div class="bl-row bl-item bl-subtotal">
             <span></span>
             <span style="min-width:0;font-size:11px;color:var(--i4)">${escapeHtml(l)} 소계 <span style="color:var(--i5)">${g.length}건</span></span>
@@ -1625,21 +1718,11 @@ function dBilling(x){
           <span style="color:var(--i5)">— 추가 배지처럼 우리가 청구하지 않는 항목이에요</span></div>` : '';
       })()}` : ''}
     </div>
-    <div class="bl-row bl-item-add">
-      <select class="fi" id="it-cat-${escAttr(x.id)}" style="flex:0 0 72px;min-width:0;font-size:11.5px;padding:6px"
-        onchange="rememberItemCat(this.value); swapItemList('${escAttr(x.id)}', this.value)">
-        ${itemCats().map(({ code: k, label: l }, i) => `<option value="${escAttr(k)}"${(lastItemCat || itemCats()[0]?.code) === k ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('')}</select>
-      <input class="fi" id="it-nm-${escAttr(x.id)}" placeholder="항목명" style="flex:1 1 120px;min-width:0;font-size:11.5px;padding:6px"
-        list="${itemListId(x, lastItemCat || itemCats()[0]?.code || 'equip')}" oninput="pickCatalogItem('${escAttr(x.id)}')">
-      ${catalogDatalist(x)}${designTargetList(x)}
-      <input class="fi" id="it-qty-${escAttr(x.id)}" placeholder="수량" style="flex:1 1 54px;min-width:0;font-size:11.5px;padding:6px"
-        oninput="calcItemAmount('${escAttr(x.id)}')">
-      <input class="fi" id="it-up-${escAttr(x.id)}" placeholder="단가" style="flex:1 1 78px;min-width:0;font-size:11.5px;padding:6px"
-        oninput="calcItemAmount('${escAttr(x.id)}')">
-      <input class="fi" id="it-amt-${escAttr(x.id)}" placeholder="금액" style="flex:1 1 88px;min-width:0;font-size:11.5px;padding:6px;text-align:right">
-      <select class="fi bl-cur" id="it-cur-${escAttr(x.id)}" onchange="rememberItemCur(this.value)">
-        ${currencies().map(c => `<option value="${c}"${(lastItemCur || currencyOf(x.id)) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
-      <button class="btn bp bs" style="flex:0 0 auto" onclick="addExhItem('${escAttr(x.id)}')">추가</button>
+    <div style="font-size:11px;color:var(--i4);padding:6px 2px 0;border-top:1px dashed var(--i7);margin-top:6px">
+      항목을 넣고 빼는 건 <b>신청항목</b> 탭의 접수 회차에서 해요 — 그래야 «몇 차에 무엇이 늘었나»가 남습니다.
+      ${openAppFor(x.id)
+        ? `<button class="btn bs" style="margin-left:4px" onclick="switchExhDT('apply')">신청항목으로</button>`
+        : `<button class="btn bs" style="margin-left:4px" onclick="switchExhDT('apply')">접수 열러 가기</button>`}
     </div>`)}
 
   ${sct('인보이스', `
@@ -2245,14 +2328,20 @@ export async function createInvoiceRow(exhId, { title, amount, currency }){
 
 /* 금액·통화를 줄에서 바로 고친다. 기록에도 무엇이 어떻게 바뀌었는지 남긴다 —
    금액은 나중에 "왜 이 숫자가 됐지"를 되짚어야 할 일이 가장 많은 값이다. */
-async function setRowField(list, saver, label, id, field, value){
+/* 저장됐는지를 돌려준다 — 실패하면 값을 되돌리는데, 부르는 쪽이 그걸 모르면
+   되돌려진 변경을 «고쳤어요»라고 기록에 남긴다.
+
+   silent는 부르는 쪽이 제 말로 기록을 남길 때 쓴다. 두 줄이 쌓이면 하나는
+   맥락이 없고(그냥 «금액 수정»), 나중에 세어 볼 때 두 번 센다. */
+async function setRowField(list, saver, label, id, field, value, opts = {}){
   const r = list.find(o => o.id === id);
-  if(!r) return;
+  if(!r) return false;
   const before = r[field];
   r[field] = value;
   refreshExhViews();
   const res = await saver({ id, [field]: value });
-  if(!res.ok){ r[field] = before; refreshExhViews(); saveFailed(res, '저장에 실패했어요.'); return; }
+  if(!res.ok){ r[field] = before; refreshExhViews(); saveFailed(res, '저장에 실패했어요.'); return false; }
+  if(opts.silent) return true;
   const x = getExhibitorById(r.exhibitor_id);
   const fl = { amount: '금액', currency: '통화',
     received_at: '받은 날', received_note: '받은 것',
@@ -2260,13 +2349,47 @@ async function setRowField(list, saver, label, id, field, value){
   trackAction('edit', label + ' 수정', x?.company_name || '',
     `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(r.name || r.title || label)} ${escapeHtml(fl)} ${escapeHtml(String(before || '(없음)'))} → ${escapeHtml(String(value || '(없음)'))}`,
     { kind: 'exhibitor', id: x?.id, tab: 'billing', field });
+  return true;
 }
 
 /* 수량·금액을 고치면 그것도 접수 건의 "변경"이다. 바뀌기 전 값을 한 번만
    붙잡아 둔다 — 같은 접수 건 안에서 두 번 고쳐도 처음 값이 기준이어야
    "1 → 3"이 나온다. */
 const TRACKED = ['qty', 'amount', 'unit_price'];
-export async function setItemField(id, field, value){
+/* 정산에서 직접 고친다 — 신청서 회차를 거치지 않은 변경.
+
+   누가 언제 고쳤는지는 줄에 적고(줄 옆 «정산수정» 표), 무엇을 얼마에서 얼마로
+   고쳤는지는 활동 기록에 남긴다. 한 줄이 여러 번 바뀌므로 칸에 담아 두면
+   마지막 것만 남는다.
+
+   고치면 청구액이 바뀐다. 이미 인보이스를 보냈다면 그만큼 차액이 생기고,
+   그건 위쪽 «추가 발행 필요»가 스스로 알아챈다(금액 항목 합계와 발행한
+   인보이스 합계를 견준다) — 따로 «발행함» 표를 두면 그 표만 손으로 지우는
+   일이 생긴다. */
+export async function setItemFieldDirect(id, field, value){
+  const i = EXH_ITEMS.find(r => r.id === id);
+  if(!i) return;
+  const was = String(i[field] ?? '');
+  if(was === String(value ?? '')) return;
+  const x = getExhibitorById(i.exhibitor_id);
+  const lbl = { amount: '금액', currency: '통화', qty: '수량', unit_price: '단가' }[field] || field;
+
+  /* 저장이 안 되면 값은 되돌아간다 — 그때는 기록도 남기지 않는다.
+     되돌려진 변경이 기록에 남으면, 금액이 왜 다른지 되짚을 때 없는 변경을
+     쫓게 된다. */
+  if(!await setItemField(id, field, value, { silent: true })) return;
+  await setRowField(EXH_ITEMS, saveExhItem, '금액 항목', id, 'edited_at', td(), { silent: true });
+  await setRowField(EXH_ITEMS, saveExhItem, '금액 항목', id, 'edited_by', currentUser?.name || '', { silent: true });
+
+  trackAction('update', '정산 직접 수정', x?.company_name || '',
+    `<b>${escapeHtml(x?.company_name || '')}</b> — ${escapeHtml(i.name || '')}의 ${escapeHtml(lbl)}을(를) `
+    + `<b>${escapeHtml(was || '(빈값)')}</b> → <b>${escapeHtml(String(value ?? '') || '(빈값)')}</b>로 고쳤어요 `
+    + `<span style="color:#9C9890">(신청서를 거치지 않은 변경)</span>`,
+    { kind: 'exhibitor', id: i.exhibitor_id, tab: 'billing' });
+  refreshExhViews();
+}
+
+export async function setItemField(id, field, value, opts = {}){
   const i = EXH_ITEMS.find(r => r.id === id);
   const open = i ? openAppFor(i.exhibitor_id) : null;
   if(i && open && TRACKED.includes(field) && String(i[field] ?? '') !== String(value ?? '')){
@@ -2277,7 +2400,7 @@ export async function setItemField(id, field, value){
       await setRowField(EXH_ITEMS, saveExhItem, '금액 항목', id, 'change_kind', '변경');
     }
   }
-  return setRowField(EXH_ITEMS, saveExhItem, '금액 항목', id, field, value);
+  return setRowField(EXH_ITEMS, saveExhItem, '금액 항목', id, field, value, opts);
 }
 export const setPayField = (id, field, value) =>
   setRowField(EXH_PAYMENTS, saveExhPayment, '입금', id, field, value);
@@ -2628,6 +2751,8 @@ window.setPayField = setPayField;
 window.toggleItemBillable = toggleItemBillable;
 window.pickCatalogItem = pickCatalogItem;
 window.rememberItemCat = rememberItemCat;
+window.setItemFieldDirect = setItemFieldDirect;
+window.editItemRow = editItemRow;
 window.swapItemList = swapItemList;
 window.rememberItemCur = rememberItemCur;
 window.addExhRefund = addExhRefund;

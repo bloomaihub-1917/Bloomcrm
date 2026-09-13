@@ -99,7 +99,8 @@ const TABLES = {
     table: 'exhibitor_items', pk: 'id', idPrefix: 'XI-',
     columns: ['id', 'exhibitor_id', 'category', 'name', 'qty', 'unit_price', 'amount', 'currency', 'note', 'sort_order',
       'catalog_id', 'billable', 'shared_ref', 'received_at', 'received_note', 'due_at',
-      'app_id', 'change_kind', 'prev_qty', 'prev_amount', 'voided_at'],
+      'app_id', 'change_kind', 'prev_qty', 'prev_amount', 'voided_at',
+      'edited_at', 'edited_by'],
   },
 
   /* 신청서 접수 이력. 파일로 온 것만이 아니라 메일·유선으로 받은 변경도

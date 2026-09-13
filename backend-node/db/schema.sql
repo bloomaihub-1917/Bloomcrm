@@ -845,6 +845,12 @@ CREATE INDEX IF NOT EXISTS idx_sess_sp_speaker     ON session_speakers(speaker_i
 CREATE INDEX IF NOT EXISTS idx_sp_contacts_speaker ON speaker_contacts(speaker_id);
 CREATE INDEX IF NOT EXISTS idx_sp_logs_speaker     ON speaker_logs(speaker_id);
 
+-- 정산에서 직접 고친 금액 항목 — 신청서 회차를 거치지 않은 변경이다.
+-- 기업이 엑스렌탈과 직접 주고받아 바뀌는 일이 있고, 그건 신청서를 안 거친다.
+-- 무엇을 얼마에서 얼마로 고쳤는지는 활동 기록에 남는다(한 줄이 여러 번 바뀐다).
+ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS edited_at TEXT;
+ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS edited_by TEXT;
+
 -- 활동 로그가 가리키는 곳(기업·연락처·세션 …). JSON 한 덩어리로 둔다 —
 -- 칸을 kind/id/tab/field로 쪼개 두면 가리키는 대상이 늘 때마다 칸을 또 만들게 된다.
 ALTER TABLE activity_log ADD COLUMN IF NOT EXISTS link TEXT;
