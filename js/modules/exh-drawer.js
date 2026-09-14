@@ -1543,12 +1543,55 @@ function dProgress(x){
 ══════════════════════════════════════════ */
 /* 지금 열어 둔 줄 — 한 번에 하나. 드로어를 다시 그리면 닫힌다(딴 데를 보다
    돌아왔을 때 잠금이 풀린 채로 남지 않게). */
+/* 외화 청구라 접어 둔 세금계산서 칸을 그래도 열어 둔 기업 — 한 곳만.
+   드로어를 다시 그리면 유지되고, 다른 기업을 열면 저절로 닫힌다. */
+let taxOpenFor = '';
+export function openTaxAnyway(id){ taxOpenFor = id; refreshExhViews(); }
+
 let editingItem = null;
 export function editItemRow(id){
   editingItem = editingItem === id ? null : id;
   refreshExhViews();
 }
 export function closeItemEdit(){ editingItem = null; }
+
+/* ══════════════════════════════════════════
+   같은 품목을 한 줄로 묶어 보여주기
+
+   접수 회차마다 줄이 따로 생긴다. 인포데스크 랩핑을 2차에 한 장, 3차에 한 장
+   추가하면 88짜리 줄이 두 개 남는다 — 회차를 남기려면 데이터는 그래야 맞다.
+   그런데 정산에서 보고 싶은 건 «이 품목 몇 장에 얼마»이지 회차가 아니다.
+   지금은 눈으로 더해야 한다.
+
+   그래서 화면에서만 묶는다. 데이터는 그대로 두고, 이름·단가·통화·청구 여부가
+   모두 같은 줄만 합쳐 «4 × 88»로 적는다. 하나라도 다르면 합치지 않는다 —
+   단가가 다른 걸 합치면 그 줄의 수량과 금액이 서로 안 맞는 수가 된다.
+
+   고칠 때는 회차별로 갈라야 하므로, 묶인 줄을 누르면 원래 줄들이 펼쳐진다.
+══════════════════════════════════════════ */
+let openItemGroup = '';
+export function toggleItemGroup(key){
+  openItemGroup = openItemGroup === key ? '' : key;
+  refreshExhViews();
+}
+
+/* 묶는 기준 — 하나라도 다르면 다른 품목으로 본다. 취소된 줄은 회차별로 남아야
+   이력이 되므로 묶지 않는다(취소 여부까지 키에 넣는다). */
+const itemGroupKey = (i) => [
+  i.category || 'etc', i.name || '', String(i.unit_price || ''),
+  i.currency || 'KRW', isBillable(i) ? 'y' : 'n', isVoided(i) ? 'v' : '',
+].join('');
+
+function groupSameItems(list){
+  const out = [];
+  const byKey = {};
+  list.forEach(i => {
+    const k = itemGroupKey(i);
+    if(!byKey[k]){ byKey[k] = { key: k, rows: [] }; out.push(byKey[k]); }
+    byKey[k].rows.push(i);
+  });
+  return out;
+}
 
 /* 정산에서 고쳤다는 표 — 이 줄은 신청서가 아니라 여기서 바뀌었다 */
 function editMark(i){
@@ -1797,6 +1840,8 @@ function dBilling(x){
       <div style="font-size:11px;color:var(--i3);margin-top:4px">
         금액 항목 <b>${escapeHtml(fmtMoney(gap.billed, gap.cur))}</b> ·
         발행한 인보이스 <b>${escapeHtml(fmtMoney(gap.invoiced, gap.cur))}</b>${
+        gap.refunded ? ` − 환불 <b>${escapeHtml(fmtMoney(gap.refunded, gap.cur))}</b> = <b>${
+          escapeHtml(fmtMoney(gap.net, gap.cur))}</b>` : ''}${
         edited.length ? ` — 정산에서 직접 고친 항목 ${edited.length}건이 있어요` : ''}
       </div>
       <div style="font-size:10.5px;color:var(--i4);margin-top:4px">${
@@ -1824,7 +1869,7 @@ function dBilling(x){
         // 얼마인지 세어보기 전엔 알 수 없다. 항목이 없는 분류는 건너뛴다.
         const g = allItems.filter(i => (i.category || 'etc') === k);
         if(!g.length) return '';
-        return g.map(i => {
+        const itemRow = (i) => {
           /* 정산은 보는 자리다. 품목은 신청서 접수(회차)를 거쳐 들어오고, 여기서
              바로 고칠 수 있으면 그 변경은 어느 회차에도 안 묶인다 — 나중에
              «이 금액이 왜 이런가»를 되짚을 자리가 없어진다.
@@ -1862,6 +1907,34 @@ function dBilling(x){
                  title="정산에서 직접 고칩니다 — 신청서를 거치지 않은 변경이라 기록에 남아요">✎</button>
                <span></span>`}
         </div>${designTargetRow(x, i)}${open ? editHintRow(i) : ''}`;
+        };
+
+        /* 같은 품목이 회차별로 흩어져 있으면 한 줄로 묶어 적는다. 고칠 일이
+           생기면 눌러서 회차별 줄을 펼친다 — 고치는 건 회차에 묶여야 한다. */
+        return groupSameItems(g).map((gr, gi) => {
+          if(gr.rows.length < 2) return itemRow(gr.rows[0]);
+          /* 펼침을 기억할 이름 — 품목명을 그대로 쓰면 따옴표가 든 이름에서
+             깨진다. 분류와 순번이면 충분하다. */
+          const gkey = `${k}#${gi}`;
+          const open = openItemGroup === gkey || gr.rows.some(i => editingItem === i.id);
+          const head = gr.rows[0];
+          const qty = gr.rows.reduce((a, i) => a + (Number(i.qty) || 0), 0);
+          const amt = gr.rows.reduce((a, i) => a + itemAmount(i), 0);
+          return `
+        <div class="bl-row bl-item" style="padding:6px 8px;background:var(--i9);border-radius:6px;cursor:pointer"
+          onclick="toggleItemGroup('${escAttr(gkey)}')"
+          title="${open ? '접어서 한 줄로 봅니다' : `회차별로 ${gr.rows.length}줄이에요 — 눌러서 펼치고 고칩니다`}">
+          <span class="pill ${isBillable(head) ? 'p-gray' : 'p-amber'}" style="text-align:center">${
+            isBillable(head) ? escapeHtml(l) : '제외'}</span>
+          <span class="bl-nm" style="${isBillable(head) ? '' : 'color:var(--i5)'}"
+            title="${escAttr(head.name || '')}">${escapeHtml(head.name || '')}
+            <span class="pill p-gray" style="font-size:9px">${open ? '▾' : '▸'} ${gr.rows.length}줄</span></span>
+          <span class="bl-qty">${qty || ''}${
+            head.unit_price ? `<span class="bl-up">${qty ? ' × ' : ''}${money(head.unit_price)}</span>` : ''}</span>
+          <span class="bl-amt-in" style="text-align:right;font-size:12px;padding:5px 2px;font-weight:700">${money(amt)}</span>
+          <span style="font-size:11px;color:var(--i5);text-align:center">${escapeHtml(head.currency || 'KRW')}</span>
+          <span></span><span></span>
+        </div>` + (open ? gr.rows.map(itemRow).join('') : '');
         }).join('')
         + `<div class="bl-row bl-item bl-subtotal">
             <span></span>
@@ -1938,7 +2011,29 @@ function dBilling(x){
         ? `저장 폴더(<b>${escapeHtml(window.invoiceFolderName(exhEvent))}</b>)의 기업 폴더에 바로 저장돼요`
         : '다운로드로 받아요 — <b>신청항목</b> 탭에서 저장 폴더를 지정하면 폴더에 바로 저장됩니다'}.</div>`)}
 
-  ${sct('세금계산서', `
+  ${(() => {
+  /* 세금계산서는 국세청에 원화로 신고하는 서류다. 외화로 청구하고 외화로
+     받은 곳은 발행할 일이 없다 — 달러 계좌이체든 해외 카드 결제든 마찬가지다.
+     그런데도 빈 발행 칸과 담당자 칸이 늘 펼쳐져 있으면, 볼 때마다 «이 회사
+     세금계산서 안 끊었나»를 한 번씩 확인하게 된다.
+
+     통화가 섞인 곳은 접지 않는다. 원화로 청구한 부분이 남아 있어 발행할 일이
+     실제로 있다. 한 장이라도 끊어 둔 곳도 접지 않는다 — 발행한 기록을 화면에서
+     지우면 무엇을 보냈는지 확인할 데가 없어진다.
+     (진행 체크리스트가 이 기업의 «세금계산서» 칸을 «외화 청구»로 비우는 것과
+     같은 기준이다.)
+
+     드물게 원화 세금계산서를 따로 끊어야 하는 일이 있어서, 접어 두되 한 번
+     눌러 열 수 있게 한다. */
+  const taxNA = !taxes.length && currencyOf(x.id) !== 'KRW' && !mixedCurrency(x.id);
+  if(taxNA && taxOpenFor !== x.id) return sct('세금계산서', `
+    <div style="font-size:11.5px;color:var(--i4);padding:8px 2px;line-height:1.7">
+      <b style="color:var(--i3)">해당 없음</b> — ${escapeHtml(currencyOf(x.id))}로 청구·결제한 곳이라 발행할 세금계산서가 없어요.
+      <br><span style="color:var(--i5)">원화로 따로 끊어야 하면
+        <span style="color:var(--a);cursor:pointer;text-decoration:underline" onclick="openTaxAnyway('${escAttr(x.id)}')">여기서 열 수 있어요</span>.</span>
+    </div>`);
+
+  return sct('세금계산서', `
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px">
       ${taxes.length ? taxes.map(v => `
         <div style="padding:8px 10px;background:var(--i9);border-radius:7px${v.status === 'void' ? ';opacity:.55' : ''}">
@@ -1977,7 +2072,8 @@ function dBilling(x){
       <div class="fg"><label class="fl">연락처</label>
         <input class="fi" style="font-size:12px" value="${escAttr(x.tax_contact_phone || '')}"
           onchange="setExhField('${escAttr(x.id)}','tax_contact_phone',this.value,'세금계산서 담당자')"></div>
-    </div>`)}
+    </div>`);
+  })()}
 
   ${sct('입금 내역', `
     <div style="display:flex;flex-direction:column;gap:1px;margin-bottom:8px">
@@ -2231,9 +2327,14 @@ function graphicItemsBlock(x){
 /* 받음 체크 — 누르면 오늘 날짜가 들어가고, 다시 누르면 지운다.
    지울 때는 원래 날짜를 기록에 남긴다(잘못 눌러 지운 값을 되찾을 수 있게). */
 export async function toggleItemReceived(id){
-  const i = EXH_ITEMS.find(r => r.id === id);
+  /* 그래픽 화면은 같은 파일을 한 줄로 묶어 보여 준다. 그 줄을 누르면 묶인
+     항목이 다 같이 움직여야 한다 — 한 장만 받음으로 바뀌면 줄에 적힌 수량과
+     상태가 서로 어긋난다. 첫 줄의 상태를 기준으로 전부 같은 값으로 맞춘다. */
+  const ids = String(id).split(',').filter(Boolean);
+  const i = EXH_ITEMS.find(r => r.id === ids[0]);
   if(!i) return;
-  await setItemField(id, 'received_at', i.received_at ? '' : td());
+  const v = i.received_at ? '' : td();
+  for(const one of ids) await setItemField(one, 'received_at', v);
 }
 
 function dGraphic(x){
@@ -2584,6 +2685,14 @@ export async function setItemFieldDirect(id, field, value){
 }
 
 export async function setItemField(id, field, value, opts = {}){
+  // 묶어서 보여 준 줄은 id가 여럿 온다 — 같은 값을 묶인 항목 모두에 넣는다
+  const many = String(id).split(',').filter(Boolean);
+  if(many.length > 1){
+    let ok = true;
+    for(const one of many) ok = (await setItemField(one, field, value, opts)) && ok;
+    return ok;
+  }
+
   const i = EXH_ITEMS.find(r => r.id === id);
   const open = i ? openAppFor(i.exhibitor_id) : null;
   if(i && open && TRACKED.includes(field) && String(i[field] ?? '') !== String(value ?? '')){
@@ -2958,6 +3067,8 @@ window.setItemFieldDirect = setItemFieldDirect;
 window.removeExhibitor = removeExhibitor;
 window.addItemHere = addItemHere;
 window.editItemRow = editItemRow;
+window.toggleItemGroup = toggleItemGroup;
+window.openTaxAnyway = openTaxAnyway;
 window.swapItemList = swapItemList;
 window.rememberItemCur = rememberItemCur;
 window.addExhRefund = addExhRefund;

@@ -232,7 +232,16 @@ export function invoiceGap(exhId){
   if(!inv.length || !items.length) return null;
   const cur = currencyOf(exhId);
   const invoiced = sumIn(inv, cur), billed = sumIn(items, cur);
-  return invoiced === billed ? null : { invoiced, billed, diff: billed - invoiced, cur };
+
+  /* 환불한 만큼은 발행을 되돌린 것으로 본다. 인보이스를 보낸 뒤 품목이 취소되면
+     그 장을 무효로 돌리지 않고 돈을 돌려준다 — 세금계산서가 이미 나갔거나
+     엑스렌탈 카드 결제를 부분 취소한 경우가 그렇다. 발행액에서 환불을 빼지
+     않으면 그런 기업은 정산이 다 맞아떨어진 뒤에도 «발행액이 청구액보다 많다»가
+     영영 사라지지 않는다(포트리아가 그랬다). 요청만 해 둔 환불은 아직 돌려준
+     돈이 아니라서 세지 않는다. */
+  const refunded = sumIn(paymentsFor(exhId).filter(hasAmount).filter(isDoneRefund), cur);
+  const net = invoiced - refunded;
+  return net === billed ? null : { invoiced, refunded, net, billed, diff: billed - net, cur };
 }
 /* ── 분류별 청구액 (부스 / 비품 / 그래픽 / 기타) ──
 
@@ -2312,8 +2321,37 @@ function graphicPlanRows(list){
   return out;
 }
 
+/* ── 같은 파일은 한 줄로 ──
+   신청은 회차별로 갈라 받아야 «몇 차에 무엇이 늘었나»가 남는다. 그런데 파일을
+   받을 때 필요한 건 «이 기업에서 이 파일 몇 장»이지 회차가 아니다. 회차가 갈린
+   탓에 같은 파일이 두 줄로 앉아 있으면 받았는지 세다가 한 장을 빠뜨린다.
+
+   그래서 화면에서만 묶는다. 기업·품목·마감·받은 날·받은 것 메모가 모두 같을
+   때만 합친다 — 하나라도 다르면 그 줄에 무엇을 적어야 할지 알 수 없으니 따로
+   둔다. 합친 줄에 마감이나 받은 날을 적으면 묶인 항목 모두에 같이 들어간다. */
+function mergeSamePlanRows(rows){
+  const out = [];
+  const by = new Map();
+  rows.forEach(r => {
+    const i = r.i;
+    const k = [r.x.id, i.catalog_id || `n:${String(i.name || '').trim()}`,
+      i.due_at || '', i.received_at || '', i.received_note || '',
+      i.currency || 'KRW', String(i.unit_price || '')].join('');
+    const q = Number(String(i.qty || '').replace(/[^0-9.-]/g, '')) || 0;
+    const a = Number(String(i.amount || '').replace(/[^0-9.-]/g, '')) || 0;
+    if(!by.has(k)){
+      const m = { ...r, ids: [i.id], qty: q, amt: a, n: 1 };
+      by.set(k, m); out.push(m);
+      return;
+    }
+    const m = by.get(k);
+    m.ids.push(i.id); m.qty += q; m.amt += a; m.n++;
+  });
+  return out;
+}
+
 function renderGraphicItemView(list){
-  const all = graphicPlanRows(list);
+  const all = mergeSamePlanRows(graphicPlanRows(list));
   if(!all.length) return emptyView('정산 탭에서 그래픽 분류로 항목을 넣으면 여기에 받을 파일로 잡혀요');
 
   const got  = all.filter(r => r.i.received_at);
@@ -2343,8 +2381,9 @@ function renderGraphicItemView(list){
       title="지금 보고 있는 미수령 항목의 마감일을 한꺼번에 정합니다">마감 일괄 지정</button>
     <button class="btn bp bs" onclick="openNewGraphicOrder()">+ 그래픽 주문 추가</button>`;
 
-  const chk = (r) => `<button onclick="event.stopPropagation();toggleItemReceived('${escAttr(r.i.id)}')"
-    title="${r.i.received_at ? '받음 표시를 지웁니다' : '오늘 받은 것으로 표시합니다'}"
+  const chk = (r) => `<button onclick="event.stopPropagation();toggleItemReceived('${escAttr(r.ids.join(','))}')"
+    title="${r.i.received_at ? '받음 표시를 지웁니다' : '오늘 받은 것으로 표시합니다'}${
+      r.n > 1 ? ` — 묶인 ${r.n}줄 모두` : ''}"
     style="width:20px;height:20px;border-radius:5px;line-height:1;flex-shrink:0;cursor:pointer;font-size:12px;font-weight:800;color:#fff;border:1.5px solid ${
       r.i.received_at ? 'var(--g)' : 'var(--i6)'};background:${r.i.received_at ? 'var(--g)' : 'transparent'}">${r.i.received_at ? '✓' : ''}</button>`;
 
@@ -2353,7 +2392,8 @@ function renderGraphicItemView(list){
       <div style="display:flex;align-items:center;gap:8px">
         ${chk(r)}
         <span style="flex:1;min-width:0" onclick="openExhDr('${escAttr(r.x.id)}','graphic')">
-          <div style="font-size:12.5px;font-weight:600">${escapeHtml(r.i.name || '(이름 없음)')}</div>
+          <div style="font-size:12.5px;font-weight:600">${escapeHtml(r.i.name || '(이름 없음)')}${
+            r.qty > 1 ? `<span style="font-weight:400;color:var(--i4)"> · ${r.qty}장</span>` : ''}</div>
           <div style="font-size:11px;color:var(--i4)">${escapeHtml(exhNames(r.x).ko)}${
             r.x.booth_no ? ` · 부스 ${escapeHtml(r.x.booth_no)}` : ''}</div>
         </span>
@@ -2362,11 +2402,11 @@ function renderGraphicItemView(list){
       <div style="display:flex;gap:6px;align-items:center;margin-top:7px">
         <span style="font-size:10.5px;color:var(--i5)">마감</span>
         <input type="date" class="fi" style="width:130px;padding:4px 7px;font-size:11.5px" value="${escAttr(r.i.due_at || '')}"
-          onchange="setItemField('${escAttr(r.i.id)}','due_at',this.value)">
+          onchange="setItemField('${escAttr(r.ids.join(','))}','due_at',this.value)">
       </div>
       <input class="fi" style="width:100%;margin-top:5px;padding:4px 8px;font-size:11.5px"
         value="${escAttr(r.i.received_note || '')}" placeholder="받은 것 — 예: 백월_최종.ai"
-        onchange="setItemField('${escAttr(r.i.id)}','received_note',this.value)">
+        onchange="setItemField('${escAttr(r.ids.join(','))}','received_note',this.value)">
     </div>`).join('') || emptyView('해당하는 항목이 없어요'), actions);
 
   return viewShell(pills, `<div class="tw"><table><thead><tr>
@@ -2385,16 +2425,18 @@ function renderGraphicItemView(list){
       <td>${chk(r)}</td>
       ${coCell(r.x, 'graphic')}
       <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(r.x.booth_no || '—')}</td>
-      <td style="font-size:12px">${escapeHtml(r.i.name || '(이름 없음)')}</td>
-      <td style="text-align:right;font-size:11.5px">${escapeHtml(String(r.i.qty || ''))}</td>
+      <td style="font-size:12px">${escapeHtml(r.i.name || '(이름 없음)')}${
+        r.n > 1 ? `<span class="pill p-gray" style="font-size:9px;margin-left:4px"
+          title="접수 회차가 갈려 ${r.n}줄로 들어왔어요 — 받는 입장에서는 한 장의 파일이라 묶었습니다">${r.n}줄</span>` : ''}</td>
+      <td style="text-align:right;font-size:11.5px">${r.qty || ''}</td>
       <td><input type="date" class="fi" style="width:110px;padding:3px 5px;font-size:11px" value="${escAttr(r.i.due_at || '')}"
-        onchange="setItemField('${escAttr(r.i.id)}','due_at',this.value)"></td>
+        onchange="setItemField('${escAttr(r.ids.join(','))}','due_at',this.value)"></td>
       <td><span class="pill ${r.d.cls}">${escapeHtml(r.d.text)}</span></td>
       <td><input type="date" class="fi" style="width:106px;padding:3px 5px;font-size:11px" value="${escAttr(r.i.received_at || '')}"
-        onchange="setItemField('${escAttr(r.i.id)}','received_at',this.value)"></td>
+        onchange="setItemField('${escAttr(r.ids.join(','))}','received_at',this.value)"></td>
       <td><input class="fi" style="width:180px;padding:3px 6px;font-size:11px" value="${escAttr(r.i.received_note || '')}"
-        placeholder="예: 백월_최종.ai · CMYK" onchange="setItemField('${escAttr(r.i.id)}','received_note',this.value)"></td>
-      <td style="text-align:right;font-size:11.5px">${r.i.amount ? escapeHtml(fmtMoney(r.i.amount, r.i.currency || 'KRW')) : '-'}</td>
+        placeholder="예: 백월_최종.ai · CMYK" onchange="setItemField('${escAttr(r.ids.join(','))}','received_note',this.value)"></td>
+      <td style="text-align:right;font-size:11.5px">${r.amt ? escapeHtml(fmtMoney(r.amt, r.i.currency || 'KRW')) : '-'}</td>
     </tr>`).join('') || '<tr><td colspan="10" style="text-align:center;color:var(--i4);padding:24px">해당하는 항목이 없어요</td></tr>'}
     </tbody></table></div>`, actions);
 }
