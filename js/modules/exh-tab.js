@@ -543,6 +543,30 @@ export function boothDesignState(x){
 let baseFil = '';
 export function setBaseFil(k){ baseFil = baseFil === k ? '' : k; renderExh(); }
 
+/* ══════════════════════════════════════════
+   부스 디자인 의뢰 (G-130)
+
+   블록·라이팅 부스는 보통 기업이 디자인을 만들어 보내고 우리가 출력·시공한다.
+   그런데 디자인까지 의뢰한 곳이 있다 — 그때는 우리가 그리고, 출력하고, 세운다.
+
+   기본 시공 화면에서 이게 안 보이면 «디자인 수령» 칸이 빈 채로 남아 있는 것을
+   보고 «아직 안 왔네, 독촉해야지»가 된다. 받을 것이 없는 곳에 독촉을 보내는
+   일이고, 정작 우리가 그려야 한다는 건 아무도 안 짚는다.
+
+   판별은 품목의 분류로 한다 — 코드를 코드에 박아 두면 디자인 품목이 하나 더
+   생길 때 또 고쳐야 한다(exh-drawer의 isDesignItem과 같은 기준). 카탈로그에
+   안 이어진 옛 줄이 있어 이름도 함께 본다. */
+export function hasDesignOrder(x){
+  return liveItemsFor(x.id).some(i => {
+    const c = i.catalog_id ? catalogItem(i.catalog_id) : null;
+    if(c) return (c.category || '') === '디자인';
+    return /^G-130|부스\s*디자인\s*의뢰/.test(String(i.name || ''));
+  });
+}
+const designPill = (x) => hasDesignOrder(x)
+  ? ` <span class="pill p-teal" style="font-size:9px"
+      title="부스 디자인까지 의뢰한 곳이에요 — 디자인을 받는 게 아니라 우리가 그려서 출력·시공합니다">디자인 의뢰</span>` : '';
+
 export const BASE_KINDS = {
   fascia: { label: '간판명', recv: '간판명 확정', done: '간판 제작', types: ['Octanium (Standard)', 'Octanium (Black)'] },
   print:  { label: '출력·시공', recv: '디자인 수령', done: '출력 완료',
@@ -3068,7 +3092,9 @@ function renderBaseView(list){
   /* 받는 것도 하는 일도 종류마다 다르다. 간판명은 상호를 받아 간판을 만들고,
      출력·시공은 디자인 파일을 받아 출력한다 — 같은 날 같은 사람이 하는 일이
      아니라, 한쪽만 보고 싶을 때가 대부분이다. */
-  const rows = baseFil ? all.filter(x => baseKind(x) === baseFil) : all;
+  const rows = !baseFil ? all
+    : baseFil === 'design' ? all.filter(hasDesignOrder)
+    : all.filter(x => baseKind(x) === baseFil);
 
   const bk = (x) => { const k = boothSortKey(x); return k === Infinity ? 1e9 : k; };
   rows.sort((a, b) => bk(a) - bk(b));
@@ -3089,6 +3115,13 @@ function renderBaseView(list){
           onclick="setBaseFil('${escAttr(k)}')"
           title="${escAttr(v.types.join(', '))} — 눌러서 이것만 보기">${v.label} ${g.length}</button>`;
       }).join('')
+    + (() => {
+        const d = all.filter(hasDesignOrder);
+        return d.length ? `<button class="pill ${baseFil === 'design' ? 'p-teal' : 'p-gray'}"
+          style="border:0;cursor:pointer;font:inherit"
+          title="${escAttr(d.map(x => exhNames(x).ko).join(', ') + ' — 우리가 그려서 출력·시공합니다')}"
+          onclick="setBaseFil('design')">디자인 의뢰 ${d.length}</button>` : '';
+      })()
     + `<span class="pill ${gotN === rows.length ? 'p-green' : 'p-amber'}">수령 ${gotN}/${rows.length}</span>`
     + `<span class="pill ${doneN === rows.length ? 'p-green' : 'p-gray'}">작업 완료 ${doneN}/${rows.length}</span>`
     + (due
@@ -3110,9 +3143,17 @@ function renderBaseView(list){
           : '게재 영문명이 비어 있어요 — 프로그램북 탭에서 넣거나 여기에 직접 적으세요')}"
         onclick="event.stopPropagation()"
         onchange="setExhField('${escAttr(x.id)}','fascia_name',this.value,'간판명')">`
-    : `<input type="date" class="fi" style="width:124px;padding:3px 6px;font-size:11.5px"
+    /* 디자인을 의뢰한 곳은 받을 것이 없다 — 우리가 그린다. 같은 칸을 «우리
+       디자인 완료»로 읽게 이름표를 바꿔 단다. 칸을 따로 만들지 않는 건, 뒤에
+       오는 «출력 완료»와의 앞뒤 관계가 똑같기 때문이다. */
+    : `<input type="date" class="fi" style="width:124px;padding:3px 6px;font-size:11.5px${
+        hasDesignOrder(x) ? ';border-color:var(--tl)' : ''}"
         value="${escAttr(x.base_recv_at || '')}" onclick="event.stopPropagation()"
-        onchange="setExhField('${escAttr(x.id)}','base_recv_at',this.value,'디자인 수령')">`;
+        title="${escAttr(hasDesignOrder(x)
+          ? '디자인을 의뢰한 곳이에요 — 기업에서 받는 날이 아니라 우리 디자인이 끝난 날을 적습니다'
+          : '기업에서 디자인 파일을 받은 날')}"
+        onchange="setExhField('${escAttr(x.id)}','base_recv_at',this.value,'${
+          escAttr(hasDesignOrder(x) ? '디자인 완료' : '디자인 수령')}')">`;
 
   const dateCell = (x, f, label) => `<input type="date" class="fi" style="width:124px;padding:3px 6px;font-size:11.5px"
     value="${escAttr(x[f] || '')}" onclick="event.stopPropagation()"
@@ -3153,7 +3194,7 @@ function renderBaseView(list){
           style="font-size:13px;font-weight:700;flex:1;min-width:0;cursor:pointer">${escapeHtml(exhNames(x).ko)}</span>
         ${mark(x)}
       </div>
-      <div style="font-size:11px;color:var(--i4);margin-bottom:4px">${escapeHtml(x.booth_type || '')} · ${escapeHtml(BASE_KINDS[k].label)}</div>
+      <div style="font-size:11px;color:var(--i4);margin-bottom:4px">${escapeHtml(x.booth_type || '')} · ${escapeHtml(BASE_KINDS[k].label)}${designPill(x)}</div>
       <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
         <span style="font-size:11px;color:var(--i4);min-width:64px">${escapeHtml(BASE_KINDS[k].recv)}</span>${recvCell(x)}</div>
       ${k === 'fascia' ? `<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
@@ -3187,7 +3228,7 @@ function renderBaseView(list){
         ${coCell(x, 'progress')}
         <td style="font-size:11px;color:var(--i4)">${escapeHtml(x.booth_type || '')}${
           x.booth_qty && x.booth_qty !== '1' ? ` <span style="color:var(--i5)">×${escapeHtml(x.booth_qty)}</span>` : ''}</td>
-        <td><span class="pill p-blue">${escapeHtml(BASE_KINDS[k].label)}</span></td>
+        <td><span class="pill p-blue">${escapeHtml(BASE_KINDS[k].label)}</span>${designPill(x)}</td>
         <td>${recvCell(x)}</td>
         <td>${k === 'fascia'
           ? dateCell(x, 'base_recv_at', '간판명 확정')
