@@ -4474,6 +4474,11 @@ const FIELD_LABEL = {
   app_received:'신청서 수신', app_received_at:'신청서 수신일', app_complete:'신청서 완비',
   app_missing:'누락 항목', extra_equipment:'추가 비품',
   booth_no:'부스 번호', booth_floor:'부스 층', booth_type:'부스 타입', booth_qty:'부스 수량',
+  /* 도면 칸들 — 부딪힘 알림에 칸 이름을 한글로 보여주려면 여기 있어야 한다.
+     없으면 «booth_design_note가 바뀌었어요»라고 뜬다. */
+  booth_design_note:'도면 비고', booth_design_received_at:'도면 수령일',
+  booth_design_checked_at:'도면 확인일', booth_design_result:'도면 검토 결과',
+  movein_at:'반입·설치', note:'비고', status:'상태',
   scope:'참가 범위', host_key:'대표 기업',
   book_name_ko:'게재 국문명', book_name_en:'게재 영문명',
   fascia_name:'간판명', base_recv_at:'간판명 확정·디자인 수령',
@@ -4524,6 +4529,51 @@ export function logExhEdit(x, patch, backup){
 /* 바뀐 칸만 골라 담는다 — 안 바뀐 칸까지 넣으면 기록이 몇 배로 불어난다 */
 const pick = (obj, keys) => keys.reduce((o, k) => (o[k] = obj[k] ?? '', o), {});
 
+/* ══════════════════════════════════════════
+   부딪혔을 때 — 무엇과 부딪혔는지 보여주고 사람이 고른다
+
+   두 사람이 같은 칸을 고치면 나중 저장이 앞사람 값을 소리 없이 지웠다. 이제
+   서버가 막아 주는데, 막기만 하고 «저장 실패»라고만 하면 사람은 무엇이
+   문제인지 모른 채 같은 걸 다시 누른다.
+
+   그래서 지금 값과 내가 쓰려던 값을 나란히 보여준다. 자동으로 합치지 않는다 —
+   메모 한 칸에도 «둘 다 남겨야 하는 경우»와 «내 것이 맞는 경우»가 다 있고,
+   그건 내용을 아는 사람만 안다.
+
+   화면의 값은 서버가 알려준 지금 값으로 맞춰 둔다. 안 그러면 옛 사진을 계속
+   보면서 다음 칸을 고치다 또 부딪힌다. */
+const FIELD_KO = (f) => FIELD_LABEL[f] || f;
+
+async function resolveConflict(id, patch, backup, current){
+  const x = getExhibitorById(id);
+  const fields = Object.keys(current || {});
+  /* 화면을 지금 값으로 먼저 맞춘다 — 무엇과 부딪혔는지 보여주기 전에 */
+  if(x) Object.assign(x, current);
+  refreshExhViews();
+
+  const lines = fields.map(f => `   ${FIELD_KO(f)}\n`
+    + `     지금  ${JSON.stringify(current[f] || '')}\n`
+    + `     내 값 ${JSON.stringify(patch[f] ?? '')}`).join('\n');
+
+  const take = confirm(
+    `그 사이 다른 사람이 이 칸을 고쳤어요.\n\n`
+    + lines + '\n\n'
+    + `[확인] 내 값으로 덮어쓰기\n`
+    + `[취소] 그대로 두기 — 지금 값이 화면에 반영됐어요`);
+
+  if(!take) return;
+  /* 덮어쓰기는 지금 값을 본 상태에서 다시 보낸다 — 한 번 더 부딪히면 그때
+     또 묻는다(그 사이 세 번째 사람이 고쳤다는 뜻이다). */
+  const again = {};
+  fields.forEach(f => { again[f] = patch[f] ?? ''; });
+  await patchExh(id, again, '덮어쓰기');
+  trackAction('edit', '덮어쓰기', x?.company_name || '',
+    `<b>${escapeHtml(x?.company_name || '')}</b> — 다른 사람이 고친 값을 보고 `
+    + `${fields.map(FIELD_KO).join(', ')}를 내 값으로 덮었어요`,
+    { kind: 'exhibitor', id, table: 'exhibitors', row: id, op: 'update',
+      before: current, after: again });
+}
+
 export async function patchExh(id, patch, label){
   const x = getExhibitorById(id);
   if(!x) return { ok: false };
@@ -4532,7 +4582,14 @@ export async function patchExh(id, patch, label){
   Object.assign(x, patch);
   refreshExhViews();
 
-  const r = await saveExhibitor({ id, ...patch, updated_at: td() });
+  /* 내가 본 값을 함께 보낸다 — 그 사이 남이 고쳤으면 서버가 거절한다 */
+  const r = await saveExhibitor({ id, ...patch, updated_at: td() }, backup);
+  if(r.conflict){
+    Object.assign(x, backup);
+    refreshExhViews();
+    await resolveConflict(id, patch, backup, r.current);
+    return r;
+  }
   if(!r.ok){
     Object.assign(x, backup); // 저장 실패 시 되돌린다 — 화면만 바뀌는 거짓 성공 방지
     refreshExhViews();

@@ -278,6 +278,35 @@ function pickColumns(columns, obj) {
   return rec;
 }
 
+/* ══════════════════════════════════════════
+   덮어쓰기 막기
+
+   두 사람이 같은 기업을 열어 두고 같은 칸을 고치면, 나중에 저장한 쪽이 이기고
+   앞사람 값은 소리 없이 사라졌다. 2026-09-14 오전에만 열여섯 번 났고, 그중
+   하나는 «X배너 4개 내외»가 통째로 없어진 채 며칠 갔다.
+
+   화면은 로그인할 때 읽은 사진을 계속 보고 있어서, 그 사이 남이 고친 걸 모른다.
+   그래서 고치는 쪽이 «내가 본 이전 값»을 함께 보내고, 지금 DB 값과 다르면
+   저장을 거절한다. 거절할 때 지금 값을 함께 돌려줘서, 부르는 쪽이 무엇과
+   부딪혔는지 사람에게 보여줄 수 있게 한다.
+
+   빈 값과 null은 같게 본다 — 화면은 빈 칸을 ''로, DB는 NULL로 들고 있어서
+   그대로 견주면 아무도 안 고쳤는데 매번 부딪힌다. */
+async function checkExpect(client, def, obj, expect) {
+  const fields = Object.keys(expect || {});
+  if (!fields.length || !obj[def.pk]) return null;
+  const { rows } = await client.query(
+    `SELECT ${fields.map(q).join(', ')} FROM ${def.table} WHERE ${q(def.pk)} = $1`,
+    [obj[def.pk]]);
+  if (!rows.length) return null;          // 아직 없는 줄 — 새로 만드는 것이라 부딪힐 게 없다
+  const same = (a, b) => String(a ?? '').trim() === String(b ?? '').trim();
+  const bad = fields.filter((f) => !same(rows[0][f], expect[f]));
+  if (!bad.length) return null;
+  const current = {};
+  bad.forEach((f) => { current[f] = rows[0][f] ?? ''; });
+  return { conflict: true, fields: bad, current };
+}
+
 async function upsertPartial(client, def, obj) {
   const cols = def.columns.filter((c) => obj[c] !== undefined);
   const rec = {};
@@ -340,7 +369,7 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { sheet, action, row, rows, data, dataRows } = req.body || {};
+  const { sheet, action, row, rows, data, dataRows, expect } = req.body || {};
   if (sheet !== 'participations' && !TABLES[sheet]) {
     return res.status(400).json({ ok: false, error: 'unknown sheet' });
   }
@@ -380,6 +409,10 @@ router.post('/', async (req, res) => {
         await bulkUpsert(client, def.table, def.pk, def.columns, records, { onConflict });
       } else if (data) {
         // 객체 단건 — 넘어온 키만 갱신
+        if (expect) {
+          const clash = await checkExpect(client, def, data, expect);
+          if (clash) { await client.query('ROLLBACK'); return res.json({ ok: false, ...clash }); }
+        }
         savedId = await upsertPartial(client, def, data);
       } else if (action === 'replaceAll') {
         // 여기도 보낸 폭까지만 쓴다 — 섹터 정렬이 4컬럼만 보내면서 canonical을

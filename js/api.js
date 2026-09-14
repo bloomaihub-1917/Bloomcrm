@@ -189,6 +189,10 @@ export async function postToSheet(payload, label, { silent = false } = {}){
     });
     let json = null;
     try { json = JSON.parse(await res.text()); } catch(e){}
+    /* 덮어쓰기를 막아 거절된 것은 «고장»이 아니다. 여기서 빨간 토스트를 띄우면
+       «저장 실패 — 네트워크를 확인하세요»가 뜨는데, 네트워크는 멀쩡하고 남이
+       고쳤을 뿐이다. 부르는 쪽이 무엇과 부딪혔는지 보여줄 수 있게 그대로 넘긴다. */
+    if(json && json.conflict) return json;
     if(!res.ok || !json || json.error || json.ok === false){
       const errMsg = (json && (json.error || json.action)) || ('HTTP ' + res.status);
       console.error('[CRM] 저장 실패:', label, errMsg);
@@ -809,7 +813,10 @@ async function deleteExhRow(sheet, id, label){
   return postToSheet({ sheet, action: 'delete', row: [id] }, label);
 }
 
-export const saveExhibitor       = (o) => saveExhRow('exhibitors',         o, '전시 참가기업 저장');
+/* expect를 함께 보내면 서버가 «내가 본 값»과 지금 값을 견주고, 다르면 저장을
+   거절한다(routes/data.js의 checkExpect). 안 보내면 예전처럼 그냥 덮는다. */
+export const saveExhibitor       = (o, expect) => postToSheet(
+  { sheet: 'exhibitors', data: o, ...(expect ? { expect } : {}) }, '전시 참가기업 저장');
 export const saveExhContact      = (o) => saveExhRow('exhibitor_contacts', o, '담당자 저장');
 export const saveExhItem         = (o) => saveExhRow('exhibitor_items',    o, '금액 항목 저장');
 export const saveExhInvoice      = (o) => saveExhRow('exhibitor_invoices', o, '인보이스 저장');
