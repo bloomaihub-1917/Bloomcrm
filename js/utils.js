@@ -43,6 +43,28 @@ export function countryOptions(selected){
   return COUNTRIES.map(c=>`<option value="${c.nameKo}"${selName===c.nameKo?' selected':''}>${c.nameKo}</option>`).join('');
 }
 
+/* ══════════════════════════════════════════
+   사람 이름 한 줄
+
+   국문명만 쓰던 자리가 여럿이었다. 그래서 Jiaxin Chen·Wangkee Tan처럼 국문명이
+   없는 사람은 활동 로그에 «<b></b>의 정보를 수정했어요»로, 행사 참여 기록에는
+   이름 대신 id 숫자로 남았다 — 누구 얘긴지 알 수 없다.
+
+   국문·영문 어느 쪽이든 있는 것을 쓰고, 둘 다 없으면 이메일이라도 보여준다.
+   그것마저 없으면 «이름 없음» — 빈칸으로 두면 문장이 무너진다. */
+export function personName(c){
+  if(!c) return '이름 없음';
+  return String(c.nameKo || '').trim() || String(c.nameEn || '').trim()
+    || String(c.email1 || '').trim() || '이름 없음';
+}
+/* 둘 다 있으면 나란히 — 드로어 제목처럼 넓은 자리에서 쓴다 */
+export function personFullName(c){
+  if(!c) return '이름 없음';
+  const ko = String(c.nameKo || '').trim(), en = String(c.nameEn || '').trim();
+  if(ko && en) return `${ko} · ${en}`;
+  return personName(c);
+}
+
 /* 모바일 뷰포트 여부 (반응형 분기용) */
 export function isMobile(){ return window.innerWidth <= 768; }
 

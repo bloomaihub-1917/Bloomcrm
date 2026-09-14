@@ -40,7 +40,7 @@ import {
   EXH_CONTACTS,
 } from '../state.js';
 import { CP, CL, RP, CAT_KEYS, ROLE_TO_CAT, COUNTRIES, avB, avF } from '../constants.js';
-import { td, ab, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseSectorScope, parseTags, joinTags, isMobile, cleanEmail } from '../utils.js';
+import { td, ab, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseSectorScope, parseTags, joinTags, isMobile, cleanEmail, personName, personFullName } from '../utils.js';
 import { postToSheet } from '../api.js';
 import { buildCoDB, ensureOrgsForNames, orgIdForName, applyCoSectors } from './company-tab.js';
 import { domainOfSector, domainName, findSectorByName, mainSectors, UNASSIGNED_DOMAIN } from './settings-tab.js';
@@ -1232,7 +1232,7 @@ export function renderMDBFlat(pairs){
       <td onclick="event.stopPropagation()" style="text-align:center"><input type="checkbox" ${isSel?'checked':''} onchange="toggleMDBSelect(${c.id})"></td>
       <td><div class="tdco">
         <div class="tdav${isSel?' sel':''}" onclick="event.stopPropagation();toggleMDBSelect(${c.id})" title="클릭해서 선택/해제">${isSel?'✓':ab(c.nameKo||c.nameEn||"")}</div>
-        <div><div class="tdnm">${c.nameKo?nameKo:nameEn}${isBDContact(c)?' <span class="pill p-teal" style="font-size:9px;padding:1px 5px">BD</span>':''}${isCLevelContact(c)?' <span class="pill p-gold" style="font-size:9px;padding:1px 5px">C-level</span>':''}${leftPill(c)}</div><div class="tdsb">${nameEn}</div></div>
+        <div><div class="tdnm">${escapeHtml(personName(c))}${isBDContact(c)?' <span class="pill p-teal" style="font-size:9px;padding:1px 5px">BD</span>':''}${isCLevelContact(c)?' <span class="pill p-gold" style="font-size:9px;padding:1px 5px">C-level</span>':''}${leftPill(c)}</div><div class="tdsb">${c.nameKo && c.nameEn ? nameEn : ''}</div></div>
       </div></td>
       <td style="max-width:200px"><div class="tdnm" style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${orgTitle}">${c.orgKo?orgKo:orgEn}</div><div class="tdsb" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${orgEnTitle}">${c.orgKo?orgEn:''}</div></td>
       <td style="color:var(--i2);font-size:12px;white-space:nowrap">${escapeHtml(countryName(c.country))}</td>
@@ -1559,7 +1559,8 @@ export function renderContactDr(){
   document.getElementById('con-dr-av').style.background = avB(gi);
   document.getElementById('con-dr-av').style.color = avF(gi);
   document.getElementById('con-dr-av').textContent = ab(c.nameKo||c.nameEn||'');
-  document.getElementById('con-dr-name').textContent = c.nameKo + (c.nameEn ? ' · ' + c.nameEn : '');
+  /* 국문명이 없으면 « · John»처럼 점부터 시작하던 자리 */
+  document.getElementById('con-dr-name').textContent = personFullName(c);
   document.getElementById('con-dr-meta').innerHTML =
     '<span>🏢 ' + escapeHtml(c.orgKo||c.orgEn||'-') + '</span>' +
     '<span>🌐 ' + escapeHtml(countryName(c.country)) + '</span>' +
@@ -1674,7 +1675,7 @@ export async function confirmAddEv(cid){
     renderContactDr(); buildCoDB(); renderMDB();
     return;
   }
-  trackAction('edit', '행사 추가', ev, `${contacts.find(x=>x.id===cid)?.nameKo||cid} → ${ev} (${role})`,
+  trackAction('edit', '행사 추가', ev, `${personName(getContactById(cid))} → ${ev} (${role})`,
     { kind: 'contact', id: cid, table: 'participations', row: part.id, op: 'create', after: part });
 }
 
@@ -1701,7 +1702,7 @@ export async function removeParticipation(cid, partId, ev){
       renderContactDr(); buildCoDB(); renderMDB();
       return;
     }
-    trackAction('edit', '행사 삭제', ev, `${contacts.find(x=>x.id===cid)?.nameKo||cid} ← ${ev} 제거`,
+    trackAction('edit', '행사 삭제', ev, `${personName(getContactById(cid))} ← ${ev} 제거`,
       removedMeta('participations', partId, removed || {}, { kind: 'contact', id: cid }));
   }
 }
@@ -1947,7 +1948,8 @@ export async function saveContactEdit(){
     try { renderMDB(); } catch(e){}
     return;
   }
-  trackAction('status', '연락처 정보 수정', c.nameKo, '<b>'+c.nameKo+'</b>의 정보를 수정했어요',
+  trackAction('status', '연락처 정보 수정', personName(c),
+    '<b>' + escapeHtml(personName(c)) + '</b>의 정보를 수정했어요',
     changed('contacts', c.id, prev, pickChanged(prev, c), { kind: 'contact', id: c.id }));
 }
 
