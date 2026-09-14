@@ -916,14 +916,24 @@ export function matchesQuery(c, q){
   });
 }
 
+/* 지금 검색창에 뭐라도 쳐 있나 — 필터·배지·건수가 같은 값을 봐야 숫자가
+   서로 어긋나지 않는다. */
+export const mdbQuery = () => String((document.getElementById('mdb-q')||{}).value || '').trim();
+
+/* 퇴사자를 목록에서 내릴 자리인가.
+
+   내리는 건 «연락할 사람을 고르는 목록»일 때뿐이다. 세 경우엔 내리지 않는다.
+   - 칩을 눌러 직접 펴 봤을 때
+   - 행사별 보기 — 그 행사에 온 건 지금도 사실이라, 빼면 몇 해 전 참가자
+     명단이 실제와 달라진다
+   - 검색 중일 때 — 이름을 콕 집어 찾는 건 «숨겨둔 것까지 보여달라»는 뜻이다.
+     여기서 빼면 «분명히 있었는데 검색이 안 되네» 하고 같은 사람을 또 등록하게
+     된다. 찾는 걸 막는 건 감추는 것보다 나쁘다. */
+export const hidingLeft = () => !mdbShowLeft && !mdbEvFilter && !mdbQuery();
+
 export function mdbFilterPairs(pairs){
   let out = pairs;
-  /* 퇴사자는 기본으로 내린다 — 연락할 사람을 고르는 목록에 이제 없는 사람이
-     섞여 있으면 그 목록을 못 믿는다. 다만 «행사별 보기»에서는 내리지 않는다.
-     그때 그 사람이 그 행사에 온 건 지금도 사실이고, 여기서 빼면 몇 해 전
-     참가자 명단이 실제와 달라진다. 조용히 감추지 않도록 몇 명이 빠졌는지는
-     위쪽 칩에 항상 적어 둔다(renderLeftChip). */
-  if(!mdbShowLeft && !mdbEvFilter) out = out.filter(({ c }) => !hasLeft(c));
+  if(hidingLeft()) out = out.filter(({ c }) => !hasLeft(c));
   if(mdbStat) out = out.filter(({ c }) => c.status === mdbStat);
   if(mdbCtryOnly) out = out.filter(({ c }) => !!ctryCheck(c));
   if(mdbRegion) out = out.filter(({ c }) =>
@@ -950,9 +960,15 @@ export function renderMDB(){
   renderMDBSelectionBar();
 
   const ctEl = document.getElementById('db-ct');
-  if(ctEl) ctEl.textContent = mdbEvFilter
-    ? `${pairs.length}명 (${evShort(mdbEvFilter)})`
-    : `${pairs.length}명`;
+  if(ctEl){
+    /* 목록에 퇴사자가 섞여 있으면 몇 명인지 적는다 — 평소엔 안 보이던 사람이
+       갑자기 끼어 있으면 «왜 나왔지»가 되고, 세어 보기 전엔 알 수도 없다. */
+    const leftN = pairs.filter(({ c }) => hasLeft(c)).length;
+    const suffix = leftN ? ` · 퇴사 ${leftN}명 포함` : '';
+    ctEl.textContent = mdbEvFilter
+      ? `${pairs.length}명 (${evShort(mdbEvFilter)})${suffix}`
+      : `${pairs.length}명${suffix}`;
+  }
 
   // 모바일은 좁아서 표 대신 카드로 그린다(교차표는 원래 가로 스크롤이 전제라 그대로)
   const mob = isMobile();
@@ -986,6 +1002,17 @@ function renderLeftChip(){
   const n = contacts.filter(c => hasLeft(c)).length;
   if(!n || mdbEvFilter){ el.style.display = 'none'; el.innerHTML = ''; return; }
   el.style.display = '';
+
+  /* 검색 중에는 퇴사자가 이미 함께 나온다 — 이때 토글을 그대로 두면 눌러도
+     아무 일이 안 일어나 고장 난 것처럼 보인다. 누를 수 없는 안내로 바꾼다. */
+  if(mdbQuery()){
+    /* 숫자를 여기 적지 않는다 — 이 n은 «DB 전체의 퇴사자»라 목록에 그만큼
+       있는 것처럼 읽힌다. 지금 목록에 몇 명인지는 오른쪽 건수가 말한다. */
+    el.innerHTML = `<span class="pill p-amber" style="cursor:default"
+      title="이름으로 찾을 때는 퇴사한 사람도 함께 보여 줍니다. 검색어를 지우면 다시 내려가요."
+      >퇴사 포함</span>`;
+    return;
+  }
   el.innerHTML = `<button class="pill ${mdbShowLeft ? 'p-amber' : 'p-gray'}"
     style="border:0;cursor:pointer;font:inherit"
     title="회사를 떠난 담당자예요. 목록에서는 내려 두고, 행사 참여 이력은 그대로 남습니다. 눌러서 함께 봅니다."
@@ -999,7 +1026,7 @@ export function updateMDBBadges(pairs){
     let bp = mdbEvFilter
       ? participations.filter(p=>p.eventId===mdbEvFilter).map(p=>({c:getContactById(p.contactId),p})).filter(x=>x.c)
       : contacts.map(c=>({c,p:null}));
-    if(!mdbShowLeft && !mdbEvFilter) bp = bp.filter(({c}) => !hasLeft(c));
+    if(hidingLeft()) bp = bp.filter(({c}) => !hasLeft(c));
     if(mdbStat) bp=bp.filter(({c})=>c.status===mdbStat);
     const q=(document.getElementById('mdb-q')||{}).value||'';
     // orgEn이 빠져 있어 영문 기업명으로 검색하면 목록에는 나오는데 배지 숫자는
@@ -1392,7 +1419,7 @@ export function renderMDBGrouped(pairs){
     // 미배정: 참가 이력(participations)이 전혀 없는 연락처
     const assignedIds = new Set(participations.map(p=>p.contactId));
     let unassigned = contacts.filter(c => !assignedIds.has(c.id));
-    if(!mdbShowLeft) unassigned = unassigned.filter(c => !hasLeft(c));
+    if(hidingLeft()) unassigned = unassigned.filter(c => !hasLeft(c));
     if(mdbCat!=='all') unassigned = unassigned.filter(c=>c.cat===mdbCat);
     if(mdbStat) unassigned = unassigned.filter(c=>c.status===mdbStat);
     const qU=(document.getElementById('mdb-q')||{}).value||'';
