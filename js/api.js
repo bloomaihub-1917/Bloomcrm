@@ -345,6 +345,13 @@ export async function loadFromSheets(hooks = {}){
           phone2: (p2 && p2 !== p1) ? p2 : '', // phone1과 같으면 비움
           beat:   r.beat||'',    products:r.products||'',
           tags:   r.tags||'',
+          /* org_id를 여기서 빠뜨리면 안 된다 — 저장은 c.org_id를 그대로 실어
+             보내므로, 읽을 때 안 담으면 undefined가 빈칸으로 나가 연락처를 고칠
+             때마다 기업 연결이 조용히 끊긴다. 쓰는 쪽만 고쳐 놨던 구멍이다. */
+          org_id: r.org_id||'',
+          /* 퇴사 — 비어 있으면 재직. moved_to_id는 이직해 새로 만든 연락처 id */
+          left_at:     r.left_at||'',
+          moved_to_id: r.moved_to_id||'',
         };
       }));
       console.log('[CRM] contacts loaded & cleaned:', contacts.length);

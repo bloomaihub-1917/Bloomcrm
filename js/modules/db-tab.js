@@ -35,6 +35,9 @@ import {
   mdbSelected,
   targets,
   getOrgById,
+  hasLeft,
+  movedTo,
+  EXH_CONTACTS,
 } from '../state.js';
 import { CP, CL, RP, CAT_KEYS, ROLE_TO_CAT, COUNTRIES, avB, avF } from '../constants.js';
 import { td, ab, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseSectorScope, parseTags, joinTags, isMobile, cleanEmail } from '../utils.js';
@@ -857,6 +860,8 @@ export function getMDBPairs(){
 /* ── Main render dispatcher (원본 1829~1842행) ── */
 let mdbCtryOnly = false;
 export function toggleMdbCtry(){ mdbCtryOnly = !mdbCtryOnly; renderMDB(); }
+let mdbShowLeft = false;
+export function toggleMdbLeft(){ mdbShowLeft = !mdbShowLeft; renderMDB(); }
 
 /* ══════════════════════════════════════════
    사이드바의 거르개들 — 한 군데서만 판단한다
@@ -913,6 +918,12 @@ export function matchesQuery(c, q){
 
 export function mdbFilterPairs(pairs){
   let out = pairs;
+  /* 퇴사자는 기본으로 내린다 — 연락할 사람을 고르는 목록에 이제 없는 사람이
+     섞여 있으면 그 목록을 못 믿는다. 다만 «행사별 보기»에서는 내리지 않는다.
+     그때 그 사람이 그 행사에 온 건 지금도 사실이고, 여기서 빼면 몇 해 전
+     참가자 명단이 실제와 달라진다. 조용히 감추지 않도록 몇 명이 빠졌는지는
+     위쪽 칩에 항상 적어 둔다(renderLeftChip). */
+  if(!mdbShowLeft && !mdbEvFilter) out = out.filter(({ c }) => !hasLeft(c));
   if(mdbStat) out = out.filter(({ c }) => c.status === mdbStat);
   if(mdbCtryOnly) out = out.filter(({ c }) => !!ctryCheck(c));
   if(mdbRegion) out = out.filter(({ c }) =>
@@ -932,6 +943,7 @@ export function mdbFilterPairs(pairs){
 export function renderMDB(){
   const pairs = getMDBPairs();
   renderCtryChip();
+  renderLeftChip();
   buildMDBRegionList();
   buildMDBDomainList();
   buildMDBTagList();
@@ -965,6 +977,21 @@ function renderCtryChip(){
     onclick="toggleMdbCtry()">국가 확인 ${n}</button>`;
 }
 
+/* 퇴사자가 몇 명 빠졌는지 — 목록에서 조용히 사라지면 «있었는데 없어졌다»가
+   된다. 숫자를 적어 두고, 누르면 함께 보여 준다. 행사별 보기에서는 애초에
+   빼지 않으므로 칩도 띄우지 않는다. */
+function renderLeftChip(){
+  const el = document.getElementById('mdb-left-chip');
+  if(!el) return;
+  const n = contacts.filter(c => hasLeft(c)).length;
+  if(!n || mdbEvFilter){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = '';
+  el.innerHTML = `<button class="pill ${mdbShowLeft ? 'p-amber' : 'p-gray'}"
+    style="border:0;cursor:pointer;font:inherit"
+    title="회사를 떠난 담당자예요. 목록에서는 내려 두고, 행사 참여 이력은 그대로 남습니다. 눌러서 함께 봅니다."
+    onclick="toggleMdbLeft()">퇴사 ${n}</button>`;
+}
+
 /* 원본 1844~1876행 */
 export function updateMDBBadges(pairs){
   // Cat counts
@@ -972,6 +999,7 @@ export function updateMDBBadges(pairs){
     let bp = mdbEvFilter
       ? participations.filter(p=>p.eventId===mdbEvFilter).map(p=>({c:getContactById(p.contactId),p})).filter(x=>x.c)
       : contacts.map(c=>({c,p:null}));
+    if(!mdbShowLeft && !mdbEvFilter) bp = bp.filter(({c}) => !hasLeft(c));
     if(mdbStat) bp=bp.filter(({c})=>c.status===mdbStat);
     const q=(document.getElementById('mdb-q')||{}).value||'';
     // orgEn이 빠져 있어 영문 기업명으로 검색하면 목록에는 나오는데 배지 숫자는
@@ -1024,6 +1052,18 @@ export function updateMDBBadges(pairs){
 const ST_MARK  = { verified:'stv', pending:'stp', new:'stn' };
 const ST_LABEL = { verified:'검증됨', pending:'확인 중', new:'신규' };
 
+/* 퇴사 표딱지 — 이름 옆에 붙는다. 행사별 보기에서는 퇴사자도 그대로 나오므로
+   (그 행사에 온 건 사실이니까) 지금 연락이 닿지 않는다는 걸 여기서 알려야 한다.
+   이직한 곳을 아는 경우엔 어디로 갔는지까지 적는다. */
+function leftPill(c){
+  if(!hasLeft(c)) return '';
+  const to = movedTo(c);
+  const whereName = to ? (to.orgKo || to.orgEn || '') : '';
+  const tip = `${c.left_at} 퇴사 확인${whereName ? ` · 지금은 ${whereName}` : ''}`;
+  return ` <span class="pill p-gray" style="font-size:9px;padding:1px 5px" title="${escAttr(tip)}"
+    >퇴사${whereName ? ' → ' + escapeHtml(whereName) : ''}</span>`;
+}
+
 /* 행사 배지 — 카드에서는 2개까지만 보여주고 나머지는 +N으로 접는다 */
 function mEvPills(c, p){
   const one = (ev) => `<span class="ev-pill" style="background:${evColor(ev)}18;color:${evColor(ev)}">
@@ -1062,7 +1102,7 @@ function mdbCard(c, p, { showOrg = true } = {}){
         <div class="mdbc-nm">${escapeHtml(c.nameKo || c.nameEn || '이름 없음')}${
           c.nameKo && c.nameEn ? `<span class="mdbc-en">${escapeHtml(c.nameEn)}</span>` : ''}${
           isBDContact(c) ? ' <span class="pill p-teal mdbc-tag">BD</span>' : ''}${
-          isCLevelContact(c) ? ' <span class="pill p-gold mdbc-tag">C-level</span>' : ''}</div>
+          isCLevelContact(c) ? ' <span class="pill p-gold mdbc-tag">C-level</span>' : ''}${leftPill(c)}</div>
         ${title ? `<div class="mdbc-ttl">${escapeHtml(title)}</div>` : ''}
       </div>
       <span class="std ${ST_MARK[c.status] || 'stn'}" title="${escAttr(ST_LABEL[c.status] || c.status || '')}"></span>
@@ -1192,7 +1232,7 @@ export function renderMDBFlat(pairs){
       <td onclick="event.stopPropagation()" style="text-align:center"><input type="checkbox" ${isSel?'checked':''} onchange="toggleMDBSelect(${c.id})"></td>
       <td><div class="tdco">
         <div class="tdav${isSel?' sel':''}" onclick="event.stopPropagation();toggleMDBSelect(${c.id})" title="클릭해서 선택/해제">${isSel?'✓':ab(c.nameKo||c.nameEn||"")}</div>
-        <div><div class="tdnm">${c.nameKo?nameKo:nameEn}${isBDContact(c)?' <span class="pill p-teal" style="font-size:9px;padding:1px 5px">BD</span>':''}${isCLevelContact(c)?' <span class="pill p-gold" style="font-size:9px;padding:1px 5px">C-level</span>':''}</div><div class="tdsb">${nameEn}</div></div>
+        <div><div class="tdnm">${c.nameKo?nameKo:nameEn}${isBDContact(c)?' <span class="pill p-teal" style="font-size:9px;padding:1px 5px">BD</span>':''}${isCLevelContact(c)?' <span class="pill p-gold" style="font-size:9px;padding:1px 5px">C-level</span>':''}${leftPill(c)}</div><div class="tdsb">${nameEn}</div></div>
       </div></td>
       <td style="max-width:200px"><div class="tdnm" style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${orgTitle}">${c.orgKo?orgKo:orgEn}</div><div class="tdsb" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${orgEnTitle}">${c.orgKo?orgEn:''}</div></td>
       <td style="color:var(--i2);font-size:12px;white-space:nowrap">${escapeHtml(countryName(c.country))}</td>
@@ -1284,7 +1324,7 @@ export function renderMDBGrouped(pairs){
         rows += `<tr>
           <td><div class="tdco">
             <div class="tdav" style="background:${avB(gi)};color:${avF(gi)}">${ab(c.nameKo||c.nameEn||"")}</div>
-            <div><div class="tdnm">${escapeHtml(c.nameKo||c.nameEn)}</div><div class="tdsb">${escapeHtml(c.nameEn)}</div></div>
+            <div><div class="tdnm">${escapeHtml(c.nameKo||c.nameEn)}${leftPill(c)}</div><div class="tdsb">${escapeHtml(c.nameEn)}</div></div>
           </div></td>
           <td style="color:var(--i3);font-size:12px">${escapeHtml(c.titleKo||c.titleEn||'-')}</td>
           <td><span class="pill ${CP[p.role]||'p-gray'}">${escapeHtml(CL[p.role]||p.role)}</span></td>
@@ -1344,7 +1384,7 @@ export function renderMDBGrouped(pairs){
           rows+=`<tr onclick="openContactDr(${c.id})" style="cursor:pointer">
             <td><div class="tdco" style="padding-left:${ms.length>1?'8px':'0'}">
               <div class="tdav" style="background:${avB(gi)};color:${avF(gi)}">${ab(c.nameKo||c.nameEn||"")}</div>
-              <div><div class="tdnm">${escapeHtml(c.nameKo||c.nameEn)}</div><div class="tdsb">${escapeHtml(c.nameEn)}</div></div>
+              <div><div class="tdnm">${escapeHtml(c.nameKo||c.nameEn)}${leftPill(c)}</div><div class="tdsb">${escapeHtml(c.nameEn)}</div></div>
             </div></td>
             <td style="color:var(--i2);font-size:12px;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(c.orgKo||c.orgEn||'')}">${ms.length>1?'':escapeHtml(c.orgKo||c.orgEn||'')}</td>
             <td style="color:var(--i2);font-size:11px;white-space:nowrap">${escapeHtml(countryName(c.country))}</td>
@@ -1364,6 +1404,7 @@ export function renderMDBGrouped(pairs){
     // 미배정: 참가 이력(participations)이 전혀 없는 연락처
     const assignedIds = new Set(participations.map(p=>p.contactId));
     let unassigned = contacts.filter(c => !assignedIds.has(c.id));
+    if(!mdbShowLeft) unassigned = unassigned.filter(c => !hasLeft(c));
     if(mdbCat!=='all') unassigned = unassigned.filter(c=>c.cat===mdbCat);
     if(mdbStat) unassigned = unassigned.filter(c=>c.status===mdbStat);
     const qU=(document.getElementById('mdb-q')||{}).value||'';
@@ -1395,7 +1436,7 @@ export function renderMDBGrouped(pairs){
           rows+=`<tr onclick="openContactDr(${c.id})" style="cursor:pointer">
             <td><div class="tdco" style="padding-left:${cs.length>1?'8px':'0'}">
               <div class="tdav" style="background:${avB(gi)};color:${avF(gi)}">${ab(c.nameKo||c.nameEn||"")}</div>
-              <div><div class="tdnm">${escapeHtml(c.nameKo||c.nameEn)}</div><div class="tdsb">${escapeHtml(c.nameEn)}</div></div>
+              <div><div class="tdnm">${escapeHtml(c.nameKo||c.nameEn)}${leftPill(c)}</div><div class="tdsb">${escapeHtml(c.nameEn)}</div></div>
             </div></td>
             <td style="color:var(--i2);font-size:12px;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(c.orgKo||c.orgEn||'')}">${cs.length>1?'':escapeHtml(c.orgKo||c.orgEn||'')}</td>
             <td style="color:var(--i2);font-size:11px;white-space:nowrap">${escapeHtml(countryName(c.country))}</td>
@@ -1669,12 +1710,35 @@ export async function removeParticipation(cid, partId, ev){
 export function contactViewPanel(c){
   const evs = contactEvents(c);
   return `
-    <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
+    <div style="display:flex;justify-content:flex-end;gap:6px;margin-bottom:14px">
+      <button class="btn bs" onclick="${hasLeft(c) ? `undoContactLeft(${c.id})` : `openLeaveModal(${c.id})`}"
+        title="${hasLeft(c) ? '아직 다니고 있다면 표시를 되돌립니다.' : '회사를 떠났다고 표시합니다. 행은 지우지 않아요.'}">
+        ${hasLeft(c) ? '퇴사 표시 해제' : '퇴사 처리'}
+      </button>
       <button class="btn bp bs" onclick="startContactEdit()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:13px;height:13px"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
         편집
       </button>
     </div>
+
+    ${hasLeft(c) ? (() => {
+      const to = movedTo(c);
+      return `<div style="display:flex;gap:8px;align-items:flex-start;padding:10px 12px;margin-bottom:14px;
+        border-radius:8px;background:var(--i7);border:1px solid var(--i6)">
+        <span style="font-size:13px;line-height:1.5">🚪</span>
+        <div style="font-size:12px;color:var(--i2);line-height:1.6">
+          <b>${escapeHtml(c.left_at)}</b>에 퇴사를 확인했어요. 목록에서는 내려가 있고,
+          아래 참여 행사 기록은 그대로 남습니다.
+          ${to
+            ? `<div style="margin-top:4px">지금은
+                <a href="javascript:void(0)" onclick="openContactDr(${to.id})"
+                   style="color:var(--a);text-decoration:none;font-weight:600"
+                  >${escapeHtml(to.orgKo || to.orgEn || '다른 회사')} · ${escapeHtml(to.nameKo || to.nameEn || '')}</a>
+               </div>`
+            : `<div style="margin-top:4px;color:var(--i4)">옮겨간 곳은 아직 몰라요.</div>`}
+        </div>
+      </div>`;
+    })() : ''}
 
     <div class="sct">기본 정보</div>
     <div class="ig">
@@ -2031,6 +2095,220 @@ export async function saveNewContact(){
 }
 
 /* ══════════════════════════════════════════
+   퇴사 처리
+
+   담당자가 회사를 떠났을 때 행을 지우면 안 된다. participations는 성명·소속을
+   저장하지 않고 읽을 때 연락처와 이어 붙여 만들기 때문에, 사람을 지우면 그가
+   참가했던 몇 해 전 행사 명단이 통째로 빈칸이 된다. 지우는 대신 내려 둔다.
+
+   이직을 «소속만 갈아끼우기»로 처리하면 같은 이유로 과거가 뒤틀린다 — 예전
+   회사 소속으로 참가했던 행사가 전부 새 회사 이름으로 표시된다. 그래서 새
+   연락처를 따로 만들고 옛 행이 그쪽을 가리키게 한다. 과거는 과거 자리에,
+   지금 연락할 사람은 새 행에.
+══════════════════════════════════════════ */
+export function openLeaveModal(cid){
+  const c = getContactById(cid);
+  if(!c) return;
+
+  const evN = contactEvents(c).length;
+  /* 이 사람이 어느 전시의 «대표 담당»이면 넘겨줄 사람을 정해야 한다. 그냥
+     내려버리면 그 기업은 대표 연락처가 없는 채로 남고, 아무도 모른다. */
+  const primaryOf = EXH_CONTACTS.filter(x =>
+    String(x.contact_id||'') === String(cid) && String(x.is_primary||'') === 'yes');
+
+  const html = `
+    <div id="leave-modal" onclick="if(event.target===this)closeLeaveModal()"
+      style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px">
+      <div style="background:var(--W);border-radius:14px;padding:24px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.2)">
+        <div style="font-size:15px;font-weight:700;color:var(--i1);margin-bottom:6px">퇴사 처리</div>
+        <div style="font-size:12px;color:var(--i3);margin-bottom:16px;line-height:1.6">
+          <b>${escapeHtml(c.nameKo || c.nameEn || '')}</b>${
+            (c.orgKo || c.orgEn) ? ` · ${escapeHtml(c.orgKo || c.orgEn)}` : ''}<br>
+          연락처를 지우지 않습니다. ${evN ? `참여한 행사 ${evN}건은 그대로 남고, ` : ''}목록에서만 내려가요.
+        </div>
+
+        ${primaryOf.length ? `
+        <div style="display:flex;gap:8px;padding:10px 12px;margin-bottom:14px;border-radius:8px;
+          background:var(--i7);border:1px solid var(--am)">
+          <span>⚠</span>
+          <div style="font-size:11.5px;color:var(--i2);line-height:1.6">
+            이 사람은 전시 ${primaryOf.length}건의 <b>대표 담당자</b>예요. 퇴사 처리한 뒤
+            전시 탭에서 대표 담당을 다른 사람에게 넘겨주세요 — 안 넘기면 그 기업은
+            대표 연락처가 빈 채로 남습니다.
+          </div>
+        </div>` : ''}
+
+        <div style="margin-bottom:14px">
+          <div class="mlbl">퇴사 확인일</div>
+          <input class="fi" id="lv-date" type="date" value="${escAttr(td())}" style="width:100%">
+        </div>
+
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-bottom:10px;font-size:12.5px;color:var(--i2)">
+          <input type="checkbox" id="lv-moved" onchange="toggleLeaveMoved()">
+          옮겨간 곳을 알아요
+        </label>
+
+        <div id="lv-moved-box" style="display:none;padding:12px;border-radius:8px;background:var(--i7);margin-bottom:14px">
+          <div style="font-size:11px;color:var(--i3);line-height:1.6;margin-bottom:10px">
+            새 소속으로 연락처를 하나 만들고, 이 사람과 이어 둡니다. 예전 소속으로
+            참가했던 행사 기록은 지금 이 행에 그대로 남아요.
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+            <div><div class="mlbl">새 기업 (국문)</div>
+              <input class="fi" id="lv-orgKo" style="width:100%"></div>
+            <div><div class="mlbl">새 기업 (영문)</div>
+              <input class="fi" id="lv-orgEn" style="width:100%"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div><div class="mlbl">새 직함</div>
+              <input class="fi" id="lv-title" value="${escAttr(c.titleKo||'')}" style="width:100%"></div>
+            <div><div class="mlbl">새 이메일</div>
+              <input class="fi" id="lv-email" style="width:100%"></div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn bs" onclick="closeLeaveModal()">취소</button>
+          <button class="btn bp" id="lv-save-btn" onclick="confirmLeave(${c.id})">퇴사 처리</button>
+        </div>
+        <div id="lv-msg" style="font-size:11px;text-align:right;margin-top:8px;height:14px"></div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+export function closeLeaveModal(){ document.getElementById('leave-modal')?.remove(); }
+
+export function toggleLeaveMoved(){
+  const on  = !!(document.getElementById('lv-moved')||{}).checked;
+  const box = document.getElementById('lv-moved-box');
+  if(box) box.style.display = on ? '' : 'none';
+}
+
+/* 연락처 한 건을 저장 — 퇴사 두 칸까지 실어 보낸다.
+   위치 배열은 «보낸 칸까지만» 덮으므로(routes/data.js), 다른 자리에서 23칸만
+   보내던 코드는 그대로 둬도 퇴사 표시가 지워지지 않는다. */
+function contactRow(c){
+  return [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
+    c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
+    c.beat, c.products, c.tags||'', c.org_id||'', c.left_at||'', c.moved_to_id||''];
+}
+
+export async function confirmLeave(cid){
+  const c = getContactById(cid);
+  if(!c) return;
+
+  const date  = (document.getElementById('lv-date')||{}).value || td();
+  const moved = !!(document.getElementById('lv-moved')||{}).checked;
+  const get   = id => (document.getElementById(id)||{}).value?.trim() || '';
+  const msg   = document.getElementById('lv-msg');
+  const btn   = document.getElementById('lv-save-btn');
+
+  let newC = null;
+  if(moved){
+    const orgKo = get('lv-orgKo'), orgEn = get('lv-orgEn');
+    if(!orgKo && !orgEn){
+      if(msg){ msg.style.color='var(--re)'; msg.textContent='옮겨간 기업 이름을 적어주세요.'; }
+      return;
+    }
+    newC = {
+      id: Date.now() + Math.floor(Math.random()*10000),
+      nameKo: c.nameKo, nameEn: c.nameEn,
+      orgKo, orgEn,
+      titleKo: get('lv-title'), titleEn: '',
+      deptKo: '', deptEn: '',
+      country: c.country, cat: c.cat, lang: c.lang,
+      /* 어디서 온 행인지 적어 둔다 — 나중에 «이 사람이 왜 둘이지»의 답이 된다 */
+      source: `이직 (${c.orgKo || c.orgEn || '이전 소속'})`,
+      date, status: 'pending',
+      email1: get('lv-email'), email2: '',
+      phone1: c.phone1, phone2: '',
+      beat: c.beat||'', products: '', tags: c.tags||'',
+      left_at: '', moved_to_id: '',
+    };
+  }
+
+  if(btn){ btn.disabled = true; btn.textContent = '처리 중…'; }
+
+  /* 새 소속 기업이 기업DB에 없으면 만든다 — 안 만들면 연락처만 생기고
+     기업 쪽에서는 보이지 않는다(saveNewContact와 같은 이유). */
+  if(newC){
+    const orgNm = newC.orgKo || newC.orgEn;
+    try {
+      await ensureOrgsForNames([orgNm]);
+      newC.org_id = orgIdForName(orgNm) || '';
+    } catch(e){ console.warn('[db-tab] 기업 연결 실패:', e); }
+  }
+
+  const prev = { left_at: c.left_at||'', moved_to_id: c.moved_to_id||'' };
+  c.left_at     = date;
+  c.moved_to_id = newC ? String(newC.id) : '';
+  if(newC) contacts.push(newC);
+
+  try { buildCoDB(); renderMDB(); renderContactDr(); } catch(e){}
+
+  /* 새 연락처를 먼저 저장한다 — 옛 행이 가리키는 곳이 없는 상태를 만들지 않기
+     위해서. 반대 순서였다가 새 행 저장이 실패하면 moved_to_id가 허공을 가리킨다. */
+  if(newC){
+    const rn = await postToSheet({ sheet:'contacts', action:'upsert', row: contactRow(newC) },
+      '이직 연락처 추가', { silent: true });
+    if(!rn.ok){
+      Object.assign(c, prev);
+      const i = contacts.findIndex(x => x.id === newC.id); if(i>=0) contacts.splice(i,1);
+      try { buildCoDB(); renderMDB(); renderContactDr(); } catch(e){}
+      if(btn){ btn.disabled=false; btn.textContent='퇴사 처리'; }
+      if(msg){ msg.style.color='var(--re)'; msg.textContent='저장 실패: '+(rn.error||'네트워크 오류'); }
+      return;
+    }
+  }
+
+  const r = await postToSheet({ sheet:'contacts', action:'upsert', row: contactRow(c) },
+    '퇴사 처리', { silent: true });
+  if(!r.ok){
+    Object.assign(c, prev);
+    if(newC){ const i = contacts.findIndex(x => x.id === newC.id); if(i>=0) contacts.splice(i,1); }
+    try { buildCoDB(); renderMDB(); renderContactDr(); } catch(e){}
+    if(btn){ btn.disabled=false; btn.textContent='퇴사 처리'; }
+    if(msg){ msg.style.color='var(--re)'; msg.textContent='저장 실패: '+(r.error||'네트워크 오류'); }
+    return;
+  }
+
+  trackAction('status', '퇴사 처리', c.nameKo || c.nameEn,
+    `<b>${escapeHtml(c.nameKo || c.nameEn || '')}</b> 퇴사 (${escapeHtml(date)})${
+      newC ? ` — ${escapeHtml(newC.orgKo || newC.orgEn)}(으)로 이직` : ''}`,
+    changed('contacts', c.id, prev, { left_at: c.left_at, moved_to_id: c.moved_to_id },
+      { kind: 'contact', id: c.id }));
+
+  closeLeaveModal();
+  try { renderMDB(); renderContactDr(); buildMDBEvList(); } catch(e){}
+}
+
+/* 잘못 눌렀거나 실은 아직 다니고 있을 때. 이직으로 만들어 둔 새 연락처는
+   지우지 않는다 — 그쪽으로 이미 뭔가 적었을 수 있고, 지우는 건 언제든 따로 할
+   수 있지만 되살리는 건 못 한다. 연결만 끊는다. */
+export async function undoContactLeft(cid){
+  const c = getContactById(cid);
+  if(!c) return;
+  const to = movedTo(c);
+  if(!confirm(`${c.nameKo || c.nameEn || ''} 님의 퇴사 표시를 지울까요?${
+    to ? `\n\n이직으로 만든 «${to.orgKo || to.orgEn}» 연락처는 그대로 둡니다 — 연결만 끊어요.` : ''}`)) return;
+
+  const prev = { left_at: c.left_at||'', moved_to_id: c.moved_to_id||'' };
+  c.left_at = ''; c.moved_to_id = '';
+  try { renderMDB(); renderContactDr(); } catch(e){}
+
+  const r = await postToSheet({ sheet:'contacts', action:'upsert', row: contactRow(c) }, '퇴사 표시 해제');
+  if(!r.ok){
+    Object.assign(c, prev);
+    try { renderMDB(); renderContactDr(); } catch(e){}
+    return;
+  }
+  trackAction('status', '퇴사 표시 해제', c.nameKo || c.nameEn,
+    `<b>${escapeHtml(c.nameKo || c.nameEn || '')}</b>의 퇴사 표시를 지웠어요`,
+    changed('contacts', c.id, prev, { left_at: '', moved_to_id: '' }, { kind: 'contact', id: c.id }));
+}
+
+/* ══════════════════════════════════════════
    전역 노출 — 원본 HTML의 onclick/onchange="함수명(...)" 인라인 핸들러가
    찾을 수 있도록 window에 등록
 ══════════════════════════════════════════ */
@@ -2064,6 +2342,12 @@ window.filterCat = filterCat;
 window.filterStat = filterStat;
 window.segCat = segCat;
 window.toggleMdbCtry = toggleMdbCtry;
+window.toggleMdbLeft = toggleMdbLeft;
+window.openLeaveModal = openLeaveModal;
+window.closeLeaveModal = closeLeaveModal;
+window.toggleLeaveMoved = toggleLeaveMoved;
+window.confirmLeave = confirmLeave;
+window.undoContactLeft = undoContactLeft;
 window.setMDBRegion = setMDBRegion;
 window.buildMDBRegionList = buildMDBRegionList;
 window.exportCSV = exportCSV;

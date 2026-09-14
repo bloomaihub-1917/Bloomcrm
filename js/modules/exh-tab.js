@@ -4479,6 +4479,12 @@ const FIELD_LABEL = {
   booth_design_note:'도면 비고', booth_design_received_at:'도면 수령일',
   booth_design_checked_at:'도면 확인일', booth_design_result:'도면 검토 결과',
   movein_at:'반입·설치', note:'비고', status:'상태',
+  company_name:'기업명', booth_shared:'공동 부스', apply_order:'신청순',
+  graphic_stage:'그래픽 단계', graphic_received_at:'그래픽 수령',
+  graphic_to_team_at:'그래픽 시공사 전달', graphic_team_ok_at:'시공사 확인',
+  graphic_replied_at:'그래픽 회신',
+  book_order:'도록 순번', book_logo:'도록 로고', book_address:'도록 주소',
+  book_phone:'도록 연락처', book_website:'도록 홈페이지', book_intro:'도록 소개',
   scope:'참가 범위', host_key:'대표 기업',
   book_name_ko:'게재 국문명', book_name_en:'게재 영문명',
   fascia_name:'간판명', base_recv_at:'간판명 확정·디자인 수령',
@@ -4493,8 +4499,11 @@ const FIELD_LABEL = {
   movein_at:'반입·설치', builder:'설치업체', badge_count:'출입증 매수', badge_issued_at:'출입증 발급',
   onsite_note:'현장 메모', status:'상태', note:'메모',
 };
-const shortVal = (v) => { const t = String(v ?? '').trim();
-  return !t ? '(없음)' : (t.length > 24 ? t.slice(0, 24) + '…' : t); };
+/* 로그에 담을 값 — 너무 길면 자른다. 여러 줄짜리 메모는 줄바꿈을 «⏎»로 눌러
+   한 줄로 만든다: 로그 목록은 한 줄짜리라, 줄바꿈이 그대로 들어가면 뒷부분이
+   잘려 나가 무엇이 바뀌었는지 안 보인다. */
+const shortVal = (v) => { const t = String(v ?? '').trim().replace(/\s*\n\s*/g, ' ⏎ ');
+  return !t ? '(빈칸)' : (t.length > 40 ? t.slice(0, 40) + '…' : t); };
 
 export function logExhEdit(x, patch, backup){
   const parts = [];
@@ -4506,8 +4515,14 @@ export function logExhEdit(x, patch, backup){
     const lbl = FIELD_LABEL[k] || k;
     /* 지울 때 이전 값을 함께 남긴다. 전에는 "세금계산서 발송 지움"이라고만 적혀서,
        잘못 지웠을 때 무엇이 있었는지 알 방법이 없었다 — 그렇게 한 건을 잃었다. */
-    parts.push(b && a ? `${lbl} ${shortVal(b)} → ${shortVal(a)}`
-      : a ? `${lbl} ${shortVal(a)}` : `${lbl} ${shortVal(b)} 지움`);
+    /* 무엇이 무엇으로 바뀌었는지 늘 «이전 → 이후» 꼴로 적는다.
+
+       전에는 이전 값이 없으면 «시공사 휴대폰 010-7363-8986»이라고만 적혀서,
+       읽는 사람은 그게 새로 넣은 값인지 원래 그랬는지 알 수 없었다. 로그를
+       보는 이유가 «무엇이 달라졌나»인데 그게 안 보였다. */
+    parts.push(a
+      ? `${lbl} ${shortVal(b)} → ${shortVal(a)}`
+      : `${lbl} ${shortVal(b)} → (지움)`);
     keys.push(k);
   });
   if(!parts.length) return;

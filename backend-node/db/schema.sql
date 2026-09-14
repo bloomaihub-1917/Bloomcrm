@@ -354,6 +354,26 @@ ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS org_id TEXT;
 CREATE INDEX IF NOT EXISTS idx_contacts_org   ON contacts(org_id);
 CREATE INDEX IF NOT EXISTS idx_exhibitors_org ON exhibitors(org_id);
 
+/* ── 담당자가 회사를 떠났을 때 ──
+   행을 지우면 안 된다. participations는 소속·성명을 저장하지 않고 읽을 때
+   contacts와 JOIN해서 만들어 내므로(위 participations 주석), 담당자를 지우면
+   그 사람이 참가했던 몇 해 전 행사 명단이 통째로 빈칸이 된다. FK도 없어서
+   막아주는 것도 없다.
+
+   contacts.status는 여기 쓸 수 없다 — 그건 재직 여부가 아니라 자료 검증
+   상태(verified|pending|new)라서, 섞으면 «검증됨이면서 퇴사한 사람»을 적을
+   길이 사라진다.
+
+   left_at   비어 있으면 재직, 날짜가 적혀 있으면 그날 퇴사를 확인했다는 뜻.
+   moved_to_id 이직을 알아냈을 때 새로 만든 연락처 행의 id.
+
+   이직을 org_id 교체로 처리하면 안 되는 이유도 같은 JOIN 때문이다. 소속만
+   갈아끼우면 그 사람이 «예전 회사 소속으로» 참가했던 행사가 전부 새 회사
+   이름으로 표시된다. 옛 행은 그대로 두고 새 행을 만들어 여기로 이어 둔다. */
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS left_at     TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS moved_to_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_contacts_left ON contacts(left_at);
+
 /* ── 환불 요청 추적 ──
    환불은 "요청받았다"와 "실제로 보냈다" 사이에 시간이 뜬다. 그동안에도 합계에서
    빼버리면 아직 나가지 않은 돈이 이미 나간 것처럼 보인다 — 상태를 나눠 두고

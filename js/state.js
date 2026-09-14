@@ -57,6 +57,17 @@ export function evShort(ev){ const f = EVENT_LIST.find(e => e.key === ev); retur
 export const contacts = [];
 export const participations = [];
 
+/* 회사를 떠난 담당자 — 행을 지우지 않고 표시만 해 둔다.
+   지우면 그 사람이 참가했던 행사 명단이 빈칸이 된다(participations는 성명·소속을
+   저장하지 않고 읽을 때 JOIN해서 만든다). 연락은 하지 않되 이력은 남긴다. */
+export const hasLeft = (c) => !!String((c && c.left_at) || '').trim();
+
+/* 이직해 새로 만든 연락처 — 없으면 null(퇴사만 알고 행선지는 모르는 경우) */
+export function movedTo(c){
+  const id = (c && c.moved_to_id) || '';
+  return id ? (contacts.find(x => String(x.id) === String(id)) || null) : null;
+}
+
 /* ── helpers — 상태를 직접 조회하는 함수 (원본 1591~1601행) ── */
 export function getParts(contactId){
   return participations.filter(p => p.contactId === contactId);
