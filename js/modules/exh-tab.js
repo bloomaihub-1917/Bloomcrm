@@ -24,7 +24,7 @@ import {
   evPartOn, evPartDone, evPartState,
   findOrgByName, orgName,
 } from '../state.js';
-import { td, escapeHtml, escAttr, isMobile, cleanEmail, countryName } from '../utils.js';
+import { td, escapeHtml, escAttr, isMobile, cleanEmail, countryName, leftPill } from '../utils.js';
 export { cleanEmail };   // exh-drawer가 여기서 가져다 쓴다
 import {
   postToSheet as _postToSheet,
@@ -630,6 +630,10 @@ export function resolveContact(row){
     const c = contacts.find(k => String(k.id) === String(row.contact_id));
     if(c) return {
       row, linked: true, id: c.id,
+      /* 퇴사 여부도 여기서 같이 푼다 — 전시 담당자는 전부 이 함수를 거치므로
+         한 곳만 채우면 목록·표·드로어가 함께 알게 된다. 숨기지는 않는다:
+         그 행사의 담당자가 그 사람이었던 건 지금도 사실이다. */
+      left_at: c.left_at || '', moved_to_id: c.moved_to_id || '',
       name:  c.nameKo || c.nameEn || '',
       email: cleanEmail(c.email1),
       phone: c.phone1 || '',
@@ -638,7 +642,8 @@ export function resolveContact(row){
     };
   }
   return { row, linked: false, id: null, name: row.name || '', email: cleanEmail(row.email),
-    phone: row.phone || '', title: '', role: row.role || '', primary: row.is_primary === 'yes' };
+    phone: row.phone || '', title: '', role: row.role || '', primary: row.is_primary === 'yes',
+    left_at: '', moved_to_id: '' };
 }
 
 /* 이 기업의 담당자 전원 (메인이 맨 앞) */
@@ -4183,7 +4188,7 @@ function renderChecklistCards(list, all){
         </div>
         <div style="font-size:11.5px;color:var(--i4);margin-top:3px">
           ${x.booth_no ? `부스 ${escapeHtml(x.booth_no)}${x.booth_floor ? `·${escapeHtml(x.booth_floor)}층` : ''}${x.booth_type ? ` · ${escapeHtml(x.booth_type)}` : ''}` : '부스 미배정'}
-          ${pc && (pc.name || pc.email) ? ` · ${escapeHtml(pc.name || pc.email)}` : ''}
+          ${pc && (pc.name || pc.email) ? ` · ${escapeHtml(pc.name || pc.email)}${leftPill(pc)}` : ''}
         </div>
         <div style="display:flex;align-items:center;gap:8px;margin:9px 0 8px">
           <div style="flex:1">${progressBar(p, p === 100 ? 'var(--g)' : 'var(--a)')}</div>
@@ -4275,6 +4280,7 @@ function renderChecklistTable(list, all){
           const tip = all.map(c => [c.role, c.name, c.title, c.email, c.phone].filter(Boolean).join(' · ')).join('\n');
           return `<td style="font-size:11px;color:var(--i3);max-width:130px" title="${escAttr(tip)}">
             <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(label)}</div>
+            ${p ? leftPill(p) : ''}
             ${all.length > 1 ? `<div style="font-size:9.5px;color:var(--i5)">외 ${all.length - 1}명</div>` : ''}</td>`;
         })()}
         <td>${progressBar(p, p === 100 ? 'var(--g)' : 'var(--a)', '52px')}

@@ -1,7 +1,7 @@
 // 순수 헬퍼 함수 모음 — 원본 곳곳에 흩어져 있던 유틸 함수를 이 파일 하나로 통합
 
 import { COUNTRIES, CAT_KEYS } from './constants.js';
-import { COMPANY_SECTORS, CODE_LISTS } from './state.js';
+import { COMPANY_SECTORS, CODE_LISTS, hasLeft, movedTo } from './state.js';
 
 /* 이름에서 이니셜 추출 (한글/영문 대문자 최대 2글자) */
 export function ab(n){ const m=n.match(/[가-힣A-Z]/g); return (m||[]).slice(0,2).join('').toUpperCase() || n.slice(0,2).toUpperCase(); }
@@ -266,3 +266,21 @@ export function escAttr(s){
 
 /* 업로드 원본에 <a@b.com> 처럼 꺾쇠가 섞여 들어온 건이 있어 표시·링크 전에 벗긴다 */
 export const cleanEmail = (e) => String(e || '').replace(/[<>]/g, '').trim();
+
+/* 회사를 떠난 사람 이름 옆에 붙는 표딱지.
+
+   숨기는 건 마스터DB 목록에서만 하고 나머지 화면에서는 표시만 한다 — 전시
+   담당자도 연사도 «그때 그 사람»이 맞아서 감추면 이력이 상한다. 대신 아무
+   표시가 없으면 그 이메일로 메일을 보내고 허탕을 친다.
+
+   여기(utils)에 두는 이유는 쓰는 곳이 탭마다 흩어져 있어서다 — DB·기업·전시·
+   연사가 각자 제 모양으로 그리면 같은 뜻이 화면마다 달라 보인다.
+   c는 마스터DB 연락처 객체다(연결이 없는 줄은 빈 문자열이 나온다). */
+export function leftPill(c){
+  if(!hasLeft(c)) return '';
+  const to = movedTo(c);
+  const whereName = to ? (to.orgKo || to.orgEn || '') : '';
+  const tip = `${c.left_at} 퇴사 확인${whereName ? ` · 지금은 ${whereName}` : ''}`;
+  return ` <span class="pill p-gray" style="font-size:9px;padding:1px 5px" title="${escAttr(tip)}"
+    >퇴사${whereName ? ' → ' + escapeHtml(whereName) : ''}</span>`;
+}

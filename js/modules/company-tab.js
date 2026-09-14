@@ -59,7 +59,7 @@ import {
   exhibitorsForEvent,
 } from '../state.js';
 import { RP, avB, avF } from '../constants.js';
-import { escapeHtml, escAttr, levenshteinDist, parseSectorScope, sectorKey, countryName, isMobile, td } from '../utils.js';
+import { escapeHtml, escAttr, levenshteinDist, parseSectorScope, sectorKey, countryName, isMobile, td, leftPill } from '../utils.js';
 import { postToSheet, batchCreateExhibitors } from '../api.js';
 import { parseSectors, joinSectors, mainSectors, sectorNamesInDomain, domainName, domainOfSector, UNASSIGNED_DOMAIN } from './settings-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
@@ -296,6 +296,9 @@ export function buildCoDB(){
       events:   Object.values(evMap),
       contacts: coContacts.map(c => ({
         id: c.id,
+        /* 퇴사 두 칸을 같이 실어 둔다 — 이 투영은 원본 연락처를 다 담지 않아서
+           여기 없으면 기업 화면에서 퇴사 여부를 알 길이 없다 */
+        left_at: c.left_at || '', moved_to_id: c.moved_to_id || '',
         name: c.nameKo || c.nameEn || '',
         nameEn: c.nameEn || '',
         title: c.titleKo || c.titleEn || '',
@@ -2147,7 +2150,7 @@ function renderCoCon(c){
     return `<div class="conc" onclick="openContactDr(${p.id})" style="cursor:pointer">
       <div class="conav">${escapeHtml(av)}</div>
       <div style="flex:1;min-width:0">
-        <div class="connm">${escapeHtml(nm)}${p.nameEn && p.name ? `<span style="font-size:11px;color:var(--i4);font-weight:400;margin-left:6px">${escapeHtml(p.nameEn)}</span>` : ''}</div>
+        <div class="connm">${escapeHtml(nm)}${p.nameEn && p.name ? `<span style="font-size:11px;color:var(--i4);font-weight:400;margin-left:6px">${escapeHtml(p.nameEn)}</span>` : ''}${leftPill(p)}</div>
         <div class="conti">${escapeHtml(p.title||'')}</div>
         <div class="conps" style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">${evTags}</div>
       </div>

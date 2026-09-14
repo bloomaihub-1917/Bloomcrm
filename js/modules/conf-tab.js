@@ -25,10 +25,20 @@ import {
   sessionsForEvent, speakersForEvent, assignmentsOfSession, assignmentsFor,
   getSpeakerById, rolesOfSpeaker, speakerNeedList, speakerNeed,
   contactsOfSpeaker, SPEAKER_CONTACTS, SPEAKER_LOGS,
+  contacts,
 } from '../state.js';
 import { SPEAKER_ROLES, NEED_MARK, SPEAKER_NEEDS } from '../constants.js';
-import { escapeHtml, escAttr, isMobile } from '../utils.js';
+import { escapeHtml, escAttr, isMobile, leftPill } from '../utils.js';
 import { progressBar, shortCell } from './exh-tab.js';
+
+/* 이 연사가 회사를 떠났는지 — 연사 행은 이름·소속을 «발표 당시»로 굳혀 두므로
+   지금 연락이 닿는지는 마스터DB 연결(contact_id)을 타고 가야 알 수 있다.
+   연사 쪽 값을 바꾸지는 않는다: 작년 프로그램북의 소속은 그대로여야 맞다. */
+const spLeftPill = (sp) => {
+  const c = sp && sp.contact_id
+    ? contacts.find(x => String(x.id) === String(sp.contact_id)) : null;
+  return c ? leftPill(c) : '';
+};
 import {
   saveConfSession, deleteConfSession,
   saveSpeaker, deleteSpeaker,
@@ -1056,7 +1066,7 @@ function peopleHtml(ev){
         style="background:var(--W);border:1px solid var(--i6);border-radius:10px;padding:11px 12px;
         margin-bottom:8px;cursor:pointer">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <span style="font-size:13px;font-weight:700">${escapeHtml(sp.name_snapshot || sp.id)}</span>
+          <span style="font-size:13px;font-weight:700">${escapeHtml(sp.name_snapshot || sp.id)}</span>${spLeftPill(sp)}
           ${roles.map(r => `<span class="pill ${(SPEAKER_ROLES.find(x => x.key === r) || {}).cls || 'p-gray'}"
             style="font-size:9px">${escapeHtml(r)}</span>`).join('')}
           ${sp.lang_pref === 'en' ? '<span class="pill p-gray" style="font-size:9px">EN</span>' : ''}
@@ -1103,7 +1113,7 @@ function peopleHtml(ev){
 
     return `<tr style="cursor:pointer" onclick="openSpeakerDr('${escAttr(sp.id)}')">
       <td><div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
-          <span style="font-weight:700;font-size:12px">${escapeHtml(name)}</span>
+          <span style="font-weight:700;font-size:12px">${escapeHtml(name)}</span>${spLeftPill(sp)}
           ${roles.map(r => `<span class="pill ${(SPEAKER_ROLES.find(x => x.key === r) || {}).cls || 'p-gray'}"
             style="font-size:9px">${escapeHtml(r)}</span>`).join('')}
           ${sp.lang_pref === 'en' ? '<span class="pill p-gray" style="font-size:9px" title="영문만 받는 해외 연사예요">EN</span>' : ''}

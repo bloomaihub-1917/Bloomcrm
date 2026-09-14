@@ -40,7 +40,7 @@ import {
   EXH_CONTACTS,
 } from '../state.js';
 import { CP, CL, RP, CAT_KEYS, ROLE_TO_CAT, COUNTRIES, avB, avF } from '../constants.js';
-import { td, ab, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseSectorScope, parseTags, joinTags, isMobile, cleanEmail, personName, personFullName } from '../utils.js';
+import { td, ab, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseSectorScope, parseTags, joinTags, isMobile, cleanEmail, personName, personFullName, leftPill } from '../utils.js';
 import { postToSheet } from '../api.js';
 import { buildCoDB, ensureOrgsForNames, orgIdForName, applyCoSectors } from './company-tab.js';
 import { domainOfSector, domainName, findSectorByName, mainSectors, UNASSIGNED_DOMAIN } from './settings-tab.js';
@@ -1051,18 +1051,6 @@ export function updateMDBBadges(pairs){
 ══════════════════════════════════════════ */
 const ST_MARK  = { verified:'stv', pending:'stp', new:'stn' };
 const ST_LABEL = { verified:'검증됨', pending:'확인 중', new:'신규' };
-
-/* 퇴사 표딱지 — 이름 옆에 붙는다. 행사별 보기에서는 퇴사자도 그대로 나오므로
-   (그 행사에 온 건 사실이니까) 지금 연락이 닿지 않는다는 걸 여기서 알려야 한다.
-   이직한 곳을 아는 경우엔 어디로 갔는지까지 적는다. */
-function leftPill(c){
-  if(!hasLeft(c)) return '';
-  const to = movedTo(c);
-  const whereName = to ? (to.orgKo || to.orgEn || '') : '';
-  const tip = `${c.left_at} 퇴사 확인${whereName ? ` · 지금은 ${whereName}` : ''}`;
-  return ` <span class="pill p-gray" style="font-size:9px;padding:1px 5px" title="${escAttr(tip)}"
-    >퇴사${whereName ? ' → ' + escapeHtml(whereName) : ''}</span>`;
-}
 
 /* 행사 배지 — 카드에서는 2개까지만 보여주고 나머지는 +N으로 접는다 */
 function mEvPills(c, p){

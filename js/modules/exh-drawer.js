@@ -19,7 +19,7 @@ import {
   EXH_APPS, appsFor, openAppFor, isVoided, liveItemsFor, exhEvent, exhibitorsForEvent,
   nextItemSort,
 } from '../state.js';
-import { td, escapeHtml, escAttr, countryOptions } from '../utils.js';
+import { td, escapeHtml, escAttr, countryOptions, leftPill } from '../utils.js';
 import {
   saveExhContact as _saveExhContact, saveExhItem as _saveExhItem, saveExhInvoice as _saveExhInvoice, saveExhTax as _saveExhTax, saveExhPayment as _saveExhPayment, saveExhLog as _saveExhLog, saveExhApp as _saveExhApp,
   deleteExhContact as _deleteExhContact, deleteExhItem as _deleteExhItem, deleteExhInvoice as _deleteExhInvoice, deleteExhTax as _deleteExhTax, deleteExhPayment as _deleteExhPayment, deleteExhLog as _deleteExhLog, deleteExhApp as _deleteExhApp,
@@ -582,7 +582,7 @@ function dContact(x){
     const r = p.row;
     return `<div style="padding:9px 11px;background:var(--i9);border-radius:8px;border-left:3px solid ${p.primary ? 'var(--a)' : 'var(--i6)'};margin-bottom:6px">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
-        <span style="font-size:13px;font-weight:700">${escapeHtml(p.name || p.email || '이름 없음')}</span>
+        <span style="font-size:13px;font-weight:700">${escapeHtml(p.name || p.email || '이름 없음')}</span>${leftPill(p)}
         ${p.title ? `<span class="pill p-gray">${escapeHtml(p.title)}</span>` : ''}
         ${p.primary ? '<span class="pill p-blue">메인</span>' : ''}
         <select class="fi" style="width:74px;padding:2px 5px;font-size:10.5px;margin-left:auto"
