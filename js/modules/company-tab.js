@@ -1128,36 +1128,33 @@ function domainRoster(baseCoDb){
 
      같은 것을 두 화면에서 다른 모양으로 보여줄 이유도 없다 — 여기서 보던 줄이
      눌러 들어가도 그대로면, 어디를 보고 있는지 헷갈리지 않는다. */
-  /* 줄 사이에 테두리를 두르지 않는다 — 묶음 안에서 줄이 이어져 보여야
-     마스터DB와 같은 결이 된다. 칸은 아래 선 하나로만 나눈다. */
-  const row = (c, i) => `<div class="co-rw co-rw-flat" onclick="selectCo('${escAttr(c.key)}')"
-    draggable="true" ondragstart="this.classList.add('co-dragging');onCoDragStart(event,'${escAttr(c.key)}')"
-    ondragend="this.classList.remove('co-dragging')" title="드래그해서 왼쪽 섹터로 이동">
-    <div class="co-av" style="background:${avB(i)};color:${avF(i)}">${escapeHtml(c.abbr)}</div>
-    <div style="flex:1;min-width:0">
-      <div class="co-rn">${escapeHtml(c.nameKo || c.nameEn)}</div>
-      <div style="font-size:11px;color:var(--i4)">${escapeHtml((c.sectors || [c.sector]).join(', ') || '미분류')}</div>
-    </div>
-    <div class="co-ct">${c.events.length}회</div>
-  </div>`;
+  /* 분야를 먼저 카드로 보여주고, 누르면 그 분야의 기업 목록으로 간다.
 
-  /* 마스터DB의 묶음 보기와 같은 짜임 — 접었다 펴는 게 아니라, 분야 머리줄과
-     기업 줄이 한 줄기로 이어져 내려간다. 머리줄은 스크롤해도 위에 붙어 있어
-     («.grp-hd»의 sticky) 한참 내려가도 지금 어느 분야를 보고 있는지 안 놓친다.
+     명단을 통째로 깔아 두었더니 예순여덟 줄이 한 화면을 다 먹어서, 정작 아래
+     섹터별 대시보드가 스크롤 밖으로 밀려났다. 분야는 네댓 개뿐이라 카드로는
+     한눈에 들어오고, 그중 하나를 보러 들어가는 게 실제로 하는 일이다.
 
-     접어 두지 않는 쪽이 낫다. 접혀 있으면 어느 분야에 누가 있는지 보려고 매번
-     펴야 하는데, 이 화면은 그걸 보러 오는 자리다. */
+     가는 곳은 이미 있던 화면이다(setCoDomain) — 목록을 또 만들지 않는다.
+     거기에는 «전체 섹터 보기»로 돌아오는 길도 이미 있다. */
+  const card = (g) => `
+    <div class="astep" style="padding:14px 15px;cursor:pointer" onclick="setCoDomain('${escAttr(g.id)}')"
+      title="${escAttr(g.list.slice(0, 8).map(c => c.nameKo || c.nameEn).join(', ')
+        + (g.list.length > 8 ? ` 외 ${g.list.length - 8}곳` : ''))}">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:8px">
+        <div class="sttl" style="margin:0">${escapeHtml(g.name)}</div>
+        <div style="font-size:18px;font-weight:800;color:var(--a)">${g.list.length}<span style="font-size:10px;font-weight:600;color:var(--i4)">개사</span></div>
+      </div>
+      <div style="font-size:11px;color:var(--i4);line-height:1.5;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+        ${escapeHtml(g.list.slice(0, 4).map(c => c.nameKo || c.nameEn).join(' · '))}${
+          g.list.length > 4 ? ` 외 ${g.list.length - 4}` : ''}
+      </div>
+    </div>`;
+
   return `<div style="margin-bottom:18px">
-    <div style="font-size:13px;font-weight:700;color:var(--i1);margin-bottom:2px">분야별 기업 명단</div>
-    <div style="font-size:11px;color:var(--i4);margin-bottom:10px">기업을 누르면 그 기업으로 가요 · 끌어다 놓으면 섹터를 옮길 수 있어요</div>
-    <div style="border:1px solid var(--i6);border-radius:10px;overflow:hidden;background:var(--W)">
-      ${groups.map(g => `
-        <div class="grp-hd">
-          <span class="grp-hd-dot" style="background:var(--a)"></span>
-          <div class="grp-hd-nm">${escapeHtml(g.name)}</div>
-          <div class="grp-hd-ct">${g.list.length}개사</div>
-        </div>
-        ${g.list.map(row).join('')}`).join('')}
+    <div style="font-size:13px;font-weight:700;color:var(--i1);margin-bottom:2px">분야별 기업</div>
+    <div style="font-size:11px;color:var(--i4);margin-bottom:12px">분야를 클릭하면 그 분야의 기업 리스트로 갑니다</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">
+      ${groups.map(card).join('')}
     </div>
   </div>`;
 }
