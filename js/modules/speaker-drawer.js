@@ -374,9 +374,20 @@ function basicHtml(sp, con, evKey){
         <option value="en"${sp.lang_pref === 'en' ? ' selected' : ''}>영문만 (해외 연사)</option>
       </select>`, '국가로 짐작하지 않고 물어서 적습니다')}
     </div>
-    <div class="fgr">
-      ${fg('초청 발송', dateIn(sp.invite_sent_at, `spField('invite_sent_at',this.value,'초청 발송')`))}
-      ${fg('회신', dateIn(sp.invite_replied_at, `spField('invite_replied_at',this.value,'초청 회신')`))}
+    <div style="font-size:11px;font-weight:700;color:var(--i3);margin:16px 0 4px">보낸 것</div>
+    <div style="font-size:10px;color:var(--i4);margin-bottom:6px;line-height:1.6">
+      받은 것만 적어 두면 «왜 안 오지»를 묻게 됩니다 — 안 보냈을 수도 있어요.</div>
+    ${gotRow('초청', sp.invite_sent_at, `spStamp('invite_sent_at','초청 보냄')`,
+      `spField('invite_sent_at',this.value,'초청 발송')`)}
+    ${gotRow('가이드라인', sp.guide_sent_at, `spStamp('guide_sent_at','가이드라인 보냄')`,
+      `spField('guide_sent_at',this.value,'가이드라인 발송')`)}
+    ${gotRow('프로필 양식', sp.form_sent_at, `spStamp('form_sent_at','양식 보냄')`,
+      `spField('form_sent_at',this.value,'양식 발송')`)}
+    ${gotRow('마지막 독촉', sp.reminded_at, `spStamp('reminded_at','독촉')`,
+      `spField('reminded_at',this.value,'마지막 독촉')`)}
+    <div class="fgr" style="margin-top:10px">
+      ${fg('초청 회신', dateIn(sp.invite_replied_at, `spField('invite_replied_at',this.value,'초청 회신')`))}
+      ${fg('참가 확정', dateIn(sp.confirmed_at, `spField('confirmed_at',this.value,'참가 확정')`))}
     </div>
 
     <div style="font-size:11px;font-weight:700;color:var(--i3);margin:16px 0 4px">받은 것</div>

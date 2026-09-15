@@ -738,6 +738,12 @@ CREATE TABLE IF NOT EXISTS speakers (
   -- 섭외 · 프로필
   invite_sent_at      TEXT,
   invite_replied_at   TEXT,
+  -- 보낸 것도 적는다. 일의 절반은 «무엇을 보냈나»다 — 보낸 걸 모르면
+  -- 안 보내고 기다리거나 보낸 걸 또 보낸다.
+  guide_sent_at       TEXT,   -- 가이드라인
+  form_sent_at        TEXT,   -- 프로필 양식
+  reminded_at         TEXT,   -- 마지막 독촉
+  confirmed_at        TEXT,   -- 참가 확정
   bio_pro_ko          TEXT,
   bio_pro_en          TEXT,
   bio_work_ko         TEXT,

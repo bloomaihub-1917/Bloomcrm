@@ -167,6 +167,7 @@ const TABLES = {
       'org_ko', 'org_en', 'title_ko', 'title_en',
       'status', 'lang_pref', 'note', 'updated_at',
       'invite_sent_at', 'invite_replied_at',
+      'guide_sent_at', 'form_sent_at', 'reminded_at', 'confirmed_at',
       'bio_pro_ko', 'bio_pro_en', 'bio_work_ko', 'bio_work_en', 'profile_received_at',
       'photo_file', 'photo_received_at',
       'fee_amount', 'fee_currency', 'fee_tax_type', 'fee_paid_at', 'fee_note',

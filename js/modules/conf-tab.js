@@ -28,7 +28,7 @@ import {
   contacts,
 } from '../state.js';
 import { SPEAKER_ROLES, NEED_MARK, SPEAKER_NEEDS } from '../constants.js';
-import { escapeHtml, escAttr, isMobile, leftPill } from '../utils.js';
+import { td, escapeHtml, escAttr, isMobile, leftPill } from '../utils.js';
 import { progressBar, shortCell } from './exh-tab.js';
 
 /* 이 연사가 회사를 떠났는지 — 연사 행은 이름·소속을 «발표 당시»로 굳혀 두므로
@@ -793,8 +793,12 @@ export async function copyPga(){
 
 /* 표에 세울 항목 — 받을 것 중에서 «칸으로 볼 수 있는 것»만 고른다.
    순서는 실제로 받는 순서를 따랐다(사람 정보 → 발제 → 서류). */
+/* show:'text' — ✓ 대신 받은 값을 그대로 보여준다.
+   «소속·직함을 받았는가»는 ✓로 답할 질문이 아니다. 프로그램북에 그 글자가
+   그대로 나가므로, 여기서 보고 싶은 건 «받았다»가 아니라 «무엇을 받았나»다.
+   ✓만 보면 결국 한 사람씩 열어 확인하게 된다. */
 const SP_COLS = [
-  { key: 'profile',  label: '소속·직함' },
+  { key: 'profile',  label: '소속·직함', show: 'text', wide: true },
   { key: 'bio_pro',  label: '이력' },
   { key: 'photo',    label: '사진' },
   { key: 'title',    label: '발제명' },
@@ -804,6 +808,16 @@ const SP_COLS = [
   { key: 'bank',     label: '계좌' },
   { key: 'passport', label: '여권' },
   { key: 'travel',   label: '숙박·항공' },
+];
+
+/* 우리가 보낸 것 — 받을 것과 성격이 다르다. 받을 것은 상대가 주는 것이고
+   이쪽은 우리가 한 일이다. 보낸 날을 모르면 안 보내고 기다리거나 또 보낸다.
+   역할과 무관하게 모두에게 해당하므로 «묻지 않음»이 없다. */
+const SP_SENT = [
+  { key: 'invite_sent_at', label: '초청' },
+  { key: 'guide_sent_at',  label: '가이드' },
+  { key: 'form_sent_at',   label: '양식' },
+  { key: 'reminded_at',    label: '독촉' },
 ];
 
 /* 이 사람의 이 항목이 어떤 상태인가.
@@ -826,8 +840,10 @@ function spCell(sp, evKey, key){
 
   switch(key){
     case 'profile': {
-      const has = sp.org_ko || sp.org_en;
-      return { state: has ? 'done' : 'todo', text: has ? (sp.org_ko || sp.org_en) : '', need };
+      const org = sp.org_ko || sp.org_en;
+      const title = sp.title_ko || sp.title_en;
+      return { state: org ? 'done' : 'todo',
+        text: [org, title].filter(Boolean).join(' · '), need };
     }
     case 'bio_pro':  return done(sp.profile_received_at);
     case 'photo':    return done(sp.photo_received_at);
@@ -875,7 +891,32 @@ function spProgress(sp, evKey){
 
 /* 칸 하나 — 전시 표와 같은 기호를 쓴다. 두 화면을 오가며 보는 사람이
    기호를 두 번 배우지 않게. */
-function spCellHtml(c, colLabel, name){
+/* 보낸 것 칸 — 날짜를 눌러 오늘로 찍고, 다시 누르면 지운다.
+   표에서 바로 체크할 수 있어야 스무 명을 훑으며 정리할 수 있다. */
+function spSentHtml(sp, col){
+  const v = sp[col.key] || '';
+  return `<td style="text-align:center;padding:5px 3px">
+    <button onclick="event.stopPropagation();toggleSpeakerDate('${escAttr(sp.id)}','${col.key}')"
+      title="${escAttr(v ? `${col.label} 보낸 날 ${v} — 누르면 지웁니다` : `누르면 오늘 날짜로 ${col.label} 보냄 표시`)}"
+      style="border:0;cursor:pointer;font:inherit;min-width:44px;padding:3px 5px;border-radius:5px;
+      background:${v ? 'var(--ad)' : 'transparent'};color:${v ? 'var(--a)' : 'var(--i5)'};
+      font-size:${v ? '9.5' : '12'}px;font-weight:${v ? '600' : '800'};line-height:1.2">${
+      v ? escapeHtml(shortCell(v)) : '—'}</button></td>`;
+}
+
+function spCellHtml(c, colLabel, name, col){
+  /* 값을 보여주는 칸은 기호를 쓰지 않는다 — 기호와 값이 함께 있으면 눈이
+     기호를 먼저 읽고 값을 흘린다. */
+  if(col && col.show === 'text'){
+    if(c.state === 'na') return `<td style="text-align:center;color:var(--i6)">·</td>`;
+    return `<td style="font-size:11px;line-height:1.4;color:${c.text ? 'var(--i2)' : 'var(--i5)'};
+      max-width:180px;overflow-wrap:anywhere" title="${escAttr(c.text || '')}">${
+      c.text ? escapeHtml(c.text) : '—'}</td>`;
+  }
+  return spCellMark(c, colLabel, name);
+}
+
+function spCellMark(c, colLabel, name){
   const map = {
     done: { bg: 'var(--gb)', fg: 'var(--g)',  mark: '✓' },
     part: { bg: 'var(--ab)', fg: 'var(--am)', mark: '◐' },
@@ -899,6 +940,29 @@ function spCellHtml(c, colLabel, name){
 function spTally(list, evKey, key){
   const live = list.map(sp => spCell(sp, evKey, key)).filter(c => c.state !== 'na');
   return { n: live.filter(c => c.state === 'done').length, of: live.length };
+}
+
+/* 표에서 바로 날짜를 찍는다. 연사 드로어를 열지 않고 스무 명을 훑으며
+   «보냈다»를 체크하는 일이 실제로 있다. 전시의 받음 체크와 같은 규칙으로
+   오늘 날짜를 찍고, 다시 누르면 지운다. */
+export async function toggleSpeakerDate(spId, field){
+  if(confLocked()){ confLockNotice(); return; }
+  const sp = getSpeakerById(spId);
+  if(!sp) return;
+  const next = sp[field] ? '' : td();
+  const backup = sp[field];
+  sp[field] = next;
+  renderConf();
+  const res = await gSaveSpeaker({ id: spId, [field]: next, updated_at: td() });
+  if(!res || res.ok === false){
+    sp[field] = backup;
+    renderConf();
+    if(!res?.locked) alert('저장에 실패했어요.');
+    return;
+  }
+  const label = (SP_SENT.find(c => c.key === field) || {}).label || field;
+  trackAction('edit', '연사 진행', confEvent,
+    `${sp.name_snapshot || spId} — ${label} ${next ? `보냄 ${next}` : '표시 지움'}`);
 }
 
 export function setConfNeedFil(key){
@@ -1026,6 +1090,8 @@ function peopleHtml(ev){
 
   /* ── 받을 것 칩 — 전시의 단계 칩과 같은 방식으로 누르면 걸러진다 ── */
   const stats = SP_COLS.map(c => ({ col: c, ...spTally(all, ev.key, c.key) })).filter(x => x.of);
+  /* 보낸 것도 세어 둔다 — «가이드라인 몇 명에게 보냈나»가 실제로 묻는 말이다 */
+  const sentStats = SP_SENT.map(c => ({ col: c, n: all.filter(sp => sp[c.key]).length, of: all.length }));
   const needChips = `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
     ${stats.map(({ col, n, of }) => {
       const on = confNeedFil && confNeedFil.key === col.key;
@@ -1038,6 +1104,9 @@ function peopleHtml(ev){
         on ? (confNeedFil.mode === 'done' ? `${n}명` : `${of - n}명`) : `${n}/${of}`}${
         on ? `<span style="margin-left:3px">${confNeedFil.mode === 'done' ? '받음' : '안 받음'} ✕</span>` : ''}</button>`;
     }).join('')}
+    ${sentStats.filter(x => x.n).map(({ col, n, of }) =>
+      `<span class="pill p-blue" style="opacity:.85" title="${escAttr(`${col.label}을(를) 보낸 연사`)}">${
+        escapeHtml(col.label)} 보냄 ${n}/${of}</span>`).join('')}
   </div>`;
 
   if(!list.length){
@@ -1090,6 +1159,15 @@ function peopleHtml(ev){
                 st.state === 'part' ? '◐ ' : ''}${escapeHtml(c.label)}${st.text ? ` ${escapeHtml(st.text)}` : ''}</span>`).join('')}
             </div>`
           : `<div style="font-size:10.5px;color:var(--g);margin-top:7px">받을 것을 다 받았어요</div>`}
+        ${(() => {
+          const sent = SP_SENT.filter(c => sp[c.key]);
+          return `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
+            ${SP_SENT.map(c => `<button onclick="event.stopPropagation();toggleSpeakerDate('${escAttr(sp.id)}','${c.key}')"
+              style="border:0;font:inherit;cursor:pointer;font-size:10px;padding:3px 7px;border-radius:5px;
+              background:${sp[c.key] ? 'var(--ad)' : 'var(--i8)'};color:${sp[c.key] ? 'var(--a)' : 'var(--i5)'}">${
+              escapeHtml(c.label)}${sp[c.key] ? ` ${escapeHtml(shortCell(sp[c.key]))}` : ''}</button>`).join('')}
+          </div>`;
+        })()}
         ${sp.fee_amount ? `<div style="font-size:10.5px;margin-top:6px;color:${sp.fee_paid_at ? 'var(--g)' : 'var(--am)'}">
           연사료 ${escapeHtml(Number(String(sp.fee_amount).replace(/[^\d.-]/g, '') || 0).toLocaleString('ko-KR'))}
           · ${sp.fee_paid_at ? '지급' : '미지급'}</div>` : ''}
@@ -1129,7 +1207,8 @@ function peopleHtml(ev){
       <td style="min-width:70px">
         ${progressBar(pr.pct, pr.pct === 100 ? 'var(--g)' : 'var(--a)')}
         <div style="font-size:9.5px;color:var(--i4);margin-top:2px">${pr.n}/${pr.of}</div></td>
-      ${SP_COLS.map(c => spCellHtml(spCell(sp, ev.key, c.key), c.label, name)).join('')}
+      ${SP_COLS.map(c => spCellHtml(spCell(sp, ev.key, c.key), c.label, name, c)).join('')}
+      ${SP_SENT.map(c => spSentHtml(sp, c)).join('')}
       <td style="text-align:center;font-size:10.5px;color:${to.length ? 'var(--i4)' : 'var(--am)'}"
         title="${escAttr(to.length ? to.map(x => x.email).join(', ') : '메일 수신자가 정해지지 않았어요')}">
         ${to.length ? '✓' : '—'}</td>
@@ -1148,7 +1227,9 @@ function peopleHtml(ev){
         <th style="min-width:140px">연사</th>
         <th style="min-width:120px">세션</th>
         <th style="min-width:70px">진행률</th>
-        ${SP_COLS.map(c => `<th style="text-align:center;font-size:10px;line-height:1.2">${escapeHtml(c.label)}</th>`).join('')}
+        ${SP_COLS.map(c => `<th style="text-align:${c.show === 'text' ? 'left' : 'center'};font-size:10px;line-height:1.2${
+          c.wide ? ';min-width:120px' : ''}">${escapeHtml(c.label)}</th>`).join('')}
+        ${SP_SENT.map(c => `<th style="text-align:center;font-size:10px;line-height:1.2;color:var(--a)">${escapeHtml(c.label)}</th>`).join('')}
         <th style="text-align:center;min-width:44px;font-size:10px">수신</th>
         <th style="text-align:right;min-width:70px;font-size:10px">연사료</th>
       </tr></thead><tbody>${list.map(row).join('')}</tbody></table></div>
@@ -1856,6 +1937,7 @@ window.setConfView       = setConfView;
 window.setConfNeedFil    = setConfNeedFil;
 window.setConfRoleFil    = setConfRoleFil;
 window.setConfSessFil    = setConfSessFil;
+window.toggleSpeakerDate = toggleSpeakerDate;
 window.openPgaSession    = openPgaSession;
 window.openAuditSession  = openAuditSession;
 window.copyPga           = copyPga;
