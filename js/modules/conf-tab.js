@@ -814,13 +814,15 @@ const SP_COLS = [
    이쪽은 우리가 한 일이다. 보낸 날을 모르면 안 보내고 기다리거나 또 보낸다.
    역할과 무관하게 모두에게 해당하므로 «묻지 않음»이 없다. */
 const SP_SENT = [
-  /* 초청과 가이드라인은 한 칸이다. 초청은 사전에 이미 컨택이 끝난 상태로
-     오고, 가이드라인은 그 메일에 같이 실어 보낸다 — 실제로 한 번에 일어나는
-     일을 두 칸으로 나누면 둘 다 찍거나 둘 다 안 찍게 된다.
-     예전 invite_sent_at은 DB에 남겨 두고 화면에서만 뺐다. */
-  { key: 'guide_sent_at',  label: '초청·가이드' },
-  { key: 'form_sent_at',   label: '양식' },
-  { key: 'reminded_at',    label: '독촉' },
+  /* 보낼 때는 한 번이다. 초청은 사전에 이미 컨택이 끝난 상태로 오고,
+     가이드라인과 프로필 양식은 그 메일에 같이 실린다 — 실제로 한 번에
+     일어나는 일을 세 칸으로 나누면 세 번 찍거나 한 번도 안 찍게 된다.
+     예전 invite_sent_at·form_sent_at은 DB에 남겨 두고 화면에서만 뺐다.
+
+     받는 쪽은 합치지 않는다. 이력만 먼저 오고 사진이 며칠 뒤에 오는 일이
+     흔하고, 그때 «무엇이 아직 안 왔나»가 이 화면이 답해야 하는 질문이다. */
+  { key: 'guide_sent_at',  label: '보냄', tip: '초청 · 가이드라인 · 프로필 양식' },
+  { key: 'reminded_at',    label: '독촉', tip: '마지막으로 독촉한 날' },
 ];
 
 /* 이 사람의 이 항목이 어떤 상태인가.
@@ -900,7 +902,7 @@ function spSentHtml(sp, col){
   const v = sp[col.key] || '';
   return `<td style="text-align:center;padding:5px 3px">
     <button onclick="event.stopPropagation();toggleSpeakerDate('${escAttr(sp.id)}','${col.key}')"
-      title="${escAttr(v ? `${col.label} 보낸 날 ${v} — 누르면 지웁니다` : `누르면 오늘 날짜로 ${col.label} 보냄 표시`)}"
+      title="${escAttr(`${col.tip || col.label}\n${v ? `보낸 날 ${v} — 누르면 지웁니다` : '누르면 오늘 날짜로 표시'}`)}"
       style="border:0;cursor:pointer;font:inherit;min-width:44px;padding:3px 5px;border-radius:5px;
       background:${v ? 'var(--ad)' : 'transparent'};color:${v ? 'var(--a)' : 'var(--i5)'};
       font-size:${v ? '9.5' : '12'}px;font-weight:${v ? '600' : '800'};line-height:1.2">${
@@ -948,6 +950,59 @@ function spTally(list, evKey, key){
 /* 표에서 바로 날짜를 찍는다. 연사 드로어를 열지 않고 스무 명을 훑으며
    «보냈다»를 체크하는 일이 실제로 있다. 전시의 받음 체크와 같은 규칙으로
    오늘 날짜를 찍고, 다시 누르면 지운다. */
+/* 한꺼번에 온 것을 한 번에 찍는다.
+
+   받는 쪽을 합치지 않은 대신 이 길을 둔다. 이력·사진·동의서가 한 메일에
+   같이 오는 일이 흔한데, 그때 칸을 하나씩 누르게 하면 네 번을 누르거나
+   귀찮아서 안 누른다 — 안 누른 칸은 «아직 안 왔다»로 남아 또 독촉하게 된다.
+
+   역할이 묻지 않는 항목과 이미 받은 것은 건드리지 않는다. 무엇이 찍히는지
+   먼저 보여주고, 실제로 안 온 것은 사람이 다시 지운다. */
+export async function receiveAll(spId){
+  if(confLocked()){ confLockNotice(); return; }
+  const sp = getSpeakerById(spId);
+  if(!sp) return;
+  const today = td();
+
+  /* 연사 줄에 붙는 것과 배정 줄에 붙는 것이 다르다 — 발제는 배정마다 따로다 */
+  const onSpeaker = [
+    ['bio_pro',  'profile_received_at', '이력'],
+    ['photo',    'photo_received_at',   '사진'],
+    ['consent',  'consent_at',          '동의서'],
+    ['passport', 'passport_received_at', '여권'],
+  ].filter(([needKey, field]) => spCell(sp, sp.event_id, needKey).state === 'todo' && !sp[field]);
+
+  const onAssign = [];
+  assignmentsFor(sp.id).forEach(a => {
+    [['abstract', 'abstract_received_at', '초록'], ['slides', 'slides_received_at', '발표자료']]
+      .forEach(([needKey, field, label]) => {
+        if(speakerNeed(sp.event_id, a.role, needKey) && !a[field]) onAssign.push({ a, field, label });
+      });
+  });
+
+  if(!onSpeaker.length && !onAssign.length){
+    alert('아직 안 받은 항목이 없어요.');
+    return;
+  }
+  const names = [...onSpeaker.map(x => x[2]), ...onAssign.map(x => x.label)];
+  if(!confirm(`${sp.name_snapshot || spId} — 아래를 ${today}에 받은 것으로 표시할까요?\n\n`
+    + `· ${names.join('\n· ')}\n\n실제로 안 온 것은 그 칸을 다시 눌러 지우세요.`)) return;
+
+  for(const [, field] of onSpeaker){
+    const res = await gSaveSpeaker({ id: sp.id, [field]: today, updated_at: today });
+    if(!res || res.ok === false){ if(!res?.locked) alert('저장에 실패했어요.'); renderConf(); return; }
+    sp[field] = today;
+  }
+  for(const { a, field } of onAssign){
+    const res = await gSaveAssign({ id: a.id, [field]: today });
+    if(!res || res.ok === false){ if(!res?.locked) alert('저장에 실패했어요.'); renderConf(); return; }
+    a[field] = today;
+  }
+  trackAction('edit', '연사 받음 일괄', confEvent,
+    `${sp.name_snapshot || spId} — ${names.join(', ')} 받음`);
+  renderConf();
+}
+
 export async function toggleSpeakerDate(spId, field){
   if(confLocked()){ confLockNotice(); return; }
   const sp = getSpeakerById(spId);
@@ -1165,6 +1220,9 @@ function peopleHtml(ev){
         ${(() => {
           const sent = SP_SENT.filter(c => sp[c.key]);
           return `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
+            <button onclick="event.stopPropagation();receiveAll('${escAttr(sp.id)}')"
+              style="border:0;font:inherit;cursor:pointer;font-size:10px;padding:3px 7px;border-radius:5px;
+              background:var(--gb);color:var(--g);font-weight:600">한꺼번에 받음</button>
             ${SP_SENT.map(c => `<button onclick="event.stopPropagation();toggleSpeakerDate('${escAttr(sp.id)}','${c.key}')"
               style="border:0;font:inherit;cursor:pointer;font-size:10px;padding:3px 7px;border-radius:5px;
               background:${sp[c.key] ? 'var(--ad)' : 'var(--i8)'};color:${sp[c.key] ? 'var(--a)' : 'var(--i5)'}">${
@@ -1212,6 +1270,10 @@ function peopleHtml(ev){
         <div style="font-size:9.5px;color:var(--i4);margin-top:2px">${pr.n}/${pr.of}</div></td>
       ${SP_COLS.map(c => spCellHtml(spCell(sp, ev.key, c.key), c.label, name, c)).join('')}
       ${SP_SENT.map(c => spSentHtml(sp, c)).join('')}
+      <td style="text-align:center;padding:5px 3px">
+        <button class="btn" style="font-size:10px;padding:2px 7px"
+          onclick="event.stopPropagation();receiveAll('${escAttr(sp.id)}')"
+          title="이 연사에게서 아직 안 받은 것을 모두 오늘 받은 것으로 표시합니다">받음</button></td>
       <td style="text-align:center;font-size:10.5px;color:${to.length ? 'var(--i4)' : 'var(--am)'}"
         title="${escAttr(to.length ? to.map(x => x.email).join(', ') : '메일 수신자가 정해지지 않았어요')}">
         ${to.length ? '✓' : '—'}</td>
@@ -1232,7 +1294,9 @@ function peopleHtml(ev){
         <th style="min-width:70px">진행률</th>
         ${SP_COLS.map(c => `<th style="text-align:${c.show === 'text' ? 'left' : 'center'};font-size:10px;line-height:1.2${
           c.wide ? ';min-width:120px' : ''}">${escapeHtml(c.label)}</th>`).join('')}
-        ${SP_SENT.map(c => `<th style="text-align:center;font-size:10px;line-height:1.2;color:var(--a)">${escapeHtml(c.label)}</th>`).join('')}
+        ${SP_SENT.map(c => `<th style="text-align:center;font-size:10px;line-height:1.2;color:var(--a)"
+          title="${escAttr(c.tip || '')}">${escapeHtml(c.label)}</th>`).join('')}
+        <th style="text-align:center;font-size:10px;line-height:1.2" title="한 메일에 같이 온 것을 한 번에 표시합니다">한꺼번에</th>
         <th style="text-align:center;min-width:44px;font-size:10px">수신</th>
         <th style="text-align:right;min-width:70px;font-size:10px">연사료</th>
       </tr></thead><tbody>${list.map(row).join('')}</tbody></table></div>
@@ -1941,6 +2005,7 @@ window.setConfNeedFil    = setConfNeedFil;
 window.setConfRoleFil    = setConfRoleFil;
 window.setConfSessFil    = setConfSessFil;
 window.toggleSpeakerDate = toggleSpeakerDate;
+window.receiveAll        = receiveAll;
 window.openPgaSession    = openPgaSession;
 window.openAuditSession  = openAuditSession;
 window.copyPga           = copyPga;
