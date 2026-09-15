@@ -38,6 +38,7 @@ import {
   hasLeft,
   movedTo,
   EXH_CONTACTS,
+  speakersOfContact,
 } from '../state.js';
 import { CP, CL, RP, CAT_KEYS, ROLE_TO_CAT, COUNTRIES, avB, avF } from '../constants.js';
 import { td, ab, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseSectorScope, parseTags, joinTags, isMobile, cleanEmail, personName, personFullName, leftPill } from '../utils.js';
@@ -54,6 +55,23 @@ export function ctryCheck(c){
   const org = c && c.org_id ? getOrgById(c.org_id) : null;
   return countryCheck(c, org && (org.country || org.hq));
 }
+/* 연사의 국가는 «국적(거주지)»로 적는다.
+
+   연사는 국적과 거주지가 다를 수 있고, 다를 때가 실제로 일이 갈리는
+   지점이다 — 한국 국적이지만 미국에 사는 연사에게는 연사료를 해외 송금하고
+   항공도 미국에서 띄운다. 마스터DB의 국가 칸 하나로는 그 사실이 안 보인다.
+
+   연락처 자체의 country는 그대로 둔다. 여기서 바꾸는 건 표기뿐이고,
+   값은 연사 줄(speakers.nationality / residence_country)에서 온다. */
+function contactCountryText(c){
+  const sp = speakersOfContact(c.id).find(x => x.nationality || x.residence_country);
+  if(!sp) return countryName(c.country);
+  const nat = sp.nationality || c.country;
+  const res = sp.residence_country;
+  if(!res || countryName(res) === countryName(nat)) return countryName(nat || res);
+  return `${countryName(nat)}(${countryName(res)})`;
+}
+
 const ctryPill = (c) => {
   const r = ctryCheck(c);
   if(!r) return '';
@@ -1124,7 +1142,7 @@ function mdbCard(c, p, { showOrg = true } = {}){
     </div>
     <div class="mdbc-pills">
       <span class="pill ${CP[roleKey] || 'p-gray'}">${escapeHtml(CL[roleKey] || roleKey || '미분류')}</span>
-      ${c.country ? `<span class="pill p-gray">${escapeHtml(countryName(c.country))}</span>` : ''}${ctryPill(c)}
+      ${contactCountryText(c) ? `<span class="pill p-gray">${escapeHtml(contactCountryText(c))}</span>` : ''}${ctryPill(c)}
       ${mEvPills(c, p)}
     </div>
     ${mContactLinks(c)}
@@ -1250,7 +1268,7 @@ export function renderMDBFlat(pairs){
         <div><div class="tdnm">${escapeHtml(personName(c))}${isBDContact(c)?' <span class="pill p-teal" style="font-size:9px;padding:1px 5px">BD</span>':''}${isCLevelContact(c)?' <span class="pill p-gold" style="font-size:9px;padding:1px 5px">C-level</span>':''}${leftPill(c)}</div><div class="tdsb">${c.nameKo && c.nameEn ? nameEn : ''}</div></div>
       </div></td>
       <td style="max-width:200px"><div class="tdnm" style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${orgTitle}">${c.orgKo?orgKo:orgEn}</div><div class="tdsb" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${orgEnTitle}">${c.orgKo?orgEn:''}</div></td>
-      <td style="color:var(--i2);font-size:12px;white-space:nowrap">${escapeHtml(countryName(c.country))}</td>
+      <td style="color:var(--i2);font-size:12px;white-space:nowrap">${escapeHtml(contactCountryText(c))}</td>
       <td style="color:var(--i3);font-size:12px;max-width:170px;white-space:normal;line-height:1.4">
         <div>${escapeHtml(c.titleKo||'')}${c.titleKo&&c.titleEn?' · ':''}${escapeHtml(c.titleEn||'')}</div>
         <div style="font-size:10px;color:var(--i4);margin-top:1px">${escapeHtml(c.deptKo||'')}${c.deptKo&&c.deptEn?' · ':''}${escapeHtml(c.deptEn||'')}</div>
@@ -1402,7 +1420,7 @@ export function renderMDBGrouped(pairs){
               <div><div class="tdnm">${escapeHtml(c.nameKo||c.nameEn)}${leftPill(c)}</div><div class="tdsb">${escapeHtml(c.nameEn)}</div></div>
             </div></td>
             <td style="color:var(--i2);font-size:12px;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(c.orgKo||c.orgEn||'')}">${ms.length>1?'':escapeHtml(c.orgKo||c.orgEn||'')}</td>
-            <td style="color:var(--i2);font-size:11px;white-space:nowrap">${escapeHtml(countryName(c.country))}</td>
+            <td style="color:var(--i2);font-size:11px;white-space:nowrap">${escapeHtml(contactCountryText(c))}</td>
             <td style="color:var(--i3);font-size:12px;max-width:140px;white-space:normal;line-height:1.4">${escapeHtml(c.titleKo||'')}${c.deptKo?(' · '+escapeHtml(c.deptKo)):''}</td>
             <td><span class="pill ${CP[p.role]||'p-gray'}">${escapeHtml(CL[p.role]||p.role)}</span></td>
             <td style="color:var(--i3);font-size:11px;font-style:italic;max-width:160px;white-space:normal">${escapeHtml(p.note||'')}</td>
@@ -1454,7 +1472,7 @@ export function renderMDBGrouped(pairs){
               <div><div class="tdnm">${escapeHtml(c.nameKo||c.nameEn)}${leftPill(c)}</div><div class="tdsb">${escapeHtml(c.nameEn)}</div></div>
             </div></td>
             <td style="color:var(--i2);font-size:12px;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(c.orgKo||c.orgEn||'')}">${cs.length>1?'':escapeHtml(c.orgKo||c.orgEn||'')}</td>
-            <td style="color:var(--i2);font-size:11px;white-space:nowrap">${escapeHtml(countryName(c.country))}</td>
+            <td style="color:var(--i2);font-size:11px;white-space:nowrap">${escapeHtml(contactCountryText(c))}</td>
             <td style="color:var(--i3);font-size:12px;max-width:140px;white-space:normal;line-height:1.4">${escapeHtml(c.titleKo||'')}${c.deptKo?(' · '+escapeHtml(c.deptKo)):''}</td>
             <td><span class="pill p-gray">미배정</span></td>
             <td style="color:var(--i3);font-size:11px;font-style:italic;max-width:160px;white-space:normal"></td>
@@ -1532,7 +1550,7 @@ export function segCat(cat,btn){setMdbCat(cat);document.querySelectorAll('.mdb-s
 export function exportCSV(){
   const h=['이름','영문명','기업','영문기업','국가','직함(국)','직함(영)','부서(국)','부서(영)','카테고리','분야','전시품목','언어','이메일1','이메일2','연락처1','연락처2','출처','날짜','상태','태그'];
   const rows=contacts.map(c=>[
-    c.nameKo,c.nameEn,c.orgKo,c.orgEn,countryName(c.country),
+    c.nameKo,c.nameEn,c.orgKo,c.orgEn,contactCountryText(c),
     c.titleKo,c.titleEn,c.deptKo,c.deptEn,
     CL[c.cat]||c.cat,
     c.beat||'',
@@ -1578,7 +1596,7 @@ export function renderContactDr(){
   document.getElementById('con-dr-name').textContent = personFullName(c);
   document.getElementById('con-dr-meta').innerHTML =
     '<span>🏢 ' + escapeHtml(c.orgKo||c.orgEn||'-') + '</span>' +
-    '<span>🌐 ' + escapeHtml(countryName(c.country)) + '</span>' +
+    '<span>🌐 ' + escapeHtml(contactCountryText(c)) + '</span>' +
     '<span class="pill ' + (CP[c.cat]||'p-gray') + '">' + (CL[c.cat]||c.cat) + '</span>';
 
   document.getElementById('con-dr-body').innerHTML = conEditMode ? contactEditForm(c) : contactViewPanel(c);
@@ -1760,7 +1778,15 @@ export function contactViewPanel(c){
     <div class="ig">
       <div class="ic"><div class="il">기업</div><div class="iv">${escapeHtml(c.orgKo)||'-'}</div></div>
       <div class="ic"><div class="il">영문 기업</div><div class="iv">${escapeHtml(c.orgEn)||'-'}</div></div>
-      <div class="ic"><div class="il">국가</div><div class="iv">${escapeHtml(countryName(c.country)) || '-'}${
+      <div class="ic"><div class="il">국가</div><div class="iv">${escapeHtml(contactCountryText(c)) || '-'}${
+        (() => {
+          /* 괄호만 보면 그게 거주지인지 알 수 없다 — 상세에서는 풀어 쓴다 */
+          const sp = speakersOfContact(c.id).find(x => x.residence_country
+            && countryName(x.residence_country) !== countryName(x.nationality || c.country));
+          return sp ? `<div style="font-size:10px;color:var(--i4);margin-top:2px">국적 ${
+            escapeHtml(countryName(sp.nationality || c.country))} · 거주지 ${
+            escapeHtml(countryName(sp.residence_country))}</div>` : '';
+        })()}${
         (() => { const r = ctryCheck(c); return r
           ? `<div style="font-size:10.5px;color:var(--am);font-weight:400;margin-top:3px;line-height:1.5">${
               escapeHtml(countryCheckText(r))}</div>` : ''; })()}</div></div>

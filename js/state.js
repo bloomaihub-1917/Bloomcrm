@@ -579,6 +579,12 @@ export const assignmentsFor     = (speakerId) => SESSION_SPEAKERS.filter(x => x.
 export const assignmentsOfSession = (sessionId) => SESSION_SPEAKERS.filter(x => x.session_id === sessionId)
   .sort((a, b) => (Number(a.seq) || 0) - (Number(b.seq) || 0));
 export const getSpeakerById     = (id) => SPEAKERS.find(x => x.id === id);
+
+/* 이 연락처가 연사로 등록된 줄들. 한 사람이 여러 행사의 연사일 수 있어
+   배열로 돌려준다 — 국적·거주지는 사람에 붙는 값이라 어느 줄에서 읽어도
+   같아야 하지만, 실제로는 나중에 적은 쪽이 더 정확한 경우가 많다. */
+export const speakersOfContact  = (contactId) => contactId
+  ? SPEAKERS.filter(x => String(x.contact_id || '') === String(contactId)) : [];
 export const contactsOfSpeaker  = (speakerId) => SPEAKER_CONTACTS.filter(x => x.speaker_id === speakerId);
 export const logsOfSpeaker      = (speakerId) => SPEAKER_LOGS.filter(x => x.speaker_id === speakerId);
 
