@@ -377,10 +377,8 @@ function basicHtml(sp, con, evKey){
     <div style="font-size:11px;font-weight:700;color:var(--i3);margin:16px 0 4px">보낸 것</div>
     <div style="font-size:10px;color:var(--i4);margin-bottom:6px;line-height:1.6">
       받은 것만 적어 두면 «왜 안 오지»를 묻게 됩니다 — 안 보냈을 수도 있어요.</div>
-    ${gotRow('초청', sp.invite_sent_at, `spStamp('invite_sent_at','초청 보냄')`,
-      `spField('invite_sent_at',this.value,'초청 발송')`)}
-    ${gotRow('가이드라인', sp.guide_sent_at, `spStamp('guide_sent_at','가이드라인 보냄')`,
-      `spField('guide_sent_at',this.value,'가이드라인 발송')`)}
+    ${gotRow('초청 · 가이드라인', sp.guide_sent_at, `spStamp('guide_sent_at','초청·가이드라인 보냄')`,
+      `spField('guide_sent_at',this.value,'초청·가이드라인 발송')`)}
     ${gotRow('프로필 양식', sp.form_sent_at, `spStamp('form_sent_at','양식 보냄')`,
       `spField('form_sent_at',this.value,'양식 발송')`)}
     ${gotRow('마지막 독촉', sp.reminded_at, `spStamp('reminded_at','독촉')`,

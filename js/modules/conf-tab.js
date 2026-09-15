@@ -814,8 +814,11 @@ const SP_COLS = [
    이쪽은 우리가 한 일이다. 보낸 날을 모르면 안 보내고 기다리거나 또 보낸다.
    역할과 무관하게 모두에게 해당하므로 «묻지 않음»이 없다. */
 const SP_SENT = [
-  { key: 'invite_sent_at', label: '초청' },
-  { key: 'guide_sent_at',  label: '가이드' },
+  /* 초청과 가이드라인은 한 칸이다. 초청은 사전에 이미 컨택이 끝난 상태로
+     오고, 가이드라인은 그 메일에 같이 실어 보낸다 — 실제로 한 번에 일어나는
+     일을 두 칸으로 나누면 둘 다 찍거나 둘 다 안 찍게 된다.
+     예전 invite_sent_at은 DB에 남겨 두고 화면에서만 뺐다. */
+  { key: 'guide_sent_at',  label: '초청·가이드' },
   { key: 'form_sent_at',   label: '양식' },
   { key: 'reminded_at',    label: '독촉' },
 ];
