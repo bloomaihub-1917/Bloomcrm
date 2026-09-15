@@ -730,6 +730,14 @@ CREATE TABLE IF NOT EXISTS speakers (
   org_en        TEXT,
   title_ko      TEXT,
   title_en      TEXT,
+  -- 국적과 거주지는 다를 수 있고, 다를 때가 문제다. 한국 국적이지만 해외에
+  -- 사는 연사는 연사료·항공을 거주지 기준으로 줄 수도 있다 — 행사마다 다르다.
+  -- 한 칸에 «국가»만 두면 항공 잡는 사람은 거주지로, 정산하는 사람은 국적으로
+  -- 읽는다. 어느 쪽 기준인지는 pay_basis에 적는다.
+  nationality       TEXT,
+  residence_country TEXT,
+  pay_basis         TEXT,   -- 'residence' | 'nationality' | ''
+
   status        TEXT,   -- 섭외중 | 확정 | 취소 | 보류
   lang_pref     TEXT,   -- 'both' | 'en'   국가로 짐작하지 않는다
   note          TEXT,

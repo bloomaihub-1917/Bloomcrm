@@ -28,7 +28,7 @@ import {
   contacts,
 } from '../state.js';
 import { SPEAKER_ROLES, NEED_MARK, SPEAKER_NEEDS } from '../constants.js';
-import { td, escapeHtml, escAttr, isMobile, leftPill } from '../utils.js';
+import { td, escapeHtml, escAttr, isMobile, leftPill, countryName } from '../utils.js';
 import { progressBar, shortCell } from './exh-tab.js';
 
 /* 이 연사가 회사를 떠났는지 — 연사 행은 이름·소속을 «발표 당시»로 굳혀 두므로
@@ -160,6 +160,20 @@ const dayLabel = (d) => {
   return `${d} (${w})`;
 };
 const timeLabel = (s, e) => (s || e) ? `${s || ''}${e ? '–' + e : ''}` : '';
+
+/* 국가 딱지 — 국적과 거주지가 다를 때만 둘 다 보여준다. 같으면 한 번이면
+   되고, 다를 때가 연사료·항공을 어느 쪽으로 할지 정해야 하는 경우다. */
+function countryChip(sp){
+  const nat = sp.nationality, res = sp.residence_country;
+  if(!nat && !res) return '';
+  if(!nat || !res || nat === res){
+    return `<span class="pill p-gray" style="font-size:9px">${escapeHtml(countryName(nat || res))}</span>`;
+  }
+  const basis = sp.pay_basis === 'nationality' ? 'nationality' : 'residence';
+  const mark = (which, v) => `<span class="pill ${which === basis ? 'p-teal' : 'p-gray'}" style="font-size:9px"
+    title="${escAttr(`${which === 'residence' ? '거주지' : '국적'}${which === basis ? ' — 지급 기준' : ''}`)}">${escapeHtml(countryName(v))}</span>`;
+  return `${mark('residence', res)}${mark('nationality', nat)}`;
+}
 
 /* 연사 이름 — 스냅숏을 쓴다. 연락처가 지워져도 프로그램에서 이름이 사라지면
    안 되고, 연사명은 발표 당시 소속·직함과 함께 굳는 값이다. */
@@ -1196,6 +1210,7 @@ function peopleHtml(ev){
           <span style="font-size:13px;font-weight:700">${escapeHtml(sp.name_snapshot || sp.id)}</span>${spLeftPill(sp)}
           ${roles.map(r => `<span class="pill ${(SPEAKER_ROLES.find(x => x.key === r) || {}).cls || 'p-gray'}"
             style="font-size:9px">${escapeHtml(r)}</span>`).join('')}
+          ${countryChip(sp)}
           ${sp.lang_pref === 'en' ? '<span class="pill p-gray" style="font-size:9px">EN</span>' : ''}
           ${sp.status && sp.status !== '확정' ? `<span class="pill p-amber" style="font-size:9px">${escapeHtml(sp.status)}</span>` : ''}
         </div>
@@ -1255,6 +1270,7 @@ function peopleHtml(ev){
           <span style="font-weight:700;font-size:12px">${escapeHtml(name)}</span>${spLeftPill(sp)}
           ${roles.map(r => `<span class="pill ${(SPEAKER_ROLES.find(x => x.key === r) || {}).cls || 'p-gray'}"
             style="font-size:9px">${escapeHtml(r)}</span>`).join('')}
+          ${countryChip(sp)}
           ${sp.lang_pref === 'en' ? '<span class="pill p-gray" style="font-size:9px" title="영문만 받는 해외 연사예요">EN</span>' : ''}
           ${sp.status && sp.status !== '확정' ? `<span class="pill ${sp.status === '취소' ? 'p-gray' : 'p-amber'}" style="font-size:9px">${escapeHtml(sp.status)}</span>` : ''}
         </div>
@@ -1486,6 +1502,7 @@ export async function handleConfFile(e){
     const patch = {
       name_snapshot: r.name_snapshot, org_ko: r.org_ko, org_en: r.org_en,
       title_ko: r.title_ko, title_en: r.title_en, lang_pref: r.lang_pref,
+      nationality: r.nationality, residence_country: r.residence_country,
       status: r.status, fee_amount: r.fee_amount, fee_currency: r.fee_currency, note: r.note,
     };
     Object.keys(patch).forEach(k => { if(!patch[k]) delete patch[k]; });

@@ -44,6 +44,8 @@ export const IMPORT_SHEETS = [
       { key: 'org_en',        label: '소속(영문)',  hint: '' },
       { key: 'title_ko',      label: '직함(국문)',  hint: '' },
       { key: 'title_en',      label: '직함(영문)',  hint: '' },
+      { key: 'nationality',       label: '국적',   hint: '국가명 (예: 대한민국, 미국)' },
+      { key: 'residence_country', label: '거주지', hint: '국적과 다를 수 있어요 — 연사료·항공을 여기 기준으로 할 때가 있습니다' },
       { key: 'lang_pref',     label: '언어',        hint: '비움 / both(국·영문) / en(해외 연사, 영문만)' },
       { key: 'status',        label: '섭외 상태',   hint: '섭외중 / 확정 / 보류 / 취소 — 비우면 섭외중' },
       { key: 'email',         label: '메일',        hint: '적어 두면 연락 상대(수신)로 함께 만들어집니다' },
@@ -53,8 +55,8 @@ export const IMPORT_SHEETS = [
       { key: 'note',          label: '메모',        hint: '' },
     ],
     sample: [
-      ['정청수', '○○건축사사무소', 'OO Architects', '대표', 'Principal', 'both', '확정', 'chung@example.kr', '', '500000', 'KRW', ''],
-      ['Eric Ho', '', 'Studio Ho', '', 'Founder', 'en', '섭외중', 'eric@example.com', '', '', '', '해외 연사'],
+      ['정청수', '○○건축사사무소', 'OO Architects', '대표', 'Principal', '대한민국', '대한민국', 'both', '확정', 'chung@example.kr', '', '500000', 'KRW', ''],
+      ['Eric Ho', '', 'Studio Ho', '', 'Founder', '대한민국', '미국', 'en', '섭외중', 'eric@example.com', '', '', '', '국적은 한국, 거주지는 미국'],
     ],
   },
   {

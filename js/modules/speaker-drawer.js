@@ -25,7 +25,7 @@ import {
   confCfg, speakerNeed, speakerNeedList,
 } from '../state.js';
 import { SPEAKER_ROLES, NEED_MARK, NEED_LABEL } from '../constants.js';
-import { td, escapeHtml, escAttr } from '../utils.js';
+import { td, escapeHtml, escAttr, countryOptions, countryName } from '../utils.js';
 import {
   saveSpeaker, saveSessionSpeaker,
   saveSpeakerContact, deleteSpeakerContact,
@@ -176,6 +176,9 @@ export function renderSpeakerDr(){
         ${roles.map(r => `<span class="pill ${(SPEAKER_ROLES.find(x => x.key === r) || {}).cls || 'p-gray'}"
           style="vertical-align:middle;font-size:10px">${escapeHtml(r)}</span>`).join(' ')}</div>
       <div class="drmt">${escapeHtml(sp.status || '섭외중')}${
+        payCountry(sp) ? ` · ${escapeHtml(countryName(payCountry(sp)))}${
+          (sp.nationality && sp.residence_country && sp.nationality !== sp.residence_country)
+            ? ` <span style="color:var(--am)">(국적 ${escapeHtml(countryName(sp.nationality))})</span>` : ''}` : ''}${
         (sp.org_ko || sp.org_en || sp.title_ko || sp.title_en)
           ? ` · ${escapeHtml([sp.org_ko || sp.org_en, sp.title_ko || sp.title_en].filter(Boolean).join(' '))}`
           : ' · 소속·직함 없음'}${
@@ -364,6 +367,13 @@ function basicHtml(sp, con, evKey){
     </div>
     <div style="font-size:10px;color:var(--i4);margin:-4px 0 12px">
       프로그램북에 나가는 값입니다 — 발표 당시의 소속이라, 나중에 이직해도 그대로 둡니다.</div>
+    <div class="fgr">
+      ${fg('국적', `<select class="fi" onchange="spField('nationality',this.value,'국적')">
+        <option value="">미정</option>${countryOptions(sp.nationality)}</select>`)}
+      ${fg('거주지', `<select class="fi" onchange="spField('residence_country',this.value,'거주지')">
+        <option value="">미정</option>${countryOptions(sp.residence_country)}</select>`)}
+    </div>
+    ${countryGapNote(sp)}
     ${fg('연락처 연결' + (nOf('profile') ? ` ${NEED_MARK[nOf('profile')]}` : ''), conBox)}
     <div class="fgr">
       ${fg('섭외 상태', `<select class="fi" onchange="spField('status',this.value,'섭외 상태')">
@@ -397,6 +407,24 @@ function basicHtml(sp, con, evKey){
       `spField('consent_at',this.value,'동의서 받은 날')`, nOf('consent')) : ''}
 
     ${fg('메모', area(sp.note, `spField('note',this.value,'메모')`, '섭외 경위, 주의할 점 등', 3))}`;
+}
+
+/* 국적과 거주지가 다르면 알려 준다. 다를 때가 문제이기 때문이다 —
+   한국 국적이지만 해외에 사는 연사는 연사료를 해외 거주자로 원천징수하고
+   항공도 거주지에서 띄운다. 어느 쪽 기준인지는 우리가 정하지 않는다. */
+function countryGapNote(sp){
+  const nat = sp.nationality, res = sp.residence_country;
+  if(!nat || !res || nat === res) return '';
+  return `<div style="font-size:10.5px;color:var(--am);margin:-6px 0 12px;line-height:1.6">
+    국적(${escapeHtml(countryName(nat))})과 거주지(${escapeHtml(countryName(res))})가 달라요 —
+    연사료·항공을 어느 쪽 기준으로 할지는 «제공사항»에서 정하세요.</div>`;
+}
+
+/* 이 연사에게 적용할 기준 국가 — 정하지 않았으면 거주지를 먼저 본다.
+   돈을 보내고 비행기를 띄우는 일은 그 사람이 지금 있는 곳에서 일어난다. */
+export function payCountry(sp){
+  if(sp.pay_basis === 'nationality') return sp.nationality || sp.residence_country || '';
+  return sp.residence_country || sp.nationality || '';
 }
 
 /* 연락처 검색 — 이미 있는 사람을 다시 적지 않게 한다 */
@@ -880,13 +908,33 @@ function offerHtml(sp, evKey){
       ${sp.fee_paid_at ? `<span class="pill p-green" style="font-size:10px">지급 ${escapeHtml(sp.fee_paid_at)}</span>`
         : sp.fee_amount ? `<span class="pill p-amber" style="font-size:10px">미지급</span>` : ''}
     </div>
+    ${(sp.nationality && sp.residence_country && sp.nationality !== sp.residence_country) ? `
+      <div class="fg"><label class="fl">지급 기준</label>
+        <div class="seg" style="flex-wrap:wrap">
+          ${[['residence', `거주지 (${escapeHtml(countryName(sp.residence_country))})`],
+             ['nationality', `국적 (${escapeHtml(countryName(sp.nationality))})`]].map(([k, l]) =>
+            `<button class="seg-b${(sp.pay_basis || 'residence') === k ? ' on' : ''}"
+              onclick="spField('pay_basis','${k}','지급 기준')">${l}</button>`).join('')}
+        </div>
+        <div style="font-size:10px;color:var(--i4);margin-top:3px">
+          연사료 원천징수와 항공 출발지가 이 기준을 따릅니다 — 행사마다 다르니 여기서 정합니다.</div>
+      </div>` : ''}
     <div class="fgr">
       ${fg('금액', txt(sp.fee_amount, `spField('fee_amount',this.value,'연사료 금액')`, '500000'))}
       ${fg('통화', sel(sp.fee_currency || 'KRW', CURRENCIES, `spField('fee_currency',this.value,'연사료 통화')`))}
     </div>
     <div class="fgr">
       ${fg('원천징수 구분', sel(sp.fee_tax_type, TAX_TYPES, `spField('fee_tax_type',this.value,'원천징수 구분')`, '미정'),
-        '세액은 계산하지 않습니다 — 어느 쪽인지만 적어 두세요')}
+        (() => {
+          /* 기준 국가가 해외인데 국내 소득으로 잡혀 있으면 짚어 준다. 고치지는
+             않는다 — 조세조약이나 국내 지급 대리인처럼 우리가 모르는 사정이 있다. */
+          const pc = payCountry(sp);
+          const overseas = pc && countryName(pc) !== '대한민국';
+          if(overseas && /^국내/.test(sp.fee_tax_type || '')){
+            return `<span style="color:var(--am)">기준이 ${escapeHtml(countryName(pc))}인데 국내 소득으로 잡혀 있어요 — 맞는지 확인해주세요</span>`;
+          }
+          return '세액은 계산하지 않습니다 — 어느 쪽인지만 적어 두세요';
+        })())}
       ${fg('지급일', dateIn(sp.fee_paid_at, `spField('fee_paid_at',this.value,'연사료 지급일')`))}
     </div>
     ${feeNeed ? `<div style="font-size:10.5px;color:${sp.bank_account ? 'var(--i4)' : 'var(--am)'};margin:-2px 0 8px">
