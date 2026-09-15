@@ -185,6 +185,8 @@ export function renderSpeakerDr(){
         con ? '' : ' · 연락처 연결 안 됨'}${
         assignmentsFor(sp.id).length ? ` · 세션 ${assignmentsFor(sp.id).length}` : ''}</div>
     </div>
+    <button class="btn" style="font-size:10.5px;color:var(--re);align-self:center"
+      onclick="removeSpeakerFromDr()" title="이 연사를 지웁니다 — 배정·연락 상대·기록도 함께">지우기</button>
     <button class="drcls" onclick="closeSpeakerDr()">✕</button>`;
 
   /* 탭에 «아직 안 받은 것»의 수를 띄운다 — 열어 보기 전에 남은 일이 보이게 */
@@ -425,6 +427,16 @@ function countryGapNote(sp){
 export function payCountry(sp){
   if(sp.pay_basis === 'nationality') return sp.nationality || sp.residence_country || '';
   return sp.residence_country || sp.nationality || '';
+}
+
+/* 드로어에서 지우면 드로어부터 닫는다 — 지워진 사람을 그리려다 빈 화면이
+   남는다. 실제로 지우는 일은 연사 탭 한 곳에서만 한다(묻는 말이 두 벌이 되면
+   한쪽이 빠뜨린다). */
+export function removeSpeakerFromDr(){
+  const id = spId;
+  if(!id) return;
+  closeSpeakerDr();
+  window.removeConfSpeaker?.(id);
 }
 
 /* 연락처 검색 — 이미 있는 사람을 다시 적지 않게 한다 */
@@ -1108,6 +1120,7 @@ export function hideBank(){ bankRevealed = false; renderSpeakerDr(); }
 /* ── 노출 ── */
 window.openSpeakerDr        = openSpeakerDr;
 window.closeSpeakerDr       = closeSpeakerDr;
+window.removeSpeakerFromDr  = removeSpeakerFromDr;
 window.switchSpeakerDT      = switchSpeakerDT;
 window.spField              = spField;
 window.asField              = asField;

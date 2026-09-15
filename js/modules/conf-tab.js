@@ -1235,6 +1235,9 @@ function peopleHtml(ev){
         ${(() => {
           const sent = SP_SENT.filter(c => sp[c.key]);
           return `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
+            <button onclick="event.stopPropagation();removeConfSpeaker('${escAttr(sp.id)}')"
+              style="border:0;font:inherit;cursor:pointer;font-size:10px;padding:3px 7px;border-radius:5px;
+              background:var(--rb);color:var(--re);margin-left:auto">지우기</button>
             <button onclick="event.stopPropagation();receiveAll('${escAttr(sp.id)}')"
               style="border:0;font:inherit;cursor:pointer;font-size:10px;padding:3px 7px;border-radius:5px;
               background:var(--gb);color:var(--g);font-weight:600">한꺼번에 받음</button>
@@ -1293,6 +1296,10 @@ function peopleHtml(ev){
       <td style="text-align:center;font-size:10.5px;color:${to.length ? 'var(--i4)' : 'var(--am)'}"
         title="${escAttr(to.length ? to.map(x => x.email).join(', ') : '메일 수신자가 정해지지 않았어요')}">
         ${to.length ? '✓' : '—'}</td>
+      <td style="text-align:center;padding:5px 3px">
+        <button class="btn" style="font-size:10px;padding:2px 6px;color:var(--re)"
+          onclick="event.stopPropagation();removeConfSpeaker('${escAttr(sp.id)}')"
+          title="이 연사를 지웁니다 — 배정·연락 상대·기록도 함께">✕</button></td>
       <td style="text-align:right;font-size:11px;white-space:nowrap">
         ${sp.fee_amount
           ? `<span style="color:${sp.fee_paid_at ? 'var(--g)' : 'var(--i2)'}">${
@@ -1314,6 +1321,7 @@ function peopleHtml(ev){
           title="${escAttr(c.tip || '')}">${escapeHtml(c.label)}</th>`).join('')}
         <th style="text-align:center;font-size:10px;line-height:1.2" title="한 메일에 같이 온 것을 한 번에 표시합니다">한꺼번에</th>
         <th style="text-align:center;min-width:44px;font-size:10px">수신</th>
+        <th style="text-align:center;min-width:32px"></th>
         <th style="text-align:right;min-width:70px;font-size:10px">연사료</th>
       </tr></thead><tbody>${list.map(row).join('')}</tbody></table></div>
       <div style="font-size:10px;color:var(--i4);margin-top:7px;line-height:1.6">
@@ -1984,11 +1992,15 @@ export async function removeConfSpeaker(spId){
   if(confLocked()){ confLockNotice(); return; }
   const sp = getSpeakerById(spId);
   if(!sp) return;
+  /* 배정이 있으면 예전에는 거부하고 «먼저 해제하세요»라고 했다. 그러면 세
+   군데를 돌아다녀야 지워지고, 결국 안 지운 채로 둔다 — 잘못 올린 연사가
+   프로그램에 남는 쪽이 더 나쁘다. 지금은 무엇이 함께 지워지는지 세션 이름까지
+   보여주고 한 번에 지운다. */
   const asg = assignmentsFor(spId);
-  if(asg.length){
-    alert(`이 연사는 세션 ${asg.length}건에 배정돼 있어요.\n먼저 «프로그램»에서 배정을 해제해주세요 — 배정을 남기고 사람을 지우면 프로그램에 이름 없는 줄이 남아요.`);
-    return;
-  }
+  const asgLines = asg.map(a => {
+    const ss = CONF_SESSIONS.find(x => x.id === a.session_id);
+    return `${ss ? (ss.title_ko || ss.title_en || ss.id) : '(삭제된 세션)'} — ${a.role}`;
+  });
   /* 연사 줄에 딸린 것들 — 연락 상대와 주고받은 기록. 연사 줄만 지워서 이것들이
      없는 사람을 가리킨 채 DB에 남아 있었다(실제로 네 줄이 그랬다). 화면에서는
      안 보이니 아무도 모르고, 계좌·여권을 열어 본 기록까지 주인 없이 떠돈다.
@@ -1996,8 +2008,23 @@ export async function removeConfSpeaker(spId){
   const goneCons = SPEAKER_CONTACTS.filter(c => c.speaker_id === spId).map(c => ({ ...c }));
   const goneLogs = SPEAKER_LOGS.filter(l => l.speaker_id === spId).map(l => ({ ...l }));
   if(!confirm(`«${sp.name_snapshot || spId}» 연사를 지울까요?\n이력·제공사항·계좌 정보가 함께 지워집니다.`
+    + (asgLines.length ? `\n\n세션 배정 ${asgLines.length}건도 함께 풀립니다:\n· ${asgLines.join('\n· ')}` : '')
     + (goneCons.length || goneLogs.length
-      ? `\n연락 상대 ${goneCons.length}명, 주고받은 기록 ${goneLogs.length}건도 함께 지워져요.` : ''))) return;
+      ? `\n\n연락 상대 ${goneCons.length}명, 주고받은 기록 ${goneLogs.length}건도 함께 지워져요.` : '')
+    + `\n\n되돌릴 수 없어요.`)) return;
+
+  /* 배정을 먼저 푼다 — 사람을 먼저 지우면 중간에 실패했을 때 이름 없는
+     배정 줄이 프로그램에 남는다. */
+  for(const a of asg.slice()){
+    const r = await gDelAssign(a.id);
+    if(r && r.ok === false){
+      if(!r.locked) alert('배정을 푸는 중에 멈췄어요 — 연사는 지우지 않았습니다.');
+      renderConf();
+      return;
+    }
+    const k = SESSION_SPEAKERS.findIndex(x => x.id === a.id);
+    if(k >= 0) SESSION_SPEAKERS.splice(k, 1);
+  }
 
   for(const c of goneCons) await gDelSpeakerContact(c.id);
   for(const l of goneLogs) await gDelSpeakerLog(l.id);
