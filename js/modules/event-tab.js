@@ -21,12 +21,12 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import {
-  EVENT_LIST, contacts, participations, targets,
+  EVENT_LIST, contacts, participations, targets, DOMAINS,
   EXHIBITORS, exhibitorsForEvent, PART_TYPES, evParts, evPartDone, getOrgById,
 } from '../state.js';
 import { RP, EVENT_PARTS, partStateOf } from '../constants.js';
 import { td, escapeHtml, escAttr, countryName, isMobile } from '../utils.js';
-import { saveEventToSheet, batchCreateExhibitors } from '../api.js';
+import { saveEventToSheet, batchCreateExhibitors, postToSheet } from '../api.js';
 import { saveTargetToSheet, buildEvFil, renderCrm, updBadges } from './crm-tab.js';
 import { normalizeCompanyKey } from './company-tab.js';
 /* changed는 이 파일의 지역 변수 이름과 겹친다 — 별칭으로 들여온다 */
@@ -39,6 +39,9 @@ let evdbView = 'profile';
 let evdbRoleFil = '';      // 참여자·기업 화면의 역할 필터
 let evdbQuery = '';        // 검색어
 const evdbPicked = new Set();   // 기업 화면에서 고른 기업 (company_key)
+/* 참여자 화면 — 확정/타겟 거르개와 고른 사람 */
+let evdbStatFil = '';           // '' | 'confirmed' | 'target'
+const evdbPickedPeople = new Set();   // 고른 사람의 cid
 
 const VIEWS = [['profile', '개요'], ['people', '참여자'], ['orgs', '기업']];
 
@@ -76,10 +79,16 @@ function evPeople(evKey){
         org, orgEn: c.orgEn || '', orgKey: normalizeCompanyKey(org || c.orgEn),
         country: c.country || '', email: c.email1 || c.email2 || '',
         sector: c.beat || '',
+        phone: c.phone1 || c.phone2 || '', dept: c.deptKo || c.deptEn || '',
+        /* 확정은 참여 기록에 붙는다. 한 사람이 두 역할이면 줄도 둘이라,
+           한 줄이라도 확정이면 그 사람은 온 것으로 본다. */
+        partIds: [], confirmedAt: '',
       });
     }
     const m = map.get(key);
     m.recs++;
+    m.partIds.push(p.id);
+    if(p.confirmedAt && !m.confirmedAt) m.confirmedAt = p.confirmedAt;
     if(p.role) m.roles.add(p.role);
   });
 
@@ -183,6 +192,7 @@ export function setEvDbEvent(key){
 
 export function setEvDbView(v){ evdbView = v; evdbPicked.clear(); renderEvDb(); }
 export function setEvDbRole(v){ evdbRoleFil = v; evdbPicked.clear(); renderEvDb(); }
+export function setEvDbStat(v){ evdbStatFil = v; evdbPickedPeople.clear(); renderEvDb(); }
 
 /* 검색은 글자를 칠 때마다 다시 그리는데, 통째로 갈면 입력칸이 포커스를 잃는다.
    목록만 갈아 끼우고 입력칸은 그대로 둔다(설정 탭 비품 검색과 같은 방식). */
@@ -225,6 +235,19 @@ export function renderEvDb(){
   el.innerHTML = seg + (evdbView === 'profile' ? profileHtml(ev)
     : evdbView === 'orgs' ? orgsHtml(ev)
     : peopleHtml(ev));
+}
+
+/* 행사의 분야 — 여러 개 걸칠 수 있다(바이오 행사인데 건축 자재사가 오는 식).
+   그래서 하나만 고르는 드롭다운이 아니라 체크로 둔다. */
+function domainField(ev){
+  const on = String(ev.domain || '').split('|').map(v => v.trim()).filter(Boolean);
+  return `<div><div class="mlbl">분야 <span style="font-size:9px;color:var(--i4)">마스터DB에서 «이 분야 행사에 왔던 사람»을 찾을 때 씁니다</span></div>
+    <div id="evdb-domain" style="display:flex;gap:10px;flex-wrap:wrap;padding:7px 0">
+      ${DOMAINS.map(d => `<label style="display:flex;align-items:center;gap:5px;font-size:11.5px;cursor:pointer">
+        <input type="checkbox" class="evdb-dom" value="${escAttr(d.id)}"${on.includes(d.id) ? ' checked' : ''}>
+        ${escapeHtml(d.name)}</label>`).join('')
+        || '<span style="font-size:11px;color:var(--i4)">설정 › 섹터 관리에서 분야를 먼저 만들어주세요</span>'}
+    </div></div>`;
 }
 
 /* ── 개요 ──
@@ -328,6 +351,7 @@ function profileHtml(ev){
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
         ${fld('theme', '대주제', ev.theme, '예: 바이오헬스 글로벌 협력')}
+        ${domainField(ev)}
         ${fld('homepage', '홈페이지', ev.homepage, 'https://')}
       </div>
       ${area('summary', '행사 성격 — 어떤 행사였나', ev.summary, '누가 오는 행사인지, 무엇을 하는 자리인지')}
@@ -348,12 +372,17 @@ export async function saveEvDbProfile(){
   const say = (t, ok) => { if(msg){ msg.style.color = ok ? 'var(--g)' : 'var(--re)'; msg.textContent = t; } };
   const g = (id) => (document.getElementById('evdb-' + id)?.value || '').trim();
 
-  const FIELDS = ['host', 'organizer', 'our_role', 'scale', 'theme', 'homepage', 'summary', 'outcome'];
+  const FIELDS = ['host', 'organizer', 'our_role', 'scale', 'theme', 'homepage', 'summary', 'outcome', 'domain'];
   const prev = {};
   FIELDS.forEach(f => { prev[f] = ev[f] || ''; });
 
+  /* 분야는 체크박스 여럿이라 값 읽는 방법이 다르다 — 섹터와 같은 방식으로
+     파이프로 이어 한 칸에 담는다. */
+  const domain = [...document.querySelectorAll('#evdb-domain .evdb-dom:checked')]
+    .map(el => el.value).join('|');
+
   const next = {};
-  FIELDS.forEach(f => { next[f] = g(f); });
+  FIELDS.forEach(f => { next[f] = f === 'domain' ? domain : g(f); });
   const changed = FIELDS.filter(f => prev[f] !== next[f]);
   if(!changed.length){ say('바뀐 게 없어요.', true); return; }
 
@@ -406,6 +435,14 @@ function roleChips(evKey, byOrg){
   </div>`;
 }
 
+/* 확정 표시 — 눌러서 그 자리에서 바꾼다. 한 명씩 고치는 일이 제일 잦다.
+   확정된 날짜를 툴팁에 둔다 — 언제 정해졌는지가 나중에 꼭 문제가 된다. */
+const confirmBadge = (r) => r.confirmedAt
+  ? `<span class="pill p-green" style="cursor:pointer" title="${escAttr(r.confirmedAt)}에 확정 — 눌러서 해제"
+      onclick="event.stopPropagation();toggleEvDbConfirm(${r.cid})">✓ 확정</span>`
+  : `<span class="pill p-gray" style="cursor:pointer" title="눌러서 참가 확정"
+      onclick="event.stopPropagation();toggleEvDbConfirm(${r.cid})">타겟</span>`;
+
 /* 한 사람이 여러 역할일 수 있다 — 하나만 보여주면 나머지를 못 본다 */
 const roleBadges = (r) => [...r.roles]
   .map(v => `<span class="pill ${escAttr(RP[v] || 'p-gray')}" style="margin-right:3px">${escapeHtml(v)}</span>`).join('');
@@ -413,15 +450,45 @@ const roleBadges = (r) => [...r.roles]
 function filteredRows(){
   let l = evPeople(evdbEvent);
   if(evdbRoleFil) l = l.filter(r => r.roles.has(evdbRoleFil));
+  if(evdbStatFil === 'confirmed') l = l.filter(r => !!r.confirmedAt);
+  if(evdbStatFil === 'target')    l = l.filter(r => !r.confirmedAt);
   const q = evdbQuery.trim().toLowerCase();
   if(q) l = l.filter(r => [r.name, r.nameEn, r.org, r.orgEn, r.title, r.email]
     .some(v => String(v || '').toLowerCase().includes(q)));
   return l;
 }
 
+/* ── 타겟과 참가자 ──
+   행사에 «건다»는 것과 «온다»는 것은 다른 일이다. 역할(연사·바이어)로
+   가르면 안 된다 — 바이어였다가 참가자가 되는 게 아니라 바이어인 채로
+   확정되는 것이다. 그래서 확정 여부로만 가른다. */
+function statChips(evKey){
+  const all = evPeople(evKey);
+  const conf = all.filter(r => r.confirmedAt).length;
+  const chip = (v, label, n) => `<button class="seg-b${evdbStatFil === v ? ' on' : ''}"
+    onclick="setEvDbStat('${v}')">${label} ${n}명</button>`;
+  return `<div class="seg" style="flex-wrap:wrap">
+    ${chip('', '전체', all.length)}
+    ${chip('confirmed', '참가 확정', conf)}
+    ${chip('target', '타겟', all.length - conf)}
+  </div>`;
+}
+
 function peopleHtml(ev){
-  return `<div style="padding:10px 16px 0">${roleChips(ev.key)}</div>
-    <div style="padding:10px 16px 0">${searchBoxHtml('이름·기업·직함 검색…')}</div>
+  const shown = filteredRows();
+  const picked = evdbPickedPeople.size;
+  return `<div style="padding:10px 16px 0">${statChips(ev.key)}</div>
+    <div style="padding:8px 16px 0">${roleChips(ev.key)}</div>
+    <div style="padding:10px 16px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      ${searchBoxHtml('이름·기업·직함 검색…')}
+      <button class="btn" style="font-size:11px" onclick="toggleEvDbPeopleAll()">전체 선택/해제</button>
+      <div style="flex:1"></div>
+      <span id="evdb-picked-n" style="font-size:11px;color:var(--i4)">${picked ? picked + '명 선택' : ''}</span>
+      <button class="btn" style="font-size:11px" onclick="confirmEvDbPeople(true)">참가 확정</button>
+      <button class="btn" style="font-size:11px" onclick="confirmEvDbPeople(false)">확정 해제</button>
+      <button class="btn" style="font-size:11px" onclick="openEvDbMailList()">메일 대상 모으기</button>
+      <button class="btn bp" style="font-size:11px" onclick="exportEvDbPeople()">명단 내보내기 (${shown.length})</button>
+    </div>
     <div id="evdb-rows" style="padding:6px 16px 40px">${peopleRowsHtml()}</div>`;
 }
 
@@ -437,7 +504,10 @@ function peopleRowsHtml(){
   // 좁은 화면에서는 표가 옆으로 넘쳐 읽을 수 없다 — 카드로 바꿔 준다
   if(isMobile()) return l.map(r => `<div style="background:var(--W);border:1px solid var(--i6);border-radius:8px;padding:10px 12px;margin-bottom:6px">
     <div style="display:flex;align-items:center;gap:7px">
+      <input type="checkbox" ${evdbPickedPeople.has(r.cid) ? 'checked' : ''}
+        onchange="pickEvDbPerson(${r.cid},this.checked)">
       <span style="font-size:13px;font-weight:600;color:var(--i1)">${escapeHtml(r.name)}</span>
+      ${confirmBadge(r)}
       ${roleBadges(r)}
     </div>
     <div style="font-size:11px;color:var(--i3);margin-top:3px">${escapeHtml(r.org)}${r.title ? ' · ' + escapeHtml(r.title) : ''}</div>
@@ -446,9 +516,13 @@ function peopleRowsHtml(){
 
   return `<div style="overflow-x:auto"><table style="width:100%">
     <thead><tr>
+      <th style="width:26px"></th><th style="width:74px">참가</th>
       <th>성명</th><th>기업·기관</th><th>직함</th><th>역할</th><th>국가</th><th>연락처</th>
     </tr></thead><tbody>
     ${l.map(r => `<tr>
+      <td style="text-align:center"><input type="checkbox" ${evdbPickedPeople.has(r.cid) ? 'checked' : ''}
+        onchange="pickEvDbPerson(${r.cid},this.checked)"></td>
+      <td>${confirmBadge(r)}</td>
       <td><span style="font-weight:600">${escapeHtml(r.name)}</span>${r.nameEn ? `<div style="font-size:10.5px;color:var(--i4)">${escapeHtml(r.nameEn)}</div>` : ''}</td>
       <td>${escapeHtml(r.org)}${r.orgEn && r.orgEn !== r.org ? `<div style="font-size:10.5px;color:var(--i4)">${escapeHtml(r.orgEn)}</div>` : ''}</td>
       <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(r.title)}</td>
@@ -738,6 +812,160 @@ function finishSend(n, skipped, what){
 }
 
 /* ── 탭 진입 훅 (router.js가 부른다) ── */
+
+/* ══════════════════════════════════════════
+   참가 확정 · 명단 내보내기 · 메일 대상
+
+   행사 담당자가 이 화면에서 실제로 하는 일 세 가지다. 마스터DB로 건너가서
+   하게 하면 «내 행사»라는 범위가 매번 풀린다.
+══════════════════════════════════════════ */
+export function pickEvDbPerson(cid, on){
+  if(on) evdbPickedPeople.add(cid); else evdbPickedPeople.delete(cid);
+  const el = document.getElementById('evdb-picked-n');
+  if(el) el.textContent = evdbPickedPeople.size ? evdbPickedPeople.size + '명 선택' : '';
+}
+
+export function toggleEvDbPeopleAll(){
+  const shown = filteredRows();
+  const allOn = shown.length > 0 && shown.every(r => evdbPickedPeople.has(r.cid));
+  shown.forEach(r => { if(allOn) evdbPickedPeople.delete(r.cid); else evdbPickedPeople.add(r.cid); });
+  renderEvDb();
+}
+
+/* 참여 기록에 확정 날짜를 적는다. 한 사람이 두 역할이면 줄도 둘이라
+   둘 다 같이 움직여야 «연사로는 확정, 바이어로는 미정» 같은 게 안 생긴다. */
+async function saveConfirm(rows, on){
+  const when = on ? td() : '';
+  const touched = [];
+  rows.forEach(r => {
+    r.partIds.forEach(pid => {
+      const p = participations.find(x => x.id === pid);
+      if(!p) return;
+      touched.push({ p, before: p.confirmedAt || '' });
+      p.confirmedAt = when;
+    });
+    r.confirmedAt = when;
+  });
+  if(!touched.length) return true;
+
+  invalidateEvRows();
+  renderEvDb();
+
+  /* 위치 배열 — 시트 순서 그대로. 맨 뒤가 확정 날짜다.
+     (id, ev_id, 행사명, cid, 소속, 성명, 직함, type, note, matched, confirmed_at) */
+  const res = await postToSheet({
+    sheet: 'participations', action: 'batchUpsert',
+    rows: touched.map(({ p }) => [p.id, p.eventId, '', p.contactId, '', '', '',
+      p.role || '', p.note || '', p.matched || '', p.confirmedAt || '']),
+  }, on ? '참가 확정' : '참가 확정 해제');
+
+  if(!res.ok){
+    touched.forEach(({ p, before }) => { p.confirmedAt = before; });
+    invalidateEvRows();
+    renderEvDb();
+    alert('저장에 실패해서 되돌렸어요. 네트워크를 확인하고 다시 해주세요.');
+    return false;
+  }
+  trackAction('edit', on ? '참가 확정' : '참가 확정 해제', rows.length + '명',
+    evdbEvent + ' 참여자 ' + rows.length + '명을 ' + (on ? '참가 확정' : '타겟으로 되돌림'),
+    { table: 'participations', op: 'update-many',
+      rows: touched.map(({ p, before }) => ({ row: p.id,
+        before: { confirmed_at: before }, after: { confirmed_at: p.confirmedAt || '' } })) });
+  return true;
+}
+
+export async function toggleEvDbConfirm(cid){
+  const r = evPeople(evdbEvent).find(x => x.cid === cid);
+  if(!r) return;
+  await saveConfirm([r], !r.confirmedAt);
+}
+
+export async function confirmEvDbPeople(on){
+  const rows = evPeople(evdbEvent).filter(r => evdbPickedPeople.has(r.cid));
+  if(!rows.length){ alert('먼저 사람을 골라주세요.'); return; }
+  const todo = rows.filter(r => !!r.confirmedAt !== on);
+  if(!todo.length){ alert(on ? '고른 사람은 이미 모두 확정돼 있어요.' : '고른 사람은 이미 모두 타겟이에요.'); return; }
+  if(!confirm(todo.length + '명을 ' + (on ? '참가 확정' : '타겟으로 되돌림') + ' 처리할까요?')) return;
+  if(await saveConfirm(todo, on)) evdbPickedPeople.clear();
+  renderEvDb();
+}
+
+/* 지금 보고 있는 명단 그대로 내보낸다 — 거르개를 걸어 둔 채 «참가 확정만»,
+   «바이어만» 뽑는 일이 잦다. 고른 사람이 있으면 그 사람만. */
+export function exportEvDbPeople(){
+  let l = filteredRows();
+  if(evdbPickedPeople.size) l = l.filter(r => evdbPickedPeople.has(r.cid));
+  if(!l.length){ alert('내보낼 명단이 없어요.'); return; }
+
+  const ev = EVENT_LIST.find(e => e.key === evdbEvent);
+  const head = ['참가', '성명', '영문명', '기업·기관', '부서', '직함', '역할', '국가', '이메일', '연락처', '확정일'];
+  const body = l.map(r => [
+    r.confirmedAt ? '확정' : '타겟',
+    r.name, r.nameEn, r.org, r.dept, r.title,
+    [...r.roles].join('|'), countryName(r.country) || '', r.email, r.phone, r.confirmedAt,
+  ]);
+  const csv = [head, ...body]
+    .map(row => row.map(v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(','))
+    .join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,﻿' + encodeURIComponent(csv);
+  a.download = ((ev && (ev.short || ev.name)) || evdbEvent) + '_명단_' + td() + '.csv';
+  a.click();
+}
+
+/* 메일 대상 — 주소를 모아 보여준다. 여기서 바로 보내지는 않는다.
+   보내는 건 메일 프로그램이 할 일이고, 우리가 할 일은 «누구에게»를 정확히
+   추리는 것이다. 주소가 없는 사람은 세어서 알려 준다 — 조용히 빠지면
+   보냈다고 생각한 사람에게 안 간다. */
+export function openEvDbMailList(){
+  let l = filteredRows();
+  if(evdbPickedPeople.size) l = l.filter(r => evdbPickedPeople.has(r.cid));
+  if(!l.length){ alert('대상이 없어요.'); return; }
+
+  const seen = new Set();
+  const mails = [];
+  const noMail = [];
+  l.forEach(r => {
+    const e = String(r.email || '').trim().toLowerCase();
+    if(!e){ noMail.push(r.name || r.org); return; }
+    if(seen.has(e)) return;
+    seen.add(e); mails.push(r.email.trim());
+  });
+
+  const old = document.getElementById('evdb-mail-modal');
+  if(old) old.remove();
+  const wrap = document.createElement('div');
+  wrap.id = 'evdb-mail-modal';
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;'
+    + 'display:flex;align-items:center;justify-content:center;padding:16px';
+  wrap.onclick = (e) => { if(e.target === wrap) wrap.remove(); };
+  wrap.innerHTML = `<div style="background:var(--W);border-radius:12px;padding:20px;width:100%;max-width:520px;
+      max-height:82vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.2)" onclick="event.stopPropagation()">
+    <div style="font-size:14px;font-weight:700;margin-bottom:4px">메일 대상 ${mails.length}명</div>
+    <div style="font-size:11.5px;color:var(--i3);line-height:1.6;margin-bottom:10px">
+      지금 보고 있는 명단에서 모았어요${evdbPickedPeople.size ? ' (고른 사람만)' : ''}.
+      ${noMail.length ? `<br><span style="color:var(--am)">메일 주소가 없어 빠진 ${noMail.length}명: ${
+        escapeHtml(noMail.slice(0, 6).join(', '))}${noMail.length > 6 ? ' 외' : ''}</span>` : ''}
+    </div>
+    <textarea id="evdb-mail-box" readonly style="width:100%;height:190px;font-size:11px;font-family:monospace;
+      padding:8px;border:1px solid var(--i6);border-radius:8px;resize:vertical">${escapeHtml(mails.join('; '))}</textarea>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap">
+      <button class="btn bs" onclick="document.getElementById('evdb-mail-modal').remove()">닫기</button>
+      <button class="btn bs" onclick="copyEvDbMails()">주소 복사</button>
+    </div>
+  </div>`;
+  document.body.appendChild(wrap);
+}
+
+export function copyEvDbMails(){
+  const box = document.getElementById('evdb-mail-box');
+  if(!box) return;
+  box.select();
+  navigator.clipboard?.writeText(box.value)
+    .then(() => { box.blur(); alert('주소를 복사했어요. 메일 프로그램의 받는 사람 칸에 붙여 넣으세요.'); })
+    .catch(() => { try { document.execCommand('copy'); alert('주소를 복사했어요.'); } catch(e){ alert('복사에 실패했어요 — 직접 선택해서 복사해주세요.'); } });
+}
+
 export function initEvDbTab(){
   invalidateEvRows();
   buildEvDbList();
@@ -758,3 +986,11 @@ window.openEvDbSend     = openEvDbSend;
 window.closeEvDbSend    = closeEvDbSend;
 window.setEvDbDest      = setEvDbDest;
 window.confirmEvDbSend  = confirmEvDbSend;
+window.setEvDbStat         = setEvDbStat;
+window.pickEvDbPerson      = pickEvDbPerson;
+window.toggleEvDbPeopleAll = toggleEvDbPeopleAll;
+window.toggleEvDbConfirm   = toggleEvDbConfirm;
+window.confirmEvDbPeople   = confirmEvDbPeople;
+window.exportEvDbPeople    = exportEvDbPeople;
+window.openEvDbMailList    = openEvDbMailList;
+window.copyEvDbMails       = copyEvDbMails;

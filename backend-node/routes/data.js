@@ -18,7 +18,8 @@ const TABLES = {
   events: {
     table: 'events', pk: 'id', idPrefix: '',
     columns: ['id', 'name', 'short', 'date_start', 'date_end', 'location', 'color',
-      'host', 'organizer', 'our_role', 'theme', 'scale', 'homepage', 'summary', 'outcome'],
+      'host', 'organizer', 'our_role', 'theme', 'scale', 'homepage', 'summary', 'outcome',
+      'domain'],
   },
   crm_targets: {
     table: 'crm_targets', pk: 'id', idPrefix: '',
@@ -340,7 +341,7 @@ async function readParticipations() {
     SELECT p.id, p.event_id AS ev_id, COALESCE(e.name, '') AS "행사명",
            p.contact_id AS cid, COALESCE(c."orgKo", '') AS "소속",
            COALESCE(c."nameKo", '') AS "성명", COALESCE(c."titleKo", '') AS "직함",
-           p.role AS type, p.note, p.matched
+           p.role AS type, p.note, p.matched, p.confirmed_at
     FROM participations p
     LEFT JOIN events e ON e.id = p.event_id
     LEFT JOIN contacts c ON c.id = p.contact_id
@@ -349,10 +350,10 @@ async function readParticipations() {
   return rows;
 }
 
-const PARTICIPATION_COLS = ['id', 'event_id', 'contact_id', 'role', 'note', 'matched'];
+const PARTICIPATION_COLS = ['id', 'event_id', 'contact_id', 'role', 'note', 'matched', 'confirmed_at'];
 
 function participationFromRow(row) {
-  // 헤더 순서: id, ev_id, 행사명, cid, 소속, 성명, 직함, type, note, matched
+  // 헤더 순서: id, ev_id, 행사명, cid, 소속, 성명, 직함, type, note, matched, confirmed_at
   return {
     id: row[0] || genId('P-'),
     event_id: row[1] || null,
@@ -360,6 +361,7 @@ function participationFromRow(row) {
     role: row[7] || null,
     note: row[8] || null,
     matched: row[9] || null,
+    confirmed_at: row[10] === undefined ? null : row[10],
   };
 }
 

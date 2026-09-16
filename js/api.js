@@ -101,6 +101,8 @@ export function normalizeParticipationRow(r){
     role:      r.type || r.role || '',
     note:      r.note || '',
     matched:   r.matched || '',
+    /* 비어 있으면 타겟(부를 후보), 날짜가 있으면 그날 참가가 확정됐다는 뜻 */
+    confirmedAt: r.confirmed_at || '',
   };
 }
 
@@ -492,6 +494,9 @@ export async function loadFromSheets(hooks = {}){
         homepage:   r.homepage   || '',
         summary:    r.summary    || '',
         outcome:    r.outcome    || '',
+        /* 이 행사가 어느 분야였나 — 마스터DB에서 «건축 행사에 왔던 사람»을
+           찾는 근거다. DOMAINS의 id, 여러 분야면 파이프로 잇는다. */
+        domain:     r.domain     || '',
       })).filter(e => e.key));
       console.log('[CRM] events loaded:', EVENT_LIST.length, '건');
     }
@@ -658,7 +663,7 @@ export async function saveEventToSheet(ev){
     // 위치 배열이라 data.js의 events.columns와 순서가 정확히 같아야 한다
     row: [ev.key, ev.name, ev.short, ev.date_start||ev.date||'', ev.date_end||'', ev.location||'', ev.color,
       ev.host||'', ev.organizer||'', ev.our_role||'', ev.theme||'',
-      ev.scale||'', ev.homepage||'', ev.summary||'', ev.outcome||''],
+      ev.scale||'', ev.homepage||'', ev.summary||'', ev.outcome||'', ev.domain||''],
   }, '행사 저장');
   if(r.ok) console.log('[CRM] event saved:', ev.key);
   return r;

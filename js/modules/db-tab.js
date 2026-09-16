@@ -19,6 +19,7 @@ import {
   evShort,
   getContactById,
   contactEvents,
+  isConfirmedFor,
   mdbEvFilter,
   mdbView,
   mdbCat,
@@ -135,6 +136,22 @@ function setContactTag(c, name, add){
    역참조해서 만든다 — 한 기업이 여러 분야에 속할 수 있으므로(예: Investor
    = BIO+VC) 연락처도 여러 분야에 동시에 속할 수 있다. 등록 안 된 섹터명이나
    분야 미배정인 경우 빈 배열(미분류)을 반환한다. */
+/* 그 사람이 다녀온 행사의 분야 — 소속 기업의 섹터와는 다른 근거다.
+   대학 교수는 건축 행사에도 바이오 행사에도 온다. 기업 섹터만 보면
+   그 사람은 늘 «대학·연구소»지, 어느 자리에서 만났는지는 안 보인다.
+
+   마스터DB는 한 행사의 명단이 아니라 여러 행사에 걸쳐 쓰는 창고라,
+   다음 행사에 부를 사람을 고를 때 이쪽이 더 정확할 때가 많다. */
+function eventDomainsOf(cid){
+  const out = new Set();
+  participations.filter(p => String(p.contactId) === String(cid)).forEach(p => {
+    const ev = EVENT_LIST.find(e => e.key === p.eventId);
+    String(ev && ev.domain || '').split('|').map(v => v.trim()).filter(Boolean)
+      .forEach(d => out.add(d));
+  });
+  return [...out];
+}
+
 function buildContactDomainMap(){
   const map = new Map();
   CO_DB.forEach(co => {
@@ -146,6 +163,14 @@ function buildContactDomainMap(){
     });
     const domArr = [...doms];
     (co.contacts||[]).forEach(cc => map.set(cc.id, domArr));
+  });
+  /* 기업이 없는 사람도 행사 이력으로는 분야를 안다 — 기업에 안 묶였다고
+     «미분류»로 떨어뜨리면, 명단에 멀쩡히 있는 사람을 다음에 못 찾는다. */
+  contacts.forEach(c => {
+    const evd = eventDomainsOf(c.id);
+    if(!evd.length) return;
+    const cur = map.get(c.id) || [];
+    map.set(c.id, [...new Set([...cur, ...evd])]);
   });
   return map;
 }
@@ -1243,8 +1268,7 @@ const ST_LABEL = { verified:'검증됨', pending:'확인 중', new:'신규' };
 
 /* 행사 배지 — 카드에서는 2개까지만 보여주고 나머지는 +N으로 접는다 */
 function mEvPills(c, p){
-  const one = (ev) => `<span class="ev-pill" style="background:${evColor(ev)}18;color:${evColor(ev)}">
-    <span class="ev-pill-dot" style="background:${evColor(ev)}"></span>${escapeHtml(evShort(ev))}</span>`;
+  const one = (ev) => evPill(ev, isConfirmedFor(c.id, ev));
   if(p) return one(p.eventId);
   const evs = contactEvents(c);
   return evs.slice(0, 2).map(one).join('')
@@ -1341,6 +1365,24 @@ function renderMDBGroupedCards(pairs){
     : '<div class="mdbc-empty">조건에 맞는 참가 이력이 없어요</div>';
 }
 
+/* ── 행사 칩 ──
+   행사에 «걸려 있다»와 «참가가 정해졌다»는 다른 일이다. 둘을 같은 모양으로
+   그리면, 뉴스레터만 받은 사람이 그 행사에 온 사람처럼 보인다 — 실제로
+   아직 열리지도 않은 행사가 109명이 참가한 것처럼 보인 적이 있다.
+
+   확정된 것만 색을 채우고, 타겟은 테두리만 남긴다. 한눈에 갈리되 목록에서
+   사라지지는 않게 — 타겟도 그 행사의 명단이긴 하다. */
+function evPill(ev, confirmed){
+  const col = evColor(ev);
+  const base = 'margin-bottom:2px;';
+  return confirmed
+    ? `<span class="ev-pill" style="${base}background:${col}18;color:${col}" title="참가 확정">
+        <span class="ev-pill-dot" style="background:${col}"></span>${escapeHtml(evShort(ev))}</span>`
+    : `<span class="ev-pill" style="${base}background:transparent;color:${col}99;border:1px dashed ${col}66"
+        title="타겟 — 아직 참가 확정 전">
+        <span class="ev-pill-dot" style="background:transparent;border:1px solid ${col}99"></span>${escapeHtml(evShort(ev))}</span>`;
+}
+
 /* ── FLAT VIEW (원본 1879~1958행) ── */
 export function renderMDBFlat(pairs){
   pairs = applyMDBSort(pairs);
@@ -1389,15 +1431,11 @@ export function renderMDBFlat(pairs){
     // Events column
     let evCell = '';
     if(p){
-      evCell = `<span class="ev-pill" style="background:${evColor(p.eventId)}18;color:${evColor(p.eventId)}">
-        <span class="ev-pill-dot" style="background:${evColor(p.eventId)}"></span>${escapeHtml(evShort(p.eventId))}
-      </span>${p.note?`<div style="font-size:10px;color:var(--i3);margin-top:3px">${escapeHtml(p.note)}</div>`:''}`;
+      evCell = evPill(p.eventId, !!p.confirmedAt)
+        + (p.note?`<div style="font-size:10px;color:var(--i3);margin-top:3px">${escapeHtml(p.note)}</div>`:'');
     } else {
       const evs = contactEvents(c);
-      const shown = evs.slice(0,2).map(ev=>
-        `<span class="ev-pill" style="background:${evColor(ev)}18;color:${evColor(ev)};margin-bottom:2px">
-          <span class="ev-pill-dot" style="background:${evColor(ev)}"></span>${escapeHtml(evShort(ev))}
-        </span>`).join('');
+      const shown = evs.slice(0,2).map(ev => evPill(ev, isConfirmedFor(c.id, ev))).join('');
       const more = evs.length>2?`<span class="pill p-gray">+${evs.length-2}</span>`:'';
       evCell = `<div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center">${shown}${more}</div>`;
     }

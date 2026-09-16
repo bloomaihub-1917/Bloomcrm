@@ -78,6 +78,13 @@ export function getEvParts(evName){
 export function getContactById(id){
   return contacts.find(c => c.id === id);
 }
+/* 그 사람이 그 행사에 «확정»으로 걸려 있나.
+   한 사람이 두 역할이면 줄도 둘이라, 한 줄이라도 확정이면 확정으로 본다. */
+export function isConfirmedFor(cid, evId){
+  return participations.some(p => String(p.contactId) === String(cid)
+    && p.eventId === evId && !!p.confirmedAt);
+}
+
 export function contactEvents(c){
   return [...new Set(
     participations

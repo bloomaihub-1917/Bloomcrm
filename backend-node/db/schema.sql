@@ -960,3 +960,28 @@ ALTER TABLE orgs ADD COLUMN IF NOT EXISTS products TEXT;
    대표번호는 원래 사람이 아니라 회사의 것이다. */
 ALTER TABLE orgs ADD COLUMN IF NOT EXISTS phone TEXT;
 ALTER TABLE orgs ADD COLUMN IF NOT EXISTS email TEXT;
+
+/* ── 참가 확정 ──
+   행사에 «건다»는 것과 «온다»는 것은 다른 일인데 한 칸에 섞여 있었다.
+   그래서 아직 열리지도 않은 행사가 109명이 참가한 것처럼 보였다.
+
+   역할(연사·바이어·전시참가기업)로 가르면 안 된다 — 그건 «무엇으로»지
+   «왔느냐»가 아니다. 바이어였다가 참가자가 되는 게 아니라, 바이어인 채로
+   확정되는 것이다. 그래서 칸을 따로 둔다.
+
+   비어 있으면 타겟(부를 후보), 날짜가 적혀 있으면 그날 참가가 확정됐다는 뜻. */
+ALTER TABLE participations ADD COLUMN IF NOT EXISTS confirmed_at TEXT;
+CREATE INDEX IF NOT EXISTS idx_parts_confirmed ON participations(confirmed_at);
+
+/* ── 행사의 분야 ──
+   마스터DB는 한 행사의 명단이 아니라 여러 행사에 걸쳐 쓰는 사람 창고다.
+   그래서 «이 사람이 어떤 분야의 행사에 왔었나»가 다음 행사에 부를 사람을
+   고르는 근거가 된다 — 건축 행사를 준비하며 건축 행사에 왔던 사람을 찾는다.
+
+   그런데 행사에는 분야를 적을 칸이 없어서 그걸 알 길이 없었다. 기업의
+   섹터로 짐작할 수는 있지만 그건 «그 회사가 무슨 일을 하나»지 «어떤 자리에
+   왔었나»가 아니다. 대학 교수는 건축 행사에도 바이오 행사에도 온다.
+
+   값은 DOMAINS의 id다(settings.domains). 한 행사가 두 분야에 걸치면
+   섹터와 같은 방식으로 파이프로 잇는다. */
+ALTER TABLE events ADD COLUMN IF NOT EXISTS domain TEXT;
