@@ -499,7 +499,7 @@ export function renderMDBSelectionBar(){
   el.innerHTML = `
     <span style="font-size:12px;font-weight:600;color:var(--i1)">${n}명 선택됨</span>${
       isMobile() ? '<span style="font-size:10.5px;color:var(--i5)">탭하면 선택·해제 · 길게 눌러 시작</span>' : ''}
-    <button class="btn bp bs" onclick="openMDBBulkEditModal()">기업명/카테고리/상태 일괄 변경</button>
+    <button class="btn bp bs" onclick="openMDBBulkEditModal()">기업명/카테고리/국가/상태 일괄 변경</button>
     <button class="btn bs" onclick="openMDBToCrmModal()"
       title="고른 사람들을 행사 참가자로 올리고, 소속 기업을 CRM 타겟으로 잡습니다">행사에 초청</button>
     <button class="btn bs" style="color:var(--re);border-color:var(--re)" onclick="bulkDeleteMDBContacts()">선택 삭제</button>
@@ -750,6 +750,14 @@ export function openMDBBulkEditModal(){
         <select class="fi" id="mdb-bulk-cat"><option value="">변경 안 함</option>
           ${CAT_KEYS.map(k=>`<option value="${k}">${CL[k]}</option>`).join('')}
         </select></div>
+      <div class="fg" style="margin-top:8px"><label class="fl">국가 — 유지하려면 선택 안 함<br>
+          <span style="font-weight:400;color:var(--i4)">«비우기»를 고르면 국가를 지웁니다 — 잘못 들어간 값을 되돌릴 때 씁니다</span>
+        </label>
+        <select class="fi" id="mdb-bulk-country">
+          <option value="">변경 안 함</option>
+          <option value="__blank__">— 비우기 —</option>
+          ${countryOptions('')}
+        </select></div>
       <div class="fg" style="margin-top:8px"><label class="fl">상태 — 유지하려면 선택 안 함</label>
         <select class="fi" id="mdb-bulk-status"><option value="">변경 안 함</option>
           <option value="verified">검증됨</option><option value="pending">확인 중</option><option value="new">신규</option>
@@ -807,9 +815,13 @@ export async function applyMDBBulkEdit(){
   const org    = ((document.getElementById('mdb-bulk-org')||{}).value||'').trim();
   const cat    = (document.getElementById('mdb-bulk-cat')||{}).value||'';
   const status = (document.getElementById('mdb-bulk-status')||{}).value||'';
+  /* 국가는 «안 바꿈»과 «비우기»를 구분해야 한다 — 빈 문자열 하나로는
+     «건드리지 마»와 «지워»가 같은 말이 된다. */
+  const countrySel = (document.getElementById('mdb-bulk-country')||{}).value||'';
+  const country = countrySel === '__blank__' ? '' : countrySel;
   const tagOps = TAGS.map(t => ({ key: t.key, label: t.label, op: (document.getElementById('mdb-bulk-tag-'+t.key)||{}).value||'' }))
     .filter(x => x.op);
-  if(!org && !cat && !status && !tagOps.length){ alert('변경할 값을 하나 이상 입력/선택하세요.'); return; }
+  if(!org && !cat && !status && !countrySel && !tagOps.length){ alert('변경할 값을 하나 이상 입력/선택하세요.'); return; }
 
   const ids = [...mdbSelected];
   const changed = [];
@@ -817,10 +829,11 @@ export async function applyMDBBulkEdit(){
   ids.forEach(id => {
     const c = getContactById(id);
     if(!c) return;
-    backup.push({ c, orgKo: c.orgKo, orgEn: c.orgEn, cat: c.cat, status: c.status, tags: c.tags, org_id: c.org_id });
+    backup.push({ c, orgKo: c.orgKo, orgEn: c.orgEn, cat: c.cat, status: c.status, country: c.country, tags: c.tags, org_id: c.org_id });
     if(org){ c.orgKo = org; if(!c.orgEn) c.orgEn = org; }
     if(cat) c.cat = cat;
     if(status) c.status = status;
+    if(countrySel) c.country = country;
     tagOps.forEach(t => setContactTag(c, t.key, t.op === 'add'));
     changed.push(c);
   });
@@ -845,7 +858,7 @@ export async function applyMDBBulkEdit(){
   if(!r.ok){
     // 기업 병합(mergeCompanies)과 동일한 원칙 — 저장 실패 시 로컬 변경을 되돌려서
     // 화면엔 바뀐 것처럼 보이는데 새로고침하면 원복되는 거짓 성공을 막는다.
-    backup.forEach(b => { b.c.orgKo = b.orgKo; b.c.orgEn = b.orgEn; b.c.cat = b.cat; b.c.status = b.status; b.c.tags = b.tags; b.c.org_id = b.org_id; });
+    backup.forEach(b => { b.c.orgKo = b.orgKo; b.c.orgEn = b.orgEn; b.c.cat = b.cat; b.c.status = b.status; b.c.country = b.country; b.c.tags = b.tags; b.c.org_id = b.org_id; });
     buildCoDB();
     mdbSelected.clear();
     renderMDB();
@@ -853,7 +866,8 @@ export async function applyMDBBulkEdit(){
     return;
   }
 
-  const parts = [org&&'기업명', cat&&'카테고리', status&&'상태', ...tagOps.map(t=>`${t.label} ${t.op==='add'?'추가':'해제'}`)].filter(Boolean).join(', ');
+  const parts = [org&&'기업명', cat&&'카테고리', status&&'상태',
+    countrySel && (country ? `국가→${country}` : '국가 비움'), ...tagOps.map(t=>`${t.label} ${t.op==='add'?'추가':'해제'}`)].filter(Boolean).join(', ');
   /* 여러 명을 한꺼번에 바꾼 것 — 사람마다 이전값이 다르므로 줄마다 담는다 */
   trackAction('edit', '연락처 일괄 변경', `${changed.length}명`, `연락처 ${changed.length}명 일괄 변경(${parts})`,
     { table: 'contacts', op: 'update-many',

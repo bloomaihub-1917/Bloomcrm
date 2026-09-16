@@ -398,25 +398,46 @@ function normalizeSector(v){
 }
 
 /* 컬럼명 자동 매핑 후보 탐색 (원본 2515~2539행) */
+const COL_SEP = /[\s_\-\/().·,]/;
+const colNorm = h => String(h||'').toLowerCase().replace(/[\s_\-\/().·,]/g,'');
+
+/* 정규화하면서 «원문에서 낱말이 시작된 자리»를 함께 적어 둔다.
+   2단계가 낱말 한가운데를 물지 않게 하려면 이 자리가 필요하다 —
+   «AIA Designation»이 국가로 잡힌 적이 있다. 별칭 «nation»이
+   desig-nation의 꼬리에 걸려서, 85명의 국가 칸에 AIA 등급이 들어갔다. */
+function colNormWithStarts(h){
+  let out = ''; const starts = new Set([0]); let atStart = true;
+  for(const ch of String(h||'').toLowerCase()){
+    if(COL_SEP.test(ch)){ atStart = true; continue; }
+    if(atStart){ starts.add(out.length); atStart = false; }
+    out += ch;
+  }
+  return { text: out, starts };
+}
+
 function guessColumn(headers, aliases, usedHeaders){
   const used = usedHeaders || new Set();
-  const norm = h => h.toLowerCase().replace(/[\s_\-\/().·,]/g,'');
 
   // 1단계: 완전 일치
   for(const h of headers){
     if(used.has(h)) continue;
-    const nh = norm(h);
+    const nh = colNorm(h);
     for(const a of aliases){
-      if(nh === norm(a)) return h;
+      if(nh === colNorm(a)) return h;
     }
   }
-  // 2단계: alias가 헤더에 포함 (alias ⊂ 헤더) — 4자 이상만
+  /* 2단계: alias가 헤더 안에 들어 있으면 같은 것으로 본다 — 4자 이상만,
+     그리고 «낱말이 시작되는 자리»에서 시작할 때만. 그래야 Preferred Email의
+     email은 잡고 Designation의 nation은 안 잡는다. */
   for(const h of headers){
     if(used.has(h)) continue;
-    const nh = norm(h);
+    const nh = colNormWithStarts(h);
     for(const a of aliases){
-      const na = norm(a);
-      if(na.length >= 4 && nh.includes(na)) return h;
+      const na = colNorm(a);
+      if(na.length < 4) continue;
+      for(let i = nh.text.indexOf(na); i >= 0; i = nh.text.indexOf(na, i + 1)){
+        if(nh.starts.has(i)) return h;
+      }
     }
   }
   return null;
