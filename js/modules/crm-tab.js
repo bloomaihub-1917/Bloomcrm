@@ -72,7 +72,12 @@ const KCOLS = Object.entries(SC).map(([key, c]) => ({ key, c }));
 ══════════════════════════════════════════ */
 export function crmFilt() {
   let l = [...targets];
-  if (crmEvF) l = l.filter(t => t.event === crmEvF);
+  /* 행사 여러 개를 함께 볼 수 있다 — 바이오 행사 둘을 같은 철에 하면
+     두 파이프라인을 나란히 놓고 봐야 «어디에 먼저 전화할까»가 보인다.
+     타겟은 행사마다 따로다. 컨택도 제안서도 행사마다 따로 가기 때문이다 —
+     한 줄로 합치면 KIC은 미팅까지 갔는데 BIO는 아직 미접촉인 상태를
+     적을 데가 없어진다. 여기서 합치는 건 «보는 것»뿐이다. */
+  if (crmEvSel().length) l = l.filter(t => crmEvSel().includes(t.event));
   if (crmStF) l = l.filter(t => t.status === crmStF);
   const q = (document.getElementById('crm-q') || {}).value || '';
   if (q) l = l.filter(t => t.name.toLowerCase().includes(q.toLowerCase()) || t.nameEn.toLowerCase().includes(q.toLowerCase()));
@@ -82,19 +87,39 @@ export function crmFilt() {
 /* ══════════════════════════════════════════
    좌측 행사 필터 사이드바 (원본 4622~4635행)
 ══════════════════════════════════════════ */
+/* 지금 고른 행사들 — 하나만 고르던 시절의 값(문자열)도 그대로 읽는다 */
+export function crmEvSel(){
+  if(!crmEvF) return [];
+  return Array.isArray(crmEvF) ? crmEvF : [crmEvF];
+}
+
 export function buildEvFil() {
   const el = document.getElementById('ev-fil');
   if (!el) return;
   const evs = [...new Set(targets.map(t => t.event).filter(Boolean))];
+  const sel = crmEvSel();
   el.innerHTML = evs.length
-    ? evs.map((e, i) => `
-        <button class="evc${crmEvF === e ? ' on' : ''}" onclick="setEvF('${escAttr(e)}')">
+    ? (sel.length > 1
+        ? `<div style="font-size:10.5px;color:var(--i4);padding:2px 8px 6px">${sel.length}개 행사를 함께 보는 중 ·
+             <a href="javascript:void(0)" onclick="clearEvF()" style="color:var(--a)">모두 해제</a></div>` : '')
+      + evs.map((e, i) => `
+        <button class="evc${sel.includes(e) ? ' on' : ''}" onclick="setEvF('${escAttr(e)}')"
+          title="여러 행사를 함께 보려면 차례로 누르세요">
           <span class="ev-d" style="background:${EC[i % EC.length]}"></span><span class="ev-n">${escapeHtml(e)}</span>
           <span style="font-size:10px;color:var(--i4)">${targets.filter(t => t.event === e).length}</span>
         </button>`).join('')
     : '<div style="padding:10px 8px;font-size:11px;color:var(--i4)">등록된 행사 없음</div>';
 }
-export function setEvF(ev) { setCrmEvF(crmEvF === ev ? null : ev); buildEvFil(); renderCrm(); }
+
+/* 누를 때마다 더하고 뺀다 — 하나만 고르던 때와 손놀림이 같고(한 번 누르면
+   그 행사만), 두 번째를 누르면 함께 보인다. */
+export function setEvF(ev) {
+  const cur = crmEvSel();
+  const next = cur.includes(ev) ? cur.filter(v => v !== ev) : [...cur, ev];
+  setCrmEvF(next.length ? next : null);
+  buildEvFil(); renderCrm();
+}
+export function clearEvF(){ setCrmEvF(null); buildEvFil(); renderCrm(); }
 export function filterSt2(s, btn) {
   setCrmStF(crmStF === s ? null : s);
   document.querySelectorAll('.s-s .nr').forEach(b => b.classList.remove('on'));
@@ -647,6 +672,7 @@ export function initCrmTab() {
    문자열로 호출되므로 반드시 window에 등록해야 동작한다.
 ══════════════════════════════════════════ */
 window.setEvF = setEvF;
+window.clearEvF = clearEvF;
 window.filterSt2 = filterSt2;
 window.switchCV = switchCV;
 window.renderCrm = renderCrm;

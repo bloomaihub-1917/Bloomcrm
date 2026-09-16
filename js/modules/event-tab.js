@@ -22,13 +22,14 @@
 
 import {
   EVENT_LIST, contacts, participations, targets, DOMAINS,
-  EXHIBITORS, exhibitorsForEvent, PART_TYPES, evParts, evPartDone, getOrgById,
+  EXHIBITORS, exhibitorsForEvent, PART_TYPES, evParts, evPartDone, getOrgById, CO_DB,
 } from '../state.js';
 import { RP, EVENT_PARTS, partStateOf } from '../constants.js';
 import { td, escapeHtml, escAttr, countryName, isMobile } from '../utils.js';
 import { saveEventToSheet, batchCreateExhibitors, postToSheet } from '../api.js';
 import { saveTargetToSheet, buildEvFil, renderCrm, updBadges } from './crm-tab.js';
 import { normalizeCompanyKey } from './company-tab.js';
+import { domainOfSector, domainName, findSectorByName } from './settings-tab.js';
 /* changed는 이 파일의 지역 변수 이름과 겹친다 — 별칭으로 들여온다 */
 import { trackAction, changed as changeMeta } from './audit-tab.js';
 
@@ -42,8 +43,11 @@ const evdbPicked = new Set();   // 기업 화면에서 고른 기업 (company_ke
 /* 참여자 화면 — 확정/타겟 거르개와 고른 사람 */
 let evdbStatFil = '';           // '' | 'confirmed' | 'target'
 const evdbPickedPeople = new Set();   // 고른 사람의 cid
+/* CRM 타겟 화면 — 창고에서 끌어올 기업 */
+let evdbTgtFil = 'new';         // 'new'(아직 타겟 아님) | 'on'(이미 타겟)
+const evdbPickedTgt = new Set();      // 고른 기업의 org id
 
-const VIEWS = [['profile', '개요'], ['people', '참여자'], ['orgs', '기업']];
+const VIEWS = [['profile', '개요'], ['people', '참여자'], ['orgs', '기업'], ['target', 'CRM 타겟']];
 
 /* ══════════════════════════════════════════
    집계 — participations를 행사 기준으로 다시 세운다
@@ -234,6 +238,7 @@ export function renderEvDb(){
 
   el.innerHTML = seg + (evdbView === 'profile' ? profileHtml(ev)
     : evdbView === 'orgs' ? orgsHtml(ev)
+    : evdbView === 'target' ? targetHtml(ev)
     : peopleHtml(ev));
 }
 
@@ -1016,6 +1021,181 @@ export function copyEvDbMails(){
     .catch(() => { try { document.execCommand('copy'); alert('주소를 복사했어요.'); } catch(e){ alert('복사에 실패했어요 — 직접 선택해서 복사해주세요.'); } });
 }
 
+
+/* ══════════════════════════════════════════
+   CRM 타겟 — 이 행사의 분야에서 창고를 훑는다
+
+   타겟은 행사마다 따로 쌓인다. AIASK는 10월 건축 행사라 건축 분야에서
+   고르고, EVENTKOREA 2027은 1월 이벤트 행사라 이벤트·MICE에서 고른다.
+   그 «어느 분야에서 고르나»는 행사 개요의 분야 칸이 정한다.
+
+   지금까지 타겟을 만드는 길은 «그 행사에 이미 온 기업» 중에서 고르는 것뿐이라,
+   아직 한 번도 안 만난 곳은 끌어올 수가 없었다. 열리지도 않은 행사는 온
+   기업이 없으니 타겟도 만들 수 없었다는 뜻이다 — EVENTKOREA 690개사 중
+   타겟이 0곳이었던 까닭이다.
+
+   여기서는 분야만 보고 창고 전체를 훑는다. 이미 타겟인 곳은 빼서 보여주되
+   («이미 타겟» 칩으로 볼 수는 있다), 두 번 만들지 않는다.
+══════════════════════════════════════════ */
+const evDomains = (ev) => String(ev && ev.domain || '').split('|').map(v => v.trim()).filter(Boolean);
+
+/* 그 기업이 이 행사 분야에 드나 — 섹터의 분야로 본다 */
+function orgsInDomain(doms){
+  if(!doms.length) return [];
+  return CO_DB.filter(co => (co.sectors || []).some(name => {
+    const sec = findSectorByName(name);
+    return sec && domainOfSector(sec).some(d => doms.includes(d));
+  }));
+}
+
+const tgtKeyOf = (co) => co.key;
+
+function targetHtml(ev){
+  const doms = evDomains(ev);
+  if(!doms.length){
+    return `<div style="padding:30px 16px;max-width:620px">
+      <div style="background:var(--ab);border:1px solid #FDE68A;border-radius:10px;padding:14px 16px">
+        <div style="font-size:12.5px;font-weight:700;color:var(--am);margin-bottom:5px">이 행사의 분야가 아직 없어요</div>
+        <div style="font-size:11.5px;color:var(--i3);line-height:1.6">
+          타겟은 «어느 분야에서 고르나»가 정해져야 훑을 수 있어요.
+          «개요» 화면에서 분야를 골라주세요 — 예: AIASK는 건축, EVENTKOREA는 이벤트·MICE.
+        </div></div></div>`;
+  }
+
+  const onKeys = new Set(targets.filter(t => t.event === ev.key)
+    .flatMap(t => [t.name, t.nameEn, ...(t.branches || [])])
+    .filter(Boolean).map(normalizeCompanyKey));
+  const pool = orgsInDomain(doms);
+  const isOn = (co) => onKeys.has(normalizeCompanyKey(co.nameKo || co.nameEn))
+    || (co.branches || []).some(b => onKeys.has(normalizeCompanyKey(b)));
+
+  const already = pool.filter(isOn);
+  const fresh = pool.filter(co => !isOn(co));
+  let list = evdbTgtFil === 'on' ? already : fresh;
+
+  const q = evdbQuery.trim().toLowerCase();
+  if(q) list = list.filter(co => [co.nameKo, co.nameEn, ...(co.sectors || [])]
+    .some(v => String(v || '').toLowerCase().includes(q)));
+
+  const domNames = doms.map(d => domainName(d)).join(' · ');
+  const chip = (v, label, n) => `<button class="seg-b${evdbTgtFil === v ? ' on' : ''}"
+    onclick="setEvDbTgtFil('${v}')">${label} ${n}개사</button>`;
+
+  return `<div style="padding:12px 16px 0;max-width:1000px">
+      <div style="font-size:11.5px;color:var(--i3);line-height:1.6;margin-bottom:10px">
+        <b>${escapeHtml(domNames)}</b> 분야의 기업 ${pool.length}개사를 훑어요 —
+        이 행사(${escapeHtml(ev.short || ev.key)})의 타겟으로 잡을 곳을 고르세요.
+        <span style="color:var(--i5)">분야는 «개요»에서 바꿉니다.</span>
+      </div>
+      <div class="seg" style="flex-wrap:wrap">
+        ${chip('new', '아직 타겟 아님', fresh.length)}
+        ${chip('on', '이미 타겟', already.length)}
+      </div>
+    </div>
+    <div style="padding:10px 16px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      ${searchBoxHtml('기업명·섹터 검색…')}
+      <button class="btn" style="font-size:11px" onclick="toggleEvDbTgtAll()">전체 선택/해제</button>
+      <div style="flex:1"></div>
+      <button class="btn bp" id="evdb-tgt-btn" onclick="openEvDbTargetSend()"
+        ${evdbTgtFil === 'on' ? 'disabled style="opacity:.5"' : ''}>CRM 타겟으로 잡기${
+        evdbPickedTgt.size ? ` (${evdbPickedTgt.size})` : ''}</button>
+    </div>
+    <div style="padding:6px 16px 40px">${targetRowsHtml(list)}</div>`;
+}
+
+function targetRowsHtml(list){
+  if(!list.length) return '<div style="font-size:12px;color:var(--i4);padding:20px 0">해당하는 기업이 없어요.</div>';
+  return list.map(co => {
+    const nm = co.nameKo || co.nameEn || '(이름 없음)';
+    const on = evdbTgtFil === 'on';
+    return `<label style="display:flex;align-items:center;gap:10px;background:var(--W);border:1px solid var(--i6);
+        border-radius:8px;padding:9px 12px;margin-bottom:5px;${on ? '' : 'cursor:pointer'}">
+      ${on ? '<span class="pill p-green">타겟</span>'
+           : `<input type="checkbox" ${evdbPickedTgt.has(co.key) ? 'checked' : ''}
+                onchange="pickEvDbTgt('${escAttr(co.key)}',this.checked)">`}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12.5px;font-weight:600;color:var(--i1)">${escapeHtml(nm)}</div>
+        <div style="font-size:10.5px;color:var(--i4);margin-top:2px">
+          ${(co.sectors || []).map(sx => `<span class="pill p-blue" style="margin-right:3px">${escapeHtml(sx)}</span>`).join('')}
+          ${co.contacts && co.contacts.length ? `담당자 ${co.contacts.length}명` : '<span style="color:var(--i5)">담당자 없음</span>'}
+        </div>
+      </div>
+    </label>`;
+  }).join('');
+}
+
+export function setEvDbTgtFil(v){ evdbTgtFil = v; evdbPickedTgt.clear(); renderEvDb(); }
+
+export function pickEvDbTgt(key, on){
+  if(on) evdbPickedTgt.add(key); else evdbPickedTgt.delete(key);
+  const btn = document.getElementById('evdb-tgt-btn');
+  if(btn) btn.textContent = evdbPickedTgt.size ? `CRM 타겟으로 잡기 (${evdbPickedTgt.size})` : 'CRM 타겟으로 잡기';
+}
+
+export function toggleEvDbTgtAll(){
+  const ev = EVENT_LIST.find(e => e.key === evdbEvent);
+  if(!ev || evdbTgtFil === 'on') return;
+  const doms = evDomains(ev);
+  const onKeys = new Set(targets.filter(t => t.event === ev.key)
+    .flatMap(t => [t.name, t.nameEn, ...(t.branches || [])]).filter(Boolean).map(normalizeCompanyKey));
+  let list = orgsInDomain(doms).filter(co => !onKeys.has(normalizeCompanyKey(co.nameKo || co.nameEn)));
+  const q = evdbQuery.trim().toLowerCase();
+  if(q) list = list.filter(co => [co.nameKo, co.nameEn, ...(co.sectors || [])]
+    .some(v => String(v || '').toLowerCase().includes(q)));
+  const allOn = list.length > 0 && list.every(co => evdbPickedTgt.has(co.key));
+  list.forEach(co => { if(allOn) evdbPickedTgt.delete(co.key); else evdbPickedTgt.add(co.key); });
+  renderEvDb();
+}
+
+export async function openEvDbTargetSend(){
+  const ev = EVENT_LIST.find(e => e.key === evdbEvent);
+  if(!ev) return;
+  if(!evdbPickedTgt.size){ alert('타겟으로 잡을 기업을 골라주세요.'); return; }
+  const picked = CO_DB.filter(co => evdbPickedTgt.has(co.key));
+  if(!confirm(`${picked.length}개사를 «${ev.short || ev.key}» CRM 타겟으로 잡을까요?\n`
+    + `진행 단계는 «타겟 등록»부터 시작합니다.`)) return;
+
+  const made = [];
+  for(const co of picked){
+    const t = {
+      id: 'T-' + Date.now() + '-' + made.length,
+      name: co.nameKo || co.nameEn || '', nameEn: co.nameEn || '',
+      sector: (co.sectors || [])[0] || '', hq: co.hq || co.country || '',
+      event: ev.key, role: '', status: '미접촉', priority: 'mid', assignee: '',
+      lastActivity: td(),
+      branches: [co.nameKo, co.nameEn].filter(Boolean),
+      mainBranch: co.nameKo || co.nameEn || '',
+      log: [{ type: '메모', text: `${domainName(evDomains(ev)[0])} 분야에서 ${ev.short || ev.key} 타겟으로 잡음`,
+              date: td(), color: '#9C9890' }],
+      currentStage: 1,
+    };
+    targets.unshift(t);
+    made.push(t);
+  }
+  renderEvDb();
+
+  /* 한 건씩 저장한다 — 실패한 것만 정확히 되돌리기 위해서다. 수백 개를
+     한 번에 보내면 어디까지 들어갔는지 알 수 없다. */
+  const failed = [];
+  for(const t of made){
+    const r = await saveTargetToSheet(t);
+    if(!r || r.ok === false) failed.push(t);
+  }
+  if(failed.length){
+    const ids = new Set(failed.map(t => t.id));
+    for(let i = targets.length - 1; i >= 0; i--) if(ids.has(targets[i].id)) targets.splice(i, 1);
+    alert(`${made.length - failed.length}개사는 타겟이 됐고 ${failed.length}개사는 저장에 실패했어요.\n`
+      + '실패한 곳은 목록에서 되돌렸습니다 — 네트워크 확인 후 다시 골라주세요.');
+  }
+  evdbPickedTgt.clear();
+  try { buildEvFil(); renderCrm(); updBadges(); } catch(e){}
+  renderEvDb();
+  if(!failed.length){
+    trackAction('add', 'CRM 타겟 등록', `${made.length}개사`,
+      `<b>${escapeHtml(ev.short || ev.key)}</b> 타겟으로 <b>${made.length}개사</b>를 분야에서 잡음`);
+  }
+}
+
 export function initEvDbTab(){
   invalidateEvRows();
   buildEvDbList();
@@ -1044,3 +1224,7 @@ window.confirmEvDbPeople   = confirmEvDbPeople;
 window.exportEvDbPeople    = exportEvDbPeople;
 window.openEvDbMailList    = openEvDbMailList;
 window.copyEvDbMails       = copyEvDbMails;
+window.setEvDbTgtFil       = setEvDbTgtFil;
+window.pickEvDbTgt         = pickEvDbTgt;
+window.toggleEvDbTgtAll    = toggleEvDbTgtAll;
+window.openEvDbTargetSend  = openEvDbTargetSend;
