@@ -1066,6 +1066,16 @@ export function mdbFilterPairs(pairs){
   return out;
 }
 
+/* 모바일 검색칸 — 상단바(.tb)가 모바일에서 통째로 숨겨져 데스크톱 검색창을
+   쓸 수 없다(헤더의 돋보기가 숨은 칸에 focus를 걸고 있어 아무 일도 안 일어났다).
+   검색어는 데스크톱 칸 하나로 모아 둔다 — 읽는 자리가 여섯 군데라, 둘이 서로
+   다른 값을 들고 있으면 어느 쪽이 지금 걸린 조건인지 알 수 없다. */
+export function searchMdbM(v){
+  const d = document.getElementById('mdb-q');
+  if(d) d.value = v;
+  renderMDB();
+}
+
 export function renderMDB(){
   const pairs = getMDBPairs();
   renderCtryChip();
@@ -2504,6 +2514,7 @@ window.bulkDeleteMDBContacts = bulkDeleteMDBContacts;
 window.setDBView = setDBView;
 window.getMDBPairs = getMDBPairs;
 window.renderMDB = renderMDB;
+window.searchMdbM = searchMdbM;
 window.updateMDBBadges = updateMDBBadges;
 window.renderMDBFlat = renderMDBFlat;
 window.emptyStateRow = emptyStateRow;

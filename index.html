@@ -280,8 +280,17 @@
 <div class="mob-header" id="mob-h-mdb">
   <button class="mob-menu-btn" onclick="toggleSb()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
   <div class="mob-title">Master DB</div>
-  <button class="mob-action-btn" onclick="document.getElementById('mdb-q').focus()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></button>
+  <button class="mob-action-btn" onclick="document.getElementById('mdb-q-m').focus()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></button>
 </div>
+  <!-- 모바일 검색 — 전시 탭과 같은 이유로 따로 둔다(.tb가 모바일에서 숨겨진다).
+       헤더의 돋보기는 여기로 focus를 건다. -->
+  <div class="mob-srch">
+    <div class="srch" style="width:100%">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input type="text" id="mdb-q-m" placeholder="이름·기업·국가·이메일 검색…" style="width:100%"
+        oninput="searchMdbM(this.value)">
+    </div>
+  </div>
   <div class="tb">
     <div class="tb-t">Master DB <span class="tb-s">통합 연락처 데이터베이스</span></div>
     <div class="srch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" placeholder="이름·기업·국가·이메일 검색 — 국가:싱가포르 처럼도 돼요" oninput="renderMDB()" id="mdb-q" title="띄어 쓰면 «그리고»예요 — «파렉셀 팀장»은 둘 다 맞는 사람.&#10;칸을 콕 집으려면 이름:·기업:·국가:·직함:·부서:·이메일:·연락처:·태그:·분야:·출처:"></div>
