@@ -59,9 +59,9 @@ import {
   exhibitorsForEvent,
 } from '../state.js';
 import { RP, avB, avF } from '../constants.js';
-import { escapeHtml, escAttr, levenshteinDist, parseSectorScope, sectorKey, countryName, isMobile, td, leftPill, safeUrl, parseLinks } from '../utils.js';
-import { postToSheet, batchCreateExhibitors } from '../api.js';
-import { parseSectors, joinSectors, mainSectors, sectorNamesInDomain, domainName, domainOfSector, UNASSIGNED_DOMAIN } from './settings-tab.js';
+import { escapeHtml, escAttr, levenshteinDist, parseSectorScope, sectorKey, countryName, isMobile, td, leftPill, safeUrl, parseLinks, slugifySectorName } from '../utils.js';
+import { postToSheet, batchCreateExhibitors, upsertSectorRow } from '../api.js';
+import { parseSectors, joinSectors, mainSectors, sectorNamesInDomain, domainName, domainOfSector, findSectorByName, UNASSIGNED_DOMAIN } from './settings-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
 import { trackAction, changed } from './audit-tab.js';
 import { billedAmount, paidAmount, currencyOf, exhibitorTradeFor, fmtMoney,
@@ -1219,6 +1219,7 @@ export function renderCoDetail(c){
           ${(() => { const k = orgKindOf(c.kind); return k
             ? `<span class="pill ${k.cls}" style="cursor:pointer" onclick="editCoKind('${escAttr(c.key)}')" title="클릭하여 기업 종류 변경">${escapeHtml(k.label)}</span>`
             : `<span class="pill p-gray" style="cursor:pointer" onclick="editCoKind('${escAttr(c.key)}')">종류 지정</span>`; })()}
+          ${coDomainPill(c)}
           <span class="pill ${c.sector ? 'p-blue' : 'p-gray'}" style="cursor:pointer" onclick="editCoSector('${escAttr(c.key)}')" title="클릭하여 섹터 변경">
             <span id="co-sector-${escapeHtml(c.key)}">${escapeHtml(c.sectors && c.sectors.length ? c.sectors.join(' · ') : '미분류')}</span></span>
           ${c.catCode ? `<span class="btag main" id="co-catcode-${escapeHtml(c.key)}">${escapeHtml(c.catCode)}</span>`
@@ -1759,6 +1760,97 @@ export function closeCoSectorPopover(){
   if(pop) pop.remove();
   document.removeEventListener('mousedown', handleCoSectorOutsideClick);
 }
+
+/* ══════════════════════════════════════════
+   분야와 섹터를 나란히
+
+   화면에는 섹터만 있었다. 그런데 «임상 IT·데이터»를 보고 그게 바이오 분야인지
+   아는 건 그 목록을 외운 사람뿐이다. 분야는 섹터에서 파생되니 계산할 수
+   있는데도 보여주지 않아서, 옆 사람에게 물어야 알 수 있었다.
+
+   섹터를 모르는 채로 분야만 정해야 할 때도 있다 — 건축 행사에서 만난 회사인데
+   설계인지 시공인지는 아직 모르는 식이다. 그럴 때 분야 배지를 눌러 분야만
+   고르면, 그 분야의 «업종 미정» 자리로 들어간다. 나중에 섹터를 알면 그때
+   옮기면 된다. */
+function coDomainsOf(c){
+  const out = new Set();
+  (c.sectors || []).forEach(name => {
+    const sec = findSectorByName(name);
+    if(sec) domainOfSector(sec).forEach(d => out.add(d));
+  });
+  return [...out];
+}
+
+function coDomainPill(c){
+  const doms = coDomainsOf(c);
+  const label = doms.length ? doms.map(d => domainName(d)).join(' · ') : '분야 미정';
+  return `<span class="pill ${doms.length ? 'p-teal' : 'p-gray'}" style="cursor:pointer"
+      onclick="editCoDomain('${escAttr(c.key)}')" title="클릭하여 분야 지정 — 섹터를 몰라도 분야만 정할 수 있어요">
+      <span id="co-domain-${escapeHtml(c.key)}">${escapeHtml(label)}</span></span>`;
+}
+
+export function closeCoDomainPopover(){
+  const el = document.getElementById('co-domain-pop');
+  if(el) el.remove();
+}
+
+export function editCoDomain(key){
+  const c = CO_DB.find(x => x.key === key);
+  if(!c) return;
+  closeCoDomainPopover();
+  const cur = coDomainsOf(c);
+
+  const wrap = document.createElement('div');
+  wrap.id = 'co-domain-pop';
+  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9999;'
+    + 'display:flex;align-items:center;justify-content:center;padding:16px';
+  wrap.onclick = (e) => { if(e.target === wrap) closeCoDomainPopover(); };
+  wrap.innerHTML = `<div style="background:var(--W);border-radius:12px;padding:20px;width:100%;max-width:400px;
+      max-height:80vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.2)" onclick="event.stopPropagation()">
+    <div style="font-size:14px;font-weight:700;margin-bottom:4px">분야 지정</div>
+    <div style="font-size:11.5px;color:var(--i3);line-height:1.6;margin-bottom:12px">
+      섹터를 아직 모르면 분야만 골라 두세요 — 그 분야의 «업종 미정» 자리로 들어가고,
+      나중에 섹터를 알면 옆의 섹터 배지에서 옮기면 됩니다.
+      ${cur.length ? `<br>지금: <b>${escapeHtml(cur.map(d => domainName(d)).join(' · '))}</b>` : ''}
+    </div>
+    ${DOMAINS.map(d => `<button class="btn" style="width:100%;justify-content:flex-start;margin-bottom:5px;font-size:12px"
+      data-dom="${escAttr(d.id)}">${escapeHtml(d.name)}${cur.includes(d.id) ? ' ✓' : ''}</button>`).join('')
+      || '<div style="font-size:11.5px;color:var(--i4)">설정 › 섹터 관리에서 분야를 먼저 만들어주세요.</div>'}
+    <button class="btn bs" style="width:100%;justify-content:center;margin-top:8px"
+      onclick="closeCoDomainPopover()">취소</button>
+  </div>`;
+  document.body.appendChild(wrap);
+
+  wrap.querySelectorAll('[data-dom]').forEach(b => {
+    b.onclick = async () => {
+      closeCoDomainPopover();
+      await assignCoDomain(c, b.dataset.dom);
+    };
+  });
+}
+
+/* 분야만 정한다 — 그 분야에 이미 섹터가 붙어 있으면 아무것도 하지 않는다.
+   덮어쓰면 손으로 골라 둔 섹터가 «업종 미정»으로 후퇴한다. */
+async function assignCoDomain(c, domainId){
+  if(coDomainsOf(c).includes(domainId)) return;
+  const name = `${domainName(domainId)} 업종 미정`;
+  let sec = findSectorByName(name);
+  if(!sec){
+    sec = { id: slugifySectorName(name), name, parent: null, domain: domainId, canonical: '' };
+    COMPANY_SECTORS.push(sec);
+    const r = await upsertSectorRow(sec);
+    if(r && r.ok === false){
+      const i = COMPANY_SECTORS.indexOf(sec);
+      if(i >= 0) COMPANY_SECTORS.splice(i, 1);
+      alert(`«${name}» 섹터를 만들지 못했어요. 네트워크를 확인하고 다시 시도해주세요.`);
+      return;
+    }
+  }
+  applyCoSectors(c, [...(c.sectors || []), sec.name]);
+  renderCoDetail(c);
+  try { buildCoCAT(); } catch(e){}
+}
+
 export function editCoSector(key){
   const c = CO_DB.find(x => x.key === key);
   if(!c) return;
@@ -2240,6 +2332,8 @@ window.editCoNameKo = editCoNameKo;
 window.editCoNameEn = editCoNameEn;
 window.editCoNotes = editCoNotes;
 window.editCoProducts = editCoProducts;
+window.editCoDomain = editCoDomain;
+window.closeCoDomainPopover = closeCoDomainPopover;
 window.editCoPhone = editCoPhone;
 window.editCoEmail = editCoEmail;
 window.editCoWebsite = editCoWebsite;
