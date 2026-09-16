@@ -1330,7 +1330,7 @@ function mdbCard(c, p, { showOrg = true } = {}){
         onclick="event.stopPropagation();toggleMDBSelect(${c.id})" title="탭해서 선택/해제">${isSel ? '✓' : ab(c.nameKo || c.nameEn || '')}</div>
       <div class="mdbc-hd">
         ${showOrg && org ? `<div class="mdbc-org">${escapeHtml(org)}</div>` : ''}
-        <div class="mdbc-nm">${escapeHtml(c.nameKo || c.nameEn || '이름 없음')}${
+        <div class="mdbc-nm"${(c.nameKo||c.nameEn) ? '' : ' style="color:var(--i5)"'}>${escapeHtml(personName(c))}${
           c.nameKo && c.nameEn ? `<span class="mdbc-en">${escapeHtml(c.nameEn)}</span>` : ''}${
           isBDContact(c) ? ' <span class="pill p-teal mdbc-tag">BD</span>' : ''}${
           isCLevelContact(c) ? ' <span class="pill p-gold mdbc-tag">C-level</span>' : ''}${leftPill(c)}</div>
@@ -1478,7 +1478,7 @@ export function renderMDBFlat(pairs){
       <td onclick="event.stopPropagation()" style="text-align:center"><input type="checkbox" ${isSel?'checked':''} onclick="event.stopPropagation();toggleMDBSelect(${c.id}, event)" title="Shift를 누른 채 누르면 이전에 고른 줄까지 한꺼번에"></td>
       <td><div class="tdco">
         <div class="tdav${isSel?' sel':''}" onclick="event.stopPropagation();toggleMDBSelect(${c.id}, event)" title="클릭해서 선택/해제 · Shift를 누른 채 누르면 사이 전부">${isSel?'✓':ab(c.nameKo||c.nameEn||"")}</div>
-        <div><div class="tdnm">${escapeHtml(personName(c))}${isBDContact(c)?' <span class="pill p-teal" style="font-size:9px;padding:1px 5px">BD</span>':''}${isCLevelContact(c)?' <span class="pill p-gold" style="font-size:9px;padding:1px 5px">C-level</span>':''}${leftPill(c)}</div><div class="tdsb">${c.nameKo && c.nameEn ? nameEn : ''}</div></div>
+        <div><div class="tdnm"${(c.nameKo||c.nameEn) ? '' : ' style="color:var(--i5)" title="이름을 아직 모르는 줄 — 그 회사의 메인 컨택포인트예요"'}>${escapeHtml(personName(c))}${isBDContact(c)?' <span class="pill p-teal" style="font-size:9px;padding:1px 5px">BD</span>':''}${isCLevelContact(c)?' <span class="pill p-gold" style="font-size:9px;padding:1px 5px">C-level</span>':''}${leftPill(c)}</div><div class="tdsb">${c.nameKo && c.nameEn ? nameEn : ''}</div></div>
       </div></td>
       <td style="max-width:200px"><div class="tdnm" style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${orgTitle}">${c.orgKo?orgKo:orgEn}</div><div class="tdsb" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${orgEnTitle}">${c.orgKo?orgEn:''}</div></td>
       <td style="color:var(--i2);font-size:12px;white-space:nowrap">${escapeHtml(contactCountryText(c))}</td>

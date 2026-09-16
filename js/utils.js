@@ -4,7 +4,12 @@ import { COUNTRIES, CAT_KEYS } from './constants.js';
 import { COMPANY_SECTORS, CODE_LISTS, hasLeft, movedTo } from './state.js';
 
 /* 이름에서 이니셜 추출 (한글/영문 대문자 최대 2글자) */
-export function ab(n){ const m=n.match(/[가-힣A-Z]/g); return (m||[]).slice(0,2).join('').toUpperCase() || n.slice(0,2).toUpperCase(); }
+export function ab(n){
+  const t = String(n || '').trim();
+  if(!t || t === NO_NAME) return '·';   // 이름이 없는 줄 — 사람처럼 보이지 않게
+  const m = t.match(/[가-힣A-Z]/g);
+  return (m || []).slice(0, 2).join('').toUpperCase() || t.slice(0, 2).toUpperCase();
+}
 
 /* 오늘 날짜 문자열 (YYYY-MM-DD)
 
@@ -96,19 +101,26 @@ export function countryOptions(selected){
    사람 이름 한 줄
 
    국문명만 쓰던 자리가 여럿이었다. 그래서 Jiaxin Chen·Wangkee Tan처럼 국문명이
-   없는 사람은 활동 로그에 «<b></b>의 정보를 수정했어요»로, 행사 참여 기록에는
-   이름 대신 id 숫자로 남았다 — 누구 얘긴지 알 수 없다.
+   없는 사람은 활동 로그에 «<b></b>의 정보를 수정했어요»로 남았다 — 누구
+   얘긴지 알 수 없다. 국문·영문 어느 쪽이든 있는 것을 쓴다.
 
-   국문·영문 어느 쪽이든 있는 것을 쓰고, 둘 다 없으면 이메일이라도 보여준다.
-   그것마저 없으면 «이름 없음» — 빈칸으로 두면 문장이 무너진다. */
+   둘 다 없으면 «-»로 둔다.
+
+   전에는 이메일로 대신 채우고 그것마저 없으면 «이름 없음»이라 적었다. 그런데
+   명단에는 사람 이름 대신 «컨택»·«*»이 적혀 오는 줄이 있고, 그건 그런 이름의
+   사람이 아니라 그 회사의 메인 컨택포인트라는 뜻이다. 이메일을 이름 자리에
+   넣으면 그 사실이 가려져서, 메일 첫머리에 그 주소를 이름처럼 쓰게 된다.
+
+   비워 두는 편이 더 정확하다 — 이름 칸의 «-»가 «아직 누구인지 모른다»를
+   그대로 말해 준다. 연락처는 옆 칸에 그대로 있다. */
+export const NO_NAME = '-';
 export function personName(c){
-  if(!c) return '이름 없음';
-  return String(c.nameKo || '').trim() || String(c.nameEn || '').trim()
-    || String(c.email1 || '').trim() || '이름 없음';
+  if(!c) return NO_NAME;
+  return String(c.nameKo || '').trim() || String(c.nameEn || '').trim() || NO_NAME;
 }
 /* 둘 다 있으면 나란히 — 드로어 제목처럼 넓은 자리에서 쓴다 */
 export function personFullName(c){
-  if(!c) return '이름 없음';
+  if(!c) return NO_NAME;
   const ko = String(c.nameKo || '').trim(), en = String(c.nameEn || '').trim();
   if(ko && en) return `${ko} · ${en}`;
   return personName(c);
