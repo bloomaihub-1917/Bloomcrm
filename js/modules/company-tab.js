@@ -290,6 +290,8 @@ export function buildCoDB(){
       bizNo:    o.biz_no || '',
       notes:    o.notes || '',
       products: o.products || '',
+      phone:    o.phone || '',
+      email:    o.email || '',
       catCode:  o.cat_code || '',
       source:   o.source || '',
       updatedAt: o.updated_at || '',
@@ -821,6 +823,8 @@ export function openAddOrgModal(){
       <div class="fg"><label class="fl">국가</label><input class="fi" id="ao-country" placeholder="예: 대한민국"></div>
       <div class="fg"><label class="fl">웹사이트</label><input class="fi" id="ao-website" placeholder="https://"></div>
       <div class="fg"><label class="fl">사업자등록번호</label><input class="fi" id="ao-bizNo" placeholder="000-00-00000"></div>
+      <div class="fg"><label class="fl">대표 전화</label><input class="fi" id="ao-phone" placeholder="02-000-0000"></div>
+      <div class="fg"><label class="fl">대표 메일</label><input class="fi" id="ao-email" placeholder="info@example.com"></div>
       <div class="fg"><label class="fl">취급 품목</label><input class="fi" id="ao-products" placeholder="예: LED, 렌탈,포토"></div>
       <div class="fg"><label class="fl">메모</label><textarea class="fi" id="ao-notes" rows="2"></textarea></div>
       <div id="ao-msg" style="font-size:11.5px;min-height:16px;margin-bottom:8px"></div>
@@ -844,7 +848,8 @@ export async function submitAddOrg(){
   const r = await createOrg({
     nameKo: v('ao-nameKo'), nameEn: v('ao-nameEn'), kind: v('ao-kind'),
     country: v('ao-country'), website: v('ao-website'), bizNo: v('ao-bizNo'),
-    products: v('ao-products'), notes: v('ao-notes'),
+    products: v('ao-products'), phone: v('ao-phone'), email: v('ao-email'),
+    notes: v('ao-notes'),
   });
   if(!r.ok){
     if(btn){ btn.disabled = false; btn.textContent = '등록'; }
@@ -1236,6 +1241,8 @@ export function renderCoDetail(c){
             ['bizNo',   '사업자번호', c.bizNo,  `editCoBizNo('${escAttr(c.key)}')`, false],
             ['abbr',    '약어',     c.abbr,    `editCoAbbr('${escAttr(c.key)}')`, false],
             ['source',  '출처',     c.source,  `editCoSource('${escAttr(c.key)}')`, false],
+            ['phone',   '대표 전화', c.phone,   `editCoPhone('${escAttr(c.key)}')`, false],
+            ['email',   '대표 메일', c.email,   `editCoEmail('${escAttr(c.key)}')`, false],
             ['products','취급 품목', c.products, `editCoProducts('${escAttr(c.key)}')`, false],
             ['notes',   '메모',     c.notes,   `editCoNotes('${escAttr(c.key)}')`, false],
           ];
@@ -1314,7 +1321,7 @@ export function switchCoT(k){
 const ORG_FIELDS = {
   nameKo:'name_ko', nameEn:'name_en', abbr:'abbr', kind:'kind', orgStatus:'status',
   country:'country', hq:'hq', website:'website', bizNo:'biz_no', catCode:'cat_code',
-  notes:'notes', products:'products', source:'source',
+  notes:'notes', products:'products', phone:'phone', email:'email', source:'source',
 };
 
 /* 화면용 기업 객체(c)에서 바뀐 필드만 서버 컬럼명으로 옮겨 담는다.
@@ -1526,7 +1533,7 @@ export function orgIdForName(name){
    전에는 기업이 연락처에서 파생됐기 때문에, 담당자를 모르는 회사는 등록할 방법이
    아예 없었다. 잠재 고객사나 시공 벤더를 먼저 적어두고 나중에 사람을 붙일 수 있게
    한다. 이름이 같은 기업(옛 이름 포함)이 이미 있으면 새로 만들지 않고 알린다. */
-export async function createOrg({ nameKo, nameEn, kind, sectors, country, website, bizNo, notes, products }){
+export async function createOrg({ nameKo, nameEn, kind, sectors, country, website, bizNo, notes, products, phone, email }){
   const name = (nameKo || nameEn || '').trim();
   if(!name) return { ok: false, error: '기업명을 입력해주세요.' };
 
@@ -1539,7 +1546,7 @@ export async function createOrg({ nameKo, nameEn, kind, sectors, country, websit
     kind: kind || '잠재고객사', status: '활성',
     sectors: joinSectors(sectors || []), country: country || '', hq: country || '',
     website: website || '', biz_no: bizNo || '', cat_code: '', notes: notes || '',
-    products: products || '',
+    products: products || '', phone: phone || '', email: email || '',
     source: '수동 등록', created_at: now, updated_at: now,
   };
   const r = await postToSheet({ sheet: 'orgs', action: 'upsert', data: rec }, '기업 등록');
@@ -1578,6 +1585,9 @@ const CO_TEXT_FIELDS = {
   /* 섹터가 «고르는 값»이라면 이쪽은 «적는 값» — 회사가 실제로 하는 일을
      명단에 적힌 그대로 담는다(예: 렌탈,포토 / 음향, 통역시스템). */
   products:{ placeholder: '예: LED, 렌탈,포토 — 쉼표로 여러 개',  multiline: false, empty: '취급 품목 추가' },
+  /* 담당자를 아직 못 찾은 회사의 대표번호 — 사람이 아니라 회사에 붙는다 */
+  phone:   { placeholder: '02-000-0000',                      multiline: false, empty: '대표 전화 추가' },
+  email:   { placeholder: 'info@example.com',                 multiline: false, empty: '대표 메일 추가' },
   website: { placeholder: 'https://example.com',              multiline: false, empty: '웹사이트 추가', isLink: true },
   country: { placeholder: '예: 한국',                          multiline: false, empty: '국가 추가' },
   abbr:    { placeholder: '예: SK',                            multiline: false, empty: '약어 추가' },
@@ -1687,6 +1697,8 @@ export function editCoNameKo(key){ startCoInlineEdit(key, 'nameKo'); }
 export function editCoNameEn(key){ startCoInlineEdit(key, 'nameEn'); }
 export function editCoNotes(key){ startCoInlineEdit(key, 'notes'); }
 export function editCoProducts(key){ startCoInlineEdit(key, 'products'); }
+export function editCoPhone(key){ startCoInlineEdit(key, 'phone'); }
+export function editCoEmail(key){ startCoInlineEdit(key, 'email'); }
 export function editCoWebsite(key){ startCoInlineEdit(key, 'website'); }
 export function editCoCountry(key){ startCoInlineEdit(key, 'country'); }
 export function editCoAbbr(key){ startCoInlineEdit(key, 'abbr'); }
@@ -2212,6 +2224,8 @@ window.editCoNameKo = editCoNameKo;
 window.editCoNameEn = editCoNameEn;
 window.editCoNotes = editCoNotes;
 window.editCoProducts = editCoProducts;
+window.editCoPhone = editCoPhone;
+window.editCoEmail = editCoEmail;
 window.editCoWebsite = editCoWebsite;
 window.editCoCountry = editCoCountry;
 window.editCoAbbr = editCoAbbr;

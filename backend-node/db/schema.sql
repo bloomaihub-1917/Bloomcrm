@@ -952,3 +952,11 @@ ALTER TABLE contacts ADD COLUMN IF NOT EXISTS prefix TEXT;
    섹터가 «고르는 값»이라면 이쪽은 «적는 값»이다 — 열일곱 개로 좁힌 뒤
    «통역시스템»으로 다시 찾는 두 단계가 그래서 가능해진다. */
 ALTER TABLE orgs ADD COLUMN IF NOT EXISTS products TEXT;
+
+/* ── 기업의 대표 전화·메일 ──
+   담당자 이름 없이 대표번호만 적힌 줄이 명단에 106개 있었다. 이름이 없으면
+   연락처로 만들 수 없고(업로드도 그런 줄은 사람으로 만들지 않는다), 버리면
+   전화 한 통이면 담당자를 알아낼 수 있는 곳을 통째로 잃는다.
+   대표번호는 원래 사람이 아니라 회사의 것이다. */
+ALTER TABLE orgs ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE orgs ADD COLUMN IF NOT EXISTS email TEXT;
