@@ -59,7 +59,7 @@ import {
   exhibitorsForEvent,
 } from '../state.js';
 import { RP, avB, avF } from '../constants.js';
-import { escapeHtml, escAttr, levenshteinDist, parseSectorScope, sectorKey, countryName, isMobile, td, leftPill, safeUrl } from '../utils.js';
+import { escapeHtml, escAttr, levenshteinDist, parseSectorScope, sectorKey, countryName, isMobile, td, leftPill, safeUrl, parseLinks } from '../utils.js';
 import { postToSheet, batchCreateExhibitors } from '../api.js';
 import { parseSectors, joinSectors, mainSectors, sectorNamesInDomain, domainName, domainOfSector, UNASSIGNED_DOMAIN } from './settings-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
@@ -1249,12 +1249,22 @@ export function renderCoDetail(c){
           const has = F.filter(f => String(f[2] || '').trim());
           const gap = F.filter(f => !String(f[2] || '').trim() && f[3]);
 
+          /* 한 칸에 주소가 여럿이면 각각 링크로 그린다 — 통째로 걸면
+             하나도 제대로 안 열린다. 괄호에 적힌 설명은 이름표로 옆에 둔다. */
+          const linksHtml = (val) => parseLinks(val).map(({ url, label }) => {
+            const href = safeUrl(url);
+            const a = href
+              ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(url)}</a>`
+              : escapeHtml(url);
+            return a + (label ? ` <span style="color:var(--i5);font-size:10px">${escapeHtml(label)}</span>` : '');
+          }).join('<span style="color:var(--i6)"> · </span>');
+
           const row = ([id, label, val, on, isLink]) => `
             <div style="display:flex;gap:8px;align-items:baseline;padding:2px 0;font-size:11.5px">
               <span style="flex:0 0 62px;color:var(--i5)">${escapeHtml(label)}</span>
               <span style="flex:1;min-width:0;color:var(--i2);${on ? 'cursor:pointer' : ''}" ${on ? `onclick="${on}"` : ''}>
                 <span id="co-${id}-${escapeHtml(c.key)}">${
-                  isLink && safeUrl(val) ? `<a href="${escapeHtml(safeUrl(val))}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(val)}</a>`
+                  isLink && val ? linksHtml(val)
                     : val ? escapeHtml(val)
                     /* 빈 줄은 누를 자리가 없으면 편집으로 들어갈 수 없다 — 옅은 안내를 둔다 */
                     : `<span style="color:var(--i5)">입력</span>`}</span></span>
@@ -1604,8 +1614,14 @@ function renderCoFieldDisplay(key, field){
   const span = document.getElementById(`co-${field}-${key}`);
   if(!c || !cfg || !span) return;
   const val = c[field] || '';
-  if(cfg.isLink && safeUrl(val)){
-    span.innerHTML = `<a href="${escapeHtml(safeUrl(val))}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(val)}</a>`;
+  if(cfg.isLink && val){
+    span.innerHTML = parseLinks(val).map(({ url, label }) => {
+      const href = safeUrl(url);
+      const a = href
+        ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(url)}</a>`
+        : escapeHtml(url);
+      return a + (label ? ` <span style="color:var(--i5);font-size:10px">${escapeHtml(label)}</span>` : '');
+    }).join('<span style="color:var(--i6)"> · </span>');
   } else {
     span.textContent = val || cfg.empty;
   }

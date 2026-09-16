@@ -50,8 +50,39 @@ export function safeUrl(v){
   if(!t) return '';
   const m = t.match(/^([a-z][a-z0-9+.-]*):/i);
   if(m) return /^(https?|mailto)$/i.test(m[1]) ? t : '';
+  /* 주소 한가운데 띄어쓰기가 있으면(«Nine audio.co.kr») 어디까지가 주소인지
+     우리가 정할 수 없다. 억지로 링크를 걸면 눌러도 안 열리는데 눌러보기
+     전에는 모른다 — 차라리 글자로 두고 사람이 고치게 한다. */
+  if(/\s/.test(t)) return '';
   if(t.startsWith('//')) return 'https:' + t;   // //example.com 꼴
   return 'https://' + t;
+}
+
+/* 한 칸에 여러 주소가 적힌 것을 쪼갠다.
+
+   명단의 웹사이트 칸은 사람이 손으로 적은 자리라 이런 것들이 섞여 온다.
+     u1lab.com(공식홈) / physicalmedia.ai/kr/(행사용)
+     (기업) twinkly.co.kr / (렌탈) my-lighting.com
+     aladdin-lights.com (글로벌 브랜드 홈페이지)
+   통째로 링크를 걸면 주소 하나도 제대로 안 열린다.
+
+   나누는 기준은 «띄어 쓴 슬래시»다. 그냥 슬래시로 나누면 주소 안의 경로
+   (physicalmedia.ai/kr/)까지 잘려 나간다. 괄호는 앞에 오든 뒤에 오든
+   설명으로 보고 떼어내 이름표로 쓴다. */
+export function parseLinks(v){
+  return String(v || '').split(/\s+\/\s+|[;\n]/)
+    .map((s) => s.trim()).filter(Boolean)
+    .map((part) => {
+      let url = part, label = '';
+      let m = url.match(/^\(([^)]*)\)\s*(.+)$/);        // (렌탈) my-lighting.com
+      if(m){ label = m[1].trim(); url = m[2].trim(); }
+      else {
+        m = url.match(/^(.*?)\s*\(([^)]*)\)\s*$/);      // a.com(공식홈)
+        if(m){ url = m[1].trim(); label = m[2].trim(); }
+      }
+      return { url, label };
+    })
+    .filter((x) => x.url);
 }
 
 export function countryOptions(selected){

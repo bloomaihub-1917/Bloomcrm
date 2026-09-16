@@ -412,9 +412,40 @@ export function buildMDBTagList(){
    기업 병합은 "기업명 일괄 변경"으로 통합 처리(선택된 연락처들의 orgKo를
    하나로 맞추면 기업DB 집계 시 자연히 한 기업으로 합쳐진다).
 ══════════════════════════════════════════ */
-export function toggleMDBSelect(id){
-  if(mdbSelected.has(id)) mdbSelected.delete(id);
-  else mdbSelected.add(id);
+/* ── 줄 고르기 ──
+   하나 누르고 Shift를 누른 채 아래를 누르면 그 사이가 전부 딸려 온다.
+   백 명을 고르려면 백 번 눌러야 했다 — 표를 쓰는 사람은 파일 탐색기에서
+   하던 손버릇을 여기서도 쓴다.
+
+   «그 사이»는 지금 화면에 보이는 차례를 말한다. 정렬을 바꾸거나 걸러낸
+   뒤에는 보이는 차례가 곧 사람이 생각하는 차례라, 원본 순서로 세면
+   엉뚱한 사람들이 딸려 온다. 그래서 그릴 때 차례를 적어 둔다. */
+let _mdbRowOrder = [];   // 지금 그려진 줄의 id — 위에서 아래 순서
+let _mdbAnchorId = null; // Shift의 기준이 되는, 마지막으로 그냥 누른 줄
+
+export function setMDBRowOrder(ids){ _mdbRowOrder = ids; }
+
+export function toggleMDBSelect(id, ev){
+  const turningOn = !mdbSelected.has(id);
+
+  if(ev && ev.shiftKey && _mdbAnchorId != null && _mdbAnchorId !== id){
+    const a = _mdbRowOrder.indexOf(_mdbAnchorId);
+    const b = _mdbRowOrder.indexOf(id);
+    if(a >= 0 && b >= 0){
+      /* 기준부터 지금 누른 줄까지를 «켠다». 누른 줄이 이미 켜져 있다고 해서
+         그 사이를 끄지는 않는다 — 범위 안을 다시 눌렀을 때 앞쪽이 통째로
+         풀리면, 무엇을 고르고 있었는지가 한 번에 날아간다. 풀 때는 한 줄씩
+         누르거나 «선택 해제»를 쓴다. */
+      const [from, to] = a < b ? [a, b] : [b, a];
+      for(let i = from; i <= to; i++) mdbSelected.add(_mdbRowOrder[i]);
+      renderMDB();
+      return;   // 기준은 그대로 둔다 — 같은 자리에서 범위를 넓혔다 줄일 수 있다
+    }
+  }
+
+  if(turningOn) mdbSelected.add(id);
+  else mdbSelected.delete(id);
+  _mdbAnchorId = id;
   renderMDB();
 }
 export function clearMDBSelection(){
@@ -1098,6 +1129,10 @@ export function renderMDB(){
   }
 
   // 모바일은 좁아서 표 대신 카드로 그린다(교차표는 원래 가로 스크롤이 전제라 그대로)
+  /* 다른 보기로 넘어갔을 때 옛 차례가 남아 있으면 Shift가 엉뚱한 줄을 집는다.
+     목록 보기는 제 안에서 정렬한 차례로 다시 적는다. */
+  setMDBRowOrder(pairs.map(({ c }) => c.id));
+
   const mob = isMobile();
   if(mdbView==='group')  (mob ? renderMDBGroupedCards : renderMDBGrouped)(pairs);
   else if(mdbView==='matrix') renderMDBMatrix();
@@ -1341,6 +1376,7 @@ export function renderMDBFlat(pairs){
   const body = document.getElementById('mdb-body');
   if(!body) return;
 
+  setMDBRowOrder(pairs.map(({ c }) => c.id));
   body.innerHTML = pairs.map(({c,p})=>{
     const gi = contacts.indexOf(c);
     const roleKey = p ? p.role : c.cat;
@@ -1371,9 +1407,9 @@ export function renderMDBFlat(pairs){
     const isSel = mdbSelected.has(c.id);
     return `<tr onclick="openContactDr(${c.id})" style="cursor:pointer" class="${isSel?'row-sel':''}"
       draggable="true" ondragstart="onMDBDragStart(event,${c.id})" ondragend="onMDBDragEnd()">
-      <td onclick="event.stopPropagation()" style="text-align:center"><input type="checkbox" ${isSel?'checked':''} onchange="toggleMDBSelect(${c.id})"></td>
+      <td onclick="event.stopPropagation()" style="text-align:center"><input type="checkbox" ${isSel?'checked':''} onclick="event.stopPropagation();toggleMDBSelect(${c.id}, event)" title="Shift를 누른 채 누르면 이전에 고른 줄까지 한꺼번에"></td>
       <td><div class="tdco">
-        <div class="tdav${isSel?' sel':''}" onclick="event.stopPropagation();toggleMDBSelect(${c.id})" title="클릭해서 선택/해제">${isSel?'✓':ab(c.nameKo||c.nameEn||"")}</div>
+        <div class="tdav${isSel?' sel':''}" onclick="event.stopPropagation();toggleMDBSelect(${c.id}, event)" title="클릭해서 선택/해제 · Shift를 누른 채 누르면 사이 전부">${isSel?'✓':ab(c.nameKo||c.nameEn||"")}</div>
         <div><div class="tdnm">${escapeHtml(personName(c))}${isBDContact(c)?' <span class="pill p-teal" style="font-size:9px;padding:1px 5px">BD</span>':''}${isCLevelContact(c)?' <span class="pill p-gold" style="font-size:9px;padding:1px 5px">C-level</span>':''}${leftPill(c)}</div><div class="tdsb">${c.nameKo && c.nameEn ? nameEn : ''}</div></div>
       </div></td>
       <td style="max-width:200px"><div class="tdnm" style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${orgTitle}">${c.orgKo?orgKo:orgEn}</div><div class="tdsb" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${orgEnTitle}">${c.orgKo?orgEn:''}</div></td>
