@@ -987,10 +987,14 @@ export function searchExhM(v){
   renderExh();
 }
 
-function visibleList(){
-  // 데스크톱 칸이 숨어 있는 모바일에서는 모바일 칸을 본다
-  const q = ((document.getElementById('exh-q')?.value
+/* 지금 걸린 검색어 — 데스크톱 칸이 숨어 있는 모바일에서는 모바일 칸을 본다 */
+function exhQuery(){
+  return ((document.getElementById('exh-q')?.value
     || document.getElementById('exh-q-m')?.value || '')).trim().toLowerCase();
+}
+
+function visibleList(){
+  const q = exhQuery();
   let list = exhFilter === 'cancelled' ? cancelledExhibitors(exhEvent) : activeExhibitors(exhEvent);
   if(exhFilter === 'incomplete') list = list.filter(x => progressOf(x) < 100);
   if(exhFilter === 'unpaid')     list = list.filter(x => ['unpaid','partial'].includes(settleState(x).state));
@@ -1072,8 +1076,20 @@ export function renderExh(){
       ${VIEWS.map(([k, l]) => `<button class="seg-b${exhView === k ? ' on' : ''}" onclick="setExhView('${k}')">${l}</button>`).join('')}
     </div></div>`;
 
-  const bodyHtml =
-      exhView === 'dash'    ? renderDashboard(all)
+  /* 검색은 목록을 거르는 일인데, 대시보드와 파일 감시에는 거를 목록이 없다.
+     그 두 화면에서는 무엇을 쳐도 화면이 그대로여서 «검색이 안 된다»로 보였다.
+     모바일은 대시보드가 첫 화면이라 특히 그랬다. 그래서 검색어가 들어오면
+     기업리스트를 대신 보여준다 — 보기 설정은 건드리지 않아서, 검색어를 지우면
+     보던 화면으로 그대로 돌아온다. */
+  const q = exhQuery();
+  const searchOverride = !!q && (exhView === 'dash' || exhView === 'watch');
+  const searchNote = searchOverride ? `<div style="display:flex;align-items:center;gap:8px;margin:12px 16px 0;
+      background:var(--i8);border:1px solid var(--i6);border-radius:8px;padding:8px 12px">
+    <span style="font-size:11.5px;color:var(--i3)">«<b>${escapeHtml(q)}</b>» 검색 결과 ${list.length}곳 —
+      검색어를 지우면 ${exhView === 'dash' ? '대시보드' : '파일 감시'}로 돌아갑니다</span></div>` : '';
+
+  const bodyHtml = searchOverride ? searchNote + renderInquiryPanel() + renderChecklist(list, all)
+    : exhView === 'dash'    ? renderDashboard(all)
     : exhView === 'booth'   ? renderBoothView(list)
     : exhView === 'equip'   ? renderEquipView(list)
     : exhView === 'graphic' ? renderGraphicView(list)
