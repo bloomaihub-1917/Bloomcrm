@@ -22,9 +22,9 @@ import {
   appsFor, openAppFor, nextItemSort,
   codeList, codeLabel, codeCls,
   evPartOn, evPartDone, evPartState,
-  findOrgByName, orgName,
+  findOrgByName, orgName, ORGS,
 } from '../state.js';
-import { td, escapeHtml, escAttr, isMobile, cleanEmail, countryName, leftPill } from '../utils.js';
+import { td, escapeHtml, escAttr, isMobile, cleanEmail, countryName, leftPill, levenshteinDist } from '../utils.js';
 export { cleanEmail };   // exh-drawer가 여기서 가져다 쓴다
 import {
   postToSheet as _postToSheet,
@@ -4329,6 +4329,38 @@ function renderChecklistTable(list, all){
    만들지 않고 그 기업에 잇는다 — 여기서 또 만들면 기업DB에 같은 회사가
    두 줄 생기고, 지난 행사 이력이 갈린다.
 ══════════════════════════════════════════ */
+/* 기업DB 후보 찾기 — 이름을 치는 동안 이미 있는 기업을 보여준다.
+
+   정확히 같은 이름만 봐서는 부족했다. 표기가 조금만 달라도(오타, 띄어쓰기,
+   국문/영문 교차) 새 기업이 하나 더 생기고, 지난 행사 이력이 두 줄로 갈렸다.
+   그래서 (a) 부분일치와 (b) 레벤슈타인 근사값까지 후보로 올린다. 자동으로
+   붙이지는 않는다 — 비슷한 이름의 다른 회사도 실제로 있기 때문에, 고르는 건
+   사람이 한다. */
+export function findOrgCandidates(raw, limit = 6){
+  const t = String(raw || '').trim();
+  if(t.length < 2) return [];
+  const k = normalizeCompanyKey(t);
+  if(!k) return [];
+  const out = [];
+  for(const o of ORGS){
+    const names = [o.name_ko, o.name_en, ...String(o.aliases || '').split('\n')]
+      .map(n => String(n || '').trim()).filter(Boolean);
+    let best = 0;
+    for(const n of names){
+      const nk = normalizeCompanyKey(n);
+      if(!nk) continue;
+      if(nk === k){ best = 1; break; }
+      if(nk.includes(k) || k.includes(nk)){ best = Math.max(best, 0.9); continue; }
+      const maxLen = Math.max(nk.length, k.length);
+      if(maxLen < 3) continue;
+      const sim = 1 - levenshteinDist(nk, k) / maxLen;
+      if(sim >= 0.7) best = Math.max(best, sim);
+    }
+    if(best > 0) out.push({ org: o, score: best });
+  }
+  return out.sort((a, b) => b.score - a.score).slice(0, limit);
+}
+
 export function openExhAdd(){
   closeExhAdd();
   if(exhLocked()){
@@ -4359,6 +4391,7 @@ export function openExhAdd(){
         <input class="fi" id="exh-add-country" placeholder="비우면 국내로 봅니다" autocomplete="off"></div>
       <div class="fg"><label class="fl">신청순</label>
         <input class="fi" id="exh-add-order" value="${next}" inputmode="numeric"></div>
+      <div id="exh-add-hits" style="margin:-4px 0 8px"></div>
       <div id="exh-add-msg" style="font-size:11.5px;color:var(--i4);min-height:16px"></div>
     </div>
     <div class="mf2">
@@ -4366,9 +4399,63 @@ export function openExhAdd(){
       <button class="btn bp" onclick="confirmExhAdd()" id="exh-add-btn">추가</button>
     </div></div>`;
   document.body.appendChild(pop);
+  ['exh-add-ko', 'exh-add-en'].forEach((id) => {
+    document.getElementById(id)?.addEventListener('input', renderExhAddHits);
+  });
   document.getElementById('exh-add-ko')?.focus();
 }
-export function closeExhAdd(){ document.getElementById('exh-add-modal')?.remove(); }
+
+/* 고른 기업을 붙들어 둔다 — 이름을 더 고쳐도 연결은 유지된다.
+   비어 있으면 "이름으로 찾기"로 돌아간다. */
+let exhAddPickedOrg = '';
+
+export function renderExhAddHits(){
+  const box = document.getElementById('exh-add-hits');
+  if(!box) return;
+  const v = (id) => String(document.getElementById(id)?.value || '').trim();
+
+  if(exhAddPickedOrg){
+    const o = getOrgById(exhAddPickedOrg);
+    if(o){
+      box.innerHTML = `<div style="display:flex;align-items:center;gap:8px;background:var(--bl-w,#eff6ff);border:1px solid var(--bl,#3b82f6);border-radius:8px;padding:7px 10px">
+        <span style="font-size:12px;color:var(--i3)">기업DB의 <b>${escapeHtml(orgName(o))}</b>에 연결합니다</span>
+        <button class="btn" style="margin-left:auto;padding:2px 8px;font-size:11px" id="exh-add-unpick">해제</button></div>`;
+      document.getElementById('exh-add-unpick')?.addEventListener('click', () => {
+        exhAddPickedOrg = ''; renderExhAddHits();
+      });
+      return;
+    }
+    exhAddPickedOrg = '';
+  }
+
+  const seen = new Set();
+  const hits = [...findOrgCandidates(v('exh-add-ko')), ...findOrgCandidates(v('exh-add-en'))]
+    .filter(h => !seen.has(h.org.id) && seen.add(h.org.id))
+    .sort((a, b) => b.score - a.score).slice(0, 6);
+  if(!hits.length){ box.innerHTML = ''; return; }
+
+  box.innerHTML = `<div style="font-size:11px;color:var(--i4);margin-bottom:4px">기업DB에 비슷한 이름이 있어요 — 같은 곳이면 눌러서 연결하세요</div>
+    <div style="display:flex;flex-direction:column;gap:4px;max-height:150px;overflow:auto">${
+      hits.map(({ org: o, score }) => `<button class="btn" data-org="${escAttr(o.id)}"
+        style="display:flex;align-items:center;gap:8px;text-align:left;padding:5px 9px;font-size:12px">
+        <span style="font-weight:600">${escapeHtml(o.name_ko || o.name_en || '')}</span>
+        ${o.name_ko && o.name_en ? `<span style="color:var(--i4);font-size:11px">${escapeHtml(o.name_en)}</span>` : ''}
+        <span style="margin-left:auto;color:var(--i4);font-size:11px">${score >= 1 ? '같은 이름' : `${Math.round(score*100)}%`}</span>
+      </button>`).join('')}</div>`;
+  box.querySelectorAll('[data-org]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const o = getOrgById(b.dataset.org);
+      if(!o) return;
+      exhAddPickedOrg = o.id;
+      const ko = document.getElementById('exh-add-ko'), en = document.getElementById('exh-add-en');
+      if(ko && o.name_ko) ko.value = o.name_ko;
+      if(en && o.name_en) en.value = o.name_en;
+      renderExhAddHits();
+    });
+  });
+}
+
+export function closeExhAdd(){ exhAddPickedOrg = ''; document.getElementById('exh-add-modal')?.remove(); }
 
 export async function confirmExhAdd(){
   const v = (id) => String(document.getElementById(id)?.value || '').trim();
@@ -4390,7 +4477,25 @@ export async function confirmExhAdd(){
   /* ① 기업DB — 같은 이름이 있으면 그 기업을 쓴다.
      createOrg는 중복이면 ok:false와 함께 그 기업(org)을 돌려준다. */
   let orgId = '';
-  const existing = findOrgByName(name, normalizeCompanyKey);
+  /* 고른 기업이 있으면 그걸 쓴다. 없으면 국문·영문 둘 다로 찾는다 —
+     영문명으로만 등록된 기업에 국문명을 치면(반대도 마찬가지) 한쪽만 보던
+     때는 못 찾고 같은 회사를 하나 더 만들었다. */
+  const existing = (exhAddPickedOrg && getOrgById(exhAddPickedOrg))
+    || findOrgByName(nameKo, normalizeCompanyKey)
+    || findOrgByName(nameEn, normalizeCompanyKey);
+
+  /* 이름이 똑같지는 않지만 비슷한 기업이 있으면 한 번 묻는다. 오타 하나로
+     기업DB가 갈리면 지난 행사 이력이 두 줄로 흩어진다. */
+  if(!existing){
+    const near = [...findOrgCandidates(nameKo), ...findOrgCandidates(nameEn)]
+      .filter(h => h.score < 1).slice(0, 3);
+    if(near.length){
+      const names = near.map(h => `· ${orgName(h.org)}`).join('\n');
+      const go = confirm(`기업DB에 비슷한 이름이 있어요:\n${names}\n\n같은 곳이면 취소하고 위 목록에서 골라 연결하세요.\n정말 새 기업으로 만들까요?`);
+      if(!go) return say('기업DB의 후보 중에서 골라주세요.');
+    }
+  }
+
   if(existing){
     orgId = existing.id;
     say(`기업DB에 이미 있는 «${orgName(existing)}»에 이어 붙였어요.`);

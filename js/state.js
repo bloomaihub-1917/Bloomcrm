@@ -255,7 +255,7 @@ export const EQUIP_CATALOG = [];
 /* kind를 주면 그 종류만 — 비어 있는 옛 행은 비품으로 본다(전부 비품이었다) */
 export function catalogFor(evKey, kind){
   return EQUIP_CATALOG
-    .filter(c => c.event_id === evKey && c.active !== 'no')
+    .filter(c => String(c.event_id || '') === String(evKey || '') && c.active !== 'no')
     .filter(c => !kind || (c.kind || 'equip') === kind)
     .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0));
 }
@@ -270,7 +270,7 @@ export function findCatalogByName(evKey, name){
   if(!k) return null;
   const codeM = String(name || '').toUpperCase().match(/\b([A-Z]{1,2}-\d{2,4})\b/);
   return EQUIP_CATALOG.find(c => {
-    if(c.event_id !== evKey) return false;
+    if(String(c.event_id || '') !== String(evKey || '')) return false;
     if(codeM && String(c.code || '').toUpperCase() === codeM[1]) return true;
     return [c.name_ko, c.name_en, `${c.code} ${c.name_ko}`, `${c.code} ${c.name_en}`]
       .filter(Boolean).some(n => norm(n) === k);

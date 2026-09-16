@@ -15,7 +15,7 @@ import {
   getExhibitorById, itemsFor, invoicesFor, taxInvoicesFor, paymentsFor, logsFor, openInquiriesFor,
   EXH_CONTACTS, EXH_ITEMS, EXH_INVOICES, EXH_TAX, EXH_PAYMENTS, EXH_LOGS, EXHIBITORS, CO_DB, currentUser,
   contactsFor, catalogFor, catalogItem, EQUIP_CATALOG, findCatalogByName,
-  contacts, participations, getOrgById, codeList, codeLabel,
+  contacts, participations, getOrgById, findOrgByName, codeList, codeLabel,
   EXH_APPS, appsFor, openAppFor, isVoided, liveItemsFor, exhEvent, exhibitorsForEvent,
   nextItemSort,
 } from '../state.js';
@@ -54,6 +54,7 @@ function saveFailed(res, msg){
 }
 import { trackAction, changed, removed } from './audit-tab.js';
 import { ieyo } from '../country-signal.js';
+import { normalizeCompanyKey } from './company-tab.js';
 import {
   billedAmount, paidAmount, graphicState, graphicDueInfo, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
   isPendingRefund, boothTypeOptions, boothTypes, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
@@ -109,6 +110,30 @@ export function closeExhDr(){
 }
 export function switchExhDT(v){ drTab = tabKey(v); renderExhDr(); }
 
+/* ── 기업 정보 수정 — 기업DB로 넘긴다 ──
+
+   드로어에서 고칠 수 있는 건 이 행사에서의 진행 상황뿐이다. 사명·국가·업종
+   같은 기업 자체의 정보는 기업DB에 있고, 여기서 따로 고치게 만들면 같은 회사가
+   화면마다 다른 이름으로 남는다. 그래서 고치는 자리는 하나로 두고 넘겨보낸다.
+
+   org_id가 아직 없는 옛 행은 이름으로 한 번 더 맞춰본다. */
+export function openOrgFromExh(exhId){
+  const x = getExhibitorById(exhId);
+  if(!x) return;
+  const org = (x.org_id && getOrgById(x.org_id))
+    || findOrgByName(exhNames(x).ko, normalizeCompanyKey)
+    || findOrgByName(exhNames(x).en, normalizeCompanyKey);
+  if(!org){
+    alert('이 참가기업은 아직 기업DB에 연결돼 있지 않아요.\n기업DB에서 먼저 등록한 뒤 다시 열어주세요.');
+    return;
+  }
+  try {
+    closeExhDr();
+    window.switchApp?.('co');                       // 여기서 기업DB를 다시 만든다
+    setTimeout(() => window.selectCo?.(org.id), 60);
+  } catch(e){ console.warn('[exh-drawer] 기업DB 이동 실패:', e); }
+}
+
 export function renderExhDr(){
   if(!drId) return;
   const x = getExhibitorById(drId);
@@ -127,6 +152,8 @@ export function renderExhDr(){
         (() => { const p = exhContact(x); return (p.name || p.email) ? ` · 담당자 ${escapeHtml(p.name || p.email)}` : ''; })()
         }${billed ? ` · 입금 ${money(paid)}/${money(billed)}` : ''}</div>
     </div>
+    <button class="btn bs" style="flex:0 0 auto;margin-right:6px" onclick="openOrgFromExh('${escAttr(x.id)}')"
+      title="기업DB에서 이 기업의 정보를 고칩니다">기업 정보 수정</button>
     <button class="drcls" onclick="closeExhDr()">✕</button>`;
 
   // 신청서가 아직 안 왔거나 정보가 빠졌으면 탭에서 바로 보이게 한다
@@ -531,8 +558,18 @@ export function pickCatalogItem(exhId){
   const nameEl = document.getElementById(`it-nm-${exhId}`);
   if(!nameEl) return;
   const typed = nameEl.value.trim();
-  const hit = catalogFor(x.event_id).find(c => `${c.code} ${c.name_ko}` === typed);
+  /* 목록에서 고른 값(«코드 품명») 먼저, 없으면 코드·국문명·영문명까지 훑는다.
+     코드만 치고 넘어가는 일이 실제로 가장 잦은데(«D-029»), 완전일치만 보던
+     때는 그때마다 단가를 손으로 적어야 했다. 국문명이 빈 영문 전용 품목은
+     목록에서 골라도 값 끝에 공백이 남아 매칭이 빗나갔다 — 그것도 여기서 걸린다. */
+  const hit = catalogFor(x.event_id).find(c => `${c.code} ${c.name_ko}`.trim() === typed)
+    || findCatalogByName(x.event_id, typed);
   if(!hit) return;
+
+  /* 코드만 쳤으면 품명까지 채워 준다 — 저장된 이름이 기업마다 갈리지 않게 */
+  if(String(hit.code || '').toLowerCase() === typed.toLowerCase()){
+    nameEl.value = `${hit.code} ${hit.name_ko || hit.name_en || ''}`.trim();
+  }
 
   const up = document.getElementById(`it-up-${exhId}`);
   const cur = document.getElementById(`it-cur-${exhId}`);
@@ -1677,7 +1714,7 @@ export function rememberItemCat(v){ lastItemCat = v || null; }
 export function swapItemList(exhId, cat){
   const el = document.getElementById('it-nm-' + exhId);
   if(!el) return;
-  const id = `eqcat-${exhId}-${cat}`;
+  const id = `eqcat-${escAttr(exhId)}-${cat}`;
   if(document.getElementById(id)) el.setAttribute('list', id);
   else el.removeAttribute('list');       // 기타 — 카탈로그 밖이라 고를 목록이 없다
 }
@@ -3036,6 +3073,7 @@ window.delGraphicFeedback = delGraphicFeedback;
 window.openExhDr = openExhDr;
 window.closeExhDr = closeExhDr;
 window.switchExhDT = switchExhDT;
+window.openOrgFromExh = openOrgFromExh;
 window.openNewContact = openNewContact;
 window.closeNewContact = closeNewContact;
 window.submitNewContact = submitNewContact;
