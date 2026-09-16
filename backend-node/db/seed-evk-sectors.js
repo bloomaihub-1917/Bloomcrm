@@ -1,0 +1,128 @@
+/* ══════════════════════════════════════════════════════════════
+   seed-evk-sectors.js — EVENTKOREA 셀러·바이어 대분류를 섹터로 심는다
+
+   이벤트·MICE 섹터는 seed-sectors.js가 심어 둔 8개였고, 주석에도 "아직 등록된
+   기업이 없다 — 참가사를 넣기 시작하면 채워진다"고 적혀 있다. 그 순간이 지금이다.
+
+   이름은 우리가 새로 짓지 않고 명단의 대분류를 그대로 쓴다. 섹터 이름은
+   사람이 고르는 말이라, 명단에서 «부스/무대/구조물»이라 부르던 것을 DB에서만
+   «부스시공·전시장치»로 바꿔 두면 고를 때마다 머릿속에서 한 번 옮겨야 한다.
+   표기가 흔들리는 것(이벤트부스/이벤트 부스)과 오타(프리렌서, 동역)만 접는다.
+   그 대응표는 업로드 쪽 SECTOR_ALIASES(js/modules/upload-tab.js)에 있다.
+
+   그래서 이 스크립트는 «추가»만 하지 않고 이름도 맞춘다 — 먼저 만들어 둔
+   일반적인 이름(부스시공·전시장치 …)을 명단의 이름으로 고쳐 쓴다. 다만
+   그 섹터를 쓰는 기업이 이미 있으면 건드리지 않고 경고만 남긴다. 이름이
+   곧 저장된 값이라(orgs.sectors는 이름을 이어 붙인다) 바꾸면 그 기업의
+   분류가 끊기기 때문이다.
+
+     node db/seed-evk-sectors.js [--dry]
+══════════════════════════════════════════════════════════════ */
+require('dotenv').config();
+const pool = require('./pool');
+
+const DRY = process.argv.includes('--dry');
+
+/* ── 셀러 (이벤트·MICE) ── 명단의 «카테고리 정리» 시트에 적힌 순서 그대로.
+   «기타»는 여기 두지 않고 공통의 기존 «기타»를 함께 쓴다 — 이름이 곧
+   저장되는 값이라 같은 이름을 둘로 만들면 어느 쪽인지 구분할 수가 없다. */
+const MICE = [
+  { id: 'venue',       name: '베뉴' },
+  { id: 'evk_traffic', name: '교통' },
+  { id: 'evk_fx',      name: '이벤트(특효)장치/장비' },
+  { id: 'evk_booth',   name: '이벤트 부스' },
+  { id: 'evk_enter',   name: '엔터에이전시(MC/공연)' },
+  { id: 'booth',       name: '부스/무대/구조물' },
+  { id: 'evk_led',     name: 'LED/LCD 디스플레이' },
+  { id: 'evk_video',   name: '영상' },
+  { id: 'evk_audio',   name: '음향' },
+  { id: 'evk_light',   name: '조명' },
+  { id: 'evk_trans',   name: '통역' },
+  { id: 'rental',      name: '행사가구/텐트/렌탈' },
+  { id: 'evk_promo',   name: '판촉(기념품,굿즈)' },
+  { id: 'micetech',    name: 'IT솔루션' },
+  { id: 'evk_free',    name: '프리랜서' },
+  { id: 'sign',        name: '인쇄/출력' },
+  { id: 'agency',      name: '대행사' },
+];
+
+/* ── 바이어 (공통) ── 기관 성격에 따라 입찰·수의계약 방식이 갈려서
+   «정부·공공기관» 한 덩어리로는 파이프라인에서 쓸모가 없다.
+   협·단체와 대학은 기존 «학회·협회»·«대학·연구소»를 그대로 쓴다. */
+const COMMON = [
+  { id: 'evk_govt',   name: '정부기관' },
+  { id: 'evk_local',  name: '지방자치단체' },
+  { id: 'evk_public', name: '공공기관' },
+  { id: 'evk_quango', name: '정부산하기관' },
+  { id: 'evk_found',  name: '재단법인' },
+  { id: 'evk_corp',   name: '민간기업' },
+];
+
+/* 명단에 없는 구분 — 음향·영상·조명으로 쪼개지면서 갈 곳이 없어졌다.
+   쓰는 기업이 있으면 지우지 않는다. */
+const DROP = ['av', 'staff'];
+
+const SECTORS = [
+  ...MICE.map((s) => ({ ...s, domain: 'mice' })),
+  ...COMMON.map((s) => ({ ...s, domain: 'common' })),
+];
+
+(async () => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const cur = new Map((await client.query('SELECT id, name, domain FROM sectors')).rows
+      .map((r) => [r.id, r]));
+
+    /* 어떤 섹터 이름이 실제로 쓰이고 있는지 — orgs.sectors는 '|'로 이어 붙인 이름이다 */
+    const used = new Set();
+    (await client.query(`SELECT sectors FROM orgs WHERE COALESCE(sectors,'') <> ''`)).rows
+      .forEach((r) => String(r.sectors).split('|').forEach((n) => used.add(n.trim())));
+
+    const added = []; const renamed = []; const held = []; const dropped = [];
+
+    for (const s of SECTORS) {
+      const have = cur.get(s.id);
+      if (!have) {
+        await client.query(
+          `INSERT INTO sectors (id, name, parent, domain, canonical) VALUES ($1, $2, '', $3, '')`,
+          [s.id, s.name, s.domain]);
+        added.push(s);
+      } else if (have.name !== s.name) {
+        if (used.has(have.name)) { held.push({ ...s, was: have.name }); continue; }
+        await client.query(`UPDATE sectors SET name = $2, domain = $3 WHERE id = $1`,
+          [s.id, s.name, s.domain]);
+        renamed.push({ ...s, was: have.name });
+      }
+    }
+
+    for (const id of DROP) {
+      const have = cur.get(id);
+      if (!have) continue;
+      if (used.has(have.name)) { held.push({ id, name: have.name, was: have.name }); continue; }
+      await client.query(`DELETE FROM sectors WHERE id = $1`, [id]);
+      dropped.push(have);
+    }
+
+    console.log(`추가 ${added.length} · 이름 정리 ${renamed.length} · 삭제 ${dropped.length}`);
+    added.forEach((s) => console.log(`   + ${s.domain.padEnd(7)} ${s.name}`));
+    renamed.forEach((s) => console.log(`   ~ ${s.domain.padEnd(7)} ${s.was} → ${s.name}`));
+    dropped.forEach((s) => console.log(`   - ${s.domain.padEnd(7)} ${s.name}`));
+    held.forEach((s) => console.log(`   ! 건너뜀 — «${s.was}»를 쓰는 기업이 있어 그대로 뒀습니다`));
+
+    const after = (await client.query(
+      `SELECT name FROM sectors WHERE domain = 'mice' ORDER BY id`)).rows.map((r) => r.name);
+    console.log(`\n이벤트·MICE ${after.length}종: ${after.join(' · ')}`);
+
+    if (DRY) { await client.query('ROLLBACK'); console.log('\n--dry 라서 되돌렸습니다.'); }
+    else { await client.query('COMMIT'); console.log('\n반영 완료.'); }
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('실패 — 되돌렸습니다:', e.message);
+    process.exitCode = 1;
+  } finally {
+    client.release();
+    await pool.end?.();
+  }
+})();

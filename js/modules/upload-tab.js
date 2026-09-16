@@ -296,6 +296,7 @@ const COLUMN_ALIASES = {
   ],
   orgKo: [
     '기업','회사','소속','기관','소속기관','소속(회사/기관)','소속(국문)',
+    '기업명','기관/기업/단체명','기관명','단체명','업체명','기업명(국문)','기관/단체명',
     '회사명','기관명','단체명',
     'orgko','org_ko','ko_org',
     'organization','company','org','institute','affiliation',
@@ -325,30 +326,78 @@ const COLUMN_ALIASES = {
     'title','titleen','positionen','position(en)','title_en','titleen',
     'job title','jobtitle',
   ],
-  deptKo: ['부서','팀','부서(국문)','팀(국문)','department','dept'],
+  deptKo: ['부서','부서명','소속부서','담당부서','팀','팀명','부서(국문)','팀(국문)','department','dept'],
   deptEn: ['영문부서','영문팀','부서(영문)','팀(영문)','departmenten','department(en)'],
   country: ['국가','나라','country','nation'],
-  email1:  ['이메일','이메일1','email','email1','e-mail','mail'],
+  email1:  ['이메일','이메일1','메일','메일주소','이메일주소','email','email1','e-mail','mail'],
   email2:  ['이메일2','보조이메일','email2','email address 2'],
+  /* 명단에 유선과 휴대폰이 같이 있으면 유선이 먼저 온다(기관 명단이 그렇다).
+     둘 다 남겨야 해서 phone1/phone2 두 칸에 나눠 담는다 — 어느 쪽을 1번으로
+     둘지는 매핑 드롭다운에서 바꿀 수 있다. */
   phone1: [
     '연락처','전화번호','연락처1','휴대폰','휴대폰번호','핸드폰','핸드폰번호','휴대전화',
     'phone','phone1','tel','hp',
   ],
   phone2: [
-    '연락처2','전화번호2','휴대폰2','mobile','mobile number','cell','cellphone',
+    '연락처2','전화번호2','휴대폰2','일반번호','대표번호','유선번호','사무실번호','사무실',
+    'mobile','mobile number','cell','cellphone',
     'phone2','tel2','mobile phone','mobilephone',
   ],
-  cat: ['카테고리','분류','구분','참가구분','등록구분','참가유형','category','type','role'],
-  beat:     ['분야','업종','산업분야','섹터','취재분야','출입처','beat','sector','industry'],
+  /* '카테고리'를 뺐다 — 우리 명단에서 그 말은 참가 구분이 아니라 업종의 세분류로
+     쓰인다(셀러 명단의 «카테고리» 열은 LED·음향·렌탈 같은 취급 품목이다).
+     참가 구분으로 읽히면 154종짜리 값별 매핑 창이 뜬다. 참가 구분은 아래
+     '구분/참가구분/등록구분'과 업로드 화면의 «기본 카테고리»로 잡는다. */
+  cat: ['분류','구분','참가구분','등록구분','참가유형','category','role'],
+  beat:     ['대분류','분야','업종','업종대분류','산업분야','섹터','취재분야','출입처','beat','sector','industry'],
   products: ['전시품목','품목','제품','출품작','products','exhibits','item'],
   website:  ['웹페이지','홈페이지','웹사이트','website','homepage','url'],
+  /* 행마다 출처가 다른 명단이 있다(이벤트넷에서 긁어온 줄과 직접 받은 줄이 섞인다).
+     열이 없으면 업로드 화면의 «수집 출처» 한 값을 전체에 쓴다 — 예전 그대로다. */
+  source:   ['출처','수집출처','유입경로','source','origin'],
   note:     ['비고','설명','참고사항','note','notes','remark','remarks'],
   /* memo1~3: 기본 항목으로 떨어지지 않는 열을 그대로 담아 두는 칸.
      위 note와 달리 연락처 자신에게 붙는다(note는 소속 기업의 메모로 간다). */
-  memo1:    ['메모','메모1','기타','기타1','memo','memo1'],
+  memo1:    ['메모','메모1','카테고리','세부카테고리','소분류','기타','기타1','memo','memo1'],
   memo2:    ['메모2','기타2','memo2'],
   memo3:    ['메모3','기타3','memo3'],
 };
+
+/* ── 대분류 → 표준 섹터 이름 ──
+   명단의 대분류는 사람이 손으로 적은 값이라 같은 뜻이 여러 표기로 온다
+   (이벤트 부스 / 이벤트부스, 프리렌서, 동역). 원문을 그대로 흘려보내면
+   기업DB 섹터에 «IT Soultion»이 그랬듯 아무도 다시 안 보는 분류가 쌓인다.
+   그래서 여기서 한 번 표준 이름으로 접는다 — 표준 목록 자체는
+   backend-node/db/seed-evk-sectors.js가 심는다.
+
+   «동역»은 오타로 보인다. 원본 파일의 «카테고리 정리» 시트에서 그 열 아래에
+   통역사·통역장비·통역운영이 달려 있어 통역으로 접었다. */
+const SECTOR_ALIASES = {
+  // 셀러 — 표기 흔들림과 오타만 접는다. 대분류 이름 자체는 명단 그대로 쓴다.
+  '전시부스/무대/구조물': '부스/무대/구조물',
+  '베뉴(대관사)': '베뉴',
+  '이벤트부스': '이벤트 부스',
+  '프리렌서': '프리랜서',
+  '동역': '통역',
+  // 바이어 — 같은 뜻인데 표기가 갈린 것들
+  '지자체': '지방자치단체',
+  '협∙단체': '학회·협회',
+  '협·단체': '학회·협회',
+  '협.단체': '학회·협회',
+  '협회': '학회·협회',
+  '학회': '학회·협회',
+  '체육단체': '학회·협회',
+  '대학교': '대학·연구소',
+  '대학': '대학·연구소',
+  '학교(대학)': '대학·연구소',
+  '기업': '민간기업',
+  '기업(단독행사주최기업)': '민간기업',
+};
+
+function normalizeSector(v){
+  const t = String(v || '').trim();
+  if(!t) return '';
+  return SECTOR_ALIASES[t] || SECTOR_ALIASES[t.toLowerCase()] || t;
+}
 
 /* 컬럼명 자동 매핑 후보 탐색 (원본 2515~2539행) */
 function guessColumn(headers, aliases, usedHeaders){
@@ -456,7 +505,7 @@ const DB_FIELD_LABELS = {
   country: '국가', email1: '이메일1', email2: '이메일2',
   phone1: '연락처1', phone2: '연락처2',
   cat: '카테고리', beat: '분야(산업/업종)', products: '전시품목',
-  website: '웹사이트', note: '기업 메모',
+  website: '웹사이트', note: '기업 메모', source: '수집 출처',
   memo1: '메모1', memo2: '메모2', memo3: '메모3',
 };
 
@@ -542,6 +591,8 @@ export function onColumnMapChange(){
 
 let _lastHeaders = null;
 let _lastRows = null;
+/* 담당자 이름이 없어 연락처는 못 만들지만 기업은 등록해야 하는 줄 */
+const _orgOnlyRows = [];
 
 /* colMap을 실제로 적용해 mappedContacts(파싱 결과)를 계산하고,
    AI 로그/"DB에 추가" 버튼을 갱신한다. 최초 자동 매칭 시와, 사용자가
@@ -704,7 +755,7 @@ function applyColumnMap(colMap){
       // beat 필드 = 기업의 산업 분야(자유 텍스트, 예: Pharma/Biotech/Digital Health).
       // cat이 speaker/vip/attendee 3분류로 단순화되며 "기자" 카테고리가 사라져서,
       // 예전에 있던 기자 전용 취재분야 코드(BEATS) 정규화 분기는 더 이상 쓰이지 않는다.
-      beat: colMap.beat ? String(r[colMap.beat]||'').trim() : '',
+      beat: colMap.beat ? normalizeSector(r[colMap.beat]) : '',
       products: colMap.products ? String(r[colMap.products]||'').trim() : '',
       // website/note는 연락처가 아니라 "기업" 속성 — runValidationStep()에서 기업 마스터(orgs)로 반영하고 contact 저장 시엔 제거한다.
       _companyWebsite: colMap.website ? String(r[colMap.website]||'').trim() : '',
@@ -721,7 +772,9 @@ function applyColumnMap(colMap){
               ? String(r[colMap.phone2]||'').trim() : '',
       cat: rowCat,
       lang: /[가-힣]/.test(name) ? 'KO' : 'EN',
-      source: (document.getElementById('up-src')||{}).value || '직접 업로드',
+      // 열에 적힌 출처가 있으면 그 값, 없으면 업로드 화면에 적은 한 값
+      source: (colMap.source ? String(r[colMap.source]||'').trim() : '')
+              || (document.getElementById('up-src')||{}).value || '직접 업로드',
       date: td(),
       status: 'new',
       _dup: isDup,
@@ -731,9 +784,23 @@ function applyColumnMap(colMap){
       _suspectOrg:  suspectMatch ? (suspectMatch.orgKo||suspectMatch.orgEn||'') : '',
       _suspectEmail:suspectMatch ? (suspectMatch.email1||'') : '',
     };
-  }).filter(c => c.nameKo || c.nameEn); // 이름 없는 빈 행 제외
+  });
 
-  mappedContacts.splice(0, mappedContacts.length, ...result);
+  /* ── 담당자 이름이 없는 줄 ──
+     지금까지는 이름이 없으면 줄째로 버렸다. 모아 둔 발주처 명단은 그 줄이
+     절반 가까이 된다 — 기관과 부서와 대표번호는 있는데 담당자를 아직 못
+     알아낸 상태다. 파이프라인에서 먼저 하는 일이 바로 그 담당자를 찾는
+     것이라, 버리면 «앞으로 뚫어야 할 곳»의 목록이 통째로 사라진다.
+     그래서 연락처는 만들지 않되 기업은 등록한다. */
+  const orgOnly = result.filter(c => !c.nameKo && !c.nameEn && (c.orgKo || c.orgEn));
+  _orgOnlyRows.splice(0, _orgOnlyRows.length,
+    ...orgOnly.map(c => ({ name: (c.orgKo || c.orgEn).trim(), beat: c.beat || '' })));
+
+  mappedContacts.splice(0, mappedContacts.length,
+    ...result.filter(c => c.nameKo || c.nameEn));
+  if(_orgOnlyRows.length){
+    addAiLog('info', '담당자 이름이 없는 ' + _orgOnlyRows.length + '줄은 기업DB에만 등록해요 — 연락처는 안 만들어요.');
+  }
 
   console.log('[upload-tab] 파싱 결과:', mappedContacts.length, '건, 샘플:', JSON.stringify(mappedContacts[0]||{}));
   const newCount = mappedContacts.filter(c => !c._dup).length;
@@ -1010,6 +1077,9 @@ export async function runValidationStep(newRows, dupRows){
     : (_evSel && _evSel.value !== '__direct__' ? _evSel.value : '');
   const selectedRole   = (document.getElementById('up-ev-role') ||{}).value || '참가자';
   const selectedSector = (document.getElementById('up-sector')  ||{}).value || '';
+  /* 이 파일이 어느 쪽 명단인지 — 셀러(벤더시공사)냐 발주처(잠재고객사)냐.
+     비워 두면 ensureOrgsForNames가 예전처럼 '잠재고객사'로 넣는다. */
+  const selectedKind   = (document.getElementById('up-kind')    ||{}).value || '';
   console.log('[upload-tab] 업로드 확정 — selectedEv:', JSON.stringify(selectedEv),
     '| _evDirectMode:', _evDirectMode, '| up-ev.value:', _evSel && _evSel.value,
     '| up-ev-text.value:', _evInp && _evInp.value);
@@ -1173,8 +1243,14 @@ export async function runValidationStep(newRows, dupRows){
       if(!nm || !c.beat || orgSectors.has(nm)) return;
       orgSectors.set(nm, c.beat);
     });
+    // 담당자 이름이 없어 연락처는 못 만든 줄도 기업은 등록한다
+    _orgOnlyRows.forEach(o => {
+      if(!o.name) return;
+      touchedCompanyKeys.add(o.name);
+      if(o.beat && !orgSectors.has(o.name)) orgSectors.set(o.name, o.beat);
+    });
 
-    const ensured = await ensureOrgsForNames([...touchedCompanyKeys], '', orgSectors);
+    const ensured = await ensureOrgsForNames([...touchedCompanyKeys], selectedKind, orgSectors);
     if(ensured.created) addAiLog('ok', '새 기업 ' + ensured.created + '개를 등록했어요.');
     if(ensured.filled) addAiLog('ok', '업종이 비어 있던 기업 ' + ensured.filled + '곳을 명단 값으로 채웠어요.');
     addedContacts.forEach(c => { c.org_id = orgIdForName(c.orgKo || c.orgEn) || ''; });
@@ -1344,6 +1420,7 @@ export function resetUpload(){
     '<tr><td colspan="4" style="padding:18px;text-align:center;color:var(--i4);font-size:11px">파일을 업로드하면 컬럼 매핑이 표시됩니다</td></tr>';
   parsedRows.length = 0;
   mappedContacts.length = 0;
+  _orgOnlyRows.length = 0;
   parserPrev.length = 0;
   aiLogs.length = 0;
   setUploadedFileName('');
