@@ -32,6 +32,7 @@ import {
   setMdbStat,
   setMdbDomainFilter,
   CO_DB,
+  COMPANY_SECTORS,
   DOMAINS,
   TAGS,
   mdbSelected,
@@ -43,8 +44,8 @@ import {
   speakersOfContact,
 } from '../state.js';
 import { CP, CL, RP, CAT_KEYS, ROLE_TO_CAT, COUNTRIES, avB, avF } from '../constants.js';
-import { td, ab, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseSectorScope, parseTags, joinTags, isMobile, cleanEmail, personName, personFullName, leftPill } from '../utils.js';
-import { postToSheet } from '../api.js';
+import { td, ab, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseSectorScope, parseTags, joinTags, isMobile, cleanEmail, personName, personFullName, leftPill, slugifySectorName } from '../utils.js';
+import { postToSheet, upsertSectorRow } from '../api.js';
 import { buildCoDB, ensureOrgsForNames, orgIdForName, applyCoSectors } from './company-tab.js';
 import { domainOfSector, domainName, findSectorByName, mainSectors, UNASSIGNED_DOMAIN } from './settings-tab.js';
 /* removed는 removeParticipation 안의 지역 변수와 이름이 겹친다 — 별칭으로 들여온다 */
@@ -2721,12 +2722,36 @@ export function onMDBDropToDomain(e, domainId, el){
     ? `\n\n기업과 안 묶인 ${without.length}명은 빠집니다: ${without.map(c => c.nameKo || c.nameEn).slice(0, 5).join(', ')}`
     : '';
 
-  if(secs.length === 1){
-    if(!confirm(`기업 ${cos.length}곳을 «${escapeHtmlPlain(secs[0].name)}» 섹터로 옮길까요?\n`
-      + `그 기업에 묶인 연락처 전원이 «${domainName(domainId)}» 분야로 들어갑니다.${note}`)) return;
-    return moveCosToSector(cos, secs[0].name, domainId);
-  }
   openDomainSectorPicker(cos, secs, domainId, note);
+}
+
+/* ── 분야만 옮기기 ──
+   분야는 저장되는 값이 아니라 기업의 섹터에서 파생된다. 그래서 «건축으로
+   옮겨»라고만 하려 해도 업종을 하나 골라야 했다 — 64곳을 한꺼번에 옮기는
+   자리에서 그걸 다 알 리가 없고, 모르면서 아무거나 고르면 틀린 분류가 64곳에
+   박힌다. 회사 이름만 보고 우리가 짐작해 넣는 건 더 나쁘다. 틀려도 아무도
+   모른 채 맞는 값처럼 보이기 때문이다.
+
+   그래서 그 분야의 «업종 미정» 자리로 보낸다. 분야별 보기에서는 바로
+   «건축»으로 잡히고, 기업DB 섹터 칸에는 아직 안 정했다는 말이 그대로 적혀
+   있어 나중에 그것만 뽑아 고칠 수 있다. */
+const catchAllName = (domainId) => domainName(domainId) + ' 업종 미정';
+
+async function ensureDomainCatchAll(domainId){
+  const name = catchAllName(domainId);
+  const have = findSectorByName(name);
+  if(have) return have.name;
+  const sector = { id: slugifySectorName(name), name, parent: null, domain: domainId, canonical: '' };
+  COMPANY_SECTORS.push(sector);
+  const r = await upsertSectorRow(sector);
+  if(r && r.ok === false){
+    // 저장에 실패하면 화면에만 있는 섹터가 남는다 — 되돌리고 알린다
+    const i = COMPANY_SECTORS.indexOf(sector);
+    if(i >= 0) COMPANY_SECTORS.splice(i, 1);
+    alert('«' + name + '» 섹터를 만들지 못했어요. 네트워크를 확인하고 다시 시도해주세요.');
+    return null;
+  }
+  return sector.name;
 }
 
 /* 분야 안에 섹터가 여럿일 때 고르게 한다 */
@@ -2743,6 +2768,9 @@ function openDomainSectorPicker(cos, secs, domainId, note){
       <div style="font-size:14px;font-weight:700;margin-bottom:4px">«${escapeHtml(domainName(domainId))}» 어느 업종인가요</div>
       <div style="font-size:11.5px;color:var(--i3);line-height:1.6;margin-bottom:12px">
         기업 ${cos.length}곳을 옮깁니다. 그 기업에 묶인 연락처 전원이 함께 따라가요.${escapeHtml(note)}</div>
+      <button class="btn bp" style="width:100%;justify-content:flex-start;margin-bottom:10px;font-size:12px"
+        data-sector="__domain__">업종은 나중에 — «${escapeHtml(domainName(domainId))}»에만 넣기</button>
+      <div style="font-size:10.5px;color:var(--i4);margin-bottom:8px">업종을 알면 아래에서 고르세요</div>
       <div id="mdb-sector-picker-list">
         ${secs.map(s => `<button class="btn" style="width:100%;justify-content:flex-start;margin-bottom:5px;font-size:12px"
           data-sector="${escAttr(s.name)}">${escapeHtml(s.name)}</button>`).join('')}
@@ -2752,7 +2780,13 @@ function openDomainSectorPicker(cos, secs, domainId, note){
     </div>`;
   document.body.appendChild(wrap);
   wrap.querySelectorAll('[data-sector]').forEach(b => {
-    b.onclick = () => { wrap.remove(); moveCosToSector(cos, b.dataset.sector, domainId); };
+    b.onclick = async () => {
+      wrap.remove();
+      const name = b.dataset.sector === '__domain__'
+        ? await ensureDomainCatchAll(domainId)
+        : b.dataset.sector;
+      if(name) moveCosToSector(cos, name, domainId);
+    };
   });
 }
 
