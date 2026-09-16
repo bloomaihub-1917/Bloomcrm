@@ -629,6 +629,52 @@ export function toggleEvDbAll(){
      전시 참가기업  — 참가가 정해진 곳. 매뉴얼→신청서 체크리스트가 바로 생긴다.
    무엇을 쓸지는 상황이 정하는 것이라 고르게 두고, 기본값은 CRM으로 둔다.
 ══════════════════════════════════════════ */
+
+/* 전시기업으로 등록한 곳의 담당자를 그 행사 참여자로 올린다.
+   부스를 잡았다는 건 참가가 정해졌다는 뜻이라 확정일까지 함께 적는다 —
+   «초청했지만 아직 등록 안 한» 사람과 갈리는 지점이 여기다.
+
+   이미 걸려 있는 사람은 역할을 건드리지 않는다. 연사로도 오는 사람이
+   있고, 무엇으로 왔는지는 사람이 적어 둔 것이 맞다. */
+async function linkExhibitorPeople(orgsSent, toEv){
+  const when = td();
+  const add = [];
+  orgsSent.forEach(o => {
+    (o.people || []).forEach(pr => {
+      if(!pr.id) return;
+      const had = participations.filter(p => p.eventId === toEv && String(p.contactId) === String(pr.id));
+      if(had.length){
+        had.forEach(p => { if(!p.confirmedAt) p.confirmedAt = when; });
+        return;
+      }
+      add.push({
+        id: 'P-' + Date.now() + '-x' + add.length,
+        eventId: toEv, event: toEv, contactId: pr.id, contact: pr.name || '',
+        role: '전시참가기업', note: '', matched: '✅ 전시 참가기업에서', confirmedAt: when,
+      });
+    });
+  });
+  if(!add.length){ invalidateEvRows(); return; }
+
+  add.forEach(p => participations.push(p));
+  const r = await postToSheet({
+    sheet: 'participations', action: 'batchAppend',
+    rows: add.map(p => [p.id, p.eventId, '', p.contactId, '', '', '',
+      p.role, p.note, p.matched, p.confirmedAt]),
+  }, '전시 참가기업 참여 기록');
+  if(!r.ok){
+    /* 참여 기록만 실패해도 전시기업 등록은 이미 됐다 — 되돌리지 않고
+       무엇이 안 됐는지 말한다. 조용히 넘어가면 행사 참여자에서 또 빈다. */
+    const ids = new Set(add.map(p => p.id));
+    for(let i = participations.length - 1; i >= 0; i--){
+      if(ids.has(participations[i].id)) participations.splice(i, 1);
+    }
+    alert('전시기업은 등록됐지만 행사 참여 기록 저장에 실패했어요.\n'
+      + '행사 탭 참여자 목록에는 아직 안 보입니다 — 네트워크 확인 후 다시 보내주세요.');
+  }
+  invalidateEvRows();
+}
+
 export function openEvDbSend(){
   if(!evdbPicked.size){ alert('보낼 기업을 골라주세요.'); return; }
   const picked = evOrgs(evdbEvent).filter(o => evdbPicked.has(o.key));
@@ -744,6 +790,10 @@ export async function confirmEvDbSend(){
 
     // 서버가 id를 만들어 주므로 저장 직후 재조회로 맞춘다(전시 탭과 같은 방식)
     await reloadExhibitors();
+    /* 전시기업이 되는 것도 «그 행사에 들어온다»는 일이다. 참여 기록을 함께
+       만들지 않으면 전시 탭에만 쌓이고 행사 참여자 목록에는 안 보인다 —
+       실제로 2025 KIC은 전시기업 48곳에 참여자가 0명이었다. */
+    await linkExhibitorPeople(fresh, toEv);
     trackAction('add', '전시 참가기업 등록', `${fresh.length}개사`,
       `<b>${escapeHtml(fromName)}</b>에서 만난 <b>${fresh.length}개사</b>를 <b>${escapeHtml(toEv)}</b> 전시 참가기업으로 등록`);
     finishSend(fresh.length, picked.length - fresh.length, '전시 참가기업');
