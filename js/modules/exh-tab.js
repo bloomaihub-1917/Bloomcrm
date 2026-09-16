@@ -125,6 +125,14 @@ let exhFilter = 'all';       // all | incomplete | unpaid | inquiry | billing | 
 
    해당 없는 곳(부스 도면이 없는 조립부스 같은)은 어느 쪽에도 넣지 않는다 —
    집계의 분모에서도 빠져 있어서, 여기서만 끼면 개수가 안 맞는다. */
+/* 대시보드 단계 줄에서 펼쳐 둔 경고 목록 — 한 번에 하나.
+   숫자만 보여 주면 «3곳»이 어디인지 찾으러 기업리스트를 훑어야 한다. */
+let stepWarnOpen = '';
+export function toggleStepWarn(key){
+  stepWarnOpen = stepWarnOpen === key ? '' : key;
+  renderExh();
+}
+
 let stepFil = null;          // { key, mode: 'done' | 'todo' }
 
 export function setStepFil(key){
@@ -552,8 +560,10 @@ export function guardWrite(fn){
 
 /* 마감을 놓친 줄을 눌렀을 때 열 드로어 탭 — 바로 처리할 수 있는 자리로 보낸다 */
 const DUE_TAB = {
+  'manual_sent_at': 'progress',
   'manual_replied_at': 'progress', 'app_received_at': 'apply',
   'booth_confirmed_at': 'progress', 'calc:design': 'progress', 'calc:payment': 'billing',
+  'calc:invoice': 'billing', 'calc:tax': 'billing',
   'calc:graphic': 'graphic', 'calc:base': 'progress',
   'directory_received_at': 'book', 'movein_at': 'progress',
 };
@@ -3960,18 +3970,35 @@ function renderDashboard(all){
 
   /* of는 그 단계에 해당하는 기업 수다. 부스 도면은 독립부스에만, 그래픽은
      주문한 곳에만 해당해서 전체(n)를 분모로 두면 영영 100%가 안 된다. */
-  const stepRow = (label, done, warn, due, of = n) => {
+  const stepRow = (label, done, warn, due, of = n, step = null, warnRows = []) => {
     const pct = of ? Math.round(done / of * 100) : 0;
     // 마감이 지났는데 다 못 끝냈으면 빨갛게, 남았으면 날짜만 조용히 붙인다
     const late = due && due.days < 0 && done < of;
+    const open = step && stepWarnOpen === step.key;
+    /* 경고 숫자를 눌러 펼친 목록. 어느 기업인지, 왜 걸렸는지까지 적는다 —
+       기업 이름만 있으면 열어 보기 전엔 무엇을 해야 할지 모른다. */
+    const list = open && warnRows.length ? `<div style="margin:-2px 0 8px 83px">
+      ${warnRows.map(({ x, text }) => `<div onclick="openExhDr('${escAttr(x.id)}','${
+          escAttr(DUE_TAB[step.key] || 'progress')}')"
+        style="display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:6px;cursor:pointer;background:var(--i9);margin-bottom:3px">
+        <span style="font-size:11.5px;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${
+          escapeHtml(exhNames(x).ko)}</span>
+        ${x.booth_no ? `<span class="pill p-gray" style="flex:0 0 auto">${escapeHtml(x.booth_no)}</span>` : ''}
+        ${text ? `<span style="font-size:10.5px;color:var(--am);flex:0 0 auto">${escapeHtml(text)}</span>` : ''}
+      </div>`).join('')}
+    </div>` : '';
     return `<div style="display:flex;align-items:center;gap:9px;margin-bottom:7px">
       <span style="font-size:11.5px;color:var(--i3);flex:0 0 74px">${escapeHtml(label)}</span>
       <div style="flex:1;min-width:0">${progressBar(pct, pct === 100 ? 'var(--g)' : late ? 'var(--re)' : 'var(--a)')}</div>
       <span style="font-size:11px;color:var(--i4);flex:0 0 48px;text-align:right">${done}/${of}</span>
       <span style="flex:0 0 66px;text-align:right;font-size:10px;color:${late ? 'var(--re)' : 'var(--i5)'}">${
         due ? escapeHtml(due.date.slice(5)) + (late ? ` ${-due.days}일↑` : '') : ''}</span>
-      ${warn ? `<span class="pill p-amber" style="flex:0 0 auto">${warn}</span>` : '<span style="flex:0 0 24px"></span>'}
-    </div>`;
+      ${warn ? `<span class="pill p-amber" style="flex:0 0 auto;cursor:pointer${
+          open ? ';outline:2px solid var(--i5)' : ''}"
+          onclick="toggleStepWarn('${escAttr(step ? step.key : '')}')"
+          title="${open ? '접기' : `걸려 있는 ${warn}곳을 봅니다`}">${warn}</span>`
+        : '<span style="flex:0 0 24px"></span>'}
+    </div>${list}`;
   };
 
   const STATE_PILLS = [['완납','paid','p-green'],['완납 처리','settled','p-green'],['부분 입금','partial','p-amber'],
@@ -4011,8 +4038,11 @@ function renderDashboard(all){
         const live = all.filter(x => rawCellState(x, st).state !== 'na');
         if(!live.length) return '';
         const done = live.filter(x => rawCellState(x, st).state === 'done').length;
-        const warn = live.filter(x => rawCellState(x, st).state === 'warn').length;
-        return stepRow(st.label.replace(/<br>/g, ''), done, warn, dueInfo(st.key, exhEvent), live.length);
+        const warnRows = live.map(x => ({ x, c: rawCellState(x, st) }))
+          .filter(r => r.c.state === 'warn')
+          .map(r => ({ x: r.x, text: r.c.text || '' }));
+        return stepRow(st.label.replace(/<br>/g, ''), done, warnRows.length,
+          dueInfo(st.key, exhEvent), live.length, st, warnRows);
       }).join('')}
       ${Object.keys(eventDeadlines(exhEvent)).length ? '' :
         `<div style="font-size:10.5px;color:var(--i5);margin-top:6px">마감일을 정해 두면 늦은 기업이 처리 필요에 모입니다</div>`}
@@ -4934,6 +4964,7 @@ window.applyGraphicDue = applyGraphicDue;
 window.searchExhM = searchExhM;
 window.setBoothTypeFil = setBoothTypeFil;
 window.setStepFil = setStepFil;
+window.toggleStepWarn = toggleStepWarn;
 window.moveBookOrder = moveBookOrder;
 window.renumberBook = renumberBook;
 window.bookDragOn = bookDragOn;
