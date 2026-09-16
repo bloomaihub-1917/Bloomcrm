@@ -179,17 +179,20 @@ function buildContactDomainMap(){
    행사 칩 목록 (원본 1745~1764행)
 ══════════════════════════════════════════ */
 export function buildMDBEvList(){
-  const usedEvs = EVENT_LIST.filter(e => participations.some(p => p.eventId === e.key));
   const el = document.getElementById('mdb-ev-list');
   if(!el) return;
+  /* 분야를 골라 뒀으면 그 안의 사람만 센다 — 아래 칩들은 모두 같은 범위다 */
+  const scoped = new Set(domainScope(contacts).map(c => String(c.id)));
+  const inScope = (p) => scoped.has(String(p.contactId));
+  const usedEvs = EVENT_LIST.filter(e => participations.some(p => p.eventId === e.key && inScope(p)));
   el.innerHTML =
     `<button class="ev-chip${!mdbEvFilter?' on':''}" onclick="setMDBEv(null)">
       <span class="ev-chip-dot" style="background:var(--i4)"></span>
       <span class="ev-chip-nm">전체 행사</span>
-      <span class="ev-chip-ct">${contacts.length}명</span>
+      <span class="ev-chip-ct">${scoped.size}명</span>
     </button>` +
     usedEvs.map(e => {
-      const cnt = [...new Set(participations.filter(p=>p.eventId===e.key).map(p=>p.contactId))].length;
+      const cnt = [...new Set(participations.filter(p=>p.eventId===e.key && inScope(p)).map(p=>p.contactId))].length;
       return `<button class="ev-chip${mdbEvFilter===e.key?' on':''}" onclick="setMDBEv('${escAttr(e.key)}')">`+
         `<span class="ev-chip-dot" style="background:${e.color}"></span>`+
         `<span class="ev-chip-nm">${escapeHtml(e.short)}</span>`+
@@ -305,10 +308,29 @@ export function setMDBRegion(v){
   renderMDB();
 }
 
+/* ── 분야가 맨 위 축이다 ──
+   사이드바가 행사·지역·분야 순이던 시절에는 셋이 서로 남남이라, 분야를
+   눌러 놓고 지역 칩을 보면 그 숫자는 여전히 전체 인원이었다. 743명 중
+   건축 95명을 보고 있는데 «북미 15명»이라 적혀 있으면, 그 15명이 건축의
+   15명인지 전체의 15명인지 알 수가 없다.
+
+   이제 분야를 먼저 고르고 그 안에서 국가·행사·카테고리·태그로 좁힌다.
+   아래 목록들은 모두 이 범위 안에서 센다. 분야 목록 자신만 늘 전체를
+   세는데, 그게 맨 위 축이기 때문이다 — 제 숫자가 제 선택에 따라 변하면
+   어디로 갈 수 있는지를 알 수 없다. */
+function domainScope(list){
+  if(!mdbDomainFilter) return list;
+  const map = buildContactDomainMap();
+  return list.filter(c => {
+    const doms = map.get(c.id) || [];
+    return mdbDomainFilter === UNASSIGNED_DOMAIN ? doms.length === 0 : doms.includes(mdbDomainFilter);
+  });
+}
+
 export function buildMDBRegionList(){
   const el = document.getElementById('mdb-region-list');
   if(!el) return;
-  const base = contacts;
+  const base = domainScope(contacts);
   const n = (f) => base.filter(f).length;
   const chip = (key, label, cnt, dot, indent) =>
     `<button class="ev-chip${mdbRegion === key ? ' on' : ''}" onclick="setMDBRegion(${key === null ? 'null' : `'${escAttr(key)}'`})"${
@@ -1137,6 +1159,9 @@ export function renderMDB(){
   renderCtryChip();
   renderLeftChip();
   buildMDBFilterBar();
+  /* 행사 목록도 여기서 다시 그린다 — 분야를 바꾸면 그 안의 인원으로 세어야
+     하는데, 지금까지는 행사를 고를 때만 그려서 숫자가 옛것으로 남아 있었다. */
+  buildMDBEvList();
   buildMDBRegionList();
   buildMDBDomainList();
   buildMDBTagList();
@@ -1213,6 +1238,11 @@ export function updateMDBBadges(pairs){
     let bp = mdbEvFilter
       ? participations.filter(p=>p.eventId===mdbEvFilter).map(p=>({c:getContactById(p.contactId),p})).filter(x=>x.c)
       : contacts.map(c=>({c,p:null}));
+    /* 분야가 맨 위 축이라 카테고리·태그 숫자도 그 안에서 센다 */
+    if(mdbDomainFilter){
+      const inDom = new Set(domainScope(contacts).map(c => String(c.id)));
+      bp = bp.filter(({c}) => inDom.has(String(c.id)));
+    }
     if(hidingLeft()) bp = bp.filter(({c}) => !hasLeft(c));
     if(mdbStat) bp=bp.filter(({c})=>c.status===mdbStat);
     const q=(document.getElementById('mdb-q')||{}).value||'';
