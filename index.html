@@ -912,16 +912,19 @@
 
 <!-- ⑤ CRM -->
 <div class="page" id="page-crm">
-<div class="mob-header" id="mob-h-audit" style="display:none">
-  <button class="mob-menu-btn" onclick="toggleSb()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
-  <div class="mob-title">활동 로그</div>
-  <button class="mob-action-btn" onclick="exportAuditCSV()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
-</div>
 <div class="mob-header" id="mob-h-crm">
   <button class="mob-menu-btn" onclick="toggleSb()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
   <div class="mob-title" id="mob-crm-ttl">파이프라인</div>
   <button class="mob-action-btn primary" onclick="openModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
 </div>
+  <!-- 모바일 검색 — .tb가 모바일에서 숨겨져 검색창이 통째로 사라진다 -->
+  <div class="mob-srch">
+    <div class="srch" style="width:100%">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input type="text" id="crm-q-m" placeholder="기업명 검색…" style="width:100%"
+        oninput="searchCrmM(this.value)">
+    </div>
+  </div>
   <div class="tb">
     <div class="tb-t" id="crm-ttl">파이프라인 <span class="tb-s">행사 타겟 기업 컨택 현황</span></div>
     <div class="srch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" placeholder="기업명 검색…" oninput="renderCrm()" id="crm-q"></div>
@@ -960,6 +963,21 @@
 
 <!-- ⑥ AUDIT LOG PAGE -->
 <div class="page" id="page-audit">
+<!-- 모바일 헤더는 전에 page-crm 안에 들어가 있었다 — 로그 탭을 열면 page-crm이
+     통째로 숨으므로 이 머리도 같이 사라져, 모바일에서는 제목도 내보내기도
+     보이지 않았다. 제 페이지 안으로 옮긴다. -->
+<div class="mob-header" id="mob-h-audit" style="display:none">
+  <button class="mob-menu-btn" onclick="toggleSb()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+  <div class="mob-title">활동 로그</div>
+  <button class="mob-action-btn" onclick="exportAuditCSV()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+</div>
+  <div class="mob-srch">
+    <div class="srch" style="width:100%">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input type="text" id="audit-q-m" placeholder="이름, 기업, 내용 검색…" style="width:100%"
+        oninput="searchAuditM(this.value)">
+    </div>
+  </div>
   <div class="tb">
     <div class="tb-t">활동 로그 <span class="tb-s">팀원 액션 추적</span></div>
     <div class="srch">

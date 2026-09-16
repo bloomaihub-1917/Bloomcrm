@@ -123,6 +123,14 @@ export function switchCV(v, btn) {
 /* ══════════════════════════════════════════
    뷰 전환 렌더 디스패치 (원본 4653~4661행)
 ══════════════════════════════════════════ */
+/* 모바일 검색칸 — 상단바(.tb)가 모바일에서 통째로 숨겨져 검색창을 쓸 수 없다.
+   값은 데스크톱 칸 하나로 모아 둔다. */
+export function searchCrmM(v){
+  const d = document.getElementById('crm-q');
+  if(d) d.value = v;
+  renderCrm();
+}
+
 export function renderCrm() {
   try {
     if (crmV === 'pipeline') renderPipeline(); else renderTable2();
@@ -642,6 +650,7 @@ window.setEvF = setEvF;
 window.filterSt2 = filterSt2;
 window.switchCV = switchCV;
 window.renderCrm = renderCrm;
+window.searchCrmM = searchCrmM;
 window.tblF = tblF;
 window.chgSt = chgSt;
 window.clearCrmSelection = clearCrmSelection;

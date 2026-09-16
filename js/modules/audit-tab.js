@@ -140,6 +140,14 @@ export function getAuditFiltered(){
 }
 
 /* (원본 5231~5266행) */
+/* 모바일 검색칸 — 상단바(.tb)가 모바일에서 통째로 숨겨져 검색창을 쓸 수 없다.
+   값은 데스크톱 칸 하나로 모아 둔다. */
+export function searchAuditM(v){
+  const d = document.getElementById('audit-q');
+  if(d) d.value = v;
+  renderAudit();
+}
+
 export function renderAudit(){
   const list = getAuditFiltered();
   const ct = document.getElementById('audit-ct');
@@ -335,6 +343,7 @@ export function exportAuditCSV(){
 window.exportAuditCSV = exportAuditCSV;
 window.filterAudit    = filterAudit;
 window.renderAudit    = renderAudit;
+window.searchAuditM   = searchAuditM;
 window.setAuditUser   = setAuditUser;
 window.openAuditTarget = openAuditTarget;
 window.flashAuditField = flashAuditField;
