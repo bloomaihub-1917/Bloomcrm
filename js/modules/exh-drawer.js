@@ -56,7 +56,7 @@ import { trackAction, changed, removed } from './audit-tab.js';
 import { ieyo } from '../country-signal.js';
 import { normalizeCompanyKey } from './company-tab.js';
 import {
-  billedAmount, paidAmount, graphicState, graphicDueInfo, money, fmtMoney, currencyOf, mixedCurrency, daysSince, CANCELLED,
+  billedAmount, paidAmount, graphicState, graphicDueInfo, money, fmtMoney, currencyOf, mixedCurrency, taxNeed, daysSince, CANCELLED,
   isPendingRefund, boothTypeOptions, boothTypes, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
   TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing, introOver, boothDesignState,
   isSharedBooth, isBookOnly, baseKind, BASE_KINDS, bookName, fasciaName,
@@ -2062,15 +2062,24 @@ function dBilling(x){
 
      드물게 원화 세금계산서를 따로 끊어야 하는 일이 있어서, 접어 두되 한 번
      눌러 열 수 있게 한다. */
-  const taxNA = !taxes.length && currencyOf(x.id) !== 'KRW' && !mixedCurrency(x.id);
-  if(taxNA && taxOpenFor !== x.id) return sct('세금계산서', `
+  const need = taxNeed(x);
+  if(need.kind === 'na' && taxOpenFor !== x.id) return sct('세금계산서', `
     <div style="font-size:11.5px;color:var(--i4);padding:8px 2px;line-height:1.7">
-      <b style="color:var(--i3)">해당 없음</b> — ${escapeHtml(currencyOf(x.id))}로 청구·결제한 곳이라 발행할 세금계산서가 없어요.
-      <br><span style="color:var(--i5)">원화로 따로 끊어야 하면
+      <b style="color:var(--i3)">해당 없음</b> — ${
+        need.why === '카드 완납' ? '카드로 완납한 곳이라 카드사 매출로 잡혀요.'
+        : need.why === '청구 없음' ? '청구할 금액 항목이 아직 없어요.'
+        : `${escapeHtml(currencyOf(x.id))}로 청구·결제한 곳이라 발행할 세금계산서가 없어요.`}
+      <br><span style="color:var(--i5)">그래도 끊어야 하면
         <span style="color:var(--a);cursor:pointer;text-decoration:underline" onclick="openTaxAnyway('${escAttr(x.id)}')">여기서 열 수 있어요</span>.</span>
     </div>`);
 
   return sct('세금계산서', `
+    ${need.kind === 'pre' ? `<div style="font-size:11px;color:var(--i3);background:var(--i9);border-left:3px solid var(--am);padding:6px 8px;border-radius:6px;margin-bottom:8px">
+      <b>선발행(청구용)</b> — 아직 못 받은 돈이 있어요. 세금계산서를 먼저 끊어야 입금됩니다.</div>` : ''}
+    ${need.kind === 'after' ? `<div style="font-size:11px;color:var(--i3);background:var(--i9);padding:6px 8px;border-radius:6px;margin-bottom:8px">
+      <b>사후 발행</b> — 계좌이체로 완납된 곳이에요. 받은 돈에 대해 끊어 주세요.</div>` : ''}
+    ${need.kind === 'check' ? `<div style="font-size:11px;color:var(--i3);background:var(--i9);border-left:3px solid var(--am);padding:6px 8px;border-radius:6px;margin-bottom:8px">
+      <b>결제 수단 확인</b> — 입금에 수단이 안 적혀 있어요. 카드면 발행할 것이 없고, 계좌이체면 끊어야 합니다.</div>` : ''}
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px">
       ${taxes.length ? taxes.map(v => `
         <div style="padding:8px 10px;background:var(--i9);border-radius:7px${v.status === 'void' ? ';opacity:.55' : ''}">

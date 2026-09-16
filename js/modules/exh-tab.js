@@ -320,6 +320,54 @@ export function payGroup(method){
   return t.includes('카드') ? 'card' : 'bank';
 }
 
+/* 이 기업이 낸 돈의 결제 수단 — 환불은 뺀다(돌려준 돈의 수단은 의미가 없다).
+   청구 통화와 같은 통화의 입금만 본다. */
+function paidMethodsOf(exhId){
+  const cur = currencyOf(exhId);
+  return new Set(paymentsFor(exhId).filter(hasAmount)
+    .filter(p => p.kind !== 'refund' && (p.currency || 'KRW') === cur)
+    .map(p => payGroup(p.method)));
+}
+
+/* ══════════════════════════════════════════
+   세금계산서가 필요한 곳인가
+
+   세금계산서는 계좌이체로 받는 돈에만 붙는다. 카드로 결제하면 카드사 매출로
+   잡혀 우리가 끊을 것이 없다. 그래서 «카드로 완납한 곳»은 아예 대상이 아니다 —
+   대상으로 세어 두면 채워지지 않는 숫자가 분모에 영원히 남는다(2026 KIC에서
+   7곳이 그랬다).
+
+   반대로 아직 못 받은 곳은 세금계산서가 있어야 돈이 들어온다. 선발행이 곧
+   청구 수단이라 «안 한 일»이 아니라 «막고 있는 일»이다. 계좌이체로 이미 받은
+   곳은 사후 발행이 남는다.
+
+   아직 안 낸 기업이 나중에 카드로 낼지 계좌로 낼지는 지금 알 수 없다. 필요한
+   쪽으로 두고, 카드로 완납되면 그때 저절로 «해당 없음»이 된다.
+
+   kind — issued: 이미 발행함 / na: 대상 아님 / after: 완납, 사후 발행
+          pre: 미납, 선발행 / check: 완납인데 결제 수단이 안 적혀 판단 불가
+══════════════════════════════════════════ */
+export function taxNeed(x){
+  const tx = taxInvoicesFor(x.id).filter(t => t.status !== 'void');
+  // 한 장이라도 끊었으면 통화·수단과 무관하게 그것부터 보여준다
+  if(tx.length) return { kind: 'issued', tx };
+
+  if(currencyOf(x.id) !== 'KRW' && !mixedCurrency(x.id)) return { kind: 'na', why: '외화 청구' };
+
+  const s = settleState(x);
+  if(!s.billed) return { kind: 'na', why: '청구 없음' };
+
+  if(s.balance <= 0){
+    const ms = paidMethodsOf(x.id);
+    /* 수단이 안 적힌 입금으로 완납된 곳은 가르지 않는다. 카드로 밀어 넣으면
+       발행해야 할 곳이 조용히 사라지고, 계좌로 밀어 넣으면 없는 일이 생긴다. */
+    if(!ms.size || ms.has('etc')) return { kind: 'check', why: '결제 수단 확인' };
+    if(!ms.has('bank')) return { kind: 'na', why: '카드 완납' };
+    return { kind: 'after', why: '완납 · 사후 발행' };
+  }
+  return { kind: 'pre', why: s.paid > 0 ? '부분 입금 · 선발행' : '선발행(청구용)' };
+}
+
 export function settleByCurrency(exhId){
   const items = billableItems(exhId);
   const src = items.length ? items : liveInvoices(exhId);   // billedAmount와 같은 기준
@@ -727,19 +775,14 @@ function rawCellState(x, step){
     // 재촉 대상을 가리는 용도일 뿐이라, 단계를 안 넘기고 날짜만 적어도 완료로 본다.
     // 여기서 stage만 보게 바꿨다가 날짜는 있는데 단계가 안 넘어간 건들이 전부
     // "완료"에서 빠지는 회귀가 있었다.
-    const tx = taxInvoicesFor(x.id).filter(t => t.status !== 'void');
-    /* 세금계산서는 국세청에 원화로 신고하는 서류다. 외화로 청구한 곳은 애초에
-       발행할 일이 없으니 «아직 안 한 일»로 세면 안 된다 — 50곳 중 17곳이 USD인
-       행사에서 16/50은 영원히 채워지지 않는 숫자가 된다.
-
-       통화가 섞인 곳은 빼지 않는다. 원화로 청구한 부분이 남아 있어서 발행할
-       일이 실제로 있다.
-
-       이미 한 장이라도 끊었으면 그것부터 보여준다 — 통화와 무관하게 발행한
-       기록이 있는데 화면에서 지워 버리면, 뭘 보냈는지 확인할 데가 없어진다. */
-    if(!tx.length && currencyOf(x.id) !== 'KRW' && !mixedCurrency(x.id))
-      return { state: 'na', text: '외화 청구' };
-    if(!tx.length) return { state: 'todo' };
+    /* 누가 대상인지는 taxNeed가 정한다 — 드로어·처리 필요 목록도 같은 판정을
+       쓴다. 화면마다 따로 가르면 한 곳만 고쳤을 때 숫자가 갈린다. */
+    const need = taxNeed(x);
+    if(need.kind === 'na')    return { state: 'na',   text: need.why };
+    if(need.kind === 'check') return { state: 'warn', text: need.why };
+    if(need.kind === 'pre')   return { state: 'warn', text: need.why };
+    if(need.kind === 'after') return { state: 'todo', text: need.why };
+    const tx = need.tx;
     const sent = tx.filter(t => t.sent_at);
     if(!sent.length) return { state: 'warn', text: stageOf(TAX_STAGES, tx[0].stage).label };
     if(tx.some(t => String(t.amount ?? '').trim() === '')) return { state: 'warn', text: '금액 미입력' };
@@ -3781,6 +3824,13 @@ function renderDashboard(all){
       attention.push({ x, why: s.state === 'over' ? ('초과 입금 ' + fmtMoney(-s.balance, s.cur))
         : '인보이스 금액 미입력' });
     }
+    /* 못 받은 돈 중에는 세금계산서가 없어서 못 받는 것이 섞여 있다. 선발행이
+       곧 청구라 «아직 안 한 일»이 아니라 이쪽이 막고 있는 일이다. 완납 뒤
+       사후 발행은 여기 올리지 않는다 — 돈은 이미 들어왔고, 단계별 진행에
+       숫자로 남는다. */
+    const tn = taxNeed(x);
+    if(tn.kind === 'pre')   attention.push({ x, why: '세금계산서 ' + tn.why + ' — 발행해야 입금됩니다' });
+    if(tn.kind === 'check') attention.push({ x, why: '입금 결제 수단이 안 적혀 세금계산서 발행 여부를 못 정해요' });
   });
   overdue.sort((a, b) => daysSince(b.s.due) - daysSince(a.s.due));
 
