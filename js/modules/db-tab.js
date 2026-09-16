@@ -24,7 +24,9 @@ import {
   mdbCat,
   mdbStat,
   mdbDomainFilter,
+  mdbTypeFilter,
   setMdbEvFilter,
+  setMdbTypeFilter,
   setMdbView,
   setMdbCat,
   setMdbStat,
@@ -169,7 +171,78 @@ export function buildMDBEvList(){
         `</button>`;
     }).join('');
 }
-export function setMDBEv(ev){ setMdbEvFilter(ev); buildMDBEvList(); renderMDB(); }
+export function setMDBEv(ev){
+  setMdbEvFilter(ev);
+  /* 행사를 바꾸면 그 행사에 없는 유형이 걸린 채로 남아 «0명»이 된다 —
+     칩은 켜져 있는데 목록만 비어서, 왜 아무것도 없는지 알 길이 없다. */
+  if(mdbTypeFilter && ev && !participations.some(p => p.eventId === ev && (p.role||'') === mdbTypeFilter)){
+    setMdbTypeFilter(null);
+  }
+  buildMDBEvList(); renderMDB();
+}
+export function setMDBType(t){ setMdbTypeFilter(t || null); renderMDB(); }
+
+/* ══════════════════════════════════════════
+   목록 위의 가로 거르개 — 행사와 참가 유형
+
+   행사 칩은 사이드바에도 있지만, 사이드바를 접어 두고 쓰는 일이 많아
+   목록만 보고 있으면 지금 무엇으로 걸러져 있는지가 안 보인다. 그리고
+   참가 유형은 어디에도 거르개가 없었다 — 표의 «행사» 칸에 적혀 있는데
+   그걸로 좁힐 수가 없으니, 바이어만 추리려면 눈으로 훑어야 했다.
+
+   유형 칩은 지금 걸린 행사 안에서 실제로 쓰인 것만 띄운다. 쓰지도 않는
+   유형이 0명으로 늘어서 있으면 고를 것을 찾는 데 방해만 된다.
+══════════════════════════════════════════ */
+export function buildMDBFilterBar(){
+  const el = document.getElementById('mdb-filterbar');
+  if(!el) return;
+
+  const usedEvs = EVENT_LIST.filter(e => participations.some(p => p.eventId === e.key));
+  const scope = mdbEvFilter ? participations.filter(p => p.eventId === mdbEvFilter) : participations;
+
+  // 유형별 «사람 수» — 한 사람이 한 행사에 두 역할로 들어가도 두 번 세지 않는다
+  const byType = new Map();
+  scope.forEach(p => {
+    const k = p.role || '참가자';
+    if(!byType.has(k)) byType.set(k, new Set());
+    byType.get(k).add(p.contactId);
+  });
+  // PART_TYPES 순서를 따르고, 목록에 없는 값이 들어와 있으면 뒤에 붙인다
+  const typeKeys = [
+    ...PART_TYPES.map(t => t.key).filter(k => byType.has(k)),
+    ...[...byType.keys()].filter(k => !PART_TYPES.some(t => t.key === k)),
+  ];
+
+  const evTotal = mdbEvFilter
+    ? new Set(scope.map(p => p.contactId)).size
+    : contacts.length;
+
+  const chip = (on, onclick, dot, label, count) =>
+    `<button class="seg-b${on ? ' on' : ''}" onclick="${onclick}" style="display:inline-flex;align-items:center;gap:5px">`
+    + (dot ? `<span style="width:6px;height:6px;border-radius:50%;background:${dot};flex:none"></span>` : '')
+    + `${escapeHtml(label)}<span style="color:var(--i4);font-size:10px">${count}</span></button>`;
+
+  const evChips = chip(!mdbEvFilter, 'setMDBEv(null)', '', '전체 행사', contacts.length)
+    + usedEvs.map(e => chip(mdbEvFilter === e.key, `setMDBEv('${escAttr(e.key)}')`, e.color, e.short,
+        new Set(participations.filter(p => p.eventId === e.key).map(p => p.contactId)).size)).join('');
+
+  const typeChips = chip(!mdbTypeFilter, 'setMDBType(null)', '', '전체 유형', evTotal)
+    + typeKeys.map(k => {
+        const t = PART_TYPES.find(x => x.key === k);
+        return chip(mdbTypeFilter === k, `setMDBType('${escAttr(k)}')`, '', t ? t.label : k,
+          byType.get(k).size);
+      }).join('');
+
+  el.innerHTML =
+    `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+       <span style="font-size:10px;color:var(--i4);flex:none">행사</span>
+       <div class="seg" style="flex-wrap:wrap">${evChips}</div>
+     </div>
+     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+       <span style="font-size:10px;color:var(--i4);flex:none">유형</span>
+       <div class="seg" style="flex-wrap:wrap">${typeChips}</div>
+     </div>`;
+}
 
 /* ══════════════════════════════════════════
    분야별 보기 (신규) — 행사별 보기와 같은 칩 UI 패턴.
@@ -847,6 +920,7 @@ export function getMDBPairs(){
         return ROLE_TO_CAT[p.role] === mdbCat;
       });
     }
+    if(mdbTypeFilter) evParts = evParts.filter(p => (p.role || '참가자') === mdbTypeFilter);
     // 한 행사당 한 사람은 1번만 (카테고리 필터 이후에 중복 제거해야 다중 트랙 참가자가 안 빠짐)
     const seenCids = new Set();
     pairs = evParts
@@ -953,6 +1027,13 @@ export const hidingLeft = () => !mdbShowLeft && !mdbEvFilter && !mdbQuery();
 
 export function mdbFilterPairs(pairs){
   let out = pairs;
+  /* 참가 유형 — p가 있으면 그 줄의 역할을, 없으면(전체 보기) 그 사람의
+     참가 이력 어딘가에 그 역할이 있는지를 본다. */
+  if(mdbTypeFilter){
+    out = out.filter(({ c, p }) => p
+      ? (p.role || '참가자') === mdbTypeFilter
+      : participations.some(x => x.contactId === c.id && (x.role || '참가자') === mdbTypeFilter));
+  }
   if(hidingLeft()) out = out.filter(({ c }) => !hasLeft(c));
   if(mdbStat) out = out.filter(({ c }) => c.status === mdbStat);
   if(mdbCtryOnly) out = out.filter(({ c }) => !!ctryCheck(c));
@@ -974,6 +1055,7 @@ export function renderMDB(){
   const pairs = getMDBPairs();
   renderCtryChip();
   renderLeftChip();
+  buildMDBFilterBar();
   buildMDBRegionList();
   buildMDBDomainList();
   buildMDBTagList();
@@ -2690,6 +2772,8 @@ async function moveCosToSector(cos, sectorName, domainId){
 const escapeHtmlPlain = (s) => String(s == null ? '' : s);
 
 /* ── 인라인 핸들러용 노출 ── */
+window.setMDBType        = setMDBType;
+window.buildMDBFilterBar = buildMDBFilterBar;
 window.onMDBDragStart    = onMDBDragStart;
 window.onMDBDragEnd      = onMDBDragEnd;
 window.onMDBDragOver     = onMDBDragOver;

@@ -429,12 +429,17 @@ let mdbView = 'flat';
 let mdbCat = 'all';
 let mdbStat = null;
 let mdbDomainFilter = null; // 분야별 보기 — DOMAINS의 id, 또는 '__none__'(미분류). null=전체
+/* 참가 유형(participations.role) — PART_TYPES의 key. null=전체.
+   연락처의 cat(연사/VIP/일반참가자)과는 다른 값이다 — 이쪽은 «그 행사에서
+   무엇으로 왔나»라, 같은 사람이 행사마다 다를 수 있다. */
+let mdbTypeFilter = null;
 export function setMdbEvFilter(v){ mdbEvFilter = v; }
+export function setMdbTypeFilter(v){ mdbTypeFilter = v; }
 export function setMdbView(v){ mdbView = v; }
 export function setMdbCat(v){ mdbCat = v; }
 export function setMdbStat(v){ mdbStat = v; }
 export function setMdbDomainFilter(v){ mdbDomainFilter = v; }
-export { mdbEvFilter, mdbView, mdbCat, mdbStat, mdbDomainFilter };
+export { mdbEvFilter, mdbView, mdbCat, mdbStat, mdbDomainFilter, mdbTypeFilter };
 
 /* 마스터DB 행 선택(체크) 상태 — 아바타 클릭으로 토글, 일괄 병합/삭제/변경에 사용.
    Set은 재할당 없이 add/delete로 직접 조작(CO_DB 등과 동일한 패턴). */
