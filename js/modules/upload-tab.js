@@ -275,6 +275,14 @@ const COLUMN_ALIASES = {
     'nameen_f','nameen_first',
     'name (english first)','name(english first)',
   ],
+  /* 중간이름은 따로 보관하지 않는다 — nameEn에 First·Middle·Last 순으로
+     합쳐 넣는다. 우리 쪽에서 쓰는 건 언제나 «부르는 전체 이름» 한 줄이라
+     칸을 나눠두면 표시할 때마다 도로 이어붙여야 한다. */
+  middleName: [
+    '영문명(중간이름)','중간이름','미들네임',
+    'middlename','middle name','middle','middleinitial','middle initial',
+    'name_middle','nameen_m','nameen_middle',
+  ],
   lastName: [
     '영문명(성)','영문(성)','성(영문)',
     'lastname','last name','surname','familyname','family name','lname','name_last',
@@ -303,6 +311,10 @@ const COLUMN_ALIASES = {
     'englishcompany','englishorg','englishorganization','englishaffiliation',
     'company name','companyname',
   ],
+  /* 경칭은 직함이 아니다 — Dr.는 «박사님»이라 부르는 호칭이고,
+     titleKo/titleEn은 그 사람이 회사에서 맡은 자리다. 섞으면 명단에
+     "Dr." 가 직함 칸에 찍힌다. */
+  prefix: ['경칭','호칭','존칭','prefix','salutation','honorific','titleprefix','name prefix'],
   titleKo: [
     '직함','직책','직급','직위','국문직위','국문직책','국문직함',
     '직책(국문)','직함(국문)','직위(국문)',
@@ -330,7 +342,12 @@ const COLUMN_ALIASES = {
   beat:     ['분야','업종','산업분야','섹터','취재분야','출입처','beat','sector','industry'],
   products: ['전시품목','품목','제품','출품작','products','exhibits','item'],
   website:  ['웹페이지','홈페이지','웹사이트','website','homepage','url'],
-  note:     ['비고','메모','설명','참고사항','note','notes','remark','remarks'],
+  note:     ['비고','설명','참고사항','note','notes','remark','remarks'],
+  /* memo1~3: 기본 항목으로 떨어지지 않는 열을 그대로 담아 두는 칸.
+     위 note와 달리 연락처 자신에게 붙는다(note는 소속 기업의 메모로 간다). */
+  memo1:    ['메모','메모1','기타','기타1','memo','memo1'],
+  memo2:    ['메모2','기타2','memo2'],
+  memo3:    ['메모3','기타3','memo3'],
 };
 
 /* 컬럼명 자동 매핑 후보 탐색 (원본 2515~2539행) */
@@ -431,14 +448,16 @@ export function runMatchColumnsStep(headers, rows){
 const DB_FIELD_LABELS = {
   '': '매핑 안 함',
   nameKo: '이름(한글)', nameEn: '이름(영문)',
-  nameEnFirst: '이름(영문·이름부분)', lastName: '이름(영문·성)',
+  nameEnFirst: '이름(영문·이름부분)', middleName: '이름(영문·중간이름)', lastName: '이름(영문·성)',
   orgKo: '기업(한글)', orgEn: '기업(영문)',
   titleKo: '직함(한글)', titleEn: '직함(영문)',
   deptKo: '부서(한글)', deptEn: '부서(영문)',
+  prefix: '경칭(Mr./Dr.)',
   country: '국가', email1: '이메일1', email2: '이메일2',
   phone1: '연락처1', phone2: '연락처2',
   cat: '카테고리', beat: '분야(산업/업종)', products: '전시품목',
-  website: '웹사이트', note: '메모',
+  website: '웹사이트', note: '기업 메모',
+  memo1: '메모1', memo2: '메모2', memo3: '메모3',
 };
 
 function renderColumnMappingPreview(headers, rows, colMap){
@@ -576,30 +595,34 @@ function applyColumnMap(colMap){
     const rawNameKo      = colMap.nameKo      ? String(r[colMap.nameKo]     ||'').trim() : '';
     const rawNameEn      = colMap.nameEn      ? String(r[colMap.nameEn]     ||'').trim() : '';
     const rawNameEnFirst = colMap.nameEnFirst  ? String(r[colMap.nameEnFirst]||'').trim() : '';
+    const rawMiddle      = colMap.middleName   ? String(r[colMap.middleName] ||'').trim() : '';
     const rawLast        = colMap.lastName     ? String(r[colMap.lastName]   ||'').trim() : '';
 
     const isKorean = (s) => /[가-힣]/.test(s);
 
-    const buildEnName = (first, last) => {
-      const f = (first||'').trim(), l = (last||'').trim();
-      if(!f) return l;
-      if(!l) return f;
-      if(f.toLowerCase().includes(l.toLowerCase())) return f;
-      if(l.toLowerCase().includes(f.toLowerCase())) return l;
-      return f + ' ' + l;
+    /* First·Middle·Last를 한 줄로 잇는다. 한 칸에 이미 전체 이름이 들어 있는
+       파일이 있어서(성 칸에 "John Smith"), 다른 조각을 전부 품고 있는 칸이
+       있으면 이어붙이지 않고 그 칸만 쓴다 — 안 그러면 "John John Smith"가 된다. */
+    const buildEnName = (first, middle, last) => {
+      const parts = [first, middle, last].map(v => (v||'').trim()).filter(Boolean);
+      if(!parts.length) return '';
+      const full = parts.find(p =>
+        parts.every(q => q === p || p.toLowerCase().includes(q.toLowerCase())));
+      return full || parts.join(' ');
     };
 
     let nameKo = '', nameEn = '';
     const sameCol = (colMap.nameKo && colMap.nameEn && colMap.nameKo === colMap.nameEn);
 
     if(rawNameEnFirst){
-      nameEn = buildEnName(rawNameEnFirst, rawLast);
+      nameEn = buildEnName(rawNameEnFirst, rawMiddle, rawLast);
       if(rawNameKo && isKorean(rawNameKo)) nameKo = rawNameKo;
     } else if(rawNameEn && !sameCol){
       nameEn = isKorean(rawNameEn) ? '' : rawNameEn;
       if(rawNameKo && isKorean(rawNameKo)) nameKo = rawNameKo;
     } else if(rawLast && !rawNameEn && !rawNameEnFirst){
-      nameEn = isKorean(rawLast) ? '' : rawLast;
+      const built = buildEnName('', rawMiddle, rawLast);
+      nameEn = isKorean(built) ? '' : built;
       if(rawNameKo && isKorean(rawNameKo)) nameKo = rawNameKo;
     } else if(rawNameKo){
       if(isKorean(rawNameKo)){
@@ -674,6 +697,7 @@ function applyColumnMap(colMap){
         const v = String(r[colMap.titleEn]||'').trim();
         return /[가-힣]/.test(v) ? '' : v;
       })(),
+      prefix:  colMap.prefix  ? String(r[colMap.prefix] ||'').trim() : '',
       deptKo:  colMap.deptKo  ? String(r[colMap.deptKo] ||'').trim() : '',
       deptEn:  colMap.deptEn  ? String(r[colMap.deptEn] ||'').trim() : '',
       country: countryCode,
@@ -685,6 +709,10 @@ function applyColumnMap(colMap){
       // website/note는 연락처가 아니라 "기업" 속성 — runValidationStep()에서 기업 마스터(orgs)로 반영하고 contact 저장 시엔 제거한다.
       _companyWebsite: colMap.website ? String(r[colMap.website]||'').trim() : '',
       _companyNote: colMap.note ? String(r[colMap.note]||'').trim() : '',
+      // memo1~3은 연락처 자신의 자유 칸 — 기본 항목에 없는 열(회원번호, 이사회 여부 등)을 버리지 않고 여기 담는다.
+      memo1: colMap.memo1 ? String(r[colMap.memo1]||'').trim() : '',
+      memo2: colMap.memo2 ? String(r[colMap.memo2]||'').trim() : '',
+      memo3: colMap.memo3 ? String(r[colMap.memo3]||'').trim() : '',
       email1: colMap.email1 ? String(r[colMap.email1]||'').trim() : '',
       email2: (colMap.email2 && colMap.email2 !== colMap.email1)
               ? String(r[colMap.email2]||'').trim() : '',
@@ -1205,9 +1233,11 @@ export async function runValidationStep(newRows, dupRows){
   let partsSaveFailed = false;
   if(API_BASE_URL && currentUser){
     if(addedContacts.length){
+      // 위치 배열 — 뒤쪽 memo1~3까지 보내려면 그 앞의 left_at/moved_to_id 자리도 채워야 한다(신규라 빈 값).
       const contactRows = addedContacts.map(r => [r.id, r.nameKo, r.nameEn, r.orgKo, r.orgEn, r.titleKo, r.titleEn, r.deptKo, r.deptEn,
             r.country, r.cat, r.lang, r.source, r.date, r.status, r.email1, r.email2, r.phone1, r.phone2,
-            r.beat||'', r.products||'', r.tags||'', r.org_id||'']);   // 맨 뒤가 org_id — 기업과의 연결
+            r.beat||'', r.products||'', r.tags||'', r.org_id||'', '', '',
+            r.memo1||'', r.memo2||'', r.memo3||'', r.prefix||'']);
       const res = await postToSheet(
         { sheet: 'contacts', action: 'batchAppend', rows: contactRows }, '연락처 업로드');
       if(!res.ok){
@@ -1237,7 +1267,8 @@ export async function runValidationStep(newRows, dupRows){
         action: 'upsert',
         row: [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
               c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
-              c.beat||'', c.products||'', c.tags||'', c.org_id||''],
+              c.beat||'', c.products||'', c.tags||'', c.org_id||'', c.left_at||'', c.moved_to_id||'',
+              c.memo1||'', c.memo2||'', c.memo3||'', c.prefix||''],
       }, '연락처 정보 보강');
     }
     // participations 구글시트 저장 — batchAppend로 한 번에

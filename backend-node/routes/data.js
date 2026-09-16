@@ -12,7 +12,8 @@ const TABLES = {
     table: 'contacts', pk: 'id', idPrefix: '',
     columns: ['id', 'nameKo', 'nameEn', 'orgKo', 'orgEn', 'titleKo', 'titleEn', 'deptKo', 'deptEn',
       'country', 'cat', 'lang', 'source', 'date', 'status', 'email1', 'email2', 'phone1', 'phone2',
-      'beat', 'products', 'tags', 'org_id', 'left_at', 'moved_to_id'],
+      'beat', 'products', 'tags', 'org_id', 'left_at', 'moved_to_id',
+      'memo1', 'memo2', 'memo3', 'prefix'],
   },
   events: {
     table: 'events', pk: 'id', idPrefix: '',

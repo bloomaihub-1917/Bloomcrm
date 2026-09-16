@@ -913,12 +913,14 @@ const Q_FIELDS = {
   연락처: ['phone1', 'phone2'], phone: ['phone1', 'phone2'],
   태그: ['tags'], tag: ['tags'],
   분야: ['beat'], 품목: ['products'],
+  메모: ['memo1', 'memo2', 'memo3'], memo: ['memo1', 'memo2', 'memo3'],
+  경칭: ['prefix'], prefix: ['prefix'],
   출처: ['source'], source: ['source'],
   상태: ['status'], 언어: ['lang'],
 };
 const ALL_Q = ['nameKo', 'nameEn', 'orgKo', 'orgEn', 'titleKo', 'titleEn',
   'deptKo', 'deptEn', 'country', 'email1', 'email2', 'phone1', 'phone2',
-  'tags', 'beat', 'products', 'source'];
+  'tags', 'beat', 'products', 'source', 'memo1', 'memo2', 'memo3', 'prefix'];
 const hay = (c, keys) => keys.map(k => String(c[k] ?? '')).join(' ').toLowerCase();
 
 export function matchesQuery(c, q){
@@ -1548,8 +1550,9 @@ export function filterCat(cat,btn){setMdbCat(cat);document.querySelectorAll('#sb
 export function filterStat(s,btn){setMdbStat(mdbStat===s?null:s);document.querySelectorAll('#sbp-mdb .s-s .nr').forEach(b=>b.classList.remove('on'));if(mdbStat)btn.classList.add('on');renderMDB()}
 export function segCat(cat,btn){setMdbCat(cat);document.querySelectorAll('.mdb-seg-b').forEach(b=>b.classList.remove('on'));if(btn)btn.classList.add('on');renderMDB();}
 export function exportCSV(){
-  const h=['이름','영문명','기업','영문기업','국가','직함(국)','직함(영)','부서(국)','부서(영)','카테고리','분야','전시품목','언어','이메일1','이메일2','연락처1','연락처2','출처','날짜','상태','태그'];
+  const h=['경칭','이름','영문명','기업','영문기업','국가','직함(국)','직함(영)','부서(국)','부서(영)','카테고리','분야','전시품목','언어','이메일1','이메일2','연락처1','연락처2','출처','날짜','상태','태그','메모1','메모2','메모3'];
   const rows=contacts.map(c=>[
+    c.prefix||'',
     c.nameKo,c.nameEn,c.orgKo,c.orgEn,contactCountryText(c),
     c.titleKo,c.titleEn,c.deptKo,c.deptEn,
     CL[c.cat]||c.cat,
@@ -1558,7 +1561,8 @@ export function exportCSV(){
     c.lang,
     c.email1,c.email2,c.phone1,c.phone2,
     c.source,c.date,c.status,
-    c.tags||''
+    c.tags||'',
+    c.memo1||'',c.memo2||'',c.memo3||''
   ]);
   const csv=[h,...rows].map(r=>r.map(v=>`"${(v||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
   const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);a.download='master_db_export.csv';a.click();
@@ -1796,8 +1800,9 @@ export function contactViewPanel(c){
       </div></div>
     </div>
 
-    <div class="sct" style="margin-top:14px">직함 / 부서</div>
+    <div class="sct" style="margin-top:14px">경칭 / 직함 / 부서</div>
     <div class="ig">
+      <div class="ic"><div class="il">경칭</div><div class="iv">${escapeHtml(c.prefix)||'-'}</div></div>
       <div class="ic"><div class="il">직함 (국문)</div><div class="iv">${escapeHtml(c.titleKo)||'-'}</div></div>
       <div class="ic"><div class="il">직함 (영문)</div><div class="iv">${escapeHtml(c.titleEn)||'-'}</div></div>
       <div class="ic"><div class="il">부서 (국문)</div><div class="iv">${escapeHtml(c.deptKo)||'-'}</div></div>
@@ -1814,6 +1819,13 @@ export function contactViewPanel(c){
     <div class="sct" style="margin-top:14px">전시 품목</div>
     <div class="ig">
       <div class="ic" style="grid-column:span 2"><div class="il">제품/품목</div><div class="iv">${escapeHtml(c.products)||'-'}</div></div>
+    </div>` : ''}
+
+    ${(c.memo1||c.memo2||c.memo3) ? `
+    <div class="sct" style="margin-top:14px">메모</div>
+    <div class="ig">
+      ${[1,2,3].filter(n => c['memo'+n]).map(n => `
+      <div class="ic" style="grid-column:span 2"><div class="il">메모 ${n}</div><div class="iv">${escapeHtml(c['memo'+n])}</div></div>`).join('')}
     </div>` : ''}
 
     <div class="sct" style="margin-top:14px">연락처</div>
@@ -1866,6 +1878,10 @@ export function contactViewPanel(c){
 export function contactEditForm(c){
   return `
     <div class="fg-row" style="margin-bottom:12px">
+      <div class="fg"><label class="fl">경칭</label><input class="fi" id="ce-prefix" value="${escapeHtml(c.prefix||'')}" placeholder="Mr. / Ms. / Dr. / Prof."></div>
+      <div class="fg"></div>
+    </div>
+    <div class="fg-row" style="margin-bottom:12px">
       <div class="fg"><label class="fl">이름 (국문)</label><input class="fi" id="ce-name" value="${escapeHtml(c.nameKo||'')}"></div>
       <div class="fg"><label class="fl">이름 (영문)</label><input class="fi" id="ce-nameEn" value="${escapeHtml(c.nameEn||'')}"></div>
     </div>
@@ -1913,6 +1929,16 @@ export function contactEditForm(c){
         <label class="fl">제품/품목</label>
         <input class="fi" id="ce-products" value="${escapeHtml(c.products||'')}" placeholder="예: AI 카메라, 스마트 센서 등">
       </div>
+    </div>
+
+    <div class="sec-t" style="margin:16px 0 8px">메모</div>
+    <div class="fg" style="margin-bottom:8px">
+      <label class="fl">메모 1</label>
+      <input class="fi" id="ce-memo1" value="${escapeHtml(c.memo1||'')}" placeholder="기본 항목에 없는 값 (예: 회원번호)">
+    </div>
+    <div class="fg-row" style="margin-bottom:12px">
+      <div class="fg"><label class="fl">메모 2</label><input class="fi" id="ce-memo2" value="${escapeHtml(c.memo2||'')}"></div>
+      <div class="fg"><label class="fl">메모 3</label><input class="fi" id="ce-memo3" value="${escapeHtml(c.memo3||'')}"></div>
     </div>
 
     <div class="sec-t" style="margin:16px 0 8px">연락처</div>
@@ -1965,6 +1991,12 @@ export async function saveContactEdit(){
   c.beat     = beatEl ? beatEl.value : (c.beat||'');
   c.products = productsEl ? productsEl.value.trim() : (c.products||'');
 
+  // 기본 항목에 없는 값을 담아 두는 자유 칸 세 개
+  ['memo1','memo2','memo3','prefix'].forEach(k => {
+    const el = document.getElementById('ce-' + k);
+    if(el) c[k] = el.value.trim();
+  });
+
   /* 섹터는 기업에 저장된다 — 연락처 저장과 별개의 길이라 따로 부른다 */
   try { saveContactSectorField(c); } catch(e){ console.warn('[db-tab] 섹터 반영 실패:', e); }
 
@@ -1979,9 +2011,7 @@ export async function saveContactEdit(){
     /* org_id를 빼면 안 된다 — 위치 배열은 안 보낸 열을 비우기 때문에,
        연락처를 고칠 때마다 기업 연결이 조용히 끊겼다. 분야는 기업의 섹터를
        타고 오므로 연결이 끊기면 그 사람은 미분류로 떨어진다. */
-    row: [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
-          c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
-          c.beat, c.products, c.tags||'', c.org_id||''],
+    row: contactRow(c),
   }, '연락처 수정');
   if(!r.ok){
     Object.assign(c, prev);
@@ -2228,13 +2258,14 @@ export function toggleLeaveMoved(){
   if(box) box.style.display = on ? '' : 'none';
 }
 
-/* 연락처 한 건을 저장 — 퇴사 두 칸까지 실어 보낸다.
+/* 연락처 한 건을 저장 — 퇴사 두 칸과 자유 메모 세 칸까지 실어 보낸다.
    위치 배열은 «보낸 칸까지만» 덮으므로(routes/data.js), 다른 자리에서 23칸만
-   보내던 코드는 그대로 둬도 퇴사 표시가 지워지지 않는다. */
+   보내던 코드는 그대로 둬도 퇴사 표시나 메모가 지워지지 않는다. */
 function contactRow(c){
   return [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
     c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
-    c.beat, c.products, c.tags||'', c.org_id||'', c.left_at||'', c.moved_to_id||''];
+    c.beat, c.products, c.tags||'', c.org_id||'', c.left_at||'', c.moved_to_id||'',
+    c.memo1||'', c.memo2||'', c.memo3||'', c.prefix||''];
 }
 
 export async function confirmLeave(cid){

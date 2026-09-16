@@ -932,3 +932,16 @@ CREATE TABLE IF NOT EXISTS watch_files (
 
 CREATE INDEX IF NOT EXISTS idx_watch_files_folder ON watch_files(folder_id);
 CREATE INDEX IF NOT EXISTS idx_watch_files_event  ON watch_files(event_id);
+
+/* ── 연락처 자유 메모 세 칸 ──
+   업로드 파일에는 기본 항목으로 떨어지지 않는 열이 섞여 온다(AIA Number,
+   Board Member, Membership Type …). 매핑하지 않으면 버려지고, 기존 «메모»에
+   넣으면 그건 소속 기업의 메모라 같은 회사 사람끼리 서로의 값을 덮어썼다.
+   memo1/2/3은 연락처 자신에게 붙는 칸이라 사람마다 다른 값을 가질 수 있다. */
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS memo1 TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS memo2 TEXT;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS memo3 TEXT;
+
+/* 경칭(Mr./Dr./Prof.)은 메모가 아니라 제 칸에 둔다 — 영문 메일 호칭에 그대로
+   쓰이는 값이라 자유 메모에 섞어두면 치환할 수가 없다. */
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS prefix TEXT;
