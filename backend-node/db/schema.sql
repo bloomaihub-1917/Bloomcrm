@@ -945,3 +945,10 @@ ALTER TABLE contacts ADD COLUMN IF NOT EXISTS memo3 TEXT;
 /* 경칭(Mr./Dr./Prof.)은 메모가 아니라 제 칸에 둔다 — 영문 메일 호칭에 그대로
    쓰이는 값이라 자유 메모에 섞어두면 치환할 수가 없다. */
 ALTER TABLE contacts ADD COLUMN IF NOT EXISTS prefix TEXT;
+
+/* ── 기업의 취급 품목 ──
+   «전시품목»은 연락처에만 있었는데, 그건 사람이 아니라 회사에 붙는 값이다.
+   담당자를 아직 못 찾은 회사는 적어 둘 데가 없어 명단의 품목 열이 버려졌다.
+   섹터가 «고르는 값»이라면 이쪽은 «적는 값»이다 — 열일곱 개로 좁힌 뒤
+   «통역시스템»으로 다시 찾는 두 단계가 그래서 가능해진다. */
+ALTER TABLE orgs ADD COLUMN IF NOT EXISTS products TEXT;

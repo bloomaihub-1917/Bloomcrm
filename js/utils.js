@@ -36,6 +36,24 @@ export function countryName(val){
   // 3) 매칭 안 되면 원본 그대로
   return v;
 }
+/* 사람이 적어 둔 웹주소를 링크로 쓸 수 있게 고친다.
+
+   명단에는 «gds-korea.com»처럼 http를 뺀 채로 적힌다. 그대로 href에 넣으면
+   브라우저가 상대경로로 읽어서 우리 앱 주소 뒤에 붙는다 —
+   .../Bloomcrm/gds-korea.com 으로 가서 404가 났다.
+
+   스킴이 이미 있으면 그대로 둔다. http·https·mailto가 아닌 스킴(javascript: 등)은
+   링크로 만들지 않는다 — 기업DB의 값은 업로드 파일에서 그대로 들어온 것이라
+   무엇이 적혀 있을지 우리가 정하지 못한다. */
+export function safeUrl(v){
+  const t = String(v || '').trim();
+  if(!t) return '';
+  const m = t.match(/^([a-z][a-z0-9+.-]*):/i);
+  if(m) return /^(https?|mailto)$/i.test(m[1]) ? t : '';
+  if(t.startsWith('//')) return 'https:' + t;   // //example.com 꼴
+  return 'https://' + t;
+}
+
 export function countryOptions(selected){
   const norm = v => v ? String(v).toLowerCase() : '';
   const selCode = COUNTRIES.find(c => c.code === (selected||'').toUpperCase() || c.aliases.includes(norm(selected)));

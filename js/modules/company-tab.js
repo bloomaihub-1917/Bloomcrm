@@ -59,7 +59,7 @@ import {
   exhibitorsForEvent,
 } from '../state.js';
 import { RP, avB, avF } from '../constants.js';
-import { escapeHtml, escAttr, levenshteinDist, parseSectorScope, sectorKey, countryName, isMobile, td, leftPill } from '../utils.js';
+import { escapeHtml, escAttr, levenshteinDist, parseSectorScope, sectorKey, countryName, isMobile, td, leftPill, safeUrl } from '../utils.js';
 import { postToSheet, batchCreateExhibitors } from '../api.js';
 import { parseSectors, joinSectors, mainSectors, sectorNamesInDomain, domainName, domainOfSector, UNASSIGNED_DOMAIN } from './settings-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
@@ -105,8 +105,9 @@ const CO_TOGGLE_COLUMNS = [
   {key:'country', label:'국가'},
   {key:'website',  label:'웹사이트'},
   {key:'notes',    label:'메모'},
+  {key:'products', label:'취급 품목'},
 ];
-let coVisibleCols = { country:false, website:false, notes:false };
+let coVisibleCols = { country:false, website:false, notes:false, products:false };
 let coColMenuOpen = false;
 
 export function toggleCoColMenu(){
@@ -288,6 +289,7 @@ export function buildCoDB(){
       website:  o.website || '',
       bizNo:    o.biz_no || '',
       notes:    o.notes || '',
+      products: o.products || '',
       catCode:  o.cat_code || '',
       source:   o.source || '',
       updatedAt: o.updated_at || '',
@@ -771,6 +773,7 @@ export function renderCoList(q2=''){
           ${coVisibleCols.country ? `<span style="font-size:10px;color:var(--i4)">· ${escapeHtml(c.country||'-')}</span>` : ''}
           ${coVisibleCols.website ? `<span style="font-size:10px;color:var(--i4)">· ${c.website?escapeHtml(c.website):'-'}</span>` : ''}
           ${coVisibleCols.notes ? `<span style="font-size:10px;color:var(--i4)">· ${escapeHtml(c.notes||'-')}</span>` : ''}
+          ${coVisibleCols.products ? `<span style="font-size:10px;color:var(--pu)">· 📦 ${escapeHtml(c.products||'-')}</span>` : ''}
         </div>
       </div>
       <div class="co-ct">${c.events.length}회</div>
@@ -818,6 +821,7 @@ export function openAddOrgModal(){
       <div class="fg"><label class="fl">국가</label><input class="fi" id="ao-country" placeholder="예: 대한민국"></div>
       <div class="fg"><label class="fl">웹사이트</label><input class="fi" id="ao-website" placeholder="https://"></div>
       <div class="fg"><label class="fl">사업자등록번호</label><input class="fi" id="ao-bizNo" placeholder="000-00-00000"></div>
+      <div class="fg"><label class="fl">취급 품목</label><input class="fi" id="ao-products" placeholder="예: LED, 렌탈,포토"></div>
       <div class="fg"><label class="fl">메모</label><textarea class="fi" id="ao-notes" rows="2"></textarea></div>
       <div id="ao-msg" style="font-size:11.5px;min-height:16px;margin-bottom:8px"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end">
@@ -839,7 +843,8 @@ export async function submitAddOrg(){
 
   const r = await createOrg({
     nameKo: v('ao-nameKo'), nameEn: v('ao-nameEn'), kind: v('ao-kind'),
-    country: v('ao-country'), website: v('ao-website'), bizNo: v('ao-bizNo'), notes: v('ao-notes'),
+    country: v('ao-country'), website: v('ao-website'), bizNo: v('ao-bizNo'),
+    products: v('ao-products'), notes: v('ao-notes'),
   });
   if(!r.ok){
     if(btn){ btn.disabled = false; btn.textContent = '등록'; }
@@ -1231,6 +1236,7 @@ export function renderCoDetail(c){
             ['bizNo',   '사업자번호', c.bizNo,  `editCoBizNo('${escAttr(c.key)}')`, false],
             ['abbr',    '약어',     c.abbr,    `editCoAbbr('${escAttr(c.key)}')`, false],
             ['source',  '출처',     c.source,  `editCoSource('${escAttr(c.key)}')`, false],
+            ['products','취급 품목', c.products, `editCoProducts('${escAttr(c.key)}')`, false],
             ['notes',   '메모',     c.notes,   `editCoNotes('${escAttr(c.key)}')`, false],
           ];
           const has = F.filter(f => String(f[2] || '').trim());
@@ -1241,7 +1247,7 @@ export function renderCoDetail(c){
               <span style="flex:0 0 62px;color:var(--i5)">${escapeHtml(label)}</span>
               <span style="flex:1;min-width:0;color:var(--i2);${on ? 'cursor:pointer' : ''}" ${on ? `onclick="${on}"` : ''}>
                 <span id="co-${id}-${escapeHtml(c.key)}">${
-                  isLink && val ? `<a href="${escapeHtml(val)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(val)}</a>`
+                  isLink && safeUrl(val) ? `<a href="${escapeHtml(safeUrl(val))}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(val)}</a>`
                     : val ? escapeHtml(val)
                     /* 빈 줄은 누를 자리가 없으면 편집으로 들어갈 수 없다 — 옅은 안내를 둔다 */
                     : `<span style="color:var(--i5)">입력</span>`}</span></span>
@@ -1308,7 +1314,7 @@ export function switchCoT(k){
 const ORG_FIELDS = {
   nameKo:'name_ko', nameEn:'name_en', abbr:'abbr', kind:'kind', orgStatus:'status',
   country:'country', hq:'hq', website:'website', bizNo:'biz_no', catCode:'cat_code',
-  notes:'notes', source:'source',
+  notes:'notes', products:'products', source:'source',
 };
 
 /* 화면용 기업 객체(c)에서 바뀐 필드만 서버 컬럼명으로 옮겨 담는다.
@@ -1520,7 +1526,7 @@ export function orgIdForName(name){
    전에는 기업이 연락처에서 파생됐기 때문에, 담당자를 모르는 회사는 등록할 방법이
    아예 없었다. 잠재 고객사나 시공 벤더를 먼저 적어두고 나중에 사람을 붙일 수 있게
    한다. 이름이 같은 기업(옛 이름 포함)이 이미 있으면 새로 만들지 않고 알린다. */
-export async function createOrg({ nameKo, nameEn, kind, sectors, country, website, bizNo, notes }){
+export async function createOrg({ nameKo, nameEn, kind, sectors, country, website, bizNo, notes, products }){
   const name = (nameKo || nameEn || '').trim();
   if(!name) return { ok: false, error: '기업명을 입력해주세요.' };
 
@@ -1533,6 +1539,7 @@ export async function createOrg({ nameKo, nameEn, kind, sectors, country, websit
     kind: kind || '잠재고객사', status: '활성',
     sectors: joinSectors(sectors || []), country: country || '', hq: country || '',
     website: website || '', biz_no: bizNo || '', cat_code: '', notes: notes || '',
+    products: products || '',
     source: '수동 등록', created_at: now, updated_at: now,
   };
   const r = await postToSheet({ sheet: 'orgs', action: 'upsert', data: rec }, '기업 등록');
@@ -1568,6 +1575,9 @@ function assignCategoryCode(company, prefix){
 ══════════════════════════════════════════ */
 const CO_TEXT_FIELDS = {
   notes:   { placeholder: '이 기업에 대한 메모를 남겨보세요', multiline: true,  empty: '메모 추가' },
+  /* 섹터가 «고르는 값»이라면 이쪽은 «적는 값» — 회사가 실제로 하는 일을
+     명단에 적힌 그대로 담는다(예: 렌탈,포토 / 음향, 통역시스템). */
+  products:{ placeholder: '예: LED, 렌탈,포토 — 쉼표로 여러 개',  multiline: false, empty: '취급 품목 추가' },
   website: { placeholder: 'https://example.com',              multiline: false, empty: '웹사이트 추가', isLink: true },
   country: { placeholder: '예: 한국',                          multiline: false, empty: '국가 추가' },
   abbr:    { placeholder: '예: SK',                            multiline: false, empty: '약어 추가' },
@@ -1584,8 +1594,8 @@ function renderCoFieldDisplay(key, field){
   const span = document.getElementById(`co-${field}-${key}`);
   if(!c || !cfg || !span) return;
   const val = c[field] || '';
-  if(cfg.isLink && val){
-    span.innerHTML = `<a href="${escapeHtml(val)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(val)}</a>`;
+  if(cfg.isLink && safeUrl(val)){
+    span.innerHTML = `<a href="${escapeHtml(safeUrl(val))}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(val)}</a>`;
   } else {
     span.textContent = val || cfg.empty;
   }
@@ -1676,6 +1686,7 @@ function startCoInlineEdit(key, field){
 export function editCoNameKo(key){ startCoInlineEdit(key, 'nameKo'); }
 export function editCoNameEn(key){ startCoInlineEdit(key, 'nameEn'); }
 export function editCoNotes(key){ startCoInlineEdit(key, 'notes'); }
+export function editCoProducts(key){ startCoInlineEdit(key, 'products'); }
 export function editCoWebsite(key){ startCoInlineEdit(key, 'website'); }
 export function editCoCountry(key){ startCoInlineEdit(key, 'country'); }
 export function editCoAbbr(key){ startCoInlineEdit(key, 'abbr'); }
@@ -2200,6 +2211,7 @@ window.editCoSector = editCoSector;
 window.editCoNameKo = editCoNameKo;
 window.editCoNameEn = editCoNameEn;
 window.editCoNotes = editCoNotes;
+window.editCoProducts = editCoProducts;
 window.editCoWebsite = editCoWebsite;
 window.editCoCountry = editCoCountry;
 window.editCoAbbr = editCoAbbr;

@@ -66,7 +66,8 @@ const TABLES = {
   orgs: {
     table: 'orgs', pk: 'id', idPrefix: 'O-',
     columns: ['id', 'name_ko', 'name_en', 'abbr', 'aliases', 'kind', 'status', 'sectors',
-      'country', 'hq', 'website', 'biz_no', 'cat_code', 'notes', 'source', 'created_at', 'updated_at'],
+      'country', 'hq', 'website', 'biz_no', 'cat_code', 'notes', 'products',
+      'source', 'created_at', 'updated_at'],
   },
 
   /* ── 전시 참가기업 진행관리 ──
