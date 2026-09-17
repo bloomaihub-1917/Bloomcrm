@@ -67,11 +67,14 @@ function logoSet(slug) {
   return set;
 }
 
-/* 도록 순번으로 파일을 찾는다. 확장자는 그래픽팀이 무엇으로 주든 받아들인다. */
+/* 도록 순번으로 파일을 찾는다. 확장자는 무엇으로 넣어도 받아들인다.
+   같은 순번에 확장자만 다른 파일이 둘 있으면(20.jpg와 20.png) 이름순으로
+   골라 늘 같은 것이 뜨게 한다 — 폴더를 읽는 순서에 맡기면 서버마다 다른
+   로고가 뜰 수 있다. */
 function logoFor(slug, order) {
   const n = String(order || '').trim();
   if (!n) return null;
-  const found = [...logoSet(slug)].find((f) => f.replace(/\.[^.]+$/, '') === n);
+  const found = [...logoSet(slug)].sort().find((f) => f.replace(/\.[^.]+$/, '') === n);
   return found ? `/d/logos/${encodeURIComponent(slug)}/${encodeURIComponent(found)}` : null;
 }
 

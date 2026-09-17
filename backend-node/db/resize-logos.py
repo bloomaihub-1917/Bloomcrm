@@ -18,6 +18,10 @@ import sys
 
 from PIL import Image, ImageChops
 
+# 인쇄용 원본은 1억 화소를 넘기도 한다. Pillow는 그걸 공격으로 의심해 경고를
+# 띄우는데, 우리 OneDrive에서 가져온 파일이라 믿을 수 있다.
+Image.MAX_IMAGE_PIXELS = None
+
 # 화면에서는 24~34px로 쓴다. 고해상도 화면까지 고려해 160px로 두면 넉넉하다
 # (원본은 인쇄용이라 17,870px짜리도 섞여 있다).
 HEIGHT = 160
@@ -47,8 +51,52 @@ def has_alpha(im):
     return im.convert('RGBA').split()[3].getextrema()[0] < 250
 
 
-def convert(src, dst_base):
-    raw = Image.open(src)
+def open_vector(src):
+    """ai·eps·pdf를 그림으로 펼친다.
+
+    브라우저는 ai도 eps도 못 읽는데, 래스터를 아예 안 보낸 기업이 있다(Certara는
+    'Certara logo.ai' 한 장뿐이었다). 일러스트레이터가 PDF 호환으로 저장한 ai는
+    PDF 리더가 그대로 열 수 있어, 그걸로 펼쳐 쓴다.
+
+    아트보드가 로고보다 훨씬 클 때가 많아(1920×1080 안에 작은 로고) 넉넉한
+    배율로 펼친 뒤 여백을 자른다 — 작게 펼치면 자르고 나서 흐려진다.
+    """
+    import fitz                                   # PyMuPDF — 벡터일 때만 쓴다
+    doc = fitz.open(src)
+    page = doc[0]
+    zoom = max(2.0, (HEIGHT * 6) / max(1.0, page.rect.height))
+    pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=True)
+    return Image.frombytes('RGBA', (pix.width, pix.height), pix.samples)
+
+
+def is_vector(path):
+    return path.lower().endswith(('.ai', '.eps', '.pdf'))
+
+
+def load(path):
+    return open_vector(path) if is_vector(path) else Image.open(path)
+
+
+def convert(src, dst_base, alt=None):
+    raw = load(src)
+
+    # 래스터가 쓸 높이보다 작으면 늘려 쓰게 되어 흐려진다. 같은 폴더의 벡터로
+    # 갈아타면 얼마든 선명하게 펼칠 수 있다(Ultragenic이 보낸 png가 160×33).
+    #
+    # 단, 가로세로 비율이 비슷할 때만 갈아탄다. 같은 폴더의 벡터가 같은 로고의
+    # 다른 버전인 경우가 있다 — 분당서울대병원은 래스터가 가로형(432×152)인데
+    # ai는 세로형(113×160)이어서, 갈아타면 기업이 보낸 것과 다른 모양이 올라간다.
+    # 비율은 여백을 자른 뒤에 견준다. 벡터는 아트보드가 로고보다 훨씬 커서
+    # (1920×1080 안에 납작한 로고) 자르기 전 비율로는 늘 달라 보인다.
+    if alt and not is_vector(src) and raw.height < HEIGHT:
+        try:
+            cand = load(alt)
+            a, b = trim(raw.convert('RGBA')), trim(cand.convert('RGBA'))
+            ratio = (b.width / b.height) / max(0.01, a.width / a.height)
+            if 0.8 <= ratio <= 1.25:
+                raw, src = cand, alt
+        except Exception:
+            pass
     alpha = has_alpha(raw)
     im = trim(raw.convert('RGBA' if alpha else 'RGB'))
     if im.height > HEIGHT:
@@ -64,7 +112,8 @@ def convert(src, dst_base):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     im.save(path, **kw)
     return {'path': path, 'w': im.width, 'h': im.height,
-            'kb': round(os.path.getsize(path) / 1024), 'alpha': alpha}
+            'kb': round(os.path.getsize(path) / 1024), 'alpha': alpha,
+            'used': os.path.basename(src), 'vector': is_vector(src)}
 
 
 def main():
@@ -72,7 +121,7 @@ def main():
     out = []
     for item in plan:
         try:
-            r = convert(item['src'], item['dst'])
+            r = convert(item['src'], item['dst'], item.get('altSrc'))
         except Exception as e:                              # 한 장이 깨져도 나머지는 만든다
             r = {'error': '%s: %s' % (type(e).__name__, e)}
         r['order'] = item.get('order')
