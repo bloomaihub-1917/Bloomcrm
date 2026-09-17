@@ -551,6 +551,41 @@ function importBtns(){
       onchange="handleConfFile(event)">`;
 }
 
+/* 프로그램표의 연사 줄.
+
+   이름만 늘어놓으면 «누가 나오나»는 알아도 «무엇을 하나»는 모른다. 표를
+   보는 사람이 다음으로 묻는 것이 그거다 — 좌장이 누구고, 어느 발표가 몇
+   시고, 발제명이 무엇인지. 배정 순서대로 적고 역할과 시각을 함께 둔다.
+
+   발제명이 있으면 이름 아래 붙인다. 프로그램북의 세션 면이 정확히 이
+   모양이라, 여기서 보이는 그대로 옮겨 쓸 수 있어야 한다. */
+function pgaSpeakers(ss, opts){
+  const asg = assignmentsOfSession(ss.id);
+  if(!asg.length) return '';
+  const compact = opts && opts.compact;
+
+  return `<div style="margin-top:5px;border-top:1px solid var(--i7);padding-top:4px">
+    ${asg.map(a => {
+      const sp = getSpeakerById(a.speaker_id);
+      const nm = speakerName(a.speaker_id);
+      /* 소속은 이름 옆에 작게. 같은 이름이 둘일 때 이걸로 가른다 */
+      const org = sp ? (sp.org_ko || sp.org_en || '') : '';
+      const title = a.title_ko || a.title_en || '';
+      const when = a.start_at ? timeLabel(a.start_at, a.end_at) : '';
+      const roleC = (SPEAKER_ROLES.find(r => r.key === a.role) || {}).cls || 'p-gray';
+      return `<div style="display:flex;gap:5px;align-items:baseline;margin-top:3px">
+        <span class="pill ${roleC}" style="font-size:8.5px;flex:0 0 auto;padding:1px 4px">${escapeHtml(a.role || '')}</span>
+        <div style="min-width:0;flex:1">
+          <div style="font-size:10px;color:var(--i2);line-height:1.35">
+            ${escapeHtml(nm)}${org ? `<span style="color:var(--i4)"> · ${escapeHtml(org)}</span>` : ''}${
+            when ? `<span style="color:var(--i4)"> · ${escapeHtml(when)}</span>` : ''}</div>
+          ${title && !compact ? `<div style="font-size:9.5px;color:var(--i4);line-height:1.35">${escapeHtml(title)}</div>` : ''}
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
 function pgaHtml(ev){
   const sessions = sessionsForEvent(ev.key);
   if(!sessions.length){
@@ -595,14 +630,7 @@ function pgaHtml(ev){
       <div style="padding:6px 7px 8px;background:var(--W);overflow-wrap:anywhere">
         <div style="font-size:11px;line-height:1.45;color:var(--i1)">${escapeHtml(ss.title_ko || ss.title_en || '(세션명 없음)')}</div>
         ${ss.title_ko && ss.title_en ? `<div style="font-size:9.5px;color:var(--i4);line-height:1.4;margin-top:2px">${escapeHtml(ss.title_en)}</div>` : ''}
-        ${(() => {
-          const asg = assignmentsOfSession(ss.id);
-          /* 한 사람이 좌장이면서 발표도 하면 배정이 둘이다 — 이름은 한 번만 */
-          const names = [...new Set(asg.map(a => speakerName(a.speaker_id)))];
-          return names.length ? `<div style="font-size:9.5px;color:var(--i4);margin-top:4px">${
-            escapeHtml(names.slice(0, 3).join(', '))}${
-            names.length > 3 ? ` 외 ${names.length - 3}` : ''}</div>` : '';
-        })()}
+        ${pgaSpeakers(ss)}
       </div>
     </div>`;
   };
@@ -616,6 +644,14 @@ function pgaHtml(ev){
       border-radius:4px;padding:9px;text-align:center;margin-bottom:5px">
       <div style="font-size:11.5px;font-weight:600">${escapeHtml(ss.title_ko || ss.title_en || '(세션명 없음)')}</div>
       ${ss.title_en && ss.title_ko ? `<div style="font-size:9.5px;color:var(--i4);margin-top:2px">${escapeHtml(ss.title_en)}</div>` : ''}
+      ${(() => {
+        /* 개막식 줄은 가운데 정렬이라 연사 줄을 그대로 넣으면 왼쪽으로 쏠린다.
+           개회사·환영사도 누가 하는지가 프로그램북에 나가므로 한 줄로 적는다. */
+        const asg = assignmentsOfSession(ss.id);
+        if(!asg.length) return '';
+        return `<div style="font-size:9.5px;color:var(--i4);margin-top:3px">${
+          escapeHtml(asg.map(a => `${speakerName(a.speaker_id)}${a.role ? ` (${a.role})` : ''}`).join(' · '))}</div>`;
+      })()}
     </div>`;
   };
 
@@ -663,7 +699,6 @@ function pgaHtml(ev){
   if(isMobile()){
     const line = (ss) => {
       const c = trackColor(ev.key, ss.track);
-      const asg = assignmentsOfSession(ss.id);
       return `<div onclick="openPgaSession('${escAttr(ss.id)}')"
         style="cursor:pointer;background:var(--W);border:1px solid var(--i6);border-left:3px solid ${
           ss.track ? c.bd : 'var(--i5)'};border-radius:8px;padding:9px 11px;margin-bottom:7px">
@@ -674,12 +709,7 @@ function pgaHtml(ev){
         </div>
         <div style="font-size:12.5px;font-weight:600;margin-top:4px;line-height:1.45">${escapeHtml(ss.title_ko || ss.title_en || '(세션명 없음)')}</div>
         ${ss.title_ko && ss.title_en ? `<div style="font-size:10px;color:var(--i4);line-height:1.4">${escapeHtml(ss.title_en)}</div>` : ''}
-        ${(() => {
-          const names = [...new Set(asg.map(a => speakerName(a.speaker_id)))];
-          return names.length ? `<div style="font-size:10.5px;color:var(--i4);margin-top:4px">${
-            escapeHtml(names.slice(0, 3).join(', '))}${
-            names.length > 3 ? ` 외 ${names.length - 3}` : ''}</div>` : '';
-        })()}
+        ${pgaSpeakers(ss)}
       </div>`;
     };
     const byDay = (d) => {
