@@ -16,3 +16,5 @@ Thumbs.db
 # 백엔드(Node) — 의존성/비밀값
 backend-node/node_modules/
 backend-node/.env
+# 지우기 전에 남긴 줄들 — 실명·이메일이 그대로 들어 있다
+backend-node/db/backups/
