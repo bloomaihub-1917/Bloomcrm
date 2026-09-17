@@ -506,6 +506,14 @@ const BIO_PARTS = [
   { need: 'bio_edu',  label: 'Education',               ko: 'bio_edu_ko',  en: 'bio_edu_en',  lim: 'bio_edu' },
   { need: 'bio_awards', label: 'Selected Awards & Recognitions', ko: 'bio_awards_ko', en: 'bio_awards_en',
     lim: 'bio_awards', hint: '국제 수상·선정 이력' },
+  { need: 'bio_credentials', label: 'Licenses & Credentials', ko: 'bio_credentials_ko', en: 'bio_credentials_en',
+    lim: 'bio_credentials', rows: 2, hint: '이름 옆에 붙는 자격 — 예: AIA · LEED AP' },
+  { need: 'bio_teaching', label: 'Academic & Teaching', ko: 'bio_teaching_ko', en: 'bio_teaching_en',
+    lim: 'bio_teaching' },
+  { need: 'bio_affil', label: 'Affiliations & Public Service', ko: 'bio_affil_ko', en: 'bio_affil_en',
+    lim: 'bio_affil' },
+  { need: 'bio_pubs', label: 'Press · Publications · Exhibitions', ko: 'bio_pubs_ko', en: 'bio_pubs_en',
+    lim: 'bio_pubs' },
 ];
 
 function bioHtml(sp, evKey){
@@ -532,9 +540,9 @@ function bioHtml(sp, evKey){
         ${p.hint ? `<div style="font-size:10px;color:var(--i4)">${escapeHtml(p.hint)}</div>` : ''}
       </div>
       ${enOnly ? '' : fg(`국문 · ${countHint(koVal, limit)}`,
-        area(koVal, `spField('${p.ko}',this.value,'${escAttr(p.label)} 국문')`, '', 5))}
+        area(koVal, `spField('${p.ko}',this.value,'${escAttr(p.label)} 국문')`, '', p.rows || 5))}
       ${fg(`영문 · ${countHint(enVal, limit)}`,
-        area(enVal, `spField('${p.en}',this.value,'${escAttr(p.label)} 영문')`, '', 5))}
+        area(enVal, `spField('${p.en}',this.value,'${escAttr(p.label)} 영문')`, '', p.rows || 5))}
     </div>`;
   };
 
@@ -542,6 +550,15 @@ function bioHtml(sp, evKey){
     ${enOnly ? `<div style="padding:8px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;
       font-size:11px;color:var(--i3);margin-bottom:12px">
       해외 연사(영문만)로 적혀 있어 국문 칸을 숨겼어요. 기본 탭의 «언어»를 바꾸면 다시 보여요.</div>` : ''}
+    ${needState(evKey, roles, 'cv') ? `
+      ${gotRow('CV 원본 받음', sp.cv_received_at, `spStamp('cv_received_at','CV 받음')`,
+        `spField('cv_received_at',this.value,'CV 받은 날')`, needState(evKey, roles, 'cv'))}
+      ${fg('CV 파일명', txt(sp.cv_file, `spField('cv_file',this.value,'CV 파일')`, '원드라이브 파일명'),
+        'CV는 4쪽이 넘기도 해요 — 아래 칸에는 프로그램북에 나갈 것만 옮기고 원본은 폴더에 둡니다')}` : ''}
+    ${needState(evKey, roles, 'languages') ? fg(
+      `구사 언어 ${NEED_MARK[needState(evKey, roles, 'languages')] || ''}`,
+      txt(sp.languages, `spField('languages',this.value,'구사 언어')`, '영어(업무 가능) · 중국어(모국어) · 일본어'),
+      '통역을 붙일지 정할 때 봅니다 — 위 «언어»는 우리가 자료를 어느 언어로 받는지예요') : ''}
     ${gotRow('이력 받음', sp.profile_received_at,
       `spStamp('profile_received_at','이력 받음')`,
       `spField('profile_received_at',this.value,'이력 받은 날')`,
@@ -626,6 +643,16 @@ function talkHtml(sp, evKey){
           발표자료는 현장에서 바뀝니다 — 어느 판을 받았는지 적어 두면 무엇을 틀지 헷갈리지 않아요.</div>
       </div>` : ''}
 
+      ${nTitle ? `
+        ${fg('키워드', txt(a.keywords, `asField('${escAttr(a.id)}','keywords',this.value,'발제 키워드')`,
+          '예: 적응형 재생 · 산업유산 · 저탄소'),
+          '프로그램북 색인과 트랙 배정에 씁니다 — 연사가 해시태그로 보내오기도 해요')}
+        ${fg('발표 형식', txt(a.talk_format, `asField('${escAttr(a.id)}','talk_format',this.value,'발표 형식')`,
+          '예: 15분 발표 + 라운드테이블'),
+          '연사가 제안서에 적어 보내는 값입니다 — 세션 시간을 짤 때 이걸 봅니다')}
+        ${fg('라운드테이블 논의 주제', area(a.discussion,
+          `asField('${escAttr(a.id)}','discussion',this.value,'라운드테이블 주제')`, '', 3),
+          '좌장이 진행할 때 쓰는 질문들 — 연사가 함께 보내오면 여기 옮겨 둡니다')}` : ''}
       ${fg('메모', area(a.note, `asField('${escAttr(a.id)}','note',this.value,'발제 메모')`, '', 2))}
     </div>`;
   };

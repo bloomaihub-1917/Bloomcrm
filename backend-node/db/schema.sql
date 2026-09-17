@@ -764,6 +764,21 @@ CREATE TABLE IF NOT EXISTS speakers (
   bio_edu_en          TEXT,
   bio_awards_ko       TEXT,   -- Awards & Recognitions
   bio_awards_en       TEXT,
+  bio_credentials_ko  TEXT,   -- 자격·면허 (RA, AIA, LEED AP …) 이름 옆에 붙는다
+  bio_credentials_en  TEXT,
+  bio_teaching_ko     TEXT,   -- 강의·교육
+  bio_teaching_en     TEXT,
+  bio_affil_ko        TEXT,   -- 학회·공직
+  bio_affil_en        TEXT,
+  bio_pubs_ko         TEXT,   -- 출판·전시
+  bio_pubs_en         TEXT,
+  -- 구사 언어. lang_pref와 다르다 — lang_pref는 «우리가 어느 언어로 받나»이고
+  -- 이쪽은 «이 사람이 무슨 말을 하나»다(통역을 붙일지 정할 때 본다).
+  languages           TEXT,
+  -- CV 원본. 4쪽짜리를 칸으로 다 쪼개지 않고, 프로그램북에 나가는 것만 칸으로
+  -- 두고 나머지는 원본을 보관한다.
+  cv_file             TEXT,
+  cv_received_at      TEXT,
   profile_received_at TEXT,
   photo_file          TEXT,
   photo_received_at   TEXT,
@@ -833,6 +848,11 @@ CREATE TABLE IF NOT EXISTS session_speakers (
   start_at      TEXT,
   end_at        TEXT,
   duration_min TEXT,
+  -- 발제에 붙는 것들. 사람이 아니라 배정에 붙는다 — 한 사람이 두 세션에서
+  -- 발표하면 키워드도 형식도 다르다.
+  keywords      TEXT,   -- 프로그램북 색인·트랙 배정에 쓴다
+  talk_format   TEXT,   -- 예: 15분 발표 + 라운드테이블
+  discussion    TEXT,   -- 라운드테이블 논의 주제
 
   title_ko    TEXT,
   title_en    TEXT,

@@ -165,6 +165,12 @@ export const SPEAKER_NEEDS = [
   { key: 'bio_work', label: 'Working experience',       where: 'bio_work_ko · bio_work_en' },
   { key: 'bio_edu',  label: 'Education',                where: 'bio_edu_ko · bio_edu_en' },
   { key: 'bio_awards', label: 'Awards & Recognitions',  where: 'bio_awards_ko · bio_awards_en' },
+  { key: 'bio_credentials', label: '자격·면허',          where: 'bio_credentials_ko · bio_credentials_en' },
+  { key: 'bio_teaching', label: '강의·교육',             where: 'bio_teaching_ko · bio_teaching_en' },
+  { key: 'bio_affil',  label: '학회·공직',               where: 'bio_affil_ko · bio_affil_en' },
+  { key: 'bio_pubs',   label: '출판·전시',               where: 'bio_pubs_ko · bio_pubs_en' },
+  { key: 'languages',  label: '구사 언어',               where: 'languages' },
+  { key: 'cv',         label: 'CV 원본',                 where: 'cv_file' },
   { key: 'photo',    label: '프로필 사진',              where: 'photo_file' },
   { key: 'title',    label: '발제명',                   where: 'title_ko · title_en' },
   { key: 'abstract', label: '초록',                     where: 'abstract_ko · abstract_en' },
@@ -182,19 +188,25 @@ export const SPEAKER_NEEDS_ON_TALK = ['title', 'abstract', 'slides'];
 export const SPEAKER_ROLES = [
   { key: '연사', label: '연사', cls: 'p-blue', needs: {
     profile: 'req', bio_profile: 'req', bio_pro: 'req', bio_work: 'req',
-    bio_edu: 'opt', bio_awards: 'opt', photo: 'req',
+    bio_edu: 'opt', bio_awards: 'opt', bio_credentials: 'req',
+    bio_teaching: 'opt', bio_affil: 'opt', bio_pubs: 'opt',
+    languages: 'opt', cv: 'opt', photo: 'req',
     title: 'req', abstract: 'req', slides: 'req',
     consent: 'req', bank: 'req', passport: 'opt', travel: 'opt' } },
   { key: '패널', label: '패널', cls: 'p-teal', needs: {
     profile: 'req', bio_profile: 'req', bio_pro: 'req', bio_work: 'req',
-    bio_edu: 'opt', bio_awards: 'opt', photo: 'req',
+    bio_edu: 'opt', bio_awards: 'opt', bio_credentials: 'req',
+    bio_teaching: 'opt', bio_affil: 'opt', bio_pubs: 'opt',
+    languages: 'opt', cv: 'opt', photo: 'req',
     title: 'req', abstract: 'opt', slides: 'opt',
     consent: 'req', bank: 'req', passport: 'opt', travel: 'opt' } },
   /* 좌장은 발제 정보를 받지 않는다 — 세션을 진행하는 자리다.
      이력·사진은 받는다(도록에 실린다). */
   { key: '좌장', label: '좌장', cls: 'p-indigo', needs: {
     profile: 'req', bio_profile: 'req', bio_pro: 'req', bio_work: 'req',
-    bio_edu: 'opt', bio_awards: 'opt', photo: 'req',
+    bio_edu: 'opt', bio_awards: 'opt', bio_credentials: 'req',
+    bio_teaching: 'opt', bio_affil: 'opt', bio_pubs: 'opt',
+    languages: 'opt', cv: 'opt', photo: 'req',
     title: '', abstract: '', slides: '',
     consent: 'req', bank: 'req', passport: 'opt', travel: 'opt' } },
   /* 사회는 우리가 섭외한다. 그래서 이력·사진이 선택이고 항공·숙박은 묻지 않는다.

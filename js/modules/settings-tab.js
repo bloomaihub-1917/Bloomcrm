@@ -2680,6 +2680,10 @@ function evConfHtml(ev){
       <div><div class="mlbl">Working experience</div>${numIn('conf-lim-work', limits.bio_work, '자')}</div>
       <div><div class="mlbl">Education</div>${numIn('conf-lim-edu', limits.bio_edu, '자')}</div>
       <div><div class="mlbl">Awards</div>${numIn('conf-lim-awards', limits.bio_awards, '자')}</div>
+      <div><div class="mlbl">자격·면허</div>${numIn('conf-lim-cred', limits.bio_credentials, '자')}</div>
+      <div><div class="mlbl">강의·교육</div>${numIn('conf-lim-teach', limits.bio_teaching, '자')}</div>
+      <div><div class="mlbl">학회·공직</div>${numIn('conf-lim-affil', limits.bio_affil, '자')}</div>
+      <div><div class="mlbl">출판·전시</div>${numIn('conf-lim-pubs', limits.bio_pubs, '자')}</div>
       <div><div class="mlbl">초록</div>${numIn('conf-lim-abs', limits.abstract, '자')}</div>
     </div>
 
@@ -2845,7 +2849,9 @@ export async function saveEvConf(){
   const limits = {
     bio_profile: num('conf-lim-prof'), bio_pro: num('conf-lim-pro'),
     bio_work: num('conf-lim-work'), bio_edu: num('conf-lim-edu'),
-    bio_awards: num('conf-lim-awards'), abstract: num('conf-lim-abs'),
+    bio_awards: num('conf-lim-awards'), bio_credentials: num('conf-lim-cred'),
+    bio_teaching: num('conf-lim-teach'), bio_affil: num('conf-lim-affil'),
+    bio_pubs: num('conf-lim-pubs'), abstract: num('conf-lim-abs'),
   };
   Object.keys(limits).forEach(k => { if(!limits[k]) delete limits[k]; });
   if(Object.keys(limits).length) cfg.limits = limits; else delete cfg.limits;
