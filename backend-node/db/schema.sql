@@ -752,10 +752,18 @@ CREATE TABLE IF NOT EXISTS speakers (
   form_sent_at        TEXT,   -- 프로필 양식
   reminded_at         TEXT,   -- 마지막 독촉
   confirmed_at        TEXT,   -- 참가 확정
-  bio_pro_ko          TEXT,
+  -- 프로필은 넷으로 나눠 받는다. 한 칸에 몰아 받으면 프로그램북을 만들 때
+  -- 사람이 다시 잘라야 하고, 자르는 기준이 매번 달라진다.
+  bio_profile_ko      TEXT,   -- Professional Profile (한 문단 소개)
+  bio_profile_en      TEXT,
+  bio_pro_ko          TEXT,   -- Professional experience
   bio_pro_en          TEXT,
-  bio_work_ko         TEXT,
+  bio_work_ko         TEXT,   -- Working experience
   bio_work_en         TEXT,
+  bio_edu_ko          TEXT,   -- Education
+  bio_edu_en          TEXT,
+  bio_awards_ko       TEXT,   -- Awards & Recognitions
+  bio_awards_en       TEXT,
   profile_received_at TEXT,
   photo_file          TEXT,
   photo_received_at   TEXT,

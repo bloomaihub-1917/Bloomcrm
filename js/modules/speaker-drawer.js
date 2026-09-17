@@ -495,32 +495,46 @@ export async function unlinkSpeakerContact(){
 /* ══════════════════════════════════════════
    이력 — 국·영문 따로. 해외 연사는 영문만 오는 게 정상이다.
 ══════════════════════════════════════════ */
+/* 이력으로 받는 것들. 순서는 프로필에 실리는 순서를 따랐다 —
+   한 문단 소개 → 경력 → 학력 → 수상. 받은 글을 그대로 옮겨 붙일 수 있어야
+   프로그램북을 만들 때 다시 자르지 않는다. */
+const BIO_PARTS = [
+  { need: 'bio_profile', label: 'Professional Profile', ko: 'bio_profile_ko', en: 'bio_profile_en',
+    lim: 'bio_profile', hint: '한 문단짜리 소개 — 현장 소개 멘트로도 씁니다' },
+  { need: 'bio_pro',  label: 'Professional experience', ko: 'bio_pro_ko',  en: 'bio_pro_en',  lim: 'bio_pro' },
+  { need: 'bio_work', label: 'Working experience',      ko: 'bio_work_ko', en: 'bio_work_en', lim: 'bio_work' },
+  { need: 'bio_edu',  label: 'Education',               ko: 'bio_edu_ko',  en: 'bio_edu_en',  lim: 'bio_edu' },
+  { need: 'bio_awards', label: 'Selected Awards & Recognitions', ko: 'bio_awards_ko', en: 'bio_awards_en',
+    lim: 'bio_awards', hint: '국제 수상·선정 이력' },
+];
+
 function bioHtml(sp, evKey){
   const roles = rolesOfSpeaker(sp.id);
-  const nPro = needState(evKey, roles, 'bio_pro');
-  const nWork = needState(evKey, roles, 'bio_work');
   const lim = confCfg(evKey).limits || {};
   const enOnly = sp.lang_pref === 'en';
+  const parts = BIO_PARTS.map(p => ({ ...p, state: needState(evKey, roles, p.need) }))
+    .filter(p => p.state);
 
-  if(!nPro && !nWork){
+  if(!parts.length){
     return `<div style="padding:16px;background:var(--i8);border:1px solid var(--i6);border-radius:8px;
       font-size:12px;color:var(--i5);line-height:1.7">
       이 연사의 역할(${escapeHtml(roles.join(' · ') || '배정 없음')})은 이력을 받지 않아요.
       받아야 한다면 설정 › 행사 관리 › 컨퍼런스에서 역할별 항목을 고치세요.</div>`;
   }
 
-  const pair = (label, need, koField, enField) => {
-    const koVal = sp[koField], enVal = sp[enField];
-    const limit = koField.includes('pro') ? lim.bio_pro : lim.bio_work;
+  const pair = (p) => {
+    const koVal = sp[p.ko], enVal = sp[p.en];
+    const limit = lim[p.lim];
     return `<div style="margin-bottom:16px">
       <div style="display:flex;align-items:baseline;gap:7px;margin-bottom:5px">
-        <div style="font-size:11.5px;font-weight:700">${escapeHtml(label)}</div>
-        <div style="font-size:10px;color:var(--i4)" title="${escAttr(NEED_LABEL[need] || '')}">${NEED_MARK[need] || ''}</div>
+        <div style="font-size:11.5px;font-weight:700">${escapeHtml(p.label)}</div>
+        <div style="font-size:10px;color:var(--i4)" title="${escAttr(NEED_LABEL[p.state] || '')}">${NEED_MARK[p.state] || ''}</div>
+        ${p.hint ? `<div style="font-size:10px;color:var(--i4)">${escapeHtml(p.hint)}</div>` : ''}
       </div>
       ${enOnly ? '' : fg(`국문 · ${countHint(koVal, limit)}`,
-        area(koVal, `spField('${koField}',this.value,'${escAttr(label)} 국문')`, '', 5))}
+        area(koVal, `spField('${p.ko}',this.value,'${escAttr(p.label)} 국문')`, '', 5))}
       ${fg(`영문 · ${countHint(enVal, limit)}`,
-        area(enVal, `spField('${enField}',this.value,'${escAttr(label)} 영문')`, '', 5))}
+        area(enVal, `spField('${p.en}',this.value,'${escAttr(p.label)} 영문')`, '', 5))}
     </div>`;
   };
 
@@ -531,11 +545,10 @@ function bioHtml(sp, evKey){
     ${gotRow('이력 받음', sp.profile_received_at,
       `spStamp('profile_received_at','이력 받음')`,
       `spField('profile_received_at',this.value,'이력 받은 날')`,
-      nPro === 'req' || nWork === 'req' ? 'req' : 'opt')}
+      parts.some(p => p.state === 'req') ? 'req' : 'opt')}
     <div style="font-size:10.5px;color:var(--i4);margin:5px 0 14px">
       받았는지는 이 체크로 봅니다 — 해외 연사는 국문이 비는 게 정상이라 글자 유무로 세지 않아요.</div>
-    ${nPro ? pair('Professional experience', nPro, 'bio_pro_ko', 'bio_pro_en') : ''}
-    ${nWork ? pair('Working experience', nWork, 'bio_work_ko', 'bio_work_en') : ''}`;
+    ${parts.map(pair).join('')}`;
 }
 
 /* ══════════════════════════════════════════
@@ -808,9 +821,22 @@ export function fillSpeakerMail(kind){
     invite: en
       ? `Dear ${name},\n\nWe are pleased to invite you to ${evName}.\n\n${sessions ? `Your session(s):\n${sessions}\n\n` : ''}We would be grateful if you could confirm your participation.\n\nBest regards,`
       : `${name} 님, 안녕하세요.\n\n${evName}에 연사로 모시고자 연락드립니다.\n\n${sessions ? `배정 세션\n${sessions}\n\n` : ''}참석 가능 여부를 회신해 주시면 감사하겠습니다.\n\n감사합니다.`,
-    profile: en
-      ? `Dear ${name},\n\nCould you please send us the following for the programme book?\n- Professional experience${lim.bio_pro ? ` (within ${lim.bio_pro} characters)` : ''}\n- Working experience${lim.bio_work ? ` (within ${lim.bio_work} characters)` : ''}\n- A portrait photo (high resolution)\n\nBest regards,`
-      : `${name} 님, 안녕하세요.\n\n프로그램북 제작을 위해 아래 자료를 부탁드립니다.\n- Professional experience${lim.bio_pro ? ` (${lim.bio_pro}자 이내)` : ''}\n- Working experience${lim.bio_work ? ` (${lim.bio_work}자 이내)` : ''}\n- 사진 (고해상도)${dueLine('profile', '자료')}\n\n감사합니다.`,
+    /* 무엇을 달라고 할지는 역할이 요구하는 것에서 나온다 — 좌장에게 발제를
+       묻지 않듯, 이 행사가 학력을 안 받으면 메일에도 안 적는다. */
+    profile: (() => {
+      const roles = rolesOfSpeaker(sp.id);
+      const want = BIO_PARTS.filter(p => needState(evKey, roles, p.need));
+      const line = (p) => {
+        const l = lim[p.lim];
+        return en ? `- ${p.label}${l ? ` (within ${l} characters)` : ''}`
+          : `- ${p.label}${l ? ` (${l}자 이내)` : ''}`;
+      };
+      return en
+        ? `Dear ${name},\n\nCould you please send us the following for the programme book?\n${
+            want.map(line).join('\n')}\n- A portrait photo (high resolution)\n\nBest regards,`
+        : `${name} 님, 안녕하세요.\n\n프로그램북 제작을 위해 아래 자료를 부탁드립니다.\n${
+            want.map(line).join('\n')}\n- 사진 (고해상도)${dueLine('profile', '자료')}\n\n감사합니다.`;
+    })(),
     abstract: en
       ? `Dear ${name},\n\nCould you please send us your presentation title and abstract?${lim.abstract ? `\nAbstract: within ${lim.abstract} characters.` : ''}\n\nBest regards,`
       : `${name} 님, 안녕하세요.\n\n발제명과 초록을 부탁드립니다.${lim.abstract ? `\n초록은 ${lim.abstract}자 이내로 부탁드립니다.` : ''}${dueLine('abstract', '초록')}\n\n감사합니다.`,

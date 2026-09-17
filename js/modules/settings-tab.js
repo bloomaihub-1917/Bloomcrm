@@ -2675,8 +2675,11 @@ function evConfHtml(ev){
       행사마다 달라요. 넘치면 화면이 얼마나 줄여야 하는지까지 알려줍니다 — 비우면 한도를 걸지 않아요.
     </div>
     <div style="display:flex;gap:10px;flex-wrap:wrap;padding-bottom:11px;border-bottom:1px solid var(--i7)">
+      <div><div class="mlbl">Professional Profile</div>${numIn('conf-lim-prof', limits.bio_profile, '자')}</div>
       <div><div class="mlbl">Professional experience</div>${numIn('conf-lim-pro', limits.bio_pro, '자')}</div>
       <div><div class="mlbl">Working experience</div>${numIn('conf-lim-work', limits.bio_work, '자')}</div>
+      <div><div class="mlbl">Education</div>${numIn('conf-lim-edu', limits.bio_edu, '자')}</div>
+      <div><div class="mlbl">Awards</div>${numIn('conf-lim-awards', limits.bio_awards, '자')}</div>
       <div><div class="mlbl">초록</div>${numIn('conf-lim-abs', limits.abstract, '자')}</div>
     </div>
 
@@ -2839,7 +2842,11 @@ export async function saveEvConf(){
   const num = (id) => { const n = Number(g(id)); return n > 0 ? String(n) : ''; };
 
   const cfg = JSON.parse(JSON.stringify(confCfg(ev.key)));
-  const limits = { bio_pro: num('conf-lim-pro'), bio_work: num('conf-lim-work'), abstract: num('conf-lim-abs') };
+  const limits = {
+    bio_profile: num('conf-lim-prof'), bio_pro: num('conf-lim-pro'),
+    bio_work: num('conf-lim-work'), bio_edu: num('conf-lim-edu'),
+    bio_awards: num('conf-lim-awards'), abstract: num('conf-lim-abs'),
+  };
   Object.keys(limits).forEach(k => { if(!limits[k]) delete limits[k]; });
   if(Object.keys(limits).length) cfg.limits = limits; else delete cfg.limits;
 

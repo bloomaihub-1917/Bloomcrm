@@ -160,8 +160,11 @@ export const partStateOf = (v) => PART_STATES.find(s => s.key === v) || PART_STA
 ══════════════════════════════════════════ */
 export const SPEAKER_NEEDS = [
   { key: 'profile',  label: '성명·소속·직함',           where: 'contacts' },
+  { key: 'bio_profile', label: 'Professional Profile',  where: 'bio_profile_ko · bio_profile_en' },
   { key: 'bio_pro',  label: 'Professional experience',  where: 'bio_pro_ko · bio_pro_en' },
   { key: 'bio_work', label: 'Working experience',       where: 'bio_work_ko · bio_work_en' },
+  { key: 'bio_edu',  label: 'Education',                where: 'bio_edu_ko · bio_edu_en' },
+  { key: 'bio_awards', label: 'Awards & Recognitions',  where: 'bio_awards_ko · bio_awards_en' },
   { key: 'photo',    label: '프로필 사진',              where: 'photo_file' },
   { key: 'title',    label: '발제명',                   where: 'title_ko · title_en' },
   { key: 'abstract', label: '초록',                     where: 'abstract_ko · abstract_en' },
@@ -178,17 +181,20 @@ export const SPEAKER_NEEDS_ON_TALK = ['title', 'abstract', 'slides'];
 
 export const SPEAKER_ROLES = [
   { key: '연사', label: '연사', cls: 'p-blue', needs: {
-    profile: 'req', bio_pro: 'req', bio_work: 'req', photo: 'req',
+    profile: 'req', bio_profile: 'req', bio_pro: 'req', bio_work: 'req',
+    bio_edu: 'opt', bio_awards: 'opt', photo: 'req',
     title: 'req', abstract: 'req', slides: 'req',
     consent: 'req', bank: 'req', passport: 'opt', travel: 'opt' } },
   { key: '패널', label: '패널', cls: 'p-teal', needs: {
-    profile: 'req', bio_pro: 'req', bio_work: 'req', photo: 'req',
+    profile: 'req', bio_profile: 'req', bio_pro: 'req', bio_work: 'req',
+    bio_edu: 'opt', bio_awards: 'opt', photo: 'req',
     title: 'req', abstract: 'opt', slides: 'opt',
     consent: 'req', bank: 'req', passport: 'opt', travel: 'opt' } },
   /* 좌장은 발제 정보를 받지 않는다 — 세션을 진행하는 자리다.
      이력·사진은 받는다(도록에 실린다). */
   { key: '좌장', label: '좌장', cls: 'p-indigo', needs: {
-    profile: 'req', bio_pro: 'req', bio_work: 'req', photo: 'req',
+    profile: 'req', bio_profile: 'req', bio_pro: 'req', bio_work: 'req',
+    bio_edu: 'opt', bio_awards: 'opt', photo: 'req',
     title: '', abstract: '', slides: '',
     consent: 'req', bank: 'req', passport: 'opt', travel: 'opt' } },
   /* 사회는 우리가 섭외한다. 그래서 이력·사진이 선택이고 항공·숙박은 묻지 않는다.
