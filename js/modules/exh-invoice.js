@@ -26,11 +26,14 @@
    빠진 항목이 있으면 알린다(실제로 원화·달러를 따로 발행해 왔다).
 
    ── 왜 행을 넣거나 빼지 않나 ──
-   양식의 항목 칸은 24줄로 미리 늘려 두었다(scripts/build-invoice-template.js).
-   실행 시점에는 남는 줄을 숨기기만 한다 — ExcelJS의 행 삭제는 병합·그림·수식을
-   따라 옮기지 못해서 양식 아래쪽(TOTAL·계좌 안내·직인)이 통째로 어긋난다.
-   숨긴 줄은 화면에도 인쇄에도 나오지 않으니 3줄짜리 인보이스는 손으로 만든 것과
-   같은 모습이 된다.
+   남는 줄은 지우지 않고 숨긴다 — ExcelJS의 행 삭제는 병합·그림·수식을 따라
+   옮기지 못해서 양식 아래쪽(TOTAL·계좌 안내·직인)이 통째로 어긋난다. 숨긴 줄은
+   화면에도 인쇄에도 나오지 않으니 3줄짜리 인보이스는 손으로 만든 것과 같은
+   모습이 된다.
+
+   항목 칸이 몇 줄인지는 코드에 박지 않고 양식에서 읽는다(B열의 TOTAL을 찾는다).
+   받은 원본 양식은 국문 9줄·영문 11줄이고, scripts/build-invoice-template.js로
+   24줄까지 늘려 쓸 수도 있다 — 어느 쪽이든 그대로 채운다.
 
    ── 금액 칸은 값이 아니라 수식으로 ──
    금액을 값으로 박아 넣으면 받은 사람이 수량 한 칸을 고쳤을 때 합계가 따라오지
@@ -40,7 +43,7 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import {
-  getExhibitorById, invoicesFor, liveItemsFor, catalogItem,
+  getExhibitorById, invoicesFor, liveItemsFor, catalogItem, findCatalogByName,
   EXH_INVOICES, EVENT_LIST, exhEvent,
 } from '../state.js';
 import { exhNames, isBillable, currencyOf } from './exh-tab.js';
@@ -54,10 +57,9 @@ import { trackAction } from './audit-tab.js';
 const EXCELJS_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
 const TEMPLATE_URL = 'Data/인보이스_양식.xlsx';
 
-/* 양식의 항목 칸. scripts/build-invoice-template.js의 ROWS와 같이 움직인다. */
+/* 항목 칸은 9행에서 시작한다(머리글이 8행). 어디서 끝나는지는 양식마다 달라서
+   코드에 박지 않고 읽는다 — 아래 sheetBounds 참고. */
 const FIRST_ROW = 9;
-const LAST_ROW  = 32;
-const CAPACITY  = LAST_ROW - FIRST_ROW + 1;
 
 /* 두 시트의 차이는 단위·기한 문구·언어뿐이다. 품명 칸(C:E)과 TOTAL 위치,
    계좌 안내는 두 장이 같다. */
@@ -65,7 +67,31 @@ const SHEETS = [
   { name: '국문', lang: 'ko', unit: '개',  duePrefix: '납입기한: ' },
   { name: '영문', lang: 'en', unit: 'EA', duePrefix: 'Due Date: ' },
 ];
-const NAME_COL = 'C';
+
+/* 품명을 어느 칸에 적나 — 양식마다 다르다.
+
+   국문 시트는 상세 칸이 C:E 한 칸이다. 영문 시트는 받은 원본에서 코드(C)와
+   품명(D:E)이 갈려 있고, 24줄로 늘린 양식은 실제 발행해 온 인보이스를 따라
+   C:E 한 칸으로 합쳐 두었다. 한 칸짜리 양식에 «코드 칸»을 가정하고 적으면
+   품명이 7자 남짓한 칸에 들어가 잘린다(실제로 잘려 나갔다).
+
+   그래서 9행의 병합을 보고 정한다: 품명 칸이 E까지 뻗어 있으면 거기에 다 적고,
+   아니면 코드는 C에 품명은 D에 적는다. */
+const COL_E = 5;
+function nameLayout(ws){
+  const m = Object.values(ws._merges).map(x => x.model)
+    .find(d => d.top <= FIRST_ROW && d.bottom >= FIRST_ROW && d.left === 3);  // C열에서 시작하는 병합
+  return (m && m.right >= COL_E) ? { name: 'C', code: null } : { name: 'D', code: 'C' };
+}
+
+/* 품목 코드 — 카탈로그 코드, 없으면 품목명 앞에 붙어 있는 코드 */
+const CODE_RE = /^([A-Z]{1,2}-\d{2,4})\s+/;
+function itemCode(i){
+  const c = catalogItem(i.catalog_id);
+  if(c && c.code) return String(c.code);
+  const m = CODE_RE.exec(String(i.name || '').trim());
+  return m ? m[1] : '';
+}
 
 /* 구분 칸에 적히는 이름. 설정(code_lists)의 화면 라벨을 따르지 않는다 — 화면
    라벨을 바꿨다고 기업에 나가는 인보이스의 글자가 바뀌면 곤란하다. 영문은 받은
@@ -87,11 +113,17 @@ const today = () => {
 
 /* 품명 — 국문 시트는 CRM에 적힌 그대로, 영문 시트는 카탈로그의 영문명을 쓴다.
    카탈로그 코드는 품명 앞에 붙여 준다("C-040 Folding Chair") — 지금 발행해 온
-   인보이스가 그 꼴이고, 렌탈사와 대조할 때 코드로 찾는다. */
+   인보이스가 그 꼴이고, 렌탈사와 대조할 때 코드로 찾는다.
+
+   카탈로그 연결(catalog_id)이 없는 항목이 많다. 신청서에서 손으로 옮겨 적으면
+   이름만 남는데, 그 이름이 국문이면 영문 인보이스에 «C-011 디자인 체어 (화이트)»가
+   그대로 실려 나간다(실제로 그렇게 나갔다). 연결이 없으면 이름으로 카탈로그를
+   한 번 더 찾는다 — 코드·국문명·영문명을 모두 훑으므로 대개 걸린다. */
 function itemName(i, lang){
   const raw = String(i.name || '').trim();
   if(lang === 'ko') return raw;
-  const c = catalogItem(i.catalog_id);
+  const x = getExhibitorById(i.exhibitor_id);
+  const c = catalogItem(i.catalog_id) || findCatalogByName(x && x.event_id, raw);
   if(!c || !c.name_en) return raw;
   const code = String(c.code || '').trim();
   return code ? `${code} ${c.name_en}` : c.name_en;
@@ -142,7 +174,6 @@ export function invoiceDoc(inv){
     itemSum: rows.reduce((s, r) => s + r.amount, 0),
     invAmount: String(inv.amount ?? '').trim() === '' ? null : num(inv.amount),
     otherCur: all.length - mine.length,
-    over: Math.max(rows.length - CAPACITY, 0),
   };
 }
 
@@ -150,29 +181,74 @@ export function invoiceDoc(inv){
    양식 채우기 — 워크북과 문서만 받는다(브라우저 API 없음)
 ══════════════════════════════════════════ */
 
+/* 항목 칸이 어디서 끝나는지 — 양식에게 묻는다.
+
+   전에는 24줄이라고 코드에 박아 두었다. 그런데 앱을 GitHub Pages에 올리면
+   Data/ 폴더가 없어서(공개 저장소라 양식을 넣지 않는다) 파일 고르기 창이 뜨고,
+   거기서 받은 원본 양식(국문 9줄·영문 11줄)을 고르는 일이 실제로 있었다.
+   그러면 10~24번째 «항목 줄»이 TOTAL·납입 안내·계좌 안내·직인 자리를 그대로
+   덮어썼다 — 아래가 통째로 사라진 인보이스가 기업 폴더에 저장됐고, 열어보기
+   전에는 아무도 몰랐다.
+
+   그래서 줄 수를 세지 않고 B열에서 TOTAL을 찾는다. 원본 양식이든 24줄로 늘린
+   양식이든 그 자리가 항목 칸의 끝이다. 못 찾으면 인보이스 양식이 아니므로
+   채우지 않는다 — 망가뜨리는 것보다 거절하는 편이 낫다. */
+const SCAN_LIMIT = 200;
+export function sheetBounds(ws){
+  for(let y = FIRST_ROW + 1; y <= SCAN_LIMIT; y++){
+    const v = ws.getCell(`B${y}`).value;
+    if(String(v == null ? '' : (v.richText ? v.richText.map(t => t.text).join('') : v)).trim().toUpperCase() === 'TOTAL'){
+      /* 납입 안내는 TOTAL 두 줄 아래다(가운데 한 줄은 비어 있다) — 원본 양식과
+         늘린 양식이 같고, 그 사이 간격이 양식의 생김새다. */
+      return { first: FIRST_ROW, last: y - 1, totalRow: y, dueRow: y + 2, capacity: y - FIRST_ROW };
+    }
+  }
+  return null;
+}
+
 /* 항목 칸 안에 완전히 들어가는 병합을 푼다. 구분 칸을 그룹 단위로 다시 묶기
    전에 자리를 비워야 한다 — 병합이 남은 채로 아랫줄에 적으면 대표 칸이 덮여
    앞 그룹의 이름이 사라진다. */
-function unmergeGroupCol(ws){
+function unmergeGroupCol(ws, b){
   Object.values(ws._merges)
     .map(m => ({ range: m.range, d: m.model }))
-    .filter(x => x.d.left === 2 && x.d.top >= FIRST_ROW && x.d.bottom <= LAST_ROW)
+    .filter(x => x.d.left === 2 && x.d.top >= b.first && x.d.bottom <= b.last)
     .forEach(x => { try { ws.unMergeCells(x.range); } catch(e){} });
 }
 
+/* 양식이 맞는지 본다. 아니면 이유를 들고 거절한다 — 엉뚱한 파일을 채우면
+   조용히 망가진 인보이스가 나온다. */
+export function checkTemplate(wb){
+  const bad = [];
+  SHEETS.forEach(spec => {
+    const ws = wb.getWorksheet(spec.name);
+    if(!ws) { bad.push(`'${spec.name}' 시트가 없어요`); return; }
+    if(!sheetBounds(ws)) bad.push(`'${spec.name}' 시트에서 TOTAL 줄을 찾지 못했어요`);
+  });
+  return bad;
+}
+
 export function fillInvoiceWorkbook(wb, doc){
+  const bad = checkTemplate(wb);
+  if(bad.length) throw new Error(`인보이스 양식이 아닌 것 같아요 — ${bad.join(' · ')}`);
+
   /* 통화 표기는 양식에서 읽어 온다. 국문 시트에는 원화 기호와 원화 표시형식이,
      영문 시트에는 달러 쪽이 이미 들어 있다 — 코드에 다시 적으면 두 곳이 갈린다. */
   const src = wb.getWorksheet(doc.cur === 'USD' ? '영문' : '국문');
   const sym = src.getCell(`I${FIRST_ROW}`).value;
   const fmt = src.getCell('C6').numFmt;
-  const totalRow = LAST_ROW + 1, dueRow = LAST_ROW + 3;
-  const used = Math.min(doc.rows.length, CAPACITY);
+  /* 두 시트의 항목 칸 길이가 다를 수 있다(원본 양식은 국문 9줄·영문 11줄) —
+     짧은 쪽이 이 양식으로 담을 수 있는 줄 수다. */
+  const capacity = Math.min(...SHEETS.map(sp => sheetBounds(wb.getWorksheet(sp.name)).capacity));
+  const used = Math.min(doc.rows.length, capacity);
+  const over = Math.max(doc.rows.length - capacity, 0);
 
   SHEETS.forEach(spec => {
     const ws = wb.getWorksheet(spec.name);
-    if(!ws) return;
-    unmergeGroupCol(ws);
+    const b = sheetBounds(ws);
+    const { last: LAST_ROW, totalRow, dueRow } = b;
+    const nc = nameLayout(ws);
+    unmergeGroupCol(ws, b);
 
     ws.getCell('C3').value = doc.no;
     ws.getCell('C4').value = doc.date;
@@ -182,7 +258,11 @@ export function fillInvoiceWorkbook(wb, doc){
     for(let y = FIRST_ROW; y <= LAST_ROW; y++){
       const r = doc.rows[y - FIRST_ROW];
       ws.getCell(`B${y}`).value = null;
-      ws.getCell(`${NAME_COL}${y}`).value = r ? itemName(r.item, spec.lang) : null;
+      /* 코드 칸이 따로 있는 양식이면 코드는 코드 칸에, 품명에서는 뗀다 */
+      const nm = r ? itemName(r.item, spec.lang) : null;
+      const code = r && nc.code ? itemCode(r.item) : '';
+      ws.getCell(`${nc.name}${y}`).value = code ? nm.replace(CODE_RE, '') : nm;
+      if(nc.code) ws.getCell(`${nc.code}${y}`).value = code || null;
       ws.getCell(`F${y}`).value = r ? r.qty : null;
       ws.getCell(`H${y}`).value = r ? r.up : null;
       /* 단위와 통화 기호는 빈 줄에도 남긴다 — 양식이 원래 깔아 두는 값이고,
@@ -193,11 +273,17 @@ export function fillInvoiceWorkbook(wb, doc){
       ws.getRow(y).hidden = !r;
     }
 
-    /* 그룹 이름은 그 그룹의 첫 줄에 적고, 두 줄 이상이면 병합해 한 칸으로 본다 */
+    /* 그룹 이름은 그 그룹의 첫 줄에 적고, 두 줄 이상이면 병합해 한 칸으로 본다.
+
+       정렬은 9행에서 가져온다. 양식의 구분 칸은 원래 그룹 단위로 병합돼 있어서
+       둘째 줄부터는 서식이 비어 있다(병합에 먹힌 칸이다). 그 자리에 그대로 적으면
+       «Office Furniture Rental»이 줄바꿈 없이 한 줄로 잘린다. */
+    const bStyle = ws.getCell(`B${FIRST_ROW}`).alignment;
     let y = FIRST_ROW;
     doc.groups.forEach(g => {
       if(y > LAST_ROW) return;
       ws.getCell(`B${y}`).value = g[spec.lang];
+      if(bStyle) ws.getCell(`B${y}`).alignment = bStyle;
       const bottom = Math.min(y + g.count - 1, LAST_ROW);
       if(bottom > y) { try { ws.mergeCells(`B${y}:B${bottom}`); } catch(e){} }
       y += g.count;
@@ -208,7 +294,7 @@ export function fillInvoiceWorkbook(wb, doc){
     ws.getCell(`L${dueRow}`).value = doc.due ? spec.duePrefix + doc.due : null;
     ws.getCell('C6').numFmt = fmt;
   });
-  return { used, totalRow };
+  return { used, capacity, over };
 }
 
 /* ══════════════════════════════════════════
@@ -278,9 +364,10 @@ function pickTemplate(){
 /* 보내기 전에 봐야 하는 어긋남 — 파일은 나가지만 조용히 두면 안 되는 값들.
    통화 경고는 '발행'에서는 빼 준다: 그쪽은 통화마다 한 장씩 이미 내고 있어서
    "빠졌어요"가 사실이 아니다. */
-function invoiceWarnings(doc, { allCurrencies = false } = {}){
+function invoiceWarnings(doc, fit, { allCurrencies = false } = {}){
   const w = [];
-  if(doc.over) w.push(`항목이 ${doc.rows.length}건인데 양식은 ${CAPACITY}줄까지예요 — 뒤 ${doc.over}건이 빠졌습니다`);
+  if(fit && fit.over)
+    w.push(`항목이 ${doc.rows.length}건인데 이 양식은 ${fit.capacity}줄까지예요 — 뒤 ${fit.over}건이 빠졌습니다`);
   if(doc.otherCur && !allCurrencies)
     w.push(`${doc.cur}가 아닌 항목 ${doc.otherCur}건은 빠졌어요 — 통화가 다르면 따로 발행하세요`);
   if(doc.invAmount != null && Math.round(doc.invAmount) !== Math.round(doc.itemSum))
@@ -311,9 +398,10 @@ async function buildInvoiceFile(doc){
   const [ExcelJS, buf] = await Promise.all([loadExcelJs(), loadTemplate()]);
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(buf);
-  fillInvoiceWorkbook(wb, doc);
+  const fit = fillInvoiceWorkbook(wb, doc);
   const out = await wb.xlsx.writeBuffer();
-  return new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  return { fit, blob: new Blob([out],
+    { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }) };
 }
 
 function download(blob, filename){
@@ -390,7 +478,7 @@ async function putInvoiceFile(doc, blob){
 
 /* 저장 결과와 어긋남을 한 줄로 — 여러 장을 낼 때는 부르는 쪽이 모아서 한 번에
    띄운다(알림 칸이 하나뿐이라 연달아 띄우면 앞의 것이 지워진다). */
-function reportSave(doc, res, opts){
+function reportSave(doc, res, fit, opts){
   const nm = fileNames(doc);
   const where = res.how === 'folder'
     ? `${res.at}에 저장`
@@ -401,7 +489,7 @@ function reportSave(doc, res, opts){
         : `폴더에 쓰지 못해 다운로드로 받았어요 (${res.why})`;
   trackAction('add', '인보이스 양식', nm.company,
     `${doc.no} · ${doc.rows.length}건 · ${res.how === 'folder' ? res.at : '다운로드'}`);
-  return [`${doc.no} ${where}`, ...invoiceWarnings(doc, opts)].join(' · ');
+  return [`${doc.no} ${where}`, ...invoiceWarnings(doc, fit, opts)].join(' · ');
 }
 
 /* 버튼을 잠근다 — 만드는 동안 두 번 눌리면 파일이 두 개 떨어진다.
@@ -438,8 +526,8 @@ export async function exportExhInvoice(invId){
 
   await withButton(`inv-xls-${invId}`, async () => {
     try {
-      const blob = await buildInvoiceFile(doc);
-      showSaveErrorToast(reportSave(doc, await putInvoiceFile(doc, blob)));
+      const { fit, blob } = await buildInvoiceFile(doc);
+      showSaveErrorToast(reportSave(doc, await putInvoiceFile(doc, blob), fit));
     } catch(err){
       console.error('[exh-invoice] 내보내기 실패', err);
       showSaveErrorToast('내보내기 실패: ' + (err && err.message ? err.message : err));
@@ -484,8 +572,8 @@ export async function issueExhInvoice(exhId){
         });
         if(!inv) return;                    // 저장 실패 — createInvoiceRow가 이미 알렸다
         const doc = invoiceDoc(inv);
-        const blob = await buildInvoiceFile(doc);
-        msgs.push(reportSave(doc, await putInvoiceFile(doc, blob), { allCurrencies: true }));
+        const { fit, blob } = await buildInvoiceFile(doc);
+        msgs.push(reportSave(doc, await putInvoiceFile(doc, blob), fit, { allCurrencies: true }));
       } catch(err){
         console.error('[exh-invoice] 발행 실패', err);
         msgs.push(`${cur} 발행 실패: ` + (err && err.message ? err.message : err));
