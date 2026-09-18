@@ -37,6 +37,10 @@ const MICE = [
   { id: 'evk_traffic', name: '교통' },
   { id: 'evk_fx',      name: '이벤트(특효)장치/장비' },
   { id: 'evk_booth',   name: '이벤트 부스' },
+  /* 케이터링은 명단의 대분류에 없던 것을 뒤늦게 세운 자리다. 그동안 도시락·
+     다과·출장뷔페를 부르는 곳은 «이벤트·MICE 기타»에 섞여 있었는데, 행사마다
+     빠지지 않고 찾는 업종이라 기타에 묻어두면 매번 다시 훑어야 한다. */
+  { id: 'evk_catering', name: '케이터링' },
   { id: 'evk_enter',   name: '엔터에이전시(MC/공연)' },
   { id: 'booth',       name: '부스/무대/구조물' },
   { id: 'evk_led',     name: 'LED/LCD 디스플레이' },
