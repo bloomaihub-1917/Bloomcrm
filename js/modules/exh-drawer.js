@@ -1211,6 +1211,76 @@ function appMark(i){
     (a.received_at || '') + (a.reason ? ' · ' + a.reason : ''))}">${escapeHtml(a.seq)}차 ${escapeHtml(i.change_kind || '추가')}</span>`;
 }
 
+/* ── 이 회차에서 무엇이 달라졌나 ──
+
+   전에는 열린 회차에만 «+ G-020 랩핑 1개 추가» 같은 글줄이 떴고, 반영을 끝내면
+   요약 한 줄로 굳었다. 그래서 «2차에서 뭘 넣었더라»를 보려면 정산 탭으로 건너가
+   배지를 눈으로 훑어야 했고, 잘못 넣은 줄은 거기서 고쳐야 했다.
+
+   회차 안에 그 줄들을 그대로 펴 둔다. 열려 있으면 수량·금액을 그 자리에서 고치고
+   취소까지 할 수 있고, 닫힌 회차는 읽기만 된다 — 반영을 끝낸 기록이 조용히
+   바뀌면 «몇 차에 무엇이 늘었나»가 사실과 어긋난다. */
+function appItemRows(a, x, live){
+  const rows = itemsFor(x.id).filter(i => i.app_id === a.id);
+  if(!rows.length) return live
+    ? '<div style="font-size:11px;color:var(--i4);margin-top:6px">아직 넣은 품목이 없어요 — 아래 줄에서 넣으면 여기에 쌓입니다.</div>'
+    : '';
+
+  const mark = (i) => i.change_kind === '취소' ? ['−', 'p-red', '취소']
+    : i.change_kind === '변경' ? ['~', 'p-amber', '변경'] : ['+', 'p-teal', '추가'];
+
+  return `<div style="margin-top:6px;padding:6px 8px;background:var(--W);border-radius:6px;display:flex;flex-direction:column;gap:3px">
+    <div style="font-size:10.5px;color:var(--i4)">이 회차 ${rows.length}건${
+      live ? '' : ' — 고치려면 <b>다시 열기</b>를 누르세요'}</div>
+    ${rows.map(i => { const [sg, cls, lbl] = mark(i); const dead = isVoided(i);
+      return `<div style="display:flex;align-items:center;gap:6px;font-size:11.5px${
+        dead ? ';opacity:.55' : ''}">
+        <span class="pill ${cls}" style="font-size:9px;min-width:34px;text-align:center">${lbl}</span>
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${
+          dead ? ';text-decoration:line-through' : ''}" title="${escAttr(i.name || '')}">${sg} ${escapeHtml(i.name || '')}</span>
+        ${live ? `<input class="fi" style="width:52px;font-size:11px;padding:3px 5px" value="${escAttr(i.qty || '')}"
+            placeholder="수량" onchange="setItemFieldDirect('${escAttr(i.id)}','qty',this.value)">
+          <input class="fi" style="width:86px;font-size:11px;padding:3px 5px;text-align:right" value="${escAttr(i.amount || '')}"
+            placeholder="금액" onchange="setItemFieldDirect('${escAttr(i.id)}','amount',this.value)">
+          <button class="btn bs" style="font-size:10.5px;padding:2px 7px" onclick="voidExhItem('${escAttr(i.id)}')"
+            title="${dead ? '취소를 되돌립니다' : '지우지 않고 내립니다 — 이력은 남아요'}">${dead ? '되돌리기' : '취소'}</button>`
+        : `<span style="color:var(--i4)">${escapeHtml(i.qty || '')}${i.qty && i.amount ? ' · ' : ''}${
+            i.amount ? escapeHtml(money(i.amount)) : ''}</span>`}
+      </div>`; }).join('')}
+  </div>`;
+}
+
+/* ── 지금 살아 있는 내역 ──
+
+   회차별로 더한 것과 뺀 것을 눈으로 합산해야 «그래서 최종이 뭔데»가 나왔다.
+   취소된 줄을 걷어낸 지금 상태를 한자리에 둔다. 열린 회차가 있으면 여기서
+   바로 내릴 수 있다 — 2차를 열어 두고 1차에 넣었던 것을 빼는 게 실제 흐름이다. */
+function appFinalRows(x){
+  const live = liveItemsFor(x.id);
+  const open = openAppFor(x.id);
+  if(!live.length) return '';
+  const cur = currencyOf(x.id);
+  const sum = live.filter(isBillable).reduce((t, i) =>
+    t + (Number(String(i.amount || '').replace(/[^0-9.-]/g, '')) || 0), 0);
+
+  return `<div style="margin-top:10px;border:1px solid var(--i7);border-radius:8px;padding:8px 10px">
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+      <span style="font-size:11.5px;font-weight:700">지금 내역 ${live.length}건</span>
+      <span style="font-size:11px;color:var(--i4)">취소한 건 빼고 남은 것이에요</span>
+      <span style="margin-left:auto;font-size:12px;font-weight:700">${escapeHtml(fmtMoney(sum, cur))}</span>
+    </div>
+    ${live.map(i => `<div style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:2px 0">
+      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+        title="${escAttr(i.name || '')}">${escapeHtml(i.name || '')}${appMark(i)}</span>
+      <span style="color:var(--i4)">${escapeHtml(i.qty || '')}</span>
+      <span style="min-width:76px;text-align:right">${i.amount ? escapeHtml(money(i.amount)) : '-'}</span>
+      ${open ? `<button class="btn bs" style="font-size:10.5px;padding:2px 7px" onclick="voidExhItem('${escAttr(i.id)}')"
+        title="${escAttr(open.seq + '차 접수에 취소로 기록됩니다')}">취소</button>` : ''}
+    </div>`).join('')}
+    ${!open ? `<div style="font-size:10.5px;color:var(--i4);margin-top:4px">빼려면 접수를 하나 열어야 해요 — 몇 차에서 뺐는지가 남아야 하니까요.</div>` : ''}
+  </div>`;
+}
+
 /* 접수 이력 화면 */
 function appsSection(x){
   const list = appsFor(x.id);
@@ -1244,8 +1314,7 @@ function appsSection(x){
       <input class="fi" style="margin-top:6px;font-size:11.5px" placeholder="왜 다시 받았나요 — 예: 프북 수정, 전시패스 추가"
         value="${escAttr(a.reason || '')}" onchange="setAppField('${escAttr(a.id)}','reason',this.value)">
       ${a.file_name ? `<div style="font-size:10.5px;color:var(--i4);margin-top:4px">📄 ${escapeHtml(a.file_name)}</div>` : ''}
-      ${live && diff.length ? `<div style="font-size:11px;color:var(--i2);margin-top:6px;padding:6px 8px;background:var(--W);border-radius:6px">
-          ${diff.map(d => escapeHtml(d)).join('<br>')}</div>` : ''}
+      ${appItemRows(a, x, live)}
 
       ${!live && a.summary ? `<div style="font-size:11px;color:var(--i3);margin-top:5px">${escapeHtml(a.summary)}</div>` : ''}
     </div>`;
@@ -1294,7 +1363,7 @@ function appsSection(x){
     `<div style="font-size:11.5px;color:var(--i4)">아직 접수 기록이 없어요. 신청서를 받은 날짜부터 남겨두면 변경이 몇 번 있었는지 그대로 따라옵니다.</div>`
     + hint + add);
 
-  return sct('신청서 접수 이력', rows + hint + add,
+  return sct('신청서 접수 이력', rows + appFinalRows(x) + hint + add,
     list.length > 1 ? `<span class="pill p-amber">변경 ${list.length - 1}회</span>` : '');
 }
 
