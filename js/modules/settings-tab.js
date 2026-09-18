@@ -1728,8 +1728,10 @@ export function editBoothInclLine(n, field, v){
    품목표를 나중에 적어 넣은 행사는 아무 기업에도 안 들어가 있다. */
 export async function applyBoothItemsToEvent(evKey){
   const { exhibitorsForEvent } = await import('../state.js');
-  const { applyBoothItems, boothIncluded } = await import('./exh-tab.js');
-  const list = exhibitorsForEvent(evKey).filter(x => boothIncluded(evKey, x.booth_type).length);
+  const { applyBoothItems, boothIncluded, isSharedBooth } = await import('./exh-tab.js');
+  // 한 부스를 나눠 쓰는 쪽은 뺀다 — 부스에 딸려 오는 건 부스 하나에 하나씩이다
+  const list = exhibitorsForEvent(evKey)
+    .filter(x => !isSharedBooth(x) && boothIncluded(evKey, x.booth_type).length);
   if(!list.length){ alert('부스 타입이 정해진 참가기업이 없거나, 그 타입에 적어 둔 기본 제공 품목이 없어요.'); return; }
   if(!confirm(`참가기업 ${list.length}곳에 부스 타입별 기본 제공 품목을 넣을까요?
 `

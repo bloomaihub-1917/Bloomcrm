@@ -5075,7 +5075,7 @@ export function boothIncluded(evKey, typeCode){
    정해져 있던 기업에는 한 번도 돌지 않았다. 화면이 먼저 «넣을까요»를 묻는다. */
 export function boothItemsPending(exhId){
   const x = getExhibitorById(exhId);
-  if(!x || exhLocked()) return null;
+  if(!x || exhLocked() || isSharedBooth(x)) return null;
   const want = boothIncluded(x.event_id, x.booth_type);
   if(!want.length) return null;
   const had = itemsFor(exhId).filter(isBoothGiven);
@@ -5086,7 +5086,11 @@ export async function applyBoothItems(exhId, typeCode){
   const x = getExhibitorById(exhId);
   if(!x || exhLocked()) return;
 
-  const want = boothIncluded(x.event_id, typeCode);
+  /* 한 부스를 나눠 쓰는 쪽에는 깔지 않는다 — 부스에 딸려 오는 건 부스 하나에
+     하나씩이지 기업마다 하나씩이 아니다. 양쪽에 다 깔면 인포데스크가 두 개,
+     바스툴이 네 개로 발주된다. 대표로 신청한 쪽에만 두고, 나눠 쓰는 쪽에
+     이미 깔려 있던 것은 걷어낸다(공동으로 표시하기 전에 들어갔을 수 있다). */
+  const want = isSharedBooth(x) ? [] : boothIncluded(x.event_id, typeCode);
   const had = itemsFor(exhId).filter(isBoothGiven);
   // 같은 타입을 다시 고른 것뿐이면 그대로 둔다 — 지웠다 깔면 id가 바뀌어
   // 발주서·정산에서 같은 줄이 새 줄로 보인다
@@ -5149,8 +5153,13 @@ export async function toggleSharedBooth(id){
   const x = getExhibitorById(id);
   if(!x) return;
   const on = !isSharedBooth(x);
-  await patchExh(x, { booth_shared: on ? 'yes' : '' },
+  /* patchExh는 id를 받는다 — 객체를 넘기고 있어 getExhibitorById가 못 찾고
+     조용히 되돌아갔다. 공동 부스 표시가 눌러도 켜지지 않던 이유다. */
+  await patchExh(id, { booth_shared: on ? 'yes' : '' },
     on ? '공동 부스 — 부스 수 제외' : '공동 부스 해제');
+  /* 켜면 깔려 있던 기본 제공을 걷고, 끄면 다시 깐다 — 부스에 딸려 오는 건
+     부스 하나에 하나씩이라, 나눠 쓰는 쪽에 남아 있으면 두 배로 발주된다. */
+  await applyBoothItems(id, x.booth_type);
 }
 
 export function toggleExhFlag(id, flag, dateField, label){
