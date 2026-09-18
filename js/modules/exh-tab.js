@@ -5017,6 +5017,17 @@ export function boothIncluded(evKey, typeCode){
   }
 }
 
+/* 아직 안 깔린 기본 제공 — 부스 타입이 바뀔 때만 깔다 보니, 이미 부스가
+   정해져 있던 기업에는 한 번도 돌지 않았다. 화면이 먼저 «넣을까요»를 묻는다. */
+export function boothItemsPending(exhId){
+  const x = getExhibitorById(exhId);
+  if(!x || exhLocked()) return null;
+  const want = boothIncluded(x.event_id, x.booth_type);
+  if(!want.length) return null;
+  const had = itemsFor(exhId).filter(isBoothGiven);
+  return had.length ? null : { want, type: x.booth_type };
+}
+
 export async function applyBoothItems(exhId, typeCode){
   const x = getExhibitorById(exhId);
   if(!x || exhLocked()) return;

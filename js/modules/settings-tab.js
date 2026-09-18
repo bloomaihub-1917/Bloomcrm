@@ -1724,6 +1724,20 @@ export function editBoothInclLine(n, field, v){
   }
 }
 
+/* 이 행사 참가기업 전체에 한 번에 넣는다 — 부스 타입이 바뀔 때만 깔리니,
+   품목표를 나중에 적어 넣은 행사는 아무 기업에도 안 들어가 있다. */
+export async function applyBoothItemsToEvent(evKey){
+  const { exhibitorsForEvent } = await import('../state.js');
+  const { applyBoothItems, boothIncluded } = await import('./exh-tab.js');
+  const list = exhibitorsForEvent(evKey).filter(x => boothIncluded(evKey, x.booth_type).length);
+  if(!list.length){ alert('부스 타입이 정해진 참가기업이 없거나, 그 타입에 적어 둔 기본 제공 품목이 없어요.'); return; }
+  if(!confirm(`참가기업 ${list.length}곳에 부스 타입별 기본 제공 품목을 넣을까요?
+`
+    + '이미 들어가 있는 곳은 그대로 두고, 기업이 따로 신청한 비품도 건드리지 않아요.')) return;
+  for(const x of list) await applyBoothItems(x.id, x.booth_type);
+  alert(`참가기업 ${list.length}곳에 반영했어요.`);
+}
+
 export async function saveBoothIncluded(){
   if(!bInclRow) return;
   const clean = bInclLines
@@ -1827,6 +1841,7 @@ window.addBoothInclLine     = addBoothInclLine;
 window.delBoothInclLine     = delBoothInclLine;
 window.editBoothInclLine    = editBoothInclLine;
 window.saveBoothIncluded    = saveBoothIncluded;
+window.applyBoothItemsToEvent = applyBoothItemsToEvent;
 
 /* ══════════════════════════════════════════
    업로드 표기 → 카테고리 매핑 (code_lists.cat_alias)
@@ -2511,6 +2526,10 @@ function evBoothHtml(ev){
             onkeydown="if(event.key==='Enter')addEvCodeRow('${escAttr(key)}')"></div>
         <button class="btn bp" onclick="addEvCodeRow('${escAttr(key)}')" style="min-width:60px;height:36px">추가</button>
       </div>
+      ${key === 'booth_type' ? `<div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:11px;color:var(--i4);flex:1;min-width:160px">기본 제공 품목은 부스 타입을 <b>고칠 때</b> 들어갑니다 — 이미 부스가 정해진 기업에는 여기서 한 번에 넣으세요.</span>
+        <button class="btn bs" onclick="applyBoothItemsToEvent('${escAttr(ev.key)}')">참가기업 전체에 지금 반영</button>
+      </div>` : ''}
     </div>`;
   }).join('');
 }

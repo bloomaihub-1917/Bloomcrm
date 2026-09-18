@@ -574,7 +574,12 @@ function pgaSpeakers(ss, opts){
       const nm = speakerName(a.speaker_id);
       const org = sp ? (sp.org_ko || sp.org_en || '') : '';
       const jobTitle = sp ? (sp.title_ko || sp.title_en || '') : '';
-      const title = a.title_ko || a.title_en || '';
+      /* 발제명은 국·영문을 함께 보여준다. 프로그램북이 둘 다 싣고, 우리가
+         고르면 어느 쪽이 빠졌는지 화면에서 알 수 없다 — 하나만 있으면
+         그것만 나온다. */
+      const titleKo = a.title_ko || '';
+      const titleEn = a.title_en || '';
+      const title = titleKo || titleEn;
       const when = a.start_at ? timeLabel(a.start_at, a.end_at) : '';
       const roleC = (SPEAKER_ROLES.find(r => r.key === a.role) || {}).cls || 'p-gray';
 
@@ -589,8 +594,11 @@ function pgaSpeakers(ss, opts){
           line-height:1.5;white-space:nowrap;font-variant-numeric:tabular-nums">${escapeHtml(when)}</div>
         <div style="min-width:0;flex:1">
           ${title && !compact
-            ? `<div style="font-size:10px;color:var(--i1);line-height:1.4">${escapeHtml(title)}</div>
-               <div style="font-size:9.5px;line-height:1.4">${person}</div>`
+            ? `<div style="font-size:11.5px;font-weight:600;color:var(--i1);line-height:1.4">${
+                 escapeHtml(titleKo || titleEn)}</div>
+               ${titleKo && titleEn
+                 ? `<div style="font-size:10px;color:var(--i3);line-height:1.4">${escapeHtml(titleEn)}</div>` : ''}
+               <div style="font-size:9.5px;line-height:1.4;margin-top:1px">${person}</div>`
             : `<div style="font-size:9.5px;line-height:1.4">${person}</div>`}
         </div>
       </div>`;

@@ -60,7 +60,7 @@ import {
   isPendingRefund, boothTypeOptions, boothTypes, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
   TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing, introOver, boothDesignState,
   isSharedBooth, isBookOnly, baseKind, BASE_KINDS, bookName, fasciaName,
-  guardWrite, exhLocked, exhLockNotice, isBoothGiven, boothIncluded, applyBoothItems,
+  guardWrite, exhLocked, exhLockNotice, isBoothGiven, boothIncluded, applyBoothItems, boothItemsPending,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar, needsReissue,
   settleState, liveInvoices, payDueDate, paidBreakdown, invoiceGap,
 } from './exh-tab.js';
@@ -1492,6 +1492,19 @@ function dApply(x){
   const items = itemsFor(x.id).filter(i => (i.category || '') === 'equip');
   return `
   ${scopeBlock(x)}
+  ${(() => {
+    /* 부스에 딸려 오는 품목이 아직 안 들어간 기업 — 부스 타입이 바뀔 때만 깔다
+       보니, 이미 부스가 정해져 있던 기업은 통째로 비어 있다. 여기서 넣게 한다. */
+    const p = boothItemsPending(x.id);
+    return p ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;
+        background:var(--ad);border:1px solid var(--a);border-radius:8px;padding:8px 11px">
+      <span style="font-size:11.5px;color:var(--i2);flex:1;min-width:0">
+        <b>${escapeHtml(p.type)}</b>에 기본으로 딸려 오는 품목 ${p.want.length}건이 아직 안 들어갔어요 —
+        ${escapeHtml(p.want.map(o => [o.code, o.name].filter(Boolean).join(' ')).join(', '))}</span>
+      <button class="btn bp bs" style="flex:0 0 auto"
+        onclick="applyBoothItems('${escAttr(x.id)}','${escAttr(x.booth_type || '')}')">지금 넣기</button>
+    </div>` : '';
+  })()}
   ${appsSection(x)}
 
   ${sct('신청서',
