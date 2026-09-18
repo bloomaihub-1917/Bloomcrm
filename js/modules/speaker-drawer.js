@@ -32,6 +32,7 @@ import {
   saveSpeakerLog, sendMail,
 } from '../api.js';
 import { trackAction, changed, removed } from './audit-tab.js';
+import { patchContact } from './db-tab.js';
 import { confLocked, confLockNotice, renderConf, buildConfEvList } from './conf-tab.js';
 
 let spId = null;
@@ -340,9 +341,13 @@ function basicHtml(sp, con, evKey){
           ${escapeHtml([con.orgKo, con.titleKo].filter(Boolean).join(' · ') || '(소속·직함 없음)')}</div>
         ${con.orgEn || con.titleEn ? `<div style="font-size:10.5px;color:var(--i4)">${escapeHtml([con.orgEn, con.titleEn].filter(Boolean).join(' · '))}</div>` : ''}
         <div style="font-size:10.5px;color:var(--i4);margin-top:3px">${escapeHtml(con.email1 || '')}</div>
-        ${diff.length ? `<div style="font-size:10.5px;color:var(--am);margin-top:5px">
-          마스터DB의 ${escapeHtml(diff.join('·'))}이 아래와 달라요 — 이직했다면 그대로 두세요</div>` : ''}
-        <div style="display:flex;gap:6px;margin-top:7px">
+        ${diff.length ? `<div style="font-size:10.5px;color:var(--am);margin-top:5px;line-height:1.6">
+          마스터DB의 ${escapeHtml(diff.join('·'))}이 아래와 달라요.
+          <br>연사 자료를 새로 받아 고친 것이면 <b>마스터DB로 보내기</b>,
+          그 사람이 이직해 발표 당시 소속만 남겨야 하면 그대로 두세요.</div>` : ''}
+        <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">
+          <button class="btn" style="font-size:10.5px" onclick="pushSpeakerProfile()"
+            title="여기서 고친 소속·직함을 마스터DB 연락처에 반영합니다 — 기업DB도 새 소속으로 묶여요">마스터DB로 보내기</button>
           <button class="btn" style="font-size:10.5px" onclick="pullSpeakerProfile()">연락처에서 끌어오기</button>
           <button class="btn" style="font-size:10.5px" onclick="unlinkSpeakerContact()">연결 끊기</button>
         </div>
@@ -486,6 +491,54 @@ export async function pullSpeakerProfile(){
     .join('\n');
   if(!confirm(`연락처의 값으로 덮을까요?\n\n${lines}`)) return;
   await patchSpeaker(patch, '연락처에서 소속·직함 끌어옴');
+}
+
+/* 여기서 고친 소속·직함을 마스터DB로 보낸다.
+
+   스냅숏은 «발표 당시»를 굳히려고 둔 것이지만, 연사 자료를 받아 고치는
+   시점에는 그게 곧 «지금»이다. 그때 마스터DB가 옛 값으로 남으면 마스터DB가
+   틀린 값을 들고 있게 되고, 기업DB에는 그 회사가 아예 안 생긴다.
+
+   자동으로 흘려보내지 않는다 — 프로그램북 표기를 일부러 다르게 둔 경우가
+   있어서다(영문 표기 정리, 구 사명 유지). 무엇이 어떻게 바뀌는지 보여주고
+   사람이 누른다. */
+export async function pushSpeakerProfile(){
+  const sp = getSpeakerById(spId);
+  const c = sp && sp.contact_id ? contacts.find(x => String(x.id) === String(sp.contact_id)) : null;
+  if(!sp) return;
+  if(!c){
+    alert('연락처가 연결되지 않아 보낼 곳이 없어요.\n위에서 연락처를 찾아 연결해주세요.');
+    return;
+  }
+  const MAP = [
+    ['orgKo',   'org_ko',   '소속 국문'],
+    ['orgEn',   'org_en',   '소속 영문'],
+    ['titleKo', 'title_ko', '직함 국문'],
+    ['titleEn', 'title_en', '직함 영문'],
+  ];
+  const patch = {};
+  const lines = [];
+  MAP.forEach(([cf, sf, label]) => {
+    const v = String(sp[sf] ?? '').trim();
+    /* 연사 쪽이 빈 칸이면 보내지 않는다 — 안 받은 값으로 마스터DB를 지우면
+       원래 있던 정보가 사라진다. */
+    if(!v || String(c[cf] ?? '').trim() === v) return;
+    patch[cf] = v;
+    lines.push(`${label}: ${c[cf] || '(비어 있음)'} → ${v}`);
+  });
+  if(!lines.length){ alert('마스터DB와 이미 같아요.'); return; }
+
+  const orgChanging = 'orgKo' in patch || 'orgEn' in patch;
+  if(!confirm(`마스터DB의 «${c.nameKo || c.nameEn || c.id}»을 이렇게 고칠까요?\n\n${lines.join('\n')}`
+    + (orgChanging ? '\n\n기업DB도 새 소속으로 묶입니다. 그 기업이 없으면 만들어요.' : '')
+    + '\n\n연사 쪽 값은 그대로 남습니다(발표 당시 소속).')) return;
+
+  const res = await patchContact(c, patch, '연사 자료로 연락처 수정');
+  if(!res || res.ok === false){ alert('마스터DB에 반영하지 못했어요.'); return; }
+  trackAction('edit', '연락처(연사 자료 반영)', sp.event_id,
+    `${c.nameKo || c.nameEn || c.id} — ${lines.join(' · ')}`);
+  renderSpeakerDr();
+  alert('마스터DB에 반영했어요.');
 }
 
 export async function unlinkSpeakerContact(){
@@ -1183,6 +1236,7 @@ window.searchSpeakerContact = searchSpeakerContact;
 window.linkSpeakerContact   = linkSpeakerContact;
 window.unlinkSpeakerContact = unlinkSpeakerContact;
 window.pullSpeakerProfile   = pullSpeakerProfile;
+window.pushSpeakerProfile   = pushSpeakerProfile;
 window.renderSpeakerDr      = renderSpeakerDr;
 window.addSpeakerContact    = addSpeakerContact;
 window.scField              = scField;

@@ -76,6 +76,50 @@ function contactCountryText(c){
   return `${countryName(nat)}(${countryName(res)})`;
 }
 
+/* 연락처 한 줄을 고쳐 저장한다 — 다른 탭도 쓴다.
+
+   연락처는 칸이 스물세 개인데, 저장하는 자리마다 그 배열을 각자 조립하고
+   있었다. 위치 배열은 안 보낸 칸을 비우므로 한 칸만 빠뜨려도 값이 지워진다 —
+   실제로 org_id가 일곱 군데에서 지워지고 있었다. 그래서 여기 하나로 모은다.
+
+   소속을 고치면 기업 연결(org_id)도 새 소속을 따라가야 한다. 안 그러면
+   화면에는 새 회사 이름이 뜨는데 기업DB에서는 옛 회사에 매달려 있게 되고,
+   기업DB에는 그 회사가 아예 안 생긴다. */
+export async function patchContact(c, patch, label){
+  if(!c) return { ok: false };
+  const backup = {};
+  Object.keys(patch).forEach(k => { backup[k] = c[k]; });
+  const prevOrgId = c.org_id;
+  Object.assign(c, patch);
+
+  /* 새 소속 이름이 기업DB에 없으면 만들고 묶는다 */
+  if(patch.orgKo || patch.orgEn){
+    const nm = (patch.orgKo || patch.orgEn || '').trim();
+    if(nm){
+      try {
+        await ensureOrgsForNames([nm]);
+        const oid = orgIdForName(nm);
+        if(oid) c.org_id = oid;
+      } catch(e){ console.warn('[db-tab] 기업 재연결 실패:', e); }
+    }
+  }
+
+  const r = await postToSheet({
+    sheet: 'contacts', action: 'upsert',
+    row: [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
+      c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
+      c.beat, c.products, c.tags || '', c.org_id || ''],
+  }, label || '연락처 수정');
+  if(!r.ok){
+    Object.assign(c, backup);
+    c.org_id = prevOrgId;
+    return r;
+  }
+  try { buildCoDB(); } catch(e){}
+  try { renderMDB(); } catch(e){}
+  return r;
+}
+
 const ctryPill = (c) => {
   const r = ctryCheck(c);
   if(!r) return '';
