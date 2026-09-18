@@ -1057,8 +1057,46 @@ function dContactTab(x){
 ══════════════════════════════════════════ */
 
 /* 버튼 문구는 받침에 따라 조사가 달라 함께 적어 둔다 — "유선로"가 된다 */
+/* ── 정산 경고 덮어 두기 ──
+
+   «추가 발행 필요»와 «인보이스 발행 뒤 변경»은 대개 맞는 말이지만, 우리가 낼
+   장이 아닌 경우가 실제로 있다. 그때마다 빨간 줄이 남으면 진짜 미발행 건이 묻힌다.
+
+   지우지 않고 «그 숫자를 보고 넘어갔다»를 적어 둔다. 확인한 시점의 숫자를 함께
+   담아, 그 뒤 금액이나 접수가 또 바뀌면 값이 달라져 경고가 스스로 되살아난다 —
+   한 번 끄면 영영 안 보이는 표시는 실제와 어긋나도 알 길이 없다. */
+const gapAckToken = (g) => `${g.mine}|${g.net}|${g.cur}`;
+const reissueAckToken = (r) => `${r.last}|${r.apps.map(a => a.id).sort().join(',')}`;
+
+const ackedNote = (x, which, label) => `<div style="display:flex;align-items:center;gap:7px;margin-bottom:10px;
+    background:var(--i9);border:1px solid var(--i7);border-radius:8px;padding:7px 11px">
+  <span class="pill p-gray">확인함</span>
+  <span style="font-size:11px;color:var(--i4)">${escapeHtml(label)} — 보고 넘어간 건이에요. 금액이나 접수가 또 바뀌면 다시 알려드려요.</span>
+  <button class="btn bs" style="margin-left:auto;font-size:11px"
+    onclick="unackExhAlert('${escAttr(x.id)}','${which}')">되돌리기</button></div>`;
+
+export function ackExhAlert(exhId, which){
+  const x = getExhibitorById(exhId);
+  if(!x) return;
+  const token = which === 'gap'
+    ? (() => { const g = invoiceGap(exhId); return g ? gapAckToken(g) : ''; })()
+    : (() => { const r = needsReissue(exhId); return r ? reissueAckToken(r) : ''; })();
+  if(!token) return;
+  patchExh(exhId, { [which === 'gap' ? 'gap_ack' : 'reissue_ack']: token },
+    which === 'gap' ? '추가 발행 알림 확인' : '재발행 알림 확인');
+}
+export function unackExhAlert(exhId, which){
+  patchExh(exhId, { [which === 'gap' ? 'gap_ack' : 'reissue_ack']: '' }, '알림 되돌리기');
+}
+
+/* 접수 경로 — 엑스렌탈은 성격이 다르다. 나머지는 «우리한테 이렇게 들어왔다»인데
+   엑스렌탈은 «우리를 거치지 않고 거기서 직접 받아 결제까지 끝났다»는 뜻이다.
+   돈은 우리 입금으로 잡되(카드 결제와 같다), 인보이스는 엑스렌탈이 발행하므로
+   우리가 한 장 더 낼 이유가 없다 — 정산 경고가 그걸 알아야 한다. */
+export const EXRENTAL_CHANNEL = '엑스렌탈';
 const APP_CHANNELS = [['신청서', '신청서로 접수'], ['메일', '메일로 접수'],
-  ['유선', '유선으로 접수'], ['현장', '현장에서 접수']];
+  ['유선', '유선으로 접수'], ['현장', '현장에서 접수'],
+  [EXRENTAL_CHANNEL, '엑스렌탈로 접수']];
 const APP_KINDS    = ['최초', '변경', '취소'];
 
 /* 접수를 한 줄 연다. 첫 줄이면 최초, 아니면 변경으로 시작한다. */
@@ -1188,7 +1226,11 @@ function appsSection(x){
     return `<div style="border:1px solid ${live ? 'var(--a)' : 'var(--i7)'};border-radius:8px;padding:9px 10px;margin-bottom:6px;background:${live ? 'var(--ad)' : 'var(--W)'}">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
         <span class="pill ${a.kind === '최초' ? 'p-blue' : a.kind === '취소' ? 'p-red' : 'p-amber'}">${escapeHtml(a.seq)}차 · ${escapeHtml(a.kind || '')}</span>
-        <span class="pill p-gray">${escapeHtml(a.channel || '')}</span>
+        <select class="fi" style="width:auto;font-size:11px;padding:3px 6px"
+          title="접수 경로 — 엑스렌탈은 거기서 직접 청구·수금한 건이에요"
+          onchange="setAppField('${escAttr(a.id)}','channel',this.value)">${
+          APP_CHANNELS.map(([c]) => `<option value="${escAttr(c)}"${(a.channel || '') === c ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}${
+          APP_CHANNELS.some(([c]) => c === (a.channel || '')) ? '' : `<option value="${escAttr(a.channel || '')}" selected>${escapeHtml(a.channel || '')}</option>`}</select>
         <input type="date" class="fi" style="width:132px;font-size:11px" value="${escAttr(a.received_at || '')}"
           onchange="setAppField('${escAttr(a.id)}','received_at',this.value)">
         ${live ? '<span class="pill p-amber">반영 중</span>'
@@ -1871,6 +1913,8 @@ function dBilling(x){
     const edited = itemsFor(x.id).filter(i => String(i.edited_at || '').trim() && !isVoided(i));
     if(!sent.length || !gap || !gap.diff) return '';
     const more = gap.diff > 0;
+    // 확인한 시점의 숫자와 지금이 같으면 덮어 둔다 — 또 바뀌면 스스로 되살아난다
+    if(String(x.gap_ack || '') === gapAckToken(gap)) return ackedNote(x, 'gap', '추가 발행 필요');
     return `<div class="uc" style="border-left:3px solid var(--${more ? 're' : 'am'});margin-bottom:10px">
       <div style="font-size:12px;font-weight:700;color:var(--${more ? 're' : 'am'})">${
         more ? '추가 발행 필요' : '발행액이 청구액보다 많아요'} ${escapeHtml(fmtMoney(Math.abs(gap.diff), gap.cur))}</div>
@@ -1881,14 +1925,20 @@ function dBilling(x){
           escapeHtml(fmtMoney(gap.net, gap.cur))}</b>` : ''}${
         edited.length ? ` — 정산에서 직접 고친 항목 ${edited.length}건이 있어요` : ''}
       </div>
+      ${gap.external ? `<div style="font-size:10.5px;color:var(--i4);margin-top:4px">
+        엑스렌탈 직접 청구 <b>${escapeHtml(fmtMoney(gap.external, gap.cur))}</b>은 우리가 낼 장에서 이미 뺐어요.</div>` : ''}
       <div style="font-size:10.5px;color:var(--i4);margin-top:4px">${
         more ? '차액만큼 한 장 더 발행하면 이 알림은 사라져요 — 아래 인보이스에서 발행하세요.'
              : '옛 인보이스를 무효로 두거나, 금액 항목이 빠지지 않았는지 보세요.'}</div>
+      <div style="margin-top:6px;text-align:right">
+        <button class="btn bs" onclick="ackExhAlert('${escAttr(x.id)}','gap')"
+          title="우리가 낼 장이 아니면 덮어 두세요 — 금액이 또 바뀌면 다시 알려드려요">확인함 · 이 알림 끄기</button></div>
     </div>`;
   })()}
 
   ${(() => {
     const r = needsReissue(x.id);
+    if(r && String(x.reissue_ack || '') === reissueAckToken(r)) return ackedNote(x, 'reissue', '인보이스 발행 뒤 변경');
     return r ? `<div class="uc" style="border-left:3px solid var(--re);margin-bottom:10px">
       <div style="font-size:12px;font-weight:700;color:var(--re)">인보이스 발행 뒤에 신청이 바뀌었어요</div>
       <div style="font-size:11px;color:var(--i3);margin-top:4px">
@@ -1896,6 +1946,9 @@ function dBilling(x){
         ${r.apps.map(a => escapeHtml(`${a.seq}차 ${a.received_at}${a.reason ? ' (' + a.reason + ')' : ''}`)).join(' · ')}
       </div>
       <div style="font-size:10.5px;color:var(--i4);margin-top:4px">청구액이 맞는지 보고, 다르면 옛 인보이스를 무효로 두고 다시 발행하세요.</div>
+      <div style="margin-top:6px;text-align:right">
+        <button class="btn bs" onclick="ackExhAlert('${escAttr(x.id)}','reissue')"
+          title="다시 낼 장이 없으면 덮어 두세요 — 접수가 또 들어오면 다시 알려드려요">확인함 · 이 알림 끄기</button></div>
     </div>` : '';
   })()}
 
@@ -3088,6 +3141,8 @@ window.openExhDr = openExhDr;
 window.closeExhDr = closeExhDr;
 window.switchExhDT = switchExhDT;
 window.openOrgFromExh = openOrgFromExh;
+window.ackExhAlert = ackExhAlert;
+window.unackExhAlert = unackExhAlert;
 window.openNewContact = openNewContact;
 window.closeNewContact = closeNewContact;
 window.submitNewContact = submitNewContact;

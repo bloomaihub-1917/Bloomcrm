@@ -215,11 +215,26 @@ export function billableItems(exhId){ return liveItemsFor(exhId).filter(isBillab
    신청이 바뀌면 청구액도 바뀌는데, 인보이스는 이미 나가 있다. 이걸 놓치면
    받을 돈과 청구한 돈이 갈린 채로 행사가 끝난다. 마지막 유효 인보이스보다
    늦게 반영된 접수가 있으면 알린다. */
+export const EXRENTAL_CHANNEL = '엑스렌탈';
+export const isExrentalApp = (a) => String(a?.channel || '') === EXRENTAL_CHANNEL;
+
+/* 엑스렌탈로 접수된 회차에 달린 금액 — 거기서 직접 청구·수금한 몫이다.
+   돈은 우리 입금으로 잡지만(카드 결제와 같다) 인보이스는 엑스렌탈이 낸다.
+   그래서 «우리가 발행해야 할 금액»에서만 뺀다 — 청구액에서 빼면 입금과
+   어긋나 이번엔 «초과 입금»이 뜬다. */
+export function exrentalBilled(exhId){
+  const ids = new Set(appsFor(exhId).filter(isExrentalApp).map(a => a.id));
+  if(!ids.size) return 0;
+  const cur = currencyOf(exhId);
+  return sumIn(billableItems(exhId).filter(i => ids.has(String(i.app_id || ''))), cur);
+}
+
 export function needsReissue(exhId){
   const inv = liveInvoices(exhId).map(i => i.sent_at || i.created_at || '').filter(Boolean).sort();
   if(!inv.length) return null;
   const last = inv[inv.length - 1];
-  const after = appsFor(exhId).filter(a => a.kind !== '최초'
+  // 엑스렌탈 회차는 우리가 다시 낼 인보이스가 없다 — 재발행 사유가 아니다
+  const after = appsFor(exhId).filter(a => a.kind !== '최초' && !isExrentalApp(a)
     && String(a.received_at || '') > last);
   return after.length ? { last, apps: after } : null;
 }
@@ -249,7 +264,12 @@ export function invoiceGap(exhId){
      돈이 아니라서 세지 않는다. */
   const refunded = sumIn(paymentsFor(exhId).filter(hasAmount).filter(isDoneRefund), cur);
   const net = invoiced - refunded;
-  return net === billed ? null : { invoiced, refunded, net, billed, diff: billed - net, cur };
+  /* 엑스렌탈이 직접 발행한 몫은 우리가 낼 장에서 뺀다 — 안 빼면 그 기업은
+     정산이 다 맞은 뒤에도 «추가 발행 필요»가 영영 남는다. */
+  const external = exrentalBilled(exhId);
+  const mine = billed - external;
+  return net === mine ? null
+    : { invoiced, refunded, net, billed, external, mine, diff: mine - net, cur };
 }
 /* ── 분류별 청구액 (부스 / 비품 / 그래픽 / 기타) ──
 

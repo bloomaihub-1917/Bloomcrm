@@ -1023,3 +1023,8 @@ ALTER TABLE code_lists ADD COLUMN IF NOT EXISTS included TEXT;
    부스를 바꿀 때 깔아 준 것만 갈아끼우고, 기업이 자체로 신청한 추가 비품은
    그대로 둔다. 구분이 없으면 부스 한 번 바꿀 때마다 신청 내역이 날아간다. */
 ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS origin TEXT;
+
+/* 정산 경고를 «확인함»으로 덮어 둔 표시 — 확인한 시점의 숫자를 함께 담는다.
+   그 뒤 금액이나 접수가 또 바뀌면 값이 달라져 경고가 스스로 되살아난다. */
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS gap_ack TEXT;
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS reissue_ack TEXT;
