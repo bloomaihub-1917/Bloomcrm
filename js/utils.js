@@ -59,8 +59,14 @@ export function safeUrl(v){
      우리가 정할 수 없다. 억지로 링크를 걸면 눌러도 안 열리는데 눌러보기
      전에는 모른다 — 차라리 글자로 두고 사람이 고치게 한다. */
   if(/\s/.test(t)) return '';
-  if(t.startsWith('//')) return 'https:' + t;   // //example.com 꼴
-  return 'https://' + t;
+  if(t.startsWith('//')) return 'http:' + t;   // //example.com 꼴
+  /* 스킴이 없는 주소에는 https가 아니라 http를 붙인다.
+
+     rodjet.co.kr은 443을 열어두지 않았다 — https로 가면 연결 자체가 안 되고,
+     그런 회사가 명단에 적지 않게 있다. 반대로 https만 받는 곳은 http로
+     두드려도 서버가 https로 넘겨준다 — 한쪽은 막히고 한쪽은 알아서 올라간다면
+     열리는 쪽으로 붙인다. */
+  return 'http://' + t;
 }
 
 /* 한 칸에 여러 주소가 적힌 것을 쪼갠다.

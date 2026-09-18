@@ -564,22 +564,34 @@ function pgaSpeakers(ss, opts){
   if(!asg.length) return '';
   const compact = opts && opts.compact;
 
+  /* 시각을 맨 앞 한 줄로 세운다. 프로그램표에서 눈이 먼저 찾는 건 «몇 시»고,
+     그게 줄 끝에 있으면 발표마다 다른 자리에 있어 훑을 수가 없다.
+     그 옆이 발제명 — 무엇을 하는지가 다음 질문이다.
+     사람은 그 아래 — 누가 하는지는 무엇을 하는지 다음에 온다. */
   return `<div style="margin-top:5px;border-top:1px solid var(--i7);padding-top:4px">
     ${asg.map(a => {
       const sp = getSpeakerById(a.speaker_id);
       const nm = speakerName(a.speaker_id);
-      /* 소속은 이름 옆에 작게. 같은 이름이 둘일 때 이걸로 가른다 */
       const org = sp ? (sp.org_ko || sp.org_en || '') : '';
+      const jobTitle = sp ? (sp.title_ko || sp.title_en || '') : '';
       const title = a.title_ko || a.title_en || '';
       const when = a.start_at ? timeLabel(a.start_at, a.end_at) : '';
       const roleC = (SPEAKER_ROLES.find(r => r.key === a.role) || {}).cls || 'p-gray';
-      return `<div style="display:flex;gap:5px;align-items:baseline;margin-top:3px">
-        <span class="pill ${roleC}" style="font-size:8.5px;flex:0 0 auto;padding:1px 4px">${escapeHtml(a.role || '')}</span>
+
+      const person = `<span class="pill ${roleC}" style="font-size:8.5px;padding:1px 4px;vertical-align:1px">${
+          escapeHtml(a.role || '')}</span>
+        <span style="color:var(--i2)"> ${escapeHtml(nm)}</span>${
+        jobTitle ? `<span style="color:var(--i4)"> · ${escapeHtml(jobTitle)}</span>` : ''}${
+        org ? `<span style="color:var(--i4)"> · ${escapeHtml(org)}</span>` : ''}`;
+
+      return `<div style="display:flex;gap:7px;margin-top:4px">
+        <div style="flex:0 0 auto;min-width:62px;font-size:9.5px;color:var(--i3);
+          line-height:1.5;white-space:nowrap;font-variant-numeric:tabular-nums">${escapeHtml(when)}</div>
         <div style="min-width:0;flex:1">
-          <div style="font-size:10px;color:var(--i2);line-height:1.35">
-            ${escapeHtml(nm)}${org ? `<span style="color:var(--i4)"> · ${escapeHtml(org)}</span>` : ''}${
-            when ? `<span style="color:var(--i4)"> · ${escapeHtml(when)}</span>` : ''}</div>
-          ${title && !compact ? `<div style="font-size:9.5px;color:var(--i4);line-height:1.35">${escapeHtml(title)}</div>` : ''}
+          ${title && !compact
+            ? `<div style="font-size:10px;color:var(--i1);line-height:1.4">${escapeHtml(title)}</div>
+               <div style="font-size:9.5px;line-height:1.4">${person}</div>`
+            : `<div style="font-size:9.5px;line-height:1.4">${person}</div>`}
         </div>
       </div>`;
     }).join('')}
