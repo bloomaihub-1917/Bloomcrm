@@ -2096,9 +2096,9 @@ function renderEquipView(list){
   const totExtra = groups.reduce((a, g) => a + g.qtyExtra, 0);
   const pills = `<span class="pill p-gray">신청 기업 ${rows.length}</span>`
     + `<span class="pill p-blue">품목 ${groups.length}종</span>`
-    + `<span class="pill p-gray">총 ${totQty}개</span>`
-    + (totBase ? `<span class="pill p-teal" title="부스 타입에 딸려 오는 기본 제공 품목이에요">기본 ${totBase}개</span>` : '')
-    + (totExtra ? `<span class="pill p-blue" title="기업이 따로 신청한 추가 비품이에요 — 청구 대상입니다">추가 ${totExtra}개</span>` : '')
+    + `<span class="pill p-gray" title="기본 제공과 추가 신청을 합친 발주 수량이에요">전체 ${totQty}개</span>`
+    + `<span class="pill p-teal" title="부스 타입에 딸려 오는 기본 제공 품목 — 우리가 청구하지 않아요">기본 ${totBase}개 · 청구 안함</span>`
+    + `<span class="pill p-blue" title="기업이 따로 신청한 비품 — 청구 대상이에요">추가비품 ${totExtra}개 · 별도 신청</span>`
     + (totKrw ? `<span class="pill p-gray">${fmtMoney(totKrw, 'KRW')}</span>` : '')
     + (totUsd ? `<span class="pill p-gray">${fmtMoney(totUsd, 'USD')}</span>` : '')
     + (offN ? `<span class="pill p-amber" title="카탈로그에 없는 품목 — 그래픽·전기처럼 다른 분류일 수 있어요">카탈로그 외 ${offN}종</span>` : '')
@@ -2166,9 +2166,9 @@ function renderEquipView(list){
         <th style="min-width:150px">품명(국문)</th>
         <th style="min-width:150px">품명(영문)</th>
         <th style="min-width:110px">규격</th>
-        <th style="min-width:56px;text-align:right">수량</th>
-        <th style="min-width:52px;text-align:right" title="부스 타입에 딸려 오는 기본 제공 품목">기본</th>
-        <th style="min-width:52px;text-align:right" title="기업이 따로 신청한 추가 비품 — 청구 대상">추가</th>
+        <th style="min-width:56px;text-align:right" title="기본 + 추가 — 발주 수량이에요">전체</th>
+        <th style="min-width:52px;text-align:right" title="부스 타입에 딸려 오는 기본 제공 — 청구하지 않아요">기본</th>
+        <th style="min-width:52px;text-align:right" title="기업이 따로 신청한 추가 비품 — 청구 대상이에요">추가</th>
         <th style="min-width:62px;text-align:right">기업</th>
         <th style="min-width:104px;text-align:right">KRW</th>
         <th style="min-width:88px;text-align:right">USD</th>
@@ -2249,7 +2249,18 @@ function renderEquipView(list){
   const actions = `<button class="btn bs" id="exh-export-btn" onclick="exportEquipLedger()"
       title="쓰던 「비품 신청 종합관리대장」 형식(품목표 + 기업×코드 교차표)으로 받습니다">엑셀 내보내기</button>`
     + `<button class="btn bp bs" onclick="openNewCatalogItem()">+ 품목 추가</button>`;
-  return viewShell(pills, summary + `<div class="sct">기업별 신청 내역</div>` + detail, actions);
+
+  /* 부스 기본 품목이 아직 안 깔린 기업 — 발주 수량이 그만큼 모자란 채로 보인다.
+     여기가 그 숫자를 보는 자리라, 모자란 걸 여기서 바로 채울 수 있어야 한다. */
+  const pend = activeExhibitors(exhEvent).filter(x => boothItemsPending(x.id));
+  const pendNote = pend.length ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+      background:var(--ad);border:1px solid var(--a);border-radius:8px;padding:8px 11px;margin-bottom:12px">
+    <span style="font-size:11.5px;color:var(--i2);flex:1;min-width:180px">
+      부스 기본 제공 품목이 아직 안 들어간 기업이 <b>${pend.length}곳</b> 있어요 — 그만큼 발주 수량이 모자랍니다.</span>
+    <button class="btn bp bs" style="flex:0 0 auto" onclick="applyBoothItemsToEvent('${escAttr(exhEvent || '')}')">${pend.length}곳에 한 번에 넣기</button>
+  </div>` : '';
+
+  return viewShell(pills, pendNote + summary + `<div class="sct">기업별 신청 내역</div>` + detail, actions);
 }
 
 /* ── 그래픽 현황 ──
