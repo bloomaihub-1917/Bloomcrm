@@ -131,7 +131,42 @@ const SPONSOR_GRADES = {
   SILVER: { label: 'SILVER', cls: 'g-silver' },
   BRONZE: { label: 'BRONZE', cls: 'g-bronze' },
 };
-const sponsorOf = (x) => SPONSOR_GRADES[String(x.grade || '').trim().toUpperCase()] || null;
+
+/* 등급은 행사마다 새로 생긴다 — 2026 KIC에 Strategic Intelligence가 붙은 것처럼.
+   네 개를 코드에 박아 두니 새 등급이 «스폰서 아님»으로 떨어져, 스폰서 블록
+   한가운데에 Exhibitors 머리글이 찍히고 배지도 안 달렸다. 설정에서 만든 등급
+   목록(code_lists.grade)을 그대로 읽는다.
+
+   무엇이 스폰서인가는 목록에 있느냐로 정한다 — Exhibitor만 등급 칸에 있을 뿐
+   스폰서가 아닌 일반 참가기업이라 따로 뺀다. 배지 색은 아는 등급은 쓰던 색을
+   쓰고, 새로 생긴 등급은 공통 색(g-other)으로 낸다. 색을 고르자고 새 등급이
+   배지 없이 나가는 편이 더 나쁘다. */
+const PLAIN_GRADE = 'EXHIBITOR';
+
+async function gradeMap(eventId) {
+  const { rows } = await pool.query(
+    `SELECT event_id, code, label FROM code_lists
+      WHERE list_key = 'grade' AND COALESCE(active, '') <> 'no'`);
+  const mine = rows.filter((r) => r.event_id === eventId);
+  const use = mine.length ? mine : rows.filter((r) => !r.event_id);
+  const map = new Map();
+  use.forEach((r) => {
+    const key = String(r.code || '').trim().toUpperCase();
+    if (!key || key === PLAIN_GRADE) return;
+    const known = SPONSOR_GRADES[key];
+    map.set(key, known || { label: String(r.label || r.code).toUpperCase(), cls: 'g-other' });
+  });
+  // 설정에 등급 목록이 아직 없는 행사는 쓰던 네 개로 버틴다
+  if (!map.size) Object.entries(SPONSOR_GRADES).forEach(([k, v]) => map.set(k, v));
+  return map;
+}
+
+const sponsorWith = (grades) => (x) =>
+  grades.get(String(x.grade || '').trim().toUpperCase()) || null;
+
+/* 판정은 한 번만 하고 행에 실어 둔다 — 카드·머리글·JSON이 따로 판정하면
+   한 곳만 고쳤을 때 배지와 그룹이 어긋난다. */
+const sponsorOf = (x) => x.sponsor_badge || null;
 
 /* 슬러그로 행사를 찾고 그 행사의 게재 대상을 읽는다.
    취소된 기업은 뺀다 — 인쇄물에서도 빠진 자리다. */
@@ -176,6 +211,9 @@ async function loadDirectory(slug) {
         AND COALESCE(x.company_name, '') <> ''`,
     [event.id]);
 
+  const grades = await gradeMap(event.id);
+  const mark = sponsorWith(grades);
+  rows.forEach((x) => { x.sponsor_badge = mark(x); });
   return { slug: want, event, list: rows.sort(bookSort) };
 }
 
@@ -314,10 +352,17 @@ function listHtml(list, slug) {
   const out = [];
   let seenSponsor = false;
   let seenPlain = false;
-  list.forEach((x) => {
+  /* 머리글은 마지막 스폰서를 지나서야 넘긴다. 스폰서 사이에 등급 없는 기업이
+     한 곳이라도 끼면(도록 순번은 등급 순이 아니다) 그 자리에서 Exhibitors가
+     찍혀 스폰서 블록이 반으로 갈렸다 — 뒤따르는 GOLD·BRONZE가 «일반 참가기업»
+     아래에 놓인다. 순번 자체는 그대로 둔다(인쇄물과 맞춰야 한다). */
+  let lastSponsor = -1;
+  list.forEach((x, i) => { if (sponsorOf(x)) lastSponsor = i; });
+
+  list.forEach((x, i) => {
     if (sponsorOf(x)) {
       if (!seenSponsor) { out.push('<h2 class="sec">Sponsors</h2>'); seenSponsor = true; }
-    } else if (!seenPlain) {
+    } else if (!seenPlain && i > lastSponsor) {
       out.push(`<h2 class="sec">${seenSponsor ? 'Exhibitors' : 'All Exhibitors'}</h2>`);
       seenPlain = true;
     }
@@ -429,6 +474,7 @@ function page({ slug, event, list }) {
   .g-gold   { --gc:#a16207; --gbg:#fef3c7; --gline:#fde68a; }
   .g-silver { --gc:#475569; --gbg:#e2e8f0; --gline:#cbd5e1; }
   .g-bronze { --gc:#9a3412; --gbg:#ffedd5; --gline:#fed7aa; }
+  .g-other  { --gc:#3730a3; --gbg:#e0e7ff; --gline:#c7d2fe; }
   .no { color:var(--dim); font-size:12px; font-variant-numeric:tabular-nums; }
   .booth { padding:2px 8px; border-radius:999px;
     background:var(--chip); color:var(--accent); font-size:12px; white-space:nowrap; }
