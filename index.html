@@ -168,7 +168,6 @@
     <div class="sbp" id="sbp-co">
       <div class="sbs s-q"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">기업 검색</div></div>
       <div class="sb-srch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" placeholder="기업명·옛 이름 검색…" oninput="searchCo(this.value)" id="co-si"></div>
-      <button class="btn bp" style="width:100%;margin-top:7px;font-size:11.5px;justify-content:center" onclick="openAddOrgModal()">+ 기업 추가</button>
       </div>
       <div class="sbs s-c"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">기업 섹터</div></div>
       <div class="sbi" id="co-catf"></div></div>
@@ -382,11 +381,10 @@
               </div>
               <div>
                 <div class="mlbl">기업 유형 <span style="font-size:9px;color:var(--i4)">새로 등록되는 기업</span></div>
+                <!-- 목록은 설정 › 선택 목록 › 기업 종류에서 관리한다.
+                     populateUploadEvDropdown()이 ORG_KINDS로 채운다. -->
                 <select class="fi" id="up-kind">
                   <option value="">잠재고객사 (기본)</option>
-                  <option value="벤더시공사">벤더시공사 (셀러)</option>
-                  <option value="잠재고객사">잠재고객사 (바이어)</option>
-                  <option value="전시참가기업">전시참가기업</option>
                 </select>
               </div>
             </div>

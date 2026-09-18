@@ -47,7 +47,8 @@ import {
 import { CP, CL, RP, CAT_KEYS, ROLE_TO_CAT, COUNTRIES, avB, avF } from '../constants.js';
 import { td, ab, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseSectorScope, parseTags, joinTags, isMobile, cleanEmail, personName, personFullName, leftPill, slugifySectorName } from '../utils.js';
 import { postToSheet, upsertSectorRow } from '../api.js';
-import { buildCoDB, ensureOrgsForNames, orgIdForName, applyCoSectors } from './company-tab.js';
+import { buildCoDB, ensureOrgsForNames, orgIdForName, applyCoSectors,
+  coDomainOptionsHtml, coSectorOptionsHtml, currentCoSectorPick } from './company-tab.js';
 import { domainOfSector, domainName, findSectorByName, mainSectors, UNASSIGNED_DOMAIN } from './settings-tab.js';
 /* removed는 removeParticipation 안의 지역 변수와 이름이 겹친다 — 별칭으로 들여온다 */
 import { trackAction, changed, removed as removedMeta } from './audit-tab.js';
@@ -2283,6 +2284,7 @@ export async function saveContactEdit(){
    연락처 직접 추가 모달 (원본 6121~6252행)
 ══════════════════════════════════════════ */
 export function openAddContactModal(){
+  const pick = currentCoSectorPick();
   const catOpts = CAT_KEYS.map(k =>
     `<option value="${k}">${CL[k]}</option>`).join('');
   const countryOpts = COUNTRIES.map(c =>
@@ -2330,6 +2332,20 @@ export function openAddContactModal(){
             </select></div>
           <div><div class="mlbl">출처</div>
             <input class="fi" id="ac-source" placeholder="예: 명함, 행사 등록" value="직접 입력" style="width:100%"></div>
+        </div>
+
+        <!-- 소속이 아직 기업DB에 없으면 여기서 만들어진다. 그때 섹터를 함께
+             넣어 두지 않으면 미분류로 떨어져, 나중에 기업DB에서 다시 찾아
+             붙여야 한다 — 사람을 넣는 자리에서 같이 정한다. -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+          <div><div class="mlbl">분야</div>
+            <select class="fi" id="ac-domain" style="width:100%" onchange="onAddContactDomainChange()">
+              ${coDomainOptionsHtml(pick.domain)}
+            </select></div>
+          <div><div class="mlbl">섹터 <span style="font-weight:400;color:var(--i4)">— 새로 만들어질 기업에 붙어요</span></div>
+            <select class="fi" id="ac-sector" style="width:100%">
+              ${coSectorOptionsHtml(pick.domain, pick.sector)}
+            </select></div>
         </div>
 
         <div style="display:flex;gap:8px;justify-content:flex-end">
@@ -2392,7 +2408,8 @@ export async function saveNewContact(){
   const orgNm = c.orgKo || c.orgEn;
   if(orgNm){
     try {
-      await ensureOrgsForNames([orgNm]);
+      const sector = get('ac-sector');
+      await ensureOrgsForNames([orgNm], undefined, sector ? { [orgNm]: sector } : null);
       c.org_id = orgIdForName(orgNm) || '';
     } catch(e){ console.warn('[db-tab] 기업 연결 실패:', e); }
   }
@@ -2694,6 +2711,15 @@ window.contactViewPanel = contactViewPanel;
 window.contactEditForm = contactEditForm;
 window.saveContactEdit = saveContactEdit;
 window.openAddContactModal = openAddContactModal;
+/* 분야를 바꾸면 섹터 목록을 그 분야 것만 남긴다 (기업 추가 창과 같은 동작) */
+window.onAddContactDomainChange = () => {
+  const d = document.getElementById('ac-domain');
+  const s = document.getElementById('ac-sector');
+  if(!d || !s) return;
+  const keep = s.value;
+  s.innerHTML = coSectorOptionsHtml(d.value, keep);
+  if(sectorKey(s.value || '') !== sectorKey(keep || '')) s.value = '';
+};
 window.closeAddContactModal = closeAddContactModal;
 window.saveNewContact = saveNewContact;
 
