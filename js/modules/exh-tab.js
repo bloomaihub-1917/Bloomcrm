@@ -1527,11 +1527,6 @@ function renderBoothView(list){
   }
   const typeCnt = countBy(all0, x => x.booth_type);
 
-  const typePill = (t, n) => `<span class="pill ${boothTypeFil === t ? 'p-blue' : 'p-gray'}"
-    onclick="setBoothTypeFil('${escAttr(t)}')" style="cursor:pointer"
-    title="${boothTypeFil === t ? '다시 눌러 전체 보기' : escAttr(t) + ' 기업만 보기'}">${escapeHtml(t)} ${n}${
-      boothTypeFil === t ? ' ✕' : ''}</span>`;
-
   const pills = `<span class="pill p-gray">기업 ${boothTypeFil ? `${rows.length}/${all0.length}` : all0.length}</span>`
     + `<span class="pill p-gray">부스 ${totalBooths}칸</span>`
     + (noBooth ? `<span class="pill p-red">번호 미배정 ${noBooth}</span>` : '')
@@ -1546,25 +1541,34 @@ function renderBoothView(list){
       return (wait ? `<span class="pill p-amber" title="도면을 못 받았거나 아직 확인하지 않은 독립부스예요">도면 확인 필요 ${wait}</span>` : '')
         + (fix ? `<span class="pill p-red" title="수정 요청한 뒤 아직 정리되지 않은 도면이에요">도면 수정 요청 ${fix}</span>` : '');
     })()
-    /* 타입 배지는 설정의 부스 타입 목록 순서로 세운다 — 대시보드의 부스 타입별
-       금액과 같은 순서라야 두 화면을 나란히 읽을 수 있다. 개수 많은 순으로 두면
-       기업이 한 곳 늘고 줄 때마다 배지 자리가 바뀌어, 누르려던 것을 놓친다.
-       목록에 없는 옛 타입은 뒤에 이름순으로 붙인다. */
-    + (() => {
-      const order = boothTypes(exhEvent).map(t => t.code);
-      const rank = (k) => { const i = order.indexOf(k); return i < 0 ? 999 : i; };
-      return Object.entries(typeCnt)
-        .sort((a, b) => rank(a[0]) - rank(b[0]) || a[0].localeCompare(b[0], 'ko'))
-        .map(([t, n]) => typePill(t, n)).join('');
-    })()
-    + (boothTypeFil
-      ? `<span style="font-size:10.5px;color:var(--a);margin-left:2px;cursor:pointer" onclick="setBoothTypeFil('')">전체 보기로 돌아가기</span>`
-      : '<span style="font-size:10.5px;color:var(--i5);margin-left:2px">타입 배지를 누르면 그 부스 기업만 봐요 · 번호·층·수량은 행을 눌러 상세에서 고쳐요</span>');
+    + '<span style="font-size:10.5px;color:var(--i5);margin-left:2px">번호·층·수량은 행을 눌러 상세에서 고쳐요</span>';
 
-  if(!rows.length) return viewShell(pills,
+  /* 부스 타입은 배지가 아니라 탭으로 세운다 — 열두 개가 다른 배지들과 한 줄에
+     섞여 있어 어느 것이 «지금 보는 것»인지 눈에 안 들어왔다. 비품 현황과 같은
+     모양으로 맞춘다.
+
+     순서는 설정의 부스 타입 목록을 따른다 — 대시보드의 부스 타입별 금액과 같은
+     순서라야 두 화면을 나란히 읽을 수 있고, 개수 많은 순으로 두면 기업이 한 곳
+     늘고 줄 때마다 탭 자리가 바뀌어 누르려던 것을 놓친다. 목록에 없는 옛 타입은
+     뒤에 이름순으로 붙인다(그 타입으로 저장된 기업이 아직 있다). */
+  const typeSeg = (() => {
+    const order = boothTypes(exhEvent).map(t => t.code);
+    const rank = (k) => { const i = order.indexOf(k); return i < 0 ? 999 : i; };
+    const tabs = Object.entries(typeCnt)
+      .filter(([t]) => String(t || '').trim())
+      .sort((a, b) => rank(a[0]) - rank(b[0]) || a[0].localeCompare(b[0], 'ko'));
+    const label = (code) => boothTypes(exhEvent).find(t => t.code === code)?.label || code;
+    return `<div style="padding:12px 16px 0"><div class="seg" style="flex-wrap:wrap">
+      <button class="seg-b${boothTypeFil ? '' : ' on'}" onclick="setBoothTypeFil('')">전체 ${all0.length}</button>
+      ${tabs.map(([t, n]) => `<button class="seg-b${boothTypeFil === t ? ' on' : ''}"
+        onclick="setBoothTypeFil('${escAttr(t)}')" title="${escAttr(t)}">${escapeHtml(label(t))} ${n}</button>`).join('')}
+    </div></div>`;
+  })();
+
+  if(!rows.length) return typeSeg + viewShell(pills,
     emptyView(`"${boothTypeFil}" 부스를 쓰는 기업이 없어요`));
 
-  if(isMobile()) return viewShell(pills, rows.map(x => `
+  if(isMobile()) return typeSeg + viewShell(pills, rows.map(x => `
     <div onclick="openExhDr('${escAttr(x.id)}','progress')" style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
         <span class="pill ${x.booth_no ? 'p-blue' : 'p-red'}">${x.booth_no ? '부스 ' + escapeHtml(x.booth_no) : '미배정'}${
@@ -1584,7 +1588,7 @@ function renderBoothView(list){
       })() : ''}
     </div>`).join(''));
 
-  return viewShell(pills, `<div class="tw"><table><thead><tr>
+  return typeSeg + viewShell(pills, `<div class="tw"><table><thead><tr>
       <th style="min-width:44px;text-align:right">신청순</th>
       <th style="min-width:64px">부스</th>
       <th style="min-width:150px">기업</th>
