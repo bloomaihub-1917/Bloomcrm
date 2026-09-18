@@ -2005,10 +2005,30 @@ function renderMoneyView(list){
 }
 
 
+/* 비품 현황 하위 탭 — 전체 / 기본 / 추가
+
+   발주는 전체를 보고 하고, 청구 확인은 추가만 보면 되고, 부스에 딸려 가는
+   것이 제대로 깔렸는지는 기본만 보면 된다. 한 표에 셋을 겹쳐 두면 볼 때마다
+   눈으로 걸러야 해서, 아예 갈라 둔다. */
+const EQUIP_SCOPES = [['all', '전체'], ['base', '기본'], ['extra', '추가']];
+let equipScope = 'all';
+export function setEquipScope(v){ equipScope = v; renderExh(); }
+
 function renderEquipView(list){
-  const rows = list.map(x => ({ x, items: liveItemsFor(x.id).filter(i => (i.category || '') === 'equip') }))
+  const inScope = (i) => equipScope === 'all' ? true
+    : equipScope === 'base' ? isBoothGiven(i) : !isBoothGiven(i);
+  const scopeSeg = `<div style="padding:12px 16px 0"><div class="seg">${EQUIP_SCOPES.map(([v, l]) =>
+    `<button class="seg-b${equipScope === v ? ' on' : ''}" onclick="setEquipScope('${v}')"
+      title="${v === 'all' ? '기본 + 추가 — 발주할 수량이에요'
+            : v === 'base' ? '부스 타입에 딸려 오는 기본 제공 — 청구하지 않아요'
+            : '기업이 따로 신청한 추가 비품 — 청구 대상이에요'}">${l}</button>`).join('')}</div></div>`;
+
+  const rows = list.map(x => ({ x, items: liveItemsFor(x.id)
+      .filter(i => (i.category || '') === 'equip').filter(inScope) }))
     .filter(r => r.items.length);
-  if(!rows.length) return emptyView('신청된 비품이 없어요');
+  if(!rows.length) return scopeSeg + emptyView(
+    equipScope === 'base' ? '부스 기본 제공으로 들어간 비품이 없어요'
+    : equipScope === 'extra' ? '기업이 따로 신청한 비품이 없어요' : '신청된 비품이 없어요');
 
   /* 카탈로그에 이어진 품목은 그 id로 묶는다 — 기업마다 "접이식 체어",
      "C-040 Folding Chair"처럼 다르게 적어 보내도 한 줄로 합쳐진다.
@@ -2088,6 +2108,8 @@ function renderEquipView(list){
       usd: gs.reduce((a, g) => a + g.usd, 0) };
   });
 
+  // 갈라 본 탭에서는 기본·추가 열이 되풀이라 뺀다 — 수량 한 칸이면 충분하다
+  const split = equipScope === 'all';
   const offN = groups.filter(g => g.offCatalog).length;
   const totKrw = groups.reduce((a, g) => a + g.krw, 0);
   const totUsd = groups.reduce((a, g) => a + g.usd, 0);
@@ -2096,9 +2118,13 @@ function renderEquipView(list){
   const totExtra = groups.reduce((a, g) => a + g.qtyExtra, 0);
   const pills = `<span class="pill p-gray">신청 기업 ${rows.length}</span>`
     + `<span class="pill p-blue">품목 ${groups.length}종</span>`
-    + `<span class="pill p-gray" title="기본 제공과 추가 신청을 합친 발주 수량이에요">전체 ${totQty}개</span>`
-    + `<span class="pill p-teal" title="부스 타입에 딸려 오는 기본 제공 품목 — 우리가 청구하지 않아요">기본 ${totBase}개 · 청구 안함</span>`
-    + `<span class="pill p-blue" title="기업이 따로 신청한 비품 — 청구 대상이에요">추가비품 ${totExtra}개 · 별도 신청</span>`
+    + (equipScope === 'all'
+        ? `<span class="pill p-gray" title="기본 제공과 추가 신청을 합친 발주 수량이에요">전체 ${totQty}개</span>`
+          + `<span class="pill p-teal" title="부스 타입에 딸려 오는 기본 제공 품목 — 우리가 청구하지 않아요">기본 ${totBase}개 · 청구 안함</span>`
+          + `<span class="pill p-blue" title="기업이 따로 신청한 비품 — 청구 대상이에요">추가비품 ${totExtra}개 · 별도 신청</span>`
+        : equipScope === 'base'
+          ? `<span class="pill p-teal">기본 ${totQty}개 · 청구 안함</span>`
+          : `<span class="pill p-blue">추가비품 ${totQty}개 · 별도 신청</span>`)
     + (totKrw ? `<span class="pill p-gray">${fmtMoney(totKrw, 'KRW')}</span>` : '')
     + (totUsd ? `<span class="pill p-gray">${fmtMoney(totUsd, 'USD')}</span>` : '')
     + (offN ? `<span class="pill p-amber" title="카탈로그에 없는 품목 — 그래픽·전기처럼 다른 분류일 수 있어요">카탈로그 외 ${offN}종</span>` : '')
@@ -2136,7 +2162,7 @@ function renderEquipView(list){
       <div style="display:flex;align-items:baseline;gap:6px;padding:10px 0 4px;border-bottom:2px solid var(--i7);margin-top:6px">
         <span style="font-size:12px;font-weight:800;color:var(--i2)">${escapeHtml(b.cat)}</span>
         <span style="font-size:10.5px;color:var(--i4)">${b.kinds}종 · ${b.qty}개${
-          b.qtyBase || b.qtyExtra ? ` (기본 ${b.qtyBase} · 추가 ${b.qtyExtra})` : ''}${
+          split && (b.qtyBase || b.qtyExtra) ? ` (기본 ${b.qtyBase} · 추가 ${b.qtyExtra})` : ''}${
           b.krw ? ' · ' + escapeHtml(fmtMoney(b.krw, 'KRW')) : ''}${
           b.usd ? ' · ' + escapeHtml(fmtMoney(b.usd, 'USD')) : ''}</span>
       </div>` + b.gs.map(g => {
@@ -2150,7 +2176,7 @@ function renderEquipView(list){
           </div>
           ${g.nameEn ? `<div style="font-size:10.5px;color:var(--i4)">${escapeHtml(g.nameEn)}</div>` : ''}
           <div style="font-size:10.5px;color:var(--i4);margin-top:2px">
-            ${g.qtyBase ? `기본 ${g.qtyBase} · ` : ''}${g.qtyExtra ? `추가 ${g.qtyExtra} · ` : ''}${
+            ${split && g.qtyBase ? `기본 ${g.qtyBase} · ` : ''}${split && g.qtyExtra ? `추가 ${g.qtyExtra} · ` : ''}${
             g.spec ? escapeHtml(g.spec) + ' · ' : ''}${g.coN}개사 신청
             ${g.krw ? ' · ' + escapeHtml(fmtMoney(g.krw, 'KRW')) : ''}${g.usd ? ' · ' + escapeHtml(fmtMoney(g.usd, 'USD')) : ''}
             <span style="color:var(--a)"> ${open ? '▲ 접기' : '▼ 신청 기업'}</span>
@@ -2166,9 +2192,9 @@ function renderEquipView(list){
         <th style="min-width:150px">품명(국문)</th>
         <th style="min-width:150px">품명(영문)</th>
         <th style="min-width:110px">규격</th>
-        <th style="min-width:56px;text-align:right" title="기본 + 추가 — 발주 수량이에요">전체</th>
-        <th style="min-width:52px;text-align:right" title="부스 타입에 딸려 오는 기본 제공 — 청구하지 않아요">기본</th>
-        <th style="min-width:52px;text-align:right" title="기업이 따로 신청한 추가 비품 — 청구 대상이에요">추가</th>
+        <th style="min-width:56px;text-align:right" title="${split ? '기본 + 추가 — 발주 수량이에요' : '이 탭에 해당하는 수량이에요'}">${split ? '전체' : '수량'}</th>
+        ${split ? `<th style="min-width:52px;text-align:right" title="부스 타입에 딸려 오는 기본 제공 — 청구하지 않아요">기본</th>
+        <th style="min-width:52px;text-align:right" title="기업이 따로 신청한 추가 비품 — 청구 대상이에요">추가</th>` : ''}
         <th style="min-width:62px;text-align:right">기업</th>
         <th style="min-width:104px;text-align:right">KRW</th>
         <th style="min-width:88px;text-align:right">USD</th>
@@ -2193,32 +2219,32 @@ function renderEquipView(list){
             <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(g.nameEn || '-')}</td>
             <td style="font-size:11px;color:var(--i4)">${escapeHtml(g.spec || '-')}</td>
             <td style="text-align:right;font-weight:700">${g.qty}</td>
-            <td style="text-align:right;color:var(--i4)">${g.qtyBase || '<span style="color:var(--i6)">-</span>'}</td>
-            <td style="text-align:right;font-weight:600">${g.qtyExtra || '<span style="color:var(--i6)">-</span>'}</td>
+            ${split ? `<td style="text-align:right;color:var(--i4)">${g.qtyBase || '<span style="color:var(--i6)">-</span>'}</td>
+            <td style="text-align:right;font-weight:600">${g.qtyExtra || '<span style="color:var(--i6)">-</span>'}</td>` : ''}
             <td style="text-align:right;color:var(--i4)">${g.coN}곳</td>
             <td style="text-align:right">${g.krw ? escapeHtml(fmtMoney(g.krw, 'KRW')) : '<span style="color:var(--i6)">-</span>'}</td>
             <td style="text-align:right">${g.usd ? escapeHtml(fmtMoney(g.usd, 'USD')) : '<span style="color:var(--i6)">-</span>'}</td>
           </tr>
-          ${open ? `<tr data-detail><td colspan="11" style="padding:8px 12px 12px;background:var(--i9)">
+          ${open ? `<tr data-detail><td colspan="${split ? 11 : 9}" style="padding:8px 12px 12px;background:var(--i9)">
             <div style="font-size:10.5px;color:var(--i4);margin-bottom:4px">신청 기업 ${g.coN}곳 — 클릭하면 그 기업 정산 탭으로 갑니다</div>
             ${coList(g)}</td></tr>` : ''}`;
         }).join('')}
       </tbody>
       <tfoot>
       ${catBlocks.length > 1 ? catBlocks.map(b => `<tr style="font-weight:600;color:var(--i3);background:var(--i9)">
-        <td colspan="4" style="font-size:11px">${escapeHtml(b.cat)} 소계 <span style="font-weight:400;color:var(--i4)">${b.kinds}종</span></td>
+        <td colspan="5" style="font-size:11px">${escapeHtml(b.cat)} 소계 <span style="font-weight:400;color:var(--i4)">${b.kinds}종</span></td>
         <td style="text-align:right">${b.qty}</td>
-        <td style="text-align:right;font-weight:400;color:var(--i4)">${b.qtyBase || '-'}</td>
-        <td style="text-align:right">${b.qtyExtra || '-'}</td>
+        ${split ? `<td style="text-align:right;font-weight:400;color:var(--i4)">${b.qtyBase || '-'}</td>
+        <td style="text-align:right">${b.qtyExtra || '-'}</td>` : ''}
         <td></td>
         <td style="text-align:right">${b.krw ? escapeHtml(fmtMoney(b.krw, 'KRW')) : '-'}</td>
         <td style="text-align:right">${b.usd ? escapeHtml(fmtMoney(b.usd, 'USD')) : '-'}</td>
       </tr>`).join('') : ''}
       <tr style="border-top:2px solid var(--i5);font-weight:800">
-        <td colspan="4" style="font-size:12px">합계 ${groups.length}종</td>
+        <td colspan="5" style="font-size:12px">합계 ${groups.length}종</td>
         <td style="text-align:right">${totQty}</td>
-        <td style="text-align:right;font-weight:600;color:var(--i3)">${totBase || '-'}</td>
-        <td style="text-align:right">${totExtra || '-'}</td>
+        ${split ? `<td style="text-align:right;font-weight:600;color:var(--i3)">${totBase || '-'}</td>
+        <td style="text-align:right">${totExtra || '-'}</td>` : ''}
         <td></td>
         <td style="text-align:right">${totKrw ? escapeHtml(fmtMoney(totKrw, 'KRW')) : '-'}</td>
         <td style="text-align:right">${totUsd ? escapeHtml(fmtMoney(totUsd, 'USD')) : '-'}</td>
@@ -2260,7 +2286,7 @@ function renderEquipView(list){
     <button class="btn bp bs" style="flex:0 0 auto" onclick="applyBoothItemsToEvent('${escAttr(exhEvent || '')}')">${pend.length}곳에 한 번에 넣기</button>
   </div>` : '';
 
-  return viewShell(pills, pendNote + summary + `<div class="sct">기업별 신청 내역</div>` + detail, actions);
+  return scopeSeg + viewShell(pills, pendNote + summary + `<div class="sct">기업별 신청 내역</div>` + detail, actions);
 }
 
 /* ── 그래픽 현황 ──
@@ -5180,6 +5206,7 @@ window.confirmExhImport = confirmExhImport;
 window.toggleExhDate = toggleExhDate;
 window.setExhField = setExhField;
 window.applyBoothItems = applyBoothItems;
+window.setEquipScope = setEquipScope;
 window.toggleBaseSel    = toggleBaseSel;
 window.toggleBaseSelAll = toggleBaseSelAll;
 window.applyBaseDone    = applyBaseDone;
