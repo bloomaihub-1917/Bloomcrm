@@ -2140,7 +2140,24 @@ function renderEquipView(list){
      부스를 다시 찾게 된다. 그래픽 현황도 같은 순서를 쓴다.
 
      부스가 아직 없는 곳은 맨 뒤로 — 번호가 없다고 앞에 세우면 매번 걸린다. */
-  const coList = (g) => g.cos.slice()
+  /* 한 기업이 같은 품목을 기본과 추가로 나눠 가지면 줄이 둘로 갈렸다 —
+     «시믹코리아 2개 / 시믹코리아 기본 2개»가 나란히 서서, 실제로 몇 개가
+     그 부스로 가는지 눈으로 더해야 했다. 여기서 알고 싶은 건 «이 부스에 몇 개»
+     하나뿐이니 기업으로 묶어 한 줄로 낸다. 기본이 섞였으면 몇 개가 기본인지만
+     작게 덧붙인다 — 금액이 수량에 비해 적은 이유가 그것이다. */
+  const coMerged = (g) => {
+    const by = new Map();
+    g.cos.forEach(c => {
+      const m = by.get(c.id) || { ...c, qty: 0, amt: 0, base: 0, shareOnly: false };
+      m.qty += c.qty; m.amt += c.amt;
+      if(c.base) m.base += c.qty;
+      if(c.shareOnly) m.shareOnly = true;
+      by.set(c.id, m);
+    });
+    return [...by.values()];
+  };
+
+  const coList = (g) => coMerged(g)
     .sort((a, b) => boothKeyOf(a.booth) - boothKeyOf(b.booth)
       || String(a.name || '').localeCompare(String(b.name || ''), 'ko'))
     .map(c => `
@@ -2149,7 +2166,7 @@ function renderEquipView(list){
       <span class="pill p-gray" style="min-width:52px;text-align:center">${c.booth ? '부스 ' + escapeHtml(c.booth) : '미배정'}</span>
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${
         isMobile() ? ';font-size:12.5px;font-weight:600' : ''}">${escapeHtml(c.name)}</span>
-      ${c.base ? '<span class="pill p-teal" style="font-size:9px" title="부스에 딸려 오는 기본 제공분이에요">기본</span>' : ''}
+      ${c.base ? `<span style="font-size:10px;color:var(--i4)" title="부스에 딸려 오는 기본 제공분이에요">기본 ${c.base}</span>` : ''}
       <span style="color:var(--i3)">${c.shareOnly ? '<span class="pill p-blue" style="font-size:9px">비용 분담</span>' : c.qty + '개'}</span>
       ${isMobile() ? ''   /* 좁은 화면에서는 금액이 기업명 자리를 먹는다 — 합계는 위 품목 줄에 있다 */
         : `<span style="min-width:88px;text-align:right;font-weight:600">${c.amt ? fmtMoney(c.amt, c.cur) : '-'}</span>`}
