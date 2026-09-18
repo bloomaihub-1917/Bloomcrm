@@ -60,7 +60,7 @@ import {
   isPendingRefund, boothTypeOptions, boothTypes, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
   TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing, introOver, boothDesignState,
   isSharedBooth, isBookOnly, baseKind, BASE_KINDS, bookName, fasciaName,
-  guardWrite, exhLocked, exhLockNotice,
+  guardWrite, exhLocked, exhLockNotice, isBoothGiven, boothIncluded, applyBoothItems,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar, needsReissue,
   settleState, liveInvoices, payDueDate, paidBreakdown, invoiceGap,
 } from './exh-tab.js';
@@ -1918,11 +1918,16 @@ function dBilling(x){
           return `
         <div class="bl-row bl-item" style="padding:6px 8px;background:var(--i9);border-radius:6px${
           open ? ';outline:2px solid var(--a);outline-offset:-2px' : ''}">
-          <span class="pill ${isBillable(i) ? 'p-gray' : 'p-amber'}" style="text-align:center;cursor:${open ? 'pointer' : 'default'}"
+          ${/* 부스에 딸려 오는 것은 기업이 신청한 게 아니다 — 청구 제외와 한데
+                묶으면 «왜 빠졌지»를 매번 다시 확인하게 된다. 따로 표시한다. */''}
+          ${isBoothGiven(i)
+            ? `<span class="pill p-teal" style="text-align:center"
+                 title="${escAttr((x.booth_type || '부스') + '에 기본으로 딸려 오는 품목이에요 — 부스 타입을 바꾸면 함께 바뀝니다')}">기본</span>`
+            : `<span class="pill ${isBillable(i) ? 'p-gray' : 'p-amber'}" style="text-align:center;cursor:${open ? 'pointer' : 'default'}"
             ${open ? `onclick="toggleItemBillable('${escAttr(i.id)}')"` : ''}
             title="${open ? (isBillable(i) ? '클릭하면 청구에서 제외합니다' : '청구에서 빠져 있어요 — 클릭하면 되돌립니다')
                           : (isBillable(i) ? '청구에 들어가는 항목이에요' : '청구에서 빠져 있어요')}">${
-            isBillable(i) ? escapeHtml(l) : '제외'}</span>
+            isBillable(i) ? escapeHtml(l) : '제외'}</span>`}
           <span class="bl-nm" style="${
             isVoided(i) ? 'color:var(--i5);text-decoration:line-through' : isBillable(i) ? '' : 'color:var(--i5)'}"
             title="${escAttr(i.name || '')}">${escapeHtml(i.name || '')}${appMark(i)}${editMark(i)}</span>

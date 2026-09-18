@@ -1605,6 +1605,10 @@ function clRowsHtml(rows, readonly){
       <label class="clf"><span class="clf-l">순서</span>
         <input class="fi" type="number" value="${escAttr(c.sort_order || '')}" title="순서" style="width:70px"
           onchange="editCodeListRow('${escAttr(c.id)}','sort_order',this.value)"></label>
+      ${c.list_key === 'booth_type' ? `<span class="clf"><span class="clf-l"></span>
+        <button class="btn" onclick="openBoothIncluded('${escAttr(c.id)}')"
+          title="이 부스에 기본으로 딸려 오는 품목이에요 — 부스 타입을 고르면 신청항목에 자동으로 들어갑니다"
+          style="height:32px;font-size:11px">기본 제공 ${boothInclCount(c)}건</button></span>` : ''}
       <span class="clf"><span class="clf-l"></span>
         <button class="btn" onclick="toggleCodeListRow('${escAttr(c.id)}')"
           style="height:32px;font-size:11px">${off ? '되살리기' : '숨김'}</button></span>`}
@@ -1616,6 +1620,134 @@ function clRowsHtml(rows, readonly){
    컬럼이 늘었을 때 안 보낸 칸이 비워진다 */
 const saveCodeRow = (row, label) =>
   postToSheet({ sheet: 'code_lists', action: 'upsertPartial', data: row }, label);
+
+/* ══════════════════════════════════════════
+   부스 타입별 기본 제공 품목
+
+   부스에 딸려 오는 품목(인포데스크·의자·콘센트…)은 매뉴얼에만 있었고, 기업마다
+   손으로 다시 적었다. 여기 적어 두면 부스 타입을 고르는 순간 신청항목에 들어간다.
+
+   code_lists 행의 included 칸에 JSON 배열로 담는다 — [{cat, code, name, qty}].
+   표를 따로 만들면 부스 타입을 지우거나 이름을 바꿀 때 짝이 어긋난다.
+══════════════════════════════════════════ */
+export function parseIncluded(raw){
+  if(!raw) return [];
+  try { const v = JSON.parse(raw); return Array.isArray(v) ? v : []; }
+  catch(e){ return []; }
+}
+export const boothInclCount = (c) => parseIncluded(c.included).length;
+
+let bInclRow = null;      // 지금 고치고 있는 부스 타입 행
+let bInclLines = [];      // 편집 중인 목록 (저장을 눌러야 반영된다)
+
+export function openBoothIncluded(rowId){
+  const c = CODE_LISTS.find(x => x.id === rowId);
+  if(!c) return;
+  bInclRow = c;
+  bInclLines = parseIncluded(c.included);
+
+  closeBoothIncluded();
+  const pop = document.createElement('div');
+  pop.id = 'bincl-modal';
+  pop.className = 'mw on';
+  let downOnBg = false;
+  pop.addEventListener('mousedown', (e) => { downOnBg = (e.target === pop); });
+  pop.addEventListener('click', (e) => { if(e.target === pop && downOnBg) closeBoothIncluded(); });
+  pop.innerHTML = `<div class="modal" style="max-width:620px">
+    <div class="mh"><div class="mt2">${escapeHtml(c.label || c.code)} — 기본 제공 품목</div>
+      <div class="mc">이 부스 타입을 고르면 신청항목에 자동으로 들어갑니다. 청구에는 잡히지 않아요.</div></div>
+    <div class="mb"><div id="bincl-body"></div></div>
+    <div class="mf2">
+      <button class="btn" onclick="closeBoothIncluded()">취소</button>
+      <button class="btn bp" onclick="saveBoothIncluded()" id="bincl-save">저장</button>
+    </div></div>`;
+  document.body.appendChild(pop);
+  renderBoothInclLines();
+}
+export function closeBoothIncluded(){ document.getElementById('bincl-modal')?.remove(); }
+
+/* 품목코드를 치면 품명이 따라오게 목록을 붙여 둔다 — 부스 타입은 행사별이라
+   그 행사의 품목표만 본다(공통 목록이면 붙일 품목표가 없다). */
+function binclDatalist(){
+  const ev = bInclRow?.event_id || '';
+  if(!ev) return '';
+  const list = EQUIP_CATALOG
+    .filter(c => String(c.event_id || '') === String(ev) && c.active !== 'no')
+    .sort((a, b) => String(a.code || '').localeCompare(String(b.code || ''), 'ko', { numeric: true }));
+  if(!list.length) return '';
+  return `<datalist id="bincl-cat">${list.map(c =>
+    `<option value="${escAttr(c.code)}">${escapeHtml(`${c.name_ko || c.name_en || ''}`)}</option>`).join('')}</datalist>`;
+}
+
+export function renderBoothInclLines(){
+  const el = document.getElementById('bincl-body');
+  if(!el) return;
+  const cats = [['equip', '비품'], ['graphic', '그래픽'], ['etc', '기타']];
+  el.innerHTML = binclDatalist() + `
+    <div style="display:flex;flex-direction:column;gap:6px">
+      ${bInclLines.length ? bInclLines.map((o, n) => `
+        <div style="display:flex;gap:6px;align-items:center">
+          <select class="fi" style="flex:0 0 78px;font-size:11.5px;padding:6px"
+            onchange="editBoothInclLine(${n},'cat',this.value)">${cats.map(([v, l]) =>
+              `<option value="${v}"${(o.cat || 'equip') === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
+          <input class="fi" style="flex:0 0 96px;font-size:11.5px;padding:6px" list="bincl-cat"
+            value="${escAttr(o.code || '')}" placeholder="품목코드"
+            onchange="editBoothInclLine(${n},'code',this.value)">
+          <input class="fi" style="flex:1 1 160px;min-width:0;font-size:11.5px;padding:6px"
+            value="${escAttr(o.name || '')}" placeholder="품명"
+            onchange="editBoothInclLine(${n},'name',this.value)">
+          <input class="fi" style="flex:0 0 62px;font-size:11.5px;padding:6px"
+            value="${escAttr(o.qty ?? '')}" placeholder="수량" inputmode="numeric"
+            onchange="editBoothInclLine(${n},'qty',this.value)">
+          <button class="btn" style="flex:0 0 auto;padding:4px 9px;font-size:11px"
+            onclick="delBoothInclLine(${n})">삭제</button>
+        </div>`).join('')
+        : '<div style="font-size:11.5px;color:var(--i4)">아직 없어요. 아래에서 한 줄씩 넣으세요.</div>'}
+    </div>
+    <button class="btn" style="margin-top:10px;font-size:11.5px" onclick="addBoothInclLine()">+ 한 줄 추가</button>
+    <div style="font-size:11px;color:var(--i4);margin-top:8px">
+      품목코드를 적으면 품목표의 그 품목에 이어 붙습니다 — 발주서에서 같은 줄로 묶여요.
+      코드가 없는 것(전기 별도 시공 등)은 비워 두고 품명만 적으면 됩니다.</div>`;
+}
+
+export function addBoothInclLine(){ bInclLines.push({ cat: 'equip', code: '', name: '', qty: '1' }); renderBoothInclLines(); }
+export function delBoothInclLine(n){ bInclLines.splice(n, 1); renderBoothInclLines(); }
+export function editBoothInclLine(n, field, v){
+  if(!bInclLines[n]) return;
+  bInclLines[n][field] = String(v || '').trim();
+  // 코드만 치고 품명을 비워 뒀으면 품목표에서 이름을 가져다 채운다
+  if(field === 'code' && !bInclLines[n].name){
+    const hit = EQUIP_CATALOG.find(c => String(c.event_id || '') === String(bInclRow?.event_id || '')
+      && String(c.code || '').toUpperCase() === String(v || '').trim().toUpperCase());
+    if(hit) bInclLines[n].name = hit.name_ko || hit.name_en || '';
+    renderBoothInclLines();
+  }
+}
+
+export async function saveBoothIncluded(){
+  if(!bInclRow) return;
+  const clean = bInclLines
+    .map(o => ({ cat: o.cat || 'equip', code: String(o.code || '').trim(),
+                 name: String(o.name || '').trim(), qty: String(o.qty ?? '').trim() }))
+    .filter(o => o.code || o.name);
+
+  const btn = document.getElementById('bincl-save');
+  if(btn){ btn.disabled = true; btn.textContent = '저장 중…'; }
+
+  const before = bInclRow.included || '';
+  bInclRow.included = JSON.stringify(clean);
+  const r = await saveCodeRow({ id: bInclRow.id, included: bInclRow.included }, '기본 제공 품목');
+  if(!r.ok){
+    bInclRow.included = before;                 // 저장 실패는 화면에도 남기지 않는다
+    if(btn){ btn.disabled = false; btn.textContent = '저장'; }
+    alert('저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
+    return;
+  }
+  trackAction('edit', '기본 제공 품목', bInclRow.label || bInclRow.code,
+    `<b>${escapeHtml(bInclRow.label || bInclRow.code)}</b>의 기본 제공 품목을 ${clean.length}건으로 정했어요`);
+  closeBoothIncluded();
+  reRenderFor('booth_type');
+}
 
 export async function addCodeListRow(){
   const key = clKey(), scope = clScope();
@@ -1689,6 +1821,12 @@ window.renderCodeList       = renderCodeList;
 window.addCodeListRow       = addCodeListRow;
 window.editCodeListRow      = editCodeListRow;
 window.toggleCodeListRow    = toggleCodeListRow;
+window.openBoothIncluded    = openBoothIncluded;
+window.closeBoothIncluded   = closeBoothIncluded;
+window.addBoothInclLine     = addBoothInclLine;
+window.delBoothInclLine     = delBoothInclLine;
+window.editBoothInclLine    = editBoothInclLine;
+window.saveBoothIncluded    = saveBoothIncluded;
 
 /* ══════════════════════════════════════════
    업로드 표기 → 카테고리 매핑 (code_lists.cat_alias)

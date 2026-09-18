@@ -20,7 +20,7 @@ import {
   EVENT_LIST, contacts, participations, CO_DB, currentUser, API_BASE_URL, auditLog,
   catalogItem, catalogFor, findCatalogByName, EQUIP_CATALOG, getOrgById, liveItemsFor,
   appsFor, openAppFor, nextItemSort,
-  codeList, codeLabel, codeCls,
+  codeList, codeItem, codeLabel, codeCls,
   evPartOn, evPartDone, evPartState,
   findOrgByName, orgName, ORGS,
 } from '../state.js';
@@ -4935,6 +4935,98 @@ export function toggleExhDate(id, field, label){
 }
 export function setExhField(id, field, value, label){
   patchExh(id, { [field]: value }, label);
+  // 부스 타입이 정해지면 딸려 오는 품목도 함께 정해진다 — 손으로 다시 적지 않는다
+  if(field === 'booth_type') applyBoothItems(id, value);
+}
+
+/* ══════════════════════════════════════════
+   부스 타입에 딸려 오는 기본 제공 품목
+
+   매뉴얼에만 적혀 있던 것이라 기업마다 손으로 다시 적었고, 적다 보면 빠졌다.
+   빠지면 현장에서 «우리 건 왜 없냐»가 된다. 부스 타입을 고르는 순간 깔아 준다.
+
+   깔아 준 품목은 origin='booth'로 표시해 둔다. 부스를 바꾸면 그 표시가 붙은
+   것만 걷어내고 새 타입 것으로 다시 깐다 — 기업이 자체로 신청한 추가 비품은
+   건드리지 않는다. 표시가 없으면 부스를 한 번 바꿀 때마다 신청 내역이 날아간다.
+
+   청구하지 않으므로 billable='no'로 넣는다(금액 합계·인보이스에서 빠진다).
+   접수 회차(app_id)에도 매달지 않는다 — 기업이 신청한 게 아니라 부스에 붙어
+   오는 것이라, 접수 이력에 «추가»로 찍히면 신청서 원본과 어긋난다.
+══════════════════════════════════════════ */
+export const BOOTH_ORIGIN = 'booth';
+export const isBoothGiven = (i) => String(i.origin || '') === BOOTH_ORIGIN;
+
+/* 부스 타입에 적어 둔 기본 제공 목록 — 설정에서 JSON으로 들고 있다 */
+export function boothIncluded(evKey, typeCode){
+  const raw = codeItem('booth_type', evKey || exhEvent, typeCode)?.included;
+  if(!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v.filter(o => o && (o.name || o.code)) : [];
+  } catch(e){
+    console.warn('[exh] 기본 제공 품목을 읽지 못했어요:', typeCode, e.message);
+    return [];
+  }
+}
+
+export async function applyBoothItems(exhId, typeCode){
+  const x = getExhibitorById(exhId);
+  if(!x || exhLocked()) return;
+
+  const want = boothIncluded(x.event_id, typeCode);
+  const had = itemsFor(exhId).filter(isBoothGiven);
+  // 같은 타입을 다시 고른 것뿐이면 그대로 둔다 — 지웠다 깔면 id가 바뀌어
+  // 발주서·정산에서 같은 줄이 새 줄로 보인다
+  if(sameBoothSet(had, want)) return;
+
+  for(const i of had){
+    const at = EXH_ITEMS.indexOf(i);
+    if(at >= 0) EXH_ITEMS.splice(at, 1);
+    await deleteExhItem(i.id);
+  }
+
+  for(const o of want){
+    const cat = o.cat || 'equip';
+    // 코드가 있으면 품목표의 그 품목에 잇는다 — 발주서에서 카탈로그 품목과
+    // 같은 줄로 묶이고, 이름 표기가 갈리지 않는다
+    const hit = o.code ? findCatalogByName(x.event_id, o.code) : null;
+    const rec = {
+      id: `XI-${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+      exhibitor_id: exhId, category: cat,
+      catalog_id: hit ? hit.id : '',
+      name: [o.code, o.name].filter(Boolean).join(' '),
+      qty: String(o.qty ?? ''), unit_price: '', amount: '', currency: 'KRW',
+      note: '', billable: 'no', origin: BOOTH_ORIGIN,
+      app_id: '', change_kind: '', sort_order: nextItemSort(exhId),
+    };
+    EXH_ITEMS.push(rec);
+    const r = await saveExhItem(rec);
+    if(!r.ok){
+      const at = EXH_ITEMS.indexOf(rec);
+      if(at >= 0) EXH_ITEMS.splice(at, 1);
+      console.warn('[exh] 기본 제공 품목 저장 실패:', rec.name);
+      continue;
+    }
+    if(r.id && r.id !== rec.id) rec.id = r.id;
+  }
+
+  refreshExhViews();
+  if(want.length || had.length){
+    trackAction('edit', '기본 제공 품목', x.company_name || '',
+      `<b>${escapeHtml(typeCode || '부스 없음')}</b>의 기본 제공 품목 ${want.length}건을 넣었어요${
+        had.length ? ` (이전 ${had.length}건은 걷어냈어요)` : ''}`,
+      { kind: 'exhibitor', id: exhId, tab: 'apply' });
+  }
+}
+
+/* 이미 깔린 것과 깔아야 할 것이 같은지 — 코드·이름·수량이 모두 같으면 같다 */
+function sameBoothSet(had, want){
+  if(had.length !== want.length) return false;
+  const key = (cat, name, qty) => `${cat}|${String(name).trim()}|${String(qty ?? '').trim()}`;
+  const a = had.map(i => key(i.category || 'equip', i.name, i.qty)).sort();
+  const b = want.map(o => key(o.cat || 'equip',
+    [o.code, o.name].filter(Boolean).join(' '), o.qty)).sort();
+  return a.every((v, n) => v === b[n]);
 }
 
 /* 여부 플래그 토글 — 끌 때는 날짜도 함께 지운다(체크는 꺼졌는데 날짜만 남는 상태 방지) */
@@ -5017,6 +5109,7 @@ window.renderExhImportList = renderExhImportList;
 window.confirmExhImport = confirmExhImport;
 window.toggleExhDate = toggleExhDate;
 window.setExhField = setExhField;
+window.applyBoothItems = applyBoothItems;
 window.toggleBaseSel    = toggleBaseSel;
 window.toggleBaseSelAll = toggleBaseSelAll;
 window.applyBaseDone    = applyBaseDone;

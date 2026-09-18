@@ -58,7 +58,7 @@ const TABLES = {
      event_id로 행사별 덮어쓰기를 한다(schema.sql 주석 참고). */
   code_lists: {
     table: 'code_lists', pk: 'id', idPrefix: 'CD-',
-    columns: ['id', 'list_key', 'event_id', 'code', 'label', 'cls', 'note', 'active', 'sort_order'],
+    columns: ['id', 'list_key', 'event_id', 'code', 'label', 'cls', 'note', 'active', 'sort_order', 'included'],
   },
 
   /* 기업 마스터. companies(정규화된 이름이 키인 오버레이)를 대신한다 —
@@ -103,7 +103,7 @@ const TABLES = {
     columns: ['id', 'exhibitor_id', 'category', 'name', 'qty', 'unit_price', 'amount', 'currency', 'note', 'sort_order',
       'catalog_id', 'billable', 'shared_ref', 'received_at', 'received_note', 'due_at',
       'app_id', 'change_kind', 'prev_qty', 'prev_amount', 'voided_at',
-      'edited_at', 'edited_by'],
+      'edited_at', 'edited_by', 'origin'],
   },
 
   /* 신청서 접수 이력. 파일로 온 것만이 아니라 메일·유선으로 받은 변경도
