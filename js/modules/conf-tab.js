@@ -586,6 +586,8 @@ function pgaSpeakers(ss, opts){
       const person = `<span class="pill ${roleC}" style="font-size:8.5px;padding:1px 4px;vertical-align:1px">${
           escapeHtml(a.role || '')}</span>
         <span style="color:var(--i2)"> ${escapeHtml(nm)}</span>${
+        (sp && sp.name_snapshot && sp.name_en)
+          ? `<span style="color:var(--i4)"> ${escapeHtml(sp.name_en)}</span>` : ''}${
         jobTitle ? `<span style="color:var(--i4)"> · ${escapeHtml(jobTitle)}</span>` : ''}${
         org ? `<span style="color:var(--i4)"> · ${escapeHtml(org)}</span>` : ''}`;
 
@@ -1320,7 +1322,9 @@ function peopleHtml(ev){
 
     return `<tr style="cursor:pointer" onclick="openSpeakerDr('${escAttr(sp.id)}')">
       <td><div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
-          <span style="font-weight:700;font-size:12px">${escapeHtml(name)}</span>${spLeftPill(sp)}
+          <span style="font-weight:700;font-size:12px">${escapeHtml(name)}</span>
+          ${sp.name_snapshot && sp.name_en
+            ? `<span style="font-size:10.5px;color:var(--i4)">${escapeHtml(sp.name_en)}</span>` : ''}${spLeftPill(sp)}
           ${roles.map(r => `<span class="pill ${(SPEAKER_ROLES.find(x => x.key === r) || {}).cls || 'p-gray'}"
             style="font-size:9px">${escapeHtml(r)}</span>`).join('')}
           ${countryChip(sp)}
@@ -1558,7 +1562,7 @@ export async function handleConfFile(e){
     if(!r.name_snapshot) continue;
     const exist = haveSp.get(sessKey(r.name_snapshot));
     const patch = {
-      name_snapshot: r.name_snapshot, org_ko: r.org_ko, org_en: r.org_en,
+      name_snapshot: r.name_snapshot, name_en: r.name_en, org_ko: r.org_ko, org_en: r.org_en,
       title_ko: r.title_ko, title_en: r.title_en, lang_pref: r.lang_pref,
       nationality: r.nationality, residence_country: r.residence_country,
       status: r.status, fee_amount: r.fee_amount, fee_currency: r.fee_currency, note: r.note,

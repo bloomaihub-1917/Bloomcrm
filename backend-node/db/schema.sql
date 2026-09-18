@@ -723,6 +723,9 @@ CREATE TABLE IF NOT EXISTS speakers (
   event_id      TEXT,
   contact_id    TEXT,
   name_snapshot TEXT,
+  -- 영문 성명. 프로그램북·명찰·현장 안내가 국·영문을 나눠 쓰고, 해외 연사는
+  -- 영문만 오고 국내 연사는 둘 다 온다. 한 칸에 몰면 영문판에서 다시 갈라야 한다.
+  name_en       TEXT,
   -- 소속·직함은 «발표 당시»의 것이다. 사람이 이직하면 마스터DB는 바뀌어야
   -- 맞지만 작년 프로그램북의 소속은 그대로여야 한다 — 원래 다른 값이라
   -- 연락처에서 끌어와 여기에 굳힌다.

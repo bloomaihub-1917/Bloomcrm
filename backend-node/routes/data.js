@@ -166,7 +166,7 @@ const TABLES = {
   },
   speakers: {
     table: 'speakers', pk: 'id', idPrefix: 'SP-',
-    columns: ['id', 'event_id', 'contact_id', 'name_snapshot',
+    columns: ['id', 'event_id', 'contact_id', 'name_snapshot', 'name_en',
       'org_ko', 'org_en', 'title_ko', 'title_en',
       'nationality', 'residence_country', 'pay_basis',
       'status', 'lang_pref', 'note', 'updated_at',

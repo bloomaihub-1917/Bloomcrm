@@ -173,7 +173,9 @@ export function renderSpeakerDr(){
   const h = document.getElementById('sp-drh');
   if(h) h.innerHTML = `
     <div style="flex:1;min-width:0">
-      <div class="drnm">${escapeHtml(sp.name_snapshot || '(이름 없음)')}
+      <div class="drnm">${escapeHtml(sp.name_snapshot || sp.name_en || '(이름 없음)')}${
+        sp.name_snapshot && sp.name_en
+          ? `<span style="font-size:12px;font-weight:400;color:var(--i4);margin-left:6px">${escapeHtml(sp.name_en)}</span>` : ''}
         ${roles.map(r => `<span class="pill ${(SPEAKER_ROLES.find(x => x.key === r) || {}).cls || 'p-gray'}"
           style="vertical-align:middle;font-size:10px">${escapeHtml(r)}</span>`).join(' ')}</div>
       <div class="drmt">${escapeHtml(sp.status || '섭외중')}${
@@ -362,8 +364,13 @@ function basicHtml(sp, con, evKey){
       </div>`;
 
   return `
-    ${fg('성명 (프로그램에 나갈 이름)', txt(sp.name_snapshot, `spField('name_snapshot',this.value,'성명')`, '홍길동'),
-      '연락처를 지워도 프로그램에서 이름이 사라지지 않도록 따로 굳혀 둡니다')}
+    <div class="fgr">
+      ${fg('성명 국문', txt(sp.name_snapshot, `spField('name_snapshot',this.value,'성명 국문')`, '홍길동'))}
+      ${fg('성명 영문', txt(sp.name_en, `spField('name_en',this.value,'성명 영문')`, 'Gil-dong Hong'))}
+    </div>
+    <div style="font-size:10px;color:var(--i4);margin:-4px 0 12px">
+      프로그램에 나갈 이름입니다 — 연락처를 지워도 프로그램에서 사라지지 않도록 따로 굳혀 둡니다.
+      해외 연사는 영문만 있어도 됩니다.</div>
     <div class="fgr">
       ${fg('소속 국문', txt(sp.org_ko, `spField('org_ko',this.value,'소속 국문')`, '○○대학교'))}
       ${fg('소속 영문', txt(sp.org_en, `spField('org_en',this.value,'소속 영문')`, 'XX University'))}
@@ -470,6 +477,7 @@ export async function linkSpeakerContact(cid){
   const patch = { contact_id: String(c.id) };
   const fill = (field, v) => { if(!sp[field] && v) patch[field] = v; };
   fill('name_snapshot', c.nameKo || c.nameEn);
+  fill('name_en', c.nameEn);
   fill('org_ko', c.orgKo); fill('org_en', c.orgEn);
   fill('title_ko', c.titleKo); fill('title_en', c.titleEn);
   await patchSpeaker(patch, `연락처 연결 (${c.nameKo || c.nameEn || c.id})`);
@@ -482,10 +490,12 @@ export async function pullSpeakerProfile(){
   if(!c) return;
   const patch = {};
   const set = (field, v) => { if((v || '') !== (sp[field] || '')) patch[field] = v || ''; };
+  set('name_en', c.nameEn);
   set('org_ko', c.orgKo); set('org_en', c.orgEn);
   set('title_ko', c.titleKo); set('title_en', c.titleEn);
   if(!Object.keys(patch).length){ alert('연락처와 이미 같아요.'); return; }
-  const LABEL = { org_ko: '소속 국문', org_en: '소속 영문', title_ko: '직함 국문', title_en: '직함 영문' };
+  const LABEL = { name_en: '성명 영문', org_ko: '소속 국문', org_en: '소속 영문',
+    title_ko: '직함 국문', title_en: '직함 영문' };
   const lines = Object.entries(patch)
     .map(([k, v]) => `${LABEL[k] || k}: ${sp[k] || '(비어 있음)'} → ${v || '(비움)'}`)
     .join('\n');
@@ -511,6 +521,8 @@ export async function pushSpeakerProfile(){
     return;
   }
   const MAP = [
+    ['nameKo',  'name_snapshot', '성명 국문'],
+    ['nameEn',  'name_en',       '성명 영문'],
     ['orgKo',   'org_ko',   '소속 국문'],
     ['orgEn',   'org_en',   '소속 영문'],
     ['titleKo', 'title_ko', '직함 국문'],

@@ -40,6 +40,7 @@ export const IMPORT_SHEETS = [
     key: 'speakers',
     cols: [
       { key: 'name_snapshot', label: '성명',        hint: '프로그램에 나갈 이름. 배정 시트에서 이 이름으로 찾습니다' },
+      { key: 'name_en',       label: '성명(영문)',  hint: '해외 연사는 이 칸만 채워도 됩니다' },
       { key: 'org_ko',        label: '소속(국문)',  hint: '발표 당시의 소속입니다' },
       { key: 'org_en',        label: '소속(영문)',  hint: '' },
       { key: 'title_ko',      label: '직함(국문)',  hint: '' },
@@ -55,8 +56,8 @@ export const IMPORT_SHEETS = [
       { key: 'note',          label: '메모',        hint: '' },
     ],
     sample: [
-      ['정청수', '○○건축사사무소', 'OO Architects', '대표', 'Principal', '대한민국', '대한민국', 'both', '확정', 'chung@example.kr', '', '500000', 'KRW', ''],
-      ['Eric Ho', '', 'Studio Ho', '', 'Founder', '대한민국', '미국', 'en', '섭외중', 'eric@example.com', '', '', '', '국적은 한국, 거주지는 미국'],
+      ['정청수', 'Chung-soo Jung', '○○건축사사무소', 'OO Architects', '대표', 'Principal', '대한민국', '대한민국', 'both', '확정', 'chung@example.kr', '', '500000', 'KRW', ''],
+      ['Eric Ho', '', '', 'Studio Ho', '', 'Founder', '대한민국', '미국', 'en', '섭외중', 'eric@example.com', '', '', '', '국적은 한국, 거주지는 미국'],
     ],
   },
   {
