@@ -627,12 +627,22 @@ export function buildCoCAT(){
   buildCoCountryF();
 }
 
+/* 왼쪽에서 섹터·분야·국가를 누르는 것은 «이 묶음을 다시 훑어보겠다»는 뜻이다.
+   그런데 기업 하나를 열어 둔 채로 누르면 본문이 그 기업 상세에 그대로 머물러,
+   왼쪽 숫자만 바뀌고 화면은 꼼짝 않는 것처럼 보였다 — 열어 둔 기업을 접고
+   고른 묶음의 첫 화면으로 돌아간다. */
+function showCoFilteredList(){
+  setSelCo(null);
+  const cdtEl  = document.getElementById('cdt');     if(cdtEl)  cdtEl.style.display  = 'none';
+  const dashEl = document.getElementById('co-dash'); if(dashEl) dashEl.style.display = 'block';
+  renderCoDashboard();
+}
+
 export function setCoCat(s){
   setCoCatF((coCatF===s)?null:s);
   setCoDomainF(null); // 분야 필터와 상호 배타
   buildCoCAT(); renderCoList();
-  // 기업이 선택되어 상세화면을 보는 중이 아니라면, 메인 화면도 필터된 기업 리스트로 갱신
-  if(!selCo) renderCoDashboard();
+  showCoFilteredList();
 }
 
 /* 분야 전체 필터 (신규) */
@@ -641,7 +651,7 @@ export function setCoDomain(id){
   setCoCatF(null); // 섹터 필터와 상호 배타
   if(coDomainF) _expandedDomains.add(id); // 필터 걸면 자동 펼침
   buildCoCAT(); renderCoList();
-  if(!selCo) renderCoDashboard();
+  showCoFilteredList();
 }
 
 export function toggleCoDomain(id){
@@ -706,7 +716,7 @@ export function buildCoCountryF(){
 export function setCoCountry(v){
   setCoCountryF((coCountryF===v)?null:v);
   buildCoCountryF(); renderCoList();
-  if(!selCo) renderCoDashboard();
+  showCoFilteredList();
 }
 
 /* ══════════════════════════════════════════
