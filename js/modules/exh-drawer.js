@@ -1256,7 +1256,11 @@ function appItemRows(a, x, live){
    취소된 줄을 걷어낸 지금 상태를 한자리에 둔다. 열린 회차가 있으면 여기서
    바로 내릴 수 있다 — 2차를 열어 두고 1차에 넣었던 것을 빼는 게 실제 흐름이다. */
 function appFinalRows(x){
-  const live = liveItemsFor(x.id);
+  /* 부스에 딸려 오는 것은 여기 세지 않는다 — 기업이 신청한 게 아니라 부스를
+     고르면 당연히 따라오는 것이라, 신청 내역에 섞이면 «이것도 신청했나»를
+     신청서와 맞춰 보게 된다. 무엇이 딸려 오는지는 비품 현황의 «기본» 탭이
+     말해 준다. */
+  const live = liveItemsFor(x.id).filter(i => !isBoothGiven(i));
   const open = openAppFor(x.id);
   if(!live.length) return '';
   const cur = currencyOf(x.id);
@@ -1897,7 +1901,10 @@ const payPill = (m) => {
 function dBilling(x){
   /* 목록에는 취소된 줄도 보여준다 — 왜 빠졌는지 여기서 확인해야 한다.
      합계는 살아 있는 것만 센다. */
-  const allItems = itemsFor(x.id);
+  /* 딸림 품목은 정산에도 올리지 않는다. 청구액이 0이라 합계는 어차피 같지만,
+     «기본»으로 찍힌 줄이 총계 건수를 부풀리고 제외 합계에도 앉아 있어, 무엇을
+     빼 주었는지 매번 다시 확인하게 된다. 돈이 오가는 줄만 둔다. */
+  const allItems = itemsFor(x.id).filter(i => !isBoothGiven(i));
   const items = allItems.filter(i => !isVoided(i));
   const invs = invoicesFor(x.id);
   const taxes = taxInvoicesFor(x.id);
@@ -2053,16 +2060,11 @@ function dBilling(x){
           return `
         <div class="bl-row bl-item" style="padding:6px 8px;background:var(--i9);border-radius:6px${
           open ? ';outline:2px solid var(--a);outline-offset:-2px' : ''}">
-          ${/* 부스에 딸려 오는 것은 기업이 신청한 게 아니다 — 청구 제외와 한데
-                묶으면 «왜 빠졌지»를 매번 다시 확인하게 된다. 따로 표시한다. */''}
-          ${isBoothGiven(i)
-            ? `<span class="pill p-teal" style="text-align:center"
-                 title="${escAttr((x.booth_type || '부스') + '에 기본으로 딸려 오는 품목이에요 — 부스 타입을 바꾸면 함께 바뀝니다')}">기본</span>`
-            : `<span class="pill ${isBillable(i) ? 'p-gray' : 'p-amber'}" style="text-align:center;cursor:${open ? 'pointer' : 'default'}"
+          <span class="pill ${isBillable(i) ? 'p-gray' : 'p-amber'}" style="text-align:center;cursor:${open ? 'pointer' : 'default'}"
             ${open ? `onclick="toggleItemBillable('${escAttr(i.id)}')"` : ''}
             title="${open ? (isBillable(i) ? '클릭하면 청구에서 제외합니다' : '청구에서 빠져 있어요 — 클릭하면 되돌립니다')
                           : (isBillable(i) ? '청구에 들어가는 항목이에요' : '청구에서 빠져 있어요')}">${
-            isBillable(i) ? escapeHtml(l) : '제외'}</span>`}
+            isBillable(i) ? escapeHtml(l) : '제외'}</span>
           <span class="bl-nm" style="${
             isVoided(i) ? 'color:var(--i5);text-decoration:line-through' : isBillable(i) ? '' : 'color:var(--i5)'}"
             title="${escAttr(i.name || '')}">${escapeHtml(i.name || '')}${appMark(i)}${editMark(i)}</span>
