@@ -49,6 +49,7 @@ import {
   getOrgById,
   EVENT_LIST,
   COMPANY_SECTORS,
+  ORG_KINDS,
   CATMAPS,
   PART_TYPES,
   API_BASE_URL,
@@ -1529,6 +1530,19 @@ export function populateUploadEvDropdown(){
         const indent = (typeof s!=='string' && s.parent) ? '　↳ ' : '';
         return `<option value="${escapeHtml(name)}"${name===cur?' selected':''}>${indent}${escapeHtml(name)}</option>`;
       }).join('');
+  }
+
+  /* 기업 유형 — 설정 › 선택 목록 › 기업 종류(org_kind)를 그대로 쓴다.
+     여기 목록을 코드에 박아 두면 설정에서 유형을 하나 늘려도 업로드 화면만
+     옛 목록을 들고 있어, 새 유형으로 들어와야 할 기업이 조용히 기본값으로
+     떨어진다. ORG_KINDS는 applyCodeLists()가 내용만 갈아끼우므로 그때그때 읽는다. */
+  const kindSel = document.getElementById('up-kind');
+  if(kindSel){
+    const cur = kindSel.value;
+    kindSel.innerHTML = '<option value="">잠재고객사 (기본)</option>' +
+      ORG_KINDS.map(k =>
+        `<option value="${escapeHtml(k.key)}"${k.key===cur?' selected':''}>${escapeHtml(k.label)}</option>`
+      ).join('');
   }
 
   const sel = document.getElementById('up-ev');
