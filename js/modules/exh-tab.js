@@ -5156,13 +5156,32 @@ export async function applyBoothItems(exhId, typeCode){
   // 발주서·정산에서 같은 줄이 새 줄로 보인다
   if(sameBoothSet(had, want)) return;
 
-  for(const i of had){
+  /* 달라진 줄만 손댄다. 전에는 전부 지우고 다시 깔았는데, 그러면 양쪽에 다 있는
+     줄까지 새 id로 바뀌면서 그 줄에 붙어 있던 «파일 받은 날»이 함께 사라졌다 —
+     설정에서 품목 하나를 더하는 것만으로 이미 받은 기록이 지워지고, 그러면
+     파일을 이미 보낸 기업에 독촉이 나간다. */
+  const keyOf = (cat, name, qty) => `${cat}|${String(name || '').trim()}|${String(qty ?? '').trim()}`;
+  const left = new Map();
+  had.forEach(i => {
+    const k = keyOf(i.category || 'equip', i.name, i.qty);
+    if(!left.has(k)) left.set(k, []);
+    left.get(k).push(i);
+  });
+  const make = [];
+  want.forEach(o => {
+    const k = keyOf(o.cat || 'equip', [o.code, o.name].filter(Boolean).join(' '), o.qty);
+    const hit = left.get(k);
+    if(hit && hit.length){ hit.shift(); return; }   // 그대로 두는 줄
+    make.push(o);
+  });
+
+  for(const i of [...left.values()].flat()){
     const at = EXH_ITEMS.indexOf(i);
     if(at >= 0) EXH_ITEMS.splice(at, 1);
     await deleteExhItem(i.id);
   }
 
-  for(const o of want){
+  for(const o of make){
     const cat = o.cat || 'equip';
     // 코드가 있으면 품목표의 그 품목에 잇는다 — 발주서에서 카탈로그 품목과
     // 같은 줄로 묶이고, 이름 표기가 갈리지 않는다
@@ -5188,10 +5207,10 @@ export async function applyBoothItems(exhId, typeCode){
   }
 
   refreshExhViews();
-  if(want.length || had.length){
+  if(make.length || [...left.values()].flat().length){
     trackAction('edit', '기본 제공 품목', x.company_name || '',
-      `<b>${escapeHtml(typeCode || '부스 없음')}</b>의 기본 제공 품목 ${want.length}건을 넣었어요${
-        had.length ? ` (이전 ${had.length}건은 걷어냈어요)` : ''}`,
+      `<b>${escapeHtml(typeCode || '부스 없음')}</b>의 기본 제공 품목을 맞췄어요 — ${make.length}건 넣고 ${
+        [...left.values()].flat().length}건 걷었어요 (그대로 둔 줄은 받은 날짜도 그대로예요)`,
       { kind: 'exhibitor', id: exhId, tab: 'apply' });
   }
 }
