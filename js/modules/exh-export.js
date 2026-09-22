@@ -241,7 +241,7 @@ function drawLedgerSheet(wb, data, meta, view = LEDGER_VIEWS.all){
   const rows = view.rows || data.rows;
   const ws = wb.addWorksheet(view.name);
 
-  const INFO    = 6;                        // No. ~ 담당자
+  const INFO    = 7;                        // No. ~ 담당자
   const cEquip0 = INFO + 1;                 // 첫 가구비품 열
   const cEquip1 = INFO + equipCols.length;
   const cEqSub  = cEquip1 + 1;              // 가구비품 소계
@@ -262,9 +262,15 @@ function drawLedgerSheet(wb, data, meta, view = LEDGER_VIEWS.all){
   ws.getColumn(1).width = 5;
   ws.getColumn(2).width = 14;
   ws.getColumn(3).width = 9;
-  ws.getColumn(4).width = 24;
-  ws.getColumn(5).width = 26;
-  ws.getColumn(6).width = 18;
+  ws.getColumn(4).width = 7;                // 부스 정렬
+  ws.getColumn(5).width = 24;
+  ws.getColumn(6).width = 26;
+  ws.getColumn(7).width = 18;
+  /* 부스번호는 «44-46»처럼 세 칸을 쓰는 기업이 있어 숫자로 담을 수 없다. 그런데
+     「51」은 숫자로, 「44-46」은 텍스트로 들어가면 엑셀이 한 열에서 두 가지를
+     섞어 정렬해 순서가 뒤엉킨다. 그래서 이 열은 전부 텍스트로 굳히고(@),
+     정렬은 옆의 숫자 열(부스 정렬)로 한다. */
+  ws.getColumn(3).numFmt = '@';
   equipCols.forEach((c, i) => { ws.getColumn(cEquip0 + i).width = 7; });
   graphicCols.forEach((c, i) => { ws.getColumn(cGra0 + i).width = 14; });
   ws.getColumn(cEqSub).width = 13;
@@ -277,16 +283,15 @@ function drawLedgerSheet(wb, data, meta, view = LEDGER_VIEWS.all){
   r1.getCell(1).value       = '업체 정보';
   r1.getCell(cEquip0).value = '가구비품 신청 수량 (코드별)';
   if(graphicCols.length) r1.getCell(cGra0).value = '그래픽·부대시설 신청 수량';
-  r1.getCell(cDirect).value = view.reference
-    ? '기타 금액\n(카탈로그 외·분담)' : '기타 금액\n(카탈로그 외·분담·무상)';
-  r1.getCell(cTotal).value  = view.reference ? '참고 금액\n(청구 안 함)' : '총 신청금액';
+  r1.getCell(cDirect).value = '기타 금액';
+  r1.getCell(cTotal).value  = view.reference ? '참고 금액' : '총 신청금액';
   r1.height = 20;
 
   /* 2행 — 열 머리글. 가구비품은 코드만(80개 가까이라 이름까지 넣으면 읽히지
      않는다 — 이름은 카탈로그 시트에 있다), 그래픽은 코드+품명(몇 개뿐이고
      이름을 봐야 무엇인지 안다). */
   const r2 = ws.getRow(2);
-  ['No.', '부스타입', '부스번호', '업체명(국문)', '업체명(영문)', '담당자']
+  ['No.', '부스타입', '부스번호', '부스 정렬', '업체명(국문)', '업체명(영문)', '담당자']
     .forEach((v, i) => { r2.getCell(i + 1).value = v; });
   equipCols.forEach((c, i) => { r2.getCell(cEquip0 + i).value = c.code || ''; });
   r2.getCell(cEqSub).value = '가구비품\n소계';
@@ -294,6 +299,11 @@ function drawLedgerSheet(wb, data, meta, view = LEDGER_VIEWS.all){
     r2.getCell(cGra0 + i).value = `${c.code || ''}\n${c.name_ko || c.name_en || ''}`;
   });
   if(graphicCols.length) r2.getCell(cGraSub).value = '그래픽·부대시설\n소계';
+  /* 금액 두 열은 1·2행을 세로로 병합하지 않는다 — 머리글 행에 걸친 병합이
+     하나라도 있으면 엑셀이 «병합된 셀의 크기가 모두 같아야 합니다»라며 필터와
+     정렬을 거부한다. 설명은 2행에 작은 글씨로 적는다. */
+  r2.getCell(cDirect).value = view.reference ? '(카탈로그 외·분담)' : '(카탈로그 외·분담·무상)';
+  r2.getCell(cTotal).value  = view.reference ? '(청구 안 함)' : '(원화 단가 기준)';
   r2.height = graphicCols.length ? 46 : 26;
 
   for(let c = 1; c <= cTotal; c++){
@@ -303,8 +313,6 @@ function drawLedgerSheet(wb, data, meta, view = LEDGER_VIEWS.all){
   ws.mergeCells(1, 1, 1, INFO);
   ws.mergeCells(1, cEquip0, 1, cEqSub);
   if(graphicCols.length) ws.mergeCells(1, cGra0, 1, cGraSub);
-  ws.mergeCells(1, cDirect, 2, cDirect);
-  ws.mergeCells(1, cTotal, 2, cTotal);
 
   /* 3행 — 단가 보조행(숨김).
      카탈로그 시트를 참조로 걸어 두면, 단가가 개정돼 그 시트만 고쳐도 대장 전체
@@ -335,10 +343,15 @@ function drawLedgerSheet(wb, data, meta, view = LEDGER_VIEWS.all){
 
     r.getCell(1).value = idx + 1;
     r.getCell(2).value = x.booth_type || '';
-    r.getCell(3).value = x.booth_no || '';
-    r.getCell(4).value = n.ko || '';
-    r.getCell(5).value = n.en || '';
-    r.getCell(6).value = pc.name || pc.email || '';
+    r.getCell(3).value = String(x.booth_no ?? '');
+    /* 정렬용 숫자 — «44-46»이면 44. 부스 순서로 줄을 세우거나 발주 동선을
+       따라갈 때 쓰는 열이라 첫 번호가 기준이다. 번호가 없는 기업은 빈 칸으로
+       둔다(0을 넣으면 맨 앞에 몰려 아직 배정 안 된 기업이 1번 부스처럼 보인다). */
+    const bn = String(x.booth_no ?? '').match(/\d+/);
+    r.getCell(4).value = bn ? Number(bn[0]) : null;
+    r.getCell(5).value = n.ko || '';
+    r.getCell(6).value = n.en || '';
+    r.getCell(7).value = pc.name || pc.email || '';
     cols.forEach((c, i) => {
       const q = qty.get(c.id) || 0;
       if(q) r.getCell(colAt(i)).value = q;
@@ -367,7 +380,7 @@ function drawLedgerSheet(wb, data, meta, view = LEDGER_VIEWS.all){
 
     for(let c = 1; c <= cTotal; c++){
       const cell = r.getCell(c);
-      const nameCol = c === 4 || c === 5;
+      const nameCol = c === 5 || c === 6;
       cell.font      = FONT;
       cell.border    = { bottom: BORDER, right: BORDER };
       cell.alignment = { vertical: 'middle', horizontal: nameCol ? 'left' : 'center', wrapText: nameCol };
@@ -402,13 +415,23 @@ function drawLedgerSheet(wb, data, meta, view = LEDGER_VIEWS.all){
     cell.border = { top: { style: 'medium', color: { argb: C_HEAD } }, bottom: BORDER };
     if(!cell.alignment) cell.alignment = { vertical: 'middle', horizontal: 'center' };
   }
-  ws.mergeCells(totRow, 1, totRow, INFO);
+  /* 합계 줄도 병합하지 않는다 — 표 안에 병합이 하나라도 있으면 열을 골라
+     정렬할 때 엑셀이 막는다. 라벨은 A열에 두고 왼쪽으로 붙여 읽는다. */
+  tot.getCell(1).alignment = { vertical: 'middle', horizontal: 'left' };
+
+  /* 필터를 미리 걸어 둔다 — 받은 사람이 직접 걸다가 머리글 병합에 걸려
+     오류를 보지 않도록. 합계 줄은 범위에서 뺀다(필터에 걸리면 합계가 숨는다). */
+  if(rows.length) ws.autoFilter = {
+    from: { row: 2, column: 1 },
+    to:   { row: last, column: cTotal },
+  };
 
   /* 아래 주석 — 이 숫자가 어디서 왔고 무엇을 빼고 세었는지. 표만 넘겨받은
      사람이 되물어야 알 수 있는 것들을 표 안에 남긴다. */
   const notes = [
     view.note,
     `※ ${meta.eventLabel} · CRM 「전시 → 비품 현황」의 신청 내역을 ${meta.stamp}에 그대로 집계한 표입니다. 품목 코드·단가는 「${CAT_SHEET}」 시트를 참조합니다.`,
+    '※ D열 「부스 정렬」은 부스번호의 첫 숫자입니다 — 「44-46」처럼 여러 칸을 쓰는 기업 때문에 부스번호 열은 전부 텍스트로 담았고, 부스 순서로 정렬할 때는 이 숫자 열을 쓰세요. 머리글에 필터도 걸어 두었습니다.',
     '※ 공동 부스에서 비용만 나눠 낸 줄(실물은 상대 기업이 주문)은 수량에서 뺐습니다 — 두 번 세면 없는 물건을 발주하게 됩니다.',
     `※ 소계·총액은 「${CAT_SHEET}」의 원화 단가 × 수량입니다. 3행은 그 단가를 수량과 같은 가로 방향으로 깔아 둔 계산용 보조행(숨김)이라 지우면 소계·총액이 계산되지 않습니다.`,
     '※ 한 기업은 한 줄입니다. 달러로 청구하는 기업의 신청도 같은 줄에 담았고, 금액은 모두 원화 단가로 계산했습니다 — 실제 청구 통화와 청구액은 인보이스를 따릅니다.',
