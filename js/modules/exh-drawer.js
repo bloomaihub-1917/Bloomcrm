@@ -59,7 +59,8 @@ import {
   billedAmount, paidAmount, graphicState, graphicDueInfo, money, fmtMoney, currencyOf, mixedCurrency, taxNeed, daysSince, CANCELLED,
   isPendingRefund, boothTypeOptions, boothTypes, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
   TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing, introOver, boothDesignState,
-  isSharedBooth, isBookOnly, baseKind, BASE_KINDS, bookName, fasciaName, baseRecvAt, baseRecvItems,
+  isSharedBooth, isBookOnly, baseKind, BASE_KINDS, bookName, fasciaName,
+  baseRecvAt, baseDoneAt, baseItems, baseRecvItems,
   guardWrite, exhLocked, exhLockNotice, isBoothGiven, boothIncluded, applyBoothItems, boothItemsPending,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar, needsReissue,
   settleState, liveInvoices, payDueDate, paidBreakdown, invoiceGap,
@@ -1443,8 +1444,8 @@ function baseWorkBlock(x){
                 x.fascia_name ? ' (간판만 따로 적음)' : ' (프로그램북 게재 영문명)'}</div>`
             : '<div style="font-size:10.5px;color:var(--re);margin-top:3px">게재 영문명이 비어 있어 간판을 만들 수 없어요 — 프로그램북 탭에서 넣거나 여기에 직접 적으세요.</div>'}</div>
         <div class="fg"><label class="fl">간판명 확정</label>
-          <input type="date" class="fi" style="font-size:12px" value="${escAttr(x.base_recv_at || '')}"
-            onchange="setExhField('${escAttr(x.id)}','base_recv_at',this.value,'간판명 확정')"></div>`
+          <input type="date" class="fi" style="font-size:12px" value="${escAttr(baseRecvAt(x))}"
+            onchange="setBaseRecvAt('${escAttr(x.id)}',this.value)"></div>`
       /* 이 날짜는 그래픽 현황의 «받을 파일»과 같은 자리다 — 기본 제공 그래픽
          항목의 받은 날을 읽고 쓴다. 두 화면이 각자 적던 시절에는 한쪽이 받음,
          다른 쪽이 미수령이었다. */
@@ -1456,8 +1457,8 @@ function baseWorkBlock(x){
                 escapeHtml(baseRecvItems(x).map(i => i.name || '').filter(Boolean).join(' · '))}»와 같은 칸이에요</div>`
             : ''}</div>`)
     + `<div class="fg"><label class="fl">${escapeHtml(v.done)}</label>
-        <input type="date" class="fi" style="font-size:12px" value="${escAttr(x.base_done_at || '')}"
-          onchange="setExhField('${escAttr(x.id)}','base_done_at',this.value,'${escAttr(v.done)}')"></div>
+        <input type="date" class="fi" style="font-size:12px" value="${escAttr(baseDoneAt(x))}"
+          onchange="setBaseDoneAt('${escAttr(x.id)}',this.value)"></div>
       <div class="fg"><label class="fl">비고</label>
         <input class="fi" style="font-size:12px" value="${escAttr(x.base_note || '')}"
           placeholder="색상·재질·시공 메모" onchange="setExhField('${escAttr(x.id)}','base_note',this.value,'기본 시공 비고')"></div>
@@ -2463,57 +2464,85 @@ export function graphicUnreceived(exhId){
   return graphicItems(exhId).filter(i => !i.received_at).length;
 }
 
+/* 한 항목 줄. 기본 제공 줄에는 «만든 날»이 하나 더 붙는다 — 그 줄이 곧
+   기본 시공이라, 받은 뒤에 우리가 만들어 세우는 단계까지 여기서 끝난다. */
+function graphicItemRow(i, opts = {}){
+  const on = !!i.received_at;
+  return `<div style="padding:9px 0;border-bottom:1px solid var(--i8)">
+    <div style="display:flex;align-items:center;gap:9px">
+      <button onclick="toggleItemReceived('${escAttr(i.id)}')"
+        title="${on ? '받음 표시를 지웁니다' : '오늘 받은 것으로 표시합니다'}"
+        style="width:20px;height:20px;border-radius:5px;border:1.5px solid ${on ? 'var(--g)' : 'var(--i6)'};background:${on ? 'var(--g)' : 'transparent'};color:#fff;font-size:12px;font-weight:800;cursor:pointer;flex-shrink:0;line-height:1">${on ? '✓' : ''}</button>
+      <span style="flex:1;min-width:0">
+        <span style="font-size:12.5px;font-weight:${on ? 600 : 500};color:${on ? 'var(--i1)' : 'var(--i3)'}">${escapeHtml(i.name || '(이름 없음)')}</span>
+        <span style="font-size:10.5px;color:var(--i4)">${i.qty ? ` · ${escapeHtml(String(i.qty))}개` : ''}${
+          i.amount ? ` · ${escapeHtml(fmtMoney(i.amount, i.currency))}` : ''}</span>${
+          isDesignItem(i) && i.note ? `<div style="font-size:10.5px;color:var(--i4);margin-top:2px">디자인 대상 — <b>${escapeHtml(i.note)}</b></div>` : ''}
+      </span>
+      <input type="date" class="fi" style="width:136px;padding:4px 8px;font-size:11.5px"
+        value="${escAttr(i.received_at || '')}"
+        onchange="setItemField('${escAttr(i.id)}','received_at',this.value)">
+    </div>
+    ${opts.done ? `<div style="display:flex;gap:9px;align-items:center;margin-top:5px;padding-left:29px">
+      <span style="font-size:10.5px;color:var(--i5);flex:0 0 auto">만든 날</span>
+      <input type="date" class="fi" style="width:136px;padding:4px 8px;font-size:11.5px"
+        value="${escAttr(i.done_at || '')}"
+        onchange="setItemField('${escAttr(i.id)}','done_at',this.value)">
+      ${i.done_at ? '<span class="pill p-green">완료</span>'
+        : i.received_at ? '<span class="pill p-amber">작업 전</span>' : ''}
+    </div>` : ''}
+    <div style="display:flex;gap:9px;align-items:center;margin-top:5px;padding-left:29px">
+      <span style="font-size:10.5px;color:var(--i5);flex:0 0 auto">마감</span>
+      <input type="date" class="fi" style="width:136px;padding:4px 8px;font-size:11.5px"
+        value="${escAttr(i.due_at || '')}"
+        onchange="setItemField('${escAttr(i.id)}','due_at',this.value)">
+      ${(() => { const d = graphicDueInfo(i);
+        return on ? '' : `<span class="pill ${d.cls}">${escapeHtml(d.text)}</span>`; })()}
+    </div>
+    <div style="display:flex;gap:9px;align-items:center;margin-top:5px;padding-left:29px">
+      <span style="font-size:10.5px;color:var(--i5);flex:0 0 auto">받은 것</span>
+      <input class="fi" style="flex:1;min-width:0;padding:4px 8px;font-size:11.5px"
+        value="${escAttr(i.received_note || '')}" placeholder="예: 백월_최종.ai · CMYK · 재단선 포함"
+        onchange="setItemField('${escAttr(i.id)}','received_note',this.value)">
+    </div>
+  </div>`;
+}
+
+/* 받을 그래픽 — 계약에 딸려 오는 것과 기업이 따로 주문한 것을 갈라 둔다.
+
+   둘은 성격이 다르다. 기본 제공은 부스 타입이 정하는 것이라 기업이 아무 말을
+   안 해도 우리가 만들어 세워야 하고(빠뜨리면 개막날 부스에 상호가 없다),
+   추가 주문은 기업이 신청하고 돈을 더 내는 것이라 안 하면 그만이다. 한 줄에
+   섞여 있으면 «이 부스에 원래 들어가는 것»이 무엇인지 알 수 없다. */
 function graphicItemsBlock(x){
   const gi = graphicItems(x.id);
   if(!gi.length){
     return `<div style="font-size:11.5px;color:var(--i5);margin-bottom:8px">등록된 그래픽 항목이 없어요</div>
       <div style="font-size:11px;color:var(--i4);margin-bottom:8px">
-        정산 탭에서 <b>그래픽</b> 분류로 항목을 추가하면 여기 나옵니다.</div>
+        부스 타입을 정하면 그 타입의 기본 제공 그래픽이 여기 깔리고,
+        정산 탭에서 <b>그래픽</b> 분류로 넣은 추가 주문도 여기 나옵니다.</div>
       <button class="btn bs" onclick="switchExhDT('billing')">정산 탭으로 이동</button>`;
   }
 
+  const base = gi.filter(isBoothGiven);
+  const extra = gi.filter(i => !isBoothGiven(i));
   const total = gi.reduce((s, i) => s + Number(String(i.amount || '').replace(/[^0-9.-]/g, '') || 0), 0);
   const got = gi.filter(i => i.received_at).length;
   const late = gi.filter(i => !i.received_at && graphicDueInfo(i).late).length;
 
+  const group = (label, list, hint, opts) => !list.length ? '' : `
+    <div style="margin:${label === '기본 제공' ? '0' : '14px'} 0 2px;display:flex;align-items:baseline;gap:7px">
+      <span style="font-size:11.5px;font-weight:700;color:var(--i2)">${escapeHtml(label)}</span>
+      <span style="font-size:10.5px;color:var(--i5)">${escapeHtml(hint)}</span>
+    </div>
+    ${list.map(i => graphicItemRow(i, opts)).join('')}`;
+
   return `<div style="font-size:11px;color:var(--i4);margin-bottom:8px">
-      정산 탭의 <b>그래픽</b> 분류에서 그대로 가져옵니다 — 여기서 항목을 늘리거나 지우지는 않아요.
       기업에서 파일을 받으면 왼쪽 칸에 체크하고, 받은 파일이 무엇이었는지 적어 두세요.
       <b>마감</b>은 이 파일을 언제까지 받기로 했나입니다 — 지난 것은 그래픽 현황에서 붉게 잡힙니다.</div>
 
-    ${gi.map(i => {
-      const on = !!i.received_at;
-      return `<div style="padding:9px 0;border-bottom:1px solid var(--i8)">
-        <div style="display:flex;align-items:center;gap:9px">
-          <button onclick="toggleItemReceived('${escAttr(i.id)}')"
-            title="${on ? '받음 표시를 지웁니다' : '오늘 받은 것으로 표시합니다'}"
-            style="width:20px;height:20px;border-radius:5px;border:1.5px solid ${on ? 'var(--g)' : 'var(--i6)'};background:${on ? 'var(--g)' : 'transparent'};color:#fff;font-size:12px;font-weight:800;cursor:pointer;flex-shrink:0;line-height:1">${on ? '✓' : ''}</button>
-          <span style="flex:1;min-width:0">
-            <span style="font-size:12.5px;font-weight:${on ? 600 : 500};color:${on ? 'var(--i1)' : 'var(--i3)'}">${escapeHtml(i.name || '(이름 없음)')}</span>
-            <span style="font-size:10.5px;color:var(--i4)">${i.qty ? ` · ${escapeHtml(String(i.qty))}개` : ''}${
-              i.amount ? ` · ${escapeHtml(fmtMoney(i.amount, i.currency))}` : ''}</span>${
-              isDesignItem(i) && i.note ? `<div style="font-size:10.5px;color:var(--i4);margin-top:2px">디자인 대상 — <b>${escapeHtml(i.note)}</b></div>` : ''}
-          </span>
-          <input type="date" class="fi" style="width:136px;padding:4px 8px;font-size:11.5px"
-            value="${escAttr(i.received_at || '')}"
-            onchange="setItemField('${escAttr(i.id)}','received_at',this.value)">
-        </div>
-        <div style="display:flex;gap:9px;align-items:center;margin-top:5px;padding-left:29px">
-          <span style="font-size:10.5px;color:var(--i5);flex:0 0 auto">마감</span>
-          <input type="date" class="fi" style="width:136px;padding:4px 8px;font-size:11.5px"
-            value="${escAttr(i.due_at || '')}"
-            onchange="setItemField('${escAttr(i.id)}','due_at',this.value)">
-          ${(() => { const d = graphicDueInfo(i);
-            return on ? '' : `<span class="pill ${d.cls}">${escapeHtml(d.text)}</span>`; })()}
-        </div>
-        <div style="display:flex;gap:9px;align-items:center;margin-top:5px;padding-left:29px">
-          <span style="font-size:10.5px;color:var(--i5);flex:0 0 auto">받은 것</span>
-          <input class="fi" style="flex:1;min-width:0;padding:4px 8px;font-size:11.5px"
-            value="${escAttr(i.received_note || '')}" placeholder="예: 백월_최종.ai · CMYK · 재단선 포함"
-            onchange="setItemField('${escAttr(i.id)}','received_note',this.value)">
-        </div>
-      </div>`;
-    }).join('')}
+    ${group('기본 제공', base, `${x.booth_type || '부스 타입'}에 딸려 나갑니다 — 청구하지 않아요`, { done: true })}
+    ${group('추가 주문', extra, '기업이 따로 신청한 것 — 청구 대상이에요', {})}
 
     <div style="display:flex;justify-content:space-between;align-items:baseline;padding:9px 2px 0;font-size:12px">
       <span style="color:var(--i4)">${gi.length}건 · 받음 ${got}건${got < gi.length ? ` · <b style="color:var(--am)">미수령 ${gi.length - got}건</b>` : ''}${

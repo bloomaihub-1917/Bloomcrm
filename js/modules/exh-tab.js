@@ -145,7 +145,7 @@ let exhView = 'dash';        // dash | list | booth | equip | graphic | watch
 /* 그래픽 현황 안의 보기와 거르개. 그래픽은 기업 한 줄로 볼 일(단계 진행)과
    파일 한 줄로 볼 일(무엇이 안 왔나)이 갈린다 — 화면 하나에 둘 다 넣으면
    어느 쪽도 제대로 안 보여서 나눠 두고 전환한다. */
-let gView = 'item';          // item(받을 파일) | kind(품목별) | co(기업별 진행) | self(독립부스)
+let gView = 'base';          // base(기본 제공) | item(받을 파일) | kind(품목별) | co(기업별 진행) | self(독립부스)
 let gFil  = 'all';           // all | todo | late | none | got
 let payFil = 'all';          // all | paid | partial | unpaid | none — 금액 현황의 기업별 세부
 
@@ -673,41 +673,51 @@ export function baseKind(x){
   return Object.keys(BASE_KINDS).find(k => BASE_KINDS[k].types.includes(t)) || '';
 }
 
-/* ── 「디자인 수령」은 그래픽 현황과 같은 자리를 본다 ──
+/* ── 기본 제공 시공은 그래픽 항목 위에서 돈다 ──
 
-   출력·시공 부스가 받는 것은 결국 그래픽 파일이고, 그건 그래픽 현황의 «받을
-   파일» 목록에 이미 한 줄씩 있다. 그런데 기본 시공은 기업 칸(base_recv_at)에
-   따로 날짜를 적고 있어서, 같은 사실을 두 군데가 각자 기록했다 — 스물두 곳 중
-   열세 곳이 그래픽 현황에는 «받음»인데 기본 시공에는 «미수령»이었다. 그 화면만
-   보고 독촉하면 이미 파일을 보낸 곳에 독촉이 나간다.
+   부스 타입이 깔아 주는 것(간판·벽면 그래픽)은 그래픽 항목으로 들어온다.
+   전에는 그 사실을 기업 칸(base_recv_at/base_done_at)에 따로 적어서, 같은 일이
+   두 군데에 적혔다 — 스물두 곳 중 열세 곳이 그래픽에는 «받음», 기본 시공에는
+   «미수령»이었다. 그 화면만 보고 독촉하면 이미 보낸 곳에 독촉이 나간다.
 
-   그래서 적는 자리를 항목 하나로 모으고, 기본 시공은 그걸 읽기만 한다.
-   기본 제공으로 깔린 그래픽이 여럿이면 전부 와야 «수령»이다 — 하나가 비어
-   있는데 수령으로 보이면 그 한 장을 아무도 안 찾는다. */
-export function baseRecvItems(x){
+   이제 정본은 항목 줄이다. 기업 칸은 항목이 아직 없는 기업을 위해서만 읽는다.
+   여럿이면 전부 와야 «받음»이고 전부 끝나야 «완료»다 — 하나가 비었는데 완료로
+   보이면 그 한 장을 아무도 안 찾는다. */
+export function baseItems(x){
   return liveItemsFor(x.id).filter(i => (i.category || '') === 'graphic' && isBoothGiven(i));
 }
+/* 이름을 바꾸기 전에 쓰던 자리 — 드로어가 아직 이 이름으로 부른다 */
+export const baseRecvItems = baseItems;
+
+const allDate = (items, field) => {
+  if(items.some(i => !String(i[field] || '').trim())) return '';
+  return items.map(i => String(i[field] || '')).sort().pop();
+};
 export function baseRecvAt(x){
-  /* 간판(기본부스)은 받을 파일이 없다 — 지금까지처럼 기업 칸을 쓴다.
-     출력·시공이라도 기본 제공 그래픽 줄이 아직 없으면 옛 칸을 그대로 읽는다. */
-  if(baseKind(x) !== 'print') return String(x.base_recv_at || '').trim();
-  const gi = baseRecvItems(x);
-  if(!gi.length) return String(x.base_recv_at || '').trim();
-  if(gi.some(i => !String(i.received_at || '').trim())) return '';
-  return gi.map(i => String(i.received_at || '')).sort().pop();
+  const gi = baseItems(x);
+  return gi.length ? allDate(gi, 'received_at') : String(x.base_recv_at || '').trim();
 }
-/* 기본 시공 화면에서 고친 날짜도 항목으로 들어간다 — 읽는 곳과 쓰는 곳이
-   다르면 고쳐도 화면이 안 바뀐다. */
-export async function setBaseRecvAt(exhId, v){
+export function baseDoneAt(x){
+  const gi = baseItems(x);
+  return gi.length ? allDate(gi, 'done_at') : String(x.base_done_at || '').trim();
+}
+
+/* 화면에서 고친 날짜도 항목으로 들어간다 — 읽는 곳과 쓰는 곳이 다르면
+   고쳐도 화면이 안 바뀐다. 항목이 없는 기업만 옛 기업 칸에 적는다. */
+async function setBaseDate(exhId, field, itemField, v, label){
   const x = getExhibitorById(exhId);
   if(!x) return;
-  const gi = baseKind(x) === 'print' ? baseRecvItems(x) : [];
-  if(!gi.length){ await patchExh(exhId, { base_recv_at: v }, '디자인 수령'); return; }
+  const gi = baseItems(x);
+  if(!gi.length){ await patchExh(exhId, { [field]: v }, label); return; }
   /* 항목 저장은 드로어가 갖고 있다 — 이 파일이 그쪽을 import하면 순환 참조라
      window 경유로 부른다(이 파일의 다른 드로어 호출과 같은 방식). */
-  for(const i of gi) await window.setItemField?.(i.id, 'received_at', v);
+  for(const i of gi) await window.setItemField?.(i.id, itemField, v);
   refreshExhViews();
 }
+export const setBaseRecvAt = (exhId, v) =>
+  setBaseDate(exhId, 'base_recv_at', 'received_at', v, '디자인 수령·간판명 확정');
+export const setBaseDoneAt = (exhId, v) =>
+  setBaseDate(exhId, 'base_done_at', 'done_at', v, '기본 시공 완료');
 
 /* 어디까지 왔나. 받는 것과 만드는 것이 따로라 두 단계로 본다 —
    "디자인은 왔는데 아직 안 뽑았다"가 제일 흔한 상태이고, 그걸 완료로 묶으면
@@ -720,8 +730,8 @@ export function baseState(x){
   // 간판은 영문명이 있어야 만든다. 확정 도장을 찍었어도 이름이 없으면 못 만든다.
   if(k === 'fascia' && !fasciaName(x)) return { state: 'warn', text: '영문명 없음' };
   const got = baseRecvAt(x);
-  if(!got)            return { state: 'todo', text: '미수령' };
-  if(!x.base_done_at) return { state: 'part', text: '수령 · 작업 전' };
+  if(!got)             return { state: 'todo', text: '미수령' };
+  if(!baseDoneAt(x))   return { state: 'part', text: '수령 · 작업 전' };
   return { state: 'done', text: BASE_KINDS[k].done };
 }
 
@@ -1131,7 +1141,6 @@ export function renderExh(){
      끝낼 수 있어야 한다. */
   const VIEWS = [['dash','대시보드'], ['list','기업리스트'],
     ['booth','부스 현황'], ['equip','비품 현황'], ['graphic','그래픽 현황'],
-    ['base','기본 시공'],
     ['money','금액 현황'], ['book','프로그램북'], ['watch','파일 감시']];
   const seg = `<div class="tbar" style="padding:10px 16px 0">
     <div class="seg" style="flex-wrap:wrap">
@@ -1155,7 +1164,7 @@ export function renderExh(){
     : exhView === 'booth'   ? renderBoothView(list)
     : exhView === 'equip'   ? renderEquipView(list)
     : exhView === 'graphic' ? renderGraphicView(list)
-    : exhView === 'base'    ? renderBaseView(list)
+    : exhView === 'base'    ? renderGraphicView(list)   /* 옛 주소로 들어와도 그래픽으로 */
     : exhView === 'money'   ? renderMoneyView(list)
     : exhView === 'book'    ? renderBookView(list)
     : exhView === 'watch'   ? renderWatchView(exhEvent)
@@ -2363,17 +2372,24 @@ function renderGraphicView(list){
      우리는 받아 보기만 한다. 그래서 주문 목록(rows)이 아니라 부스 타입으로 잡는다.
      주문이 하나도 없어도 이 보기는 열려야 한다. */
   const selfRows = list.filter(x => (x.booth_type || '') === SELF_BUILD_TYPE);
-  if(!rows.length && !selfRows.length) return emptyView('그래픽을 주문한 기업이 없어요');
+  const baseAny = list.some(x => baseKind(x));
+  if(!rows.length && !selfRows.length && !baseAny) return emptyView('그래픽을 주문한 기업이 없어요');
 
   /* 보기 전환 — 기업별은 "이 회사가 어느 단계인가", 항목별은 "무엇이 아직 안 왔나".
      그래픽은 한 기업이 백월·행잉배너·데스크 랩핑을 함께 주문하므로 기업 한 줄로는
      무엇을 받았는지 체크할 자리가 없다. 그래서 받을 파일 목록을 기본으로 둔다. */
+  /* «기본 제공»이 맨 앞이다 — 계약에 들어 있어 기업이 조용해도 우리가 만들어
+     세워야 하는 것이라, 안 하면 그만인 추가 주문보다 먼저 본다. 전에는 「기본
+     시공」이라는 제 탭을 갖고 있었는데, 거기서 하던 일이 결국 그래픽 파일을
+     받아 만드는 일이라 같은 화면으로 들어왔다. */
+  const baseN = list.filter(x => baseKind(x)).length;
   const seg = `<div style="padding:12px 16px 0"><div class="seg">
-    ${[['item', '받을 파일'], ['kind', '품목별'], ['co', '기업별 진행'],
+    ${[['base', `기본 제공${baseN ? ` ${baseN}` : ''}`], ['item', '받을 파일'], ['kind', '품목별'], ['co', '기업별 진행'],
        ['self', `독립부스${selfRows.length ? ` ${selfRows.length}` : ''}`]].map(([k, l]) =>
       `<button class="seg-b${gView === k ? ' on' : ''}" onclick="setGraphicView('${k}')">${l}</button>`).join('')}
   </div></div>`;
 
+  if(gView === 'base') return seg + renderBaseView(list);
   if(gView === 'self') return seg + renderSelfBoothView(selfRows);
   if(!rows.length) return seg + emptyView('그래픽을 주문한 기업이 없어요');
   return seg + (gView === 'co' ? renderGraphicCoView(rows)
@@ -3326,7 +3342,7 @@ export async function applyBaseDone(){
   if(!rows.length){ alert('제작 완료로 표시할 곳을 먼저 고르세요.'); return; }
 
   const v = (document.getElementById('base-bulk-date')?.value || '').trim() || td();
-  const over = rows.filter(x => String(x.base_done_at || '').trim() && x.base_done_at !== v);
+  const over = rows.filter(x => baseDoneAt(x) && baseDoneAt(x) !== v);
   const noName = rows.filter(x => baseKind(x) === 'fascia' && !fasciaName(x));
 
   /* 간판은 우리가 도록 영문명으로 일괄 제작한다 — «간판명 확정»과 «간판 제작»이
@@ -3334,7 +3350,7 @@ export async function applyBaseDone(){
      남는다. 지어내는 날짜가 아니라 같은 날의 같은 일이므로 함께 찍는다.
      출력·시공 쪽은 다르다 — 거기 수령일은 기업에서 파일이 실제로 온 날이라
      우리가 만든 날로 대신할 수 없다. */
-  const alsoRecv = rows.filter(x => baseKind(x) === 'fascia' && !String(x.base_recv_at || '').trim());
+  const alsoRecv = rows.filter(x => baseKind(x) === 'fascia' && !baseRecvAt(x));
 
   if(!confirm(`${rows.length}곳을 «제작 완료 ${v}»로 표시합니다.`
     + (alsoRecv.length ? `\n간판 ${alsoRecv.length}곳은 «간판명 확정»도 같은 날짜로 함께 찍습니다.` : '')
@@ -3342,9 +3358,10 @@ export async function applyBaseDone(){
     + (noName.length ? `\n\n⚠ 간판에 넣을 영문명이 없는 곳이 ${noName.length}곳 있어요 — 이름 없이 완료로 표시됩니다.\n   ${noName.slice(0, 5).map(x => exhNames(x).ko).join(', ')}${noName.length > 5 ? ' 외' : ''}` : ''))) return;
 
   for(const x of rows){
-    const patch = { base_done_at: v };
-    if(alsoRecv.includes(x)) patch.base_recv_at = v;
-    await patchExh(x.id, patch, BASE_KINDS[baseKind(x)].done);
+    /* 날짜는 항목 줄에 들어간다(항목이 없는 기업만 기업 칸에) — 읽는 자리와
+       쓰는 자리가 갈리면 일괄로 찍어도 화면이 안 바뀐다. */
+    await setBaseDoneAt(x.id, v);
+    if(alsoRecv.includes(x)) await setBaseRecvAt(x.id, v);
   }
   baseSel.clear();
   renderExh();
@@ -3354,10 +3371,10 @@ export async function applyBaseDone(){
    길도 있어야 한다. 없으면 스무 곳을 하나씩 지우게 된다. */
 export async function clearBaseDone(){
   baseSelSync();
-  const rows = visibleList().filter(x => baseKind(x) && baseSel.has(x.id) && String(x.base_done_at || '').trim());
+  const rows = visibleList().filter(x => baseKind(x) && baseSel.has(x.id) && baseDoneAt(x));
   if(!rows.length){ alert('제작 완료가 적힌 곳을 골라 주세요.'); return; }
   if(!confirm(`${rows.length}곳의 «제작 완료» 날짜를 지웁니다.`)) return;
-  for(const x of rows) await patchExh(x.id, { base_done_at: '' }, BASE_KINDS[baseKind(x)].done);
+  for(const x of rows) await setBaseDoneAt(x.id, '');
   baseSel.clear();
   renderExh();
 }
@@ -3433,9 +3450,14 @@ function renderBaseView(list){
             : '기업에서 디자인 파일을 받은 날')}"
         onchange="setBaseRecvAt('${escAttr(x.id)}',this.value)">`;
 
-  const dateCell = (x, f, label) => `<input type="date" class="fi" style="width:124px;padding:3px 6px;font-size:11.5px"
-    value="${escAttr(x[f] || '')}" onclick="event.stopPropagation()"
-    onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')">`;
+  /* 확정·완료 날짜는 그래픽 항목 줄에 적힌다(항목이 아직 없는 기업만 기업 칸).
+     읽는 자리와 쓰는 자리를 함께 옮겨야 고친 값이 되돌아오지 않는다. */
+  const baseDate = (x, which) => `<input type="date" class="fi" style="width:124px;padding:3px 6px;font-size:11.5px"
+    value="${escAttr(which === 'done' ? baseDoneAt(x) : baseRecvAt(x))}" onclick="event.stopPropagation()"
+    title="${escAttr(baseItems(x).length
+      ? `그래픽의 «${baseItems(x).map(i => i.name || '').filter(Boolean).join(' · ')}»와 같은 칸이에요`
+      : '')}"
+    onchange="${which === 'done' ? 'setBaseDoneAt' : 'setBaseRecvAt'}('${escAttr(x.id)}',this.value)">`;
 
   const noteCell = (x) => `<input class="fi" style="width:100%;min-width:120px;padding:3px 6px;font-size:11.5px"
     placeholder="비고" value="${escAttr(x.base_note || '')}" onclick="event.stopPropagation()"
@@ -3476,9 +3498,9 @@ function renderBaseView(list){
       <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
         <span style="font-size:11px;color:var(--i4);min-width:64px">${escapeHtml(BASE_KINDS[k].recv)}</span>${recvCell(x)}</div>
       ${k === 'fascia' ? `<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
-        <span style="font-size:11px;color:var(--i4);min-width:64px">확정</span>${dateCell(x, 'base_recv_at', '간판명 확정')}</div>` : ''}
+        <span style="font-size:11px;color:var(--i4);min-width:64px">확정</span>${baseDate(x, 'recv')}</div>` : ''}
       <div style="display:flex;gap:6px;align-items:center">
-        <span style="font-size:11px;color:var(--i4);min-width:64px">${escapeHtml(BASE_KINDS[k].done)}</span>${dateCell(x, 'base_done_at', BASE_KINDS[k].done)}</div>
+        <span style="font-size:11px;color:var(--i4);min-width:64px">${escapeHtml(BASE_KINDS[k].done)}</span>${baseDate(x, 'done')}</div>
     </div>`;
   }).join(''), actions);
 
@@ -3509,9 +3531,9 @@ function renderBaseView(list){
         <td><span class="pill p-blue">${escapeHtml(BASE_KINDS[k].label)}</span>${designPill(x)}</td>
         <td>${recvCell(x)}</td>
         <td>${k === 'fascia'
-          ? dateCell(x, 'base_recv_at', '간판명 확정')
+          ? baseDate(x, 'recv')
           : '<span style="font-size:11px;color:var(--i6)">·</span>'}</td>
-        <td>${dateCell(x, 'base_done_at', BASE_KINDS[k].done)}</td>
+        <td>${baseDate(x, 'done')}</td>
         <td style="text-align:center">${mark(x)}</td>
         <td>${noteCell(x)}</td>
       </tr>`;
@@ -5266,6 +5288,7 @@ window.setExhFilter = setExhFilter;
 window.setExhView = setExhView;
 window.setBaseFil = setBaseFil;
 window.setBaseRecvAt = setBaseRecvAt;
+window.setBaseDoneAt = setBaseDoneAt;
 window.setGraphicView = setGraphicView;
 window.setGraphicFil = setGraphicFil;
 window.setPayFil = setPayFil;

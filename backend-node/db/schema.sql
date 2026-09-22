@@ -539,6 +539,11 @@ ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS received_note TEXT;  -- 받
    항목마다 마감(받기로 한 날)을 잡아 지난 것·임박한 것을 갈라 본다. */
 ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS due_at TEXT;  -- 받기로 한 날 (YYYY-MM-DD)
 
+/* 만든 날. 받는 것과 만드는 것은 다른 일이라 «디자인은 왔는데 아직 안 뽑았다»가
+   제일 흔한 상태다. 기업 칸 하나(base_done_at)로 세다가, 벽면은 뽑고 인포데스크는
+   아직인 기업을 담지 못해 항목 줄로 내렸다 — 발주·시공은 장 단위로 움직인다. */
+ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS done_at TEXT;  -- 작업(제작·출력)을 끝낸 날
+
 /* 품목표는 비품만 담다가 그래픽(사인물)까지 담게 됐다. 표를 새로 만들지 않고
    종류만 나눈다 — 고르는 화면도, 이름으로 찾는 규칙도, 설정 편집기도 같다.
    빈 값은 비품으로 본다(예전 행이 전부 비품이라 되메우지 않아도 맞다). */
