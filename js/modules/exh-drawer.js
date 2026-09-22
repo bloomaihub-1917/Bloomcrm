@@ -1790,6 +1790,10 @@ const catLabel = (c) => codeLabel('item_cat', null, c) || '기타';
 ══════════════════════════════════════════ */
 const DESIGN_CAT = '디자인';
 const isDesignItem = (i) => {
+  /* 부스 기본 제공으로 깔린 줄은 빼고 본다 — 분류가 «디자인»인 품목 중에는
+     계약에 들어 있는 출력분(G-131)이 섞여 있어서, 그것까지 의뢰로 보면
+     블록·라이팅 부스마다 «무엇을 디자인했나» 칸이 따라붙는다. */
+  if(isBoothGiven(i)) return false;
   const c = i.catalog_id ? catalogItem(i.catalog_id) : null;
   return !!c && (c.category || '') === DESIGN_CAT;
 };

@@ -645,6 +645,12 @@ export function setBaseFil(k){ baseFil = baseFil === k ? '' : k; renderExh(); }
    안 이어진 옛 줄이 있어 이름도 함께 본다. */
 export function hasDesignOrder(x){
   return liveItemsFor(x.id).some(i => {
+    /* 부스에 딸려 오는 기본 제공은 의뢰가 아니다.
+       블록·라이팅 부스에는 「G-131 벽면 그래픽 출력(디자인 비용 별도)」이 계약으로
+       깔려 있는데 그 품목의 분류가 «디자인»이라, 분류만 보면 블록·라이팅 21곳이
+       전부 디자인 의뢰가 된다. 이름 그대로 디자인 비용은 별도이고 디자인은 기업이
+       준다 — 우리가 그리는 곳은 G-130을 따로 주문한 곳뿐이다. */
+    if(isBoothGiven(i)) return false;
     const c = i.catalog_id ? catalogItem(i.catalog_id) : null;
     if(c) return (c.category || '') === '디자인';
     return /^G-130|부스\s*디자인\s*의뢰/.test(String(i.name || ''));
