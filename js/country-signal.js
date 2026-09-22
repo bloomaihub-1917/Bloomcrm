@@ -66,9 +66,48 @@ const tldCountry = (email) => {
   return (m && TLD[m[1]]) || null;
 };
 
+/* 국가번호 없이 적힌 한국 번호. 국내에서 받은 명단은 «010-1234-5678»,
+   «02-322-1297»처럼 국가번호를 떼고 적는다 — 그게 한국 번호라는 뜻인데,
+   +82만 보면 국내 명단 전체가 «알 수 없음»으로 남는다.
+
+   대표번호(1588·1544·15xx·16xx·18xx)도 한국에만 있는 모양이다. */
+const KR_PHONE = /^(0(1[016789]|[2-6][0-4]?)\d{6,8}|1[5-8]\d{2}\d{4})$/;
+const krPhone = (phone) => {
+  /* 한 칸에 두 번호가 들어 있는 줄이 많다(«02-1234-5678 / 010-...»).
+     조각마다 본다 — 앞 조각이 대표번호면 뒤 조각을 못 보고 지나친다. */
+  return String(phone || '').split(/[/,·]/).some(part => {
+    const s = part.replace(/[^0-9+]/g, '');
+    if(!s || s.startsWith('+')) return false;   // 국가번호가 붙어 있으면 위에서 이미 봤다
+    return KR_PHONE.test(s);
+  }) ? '대한민국' : null;
+};
+
+/* 나라를 가리키는 무료 메일. 도메인이 .com이라 국가 도메인으로는 안 잡히는데,
+   이 주소를 쓰는 사람은 거의 한국에서 일한다. */
+const KR_MAIL = ['naver.com', 'hanmail.net', 'daum.net', 'nate.com', 'kakao.com',
+  'korea.com', 'empas.com', 'dreamwiz.com', 'paran.com', 'hanmir.com'];
+const krMail = (email) => {
+  const s = String(email || '').toLowerCase();
+  return KR_MAIL.some(d => s.includes('@' + d)) ? '대한민국' : null;
+};
+
+/* 웹주소의 국가 도메인 — 이메일과 같은 규칙이되, 경로가 붙어 있어(«pabloair.com/kr»)
+   호스트 부분만 본다. */
+const siteCountry = (site) => {
+  const host = String(site || '').toLowerCase().trim()
+    .replace(/^https?:\/\//, '').split(/[/\s]/)[0];
+  const m = host.match(/\.([a-z]{2})$/);
+  return (m && TLD[m[1]]) || null;
+};
+
 /* 이 사람이 어디 사람인지 자료가 말해 주는 것.
-   전화 > 이메일 > 이름 순으로 믿는다 — 전화는 그 나라 번호를 실제로 쓴다는
-   뜻이고, 이메일은 회사 도메인이라 본사 나라일 수 있으며, 이름은 가장 약하다. */
+   전화 > 이메일 > 이름 > 소속 > 웹주소 순으로 믿는다 — 전화는 그 나라 번호를
+   실제로 쓴다는 뜻이고, 이메일은 회사 도메인이라 본사 나라일 수 있으며, 이름과
+   소속은 그보다 약하다. 웹주소는 사람이 아니라 회사의 것이라 맨 뒤에 둔다.
+
+   국가번호가 붙은 번호를 국내 형식보다 먼저 본다 — 한 사람이 «+86 …»과
+   «010 …»을 함께 적어 두는 경우(한국에 온 중국 업체 담당자)에, 국내 번호를
+   먼저 보면 그 사람이 한국 사람이 되어 버린다. */
 export function countryHint(c){
   if(!c) return null;
   const byPhone = dialCountry(c.phone1) || dialCountry(c.phone2);
@@ -77,7 +116,17 @@ export function countryHint(c){
   const byMail = tldCountry(c.email1) || tldCountry(c.email2);
   if(byMail) return { country: byMail, why: '이메일 국가 도메인' };
 
+  const byKrPhone = krPhone(c.phone1) || krPhone(c.phone2);
+  if(byKrPhone) return { country: byKrPhone, why: '국내 전화번호' };
+
+  const byKrMail = krMail(c.email1) || krMail(c.email2);
+  if(byKrMail) return { country: byKrMail, why: '국내 메일 주소' };
+
   if(/[가-힣]/.test(String(c.nameKo || ''))) return { country: '대한민국', why: '한글 이름' };
+  if(/[가-힣]/.test(String(c.orgKo || '')))  return { country: '대한민국', why: '한글 소속명' };
+
+  const bySite = siteCountry(c.website);
+  if(bySite) return { country: bySite, why: '웹주소 국가 도메인' };
   return null;
 }
 
