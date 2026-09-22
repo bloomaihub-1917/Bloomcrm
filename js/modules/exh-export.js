@@ -11,7 +11,15 @@
      [카탈로그_단가표]        품목표 그대로 (코드·규격·단가 KRW/USD)
      [종합비품신청관리대장]   가로=품목코드, 세로=참가기업(한 기업 한 줄)인 교차표
                               3행(숨김)에 단가를 깔고 SUMPRODUCT로 소계
+     [추가 신청]              같은 교차표에서 기업이 따로 신청한 것만 (청구 대상)
+     [기본 제공]              부스 타입에 딸려 오는 것만 (청구하지 않음)
      [카탈로그 외 신청내역]   교차표에 열이 없는 항목의 품목별 내역 (있을 때만)
+
+   ── 왜 같은 표를 세 장 뽑나 ──
+   발주는 둘을 합친 수량으로 하지만, 청구는 «추가»만 보고 부스 준비는 «기본»만
+   본다. 한 장에 섞어 두면 볼 때마다 어느 줄이 어느 쪽인지 사람이 갈라야 하고,
+   렌탈사에 추가분만 보내야 할 때 잘라낼 방법이 없다. 화면(비품 현황)의
+   전체·기본·추가 탭과 같은 기준으로 나눈다.
 
    ── 왜 단가를 숨긴 행에 깔아 두나 ──
    소계를 값으로 박아 넣으면 엑셀에서 수량을 고쳤을 때 금액이 따라오지 않는다.
@@ -29,7 +37,7 @@ import {
   EQUIP_CATALOG, catalogItem, liveItemsFor,
   exhEvent, EVENT_LIST,
 } from '../state.js';
-import { activeExhibitors, exhNames, exhContact, isBillable } from './exh-tab.js';
+import { activeExhibitors, exhNames, exhContact, isBillable, isBoothGiven } from './exh-tab.js';
 import { showSaveErrorToast } from '../api.js';
 import { trackAction } from './audit-tab.js';
 
@@ -98,12 +106,16 @@ export function buildLedger(evKey){
      그 기업의 수량이 대장에서 소리 없이 사라진다. */
   const used = new Set();
   const offCatalog = [];   // 카탈로그에 잇지 못한 신청 — 교차표에 담을 자리가 없다
-  const rows = [];         // 대장의 한 줄 = 한 기업
+  const rows = [];         // 전체 — 대장의 한 줄 = 한 기업
+  const base = [];         // 부스 타입에 딸려 오는 기본 제공만
+  const extra = [];        // 기업이 따로 신청한 추가분만
 
   exhs.forEach(x => {
-    const qty  = new Map();   // catalogId → 수량
-    const free = new Map();   // 무상 제공분 (수량은 세고 금액만 뺀다)
-    let   direct = 0;         // 수량×단가로 낼 수 없는 금액
+    /* 같은 기업을 세 벌로 센다 — 전체·기본·추가. 한 번 훑으면서 해당하는
+       주머니에 같이 담는다(두 번 훑으면 규칙이 갈라진다). */
+    const mk = () => ({ qty: new Map(), free: new Map(), direct: 0 });
+    const all = mk(), bse = mk(), ext = mk();
+    const add = (i, fn) => { fn(all); fn(isBoothGiven(i) ? bse : ext); };
     liveItemsFor(x.id).forEach(i => {
       if(!LEDGER_CATS.includes(i.category || '')) return;
       const cat = i.catalog_id ? catalogItem(i.catalog_id) : null;
@@ -114,7 +126,7 @@ export function buildLedger(evKey){
          청구서와 어긋난다. 무엇이었는지는 별도 시트에 품목별로 남는다. */
       if(!cat || cat.event_id !== evKey){
         offCatalog.push({ x, i });
-        if(isBillable(i)) direct += num(i.amount);
+        if(isBillable(i)) add(i, b => { b.direct += num(i.amount); });
         return;
       }
       used.add(cat.id);
@@ -122,20 +134,23 @@ export function buildLedger(evKey){
          기업이 주문하므로 여기서 또 세면 없는 의자를 발주하게 된다.
          (비품 현황 화면과 같은 규칙) 다만 그 기업이 내는 돈이라 금액은 남긴다. */
       if(String(i.shared_ref || '').trim()){
-        if(isBillable(i)) direct += num(i.amount);
+        if(isBillable(i)) add(i, b => { b.direct += num(i.amount); });
         return;
       }
       const q = num(i.qty) || 1;
-      qty.set(cat.id, (qty.get(cat.id) || 0) + q);
+      add(i, b => b.qty.set(cat.id, (b.qty.get(cat.id) || 0) + q));
       /* 무상 제공(청구 제외) 항목. 수량은 그대로 세야 한다 — 돈은 안 받아도
          물건은 만들어야 하니 발주 대상이다. 다만 소계가 수량×단가로 계산되는
          구조라 금액이 저절로 붙으므로, 그만큼을 「기타 금액」에서 뺀다. */
-      if(!isBillable(i)) free.set(cat.id, (free.get(cat.id) || 0) + q);
+      if(!isBillable(i)) add(i, b => b.free.set(cat.id, (b.free.get(cat.id) || 0) + q));
     });
 
     /* 아직 아무것도 신청하지 않은 기업도 줄은 남긴다 — 누가 안 냈는지가
-       대장에서 보여야 한다. */
-    rows.push({ x, qty, direct, free, empty: !qty.size && !direct });
+       대장에서 보여야 한다. 기본·추가 시트에서는 그쪽에 아무것도 없는 기업은
+       빼 둔다(한쪽만 있는 기업이 절반이라 빈 줄이 표를 덮는다). */
+    rows.push({ x, ...all });
+    if(bse.qty.size || bse.direct) base.push({ x, ...bse });
+    if(ext.qty.size || ext.direct) extra.push({ x, ...ext });
   });
 
   const cols = EQUIP_CATALOG
@@ -150,7 +165,7 @@ export function buildLedger(evKey){
     });
 
   return {
-    exhs, rows, cols, offCatalog,
+    exhs, rows, base, extra, cols, offCatalog,
     equipCols:   cols.filter(c => (c.kind || 'equip') !== 'graphic'),
     graphicCols: cols.filter(c => (c.kind || 'equip') === 'graphic'),
   };
@@ -203,9 +218,28 @@ function drawCatalogSheet(wb, cols){
   return ws;
 }
 
-function drawLedgerSheet(wb, data, meta){
-  const { rows, cols, equipCols, graphicCols, offCatalog } = data;
-  const ws = wb.addWorksheet('종합비품신청관리대장');
+/* 같은 교차표를 세 번 그린다 — 전체 / 추가만 / 기본만.
+   view.rows 가 그 시트에 실을 줄이고, view.name 이 시트 이름이다. */
+const LEDGER_VIEWS = {
+  all: {
+    name: '종합비품신청관리대장',
+    note: '※ 이 시트는 기본 제공 + 추가 신청을 합친 «발주 수량»입니다 — 렌탈사에 넘기는 숫자입니다. 청구 대상만 보려면 「추가 신청」 시트를, 부스에 딸려 나가는 것만 보려면 「기본 제공」 시트를 보세요.',
+  },
+  extra: {
+    name: '추가 신청',
+    note: '※ 이 시트는 기업이 따로 신청한 «추가분»만 담습니다 — 청구 대상입니다. 부스 타입에 딸려 오는 기본 제공은 「기본 제공」 시트에 있고, 합친 발주 수량은 「종합비품신청관리대장」 시트에 있습니다. 그쪽에 신청이 없는 기업은 줄을 두지 않았습니다.',
+  },
+  base: {
+    name: '기본 제공',
+    note: '※ 이 시트는 부스 타입에 딸려 오는 «기본 제공»만 담습니다 — 발주는 하지만 기업에 청구하지 않습니다. 금액은 카탈로그 단가로 계산한 참고값이며 청구액이 아닙니다.',
+    reference: true,
+  },
+};
+
+function drawLedgerSheet(wb, data, meta, view = LEDGER_VIEWS.all){
+  const { cols, equipCols, graphicCols, offCatalog } = data;
+  const rows = view.rows || data.rows;
+  const ws = wb.addWorksheet(view.name);
 
   const INFO    = 6;                        // No. ~ 담당자
   const cEquip0 = INFO + 1;                 // 첫 가구비품 열
@@ -243,8 +277,9 @@ function drawLedgerSheet(wb, data, meta){
   r1.getCell(1).value       = '업체 정보';
   r1.getCell(cEquip0).value = '가구비품 신청 수량 (코드별)';
   if(graphicCols.length) r1.getCell(cGra0).value = '그래픽·부대시설 신청 수량';
-  r1.getCell(cDirect).value = '기타 금액\n(카탈로그 외·분담·무상)';
-  r1.getCell(cTotal).value  = '총 신청금액';
+  r1.getCell(cDirect).value = view.reference
+    ? '기타 금액\n(카탈로그 외·분담)' : '기타 금액\n(카탈로그 외·분담·무상)';
+  r1.getCell(cTotal).value  = view.reference ? '참고 금액\n(청구 안 함)' : '총 신청금액';
   r1.height = 20;
 
   /* 2행 — 열 머리글. 가구비품은 코드만(80개 가까이라 이름까지 넣으면 읽히지
@@ -324,7 +359,7 @@ function drawLedgerSheet(wb, data, meta){
       if(i < 0) return '';
       return `${q}*${L(colAt(i))}$${PRICE_ROW}`;
     }).filter(Boolean);
-    if(minus.length) r.getCell(cDirect).value = { formula: `${direct}-${minus.join('-')}` };
+    if(minus.length && !view.reference) r.getCell(cDirect).value = { formula: `${direct}-${minus.join('-')}` };
     else if(direct)  r.getCell(cDirect).value = direct;
     r.getCell(cTotal).value = { formula:
       [cEqSub, graphicCols.length ? cGraSub : null, cDirect]
@@ -372,17 +407,18 @@ function drawLedgerSheet(wb, data, meta){
   /* 아래 주석 — 이 숫자가 어디서 왔고 무엇을 빼고 세었는지. 표만 넘겨받은
      사람이 되물어야 알 수 있는 것들을 표 안에 남긴다. */
   const notes = [
+    view.note,
     `※ ${meta.eventLabel} · CRM 「전시 → 비품 현황」의 신청 내역을 ${meta.stamp}에 그대로 집계한 표입니다. 품목 코드·단가는 「${CAT_SHEET}」 시트를 참조합니다.`,
     '※ 공동 부스에서 비용만 나눠 낸 줄(실물은 상대 기업이 주문)은 수량에서 뺐습니다 — 두 번 세면 없는 물건을 발주하게 됩니다.',
     `※ 소계·총액은 「${CAT_SHEET}」의 원화 단가 × 수량입니다. 3행은 그 단가를 수량과 같은 가로 방향으로 깔아 둔 계산용 보조행(숨김)이라 지우면 소계·총액이 계산되지 않습니다.`,
     '※ 한 기업은 한 줄입니다. 달러로 청구하는 기업의 신청도 같은 줄에 담았고, 금액은 모두 원화 단가로 계산했습니다 — 실제 청구 통화와 청구액은 인보이스를 따릅니다.',
   ];
   notes.push('※ 「기타 금액」은 수량×단가로 낼 수 없는 금액입니다 — 카탈로그에 없는 품목(디자인 제작비·전기 인입 등)과 공동 부스 분담분을 더하고, 무상 제공 항목은 뺍니다. 인보이스에는 함께 나가므로 총액에 넣었습니다.');
-  notes.push('※ 무상 제공 항목은 수량은 그대로 세고(돈은 안 받아도 물건은 만들어야 하니 발주 대상입니다) 금액만 「기타 금액」에서 차감합니다 — 소계가 수량×단가로 계산되는 구조라 그냥 두면 없는 청구액이 붙습니다.');
+  if(!view.reference) notes.push('※ 무상 제공 항목은 수량은 그대로 세고(돈은 안 받아도 물건은 만들어야 하니 발주 대상입니다) 금액만 「기타 금액」에서 차감합니다 — 소계가 수량×단가로 계산되는 구조라 그냥 두면 없는 청구액이 붙습니다.');
   if(offCatalog.length) notes.push(
     `※ 그중 카탈로그에 없는 신청 ${offCatalog.length}건의 품목별 내역은 「카탈로그 외 신청내역」 시트에 있습니다 — 발주 전 확인이 필요합니다.`);
 
-  notes.forEach((t, i) => {
+  notes.filter(Boolean).forEach((t, i) => {
     const cell = ws.getRow(totRow + 2 + i).getCell(1);
     cell.value     = t;
     cell.font      = { ...FONT, color: { argb: 'FF808080' } };
@@ -447,7 +483,12 @@ export function buildWorkbook(ExcelJS, evKey, meta){
   /* 카탈로그 시트를 먼저 만든다 — 대장의 단가 보조행이 이 시트의 행 번호를
      참조하므로, 두 시트가 같은 배열(data.cols)을 같은 순서로 써야 한다. */
   drawCatalogSheet(wb, data.cols);
-  drawLedgerSheet(wb, data, meta);
+  /* 전체 → 추가 → 기본 순. 청구에 쓰는 「추가」를 앞에 둔다.
+     한쪽이 아예 없는 행사(기본 제공을 안 쓰는 행사)는 그 시트를 만들지 않는다 —
+     빈 표가 한 장 늘면 어느 시트를 봐야 하는지 헷갈린다. */
+  drawLedgerSheet(wb, data, meta, LEDGER_VIEWS.all);
+  if(data.extra.length) drawLedgerSheet(wb, data, meta, { ...LEDGER_VIEWS.extra, rows: data.extra });
+  if(data.base.length)  drawLedgerSheet(wb, data, meta, { ...LEDGER_VIEWS.base,  rows: data.base });
   if(data.offCatalog.length) drawOffCatalogSheet(wb, data.offCatalog);
   return { wb, data };
 }
