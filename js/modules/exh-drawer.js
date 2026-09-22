@@ -60,6 +60,7 @@ import {
   isPendingRefund, boothTypeOptions, boothTypes, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
   TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing, introOver, boothDesignState,
   isSharedBooth, isBookOnly, baseKind, BASE_KINDS, bookName, fasciaName,
+  BOOTH_ORIGIN, BOOTH_EXC, isBoothExc, itemCode,
   baseRecvAt, baseDoneAt, baseItems, baseRecvItems,
   guardWrite, exhLocked, exhLockNotice, isBoothGiven, boothIncluded, applyBoothItems, boothItemsPending,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar, needsReissue,
@@ -1531,6 +1532,15 @@ function dApply(x){
     </div>`,
     appIssue ? '<span class="pill p-amber">정보 누락</span>' : '')}
 
+  ${sct('부스 기본 제공', boothGivenBlock(x), (() => {
+    const rows = itemsFor(x.id).filter(isBoothGiven);
+    const ex = rows.filter(isBoothExc).length;
+    return rows.length
+      ? `<span class="pill p-gray">${rows.filter(i => !isVoided(i)).length}종</span>${
+          ex ? `<span class="pill p-amber">예외 ${ex}</span>` : ''}`
+      : '';
+  })())}
+
   ${sct('추가 비품 신청',
     textRow(x, 'extra_equipment', '신청 내역 (받은 그대로)', '예: 추가 테이블 2, 전기 3kW', true) +
     `<button class="btn bs" onclick="addItemFromEquip('${escAttr(x.id)}')" style="margin-top:2px">이 내역을 비품 금액 항목으로 추가</button>`)}
@@ -2483,6 +2493,7 @@ function graphicItemRow(i, opts = {}){
         value="${escAttr(i.received_at || '')}"
         onchange="setItemField('${escAttr(i.id)}','received_at',this.value)">
     </div>
+    ${opts.done ? boothExcRow(i, { pad: 'margin-top:6px;padding-left:29px' }) : ''}
     ${opts.done ? `<div style="display:flex;gap:9px;align-items:center;margin-top:5px;padding-left:29px">
       <span style="font-size:10.5px;color:var(--i5);flex:0 0 auto">만든 날</span>
       <input type="date" class="fi" style="width:136px;padding:4px 8px;font-size:11.5px"
@@ -2515,7 +2526,10 @@ function graphicItemRow(i, opts = {}){
    추가 주문은 기업이 신청하고 돈을 더 내는 것이라 안 하면 그만이다. 한 줄에
    섞여 있으면 «이 부스에 원래 들어가는 것»이 무엇인지 알 수 없다. */
 function graphicItemsBlock(x){
-  const gi = graphicItems(x.id);
+  /* 뺀 줄(내려 둔 기본 제공)도 함께 본다 — 목록에서 사라지면 «원래 있었는데
+     뺐다»는 사실까지 사라져, 다음 사람이 빠뜨린 줄로 알고 다시 넣는다. */
+  const gi = [...graphicItems(x.id),
+    ...itemsFor(x.id).filter(i => (i.category || '') === 'graphic' && isVoided(i) && isBoothExc(i))];
   if(!gi.length){
     return `<div style="font-size:11.5px;color:var(--i5);margin-bottom:8px">등록된 그래픽 항목이 없어요</div>
       <div style="font-size:11px;color:var(--i4);margin-bottom:8px">
@@ -2550,6 +2564,119 @@ function graphicItemsBlock(x){
       <span>합계 <b>${money(total)}</b>원</span>
     </div>
     <button class="btn bs" onclick="switchExhDT('billing')" style="margin-top:8px">정산 탭에서 항목 추가·수정</button>`;
+}
+
+/* ══════════════════════════════════════════
+   부스 기본 제공 — 이 기업만의 예외
+
+   설정(부스 타입 › 기본 제공 품목)은 좀처럼 바뀌지 않는다. 대신 현장에서
+   예외가 계속 나온다 — 인포데스크를 안 쓰겠다는 기업, 바스툴을 하나 더 받기로
+   한 기업, 벽면 그래픽을 자체로 만들어 오는 기업.
+
+   그 줄을 그냥 지우거나 고치면 다음에 부스 타입을 다시 고르는 순간 설정대로
+   덮인다. 그래서 손댄 줄은 «예외»로 표시해 두고(origin=booth-exc), 자동 반영이
+   건드리지 않게 한다. 왜 그랬는지는 줄마다 적는다 — 현장에서 «이 부스만 왜
+   데스크가 없지»를 되묻지 않도록.
+
+   안 쓰겠다는 것은 지우지 않고 내린다. 지우면 발주 수량에서는 빠지지만 «원래
+   있었는데 뺐다»는 사실도 함께 사라져서, 다음 사람이 빠뜨린 줄로 알고 다시
+   넣는다. 내려 두면 발주·대장에서는 빠지고 화면에는 취소선으로 남는다.
+══════════════════════════════════════════ */
+
+/* 설정에 적힌 그 품목의 수량 — 되돌릴 때 쓴다 */
+function boothWantOf(x, i){
+  const code = itemCode(i.name);
+  return boothIncluded(x.event_id, x.booth_type)
+    .find(o => String(o.code || itemCode(o.name)) === code) || null;
+}
+
+async function markExc(i){
+  if(isBoothExc(i)) return;
+  await setItemField(i.id, 'origin', BOOTH_EXC);
+}
+
+export async function setBoothItemQty(id, v){
+  const i = EXH_ITEMS.find(r => r.id === id);
+  if(!i || String(i.qty ?? '') === String(v ?? '')) return;
+  await markExc(i);
+  await setItemField(id, 'qty', v);
+  refreshExhViews();
+}
+
+/* 안 쓰겠다 — 내려 둔다(지우지 않는다) */
+export async function excludeBoothItem(id){
+  const i = EXH_ITEMS.find(r => r.id === id);
+  if(!i) return;
+  const why = prompt('이 기업만 빼는 이유를 적어 주세요 — 현장에서 «왜 없지»를 되묻지 않도록.\n예: 자체 데스크를 가져옴 / 기업 요청으로 미사용', i.note || '');
+  if(why === null) return;
+  await markExc(i);
+  if(String(why).trim() !== String(i.note || '')) await setItemField(id, 'note', why);
+  await setItemField(id, 'voided_at', td());
+  trackAction('edit', '기본 제공 예외', getExhibitorById(i.exhibitor_id)?.company_name || '',
+    `<b>${escapeHtml(i.name || '')}</b>를 이 기업에서 뺐어요 — ${escapeHtml(String(why).trim() || '사유 없음')}`,
+    { kind: 'exhibitor', id: i.exhibitor_id, tab: 'apply' });
+  refreshExhViews();
+}
+
+/* 설정대로 되돌리기 — 내린 것은 올리고, 고친 수량은 설정 값으로 */
+export async function restoreBoothItem(id){
+  const i = EXH_ITEMS.find(r => r.id === id);
+  if(!i) return;
+  const x = getExhibitorById(i.exhibitor_id);
+  const want = x ? boothWantOf(x, i) : null;
+  if(!confirm(`«${i.name || ''}»를 설정대로 되돌릴까요?`
+    + (want && String(want.qty ?? '') !== String(i.qty ?? '') ? `\n수량 ${i.qty || '-'} → ${want.qty ?? '-'}` : '')
+    + (isVoided(i) ? '\n뺐던 줄을 다시 살립니다.' : ''))) return;
+  if(isVoided(i)) await setItemField(id, 'voided_at', '');
+  if(want && String(want.qty ?? '') !== String(i.qty ?? '')) await setItemField(id, 'qty', String(want.qty ?? ''));
+  await setItemField(id, 'origin', BOOTH_ORIGIN);
+  refreshExhViews();
+}
+
+/* 예외 줄 하나. 그래픽 탭과 신청항목 탭이 같은 줄을 쓴다 — 두 군데가 다르게
+   보이면 어느 쪽이 맞는지 다시 확인하게 된다. */
+function boothExcRow(i, opts = {}){
+  const off = isVoided(i);
+  const exc = isBoothExc(i);
+  return `<div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;${opts.pad || ''}">
+    ${exc ? `<span class="pill ${off ? 'p-red' : 'p-amber'}" title="설정과 다르게 이 기업만 따로 둔 줄이에요 — 부스 타입을 다시 골라도 그대로 둡니다">${off ? '뺌' : '예외'}</span>` : ''}
+    <span style="font-size:10.5px;color:var(--i5)">수량</span>
+    <input class="fi" style="width:56px;padding:3px 6px;font-size:11.5px" value="${escAttr(i.qty ?? '')}"
+      inputmode="numeric" ${off ? 'disabled' : ''}
+      title="설정과 다르게 적으면 이 줄은 예외가 됩니다"
+      onchange="setBoothItemQty('${escAttr(i.id)}',this.value)">
+    ${off
+      ? `<button class="btn bs" onclick="restoreBoothItem('${escAttr(i.id)}')" title="다시 제공하는 것으로 되돌립니다">되살리기</button>`
+      : `<button class="btn bs" onclick="excludeBoothItem('${escAttr(i.id)}')" title="이 기업에는 안 나갑니다 — 발주 수량에서 빠지고, 뺐다는 사실은 남습니다">이 기업은 뺌</button>`}
+    ${exc && !off ? `<button class="btn bs" onclick="restoreBoothItem('${escAttr(i.id)}')" title="설정에 적힌 수량으로 되돌립니다">설정대로</button>` : ''}
+    ${exc ? `<input class="fi" style="flex:1;min-width:120px;padding:3px 7px;font-size:11px"
+        placeholder="예외 사유 — 예: 자체 데스크를 가져옴" value="${escAttr(i.note || '')}"
+        onchange="setItemField('${escAttr(i.id)}','note',this.value)">` : ''}
+  </div>`;
+}
+
+/* 신청항목 탭의 «부스 기본 제공» 구획 — 비품·그래픽을 한자리에서 본다.
+   내린 줄도 보여 준다. 무엇이 빠졌는지가 안 보이면 다음 사람이 다시 넣는다. */
+function boothGivenBlock(x){
+  const rows = itemsFor(x.id).filter(isBoothGiven);
+  if(!rows.length){
+    return `<div style="font-size:11.5px;color:var(--i5);padding:6px 2px">
+      이 부스 타입에 적어 둔 기본 제공 품목이 없어요 — 설정 › 행사 관리 › 선택 목록에서 부스 타입에 적습니다.</div>`;
+  }
+  return `<div style="font-size:11px;color:var(--i4);margin-bottom:8px">
+      부스 타입(<b>${escapeHtml(x.booth_type || '미정')}</b>)에 딸려 나가는 것들이에요 — 청구하지 않습니다.
+      이 기업만 다르게 가야 하면 여기서 고치세요. 고친 줄은 <b>예외</b>로 표시되어, 부스 타입을 다시 골라도 그대로 둡니다.</div>
+    ${rows.map(i => {
+      const off = isVoided(i);
+      return `<div style="padding:8px 0;border-bottom:1px solid var(--i8)">
+        <div style="display:flex;align-items:baseline;gap:7px">
+          <span class="pill ${(i.category || '') === 'graphic' ? 'p-teal' : 'p-gray'}">${
+            (i.category || '') === 'graphic' ? '그래픽' : '비품'}</span>
+          <span style="font-size:12.5px;font-weight:600;${off ? 'color:var(--i5);text-decoration:line-through' : ''}">${escapeHtml(i.name || '')}</span>
+        </div>
+        ${boothExcRow(i, { pad: 'margin-top:6px' })}
+      </div>`;
+    }).join('')}`;
 }
 
 /* 받음 체크 — 누르면 오늘 날짜가 들어가고, 다시 누르면 지운다.
@@ -3258,6 +3385,9 @@ export async function holdExhLog(id){
   if(!r.ok){ l.status = before; refreshExhViews(); saveFailed(r, '저장에 실패했어요.'); }
 }
 
+window.setBoothItemQty      = setBoothItemQty;
+window.excludeBoothItem     = excludeBoothItem;
+window.restoreBoothItem     = restoreBoothItem;
 window.toggleItemReceived = toggleItemReceived;
 window.addGraphicFeedback = addGraphicFeedback;
 window.delGraphicFeedback = delGraphicFeedback;

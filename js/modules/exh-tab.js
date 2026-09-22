@@ -5138,7 +5138,23 @@ export function setExhField(id, field, value, label){
    오는 것이라, 접수 이력에 «추가»로 찍히면 신청서 원본과 어긋난다.
 ══════════════════════════════════════════ */
 export const BOOTH_ORIGIN = 'booth';
-export const isBoothGiven = (i) => String(i.origin || '') === BOOTH_ORIGIN;
+/* 이 기업만 다르게 둔 줄 — 설정과 다르게 가는 «예외»다.
+
+   설정은 좀처럼 바뀌지 않지만 현장에서는 예외가 계속 나온다. 벽면 그래픽을
+   자체로 만들어 오는 기업, 바스툴을 하나 더 받기로 한 기업. 그때 줄을 그냥
+   고치면 다음에 부스 타입을 다시 고르는 순간 설정대로 덮여 사라진다.
+
+   그래서 손댄 줄은 예외로 표시해 둔다. 자동 반영은 예외 줄을 건드리지 않고,
+   그 품목을 설정에서 다시 깔지도 않는다 — 예외가 그 자리를 대신한다. */
+export const BOOTH_EXC = 'booth-exc';
+export const isBoothExc = (i) => String(i.origin || '') === BOOTH_EXC;
+export const isBoothGiven = (i) => {
+  const o = String(i.origin || '');
+  return o === BOOTH_ORIGIN || o === BOOTH_EXC;
+};
+/* 줄 이름 앞머리가 품목코드다(«G-131 벽면 그래픽 출력») — 설정 줄과 맞출 때
+   수량·이름이 달라도 같은 품목인지 알아야 해서 코드로 맞춘다. */
+export const itemCode = (nm) => String(nm || '').trim().split(/\s+/)[0];
 
 /* 부스 타입에 적어 둔 기본 제공 목록 — 설정에서 JSON으로 들고 있다 */
 export function boothIncluded(evKey, typeCode){
@@ -5172,8 +5188,15 @@ export async function applyBoothItems(exhId, typeCode){
      하나씩이지 기업마다 하나씩이 아니다. 양쪽에 다 깔면 인포데스크가 두 개,
      바스툴이 네 개로 발주된다. 대표로 신청한 쪽에만 두고, 나눠 쓰는 쪽에
      이미 깔려 있던 것은 걷어낸다(공동으로 표시하기 전에 들어갔을 수 있다). */
-  const want = isSharedBooth(x) ? [] : boothIncluded(x.event_id, typeCode);
-  const had = itemsFor(exhId).filter(isBoothGiven);
+  const all = isSharedBooth(x) ? [] : boothIncluded(x.event_id, typeCode);
+  const had0 = itemsFor(exhId).filter(isBoothGiven);
+  /* 예외 줄은 사람이 정한 것이라 건드리지 않는다. 그 품목은 설정에서 다시
+     깔지도 않는다 — 빼 주기로 한 벽면 그래픽이 부스 타입을 다시 고르는 순간
+     되살아나면, 만들지 않기로 한 것을 발주하게 된다. */
+  const exc = had0.filter(isBoothExc);
+  const had = had0.filter(i => !isBoothExc(i));
+  const excCodes = new Set(exc.map(i => itemCode(i.name)));
+  const want = all.filter(o => !excCodes.has(o.code || itemCode(o.name)));
   // 같은 타입을 다시 고른 것뿐이면 그대로 둔다 — 지웠다 깔면 id가 바뀌어
   // 발주서·정산에서 같은 줄이 새 줄로 보인다
   if(sameBoothSet(had, want)) return;
