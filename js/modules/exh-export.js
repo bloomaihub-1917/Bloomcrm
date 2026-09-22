@@ -11,6 +11,7 @@
      [카탈로그_단가표]        품목표 그대로 (코드·규격·단가 KRW/USD)
      [종합비품신청관리대장]   가로=품목코드, 세로=참가기업(한 기업 한 줄)인 교차표
                               3행(숨김)에 단가를 깔고 SUMPRODUCT로 소계
+     [품목별 합계]            품목 한 줄 = 전체·기본·추가 수량과 신청 기업 수 (발주서)
      [추가 신청]              같은 교차표에서 기업이 따로 신청한 것만 (청구 대상)
      [기본 제공]              부스 타입에 딸려 오는 것만 (청구하지 않음)
      [카탈로그 외 신청내역]   교차표에 열이 없는 항목의 품목별 내역 (있을 때만)
@@ -451,6 +452,104 @@ function drawLedgerSheet(wb, data, meta, view = LEDGER_VIEWS.all){
   /* 업체 정보와 머리글을 고정한다 — 80개 열을 오른쪽으로 밀고 나면 어느 회사
      줄인지 알 수 없어진다. */
   ws.views = [{ state: 'frozen', xSplit: INFO, ySplit: 3 }];
+  /* 품목별 합계 시트가 이 표를 세로로 더한다 — 어디서부터 어디까지인지,
+     그리고 카탈로그 i번째 품목이 몇 번째 열인지 알려 준다. */
+  return { ws, name: view.name, first, last, rows: rows.length, colAt };
+}
+
+/* ══════════════════════════════════════════
+   품목별 합계 — 발주서에 옮겨 적는 숫자
+══════════════════════════════════════════ */
+
+/* 대장은 «어느 기업이 무엇을»을 보는 표라, 「의자를 몇 개 빌려야 하나」를
+   알려면 80개 열을 하나씩 세로로 더해야 한다. 그 한 번을 시트가 대신 한다.
+
+   숫자를 값으로 박지 않고 대장 시트를 더하는 수식으로 둔다 — 받은 사람이
+   대장에서 수량 한 칸을 고치면 발주 수량도 따라 바뀐다. 값으로 박으면 두
+   표가 조용히 갈라지고, 갈라진 쪽을 보고 발주하게 된다. */
+function drawSummarySheet(ws, data, refs, meta){
+  const { cols } = data;
+  ws.columns = [
+    { width: 12 }, { width: 10 }, { width: 26 }, { width: 26 }, { width: 20 },
+    { width: 11 }, { width: 9 }, { width: 9 }, { width: 9 }, { width: 11 }, { width: 14 },
+  ];
+  const head = ws.addRow(['분류', '품목코드', '품명(국문)', '품명(영문)', '규격',
+    '단가(KRW)', '전체', '기본', '추가', '신청 기업', '금액(원)']);
+  head.eachCell(c => Object.assign(c, headStyle(C_HEAD), { border: { bottom: BORDER } }));
+  head.height = 22;
+
+  const L = colLetter;
+  /* 시트 이름에 공백이 있어 수식에서 따옴표로 감싼다 */
+  const q = (nm) => `'${nm}'`;
+  /* 그 대장 시트에서 i번째 품목의 세로 범위 — 줄이 없는 시트는 빈 문자열 */
+  const range = (ref, i) => {
+    if(!ref || !ref.rows) return '';
+    const c = L(ref.colAt(i));
+    return `${q(ref.name)}!${c}${ref.first}:${c}${ref.last}`;
+  };
+  const sum = (ref, i) => { const r = range(ref, i); return r ? { formula: `SUM(${r})` } : 0; };
+
+  const first = 2;
+  cols.forEach((c, i) => {
+    const rn = first + i;
+    const r = ws.addRow([
+      (c.kind || 'equip') === 'graphic' ? (c.category || '그래픽·부대시설')
+                                        : (c.category || '기타비품'),
+      c.code || '', c.name_ko || '', c.name_en || '', c.spec || '',
+      num(c.price_krw) || null,
+    ]);
+    r.getCell(7).value = sum(refs.all, i);
+    r.getCell(8).value = sum(refs.base, i);
+    r.getCell(9).value = sum(refs.extra, i);
+    /* 몇 곳이 신청했나 — 수량이 적힌 칸을 센다. 발주 전에 «이 품목은 세 곳뿐인데
+       왜 40개인가»를 되짚을 때 쓰는 숫자다. */
+    const rg = range(refs.all, i);
+    r.getCell(10).value = rg ? { formula: `COUNTIF(${rg},">0")` } : 0;
+    r.getCell(11).value = { formula: `F${rn}*G${rn}` };
+    r.eachCell({ includeEmpty: true }, (cell, ci) => {
+      cell.font      = FONT;
+      cell.border    = { bottom: BORDER };
+      cell.alignment = { vertical: 'middle', horizontal: ci <= 2 ? 'center' : 'left', wrapText: ci >= 3 && ci <= 5 };
+    });
+    [6, 7, 8, 9, 10, 11].forEach(ci => {
+      const cell = r.getCell(ci);
+      cell.numFmt    = ci === 11 ? NUM_FMT : '#,##0';
+      cell.alignment = { vertical: 'middle', horizontal: 'right' };
+    });
+    r.getCell(7).font = { ...FONT, bold: true };   // 발주 수량 — 이 표에서 제일 많이 보는 칸
+  });
+
+  const last = first + cols.length - 1;
+  const tot = ws.addRow(['합계']);
+  [7, 8, 9, 11].forEach(ci => {
+    tot.getCell(ci).value  = { formula: `SUM(${L(ci)}${first}:${L(ci)}${last})` };
+    tot.getCell(ci).numFmt = ci === 11 ? NUM_FMT : '#,##0';
+  });
+  for(let ci = 1; ci <= 11; ci++){
+    const cell = tot.getCell(ci);
+    cell.font      = { ...FONT, bold: true };
+    cell.fill      = fill(C_TOTROW);
+    cell.border    = { top: { style: 'medium', color: { argb: C_HEAD } }, bottom: BORDER };
+    cell.alignment = { vertical: 'middle', horizontal: ci >= 6 ? 'right' : 'left' };
+  }
+  /* 금액 합계는 품목별 금액의 합이지 대장 총액이 아니다 — 카탈로그 밖 품목과
+     분담분이 여기엔 없다. 아래 주석에 적어 둔다. */
+
+  if(cols.length) ws.autoFilter = {
+    from: { row: 1, column: 1 }, to: { row: last, column: 11 },
+  };
+
+  const notes = [
+    `※ ${meta.eventLabel} · 품목 한 줄에 전체·기본·추가 수량을 적은 발주용 표입니다. 「전체」가 렌탈사에 넘기는 수량입니다(기본 제공 + 추가 신청).`,
+    '※ 수량은 대장 시트를 세로로 더한 수식입니다 — 대장에서 수량을 고치면 여기도 따라 바뀝니다. 어느 기업이 신청했는지는 대장 시트에서 그 품목 열을 보세요.',
+    '※ 「금액」은 단가 × 전체 수량입니다. 기본 제공분까지 들어 있어 청구액이 아니고, 카탈로그 밖 품목·분담분도 빠져 있어 대장의 총 신청금액과 다릅니다.',
+  ];
+  notes.forEach((t, i) => {
+    const cell = ws.getRow(last + 3 + i).getCell(1);
+    cell.value     = t;
+    cell.font      = { ...FONT, color: { argb: 'FF808080' } };
+    cell.alignment = { vertical: 'top' };
+  });
   return ws;
 }
 
@@ -509,9 +608,13 @@ export function buildWorkbook(ExcelJS, evKey, meta){
   /* 전체 → 추가 → 기본 순. 청구에 쓰는 「추가」를 앞에 둔다.
      한쪽이 아예 없는 행사(기본 제공을 안 쓰는 행사)는 그 시트를 만들지 않는다 —
      빈 표가 한 장 늘면 어느 시트를 봐야 하는지 헷갈린다. */
-  drawLedgerSheet(wb, data, meta, LEDGER_VIEWS.all);
-  if(data.extra.length) drawLedgerSheet(wb, data, meta, { ...LEDGER_VIEWS.extra, rows: data.extra });
-  if(data.base.length)  drawLedgerSheet(wb, data, meta, { ...LEDGER_VIEWS.base,  rows: data.base });
+  const sumWs = wb.addWorksheet('품목별 합계', { views: [{ state: 'frozen', ySplit: 1 }] });
+  const refs = { all: drawLedgerSheet(wb, data, meta, LEDGER_VIEWS.all) };
+  if(data.extra.length) refs.extra = drawLedgerSheet(wb, data, meta, { ...LEDGER_VIEWS.extra, rows: data.extra });
+  if(data.base.length)  refs.base  = drawLedgerSheet(wb, data, meta, { ...LEDGER_VIEWS.base,  rows: data.base });
+  /* 품목별 합계는 대장을 더하는 수식이라 내용은 대장을 그린 뒤에 채운다.
+     시트 자리는 먼저 잡아 둔다 — 발주서를 쓸 때 제일 먼저 펴는 장이다. */
+  drawSummarySheet(sumWs, data, refs, meta);
   if(data.offCatalog.length) drawOffCatalogSheet(wb, data.offCatalog);
   return { wb, data };
 }
