@@ -673,6 +673,42 @@ export function baseKind(x){
   return Object.keys(BASE_KINDS).find(k => BASE_KINDS[k].types.includes(t)) || '';
 }
 
+/* ── 「디자인 수령」은 그래픽 현황과 같은 자리를 본다 ──
+
+   출력·시공 부스가 받는 것은 결국 그래픽 파일이고, 그건 그래픽 현황의 «받을
+   파일» 목록에 이미 한 줄씩 있다. 그런데 기본 시공은 기업 칸(base_recv_at)에
+   따로 날짜를 적고 있어서, 같은 사실을 두 군데가 각자 기록했다 — 스물두 곳 중
+   열세 곳이 그래픽 현황에는 «받음»인데 기본 시공에는 «미수령»이었다. 그 화면만
+   보고 독촉하면 이미 파일을 보낸 곳에 독촉이 나간다.
+
+   그래서 적는 자리를 항목 하나로 모으고, 기본 시공은 그걸 읽기만 한다.
+   기본 제공으로 깔린 그래픽이 여럿이면 전부 와야 «수령»이다 — 하나가 비어
+   있는데 수령으로 보이면 그 한 장을 아무도 안 찾는다. */
+export function baseRecvItems(x){
+  return liveItemsFor(x.id).filter(i => (i.category || '') === 'graphic' && isBoothGiven(i));
+}
+export function baseRecvAt(x){
+  /* 간판(기본부스)은 받을 파일이 없다 — 지금까지처럼 기업 칸을 쓴다.
+     출력·시공이라도 기본 제공 그래픽 줄이 아직 없으면 옛 칸을 그대로 읽는다. */
+  if(baseKind(x) !== 'print') return String(x.base_recv_at || '').trim();
+  const gi = baseRecvItems(x);
+  if(!gi.length) return String(x.base_recv_at || '').trim();
+  if(gi.some(i => !String(i.received_at || '').trim())) return '';
+  return gi.map(i => String(i.received_at || '')).sort().pop();
+}
+/* 기본 시공 화면에서 고친 날짜도 항목으로 들어간다 — 읽는 곳과 쓰는 곳이
+   다르면 고쳐도 화면이 안 바뀐다. */
+export async function setBaseRecvAt(exhId, v){
+  const x = getExhibitorById(exhId);
+  if(!x) return;
+  const gi = baseKind(x) === 'print' ? baseRecvItems(x) : [];
+  if(!gi.length){ await patchExh(exhId, { base_recv_at: v }, '디자인 수령'); return; }
+  /* 항목 저장은 드로어가 갖고 있다 — 이 파일이 그쪽을 import하면 순환 참조라
+     window 경유로 부른다(이 파일의 다른 드로어 호출과 같은 방식). */
+  for(const i of gi) await window.setItemField?.(i.id, 'received_at', v);
+  refreshExhViews();
+}
+
 /* 어디까지 왔나. 받는 것과 만드는 것이 따로라 두 단계로 본다 —
    "디자인은 왔는데 아직 안 뽑았다"가 제일 흔한 상태이고, 그걸 완료로 묶으면
    출력소에 넘길 목록을 다시 손으로 세게 된다. */
@@ -683,7 +719,7 @@ export function baseState(x){
      못 된다. 사람이 확정한 날(base_recv_at)로만 판단한다. */
   // 간판은 영문명이 있어야 만든다. 확정 도장을 찍었어도 이름이 없으면 못 만든다.
   if(k === 'fascia' && !fasciaName(x)) return { state: 'warn', text: '영문명 없음' };
-  const got = x.base_recv_at;
+  const got = baseRecvAt(x);
   if(!got)            return { state: 'todo', text: '미수령' };
   if(!x.base_done_at) return { state: 'part', text: '수령 · 작업 전' };
   return { state: 'done', text: BASE_KINDS[k].done };
@@ -3388,12 +3424,14 @@ function renderBaseView(list){
        오는 «출력 완료»와의 앞뒤 관계가 똑같기 때문이다. */
     : `<input type="date" class="fi" style="width:124px;padding:3px 6px;font-size:11.5px${
         hasDesignOrder(x) ? ';border-color:var(--tl)' : ''}"
-        value="${escAttr(x.base_recv_at || '')}" onclick="event.stopPropagation()"
+        value="${escAttr(baseRecvAt(x))}" onclick="event.stopPropagation()"
         title="${escAttr(hasDesignOrder(x)
           ? '디자인을 의뢰한 곳이에요 — 기업에서 받는 날이 아니라 우리 디자인이 끝난 날을 적습니다'
-          : '기업에서 디자인 파일을 받은 날')}"
-        onchange="setExhField('${escAttr(x.id)}','base_recv_at',this.value,'${
-          escAttr(hasDesignOrder(x) ? '디자인 완료' : '디자인 수령')}')">`;
+          : baseRecvItems(x).length
+            ? `그래픽 현황의 «받을 파일»과 같은 자리예요 — 여기서 고치면 그쪽도 함께 바뀝니다 (${
+                baseRecvItems(x).map(i => i.name || '').filter(Boolean).join(' · ')})`
+            : '기업에서 디자인 파일을 받은 날')}"
+        onchange="setBaseRecvAt('${escAttr(x.id)}',this.value)">`;
 
   const dateCell = (x, f, label) => `<input type="date" class="fi" style="width:124px;padding:3px 6px;font-size:11.5px"
     value="${escAttr(x[f] || '')}" onclick="event.stopPropagation()"
@@ -5208,6 +5246,7 @@ window.setExhEvent2 = setExhEvent2;
 window.setExhFilter = setExhFilter;
 window.setExhView = setExhView;
 window.setBaseFil = setBaseFil;
+window.setBaseRecvAt = setBaseRecvAt;
 window.setGraphicView = setGraphicView;
 window.setGraphicFil = setGraphicFil;
 window.setPayFil = setPayFil;

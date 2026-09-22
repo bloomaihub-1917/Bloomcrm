@@ -59,7 +59,7 @@ import {
   billedAmount, paidAmount, graphicState, graphicDueInfo, money, fmtMoney, currencyOf, mixedCurrency, taxNeed, daysSince, CANCELLED,
   isPendingRefund, boothTypeOptions, boothTypes, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
   TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing, introOver, boothDesignState,
-  isSharedBooth, isBookOnly, baseKind, BASE_KINDS, bookName, fasciaName,
+  isSharedBooth, isBookOnly, baseKind, BASE_KINDS, bookName, fasciaName, baseRecvAt, baseRecvItems,
   guardWrite, exhLocked, exhLockNotice, isBoothGiven, boothIncluded, applyBoothItems, boothItemsPending,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar, needsReissue,
   settleState, liveInvoices, payDueDate, paidBreakdown, invoiceGap,
@@ -1445,9 +1445,16 @@ function baseWorkBlock(x){
         <div class="fg"><label class="fl">간판명 확정</label>
           <input type="date" class="fi" style="font-size:12px" value="${escAttr(x.base_recv_at || '')}"
             onchange="setExhField('${escAttr(x.id)}','base_recv_at',this.value,'간판명 확정')"></div>`
+      /* 이 날짜는 그래픽 현황의 «받을 파일»과 같은 자리다 — 기본 제공 그래픽
+         항목의 받은 날을 읽고 쓴다. 두 화면이 각자 적던 시절에는 한쪽이 받음,
+         다른 쪽이 미수령이었다. */
       : `<div class="fg"><label class="fl">디자인 수령일</label>
-          <input type="date" class="fi" style="font-size:12px" value="${escAttr(x.base_recv_at || '')}"
-            onchange="setExhField('${escAttr(x.id)}','base_recv_at',this.value,'디자인 수령')"></div>`)
+          <input type="date" class="fi" style="font-size:12px" value="${escAttr(baseRecvAt(x))}"
+            onchange="setBaseRecvAt('${escAttr(x.id)}',this.value)">
+          ${baseRecvItems(x).length
+            ? `<div style="font-size:10.5px;color:var(--i5);margin-top:3px">그래픽 탭의 «${
+                escapeHtml(baseRecvItems(x).map(i => i.name || '').filter(Boolean).join(' · '))}»와 같은 칸이에요</div>`
+            : ''}</div>`)
     + `<div class="fg"><label class="fl">${escapeHtml(v.done)}</label>
         <input type="date" class="fi" style="font-size:12px" value="${escAttr(x.base_done_at || '')}"
           onchange="setExhField('${escAttr(x.id)}','base_done_at',this.value,'${escAttr(v.done)}')"></div>
