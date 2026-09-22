@@ -3293,11 +3293,23 @@ export async function applyBaseDone(){
   const over = rows.filter(x => String(x.base_done_at || '').trim() && x.base_done_at !== v);
   const noName = rows.filter(x => baseKind(x) === 'fascia' && !fasciaName(x));
 
+  /* 간판은 우리가 도록 영문명으로 일괄 제작한다 — «간판명 확정»과 «간판 제작»이
+     한 동작이라, 제작 완료를 찍는데 확정일이 비어 있으면 화면에는 계속 «미수령»로
+     남는다. 지어내는 날짜가 아니라 같은 날의 같은 일이므로 함께 찍는다.
+     출력·시공 쪽은 다르다 — 거기 수령일은 기업에서 파일이 실제로 온 날이라
+     우리가 만든 날로 대신할 수 없다. */
+  const alsoRecv = rows.filter(x => baseKind(x) === 'fascia' && !String(x.base_recv_at || '').trim());
+
   if(!confirm(`${rows.length}곳을 «제작 완료 ${v}»로 표시합니다.`
+    + (alsoRecv.length ? `\n간판 ${alsoRecv.length}곳은 «간판명 확정»도 같은 날짜로 함께 찍습니다.` : '')
     + (over.length ? `\n이미 날짜가 적힌 ${over.length}곳도 이 날짜로 바뀝니다.` : '')
     + (noName.length ? `\n\n⚠ 간판에 넣을 영문명이 없는 곳이 ${noName.length}곳 있어요 — 이름 없이 완료로 표시됩니다.\n   ${noName.slice(0, 5).map(x => exhNames(x).ko).join(', ')}${noName.length > 5 ? ' 외' : ''}` : ''))) return;
 
-  for(const x of rows) await patchExh(x.id, { base_done_at: v }, BASE_KINDS[baseKind(x)].done);
+  for(const x of rows){
+    const patch = { base_done_at: v };
+    if(alsoRecv.includes(x)) patch.base_recv_at = v;
+    await patchExh(x.id, patch, BASE_KINDS[baseKind(x)].done);
+  }
   baseSel.clear();
   renderExh();
 }
