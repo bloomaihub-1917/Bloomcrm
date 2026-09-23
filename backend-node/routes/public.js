@@ -246,7 +246,11 @@ const dropKorean = (v) => (/[가-힣㄰-㆏]/.test(String(v || '')) ? '' : Strin
    붙어 두 번호가 한 덩어리로 읽힌다. 원문의 줄을 그대로 살린다. */
 const nl2br = (v) => esc(v).replace(/\n/g, '<br>');
 
-/* 신청서 서식이 '(General Inquiries)'와 '(Direct Number)' 두 줄을 미리 깔아 두는
+/* '(General Inquiries)'는 도록 연락처에서 아예 떼기로 했다(db/import-program-book.js
+   의 stripInquiryLabel). 남은 '(Direct Number)'는 둘째 번호를 가리는 구실을 하므로
+   그대로 두는데, 번호 없이 딱지만 온 줄은 여기서 거른다.
+
+   신청서 서식이 '(General Inquiries)'와 '(Direct Number)' 두 줄을 미리 깔아 두는
    탓에, 한쪽만 적어 보낸 기업은 딱지만 남은 줄까지 함께 온다. 그대로 내보내면
    번호가 없는 '(Direct Number)'가 공개 화면에 남는다(13곳이 그렇고, 노보텍·
    파렉셀은 두 줄이 다 비어 있어 연락처 행 자체가 빠진다).

@@ -38,6 +38,20 @@ const clean = (v) => String(v ?? '')
   .replace(/\r\n?/g, '\n')
   .trim();
 
+/* 연락처의 '(General Inquiries)' 딱지를 뗀다.
+
+   신청서 서식이 '(General Inquiries)'와 '(Direct Number)' 두 줄을 미리 깔아 둬서,
+   기업이 적어 보내면 대표번호마다 이 딱지가 따라온다. 번호가 하나뿐인 기업에는
+   붙일 이유가 없고, 프로그램북 지면에도 도록 연락처에도 번호만 있으면 된다.
+   '(Direct Number)'는 둘째 번호를 가리는 구실을 하므로 그대로 둔다.
+
+   딱지만 있고 번호가 없던 줄은 함께 지운다 — 딱지를 떼면 빈 줄만 남는다. */
+const stripInquiryLabel = (v) => String(v ?? '')
+  .split('\n')
+  .map((l) => l.replace(/\(\s*general\s+inquir(?:y|ies)\s*\)/gi, '').replace(/\s{2,}/g, ' ').trim())
+  .filter(Boolean)
+  .join('\n');
+
 /* 이름 대조용 정규화 — 법인 접미사와 기호를 눌러 표기 차이를 흡수한다 */
 function norm(raw) {
   let s = clean(raw).toLowerCase();
@@ -112,7 +126,7 @@ const ALIAS = {
       const put = (col, v) => { if (v) patch[col] = v; };
       put('book_order', clean(r['순서']));
       put('book_address', clean(r['주소']));
-      put('book_phone', clean(r['연락처']));
+      put('book_phone', stripInquiryLabel(clean(r['연락처'])));
       put('book_website', clean(r['웹사이트']));
       put('book_intro', intro);
       if (!Object.keys(patch).length) continue;
