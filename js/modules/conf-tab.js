@@ -59,6 +59,7 @@ let confNewSession = false;    // 세션 추가 칸이 열려 있나
 let confNeedFil = null;        // {key, mode:'done'|'todo'} — 받을 것 칩으로 거르기
 let confRoleFil = '';          // 역할로 거르기
 let confSessFil = '';          // 세션으로 거르기
+let confPeopleQ = '';          // 연사 이름·소속·세션으로 찾기
 
 /* ══════════════════════════════════════════
    진행 완료 잠금
@@ -138,6 +139,7 @@ export function setConfEvent(key){
   confNeedFil = null;
   confRoleFil = '';
   confSessFil = '';
+  confPeopleQ = '';
   buildConfEvList();
   renderConf();
   if(isMobile()) window.closeSb?.();
@@ -1105,6 +1107,26 @@ export function setConfRoleFil(role){
   renderConf();
 }
 
+/* ── 연사 찾기 ──
+   연사가 열일곱이면 눈으로 훑어도 되지만, 행사가 커지면 백 명이 넘고 칩으로
+   좁혀도 한 화면에 안 들어온다. «그 사람 이름이 뭐였더라»가 아니라 «그 사람
+   사진 받았던가»를 확인하려고 여는 화면이라, 이름을 쳐서 한 줄만 남기는
+   편이 빠르다. 소속과 세션명으로도 찾는다 — 이름이 기억 안 날 때 대신
+   떠오르는 것이 그 둘이다.
+
+   한 글자 칠 때마다 화면을 통째로 다시 그리는 탓에 검색칸이 새로 만들어져
+   커서를 잃는다. 값과 커서 자리를 그대로 되돌려 놓는다. */
+export function setConfPeopleQ(v){
+  confPeopleQ = String(v || '');
+  const pos = (document.getElementById('conf-sp-q') || {}).selectionStart;
+  renderConf();
+  const el = document.getElementById('conf-sp-q');
+  if(!el) return;
+  el.value = confPeopleQ;
+  el.focus();
+  if(pos != null) try { el.setSelectionRange(pos, pos); } catch(e){}
+}
+
 function peopleHtml(ev){
   const all = speakersForEvent(ev.key);
   if(!all.length){
@@ -1133,6 +1155,18 @@ function peopleHtml(ev){
       if(c.state === 'na') return false;
       return confNeedFil.mode === 'done' ? c.state === 'done' : c.state !== 'done';
     });
+  }
+  /* 찾는 말은 칩보다 나중에 건다 — 칩으로 좁힌 안에서 다시 찾는 것이 순서다.
+     띄어쓰기는 사람마다 달라서(«한양 대학교» / «한양대학교») 양쪽 다 지우고 견준다. */
+  const sq = confPeopleQ.trim().toLowerCase().replace(/\s+/g, '');
+  if(sq){
+    list = list.filter(sp => [
+      sp.name_snapshot, sp.name_en, sp.org_ko, sp.org_en, sp.title_ko, sp.title_en,
+      ...assignmentsFor(sp.id).map(a => {
+        const ss = CONF_SESSIONS.find(x => x.id === a.session_id);
+        return ss ? [ss.title_ko, ss.title_en, ss.track].filter(Boolean).join(' ') : '';
+      }),
+    ].filter(Boolean).join(' ').toLowerCase().replace(/\s+/g, '').includes(sq));
   }
 
   /* ── 위쪽 요약 — 전시의 카드 줄과 같은 자리 ── */
@@ -1167,6 +1201,22 @@ function peopleHtml(ev){
      단위이기도 하고, 색도 프로그램 표와 같은 색을 써서 두 화면이 이어진다.
      트랙이 없는 세션만 제 이름으로 남는다 — 묶을 데가 없으니 숨기면 아예
      고를 수 없게 된다. 세션 하나하나는 툴팁에 일자·시각과 함께 적어 둔다. */
+  /* 검색칸은 칩 위에 둔다 — 칩으로 좁히든 이름을 치든 여기서 시작한다.
+     찾는 중에는 몇 명이 남았는지를 칸 오른쪽에 붙여 둔다. */
+  const searchBox = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+    <div style="position:relative;flex:1;max-width:${isMobile() ? '100%' : '320px'}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+        style="width:13px;height:13px;color:var(--i5);position:absolute;left:9px;top:50%;transform:translateY(-50%)">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input class="fi" id="conf-sp-q" value="${escAttr(confPeopleQ)}" style="padding-left:27px;font-size:12px"
+        placeholder="연사 이름·소속·세션 검색…" oninput="setConfPeopleQ(this.value)">
+      ${confPeopleQ ? `<button onclick="setConfPeopleQ('')" title="지우기"
+        style="position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:none;
+        cursor:pointer;color:var(--i4);font-size:13px;line-height:1;padding:2px 4px">✕</button>` : ''}
+    </div>
+    ${confPeopleQ ? `<span style="font-size:11px;color:var(--i4);white-space:nowrap">${list.length}명</span>` : ''}
+  </div>`;
+
   const sessions = sessionsForEvent(ev.key);
   const noSess = all.filter(sp => !assignmentsFor(sp.id).length).length;
   const headN = (ids) => all.filter(sp => assignmentsFor(sp.id).some(a => ids.has(a.session_id))).length;
@@ -1234,9 +1284,11 @@ function peopleHtml(ev){
   </div>`;
 
   if(!list.length){
-    return summary + sessChips + roleChips + needChips
+    return summary + searchBox + sessChips + roleChips + needChips
       + `<div style="padding:20px;background:var(--i8);border:1px solid var(--i6);border-radius:10px;
-        font-size:12px;color:var(--i5)">이 조건에 맞는 연사가 없어요.</div>`;
+        font-size:12px;color:var(--i5)">${confPeopleQ
+          ? `«${escapeHtml(confPeopleQ)}»로 찾은 연사가 없어요. 이름 대신 소속이나 세션명으로도 찾을 수 있어요.`
+          : '이 조건에 맞는 연사가 없어요.'}</div>`;
   }
 
   /* ── 모바일 ──
@@ -1304,7 +1356,7 @@ function peopleHtml(ev){
           · ${sp.fee_paid_at ? '지급' : '미지급'}</div>` : ''}
       </div>`;
     };
-    return summary + sessChips + roleChips + needChips
+    return summary + searchBox + sessChips + roleChips + needChips
       + `<div style="font-size:10px;color:var(--i4);margin-bottom:7px">딱지는 아직 안 받은 것이에요 — 카드를 누르면 그 연사가 열립니다</div>`
       + list.map(card).join('');
   }
@@ -1364,7 +1416,7 @@ function peopleHtml(ev){
     </tr>`;
   };
 
-  return summary + sessChips + roleChips + needChips
+  return summary + searchBox + sessChips + roleChips + needChips
     + `<div class="tw"><table><thead><tr>
         <th style="min-width:140px">연사</th>
         <th style="min-width:120px">세션</th>
@@ -2101,6 +2153,7 @@ window.setConfEvent      = setConfEvent;
 window.setConfView       = setConfView;
 window.setConfNeedFil    = setConfNeedFil;
 window.setConfRoleFil    = setConfRoleFil;
+window.setConfPeopleQ    = setConfPeopleQ;
 window.setConfSessFil    = setConfSessFil;
 window.toggleSpeakerDate = toggleSpeakerDate;
 window.receiveAll        = receiveAll;
