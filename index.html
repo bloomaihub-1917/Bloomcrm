@@ -889,8 +889,19 @@
   <button class="mob-menu-btn" onclick="toggleSb()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
   <div class="mob-title" id="mob-conf-ttl">연사</div>
 </div>
+  <!-- 모바일 검색 — .tb(상단바)가 모바일에서 통째로 숨겨져 데스크톱 검색창을
+       쓸 수 없다. 본문(#conf-body) 밖이라 글자를 칠 때마다 다시 그려도
+       포커스를 잃지 않는다(전시 탭과 같은 방식). -->
+  <div class="mob-srch">
+    <div class="srch" style="width:100%">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input type="text" id="conf-q-m" placeholder="연사·소속·세션 검색…" style="width:100%"
+        oninput="searchConfM(this.value)">
+    </div>
+  </div>
   <div class="tb">
     <div class="tb-t" id="conf-ttl">연사</div>
+    <div class="srch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" placeholder="연사·소속·세션 검색…" oninput="renderConf()" id="conf-q"></div>
   </div>
   <!-- .page가 overflow:hidden이라 실제 세로 스크롤은 이 안쪽에서 일어난다 -->
   <div id="conf-body" style="flex:1;overflow:auto;min-height:0"></div>
