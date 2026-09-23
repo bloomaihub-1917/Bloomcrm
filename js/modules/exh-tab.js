@@ -661,8 +661,8 @@ const designPill = (x) => hasDesignOrder(x)
       title="부스 디자인까지 의뢰한 곳이에요 — 디자인을 받는 게 아니라 우리가 그려서 출력·시공합니다">디자인 의뢰</span>` : '';
 
 export const BASE_KINDS = {
-  fascia: { label: '간판명', recv: '간판명 확정', done: '간판 제작', types: ['Octanium (Standard)', 'Octanium (Black)'] },
-  print:  { label: '출력·시공', recv: '디자인 수령', done: '출력 완료',
+  fascia: { label: '간판명', cls: 'p-purple', recv: '간판명 확정', done: '간판 제작', types: ['Octanium (Standard)', 'Octanium (Black)'] },
+  print:  { label: '출력·시공', cls: 'p-blue', recv: '디자인 수령', done: '출력 완료',
             types: ['Block System A', 'Block System B', 'Block System C', 'Lighting Booth'] },
 };
 
@@ -3528,7 +3528,7 @@ function renderBaseView(list){
         ${coCell(x, 'progress')}
         <td style="font-size:11px;color:var(--i4)">${escapeHtml(x.booth_type || '')}${
           x.booth_qty && x.booth_qty !== '1' ? ` <span style="color:var(--i5)">×${escapeHtml(x.booth_qty)}</span>` : ''}</td>
-        <td><span class="pill p-blue">${escapeHtml(BASE_KINDS[k].label)}</span>${designPill(x)}</td>
+        <td><span class="pill ${BASE_KINDS[k].cls}">${escapeHtml(BASE_KINDS[k].label)}</span>${designPill(x)}</td>
         <td>${recvCell(x)}</td>
         <td>${k === 'fascia'
           ? baseDate(x, 'recv')
