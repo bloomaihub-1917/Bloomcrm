@@ -724,12 +724,12 @@ export const toggleBaseDone = (exhId) =>
   setBaseDoneAt(exhId, baseDoneAt(getExhibitorById(exhId) || {}) ? '' : td());
 /* 드로어와 목록이 같은 단추를 쓴다 — 한쪽만 체크로 바뀌면 어느 쪽이 맞는지
    다시 확인하게 된다. */
-export function baseDoneCheck(x){
+export function baseDoneCheck(x, extra = ''){
   const on = baseDoneAt(x);
   const got = baseRecvAt(x);
   return `<button onclick="event.stopPropagation();toggleBaseDone('${escAttr(x.id)}')"
     class="pill ${on ? 'p-green' : got ? 'p-amber' : 'p-gray'}"
-    style="border:0;cursor:pointer;font:inherit;padding:3px 10px"
+    style="border:0;cursor:pointer;font:inherit;padding:0 10px;${extra}"
     title="${on ? `${escAttr(on)}에 했어요 — 누르면 되돌립니다` : '누르면 «했음»으로 표시합니다'}">${
     on ? '✓ 했음' : '안 했음'}</button>`;
 }
@@ -3440,10 +3440,17 @@ function renderBaseView(list){
         return no.length ? `<span class="pill p-red" title="${escAttr(no.map(x => exhNames(x).ko).join(', '))}">영문명 없음 ${no.length}</span>` : ''; })()
     + '<span style="font-size:10.5px;color:var(--i5);margin-left:2px">간판은 영문으로 나갑니다 · 추가 발주가 아니라 계약에 들어 있는 것들이에요 — 기업이 조용해도 우리가 만들어 세웁니다</span>';
 
+  /* ── 칸 치수는 한 곳에서 정한다 ──
+     칸마다 폭을 따로 적어 뒀더니 같은 열에서 글자칸 200px, 날짜칸 124px이
+     섞여 줄마다 오른쪽 끝이 어긋났다. 열 폭은 표 머리(th)가 정하게 두고,
+     칸은 그 폭을 꽉 채우기만 한다. 알약도 폭을 맞춰 세로로 줄이 선다. */
+  const CELL = 'width:100%;box-sizing:border-box;height:28px;padding:3px 7px;font-size:11.5px';
+  const PILL = 'min-width:74px;height:22px;justify-content:center';
+
   /* 받는 것이 무엇인지가 부스 타입마다 달라, 칸 하나에 두 가지를 담는다.
      기본부스는 간판에 넣을 상호를 적는 것 자체가 «받음»이다. */
   const recvCell = (x) => baseKind(x) === 'fascia'
-    ? `<input class="fi" style="width:200px;padding:3px 6px;font-size:11.5px${x.fascia_name ? ';font-weight:600' : ''}${
+    ? `<input class="fi" style="${CELL}${x.fascia_name ? ';font-weight:600' : ''}${
         fasciaName(x) ? '' : ';border-color:var(--re)'}"
         placeholder="${escAttr(bookName(x).en || '게재 영문명이 없어요')}" value="${escAttr(x.fascia_name || '')}"
         title="${escAttr(x.fascia_name ? '간판만 따로 적은 이름이에요'
@@ -3454,7 +3461,7 @@ function renderBaseView(list){
     /* 디자인을 의뢰한 곳은 받을 것이 없다 — 우리가 그린다. 같은 칸을 «우리
        디자인 완료»로 읽게 이름표를 바꿔 단다. 칸을 따로 만들지 않는 건, 뒤에
        오는 «출력 완료»와의 앞뒤 관계가 똑같기 때문이다. */
-    : `<input type="date" class="fi" style="width:124px;padding:3px 6px;font-size:11.5px${
+    : `<input type="date" class="fi" style="${CELL}${
         hasDesignOrder(x) ? ';border-color:var(--tl)' : ''}"
         value="${escAttr(baseRecvAt(x))}" onclick="event.stopPropagation()"
         title="${escAttr(hasDesignOrder(x)
@@ -3467,20 +3474,20 @@ function renderBaseView(list){
 
   /* 확정·완료 날짜는 그래픽 항목 줄에 적힌다(항목이 아직 없는 기업만 기업 칸).
      읽는 자리와 쓰는 자리를 함께 옮겨야 고친 값이 되돌아오지 않는다. */
-  const baseDate = (x, which) => `<input type="date" class="fi" style="width:124px;padding:3px 6px;font-size:11.5px"
+  const baseDate = (x, which) => `<input type="date" class="fi" style="${CELL}"
     value="${escAttr(which === 'done' ? baseDoneAt(x) : baseRecvAt(x))}" onclick="event.stopPropagation()"
     title="${escAttr(baseItems(x).length
       ? `그래픽의 «${baseItems(x).map(i => i.name || '').filter(Boolean).join(' · ')}»와 같은 칸이에요`
       : '')}"
     onchange="${which === 'done' ? 'setBaseDoneAt' : 'setBaseRecvAt'}('${escAttr(x.id)}',this.value)">`;
 
-  const noteCell = (x) => `<input class="fi" style="width:100%;min-width:120px;padding:3px 6px;font-size:11.5px"
+  const noteCell = (x) => `<input class="fi" style="${CELL}"
     placeholder="비고" value="${escAttr(x.base_note || '')}" onclick="event.stopPropagation()"
     onchange="setExhField('${escAttr(x.id)}','base_note',this.value,'기본 시공 비고')">`;
 
   const mark = (x) => { const s = st(x);
     const c = s.state === 'done' ? 'p-green' : s.state === 'part' ? 'p-amber' : 'p-red';
-    return `<span class="pill ${c}">${escapeHtml(s.text || '')}</span>`; };
+    return `<span class="pill ${c}" style="${PILL}">${escapeHtml(s.text || '')}</span>`; };
 
   baseSelSync();
   const selN = rows.filter(x => baseSel.has(x.id)).length;
@@ -3527,12 +3534,12 @@ function renderBaseView(list){
       <th style="min-width:56px">부스</th>
       <th style="min-width:150px">기업</th>
       <th style="min-width:120px">부스 타입</th>
-      <th style="min-width:78px">해야 할 일</th>
-      <th style="min-width:186px">받을 것</th>
-      <th style="min-width:130px">확정</th>
-      <th style="min-width:84px;text-align:center">우리 작업</th>
-      <th style="min-width:88px;text-align:center">상태</th>
-      <th style="min-width:140px">비고</th>
+      <th style="min-width:96px">해야 할 일</th>
+      <th style="width:200px;min-width:200px">받을 것</th>
+      <th style="width:132px;min-width:132px">확정</th>
+      <th style="width:96px;min-width:96px;text-align:center">우리 작업</th>
+      <th style="width:96px;min-width:96px;text-align:center">상태</th>
+      <th style="min-width:150px">비고</th>
     </tr></thead><tbody>
     ${rows.map(x => {
       const k = baseKind(x);
@@ -3543,12 +3550,12 @@ function renderBaseView(list){
         ${coCell(x, 'progress')}
         <td style="font-size:11px;color:var(--i4)">${escapeHtml(x.booth_type || '')}${
           x.booth_qty && x.booth_qty !== '1' ? ` <span style="color:var(--i5)">×${escapeHtml(x.booth_qty)}</span>` : ''}</td>
-        <td><span class="pill ${BASE_KINDS[k].cls}">${escapeHtml(BASE_KINDS[k].label)}</span>${designPill(x)}</td>
+        <td><span class="pill ${BASE_KINDS[k].cls}" style="${PILL}">${escapeHtml(BASE_KINDS[k].label)}</span>${designPill(x)}</td>
         <td>${recvCell(x)}</td>
         <td>${k === 'fascia'
           ? baseDate(x, 'recv')
-          : '<span style="font-size:11px;color:var(--i6)">·</span>'}</td>
-        <td style="text-align:center">${baseDoneCheck(x)}</td>
+          : '<span style="display:inline-block;width:100%;text-align:center;font-size:11px;color:var(--i6)">·</span>'}</td>
+        <td style="text-align:center">${baseDoneCheck(x, PILL)}</td>
         <td style="text-align:center">${mark(x)}</td>
         <td>${noteCell(x)}</td>
       </tr>`;
