@@ -647,3 +647,16 @@ tr.row-sel{background:var(--ad)}
 }
 .audit-item:hover .audit-undo{opacity:1}
 .audit-undo:hover{border-color:var(--re);color:var(--re);opacity:1}
+
+/* ── 탭을 옮길 때 화면이 흔들리지 않게 ──
+
+   세로 스크롤바는 내용이 길 때만 생긴다. 그래서 탭을 옮길 때마다 스크롤바가
+   생겼다 사라졌다 하고, 그때마다 본문 폭이 스크롤바 폭(약 15px)만큼 줄었다
+   늘었다 하면서 표와 알약 줄이 좌우로 밀린다 — «조금씩 틀어진다»의 정체다.
+
+   스크롤이 일어나는 자리마다 스크롤바 자리를 늘 비워 둔다. 스크롤이 없을 때도
+   그만큼을 비워 두므로, 생기든 말든 본문 폭이 그대로다. */
+#exh-body, #conf-body, #evdb-body, #co-dash, #page-arch,
+.tw, .uw, .aw, .cdt, .cotb, .drbd, .mb, .audit-list, .sbs.s-q{
+  scrollbar-gutter: stable;
+}

@@ -163,6 +163,16 @@ export function setPayFil(v){ payFil = payFil === v && v !== 'all' ? 'all' : v; 
 const num = (v) => { const n = Number(String(v ?? '').replace(/[^0-9.-]/g, '')); return isNaN(n) ? 0 : n; };
 export const money = (v) => num(v).toLocaleString('ko-KR');
 
+/* ── 표 안의 칸 치수 ──
+   칸마다 폭과 높이를 따로 적어 두면 같은 열에서 글자칸 200px과 날짜칸 124px이
+   섞이고, 줄마다 오른쪽 끝이 어긋난다. 열 폭은 표 머리(th)가 정하고 칸은 그
+   폭을 채우기만 한다. 알약도 폭을 맞춰야 세로로 줄이 선다.
+
+   드로어도 같은 값을 가져다 쓴다 — 표와 드로어가 다른 치수를 쓰면 같은 항목이
+   화면을 옮길 때마다 크기가 달라 보인다. */
+export const TCELL = 'width:100%;box-sizing:border-box;height:28px;padding:3px 7px;font-size:11.5px';
+export const TPILL = 'min-width:74px;height:22px;justify-content:center';
+
 /* ── 정산 계산 ──────────────────────────────────────────────────
    실무에서 자주 나오는 상황을 그대로 반영한다:
    - 통화 변경·금액 오류로 인보이스를 다시 발행 → 옛 건은 'void'로 두고 합계에서 뺀다
@@ -1439,9 +1449,13 @@ function renderChecklist(list, all){
 ══════════════════════════════════════════ */
 
 /* 표/카드 공통 껍데기 — 요약 배지 + 본문 */
+/* 알약 줄은 한 줄로 못 박는다 — 거르개를 누를 때마다 알약 개수가 달라지는데,
+   줄바꿈을 허용하면 그때마다 아래 표가 한 줄만큼 위아래로 뛴다. 넘치면 가로로
+   민다(모바일은 화면이 좁아 줄바꿈이 낫다). 높이도 한 값으로 잡아 둔다. */
 const viewShell = (pills, inner, actions = '') => `<div style="padding:0 16px 16px">
-  <div style="display:flex;flex-wrap:wrap;gap:6px;margin:12px 0;align-items:center">
-    ${pills}${actions ? `<span style="margin-left:auto;display:flex;gap:6px">${actions}</span>` : ''}
+  <div style="display:flex;gap:6px;margin:12px 0;align-items:center;min-height:30px;${
+    isMobile() ? 'flex-wrap:wrap' : 'flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden'}">
+    ${pills}${actions ? `<span style="margin-left:auto;display:flex;gap:6px;flex:0 0 auto">${actions}</span>` : ''}
   </div>
   ${inner}</div>`;
 
@@ -1624,7 +1638,7 @@ function renderBoothView(list){
       .filter(([t]) => String(t || '').trim())
       .sort((a, b) => rank(a[0]) - rank(b[0]) || a[0].localeCompare(b[0], 'ko'));
     const label = (code) => boothTypes(exhEvent).find(t => t.code === code)?.label || code;
-    return `<div style="padding:12px 16px 0"><div class="seg" style="flex-wrap:wrap">
+    return `<div class="subbar" style="padding:10px 16px 0"><div class="seg" style="flex-wrap:wrap">
       <button class="seg-b${boothTypeFil ? '' : ' on'}" onclick="setBoothTypeFil('')">전체 ${all0.length}</button>
       ${tabs.map(([t, n]) => `<button class="seg-b${boothTypeFil === t ? ' on' : ''}"
         onclick="setBoothTypeFil('${escAttr(t)}')" title="${escAttr(t)}">${escapeHtml(label(t))} ${n}</button>`).join('')}
@@ -2087,7 +2101,7 @@ export function setEquipScope(v){ equipScope = v; renderExh(); }
 function renderEquipView(list){
   const inScope = (i) => equipScope === 'all' ? true
     : equipScope === 'base' ? isBoothGiven(i) : !isBoothGiven(i);
-  const scopeSeg = `<div style="padding:12px 16px 0"><div class="seg">${EQUIP_SCOPES.map(([v, l]) =>
+  const scopeSeg = `<div class="subbar" style="padding:10px 16px 0"><div class="seg">${EQUIP_SCOPES.map(([v, l]) =>
     `<button class="seg-b${equipScope === v ? ' on' : ''}" onclick="setEquipScope('${v}')"
       title="${v === 'all' ? '기본 + 추가 — 발주할 수량이에요'
             : v === 'base' ? '부스 타입에 딸려 오는 기본 제공 — 청구하지 않아요'
@@ -2398,7 +2412,7 @@ function renderGraphicView(list){
      시공」이라는 제 탭을 갖고 있었는데, 거기서 하던 일이 결국 그래픽 파일을
      받아 만드는 일이라 같은 화면으로 들어왔다. */
   const baseN = list.filter(x => baseKind(x)).length;
-  const seg = `<div style="padding:12px 16px 0"><div class="seg">
+  const seg = `<div class="subbar" style="padding:10px 16px 0"><div class="seg">
     ${[['base', `기본 제공${baseN ? ` ${baseN}` : ''}`], ['item', '받을 파일'], ['kind', '품목별'], ['co', '기업별 진행'],
        ['self', `독립부스${selfRows.length ? ` ${selfRows.length}` : ''}`]].map(([k, l]) =>
       `<button class="seg-b${gView === k ? ' on' : ''}" onclick="setGraphicView('${k}')">${l}</button>`).join('')}
@@ -2654,7 +2668,7 @@ function renderGraphicItemView(list){
       </div>
       <div style="display:flex;gap:6px;align-items:center;margin-top:7px">
         <span style="font-size:10.5px;color:var(--i5)">마감</span>
-        <input type="date" class="fi" style="width:130px;padding:4px 7px;font-size:11.5px" value="${escAttr(r.i.due_at || '')}"
+        <input type="date" class="fi" style="${TCELL};width:130px" value="${escAttr(r.i.due_at || '')}"
           onchange="setItemField('${escAttr(r.ids.join(','))}','due_at',this.value)">
       </div>
       <input class="fi" style="width:100%;margin-top:5px;padding:4px 8px;font-size:11.5px"
@@ -2668,10 +2682,10 @@ function renderGraphicItemView(list){
       <th style="min-width:56px">부스</th>
       <th style="min-width:180px">받을 파일</th>
       <th style="min-width:44px;text-align:right">수량</th>
-      <th style="min-width:118px">마감</th>
-      <th style="min-width:88px">상태</th>
-      <th style="min-width:100px">받은 날</th>
-      <th style="min-width:190px">받은 것</th>
+      <th style="width:126px;min-width:126px">마감</th>
+      <th style="width:96px;min-width:96px;text-align:center">상태</th>
+      <th style="width:126px;min-width:126px">받은 날</th>
+      <th style="min-width:200px">받은 것</th>
       <th style="min-width:96px;text-align:right">금액</th>
     </tr></thead><tbody>
     ${shown.map(r => `<tr${r.i.received_at ? ' style="opacity:.72"' : ''}>
@@ -2682,12 +2696,12 @@ function renderGraphicItemView(list){
         r.n > 1 ? `<span class="pill p-gray" style="font-size:9px;margin-left:4px"
           title="접수 회차가 갈려 ${r.n}줄로 들어왔어요 — 받는 입장에서는 한 장의 파일이라 묶었습니다">${r.n}줄</span>` : ''}</td>
       <td style="text-align:right;font-size:11.5px">${r.qty || ''}</td>
-      <td><input type="date" class="fi" style="width:110px;padding:3px 5px;font-size:11px" value="${escAttr(r.i.due_at || '')}"
+      <td><input type="date" class="fi" style="${TCELL}" value="${escAttr(r.i.due_at || '')}"
         onchange="setItemField('${escAttr(r.ids.join(','))}','due_at',this.value)"></td>
-      <td><span class="pill ${r.d.cls}">${escapeHtml(r.d.text)}</span></td>
-      <td><input type="date" class="fi" style="width:106px;padding:3px 5px;font-size:11px" value="${escAttr(r.i.received_at || '')}"
+      <td style="text-align:center"><span class="pill ${r.d.cls}" style="${TPILL}">${escapeHtml(r.d.text)}</span></td>
+      <td><input type="date" class="fi" style="${TCELL}" value="${escAttr(r.i.received_at || '')}"
         onchange="setItemField('${escAttr(r.ids.join(','))}','received_at',this.value)"></td>
-      <td><input class="fi" style="width:180px;padding:3px 6px;font-size:11px" value="${escAttr(r.i.received_note || '')}"
+      <td><input class="fi" style="${TCELL}" value="${escAttr(r.i.received_note || '')}"
         placeholder="예: 백월_최종.ai · CMYK" onchange="setItemField('${escAttr(r.ids.join(','))}','received_note',this.value)"></td>
       <td style="text-align:right;font-size:11.5px">${r.amt ? escapeHtml(fmtMoney(r.amt, r.i.currency || 'KRW')) : '-'}</td>
     </tr>`).join('') || '<tr><td colspan="10" style="text-align:center;color:var(--i4);padding:24px">해당하는 항목이 없어요</td></tr>'}
@@ -3440,17 +3454,10 @@ function renderBaseView(list){
         return no.length ? `<span class="pill p-red" title="${escAttr(no.map(x => exhNames(x).ko).join(', '))}">영문명 없음 ${no.length}</span>` : ''; })()
     + '<span style="font-size:10.5px;color:var(--i5);margin-left:2px">간판은 영문으로 나갑니다 · 추가 발주가 아니라 계약에 들어 있는 것들이에요 — 기업이 조용해도 우리가 만들어 세웁니다</span>';
 
-  /* ── 칸 치수는 한 곳에서 정한다 ──
-     칸마다 폭을 따로 적어 뒀더니 같은 열에서 글자칸 200px, 날짜칸 124px이
-     섞여 줄마다 오른쪽 끝이 어긋났다. 열 폭은 표 머리(th)가 정하게 두고,
-     칸은 그 폭을 꽉 채우기만 한다. 알약도 폭을 맞춰 세로로 줄이 선다. */
-  const CELL = 'width:100%;box-sizing:border-box;height:28px;padding:3px 7px;font-size:11.5px';
-  const PILL = 'min-width:74px;height:22px;justify-content:center';
-
   /* 받는 것이 무엇인지가 부스 타입마다 달라, 칸 하나에 두 가지를 담는다.
      기본부스는 간판에 넣을 상호를 적는 것 자체가 «받음»이다. */
   const recvCell = (x) => baseKind(x) === 'fascia'
-    ? `<input class="fi" style="${CELL}${x.fascia_name ? ';font-weight:600' : ''}${
+    ? `<input class="fi" style="${TCELL}${x.fascia_name ? ';font-weight:600' : ''}${
         fasciaName(x) ? '' : ';border-color:var(--re)'}"
         placeholder="${escAttr(bookName(x).en || '게재 영문명이 없어요')}" value="${escAttr(x.fascia_name || '')}"
         title="${escAttr(x.fascia_name ? '간판만 따로 적은 이름이에요'
@@ -3461,7 +3468,7 @@ function renderBaseView(list){
     /* 디자인을 의뢰한 곳은 받을 것이 없다 — 우리가 그린다. 같은 칸을 «우리
        디자인 완료»로 읽게 이름표를 바꿔 단다. 칸을 따로 만들지 않는 건, 뒤에
        오는 «출력 완료»와의 앞뒤 관계가 똑같기 때문이다. */
-    : `<input type="date" class="fi" style="${CELL}${
+    : `<input type="date" class="fi" style="${TCELL}${
         hasDesignOrder(x) ? ';border-color:var(--tl)' : ''}"
         value="${escAttr(baseRecvAt(x))}" onclick="event.stopPropagation()"
         title="${escAttr(hasDesignOrder(x)
@@ -3474,20 +3481,20 @@ function renderBaseView(list){
 
   /* 확정·완료 날짜는 그래픽 항목 줄에 적힌다(항목이 아직 없는 기업만 기업 칸).
      읽는 자리와 쓰는 자리를 함께 옮겨야 고친 값이 되돌아오지 않는다. */
-  const baseDate = (x, which) => `<input type="date" class="fi" style="${CELL}"
+  const baseDate = (x, which) => `<input type="date" class="fi" style="${TCELL}"
     value="${escAttr(which === 'done' ? baseDoneAt(x) : baseRecvAt(x))}" onclick="event.stopPropagation()"
     title="${escAttr(baseItems(x).length
       ? `그래픽의 «${baseItems(x).map(i => i.name || '').filter(Boolean).join(' · ')}»와 같은 칸이에요`
       : '')}"
     onchange="${which === 'done' ? 'setBaseDoneAt' : 'setBaseRecvAt'}('${escAttr(x.id)}',this.value)">`;
 
-  const noteCell = (x) => `<input class="fi" style="${CELL}"
+  const noteCell = (x) => `<input class="fi" style="${TCELL}"
     placeholder="비고" value="${escAttr(x.base_note || '')}" onclick="event.stopPropagation()"
     onchange="setExhField('${escAttr(x.id)}','base_note',this.value,'기본 시공 비고')">`;
 
   const mark = (x) => { const s = st(x);
     const c = s.state === 'done' ? 'p-green' : s.state === 'part' ? 'p-amber' : 'p-red';
-    return `<span class="pill ${c}" style="${PILL}">${escapeHtml(s.text || '')}</span>`; };
+    return `<span class="pill ${c}" style="${TPILL}">${escapeHtml(s.text || '')}</span>`; };
 
   baseSelSync();
   const selN = rows.filter(x => baseSel.has(x.id)).length;
@@ -3550,12 +3557,12 @@ function renderBaseView(list){
         ${coCell(x, 'progress')}
         <td style="font-size:11px;color:var(--i4)">${escapeHtml(x.booth_type || '')}${
           x.booth_qty && x.booth_qty !== '1' ? ` <span style="color:var(--i5)">×${escapeHtml(x.booth_qty)}</span>` : ''}</td>
-        <td><span class="pill ${BASE_KINDS[k].cls}" style="${PILL}">${escapeHtml(BASE_KINDS[k].label)}</span>${designPill(x)}</td>
+        <td><span class="pill ${BASE_KINDS[k].cls}" style="${TPILL}">${escapeHtml(BASE_KINDS[k].label)}</span>${designPill(x)}</td>
         <td>${recvCell(x)}</td>
         <td>${k === 'fascia'
           ? baseDate(x, 'recv')
           : '<span style="display:inline-block;width:100%;text-align:center;font-size:11px;color:var(--i6)">·</span>'}</td>
-        <td style="text-align:center">${baseDoneCheck(x, PILL)}</td>
+        <td style="text-align:center">${baseDoneCheck(x, TPILL)}</td>
         <td style="text-align:center">${mark(x)}</td>
         <td>${noteCell(x)}</td>
       </tr>`;

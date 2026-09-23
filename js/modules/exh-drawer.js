@@ -61,7 +61,7 @@ import {
   TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing, introOver, boothDesignState,
   isSharedBooth, isBookOnly, baseKind, BASE_KINDS, bookName, fasciaName,
   BOOTH_ORIGIN, BOOTH_EXC, isBoothExc, itemCode,
-  baseRecvAt, baseDoneAt, baseDoneCheck, baseItems, baseRecvItems,
+  baseRecvAt, baseDoneAt, baseDoneCheck, baseItems, baseRecvItems, TCELL, TPILL,
   guardWrite, exhLocked, exhLockNotice, isBoothGiven, boothIncluded, applyBoothItems, boothItemsPending,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar, needsReissue,
   settleState, liveInvoices, payDueDate, paidBreakdown, invoiceGap,
@@ -2481,7 +2481,7 @@ export function graphicUnreceived(exhId){
    둔다 — 나중에 «언제 만들었더라»가 필요하면 기록에 남아 있다. */
 const doneCheck = (i) => `<button onclick="toggleItemDone('${escAttr(i.id)}')"
   class="pill ${i.done_at ? 'p-green' : i.received_at ? 'p-amber' : 'p-gray'}"
-  style="border:0;cursor:pointer;font:inherit;padding:3px 10px"
+  style="border:0;cursor:pointer;font:inherit;padding:0 10px;${TPILL}"
   title="${i.done_at ? `${escAttr(i.done_at)}에 했어요 — 누르면 되돌립니다` : '누르면 «했음»으로 표시합니다'}">${
   i.done_at ? '✓ 했음' : '안 했음'}</button>`;
 
@@ -2500,26 +2500,26 @@ function graphicItemRow(i, opts = {}){
           i.amount ? ` · ${escapeHtml(fmtMoney(i.amount, i.currency))}` : ''}</span>${
           isDesignItem(i) && i.note ? `<div style="font-size:10.5px;color:var(--i4);margin-top:2px">디자인 대상 — <b>${escapeHtml(i.note)}</b></div>` : ''}
       </span>
-      <input type="date" class="fi" style="width:136px;padding:4px 8px;font-size:11.5px"
+      <input type="date" class="fi" style="${TCELL};width:136px;flex:0 0 auto"
         value="${escAttr(i.received_at || '')}"
         onchange="setItemField('${escAttr(i.id)}','received_at',this.value)">
     </div>
     ${opts.done ? boothExcRow(i, { pad: 'margin-top:6px;padding-left:29px' }) : ''}
     ${opts.done ? `<div style="display:flex;gap:9px;align-items:center;margin-top:5px;padding-left:29px">
-      <span style="font-size:10.5px;color:var(--i5);flex:0 0 auto">우리 작업</span>
+      <span style="font-size:10.5px;color:var(--i5);flex:0 0 52px">우리 작업</span>
       ${doneCheck(i)}
     </div>` : ''}
     <div style="display:flex;gap:9px;align-items:center;margin-top:5px;padding-left:29px">
-      <span style="font-size:10.5px;color:var(--i5);flex:0 0 auto">마감</span>
-      <input type="date" class="fi" style="width:136px;padding:4px 8px;font-size:11.5px"
+      <span style="font-size:10.5px;color:var(--i5);flex:0 0 52px">마감</span>
+      <input type="date" class="fi" style="${TCELL};width:136px;flex:0 0 auto"
         value="${escAttr(i.due_at || '')}"
         onchange="setItemField('${escAttr(i.id)}','due_at',this.value)">
       ${(() => { const d = graphicDueInfo(i);
-        return on ? '' : `<span class="pill ${d.cls}">${escapeHtml(d.text)}</span>`; })()}
+        return on ? '' : `<span class="pill ${d.cls}" style="${TPILL}">${escapeHtml(d.text)}</span>`; })()}
     </div>
     ${opts.done ? '' : `<div style="display:flex;gap:9px;align-items:center;margin-top:5px;padding-left:29px">
-      <span style="font-size:10.5px;color:var(--i5);flex:0 0 auto">받은 것</span>
-      <input class="fi" style="flex:1;min-width:0;padding:4px 8px;font-size:11.5px"
+      <span style="font-size:10.5px;color:var(--i5);flex:0 0 52px">받은 것</span>
+      <input class="fi" style="${TCELL};flex:1;min-width:0"
         value="${escAttr(i.received_note || '')}" placeholder="예: 백월_최종.ai · CMYK · 재단선 포함"
         onchange="setItemField('${escAttr(i.id)}','received_note',this.value)">
     </div>`}
@@ -2646,9 +2646,9 @@ function boothExcRow(i, opts = {}){
   const off = isVoided(i);
   const exc = isBoothExc(i);
   return `<div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;${opts.pad || ''}">
-    ${exc ? `<span class="pill ${off ? 'p-red' : 'p-amber'}" title="설정과 다르게 이 기업만 따로 둔 줄이에요 — 부스 타입을 다시 골라도 그대로 둡니다">${off ? '뺌' : '예외'}</span>` : ''}
-    <span style="font-size:10.5px;color:var(--i5)">수량</span>
-    <input class="fi" style="width:56px;padding:3px 6px;font-size:11.5px" value="${escAttr(i.qty ?? '')}"
+    ${exc ? `<span class="pill ${off ? 'p-red' : 'p-amber'}" style="${TPILL};min-width:48px" title="설정과 다르게 이 기업만 따로 둔 줄이에요 — 부스 타입을 다시 골라도 그대로 둡니다">${off ? '뺌' : '예외'}</span>` : ''}
+    <span style="font-size:10.5px;color:var(--i5);flex:0 0 52px">수량</span>
+    <input class="fi" style="${TCELL};width:56px;flex:0 0 auto" value="${escAttr(i.qty ?? '')}"
       inputmode="numeric" ${off ? 'disabled' : ''}
       title="설정과 다르게 적으면 이 줄은 예외가 됩니다"
       onchange="setBoothItemQty('${escAttr(i.id)}',this.value)">
@@ -2656,7 +2656,7 @@ function boothExcRow(i, opts = {}){
       ? `<button class="btn bs" onclick="restoreBoothItem('${escAttr(i.id)}')" title="다시 제공하는 것으로 되돌립니다">되살리기</button>`
       : `<button class="btn bs" onclick="excludeBoothItem('${escAttr(i.id)}')" title="이 기업에는 안 나갑니다 — 발주 수량에서 빠지고, 뺐다는 사실은 남습니다">이 기업은 뺌</button>`}
     ${exc && !off ? `<button class="btn bs" onclick="restoreBoothItem('${escAttr(i.id)}')" title="설정에 적힌 수량으로 되돌립니다">설정대로</button>` : ''}
-    ${exc ? `<input class="fi" style="flex:1;min-width:120px;padding:3px 7px;font-size:11px"
+    ${exc ? `<input class="fi" style="${TCELL};flex:1;min-width:120px"
         placeholder="예외 사유 — 예: 자체 데스크를 가져옴" value="${escAttr(i.note || '')}"
         onchange="setItemField('${escAttr(i.id)}','note',this.value)">` : ''}
   </div>`;
