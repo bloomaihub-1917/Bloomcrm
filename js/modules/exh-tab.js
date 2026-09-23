@@ -718,6 +718,21 @@ export const setBaseRecvAt = (exhId, v) =>
   setBaseDate(exhId, 'base_recv_at', 'received_at', v, '디자인 수령·간판명 확정');
 export const setBaseDoneAt = (exhId, v) =>
   setBaseDate(exhId, 'base_done_at', 'done_at', v, '기본 시공 완료');
+/* 우리가 하는 일은 날짜를 받지 않는다 — 됐다/안 됐다만 누른다. 값은 누른 날로
+   적히지만 화면은 체크만 보여 준다(스무 줄을 날짜로 채우게 하지 않는다). */
+export const toggleBaseDone = (exhId) =>
+  setBaseDoneAt(exhId, baseDoneAt(getExhibitorById(exhId) || {}) ? '' : td());
+/* 드로어와 목록이 같은 단추를 쓴다 — 한쪽만 체크로 바뀌면 어느 쪽이 맞는지
+   다시 확인하게 된다. */
+export function baseDoneCheck(x){
+  const on = baseDoneAt(x);
+  const got = baseRecvAt(x);
+  return `<button onclick="event.stopPropagation();toggleBaseDone('${escAttr(x.id)}')"
+    class="pill ${on ? 'p-green' : got ? 'p-amber' : 'p-gray'}"
+    style="border:0;cursor:pointer;font:inherit;padding:3px 10px"
+    title="${on ? `${escAttr(on)}에 했어요 — 누르면 되돌립니다` : '누르면 «했음»으로 표시합니다'}">${
+    on ? '✓ 했음' : '안 했음'}</button>`;
+}
 
 /* 어디까지 왔나. 받는 것과 만드는 것이 따로라 두 단계로 본다 —
    "디자인은 왔는데 아직 안 뽑았다"가 제일 흔한 상태이고, 그걸 완료로 묶으면
@@ -3500,7 +3515,7 @@ function renderBaseView(list){
       ${k === 'fascia' ? `<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
         <span style="font-size:11px;color:var(--i4);min-width:64px">확정</span>${baseDate(x, 'recv')}</div>` : ''}
       <div style="display:flex;gap:6px;align-items:center">
-        <span style="font-size:11px;color:var(--i4);min-width:64px">${escapeHtml(BASE_KINDS[k].done)}</span>${baseDate(x, 'done')}</div>
+        <span style="font-size:11px;color:var(--i4);min-width:64px">${escapeHtml(BASE_KINDS[k].done)}</span>${baseDoneCheck(x)}</div>
     </div>`;
   }).join(''), actions);
 
@@ -3515,7 +3530,7 @@ function renderBaseView(list){
       <th style="min-width:78px">해야 할 일</th>
       <th style="min-width:186px">받을 것</th>
       <th style="min-width:130px">확정</th>
-      <th style="min-width:130px">우리 작업</th>
+      <th style="min-width:84px;text-align:center">우리 작업</th>
       <th style="min-width:88px;text-align:center">상태</th>
       <th style="min-width:140px">비고</th>
     </tr></thead><tbody>
@@ -3533,7 +3548,7 @@ function renderBaseView(list){
         <td>${k === 'fascia'
           ? baseDate(x, 'recv')
           : '<span style="font-size:11px;color:var(--i6)">·</span>'}</td>
-        <td>${baseDate(x, 'done')}</td>
+        <td style="text-align:center">${baseDoneCheck(x)}</td>
         <td style="text-align:center">${mark(x)}</td>
         <td>${noteCell(x)}</td>
       </tr>`;
@@ -5312,6 +5327,7 @@ window.setExhView = setExhView;
 window.setBaseFil = setBaseFil;
 window.setBaseRecvAt = setBaseRecvAt;
 window.setBaseDoneAt = setBaseDoneAt;
+window.toggleBaseDone = toggleBaseDone;
 window.setGraphicView = setGraphicView;
 window.setGraphicFil = setGraphicFil;
 window.setPayFil = setPayFil;

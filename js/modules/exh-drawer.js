@@ -61,7 +61,7 @@ import {
   TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing, introOver, boothDesignState,
   isSharedBooth, isBookOnly, baseKind, BASE_KINDS, bookName, fasciaName,
   BOOTH_ORIGIN, BOOTH_EXC, isBoothExc, itemCode,
-  baseRecvAt, baseDoneAt, baseItems, baseRecvItems,
+  baseRecvAt, baseDoneAt, baseDoneCheck, baseItems, baseRecvItems,
   guardWrite, exhLocked, exhLockNotice, isBoothGiven, boothIncluded, applyBoothItems, boothItemsPending,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar, needsReissue,
   settleState, liveInvoices, payDueDate, paidBreakdown, invoiceGap,
@@ -1458,8 +1458,7 @@ function baseWorkBlock(x){
                 escapeHtml(baseRecvItems(x).map(i => i.name || '').filter(Boolean).join(' · '))}»와 같은 칸이에요</div>`
             : ''}</div>`)
     + `<div class="fg"><label class="fl">${escapeHtml(v.done)}</label>
-        <input type="date" class="fi" style="font-size:12px" value="${escAttr(baseDoneAt(x))}"
-          onchange="setBaseDoneAt('${escAttr(x.id)}',this.value)"></div>
+        <div style="padding:3px 0">${baseDoneCheck(x)}</div></div>
       <div class="fg"><label class="fl">비고</label>
         <input class="fi" style="font-size:12px" value="${escAttr(x.base_note || '')}"
           placeholder="색상·재질·시공 메모" onchange="setExhField('${escAttr(x.id)}','base_note',this.value,'기본 시공 비고')"></div>
@@ -2474,7 +2473,19 @@ export function graphicUnreceived(exhId){
   return graphicItems(exhId).filter(i => !i.received_at).length;
 }
 
-/* 한 항목 줄. 기본 제공 줄에는 «만든 날»이 하나 더 붙는다 — 그 줄이 곧
+/* ── 우리가 하는 일은 «됐다/안 됐다»만 체크한다 ──
+
+   받는 것은 상대가 준 날이 근거로 남아야 한다(언제 왔길래 독촉을 했나, 마감을
+   지켰나). 그런데 우리가 만드는 것은 날짜를 적어 봐야 쓰는 데가 없고, 스무 줄을
+   날짜로 채우자니 손이 너무 간다. 체크만 남기고 날짜는 누른 날로 조용히 적어
+   둔다 — 나중에 «언제 만들었더라»가 필요하면 기록에 남아 있다. */
+const doneCheck = (i) => `<button onclick="toggleItemDone('${escAttr(i.id)}')"
+  class="pill ${i.done_at ? 'p-green' : i.received_at ? 'p-amber' : 'p-gray'}"
+  style="border:0;cursor:pointer;font:inherit;padding:3px 10px"
+  title="${i.done_at ? `${escAttr(i.done_at)}에 했어요 — 누르면 되돌립니다` : '누르면 «했음»으로 표시합니다'}">${
+  i.done_at ? '✓ 했음' : '안 했음'}</button>`;
+
+/* 한 항목 줄. 기본 제공 줄에는 «우리 작업» 체크가 하나 더 붙는다 — 그 줄이 곧
    기본 시공이라, 받은 뒤에 우리가 만들어 세우는 단계까지 여기서 끝난다. */
 function graphicItemRow(i, opts = {}){
   const on = !!i.received_at;
@@ -2495,12 +2506,8 @@ function graphicItemRow(i, opts = {}){
     </div>
     ${opts.done ? boothExcRow(i, { pad: 'margin-top:6px;padding-left:29px' }) : ''}
     ${opts.done ? `<div style="display:flex;gap:9px;align-items:center;margin-top:5px;padding-left:29px">
-      <span style="font-size:10.5px;color:var(--i5);flex:0 0 auto">만든 날</span>
-      <input type="date" class="fi" style="width:136px;padding:4px 8px;font-size:11.5px"
-        value="${escAttr(i.done_at || '')}"
-        onchange="setItemField('${escAttr(i.id)}','done_at',this.value)">
-      ${i.done_at ? '<span class="pill p-green">완료</span>'
-        : i.received_at ? '<span class="pill p-amber">작업 전</span>' : ''}
+      <span style="font-size:10.5px;color:var(--i5);flex:0 0 auto">우리 작업</span>
+      ${doneCheck(i)}
     </div>` : ''}
     <div style="display:flex;gap:9px;align-items:center;margin-top:5px;padding-left:29px">
       <span style="font-size:10.5px;color:var(--i5);flex:0 0 auto">마감</span>
@@ -2510,12 +2517,12 @@ function graphicItemRow(i, opts = {}){
       ${(() => { const d = graphicDueInfo(i);
         return on ? '' : `<span class="pill ${d.cls}">${escapeHtml(d.text)}</span>`; })()}
     </div>
-    <div style="display:flex;gap:9px;align-items:center;margin-top:5px;padding-left:29px">
+    ${opts.done ? '' : `<div style="display:flex;gap:9px;align-items:center;margin-top:5px;padding-left:29px">
       <span style="font-size:10.5px;color:var(--i5);flex:0 0 auto">받은 것</span>
       <input class="fi" style="flex:1;min-width:0;padding:4px 8px;font-size:11.5px"
         value="${escAttr(i.received_note || '')}" placeholder="예: 백월_최종.ai · CMYK · 재단선 포함"
         onchange="setItemField('${escAttr(i.id)}','received_note',this.value)">
-    </div>
+    </div>`}
   </div>`;
 }
 
@@ -2677,6 +2684,18 @@ function boothGivenBlock(x){
         ${boothExcRow(i, { pad: 'margin-top:6px' })}
       </div>`;
     }).join('')}`;
+}
+
+/* 우리 작업 체크 — 누르면 오늘 날짜가 들어가고, 다시 누르면 지운다.
+   화면에는 날짜를 보이지 않지만 값은 날짜로 남긴다 — «됐다»만 남기면 언제
+   했는지가 사라지고, 현장에서 «이거 어제 건 맞나»를 되짚을 수 없다. */
+export async function toggleItemDone(id){
+  const ids = String(id).split(',').filter(Boolean);
+  const i = EXH_ITEMS.find(r => r.id === ids[0]);
+  if(!i) return;
+  const v = i.done_at ? '' : td();
+  for(const one of ids) await setItemField(one, 'done_at', v);
+  refreshExhViews();
 }
 
 /* 받음 체크 — 누르면 오늘 날짜가 들어가고, 다시 누르면 지운다.
@@ -3385,6 +3404,7 @@ export async function holdExhLog(id){
   if(!r.ok){ l.status = before; refreshExhViews(); saveFailed(r, '저장에 실패했어요.'); }
 }
 
+window.toggleItemDone       = toggleItemDone;
 window.setBoothItemQty      = setBoothItemQty;
 window.excludeBoothItem     = excludeBoothItem;
 window.restoreBoothItem     = restoreBoothItem;
