@@ -15,7 +15,7 @@ import {
   getExhibitorById, itemsFor, invoicesFor, taxInvoicesFor, paymentsFor, logsFor, openInquiriesFor,
   EXH_CONTACTS, EXH_ITEMS, EXH_INVOICES, EXH_TAX, EXH_PAYMENTS, EXH_LOGS, EXHIBITORS, CO_DB, currentUser,
   contactsFor, catalogFor, catalogItem, EQUIP_CATALOG, findCatalogByName,
-  contacts, participations, getOrgById, findOrgByName, codeList, codeLabel,
+  contacts, participations, getOrgById, findOrgByName, ORGS, codeList, codeLabel,
   EXH_APPS, appsFor, openAppFor, isVoided, liveItemsFor, exhEvent, exhibitorsForEvent,
   nextItemSort,
 } from '../state.js';
@@ -54,7 +54,7 @@ function saveFailed(res, msg){
 }
 import { trackAction, changed, removed } from './audit-tab.js';
 import { ieyo } from '../country-signal.js';
-import { normalizeCompanyKey } from './company-tab.js';
+import { normalizeCompanyKey, createOrg } from './company-tab.js';
 import {
   billedAmount, paidAmount, graphicState, graphicDueInfo, money, fmtMoney, currencyOf, mixedCurrency, taxNeed, daysSince, CANCELLED,
   isPendingRefund, boothTypeOptions, boothTypes, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
@@ -319,6 +319,45 @@ const BUILDER_FIELDS = [
   ['builder_email',   '이메일',     ''],
 ];
 
+/* 시공사명은 기업 DB의 벤더시공사에서 고른다 — 목록에 없으면 적은 이름으로
+   새로 등록한다. 적힌 글자만 있으면 다음 행사에서 같은 시공사를 찾을 수 없다.
+   «직접 설치»는 시공사가 아니라 잇지 않는다. */
+const SELF_INSTALL = /^직접\s*설치$/;
+function builderNameRow(x){
+  const org = getOrgById(x.builder_org_id);
+  const vendors = ORGS.filter(o => o.kind === '벤더시공사' && (o.name_ko || o.name_en));
+  const note = org
+    ? `<span style="color:var(--g)">기업 DB 연결됨</span>`
+    : (String(x.builder || '').trim() && !SELF_INSTALL.test(String(x.builder).trim())
+      ? `<span style="color:var(--am)">기업 DB에 아직 연결되지 않았어요 — 다시 입력하면 연결됩니다</span>` : '');
+  return `<div class="fg"><label class="fl">시공사명</label>
+    <input class="fi" style="font-size:12px" list="builder-orgs" value="${escAttr(x.builder || '')}"
+      placeholder="기업 DB의 시공사에서 고르거나 새 이름을 적으세요"
+      onchange="setBuilderOrg('${escAttr(x.id)}',this.value)">
+    <datalist id="builder-orgs">${vendors.map(o => `<option value="${escAttr(o.name_ko || o.name_en)}">`).join('')}</datalist>
+    ${note ? `<div style="font-size:10.5px;margin-top:3px">${note}</div>` : ''}</div>`;
+}
+export async function setBuilderOrg(id, value){
+  const x = getExhibitorById(id);
+  if(!x) return;
+  const name = String(value || '').trim();
+  if(!name || SELF_INSTALL.test(name)){
+    window.setExhField(id, 'builder', name, '시공사명');
+    if(x.builder_org_id) window.setExhField(id, 'builder_org_id', '', '시공사 연결');
+    return;
+  }
+  let org = findOrgByName(name, normalizeCompanyKey);
+  if(!org){
+    const r = await createOrg({ nameKo: name, kind: '벤더시공사' });
+    org = r.ok ? getOrgById(r.id) : r.org;
+  }
+  const patch = { builder: org ? (org.name_ko || org.name_en || name) : name, builder_org_id: org?.id || '' };
+  /* 이미 아는 시공사면 대표 번호·메일을 빈 칸에 깔아 준다 */
+  if(org?.phone && !String(x.builder_tel || '').trim()) patch.builder_tel = org.phone;
+  if(org?.email && !String(x.builder_email || '').trim()) patch.builder_email = org.email;
+  await patchExh(id, patch, '시공사명');
+}
+
 function builderBlock(x){
   const isSelf = (x.booth_type || '') === SELF_BUILD_TYPE;
   const hasAny = BUILDER_FIELDS.some(([f]) => String(x[f] || '').trim());
@@ -332,7 +371,7 @@ function builderBlock(x){
   return `<div style="padding:9px 11px;background:var(--i9);border-radius:8px;border-left:3px solid var(--a);margin-bottom:10px">
     <div style="font-size:11px;font-weight:700;color:var(--i2);margin-bottom:7px">
       시공사 정보${isSelf ? '' : ' <span style="font-weight:400;color:var(--i5)">— 부스 타입은 자체 시공이 아니에요</span>'}</div>
-    ${row('builder', '시공사명', '')}
+    ${builderNameRow(x)}
     <div class="fgr">${row('builder_contact', '시공 담당자', '')}${row('builder_tel', '유선번호', '02-000-0000')}</div>
     <div class="fgr">${row('builder_mobile', '휴대폰', '010-0000-0000')}${row('builder_email', '이메일', '')}</div>
   </div>`;
@@ -3440,6 +3479,7 @@ window.submitNewContact = submitNewContact;
 window.assignExhContact = assignExhContact;
 window.unassignExhContact = unassignExhContact;
 window.drawIntroMeter = drawIntroMeter;
+window.setBuilderOrg = setBuilderOrg;
 /* 기업 DB 값을 이번 행사 원고로 옮긴다 — 기업이 그대로 쓰겠다고 확인한 뒤에만 */
 window.useOrgBookValue = (id, f, orgKey, label) => {
   const x = getExhibitorById(id); const o = getOrgById(x?.org_id);
