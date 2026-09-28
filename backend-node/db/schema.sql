@@ -1036,3 +1036,9 @@ ALTER TABLE exhibitor_items ADD COLUMN IF NOT EXISTS origin TEXT;
    그 뒤 금액이나 접수가 또 바뀌면 값이 달라져 경고가 스스로 되살아난다. */
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS gap_ack TEXT;
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS reissue_ack TEXT;
+
+/* ── 기업의 주소·회사소개 ──
+   프로그램북 원고(exhibitors.book_*)에만 있던 값인데 행사가 아니라 회사에
+   붙는다. 행사마다 다시 받지 않게 기업 DB에 정본을 둔다(db/add-org-profile.js). */
+ALTER TABLE orgs ADD COLUMN IF NOT EXISTS address TEXT;
+ALTER TABLE orgs ADD COLUMN IF NOT EXISTS intro   TEXT;

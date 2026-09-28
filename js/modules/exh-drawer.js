@@ -1587,9 +1587,25 @@ export function drawIntroMeter(id){
 function dBook(x){
   const miss = bookMissing(x);
   const o = introOver(x.book_intro, x.event_id);
+  /* 행사마다 새로 받는 값이라 기업 DB 값을 미리 채우지 않는다 — 채워 두면
+     받지도 않은 원고가 «받음»으로 보인다. 대신 가진 값을 옆에 보여 줘서
+     제로 베이스로 받을지, «이대로 맞나요?»로 확인만 받을지 고를 수 있게 한다. */
+  const org = getOrgById(x.org_id) || {};
+  const known = (f, orgKey, label) => {
+    const v = String(org[orgKey] || '').trim();
+    if(!v || v === String(x[f] || '').trim()) return '';
+    return `<div style="font-size:10.5px;color:var(--i5);margin-top:3px;display:flex;gap:6px;align-items:baseline">
+      <span style="flex:1;min-width:0;white-space:pre-line;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical"
+        title="${escAttr(v)}">기업 DB: ${escapeHtml(v)}</span>
+      <button class="btn bs" style="font-size:10px;padding:1px 6px;flex:none"
+        title="기업이 이 값 그대로 쓰겠다고 확인해 줬을 때 누르세요"
+        onclick="useOrgBookValue('${escAttr(x.id)}','${f}','${orgKey}','${escAttr(label)}')">확인받음 · 쓰기</button></div>`;
+  };
+  const ORG_OF = { book_address: 'address', book_website: 'website' };
   const row = (f, label, ph) => `<div class="fg"><label class="fl">${escapeHtml(label)}</label>
     <input class="fi" style="font-size:12px" value="${escAttr(x[f] || '')}" placeholder="${escAttr(ph)}"
-      onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')"></div>`;
+      onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')">
+    ${ORG_OF[f] ? known(f, ORG_OF[f], label) : ''}</div>`;
 
   return `
   ${sct('게재 정보', `
@@ -1635,7 +1651,8 @@ function dBook(x){
       placeholder="도록에 실을 회사소개를 붙여넣으세요"
       oninput="drawIntroMeter('${escAttr(x.id)}')"
       onchange="setExhField('${escAttr(x.id)}','book_intro',this.value,'회사소개')">${escapeHtml(x.book_intro || '')}</textarea>
-    <div id="bk-meter-${escAttr(x.id)}" style="font-size:11.5px;margin-top:6px">${introMeter(x.book_intro, x.event_id)}</div>`,
+    <div id="bk-meter-${escAttr(x.id)}" style="font-size:11.5px;margin-top:6px">${introMeter(x.book_intro, x.event_id)}</div>
+    ${known('book_intro', 'intro', '회사소개')}`,
     o.chars ? `<span class="pill ${o.isOver ? 'p-red' : 'p-green'}">${o.chars}자${o.isOver ? ' 초과' : ''}</span>`
       : '<span class="pill p-red">없음</span>')}
 
@@ -3423,6 +3440,11 @@ window.submitNewContact = submitNewContact;
 window.assignExhContact = assignExhContact;
 window.unassignExhContact = unassignExhContact;
 window.drawIntroMeter = drawIntroMeter;
+/* 기업 DB 값을 이번 행사 원고로 옮긴다 — 기업이 그대로 쓰겠다고 확인한 뒤에만 */
+window.useOrgBookValue = (id, f, orgKey, label) => {
+  const x = getExhibitorById(id); const o = getOrgById(x?.org_id);
+  if(x && o?.[orgKey]) window.setExhField(id, f, o[orgKey], label);
+};
 window.renderExhDr = renderExhDr;
 window.addExhItem = addExhItem;
 window.delExhItem = delExhItem;

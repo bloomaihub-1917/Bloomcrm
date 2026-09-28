@@ -292,6 +292,8 @@ export function buildCoDB(){
       products: o.products || '',
       phone:    o.phone || '',
       email:    o.email || '',
+      address:  o.address || '',
+      intro:    o.intro || '',
       catCode:  o.cat_code || '',
       source:   o.source || '',
       updatedAt: o.updated_at || '',
@@ -1410,6 +1412,8 @@ export function renderCoDetail(c){
             ['phone',   '대표 전화', c.phone,   `editCoPhone('${escAttr(c.key)}')`, false],
             ['email',   '대표 메일', c.email,   `editCoEmail('${escAttr(c.key)}')`, false],
             ['products','취급 품목', c.products, `editCoProducts('${escAttr(c.key)}')`, false],
+            ['address', '주소',     c.address, `editCoAddress('${escAttr(c.key)}')`, false],
+            ['intro',   '회사소개', c.intro,   `editCoIntro('${escAttr(c.key)}')`, false],
             ['notes',   '메모',     c.notes,   `editCoNotes('${escAttr(c.key)}')`, false],
           ];
           const has = F.filter(f => String(f[2] || '').trim());
@@ -1428,7 +1432,7 @@ export function renderCoDetail(c){
           const row = ([id, label, val, on, isLink]) => `
             <div style="display:flex;gap:8px;align-items:baseline;padding:2px 0;font-size:11.5px">
               <span style="flex:0 0 62px;color:var(--i5)">${escapeHtml(label)}</span>
-              <span style="flex:1;min-width:0;color:var(--i2);${on ? 'cursor:pointer' : ''}" ${on ? `onclick="${on}"` : ''}>
+              <span style="flex:1;min-width:0;color:var(--i2);white-space:pre-line;${on ? 'cursor:pointer' : ''}" ${on ? `onclick="${on}"` : ''}>
                 <span id="co-${id}-${escapeHtml(c.key)}">${
                   isLink && val ? linksHtml(val)
                     : val ? escapeHtml(val)
@@ -1498,6 +1502,7 @@ const ORG_FIELDS = {
   nameKo:'name_ko', nameEn:'name_en', abbr:'abbr', kind:'kind', orgStatus:'status',
   country:'country', hq:'hq', website:'website', bizNo:'biz_no', catCode:'cat_code',
   notes:'notes', products:'products', phone:'phone', email:'email', source:'source',
+  address:'address', intro:'intro',
 };
 
 /* 화면용 기업 객체(c)에서 바뀐 필드만 서버 컬럼명으로 옮겨 담는다.
@@ -1764,6 +1769,9 @@ const CO_TEXT_FIELDS = {
   /* 담당자를 아직 못 찾은 회사의 대표번호 — 사람이 아니라 회사에 붙는다 */
   phone:   { placeholder: '02-000-0000',                      multiline: false, empty: '대표 전화 추가' },
   email:   { placeholder: 'info@example.com',                 multiline: false, empty: '대표 메일 추가' },
+  /* 프로그램북 원고에서 옮겨 온 값 — 행사가 아니라 회사에 붙는다 */
+  address: { placeholder: '예: 서울시 강남구 …',               multiline: true,  empty: '주소 추가' },
+  intro:   { placeholder: '회사소개',                          multiline: true,  empty: '회사소개 추가' },
   website: { placeholder: 'https://example.com',              multiline: false, empty: '웹사이트 추가', isLink: true },
   country: { placeholder: '예: 한국',                          multiline: false, empty: '국가 추가' },
   abbr:    { placeholder: '예: SK',                            multiline: false, empty: '약어 추가' },
@@ -1882,6 +1890,8 @@ export function editCoProducts(key){ startCoInlineEdit(key, 'products'); }
 export function editCoPhone(key){ startCoInlineEdit(key, 'phone'); }
 export function editCoEmail(key){ startCoInlineEdit(key, 'email'); }
 export function editCoWebsite(key){ startCoInlineEdit(key, 'website'); }
+export function editCoAddress(key){ startCoInlineEdit(key, 'address'); }
+export function editCoIntro(key){ startCoInlineEdit(key, 'intro'); }
 export function editCoCountry(key){ startCoInlineEdit(key, 'country'); }
 export function editCoAbbr(key){ startCoInlineEdit(key, 'abbr'); }
 export function editCoSource(key){ startCoInlineEdit(key, 'source'); }
@@ -2500,6 +2510,8 @@ window.editCoProducts = editCoProducts;
 window.editCoDomain = editCoDomain;
 window.closeCoDomainPopover = closeCoDomainPopover;
 window.editCoPhone = editCoPhone;
+window.editCoAddress = editCoAddress;
+window.editCoIntro = editCoIntro;
 window.editCoEmail = editCoEmail;
 window.editCoWebsite = editCoWebsite;
 window.editCoCountry = editCoCountry;

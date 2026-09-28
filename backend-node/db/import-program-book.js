@@ -86,7 +86,8 @@ const ALIAS = {
     await client.query('BEGIN');
 
     const exhs = (await client.query(
-      `SELECT e.id, e.company_name, e.booth_no, o.name_ko, o.name_en, o.aliases
+      `SELECT e.id, e.org_id, e.company_name, e.booth_no, o.name_ko, o.name_en, o.aliases,
+              o.address AS org_address, o.website AS org_website, o.intro AS org_intro
          FROM exhibitors e LEFT JOIN orgs o ON o.id = e.org_id
         WHERE e.event_id = $1`, [EVENT])).rows;
 
@@ -106,6 +107,7 @@ const ALIAS = {
 
     const applied = [], missed = [], boothOdd = [], lenOdd = [], over = [];
     const LIMIT = 1300;
+    let orgFilled = 0;
 
     for (const r of rows) {
       const name = clean(r['기업명(프로그램북)']);
@@ -138,10 +140,26 @@ const ALIAS = {
              updated_at = $${cols.length + 2} WHERE id = $1`,
           [e.id, ...cols.map((c) => patch[c]), new Date().toISOString().slice(0, 10)]);
       }
+      /* 주소·웹사이트·회사소개는 회사에 붙는 값이라 기업 DB에도 남긴다.
+         행사마다 새로 받는 원고라 방금 받은 것이 가장 최신이다 — 다르면 갱신한다.
+         엑셀에 빈 칸이면 patch에 없으므로 기업 DB 값은 지우지 않는다. */
+      const orgPatch = {};
+      [['book_address', 'address'], ['book_website', 'website'], ['book_intro', 'intro']].forEach(([from, to]) => {
+        if (patch[from] && patch[from] !== String(e[`org_${to}`] || '').trim()) orgPatch[to] = patch[from];
+      });
+      const oc = Object.keys(orgPatch);
+      if (e.org_id && oc.length) {
+        orgFilled++;
+        if (!DRY) await client.query(
+          `UPDATE orgs SET ${oc.map((c, i) => `"${c}" = $${i + 2}`).join(', ')},
+             updated_at = $${oc.length + 2} WHERE id = $1`,
+          [e.org_id, ...oc.map((c) => orgPatch[c]), new Date().toISOString().slice(0, 10)]);
+      }
       applied.push({ co: e.company_name, n: intro.length, fields: Object.keys(patch).length });
     }
 
     console.log(`\n${EVENT} 프로그램북: ${applied.length}개 기업 반영 (엑셀 ${rows.length}행)`);
+    if (orgFilled) console.log(`  기업 DB 주소·웹사이트·회사소개 갱신 ${orgFilled}개 기업`);
     const withIntro = applied.filter((a) => a.n);
     if (withIntro.length) {
       const ns = withIntro.map((a) => a.n);
