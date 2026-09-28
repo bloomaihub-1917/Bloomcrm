@@ -38,7 +38,8 @@ import {
   EQUIP_CATALOG, catalogItem, liveItemsFor,
   exhEvent, EVENT_LIST,
 } from '../state.js';
-import { activeExhibitors, exhNames, exhContact, isBillable, isBoothGiven } from './exh-tab.js';
+import { activeExhibitors, exhNames, exhContact, isBillable, isBoothGiven,
+  boothViewRows, parseBooth, isSharedBooth, boothDesignState, SELF_BUILD_TYPE } from './exh-tab.js';
 import { showSaveErrorToast } from '../api.js';
 import { trackAction } from './audit-tab.js';
 
@@ -669,3 +670,106 @@ export async function exportEquipLedger(){
 }
 
 window.exportEquipLedger = exportEquipLedger;
+
+/* ══════════════════════════════════════════
+   부스 현황 내보내기
+
+   화면에 보이던 표를 그대로 한 장으로 받는다 — 같은 순서(부스 번호순), 같은
+   거르기(타입 탭·검색). 대장처럼 수식을 걸 일은 없어서 값만 담는다.
+   부스번호는 «44-46»이 섞여 있어 전부 텍스트로 굳히고, 정렬용 숫자 열을
+   옆에 둔다(비품 대장과 같은 이유).
+══════════════════════════════════════════ */
+export async function exportBoothStatus(){
+  const evKey = exhEvent;
+  if(!evKey) return showSaveErrorToast('행사를 먼저 고르세요');
+  const { rows, dupBooth, typeFil } = boothViewRows();
+  if(!rows.length) return showSaveErrorToast('내보낼 부스 현황이 없어요');
+
+  const btn = document.getElementById('booth-export-btn');
+  const label = btn ? btn.innerHTML : '';
+  if(btn){ btn.disabled = true; btn.textContent = '만드는 중…'; }
+
+  try {
+    const ExcelJS = await loadExcelJs();
+    const ev = EVENT_LIST.find(e => e.key === evKey);
+    const evLabel = (ev && (ev.short || ev.key)) || evKey;
+    const stamp = stampNow();
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Bloom CRM';
+    wb.created = new Date();
+    const ws = wb.addWorksheet('부스 현황', { views: [{ state: 'frozen', ySplit: 1, xSplit: 4 }] });
+    const COLS = [
+      ['신청순', 7], ['부스번호', 10], ['부스 정렬', 8], ['업체명(국문)', 24], ['업체명(영문)', 26],
+      ['층', 6], ['부스 타입', 18], ['칸 수', 6], ['수량', 6], ['공동 부스', 9], ['등급', 9],
+      ['배정 확정', 9], ['시공사', 18], ['시공사 담당자', 12], ['시공사 연락처', 15],
+      ['부스 도면', 14], ['도면 받은 날', 12],
+    ];
+    ws.columns = COLS.map(([, w]) => ({ width: w }));
+    ws.getColumn(2).numFmt = '@';
+    const head = ws.addRow(COLS.map(([h]) => h));
+    head.eachCell(c => Object.assign(c, headStyle(C_HEAD), { border: { bottom: BORDER } }));
+    head.height = 20;
+
+    rows.forEach(x => {
+      const n = exhNames(x);
+      const b = parseBooth(x.booth_no);
+      const self = x.booth_type === SELF_BUILD_TYPE;
+      const shared = isSharedBooth(x);
+      const r = ws.addRow([
+        x.apply_order ? (Number(x.apply_order) || String(x.apply_order)) : null,
+        String(x.booth_no ?? ''),
+        b.first === Infinity ? null : b.first,
+        n.ko || '', n.en || '',
+        x.booth_floor || '',
+        x.booth_type || '',
+        shared || b.kind === 'none' ? null : b.count,
+        x.booth_qty ? (Number(String(x.booth_qty).replace(/[^0-9.]/g, '')) || String(x.booth_qty)) : null,
+        shared ? '공동' : (dupBooth.has(String(x.booth_no || '').trim()) ? '번호 겹침' : ''),
+        x.grade || '',
+        (x.booth_confirmed === 'yes' || x.booth_confirmed_at) ? '확정' : '미확정',
+        self ? (x.builder || '') : '',
+        self ? (x.builder_contact || '') : '',
+        self ? (x.builder_mobile || x.builder_tel || '') : '',
+        self ? boothDesignState(x).text : '',
+        self ? (x.booth_design_received_at || '') : '',
+      ]);
+      r.eachCell({ includeEmpty: true }, (cell, ci) => {
+        cell.font = FONT;
+        cell.border = { bottom: BORDER, right: BORDER };
+        const left = ci === 4 || ci === 5 || ci === 7 || ci === 13;
+        cell.alignment = { vertical: 'middle', horizontal: left ? 'left' : 'center', wrapText: ci === 4 || ci === 5 };
+      });
+    });
+    ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: rows.length + 1, column: COLS.length } };
+
+    const notes = [
+      `※ ${evLabel} · CRM 「전시 → 부스 현황」을 ${stamp.text}에 받은 표입니다${typeFil ? ` (부스 타입 «${typeFil}»만)` : ''}.`,
+      '※ 「부스 정렬」은 부스번호의 첫 숫자입니다 — 부스번호 열은 «44-46» 같은 값 때문에 텍스트라, 부스 순서로 정렬할 때는 이 열을 쓰세요.',
+      '※ 「칸 수」는 부스번호에서 읽은 칸 수입니다. 공동 부스는 부스 수에서 빠지므로 비워 두었습니다.',
+    ];
+    notes.forEach((t, i) => {
+      const cell = ws.getRow(rows.length + 3 + i).getCell(1);
+      cell.value = t;
+      cell.font = { ...FONT, color: { argb: 'FF808080' } };
+    });
+
+    const buf = await wb.xlsx.writeBuffer();
+    const url = URL.createObjectURL(new Blob([buf],
+      { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${evLabel}_부스 현황${typeFil ? '_' + typeFil : ''}_${stamp.file}.xlsx`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+    trackAction('add', '부스 현황 내보내기', evLabel, `${rows.length}개사${typeFil ? ' · ' + typeFil : ''}`);
+  } catch(err){
+    console.error('[exh-export] 부스 현황 내보내기 실패', err);
+    showSaveErrorToast('내보내기 실패: ' + (err && err.message ? err.message : err));
+  } finally {
+    if(btn){ btn.disabled = false; btn.innerHTML = label; }
+  }
+}
+
+window.exportBoothStatus = exportBoothStatus;

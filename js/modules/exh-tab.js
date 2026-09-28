@@ -1572,8 +1572,13 @@ export function setBoothTypeFil(t){
   renderExh();
 }
 
+/* 엑셀로 받을 때 화면에 보이던 줄을 그대로 쓴다 — 검색·타입 탭으로 거른 결과가
+   파일에서 다시 51줄로 늘어나면 «보던 것»을 받은 게 아니다. */
+let boothShown = { rows: [], dupBooth: new Set(), typeFil: '' };
+export const boothViewRows = () => boothShown;
+
 function renderBoothView(list){
-  if(!list.length) return emptyView('표시할 기업이 없어요');
+  if(!list.length){ boothShown = { rows: [], dupBooth: new Set(), typeFil: boothTypeFil }; return emptyView('표시할 기업이 없어요'); }
   const all0 = [...list].sort((a, b) => boothSortKey(a) - boothSortKey(b));
   // 걸러도 배지의 숫자는 전체 기준을 유지한다 — 누를 때마다 숫자가 1로 바뀌면
   // 다른 타입이 몇 곳인지 알 수 없어 옮겨 다닐 수가 없다
@@ -1606,6 +1611,11 @@ function renderBoothView(list){
     });
   }
   const typeCnt = countBy(all0, x => x.booth_type);
+  boothShown = { rows, dupBooth, typeFil: boothTypeFil };
+  /* 내보내기는 exh-export.js 소관 — 순환 참조를 피해 window 경유로 부른다 */
+  const actions = rows.length
+    ? `<button class="btn bs" id="booth-export-btn" onclick="exportBoothStatus()"
+        title="지금 보이는 부스 현황 표를 엑셀로 받습니다">엑셀 다운로드</button>` : '';
 
   const pills = `<span class="pill p-gray">기업 ${boothTypeFil ? `${rows.length}/${all0.length}` : all0.length}</span>`
     + `<span class="pill p-gray">부스 ${totalBooths}칸</span>`
@@ -1646,7 +1656,7 @@ function renderBoothView(list){
   })();
 
   if(!rows.length) return typeSeg + viewShell(pills,
-    emptyView(`"${boothTypeFil}" 부스를 쓰는 기업이 없어요`));
+    emptyView(`"${boothTypeFil}" 부스를 쓰는 기업이 없어요`), actions);
 
   if(isMobile()) return typeSeg + viewShell(pills, rows.map(x => `
     <div onclick="openExhDr('${escAttr(x.id)}','progress')" style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
@@ -1666,7 +1676,7 @@ function renderBoothView(list){
         const cls = { none: 'p-gray', todo: 'p-amber', warn: 'p-red', done: 'p-green' }[d.state];
         return `<div style="margin-top:4px"><span class="pill ${cls}" style="font-size:9.5px">도면 ${escapeHtml(d.text)}</span></div>`;
       })() : ''}
-    </div>`).join(''));
+    </div>`).join(''), actions);
 
   return typeSeg + viewShell(pills, `<div class="tw"><table><thead><tr>
       <th style="min-width:44px;text-align:right">신청순</th>
@@ -1725,7 +1735,7 @@ function renderBoothView(list){
         })() : '<span style="color:var(--i6);font-size:11px">—</span>'}</td>
       </tr>`;
     }).join('')}
-    </tbody></table></div>`);
+    </tbody></table></div>`, actions);
 }
 
 /* ── 비품 현황 ──
