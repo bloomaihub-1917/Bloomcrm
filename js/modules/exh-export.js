@@ -39,7 +39,10 @@ import {
   exhEvent, EVENT_LIST,
 } from '../state.js';
 import { activeExhibitors, exhNames, exhContact, isBillable, isBoothGiven,
-  boothViewRows, parseBooth, isSharedBooth, boothDesignState, SELF_BUILD_TYPE } from './exh-tab.js';
+  boothViewRows, parseBooth, isSharedBooth, boothDesignState, SELF_BUILD_TYPE,
+  STEPS, cellState, progressOf, billedAmount, paidAmount, currencyOf, settleState,
+  visibleList } from './exh-tab.js';
+import { openInquiriesFor } from '../state.js';
 import { showSaveErrorToast } from '../api.js';
 import { trackAction } from './audit-tab.js';
 
@@ -591,6 +594,173 @@ function drawOffCatalogSheet(wb, offCatalog){
   return ws;
 }
 
+
+/* ══════════════════════════════════════════
+   기업리스트 — 화면에 보이는 진행표 그대로
+
+   진행 현황은 회의 자료로 자주 나간다. 그때마다 화면을 보며 손으로 옮겨 적으면
+   그 순간의 숫자가 아니라 «옮겨 적은 사람이 본 숫자»가 되고, 한 곳이라도 빠지면
+   회의에서 없는 문제를 이야기하게 된다. 화면과 같은 규칙으로 그대로 찍는다.
+
+   칸의 뜻도 화면과 같다 — ✓ 완료 / ◐ 진행 / ! 확인 필요 / — 아직 / · 해당 없음.
+   색까지 같이 입혀 인쇄해서 나란히 놓아도 같은 표로 보이게 한다.
+══════════════════════════════════════════ */
+const STATE_MARK = {
+  done: { mark: '✓', label: '완료',      bg: 'FFDCFCE7', fg: 'FF166534' },
+  part: { mark: '◐', label: '진행',      bg: 'FFFEF3C7', fg: 'FF92400E' },
+  warn: { mark: '!', label: '확인 필요', bg: 'FFFEE2E2', fg: 'FF991B1B' },
+  todo: { mark: '—', label: '아직',      bg: null,       fg: 'FF9CA3AF' },
+  na:   { mark: '·', label: '해당 없음', bg: null,       fg: 'FFD1D5DB' },
+};
+
+/* 표 머리글의 <br>은 화면에서 두 줄로 세우려고 넣은 것이라 엑셀에서는 걷는다 */
+const stepLabel = (s) => String(s.label || '').replace(/<br>/g, ' ');
+
+function drawChecklistSheet(wb, exhs, meta){
+  const ws = wb.addWorksheet('참가기업 진행현황', { views: [{ state: 'frozen', xSplit: 4, ySplit: 2 }] });
+
+  const INFO = ['신청순', '부스', '기업명(국문)', '기업명(영문)', '부스 타입', '담당자', '이메일', '전화', '진행률'];
+  const TAIL = ['열린 문의', '청구액', '입금액', '잔액', '통화'];
+  const cStep0 = INFO.length + 1;
+  const cStep1 = INFO.length + STEPS.length;
+  const cTail0 = cStep1 + 1;
+  const last   = cStep1 + TAIL.length;
+
+  ws.columns = [
+    { width: 7 }, { width: 9 }, { width: 26 }, { width: 26 }, { width: 16 },
+    { width: 12 }, { width: 24 }, { width: 15 }, { width: 8 },
+    ...STEPS.map(() => ({ width: 13 })),
+    { width: 9 }, { width: 14 }, { width: 14 }, { width: 14 }, { width: 7 },
+  ];
+
+  /* 1행 — 묶음 머리글. 단계가 열한 개라 어디부터가 진행 단계인지 눈으로 잡아 준다 */
+  const r1 = ws.getRow(1);
+  r1.getCell(1).value = '기업 정보';
+  r1.getCell(cStep0).value = '진행 단계';
+  r1.getCell(cTail0).value = '문의 · 정산';
+  for(let c = 1; c <= last; c++) Object.assign(r1.getCell(c), headStyle(C_GROUP));
+  ws.mergeCells(1, 1, 1, INFO.length);
+  ws.mergeCells(1, cStep0, 1, cStep1);
+  ws.mergeCells(1, cTail0, 1, last);
+  r1.height = 20;
+
+  const r2 = ws.getRow(2);
+  [...INFO, ...STEPS.map(stepLabel), ...TAIL].forEach((v, i) => { r2.getCell(i + 1).value = v; });
+  for(let c = 1; c <= last; c++) Object.assign(r2.getCell(c), headStyle(C_HEAD));
+  r2.height = 26;
+
+  const first = 3;
+  exhs.forEach((x, idx) => {
+    const rn = first + idx;
+    const r = ws.getRow(rn);
+    const n = exhNames(x);
+    const pc = exhContact(x);
+    const st = settleState(x);
+
+    const vals = [
+      num(x.apply_order) || null, x.booth_no || '', n.ko || '', n.en || '', x.booth_type || '',
+      pc.name || '', pc.email || '', pc.phone || '', progressOf(x) / 100,
+    ];
+    vals.forEach((v, i) => { r.getCell(i + 1).value = v; });
+    r.getCell(9).numFmt = '0%';
+
+    STEPS.forEach((s, i) => {
+      const c = cellState(x, s);
+      const m = STATE_MARK[c.state] || STATE_MARK.todo;
+      const cell = r.getCell(cStep0 + i);
+      /* 표시와 내용을 한 칸에 담는다 — «✓ 완료 · 2026-09-10»처럼. 칸을 둘로
+         나누면 열이 스물두 개가 되어 한 화면에 안 들어온다. */
+      /* 해당 없는 칸에 적힌 말(«청구 없음» 같은)은 그 자체가 까닭이라, 「해당 없음」을
+         앞에 또 붙이면 «· 해당 없음 · 청구 없음»이 된다. 까닭이 있으면 까닭만 적는다. */
+      cell.value = c.state === 'na' && c.text ? `· ${c.text}`
+        : [`${m.mark} ${m.label}`, c.text ? String(c.text) : ''].filter(Boolean).join(' · ');
+      cell.font = { ...FONT, color: { argb: m.fg }, bold: c.state === 'done' || c.state === 'warn' };
+      if(m.bg) cell.fill = fill(m.bg);
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    });
+
+    const openN = openInquiriesFor(x.id).length;
+    r.getCell(cTail0).value = openN || null;
+    if(openN) Object.assign(r.getCell(cTail0), {
+      font: { ...FONT, bold: true, color: { argb: 'FF991B1B' } }, fill: fill('FFFEE2E2') });
+    r.getCell(cTail0 + 1).value = billedAmount(x.id) || null;
+    r.getCell(cTail0 + 2).value = paidAmount(x.id) || null;
+    r.getCell(cTail0 + 3).value = { formula: `${colLetter(cTail0 + 1)}${rn}-${colLetter(cTail0 + 2)}${rn}` };
+    r.getCell(cTail0 + 4).value = st.cur || currencyOf(x.id);
+    [cTail0 + 1, cTail0 + 2, cTail0 + 3].forEach(c => {
+      r.getCell(c).numFmt = '#,##0';
+      r.getCell(c).alignment = { horizontal: 'right', vertical: 'middle' };
+    });
+
+    for(let c = 1; c <= last; c++){
+      const cell = r.getCell(c);
+      const nameCol = c === 3 || c === 4;
+      if(!cell.font) cell.font = FONT;
+      cell.border = { bottom: BORDER, right: BORDER };
+      if(!cell.alignment) cell.alignment = {
+        vertical: 'middle', horizontal: nameCol || c === 7 ? 'left' : 'center', wrapText: nameCol };
+    }
+  });
+
+  const lastRow = first + exhs.length - 1;
+  if(exhs.length) ws.autoFilter = { from: { row: 2, column: 1 }, to: { row: lastRow, column: last } };
+
+  const notes = [
+    `※ ${meta.eventLabel} · CRM 「전시 → 기업리스트」 화면을 ${meta.stamp}에 그대로 옮긴 표입니다. 화면에서 보는 것과 같은 규칙으로 셉니다.`,
+    '※ 칸의 뜻 — ✓ 완료 / ◐ 진행 중 / ! 확인 필요 / — 아직 / · 해당 없음(그 기업에는 없는 단계입니다. 진행률 분모에서도 빠집니다).',
+    '※ 진행률은 «해당 없음»을 뺀 단계 중 완료된 비율입니다.',
+    '※ 잔액은 청구액 − 입금액 수식입니다. 통화가 다른 기업이 섞여 있으므로 세로로 더하지 마세요 — 통화 열을 보고 갈라 세야 합니다.',
+  ];
+  notes.forEach((t, i) => {
+    const cell = ws.getRow(lastRow + 2 + i).getCell(1);
+    cell.value = t;
+    cell.font = { ...FONT, color: { argb: 'FF808080' } };
+    cell.alignment = { vertical: 'top' };
+  });
+  return ws;
+}
+
+/* 기업리스트 내보내기 — 지금 화면에 보이는 목록 그대로.
+   거르개를 걸어 둔 채 누르면 걸러진 것만 나간다(보이는 것과 받는 것이 같아야
+   «왜 스물두 곳뿐이지»를 되묻지 않는다). */
+export async function exportChecklist(){
+  const evKey = exhEvent;
+  if(!evKey) return showSaveErrorToast('행사를 먼저 고르세요');
+  const rows = visibleList();
+  if(!rows.length) return showSaveErrorToast('내보낼 기업이 없어요');
+
+  const btn = document.getElementById('exh-list-export-btn');
+  const label = btn ? btn.innerHTML : '';
+  if(btn){ btn.disabled = true; btn.textContent = '만드는 중…'; }
+  try {
+    const ExcelJS = await loadExcelJs();
+    const ev = EVENT_LIST.find(e => e.key === evKey);
+    const evLabel = (ev && (ev.short || ev.key)) || evKey;
+    const stamp = stampNow();
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Bloom CRM';
+    wb.created = new Date();
+    drawChecklistSheet(wb, rows, { eventLabel: evLabel, stamp: stamp.text });
+
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${evLabel}_참가기업 진행현황_${stamp.file}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+
+    trackAction('export', '기업리스트', evKey, `참가기업 ${rows.length}곳의 진행현황을 엑셀로 내려받았어요`);
+  } catch(err){
+    console.error('[exh] 기업리스트 내보내기 실패:', err);
+    showSaveErrorToast(err.message || '엑셀을 만들지 못했어요');
+  } finally {
+    if(btn){ btn.disabled = false; btn.innerHTML = label; }
+  }
+}
+
 /* ══════════════════════════════════════════
    내보내기
 ══════════════════════════════════════════ */
@@ -773,3 +943,4 @@ export async function exportBoothStatus(){
 }
 
 window.exportBoothStatus = exportBoothStatus;
+window.exportChecklist   = exportChecklist;

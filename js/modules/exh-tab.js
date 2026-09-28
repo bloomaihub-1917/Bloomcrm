@@ -93,7 +93,7 @@ function nameCell(x, opts = {}){
 }
 
 /* 체크리스트 표의 열 정의. key는 exhibitors 컬럼, 또는 파생 계산(calc). */
-const STEPS = [
+export const STEPS = [
   { key: 'manual_sent_at',       label: '매뉴얼<br>발송' },
   { key: 'manual_replied_at',    label: '매뉴얼<br>회신' },
   { key: 'app_received_at',      label: '신청서',   flag: 'app_received',
@@ -863,7 +863,7 @@ function withDue(c, x, step){
   return { ...c, due: d };
 }
 
-function cellState(x, step){ return withDue(rawCellState(x, step), x, step); }
+export function cellState(x, step){ return withDue(rawCellState(x, step), x, step); }
 
 function rawCellState(x, step){
   // 프로그램북만 참가하는 곳은 도록 외에는 받을 것이 없다
@@ -924,7 +924,7 @@ function rawCellState(x, step){
 }
 
 /* 기업별 진행률 — 해당 없음(그래픽 미주문)은 분모에서 제외 */
-function progressOf(x){
+export function progressOf(x){
   let done = 0, total = 0;
   STEPS.forEach(s => {
     const c = cellState(x, s);
@@ -1090,7 +1090,7 @@ function exhQuery(){
     || document.getElementById('exh-q-m')?.value || '')).trim().toLowerCase();
 }
 
-function visibleList(){
+export function visibleList(){
   const q = exhQuery();
   let list = exhFilter === 'cancelled' ? cancelledExhibitors(exhEvent) : activeExhibitors(exhEvent);
   if(exhFilter === 'incomplete') list = list.filter(x => progressOf(x) < 100);
@@ -4485,6 +4485,9 @@ function renderChecklistCards(list, all){
     <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">
       ${STEPS.map(s => { const t = stepTally(all, s); return t.of ? stepPill(s, t) : ''; }).join('')}
     </div>
+    ${list.length ? `<div style="margin-bottom:10px">
+      <button class="btn bs" id="exh-list-export-btn" onclick="exportChecklist()"
+        title="지금 보이는 ${list.length}곳의 진행현황을 엑셀로 받습니다">엑셀 다운로드</button></div>` : ''}
     ${list.map(x => {
       const p = progressOf(x);
       const openN = openInquiriesFor(x.id).length;
@@ -4559,10 +4562,15 @@ function renderChecklistTable(list, all){
 
   const stats = STEPS.map(s => ({ step: s, ...stepTally(all, s) })).filter(s => s.of);
 
+  /* 내보내기는 exh-export.js 소관 — 순환 참조를 피해 window 경유로 부른다.
+     부스 현황과 같은 자리·같은 이름으로 둔다(화면마다 다른 곳에 있으면 찾는다). */
   return `<div style="padding:0 16px 16px">
     ${renderExhSummary(all)}
-    <div style="display:flex;flex-wrap:wrap;gap:6px;margin:12px 0">
+    <div style="display:flex;gap:6px;margin:12px 0;align-items:center;flex-wrap:wrap">
       ${stats.map(s => stepPill(s.step, s)).join('')}
+      ${list.length ? `<span style="margin-left:auto;flex:0 0 auto">
+        <button class="btn bs" id="exh-list-export-btn" onclick="exportChecklist()"
+          title="지금 보이는 ${list.length}곳의 진행현황을 엑셀로 받습니다">엑셀 다운로드</button></span>` : ''}
     </div>
     <div class="tw"><table><thead><tr>
       <th style="min-width:44px;text-align:right">신청순</th>
