@@ -54,7 +54,7 @@ function saveFailed(res, msg){
 }
 import { trackAction, changed, removed } from './audit-tab.js';
 import { ieyo } from '../country-signal.js';
-import { normalizeCompanyKey, createOrg } from './company-tab.js';
+import { normalizeCompanyKey, createOrg, patchOrgFields } from './company-tab.js';
 import {
   billedAmount, paidAmount, graphicState, graphicDueInfo, money, fmtMoney, currencyOf, mixedCurrency, taxNeed, daysSince, CANCELLED,
   isPendingRefund, boothTypeOptions, boothTypes, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
@@ -323,13 +323,60 @@ const BUILDER_FIELDS = [
    새로 등록한다. 적힌 글자만 있으면 다음 행사에서 같은 시공사를 찾을 수 없다.
    «직접 설치»는 시공사가 아니라 잇지 않는다. */
 const SELF_INSTALL = /^직접\s*설치$/;
+
+/* ── 기입한 값과 기업 DB 값의 관계를 색으로 ──
+   초록  두 값이 같다
+   노랑  이번 행사에 적은 값이 더 최신이다 → 기업 DB를 갱신할 수 있다
+   파랑  기업 DB 값이 더 최신이다(또는 아직 안 받았다) → 확인받고 옮겨 쓸 수 있다
+   빨강  기업 DB에 값이 없다(또는 기업 DB와 연결되지 않았다)
+
+   칸마다 고친 시각을 따로 두지 않아서, «더 최신»은 참가기업 행과 기업 행의
+   마지막 수정일로 가른다. 같은 날이면 이번에 적은 쪽을 최신으로 본다. */
+const SYNC_TONE = {
+  same:  { c: 'var(--g)',  b: 'var(--gb)', t: '기업 DB와 같음' },
+  mine:  { c: 'var(--am)', b: 'var(--ab)', t: '이번 값이 더 최신' },
+  db:    { c: 'var(--a)',  b: 'var(--ad)', t: '기업 DB 값이 더 최신' },
+  none:  { c: 'var(--re)', b: 'var(--rb)', t: '기업 DB에 없음' },
+};
+const syncNorm = (v) => String(v || '').replace(/\r\n?/g, '\n').replace(/[ \t]+/g, ' ').trim();
+function syncState(x, f, org, orgKey){
+  if(!org) return 'none';
+  const mine = syncNorm(x[f]), db = syncNorm(org[orgKey]);
+  if(!db) return 'none';
+  if(mine === db) return 'same';
+  if(!mine) return 'db';
+  return String(x.updated_at || '').slice(0, 10) >= String(org.updated_at || '').slice(0, 10) ? 'mine' : 'db';
+}
+function syncTag(x, f, org, orgKey, label){
+  const st = syncState(x, f, org, orgKey);
+  if(st === 'none' && !syncNorm(x[f]) && org) return '';   // 양쪽 다 비었으면 알릴 게 없다
+  const t = SYNC_TONE[st];
+  const db = syncNorm(org?.[orgKey]);
+  const btn = (txt, on, tip) => `<button class="btn bs" style="font-size:10px;padding:1px 6px;flex:none"
+    title="${escAttr(tip)}" onclick="${on}">${txt}</button>`;
+  const a = `'${escAttr(x.id)}','${f}','${orgKey}','${escAttr(label)}'`;
+  const action =
+      st === 'db'   ? btn('확인받음 · 쓰기', `useOrgBookValue(${a})`, '기업이 이 값 그대로 쓰겠다고 확인해 줬을 때 누르세요')
+    : st === 'mine' ? btn('기업 DB 갱신', `pushToOrg(${a})`, '이번에 받은 값으로 기업 DB를 고칩니다')
+    : st === 'none' && org && syncNorm(x[f]) ? btn('기업 DB에 넣기', `pushToOrg(${a})`, '이 값을 기업 DB에 적어 둡니다')
+    : '';
+  return `<div style="font-size:10.5px;margin-top:3px;padding:3px 6px;border-radius:4px;display:flex;gap:6px;align-items:baseline;
+      background:${t.b};border-left:3px solid ${t.c}">
+    <span style="flex:none;color:${t.c};font-weight:700">● ${t.t}</span>
+    ${db && st !== 'same' ? `<span style="flex:1;min-width:0;color:var(--i4);white-space:pre-line;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical"
+      title="${escAttr(db)}">${escapeHtml(db)}</span>` : '<span style="flex:1"></span>'}
+    ${action}</div>`;
+}
+/* 참가기업 서랍에서 어느 기업 행을 보는지 — 시공사 칸은 시공사, 나머지는 참가기업 */
+const orgForField = (x, f) => getOrgById(f.startsWith('builder') ? x.builder_org_id : x.org_id);
 function builderNameRow(x){
   const org = getOrgById(x.builder_org_id);
   const vendors = ORGS.filter(o => o.kind === '벤더시공사' && (o.name_ko || o.name_en));
+  const t = org ? SYNC_TONE.same : SYNC_TONE.none;
   const note = org
-    ? `<span style="color:var(--g)">기업 DB 연결됨</span>`
+    ? `<span style="color:${t.c};font-weight:700">● 기업 DB 연결됨</span>`
     : (String(x.builder || '').trim() && !SELF_INSTALL.test(String(x.builder).trim())
-      ? `<span style="color:var(--am)">기업 DB에 아직 연결되지 않았어요 — 다시 입력하면 연결됩니다</span>` : '');
+      ? `<span style="color:${t.c};font-weight:700">● 기업 DB에 연결되지 않음</span> <span style="color:var(--i5)">— 다시 입력하면 연결됩니다</span>` : '');
   return `<div class="fg"><label class="fl">시공사명</label>
     <input class="fi" style="font-size:12px" list="builder-orgs" value="${escAttr(x.builder || '')}"
       placeholder="기업 DB의 시공사에서 고르거나 새 이름을 적으세요"
@@ -365,9 +412,12 @@ function builderBlock(x){
     return `<div style="font-size:11px;color:var(--i5);padding:6px 0">
       부스 타입이 <b>${escapeHtml(SELF_BUILD_TYPE)}</b>이면 시공사 정보를 적는 칸이 나와요</div>`;
   }
+  const bOrg = getOrgById(x.builder_org_id);
+  const B_ORG = { builder_tel: 'phone', builder_email: 'email' };
   const row = (f, label, ph) => `<div class="fg"><label class="fl">${escapeHtml(label)}</label>
     <input class="fi" style="font-size:12px" value="${escAttr(x[f] || '')}" placeholder="${escAttr(ph)}"
-      onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')"></div>`;
+      onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')">
+    ${bOrg && B_ORG[f] ? syncTag(x, f, bOrg, B_ORG[f], label) : ''}</div>`;
   return `<div style="padding:9px 11px;background:var(--i9);border-radius:8px;border-left:3px solid var(--a);margin-bottom:10px">
     <div style="font-size:11px;font-weight:700;color:var(--i2);margin-bottom:7px">
       시공사 정보${isSelf ? '' : ' <span style="font-weight:400;color:var(--i5)">— 부스 타입은 자체 시공이 아니에요</span>'}</div>
@@ -1626,20 +1676,9 @@ export function drawIntroMeter(id){
 function dBook(x){
   const miss = bookMissing(x);
   const o = introOver(x.book_intro, x.event_id);
-  /* 행사마다 새로 받는 값이라 기업 DB 값을 미리 채우지 않는다 — 채워 두면
-     받지도 않은 원고가 «받음»으로 보인다. 대신 가진 값을 옆에 보여 줘서
-     제로 베이스로 받을지, «이대로 맞나요?»로 확인만 받을지 고를 수 있게 한다. */
-  const org = getOrgById(x.org_id) || {};
-  const known = (f, orgKey, label) => {
-    const v = String(org[orgKey] || '').trim();
-    if(!v || v === String(x[f] || '').trim()) return '';
-    return `<div style="font-size:10.5px;color:var(--i5);margin-top:3px;display:flex;gap:6px;align-items:baseline">
-      <span style="flex:1;min-width:0;white-space:pre-line;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical"
-        title="${escAttr(v)}">기업 DB: ${escapeHtml(v)}</span>
-      <button class="btn bs" style="font-size:10px;padding:1px 6px;flex:none"
-        title="기업이 이 값 그대로 쓰겠다고 확인해 줬을 때 누르세요"
-        onclick="useOrgBookValue('${escAttr(x.id)}','${f}','${orgKey}','${escAttr(label)}')">확인받음 · 쓰기</button></div>`;
-  };
+  /* 행사마다 새로 받는 값이라 기업 DB 값을 미리 채우지 않는다 — 대신 칸마다
+     기업 DB와 맞는지 색으로 보여 준다(syncTag). */
+  const known = (f, orgKey, label) => syncTag(x, f, getOrgById(x.org_id), orgKey, label);
   const ORG_OF = { book_address: 'address', book_website: 'website' };
   const row = (f, label, ph) => `<div class="fg"><label class="fl">${escapeHtml(label)}</label>
     <input class="fi" style="font-size:12px" value="${escAttr(x[f] || '')}" placeholder="${escAttr(ph)}"
@@ -3482,8 +3521,15 @@ window.drawIntroMeter = drawIntroMeter;
 window.setBuilderOrg = setBuilderOrg;
 /* 기업 DB 값을 이번 행사 원고로 옮긴다 — 기업이 그대로 쓰겠다고 확인한 뒤에만 */
 window.useOrgBookValue = (id, f, orgKey, label) => {
-  const x = getExhibitorById(id); const o = getOrgById(x?.org_id);
-  if(x && o?.[orgKey]) window.setExhField(id, f, o[orgKey], label);
+  const x = getExhibitorById(id); const o = x && orgForField(x, f);
+  if(o?.[orgKey]) window.setExhField(id, f, o[orgKey], label);
+};
+/* 이번 행사에 받은 값으로 기업 DB를 고친다 */
+window.pushToOrg = async (id, f, orgKey) => {
+  const x = getExhibitorById(id); const o = x && orgForField(x, f);
+  if(!o || !syncNorm(x[f])) return;
+  await patchOrgFields(o.id, { [orgKey]: String(x[f]).trim() });
+  refreshExhViews();
 };
 window.renderExhDr = renderExhDr;
 window.addExhItem = addExhItem;

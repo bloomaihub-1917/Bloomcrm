@@ -1529,6 +1529,14 @@ export async function upsertCompanyRow(c, fields){
   return postToSheet({ sheet: 'orgs', action: 'upsert', data: patch }, '기업 정보 저장');
 }
 
+/* 다른 화면(참가기업 서랍 등)에서 기업 DB의 칸 몇 개만 고칠 때 — 서버 컬럼명 그대로 받는다 */
+export async function patchOrgFields(orgId, cols){
+  const patch = { id: orgId, ...cols, updated_at: new Date().toISOString() };
+  applyOrgLocal(patch);
+  buildCoDB();
+  return postToSheet({ sheet: 'orgs', action: 'upsert', data: patch }, '기업 정보 저장');
+}
+
 /* 여러 기업을 한 번에 저장 — 업로드 직후처럼 수십~수백 개를 저장할 때
    기업마다 개별 POST를 보내면 요청이 몰려 일부가 실패한다. 한 번으로 묶는다. */
 export async function batchUpsertCompanies(companies){
