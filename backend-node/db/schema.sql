@@ -1042,3 +1042,9 @@ ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS reissue_ack TEXT;
    붙는다. 행사마다 다시 받지 않게 기업 DB에 정본을 둔다(db/add-org-profile.js). */
 ALTER TABLE orgs ADD COLUMN IF NOT EXISTS address TEXT;
 ALTER TABLE orgs ADD COLUMN IF NOT EXISTS intro   TEXT;
+
+/* ── 독립부스 시공사를 기업 DB에 잇는다 ──
+   builder는 적힌 이름 그대로 두고, 기업 DB의 벤더시공사 행을 따로 가리킨다.
+   그래야 «이 시공사가 어느 부스를 지었나»를 행사를 넘어 찾을 수 있다
+   (db/import-builders.js). */
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS builder_org_id TEXT;

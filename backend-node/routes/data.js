@@ -91,7 +91,7 @@ const TABLES = {
       'directory_received', 'directory_received_at', 'directory_note',
       'apply_order', 'book_order', 'book_logo', 'book_address', 'book_phone', 'book_website', 'book_intro',
       'book_name_ko', 'book_name_en',
-      'movein_at', 'builder', 'builder_contact', 'builder_tel', 'builder_mobile', 'builder_email',
+      'movein_at', 'builder', 'builder_org_id', 'builder_contact', 'builder_tel', 'builder_mobile', 'builder_email',
       'badge_count', 'badge_issued_at', 'onsite_note'],
   },
   exhibitor_contacts: {
