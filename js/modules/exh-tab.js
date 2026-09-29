@@ -678,6 +678,11 @@ export const BASE_KINDS = {
 
 export function baseKind(x){
   if(isBookOnly(x)) return '';
+  /* 공동 부스에서 부스 수에서 빠진 쪽은 기본 시공도 받을 게 없다 — 간판·벽면
+     그래픽은 부스를 대표한 기관이 한 번 보낸다(2026 KIC 부스 39: 서울대학교병원이
+     다 보냈고 분당서울대학교병원은 금액만 나눠 낸다). 남겨 두면 «미수령»으로
+     영영 남아 독촉 대상에 섞인다. */
+  if(isSharedBooth(x)) return '';
   const t = String(x.booth_type || '').trim();
   if(!t) return '';
   return Object.keys(BASE_KINDS).find(k => BASE_KINDS[k].types.includes(t)) || '';
