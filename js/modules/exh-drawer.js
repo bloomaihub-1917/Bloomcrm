@@ -63,7 +63,7 @@ import {
   baseRecvAt, baseDoneAt, baseDoneCheck, baseItems, baseRecvItems, TCELL, TPILL,
   guardWrite, exhLocked, exhLockNotice, isBoothGiven, boothIncluded, applyBoothItems, boothItemsPending,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar, needsReissue,
-  settleState, liveInvoices, payDueDate, paidBreakdown, invoiceGap,
+  settleState, liveInvoices, payDueDate, paidBreakdown, invoiceGap, refundDue, eventDeadlines,
 } from './exh-tab.js';
 
 let drId = null;
@@ -2042,9 +2042,36 @@ function dBilling(x){
   const pb = paidBreakdown(x.id);       // 총 입금 / 환불 / 순입금
   const gap = invoiceGap(x.id);         // 인보이스 합계가 금액 항목과 어긋나는지
   const noAmount = invoicesFor(x.id).filter(i => i.status !== 'void' && String(i.amount ?? '').trim() === '');
+  const cancelled = x.status === CANCELLED;
+  const rfDue = refundDue(x);
+  const evPayDue = (() => { const d = eventDeadlines(x.event_id); return d['calc:payment'] || d.pay || ''; })();
 
-  return `
+  /* 참가 취소 기업의 정산 — 청구는 받을 돈이 아니니 잔액을 재촉하지 않고,
+     낸 돈이 남았으면 돌려줄지(환불) 남길지(위약금)만 묻는다. */
+  const cancelCard = !cancelled ? '' : `
   <div class="uc" style="margin-bottom:16px">
+    <div style="font-size:11px;color:var(--i4);margin-bottom:6px">참가 취소 — 청구액은 받을 돈에서 빠졌어요</div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;padding:2px 0">
+      <span style="color:var(--i3)">낸 돈(순입금)</span><b>${escapeHtml(fmtMoney(pb.net, pb.cur))}</b></div>
+    ${pb.refunded ? `<div style="display:flex;justify-content:space-between;font-size:11px;padding:1px 0">
+      <span style="color:var(--i4)">환불 완료</span><span style="color:var(--re)">−${escapeHtml(fmtMoney(pb.refunded, pb.cur))}</span></div>` : ''}
+    ${pb.requested ? `<div style="display:flex;justify-content:space-between;font-size:11px;padding:1px 0;color:var(--am)">
+      <span>보내야 할 환불</span><span>${escapeHtml(fmtMoney(pb.requested, pb.cur))}</span></div>` : ''}
+    <div style="font-size:11px;margin-top:6px;color:${rfDue ? 'var(--am)' : 'var(--i4)'}">${
+      x.settled === 'yes' ? `위약금으로 남김${x.settled_note ? ` — ${escapeHtml(x.settled_note)}` : ''}`
+      : rfDue ? `돌려줄지 정해야 할 돈 ${escapeHtml(fmtMoney(pb.net, pb.cur))} — 환불했으면 아래 입금 기록에 «환불»로 남기세요`
+      : '낸 돈이 없어 정산할 게 없어요'}</div>
+    ${rfDue ? `<div style="margin-top:8px;display:flex;gap:5px;flex-wrap:wrap;align-items:center">
+        <input class="fi" id="stl-note-${escAttr(x.id)}" placeholder="사유 (예: 계약상 디파짓 환불 불가)"
+          style="flex:1 1 180px;min-width:0;font-size:11px;padding:5px">
+        <button class="btn bs" style="flex:0 0 auto" onclick="forfeitExh('${escAttr(x.id)}')">위약금으로 남김</button>
+      </div>` : ''}
+    ${x.settled === 'yes' ? `<div style="margin-top:8px;text-align:right">
+      <button class="btn bs" onclick="unsettleExh('${escAttr(x.id)}')">위약금 처리 해제</button></div>` : ''}
+  </div>`;
+
+  return `${cancelCard}
+  <div class="uc" style="margin-bottom:16px${cancelled ? ';display:none' : ''}">
     <div style="display:flex;justify-content:space-between;align-items:baseline">
       <span style="font-size:11px;color:var(--i4)">청구 / 입금</span>
       <span><b style="font-size:16px;color:${paid >= billed && billed > 0 ? 'var(--g)' : 'var(--i1)'}">${cur === 'USD' ? '$' : ''}${money(paid)}</b>
@@ -2096,8 +2123,17 @@ function dBilling(x){
         : st.state === 'over' ? `초과 입금 ${fmtMoney(-rest, cur)} — 누락된 인보이스가 없는지 확인해주세요`
         : rest > 0 ? `잔액 ${fmtMoney(rest, cur)}` : '완납'}
 </div>
-    ${st.due ? `<div style="font-size:11px;margin-top:3px;color:${st.overdue && rest > 0 ? 'var(--re)' : 'var(--i4)'}">
-      입금 기한 ${escapeHtml(st.due)}${st.overdue && rest > 0 ? ` · ${daysSince(st.due)}일 지남` : ''}</div>` : ''}
+    ${/* 입금 기한 — 비워 두면 행사 공통 기한(설정 › 일정 › 입금)을 쓴다. 행사 뒤에
+         내기로 미리 합의한 기업은 여기 날짜를 행사 뒤로 적으면 «입금 예정»으로 분류된다. */''}
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;margin-top:5px;color:var(--i4)">
+      <span>입금 기한</span>
+      <input type="date" class="fi" style="width:132px;padding:2px 6px;font-size:11px" value="${escAttr(x.pay_due_date || '')}"
+        onchange="setExhField('${escAttr(x.id)}','pay_due_date',this.value,'입금 기한')">
+      <span style="color:${st.overdue && rest > 0 ? 'var(--re)' : 'var(--i5)'}">${
+        !x.pay_due_date ? (st.due ? `행사 공통 기한 ${escapeHtml(st.due)} 적용 중` : '기한 없음 — 재촉 대상에서 빠져요')
+        : evPayDue && x.pay_due_date > evPayDue ? `행사 공통(${escapeHtml(evPayDue)})보다 늦게 — 사후 납부 합의`
+        : ''}${st.overdue && rest > 0 ? ` · ${daysSince(st.due)}일 지남` : (rest > 0 && st.due ? ' · 입금 예정' : '')}</span>
+    </div>
     ${noAmount.length ? `<div style="font-size:11px;color:var(--am);margin-top:3px">
       ⚠ 금액이 안 적힌 인보이스 ${noAmount.length}건이 있어 청구액이 실제보다 적을 수 있어요</div>` : ''}
     ${/* 인보이스와 어긋난 금액은 바로 아래 «추가 발행 필요»에서 무엇을 해야 하는지까지
@@ -3395,6 +3431,15 @@ export async function settleExh(exhId){
 사유: ${note}`)) return;
   await patchExh(exhId, { settled: 'yes', settled_note: note }, '완납 처리');
 }
+/* 취소 기업이 낸 돈을 돌려주지 않기로 했다 — 완납 처리와 같은 칸(settled)에
+   담는다. 취소 기업에게 «완납»은 뜻이 없으니 화면에서만 위약금이라 부른다. */
+export async function forfeitExh(exhId){
+  const note = (document.getElementById(`stl-note-${exhId}`)?.value || '').trim();
+  if(!note){ alert('사유를 적어주세요. (예: 계약상 디파짓 환불 불가)'); return; }
+  if(!confirm(`낸 돈을 돌려주지 않고 위약금으로 남길까요?
+사유: ${note}`)) return;
+  await patchExh(exhId, { settled: 'yes', settled_note: note }, '위약금으로 남김');
+}
 export async function unsettleExh(exhId){
   await patchExh(exhId, { settled: '', settled_note: '' }, '완납 처리 해제');
 }
@@ -3589,3 +3634,4 @@ window.advanceTaxStage = advanceTaxStage;
 window.rewindTaxStage = rewindTaxStage;
 window.settleExh = settleExh;
 window.unsettleExh = unsettleExh;
+window.forfeitExh = forfeitExh;

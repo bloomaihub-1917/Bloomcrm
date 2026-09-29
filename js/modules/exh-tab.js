@@ -115,7 +115,7 @@ export const STEPS = [
   { key: 'movein_at',            label: '현장' },
 ];
 
-let exhFilter = 'all';       // all | incomplete | unpaid | inquiry | billing | cancelled
+let exhFilter = 'all';       // all | incomplete | ready | overdue | waiting | inquiry | billing | cancelled | refund
 
 /* 단계별 집계 알약을 누르면 그 단계만 걸러 본다. "신청서 47/51"에서 못 채운
    네 곳이 어디인지 보려면 지금은 51줄을 눈으로 훑어야 한다.
@@ -432,8 +432,10 @@ export function settleByCurrency(exhId){
    인보이스에 적힌 기한을 쓴다. */
 export function payDueDate(x){
   if(x.pay_due_date) return x.pay_due_date;
+  /* 설정 › 일정의 «입금» 마감은 calc:payment 키로 담긴다. 예전엔 여기서 ev.pay만
+     읽어서 행사 공통 기한이 한 번도 걸리지 않았다. */
   const ev = eventDeadlines(x.event_id);
-  if(ev.pay) return ev.pay;
+  if(ev['calc:payment'] || ev.pay) return ev['calc:payment'] || ev.pay;
   const withDue = invoicesFor(x.id).filter(i => i.due_date && i.status !== 'void');
   return withDue.length ? withDue.map(i => i.due_date).sort()[0] : '';
 }
@@ -451,6 +453,24 @@ export function settleState(x){
   if(paid >= billed)        return { state:'paid',    billed, paid, balance, cur, due, overdue:false };
   if(paid > 0)              return { state:'partial', billed, paid, balance, cur, due, overdue };
   return { state:'unpaid', billed, paid, balance, cur, due, overdue };
+}
+
+/* 입금이 남은 기업을 둘로 가른다. 기한이 지난 곳만 챙기면 되고, 행사 뒤 납부로
+   미리 합의한 곳(기업별 입금 기한을 행사 뒤로 적어 둔 곳)은 기다리면 된다.
+   둘을 «미납» 하나로 묶으면 챙길 곳이 합의된 곳들 사이에 묻힌다.
+   기한이 아예 없는 곳은 재촉할 근거가 없으니 «입금 예정»에 둔다. */
+export const isOwing = (s) => s.state === 'unpaid' || s.state === 'partial';
+export const isOverdue = (s) => isOwing(s) && s.overdue;
+export const isWaiting = (s) => isOwing(s) && !s.overdue;
+
+/* 참가 취소 기업 중 돌려줄 돈이 남은 곳. 취소 기업의 청구는 받을 돈이 아니라
+   집계에서 빠지지만, 이미 낸 디파짓까지 같이 사라지면 환불할 돈이 화면에서
+   없어진다. 환불을 마치면(완료된 환불이 입금을 상쇄) 저절로 빠지고, 돌려주지
+   않기로 한 돈은 «위약금으로 남김»(settled=yes)으로 닫는다. */
+export function refundDue(x){
+  if(x.status !== CANCELLED || x.settled === 'yes') return null;
+  const pb = paidBreakdown(x.id);
+  return pb.net > 0 ? pb : null;
 }
 
 /* ══════════════════════════════════════════
@@ -1020,18 +1040,26 @@ function exhFilterChipsHtml(){
   const list = activeExhibitors(exhEvent);
   const openInq = list.reduce((s, x) => s + openInquiriesFor(x.id).length, 0);
   const incomplete = list.filter(x => progressOf(x) < 100).length;
-  const unpaid = list.filter(x => ['unpaid','partial'].includes(settleState(x).state)).length;
+  const overdue = list.filter(x => isOverdue(settleState(x))).length;
+  const waiting = list.filter(x => isWaiting(settleState(x))).length;
   const cancelled = cancelledExhibitors(exhEvent).length;
+  const refund = cancelledExhibitors(exhEvent).filter(refundDue).length;
   // 초과 입금·통화 혼재·금액 미입력처럼 사람이 봐야 하는 정산 건
   const attention = list.filter(x => settleState(x).state === 'over' ||
     invoicesFor(x.id).some(i => i.status !== 'void' && String(i.amount ?? '').trim() === '')).length;
-  const f = (k, label, n) => (n || k === 'all' || exhFilter === k)
+  const f = (k, label, n, tip = '') => (n || k === 'all' || exhFilter === k)
     ? `<button class="btn bs${exhFilter === k ? ' bp' : ''}" style="font-size:11px;padding:3px 10px;gap:5px"
-        onclick="setExhFilter('${k}')">${label}<span style="${exhFilter === k ? '' : 'color:var(--i4);'}font-weight:700">${n}</span></button>`
+        title="${escAttr(tip)}" onclick="setExhFilter('${k}')">${label}<span style="${exhFilter === k ? '' : 'color:var(--i4);'}font-weight:700">${n}</span></button>`
     : '';
   return `<div style="display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px 0">
-    ${f('all', '전체', list.length)}${f('incomplete', '진행 중', incomplete)}${f('unpaid', '입금 미완료', unpaid)}${
-      f('inquiry', '미답변 문의', openInq)}${f('billing', '정산 확인 필요', attention)}${f('cancelled', '참가 취소', cancelled)}
+    ${f('all', '전체', list.length, '참가 취소 기업은 빼고 셉니다')}${
+      f('incomplete', '준비 중', incomplete, '신청서·부스·그래픽 같은 준비 단계가 아직 다 끝나지 않은 기업')}${
+      f('ready', '준비 완료', list.length - incomplete, '준비 단계를 모두 마친 기업')}${
+      f('overdue', '입금 기한 지남', overdue, '입금 기한이 지났는데 잔액이 남은 기업 — 챙겨야 할 곳')}${
+      f('waiting', '입금 예정', waiting, '잔액이 남았지만 기한 전이거나(행사 후 납부 합의 포함) 기한이 없는 기업')}${
+      f('inquiry', '미답변 문의', openInq)}${f('billing', '정산 확인 필요', attention)}${
+      f('cancelled', '참가 취소', cancelled, '목록과 금액 집계에서 빠진 기업')}${
+      f('refund', '환불 확인 필요', refund, '참가 취소했는데 낸 돈이 남아 있는 기업')}
   </div>`;
 }
 
@@ -1112,9 +1140,12 @@ function exhQuery(){
 
 export function visibleList(){
   const q = exhQuery();
-  let list = exhFilter === 'cancelled' ? cancelledExhibitors(exhEvent) : activeExhibitors(exhEvent);
+  let list = ['cancelled', 'refund'].includes(exhFilter) ? cancelledExhibitors(exhEvent) : activeExhibitors(exhEvent);
   if(exhFilter === 'incomplete') list = list.filter(x => progressOf(x) < 100);
-  if(exhFilter === 'unpaid')     list = list.filter(x => ['unpaid','partial'].includes(settleState(x).state));
+  if(exhFilter === 'ready')      list = list.filter(x => progressOf(x) >= 100);
+  if(exhFilter === 'overdue')    list = list.filter(x => isOverdue(settleState(x)));
+  if(exhFilter === 'waiting')    list = list.filter(x => isWaiting(settleState(x)));
+  if(exhFilter === 'refund')     list = list.filter(refundDue);
   if(exhFilter === 'billing')    list = list.filter(x => { const s = settleState(x);
     return s.state === 'over' ||
       invoicesFor(x.id).some(i => i.status !== 'void' && String(i.amount ?? '').trim() === ''); });
@@ -2049,6 +2080,10 @@ function renderMoneyView(list){
   };
   const marked = rows.map(r => ({ ...r, st: payStateOf(r.x) }));
   const cnt = (k) => marked.filter(r => r.st === k).length;
+  /* 미납·일부만 냄을 기한으로 한 번 더 가른다 — 행사 후 납부로 합의한 곳은
+     안 낸 게 맞다. 기업별 입금 기한(없으면 행사 공통 기한)을 본다. */
+  const lateN = marked.filter(r => isOverdue(settleState(r.x))).length;
+  const waitN = marked.filter(r => isWaiting(settleState(r.x))).length;
 
   const fpill = (k, l, n, cls) => n || k === 'all'
     ? `<button class="pill ${payFil === k ? cls : 'p-gray'}"
@@ -2062,9 +2097,15 @@ function renderMoneyView(list){
     ${fpill('partial', '일부만 냄', cnt('partial'), 'p-amber')}
     ${fpill('unpaid', '미납', cnt('unpaid'), 'p-red')}
     ${fpill('none', '청구 없음', cnt('none'), 'p-gray')}
+    ${lateN || waitN ? '<span style="width:1px;background:var(--i6);margin:0 3px"></span>' : ''}
+    ${fpill('late', '기한 지남', lateN, 'p-red')}
+    ${fpill('wait', '입금 예정', waitN, 'p-blue')}
   </div>`;
 
-  const vrows = payFil === 'all' ? marked : marked.filter(r => r.st === payFil);
+  const vrows = payFil === 'all' ? marked
+    : payFil === 'late' ? marked.filter(r => isOverdue(settleState(r.x)))
+    : payFil === 'wait' ? marked.filter(r => isWaiting(settleState(r.x)))
+    : marked.filter(r => r.st === payFil);
 
   /* 표 아래 합계는 지금 걸러 놓은 기업만 더한다 — 위 카드가 전체를 보여주니
      여기까지 전체를 더하면 «미납만 보고 있는데 받은 돈이 찍히는» 꼴이 된다. */
@@ -2081,7 +2122,31 @@ function renderMoneyView(list){
 
   const noneMsg = emptyView('해당하는 기업이 없어요');
 
-  if(isMobile()) return viewShell(pills, catDash + payFilBar + (vrows.length ? '' : noneMsg) + vrows.map(({ x, by }) => {
+  // 잔액 아래 한 줄 — 챙길 곳인지 기다릴 곳인지
+  const dueTag = (x) => {
+    const s = settleState(x);
+    if(!isOwing(s)) return '';
+    return isOverdue(s)
+      ? `<div style="font-size:9.5px;color:var(--re)">기한 ${daysSince(s.due)}일 지남</div>`
+      : `<div style="font-size:9.5px;color:var(--i4)">${s.due ? `입금 예정 ~${escapeHtml(s.due.slice(5).replace('-', '/'))}` : '기한 없음'}</div>`;
+  };
+
+  /* 참가 취소했는데 낸 돈이 남은 곳. 위 카드와 표는 취소 기업을 빼고 세므로
+     여기 따로 적지 않으면 돌려줄 돈이 화면에서 사라진다. */
+  const refunds = cancelledExhibitors(exhEvent).map(x => ({ x, pb: refundDue(x) })).filter(r => r.pb);
+  const refundBox = refunds.length ? `<div style="background:var(--W);border:1px solid var(--i6);border-left:3px solid var(--am);
+      border-radius:8px;padding:9px 12px;margin:-2px 0 14px">
+      <div style="font-size:11.5px;font-weight:700;color:var(--i2);margin-bottom:4px">환불 확인 필요 ${refunds.length}곳
+        <span style="font-weight:400;color:var(--i4);font-size:10.5px">— 참가 취소했지만 낸 돈이 남아 있어요. 위 집계에는 들어 있지 않습니다.</span></div>
+      ${refunds.map(({ x, pb }) => `<div onclick="openExhDr('${escAttr(x.id)}','billing')"
+          style="display:flex;gap:8px;font-size:11.5px;padding:3px 0;cursor:pointer">
+        <span style="flex:1;min-width:0">${escapeHtml(exhNames(x).ko)}</span>
+        ${pb.requested ? `<span style="color:var(--i4);font-size:10.5px">환불 요청 ${escapeHtml(fmtMoney(pb.requested, pb.cur))}</span>` : ''}
+        <b style="color:var(--am)">${escapeHtml(fmtMoney(pb.net, pb.cur))}</b></div>`).join('')}
+      <div style="font-size:10px;color:var(--i5);margin-top:3px">환불을 입금 기록에 «환불 완료»로 남기면 여기서 빠져요. 돌려주지 않기로 했다면 기업 정산에서 «위약금으로 남김»을 누르세요.</div>
+    </div>` : '';
+
+  if(isMobile()) return viewShell(pills, catDash + refundBox + payFilBar + (vrows.length ? '' : noneMsg) + vrows.map(({ x, by }) => {
     const st = settleByCurrency(x.id);
     const sc = Object.keys(st).sort();
     const line = (key) => sc.filter(c => st[c][key]).map(c => amt(c, st[c][key])).join(' · ') || '-';
@@ -2119,9 +2184,9 @@ function renderMoneyView(list){
     </div>`;
   }).join(''));
 
-  if(!vrows.length) return viewShell(pills, catDash + `<div class="sct">기업별 세부</div>` + payFilBar + noneMsg);
+  if(!vrows.length) return viewShell(pills, catDash + refundBox + `<div class="sct">기업별 세부</div>` + payFilBar + noneMsg);
 
-  return viewShell(pills, catDash + `<div class="sct">기업별 세부</div>` + payFilBar + `<div class="tw"><table><thead><tr>
+  return viewShell(pills, catDash + refundBox + `<div class="sct">기업별 세부</div>` + payFilBar + `<div class="tw"><table><thead><tr>
       <th style="min-width:44px;text-align:right">신청순</th>
       <th style="min-width:150px">기업</th>
       <th style="min-width:56px">부스번호</th>
@@ -2146,7 +2211,7 @@ function renderMoneyView(list){
             curs.filter(c => by[c]?.합계).map(c => amt(c, by[c].합계)).join('<br>') || '-'}</td>
           <td style="text-align:right">${col('billed')}</td>
           ${payCols.map(([k]) => `<td style="text-align:right">${col(k)}</td>`).join('')}
-          <td style="text-align:right;color:${owing ? 'var(--am)' : 'var(--i3)'}">${col('balance')}</td>
+          <td style="text-align:right;color:${owing ? 'var(--am)' : 'var(--i3)'}">${col('balance')}${dueTag(x)}</td>
         </tr>`;
       }).join('')}
     </tbody>
