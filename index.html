@@ -167,7 +167,7 @@
     <!-- CO sidebar -->
     <div class="sbp" id="sbp-co">
       <div class="sbs s-q"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">기업 검색</div></div>
-      <div class="sb-srch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" placeholder="기업명·옛 이름 검색…" oninput="searchCo(this.value)" id="co-si"></div>
+      <div class="sb-srch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" placeholder="기업명·옛 이름·전화번호 검색…" oninput="searchCo(this.value)" id="co-si"></div>
       </div>
       <div class="sbs s-c"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">기업 섹터</div></div>
       <div class="sbi" id="co-catf"></div></div>
@@ -286,13 +286,13 @@
   <div class="mob-srch">
     <div class="srch" style="width:100%">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input type="text" id="mdb-q-m" placeholder="이름·기업·국가·이메일 검색…" style="width:100%"
+      <input type="text" id="mdb-q-m" placeholder="이름·기업·국가·이메일·전화번호 검색…" style="width:100%"
         oninput="searchMdbM(this.value)">
     </div>
   </div>
   <div class="tb">
     <div class="tb-t">Master DB <span class="tb-s">통합 연락처 데이터베이스</span></div>
-    <div class="srch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" placeholder="이름·기업·국가·이메일 검색 — 국가:싱가포르 처럼도 돼요" oninput="renderMDB()" id="mdb-q" title="띄어 쓰면 «그리고»예요 — «파렉셀 팀장»은 둘 다 맞는 사람.&#10;칸을 콕 집으려면 이름:·기업:·국가:·직함:·부서:·이메일:·연락처:·태그:·분야:·출처:"></div>
+    <div class="srch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" placeholder="이름·기업·국가·이메일·전화번호 검색 — 국가:싱가포르 처럼도 돼요" oninput="renderMDB()" id="mdb-q" title="띄어 쓰면 «그리고»예요 — «파렉셀 팀장»은 둘 다 맞는 사람.&#10;칸을 콕 집으려면 이름:·기업:·국가:·직함:·부서:·이메일:·연락처:·태그:·분야:·출처:"></div>
     <button class="btn bp" onclick="openAddContactModal()" style="gap:4px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>연락처 추가
     </button>
@@ -868,14 +868,14 @@
   <div class="exh-msrch">
     <div class="srch" style="width:100%">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input type="text" id="exh-q-m" placeholder="기업명·영문명 검색…" style="width:100%"
+      <input type="text" id="exh-q-m" placeholder="기업명·영문명·전화번호 검색…" style="width:100%"
         oninput="searchExhM(this.value)">
     </div>
   </div>
   <div class="tb">
     <div class="tb-t" id="exh-ttl">전시 진행관리 <span class="tb-s">참가기업 준비 현황</span></div>
     <button class="btn bs" onclick="openExhAdd()" title="기업DB에 없는 기업도 여기서 바로 등록해요"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>참가기업 추가</button>
-    <div class="srch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" placeholder="기업명·영문명 검색…" oninput="renderExh()" id="exh-q"></div>
+    <div class="srch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" placeholder="기업명·영문명·전화번호 검색…" oninput="renderExh()" id="exh-q"></div>
     <button class="btn bp bs" onclick="openExhImport()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>참가기업 불러오기</button>
   </div>
   <!-- .page가 overflow:hidden이라 실제 세로 스크롤은 이 안쪽에서 일어난다

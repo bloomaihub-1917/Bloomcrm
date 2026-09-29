@@ -24,7 +24,7 @@ import {
   evPartOn, evPartDone, evPartState,
   findOrgByName, orgName, ORGS,
 } from '../state.js';
-import { td, escapeHtml, escAttr, isMobile, cleanEmail, countryName, leftPill, levenshteinDist } from '../utils.js';
+import { td, escapeHtml, escAttr, isMobile, cleanEmail, countryName, leftPill, levenshteinDist, phoneMatch } from '../utils.js';
 export { cleanEmail };   // exh-drawer가 여기서 가져다 쓴다
 import {
   postToSheet as _postToSheet,
@@ -1068,6 +1068,9 @@ export function setExhFilter(k){ exhFilter = k; stepFil = null; buildExhFilters(
 function matchExhName(x, q){
   const lq = String(q || '').trim().toLowerCase();
   if(!lq) return true;
+  /* 번호로도 찾는다 — 기업 대표번호, 담당자(마스터DB 번호 포함), 프로그램북·세금계산서 번호 */
+  if(phoneMatch(lq, getOrgById(x.org_id)?.phone, x.book_phone, x.tax_contact_phone,
+    exhContacts(x).map(c => c.phone))) return true;
   const squash = (v) => String(v || '').toLowerCase()
     .replace(/\(주\)|\(유\)|주식회사|㈜|유한회사|inc\.?|corp\.?|co\.?|ltd\.?|llc\.?/g, '')
     .replace(/[^a-z0-9가-힣]/g, '');

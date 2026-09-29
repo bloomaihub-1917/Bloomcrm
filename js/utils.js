@@ -351,3 +351,32 @@ export function leftPill(c){
   return ` <span class="pill p-gray" style="font-size:9px;padding:1px 5px" title="${escAttr(tip)}"
     >퇴사${whereName ? ' → ' + escapeHtml(whereName) : ''}</span>`;
 }
+
+/* ── 전화번호로 찾기 ──
+   번호는 적는 모양이 제각각이다(010-1234-5678, 01012345678, +82 10 1234 5678,
+   02)123-4567). 친 그대로 견주면 하이픈 하나로 못 찾는다. 양쪽을 숫자만 남기고
+   국가번호 82는 앞자리 0으로 돌려서 견준다.
+
+   숫자가 네 자리 이상이고 숫자·기호만으로 된 검색어일 때만 번호로 본다 —
+   «3M»이나 «B2B» 같은 이름 검색이 번호 검색에 걸리면 엉뚱한 기업이 쏟아진다. */
+const phoneDigits = (v) => {
+  let d = String(v || '').replace(/[^0-9]/g, '');
+  if(/^\s*\+?\s*82/.test(String(v || '')) || d.startsWith('82') && d.length >= 11) d = '0' + d.slice(2).replace(/^0/, '');
+  return d;
+};
+export function phoneQuery(q){
+  const s = String(q || '').trim();
+  if(!/^[0-9+\-().\s]+$/.test(s)) return '';
+  const d = phoneDigits(s);
+  return d.length >= 4 ? d : '';
+}
+export function phoneMatch(q, ...phones){
+  const d = phoneQuery(q);
+  if(!d) return false;
+  const bare = String(q).replace(/[^0-9]/g, '');   // 국가번호를 떼지 않은 원래 숫자로도 본다
+  return phones.flat().some(p => {
+    if(!p) return false;
+    const pd = phoneDigits(p), raw = String(p).replace(/[^0-9]/g, '');
+    return pd.includes(d) || raw.includes(bare);
+  });
+}

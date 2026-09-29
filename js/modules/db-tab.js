@@ -45,7 +45,7 @@ import {
   speakersOfContact,
 } from '../state.js';
 import { CP, CL, RP, CAT_KEYS, ROLE_TO_CAT, COUNTRIES, avB, avF } from '../constants.js';
-import { td, ab, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseSectorScope, parseTags, joinTags, isMobile, cleanEmail, personName, personFullName, leftPill, slugifySectorName } from '../utils.js';
+import { td, ab, phoneMatch, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseSectorScope, parseTags, joinTags, isMobile, cleanEmail, personName, personFullName, leftPill, slugifySectorName } from '../utils.js';
 import { postToSheet, upsertSectorRow } from '../api.js';
 import { buildCoDB, ensureOrgsForNames, orgIdForName, applyCoSectors,
   coDomainOptionsHtml, coSectorOptionsHtml, currentCoSectorPick } from './company-tab.js';
@@ -1136,6 +1136,9 @@ const ALL_Q = ['nameKo', 'nameEn', 'orgKo', 'orgEn', 'titleKo', 'titleEn',
 const hay = (c, keys) => keys.map(k => String(c[k] ?? '')).join(' ').toLowerCase();
 
 export function matchesQuery(c, q){
+  /* 번호 모양 검색어는 통째로 번호로 견준다 — «010 1234 5678»을 칸마다 끊어
+     보면 엉뚱한 사람이 걸리고, 하이픈 유무만 달라도 못 찾는다 */
+  if(phoneMatch(q, c.phone1, c.phone2)) return true;
   const terms = String(q || '').trim().split(/\s+/).filter(Boolean);
   if(!terms.length) return true;
   return terms.every(t => {

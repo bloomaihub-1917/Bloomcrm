@@ -59,7 +59,7 @@ import {
   exhibitorsForEvent,
 } from '../state.js';
 import { RP, avB, avF } from '../constants.js';
-import { escapeHtml, escAttr, levenshteinDist, parseSectorScope, sectorKey, countryName, isMobile, td, leftPill, safeUrl, parseLinks, slugifySectorName } from '../utils.js';
+import { escapeHtml, escAttr, levenshteinDist, phoneMatch, parseSectorScope, sectorKey, countryName, isMobile, td, leftPill, safeUrl, parseLinks, slugifySectorName } from '../utils.js';
 import { postToSheet, batchCreateExhibitors, upsertSectorRow } from '../api.js';
 import { parseSectors, joinSectors, mainSectors, sectorNamesInDomain, domainName, domainOfSector, findSectorByName, UNASSIGNED_DOMAIN } from './settings-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
@@ -743,6 +743,8 @@ export function renderCoList(q2=''){
     const squash = (v) => stripLegalForm(v).toLowerCase().replace(/[^a-z0-9가-힣]/g, '');
     const sq = squash(lq);
     list = list.filter(c => {
+      // 대표번호나 소속 연락처 번호로 쳐도 그 기업이 나온다
+      if(phoneMatch(lq, c.phone, (c.contacts || []).map(k => k.phone))) return true;
       const fields = [c.nameKo, c.nameEn, c.sector, c.abbr, c.mainBranch,
         ...(c.aliases || []), ...(c.branches || [])];
       // 친 그대로 걸리면 그걸로 됐고(부분어·띄어쓰기 포함 검색),
