@@ -465,6 +465,7 @@ function boothDesignBlock(x){
     </div>
 
     <div class="fgr">${dateCell('booth_design_received_at', '도면 받은 날')}${dateCell('booth_design_checked_at', '확인한 날')}</div>
+    ${isSelf ? `<div class="fgr">${dateCell('work_report_at', '호텔 작업신고서 제출일')}</div>` : ''}
 
     <div style="margin-top:2px">
       <label class="fl">확인 결과</label>

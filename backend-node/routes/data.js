@@ -80,7 +80,7 @@ const TABLES = {
       'manual_sent_at', 'manual_replied_at',
       'app_received', 'app_received_at', 'app_complete', 'app_missing', 'extra_equipment',
       'booth_no', 'booth_floor', 'booth_type', 'booth_qty', 'grade', 'booth_confirmed', 'booth_confirmed_at',
-      'booth_design_received_at', 'booth_design_checked_at', 'booth_design_result', 'booth_design_note',
+      'booth_design_received_at', 'booth_design_checked_at', 'booth_design_result', 'booth_design_note', 'work_report_at',
       'booth_shared', 'scope', 'host_key',
       'fascia_name', 'base_recv_at', 'base_done_at', 'base_note',
       'settled', 'settled_note', 'pay_due_date', 'gap_ack', 'reissue_ack',

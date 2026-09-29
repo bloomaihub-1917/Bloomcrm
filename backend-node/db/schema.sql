@@ -613,6 +613,9 @@ ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS booth_design_received_at TEXT;
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS booth_design_checked_at  TEXT;
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS booth_design_result      TEXT;  -- 'ok'(적합) | 'fix'(수정 필요) | ''
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS booth_design_note        TEXT;  -- 확인 결과 메모
+-- 독립부스 시공사는 호텔에 작업신고서를 내야 반입·시공이 된다. 안 낸 곳을 현장
+-- 전에 골라 독촉하려고 낸 날짜를 적는다(빈 칸 = 아직).
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS work_report_at TEXT;
 
 /* ── 공동 부스 ──
    한 부스를 두 기관이 나눠 쓰는 일이 있다(2026 KIC 부스 39 — 서울대학교병원과

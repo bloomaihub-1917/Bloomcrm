@@ -2523,6 +2523,7 @@ function renderSelfBoothView(rows){
   const nS = list.filter(seen).length;
   const nOk  = list.filter(x => x.booth_design_result === 'ok').length;
   const nFix = list.filter(x => x.booth_design_result === 'fix').length;
+  const nW = list.filter(x => x.work_report_at).length;   // 시공사가 호텔에 낸 작업신고서
   const due = dueInfo('calc:design', exhEvent);
 
   /* 숫자만 보면 12/18이 얼마나 남은 건지 안 들어온다 */
@@ -2535,6 +2536,7 @@ function renderSelfBoothView(rows){
     + `<span class="pill ${nB === list.length ? 'p-green' : 'p-amber'}">시공사 ${nB}/${list.length}</span>`
     + `<span class="pill ${nG === list.length ? 'p-green' : 'p-amber'}">도면 수령 ${nG}/${list.length}</span>`
     + `<span class="pill ${nS === list.length ? 'p-green' : 'p-amber'}">확인 ${nS}/${list.length}</span>`
+    + `<span class="pill ${nW === list.length ? 'p-green' : 'p-amber'}" title="${escAttr(list.filter(x => !x.work_report_at).map(x => exhNames(x).ko).join(', ') || '모두 제출')}">작업신고서 ${nW}/${list.length}</span>`
     + (nFix ? `<span class="pill p-red" title="${escAttr(list.filter(x => x.booth_design_result === 'fix').map(x => exhNames(x).ko).join(', '))}">수정 요청 ${nFix}</span>` : '')
     + (nOk ? `<span class="pill p-green">적합 ${nOk}</span>` : '')
     + (due
@@ -2545,7 +2547,7 @@ function renderSelfBoothView(rows){
   const board = `<div class="uc" style="margin:12px 0 10px;padding:11px 14px">
     <div style="display:flex;flex-wrap:wrap;gap:14px 26px">
       ${[['시공사 정보', nB, 'var(--a)'], ['도면·그래픽 수령', nG, 'var(--am)'],
-         ['우리 확인', nS, 'var(--am)'], ['적합 판정', nOk, 'var(--g)']].map(([l, v, c]) =>
+         ['우리 확인', nS, 'var(--am)'], ['적합 판정', nOk, 'var(--g)'], ['호텔 작업신고서', nW, 'var(--a)']].map(([l, v, c]) =>
         `<div style="min-width:150px">
           <div style="font-size:10px;color:var(--i5);font-weight:600">${l}</div>
           <div style="margin-top:4px">${bar(v, list.length, c)}</div></div>`).join('')}
@@ -2595,6 +2597,8 @@ function renderSelfBoothView(rows){
         <span style="font-size:11px;color:var(--i4);min-width:56px">확인</span>${dt(x, 'booth_design_checked_at', '도면 확인')}</div>
       <div style="display:flex;gap:6px;align-items:center">
         <span style="font-size:11px;color:var(--i4);min-width:56px">결과</span>${resultCell(x)}</div>
+      <div style="display:flex;gap:6px;align-items:center;margin-top:4px">
+        <span style="font-size:11px;color:var(--i4);min-width:56px">작업신고</span>${dt(x, 'work_report_at', '작업신고서 제출')}</div>
     </div>`).join(''));
 
   return viewShell(pills, board + `<div class="tw"><table><thead><tr>
@@ -2606,6 +2610,7 @@ function renderSelfBoothView(rows){
       <th style="min-width:130px">도면·그래픽 수령</th>
       <th style="min-width:130px">우리 확인</th>
       <th style="min-width:110px">결과</th>
+      <th style="min-width:130px" title="시공사가 호텔에 낸 날 — 비어 있으면 아직 안 낸 것">작업신고서</th>
       <th style="min-width:90px;text-align:center">상태</th>
       <th style="min-width:150px">비고</th>
     </tr></thead><tbody>
@@ -2622,6 +2627,7 @@ function renderSelfBoothView(rows){
         <td>${dt(x, 'booth_design_received_at', '도면 수령')}</td>
         <td>${dt(x, 'booth_design_checked_at', '도면 확인')}</td>
         <td>${resultCell(x)}</td>
+        <td>${dt(x, 'work_report_at', '작업신고서 제출')}</td>
         <td style="text-align:center">${stateCell(x)}</td>
         <td>${txt(x, 'booth_design_note', '수정 요청 내용 등', '도면 비고', '100%')}</td>
       </tr>`;
@@ -5063,7 +5069,7 @@ const FIELD_LABEL = {
   /* 도면 칸들 — 부딪힘 알림에 칸 이름을 한글로 보여주려면 여기 있어야 한다.
      없으면 «booth_design_note가 바뀌었어요»라고 뜬다. */
   booth_design_note:'도면 비고', booth_design_received_at:'도면 수령일',
-  booth_design_checked_at:'도면 확인일', booth_design_result:'도면 검토 결과',
+  booth_design_checked_at:'도면 확인일', work_report_at:'작업신고서 제출일', booth_design_result:'도면 검토 결과',
   movein_at:'반입·설치', note:'비고', status:'상태',
   company_name:'기업명', booth_shared:'공동 부스', apply_order:'신청순',
   graphic_stage:'그래픽 단계', graphic_received_at:'그래픽 수령',
