@@ -165,7 +165,7 @@ const abbrOf = (nm) => String(nm || '').trim().slice(0, 2);
                                  "deptKo", "deptEn", country, cat, lang, source, date, status,
                                  email1, email2, phone1, phone2, beat, products, tags, org_id)
            VALUES ($1,$2,'',$3,'','','',$4,'',$5,'bd','KO',$6,$7,'new',$8,'',$9,'','','','',$10)`,
-          [`${stamp}${String(++seq).padStart(4, '0')}`, p.name, o.name, p.dept,
+          [`${stamp}${String(++seq).padStart(3, '0')}` /* 16자리까지 — 넘으면 화면이 끝자리를 반올림한다 */, p.name, o.name, p.dept,
             p.country, p.source, TODAY, p.email, p.phone, o.id]);
         cMade++;
       }

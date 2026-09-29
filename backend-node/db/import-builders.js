@@ -117,7 +117,7 @@ const phones = (v) => clean(v).split(/\s*[\/,]\s*/).map(clean).filter(Boolean);
         `INSERT INTO contacts (id, "nameKo", "orgKo", "titleKo", cat, lang, source, date, status,
                                email1, phone1, phone2, org_id)
          VALUES ($1, $2, $3, $4, '', 'ko', $5, $6, 'new', $7, $8, $9, $10)`,
-        [`${stamp}${String(++seq).padStart(4, '0')}`, name, org.name_ko, title,
+        [`${stamp}${String(++seq).padStart(3, '0')}` /* 16자리까지 — 넘으면 화면이 끝자리를 반올림한다 */, name, org.name_ko, title,
           `${EVENT} 독립부스 시공사`, today, email, m1 || tel, m1 ? (m2 || tel) : (m2 || ''), org.id]);
       people.push(`${name}${title ? ' ' + title : ''} (${org.name_ko})`);
     }

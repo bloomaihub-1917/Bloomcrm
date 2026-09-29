@@ -148,7 +148,7 @@ const norm = (v) => clean(v).toLowerCase()
           await join(dup.id, `${pn} (${org.name_ko})`);
           continue;
         }
-        const cid = `${stamp}${String(++seq).padStart(4, '0')}`;
+        const cid = `${stamp}${String(++seq).padStart(3, '0')}` /* 16자리까지 — 넘으면 화면이 끝자리를 반올림한다 */;
         if (!DRY) await client.query(
           `INSERT INTO contacts (id, "nameKo", "orgKo", "titleKo", cat, lang, source, date, status,
                                  email1, phone1, phone2, org_id)
