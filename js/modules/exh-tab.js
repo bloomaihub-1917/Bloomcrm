@@ -994,33 +994,45 @@ export function buildExhEvList(){
     ? (title ? head(title) : '') + arr.map(e => row(e, withCount ? activeExhibitors(e.key).length : 0)).join('')
     : '';
 
-  el.innerHTML = (
-      group(doing, '', true)
+  /* 설정에서 전시를 «안 함»으로 둔 행사는 목록에서 뺀다 — 고를 일이 없는데 자리만
+     차지했다. 몇 개가 빠졌는지와 켜는 곳만 한 줄로 남긴다.
+
+     참가기업이 아직 없는 진행 중 행사(예전 «전시 대상 없음»)는 따로 묶지 않고
+     진행 중 맨 뒤에 둔다 — 그 행사를 열어야 참가기업을 넣을 수 있으니 숨길 수 없고,
+     «안 함»과 이름이 비슷해 둘을 헷갈렸다. */
+  const hiddenNote = off.length
+    ? `<div style="font-size:10px;color:var(--i5);margin:10px 0 0;padding-left:2px"
+         title="${escAttr(off.map(e => e.short || e.name || e.key).join(', '))}">전시 안 하는 행사 ${off.length}개는 숨겼어요 — 설정 › 행사 관리에서 켜요</div>`
+    : '';
+  el.innerHTML = ((
+      group([...doing, ...empty], '', true)
     + group(done,  '진행 완료', true)
-    + group(off,   '전시 안 함', false)
-    + group(empty, '전시 대상 없음', false)
-  ) || '<div style="font-size:11px;color:var(--i4);padding:6px 2px">등록된 행사가 없어요</div>';
+  ) || '<div style="font-size:11px;color:var(--i4);padding:6px 2px">진행 중인 전시가 없어요</div>') + hiddenNote;
 
   buildExhFilters();
 }
 
-function buildExhFilters(){
-  const el = document.getElementById('exh-filter-list');
-  if(el){
-    const list = activeExhibitors(exhEvent);
-    const openInq = list.reduce((s, x) => s + openInquiriesFor(x.id).length, 0);
-    const incomplete = list.filter(x => progressOf(x) < 100).length;
-    const unpaid = list.filter(x => ['unpaid','partial'].includes(settleState(x).state)).length;
-    const cancelled = cancelledExhibitors(exhEvent).length;
-    // 초과 입금·통화 혼재·금액 미입력처럼 사람이 봐야 하는 정산 건
-    const attention = list.filter(x => settleState(x).state === 'over' ||
-      invoicesFor(x.id).some(i => i.status !== 'void' && String(i.amount ?? '').trim() === '')).length;
-    const f = (k, label, n) => `<button class="nr${exhFilter === k ? ' on' : ''}" onclick="setExhFilter('${k}')">${label}<span class="nbg">${n}</span></button>`;
-    el.innerHTML = f('all', '전체', list.length) + f('incomplete', '진행 중', incomplete)
-      + f('unpaid', '입금 미완료', unpaid) + f('inquiry', '미답변 문의', openInq)
-      + (attention ? f('billing', '정산 확인 필요', attention) : '')
-      + (cancelled ? f('cancelled', '참가 취소', cancelled) : '');
-  }
+/* 필터는 사이드바에서 본문 목록 바로 위 칩으로 옮겼다 — «고른 행사 안에서 거르는
+   것»이라 행사를 고르는 사이드바보다 거를 목록 곁에 있어야 한다. 0건인 칩은
+   숨긴다(지금 켜 둔 칩은 0이어도 남겨서 끌 수 있게). */
+function buildExhFilters(){}
+function exhFilterChipsHtml(){
+  const list = activeExhibitors(exhEvent);
+  const openInq = list.reduce((s, x) => s + openInquiriesFor(x.id).length, 0);
+  const incomplete = list.filter(x => progressOf(x) < 100).length;
+  const unpaid = list.filter(x => ['unpaid','partial'].includes(settleState(x).state)).length;
+  const cancelled = cancelledExhibitors(exhEvent).length;
+  // 초과 입금·통화 혼재·금액 미입력처럼 사람이 봐야 하는 정산 건
+  const attention = list.filter(x => settleState(x).state === 'over' ||
+    invoicesFor(x.id).some(i => i.status !== 'void' && String(i.amount ?? '').trim() === '')).length;
+  const f = (k, label, n) => (n || k === 'all' || exhFilter === k)
+    ? `<button class="btn bs${exhFilter === k ? ' bp' : ''}" style="font-size:11px;padding:3px 10px;gap:5px"
+        onclick="setExhFilter('${k}')">${label}<span style="${exhFilter === k ? '' : 'color:var(--i4);'}font-weight:700">${n}</span></button>`
+    : '';
+  return `<div style="display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px 0">
+    ${f('all', '전체', list.length)}${f('incomplete', '진행 중', incomplete)}${f('unpaid', '입금 미완료', unpaid)}${
+      f('inquiry', '미답변 문의', openInq)}${f('billing', '정산 확인 필요', attention)}${f('cancelled', '참가 취소', cancelled)}
+  </div>`;
 }
 
 /* 하단 네비 배지 — 미답변 문의가 있으면 숫자를 띄운다(놓치지 않는 게 핵심 기능이라
@@ -1202,7 +1214,9 @@ export function renderExh(){
     : exhView === 'book'    ? renderBookView(list)
     : exhView === 'watch'   ? renderWatchView(exhEvent)
     : renderInquiryPanel() + renderChecklist(list, all);
-  el.innerHTML = seg + banner
+  // 거를 목록이 없는 화면(대시보드·파일 감시)에는 필터 칩도 두지 않는다
+  const chips = (searchOverride || !['dash', 'watch'].includes(exhView)) ? exhFilterChipsHtml() : '';
+  el.innerHTML = seg + chips + banner
     + (exhLocked() ? `<div class="ro">${bodyHtml}</div>` : bodyHtml);
 }
 

@@ -123,11 +123,16 @@ export function buildConfEvList(){
     ? (title ? head(title) : '') + arr.map(e => row(e, count ? speakersForEvent(e.key).length : 0)).join('')
     : '';
 
-  el.innerHTML = (
+  /* 설정에서 컨퍼런스를 «안 함»으로 둔 행사는 목록에서 뺀다 — 몇 개가 빠졌는지와
+     켜는 곳만 한 줄로 남긴다 */
+  const hiddenNote = off.length
+    ? `<div style="font-size:10px;color:var(--i5);margin:10px 0 0;padding-left:2px"
+         title="${escAttr(off.map(e => e.short || e.name || e.key).join(', '))}">컨퍼런스 안 하는 행사 ${off.length}개는 숨겼어요 — 설정 › 행사 관리에서 켜요</div>`
+    : '';
+  el.innerHTML = ((
       group(doing, '', true)
     + group(done, '진행 완료', true)
-    + group(off,  '컨퍼런스 안 함', false)
-  ) || '<div style="font-size:11px;color:var(--i4);padding:6px 2px">등록된 행사가 없어요</div>';
+  ) || '<div style="font-size:11px;color:var(--i4);padding:6px 2px">진행 중인 컨퍼런스가 없어요</div>') + hiddenNote;
 }
 
 export function setConfEvent(key){
