@@ -1215,23 +1215,6 @@ function coChip(on, label, n, onclick, title){
     ${escapeHtml(label)}<span style="${on ? '' : 'color:var(--i4);'}font-weight:700">${n}</span></button>`;
 }
 
-function coDomainChipsHtml(base){
-  const chips = [coChip(!coDomainF, '전체', base.length, 'setCoDomainOnly(null)')];
-  const seen = new Set();
-  const push = (id, name) => {
-    const keys = coDomainKeys(id);
-    const n = base.filter(c => {
-      const hit = coSecsOf(c).some(s => keys.has(sectorKey(s)));
-      if(hit) seen.add(c.key);
-      return hit;
-    }).length;
-    if(n) chips.push(coChip(coDomainF === id, name, n, `setCoDomainOnly('${escAttr(id)}')`));
-  };
-  DOMAINS.forEach(d => push(d.id, d.name));
-  push(UNASSIGNED_DOMAIN, '미분류');
-  return chips.join('');
-}
-
 function coSectorChipsHtml(base){
   if(!coDomainF) return '';
   const keys = coDomainKeys(coDomainF);
@@ -1286,8 +1269,7 @@ export function renderCoDashboard(){
       <div style="font-size:13px;font-weight:700;color:var(--i1);flex:1;min-width:0">기업 DB</div>
       ${CO_ADD_BTN}
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:6px">${rowLbl('분야')}
-      <div style="display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:0">${coDomainChipsHtml(base)}</div></div>
+    ${/* 분야는 왼쪽 트리에서 고른다 — 본문에 같은 줄을 또 두지 않는다 */''}
     ${secChips ? `<div style="display:flex;gap:8px;margin-bottom:6px">${rowLbl('섹터')}
       <div style="display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:0">${secChips}</div></div>` : ''}
     <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
