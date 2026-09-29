@@ -1343,11 +1343,12 @@ export function renderCoDetail(c){
             return a + (label ? ` <span style="color:var(--i5);font-size:10px">${escapeHtml(label)}</span>` : '');
           }).join('<span style="color:var(--i6)"> · </span>');
 
+          /* 값 칸은 white-space:pre-line이라(메모의 줄바꿈을 살리려고) 태그 사이
+             들여쓰기 줄바꿈까지 그대로 줄이 된다 — 여는 태그 바로 뒤에 붙여 쓴다 */
           const row = ([id, label, val, on, isLink]) => `
             <div style="display:flex;gap:8px;align-items:baseline;padding:2px 0;font-size:11.5px">
               <span style="flex:0 0 62px;color:var(--i5)">${escapeHtml(label)}</span>
-              <span style="flex:1;min-width:0;color:var(--i2);white-space:pre-line;${on ? 'cursor:pointer' : ''}" ${on ? `onclick="${on}"` : ''}>
-                <span id="co-${id}-${escapeHtml(c.key)}">${
+              <span style="flex:1;min-width:0;color:var(--i2);white-space:pre-line;${on ? 'cursor:pointer' : ''}" ${on ? `onclick="${on}"` : ''}><span id="co-${id}-${escapeHtml(c.key)}">${
                   isLink && val ? linksHtml(val)
                     : val ? escapeHtml(val)
                     /* 빈 줄은 누를 자리가 없으면 편집으로 들어갈 수 없다 — 옅은 안내를 둔다 */
