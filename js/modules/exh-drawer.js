@@ -23,7 +23,7 @@ import { td, escapeHtml, escAttr, countryOptions, leftPill } from '../utils.js';
 import {
   saveExhContact as _saveExhContact, saveExhItem as _saveExhItem, saveExhInvoice as _saveExhInvoice, saveExhTax as _saveExhTax, saveExhPayment as _saveExhPayment, saveExhLog as _saveExhLog, saveExhApp as _saveExhApp,
   deleteExhContact as _deleteExhContact, deleteExhItem as _deleteExhItem, deleteExhInvoice as _deleteExhInvoice, deleteExhTax as _deleteExhTax, deleteExhPayment as _deleteExhPayment, deleteExhLog as _deleteExhLog, deleteExhApp as _deleteExhApp,
-  saveEquipCatalog as _saveEquipCatalog, deleteExhibitor as _deleteExhibitor,
+  deleteExhibitor as _deleteExhibitor,
 } from '../api.js';
 
 /* 진행 완료된 행사는 열람만 — exh-tab의 가드를 그대로 쓴다.
@@ -42,7 +42,6 @@ const deleteExhTax = guardWrite(_deleteExhTax);
 const deleteExhPayment = guardWrite(_deleteExhPayment);
 const deleteExhLog = guardWrite(_deleteExhLog);
 const deleteExhApp = guardWrite(_deleteExhApp);
-const saveEquipCatalog = guardWrite(_saveEquipCatalog);
 const deleteExhibitor = guardWrite(_deleteExhibitor);
 
 /* 저장이 안 됐을 때 왜 안 됐는지 갈라 말한다. 잠금은 고장이 아닌데
@@ -582,64 +581,20 @@ function catalogDatalist(x){
   }).join('');
 }
 
-/* ── 직접 입력한 비품을 품목마스터에 올린다 ──
-   카탈로그에 없는 품목이 실제로 계속 들어온다(행사마다 새 품목, 렌탈사 추가
-   품목). 그때마다 이름만 적고 넘어가면 다음 기업이 같은 걸 신청할 때 또 손으로
-   적게 되고, 표기가 갈라져 발주 합계가 다시 흩어진다.
-
-   그래서 처음 적을 때 그 행사 품목마스터에 함께 올려 둔다. 다음부터는 목록에서
-   골라 쓸 수 있고, 단가도 따라온다. 사람이 확인한 정식 품목과 구분되도록
-   note에 '직접 추가'를 남긴다.
-
-   이미 있는 이름이면 새로 만들지 않고 그 품목에 잇는다 — 같은 의자가 두 줄로
-   생기면 애초에 카탈로그를 둔 이유가 없어진다. */
-async function registerDirectItem(x, name, unitPrice, currency, itemCat){
-  const nm = String(name || '').trim();
-  if(!nm) return '';
-
-  const dup = findCatalogByName(x.event_id, nm);
-  if(dup) return dup.id;   // 표기만 다른 같은 품목
-
-  // 그래픽으로 적은 항목은 그래픽 품목표에 올린다 — 비품 목록에 섞이면
-  // 발주할 때 렌탈사에 그래픽을 주문하게 된다
-  const kind = itemCat === 'graphic' ? 'graphic' : 'equip';
-  const pre = kind === 'graphic' ? 'XG' : 'X';
-
-  // 이름에 코드가 들어 있으면 그대로 쓰고, 없으면 직접 추가용 코드를 만든다
-  const m = nm.toUpperCase().match(/\b([A-Z]{1,2}-\d{2,4})\b/);
-  const used = new Set(catalogFor(x.event_id).map(c => String(c.code || '').toUpperCase()));
-  let code = m ? m[1] : '';
-  if(!code || used.has(code)){
-    let n = 1;
-    while(used.has(`${pre}-${String(n).padStart(3, '0')}`)) n++;
-    code = `${pre}-${String(n).padStart(3, '0')}`;
-  }
-
-  const isUsd = currency === 'USD';
-  const rec = {
-    id: localId('EC-'), event_id: x.event_id, kind,
-    category: kind === 'graphic' ? '기타그래픽' : '기타비품', code,
-    name_ko: /[가-힣]/.test(nm) ? nm : '',
-    name_en: /[가-힣]/.test(nm) ? '' : nm,
-    spec: '',
-    price_krw: isUsd ? '' : String(unitPrice || ''),
-    price_usd: isUsd ? String(unitPrice || '') : '',
-    note: '직접 추가', active: '',
-    sort_order: String(900 + catalogFor(x.event_id).length),
-  };
-
-  EQUIP_CATALOG.push(rec);
-  const r = await saveEquipCatalog(rec);
-  if(!r.ok){
-    const i = EQUIP_CATALOG.indexOf(rec);
-    if(i >= 0) EQUIP_CATALOG.splice(i, 1);
-    return '';   // 품목마스터 등록만 실패 — 신청 항목 자체는 그대로 저장된다
-  }
-  if(r.id && r.id !== rec.id) rec.id = r.id;
-  trackAction('add', '품목 등록', x.company_name || '',
-    `<b>${escapeHtml(code)}</b> ${escapeHtml(nm)} — 직접 입력으로 품목마스터에 추가`,
-    { kind: 'exhibitor', id: x?.id, tab: 'apply' });
-  return rec.id;
+/* ── 비품·그래픽은 품목표에서 골라야만 들어간다 ──
+   예전에는 목록에 없는 이름을 적으면 품목마스터에 X-코드로 자동 등록했다.
+   그러다 «인포데스크»가 D-029, «프리미엄 인포데스크», «하이인포데스크»처럼
+   표기만 다른 품목 세 개로 갈라져 발주 합계가 흩어지고, 단가 없는 품목이
+   0원으로 청구됐다. 이제는 글자로 짐작하지 않는다 — 목록에 없으면 설정의
+   품목표에 먼저 올리고 고른다. 부스·기타는 품목표가 없으니 그대로 적는다. */
+const needsCatalog = (cat) => cat === 'equip' || cat === 'graphic';
+function catalogPickMissing(exhId){
+  const cat = val(`it-cat-${exhId}`) || 'etc';
+  if(!needsCatalog(cat)) return false;
+  if(document.getElementById(`it-nm-${exhId}`)?.dataset.catalogId) return false;
+  alert('비품·그래픽은 품목표 목록에서 골라 주세요.\n목록에 없는 품목이면 설정 > 품목표에 먼저 추가하세요.');
+  document.getElementById(`it-nm-${exhId}`)?.focus();
+  return true;
 }
 
 /* 카탈로그에서 고른 값이면 단가·분류를 대신 채운다. 손으로 적던 값은 건드리지 않는다. */
@@ -655,7 +610,8 @@ export function pickCatalogItem(exhId){
      목록에서 골라도 값 끝에 공백이 남아 매칭이 빗나갔다 — 그것도 여기서 걸린다. */
   const hit = catalogFor(x.event_id).find(c => `${c.code} ${c.name_ko}`.trim() === typed)
     || findCatalogByName(x.event_id, typed);
-  if(!hit) return;
+  // 고른 뒤 글자를 고치면 더는 그 품목이 아니다 — 남은 id로 엉뚱한 품목에 붙지 않게
+  if(!hit){ delete nameEl.dataset.catalogId; return; }
 
   /* 코드만 쳤으면 품명까지 채워 준다 — 저장된 이름이 기업마다 갈리지 않게 */
   if(String(hit.code || '').toLowerCase() === typed.toLowerCase()){
@@ -667,7 +623,7 @@ export function pickCatalogItem(exhId){
   const cat = document.getElementById(`it-cat-${exhId}`);
   // 품목표에 비품과 그래픽이 함께 있다 — 고른 품목의 종류대로 분류를 맞춰 둔다
   const kind = (hit.kind || 'equip') === 'graphic' ? 'graphic' : 'equip';
-  if(cat){ cat.value = kind; lastItemCat = kind; }
+  if(cat){ cat.value = kind; lastItemCat = kind; markItemCat(exhId, kind); }
   if(up && !up.value.trim()){
     up.value = (cur && cur.value === 'USD') ? (hit.price_usd || '') : (hit.price_krw || '');
   }
@@ -1208,11 +1164,10 @@ export async function addExhApp(exhId, preset = {}){
     complete: '', missing: '', handled_at: '', handler: '', summary: '', note: '',
   };
   if(!await addRow(EXH_APPS, rec, saveExhApp)) return;
+  lastItemCat = null;   // 새 접수 건은 분류부터 다시 고른다 — 지난 분류가 남아 엉뚱한 칸에 들어가지 않게
   /* 최초 접수는 체크리스트가 보는 칸도 함께 채운다 — 두 곳이 갈라지지 않게. */
   const x = getExhibitorById(exhId);
-  if(x && rec.kind === '최초' && !x.app_received_at){
-    await patchExh(exhId, { app_received: 'yes', app_received_at: rec.received_at }, '신청서 수신');
-  }
+  await syncAppReceived(exhId, true);
   trackAction('add', '신청서 접수', x?.company_name || '',
     `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(rec.seq)}차 접수 (${escapeHtml(rec.kind)} · ${escapeHtml(rec.channel)})`,
     { kind: 'exhibitor', id: x?.id, tab: 'progress' });
@@ -1235,6 +1190,7 @@ export async function addItemHere(exhId){
     ITEM_FIELDS.forEach(k => { keep[k] = val(`it-${k}-${exhId}`); });
     const catalogId = document.getElementById(`it-nm-${exhId}`)?.dataset.catalogId || '';
     if(!keep.nm){ alert('항목명을 입력해주세요.'); return; }
+    if(catalogPickMissing(exhId)) return;   // 빈 접수만 열리고 끝나지 않게 먼저 본다
 
     await addExhApp(exhId, { channel: '신청서' });
     if(!openAppFor(exhId)) return;
@@ -1249,9 +1205,34 @@ export async function addItemHere(exhId){
   return addExhItem(exhId);
 }
 
-export const setAppField = (id, field, value) =>
-  setRowField(EXH_APPS, saveExhApp, '신청서 접수', id, field, value);
-export const delExhApp = (id) => removeRow(EXH_APPS, id, deleteExhApp, '신청서 접수', 'exhibitor_apps');
+/* ── «신청서 수신»은 접수 이력이 정한다 ──
+   한 번이라도 접수가 있으면 받은 것이고, 날짜는 가장 이른 접수일이다. 예전에는
+   체크 칸을 따로 눌러야 해서 이력은 있는데 체크가 빠지거나, 이력을 지웠는데
+   체크가 남았다. 체크리스트·진행표가 app_received(_at)를 보므로 칸 자체는 두고
+   이력에 맞춰 채운다. 이력이 하나도 없는 옛 기업은 손대지 않는다 — 접수 이력이
+   생기기 전에 체크만 해 둔 기록이 날아가면 안 된다. */
+async function syncAppReceived(exhId, hadApps){
+  const x = getExhibitorById(exhId);
+  if(!x) return;
+  const dates = appsFor(exhId).map(a => String(a.received_at || '').trim()).filter(Boolean).sort();
+  const any = appsFor(exhId).length > 0;
+  if(!any && !hadApps) return;
+  const want = any ? { app_received: 'yes', app_received_at: dates[0] || x.app_received_at || td() }
+                   : { app_received: '', app_received_at: '' };
+  if((x.app_received || '') === want.app_received && (x.app_received_at || '') === want.app_received_at) return;
+  await patchExh(exhId, want, '신청서 수신');
+}
+const appExhId = (id) => EXH_APPS.find(a => a.id === id)?.exhibitor_id;
+
+export async function setAppField(id, field, value){
+  await setRowField(EXH_APPS, saveExhApp, '신청서 접수', id, field, value);
+  if(field === 'received_at'){ const e = appExhId(id); if(e) await syncAppReceived(e, true); }
+}
+export async function delExhApp(id){
+  const e = appExhId(id);
+  await removeRow(EXH_APPS, id, deleteExhApp, '신청서 접수', 'exhibitor_apps');
+  if(e) await syncAppReceived(e, true);
+}
 
 /* 이 접수 건에 달린 품목 변경을 사람이 읽는 한 줄로 만든다.
    닫을 때 한 번 만들어 summary에 넣는다 — 나중에 품목을 또 고쳐도 그때
@@ -1380,7 +1361,7 @@ function appFinalRows(x){
 function appsSection(x){
   const list = appsFor(x.id);
   const open = openAppFor(x.id);
-  const add = `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+  const add = `<div style="display:flex;gap:6px;flex-wrap:wrap">
     ${APP_CHANNELS.map(([c, l]) => `<button class="btn bs" onclick="addExhApp('${escAttr(x.id)}',{channel:'${c}'})">+ ${l}</button>`).join('')}
   </div>`;
 
@@ -1431,34 +1412,36 @@ function appsSection(x){
      날짜로 접수를 하나 열고 거기에 넣는다. 모든 품목이 회차에 묶인다는 규칙은
      그대로면서 누르는 횟수만 줄었다. 어느 회차에 들어갔는지는 바로 위 카드에
      그대로 보인다. */
-  const hint = `<div style="font-size:11px;color:${open ? 'var(--a)' : 'var(--i4)'};margin:6px 0 4px">${
-    open ? `${escapeHtml(open.seq)}차 접수를 반영하는 중이에요 — 여기서 넣는 품목이 이 접수 건에 기록됩니다.`
-         : `품목을 넣으면 ${list.length + 1}차 접수가 열리면서 거기에 기록돼요 — 경로를 정해 열려면 아래 접수 단추를 쓰세요.`}</div>
-    <div class="bl-row bl-item-add">
-      <select class="fi" id="it-cat-${escAttr(x.id)}" style="flex:0 0 72px;min-width:0;font-size:11.5px;padding:6px"
-        onchange="rememberItemCat(this.value); swapItemList('${escAttr(x.id)}', this.value)">
-        ${itemCats().map(({ code: k, label: l }, i) => `<option value="${escAttr(k)}"${(lastItemCat || itemCats()[0]?.code) === k ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('')}</select>
-      <input class="fi" id="it-nm-${escAttr(x.id)}" placeholder="항목명" style="flex:1 1 120px;min-width:0;font-size:11.5px;padding:6px"
-        list="${itemListId(x, lastItemCat || itemCats()[0]?.code || 'equip')}" oninput="pickCatalogItem('${escAttr(x.id)}')">
+  /* 접수 경로 단추가 맨 위 — 무엇으로 받았는지부터 고른다. 누르면 그 아래에
+     분류(부스/비품/그래픽/기타)가 나오고, 분류를 고르면 그 분류의 품목 줄이 열린다.
+     품목은 늘 열린 접수 건에 들어가므로, 열린 건이 없으면 분류도 보이지 않는다. */
+  const xid = escAttr(x.id);
+  const cur = open ? (lastItemCat || '') : '';
+  const picker = !open ? '' : `
+    <div style="font-size:11px;color:var(--a);margin:10px 0 6px">${escapeHtml(open.seq)}차 접수(${escapeHtml(open.channel || '')})에 넣을 품목 — 분류를 고르세요</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap" id="it-cats-${xid}">
+      ${itemCats().map(({ code: k, label: l }) => `<button class="btn bs${cur === k ? ' bp' : ''}" data-cat="${escAttr(k)}"
+        onclick="pickItemCat('${xid}','${escAttr(k)}')">${escapeHtml(l)}</button>`).join('')}
+    </div>
+    <input type="hidden" id="it-cat-${xid}" value="${escAttr(cur)}">
+    <div class="bl-row bl-item-add" id="it-row-${xid}" style="margin-top:6px;${cur ? '' : 'display:none'}">
+      <input class="fi" id="it-nm-${xid}" placeholder="항목명" style="flex:1 1 120px;min-width:0;font-size:11.5px;padding:6px"
+        ${cur ? `list="${itemListId(x, cur)}"` : ''} oninput="pickCatalogItem('${xid}')">
       ${catalogDatalist(x)}${designTargetList(x)}
-      <input class="fi" id="it-qty-${escAttr(x.id)}" placeholder="수량" style="flex:1 1 54px;min-width:0;font-size:11.5px;padding:6px"
-        oninput="calcItemAmount('${escAttr(x.id)}')">
-      <input class="fi" id="it-up-${escAttr(x.id)}" placeholder="단가" style="flex:1 1 78px;min-width:0;font-size:11.5px;padding:6px"
-        oninput="calcItemAmount('${escAttr(x.id)}')">
-      <input class="fi" id="it-amt-${escAttr(x.id)}" placeholder="금액" style="flex:1 1 88px;min-width:0;font-size:11.5px;padding:6px;text-align:right">
-      <select class="fi bl-cur" id="it-cur-${escAttr(x.id)}" onchange="rememberItemCur(this.value)">
+      <input class="fi" id="it-qty-${xid}" placeholder="수량" style="flex:1 1 54px;min-width:0;font-size:11.5px;padding:6px"
+        oninput="calcItemAmount('${xid}')">
+      <input class="fi" id="it-up-${xid}" placeholder="단가" style="flex:1 1 78px;min-width:0;font-size:11.5px;padding:6px"
+        oninput="calcItemAmount('${xid}')">
+      <input class="fi" id="it-amt-${xid}" placeholder="금액" style="flex:1 1 88px;min-width:0;font-size:11.5px;padding:6px;text-align:right">
+      <select class="fi bl-cur" id="it-cur-${xid}" onchange="rememberItemCur(this.value)">
         ${currencies().map(c => `<option value="${c}"${(lastItemCur || currencyOf(x.id)) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
-      <button class="btn bp bs" style="flex:0 0 auto" onclick="addItemHere('${escAttr(x.id)}')"
-        title="${escAttr(open ? `${open.seq}차 접수에 넣습니다` : '접수를 하나 열고 거기에 넣습니다')}">${
-        open ? '추가' : '접수 열고 추가'}</button>
+      <button class="btn bp bs" style="flex:0 0 auto" onclick="addItemHere('${xid}')">추가</button>
     </div>`;
-  /* 접수 기록이 아직 없어도 품목 줄은 보여준다 — 첫 품목을 넣는 순간 1차
-     접수가 열린다. 여기서 줄을 숨기면 «어디서 넣지»부터 막힌다. */
+  const top = add + picker;
   if(!list.length) return sct('신청서 접수 이력',
-    `<div style="font-size:11.5px;color:var(--i4)">아직 접수 기록이 없어요. 신청서를 받은 날짜부터 남겨두면 변경이 몇 번 있었는지 그대로 따라옵니다.</div>`
-    + hint + add);
+    top + `<div style="font-size:11.5px;color:var(--i4);margin-top:8px">아직 접수 기록이 없어요. 받은 경로를 누르면 접수가 열리고 품목을 넣을 수 있어요.</div>`);
 
-  return sct('신청서 접수 이력', rows + appFinalRows(x) + hint + add,
+  return sct('신청서 접수 이력', top + `<div style="margin-top:10px">${rows}</div>` + appFinalRows(x),
     list.length > 1 ? `<span class="pill p-amber">변경 ${list.length - 1}회</span>` : '');
 }
 
@@ -1603,7 +1586,10 @@ function dApply(x){
   ${appsSection(x)}
 
   ${sct('신청서',
-    flagRow(x, 'app_received', 'app_received_at', '신청서 수신') +
+    /* 수신 여부는 위 접수 이력이 정한다 — 따로 누르는 칸을 두지 않는다 */
+    `<div style="font-size:11.5px;color:var(--i4);padding:2px 0">${x.app_received_at
+      ? `신청서 수신 ${escapeHtml(x.app_received_at)} — 첫 접수일 기준으로 자동 표시돼요`
+      : '아직 받은 신청서가 없어요 — 위에서 접수를 열면 자동으로 수신 처리돼요'}</div>` +
     `<div style="padding:10px 0 2px">
       <label class="fl">필수정보 완비 여부</label>
       <div class="stbs" style="margin:4px 0 8px">
@@ -1961,6 +1947,28 @@ export function swapItemList(exhId, cat){
   else el.removeAttribute('list');       // 기타 — 카탈로그 밖이라 고를 목록이 없다
 }
 export function rememberItemCur(v){ lastItemCur = v || null; }
+/* 분류 단추 — 다시 그리지 않고 그 자리에서 바꾼다. 적어 둔 이름·수량이 날아가지 않게. */
+export function markItemCat(exhId, cat){
+  document.querySelectorAll(`#it-cats-${CSS.escape(exhId)} [data-cat]`)
+    .forEach(b => b.classList.toggle('bp', b.dataset.cat === cat));
+}
+export function pickItemCat(exhId, cat){
+  const input = document.getElementById(`it-cat-${exhId}`);
+  if(!input) return;
+  // 분류가 바뀌면 전에 고른 품목은 더는 맞지 않는다
+  if(input.value !== cat){
+    const nm = document.getElementById(`it-nm-${exhId}`);
+    if(nm) delete nm.dataset.catalogId;
+  }
+  input.value = cat;
+  rememberItemCat(cat);
+  markItemCat(exhId, cat);
+  swapItemList(exhId, cat);
+  const row = document.getElementById(`it-row-${exhId}`);
+  if(row) row.style.display = '';
+  document.getElementById(`it-nm-${exhId}`)?.focus();
+}
+
 const itemAmount = (i) => Number(String(i.amount || '').replace(/[^0-9.-]/g, '') || 0);
 
 /* 통화는 줄마다 다르다. 전에는 저장할 때 그 기업의 주 통화를 그대로 붙였는데,
@@ -3020,12 +3028,9 @@ export async function addExhItem(exhId){
   const category = val(`it-cat-${exhId}`) || 'etc';
   const currency = val(`it-cur-${exhId}`) || currencyOf(exhId);
   lastItemCat = category;   // 다음 줄도 같은 분류일 가능성이 높다
-  let catalogId = document.getElementById(`it-nm-${exhId}`)?.dataset.catalogId || '';
-  // 비품인데 카탈로그에서 고르지 않았다면 품목마스터에 함께 올린다
-  if(!catalogId && category === 'equip'){
-    const x = getExhibitorById(exhId);
-    if(x) catalogId = await registerDirectItem(x, name, val(`it-up-${exhId}`), currency, val(`it-cat-${exhId}`));
-  }
+  if(catalogPickMissing(exhId)) return;
+  const catalogId = needsCatalog(category)
+    ? document.getElementById(`it-nm-${exhId}`)?.dataset.catalogId || '' : '';
 
   /* 반영 중인 접수 건이 있으면 이 품목이 그 건으로 들어온 것으로 적는다 —
      사람이 "추가인가 변경인가"를 따로 고르지 않아도 남는다. */
@@ -3557,6 +3562,7 @@ window.editItemRow = editItemRow;
 window.toggleItemGroup = toggleItemGroup;
 window.openTaxAnyway = openTaxAnyway;
 window.swapItemList = swapItemList;
+window.pickItemCat = pickItemCat;
 window.rememberItemCur = rememberItemCur;
 window.addExhRefund = addExhRefund;
 window.toggleRefundDone = toggleRefundDone;
