@@ -357,7 +357,9 @@ tr.row-sel{background:var(--ad)}
 
 /* ── Logout dropdown ── */
 .user-menu{
-  position:absolute;top:44px;right:20px;z-index:200;
+  /* 모바일 사이드바(z 300)·배경막(299)보다 위 — 아래에 있으면 사이드바 바닥의
+     계정 단추를 눌러도 메뉴가 사이드바 뒤에서 열려 아무 일도 없는 것처럼 보였다 */
+  position:absolute;top:44px;right:20px;z-index:400;
   background:var(--W);border:1px solid var(--i6);border-radius:var(--r-lg);
   box-shadow:var(--shl);min-width:200px;overflow:hidden;display:none;
 }
