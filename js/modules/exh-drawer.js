@@ -1370,6 +1370,47 @@ function appsSection(x){
   </div>`;
 
 
+  /* 품목 넣는 줄은 열린 회차 카드 안에 둔다 — 넣은 품목이 쌓이는 곳이 그 카드라,
+     밖에 두면 «어느 회차에 들어가나»를 윗줄 글로 따로 읽어야 했다.
+
+     전에는 카드 안에서 항목명 칸이 113px까지 쪼그라들어 밖으로 뺐는데, 그건
+     입력 줄이 목록 줄의 분류 배지 칸(72px)에 항목명을 넣던 탓이었다
+     (components.css .bl-item-add). 그걸 고친 뒤로는 카드 안에서도 이름 칸이 넓다. */
+  /* 추가 줄은 늘 보인다.
+
+     처음에는 회차를 먼저 열어야 줄이 나타나게 했는데, 하나 넣자고 접수 단추를
+     고르고 → 줄이 생기길 기다리고 → 적는 세 걸음이 됐다. 품목 하나 넣는 일은
+     하루에도 여러 번이라 그 한 걸음이 그대로 짐이 된다.
+
+     줄은 늘 두고, 회차가 없으면 단추가 «접수 열고 추가»가 된다 — 누르면 오늘
+     날짜로 접수를 하나 열고 거기에 넣는다. 모든 품목이 회차에 묶인다는 규칙은
+     그대로면서 누르는 횟수만 줄었다. 어느 회차에 들어갔는지는 바로 위 카드에
+     그대로 보인다. */
+  /* 접수 경로 단추가 맨 위 — 무엇으로 받았는지부터 고른다. 누르면 그 아래에
+     분류(부스/비품/그래픽/기타)가 나오고, 분류를 고르면 그 분류의 품목 줄이 열린다.
+     품목은 늘 열린 접수 건에 들어가므로, 열린 건이 없으면 분류도 보이지 않는다. */
+  const xid = escAttr(x.id);
+  const cur = open ? (lastItemCat || '') : '';
+  const picker = !open ? '' : `
+    <div style="font-size:11px;color:var(--a);margin:10px 0 6px">이 접수에 넣을 품목 — 분류를 고르세요</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap" id="it-cats-${xid}">
+      ${itemCats().map(({ code: k, label: l }) => `<button class="btn bs${cur === k ? ' bp' : ''}" data-cat="${escAttr(k)}"
+        onclick="pickItemCat('${xid}','${escAttr(k)}')">${escapeHtml(l)}</button>`).join('')}
+    </div>
+    <input type="hidden" id="it-cat-${xid}" value="${escAttr(cur)}">
+    <div class="bl-row bl-item-add" id="it-row-${xid}" style="margin-top:6px;${cur ? '' : 'display:none'}">
+      <input class="fi" id="it-nm-${xid}" placeholder="항목명" style="flex:1 1 120px;min-width:0;font-size:11.5px;padding:6px"
+        ${cur ? `list="${itemListId(x, cur)}"` : ''} oninput="pickCatalogItem('${xid}')">
+      ${catalogDatalist(x)}${designTargetList(x)}
+      <input class="fi" id="it-qty-${xid}" placeholder="수량" style="flex:1 1 54px;min-width:0;font-size:11.5px;padding:6px"
+        oninput="calcItemAmount('${xid}')">
+      <input class="fi" id="it-up-${xid}" placeholder="단가" style="flex:1 1 78px;min-width:0;font-size:11.5px;padding:6px"
+        oninput="calcItemAmount('${xid}')">
+      <input class="fi" id="it-amt-${xid}" placeholder="금액" style="flex:1 1 88px;min-width:0;font-size:11.5px;padding:6px;text-align:right">
+      <select class="fi bl-cur" id="it-cur-${xid}" onchange="rememberItemCur(this.value)">
+        ${currencies().map(c => `<option value="${c}"${(lastItemCur || currencyOf(x.id)) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
+      <button class="btn bp bs" style="flex:0 0 auto" onclick="addItemHere('${xid}')">추가</button>
+    </div>`;
   const rows = list.map(a => {
     const live = !String(a.handled_at || '').trim();
     const diff = live ? appDiffLines(a.id, x.id) : [];
@@ -1395,53 +1436,13 @@ function appsSection(x){
         value="${escAttr(a.reason || '')}" onchange="setAppField('${escAttr(a.id)}','reason',this.value)">
       ${a.file_name ? `<div style="font-size:10.5px;color:var(--i4);margin-top:4px">📄 ${escapeHtml(a.file_name)}</div>` : ''}
       ${appItemRows(a, x, live)}
+      ${live && open && a.id === open.id ? picker : ''}
 
       ${!live && a.summary ? `<div style="font-size:11px;color:var(--i3);margin-top:5px">${escapeHtml(a.summary)}</div>` : ''}
     </div>`;
   }).join('');
 
-  /* 품목 넣는 줄은 카드 밖, 섹션 전체 너비에 둔다.
-
-     카드 안에 넣었더니 테두리와 안쪽 여백만큼 좁아져 항목명 칸이 113px까지
-     쪼그라들었다 — «C-011 디자인 체어 (화이트)»가 두 글자만 보인다. 칸 너비는
-     정산에 있을 때와 같아야 한다. 어느 회차에 들어가는지는 바로 위 글줄이
-     말해 주므로, 카드 안에 있지 않아도 헷갈리지 않는다. */
-  /* 추가 줄은 늘 보인다.
-
-     처음에는 회차를 먼저 열어야 줄이 나타나게 했는데, 하나 넣자고 접수 단추를
-     고르고 → 줄이 생기길 기다리고 → 적는 세 걸음이 됐다. 품목 하나 넣는 일은
-     하루에도 여러 번이라 그 한 걸음이 그대로 짐이 된다.
-
-     줄은 늘 두고, 회차가 없으면 단추가 «접수 열고 추가»가 된다 — 누르면 오늘
-     날짜로 접수를 하나 열고 거기에 넣는다. 모든 품목이 회차에 묶인다는 규칙은
-     그대로면서 누르는 횟수만 줄었다. 어느 회차에 들어갔는지는 바로 위 카드에
-     그대로 보인다. */
-  /* 접수 경로 단추가 맨 위 — 무엇으로 받았는지부터 고른다. 누르면 그 아래에
-     분류(부스/비품/그래픽/기타)가 나오고, 분류를 고르면 그 분류의 품목 줄이 열린다.
-     품목은 늘 열린 접수 건에 들어가므로, 열린 건이 없으면 분류도 보이지 않는다. */
-  const xid = escAttr(x.id);
-  const cur = open ? (lastItemCat || '') : '';
-  const picker = !open ? '' : `
-    <div style="font-size:11px;color:var(--a);margin:10px 0 6px">${escapeHtml(open.seq)}차 접수(${escapeHtml(open.channel || '')})에 넣을 품목 — 분류를 고르세요</div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap" id="it-cats-${xid}">
-      ${itemCats().map(({ code: k, label: l }) => `<button class="btn bs${cur === k ? ' bp' : ''}" data-cat="${escAttr(k)}"
-        onclick="pickItemCat('${xid}','${escAttr(k)}')">${escapeHtml(l)}</button>`).join('')}
-    </div>
-    <input type="hidden" id="it-cat-${xid}" value="${escAttr(cur)}">
-    <div class="bl-row bl-item-add" id="it-row-${xid}" style="margin-top:6px;${cur ? '' : 'display:none'}">
-      <input class="fi" id="it-nm-${xid}" placeholder="항목명" style="flex:1 1 120px;min-width:0;font-size:11.5px;padding:6px"
-        ${cur ? `list="${itemListId(x, cur)}"` : ''} oninput="pickCatalogItem('${xid}')">
-      ${catalogDatalist(x)}${designTargetList(x)}
-      <input class="fi" id="it-qty-${xid}" placeholder="수량" style="flex:1 1 54px;min-width:0;font-size:11.5px;padding:6px"
-        oninput="calcItemAmount('${xid}')">
-      <input class="fi" id="it-up-${xid}" placeholder="단가" style="flex:1 1 78px;min-width:0;font-size:11.5px;padding:6px"
-        oninput="calcItemAmount('${xid}')">
-      <input class="fi" id="it-amt-${xid}" placeholder="금액" style="flex:1 1 88px;min-width:0;font-size:11.5px;padding:6px;text-align:right">
-      <select class="fi bl-cur" id="it-cur-${xid}" onchange="rememberItemCur(this.value)">
-        ${currencies().map(c => `<option value="${c}"${(lastItemCur || currencyOf(x.id)) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
-      <button class="btn bp bs" style="flex:0 0 auto" onclick="addItemHere('${xid}')">추가</button>
-    </div>`;
-  const top = add + picker;
+  const top = add;
   if(!list.length) return sct('신청서 접수 이력',
     top + `<div style="font-size:11.5px;color:var(--i4);margin-top:8px">아직 접수 기록이 없어요. 받은 경로를 누르면 접수가 열리고 품목을 넣을 수 있어요.</div>`);
 
@@ -1548,8 +1549,8 @@ function baseWorkBlock(x){
    표기가 갈려서 나중에 누구 부스인지 되짚을 수 없다. */
 function scopeBlock(x){
   const book = isBookOnly(x);
-  /* 모기업은 프로그램북만인 곳에만 두던 것을 모든 기업으로 넓혔다 — 부스를 따로
-     쓰는 자회사·계열사도 모기업 밑에 묶어 봐야 한다. 부스 현황에서도 같은 칸을 고친다. */
+  /* 모기업은 진행 탭(과 부스 현황)에서만 고른다 — 신청서에 무엇을 받았는지와는
+     상관없는 묶음 정보라, 신청항목 탭에 같은 칸이 또 있으면 어디가 정본인지 헷갈린다. */
   return sct('참가 범위', `
     <div class="fg"><label class="fl">유형</label>
       <select class="fi" style="font-size:12px"
@@ -1559,10 +1560,7 @@ function scopeBlock(x){
       </select>
       <div style="font-size:10.5px;color:var(--i5);margin-top:3px">
         «프로그램북만»으로 두면 도록 외 단계는 <b>해당 없음</b>이 되고 부스 수에서도 빠집니다.
-        지우는 게 아니라 집계에서 빼는 것이라, 유형을 되돌리면 적어 둔 값이 그대로 살아납니다.</div></div>
-    <div class="fg"><label class="fl">${book ? '부스를 함께 쓰는 대표 기업' : '모기업 (이 기업이 예하로 들어갈 곳)'}</label>
-      <select class="fi" style="font-size:12px"
-        onchange="setExhField('${escAttr(x.id)}','host_key',this.value,'모기업')">${hostOptions(x)}</select></div>`);
+        지우는 게 아니라 집계에서 빼는 것이라, 유형을 되돌리면 적어 둔 값이 그대로 살아납니다.</div></div>`);
 }
 
 /* ── 신청항목 탭 ──
