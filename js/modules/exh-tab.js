@@ -1719,7 +1719,6 @@ function renderBoothView(list){
         ${isSharedBooth(x) ? '<span class="pill p-blue" title="부스 수에서 빠져요">공동 부스</span>' : ''}
       </div>
       ${exhNames(x).en ? `<div style="font-size:11px;color:var(--i4);margin:-2px 0 3px">${escapeHtml(exhNames(x).en)}</div>` : ''}
-      ${hostOf(x, all0) ? `<div style="font-size:10.5px;color:var(--a);margin:-2px 0 3px">${escapeHtml(exhNames(hostOf(x, all0)).ko)} 예하</div>` : ''}
       <div style="font-size:11px;color:var(--i4)">${[x.booth_floor && x.booth_floor + '층', boothTypeText(x.booth_type), x.booth_qty && x.booth_qty + '부스', x.grade].filter(Boolean).map(escapeHtml).join(' · ') || '정보 없음'}</div>
       ${x.builder ? `<div style="font-size:11px;color:var(--i3);margin-top:3px">🔧 ${escapeHtml(x.builder)}${x.builder_mobile ? ' · ' + escapeHtml(x.builder_mobile) : ''}</div>` : ''}
       ${x.booth_type === SELF_BUILD_TYPE ? (() => {
@@ -1733,7 +1732,6 @@ function renderBoothView(list){
       <th style="min-width:44px;text-align:right">신청순</th>
       <th style="min-width:64px">부스</th>
       <th style="min-width:150px">기업</th>
-      <th style="min-width:130px" title="예하 기업이면 모기업을 고르세요 — 모기업 바로 아래 줄로 옮겨 붙습니다">모기업</th>
       <th style="min-width:46px">층</th>
       <th style="min-width:130px">타입</th>
       <th style="min-width:50px">수량</th>
@@ -1764,11 +1762,9 @@ function renderBoothView(list){
           const h = hostOf(x, all0);
           if(!h) return coCell(x, 'progress');
           return coCell(x, 'progress').replace('<td style="min-width:150px">',
-            `<td style="min-width:150px;padding-left:22px;border-left:3px solid var(--a)">
-              <div style="font-size:9.5px;color:var(--a);margin-bottom:1px">↳ ${escapeHtml(exhNames(h).ko)} 예하</div>`);
+            `<td style="min-width:150px;padding-left:22px;position:relative" title="${escAttr(exhNames(h).ko)} 예하">
+              <span style="position:absolute;left:8px;color:var(--i5);font-size:11px">↳</span>`);
         })()}
-        <td><select class="fi" style="width:126px;padding:3px 4px;font-size:11px" onclick="event.stopPropagation()"
-          onchange="setExhField('${escAttr(x.id)}','host_key',this.value,'모기업')">${hostOptions(x)}</select></td>
         <td style="font-size:11.5px;color:var(--i3)">${x.booth_floor ? escapeHtml(x.booth_floor) + '층' : '<span style="color:var(--i6)">—</span>'}</td>
         <td><select class="fi" style="width:126px;padding:3px 4px;font-size:11px" onclick="event.stopPropagation()"
           onchange="setExhField('${escAttr(x.id)}','booth_type',this.value,'부스 타입')">${boothTypeOptions(x.booth_type)}</select></td>

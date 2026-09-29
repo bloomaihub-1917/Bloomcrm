@@ -1759,7 +1759,11 @@ function dProgress(x){
     <div class="fg"><label class="fl">스폰서 등급</label>
       <select class="fi" style="font-size:12px" onchange="setExhField('${escAttr(x.id)}','grade',this.value,'등급')">
         <option value=""${x.grade ? '' : ' selected'}>— 없음 —</option>${grades(x.event_id).map(g => `<option value="${escAttr(g.code)}"${(x.grade || '') === g.code ? ' selected' : ''}>${escapeHtml(g.label)}</option>`).join('')}
-      </select></div>` +
+      </select></div>
+    <div class="fg"><label class="fl">모기업</label>
+      <select class="fi" style="font-size:12px"
+        onchange="setExhField('${escAttr(x.id)}','host_key',this.value,'모기업')">${hostOptions(x)}</select>
+      <div style="font-size:10.5px;color:var(--i5);margin-top:3px">예하 기업이면 모기업을 고르세요 — 부스 현황에서 모기업 바로 아래 줄로 붙습니다.</div></div>` +
     `<div style="padding:8px 0 2px">
       <label style="display:flex;align-items:flex-start;gap:7px;cursor:pointer">
         <input type="checkbox" ${isSharedBooth(x) ? 'checked' : ''}
