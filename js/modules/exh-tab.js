@@ -1333,7 +1333,54 @@ export const isSharedBooth = (x) => x.booth_shared === 'yes';
    부스도 세지 않는다. 부스는 모기업 것 하나뿐이다. */
 export const isBookOnly = (x) => x.scope === 'book';
 
-const boothQty = (x) => (isSharedBooth(x) || isBookOnly(x) ? 0 : Math.max(1, num(x.booth_qty) || 1));
+/* 부스 없이 참가하는 기업 — 세미나·상담회만 하거나 모기업 부스에 얹힌 곳.
+   부스 타입 고르는 칸에서 함께 고르게 한다(따로 칸을 두면 «타입 미지정»과
+   «부스 안 함»이 구분이 안 돼서 미지정이 영영 남는다). 행사마다 다른 타입
+   목록이 아니라 늘 있는 값이라 설정 목록에 넣지 않고 여기 고정한다. */
+export const NO_BOOTH_TYPE = 'No Booth';
+export const NO_BOOTH_LABEL = '부스 진행 안함';
+export const isNoBooth = (x) => x.booth_type === NO_BOOTH_TYPE;
+export const boothTypeText = (t) => (t === NO_BOOTH_TYPE ? NO_BOOTH_LABEL : (t || ''));
+
+const boothQty = (x) => (isSharedBooth(x) || isBookOnly(x) || isNoBooth(x) ? 0 : Math.max(1, num(x.booth_qty) || 1));
+
+/* ── 모기업 · 예하 기업 ──
+   host_key에 모기업의 company_key를 적는다. 한 단계만 둔다 — 예하의 예하까지
+   열면 누가 누구 밑인지 표에서 읽을 수 없고, 서로를 가리키는 고리가 생긴다. */
+export const hostOf = (x, list) => {
+  const k = String(x.host_key || '').trim();
+  return k ? (list || exhibitorsForEvent(x.event_id)).find(o => o.company_key === k && o.id !== x.id) || null : null;
+};
+/* 모기업으로 고를 수 있는 곳 — 자기 자신, 이미 누구의 예하인 곳, 프로그램북만인 곳,
+   그리고 이 기업을 모기업으로 둔 곳(고리가 생긴다)은 뺀다 */
+export function hostCandidates(x){
+  return exhibitorsForEvent(x.event_id)
+    .filter(o => o.id !== x.id && !isBookOnly(o) && !String(o.host_key || '').trim())
+    .sort((a, b) => String(a.company_name || '').localeCompare(String(b.company_name || ''), 'ko'));
+}
+export function hostOptions(x){
+  const cur = String(x.host_key || '').trim();
+  // 이미 예하를 거느린 기업은 누구의 예하가 될 수 없다 — 두 단계가 된다
+  const hasKids = exhibitorsForEvent(x.event_id).some(o => o.id !== x.id && o.host_key === x.company_key);
+  if(hasKids && !cur) return `<option value="" selected>모기업</option>`;
+  return `<option value=""${cur ? '' : ' selected'}>— 없음 —</option>`
+    + hostCandidates(x).map(o => `<option value="${escAttr(o.company_key)}"${cur === o.company_key ? ' selected' : ''}>${
+        escapeHtml(exhNames(o).ko)}${o.booth_no ? ` (부스 ${escapeHtml(o.booth_no)})` : ''}</option>`).join('');
+}
+/* 모기업 바로 밑에 예하 기업을 붙여 세운다. 모기업이 목록에 없으면(걸러졌으면)
+   제자리에 둔다 — 안 보이는 부모 밑에 숨기면 줄이 사라진다. */
+function groupByHost(rows){
+  const kids = new Map();
+  const top = [];
+  rows.forEach(x => {
+    const h = hostOf(x, rows);
+    if(h){
+      if(!kids.has(h.company_key)) kids.set(h.company_key, []);
+      kids.get(h.company_key).push(x);
+    } else top.push(x);
+  });
+  return top.flatMap(x => [x, ...(kids.get(x.company_key) || [])]);
+}
 
 /* 누구의 부스에 얹혔는지까지 알려 준다 — "프로그램북만"이라는 말만으로는
    왜 이 회사가 부스도 없이 목록에 있는지 설명이 안 된다. */
@@ -1367,9 +1414,9 @@ function exhSummary(all){
        단위로 움직인다. 한 기업이 두 부스를 쓰면 조립도 두 벌이다.
        등급은 스폰서 계약이라 기업 수로 센다. */
     floor: sumBy(all, x => (x.booth_floor ? x.booth_floor + '층' : ''), boothQty),
-    type:  sumBy(all, x => x.booth_type || '', boothQty),
+    type:  sumBy(all, x => (isNoBooth(x) ? '' : x.booth_type || ''), boothQty),
     grade: countBy(all.filter(x => x.grade && x.grade !== 'Exhibitor'), x => x.grade),
-    noBooth: all.filter(x => !isBookOnly(x) && !String(x.booth_no || '').trim()).length,
+    noBooth: all.filter(x => !isBookOnly(x) && !isNoBooth(x) && !String(x.booth_no || '').trim()).length,
     shared: all.filter(isSharedBooth).length,
     bookOnly: all.filter(isBookOnly).length,
     prev: (() => {
@@ -1520,8 +1567,9 @@ export function boothTypeOptions(current, evKey){
   const list = boothTypes(evKey).map(t => [t.code, t.label]);
   // 목록에 없는 값이 이미 저장돼 있으면 그 값도 보기에 넣는다 — 목록을 고쳤다는
   // 이유로 저장돼 있던 값이 조용히 사라지면 안 된다
-  if(cur && !list.some(([c]) => c === cur)) list.push([cur, cur + ' (목록에 없음)']);
+  if(cur && cur !== NO_BOOTH_TYPE && !list.some(([c]) => c === cur)) list.push([cur, cur + ' (목록에 없음)']);
   return `<option value=""${cur ? '' : ' selected'}>— 미지정 —</option>`
+    + `<option value="${NO_BOOTH_TYPE}"${cur === NO_BOOTH_TYPE ? ' selected' : ''}>${NO_BOOTH_LABEL}</option>`
     + list.map(([c, l]) => `<option value="${escAttr(c)}"${cur === c ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('');
 }
 /* ── 부스 번호 읽기 ──
@@ -1579,13 +1627,14 @@ export const boothViewRows = () => boothShown;
 
 function renderBoothView(list){
   if(!list.length){ boothShown = { rows: [], dupBooth: new Set(), typeFil: boothTypeFil }; return emptyView('표시할 기업이 없어요'); }
-  const all0 = [...list].sort((a, b) => boothSortKey(a) - boothSortKey(b));
+  const all0 = groupByHost([...list].sort((a, b) => boothSortKey(a) - boothSortKey(b)));
   // 걸러도 배지의 숫자는 전체 기준을 유지한다 — 누를 때마다 숫자가 1로 바뀌면
   // 다른 타입이 몇 곳인지 알 수 없어 옮겨 다닐 수가 없다
   const rows = boothTypeFil ? all0.filter(x => (x.booth_type || '') === boothTypeFil) : all0;
-  const noBooth = all0.filter(x => !String(x.booth_no || '').trim()).length;
+  const noBooth = all0.filter(x => !isNoBooth(x) && !String(x.booth_no || '').trim()).length;
+  const noBoothN = all0.filter(isNoBooth).length;
   const selfN = all0.filter(x => x.booth_type === SELF_BUILD_TYPE).length;
-  const unconfirmed = all0.filter(x => x.booth_confirmed !== 'yes' && !x.booth_confirmed_at).length;
+  const unconfirmed = all0.filter(x => !isNoBooth(x) && x.booth_confirmed !== 'yes' && !x.booth_confirmed_at).length;
 
   /* 번호에서 읽은 부스 수와 적어둔 수량이 다르면 알린다 — 10-11이면 2부스인데
      수량이 1로 적혀 있으면 청구액이 절반으로 잡힌다. */
@@ -1620,6 +1669,7 @@ function renderBoothView(list){
   const pills = `<span class="pill p-gray">기업 ${boothTypeFil ? `${rows.length}/${all0.length}` : all0.length}</span>`
     + `<span class="pill p-gray">부스 ${totalBooths}칸</span>`
     + (noBooth ? `<span class="pill p-red">번호 미배정 ${noBooth}</span>` : '')
+    + (noBoothN ? `<span class="pill p-gray" title="부스 없이 참가하는 기업이에요 — 부스 수와 미배정·미확정에서 빠집니다">${NO_BOOTH_LABEL} ${noBoothN}</span>` : '')
     + (sharedN ? `<span class="pill p-blue" title="한 부스를 나눠 쓰는 기업이에요 — 부스 수에서 빠집니다">공동 부스 ${sharedN}</span>` : '')
     + (unconfirmed ? `<span class="pill p-amber">배정 미확정 ${unconfirmed}</span>` : '')
     + (qtyOdd.length ? `<span class="pill p-red" title="${escAttr(qtyOdd.map(x => `${x.company_name} ${x.booth_no}(${parseBooth(x.booth_no).count}칸) ↔ 수량 ${x.booth_qty}`).join(', '))}">수량 불일치 ${qtyOdd.length}</span>` : '')
@@ -1647,7 +1697,7 @@ function renderBoothView(list){
     const tabs = Object.entries(typeCnt)
       .filter(([t]) => String(t || '').trim())
       .sort((a, b) => rank(a[0]) - rank(b[0]) || a[0].localeCompare(b[0], 'ko'));
-    const label = (code) => boothTypes(exhEvent).find(t => t.code === code)?.label || code;
+    const label = (code) => code === NO_BOOTH_TYPE ? NO_BOOTH_LABEL : boothTypes(exhEvent).find(t => t.code === code)?.label || code;
     return `<div class="subbar" style="padding:10px 16px 0"><div class="seg" style="flex-wrap:wrap">
       <button class="seg-b${boothTypeFil ? '' : ' on'}" onclick="setBoothTypeFil('')">전체 ${all0.length}</button>
       ${tabs.map(([t, n]) => `<button class="seg-b${boothTypeFil === t ? ' on' : ''}"
@@ -1656,20 +1706,21 @@ function renderBoothView(list){
   })();
 
   if(!rows.length) return typeSeg + viewShell(pills,
-    emptyView(`"${boothTypeFil}" 부스를 쓰는 기업이 없어요`), actions);
+    emptyView(`"${boothTypeText(boothTypeFil)}" 부스를 쓰는 기업이 없어요`), actions);
 
   if(isMobile()) return typeSeg + viewShell(pills, rows.map(x => `
     <div onclick="openExhDr('${escAttr(x.id)}','progress')" style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
-        <span class="pill ${x.booth_no ? 'p-blue' : 'p-red'}">${x.booth_no ? '부스 ' + escapeHtml(x.booth_no) : '미배정'}${
+        <span class="pill ${x.booth_no ? 'p-blue' : isNoBooth(x) ? 'p-gray' : 'p-red'}">${x.booth_no ? '부스 ' + escapeHtml(x.booth_no) : isNoBooth(x) ? NO_BOOTH_LABEL : '미배정'}${
           (() => { const b = parseBooth(x.booth_no);
             return b.kind === 'range' ? ` (${b.count}칸)` : b.kind === 'split' ? ' 공동' : ''; })()}</span>
-        <span style="font-size:13px;font-weight:700;flex:1;min-width:0">${escapeHtml(exhNames(x).ko)}</span>
+        <span style="font-size:13px;font-weight:700;flex:1;min-width:0">${hostOf(x, all0) ? '↳ ' : ''}${escapeHtml(exhNames(x).ko)}</span>
         ${x.booth_confirmed === 'yes' || x.booth_confirmed_at ? '<span class="pill p-green">확정</span>' : '<span class="pill p-amber">미확정</span>'}
         ${isSharedBooth(x) ? '<span class="pill p-blue" title="부스 수에서 빠져요">공동 부스</span>' : ''}
       </div>
       ${exhNames(x).en ? `<div style="font-size:11px;color:var(--i4);margin:-2px 0 3px">${escapeHtml(exhNames(x).en)}</div>` : ''}
-      <div style="font-size:11px;color:var(--i4)">${[x.booth_floor && x.booth_floor + '층', x.booth_type, x.booth_qty && x.booth_qty + '부스', x.grade].filter(Boolean).map(escapeHtml).join(' · ') || '정보 없음'}</div>
+      ${hostOf(x, all0) ? `<div style="font-size:10.5px;color:var(--a);margin:-2px 0 3px">${escapeHtml(exhNames(hostOf(x, all0)).ko)} 예하</div>` : ''}
+      <div style="font-size:11px;color:var(--i4)">${[x.booth_floor && x.booth_floor + '층', boothTypeText(x.booth_type), x.booth_qty && x.booth_qty + '부스', x.grade].filter(Boolean).map(escapeHtml).join(' · ') || '정보 없음'}</div>
       ${x.builder ? `<div style="font-size:11px;color:var(--i3);margin-top:3px">🔧 ${escapeHtml(x.builder)}${x.builder_mobile ? ' · ' + escapeHtml(x.builder_mobile) : ''}</div>` : ''}
       ${x.booth_type === SELF_BUILD_TYPE ? (() => {
         const d = boothDesignState(x);
@@ -1682,6 +1733,7 @@ function renderBoothView(list){
       <th style="min-width:44px;text-align:right">신청순</th>
       <th style="min-width:64px">부스</th>
       <th style="min-width:150px">기업</th>
+      <th style="min-width:130px" title="예하 기업이면 모기업을 고르세요 — 모기업 바로 아래 줄로 옮겨 붙습니다">모기업</th>
       <th style="min-width:46px">층</th>
       <th style="min-width:130px">타입</th>
       <th style="min-width:50px">수량</th>
@@ -1696,7 +1748,7 @@ function renderBoothView(list){
       return `<tr onclick="openExhDr('${escAttr(x.id)}','progress')" style="cursor:pointer"
         title="부스 번호·층·수량은 여기서 열리는 상세에서 고칩니다">
         ${applyCell(x)}
-        <td style="font-size:12px;font-weight:700${x.booth_no ? '' : ';color:var(--i6)'}">${escapeHtml(x.booth_no || '—')}
+        <td style="font-size:12px;font-weight:700${x.booth_no ? '' : ';color:var(--i6)'}">${x.booth_no ? escapeHtml(x.booth_no) : isNoBooth(x) ? '<span style="font-size:10.5px;font-weight:400">부스 없음</span>' : '—'}
           ${(() => { const b = parseBooth(x.booth_no);
             return b.kind === 'range' ? `<div style="font-size:9.5px;color:var(--i4);font-weight:400;margin-top:1px">${b.count}칸</div>` : ''; })()}
           ${dupBooth.has(String(x.booth_no || '').trim()) || isSharedBooth(x)
@@ -1707,7 +1759,16 @@ function renderBoothView(list){
               background:${isSharedBooth(x) ? 'var(--ad)' : 'transparent'};
               color:${isSharedBooth(x) ? 'var(--a)' : 'var(--i5)'}">공동${isSharedBooth(x) ? ' ✓' : ''}</span></div>`
             : ''}</td>
-        ${coCell(x, 'progress')}
+        ${(() => {
+          /* 예하 기업은 들여 써서 모기업 밑에 달린 줄로 읽히게 한다 */
+          const h = hostOf(x, all0);
+          if(!h) return coCell(x, 'progress');
+          return coCell(x, 'progress').replace('<td style="min-width:150px">',
+            `<td style="min-width:150px;padding-left:22px;border-left:3px solid var(--a)">
+              <div style="font-size:9.5px;color:var(--a);margin-bottom:1px">↳ ${escapeHtml(exhNames(h).ko)} 예하</div>`);
+        })()}
+        <td><select class="fi" style="width:126px;padding:3px 4px;font-size:11px" onclick="event.stopPropagation()"
+          onchange="setExhField('${escAttr(x.id)}','host_key',this.value,'모기업')">${hostOptions(x)}</select></td>
         <td style="font-size:11.5px;color:var(--i3)">${x.booth_floor ? escapeHtml(x.booth_floor) + '층' : '<span style="color:var(--i6)">—</span>'}</td>
         <td><select class="fi" style="width:126px;padding:3px 4px;font-size:11px" onclick="event.stopPropagation()"
           onchange="setExhField('${escAttr(x.id)}','booth_type',this.value,'부스 타입')">${boothTypeOptions(x.booth_type)}</select></td>

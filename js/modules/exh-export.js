@@ -39,7 +39,7 @@ import {
   exhEvent, EVENT_LIST,
 } from '../state.js';
 import { activeExhibitors, exhNames, exhContact, isBillable, isBoothGiven,
-  boothViewRows, parseBooth, isSharedBooth, boothDesignState, SELF_BUILD_TYPE,
+  boothViewRows, parseBooth, isSharedBooth, boothDesignState, SELF_BUILD_TYPE, hostOf, boothTypeText,
   STEPS, cellState, progressOf, billedAmount, paidAmount, currencyOf, settleState,
   visibleList } from './exh-tab.js';
 import { openInquiriesFor } from '../state.js';
@@ -873,7 +873,7 @@ export async function exportBoothStatus(){
       ['신청순', 7], ['부스번호', 10], ['부스 정렬', 8], ['업체명(국문)', 24], ['업체명(영문)', 26],
       ['층', 6], ['부스 타입', 18], ['칸 수', 6], ['수량', 6], ['공동 부스', 9], ['등급', 9],
       ['배정 확정', 9], ['시공사', 18], ['시공사 담당자', 12], ['시공사 연락처', 15],
-      ['부스 도면', 14], ['도면 받은 날', 12],
+      ['부스 도면', 14], ['도면 받은 날', 12], ['모기업', 22],
     ];
     ws.columns = COLS.map(([, w]) => ({ width: w }));
     ws.getColumn(2).numFmt = '@';
@@ -892,7 +892,7 @@ export async function exportBoothStatus(){
         b.first === Infinity ? null : b.first,
         n.ko || '', n.en || '',
         x.booth_floor || '',
-        x.booth_type || '',
+        boothTypeText(x.booth_type),
         shared || b.kind === 'none' ? null : b.count,
         x.booth_qty ? (Number(String(x.booth_qty).replace(/[^0-9.]/g, '')) || String(x.booth_qty)) : null,
         shared ? '공동' : (dupBooth.has(String(x.booth_no || '').trim()) ? '번호 겹침' : ''),
@@ -903,6 +903,7 @@ export async function exportBoothStatus(){
         self ? (x.builder_mobile || x.builder_tel || '') : '',
         self ? boothDesignState(x).text : '',
         self ? (x.booth_design_received_at || '') : '',
+        (() => { const h = hostOf(x, rows); return h ? exhNames(h).ko : ''; })(),
       ]);
       r.eachCell({ includeEmpty: true }, (cell, ci) => {
         cell.font = FONT;
@@ -914,7 +915,7 @@ export async function exportBoothStatus(){
     ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: rows.length + 1, column: COLS.length } };
 
     const notes = [
-      `※ ${evLabel} · CRM 「전시 → 부스 현황」을 ${stamp.text}에 받은 표입니다${typeFil ? ` (부스 타입 «${typeFil}»만)` : ''}.`,
+      `※ ${evLabel} · CRM 「전시 → 부스 현황」을 ${stamp.text}에 받은 표입니다${typeFil ? ` (부스 타입 «${boothTypeText(typeFil)}»만)` : ''}.`,
       '※ 「부스 정렬」은 부스번호의 첫 숫자입니다 — 부스번호 열은 «44-46» 같은 값 때문에 텍스트라, 부스 순서로 정렬할 때는 이 열을 쓰세요.',
       '※ 「칸 수」는 부스번호에서 읽은 칸 수입니다. 공동 부스는 부스 수에서 빠지므로 비워 두었습니다.',
     ];

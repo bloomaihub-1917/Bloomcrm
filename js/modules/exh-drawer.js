@@ -59,7 +59,7 @@ import {
   billedAmount, paidAmount, graphicState, graphicDueInfo, money, fmtMoney, currencyOf, mixedCurrency, taxNeed, daysSince, CANCELLED,
   isPendingRefund, boothTypeOptions, boothTypes, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
   TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing, introOver, boothDesignState,
-  isSharedBooth, isBookOnly, baseKind, BASE_KINDS, bookName, fasciaName,
+  isSharedBooth, isBookOnly, hostOptions, baseKind, BASE_KINDS, bookName, fasciaName,
   BOOTH_ORIGIN, BOOTH_EXC, isBoothExc, itemCode,
   baseRecvAt, baseDoneAt, baseDoneCheck, baseItems, baseRecvItems, TCELL, TPILL,
   guardWrite, exhLocked, exhLockNotice, isBoothGiven, boothIncluded, applyBoothItems, boothItemsPending,
@@ -1561,9 +1561,8 @@ function baseWorkBlock(x){
    표기가 갈려서 나중에 누구 부스인지 되짚을 수 없다. */
 function scopeBlock(x){
   const book = isBookOnly(x);
-  const peers = exhibitorsForEvent(x.event_id)
-    .filter(o => o.id !== x.id && !isBookOnly(o))
-    .sort((a, b) => String(a.company_name || '').localeCompare(String(b.company_name || ''), 'ko'));
+  /* 모기업은 프로그램북만인 곳에만 두던 것을 모든 기업으로 넓혔다 — 부스를 따로
+     쓰는 자회사·계열사도 모기업 밑에 묶어 봐야 한다. 부스 현황에서도 같은 칸을 고친다. */
   return sct('참가 범위', `
     <div class="fg"><label class="fl">유형</label>
       <select class="fi" style="font-size:12px"
@@ -1574,14 +1573,9 @@ function scopeBlock(x){
       <div style="font-size:10.5px;color:var(--i5);margin-top:3px">
         «프로그램북만»으로 두면 도록 외 단계는 <b>해당 없음</b>이 되고 부스 수에서도 빠집니다.
         지우는 게 아니라 집계에서 빼는 것이라, 유형을 되돌리면 적어 둔 값이 그대로 살아납니다.</div></div>
-    ${book ? `<div class="fg"><label class="fl">부스를 함께 쓰는 대표 기업</label>
+    <div class="fg"><label class="fl">${book ? '부스를 함께 쓰는 대표 기업' : '모기업 (이 기업이 예하로 들어갈 곳)'}</label>
       <select class="fi" style="font-size:12px"
-        onchange="setExhField('${escAttr(x.id)}','host_key',this.value,'대표 기업')">
-        <option value=""${x.host_key ? '' : ' selected'}>— 지정 안 함 —</option>
-        ${peers.map(o => `<option value="${escAttr(o.company_key)}"${
-          (x.host_key || '') === o.company_key ? ' selected' : ''}>${escapeHtml(exhNames(o).ko)}${
-          o.booth_no ? ` (부스 ${escapeHtml(o.booth_no)})` : ''}</option>`).join('')}
-      </select></div>` : ''}`);
+        onchange="setExhField('${escAttr(x.id)}','host_key',this.value,'모기업')">${hostOptions(x)}</select></div>`);
 }
 
 /* ── 신청항목 탭 ──
