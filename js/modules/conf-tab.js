@@ -985,9 +985,12 @@ function spCellHtml(c, colLabel, name, col){
      기호를 먼저 읽고 값을 흘린다. */
   if(col && col.show === 'text'){
     if(c.state === 'na') return `<td style="text-align:center;color:var(--i6)">·</td>`;
-    return `<td style="font-size:11px;line-height:1.4;color:${c.text ? 'var(--i2)' : 'var(--i5)'};
-      max-width:180px;overflow-wrap:anywhere" title="${escAttr(c.text || '')}">${
-      c.text ? escapeHtml(c.text) : '—'}</td>`;
+    /* 칸 폭은 표가 정하므로 td의 max-width만으로는 글이 옆 칸으로 넘친다.
+       안쪽 div에 폭을 박고 두 줄에서 자른다 — 전문은 title로 본다. */
+    return `<td style="font-size:11px;line-height:1.4;color:${c.text ? 'var(--i2)' : 'var(--i5)'}"
+      title="${escAttr(c.text || '')}"><div style="width:180px;white-space:normal;overflow:hidden;
+      display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere">${
+      c.text ? escapeHtml(c.text) : '—'}</div></td>`;
   }
   return spCellMark(c, colLabel, name);
 }
@@ -1391,8 +1394,11 @@ function peopleHtml(ev){
           ${sp.lang_pref === 'en' ? '<span class="pill p-gray" style="font-size:9px" title="영문만 받는 해외 연사예요">EN</span>' : ''}
           ${sp.status && sp.status !== '확정' ? `<span class="pill ${sp.status === '취소' ? 'p-gray' : 'p-amber'}" style="font-size:9px">${escapeHtml(sp.status)}</span>` : ''}
         </div>
-        ${sp.org_ko || sp.org_en ? `<div style="font-size:10px;color:var(--i4)">${escapeHtml(
-          [sp.org_ko || sp.org_en, sp.title_ko || sp.title_en].filter(Boolean).join(' · '))}</div>` : ''}</td>
+        ${sp.org_ko || sp.org_en ? (() => {
+          const org = [sp.org_ko || sp.org_en, sp.title_ko || sp.title_en].filter(Boolean).join(' · ');
+          return `<div style="font-size:10px;color:var(--i4);max-width:260px;white-space:nowrap;overflow:hidden;
+            text-overflow:ellipsis" title="${escAttr(org)}">${escapeHtml(org)}</div>`;
+        })() : ''}</td>
       <td style="max-width:170px">
         ${sess.length ? `<div style="font-size:10.5px;color:var(--i3);white-space:nowrap;overflow:hidden;
             text-overflow:ellipsis" title="${escAttr(sess.join(' / '))}">${escapeHtml(sess[0])}${
