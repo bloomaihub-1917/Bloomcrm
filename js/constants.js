@@ -8,7 +8,7 @@
 /* 참가 역할 → 배지색. 키는 PART_TYPES_SEED의 key와 정확히 같아야 한다 —
    어긋나면 조용히 p-gray로 떨어져 색이 빠진다(전시참가기업/비즈니스파트너링/주최사가
    그랬다). 옛 표기(전시기업/주최)도 남겨 과거 데이터를 함께 받는다. */
-export const RP = {스폰서:'p-green',전시참가기업:'p-purple',연사:'p-blue',투자자:'p-amber',
+export const RP = {스폰서:'p-green',시공사:'p-teal',전시참가기업:'p-purple',연사:'p-blue',투자자:'p-amber',
   바이어:'p-teal',BD:'p-teal',기자:'p-red','기자/미디어':'p-red',참가자:'p-gray',VIP:'p-gold',
   주최사:'p-indigo',비즈니스파트너링:'p-amber',
   전시기업:'p-purple',주최:'p-indigo'};

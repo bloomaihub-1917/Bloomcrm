@@ -8,6 +8,9 @@
    그래서 손으로 한 회사로 묶어 두고, 다른 표기는 aliases로 남긴다.
    원본 오타(010-33311-8005)는 같은 사람의 다른 줄 번호로 고쳤다.
 
+   BIO KOREA 2026(BIO-002) 전시 시공사였으므로, 사람마다 그 행사 «시공사»
+   참가도 남긴다.
+
    여러 번 돌려도 된다 — 이미 있는 기업·연락처는 빈 칸만 채운다.
 
      node db/import-builder-list.js [--dry]
@@ -17,6 +20,10 @@ const pool = require('./pool');
 
 const DRY = process.argv.includes('--dry');
 const SOURCE = '타 행사 독립부스 시공사 명단';
+/* 이 명단은 BIO KOREA 2026 전시에서 독립부스를 지은 업체들이다. 사람마다 그
+   행사 «시공사» 참가를 남겨 두면 기업 DB 참여 이력에 딱지가 붙는다. */
+const EVENT_ID = 'BIO-002';
+const ROLE = '시공사';
 
 /* [회사, 다른 표기, [[이름, 직함, 전화, 휴대폰, 메일], …]] */
 const LIST = [
@@ -80,7 +87,19 @@ const norm = (v) => clean(v).toLowerCase()
     const today = now.toISOString().slice(0, 10);
     const stamp = now.getTime();
     let seq = 0;
-    const made = [], linked = [], people = [], filled = [];
+    const made = [], linked = [], people = [], filled = [], joined = [];
+    const hadPart = new Set((await client.query(
+      `SELECT contact_id FROM participations WHERE event_id = $1 AND role = $2`, [EVENT_ID, ROLE]))
+      .rows.map((r) => r.contact_id));
+    const join = async (cid, label) => {
+      if (hadPart.has(cid)) return;
+      hadPart.add(cid);
+      joined.push(label);
+      if (!DRY) await client.query(
+        `INSERT INTO participations (id, event_id, contact_id, role, note, matched, confirmed_at)
+         VALUES ($1, $2, $3, $4, $5, '', $6)`,
+        [`P-${stamp}-bl${++seq}`, EVENT_ID, cid, ROLE, `✅ ${SOURCE}`, today]);
+    };
 
     for (const [name, alts, persons] of LIST) {
       let org = [name, ...alts].map((n) => index.get(norm(n))).find(Boolean);
@@ -126,14 +145,17 @@ const norm = (v) => clean(v).toLowerCase()
               `UPDATE contacts SET ${cols.map((c, i) => `"${c}" = $${i + 2}`).join(', ')} WHERE id = $1`,
               [dup.id, ...cols.map((c) => patch[c])]);
           }
+          await join(dup.id, `${pn} (${org.name_ko})`);
           continue;
         }
+        const cid = `${stamp}${String(++seq).padStart(4, '0')}`;
         if (!DRY) await client.query(
           `INSERT INTO contacts (id, "nameKo", "orgKo", "titleKo", cat, lang, source, date, status,
                                  email1, phone1, phone2, org_id)
            VALUES ($1, $2, $3, $4, '', 'ko', $5, $6, 'new', $7, $8, $9, $10)`,
-          [`${stamp}${String(++seq).padStart(4, '0')}`, pn, org.name_ko, title, SOURCE, today, email, p1, p2, org.id]);
+          [cid, pn, org.name_ko, title, SOURCE, today, email, p1, p2, org.id]);
         people.push(`${pn}${title ? ' ' + title : ''} (${org.name_ko})`);
+        await join(cid, `${pn} (${org.name_ko})`);
       }
     }
 
@@ -141,6 +163,7 @@ const norm = (v) => clean(v).toLowerCase()
     console.log(`  새 기업 ${made.length}: ${made.join(', ') || '-'}`);
     console.log(`  기존 기업에 이음 ${linked.length}:`); linked.forEach((l) => console.log('    ', l));
     console.log(`  새 연락처 ${people.length}:`); people.forEach((p) => console.log('    ', p));
+    console.log(`  ${EVENT_ID} ${ROLE} 참가 새로 남김 ${joined.length}명`);
     console.log(`  기존 연락처 빈 칸 채움 ${filled.length}:`); filled.forEach((p) => console.log('    ', p));
 
     if (DRY) { await client.query('ROLLBACK'); console.log('\n--dry 라서 되돌렸습니다.'); }

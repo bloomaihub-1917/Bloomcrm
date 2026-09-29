@@ -222,6 +222,23 @@ export function buildCoDB(){
     exhByOrg.get(oid).push(x);
   });
 
+  /* 독립부스를 맡아 지은 시공사 — 참가기업 행의 시공사 칸이 곧 그 회사의
+     행사 이력이다. 연결(builder_org_id)이 우선, 없으면 이름으로 찾는다.
+     «직접 설치»는 회사가 아니다. */
+  const buildByOrg = new Map();
+  EXHIBITORS.forEach(x => {
+    const nm = String(x.builder || '').trim();
+    let oid = x.builder_org_id;
+    if(!oid || !byOrg.has(oid)){
+      if(!nm || /^직접\s*설치$/.test(nm)) return;
+      const o = findOrgByName(nm, normalizeCompanyKey);
+      oid = o ? o.id : null;
+    }
+    if(!oid) return;
+    if(!buildByOrg.has(oid)) buildByOrg.set(oid, []);
+    buildByOrg.get(oid).push(x);
+  });
+
   ORGS.forEach(o => {
     const coContacts = byOrg.get(o.id) || [];
     const cIds = new Set(coContacts.map(c => c.id));
@@ -258,6 +275,29 @@ export function buildCoDB(){
         evMap[t.eventId] = { key: t.eventId, name: ev.name || ev.key, short: ev.short || ev.key,
           year: (ev.date||'').slice(0,4), date: ev.date || '', loc: '', color: ev.color || '#9C9890',
           roles: ['전시참가기업'], people: [], note: '' };
+      }
+    });
+
+    // ── 독립부스 시공 — 그 행사에 «시공사» 딱지, 어느 부스를 지었는지는 메모로 ──
+    const built = {};
+    (buildByOrg.get(o.id) || []).forEach(x => {
+      if(!x.event_id) return;
+      (built[x.event_id] = built[x.event_id] || []).push(x.company_name || '');
+    });
+    Object.entries(built).forEach(([evId, booths]) => {
+      if(!evMap[evId]){
+        const ev = EVENT_LIST.find(e => e.key === evId)
+          || { key: evId, short: evId, name: evId, color:'#9C9890', date:'' };
+        evMap[evId] = { key: evId, name: ev.name || ev.key, short: ev.short || ev.key,
+          year: (ev.date||'').slice(0,4), date: ev.date || '', loc: '', color: ev.color || '#9C9890',
+          roles: [], people: [], note: '' };
+      }
+      const e = evMap[evId];
+      if(!e.roles.includes('시공사')) e.roles.push('시공사');
+      const list = booths.filter(Boolean);
+      if(list.length){
+        const txt = `시공: ${list.slice(0, 5).join(', ')}${list.length > 5 ? ` 외 ${list.length - 5}곳` : ''} 부스`;
+        e.note = e.note ? `${e.note} · ${txt}` : txt;
       }
     });
 
