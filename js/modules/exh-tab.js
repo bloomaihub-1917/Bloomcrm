@@ -2558,6 +2558,12 @@ function renderSelfBoothView(rows){
   const txt = (x, f, ph, label, w) => `<input class="fi" style="width:${w};padding:3px 6px;font-size:11.5px"
     placeholder="${escAttr(ph)}" value="${escAttr(x[f] || '')}" onclick="event.stopPropagation()"
     onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')">`;
+  /* 작업신고서는 냈는지만 본다 — 체크하면 오늘 날짜가 들어가고(언제 체크했는지는
+     남는다), 풀면 비운다 */
+  const wr = (x) => `<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:11.5px"
+    onclick="event.stopPropagation()"><input type="checkbox"${x.work_report_at ? ' checked' : ''}
+    onchange="setExhField('${escAttr(x.id)}','work_report_at',this.checked ? '${td()}' : '','작업신고서 제출')">
+    ${x.work_report_at ? '<span style="color:var(--g)">받음</span>' : '<span style="color:var(--i5)">미제출</span>'}</label>`;
   const dt = (x, f, label) => `<input type="date" class="fi" style="width:124px;padding:3px 6px;font-size:11.5px"
     value="${escAttr(x[f] || '')}" onclick="event.stopPropagation()"
     onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')">`;
@@ -2598,7 +2604,7 @@ function renderSelfBoothView(rows){
       <div style="display:flex;gap:6px;align-items:center">
         <span style="font-size:11px;color:var(--i4);min-width:56px">결과</span>${resultCell(x)}</div>
       <div style="display:flex;gap:6px;align-items:center;margin-top:4px">
-        <span style="font-size:11px;color:var(--i4);min-width:56px">작업신고</span>${dt(x, 'work_report_at', '작업신고서 제출')}</div>
+        <span style="font-size:11px;color:var(--i4);min-width:56px">작업신고</span>${wr(x)}</div>
     </div>`).join(''));
 
   return viewShell(pills, board + `<div class="tw"><table><thead><tr>
@@ -2610,7 +2616,7 @@ function renderSelfBoothView(rows){
       <th style="min-width:130px">도면·그래픽 수령</th>
       <th style="min-width:130px">우리 확인</th>
       <th style="min-width:110px">결과</th>
-      <th style="min-width:130px" title="시공사가 호텔에 낸 날 — 비어 있으면 아직 안 낸 것">작업신고서</th>
+      <th style="min-width:90px" title="시공사가 호텔에 작업신고서를 냈는지">작업신고서</th>
       <th style="min-width:90px;text-align:center">상태</th>
       <th style="min-width:150px">비고</th>
     </tr></thead><tbody>
@@ -2627,7 +2633,7 @@ function renderSelfBoothView(rows){
         <td>${dt(x, 'booth_design_received_at', '도면 수령')}</td>
         <td>${dt(x, 'booth_design_checked_at', '도면 확인')}</td>
         <td>${resultCell(x)}</td>
-        <td>${dt(x, 'work_report_at', '작업신고서 제출')}</td>
+        <td>${wr(x)}</td>
         <td style="text-align:center">${stateCell(x)}</td>
         <td>${txt(x, 'booth_design_note', '수정 요청 내용 등', '도면 비고', '100%')}</td>
       </tr>`;

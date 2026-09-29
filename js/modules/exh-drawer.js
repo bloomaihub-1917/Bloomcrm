@@ -465,7 +465,10 @@ function boothDesignBlock(x){
     </div>
 
     <div class="fgr">${dateCell('booth_design_received_at', '도면 받은 날')}${dateCell('booth_design_checked_at', '확인한 날')}</div>
-    ${isSelf ? `<div class="fgr">${dateCell('work_report_at', '호텔 작업신고서 제출일')}</div>` : ''}
+    ${isSelf ? `<label style="display:flex;align-items:center;gap:6px;font-size:12px;margin:2px 0 8px;cursor:pointer">
+      <input type="checkbox"${x.work_report_at ? ' checked' : ''}
+        onchange="setExhField('${escAttr(x.id)}','work_report_at',this.checked ? '${td()}' : '','작업신고서 제출')">
+      시공사가 호텔에 작업신고서 제출</label>` : ''}
 
     <div style="margin-top:2px">
       <label class="fl">확인 결과</label>
