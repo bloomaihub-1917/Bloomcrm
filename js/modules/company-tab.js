@@ -597,12 +597,14 @@ export function buildCoCAT(){
       const mainsHere = COMPANY_SECTORS.filter(s => !s.parent && inScope(s));
       const subsByParent = {};
       COMPANY_SECTORS.forEach(s => {
-        if(s.parent && inScope(s) && (sectorCounts[s.name]||0) > 0){
+        if(s.parent && inScope(s)){
           if(!subsByParent[s.parent]) subsByParent[s.parent] = [];
           subsByParent[s.parent].push(s);
         }
       });
-      const visibleMains = mainsHere.filter(m => (sectorCounts[m.name]||0) > 0 || subsByParent[m.id]);
+      /* 기업이 없는 섹터도 보인다 — 설정에서 막 만든 섹터는 0개사인데, 숨기면
+         기업을 끌어다 놓을 자리가 없어 영영 0개사로 남는다 */
+      const visibleMains = mainsHere;
       if(!visibleMains.length) return;
       if(short) rows.push(`<div style="font-size:10px;font-weight:700;color:var(--i4);text-transform:uppercase;letter-spacing:.04em;margin:6px 0 2px 14px">${escapeHtml(short)}</div>`);
       visibleMains.forEach(m => {
@@ -1241,6 +1243,12 @@ function coSectorChipsHtml(base){
     count[k] = (count[k] || 0) + 1;
     if(!label[k]) label[k] = s;
   }));
+  /* 설정에 등록된 섹터는 0개사여도 칩을 둔다 — 막 만든 섹터가 안 보이면
+     추가가 안 된 줄 안다 */
+  COMPANY_SECTORS.forEach(sc => {
+    const k = sectorKey(sc.name);
+    if(keys.has(k) && !(k in count)){ count[k] = 0; label[k] = sc.name; }
+  });
   const order = coSectorOrder();
   const want = new Set(coCats().map(sectorKey));
   const items = Object.keys(count).sort((a, b) =>
