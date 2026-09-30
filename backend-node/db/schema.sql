@@ -1051,3 +1051,8 @@ ALTER TABLE orgs ADD COLUMN IF NOT EXISTS intro   TEXT;
    그래야 «이 시공사가 어느 부스를 지었나»를 행사를 넘어 찾을 수 있다
    (db/import-builders.js). */
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS builder_org_id TEXT;
+
+-- 세션 종류. 비어 있으면 발표 세션이고, break·lunch·dinner는 커피 브레이크·
+-- 런치·갈라 디너다. 식사·휴식도 프로그램북 시간표에 한 줄로 나가야 하지만
+-- 연사를 배정할 자리는 아니다 — 그래서 세션과 같은 표에 두고 종류로 가른다.
+ALTER TABLE conf_sessions ADD COLUMN IF NOT EXISTS kind TEXT;

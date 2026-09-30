@@ -162,7 +162,7 @@ const TABLES = {
   conf_sessions: {
     table: 'conf_sessions', pk: 'id', idPrefix: 'CS-',
     columns: ['id', 'event_id', 'seq', 'title_ko', 'title_en',
-      'date', 'start_at', 'end_at', 'track', 'room', 'note'],
+      'date', 'start_at', 'end_at', 'track', 'room', 'note', 'kind'],
   },
   speakers: {
     table: 'speakers', pk: 'id', idPrefix: 'SP-',

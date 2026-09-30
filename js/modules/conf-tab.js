@@ -240,6 +240,29 @@ const emptyBox = (msg) => `<div style="padding:40px 16px">
 /* ══════════════════════════════════════════
    프로그램 — 일자 → 세션 → 배정
 ══════════════════════════════════════════ */
+/* 세션 종류 — 식사·휴식은 시간표에는 나가지만 연사를 배정하지 않는다.
+   회색으로 그려 발표 세션과 눈으로 갈라지게 한다. */
+const SESSION_KINDS = [
+  { key: '',       label: '세션' },
+  { key: 'break',  label: '커피 브레이크', ko: '커피 브레이크', en: 'Coffee Break' },
+  { key: 'lunch',  label: '런치',         ko: '오찬',          en: 'Lunch' },
+  { key: 'dinner', label: '갈라 디너',     ko: '갈라 디너',     en: 'Gala Dinner' },
+];
+const isBreak = (s) => !!(s && s.kind);
+const kindOf = (k) => SESSION_KINDS.find(x => x.key === (k || '')) || SESSION_KINDS[0];
+const kindSelect = (id, cur, titleIds) => `<select class="fi" id="${id}"
+  onchange="fillSessionKind(this.value,'${titleIds[0]}','${titleIds[1]}')">
+  ${SESSION_KINDS.map(k => `<option value="${k.key}"${(cur || '') === k.key ? ' selected' : ''}>${escapeHtml(k.label)}</option>`).join('')}
+</select>`;
+/* 종류를 고르면 세션명이 비어 있을 때만 채운다 — 적어 둔 이름(«환영 오찬»)을 덮지 않는다 */
+export function fillSessionKind(k, koId, enId){
+  const d = kindOf(k);
+  const ko = document.getElementById(koId), en = document.getElementById(enId);
+  const known = (v) => !v || SESSION_KINDS.some(x => x.ko === v || x.en === v);
+  if(ko && known(ko.value.trim())) ko.value = d.ko || '';
+  if(en && known(en.value.trim())) en.value = d.en || '';
+}
+
 function programHtml(ev){
   const cfg = confCfg(ev.key);
   const days = confDays(ev.key);
@@ -296,6 +319,7 @@ function newSessionHtml(ev, days, cfg){
   return `<div style="margin-bottom:16px;padding:12px;background:var(--i8);border:1px solid var(--i6);border-radius:10px">
     <div style="font-size:11px;font-weight:600;margin-bottom:8px">세션 만들기</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px">
+      <div><div class="fl">종류</div>${kindSelect('ns-kind', '', ['ns-ko', 'ns-en'])}</div>
       <div><div class="fl">일자</div>
         <select class="fi" id="ns-date">
           <option value="">미정</option>
@@ -400,18 +424,22 @@ function sessionCard(ev, s, days, cfg){
     </div>`;
   };
 
-  return `<div style="border:1px solid var(--i6);border-radius:9px;padding:10px 12px;margin-bottom:8px;background:var(--W)">
+  const brk = isBreak(s);
+  return `<div style="border:1px solid var(--i6);border-radius:9px;padding:10px 12px;margin-bottom:8px;
+    background:${brk ? 'var(--i8)' : 'var(--W)'}">
     <div style="display:flex;align-items:flex-start;gap:9px">
       <div style="flex:1;min-width:0">
-        <div style="font-size:12.5px;font-weight:600">${escapeHtml(s.title_ko || s.title_en || '(세션명 없음)')}</div>
+        <div style="font-size:12.5px;font-weight:600${brk ? ';color:var(--i4)' : ''}">${
+          brk ? `<span class="pill p-gray" style="font-size:9px;margin-right:5px">${escapeHtml(kindOf(s.kind).label)}</span>` : ''}${
+          escapeHtml(s.title_ko || s.title_en || '(세션명 없음)')}</div>
         ${s.title_ko && s.title_en ? `<div style="font-size:10.5px;color:var(--i4)">${escapeHtml(s.title_en)}</div>` : ''}
         ${meta ? `<div style="font-size:10.5px;color:var(--i5);margin-top:2px">${escapeHtml(meta)}</div>` : ''}
       </div>
       <div style="display:flex;gap:5px;flex-shrink:0">
-        ${asg.length && s.start_at ? `<button class="btn" style="font-size:10.5px"
+        ${!brk && asg.length && s.start_at ? `<button class="btn" style="font-size:10.5px"
           onclick="autoTalkTimes('${escAttr(s.id)}')" title="세션 시작부터 각 발표의 «분»만큼 이어 붙입니다">시간 배분</button>` : ''}
         <button class="btn" style="font-size:10.5px" onclick="toggleEditSession('${escAttr(s.id)}')">${editing ? '닫기' : '수정'}</button>
-        <button class="btn" style="font-size:10.5px" onclick="toggleAssign('${escAttr(s.id)}')">${open ? '닫기' : `배정 ${asg.length}`}</button>
+        ${brk && !asg.length ? '' : `<button class="btn" style="font-size:10.5px" onclick="toggleAssign('${escAttr(s.id)}')">${open ? '닫기' : `배정 ${asg.length}`}</button>`}
         <button class="btn" style="font-size:10.5px" onclick="removeConfSession('${escAttr(s.id)}')">삭제</button>
       </div>
     </div>
@@ -455,6 +483,7 @@ function editSessionHtml(s, days, cfg){
   return `<div style="margin-top:9px;padding:10px;background:var(--i8);border-radius:8px">
     <div style="font-size:11px;font-weight:600;margin-bottom:7px">세션 고치기</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:7px">
+      <div><div class="fl">종류</div>${kindSelect(i('kind'), s.kind, [i('ko'), i('en')])}</div>
       <div><div class="fl">일자</div>
         <select class="fi" id="${i('date')}">
           <option value=""${!s.date ? ' selected' : ''}>미정</option>
@@ -652,7 +681,17 @@ function pgaHtml(ev){
   const days = [...new Set(sessions.map(x => x.date || ''))].sort();
   const noRoomOnly = !rooms.length;
 
+  /* 식사·휴식 칸 — 트랙 색 없이 회색 한 칸 */
+  const breakCell = (ss) => `<div onclick="openPgaSession('${escAttr(ss.id)}')"
+    title="${escAttr([ss.title_ko, ss.title_en, timeLabel(ss.start_at, ss.end_at), ss.room].filter(Boolean).join(' · '))}"
+    style="cursor:pointer;background:var(--i7);border:1px solid var(--i6);border-radius:4px;padding:7px;
+    text-align:center;margin-bottom:5px;color:var(--i4)">
+    <div style="font-size:11px;font-weight:600">${escapeHtml(ss.title_ko || ss.title_en || kindOf(ss.kind).label)}</div>
+    ${ss.title_ko && ss.title_en ? `<div style="font-size:9.5px;margin-top:1px">${escapeHtml(ss.title_en)}</div>` : ''}
+  </div>`;
+
   const cell = (ss) => {
+    if(isBreak(ss)) return breakCell(ss);
     const c = trackColor(ev.key, ss.track);
     return `<div onclick="openPgaSession('${escAttr(ss.id)}')" title="${escAttr(
         [ss.title_ko, ss.title_en, timeLabel(ss.start_at, ss.end_at), ss.room].filter(Boolean).join(' · '))}"
@@ -670,6 +709,7 @@ function pgaHtml(ev){
   /* 한 줄을 통째로 쓰는 세션 — 장소를 안 적은 것. 개막식·오찬처럼 전체가
      한자리에 모이는 일들이다. */
   const wideCell = (ss) => {
+    if(isBreak(ss)) return breakCell(ss);
     const c = trackColor(ev.key, ss.track);
     return `<div onclick="openPgaSession('${escAttr(ss.id)}')" title="${escAttr(ss.title_en || '')}"
       style="cursor:pointer;background:${ss.track ? c.bg : 'var(--i8)'};border:1px solid ${ss.track ? c.bd + '55' : 'var(--i6)'};
@@ -731,8 +771,9 @@ function pgaHtml(ev){
   if(isMobile()){
     const line = (ss) => {
       const c = trackColor(ev.key, ss.track);
+      const brk = isBreak(ss);
       return `<div onclick="openPgaSession('${escAttr(ss.id)}')"
-        style="cursor:pointer;background:var(--W);border:1px solid var(--i6);border-left:3px solid ${
+        style="cursor:pointer;${brk ? 'color:var(--i4);' : ''}background:${brk ? 'var(--i7)' : 'var(--W)'};border:1px solid var(--i6);border-left:3px solid ${
           ss.track ? c.bd : 'var(--i5)'};border-radius:8px;padding:9px 11px;margin-bottom:7px">
         <div style="display:flex;gap:7px;align-items:baseline;flex-wrap:wrap">
           <span style="font-size:11px;color:var(--i3);white-space:nowrap">${escapeHtml(timeLabel(ss.start_at, ss.end_at) || '시간 미정')}</span>
@@ -766,7 +807,7 @@ function pgaHtml(ev){
   /* 트랙이 빈 세션은 색이 안 붙는다. 개막식처럼 장소가 없는 것은 원래
      그렇지만, 장소가 있는데 트랙만 빈 세션은 대개 빠뜨린 것이다 —
      색을 찾기 전에 왜 없는지를 알 수 있게 세어 둔다. */
-  const noTrack = sessions.filter(x => x.room && !x.track);
+  const noTrack = sessions.filter(x => x.room && !x.track && !isBreak(x));
   const legend = usedTracks.length ? `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
     ${usedTracks.map(t => {
       const c = trackColor(ev.key, t);
@@ -1944,7 +1985,7 @@ export async function saveSessionEdit(sid){
   const patch = {
     title_ko: titleKo, title_en: titleEn,
     date: g('date'), start_at: start, end_at: end,
-    track: g('track'), room: g('room'), note: g('note'),
+    track: g('track'), room: g('room'), note: g('note'), kind: g('kind'),
   };
   /* 바뀐 것이 없으면 보내지 않는다 — 저장할 때마다 같은 값을 밀어 넣으면
      기록이 «고침»으로 채워져 정작 무엇이 바뀌었는지 안 보인다. */
@@ -1995,7 +2036,7 @@ export async function addConfSession(){
     seq: String(sessionsForEvent(ev.key).length + 1),
     title_ko: titleKo, title_en: titleEn,
     date: gv('ns-date'), start_at: start, end_at: end,
-    track: gv('ns-track'), room: gv('ns-room'), note: '',
+    track: gv('ns-track'), room: gv('ns-room'), note: '', kind: gv('ns-kind'),
   };
   const res = await gSaveSession(row);
   if(!res || res.ok === false){ if(!res?.locked) alert('세션을 만들지 못했어요. 잠시 뒤 다시 해주세요.'); return; }
@@ -2186,6 +2227,7 @@ window.handleConfFile       = handleConfFile;
 window.buildConfEvList   = buildConfEvList;
 window.renderConf        = renderConf;
 window.fillSessionSlot   = fillSessionSlot;
+window.fillSessionKind   = fillSessionKind;
 window.toggleNewSession  = toggleNewSession;
 window.toggleAssign      = toggleAssign;
 window.toggleEditSession = toggleEditSession;
