@@ -28,11 +28,13 @@ export const IMPORT_SHEETS = [
       { key: 'title_ko',  label: '세션명(국문)', hint: '국문·영문 중 하나는 있어야 합니다' },
       { key: 'title_en',  label: '세션명(영문)', hint: '' },
       { key: 'note',      label: '메모',        hint: '' },
+      { key: 'kind',      label: '종류',        hint: '비우면 발표 세션. 커피 브레이크·런치·갈라 디너는 회색으로 그려지고 연사를 배정하지 않습니다' },
     ],
     sample: [
-      ['2026-10-16', '09:30', '10:00', '', '', '개회사', 'Opening Remarks', ''],
-      ['2026-10-16', '11:15', '12:30', 'HALL C', 'Session 1A', '적응하는 도시', 'Adaptive Cities', ''],
-      ['2026-10-16', '11:15', '12:30', 'HALL B', 'Session 1B', '새로운 영토의 건축가들', 'Architects in New Territories', ''],
+      ['2026-10-16', '09:30', '10:00', '', '', '개회사', 'Opening Remarks', '', ''],
+      ['2026-10-16', '11:15', '12:30', 'HALL C', 'Session 1A', '적응하는 도시', 'Adaptive Cities', '', ''],
+      ['2026-10-16', '11:15', '12:30', 'HALL B', 'Session 1B', '새로운 영토의 건축가들', 'Architects in New Territories', '', ''],
+      ['2026-10-16', '12:30', '13:30', '', '', '', '', '', '런치'],
     ],
   },
   {

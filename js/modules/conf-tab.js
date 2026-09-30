@@ -1552,6 +1552,17 @@ function readSheet(wb, sh){
 
 /* 엑셀이 시각을 0.4687500…으로 바꿔 놓는 일이 잦다. 되돌려 준다 —
    여기서 안 받아 주면 «시간이 다 비어서 들어왔다»가 된다. */
+/* 엑셀의 종류 칸 — 사람마다 «오찬»«점심»«Lunch»로 적는다. 다 받아 준다.
+   모르는 말이면 null을 돌려 올리기 전에 알린다. */
+function normKind(v){
+  const s = String(v || '').trim().toLowerCase().replace(/\s+/g, '');
+  if(!s || s === '세션' || s === 'session') return '';
+  if(/브레이크|휴식|커피|break|coffee/.test(s)) return 'break';
+  if(/런치|오찬|점심|중식|lunch|luncheon/.test(s)) return 'lunch';
+  if(/디너|만찬|갈라|저녁|석식|dinner|gala/.test(s)) return 'dinner';
+  return null;
+}
+
 function normTime(v){
   const s = String(v || '').trim();
   if(!s) return '';
@@ -1612,14 +1623,32 @@ export async function handleConfFile(e){
   /* 무엇이 새로 만들어지고 무엇이 이미 있는지 먼저 보여준다 — 올리고 나서
      알려 주면 되돌릴 수 없다. */
   const sessKey = (t) => String(t || '').trim().toLowerCase();
-  const haveSess = new Map();
-  sessionsForEvent(ev.key).forEach(x => {
+  /* 식사·휴식은 이름으로 찾지 않는다 — «오찬»은 날마다 있다. 이름으로 찾으면
+     둘째 날 오찬이 첫째 날 것을 덮는다. 종류·일자·시작으로 찾는다. */
+  const haveSess = new Map(), haveBreak = new Map();
+  const breakKey = (r) => `${r.kind}|${normDate(r.date)}|${normTime(r.start_at)}`;
+  const keep = (x) => {
+    if(x.kind){ haveBreak.set(breakKey(x), x); return; }
     if(x.title_ko) haveSess.set(sessKey(x.title_ko), x);
     if(x.title_en) haveSess.set(sessKey(x.title_en), x);
-  });
+  };
+  sessionsForEvent(ev.key).forEach(keep);
+  const findSess = (r) => r.kind ? haveBreak.get(breakKey(r))
+    : haveSess.get(sessKey(r.title_ko)) || haveSess.get(sessKey(r.title_en));
   const haveSp = new Map(speakersForEvent(ev.key).map(x => [sessKey(x.name_snapshot), x]));
 
-  const newSess = rowsS.filter(r => !haveSess.has(sessKey(r.title_ko)) && !haveSess.has(sessKey(r.title_en)));
+  /* 종류를 먼저 읽는다 — 세션명이 비어 있으면 종류 이름을 세션명으로 쓴다.
+     «런치»만 적은 줄도 받아야 한다(샘플이 그렇게 생겼다). */
+  const badKind = [];
+  rowsS.forEach(r => {
+    const k = normKind(r.kind);
+    if(k === null){ badKind.push(r.kind); r.kind = ''; return; }
+    r.kind = k;
+    const d = kindOf(k);
+    if(k && !r.title_ko && !r.title_en){ r.title_ko = d.ko; r.title_en = d.en; }
+  });
+
+  const newSess = rowsS.filter(r => !findSess(r));
   const newSp = rowsP.filter(r => !haveSp.has(sessKey(r.name_snapshot)));
   /* 배정이 가리키는 세션·연사가 이 파일이나 화면에 있는지 미리 본다 */
   const willSess = new Set([...haveSess.keys(), ...rowsS.flatMap(r => [sessKey(r.title_ko), sessKey(r.title_en)]).filter(Boolean)]);
@@ -1630,6 +1659,9 @@ export async function handleConfFile(e){
     + `세션 ${rowsS.length}줄 — 새로 ${newSess.length}, 이미 있는 것 ${rowsS.length - newSess.length}\n`
     + `연사 ${rowsP.length}줄 — 새로 ${newSp.length}, 이미 있는 것 ${rowsP.length - newSp.length}\n`
     + `배정 ${rowsA.length}줄${orphan.length ? ` — 이 중 ${orphan.length}줄은 세션이나 연사를 못 찾아 건너뜁니다` : ''}\n\n`
+    + (badKind.length ? `종류를 못 알아본 ${badKind.length}줄(${[...new Set(badKind)].join(', ')})은 발표 세션으로 넣습니다
+
+` : '')
     + `이미 있는 것은 비어 있지 않은 칸만 덮어씁니다. 지우지 않습니다.`;
   if(!confirm(msg)) return;
 
@@ -1642,10 +1674,11 @@ export async function handleConfFile(e){
 
   /* ── 세션 ── */
   for(const r of rowsS){
-    const exist = haveSess.get(sessKey(r.title_ko)) || haveSess.get(sessKey(r.title_en));
+    const exist = findSess(r);
     const patch = {
       date: normDate(r.date), start_at: normTime(r.start_at), end_at: normTime(r.end_at),
       room: r.room, track: r.track, title_ko: r.title_ko, title_en: r.title_en, note: r.note,
+      kind: r.kind,
     };
     /* 빈 칸은 덮지 않는다 — 엑셀에서 한 열만 채워 올리는 일이 흔한데,
        그때 나머지가 지워지면 화면에서 채워 둔 값이 통째로 날아간다. */
@@ -1663,8 +1696,7 @@ export async function handleConfFile(e){
       if(!res || res.ok === false){ fail('세션'); return; }
       const made = { ...row, id: res.id || `CS-tmp-${Date.now()}-${nS}` };
       CONF_SESSIONS.push(made);
-      if(made.title_ko) haveSess.set(sessKey(made.title_ko), made);
-      if(made.title_en) haveSess.set(sessKey(made.title_en), made);
+      keep(made);
       nS++;
     }
   }

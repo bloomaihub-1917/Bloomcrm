@@ -47,6 +47,7 @@ import {
   evPartDone,
   codeList,
   confCfg, confDays, speakerNeed,
+  CONF_SESSIONS,
 } from '../state.js';
 
 import {
@@ -64,6 +65,7 @@ import {
   saveEquipCatalog,
   deleteEquipCatalog,
   saveExhCfgToSheet,
+  saveConfSession,
 } from '../api.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 
@@ -2819,6 +2821,7 @@ function evConfHtml(ev){
           return `<span class="pill" style="background:${c.bg};color:var(--i1);border:1px solid ${c.bd}">
             <span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${c.bd};margin-right:4px"></span>${escapeHtml(t)}
             <span onclick="cycleTrackColor('${escAttr(t)}')" style="cursor:pointer;margin-left:3px" title="색 바꾸기">🎨</span>
+            <span onclick="renameConfTrack(${i})" style="cursor:pointer;margin-left:3px" title="이름 바꾸기 — 이 트랙을 쓰는 세션도 함께 바뀝니다">✎</span>
             <span onclick="removeConfTrack(${i})" style="cursor:pointer">✕</span></span>`;
         }).join('')
           : '<span style="font-size:11.5px;color:var(--i5)">트랙이 하나면 비워 두세요</span>'}
@@ -2991,6 +2994,34 @@ export const addConfTrack = () => {
     c.trackColors = { ...(c.trackColors || {}), [v]: pickTrackColorIndex(c) };
   }, `트랙 «${v}» 추가`);
 };
+/* 트랙 이름 바꾸기 — 세션은 트랙을 이름 그대로 들고 있다(conf_sessions.track).
+   설정만 바꾸면 세션들은 옛 이름으로 남아 새 트랙이 따로 생긴 것처럼 보이고
+   색도 갈린다. 그래서 설정·색·세션을 한 번에 바꾼다. */
+export async function renameConfTrack(i){
+  const ev = EVENT_LIST.find(e => e.key === evDetailKey);
+  if(!ev) return;
+  const old = (confCfg(ev.key).tracks || [])[i];
+  if(old == null) return;
+  const v = (prompt(`«${old}»의 새 이름`, old) || '').trim();
+  if(!v || v === old) return;
+  if((confCfg(ev.key).tracks || []).includes(v)){ alert(`«${v}» 트랙이 이미 있어요.`); return; }
+
+  const mine = CONF_SESSIONS.filter(x => x.event_id === ev.key && x.track === old);
+  for(const x of mine){
+    const res = await saveConfSession({ id: x.id, track: v });
+    if(!res || res.ok === false){
+      if(!res?.locked) alert(`세션 «${x.title_ko || x.title_en || x.id}»에서 멈췄어요 — 앞의 세션들은 이미 바뀌었습니다. 다시 눌러 주세요.`);
+      return;
+    }
+    x.track = v;
+  }
+  await pushConf(c => {
+    c.tracks = (c.tracks || []).map(t => t === old ? v : t);
+    const map = { ...(c.trackColors || {}) };
+    if(old in map){ map[v] = map[old]; delete map[old]; }
+    c.trackColors = map;
+  }, `트랙 «${old}» → «${v}» (세션 ${mine.length}개)`);
+}
 export const removeConfTrack = (i) => pushConf(c => {
   c.tracks = (c.tracks || []).filter((_, k) => k !== i);
 }, '트랙 삭제');
@@ -3041,4 +3072,5 @@ window.moveConfRoom      = moveConfRoom;
 window.cycleTrackColor   = cycleTrackColor;
 window.addConfTrack      = addConfTrack;
 window.removeConfTrack   = removeConfTrack;
+window.renameConfTrack   = renameConfTrack;
 window.saveEvConf        = saveEvConf;
