@@ -33,7 +33,7 @@ const layers = () => document.querySelectorAll(SEL).length + (sbOpen() ? 1 : 0);
 let last = 0;          // 마지막으로 센 겹 수
 let owed = 0;          // 우리가 history.back()을 부른 횟수 — 그만큼의 popstate는 우리 것
 let syncing = false;   // popstate를 처리하는 중 — 그 안의 변화는 이미 계산에 들어가 있다
-const appStack = [];   // 탭을 옮겨 온 자취
+const undoStack = [];  // 되돌릴 일 — 탭·작은 탭을 옮길 때마다 «원래대로 돌리는 함수»를 쌓는다
 
 /* 맨 위 한 겹을 닫는다.
 
@@ -82,9 +82,9 @@ export function initBackButton(){
     syncing = true;
     try {
       if(layers() > 0){ closeTop(); }
-      else if(appStack.length){
-        const prev = appStack.pop();
-        window.switchApp?.(prev);
+      else if(undoStack.length){
+        const undo = undoStack.pop();
+        try { undo(); } catch(e){ console.warn('[back] 되돌리기 실패:', e); }
       }
       /* 둘 다 없으면 아무것도 안 한다 — 브라우저가 이미 한 칸 나갔으니
          다음 «뒤로»에 앱을 떠난다. 그게 맞는 동작이다. */
@@ -99,13 +99,60 @@ export function initBackButton(){
   const orig = window.switchApp;
   if(typeof orig === 'function'){
     window.switchApp = function(app, btn){
-      const from = window.curApp || null;
+      /* 로그인 직후 첫 화면은 switchApp을 거치지 않아 curApp이 비어 있다.
+         그러면 첫 탭 이동이 기록되지 않아 뒤로 가기가 곧장 앱을 나갔다 —
+         지금 켜져 있는 페이지에서 읽는다. */
+      const from = window.curApp
+        || (document.querySelector('.page.on')?.id || '').replace(/^page-/, '') || null;
       const r = orig.apply(this, arguments);
-      if(!syncing && from && from !== app){
-        appStack.push(from);
-        history.pushState({ bloom: 'app' }, '');
-      }
+      if(!syncing && from && from !== app) remember(() => window.switchApp(from));
       return r;
     };
   }
+
+  /* ── 탭 안의 작은 탭 ──
+     컨퍼런스의 프로그램↔연사, 전시의 대시보드↔목록, 설정의 행사 관리↔섹터 같은
+     것들. 보기를 바꾸는 함수가 하나씩 있으니 그걸 감싸 «전 값으로 되돌리기»를 쌓는다.
+     지금 값은 모듈 안에 숨어 있어 못 읽으므로, 마지막으로 넘긴 값을 기억한다 —
+     처음 값은 각 모듈의 기본값이다. */
+  const SUBVIEWS = [
+    ['setConfView', 'pga'], ['setDBView', 'flat'], ['setEvDbView', 'profile'],
+    ['setExhView', 'dash'], ['setGraphicView', 'base'], ['switchArchTab', 'ev'],
+  ];
+  SUBVIEWS.forEach(([name, init]) => {
+    const fn = window[name];
+    if(typeof fn !== 'function') return;
+    let cur = init;
+    window[name] = function(v){
+      const prev = cur;
+      cur = v;
+      const r = fn.apply(this, arguments);
+      if(!syncing && prev !== v) remember(() => window[name](prev));
+      return r;
+    };
+  });
+
+  /* 설정의 행사 상세 — 목록에서 행사를 열고 닫는 것도 한 칸이다 */
+  const openD = window.openEvDetail, closeD = window.closeEvDetail;
+  if(typeof openD === 'function' && typeof closeD === 'function'){
+    let curKey = '';
+    window.openEvDetail = function(key){
+      const prev = curKey; curKey = key;
+      const r = openD.apply(this, arguments);
+      if(!syncing && prev !== key) remember(() => prev ? window.openEvDetail(prev) : window.closeEvDetail());
+      return r;
+    };
+    window.closeEvDetail = function(){
+      const prev = curKey; curKey = '';
+      const r = closeD.apply(this, arguments);
+      if(!syncing && prev) remember(() => window.openEvDetail(prev));
+      return r;
+    };
+  }
+}
+
+/* 되돌릴 일 하나를 쌓고 기록에 한 칸을 낸다 */
+function remember(undo){
+  undoStack.push(undo);
+  history.pushState({ bloom: 'app' }, '');
 }
