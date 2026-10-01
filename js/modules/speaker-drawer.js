@@ -503,8 +503,7 @@ export async function createSpeakerContact(){
   if(same.length && !confirm(`마스터DB에 같은 이름이 ${same.length}명 있어요:
 
 ${
-      same.slice(0, 5).map(c => `· ${c.nameKo || c.nameEn} — ${c.orgKo || c.orgEn || '소속 없음'}`).join('
-')
+      same.slice(0, 5).map(c => `· ${c.nameKo || c.nameEn} — ${c.orgKo || c.orgEn || '소속 없음'}`).join('\n')
     }
 
 그래도 새로 만들까요? (같은 사람이면 취소하고 위에서 검색해 연결하세요)`)) return;
