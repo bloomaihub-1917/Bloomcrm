@@ -75,6 +75,7 @@ router.get('/status', async (req, res) => {
    speaker_logs. 한쪽에 몰아 두면 «이 연사에게 몇 번 독촉했나»를 다시 셀 수
    없다. */
 router.post('/send', async (req, res) => {
+  if (req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 메일을 보낼 수 없어요' });
   const t = transport();
   if (!t) return res.status(400).json({ ok: false, error: '메일 계정이 설정되지 않았어요' });
 

@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('../db/pool');
+const { maskRows } = require('../middleware/test-mask');
 
 const router = express.Router();
 
@@ -374,14 +375,18 @@ function participationFromRow(row) {
 
 router.get('/', async (req, res) => {
   const { sheet } = req.query;
-  if (sheet === 'participations') return res.json(await readParticipations());
+  // 시험 계정은 기업명·이름을 가리고 연락처는 통째로 지운 값을 받는다(test-mask.js)
+  const send = (rows) => res.json(req.user && req.user.isTest ? maskRows(sheet, rows) : rows);
+  if (sheet === 'participations') return send(await readParticipations());
   const def = TABLES[sheet];
   if (!def) return res.status(400).json({ ok: false, error: 'unknown sheet' });
   const { rows } = await pool.query(`SELECT * FROM ${def.table} ORDER BY ${q(def.pk)}`);
-  res.json(rows);
+  send(rows);
 });
 
 router.post('/', async (req, res) => {
+  // 시험 계정은 가린 값을 보고 있다 — 저장하면 «애크**»가 진짜 값을 덮는다
+  if (req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 읽기만 할 수 있어요' });
   const { sheet, action, row, rows, data, dataRows, expect } = req.body || {};
   if (sheet !== 'participations' && !TABLES[sheet]) {
     return res.status(400).json({ ok: false, error: 'unknown sheet' });

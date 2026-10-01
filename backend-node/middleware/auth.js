@@ -1,4 +1,5 @@
 const admin = require('firebase-admin');
+const { isTestAccount } = require('./test-mask');
 
 const ALLOWED_DOMAIN = process.env.ALLOWED_DOMAIN || '@13100m.net';
 
@@ -33,7 +34,7 @@ async function requireAuth(req, res, next) {
       return res.status(403).json({ ok: false, error: 'domain not allowed' });
     }
     // 보낸 메일 기록에 누가 보냈는지 적으려면 이름도 필요하다
-    req.user = { email: decoded.email, name: decoded.name || '' };
+    req.user = { email: decoded.email, name: decoded.name || '', isTest: isTestAccount(decoded.email) };
     next();
   } catch (e) {
     res.status(401).json({ ok: false, error: 'invalid token' });
