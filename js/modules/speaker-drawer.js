@@ -361,6 +361,11 @@ function basicHtml(sp, con, evKey){
         <input class="fi" style="margin-top:7px" placeholder="이름·기업·메일로 검색…"
           oninput="searchSpeakerContact(this.value)">
         <div id="sp-con-hits" style="margin-top:5px"></div>
+        <div style="display:flex;align-items:center;gap:7px;margin-top:7px;flex-wrap:wrap">
+          <button class="btn" style="font-size:10.5px" onclick="createSpeakerContact()"
+            title="아래 성명·소속·직함·국적으로 마스터DB에 연락처를 만들고 바로 연결합니다">마스터DB에 새로 등록</button>
+          <span style="font-size:10px;color:var(--i4)">검색해도 없을 때 — 아래 적은 값으로 만들고 연결해요</span>
+        </div>
       </div>`;
 
   return `
@@ -465,7 +470,60 @@ export function searchSpeakerContact(q){
         <div><div class="drn">${escapeHtml(c.nameKo || c.nameEn || c.id)}</div>
         <div class="drm">${escapeHtml([c.orgKo || c.orgEn, c.titleKo || c.titleEn, c.email1].filter(Boolean).join(' · '))}</div></div>
       </div>`).join('')
-    : `<div style="font-size:11px;color:var(--i4);padding:5px 2px">찾는 사람이 없어요 — 마스터DB에 먼저 등록해주세요</div>`;
+    : `<div style="font-size:11px;color:var(--i4);padding:5px 2px">찾는 사람이 없어요 — 아래 «마스터DB에 새로 등록»으로 만들 수 있어요</div>`;
+}
+
+/* 마스터DB에 없는 연사를 여기서 바로 만든다. 전에는 «마스터DB에 먼저
+   등록하라»고만 했는데, 그러려면 드로어를 닫고 다른 탭에서 같은 이름·소속을
+   다시 적어야 했다 — 그래서 연결 안 된 연사가 쌓였다. 연사에 이미 적은
+   값으로 만들고 곧바로 잇는다. */
+export async function createSpeakerContact(){
+  if(confLocked()){ confLockNotice(); return; }
+  const sp = getSpeakerById(spId);
+  if(!sp) return;
+  const nameKo = String(sp.name_snapshot || '').trim(), nameEn = String(sp.name_en || '').trim();
+  if(!nameKo && !nameEn){ alert('성명을 먼저 적어주세요.'); return; }
+
+  /* 같은 이름이 이미 있으면 한 번 묻는다 — 검색을 건너뛰고 누르는 일이 있다 */
+  const same = contacts.filter(c => (nameKo && c.nameKo === nameKo) || (nameEn && c.nameEn === nameEn));
+  if(same.length && !confirm(`마스터DB에 같은 이름이 ${same.length}명 있어요:
+
+${
+      same.slice(0, 5).map(c => `· ${c.nameKo || c.nameEn} — ${c.orgKo || c.orgEn || '소속 없음'}`).join('
+')
+    }
+
+그래도 새로 만들까요? (같은 사람이면 취소하고 위에서 검색해 연결하세요)`)) return;
+
+  const c = {
+    // 13자리 + 4자리 난수 합 — 16자리 안이라 화면이 숫자로 바꿔도 안전하다(CLAUDE.md)
+    id: Date.now() + Math.floor(Math.random() * 10000),
+    nameKo, nameEn,
+    orgKo: sp.org_ko || '', orgEn: sp.org_en || '',
+    titleKo: sp.title_ko || '', titleEn: sp.title_en || '',
+    deptKo: '', deptEn: '',
+    country: sp.nationality || sp.residence_country || '', cat: 'speaker', lang: nameKo ? 'KO' : 'EN',
+    source: `${sp.event_id || ''} 연사`, date: td(), status: 'new',
+    email1: '', email2: '', phone1: '', phone2: '',
+    beat: '', products: '', tags: '', org_id: '',
+  };
+  contacts.push(c);
+  const { postToSheet } = await import('../api.js');
+  const r = await postToSheet({
+    sheet: 'contacts',
+    row: [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
+      c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
+      c.beat, c.products, c.tags, c.org_id],
+  }, '연사 마스터DB 등록', { silent: true });
+  if(!r || !r.ok){
+    const i = contacts.indexOf(c);
+    if(i >= 0) contacts.splice(i, 1);
+    alert('마스터DB 저장에 실패했어요. 잠시 뒤 다시 해주세요.');
+    return;
+  }
+  trackAction('add', '연사 마스터DB 등록', sp.event_id || '', `${nameKo || nameEn} 마스터DB 등록 + 연사 연결`,
+    { kind: 'contact', id: String(c.id) });
+  await linkSpeakerContact(String(c.id));
 }
 
 export async function linkSpeakerContact(cid){
@@ -1246,6 +1304,7 @@ window.spStamp              = spStamp;
 window.asStamp              = asStamp;
 window.searchSpeakerContact = searchSpeakerContact;
 window.linkSpeakerContact   = linkSpeakerContact;
+window.createSpeakerContact = createSpeakerContact;
 window.unlinkSpeakerContact = unlinkSpeakerContact;
 window.pullSpeakerProfile   = pullSpeakerProfile;
 window.pushSpeakerProfile   = pushSpeakerProfile;
