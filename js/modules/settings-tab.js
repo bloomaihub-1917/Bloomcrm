@@ -3032,8 +3032,7 @@ export const removeConfTrack = (i) => {
   if(using.length && !confirm(`«${t}» 트랙을 쓰는 세션이 ${using.length}개 있어요:
 
 ${
-      using.slice(0, 5).map(x => `· ${x.title_ko || x.title_en || x.id}`).join('
-')
+      using.slice(0, 5).map(x => `· ${x.title_ko || x.title_en || x.id}`).join('\n')
     }
 
 지워도 그 세션들은 «${t}»로 남아요. 이름을 바꾸려는 거라면 취소하고 ✎를 누르세요 — 세션도 함께 바뀝니다.
