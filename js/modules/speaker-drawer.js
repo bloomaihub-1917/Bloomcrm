@@ -89,7 +89,7 @@ async function patchSpeaker(patch, label){
     return r || { ok: false };
   }
   sp.updated_at = td();
-  if(label) trackAction('edit', '연사', sp.event_id, `${sp.name_snapshot || sp.id} — ${label}`,
+  if(label) trackAction('edit', '연사', sp.event_id, `${sp.name_snapshot || sp.name_en || sp.id} — ${label}`,
     changed('speakers', sp.id, backup, patch, { kind: 'speaker', id: sp.id }));
   renderConf();
   buildConfEvList();
@@ -130,7 +130,7 @@ function eunNeun(word){
 
 const speakerLabel = () => {
   const sp = getSpeakerById(spId);
-  return sp ? (sp.name_snapshot || sp.id) : '';
+  return sp ? (sp.name_snapshot || sp.name_en || sp.id) : '';
 };
 
 /* 인라인 핸들러가 부르는 얇은 껍데기 — 값이 그대로면 저장하지 않는다
@@ -342,7 +342,21 @@ function basicHtml(sp, con, evKey){
         <div style="font-size:11px;color:var(--i3);margin-top:2px">
           ${escapeHtml([con.orgKo, con.titleKo].filter(Boolean).join(' · ') || '(소속·직함 없음)')}</div>
         ${con.orgEn || con.titleEn ? `<div style="font-size:10.5px;color:var(--i4)">${escapeHtml([con.orgEn, con.titleEn].filter(Boolean).join(' · '))}</div>` : ''}
-        <div style="font-size:10.5px;color:var(--i4);margin-top:3px">${escapeHtml(con.email1 || '')}</div>
+        ${(() => {
+          /* 메일·전화는 마스터DB 연락처에만 둔다 — 연사 쪽에 따로 적으면 번호가
+             바뀌었을 때 어느 쪽이 맞는지 모르게 된다. 여기서 고치면 마스터DB가 고쳐진다. */
+          const f = (k, label, ph, type) => `<label style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:10px;color:var(--i4);width:38px;flex:0 0 auto">${label}</span>
+            <input class="fi" type="${type}" style="font-size:11px;padding:3px 6px" placeholder="${ph}"
+              value="${escAttr(con[k] || '')}" onchange="spContactField('${k}',this.value)"></label>`;
+          return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;margin-top:6px">
+            ${f('email1', '메일', 'name@example.com', 'email')}
+            ${f('phone1', '휴대폰', '010-0000-0000', 'tel')}
+            ${f('email2', '메일 2', '', 'email')}
+            ${f('phone2', '전화', '02-000-0000', 'tel')}
+          </div>
+          <div style="font-size:10px;color:var(--i4);margin-top:3px">메일·전화는 마스터DB 연락처에 저장돼요</div>`;
+        })()}
         ${diff.length ? `<div style="font-size:10.5px;color:var(--am);margin-top:5px;line-height:1.6">
           마스터DB의 ${escapeHtml(diff.join('·'))}이 아래와 달라요.
           <br>연사 자료를 새로 받아 고친 것이면 <b>마스터DB로 보내기</b>,
@@ -356,7 +370,7 @@ function basicHtml(sp, con, evKey){
       </div>`
     : `<div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px">
         <div style="font-size:11.5px;color:var(--i3);line-height:1.6">
-          연락처를 연결하면 소속·직함을 한 번에 끌어옵니다. 연결하지 않아도
+          연락처를 연결하면 소속·직함을 한 번에 끌어오고, 메일·전화도 여기 보입니다. 연결하지 않아도
           아래에 직접 적을 수 있어요.</div>
         <input class="fi" style="margin-top:7px" placeholder="이름·기업·메일로 검색…"
           oninput="searchSpeakerContact(this.value)">
@@ -524,6 +538,19 @@ ${
   trackAction('add', '연사 마스터DB 등록', sp.event_id || '', `${nameKo || nameEn} 마스터DB 등록 + 연사 연결`,
     { kind: 'contact', id: String(c.id) });
   await linkSpeakerContact(String(c.id));
+}
+
+/* 기본 탭의 메일·전화 칸 — 연결된 마스터DB 연락처를 고친다 */
+export async function spContactField(k, v){
+  const sp = getSpeakerById(spId);
+  const c = sp && sp.contact_id ? contacts.find(x => String(x.id) === String(sp.contact_id)) : null;
+  if(!c) return;
+  const val = String(v || '').trim();
+  if(String(c[k] || '') === val) return;
+  const res = await patchContact(c, { [k]: val }, '연사 화면에서 연락처 수정');
+  if(!res || res.ok === false){ alert('마스터DB에 저장하지 못했어요. 잠시 뒤 다시 해주세요.'); return; }
+  trackAction('edit', '연락처', sp.event_id || '', `${c.nameKo || c.nameEn} — ${k} 고침 (연사 화면)`,
+    { kind: 'contact', id: String(c.id) });
 }
 
 export async function linkSpeakerContact(cid){
@@ -852,7 +879,7 @@ export async function addSpeakerContact(){
   const first = !contactsOfSpeaker(sp.id).length;
   const row = {
     speaker_id: sp.id, contact_id: '',
-    name: first ? (sp.name_snapshot || '') : '', email: '', phone: '',
+    name: first ? (sp.name_snapshot || sp.name_en || '') : '', email: '', phone: '',
     kind: first ? '연사 본인' : '실무진', send: first ? 'to' : 'cc', note: '',
   };
   const res = await saveSpeakerContact(row);
@@ -955,7 +982,7 @@ export function fillSpeakerMail(kind){
   const lim = cfg.limits || {};
   const asg = assignmentsFor(sp.id);
   const en = sp.lang_pref === 'en';
-  const name = sp.name_snapshot || '';
+  const name = sp.name_snapshot || sp.name_en || '';
 
   const due = (k) => (cfg.due || {})[k] || '';
   const dueLine = (k, ko) => due(k) ? `\n- ${ko} 마감: ${due(k)}` : '';
@@ -1048,7 +1075,7 @@ export async function sendSpeakerMail(){
     category, subject, body: text, answered_at: '', answer: '', status: 'done',
     author_email: '', author_name: '',
   });
-  trackAction('add', '연사 메일', sp.event_id, `${sp.name_snapshot || sp.id} — ${category}`,
+  trackAction('add', '연사 메일', sp.event_id, `${sp.name_snapshot || sp.name_en || sp.id} — ${category}`,
     { kind: 'speaker', id: sp.id });
   say(res.logged === false ? '보냈어요 — 다만 기록 저장에 실패했어요.' : '보냈어요.', true);
   renderSpeakerDr();
@@ -1287,7 +1314,7 @@ export async function revealBank(){
     return;
   }
   SPEAKER_LOGS.push({ ...row, id: res.id || `SL-tmp-${Date.now()}` });
-  trackAction('view', '연사 계좌·여권', sp.event_id, sp.name_snapshot || sp.id);
+  trackAction('view', '연사 계좌·여권', sp.event_id, sp.name_snapshot || sp.name_en || sp.id);
   bankRevealed = true;
   renderSpeakerDr();
 }
@@ -1304,6 +1331,7 @@ window.spStamp              = spStamp;
 window.asStamp              = asStamp;
 window.searchSpeakerContact = searchSpeakerContact;
 window.linkSpeakerContact   = linkSpeakerContact;
+window.spContactField     = spContactField;
 window.createSpeakerContact = createSpeakerContact;
 window.unlinkSpeakerContact = unlinkSpeakerContact;
 window.pullSpeakerProfile   = pullSpeakerProfile;

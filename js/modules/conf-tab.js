@@ -185,7 +185,7 @@ function countryChip(sp){
    안 되고, 연사명은 발표 당시 소속·직함과 함께 굳는 값이다. */
 const speakerName = (id) => {
   const sp = getSpeakerById(id);
-  return sp ? (sp.name_snapshot || '(이름 없음)') : '(삭제된 연사)';
+  return sp ? (sp.name_snapshot || sp.name_en || '(이름 없음)') : '(삭제된 연사)';
 };
 
 /* ══════════════════════════════════════════
@@ -530,14 +530,14 @@ function assignFormHtml(ev, s){
   const here = assignmentsOfSession(s.id);
   const pool = speakersForEvent(ev.key)
     .map(sp => ({ sp, roles: here.filter(a => a.speaker_id === sp.id).map(a => a.role) }))
-    .sort((a, b) => String(a.sp.name_snapshot || '').localeCompare(String(b.sp.name_snapshot || ''), 'ko'));
+    .sort((a, b) => String(a.sp.name_snapshot || a.sp.name_en || '').localeCompare(String(b.sp.name_snapshot || b.sp.name_en || ''), 'ko'));
   return `<div style="margin-top:9px;padding:10px;background:var(--i8);border-radius:8px">
     <div style="font-size:11px;font-weight:600;margin-bottom:7px">사람 배정</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:7px">
       <div><div class="fl">이 행사의 연사</div>
         <select class="fi" id="as-pick">
           <option value="">새로 적기</option>
-          ${pool.map(({ sp, roles }) => `<option value="${escAttr(sp.id)}">${escapeHtml(sp.name_snapshot || sp.id)}${roles.length ? ` (이 세션 ${roles.join('·')})` : ''}</option>`).join('')}
+          ${pool.map(({ sp, roles }) => `<option value="${escAttr(sp.id)}">${escapeHtml(sp.name_snapshot || sp.name_en || sp.id)}${roles.length ? ` (이 세션 ${roles.join('·')})` : ''}</option>`).join('')}
         </select></div>
       <div><div class="fl">이름 (새로 적을 때)</div><input class="fi" id="as-name" placeholder="성명"></div>
       <div><div class="fl">역할</div>
@@ -1198,7 +1198,7 @@ function peopleHtml(ev){
   }
 
   let list = all.slice().sort((a, b) =>
-    String(a.name_snapshot || '').localeCompare(String(b.name_snapshot || ''), 'ko'));
+    String(a.name_snapshot || a.name_en || '').localeCompare(String(b.name_snapshot || b.name_en || ''), 'ko'));
   if(confRoleFil) list = list.filter(sp => rolesOfSpeaker(sp.id).includes(confRoleFil));
   /* '__none__'은 «배정 없음» — 세션에 안 들어간 사람이 남아 있는지 보려는
      것이라 세션 하나를 고른 것과 성격이 같다. */
@@ -1368,7 +1368,7 @@ function peopleHtml(ev){
         style="background:var(--W);border:1px solid var(--i6);border-radius:10px;padding:11px 12px;
         margin-bottom:8px;cursor:pointer">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <span style="font-size:13px;font-weight:700">${escapeHtml(sp.name_snapshot || sp.id)}</span>${spLeftPill(sp)}
+          <span style="font-size:13px;font-weight:700">${escapeHtml(sp.name_snapshot || sp.name_en || sp.id)}</span>${spLeftPill(sp)}
           ${roles.map(r => `<span class="pill ${(SPEAKER_ROLES.find(x => x.key === r) || {}).cls || 'p-gray'}"
             style="font-size:9px">${escapeHtml(r)}</span>`).join('')}
           ${countryChip(sp)}
@@ -1419,7 +1419,7 @@ function peopleHtml(ev){
   }
 
   const row = (sp) => {
-    const name = sp.name_snapshot || sp.id;
+    const name = sp.name_snapshot || sp.name_en || sp.id;
     const roles = rolesOfSpeaker(sp.id);
     const pr = spProgress(sp, ev.key);
     const asg = assignmentsFor(sp.id);
