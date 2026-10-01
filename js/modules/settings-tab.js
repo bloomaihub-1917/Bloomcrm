@@ -3022,9 +3022,27 @@ export async function renameConfTrack(i){
     c.trackColors = map;
   }, `트랙 «${old}» → «${v}» (세션 ${mine.length}개)`);
 }
-export const removeConfTrack = (i) => pushConf(c => {
-  c.tracks = (c.tracks || []).filter((_, k) => k !== i);
-}, '트랙 삭제');
+/* 세션이 쓰고 있는 트랙을 지우면 세션들은 옛 이름을 그대로 들고 남는다 —
+   목록에서 사라진 줄 알았던 이름이 고르는 칸에 다시 나타난다. 이름을 바꾸려던
+   거라면 ✎가 세션까지 바꾼다는 걸 알려 준다. */
+export const removeConfTrack = (i) => {
+  const ev = EVENT_LIST.find(e => e.key === evDetailKey);
+  const t = ev ? (confCfg(ev.key).tracks || [])[i] : null;
+  const using = t ? CONF_SESSIONS.filter(x => x.event_id === ev.key && x.track === t) : [];
+  if(using.length && !confirm(`«${t}» 트랙을 쓰는 세션이 ${using.length}개 있어요:
+
+${
+      using.slice(0, 5).map(x => `· ${x.title_ko || x.title_en || x.id}`).join('
+')
+    }
+
+지워도 그 세션들은 «${t}»로 남아요. 이름을 바꾸려는 거라면 취소하고 ✎를 누르세요 — 세션도 함께 바뀝니다.
+
+그래도 지울까요?`)) return;
+  return pushConf(c => {
+    c.tracks = (c.tracks || []).filter((_, k) => k !== i);
+  }, '트랙 삭제');
+};
 
 /* ── 글자 칸 모아 저장 ── */
 export async function saveEvConf(){

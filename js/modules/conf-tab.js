@@ -2029,7 +2029,10 @@ export async function saveSessionEdit(sid){
   Object.assign(s, patch);
   say('저장 중…', true);
 
-  const res = await gSaveSession({ id: sid, ...patch });
+  /* 바뀐 칸만 보낸다. 전에는 칸을 전부 보냈는데, 다른 창(또는 트랙 이름을
+     바꾸기 전에 열어 둔 화면)에서 시간만 고쳐도 옛 트랙명이 같이 실려 가
+     설정에서 바꾼 트랙을 되돌려 놓았다 — 2026-10-01 AIA 세션 셋이 그렇게 됐다. */
+  const res = await gSaveSession({ id: sid, ...diff.reduce((o, k) => (o[k] = patch[k], o), {}) });
   if(!res || res.ok === false){
     Object.assign(s, backup);
     renderConf();
