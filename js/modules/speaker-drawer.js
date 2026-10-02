@@ -270,6 +270,13 @@ function missingBank(sp, evKey){
   /* 연사료를 주기로 했으면 계좌가 있어야 한다. 금액이 없으면 무보수라
      계좌를 묻지 않는다 — 안 줄 사람에게 계좌를 요구할 이유가 없다. */
   if(isReq(evKey, roles, 'bank') && sp.fee_amount && !sp.bank_account) out.push('계좌');
+  if(isDomestic(sp)){
+    if(isReq(evKey, roles, 'bank') && sp.fee_amount){
+      if(!sp.id_card_received_at) out.push('신분증');
+      if(!sp.bankbook_received_at) out.push('통장사본');
+    }
+    return out;
+  }
   if(isReq(evKey, roles, 'passport') && !sp.passport_received_at) out.push('여권');
   return out;
 }
@@ -1231,6 +1238,39 @@ const mask = (v, keep) => {
   return '•'.repeat(Math.min(s.length - k, 12)) + s.slice(-k);
 };
 
+/* 국적이나 거주지가 한국이면 국내 송금이다. 신분증과 통장사본(은행·계좌번호)만
+   받으면 되고, KIC 해외 양식·여권은 묻지 않는다. */
+const isDomestic = sp => [sp.nationality, sp.residence_country]
+  .some(v => v && countryName(v) === '대한민국');
+
+function domesticBankHtml(sp, nBank){
+  return `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <div style="font-size:11px;color:var(--am)">열람 중 — 기록에 남았습니다</div>
+      <button class="btn" style="font-size:10.5px;margin-left:auto" onclick="hideBank()">가리기</button>
+    </div>
+    <div style="border:1px solid var(--i6);border-radius:9px;padding:11px 12px">
+      <div style="font-size:12px;font-weight:700;margin-bottom:4px">국내 계좌 ${nBank ? NEED_MARK[nBank] : ''}</div>
+      <div style="font-size:10.5px;color:var(--i4);margin-bottom:8px;line-height:1.6">
+        국적이나 거주지가 한국이라 신분증과 통장사본만 받습니다.</div>
+      ${gotRow('신분증 받음', sp.id_card_received_at,
+        `spStamp('id_card_received_at','신분증 받음')`,
+        `spField('id_card_received_at',this.value,'신분증 받은 날')`, nBank || 'opt')}
+      ${fg('신분증 파일명', txt(sp.id_card_file, `spField('id_card_file',this.value,'신분증 파일')`, '원드라이브 파일명'))}
+      ${gotRow('통장사본 받음', sp.bankbook_received_at,
+        `spStamp('bankbook_received_at','통장사본 받음')`,
+        `spField('bankbook_received_at',this.value,'통장사본 받은 날')`, nBank || 'opt')}
+      ${fg('통장사본 파일명', txt(sp.bankbook_file, `spField('bankbook_file',this.value,'통장사본 파일')`, '원드라이브 파일명'))}
+      <div class="fgr">
+        ${fg('은행', txt(sp.bank_name, `spField('bank_name',this.value,'은행')`, '예: 국민은행'))}
+        ${fg('예금주', txt(sp.bank_holder, `spField('bank_holder',this.value,'예금주')`, '통장사본에 적힌 그대로'))}
+      </div>
+      ${fg('계좌번호', txt(sp.bank_account, `spField('bank_account',this.value,'계좌번호')`))}
+      <div style="font-size:10.5px;color:var(--i4);margin-top:-4px">
+        스캔본은 원드라이브에 두고 여기엔 파일명만 적습니다.</div>
+    </div>`;
+}
+
 function bankHtml(sp, evKey){
   const roles = rolesOfSpeaker(sp.id);
   const nBank = needState(evKey, roles, 'bank');
@@ -1252,6 +1292,8 @@ function bankHtml(sp, evKey){
       <button class="btn" style="font-size:11px;margin-top:8px" onclick="revealBank()">전체 보기</button>
     </div>`;
   }
+
+  if(isDomestic(sp)) return domesticBankHtml(sp, nBank);
 
   return `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">

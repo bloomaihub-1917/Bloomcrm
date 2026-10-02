@@ -62,6 +62,7 @@ const RULES = {
     bank_holder: H, bank_name: H, bank_account: H, bank_swift: H, bank_iban: H, bank_address: H,
     bank_holder_address: H, bank_holder_postal: H, bank_branch: H, bank_code: H, bank_note: H,
     bank_first_name: H, bank_last_name: H, bank_form_file: H,
+    id_card_file: H, bankbook_file: H,
   },
   speaker_contacts: { name: N, email: H, phone: H, note: H },
   speaker_logs: { counterpart: N, subject: H, body: H, answer: H },

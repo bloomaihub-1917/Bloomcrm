@@ -852,7 +852,12 @@ CREATE TABLE IF NOT EXISTS speakers (
   bank_first_name     TEXT,   -- 여권 표기 그대로
   bank_last_name      TEXT,
   bank_form_file      TEXT,   -- 받은 Word 양식 파일명
-  bank_form_received_at TEXT
+  bank_form_received_at TEXT,
+  -- 국내 연사(국적·거주지 한국)는 신분증·통장사본만 받는다
+  id_card_file          TEXT,
+  id_card_received_at   TEXT,
+  bankbook_file         TEXT,
+  bankbook_received_at  TEXT
 );
 
 -- 배정 한 줄 = 세션 × 사람 × 역할. 발제 정보가 여기 붙는다.

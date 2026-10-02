@@ -191,7 +191,8 @@ const TABLES = {
       'bank_holder', 'bank_name', 'bank_account', 'bank_swift', 'bank_iban',
       'bank_country', 'bank_address',
       'bank_holder_address', 'bank_holder_postal', 'bank_branch', 'bank_iban_kind', 'bank_code', 'bank_note',
-      'bank_first_name', 'bank_last_name', 'bank_form_file', 'bank_form_received_at'],
+      'bank_first_name', 'bank_last_name', 'bank_form_file', 'bank_form_received_at',
+      'id_card_file', 'id_card_received_at', 'bankbook_file', 'bankbook_received_at'],
   },
   session_speakers: {
     table: 'session_speakers', pk: 'id', idPrefix: 'SS-',

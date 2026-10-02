@@ -18,6 +18,10 @@ const COLS = [
   ['bank_last_name',      'Last Name (여권 표기)'],
   ['bank_form_file',      '받은 Word 양식 파일명'],
   ['bank_form_received_at', 'Word 양식 받은 날'],
+  ['id_card_file',        '신분증 파일명 (국내 연사)'],
+  ['id_card_received_at', '신분증 받은 날'],
+  ['bankbook_file',       '통장사본 파일명 (국내 연사)'],
+  ['bankbook_received_at', '통장사본 받은 날'],
 ];
 
 (async () => {
