@@ -857,7 +857,8 @@ CREATE TABLE IF NOT EXISTS speakers (
   id_card_file          TEXT,
   id_card_received_at   TEXT,
   bankbook_file         TEXT,
-  bankbook_received_at  TEXT
+  bankbook_received_at  TEXT,
+  bank_mode             TEXT    -- '' 자동(국적·거주지 둘 다 한국이면 국내) | 'domestic' | 'overseas'
 );
 
 -- 배정 한 줄 = 세션 × 사람 × 역할. 발제 정보가 여기 붙는다.

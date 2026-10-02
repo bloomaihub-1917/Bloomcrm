@@ -22,6 +22,7 @@ const COLS = [
   ['id_card_received_at', '신분증 받은 날'],
   ['bankbook_file',       '통장사본 파일명 (국내 연사)'],
   ['bankbook_received_at', '통장사본 받은 날'],
+  ['bank_mode',           "받는 양식 — '' 자동 | 'domestic' | 'overseas'"],
 ];
 
 (async () => {

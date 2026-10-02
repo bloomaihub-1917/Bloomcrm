@@ -1238,10 +1238,30 @@ const mask = (v, keep) => {
   return '•'.repeat(Math.min(s.length - k, 12)) + s.slice(-k);
 };
 
-/* 국적이나 거주지가 한국이면 국내 송금이다. 신분증과 통장사본(은행·계좌번호)만
-   받으면 되고, KIC 해외 양식·여권은 묻지 않는다. */
-const isDomestic = sp => [sp.nationality, sp.residence_country]
-  .some(v => v && countryName(v) === '대한민국');
+/* 국적과 거주지가 둘 다 한국이면 국내 송금이다(한쪽이 비어 있으면 다른 쪽을 따른다).
+   신분증과 통장사본(은행·계좌번호)만 받으면 되고, KIC 해외 양식·여권은 묻지 않는다.
+   한국 국적이지만 해외 계좌로 받는 사람처럼 특이한 경우는 bank_mode로 직접 정한다. */
+const isKR = v => countryName(v) === '대한민국';
+const autoDomestic = sp => {
+  const vs = [sp.nationality, sp.residence_country].filter(Boolean);
+  return vs.length > 0 && vs.every(isKR);
+};
+const isDomestic = sp => sp.bank_mode === 'domestic' ? true
+  : sp.bank_mode === 'overseas' ? false : autoDomestic(sp);
+
+/* 국내·해외 양식을 고르는 줄. «자동»은 국적·거주지로 정한다. */
+function bankModeRow(sp){
+  const auto = autoDomestic(sp) ? '국내' : '해외';
+  const opt = (v, l) => `<option value="${v}"${(sp.bank_mode || '') === v ? ' selected' : ''}>${l}</option>`;
+  return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:11px">
+    <span style="color:var(--i3)">받는 양식</span>
+    <select class="fi" style="width:auto;padding:3px 6px;font-size:11px"
+      onchange="spField('bank_mode',this.value,'계좌 양식')">
+      ${opt('', `자동 (${auto})`)}${opt('domestic', '국내 — 신분증·통장사본')}${opt('overseas', '해외 — KIC 양식·여권')}
+    </select>
+    ${sp.bank_mode ? '<span style="color:var(--am)">직접 정함</span>' : ''}
+  </div>`;
+}
 
 function domesticBankHtml(sp, nBank){
   return `
@@ -1249,10 +1269,11 @@ function domesticBankHtml(sp, nBank){
       <div style="font-size:11px;color:var(--am)">열람 중 — 기록에 남았습니다</div>
       <button class="btn" style="font-size:10.5px;margin-left:auto" onclick="hideBank()">가리기</button>
     </div>
+    ${bankModeRow(sp)}
     <div style="border:1px solid var(--i6);border-radius:9px;padding:11px 12px">
       <div style="font-size:12px;font-weight:700;margin-bottom:4px">국내 계좌 ${nBank ? NEED_MARK[nBank] : ''}</div>
       <div style="font-size:10.5px;color:var(--i4);margin-bottom:8px;line-height:1.6">
-        국적이나 거주지가 한국이라 신분증과 통장사본만 받습니다.</div>
+        신분증과 통장사본만 받습니다.</div>
       ${gotRow('신분증 받음', sp.id_card_received_at,
         `spStamp('id_card_received_at','신분증 받음')`,
         `spField('id_card_received_at',this.value,'신분증 받은 날')`, nBank || 'opt')}
@@ -1300,6 +1321,7 @@ function bankHtml(sp, evKey){
       <div style="font-size:11px;color:var(--am)">열람 중 — 기록에 남았습니다</div>
       <button class="btn" style="font-size:10.5px;margin-left:auto" onclick="hideBank()">가리기</button>
     </div>
+    ${bankModeRow(sp)}
     <div style="border:1px solid var(--i6);border-radius:9px;padding:11px 12px;margin-bottom:11px">
       <div style="font-size:12px;font-weight:700;margin-bottom:8px">계좌 ${nBank ? NEED_MARK[nBank] : ''}</div>
       <div style="font-size:10.5px;color:var(--i4);margin:-2px 0 10px;line-height:1.6">
