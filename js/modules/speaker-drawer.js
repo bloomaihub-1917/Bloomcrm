@@ -1263,7 +1263,21 @@ function bankHtml(sp, evKey){
       <div style="font-size:10.5px;color:var(--i4);margin:-2px 0 10px;line-height:1.6">
         KIC 연사 양식(Appendix 4 Bank Information Form) 순서대로 적습니다.
         해외 송금은 하나라도 빠지면 은행에서 되돌아옵니다.</div>
-      <div style="font-size:11px;font-weight:700;color:var(--i3);margin:0 0 6px">받는 사람 (Account Holder)</div>
+      ${gotRow('계좌 양식(Word) 받음', sp.bank_form_received_at,
+        `spStamp('bank_form_received_at','계좌 양식 받음')`,
+        `spField('bank_form_received_at',this.value,'계좌 양식 받은 날')`, nBank || 'opt')}
+      ${fg('양식 파일명', txt(sp.bank_form_file, `spField('bank_form_file',this.value,'계좌 양식 파일')`, '원드라이브 파일명'))}
+      <div style="font-size:11px;font-weight:700;color:var(--i3);margin:4px 0 6px">연사 (Personal Information)</div>
+      <div class="fgr">
+        ${fg('이름 (First Name)', txt(sp.bank_first_name, `spField('bank_first_name',this.value,'First Name')`, '여권 표기 그대로'))}
+        ${fg('성 (Last Name)', txt(sp.bank_last_name, `spField('bank_last_name',this.value,'Last Name')`, '여권 표기 그대로'))}
+      </div>
+      <div class="fgr">
+        ${fg('국적 (Nationality)', `<select class="fi" onchange="spField('nationality',this.value,'국적')">
+          <option value="">미정</option>${countryOptions(sp.nationality)}</select>`, '기본 정보의 국적과 같은 칸입니다')}
+        ${fg('소속 (Institution)', txt(sp.org_en, `spField('org_en',this.value,'소속 영문')`), '기본 정보의 소속 영문과 같은 칸입니다')}
+      </div>
+      <div style="font-size:11px;font-weight:700;color:var(--i3);margin:4px 0 6px">받는 사람 (Account Holder)</div>
       ${fg('예금주 (Name)', txt(sp.bank_holder, `spField('bank_holder',this.value,'예금주')`, '통장에 찍힌 영문 이름 그대로'))}
       <div class="fgr">
         ${fg('주소 (Address)', txt(sp.bank_holder_address, `spField('bank_holder_address',this.value,'예금주 주소')`))}

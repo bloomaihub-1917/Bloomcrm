@@ -848,7 +848,11 @@ CREATE TABLE IF NOT EXISTS speakers (
   bank_branch         TEXT,
   bank_iban_kind      TEXT,   -- 'ABA' | 'IBAN' | ''
   bank_code           TEXT,   -- Sort Code · BSB · CC 등
-  bank_note           TEXT
+  bank_note           TEXT,
+  bank_first_name     TEXT,   -- 여권 표기 그대로
+  bank_last_name      TEXT,
+  bank_form_file      TEXT,   -- 받은 Word 양식 파일명
+  bank_form_received_at TEXT
 );
 
 -- 배정 한 줄 = 세션 × 사람 × 역할. 발제 정보가 여기 붙는다.

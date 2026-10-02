@@ -14,6 +14,10 @@ const COLS = [
   ['bank_iban_kind',      "ABA·IBAN 구분 — 'ABA' | 'IBAN' | ''"],
   ['bank_code',           '은행 코드 (Sort Code · BSB · CC)'],
   ['bank_note',           '계좌 비고'],
+  ['bank_first_name',     'First Name (여권 표기)'],
+  ['bank_last_name',      'Last Name (여권 표기)'],
+  ['bank_form_file',      '받은 Word 양식 파일명'],
+  ['bank_form_received_at', 'Word 양식 받은 날'],
 ];
 
 (async () => {

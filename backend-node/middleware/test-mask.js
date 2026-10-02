@@ -61,6 +61,7 @@ const RULES = {
     stay_hotel: H, air_in_flight: H, air_out_flight: H, air_route: H,
     bank_holder: H, bank_name: H, bank_account: H, bank_swift: H, bank_iban: H, bank_address: H,
     bank_holder_address: H, bank_holder_postal: H, bank_branch: H, bank_code: H, bank_note: H,
+    bank_first_name: H, bank_last_name: H, bank_form_file: H,
   },
   speaker_contacts: { name: N, email: H, phone: H, note: H },
   speaker_logs: { counterpart: N, subject: H, body: H, answer: H },
