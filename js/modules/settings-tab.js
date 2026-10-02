@@ -1402,14 +1402,16 @@ export async function splitMixedOrgNames(){
 
 /* ══════════════════════════════════════════
    설정 탭 하위탭 전환 (원본 6439~6450행) / 시스템 구조 문서 하위탭 (원본 3168~3174행)
-   arch-pane-ev / arch-pane-sector / arch-pane-sys 3개 패널을 전환한다.
+   행사·기업 분류·사람 분류·공통 목록·데이터 정리·시스템 구조 패널을 전환한다.
    arch-pane-sys 내부의 정적 SVG 다이어그램(전체 아키텍처/구글시트 연동/
    업무 플로우) 자체는 index.html 정적 마크업에 그대로 남아있고,
    switchAV는 그 3개 다이어그램 중 무엇을 보여줄지 display 토글만 한다
    (JS 로직은 사실상 이 전환 함수 하나뿐).
 ══════════════════════════════════════════ */
 export function switchArchTab(tab){
-  ['ev','sector','val','sys'].forEach(t => {
+  /* 옛 이름으로 불러도 연다 — 다른 화면이 switchArchTab('sector')처럼 부를 수 있다 */
+  tab = ({ sector: 'org', val: 'common' })[tab] || tab;
+  ['ev','org','people','common','clean','sys'].forEach(t => {
     const btn  = document.getElementById('arch-tab-'+t);
     const pane = document.getElementById('arch-pane-'+t);
     // 모바일 본문 전환줄 — 사이드바 버튼과 같은 상태를 유지해야 지금 어느 탭인지 보인다
@@ -1421,8 +1423,10 @@ export function switchArchTab(tab){
   const sysnav = document.getElementById('sbp-arch-sysnav');
   if(sysnav) sysnav.style.display = tab==='sys' ? 'block' : 'none';
   if(tab==='ev')     { closeEvDetail(); }   // 목록부터 — 상세는 카드를 눌러서 연다
-  if(tab==='sector') { renderSectorList(); renderPartTypeList(); renderTagList(); }
-  if(tab==='val')    { renderCodeListPicker(); renderAliasList(); mountEquipCatalog('eqcat-rows', ''); renderEvCfgList(); }
+  if(tab==='org')    { renderSectorList(); mountCodeList('org'); }
+  if(tab==='people') { renderPartTypeList(); renderTagList(); renderAliasList(); mountCodeList('people'); }
+  if(tab==='common') { mountCodeList('common'); mountEquipCatalog('eqcat-rows', ''); }
+  if(tab==='clean')  { renderSectorList(); }
 }
 
 // archV는 이 탭에서만 쓰는 로컬 UI 상태라 state.js로 옮기지 않고 모듈 스코프에 둠
@@ -1499,23 +1503,25 @@ window.removeTag              = removeTag;
    ② 삭제 대신 숨김 — 이미 저장된 값의 이름표를 지우면 화면에 코드가 그대로
       노출된다. active='no'로 내려 새로 고르지만 못 하게 한다.
 ══════════════════════════════════════════ */
+/* group — 설정의 어느 탭에 보일지. 그 값을 쓰는 화면 기준으로 나눈다:
+   org 기업DB, people 마스터DB·CRM, common 그 밖에 모든 행사가 같이 쓰는 것. */
 const CL_DEFS = [
-  { key: 'contact_cat',  label: '연락처 카테고리',    perEvent: false },
-  { key: 'org_kind',     label: '기업 종류',          perEvent: false },
-  { key: 'org_status',   label: '기업 상태',          perEvent: false },
-  { key: 'contact_role', label: '전시 담당자 역할',   perEvent: false },
-  { key: 'item_cat',     label: '금액 항목 분류',     perEvent: false },
-  { key: 'currency',     label: '통화',               perEvent: false },
-  { key: 'log_channel',  label: '문의 채널',          perEvent: false },
-  { key: 'log_cat',      label: '문의 분류',          perEvent: false },
-  { key: 'booth_type',   label: '부스 타입',          perEvent: true  },
-  { key: 'grade',        label: '스폰서 등급',        perEvent: true  },
-  { key: 'equip_cat',    label: '비품 카탈로그 분류', perEvent: true  },
+  { key: 'contact_cat',  label: '연락처 카테고리',    perEvent: false, group: 'people' },
+  { key: 'org_kind',     label: '기업 종류',          perEvent: false, group: 'org' },
+  { key: 'org_status',   label: '기업 상태',          perEvent: false, group: 'org' },
+  { key: 'contact_role', label: '전시 담당자 역할',   perEvent: false, group: 'people' },
+  { key: 'item_cat',     label: '금액 항목 분류',     perEvent: false, group: 'common' },
+  { key: 'currency',     label: '통화',               perEvent: false, group: 'common' },
+  { key: 'log_channel',  label: '문의 채널',          perEvent: false, group: 'common' },
+  { key: 'log_cat',      label: '문의 분류',          perEvent: false, group: 'common' },
+  { key: 'booth_type',   label: '부스 타입',          perEvent: true,  group: 'common' },
+  { key: 'grade',        label: '스폰서 등급',        perEvent: true,  group: 'common' },
+  { key: 'equip_cat',    label: '비품 카탈로그 분류', perEvent: true,  group: 'common' },
   /* 연사 역할 — 행사마다 다르게 부른다(발제자/좌장 대신 «발표»/«의장»을 쓰는
      학회도 있다). CL_DEFS에 넣지 않으면 설정 화면에 나오지 않는다 —
      pay_method가 그래서 고칠 수 없는 채로 있다. */
-  { key: 'speaker_role', label: '연사 역할',          perEvent: true  },
-  { key: 'graphic_cat',  label: '그래픽 품목 분류',   perEvent: true  },
+  { key: 'speaker_role', label: '연사 역할',          perEvent: true,  group: 'common' },
+  { key: 'graphic_cat',  label: '그래픽 품목 분류',   perEvent: true,  group: 'common' },
 ];
 const CL_COLORS = [['', '— 없음 —'], ['p-blue', '파랑'], ['p-green', '초록'], ['p-amber', '주황'],
   ['p-teal', '청록'], ['p-purple', '보라'], ['p-red', '빨강'], ['p-gray', '회색'],
@@ -1533,11 +1539,23 @@ function clRowsOf(key, scope){
     .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0));
 }
 
+/* 선택 목록 칸은 하나다(cl-key·cl-scope·cl-rows). 탭마다 따로 그리면 id가
+   겹치므로, 그 하나를 지금 탭의 자리(cl-slot-<탭>)로 옮겨 붙이고 그 탭의
+   목록만 고르게 한다. */
+let clGroup = 'common';
+function mountCodeList(group){
+  clGroup = group;
+  const box = document.getElementById('cl-box'), slot = document.getElementById('cl-slot-' + group);
+  if(box && slot && box.parentElement !== slot) slot.appendChild(box);
+  renderCodeListPicker();
+}
+
 export function renderCodeListPicker(){
   const kel = document.getElementById('cl-key');
   if(!kel) return;
-  const cur = kel.value || CL_DEFS[0].key;
-  kel.innerHTML = CL_DEFS.map(d =>
+  const defs = CL_DEFS.filter(d => d.group === clGroup);
+  const cur = defs.some(d => d.key === kel.value) ? kel.value : defs[0]?.key;
+  kel.innerHTML = defs.map(d =>
     `<option value="${escAttr(d.key)}"${cur === d.key ? ' selected' : ''}>${escapeHtml(d.label)}</option>`).join('');
   renderCodeList();
 }
