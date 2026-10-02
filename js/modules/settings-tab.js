@@ -1422,6 +1422,8 @@ export async function splitMixedOrgNames(){
 export function switchArchTab(tab){
   /* 옛 이름으로 불러도 연다 — 다른 화면이 switchArchTab('sector')처럼 부를 수 있다 */
   tab = ({ sector: 'org', val: 'common' })[tab] || tab;
+  /* 업로드 화면에서도 설정 사이드바가 보이므로, 거기서 누르면 설정으로 먼저 돌아온다 */
+  if(window.curApp && window.curApp !== 'arch') window.switchApp?.('arch', null);
   ['ev','org','people','common','clean','sys'].forEach(t => {
     const btn  = document.getElementById('arch-tab-'+t);
     const pane = document.getElementById('arch-pane-'+t);

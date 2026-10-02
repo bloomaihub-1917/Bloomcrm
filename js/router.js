@@ -29,8 +29,15 @@ export function switchApp(app, btn){
   const pg = document.getElementById('page-'+app);
   if(pg) pg.classList.add('on');
   document.querySelectorAll('.sbp').forEach(p => p.classList.remove('on'));
-  const sbp = document.getElementById('sbp-'+app);
+  /* 업로드는 설정의 하위 메뉴다 — 사이드바를 설정 것으로 두고, 그 아래에
+     업로드 하위 메뉴를 펼친다 */
+  const sbp = document.getElementById('sbp-'+(app==='up' ? 'arch' : app));
   if(sbp) sbp.classList.add('on');
+  const upSub = document.getElementById('arch-up-sub');
+  if(upSub) upSub.style.display = app==='up' ? 'block' : 'none';
+  if(app==='up') document.querySelectorAll('#sbp-arch [id^="arch-tab-"]')
+    .forEach(b => b.classList.toggle('on', b.id === 'arch-tab-up'));
+  else document.getElementById('arch-tab-up')?.classList.remove('on');
   if(app==='crm')    { buildEvFil(); renderCrm(); }
   if(app==='exh')    { buildExhEvList(); renderExh(); }
   if(app==='evdb')   { initEvDbTab(); }

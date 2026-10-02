@@ -1490,7 +1490,7 @@ export function rejectMg(id, btn){
 export function switchUV(v, btn){
   upV = v;
   ['upload','log','merge'].forEach(id=>{const el=document.getElementById('upv-'+id);if(el)el.style.display=id===v?'block':'none'});
-  document.querySelectorAll('#sbp-up .nr').forEach(b=>b.classList.remove('on'));
+  document.querySelectorAll('#arch-up-sub .nr').forEach(b=>b.classList.remove('on'));
   if(btn) btn.classList.add('on');
   const tt={upload:'업로드 & AI 파서',log:'수집 로그',merge:'기업 병합 관리'};
   const sb={upload:'파일 업로드 후 자동 파싱',log:'업로드 이력 확인',merge:'동일 기업 통합 관리'};

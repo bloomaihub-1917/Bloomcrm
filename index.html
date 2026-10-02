@@ -131,17 +131,6 @@
         <button class="nr" onclick="filterStat('new',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>신규<span class="nbg" id="ct-nw">2</span></button>
       </div></div>
     </div>
-    <!-- Upload sidebar -->
-    <div class="sbp" id="sbp-up">
-      <!-- 업로드는 설정 안의 메뉴라, 돌아갈 곳도 설정이다 -->
-      <div class="sbi" style="padding-top:8px"><button class="nr" onclick="switchApp('arch',null)">← 설정</button></div>
-      <div class="sbs s-v"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">업로드 메뉴</div></div>
-      <div class="sbi">
-        <button class="nr on" onclick="switchUV('upload',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>파일 업로드 & AI 파서</button>
-        <button class="nr" onclick="switchUV('log',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>수집 로그</button>
-        <button class="nr" onclick="switchUV('merge',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>기업 병합 관리</button>
-      </div></div>
-    </div>
     <!-- Arch sidebar -->
     <div class="sbp" id="sbp-arch">
       <div class="sbs s-v"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">설정 메뉴</div></div>
@@ -153,12 +142,15 @@
         <button id="arch-tab-clean"  class="nr"    onclick="switchArchTab('clean')"  >🧹 데이터 정리</button>
         <button id="arch-tab-sys"    class="nr"    onclick="switchArchTab('sys')"    >⚙️ 시스템 정보</button>
         <!-- 업로드는 매일 쓰는 탭이 아니라 위 탭줄에서 내렸다 — 설정 안에서 들어간다 -->
-        <button class="nr" onclick="switchApp('up',null)">📤 데이터 업로드</button>
-      </div></div>
-      <div class="sbi">
-        <button class="nr on" onclick="switchAV('arch',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>전체 아키텍처</button>
-        <button class="nr" onclick="switchAV('sheet',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>구글시트 연동</button>
-        <button class="nr" onclick="switchAV('flow',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>업무 플로우</button>
+        <button class="nr" id="arch-tab-up" onclick="switchApp('up',null)">📤 데이터 업로드</button>
+        <!-- 업로드의 하위 메뉴 — 업로드에 들어가 있을 때만 그 아래로 펼친다.
+             전에는 업로드에 들어가면 사이드바가 업로드 메뉴로 통째로 바뀌어
+             설정의 다른 메뉴로 돌아갈 길이 «← 설정» 하나뿐이었다. -->
+        <div id="arch-up-sub" style="display:none;padding-left:14px">
+          <button class="nr nr-sub on" onclick="switchUV('upload',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>파일 업로드 & AI 파서</button>
+          <button class="nr nr-sub" onclick="switchUV('log',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>수집 로그</button>
+          <button class="nr nr-sub" onclick="switchUV('merge',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>기업 병합 관리</button>
+        </div>
       </div></div>
     </div>
     <!-- CO sidebar -->
