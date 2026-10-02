@@ -47,7 +47,7 @@ import {
   evPartDone,
   codeList,
   confCfg, confDays, speakerNeed,
-  CONF_SESSIONS,
+  CONF_SESSIONS, EXHIBITORS, SPEAKERS,
 } from '../state.js';
 
 import {
@@ -1209,6 +1209,17 @@ export function renderEvMgr(){
             return `<span class="pill ${escAttr(st.cls)}" style="margin-right:3px"
               title="${escAttr(st.label)}">${escapeHtml(p.label)}${st.key === 'done' ? ' ✓' : ''}</span>`; }).join('')
           || '<span style="font-size:10.5px;color:var(--i5)">진행 파트 없음</span>'}</div>
+        ${(() => {
+          /* 마감일·한도는 상세를 열어야 보였다(설정값 탭에 따로 모아 둔 요약은 없앴다) —
+             목록에서 «이 행사는 정해 뒀나»만 한눈에 보이게 한 줄로 적는다 */
+          const cfg = EXH_CFG[e.key] || {};
+          const due = Object.entries(cfg.due || {}).filter(([, v]) => v);
+          const b = cfg.book || {};
+          if(!due.length && !b.chars) return '';
+          return `<div style="font-size:10.5px;color:var(--i4);margin-top:4px">${
+            due.map(([k, v]) => `${escapeHtml(DUE_LABEL[k] || k)} ${escapeHtml(v)}`).join(' · ')}${
+            b.chars ? `${due.length ? ' · ' : ''}프로그램북 ${Number(b.chars).toLocaleString()}자` : ''}</div>`;
+        })()}
       </div>
       <button onclick="event.stopPropagation();removeEventFromList(${i})"
         style="background:none;border:1px solid var(--i6);border-radius:5px;padding:3px 8px;
@@ -1426,7 +1437,65 @@ export function switchArchTab(tab){
   if(tab==='org')    { renderSectorList(); mountCodeList('org'); }
   if(tab==='people') { renderPartTypeList(); renderTagList(); renderAliasList(); mountCodeList('people'); }
   if(tab==='common') { mountCodeList('common'); mountEquipCatalog('eqcat-rows', ''); }
-  if(tab==='clean')  { renderSectorList(); }
+  if(tab==='clean')  { renderSectorList(); renderCleanCounts(); }
+  if(tab==='sys')    { renderSysInfo(); }
+}
+
+/* 정리 도구마다 «지금 손볼 것이 몇 건인지»를 먼저 보여준다. 0건인 도구를
+   눌러 «분리할 항목이 없어요»를 받는 일이 없게. 국가명은 화면에 올라온
+   연락처로 센다 — 실제 정리는 서버 원본을 다시 읽어서 한다. */
+function renderCleanCounts(){
+  const set = (k, n) => {
+    const el = document.getElementById('clean-cnt-' + k);
+    if(!el) return;
+    el.textContent = n ? `${n.toLocaleString()}건` : '할 일 없음';
+    el.className = 'pill ' + (n ? 'p-amber' : 'p-gray');
+  };
+  set('country', contacts.filter(c => c.country && c.country !== countryName(c.country)).length);
+  set('orgsplit', contacts.filter(c => BILINGUAL_FIELD_PAIRS.some(({ ko, en }) =>
+    c[ko] && !c[en] && splitMixedOrgName(c[ko]))).length);
+  try { set('unreg', collectUnregisteredSectors().length); } catch(e){ set('unreg', 0); }
+}
+
+/* 시스템 정보 — 배포 버전·서버 상태·데이터 건수 */
+async function renderSysInfo(){
+  const el = document.getElementById('sys-info');
+  if(!el) return;
+  const box = (t, rows) => `<div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:14px;margin-bottom:14px">
+    <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:8px">${t}</div>
+    ${rows.map(([k, v]) => `<div style="display:flex;gap:10px;font-size:12px;padding:4px 0;border-top:1px solid var(--i7)">
+      <span style="width:120px;color:var(--i4);flex:0 0 auto">${k}</span><span style="color:var(--i1)">${v}</span></div>`).join('')}
+  </div>`;
+  const n = (a) => (a?.length || 0).toLocaleString();
+  const data = box('데이터 건수', [
+    ['연락처', n(contacts)], ['기업', n(CO_DB)], ['행사', n(EVENT_LIST)],
+    ['행사 참여 기록', n(participations)], ['전시 참가기업', n(EXHIBITORS)],
+    ['컨퍼런스 세션', n(CONF_SESSIONS)], ['연사', n(SPEAKERS)],
+  ]);
+  const who = box('접속', [
+    ['로그인', escapeHtml(currentUser?.email || '-')],
+    ['모드', API_BASE_URL ? '실제 서버' : '<b style="color:var(--am)">테스트 모드 (저장 안 됨)</b>'],
+  ]);
+  el.innerHTML = box('서버', [['상태', '확인 중…']]) + data + who;
+
+  let server;
+  if(!API_BASE_URL) server = [['상태', '테스트 모드라 서버에 묻지 않아요']];
+  else {
+    try {
+      const t0 = performance.now();
+      const r = await fetch(API_BASE_URL + '/health', { cache: 'no-store' });
+      const j = await r.json();
+      server = [
+        ['상태', j.ok ? '<b style="color:var(--g)">정상</b>' : '<b style="color:var(--re)">응답 이상</b>'],
+        ['배포 버전', `<code>${escapeHtml(j.commit || '-')}</code>`],
+        ['응답 시간', `${Math.round(performance.now() - t0)}ms`],
+        ['주소', `<code style="font-size:11px">${escapeHtml(API_BASE_URL)}</code>`],
+      ];
+    } catch(e){
+      server = [['상태', '<b style="color:var(--re)">연결 안 됨</b> — 네트워크나 서버를 확인하세요']];
+    }
+  }
+  if(document.getElementById('sys-info') === el) el.innerHTML = box('서버', server) + data + who;
 }
 
 // archV는 이 탭에서만 쓰는 로컬 UI 상태라 state.js로 옮기지 않고 모듈 스코프에 둠
@@ -1568,27 +1637,19 @@ export function renderCodeList(){
 
   // 행사별로 나뉘지 않는 목록은 범위 선택을 잠근다 — 고를 수 있게 두면 값이
   // 어디에 저장됐는지 헷갈린다
-  const prev = sel.value;
-  sel.disabled = !def.perEvent;
-  sel.innerHTML = '<option value="">공통 (모든 행사)</option>'
-    + (def.perEvent ? EVENT_LIST.map(e => {
-        const k = e.key || e.name || e;
-        return `<option value="${escAttr(k)}"${prev === k ? ' selected' : ''}>${escapeHtml(k)} 전용</option>`;
-      }).join('') : '');
-  if(!def.perEvent) sel.value = '';
-  // 고른 범위에 아무것도 없고 다른 범위에 들어 있으면 그쪽을 연다 — 실제로는
-  // 행사 전용으로 들어 있는 목록을 "공통"으로 열어 텅 빈 화면을 보여주면
-  // 목록이 없는 줄 안다
-  if(def.perEvent && !clRowsOf(key, sel.value).length){
-    const has = CODE_LISTS.find(c => c.list_key === key && c.event_id);
-    if(has && [...sel.options].some(o => o.value === has.event_id)) sel.value = has.event_id;
-  }
+  /* 설정 탭에서는 공통만 고친다. 행사 전용 목록은 행사 › 상세(부스·컨퍼런스)에서 —
+     같은 값을 두 곳에서 고치게 두면 어느 쪽이 맞는지 헷갈린다. */
+  sel.disabled = true;
+  sel.innerHTML = `<option value="">${def.perEvent ? '공통 — 새 행사 기본값' : '공통 (모든 행사)'}</option>`;
+  sel.value = '';
 
   const scope = clScope();
   const rows = clRowsOf(key, scope);
   const inherited = def.perEvent && scope && !rows.length;
+  const evNote = def.perEvent ? `<div style="font-size:11px;color:var(--i4);margin-bottom:8px">행사 전용 목록이 없는 행사가 이 목록을 씁니다. 한 행사만 다르게 하려면 <b>행사 › 그 행사 › ${
+    def.key === 'speaker_role' ? '컨퍼런스' : '부스'}</b>에서 고치세요.</div>` : '';
 
-  el.innerHTML = (inherited
+  el.innerHTML = evNote + (inherited
     ? `<div style="font-size:11px;color:var(--i4);margin-bottom:8px">이 행사 전용 목록이 없어 <b>공통 목록</b>을 씁니다. 아래에서 항목을 추가하면 이 행사 전용 목록이 새로 만들어지고, 그때부터 공통 대신 이 목록만 쓰입니다.</div>
        <div style="opacity:.55;pointer-events:none">${clRowsHtml(clRowsOf(key, ''), true)}</div>`
     : clRowsHtml(rows, false))
@@ -2521,7 +2582,10 @@ async function saveEvParts(evKey, parts){
    그걸 쓰고 없으면 공통을 쓴다(state.js codeList). 그 규칙이 화면에서 안 보이면
    "고쳤는데 안 바뀐다"가 되므로, 지금 보고 있는 게 공통인지 이 행사 것인지를
    머리말에 배지로 붙인다. */
-const EV_BOOTH_LISTS = [['booth_type','부스 타입'], ['grade','스폰서 등급']];
+/* 비품·그래픽 분류도 행사마다 다르다. 전에는 설정값 탭에서 «○○ 전용»을 골라야
+   고칠 수 있었다 — 한 행사의 값은 그 행사 상세에서 고친다. */
+const EV_BOOTH_LISTS = [['booth_type','부스 타입'], ['grade','스폰서 등급'],
+  ['equip_cat','비품 카탈로그 분류'], ['graphic_cat','그래픽 품목 분류']];
 
 function evBoothHtml(ev){
   return EV_BOOTH_LISTS.map(([key, label]) => {

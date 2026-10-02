@@ -151,11 +151,10 @@
         <button id="arch-tab-people" class="nr"    onclick="switchArchTab('people')" >👤 사람 분류</button>
         <button id="arch-tab-common" class="nr"    onclick="switchArchTab('common')" >📋 공통 목록</button>
         <button id="arch-tab-clean"  class="nr"    onclick="switchArchTab('clean')"  >🧹 데이터 정리</button>
-        <button id="arch-tab-sys"    class="nr"    onclick="switchArchTab('sys')"    >⚙️ 시스템 구조</button>
+        <button id="arch-tab-sys"    class="nr"    onclick="switchArchTab('sys')"    >⚙️ 시스템 정보</button>
         <!-- 업로드는 매일 쓰는 탭이 아니라 위 탭줄에서 내렸다 — 설정 안에서 들어간다 -->
         <button class="nr" onclick="switchApp('up',null)">📤 데이터 업로드</button>
       </div></div>
-      <div class="sbs s-v" id="sbp-arch-sysnav" style="display:none"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">시스템 구조</div></div>
       <div class="sbi">
         <button class="nr on" onclick="switchAV('arch',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>전체 아키텍처</button>
         <button class="nr" onclick="switchAV('sheet',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>구글시트 연동</button>
@@ -440,7 +439,7 @@
     <div class="mob-title" id="mob-arch-ttl">설정</div>
   </div>
   <div class="tb">
-    <div class="tb-t">설정 <span class="tb-s">행사 · 기업 분류 · 사람 분류 · 공통 목록 · 데이터 정리</span></div>
+    <div class="tb-t">설정 <span class="tb-s">행사 · 기업 분류 · 사람 분류 · 공통 목록 · 데이터 정리 · 시스템</span></div>
   </div>
 
   <!-- 모바일 전용 탭 전환 — 사이드바를 열었다 닫지 않고 바로 옮겨 다닐 수 있게.
@@ -452,7 +451,7 @@
       <button class="seg-b"    id="arch-mtab-people" onclick="switchArchTab('people')" style="flex:1">사람</button>
       <button class="seg-b"    id="arch-mtab-common" onclick="switchArchTab('common')" style="flex:1">공통</button>
       <button class="seg-b"    id="arch-mtab-clean"  onclick="switchArchTab('clean')"  style="flex:1">정리</button>
-      <button class="seg-b"    id="arch-mtab-sys"    onclick="switchArchTab('sys')"    style="flex:1">구조</button>
+      <button class="seg-b"    id="arch-mtab-sys"    onclick="switchArchTab('sys')"    style="flex:1">시스템</button>
       <button class="seg-b"    onclick="switchApp('up',null)" style="flex:1">업로드</button>
     </div>
   </div>
@@ -672,7 +671,7 @@
     <div style="font-size:13px;font-weight:700;color:var(--i1);margin-bottom:6px">데이터 정리</div>
     <div style="font-size:11px;color:var(--i4);margin-bottom:14px">한 번씩 돌리는 청소 도구입니다. 여러 줄을 한꺼번에 바꾸니 무엇이 바뀌는지 확인하고 누르세요.</div>
     <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:16px;margin-top:0">
-      <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:6px">🌐 국가 데이터 정리</div>
+      <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:6px">🌐 국가 데이터 정리 <span id="clean-cnt-country" class="pill p-gray" style="margin-left:4px;font-weight:600"></span></div>
       <div style="font-size:11px;color:var(--i4);margin-bottom:10px">시트에 "KR", "SG" 같은 약자·영문명이 섞여 있으면 한글 국가명(예: 대한민국)으로 통일해서 구글시트까지 다시 저장해요.</div>
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn bp" onclick="normalizeAllCountries()" style="min-width:120px">국가명 일괄 정리</button>
@@ -681,14 +680,14 @@
     </div>
 
     <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:16px;margin-top:16px">
-      <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:6px">🏢 기업/직책/부서 국문·영문 분리</div>
+      <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:6px">🏢 기업/직책/부서 국문·영문 분리 <span id="clean-cnt-orgsplit" class="pill p-gray" style="margin-left:4px;font-weight:600"></span></div>
       <div style="font-size:11px;color:var(--i4);margin-bottom:10px">"한국보건산업진흥원 Korea Health Industry Development Institute"처럼 국문·영문이 한 칸에 붙어 들어간 기업명·직책·부서를 국문/영문으로 분리해서 저장해요. ("SK 바이오사이언스"처럼 영문이 1단어인 경우는 원래 이름의 일부로 보고 그대로 둡니다.)</div>
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn bp" onclick="splitMixedOrgNames()" style="min-width:120px">기업명 분리 정리</button>
         <span id="orgsplit-fix-msg" style="font-size:11px;color:var(--i3)"></span>
       </div>
     </div>
-    <div style="font-size:12px;font-weight:700;color:var(--i2);margin:22px 0 4px">🗂 미등록 섹터 그룹으로 묶기</div>
+    <div style="font-size:12px;font-weight:700;color:var(--i2);margin:22px 0 4px">🗂 미등록 섹터 그룹으로 묶기 <span id="clean-cnt-unreg" class="pill p-gray" style="margin-left:4px;font-weight:600"></span></div>
     <div style="font-size:11px;color:var(--i4);margin-bottom:10px">업로드 데이터에 나온 섹터 값(예: Pharma, CRO, Vaccine)이 아직 섹터 체계에 등록 안 돼서 대시보드에 각각 따로 나올 때, 여기서 골라 하나의 그룹(메인 섹터) 아래로 묶을 수 있어요.</div>
     <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:14px">
       <div id="sector-unreg-list" style="display:flex;flex-direction:column;gap:4px;max-height:200px;overflow-y:auto;margin-bottom:10px"></div>
@@ -742,109 +741,14 @@
     </div>
   </div>
 
-  <!-- ── 시스템 구조 탭 ── -->
-  <div id="arch-pane-sys" style="display:none">
-
-  <div class="tb"><div class="tb-t" id="arch-ttl">시스템 아키텍처 <span class="tb-s">구글시트 연동 구조</span></div></div>
-  <div class="aw">
-    <div id="av-arch">
-      <div class="at">통합 Contact CRM 시스템 아키텍처</div>
-      <div class="ad2">파일 업로드 → AI 파싱 → Master DB → 구글시트 동기화 → CRM 파이프라인으로 이어지는 전체 데이터 흐름</div>
-      <div class="asvg">
-        <svg viewBox="0 0 780 430" width="100%" style="min-width:680px">
-          <defs><marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></marker></defs>
-          <text x="20" y="22" font-size="9" font-weight="700" fill="#9C9890" letter-spacing="1">INPUT SOURCES</text>
-          <rect x="18" y="32" width="100" height="42" rx="7" fill="#EEF2FF" stroke="#3B5BDB" stroke-width="1"/><text x="68" y="49" text-anchor="middle" font-size="11" font-weight="600" fill="#3B5BDB">Excel / CSV</text><text x="68" y="64" text-anchor="middle" font-size="10" fill="#6B6860">행사 명단</text>
-          <rect x="130" y="32" width="100" height="42" rx="7" fill="#EEF2FF" stroke="#3B5BDB" stroke-width="1"/><text x="180" y="49" text-anchor="middle" font-size="11" font-weight="600" fill="#3B5BDB">구글시트</text><text x="180" y="64" text-anchor="middle" font-size="10" fill="#6B6860">링크 연동</text>
-          <rect x="242" y="32" width="100" height="42" rx="7" fill="#EEF2FF" stroke="#3B5BDB" stroke-width="1"/><text x="292" y="49" text-anchor="middle" font-size="11" font-weight="600" fill="#3B5BDB">명함 스캔</text><text x="292" y="64" text-anchor="middle" font-size="10" fill="#6B6860">이미지 OCR</text>
-          <rect x="354" y="32" width="100" height="42" rx="7" fill="#EEF2FF" stroke="#3B5BDB" stroke-width="1"/><text x="404" y="49" text-anchor="middle" font-size="11" font-weight="600" fill="#3B5BDB">직접 입력</text><text x="404" y="64" text-anchor="middle" font-size="10" fill="#6B6860">수동 등록</text>
-          <line x1="68" y1="74" x2="68" y2="122" stroke="#C8C4BC" stroke-width="1.2" marker-end="url(#arr)"/>
-          <line x1="180" y1="74" x2="160" y2="122" stroke="#C8C4BC" stroke-width="1.2" marker-end="url(#arr)"/>
-          <line x1="292" y1="74" x2="256" y2="122" stroke="#C8C4BC" stroke-width="1.2" marker-end="url(#arr)"/>
-          <line x1="404" y1="74" x2="360" y2="122" stroke="#C8C4BC" stroke-width="1.2" marker-end="url(#arr)"/>
-          <text x="20" y="116" font-size="9" font-weight="700" fill="#9C9890" letter-spacing="1">AI PARSER</text>
-          <rect x="18" y="128" width="360" height="56" rx="9" fill="#F5F3FF" stroke="#6D28D9" stroke-width="1.5"/>
-          <text x="198" y="150" text-anchor="middle" font-size="12" font-weight="700" fill="#6D28D9">AI 자동 파서</text>
-          <text x="40" y="170" font-size="10" fill="#6B6860">언어 감지</text><text x="118" y="170" font-size="10" fill="#6B6860">컬럼 매핑</text><text x="200" y="170" font-size="10" fill="#6B6860">카테고리 분류</text><text x="290" y="170" font-size="10" fill="#6B6860">중복 감지</text>
-          <line x1="198" y1="184" x2="198" y2="226" stroke="#6D28D9" stroke-width="1.5" stroke-dasharray="4 2" marker-end="url(#arr)"/>
-          <text x="20" y="220" font-size="9" font-weight="700" fill="#9C9890" letter-spacing="1">MASTER DB</text>
-          <rect x="18" y="232" width="360" height="56" rx="9" fill="#F0FDF4" stroke="#16A34A" stroke-width="1.5"/>
-          <text x="198" y="254" text-anchor="middle" font-size="12" font-weight="700" fill="#16A34A">통합 Master DB</text>
-          <text x="40" y="274" font-size="10" fill="#6B6860">연락처 247명</text><text x="135" y="274" font-size="10" fill="#6B6860">기업 62개</text><text x="215" y="274" font-size="10" fill="#6B6860">이력 로그</text><text x="295" y="274" font-size="10" fill="#6B6860">병합 관리</text>
-          <line x1="120" y1="288" x2="68" y2="332" stroke="#C8C4BC" stroke-width="1.2" marker-end="url(#arr)"/>
-          <line x1="198" y1="288" x2="198" y2="332" stroke="#C8C4BC" stroke-width="1.2" marker-end="url(#arr)"/>
-          <line x1="276" y1="288" x2="330" y2="332" stroke="#C8C4BC" stroke-width="1.2" marker-end="url(#arr)"/>
-          <text x="20" y="326" font-size="9" font-weight="700" fill="#9C9890" letter-spacing="1">OUTPUTS</text>
-          <rect x="18" y="338" width="108" height="48" rx="7" fill="#FFFBEB" stroke="#C97B0A" stroke-width="1"/><text x="72" y="357" text-anchor="middle" font-size="11" font-weight="600" fill="#C97B0A">Company DB</text><text x="72" y="373" text-anchor="middle" font-size="10" fill="#6B6860">행사 이력 타임라인</text>
-          <rect x="142" y="338" width="108" height="48" rx="7" fill="#EEF2FF" stroke="#3B5BDB" stroke-width="1"/><text x="196" y="357" text-anchor="middle" font-size="11" font-weight="600" fill="#3B5BDB">Contact CRM</text><text x="196" y="373" text-anchor="middle" font-size="10" fill="#6B6860">파이프라인 관리</text>
-          <rect x="266" y="338" width="112" height="48" rx="7" fill="#F0FDF4" stroke="#16A34A" stroke-width="1"/><text x="322" y="357" text-anchor="middle" font-size="11" font-weight="600" fill="#16A34A">구글시트 동기화</text><text x="322" y="373" text-anchor="middle" font-size="10" fill="#6B6860">실시간 업데이트</text>
-          <text x="514" y="22" font-size="9" font-weight="700" fill="#9C9890" letter-spacing="1">GOOGLE SHEETS</text>
-          <rect x="504" y="32" width="260" height="344" rx="11" fill="#FAFAF8" stroke="#E4E1DB" stroke-width="1.5" stroke-dasharray="6 3"/>
-          <text x="634" y="54" text-anchor="middle" font-size="12" font-weight="700" fill="#3C3A36">구글시트 연동</text>
-          <rect x="522" y="66" width="224" height="34" rx="6" fill="#F0FDF4" stroke="#16A34A" stroke-width="1"/><text x="634" y="81" text-anchor="middle" font-size="11" font-weight="600" fill="#16A34A">Master DB 시트</text><text x="634" y="96" text-anchor="middle" font-size="10" fill="#6B6860">전체 연락처 · 자동 동기화</text>
-          <rect x="522" y="110" width="224" height="34" rx="6" fill="#EEF2FF" stroke="#3B5BDB" stroke-width="1"/><text x="634" y="125" text-anchor="middle" font-size="11" font-weight="600" fill="#3B5BDB">Companies 시트</text><text x="634" y="140" text-anchor="middle" font-size="10" fill="#6B6860">기업 정규화 · 지부 관계</text>
-          <rect x="522" y="154" width="224" height="34" rx="6" fill="#FFFBEB" stroke="#C97B0A" stroke-width="1"/><text x="634" y="169" text-anchor="middle" font-size="11" font-weight="600" fill="#C97B0A">CRM Pipeline 시트</text><text x="634" y="184" text-anchor="middle" font-size="10" fill="#6B6860">타겟 기업 · 컨택 상태</text>
-          <rect x="522" y="198" width="224" height="34" rx="6" fill="#F5F3FF" stroke="#6D28D9" stroke-width="1"/><text x="634" y="213" text-anchor="middle" font-size="11" font-weight="600" fill="#6D28D9">Upload Log 시트</text><text x="634" y="228" text-anchor="middle" font-size="10" fill="#6B6860">수집 출처 · 날짜 자동 태깅</text>
-          <rect x="522" y="242" width="224" height="34" rx="6" fill="#F0FDFA" stroke="#0F766E" stroke-width="1"/><text x="634" y="257" text-anchor="middle" font-size="11" font-weight="600" fill="#0F766E">Event History 시트</text><text x="634" y="272" text-anchor="middle" font-size="10" fill="#6B6860">행사 참여 이력 · 타임라인</text>
-          <line x1="382" y1="260" x2="500" y2="260" stroke="#3B5BDB" stroke-width="1.5" stroke-dasharray="5 3" marker-end="url(#arr)"/>
-          <text x="440" y="254" text-anchor="middle" font-size="9" fill="#6B6860">양방향 동기화</text>
-          <rect x="522" y="290" width="224" height="48" rx="6" fill="#FEF2F2" stroke="#DC2626" stroke-width="1" stroke-dasharray="4 2"/><text x="634" y="310" text-anchor="middle" font-size="11" font-weight="600" fill="#DC2626">Apps Script</text><text x="634" y="328" text-anchor="middle" font-size="10" fill="#6B6860">자동화 트리거 · 이메일 알림</text>
-        </svg>
-      </div>
-      <div class="aleg">
-        <div class="ali"><div class="ald" style="background:#EEF2FF;border:1px solid #3B5BDB"></div>입력 소스</div>
-        <div class="ali"><div class="ald" style="background:#F5F3FF;border:1px solid #6D28D9"></div>AI 처리</div>
-        <div class="ali"><div class="ald" style="background:#F0FDF4;border:1px solid #16A34A"></div>Master DB</div>
-        <div class="ali"><div class="ald" style="background:#FFFBEB;border:1px solid #C97B0A"></div>출력/뷰</div>
-        <div class="ali"><div class="ald" style="background:transparent;border:1px dashed #9C9890"></div>구글시트 컨테이너</div>
-      </div>
-      <div class="asteps">
-        <div class="astep"><div class="snum">1</div><div class="sttl">파일 업로드</div><div class="sdsc">Excel, CSV, 구글시트 링크, 명함 사진 등 다양한 형태로 데이터 입력</div></div>
-        <div class="astep"><div class="snum">2</div><div class="sttl">AI 자동 파싱</div><div class="sdsc">언어 감지 → 컬럼 매핑 → 카테고리 분류 → 중복 감지 자동 수행</div></div>
-        <div class="astep"><div class="snum">3</div><div class="sttl">병합 검토</div><div class="sdsc">유사 기업명 통합 제안 (Samsung ↔ 삼성전자). 담당자 승인/거절</div></div>
-        <div class="astep"><div class="snum">4</div><div class="sttl">Master DB 저장</div><div class="sdsc">통합 DB에 추가. 출처·날짜 자동 태깅. 구글시트와 실시간 동기화</div></div>
-        <div class="astep"><div class="snum">5</div><div class="sttl">CRM 활용</div><div class="sdsc">Company DB 타임라인 조회 및 Contact CRM 파이프라인으로 컨택 관리</div></div>
-        <div class="astep"><div class="snum">6</div><div class="sttl">Apps Script</div><div class="sdsc">컨택 상태 변경 시 이메일 알림, 주간 리포트 자동 발송</div></div>
-      </div>
-    </div>
-    <div id="av-sheet" style="display:none">
-      <div class="at">구글시트 연동 구조 상세</div>
-      <div class="ad2">각 시트의 역할과 컬럼 구조, Apps Script 연동 방법</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">
-        <div class="astep" style="padding:13px 15px"><div style="display:flex;align-items:center;gap:7px;margin-bottom:9px"><div style="width:9px;height:9px;border-radius:2px;background:#16A34A;flex-shrink:0"></div><div class="sttl" style="margin:0">Master DB 시트</div></div><div class="sdsc" style="margin-bottom:7px">전체 연락처 통합 관리. AI 파서가 직접 쓰는 시트.</div><div style="font-size:10px;color:var(--i3);line-height:1.9;font-family:monospace;background:var(--i8);padding:7px;border-radius:5px">id | name | nameEn | org | orgEn<br>title | cat | lang | source | date<br>status | event | note | addedBy</div></div>
-        <div class="astep" style="padding:13px 15px"><div style="display:flex;align-items:center;gap:7px;margin-bottom:9px"><div style="width:9px;height:9px;border-radius:2px;background:#3B5BDB;flex-shrink:0"></div><div class="sttl" style="margin:0">Companies 시트</div></div><div class="sdsc" style="margin-bottom:7px">기업 정규화. 본사/지부 관계, 통합 기업명 관리.</div><div style="font-size:10px;color:var(--i3);line-height:1.9;font-family:monospace;background:var(--i8);padding:7px;border-radius:5px">key | name | nameEn | sector<br>hq | mainBranch | branches[]<br>contactCount | eventCount</div></div>
-        <div class="astep" style="padding:13px 15px"><div style="display:flex;align-items:center;gap:7px;margin-bottom:9px"><div style="width:9px;height:9px;border-radius:2px;background:#C97B0A;flex-shrink:0"></div><div class="sttl" style="margin:0">CRM Pipeline 시트</div></div><div class="sdsc" style="margin-bottom:7px">타겟 기업 컨택 현황. CRM 페이지와 연동.</div><div style="font-size:10px;color:var(--i3);line-height:1.9;font-family:monospace;background:var(--i8);padding:7px;border-radius:5px">id | name | event | role<br>status | priority | assignee<br>lastActivity | currentStage</div></div>
-        <div class="astep" style="padding:13px 15px"><div style="display:flex;align-items:center;gap:7px;margin-bottom:9px"><div style="width:9px;height:9px;border-radius:2px;background:#6D28D9;flex-shrink:0"></div><div class="sttl" style="margin:0">Upload Log 시트</div></div><div class="sdsc" style="margin-bottom:7px">모든 업로드 이력 자동 기록. 수집 출처 추적.</div><div style="font-size:10px;color:var(--i3);line-height:1.9;font-family:monospace;background:var(--i8);padding:7px;border-radius:5px">date | source | file | cat<br>added | dup | merged | by<br>notes</div></div>
-      </div>
-      <div class="astep" style="margin-top:11px;padding:13px 15px">
-        <div class="sttl">Apps Script 자동화 예시</div>
-        <div style="margin-top:7px;background:var(--i0);border-radius:var(--r);padding:13px;font-family:monospace;font-size:11px;color:#A8F5A0;line-height:1.9;overflow-x:auto">
-          <span style="color:#74C0FC">// 컨택 상태 변경 시 자동 알림</span><br>
-          <span style="color:#FFD166">function</span> onStatusChange(row, newStatus) {<br>
-          &nbsp;&nbsp;<span style="color:#FFD166">if</span> (newStatus === <span style="color:#A8F5A0">'확정'</span>) {<br>
-          &nbsp;&nbsp;&nbsp;&nbsp;MailApp.sendEmail({<br>
-          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;to: <span style="color:#A8F5A0">'manager@company.com'</span>,<br>
-          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;subject: <span style="color:#A8F5A0">`[CRM] ${row.name} 확정`</span>,<br>
-          &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;body: <span style="color:#A8F5A0">`담당자: ${row.assignee}`</span><br>
-          &nbsp;&nbsp;&nbsp;&nbsp;});<br>
-          &nbsp;&nbsp;}<br>
-          }
-        </div>
-      </div>
-    </div>
-    <div id="av-flow" style="display:none">
-      <div class="at">업무 플로우 — 행사 전 컨택 관리</div>
-      <div class="ad2">행사 6개월 전부터 당일까지의 팀 업무 흐름</div>
-      <div style="display:flex;flex-direction:column">
-        <div style="display:flex;align-items:stretch"><div style="width:96px;flex-shrink:0;padding:11px 12px;background:var(--ad);border:1px solid var(--i6);border-radius:8px 0 0 0;font-size:10px;font-weight:700;color:var(--a);display:flex;align-items:center">D-6개월</div><div style="flex:1;padding:11px 14px;background:var(--W);border:1px solid var(--i6);border-left:none;border-radius:0 8px 0 0"><div style="font-size:12px;font-weight:700;color:var(--i1);margin-bottom:3px">타겟 기업 발굴</div><div style="font-size:11px;color:var(--i3)">이전 행사 참가자 DB 분석 → 신규 기업 리서치 → Master DB 업로드 → CRM 파이프라인 등록</div></div></div>
-        <div style="display:flex;align-items:stretch"><div style="width:96px;flex-shrink:0;padding:11px 12px;background:var(--i8);border:1px solid var(--i6);border-top:none;font-size:10px;font-weight:700;color:var(--i2);display:flex;align-items:center">D-4개월</div><div style="flex:1;padding:11px 14px;background:var(--W);border:1px solid var(--i6);border-left:none;border-top:none"><div style="font-size:12px;font-weight:700;color:var(--i1);margin-bottom:3px">초기 컨택</div><div style="font-size:11px;color:var(--i3)">이메일/전화 첫 컨택 → 컨택 이력 CRM 기록 → 상태 '컨택중' 업데이트 → 담당자 배정</div></div></div>
-        <div style="display:flex;align-items:stretch"><div style="width:96px;flex-shrink:0;padding:11px 12px;background:var(--i8);border:1px solid var(--i6);border-top:none;font-size:10px;font-weight:700;color:var(--am);display:flex;align-items:center">D-2개월</div><div style="flex:1;padding:11px 14px;background:var(--W);border:1px solid var(--i6);border-left:none;border-top:none"><div style="font-size:12px;font-weight:700;color:var(--i1);margin-bottom:3px">제안서 발송 & 협의</div><div style="font-size:11px;color:var(--i3)">스폰서십/참여 패키지 제안 → 미팅 진행 → 조건 협의 → '협의중' 상태 → 계약서 검토</div></div></div>
-        <div style="display:flex;align-items:stretch"><div style="width:96px;flex-shrink:0;padding:11px 12px;background:var(--gb);border:1px solid var(--i6);border-top:none;font-size:10px;font-weight:700;color:var(--g);display:flex;align-items:center">D-1개월</div><div style="flex:1;padding:11px 14px;background:var(--W);border:1px solid var(--i6);border-left:none;border-top:none"><div style="font-size:12px;font-weight:700;color:var(--i1);margin-bottom:3px">계약 확정</div><div style="font-size:11px;color:var(--i3)">계약 체결 → '확정' 상태 → 구글시트 자동 업데이트 → 운영팀 인수인계</div></div></div>
-        <div style="display:flex;align-items:stretch"><div style="width:96px;flex-shrink:0;padding:11px 12px;background:var(--i8);border:1px solid var(--i6);border-top:none;border-radius:0 0 0 8px;font-size:10px;font-weight:700;color:var(--i2);display:flex;align-items:center">행사 후</div><div style="flex:1;padding:11px 14px;background:var(--W);border:1px solid var(--i6);border-left:none;border-top:none;border-radius:0 0 8px 0"><div style="font-size:12px;font-weight:700;color:var(--i1);margin-bottom:3px">사후 관리</div><div style="font-size:11px;color:var(--i3)">행사 참여 이력 → Company DB 타임라인 업데이트 → 다음 행사 타겟 DB 구축 시작</div></div></div>
-      </div>
-    </div>
+  <!-- ── 시스템 정보 탭 ──
+       예전엔 구글시트 시절 구조도가 있었다. 지금 돌아가는 것과 달라서 오히려
+       헷갈렸다 — 실제 배포 버전·서버 상태·데이터 건수를 보여준다. -->
+  <div id="arch-pane-sys" style="padding:16px 20px;max-width:900px;display:none">
+    <div style="font-size:13px;font-weight:700;color:var(--i1);margin-bottom:6px">시스템 정보</div>
+    <div style="font-size:11px;color:var(--i4);margin-bottom:14px">지금 쓰고 있는 버전과 서버 상태, 데이터 건수입니다. 문제가 생겼을 때 이 화면을 캡처해 보내주면 원인을 찾기 쉬워요.</div>
+    <div id="sys-info"></div>
   </div>
-</div>
 </div>
 
 <!-- ④ Company DB -->
