@@ -215,6 +215,12 @@ export const SPEAKER_ROLES = [
     profile: 'req', bio_pro: 'opt', bio_work: 'opt', photo: 'opt',
     title: '', abstract: '', slides: '',
     consent: 'req', bank: 'req', passport: '', travel: '' } },
+  /* 귀빈은 개회사·축사·환영사를 하는 VIP다. 성명·소속·직함과 사진만 받는다 —
+     연사료가 없어 계좌를 묻지 않고, 발제·초록·발표자료·동의서도 받지 않는다. */
+  { key: '귀빈', label: '귀빈(축사)', cls: 'p-amber', needs: {
+    profile: 'req', bio_profile: 'opt', photo: 'req',
+    title: '', abstract: '', slides: '',
+    consent: '', bank: '', passport: '', travel: '' } },
 ];
 
 export const speakerRoleOf = (v) => SPEAKER_ROLES.find(r => r.key === v) || null;

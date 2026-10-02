@@ -1274,7 +1274,8 @@ function peopleHtml(ev){
       onclick="clearConfSearch()">검색 지우기</button>
   </div>` : '';
 
-  const sessions = sessionsForEvent(ev.key);
+  /* 식사·휴식은 시간표에만 있고 연사가 없다 — 연사 화면의 세션 칩에서 뺀다 */
+  const sessions = sessionsForEvent(ev.key).filter(s => !isBreak(s));
   const noSess = all.filter(sp => !assignmentsFor(sp.id).length).length;
   const headN = (ids) => all.filter(sp => assignmentsFor(sp.id).some(a => ids.has(a.session_id))).length;
   const chipTracks = [...new Set(sessions.map(s => s.track).filter(Boolean))];
