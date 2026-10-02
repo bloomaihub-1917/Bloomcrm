@@ -25,7 +25,7 @@ import {
   sessionsForEvent, speakersForEvent, assignmentsOfSession, assignmentsFor,
   getSpeakerById, rolesOfSpeaker, speakerNeedList, speakerNeed,
   contactsOfSpeaker, SPEAKER_CONTACTS, SPEAKER_LOGS,
-  contacts,
+  contacts, participations,
 } from '../state.js';
 import { SPEAKER_ROLES, NEED_MARK, SPEAKER_NEEDS } from '../constants.js';
 import { td, escapeHtml, escAttr, isMobile, leftPill, countryName } from '../utils.js';
@@ -44,6 +44,7 @@ import {
   saveSpeaker, deleteSpeaker,
   saveSessionSpeaker, deleteSessionSpeaker,
   saveSpeakerContact, deleteSpeakerContact, deleteSpeakerLog,
+  postToSheet,
 } from '../api.js';
 import { trackAction, changed, removed, created } from './audit-tab.js';
 import { IMPORT_SHEETS, IMPORT_GUIDE } from '../conf-import-spec.js';
@@ -2151,6 +2152,7 @@ export async function addAssign(sid){
   SESSION_SPEAKERS.push(made);
   trackAction('add', '세션 배정', ev.key, `${speakerName(spId)} — ${role}`,
     { kind: 'session', id: sid, ev: ev.key });
+  await syncPartRole(spId);
 
   /* 고른 자리에 끼워 넣는다. 좌장은 대개 맨 앞이라, 넣고 나서 매번 끌어
      올리게 하면 그게 일이 된다. */
@@ -2174,7 +2176,30 @@ export async function setAssignRole(aid, role){
   trackAction('edit', '세션 배정', confEvent, `${speakerName(a.speaker_id)} — ${was} → ${role}`,
     changed('session_speakers', aid, { role: was }, { role },
       { kind: 'session', id: a.session_id, ev: confEvent }));
+  await syncPartRole(a.speaker_id);
   renderConf();
+}
+
+/* 마스터DB의 참가 역할을 세션 역할에 맞춘다. 같은 사람이 어느 행사에선 VIP,
+   어느 행사에선 연사라서 사람(cat)이 아니라 그 행사 참가 줄에 적는다.
+   그 행사에서 맡은 자리가 모두 VIP면 VIP, 하나라도 발표·좌장 등이 있으면 연사.
+   연사·VIP가 아닌 참가 줄(스폰서 등)은 건드리지 않는다. */
+async function syncPartRole(spId){
+  const sp = getSpeakerById(spId);
+  if(!sp || !sp.contact_id) return;
+  const roles = assignmentsFor(spId).map(a => a.role);
+  if(!roles.length) return;
+  const want = roles.every(r => r === 'VIP') ? 'VIP' : '연사';
+  const p = participations.find(x => String(x.contactId) === String(sp.contact_id)
+    && x.eventId === sp.event_id && (x.role === '연사' || x.role === 'VIP'));
+  if(!p || p.role === want) return;
+  const was = p.role;
+  const r = await postToSheet({ sheet: 'participations',
+    row: [p.id, p.eventId, '', p.contactId, '', '', '', want, p.note || '', p.matched || ''] },
+    '행사 참가 역할', { silent: true });
+  if(!r || !r.ok) return;
+  p.role = want;
+  trackAction('edit', '행사 참가 역할', sp.event_id, `${speakerName(spId)} — ${was} → ${want}`);
 }
 
 export async function removeAssign(aid){

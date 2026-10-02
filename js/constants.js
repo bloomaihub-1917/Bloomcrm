@@ -215,9 +215,11 @@ export const SPEAKER_ROLES = [
     profile: 'req', bio_pro: 'opt', bio_work: 'opt', photo: 'opt',
     title: '', abstract: '', slides: '',
     consent: 'req', bank: 'req', passport: '', travel: '' } },
-  /* 귀빈은 개회사·축사·환영사를 하는 VIP다. 성명·소속·직함과 사진만 받는다 —
-     연사료가 없어 계좌를 묻지 않고, 발제·초록·발표자료·동의서도 받지 않는다. */
-  { key: '귀빈', label: '귀빈(축사)', cls: 'p-amber', needs: {
+  /* VIP는 개회사·축사·환영사를 하는 귀빈이다. 성명·소속·직함과 사진만 받는다 —
+     연사료가 없어 계좌를 묻지 않고, 발제·초록·발표자료·동의서도 받지 않는다.
+     키를 마스터DB 참가 역할(PART_TYPES_SEED의 VIP)과 같게 둔다 — 세션 역할을
+     바꾸면 그 행사의 참가 역할도 VIP/연사로 따라간다(conf-tab.js syncPartRole). */
+  { key: 'VIP', label: 'VIP (축사)', cls: 'p-gold', needs: {
     profile: 'req', bio_profile: 'opt', photo: 'req',
     title: '', abstract: '', slides: '',
     consent: '', bank: '', passport: '', travel: '' } },
