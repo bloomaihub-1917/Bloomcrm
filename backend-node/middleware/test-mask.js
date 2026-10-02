@@ -60,6 +60,7 @@ const RULES = {
     cv_file: H, photo_file: H, consent_file: H, passport_file: H,
     stay_hotel: H, air_in_flight: H, air_out_flight: H, air_route: H,
     bank_holder: H, bank_name: H, bank_account: H, bank_swift: H, bank_iban: H, bank_address: H,
+    bank_holder_address: H, bank_holder_postal: H, bank_branch: H, bank_code: H, bank_note: H,
   },
   speaker_contacts: { name: N, email: H, phone: H, note: H },
   speaker_logs: { counterpart: N, subject: H, body: H, answer: H },

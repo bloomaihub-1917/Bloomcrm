@@ -841,7 +841,14 @@ CREATE TABLE IF NOT EXISTS speakers (
   bank_swift   TEXT,
   bank_iban    TEXT,
   bank_country TEXT,
-  bank_address TEXT
+  bank_address TEXT,
+  -- KIC 양식(Appendix 4)에 있는 나머지 칸. add-speaker-bank-kic.js
+  bank_holder_address TEXT,
+  bank_holder_postal  TEXT,
+  bank_branch         TEXT,
+  bank_iban_kind      TEXT,   -- 'ABA' | 'IBAN' | ''
+  bank_code           TEXT,   -- Sort Code · BSB · CC 등
+  bank_note           TEXT
 );
 
 -- 배정 한 줄 = 세션 × 사람 × 역할. 발제 정보가 여기 붙는다.

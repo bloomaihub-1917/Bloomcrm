@@ -1260,21 +1260,42 @@ function bankHtml(sp, evKey){
     </div>
     <div style="border:1px solid var(--i6);border-radius:9px;padding:11px 12px;margin-bottom:11px">
       <div style="font-size:12px;font-weight:700;margin-bottom:8px">계좌 ${nBank ? NEED_MARK[nBank] : ''}</div>
+      <div style="font-size:10.5px;color:var(--i4);margin:-2px 0 10px;line-height:1.6">
+        KIC 연사 양식(Appendix 4 Bank Information Form) 순서대로 적습니다.
+        해외 송금은 하나라도 빠지면 은행에서 되돌아옵니다.</div>
+      <div style="font-size:11px;font-weight:700;color:var(--i3);margin:0 0 6px">받는 사람 (Account Holder)</div>
+      ${fg('예금주 (Name)', txt(sp.bank_holder, `spField('bank_holder',this.value,'예금주')`, '통장에 찍힌 영문 이름 그대로'))}
       <div class="fgr">
-        ${fg('예금주', txt(sp.bank_holder, `spField('bank_holder',this.value,'예금주')`, '연사 본인 명의'))}
-        ${fg('은행', txt(sp.bank_name, `spField('bank_name',this.value,'은행')`))}
+        ${fg('주소 (Address)', txt(sp.bank_holder_address, `spField('bank_holder_address',this.value,'예금주 주소')`))}
+        ${fg('우편번호 (Postal Code)', txt(sp.bank_holder_postal, `spField('bank_holder_postal',this.value,'예금주 우편번호')`))}
       </div>
-      ${fg('계좌번호', txt(sp.bank_account, `spField('bank_account',this.value,'계좌번호')`))}
-      <div style="font-size:10.5px;color:var(--i4);margin:-4px 0 10px">
-        해외 송금이면 아래를 함께 받습니다 — 하나라도 빠지면 은행에서 되돌아옵니다.</div>
+      <div style="font-size:11px;font-weight:700;color:var(--i3);margin:4px 0 6px">은행 (Bank Info)</div>
       <div class="fgr">
-        ${fg('SWIFT / BIC', txt(sp.bank_swift, `spField('bank_swift',this.value,'SWIFT')`))}
-        ${fg('IBAN', txt(sp.bank_iban, `spField('bank_iban',this.value,'IBAN')`))}
+        ${fg('은행 (Bank Name)', txt(sp.bank_name, `spField('bank_name',this.value,'은행')`))}
+        ${fg('지점 (Branch Name)', txt(sp.bank_branch, `spField('bank_branch',this.value,'지점')`))}
       </div>
       <div class="fgr">
+        ${fg('은행 주소 (Bank Address)', txt(sp.bank_address, `spField('bank_address',this.value,'은행 주소')`), '도시와 국가는 꼭 들어가야 합니다')}
         ${fg('은행 국가', txt(sp.bank_country, `spField('bank_country',this.value,'은행 국가')`))}
-        ${fg('은행 주소', txt(sp.bank_address, `spField('bank_address',this.value,'은행 주소')`))}
       </div>
+      <div class="fgr">
+        ${fg('SWIFT / BIC', txt(sp.bank_swift, `spField('bank_swift',this.value,'SWIFT')`, '8~11자'),
+          sp.bank_swift && !/^[A-Za-z0-9]{8}([A-Za-z0-9]{3})?$/.test(sp.bank_swift.trim())
+            ? '<span style="color:var(--am)">8자나 11자가 아니에요 — 다시 확인해 주세요</span>' : '')}
+        ${fg('계좌번호 (Account No.)', txt(sp.bank_account, `spField('bank_account',this.value,'계좌번호')`))}
+      </div>
+      <div class="fgr">
+        ${fg('ABA / IBAN 구분', `<select class="fi" onchange="spField('bank_iban_kind',this.value,'ABA·IBAN 구분')">
+          ${[['', '(없음)'], ['ABA', 'ABA (미국)'], ['IBAN', 'IBAN']].map(([v, l]) =>
+            `<option value="${v}"${(sp.bank_iban_kind || '') === v ? ' selected' : ''}>${l}</option>`).join('')}
+        </select>`)}
+        ${fg('ABA / IBAN 번호', txt(sp.bank_iban, `spField('bank_iban',this.value,'ABA·IBAN')`))}
+      </div>
+      ${fg('은행 코드 (Bank Codes)', txt(sp.bank_code, `spField('bank_code',this.value,'은행 코드')`, '예: Sort Code 123456'),
+        '영국 Sort Code(6자리) · 호주 BSB(6자리) · 캐나다 CC(0+기관번호+지점번호)는 꼭 받습니다')}
+      ${fg('비고 (Other Remarks)', area(sp.bank_note, `spField('bank_note',this.value,'계좌 비고')`, '', 2))}
+      <div style="font-size:10.5px;color:var(--i4);margin-top:-4px">
+        연사료는 USD로 보냅니다 — USD를 받을 수 있는 계좌인지 확인하세요.</div>
     </div>
     <div style="border:1px solid var(--i6);border-radius:9px;padding:11px 12px">
       <div style="font-size:12px;font-weight:700;margin-bottom:8px">여권 ${nPass ? NEED_MARK[nPass] : ''}</div>
