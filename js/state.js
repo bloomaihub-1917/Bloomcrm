@@ -18,7 +18,7 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import { EVENT_LIST_SEED, CL, CP, CAT_KEYS, EVENT_PARTS, PART_STATES,
-  SPEAKER_ROLES, SPEAKER_NEEDS } from './constants.js';
+  SPEAKER_ROLES, SPEAKER_NEEDS, COUNTRIES } from './constants.js';
 
 /* ── 백엔드 API 베이스 URL (Node/Express, backend-node/) ──
    Render 등에 배포한 뒤 이 값만 바꾸면 된다(과거 GS_URL과 동일한 역할).
@@ -603,6 +603,38 @@ export const logsOfSpeaker      = (speakerId) => SPEAKER_LOGS.filter(x => x.spea
 /* 이 연사가 맡은 역할들 — 배정에서 모은다. 한 사람이 여러 역할일 수 있다. */
 export function rolesOfSpeaker(speakerId){
   return [...new Set(assignmentsFor(speakerId).map(a => a.role).filter(Boolean))];
+}
+
+/* ══════════════════════════════════════════
+   계좌·서류 — 연사 표, 진행률, 드로어가 모두 이 기준 하나로 센다.
+   국적과 거주지가 둘 다 한국이면(한쪽이 비면 다른 쪽을 따른다) 국내다.
+   특이한 경우는 bank_mode('domestic' | 'overseas')로 직접 정한다.
+   국내: 신분증 + 통장사본 + 계좌번호. 여권은 묻지 않는다.
+   해외: 계좌번호(KIC 양식) + 여권(역할 설정을 따른다).
+══════════════════════════════════════════ */
+const KR = COUNTRIES.find(c => c.code === 'KR');
+const isKR = v => { const s = String(v || '').trim().toLowerCase();
+  return !!s && (s === 'kr' || s === KR.nameKo || KR.aliases.includes(s)); };
+export function autoDomestic(sp){
+  const vs = [sp.nationality, sp.residence_country].filter(Boolean);
+  return vs.length > 0 && vs.every(isKR);
+}
+export function isDomesticSpeaker(sp){
+  return sp.bank_mode === 'domestic' ? true
+    : sp.bank_mode === 'overseas' ? false : autoDomestic(sp);
+}
+/* 이 연사가 연사료를 받는 역할인가 — 맡은 역할 중 하나라도 계좌를 묻는다.
+   VIP처럼 계좌를 묻지 않는 역할만 맡았으면 연사료도 «해당 없음»이다. */
+export function paysFee(sp){
+  return rolesOfSpeaker(sp.id).some(r => speakerNeed(sp.event_id, r, 'bank'));
+}
+/* 계좌 쪽에서 받아야 할 것들. got은 받은 날 또는 값. */
+export function bankDocs(sp){
+  return isDomesticSpeaker(sp)
+    ? [{ key: 'id_card',  label: '신분증',   got: sp.id_card_received_at },
+       { key: 'bankbook', label: '통장사본', got: sp.bankbook_received_at },
+       { key: 'account',  label: '계좌번호', got: sp.bank_account }]
+    : [{ key: 'account',  label: '계좌',     got: sp.bank_account }];
 }
 
 /* ══════════════════════════════════════════

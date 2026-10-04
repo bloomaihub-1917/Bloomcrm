@@ -23,6 +23,7 @@ import {
   getSpeakerById, assignmentsFor, rolesOfSpeaker,
   contactsOfSpeaker, logsOfSpeaker,
   confCfg, speakerNeed, speakerNeedList,
+  isDomesticSpeaker, autoDomestic, bankDocs, paysFee,
 } from '../state.js';
 import { SPEAKER_ROLES, NEED_MARK, NEED_LABEL } from '../constants.js';
 import { td, escapeHtml, escAttr, countryOptions, countryName } from '../utils.js';
@@ -33,7 +34,7 @@ import {
 } from '../api.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 import { patchContact } from './db-tab.js';
-import { confLocked, confLockNotice, renderConf, buildConfEvList } from './conf-tab.js';
+import { confLocked, confLockNotice, renderConf, buildConfEvList, syncPartRole } from './conf-tab.js';
 
 let spId = null;
 let spTab = 'basic';
@@ -269,14 +270,9 @@ function missingBank(sp, evKey){
   const out = [];
   /* 연사료를 주기로 했으면 계좌가 있어야 한다. 금액이 없으면 무보수라
      계좌를 묻지 않는다 — 안 줄 사람에게 계좌를 요구할 이유가 없다. */
-  if(isReq(evKey, roles, 'bank') && sp.fee_amount && !sp.bank_account) out.push('계좌');
-  if(isDomestic(sp)){
-    if(isReq(evKey, roles, 'bank') && sp.fee_amount){
-      if(!sp.id_card_received_at) out.push('신분증');
-      if(!sp.bankbook_received_at) out.push('통장사본');
-    }
-    return out;
-  }
+  if(isReq(evKey, roles, 'bank') && sp.fee_amount)
+    bankDocs(sp).filter(d => !d.got).forEach(d => out.push(d.label));
+  if(isDomestic(sp)) return out;   // 국내 연사는 여권을 묻지 않는다
   if(isReq(evKey, roles, 'passport') && !sp.passport_received_at) out.push('여권');
   return out;
 }
@@ -572,6 +568,7 @@ export async function linkSpeakerContact(cid){
   fill('org_ko', c.orgKo); fill('org_en', c.orgEn);
   fill('title_ko', c.titleKo); fill('title_en', c.titleEn);
   await patchSpeaker(patch, `연락처 연결 (${c.nameKo || c.nameEn || c.id})`);
+  await syncPartRole(sp.id);   // 마스터DB 참가 역할(VIP·연사)을 맞추거나 만든다
 }
 /* 연락처의 값으로 스냅숏을 덮는다. 자동으로 하지 않는 이유는, 손으로 고쳐
    둔 직함(«대표» → «Founder & CEO» 같은)이 조용히 날아가기 때문이다. */
@@ -1238,16 +1235,8 @@ const mask = (v, keep) => {
   return '•'.repeat(Math.min(s.length - k, 12)) + s.slice(-k);
 };
 
-/* 국적과 거주지가 둘 다 한국이면 국내 송금이다(한쪽이 비어 있으면 다른 쪽을 따른다).
-   신분증과 통장사본(은행·계좌번호)만 받으면 되고, KIC 해외 양식·여권은 묻지 않는다.
-   한국 국적이지만 해외 계좌로 받는 사람처럼 특이한 경우는 bank_mode로 직접 정한다. */
-const isKR = v => countryName(v) === '대한민국';
-const autoDomestic = sp => {
-  const vs = [sp.nationality, sp.residence_country].filter(Boolean);
-  return vs.length > 0 && vs.every(isKR);
-};
-const isDomestic = sp => sp.bank_mode === 'domestic' ? true
-  : sp.bank_mode === 'overseas' ? false : autoDomestic(sp);
+/* 국내·해외 판정은 state.js(isDomesticSpeaker)에 있다 — 연사 표와 같은 기준을 쓴다. */
+const isDomestic = isDomesticSpeaker;
 
 /* 국내·해외 양식을 고르는 줄. «자동»은 국적·거주지로 정한다. */
 function bankModeRow(sp){

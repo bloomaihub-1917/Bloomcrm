@@ -26,6 +26,7 @@ import {
   getSpeakerById, rolesOfSpeaker, speakerNeedList, speakerNeed,
   contactsOfSpeaker, SPEAKER_CONTACTS, SPEAKER_LOGS,
   contacts, participations,
+  isDomesticSpeaker, bankDocs, paysFee,
 } from '../state.js';
 import { SPEAKER_ROLES, NEED_MARK, SPEAKER_NEEDS } from '../constants.js';
 import { td, escapeHtml, escAttr, isMobile, leftPill, countryName } from '../utils.js';
@@ -975,8 +976,17 @@ function spCell(sp, evKey, key){
       /* 줄 돈이 없으면 계좌를 묻지 않는다 — 무보수 연사에게 계좌를 요구할
          이유가 없고, 요구한 적 없는 걸 «안 받았다»고 세면 안 된다. */
       if(!sp.fee_amount) return { state: 'na' };
-      return done(sp.bank_account, sp.bank_account ? '받음' : '');
-    case 'passport': return done(sp.passport_received_at);
+      {
+        /* 국내는 신분증·통장사본·계좌번호, 해외는 계좌 — state.js bankDocs 한 곳에서 정한다 */
+        const docs = bankDocs(sp), got = docs.filter(d => d.got).length;
+        const miss = docs.filter(d => !d.got).map(d => d.label).join('·');
+        return { state: got === docs.length ? 'done' : got ? 'part' : 'todo',
+          text: got === docs.length ? '받음' : got ? `${miss} 아직` : '', need };
+      }
+    case 'passport':
+      /* 국내 연사는 신분증으로 대신한다 */
+      if(isDomesticSpeaker(sp)) return { state: 'na' };
+      return done(sp.passport_received_at);
     case 'travel': {
       /* 챙기기로 한 것만 센다. 숙박·항공 중 적어 둔 게 없으면 아직 정해지지
          않은 것이라 «안 한 일»로 몰지 않는다. */
@@ -1237,7 +1247,7 @@ function peopleHtml(ev){
   const noSession = all.filter(sp => !assignmentsFor(sp.id).length).length;
   const avg = all.length
     ? Math.round(all.reduce((n, sp) => n + spProgress(sp, ev.key).pct, 0) / all.length) : 0;
-  const feeLeft = all.filter(sp => sp.fee_amount && !sp.fee_paid_at).length;
+  const feeLeft = all.filter(sp => sp.fee_amount && !sp.fee_paid_at && paysFee(sp)).length;
 
   const card = (label, value, sub) => `<div style="min-width:96px">
     <div style="font-size:10px;color:var(--i4);margin-bottom:2px">${escapeHtml(label)}</div>
@@ -1251,7 +1261,7 @@ function peopleHtml(ev){
       `확정 ${byStatus('확정')} · 섭외중 ${byStatus('섭외중')}`)}
     ${card('평균 진행률', `${avg}<span style="font-size:11px;font-weight:600;color:var(--i4)">%</span>`,
       '역할이 묻는 항목만 셈')}
-    ${card('세션', `${sessionsForEvent(ev.key).length}<span style="font-size:11px;font-weight:600;color:var(--i4)">개</span>`,
+    ${card('세션', `${sessionsForEvent(ev.key).filter(s => !isBreak(s)).length}<span style="font-size:11px;font-weight:600;color:var(--i4)">개</span>`,
       noSession ? `<span style="color:var(--am)">배정 없는 연사 ${noSession}</span>` : '모두 배정됨')}
     ${feeLeft ? card('연사료', `${feeLeft}<span style="font-size:11px;font-weight:600;color:var(--i4)">명</span>`, '아직 미지급') : ''}
   </div>`;
@@ -1410,7 +1420,7 @@ function peopleHtml(ev){
               escapeHtml(c.label)}${sp[c.key] ? ` ${escapeHtml(shortCell(sp[c.key]))}` : ''}</button>`).join('')}
           </div>`;
         })()}
-        ${sp.fee_amount ? `<div style="font-size:10.5px;margin-top:6px;color:${sp.fee_paid_at ? 'var(--g)' : 'var(--am)'}">
+        ${sp.fee_amount && paysFee(sp) ? `<div style="font-size:10.5px;margin-top:6px;color:${sp.fee_paid_at ? 'var(--g)' : 'var(--am)'}">
           연사료 ${escapeHtml(Number(String(sp.fee_amount).replace(/[^\d.-]/g, '') || 0).toLocaleString('ko-KR'))}
           · ${sp.fee_paid_at ? '지급' : '미지급'}</div>` : ''}
       </div>`;
@@ -1469,7 +1479,9 @@ function peopleHtml(ev){
           onclick="event.stopPropagation();removeConfSpeaker('${escAttr(sp.id)}')"
           title="이 연사를 지웁니다 — 배정·연락 상대·기록도 함께">✕</button></td>
       <td style="text-align:right;font-size:11px;white-space:nowrap">
-        ${sp.fee_amount
+        ${!paysFee(sp) && assignmentsFor(sp.id).length
+          ? '<span style="color:var(--i5);font-size:10px" title="맡은 역할이 연사료를 받지 않아요">해당 없음</span>'
+          : sp.fee_amount
           ? `<span style="color:${sp.fee_paid_at ? 'var(--g)' : 'var(--i2)'}">${
               escapeHtml(Number(String(sp.fee_amount).replace(/[^\d.-]/g, '') || 0).toLocaleString('ko-KR'))}</span>
              <div style="font-size:9.5px;color:${sp.fee_paid_at ? 'var(--g)' : 'var(--am)'}">${
@@ -2184,7 +2196,7 @@ export async function setAssignRole(aid, role){
    어느 행사에선 연사라서 사람(cat)이 아니라 그 행사 참가 줄에 적는다.
    그 행사에서 맡은 자리가 모두 VIP면 VIP, 하나라도 발표·좌장 등이 있으면 연사.
    연사·VIP가 아닌 참가 줄(스폰서 등)은 건드리지 않는다. */
-async function syncPartRole(spId){
+export async function syncPartRole(spId){
   const sp = getSpeakerById(spId);
   if(!sp || !sp.contact_id) return;
   const roles = assignmentsFor(spId).map(a => a.role);
@@ -2192,7 +2204,19 @@ async function syncPartRole(spId){
   const want = roles.every(r => r === 'VIP') ? 'VIP' : '연사';
   const p = participations.find(x => String(x.contactId) === String(sp.contact_id)
     && x.eventId === sp.event_id && (x.role === '연사' || x.role === 'VIP'));
-  if(!p || p.role === want) return;
+  if(!p){
+    /* 참가 기록이 없으면 만든다 — 연사 화면이 정본이고 마스터DB는 따라온다 */
+    const part = { id: `P-${Date.now()}-0`, eventId: sp.event_id, event: sp.event_id,
+      contactId: sp.contact_id, contact: '', role: want, note: '', matched: '✅ 연사 화면에서 추가' };
+    const r = await postToSheet({ sheet: 'participations',
+      row: [part.id, part.eventId, '', part.contactId, '', '', '', part.role, part.note, part.matched] },
+      '행사 참가 추가', { silent: true });
+    if(!r || !r.ok) return;
+    participations.push(part);
+    trackAction('edit', '행사 참가 추가', sp.event_id, `${speakerName(spId)} → ${want}`);
+    return;
+  }
+  if(p.role === want) return;
   const was = p.role;
   const r = await postToSheet({ sheet: 'participations',
     row: [p.id, p.eventId, '', p.contactId, '', '', '', want, p.note || '', p.matched || ''] },
