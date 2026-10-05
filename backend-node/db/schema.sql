@@ -829,6 +829,7 @@ CREATE TABLE IF NOT EXISTS speakers (
   consent_at       TEXT,
   consent_file     TEXT,
   consent_note     TEXT,
+  gala_rsvp        TEXT,   -- 갈라디너 'yes' | 'no' | ''
 
   -- 여권은 스캔만 받는다. 번호·만료일을 칸으로 두지 않는 것이 가장 안전하다.
   passport_file        TEXT,

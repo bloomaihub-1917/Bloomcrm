@@ -187,6 +187,7 @@ const TABLES = {
       'air_class', 'air_ticketed_at', 'air_note',
       'consent_basic', 'consent_photo', 'consent_abstract', 'consent_slides', 'consent_video',
       'consent_at', 'consent_file', 'consent_note',
+      'gala_rsvp',
       'passport_file', 'passport_received_at',
       'bank_holder', 'bank_name', 'bank_account', 'bank_swift', 'bank_iban',
       'bank_country', 'bank_address',

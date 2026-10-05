@@ -158,6 +158,16 @@ export const partStateOf = (v) => PART_STATES.find(s => s.key === v) || PART_STA
    덮어쓴다(부스 타입이 공통을 상속하는 것과 같은 방식). 패널의 초록이 실제로
    그렇게 갈린다 — 어떤 행사는 받아 도록에 싣고 어떤 행사는 묻지 않는다.
 ══════════════════════════════════════════ */
+/* 동의서 안의 갈래. 동의서를 «받았다»와 «무엇에 동의했나»는 다른 질문이다 —
+   발표자료 공유를 거절한 연사를 자료집에 넣으면 안 되는데, 받은 날만 보면 모른다. */
+export const SP_CONSENTS = [
+  { key: 'consent_basic',    label: '기본 정보' },
+  { key: 'consent_photo',    label: '사진' },
+  { key: 'consent_abstract', label: '초록' },
+  { key: 'consent_slides',   label: '발표자료' },
+  { key: 'consent_video',    label: '영상' },
+];
+
 export const SPEAKER_NEEDS = [
   { key: 'profile',  label: '성명·소속·직함',           where: 'contacts' },
   { key: 'bio_profile', label: 'Professional Profile',  where: 'bio_profile_ko · bio_profile_en' },

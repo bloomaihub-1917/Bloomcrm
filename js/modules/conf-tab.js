@@ -28,7 +28,7 @@ import {
   contacts, participations,
   isDomesticSpeaker, bankDocs, paysFee,
 } from '../state.js';
-import { SPEAKER_ROLES, NEED_MARK, SPEAKER_NEEDS } from '../constants.js';
+import { SPEAKER_ROLES, NEED_MARK, SPEAKER_NEEDS, SP_CONSENTS } from '../constants.js';
 import { td, escapeHtml, escAttr, isMobile, leftPill, countryName } from '../utils.js';
 import { progressBar, shortCell } from './exh-tab.js';
 
@@ -39,6 +39,18 @@ const spLeftPill = (sp) => {
   const c = sp && sp.contact_id
     ? contacts.find(x => String(x.id) === String(sp.contact_id)) : null;
   return c ? leftPill(c) : '';
+};
+
+/* 동의하지 않은 것 — 받은 날 체크만으로는 안 보인다 */
+export const consentRefused = (sp) => SP_CONSENTS.filter(c => sp[c.key] === 'no').map(c => c.label);
+
+/* 표에서 바로 봐야 하는 것: 공유를 거절한 항목과 갈라디너 참석 여부 */
+const spFlagPills = (sp) => {
+  const no = consentRefused(sp);
+  return (no.length ? `<span class="pill p-red" style="font-size:9px"
+      title="${escAttr(`동의하지 않음: ${no.join(', ')} — 자료집·배포에서 빼야 해요`)}">공유 ✕ ${escapeHtml(no.join('·'))}</span>` : '')
+    + (sp.gala_rsvp === 'yes' ? '<span class="pill p-green" style="font-size:9px" title="갈라디너 참석">갈라 참석</span>'
+      : sp.gala_rsvp === 'no' ? '<span class="pill p-gray" style="font-size:9px" title="갈라디너 불참">갈라 불참</span>' : '');
 };
 import {
   saveConfSession, deleteConfSession,
@@ -1005,7 +1017,10 @@ export function spCell(sp, evKey, key){
     }
     case 'bio_pro':  return done(sp.profile_received_at);
     case 'photo':    return done(sp.photo_received_at);
-    case 'consent':  return done(sp.consent_at);
+    case 'consent': {
+      const no = consentRefused(sp);
+      return done(sp.consent_at, no.length ? `${no.join('·')} ✕` : '');
+    }
     case 'bank':
       /* 줄 돈이 없으면 계좌를 묻지 않는다 — 무보수 연사에게 계좌를 요구할
          이유가 없고, 요구한 적 없는 걸 «안 받았다»고 세면 안 된다. */
@@ -1302,6 +1317,10 @@ function peopleHtml(ev){
       '역할이 묻는 항목만 셈')}
     ${card('세션', `${sessionsForEvent(ev.key).filter(s => !isBreak(s)).length}<span style="font-size:11px;font-weight:600;color:var(--i4)">개</span>`,
       noSession ? `<span style="color:var(--am)">배정 없는 연사 ${noSession}</span>` : '모두 배정됨')}
+    ${(() => { const live = all.filter(x => x.status !== '취소'), y = live.filter(x => x.gala_rsvp === 'yes').length,
+        n = live.filter(x => x.gala_rsvp === 'no').length;
+      return card('갈라디너', `${y}<span style="font-size:11px;font-weight:600;color:var(--i4)">명 참석</span>`,
+        `불참 ${n} · 미확인 ${live.length - y - n}`); })()}
     ${feeLeft ? card('연사료', `${feeLeft}<span style="font-size:11px;font-weight:600;color:var(--i4)">명</span>`, '아직 미지급') : ''}
   </div>`;
 
@@ -1419,7 +1438,7 @@ function peopleHtml(ev){
         style="background:var(--W);border:1px solid var(--i6);border-radius:10px;padding:11px 12px;
         margin-bottom:8px;cursor:pointer">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <span style="font-size:13px;font-weight:700">${escapeHtml(sp.name_snapshot || sp.name_en || sp.id)}</span>${spLeftPill(sp)}
+          <span style="font-size:13px;font-weight:700">${escapeHtml(sp.name_snapshot || sp.name_en || sp.id)}</span>${spLeftPill(sp)}${spFlagPills(sp)}
           ${roles.map(r => `<span class="pill ${(SPEAKER_ROLES.find(x => x.key === r) || {}).cls || 'p-gray'}"
             style="font-size:9px">${escapeHtml(r)}</span>`).join('')}
           ${countryChip(sp)}
@@ -1487,7 +1506,7 @@ function peopleHtml(ev){
       <td><div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
           <span style="font-weight:700;font-size:12px">${escapeHtml(name)}</span>
           ${sp.name_snapshot && sp.name_en
-            ? `<span style="font-size:10.5px;color:var(--i4)">${escapeHtml(sp.name_en)}</span>` : ''}${spLeftPill(sp)}
+            ? `<span style="font-size:10.5px;color:var(--i4)">${escapeHtml(sp.name_en)}</span>` : ''}${spLeftPill(sp)}${spFlagPills(sp)}
           ${roles.map(r => `<span class="pill ${(SPEAKER_ROLES.find(x => x.key === r) || {}).cls || 'p-gray'}"
             style="font-size:9px">${escapeHtml(r)}</span>`).join('')}
           ${countryChip(sp)}

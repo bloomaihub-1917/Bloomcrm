@@ -25,7 +25,7 @@ import {
   confCfg, speakerNeed, speakerNeedList,
   isDomesticSpeaker, autoDomestic, bankDocs, paysFee,
 } from '../state.js';
-import { SPEAKER_ROLES, NEED_MARK, NEED_LABEL } from '../constants.js';
+import { SPEAKER_ROLES, NEED_MARK, NEED_LABEL, SP_CONSENTS } from '../constants.js';
 import { td, escapeHtml, escAttr, countryOptions, countryName } from '../utils.js';
 import {
   saveSpeaker, saveSessionSpeaker,
@@ -486,6 +486,11 @@ function basicHtml(sp, con, evKey){
       ${fg('초청 회신', dateIn(sp.invite_replied_at, `spField('invite_replied_at',this.value,'초청 회신')`))}
       ${fg('참가 확정', dateIn(sp.confirmed_at, `spField('confirmed_at',this.value,'참가 확정')`))}
     </div>
+    ${fg('갈라디너', `<select class="fi" onchange="spField('gala_rsvp',this.value,'갈라디너')">
+      <option value=""${!sp.gala_rsvp ? ' selected' : ''}>미확인</option>
+      <option value="yes"${sp.gala_rsvp === 'yes' ? ' selected' : ''}>참석</option>
+      <option value="no"${sp.gala_rsvp === 'no' ? ' selected' : ''}>불참</option>
+    </select>`, '신청서의 갈라디너 참석 여부')}
 
     <div style="font-size:11px;font-weight:700;color:var(--i3);margin:16px 0 4px">받은 것</div>
     ${nOf('photo') ? gotRow('연사 사진', sp.photo_received_at,
@@ -496,6 +501,17 @@ function basicHtml(sp, con, evKey){
     ${nOf('consent') ? gotRow('개인정보 제공 동의서', sp.consent_at,
       `spStamp('consent_at','동의서 받음')`,
       `spField('consent_at',this.value,'동의서 받은 날')`, nOf('consent')) : ''}
+    ${nOf('consent') ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px;margin:6px 0 4px">
+      ${SP_CONSENTS.map(c => `<label style="font-size:10.5px;color:${sp[c.key] === 'no' ? 'var(--re)' : 'var(--i3)'}">${c.label}
+        <select class="fi" style="font-size:11px;padding:3px 5px${sp[c.key] === 'no' ? ';border-color:var(--re);color:var(--re)' : ''}"
+          onchange="spField('${c.key}',this.value,'동의 — ${c.label}')">
+          <option value=""${!sp[c.key] ? ' selected' : ''}>미확인</option>
+          <option value="yes"${sp[c.key] === 'yes' ? ' selected' : ''}>동의</option>
+          <option value="no"${sp[c.key] === 'no' ? ' selected' : ''}>동의 안 함</option>
+        </select></label>`).join('')}
+    </div>
+    ${fg('동의서 파일명', txt(sp.consent_file, `spField('consent_file',this.value,'동의서 파일')`, '원드라이브 파일명'))}
+    ${fg('동의 메모', txt(sp.consent_note, `spField('consent_note',this.value,'동의 메모')`, '예: 영상 촬영은 발표 앞부분만'))}` : ''}
 
     ${fg('메모', area(sp.note, `spField('note',this.value,'메모')`, '섭외 경위, 주의할 점 등', 3))}`;
 }
