@@ -28,6 +28,7 @@ import { auditLog, currentUser } from '../state.js';
 import { postToSheet, loadFromSheets } from '../api.js';
 import { escapeHtml } from '../utils.js';
 import { trackAction } from './audit-tab.js';
+import { describeAudit, fieldLabel, showVal } from './audit-describe.js';
 
 /* 사람이 읽는 표 이름 — 물음에 «exhibitor_items 줄을 되살릴까요»라고 쓰면
    무엇을 되살리는지 알 수 없다. */
@@ -72,7 +73,7 @@ export function restorePlan(e){
   if(x.op === 'update'){
     return { title: `${tbl(x.table)}의 값을 되돌립니다`,
       lines: Object.keys(x.before).map(k =>
-        `${k}: ${fmt(x.after && x.after[k])} → ${fmt(x.before[k])}`) };
+        `${fieldLabel(k)}: ${showVal(k, x.after && x.after[k])} → ${showVal(k, x.before[k])}`) };
   }
   return { title: `${tbl(x.table)} ${x.rows.length}건의 값을 되돌립니다`,
     lines: x.rows.slice(0, 5).map(r =>
@@ -125,9 +126,19 @@ export async function restoreFromLog(entryId){
       + `성공한 것은 그대로 반영돼 있습니다 — 다시 누르면 남은 것부터 이어집니다.`);
   }
 
+  /* 무엇을 되돌렸는지가 남아야 한다. 전에는 «세션 배정의 값을 되돌립니다»만 적혀
+     누구의 무엇이 어떻게 돌아갔는지 몰랐다. 원래 기록의 내용을 그대로 싣고,
+     바뀐 값은 «지금 값 → 되돌린 값»으로 담는다(화면이 그 줄을 풀어 보여준다). */
+  const orig = describeAudit(e);
+  const back = x.op === 'update'
+    ? { op: 'update', before: x.after || {}, after: x.before || {} }
+    : x.op === 'delete' ? { op: 'create', after: x.before }
+    : x.op === 'create' ? { op: 'delete', before: x.after || {} }
+    : {};   // 여러 줄 되돌리기는 «되돌린 값»만 있어 다시 되돌릴 재료가 못 된다
   trackAction('edit', '되돌리기', e.target || tbl(x.table),
-    `<b>${escapeHtml(when)}</b>의 «${escapeHtml(e.action || '')}»을(를) 되돌렸어요 — ${escapeHtml(plan.title)}`,
-    { restoredFrom: String(e.id), table: x.table, row: x.row });
+    `${when} ${e.name || ''}님의 «${orig.what}» 되돌림`,
+    { ...back, restoredFrom: String(e.id), table: x.table, row: x.row,
+      kind: x.kind, id: x.id, tab: x.tab, ev: x.ev });
 
   /* 화면을 DB에서 다시 읽는다. 되살아난 줄은 여기 있는 배열에 없어서,
      새로 읽지 않으면 «되돌렸다»는 말만 뜨고 화면은 그대로다. */

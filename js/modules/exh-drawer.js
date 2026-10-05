@@ -3018,7 +3018,20 @@ async function addRow(arr, rec, saveFn, label){
 
    지워진 값을 통째로 적어 둔다. 이름만 적으면 «무엇을 지웠다»는 알아도
    되살릴 수는 없다 — 되살리는 데 필요한 건 금액·수량·통화다. */
-const ROW_LABEL = (r) => r.name || r.title || '';
+/* 지운 줄을 기록에 무엇이라고 적을까. 이름 칸이 없는 줄(마스터DB에 연결된 담당자,
+   문의, 신청서 접수, 입금)은 빈칸으로 남아 «담당자  지움»처럼 무엇을 지웠는지 몰랐다. */
+const ROW_LABEL = (r) => {
+  if(r.name || r.title) return r.name || r.title;
+  if(r.contact_id){
+    const c = contacts.find(x => String(x.id) === String(r.contact_id));
+    if(c) return c.nameKo || c.nameEn || c.email1 || '';
+  }
+  if(r.email) return r.email;
+  if(r.subject || r.body) return `«${String(r.subject || r.body).replace(/\s+/g, ' ').slice(0, 24)}»`;
+  if(r.seq || r.received_at) return [r.seq && `${r.seq}차`, r.received_at && `${String(r.received_at).slice(0, 10)} 접수`].filter(Boolean).join(' ');
+  if(r.paid_at || r.amount) return [r.paid_at && String(r.paid_at).slice(0, 10), r.amount && `${r.amount} ${r.currency || 'KRW'}`].filter(Boolean).join(' ');
+  return '';
+};
 async function removeRow(arr, id, deleteFn, label = '줄', table = ''){
   const i = arr.findIndex(r => r.id === id);
   if(i < 0) return;

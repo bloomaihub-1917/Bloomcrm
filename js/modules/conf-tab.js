@@ -1240,7 +1240,7 @@ export async function toggleSpeakerDate(spId, field){
   }
   const label = (SP_SENT.find(c => c.key === field) || {}).label || field;
   trackAction('edit', '연사 진행', confEvent,
-    `${sp.name_snapshot || spId} — ${label} ${next ? `보냄 ${next}` : '표시 지움'}`);
+    `${sp.name_snapshot || spId} — ${label} ${next || '표시 지움'}`);
 }
 
 export function setConfNeedFil(key){
@@ -1989,7 +1989,11 @@ export async function setTalkTime(aid, field, value){
     return;
   }
   trackAction('edit', '발표 시간', confEvent,
-    `${speakerName(a.speaker_id)} — ${patch.start_at || a.start_at || ''}${patch.end_at ? `–${patch.end_at}` : ''}`,
+    /* 시각만이 아니라 분만 고칠 때도 있다 — 그때 «감은희 —»로 끝나 무엇을 고쳤는지 몰랐다 */
+    `${speakerName(a.speaker_id)} — ${[
+      (patch.start_at !== undefined || patch.end_at !== undefined) && `${a.start_at || '시각 없음'}${a.end_at ? `–${a.end_at}` : ''}`,
+      patch.duration_min !== undefined && (patch.duration_min ? `${patch.duration_min}분` : '분 지움'),
+    ].filter(Boolean).join(' · ') || '발표 시간'}`,
     changed('session_speakers', aid, backup, patch, { kind: 'session', id: a.session_id, ev: confEvent }));
 }
 
@@ -2080,7 +2084,8 @@ export async function onAsgDrop(e, overId, el){
   const toIdx = list.findIndex(x => x.id === overId);
   if(fromIdx < 0 || toIdx < 0) return;
   list.splice(toIdx, 0, list.splice(fromIdx, 1)[0]);
-  await applyAsgOrder(list, `${speakerName(moving.speaker_id)} 순서 옮김`);
+  const sess = CONF_SESSIONS.find(s => s.id === moving.session_id);
+  await applyAsgOrder(list, `${sess ? (sess.title_ko || sess.title_en || '세션') + ' — ' : ''}${speakerName(moving.speaker_id)} ${toIdx + 1}번째로 옮김`);
 }
 
 /* seq를 1부터 다시 매긴다. 바뀐 줄만 보낸다 — 다섯 줄 중 둘만 움직였는데

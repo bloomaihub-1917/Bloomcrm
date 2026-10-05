@@ -7,7 +7,7 @@
    기록 자체는 고치지 않는다. 되돌리기용으로 남겨 둔 이전 값·새 값(extra.before/after)이
    이미 있으니 그릴 때 풀어서 보여준다 — 그래서 지난 기록 2,900여 건도 같이 읽기 쉬워진다.
 ══════════════════════════════════════════════════════════════ */
-import { EVENT_LIST } from '../state.js';
+import { EVENT_LIST, auditLog } from '../state.js';
 
 /* 칸 이름 → 사람이 부르는 이름. 모르는 칸은 칸 이름 그대로 둔다 */
 const F = {
@@ -146,8 +146,27 @@ export const evName = (key) => {
 };
 
 /* {where, what, lines} — where: «2026 KIC · 컨퍼런스 세션», what: 본문 첫 줄, lines: 바뀐 칸들 */
+export const fieldLabel = (k) => label(k);
+export const showVal = (k, v) => show(k, v);
+
 export function describeAudit(e){
   const x = e.extra || {};
+  /* 예전 되돌리기 기록 — «세션 배정의 값을 되돌립니다»만 남아 있다.
+     원래 기록을 찾아 무엇을 되돌렸는지 풀어 쓴다 */
+  if(e.action === '되돌리기' && x.restoredFrom && !x.op){
+    const o = auditLog.find(a => String(a.id) === String(x.restoredFrom));
+    if(o && o !== e){
+      const d = describeAudit(o);
+      const ox = o.extra || {};
+      const lines = ox.op === 'update' && ox.after
+        ? Object.keys(ox.after).filter(k => String((ox.before || {})[k] ?? '') !== String(ox.after[k] ?? ''))
+            .map(k => `${label(k)}: ${show(k, ox.after[k])} → ${show(k, (ox.before || {})[k])}`)
+        : [];
+      const when = new Date(o.ts).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+      return { where: [d.where.split(' · ')[0], '되돌리기'].filter(Boolean).join(' · '),
+        what: josa(`${when} ${o.name || ''}님의 «${d.what}» 되돌림`), lines };
+    }
+  }
   const ev = evName(e.target) || evName(x.ev);
   /* 대상이 행사 key면 행사 이름으로, 기업·사람 이름이면 그대로 */
   const where = [ev || (e.target && !/@/.test(e.target) ? e.target : ''), e.action]
@@ -168,7 +187,7 @@ export function describeAudit(e){
   const said = `${e.action || ''} ${what}`;
   if(e.type === 'view') what = '열어 봄 · ' + what;          // 계좌·여권을 펼쳐 본 기록
   else if(x.op === 'delete' && !/삭제|지움|제거|뺐|되돌림/.test(said)) what = '삭제 · ' + what;
-  else if(x.op === 'create' && !/추가|등록|확인|접수|업로드|초청|배정|입력/.test(said)) what = '추가 · ' + what;
+  else if(x.op === 'create' && !/추가|등록|확인|접수|업로드|초청|배정|입력|되돌림/.test(said)) what = '추가 · ' + what;
   /* 꼬리를 못 뗀 옛 기록에서도 칸 이름만은 사람 말로 바꾼다 */
   what = what.replace(/\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b|\b(?:kind|track|room|role|status|date|seq|note|sector|method|billable|cls|currentStage|bioStep|name|location|color|host|organizer|theme|homepage|domain|summary|handler|scale)\b/g, k => F[k] || k)
     /* 옛 기록 본문에 남은 yes/no, 단계 코드 */
@@ -181,6 +200,15 @@ export function describeAudit(e){
     .replace(/\((?:빈값|빈칸|없음|지움|비어 있음|비움)\)/g, '없음')
     .replace(/\bp-([a-z]+)\b/g, (m, c) => COLOR[c] || m)
     .replace(/([가-힣])([»”\"']*)\(으\)로/g, (m, c, q) => c + q + (jong(c) > 0 && jong(c) !== 8 ? '으로' : '로'));
+  /* 옛 «— 담당자 지움»처럼 무엇을 지웠는지 빠진 줄 — 지운 줄 통째(before)에서 이름을 찾아 넣는다 */
+  if(x.op === 'delete' && x.before && /— (\S+(?: \S+)?)\s+지움/.test(what)){
+    const b = x.before;
+    const nm = b.name || b.title || b.email || (b.subject || b.body ? `«${String(b.subject || b.body).replace(/\s+/g, ' ').slice(0, 24)}»` : '')
+      || [b.seq && `${b.seq}차`, b.received_at && `${String(b.received_at).slice(0, 10)} 접수`].filter(Boolean).join(' ');
+    if(nm) what = what.replace(/— (\S+(?: \S+)?)\s+지움/, (m, kind) => `— ${kind} ${nm} 지움`);
+  }
+  /* 예전 코드가 남긴 군더더기 — «보냄 보냄 2026-09-29», 끝이 빈 «감은희 —», «담당자  지움» */
+  what = what.replace(/보냄 보냄/g, '보냄').replace(/\s+—\s*$/, '').replace(/ {2,}/g, ' ');
   what = josa(what);
   lines = lines.map(l => josa(unent(l)));
   return { where: unent(where), what, lines };

@@ -1037,7 +1037,8 @@ export async function removeSpeakerContact(id){
   if(res && res.ok === false){ if(!res.locked) alert('지우지 못했어요.'); return; }
   const i = SPEAKER_CONTACTS.findIndex(x => x.id === id);
   if(i >= 0) SPEAKER_CONTACTS.splice(i, 1);
-  trackAction('delete', '연사 연락 상대', getSpeakerById(spId)?.event_id, r.name || r.email || id,
+  trackAction('delete', '연사 연락 상대', getSpeakerById(spId)?.event_id,
+    `${speakerLabel()} — ${r.name || r.email || r.kind || '이름 없는'} 연락 상대 지움`,
     removed('speaker_contacts', id, r, { kind: 'speaker', id: spId }));
   renderSpeakerDr();
 }
