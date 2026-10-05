@@ -176,24 +176,32 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
           전체<span class="nbg" id="act-all">0</span>
         </button>
-        <button class="nr" onclick="filterAudit('status',this)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22,4 12,14.01 9,11.01"/></svg>
-          상태 변경<span class="nbg" id="act-status">0</span>
+        <button class="nr" onclick="filterAudit('exh',this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+          전시<span class="nbg" id="act-exh">0</span>
         </button>
-        <button class="nr" onclick="filterAudit('log',this)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          컨택 기록<span class="nbg" id="act-log">0</span>
+        <button class="nr" onclick="filterAudit('conf',this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+          연사<span class="nbg" id="act-conf">0</span>
         </button>
-        <button class="nr" onclick="filterAudit('add',this)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg>
-          타겟 추가<span class="nbg" id="act-add">0</span>
+        <button class="nr" onclick="filterAudit('crm',this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+          CRM<span class="nbg" id="act-crm">0</span>
         </button>
-        <button class="nr" onclick="filterAudit('stage',this)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-          단계 변경<span class="nbg" id="act-stage">0</span>
+        <button class="nr" onclick="filterAudit('db',this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+          연락처·기업<span class="nbg" id="act-db">0</span>
+        </button>
+        <button class="nr" onclick="filterAudit('set',this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+          설정<span class="nbg" id="act-set">0</span>
+        </button>
+        <button class="nr" onclick="filterAudit('del',this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+          삭제<span class="nbg" id="act-del">0</span>
         </button>
         <button class="nr" onclick="filterAudit('login',this)">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
           로그인<span class="nbg" id="act-login">0</span>
         </button>
       </div></div>
@@ -920,13 +928,18 @@
   </div>
   <div class="audit-filters">
     <div class="seg">
-      <button class="seg-b on" id="af-all"    onclick="filterAudit('all',this)">전체</button>
-      <button class="seg-b" id="af-status" onclick="filterAudit('status',this)">상태 변경</button>
-      <button class="seg-b" id="af-log"    onclick="filterAudit('log',this)">컨택 기록</button>
-      <button class="seg-b" id="af-add"    onclick="filterAudit('add',this)">타겟 추가</button>
-      <button class="seg-b" id="af-stage"  onclick="filterAudit('stage',this)">단계 변경</button>
-      <button class="seg-b" id="af-login"  onclick="filterAudit('login',this)">로그인</button>
+      <button class="seg-b on" id="af-all" onclick="filterAudit('all',this)">전체</button>
+      <button class="seg-b" id="af-exh" onclick="filterAudit('exh',this)">전시</button>
+      <button class="seg-b" id="af-conf" onclick="filterAudit('conf',this)">연사</button>
+      <button class="seg-b" id="af-crm" onclick="filterAudit('crm',this)">CRM</button>
+      <button class="seg-b" id="af-db" onclick="filterAudit('db',this)">연락처·기업</button>
+      <button class="seg-b" id="af-set" onclick="filterAudit('set',this)">설정</button>
+      <button class="seg-b" id="af-del" onclick="filterAudit('del',this)">삭제</button>
+      <button class="seg-b" id="af-login" onclick="filterAudit('login',this)">로그인</button>
     </div>
+    <select id="audit-ev-sel" onchange="renderAudit()" style="font-size:12px;padding:6px 10px;border:1px solid var(--i6);border-radius:var(--r);background:var(--i8);color:var(--i1);outline:none;max-width:170px">
+      <option value="">전체 행사</option>
+    </select>
     <select id="audit-user-sel" onchange="renderAudit()" style="font-size:12px;padding:6px 10px;border:1px solid var(--i6);border-radius:var(--r);background:var(--i8);color:var(--i1);outline:none">
       <option value="">전체 팀원</option>
     </select>

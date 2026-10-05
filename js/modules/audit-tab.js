@@ -31,7 +31,7 @@ import {
   userColor,
 } from '../state.js';
 import { saveAuditToSheets } from '../api.js';
-import { describeAudit, boldChange } from './audit-describe.js';
+import { describeAudit, boldChange, auditPart, auditEvent, isDeleteLog, AUDIT_PARTS, evName } from './audit-describe.js';
 import { td, escapeHtml, escAttr, userInitials } from '../utils.js';
 /* restore.js도 이 파일의 trackAction을 쓴다 — 서로 부르지만 둘 다 함수를
    실행할 때만 필요해서 고리가 되지 않는다(모듈을 읽는 중에 서로를 안 부른다). */
@@ -125,15 +125,20 @@ const TAG_MAP = {
 export function getAuditFiltered(){
   const q = (document.getElementById('audit-q')||{}).value||'';
   const usel = (document.getElementById('audit-user-sel')||{}).value||'';
+  const evSel = (document.getElementById('audit-ev-sel')||{}).value||'';
   let list = [...auditLog];
-  if(auditFilter !== 'all') list = list.filter(e=>e.type===auditFilter);
+  /* 파트 칩 — «삭제»는 파트를 가리지 않고 지운 기록만 모은다 */
+  if(auditFilter === 'del') list = list.filter(isDeleteLog);
+  else if(auditFilter !== 'all') list = list.filter(e => auditPart(e) === auditFilter);
+  if(evSel) list = list.filter(e => auditEvent(e) === evSel);
   if(usel) list = list.filter(e=>e.email===usel);
   if(q){
     const lq = q.toLowerCase();
     list = list.filter(e=>
       (e.name||'').toLowerCase().includes(lq) ||
       (e.target||'').toLowerCase().includes(lq) ||
-      (e.detail||'').toLowerCase().includes(lq)
+      (e.detail||'').toLowerCase().includes(lq) ||
+      (e.action||'').toLowerCase().includes(lq)
     );
   }
   list.sort((a,b)=> new Date(b.ts) - new Date(a.ts));
@@ -299,6 +304,18 @@ export function buildAuditUserList(){
   }
 }
 
+/* 행사 고르기 — 기록이 있는 행사만, 최근 기록 순으로 */
+function buildAuditEventList(){
+  const sel = document.getElementById('audit-ev-sel');
+  if(!sel) return;
+  const last = {};
+  auditLog.forEach(e => { const k = auditEvent(e); if(k && !(last[k] > e.ts)) last[k] = e.ts; });
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">전체 행사</option>' + Object.keys(last)
+    .sort((a, b) => String(last[b]).localeCompare(String(last[a])))
+    .map(k => `<option value="${escAttr(k)}"${cur === k ? ' selected' : ''}>${escapeHtml(evName(k) || k)}</option>`).join('');
+}
+
 /* (원본 5307~5313행) */
 export function setAuditUser(email){
   setAuditUserFilter((auditUserFilter===email)?'':email);
@@ -310,12 +327,13 @@ export function setAuditUser(email){
 
 /* (원본 5315~5325행) */
 export function updateAuditBadges(){
-  const types = ['all','status','log','add','stage','login','edit','upload'];
-  types.forEach(t=>{
-    const el = document.getElementById('act-'+t);
-    if(!el) return;
-    el.textContent = t==='all' ? auditLog.length : auditLog.filter(e=>e.type===t).length;
+  const n = { all: auditLog.length, del: 0 };
+  auditLog.forEach(e => { const p = auditPart(e); n[p] = (n[p] || 0) + 1; if(isDeleteLog(e)) n.del++; });
+  AUDIT_PARTS.forEach(([k]) => {
+    const el = document.getElementById('act-'+k);
+    if(el) el.textContent = n[k] || 0;
   });
+  buildAuditEventList();
   buildAuditUserList();
   // If audit page is active, re-render
   if(curApp==='audit') renderAudit();

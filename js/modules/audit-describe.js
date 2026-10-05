@@ -7,7 +7,7 @@
    기록 자체는 고치지 않는다. 되돌리기용으로 남겨 둔 이전 값·새 값(extra.before/after)이
    이미 있으니 그릴 때 풀어서 보여준다 — 그래서 지난 기록 2,900여 건도 같이 읽기 쉬워진다.
 ══════════════════════════════════════════════════════════════ */
-import { EVENT_LIST, auditLog } from '../state.js';
+import { EVENT_LIST, auditLog, EXHIBITORS, SPEAKERS, CONF_SESSIONS } from '../state.js';
 
 /* 칸 이름 → 사람이 부르는 이름. 모르는 칸은 칸 이름 그대로 둔다 */
 const F = {
@@ -232,4 +232,77 @@ export function boldChange(text){
         const v = /^\d{4,}$/.test(n) ? Number(n).toLocaleString('ko-KR') : n;
         return `<b>${v}</b>`;
       });
+}
+
+/* ══════════════════════════════════════════
+   어느 파트·어느 행사의 기록인가 — 로그 화면의 거르기에 쓴다
+
+   거르기 칩이 CRM만 쓰던 때의 «상태 변경 / 컨택 기록 / 타겟 추가»였다.
+   지금 기록의 대부분은 전시·연사인데 모두 «정보 수정» 한 칸에 몰렸다.
+   기록에 파트가 따로 적혀 있지 않아, 무엇을 열어 가는 기록인지(extra.kind)와
+   작업 이름(action)으로 가른다.
+══════════════════════════════════════════ */
+
+export const AUDIT_PARTS = [
+  ['all', '전체'], ['exh', '전시'], ['conf', '연사'], ['crm', 'CRM'],
+  ['db', '연락처·기업'], ['set', '설정'], ['del', '삭제'], ['login', '로그인'],
+];
+const KIND_PART = { exhibitor: 'exh', speaker: 'conf', session: 'conf', target: 'crm', contact: 'db', company: 'db' };
+
+export function auditPart(e){
+  const x = e.extra || {};
+  if(e.type === 'login') return 'login';
+  /* 되돌리기는 되돌린 원래 기록의 파트로 */
+  if(x.restoredFrom){
+    const o = auditLog.find(a => String(a.id) === String(x.restoredFrom));
+    if(o && o !== e) return auditPart(o);
+  }
+  const act = String(e.action || '');
+  if(/^18시 이후/.test(act)) return 'exh';
+  if(/행사 초청/.test(act)) return 'crm';
+  if(/행사 참여 기록/.test(act)) return 'db';
+  if(KIND_PART[x.kind]) return KIND_PART[x.kind];
+  const a = String(e.action || '');
+  if(/연사|세션|컨퍼런스|발표|배정|좌장|프로그램/.test(a)) return 'conf';
+  if(/CRM|타겟|단계 변경|상태 변경|컨택|참가 확정/.test(a)) return 'crm';
+  if(/전시|부스|신청서|금액|입금|세금계산서|그래픽|비품|인보이스|도록|품목|매뉴얼|완납|환불|정산|청구|참가기업|반입|자료 수신|기본 제공|담당자|결제|참가 범위|참가 취소|신청순|기록 추가|문의/.test(a)) return 'exh';
+  if(/연락처|기업|섹터|분야|카테고리|태그|국가|업로드|마스터/.test(a)) return 'db';
+  if(/행사|설정|선택 목록|진행 파트|폴더|마감/.test(a)) return 'set';
+  return 'set';
+}
+export const isDeleteLog = (e) => (e.extra || {}).op === 'delete' || e.type === 'delete' || /삭제/.test(e.action || '');
+
+/* 행사 key — 대상이 행사면 그대로, 기업·연사·세션이면 그 줄이 속한 행사 */
+export function auditEvent(e){
+  const x = e.extra || {};
+  if(x.restoredFrom){
+    const o = auditLog.find(a => String(a.id) === String(x.restoredFrom));
+    if(o && o !== e) return auditEvent(o);
+  }
+  if(EVENT_LIST.some(v => v.key === e.target)) return e.target;
+  if(x.ev) return x.ev;
+  if(x.kind === 'exhibitor'){
+    const r = EXHIBITORS.find(v => v.id === x.id) || (x.before && x.before.event_id ? x.before : null);
+    if(r) return r.event_id;
+  }
+  if(x.kind === 'speaker'){
+    const r = SPEAKERS.find(v => v.id === x.id) || (x.before && x.before.event_id ? x.before : null);
+    if(r) return r.event_id;
+  }
+  if(x.kind === 'session'){
+    const r = CONF_SESSIONS.find(v => v.id === x.id);
+    if(r) return r.event_id;
+  }
+  if(x.before && x.before.event_id) return x.before.event_id;
+  /* 옛 전시 기록은 기업 이름만 있다. 같은 기업이 KIC와 AIA에 다 나가면 이름으로는
+     못 가른다 — 기록한 날 기준으로 아직 안 끝난 행사 중 가장 가까운 것을 고른다
+     (준비 작업은 다가오는 행사를 두고 한다). 다 끝났으면 가장 최근 행사 */
+  const evs = [...new Set(EXHIBITORS.filter(v => v.company_name === e.target).map(v => v.event_id))];
+  if(evs.length <= 1) return evs[0] || '';
+  const day = String(e.ts || '').slice(0, 10);
+  const info = evs.map(k => { const v = EVENT_LIST.find(z => z.key === k) || {};
+    return { k, end: String(v.date_end || v.date_start || v.date || '') }; }).filter(v => v.end);
+  const next = info.filter(v => v.end >= day).sort((a, b) => a.end.localeCompare(b.end))[0];
+  const prev = info.sort((a, b) => b.end.localeCompare(a.end))[0];
+  return (next || prev || {}).k || '';
 }
