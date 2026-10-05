@@ -88,7 +88,7 @@ export const FLOW_STEPS = [
 
 /* 영문 메일에 한국어 표기가 섞이지 않게 — 역할과 자료 이름의 영문 */
 const ROLE_EN = { 연사: 'Speaker', 패널: 'Panelist', 좌장: 'Moderator', 사회: 'MC', VIP: 'Guest of Honour' };
-const ITEM_EN = { profile: 'Affiliation & job title', bio_pro: 'Biography', photo: 'Portrait photo (high resolution)',
+const ITEM_EN = { profile: 'Affiliation & job title', bio_pro: 'Biography', cv: 'CV', photo: 'Portrait photo (high resolution)',
   title: 'Presentation title', abstract: 'Abstract', slides: 'Presentation file', consent: 'Consent form',
   bank: 'Bank details', passport: 'Copy of passport', travel: 'Travel details' };
 

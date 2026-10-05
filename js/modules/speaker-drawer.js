@@ -34,7 +34,7 @@ import {
 } from '../api.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 import { patchContact } from './db-tab.js';
-import { confLocked, confLockNotice, renderConf, buildConfEvList, syncPartRole } from './conf-tab.js';
+import { confLocked, confLockNotice, renderConf, buildConfEvList, syncPartRole, spCell } from './conf-tab.js';
 import { flowStatus, draftFor, missingItems } from './speaker-flow.js';
 import { reuseCandidates, reusePending } from './contact-speaker.js';
 
@@ -349,7 +349,11 @@ function missingBasic(sp, con, evKey){
 function missingBio(sp, evKey){
   const roles = rolesOfSpeaker(sp.id);
   const out = [];
-  if((isReq(evKey, roles, 'bio_pro') || isReq(evKey, roles, 'bio_work')) && !sp.profile_received_at) out.push('이력');
+  /* 판단은 연사 표 칸과 같은 곳(spCell)에서 — 둘이 다르게 세면 표는 끝났다는데 여기는 남았다고 한다 */
+  [['bio_pro', '이력'], ['cv', 'CV']].forEach(([k, label]) => {
+    const c = spCell(sp, evKey, k);
+    if(c.state === 'todo' || c.state === 'part') out.push(c.state === 'part' && c.text ? `${label} (${c.text})` : label);
+  });
   return out;
 }
 /* 제공사항은 «우리가 챙길 것»이다. 연사료를 적어 놓고 안 준 것,

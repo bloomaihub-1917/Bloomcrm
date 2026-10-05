@@ -956,9 +956,18 @@ export async function copyPga(){
    «소속·직함을 받았는가»는 ✓로 답할 질문이 아니다. 프로그램북에 그 글자가
    그대로 나가므로, 여기서 보고 싶은 건 «받았다»가 아니라 «무엇을 받았나»다.
    ✓만 보면 결국 한 사람씩 열어 확인하게 된다. */
+/* 설정 › 컨퍼런스의 약력 갈래 — 이력 칸 하나로 모아 센다 */
+const BIO_PARTS = [
+  ['bio_profile', '소개'], ['bio_pro', '경력'], ['bio_work', '근무'], ['bio_edu', '학력'],
+  ['bio_awards', '수상'], ['bio_credentials', '자격'], ['bio_teaching', '강의'],
+  ['bio_affil', '학회'], ['bio_pubs', '출판'],
+].map(([key, label]) => ({ key, label, fields: [`${key}_ko`, `${key}_en`] }))
+  .concat([{ key: 'languages', label: '구사 언어', fields: ['languages'] }]);
+
 export const SP_COLS = [
   { key: 'profile',  label: '소속·직함', show: 'text', wide: true },
   { key: 'bio_pro',  label: '이력' },
+  { key: 'cv',       label: 'CV' },
   { key: 'photo',    label: '사진' },
   { key: 'title',    label: '발제명' },
   { key: 'abstract', label: '초록' },
@@ -1004,12 +1013,19 @@ export function spCell(sp, evKey, key){
   const roles = rolesOfSpeaker(sp.id);
   const asg = assignmentsFor(sp.id);
   /* 역할이 여럿이면 센 쪽을 따른다 — 좌장이자 발표자면 발제도 받아야 한다 */
-  let need = '';
-  roles.forEach(r => {
-    const v = speakerNeed(evKey, r, key);
-    if(v === 'req') need = 'req';
-    else if(v === 'opt' && need !== 'req') need = 'opt';
-  });
+  const needOf = (k) => {
+    let n = '';
+    roles.forEach(r => {
+      const v = speakerNeed(evKey, r, k);
+      if(v === 'req') n = 'req';
+      else if(v === 'opt' && n !== 'req') n = 'opt';
+    });
+    return n;
+  };
+  /* 이력 칸은 설정의 약력 갈래 아홉과 구사 언어를 한데 센다 — 하나라도 묻으면 칸이 선다 */
+  const need = key === 'bio_pro'
+    ? BIO_PARTS.map(p => needOf(p.key)).reduce((a, v) => v === 'req' || a === 'req' ? 'req' : v || a, '')
+    : needOf(key);
   if(!need) return { state: 'na' };
 
   const done = (v, text) => ({ state: v ? 'done' : 'todo', text: v ? (text || v) : '', need });
@@ -1023,7 +1039,22 @@ export function spCell(sp, evKey, key){
     }
     /* 지난 행사에서 가져온 자료는 연사가 맞다고 할 때까지 «일부»로 센다 —
        받은 날이 찍혀야 끝난다(contact-speaker.js reusePending) */
-    case 'bio_pro':  return reuseState(sp, 'bio', need) || done(sp.profile_received_at);
+    case 'bio_pro': {
+      const r = reuseState(sp, 'bio', need);
+      if(r) return r;
+      /* 받은 날만 보면 «학력 필수»로 정해도 학력이 빈 채 끝난 것으로 셌다.
+         필수로 정한 갈래가 다 채워져야 끝이다 */
+      const lack = BIO_PARTS.filter(p => needOf(p.key) === 'req' && !p.fields.some(f => String(sp[f] ?? '').trim()));
+      if(!sp.profile_received_at){
+        const any = BIO_PARTS.some(p => p.fields.some(f => String(sp[f] ?? '').trim()));
+        return { state: any ? 'part' : 'todo', text: any && lack.length ? `${lack.map(p => p.label).join('·')} 없음` : '', need };
+      }
+      return lack.length ? { state: 'part', text: `${lack.map(p => p.label).join('·')} 없음`, need }
+        : { state: 'done', text: sp.profile_received_at, need };
+    }
+    /* CV는 기본이 «선택»이다 — 선택까지 세면 모든 연사의 자료 받기가 CV 하나로 안 끝난다.
+       설정에서 «필수»로 바꾼 행사에서만 칸이 선다 */
+    case 'cv':       return need === 'req' ? done(sp.cv_received_at) : { state: 'na' };
     case 'photo':    return reuseState(sp, 'photo', need) || done(sp.photo_received_at);
     case 'consent': {
       const no = consentRefused(sp);
@@ -1156,6 +1187,7 @@ export async function receiveAll(spId){
   const onSpeaker = [
     ['bio_pro',  'profile_received_at', '이력'],
     ['photo',    'photo_received_at',   '사진'],
+    ['cv',       'cv_received_at',      'CV'],
     ['consent',  'consent_at',          '동의서'],
     ['passport', 'passport_received_at', '여권'],
   ].filter(([needKey, field]) => spCell(sp, sp.event_id, needKey).state === 'todo' && !sp[field]);
