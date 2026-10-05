@@ -896,3 +896,51 @@ export async function mailStatus(){
     return await res.json();
   } catch(e){ return { ok: false, error: e.message }; }
 }
+
+/* ── 메일 기본 첨부 (단계별 가이드·양식 파일) ──
+   행사별로 한 번 받아 두고 같이 쓴다. 테스트 모드에서는 서버에 올리지 않고
+   이 탭 안에서만 들고 있는다 — 화면 동작은 확인할 수 있게. */
+const mailFilesCache = {};
+export const mailFilesOf = (evKey) => mailFilesCache[evKey] || [];
+export async function loadMailFiles(evKey){
+  if(!API_BASE_URL || !currentUser){ mailFilesCache[evKey] = mailFilesCache[evKey] || []; return mailFilesCache[evKey]; }
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/mail/files?event_id=${encodeURIComponent(evKey)}`, { headers: await authHeaders() });
+    const j = await res.json().catch(() => ({}));
+    if(j.ok) mailFilesCache[evKey] = j.files || [];
+  } catch(e){ console.warn('[CRM] 기본 첨부 목록 실패:', e.message); }
+  return mailFilesOf(evKey);
+}
+export async function uploadMailFile(rec){
+  if(!API_BASE_URL || !currentUser){
+    const file = { ...rec, id: `MF-local-${Date.now()}`, size: Math.floor(rec.data.length * 3 / 4) };
+    delete file.data;
+    (mailFilesCache[rec.event_id] = mailFilesCache[rec.event_id] || []).push(file);
+    return { ok: true, file, offline: true };
+  }
+  try {
+    const headers = { 'Content-Type': 'application/json', ...await authHeaders() };
+    const res = await fetch(API_BASE_URL + '/api/mail/files', { method: 'POST', headers, body: JSON.stringify(rec) });
+    const j = await res.json().catch(() => ({}));
+    if(!res.ok || j.ok === false) return { ok: false, error: j.error || `올리기 실패 (${res.status})` };
+    (mailFilesCache[rec.event_id] = mailFilesCache[rec.event_id] || []).push(j.file);
+    return j;
+  } catch(e){ return { ok: false, error: `올리기 실패: ${e.message}` }; }
+}
+export async function deleteMailFile(evKey, id){
+  const drop = () => { mailFilesCache[evKey] = mailFilesOf(evKey).filter(f => f.id !== id); };
+  if(!API_BASE_URL || !currentUser){ drop(); return { ok: true }; }
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/mail/files/${encodeURIComponent(id)}`, { method: 'DELETE', headers: await authHeaders() });
+    const j = await res.json().catch(() => ({}));
+    if(!res.ok || j.ok === false) return { ok: false, error: j.error || `삭제 실패 (${res.status})` };
+    drop(); return { ok: true };
+  } catch(e){ return { ok: false, error: `삭제 실패: ${e.message}` }; }
+}
+/* 브라우저 파일 → base64 (data: 머리 뗀 것) */
+export const fileToBase64 = (file) => new Promise((ok, no) => {
+  const r = new FileReader();
+  r.onload = () => ok(String(r.result).split(',')[1] || '');
+  r.onerror = () => no(r.error);
+  r.readAsDataURL(file);
+});

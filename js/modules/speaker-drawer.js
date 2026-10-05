@@ -30,7 +30,7 @@ import { td, escapeHtml, escAttr, countryOptions, countryName } from '../utils.j
 import {
   saveSpeaker, saveSessionSpeaker,
   saveSpeakerContact, deleteSpeakerContact,
-  saveSpeakerLog, sendMail,
+  saveSpeakerLog, sendMail, loadMailFiles, mailFilesOf, fileToBase64,
 } from '../api.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 import { patchContact } from './db-tab.js';
@@ -223,6 +223,12 @@ export function renderSpeakerDr(){
       : basicHtml(sp, con, evKey));
     /* 초안 만들기로 넘어왔으면 메일 칸을 채운다 — 칸은 위에서 막 그려졌다 */
     if(spTab === 'mail' && pendingDraft){ fillSpeakerMail(pendingDraft); pendingDraft = ''; }
+    else if(spTab === 'mail'){
+      const k = document.getElementById('sp-mail-kind')?.value;
+      if(k && !document.getElementById('sp-mail-body')?.value) fillSpeakerMail(k);
+    }
+    /* 기본 첨부 목록은 서버에서 받아야 해서 늦게 온다 — 오면 첨부 칸만 다시 그린다 */
+    if(spTab === 'mail') loadMailFiles(evKey).then(() => renderSpMailFiles());
   }
 }
 
@@ -1022,6 +1028,10 @@ function mailTabHtml(sp, evKey){
     })()}
     ${fg('제목', `<input class="fi" id="sp-mail-subject" value="${escAttr(`[${evName}] 연사 안내`)}">`)}
     ${fg('내용', `<textarea class="fi" id="sp-mail-body" rows="10" style="resize:vertical"></textarea>`)}
+    ${fg('첨부', `<div id="sp-mail-files" style="font-size:11px"></div>
+      <label class="btn" style="font-size:10.5px;margin-top:5px;display:inline-block;cursor:pointer">+ PC에서 파일 추가
+        <input type="file" multiple style="display:none" onchange="addSpMailFiles(this)"></label>`,
+      '단계의 기본 첨부는 설정 › 행사 › 컨퍼런스 › 연사 연락 순서에서 올려 둡니다. PC에서 고른 파일은 합쳐서 3MB까지')}
     <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
       <button class="btn bp" style="font-size:11px" onclick="sendSpeakerMail()">보내기</button>
       <span id="sp-mail-msg" style="font-size:10.5px;color:var(--i4)"></span>
@@ -1032,6 +1042,37 @@ function mailTabHtml(sp, evKey){
       : `<div style="font-size:11px;color:var(--i4);padding:6px 0">아직 보낸 메일이 없어요</div>`}`;
 }
 
+/* ── 메일 첨부 ──
+   기본 첨부(그 단계에 올려 둔 가이드·양식)는 체크된 채로 나오고, PC에서 고른
+   파일은 보내기 전까지 이 화면에만 들고 있는다. */
+let spLocalFiles = [];
+let spSkipDefault = new Set();
+function renderSpMailFiles(kind, reset){
+  const sp = getSpeakerById(spId);
+  const el = document.getElementById('sp-mail-files');
+  if(!sp || !el) return;
+  if(reset){ spSkipDefault = new Set(); }
+  const k = kind || document.getElementById('sp-mail-kind')?.value || '';
+  const defs = mailFilesOf(sp.event_id).filter(f => f.step === k);
+  const kb = (n) => n > 1048576 ? `${(n / 1048576).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`;
+  const localTotal = spLocalFiles.reduce((n, f) => n + f.size, 0);
+  el.innerHTML = (defs.map(f => `<label style="display:flex;gap:6px;align-items:center;padding:2px 0">
+      <input type="checkbox" ${spSkipDefault.has(f.id) ? '' : 'checked'} onchange="toggleSpDefaultFile('${escAttr(f.id)}',this.checked)">
+      📎 ${escapeHtml(f.filename)} <span style="color:var(--i4)">${kb(Number(f.size) || 0)} · 기본 첨부</span></label>`).join('')
+    + spLocalFiles.map((f, i) => `<div style="display:flex;gap:6px;align-items:center;padding:2px 0">
+      📎 ${escapeHtml(f.name)} <span style="color:var(--i4)">${kb(f.size)}</span>
+      <button class="btn" style="font-size:10px;padding:1px 6px" onclick="removeSpMailFile(${i})">빼기</button></div>`).join(''))
+    || '<span style="color:var(--i4)">첨부 없음</span>';
+  if(localTotal > 3 * 1024 * 1024) el.innerHTML += `<div style="color:var(--re);margin-top:3px">PC 파일이 합쳐서 3MB를 넘어요 (${kb(localTotal)}) — 큰 파일은 링크로 보내주세요</div>`;
+}
+export function addSpMailFiles(input){
+  spLocalFiles.push(...[...(input.files || [])]);
+  input.value = '';
+  renderSpMailFiles();
+}
+export function removeSpMailFile(i){ spLocalFiles.splice(i, 1); renderSpMailFiles(); }
+export function toggleSpDefaultFile(id, on){ if(on) spSkipDefault.delete(id); else spSkipDefault.add(id); }
+
 /* 뼈대 채우기 — 무엇을 받아야 하는지는 역할에서 이미 알고 있다.
    해외 연사(영문만)에게는 영문으로 만든다. */
 export function fillSpeakerMail(kind){
@@ -1039,6 +1080,7 @@ export function fillSpeakerMail(kind){
   if(!sp) return;
   const sel = document.getElementById('sp-mail-kind');
   if(sel && sel.value !== kind) sel.value = kind;
+  renderSpMailFiles(kind, true);
   const d = draftFor(sp, kind);
   if(d){
     const s = document.getElementById('sp-mail-subject');
@@ -1133,8 +1175,14 @@ export async function sendSpeakerMail(){
      엉뚱한 사람에게 간 걸 나중에 알게 된다. */
   if(!confirm(`이 내용으로 보낼까요?\n\n수신 ${t.to.join(', ')}${t.cc.length ? `\n참조 ${t.cc.join(', ')}` : ''}\n제목 ${subject}`)) return;
 
+  const fileIds = mailFilesOf(sp.event_id).filter(f => f.step === kind && !spSkipDefault.has(f.id)).map(f => f.id);
+  if(spLocalFiles.reduce((n, f) => n + f.size, 0) > 3 * 1024 * 1024){ say('PC에서 고른 첨부가 3MB를 넘어요.', false); return; }
+
   say('보내는 중…', true);
-  const res = await sendMail({ to: t.to, cc: t.cc, subject, text, speaker_id: sp.id, category, kind });
+  const attachments = [];
+  for(const f of spLocalFiles) attachments.push({ filename: f.name, content_type: f.type, data: await fileToBase64(f) });
+  const res = await sendMail({ to: t.to, cc: t.cc, subject, text, speaker_id: sp.id, category, kind,
+    attachments, file_ids: fileIds });
   if(!res.ok){
     say(res.offline ? '테스트 모드에서는 보내지 않아요.' : (res.error || '보내지 못했어요.'), false);
     return;
@@ -1145,12 +1193,15 @@ export async function sendSpeakerMail(){
     id: `SL-tmp-${Date.now()}`, speaker_id: sp.id, kind, ts: td(),
     direction: 'out', channel: '이메일',
     counterpart: [t.to.join(', '), t.cc.length ? `(cc) ${t.cc.join(', ')}` : ''].filter(Boolean).join(' '),
-    category, subject, body: text, answered_at: '', answer: '', status: 'done',
+    category, subject, answered_at: '', answer: '', status: 'done',
+    body: text + ((attachments.length || fileIds.length)
+      ? `\n\n[첨부] ${[...mailFilesOf(sp.event_id).filter(f => fileIds.includes(f.id)).map(f => f.filename), ...spLocalFiles.map(f => f.name)].join(', ')}` : ''),
     author_email: '', author_name: '',
   });
   trackAction('add', '연사 메일', sp.event_id, `${sp.name_snapshot || sp.name_en || sp.id} — ${category}`,
     { kind: 'speaker', id: sp.id });
   say(res.logged === false ? '보냈어요 — 다만 기록 저장에 실패했어요.' : '보냈어요.', true);
+  spLocalFiles = []; spSkipDefault = new Set();
   /* 초청을 보냈으면 «보냄» 날짜를 찍는다 — 그래야 다음 단계로 넘어간다 */
   if(kind === 'invite' && !sp.guide_sent_at){ await patchSpeaker({ guide_sent_at: td() }, '초청·가이드 보냄'); return; }
   renderSpeakerDr();
@@ -1491,6 +1542,9 @@ window.asStamp              = asStamp;
 window.searchSpeakerContact = searchSpeakerContact;
 window.linkSpeakerContact   = linkSpeakerContact;
 window.openFlowDraft = openFlowDraft;
+window.addSpMailFiles = addSpMailFiles;
+window.removeSpMailFile = removeSpMailFile;
+window.toggleSpDefaultFile = toggleSpDefaultFile;
 window.spContactField     = spContactField;
 window.createSpeakerContact = createSpeakerContact;
 window.unlinkSpeakerContact = unlinkSpeakerContact;

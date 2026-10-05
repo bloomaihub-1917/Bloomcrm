@@ -24,6 +24,21 @@ const pool = require('../db/pool');
 
 const router = express.Router();
 
+/* ── 첨부파일 ──
+   Vercel 함수는 요청 하나가 4.5MB를 넘으면 받지 않는다. 브라우저에서 고른 파일은
+   base64로 오며 1.33배로 불어나므로, 한 번에 보낼 수 있는 PC 파일은 합쳐서
+   3MB로 막는다. 단계별 기본 첨부(가이드·양식)는 미리 DB에 올려 두고 id만 받으므로
+   그 한도와 무관하다 — Gmail 한도(25MB) 안에서 합쳐 20MB까지. */
+const LOCAL_MAX = 3 * 1024 * 1024;
+const TOTAL_MAX = 20 * 1024 * 1024;
+const FILE_MAX = 3 * 1024 * 1024;
+let filesReady = null;
+const ensureFiles = () => filesReady || (filesReady = pool.query(`
+  CREATE TABLE IF NOT EXISTS mail_files (
+    id TEXT PRIMARY KEY, event_id TEXT, step TEXT, filename TEXT, content_type TEXT,
+    size INTEGER, data TEXT, created_at TEXT, author_email TEXT)`).catch((e) => { filesReady = null; throw e; }));
+const b64size = (b) => Math.floor(String(b || '').replace(/=+$/, '').length * 3 / 4);
+
 const cfg = () => ({
   user: (process.env.GMAIL_USER || '').trim(),
   pass: (process.env.GMAIL_APP_PASSWORD || '').replace(/\s+/g, ''),  // 구글이 4자씩 띄어 보여준다
@@ -66,6 +81,45 @@ router.get('/status', async (req, res) => {
   res.json(out);
 });
 
+/* 단계별 기본 첨부 — 목록은 내용 없이 이름·크기만 */
+router.get('/files', async (req, res) => {
+  try {
+    await ensureFiles();
+    const r = await pool.query(
+      `SELECT id, event_id, step, filename, content_type, size, created_at, author_email
+         FROM mail_files WHERE ($1 = '' OR event_id = $1) ORDER BY created_at`, [String(req.query.event_id || '')]);
+    res.json({ ok: true, files: r.rows });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+router.post('/files', async (req, res) => {
+  if (req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 올릴 수 없어요' });
+  const { event_id, step, filename, content_type, data } = req.body || {};
+  if (!event_id || !step || !filename || !data) return res.status(400).json({ ok: false, error: '행사·단계·파일이 필요해요' });
+  const size = b64size(data);
+  if (size > FILE_MAX) return res.status(413).json({ ok: false, error: `파일이 너무 커요 (${(size / 1048576).toFixed(1)}MB, 최대 3MB)` });
+  try {
+    await ensureFiles();
+    const id = `MF-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const created_at = new Date().toISOString();
+    await pool.query(
+      `INSERT INTO mail_files (id, event_id, step, filename, content_type, size, data, created_at, author_email)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [id, event_id, step, String(filename).slice(0, 200), content_type || 'application/octet-stream', size, data,
+        created_at, req.user?.email || '']);
+    res.json({ ok: true, file: { id, event_id, step, filename, content_type, size, created_at } });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+router.delete('/files/:id', async (req, res) => {
+  if (req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 지울 수 없어요' });
+  try {
+    await ensureFiles();
+    await pool.query('DELETE FROM mail_files WHERE id = $1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 /* 메일 보내기
    body: { to, subject, text, html?, cc?, exhibitor_id?, speaker_id?, category?, kind? }
 
@@ -79,7 +133,8 @@ router.post('/send', async (req, res) => {
   const t = transport();
   if (!t) return res.status(400).json({ ok: false, error: '메일 계정이 설정되지 않았어요' });
 
-  const { to, subject, text, html, cc, exhibitor_id, speaker_id, category, kind } = req.body || {};
+  const { to, subject, text, html, cc, exhibitor_id, speaker_id, category, kind,
+    attachments: localFiles, file_ids } = req.body || {};
   const list = (v) => (Array.isArray(v) ? v : String(v || '').split(/[,;]/))
     .map((s) => String(s).trim()).filter(Boolean);
 
@@ -87,6 +142,26 @@ router.post('/send', async (req, res) => {
   if (!toList.length) return res.status(400).json({ ok: false, error: '받는 사람이 없어요' });
   if (!String(subject || '').trim() && !String(text || '').trim()) {
     return res.status(400).json({ ok: false, error: '제목이나 내용 중 하나는 있어야 해요' });
+  }
+
+  /* 첨부 — PC에서 고른 것(base64)과 미리 올려 둔 기본 첨부(id) */
+  const attachments = [];
+  let localTotal = 0;
+  for (const f of (Array.isArray(localFiles) ? localFiles : [])) {
+    if (!f || !f.data || !f.filename) continue;
+    localTotal += b64size(f.data);
+    attachments.push({ filename: String(f.filename), content: f.data, encoding: 'base64', contentType: f.content_type || undefined });
+  }
+  if (localTotal > LOCAL_MAX) return res.status(413).json({ ok: false, error: 'PC에서 고른 첨부가 합쳐서 3MB를 넘어요' });
+  const ids = (Array.isArray(file_ids) ? file_ids : []).filter(Boolean);
+  if (ids.length) {
+    try {
+      await ensureFiles();
+      const r = await pool.query('SELECT filename, content_type, data, size FROM mail_files WHERE id = ANY($1)', [ids]);
+      r.rows.forEach((f) => attachments.push({ filename: f.filename, content: f.data, encoding: 'base64', contentType: f.content_type || undefined }));
+      const total = localTotal + r.rows.reduce((n, f) => n + (Number(f.size) || 0), 0);
+      if (total > TOTAL_MAX) return res.status(413).json({ ok: false, error: '첨부가 합쳐서 20MB를 넘어요' });
+    } catch (e) { return res.status(500).json({ ok: false, error: `기본 첨부를 읽지 못했어요: ${e.message}` }); }
   }
 
   const c = cfg();
@@ -100,6 +175,7 @@ router.post('/send', async (req, res) => {
       subject: String(subject || '').trim(),
       text: String(text || ''),
       html: html || undefined,
+      attachments: attachments.length ? attachments : undefined,
     });
 
     /* 보낸 사실을 기록에 남긴다. 이게 실패해도 메일은 이미 나갔으므로 성공으로
@@ -125,7 +201,11 @@ router.post('/send', async (req, res) => {
           [`${target.prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`, target.id,
             kind || 'note', new Date().toISOString().slice(0, 10),
             counterpart, category || '기타',
-            String(subject || '').trim(), String(text || ''),
+            String(subject || '').trim(),
+            // 무엇을 붙여 보냈는지도 기록에 남긴다 — «양식 보냈나»를 나중에 다시 묻게 된다
+            String(text || '') + (attachments.length ? `
+
+[첨부] ${attachments.map((a) => a.filename).join(', ')}` : ''),
             req.user?.email || '', req.user?.name || '']);
         logged = true;
       } catch (e) { logError = e.message; }

@@ -66,6 +66,7 @@ import {
   deleteEquipCatalog,
   saveExhCfgToSheet,
   saveConfSession,
+  loadMailFiles, mailFilesOf, uploadMailFile, deleteMailFile, fileToBase64,
 } from '../api.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 
@@ -2583,6 +2584,7 @@ export function renderEvDetail(){
 
   // 비품 편집기는 이제 비품 목록 탭에만 붙는다 — 다른 자리를 가리키고 있으면 돌려놓는다
   mountEquipCatalogIdle();
+  if(evDetailSeg === 'conf' && !locked) fillFlowFiles(ev.key);
 }
 
 /* ── 기본 정보 ──
@@ -3149,8 +3151,50 @@ function flowEditorHtml(evKey){
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           ${FLOW_FIELDS.map(([f, l]) => fld(st, f, l)).join('')}
         </div>
+        <div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--i7)">
+          <div class="mlbl">기본 첨부 <span style="font-weight:400;color:var(--i4)">— 이 단계 메일에 자동으로 붙어요 (파일당 3MB)</span></div>
+          <div id="flowfiles-${st.key}" style="font-size:11px;color:var(--i4)">불러오는 중…</div>
+          <label class="btn" style="font-size:10.5px;margin-top:5px;display:inline-block;cursor:pointer">+ 파일 올리기
+            <input type="file" multiple style="display:none" onchange="uploadFlowFiles('${escAttr(evKey)}','${st.key}',this)"></label>
+        </div>
       </div>
     </details>`).join('')}`;
+}
+
+/* 단계별 기본 첨부 — 목록은 서버에서 받아 각 단계 자리에 끼운다 */
+export async function fillFlowFiles(evKey){
+  await loadMailFiles(evKey);
+  FLOW_STEPS.forEach(st => {
+    const el = document.getElementById(`flowfiles-${st.key}`);
+    if(!el) return;
+    const files = mailFilesOf(evKey).filter(f => f.step === st.key);
+    el.innerHTML = files.length ? files.map(f => `<div style="display:flex;gap:6px;align-items:center;padding:2px 0">
+        📎 <span style="color:var(--i2)">${escapeHtml(f.filename)}</span>
+        <span>${(Number(f.size || 0) / 1024).toFixed(0)}KB</span>
+        <button class="btn" style="font-size:10px;padding:1px 6px;margin-left:auto"
+          onclick="removeFlowFile('${escAttr(evKey)}','${escAttr(f.id)}')">삭제</button></div>`).join('')
+      : '없음';
+  });
+}
+export async function uploadFlowFiles(evKey, step, input){
+  const files = [...(input.files || [])];
+  input.value = '';
+  for(const f of files){
+    if(f.size > 3 * 1024 * 1024){ alert(`${f.name}: 3MB가 넘어 올릴 수 없어요.`); continue; }
+    const data = await fileToBase64(f);
+    const r = await uploadMailFile({ event_id: evKey, step, filename: f.name, content_type: f.type, data });
+    if(!r.ok){ alert(`${f.name}: ${r.error || '올리지 못했어요'}`); continue; }
+    trackAction('add', '메일 기본 첨부', evKey, `${step} 단계에 «${f.name}» 올림`);
+  }
+  fillFlowFiles(evKey);
+}
+export async function removeFlowFile(evKey, id){
+  const f = mailFilesOf(evKey).find(x => x.id === id);
+  if(!f || !confirm(`«${f.filename}»을(를) 기본 첨부에서 지울까요?`)) return;
+  const r = await deleteMailFile(evKey, id);
+  if(!r.ok){ alert(r.error || '지우지 못했어요'); return; }
+  trackAction('delete', '메일 기본 첨부', evKey, `${f.step} 단계 «${f.filename}» 지움`);
+  fillFlowFiles(evKey);
 }
 
 /* ── 격자 셀 한 번 누르기 — ● → ○ → — ──
@@ -3376,6 +3420,8 @@ export async function saveEvConf(){
 }
 
 window.cycleSpeakerNeed  = cycleSpeakerNeed;
+window.uploadFlowFiles = uploadFlowFiles;
+window.removeFlowFile = removeFlowFile;
 window.resetSpeakerNeeds = resetSpeakerNeeds;
 window.addConfDay        = addConfDay;
 window.removeConfDay     = removeConfDay;

@@ -1080,3 +1080,12 @@ ALTER TABLE conf_sessions ADD COLUMN IF NOT EXISTS kind TEXT;
    어느 품목에서 왔는지가 base_id다. 신청 내역(catalog_id)은 지금처럼 행사 사본을
    가리킨다 — 지난 행사의 단가가 그대로 남아야 옛 주문 금액이 바뀌지 않는다. */
 ALTER TABLE equip_catalog ADD COLUMN IF NOT EXISTS base_id TEXT;
+
+/* ── 메일 기본 첨부 ──
+   연사 연락 단계마다 붙여 보낼 가이드·양식 파일. 매번 PC에서 찾아 붙이면
+   행사마다 다른 판을 붙이는 실수가 난다. 내용은 base64로 둔다(파일당 3MB).
+   routes/mail.js가 처음 쓸 때 만들기도 한다. */
+CREATE TABLE IF NOT EXISTS mail_files (
+  id TEXT PRIMARY KEY, event_id TEXT, step TEXT, filename TEXT, content_type TEXT,
+  size INTEGER, data TEXT, created_at TEXT, author_email TEXT
+);
