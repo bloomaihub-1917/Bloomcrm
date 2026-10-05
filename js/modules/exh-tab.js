@@ -1885,9 +1885,11 @@ const MONEY_CATS = [['booth', '부스'], ['equip', '비품'], ['graphic', '그�
    기업 단위로 가른다. 완납한 기업이 낸 돈은 그 기업이 신청한 모든 분류를
    덮은 것으로 보고, 미납 기업의 청구는 통째로 «안 받은 돈»에 넣는다.
 
-   그래서 부분 입금한 기업은 낸 만큼이 있어도 전액이 «안 받은 돈»에 잡힌다.
-   숫자를 얼버무리지 않으려고 그렇게 두고, 그런 기업이 몇 곳인지 화면에 함께
-   적는다 — 안 적으면 미수금이 실제보다 커 보이는 이유를 알 수 없다.
+   부분 입금한 기업은 낸 돈을 그 기업의 분류별 청구 비율대로 나눠 «받은 돈»에,
+   남은 잔액을 같은 비율로 «안 받은 돈»에 넣는다. 예전엔 전액을 «안 받은 돈»에
+   넣어서 대시보드 미수금(청구 − 입금)보다 크게 나왔다 — 같은 돈을 두 곳이
+   다르게 세면 어느 쪽을 믿을지 알 수 없다. 분류별 몫은 추정이라, 그런 기업이
+   몇 곳인지 화면에 함께 적는다.
 
    완납 판정은 통화별로 한다. 원화는 다 냈는데 달러가 남은 기업이 있어서,
    기업 하나를 한 상태로 묶으면 어느 쪽이 남았는지가 사라진다. */
@@ -1910,7 +1912,10 @@ export function catSettleByCurrency(list){
          결제 수단도 없어서, 그 기업이 실제로 낸 수단 비율대로 나눈다 —
          한 기업이 한 수단으로만 내는 경우가 대부분이라 그럴 때는 그대로 맞고,
          섞어 낸 곳만 비율로 갈린다. 수단이 안 적힌 옛 건은 미확인으로 남긴다. */
-      const tot = paidUp && st[cur] && st[cur].paid > 0 ? st[cur].paid : 0;
+      const tot = st[cur] && st[cur].paid > 0 ? st[cur].paid : 0;
+      // 그 통화 청구 중 받은 비율 — 완납이면 1, 부분 입금이면 낸 만큼
+      const billedCur = by[cur].합계 || 0;
+      const paidRatio = paidUp ? 1 : (billedCur && tot ? Math.min(1, tot / billedCur) : 0);
       const mix = tot
         ? { bank: st[cur].bank / tot, card: st[cur].card / tot, unknown: st[cur].etc / tot }
         : { bank: 0, card: 0, unknown: 0 };
@@ -1920,12 +1925,12 @@ export function catSettleByCurrency(list){
         if(!v) return;
         if(!out[cur][k]) out[cur][k] = { billed: 0, paid: 0, unpaid: 0, bank: 0, card: 0, unknown: 0 };
         out[cur][k].billed += v;
-        out[cur][k][paidUp ? 'paid' : 'unpaid'] += v;
-        if(paidUp){
-          out[cur][k].bank += v * mix.bank;
-          out[cur][k].card += v * mix.card;
-          out[cur][k].unknown += v * mix.unknown;
-        }
+        const got = v * paidRatio;
+        out[cur][k].paid += got;
+        out[cur][k].unpaid += v - got;
+        out[cur][k].bank += got * mix.bank;
+        out[cur][k].card += got * mix.card;
+        out[cur][k].unknown += got * mix.unknown;
       });
     });
   });
@@ -2059,8 +2064,8 @@ function renderMoneyView(list){
   const catDash = catCards ? `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">${catCards}</div>
     <div style="font-size:10.5px;color:var(--i4);margin:-4px 0 14px;line-height:1.6">
       입금에는 분류가 없어요 — 돈은 기업 단위로 한 번에 들어옵니다. 그래서
-      <b>완납한 기업</b>의 청구를 «받은 돈»으로, <b>남은 기업</b>의 청구를 «안 받은 돈»으로 갈랐어요.
-      ${partial.length ? `<br><b style="color:var(--am)">일부만 낸 ${partial.length}곳</b>은 낸 금액이 있어도 전액이 «안 받은 돈»에 잡힙니다 — 아래 표에서 그 기업의 입금액을 보세요.` : ''}
+      <b>완납한 기업</b>의 청구를 «받은 돈»으로, <b>남은 기업</b>의 잔액을 «안 받은 돈»으로 갈랐어요.
+      ${partial.length ? `<br><b style="color:var(--am)">일부만 낸 ${partial.length}곳</b>은 낸 금액을 분류별 청구 비율대로 나눠 «받은 돈»에 넣었어요 — 분류별 몫은 추정이고, 합계는 대시보드 미수금과 같습니다.` : ''}
     </div>` : '';
 
   /* ── 완납·미납 고르기 ──
