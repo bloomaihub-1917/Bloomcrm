@@ -1885,11 +1885,13 @@ const MONEY_CATS = [['booth', '부스'], ['equip', '비품'], ['graphic', '그�
    기업 단위로 가른다. 완납한 기업이 낸 돈은 그 기업이 신청한 모든 분류를
    덮은 것으로 보고, 미납 기업의 청구는 통째로 «안 받은 돈»에 넣는다.
 
-   부분 입금한 기업은 낸 돈을 그 기업의 분류별 청구 비율대로 나눠 «받은 돈»에,
-   남은 잔액을 같은 비율로 «안 받은 돈»에 넣는다. 예전엔 전액을 «안 받은 돈»에
-   넣어서 대시보드 미수금(청구 − 입금)보다 크게 나왔다 — 같은 돈을 두 곳이
-   다르게 세면 어느 쪽을 믿을지 알 수 없다. 분류별 몫은 추정이라, 그런 기업이
-   몇 곳인지 화면에 함께 적는다.
+   부분 입금한 기업은 인보이스를 낸 순서대로 맞춘다. 최초 신청 항목이 첫
+   인보이스로 나가고, 추가 신청은 회차(exhibitor_apps) 순으로 뒤 인보이스가
+   된다. 낸 돈을 그 순서로 항목에 채워, 금액을 다 덮은 항목만 «받은 돈»에 넣고
+   못 덮은 항목은 통째로 «안 받은 돈»에 둔다. 비율로 쪼개면 «그래픽 84% 받음»
+   같은 실제로 없는 상태가 생긴다.
+   어느 항목에도 딱 맞지 않고 남는 입금(덜 낸 송금 수수료 등)은 분류에 넣지
+   않고 따로 센다 — 대시보드 미수금과의 차이가 바로 이 금액이다.
 
    완납 판정은 통화별로 한다. 원화는 다 냈는데 달러가 남은 기업이 있어서,
    기업 하나를 한 상태로 묶으면 어느 쪽이 남았는지가 사라진다. */
@@ -1903,6 +1905,17 @@ function splitInt(total, weights){
   raw.map((r, i) => [r - res[i], i]).sort((x, y) => y[0] - x[0])
     .forEach(([, i]) => { if(left > 0){ res[i]++; left--; } });
   return res;
+}
+
+const moneyCat = (i) => ['booth', 'equip', 'graphic'].includes(i.category) ? i.category : 'etc';
+
+/* 인보이스가 나간 순서 — 최초 신청(회차 없음) 항목이 먼저, 추가 신청은 회차 순 */
+function issueOrderItems(exhId, cur){
+  const seq = new Map(appsFor(exhId).map((a, n) => [a.id, a.kind === '최초' ? 0 : n + 1]));
+  return billableItems(exhId).filter(i => (i.currency || 'KRW') === cur)
+    .map((i, n) => ({ i, n, o: i.app_id ? (seq.get(i.app_id) ?? 999) : 0 }))
+    .sort((a, b) => a.o - b.o || (Number(a.i.sort_order) || 0) - (Number(b.i.sort_order) || 0) || a.n - b.n)
+    .map(r => r.i);
 }
 
 export function catSettleByCurrency(list){
@@ -1925,17 +1938,24 @@ export function catSettleByCurrency(list){
          한 기업이 한 수단으로만 내는 경우가 대부분이라 그럴 때는 그대로 맞고,
          섞어 낸 곳만 비율로 갈린다. 수단이 안 적힌 옛 건은 미확인으로 남긴다. */
       const tot = st[cur] && st[cur].paid > 0 ? st[cur].paid : 0;
-      const billedCur = by[cur].합계 || 0;
       const mix = tot
         ? { bank: st[cur].bank / tot, card: st[cur].card / tot, unknown: st[cur].etc / tot }
         : { bank: 0, card: 0, unknown: 0 };
 
-      /* 비율로 나누면 끝전(0.214원 같은)이 생긴다. 돈은 원·센트 단위라 기업마다
-         정수로 나누고 남는 끝전은 큰 자리부터 하나씩 얹어, 분류를 더하면 그
-         기업이 실제로 낸 돈과 정확히 같게 한다. */
       const cats = MONEY_CATS.map(([k]) => k).filter(k => by[cur][k]);
-      const gotTotal = paidUp ? billedCur : Math.round(Math.min(tot, billedCur));
-      const gots = splitInt(gotTotal, cats.map(k => by[cur][k]));
+      const gotBy = {};
+      if(paidUp) cats.forEach(k => { gotBy[k] = by[cur][k]; });
+      else {
+        let left = Math.max(0, tot);
+        issueOrderItems(x.id, cur).forEach(i => {
+          const v = num(i.amount), k = moneyCat(i);
+          if(v > 0 && left >= v){ gotBy[k] = (gotBy[k] || 0) + v; left -= v; }
+        });
+        if(left > 0) out[cur].__left = (out[cur].__left || 0) + left;
+      }
+      const gots = cats.map(k => gotBy[k] || 0);
+      const gotTotal = gots.reduce((a, b) => a + b, 0);
+      // 결제 수단은 항목에 안 달려 있어 기업이 낸 수단 비율대로 정수로 나눈다
       const bankT = Math.round(gotTotal * mix.bank), unkT = Math.round(gotTotal * mix.unknown);
       const banks = splitInt(bankT, gots);
       const unks = splitInt(unkT, gots.map((g, i) => g - banks[i]));   // 카드 몫이 음수가 되지 않게
@@ -2075,7 +2095,9 @@ function renderMoneyView(list){
         <span style="font-size:10.5px;color:var(--i5);margin-left:5px">분류별 수금 현황</span>
       </div>
       ${cats.map(([k, l]) => line(l, catS[cur][k], false)).join('')}
-      <div style="margin-top:auto">${line('합계', sum, true)}</div>
+      <div style="margin-top:auto">${line('합계', sum, true)}
+        ${catS[cur].__left ? `<div style="padding:0 12px 9px;font-size:10px;color:var(--am);background:var(--i9)">
+          항목에 딱 맞지 않은 입금 ${escapeHtml(fmtMoney(catS[cur].__left, cur))} — 받은 돈에 넣지 않았어요</div>` : ''}</div>
     </div>`;
   }).join('');
 
@@ -2083,7 +2105,7 @@ function renderMoneyView(list){
     <div style="font-size:10.5px;color:var(--i4);margin:-4px 0 14px;line-height:1.6">
       입금에는 분류가 없어요 — 돈은 기업 단위로 한 번에 들어옵니다. 그래서
       <b>완납한 기업</b>의 청구를 «받은 돈»으로, <b>남은 기업</b>의 잔액을 «안 받은 돈»으로 갈랐어요.
-      ${partial.length ? `<br><b style="color:var(--am)">일부만 낸 ${partial.length}곳</b>은 낸 금액을 분류별 청구 비율대로 나눠 «받은 돈»에 넣었어요 — 분류별 몫은 추정이고, 합계는 대시보드 미수금과 같습니다.` : ''}
+      ${partial.length ? `<br><b style="color:var(--am)">일부만 낸 ${partial.length}곳</b>은 인보이스 낸 순서(최초 신청 → 추가 신청)대로 낸 돈을 맞춰, 금액이 다 맞은 항목만 «받은 돈»에 넣었어요.` : ''}
     </div>` : '';
 
   /* ── 완납·미납 고르기 ──
