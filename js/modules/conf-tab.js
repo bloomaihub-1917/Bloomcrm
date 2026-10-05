@@ -52,10 +52,11 @@ import { IMPORT_SHEETS, IMPORT_GUIDE } from '../conf-import-spec.js';
 import { trackColorOf, pickTrackColorIndex } from '../track-colors.js';
 import { saveConf } from './settings-tab.js';
 import { nextActionLabel } from './speaker-flow.js';
+import { confDashHtml } from './conf-dash.js';
 
 /* ── 모듈 상태 ── */
 let confEvent = '';
-let confView = 'pga';          // 'pga' | 'program' | 'people'
+let confView = 'dash';         // 'dash' | 'pga' | 'program' | 'people'
 let confOpenSession = '';      // 배정 칸이 열려 있는 세션
 let confEditSession = '';      // 수정 칸이 열려 있는 세션
 let confNewSession = false;    // 세션 추가 칸이 열려 있나
@@ -232,7 +233,7 @@ export function renderConf(){
     return;
   }
 
-  const segs = [['pga', 'Program at a Glance'], ['program', 'Program'], ['people', 'Speakers']];
+  const segs = [['dash', '대시보드'], ['pga', 'Program at a Glance'], ['program', 'Program'], ['people', 'Speakers']];
   const seg = `<div class="seg" style="margin:0 0 12px">
     ${segs.map(([k, l]) => `<button class="seg-b${confView === k ? ' on' : ''}" onclick="setConfView('${k}')">${l}</button>`).join('')}
   </div>`;
@@ -247,6 +248,7 @@ export function renderConf(){
      보인다 — 검색어가 들어오면 연사 목록을 대신 보여준다. 보기 설정은 건드리지
      않아서, 검색어를 지우면 보던 화면으로 그대로 돌아온다(전시 탭과 같은 방식). */
   const inner = (confView === 'people' || confQuery()) ? peopleHtml(ev)
+    : confView === 'dash' ? confDashHtml(ev)
     : confView === 'pga' ? pgaHtml(ev)
     : programHtml(ev);
   body.innerHTML = `<div style="padding:14px 16px 40px">${seg}${banner}`
@@ -1193,6 +1195,11 @@ export function setConfNeedFil(key){
   else confNeedFil = null;
   renderConf();
 }
+/* 대시보드에서 누르면 Speakers 표로 가서 그 조건으로 거른다 — 센 숫자를 눌렀는데
+   아무 일이 없으면 셀 수만 있고 쓸 수는 없는 숫자가 된다 */
+export function openConfNeedTodo(key){ confNeedFil = { key, mode: 'todo' }; confView = 'people'; renderConf(); }
+export function openConfRole(role){ confRoleFil = role; confView = 'people'; renderConf(); }
+export function openConfSess(id){ confSessFil = id; confView = 'people'; renderConf(); }
 export function setConfSessFil(id){
   confSessFil = confSessFil === id ? '' : id;
   renderConf();
@@ -2342,6 +2349,9 @@ export async function removeConfSpeaker(spId){
 window.setConfEvent      = setConfEvent;
 window.setConfView       = setConfView;
 window.setConfNeedFil    = setConfNeedFil;
+window.openConfNeedTodo  = openConfNeedTodo;
+window.openConfRole      = openConfRole;
+window.openConfSess      = openConfSess;
 window.setConfRoleFil    = setConfRoleFil;
 window.searchConfM       = searchConfM;
 window.clearConfSearch   = clearConfSearch;
