@@ -31,6 +31,7 @@ import {
   userColor,
 } from '../state.js';
 import { saveAuditToSheets } from '../api.js';
+import { describeAudit, boldChange } from './audit-describe.js';
 import { td, escapeHtml, escAttr, userInitials } from '../utils.js';
 /* restore.js도 이 파일의 trackAction을 쓴다 — 서로 부르지만 둘 다 함수를
    실행할 때만 필요해서 고리가 되지 않는다(모듈을 읽는 중에 서로를 안 부른다). */
@@ -180,7 +181,12 @@ export function renderAudit(){
       <div class="audit-av" style="background:${e.color}">${escapeHtml(userInitials(e.name))}</div>
       <div class="audit-main">
         <div class="audit-who">${escapeHtml(e.name)}<span class="audit-email">${escapeHtml(e.email)}</span></div>
-        <div class="audit-what">${escapeHtml(String(e.detail||'').replace(/<[^>]+>/g,''))}</div>
+        ${(() => { const d = describeAudit(e); return `
+        ${d.where ? `<div style="font-size:11px;color:var(--i4);margin-bottom:1px">${escapeHtml(d.where)}</div>` : ''}
+        <div class="audit-what">${boldChange(d.what)}</div>
+        ${d.lines.length ? `<div style="font-size:11.5px;color:var(--i3);line-height:1.6;margin-top:2px">${
+          d.lines.slice(0, 6).map(l => `<div>· ${boldChange(l)}</div>`).join('')}${
+          d.lines.length > 6 ? `<div style="color:var(--i5)">외 ${d.lines.length - 6}칸</div>` : ''}</div>` : ''}`; })()}
         <div class="audit-meta">
           ${TAG_MAP[e.type]||''}
           <span class="audit-time">${timeStr}</span>
