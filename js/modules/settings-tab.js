@@ -70,6 +70,7 @@ import {
 import { trackAction, changed, removed } from './audit-tab.js';
 
 import { TRACK_COLORS, trackColorOf, trackColorIndex, pickTrackColorIndex } from '../track-colors.js';
+import { FLOW_STEPS, FLOW_VARS, flowSteps } from './speaker-flow.js';
 import { CL, CAT_KEYS, EVENT_PARTS, PART_STATES, partStateOf,
   SPEAKER_ROLES, SPEAKER_NEEDS, SPEAKER_NEEDS_ON_TALK,
   NEED_CYCLE, NEED_MARK, NEED_LABEL } from '../constants.js';
@@ -3093,12 +3094,63 @@ function evConfHtml(ev){
     ${row('OneDrive 폴더', '사진·발표자료·동의서가 쌓이는 곳', txtIn('conf-folder', cfg.folder,
       '예: C:/Users/…/OneDrive - STUDIO BLOOM/4.행사/2026년/…/연사'))}
 
+    ${flowEditorHtml(ev.key)}
+
     <div style="display:flex;gap:8px;align-items:center;margin-top:14px">
       <button class="btn bp" onclick="saveEvConf()" style="min-width:80px">저장</button>
       <span id="conf-msg" style="font-size:11px;color:var(--g)"></span>
       <span style="font-size:10.5px;color:var(--i5);margin-left:auto">
         일자·시간대·트랙·역할 격자는 누르는 즉시 저장돼요</span>
     </div>`;
+}
+
+/* ── 연사 연락 순서 ──
+   단계와 «끝난 기준»은 코드(speaker-flow.js)가 정하고, 여기서는 이름·설명·
+   마감일·메일 양식과 끄기만 고친다. 저장은 아래 «저장» 단추로 한꺼번에. */
+const FLOW_FIELDS = [
+  ['label', '단계 이름'], ['desc', '설명'], ['due', '마감일'],
+  ['subject_ko', '제목 (국문)'], ['body_ko', '본문 (국문)'],
+  ['subject_en', '제목 (영문)'], ['body_en', '본문 (영문)'],
+  ['remind_subject_ko', '독촉 제목 (국문)'], ['remind_body_ko', '독촉 본문 (국문)'],
+  ['remind_subject_en', '독촉 제목 (영문)'], ['remind_body_en', '독촉 본문 (영문)'],
+];
+function flowEditorHtml(evKey){
+  const steps = flowSteps(evKey, { withOff: true });
+  const rule = (st) => st.done === 'needs' ? '역할이 요구하는 자료를 다 받으면 끝'
+    : st.done === 'log' ? '이 단계 메일을 보내면 끝'
+    : ({ guide_sent_at: '«보냄» 날짜가 있으면 끝 (초청 메일을 보내면 자동으로 찍힘)',
+         invite_replied_at: '«초청 회신» 날짜가 있으면 끝', confirmed_at: '«참가 확정» 날짜가 있으면 끝' })[st.done.slice(6)] || '';
+  const fld = (st, f, l) => {
+    const def = FLOW_STEPS.find(x => x.key === st.key);
+    if(def[f] === undefined && !['label', 'desc', 'due'].includes(f)) return '';
+    const id = `flow-${st.key}-${f}`, v = st[f] ?? '';
+    if(f === 'due') return `<div><div class="mlbl">${l}</div><input class="fi" type="date" id="${id}" value="${escAttr(v)}" style="width:160px"></div>`;
+    if(f.includes('body')) return `<div style="grid-column:1/-1"><div class="mlbl">${l}</div>
+      <textarea class="fi" id="${id}" rows="6" style="width:100%;resize:vertical;font-size:11.5px">${escapeHtml(v)}</textarea></div>`;
+    return `<div${f === 'desc' ? ' style="grid-column:1/-1"' : ''}><div class="mlbl">${l}</div>
+      <input class="fi" id="${id}" value="${escAttr(v)}" style="width:100%"></div>`;
+  };
+  return `
+    <div style="font-size:12px;font-weight:700;color:var(--i2);margin:22px 0 4px">연사 연락 순서</div>
+    <div style="font-size:11px;color:var(--i4);margin-bottom:8px;line-height:1.6">
+      연사마다 지금 어느 단계인지 계산해 연사 화면 맨 위와 연사 표의 «지금 할 일»에 보여주고, 그 단계 양식으로 메일 초안을 만듭니다.
+      양식에 쓸 수 있는 칸: ${FLOW_VARS.map(v => `<code>${escapeHtml(v)}</code>`).join(' ')}
+      — 연사가 영문(EN)이면 영문 양식을 씁니다.</div>
+    ${steps.map((st, i) => `<details style="border:1px solid var(--i6);border-radius:8px;margin-bottom:6px;background:var(--W)">
+      <summary style="padding:8px 11px;cursor:pointer;font-size:12px;display:flex;gap:8px;align-items:center">
+        <b>${i + 1}. ${escapeHtml(st.label)}</b>
+        ${st.due ? `<span class="pill p-gray">마감 ${escapeHtml(st.due)}</span>` : ''}
+        ${st.off ? '<span class="pill p-gray">끔</span>' : ''}
+        <span style="font-size:10.5px;color:var(--i4);margin-left:auto">${escapeHtml(rule(st))}</span>
+      </summary>
+      <div style="padding:4px 11px 11px">
+        <label style="display:flex;gap:6px;align-items:center;font-size:11.5px;margin-bottom:8px">
+          <input type="checkbox" id="flow-${st.key}-off" ${st.off ? '' : 'checked'}> 이 행사에서 이 단계를 씀</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          ${FLOW_FIELDS.map(([f, l]) => fld(st, f, l)).join('')}
+        </div>
+      </div>
+    </details>`).join('')}`;
 }
 
 /* ── 격자 셀 한 번 누르기 — ● → ○ → — ──
@@ -3300,8 +3352,25 @@ export async function saveEvConf(){
   const folder = g('conf-folder');
   if(folder) cfg.folder = folder; else delete cfg.folder;
 
+  /* 연락 순서 — 코드 기본값과 다른 칸만 담는다. 기본 문구를 나중에 고치면
+     손대지 않은 행사에는 그것이 따라오게 */
+  const flow = {};
+  FLOW_STEPS.forEach(st => {
+    const o = {};
+    FLOW_FIELDS.forEach(([f]) => {
+      if(st[f] === undefined && !['label', 'desc', 'due'].includes(f)) return;
+      const el = document.getElementById(`flow-${st.key}-${f}`);
+      if(!el) return;
+      const v = el.value.trim();
+      if(v !== String(st[f] ?? '')) o[f] = v;
+    });
+    if(document.getElementById(`flow-${st.key}-off`)?.checked === false) o.off = true;
+    if(Object.keys(o).length) flow[st.key] = o;
+  });
+  if(Object.keys(flow).length) cfg.flow = flow; else delete cfg.flow;
+
   if(!await saveConf(ev.key, cfg)) return;
-  trackAction('edit', '컨퍼런스 설정', ev.key, `${ev.name || ev.key} — 글자수 한도·양식·폴더 저장`);
+  trackAction('edit', '컨퍼런스 설정', ev.key, `${ev.name || ev.key} — 글자수 한도·양식·폴더·연락 순서 저장`);
   say('저장했어요.', true);
   setTimeout(() => { const m = document.getElementById('conf-msg'); if(m) m.textContent = ''; }, 2000);
 }

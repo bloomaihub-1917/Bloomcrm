@@ -35,6 +35,7 @@ import {
 import { trackAction, changed, removed } from './audit-tab.js';
 import { patchContact } from './db-tab.js';
 import { confLocked, confLockNotice, renderConf, buildConfEvList, syncPartRole } from './conf-tab.js';
+import { flowStatus, draftFor, missingItems } from './speaker-flow.js';
 
 let spId = null;
 let spTab = 'basic';
@@ -213,14 +214,62 @@ export function renderSpeakerDr(){
   const b = document.getElementById('sp-drbd');
   if(b){
     b.classList.toggle('ro', confLocked());
-    b.innerHTML = spTab === 'bio' ? bioHtml(sp, evKey)
+    b.innerHTML = flowBoxHtml(sp) + (spTab === 'bio' ? bioHtml(sp, evKey)
       : spTab === 'talk' ? talkHtml(sp, evKey)
       : spTab === 'offer' ? offerHtml(sp, evKey)
       : spTab === 'bank' ? bankHtml(sp, evKey)
       : spTab === 'people' ? peopleTabHtml(sp)
       : spTab === 'mail' ? mailTabHtml(sp, evKey)
-      : basicHtml(sp, con, evKey);
+      : basicHtml(sp, con, evKey));
+    /* 초안 만들기로 넘어왔으면 메일 칸을 채운다 — 칸은 위에서 막 그려졌다 */
+    if(spTab === 'mail' && pendingDraft){ fillSpeakerMail(pendingDraft); pendingDraft = ''; }
   }
+}
+
+/* ── 연락 단계 ──
+   연사 화면 맨 위. 지금 어느 단계인지, 다음에 무엇을 하면 되는지, 그 메일 초안.
+   단계와 끝난 기준은 speaker-flow.js, 행사별 문구는 설정 › 행사 › 컨퍼런스. */
+let pendingDraft = '';
+function flowBoxHtml(sp){
+  const f = flowStatus(sp);
+  const chip = (s) => {
+    const cur = f.current && f.current.key === s.key;
+    const st = !s.applies ? { m: '–', c: 'var(--i5)', bg: 'transparent', t: '이 연사에게는 해당 없음' }
+      : s.isDone ? { m: '✓', c: 'var(--g)', bg: 'var(--gb)', t: '끝남' }
+      : cur ? { m: '●', c: 'var(--a)', bg: 'var(--ad)', t: '지금 할 일' }
+      : { m: '○', c: 'var(--i4)', bg: 'var(--i8)', t: '아직' };
+    return `<span title="${escAttr(`${s.label} — ${st.t}`)}" style="display:inline-flex;align-items:center;gap:3px;
+      font-size:10px;padding:2px 7px;border-radius:10px;background:${st.bg};color:${st.c};
+      ${cur ? 'font-weight:700;' : ''}${s.applies ? '' : 'text-decoration:line-through;'}white-space:nowrap">${st.m} ${escapeHtml(s.label)}</span>`;
+  };
+  const cur = f.current;
+  const left = cur && cur.key === 'collect' ? missingItems(sp) : [];
+  /* 사람이 받아서 적는 단계 — 메일을 보낸다고 끝나지 않는다 */
+  const markBtn = cur && cur.done.startsWith('field:') && cur.key !== 'invite'
+    ? `<button class="btn" style="font-size:10.5px" onclick="spStamp('${cur.done.slice(6)}','${escAttr(cur.label)}')">${
+        cur.key === 'reply' ? '회신 받음 표시' : cur.key === 'confirm' ? '참가 확정 표시' : '끝남 표시'}</button>` : '';
+  return `<div style="padding:9px 11px;border:1px solid var(--a);border-radius:8px;margin-bottom:12px;background:var(--W)">
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
+      <span style="font-size:11px;font-weight:700;color:var(--i2)">연락 단계</span>
+      <span style="font-size:10.5px;color:var(--i4)">${f.nDone}/${f.nAll}</span>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px">${f.steps.map(chip).join('')}</div>
+    ${cur ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i7)">
+        <div style="font-size:12px;font-weight:700;color:var(--a)">지금 할 일 · ${escapeHtml(f.remind ? '자료 독촉' : cur.label)}${
+          cur.due ? ` <span style="font-weight:400;color:${cur.due < td() ? 'var(--re)' : 'var(--i4)'};font-size:10.5px">마감 ${escapeHtml(cur.due)}</span>` : ''}</div>
+        <div style="font-size:10.5px;color:var(--i4);margin-top:2px;line-height:1.6">${escapeHtml(cur.desc || '')}</div>
+        ${left.length ? `<div style="font-size:10.5px;color:var(--am);margin-top:3px">아직 못 받음: ${escapeHtml(left.map(x => x.c.label).join(' · '))}</div>` : ''}
+        <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">
+          <button class="btn bp" style="font-size:10.5px" onclick="openFlowDraft('${cur.key}')">✉ 메일 초안 만들기</button>
+          ${markBtn}
+        </div></div>`
+      : `<div style="font-size:11px;color:var(--g);margin-top:7px">이 행사의 연락 단계를 모두 마쳤어요.</div>`}
+  </div>`;
+}
+export function openFlowDraft(stepKey){
+  pendingDraft = stepKey;
+  spTab = 'mail';
+  renderSpeakerDr();
 }
 
 /* ── «받아야 함»인데 아직 없는 것 ──
@@ -958,9 +1007,19 @@ function mailTabHtml(sp, evKey){
       ${t.to.length ? `수신 <b>${escapeHtml(t.to.join(', '))}</b>` : '<b style="color:var(--re)">수신이 없어요</b> — «연락 상대»에서 먼저 정해주세요'}
       ${t.cc.length ? `<br>참조 ${escapeHtml(t.cc.join(', '))}` : ''}
     </div>
-    ${fg('무슨 메일인가', `<select class="fi" id="sp-mail-kind" onchange="fillSpeakerMail(this.value)">
-      ${MAIL_KINDS.map(k => `<option value="${k.key}">${k.label}</option>`).join('')}</select>`,
-      '고르면 제목·본문의 뼈대가 채워집니다 — 그대로 보내지 말고 고쳐 보내세요')}
+    ${(() => {
+      /* 연락 단계가 먼저 — 지금 할 일이 골라진 채로 열린다. 개별 요청은 아래에 */
+      const f = flowStatus(sp);
+      const stepOpts = f.steps.filter(x => x.applies).map(x =>
+        `<option value="${x.key}"${f.current && f.current.key === x.key ? ' selected' : ''}>${
+          x.isDone ? '✓ ' : f.current && f.current.key === x.key ? '● ' : ''}${escapeHtml(
+          x.key === 'collect' && f.remind ? '자료 독촉' : x.label)}</option>`).join('');
+      const extra = MAIL_KINDS.filter(k => !['invite', 'travel'].includes(k.key));
+      return fg('무슨 메일인가', `<select class="fi" id="sp-mail-kind" onchange="fillSpeakerMail(this.value)">
+        <optgroup label="연락 단계">${stepOpts}</optgroup>
+        <optgroup label="개별 요청">${extra.map(k => `<option value="${k.key}">${k.label}</option>`).join('')}</optgroup>
+      </select>`, '고르면 그 단계의 양식으로 제목·본문이 채워집니다 — 양식은 설정 › 행사 › 컨퍼런스에서 고칩니다');
+    })()}
     ${fg('제목', `<input class="fi" id="sp-mail-subject" value="${escAttr(`[${evName}] 연사 안내`)}">`)}
     ${fg('내용', `<textarea class="fi" id="sp-mail-body" rows="10" style="resize:vertical"></textarea>`)}
     <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
@@ -978,6 +1037,16 @@ function mailTabHtml(sp, evKey){
 export function fillSpeakerMail(kind){
   const sp = getSpeakerById(spId);
   if(!sp) return;
+  const sel = document.getElementById('sp-mail-kind');
+  if(sel && sel.value !== kind) sel.value = kind;
+  const d = draftFor(sp, kind);
+  if(d){
+    const s = document.getElementById('sp-mail-subject');
+    const b = document.getElementById('sp-mail-body');
+    if(s) s.value = d.subject;
+    if(b) b.value = d.body;
+    return;
+  }
   const evKey = sp.event_id;
   const ev = EVENT_LIST.find(e => e.key === evKey);
   const evName = ev ? (ev.name || ev.short || ev.key) : evKey;
@@ -1057,7 +1126,8 @@ export async function sendSpeakerMail(){
   const text = (document.getElementById('sp-mail-body')?.value || '').trim();
   if(!subject && !text){ say('제목이나 내용 중 하나는 있어야 해요.', false); return; }
   const kind = document.getElementById('sp-mail-kind')?.value || 'note';
-  const category = (MAIL_KINDS.find(k => k.key === kind) || {}).label || '기타';
+  const flowD = draftFor(sp, kind);
+  const category = flowD ? flowD.category : ((MAIL_KINDS.find(k => k.key === kind) || {}).label || '기타');
 
   /* 밖으로 나가는 일은 한 번 묻는다 — 받는 사람을 눈으로 확인하지 않으면
      엉뚱한 사람에게 간 걸 나중에 알게 된다. */
@@ -1081,6 +1151,8 @@ export async function sendSpeakerMail(){
   trackAction('add', '연사 메일', sp.event_id, `${sp.name_snapshot || sp.name_en || sp.id} — ${category}`,
     { kind: 'speaker', id: sp.id });
   say(res.logged === false ? '보냈어요 — 다만 기록 저장에 실패했어요.' : '보냈어요.', true);
+  /* 초청을 보냈으면 «보냄» 날짜를 찍는다 — 그래야 다음 단계로 넘어간다 */
+  if(kind === 'invite' && !sp.guide_sent_at){ await patchSpeaker({ guide_sent_at: td() }, '초청·가이드 보냄'); return; }
   renderSpeakerDr();
 }
 
@@ -1418,6 +1490,7 @@ window.spStamp              = spStamp;
 window.asStamp              = asStamp;
 window.searchSpeakerContact = searchSpeakerContact;
 window.linkSpeakerContact   = linkSpeakerContact;
+window.openFlowDraft = openFlowDraft;
 window.spContactField     = spContactField;
 window.createSpeakerContact = createSpeakerContact;
 window.unlinkSpeakerContact = unlinkSpeakerContact;

@@ -51,6 +51,7 @@ import { trackAction, changed, removed, created } from './audit-tab.js';
 import { IMPORT_SHEETS, IMPORT_GUIDE } from '../conf-import-spec.js';
 import { trackColorOf, pickTrackColorIndex } from '../track-colors.js';
 import { saveConf } from './settings-tab.js';
+import { nextActionLabel } from './speaker-flow.js';
 
 /* ── 모듈 상태 ── */
 let confEvent = '';
@@ -916,7 +917,7 @@ export async function copyPga(){
    «소속·직함을 받았는가»는 ✓로 답할 질문이 아니다. 프로그램북에 그 글자가
    그대로 나가므로, 여기서 보고 싶은 건 «받았다»가 아니라 «무엇을 받았나»다.
    ✓만 보면 결국 한 사람씩 열어 확인하게 된다. */
-const SP_COLS = [
+export const SP_COLS = [
   { key: 'profile',  label: '소속·직함', show: 'text', wide: true },
   { key: 'bio_pro',  label: '이력' },
   { key: 'photo',    label: '사진' },
@@ -948,7 +949,17 @@ const SP_SENT = [
    'na'  — 역할이 묻지 않는다(분모에서 뺀다)
    'done'— 받았다      'part' — 일부만    'todo' — 아직
    text는 칸 아래 작게 붙는 값(받은 날짜 등) */
-function spCell(sp, evKey, key){
+/* 지금 할 일 칸 — 누르면 그 연사의 메일 탭에 그 단계 초안이 열린다 */
+function nextActionTd(sp){
+  const na = nextActionLabel(sp);
+  if(na.done) return `<td style="font-size:10.5px;color:var(--g);white-space:nowrap">✓ 연락 완료</td>`;
+  return `<td style="white-space:nowrap" onclick="event.stopPropagation();openSpeakerDr('${escAttr(sp.id)}');openFlowDraft('${escAttr(na.step)}')"
+    title="이 단계의 메일 초안 열기">
+    <span style="font-size:10.5px;font-weight:600;color:var(--a);cursor:pointer">● ${escapeHtml(na.text)}</span>${
+      na.due ? `<div style="font-size:9.5px;color:${na.due < td() ? 'var(--re)' : 'var(--i4)'}">마감 ${escapeHtml(na.due)}</div>` : ''}</td>`;
+}
+
+export function spCell(sp, evKey, key){
   const roles = rolesOfSpeaker(sp.id);
   const asg = assignmentsFor(sp.id);
   /* 역할이 여럿이면 센 쪽을 따른다 — 좌장이자 발표자면 발제도 받아야 한다 */
@@ -1397,6 +1408,9 @@ function peopleHtml(ev){
           <div style="flex:1">${progressBar(pr.pct, pr.pct === 100 ? 'var(--g)' : 'var(--a)')}</div>
           <span style="font-size:10.5px;color:var(--i4);white-space:nowrap">${pr.n}/${pr.of}</span>
         </div>
+        ${(() => { const na = nextActionLabel(sp); return `<div style="font-size:11px;margin-top:6px;font-weight:600;color:${
+          na.done ? 'var(--g)' : 'var(--a)'}">${na.done ? '✓ ' : '● '}${escapeHtml(na.text)}${
+          na.due ? ` <span style="font-weight:400;color:${na.due < td() ? 'var(--re)' : 'var(--i4)'}">~${escapeHtml(na.due)}</span>` : ''}</div>`; })()}
         ${left.length
           ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:7px">
               ${left.map(({ c, st }) => `<span style="font-size:10px;font-weight:600;padding:3px 7px;
@@ -1465,6 +1479,7 @@ function peopleHtml(ev){
       <td style="min-width:70px">
         ${progressBar(pr.pct, pr.pct === 100 ? 'var(--g)' : 'var(--a)')}
         <div style="font-size:9.5px;color:var(--i4);margin-top:2px">${pr.n}/${pr.of}</div></td>
+      ${nextActionTd(sp)}
       ${SP_COLS.map(c => spCellHtml(spCell(sp, ev.key, c.key), c.label, name, c)).join('')}
       ${SP_SENT.map(c => spSentHtml(sp, c)).join('')}
       <td style="text-align:center;padding:5px 3px">
@@ -1495,6 +1510,7 @@ function peopleHtml(ev){
         <th style="min-width:140px">연사</th>
         <th style="min-width:120px">세션</th>
         <th style="min-width:70px">진행률</th>
+        <th style="min-width:110px" title="연락 단계에서 다음에 할 일 — 누르면 그 메일 초안이 열립니다">지금 할 일</th>
         ${SP_COLS.map(c => `<th style="text-align:${c.show === 'text' ? 'left' : 'center'};font-size:10px;line-height:1.2${
           c.wide ? ';min-width:120px' : ''}">${escapeHtml(c.label)}</th>`).join('')}
         ${SP_SENT.map(c => `<th style="text-align:center;font-size:10px;line-height:1.2;color:var(--a)"
