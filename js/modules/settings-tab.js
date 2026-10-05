@@ -3118,7 +3118,8 @@ const FLOW_FIELDS = [
 ];
 function flowEditorHtml(evKey){
   const steps = flowSteps(evKey, { withOff: true });
-  const rule = (st) => st.done === 'needs' ? '역할이 요구하는 자료를 다 받으면 끝'
+  const rule = (st) => st.done === 'needs' ? '역할이 요구하는 자료(발표자료·숙박항공 제외)를 다 받으면 끝'
+    : st.done.startsWith('cell:') ? '발표자료를 받음으로 표시하면 끝'
     : st.done === 'log' ? '이 단계 메일을 보내면 끝'
     : ({ guide_sent_at: '«보냄» 날짜가 있으면 끝 (초청 메일을 보내면 자동으로 찍힘)',
          invite_replied_at: '«초청 회신» 날짜가 있으면 끝', confirmed_at: '«참가 확정» 날짜가 있으면 끝' })[st.done.slice(6)] || '';

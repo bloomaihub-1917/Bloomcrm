@@ -18,6 +18,7 @@
 import { EVENT_LIST, CONF_SESSIONS, confCfg, assignmentsFor, rolesOfSpeaker,
   logsOfSpeaker, speakerNeed, currentUser } from '../state.js';
 import { SP_COLS, spCell } from './conf-tab.js';
+import { SPEAKER_ROLES } from '../constants.js';
 
 /* 문투 — 비즈니스 메일 기준(global-email-expert 스킬)을 따른다.
    ① 첫 세 문장 안에 목적을 밝힌다  ② 세부사항은 항목(■ / -)으로 나눈다
@@ -63,6 +64,15 @@ export const FLOW_STEPS = [
     body_en: 'Dear {호칭},\n\nWe would like to arrange your accommodation and flights for {행사}. Could you kindly provide the following:\n\n- Preferred arrival and departure dates (including departure city)\n- A copy of your passport (to match the name on your ticket)\n- Any special requests (seating, dietary requirements, etc.)\n\nWe would appreciate your reply by {마감일}, after which we will send you the booking confirmation.\n\nSincerely,\n{담당자}\n{행사} Secretariat',
   },
   {
+    /* 발표자료는 가장 늦게 온다(현장에서 받기도 한다). 자료 받기·참가 확정을 막지 않게
+       따로 뒤에 둔다. 받으면 끝 — 발제 탭에서 발표자료를 받음으로 표시하면 된다 */
+    key: 'slides', label: '발표자료 받기', done: 'cell:slides', need: 'slides',
+    desc: '발표자료는 보통 가장 늦게 오고 현장에서 받기도 합니다. 행사 전에 한 번 요청하고, 받으면 발제 탭에서 받음으로 표시하세요.',
+    subject_ko: '[{행사}] 발표자료 제출 요청 — {호칭}', subject_en: '[{행사}] Request for Your Presentation File',
+    body_ko: '{호칭}께\n\n안녕하십니까. {행사} 사무국 {담당자}입니다.\n원활한 현장 진행을 위해 발표자료를 미리 받아 두고자 연락드립니다.\n\n■ 발표 일정\n{세션}\n\n■ 제출 기한\n- {마감일}\n\n최종본이 늦어지실 경우 초안을 먼저 보내주시고, 현장에서 최종본으로 교체하셔도 괜찮습니다. 영상·음원이 포함된 경우 파일을 함께 보내주시면 미리 재생을 확인해 두겠습니다.\n\n{담당자} 드림\n{행사} 사무국',
+    body_en: 'Dear {호칭},\n\nTo ensure a smooth presentation on the day, may we kindly ask you to send us your presentation file in advance.\n\nYour session:\n{세션}\n\nDeadline: {마감일}\n\nIf your final version is not ready yet, a draft is perfectly fine — you may replace it with the final version on site. If your slides include video or audio, please send those files as well so that we can test playback beforehand.\n\nSincerely,\n{담당자}\n{행사} Secretariat',
+  },
+  {
     key: 'thanks', label: '감사 메일', done: 'log',
     desc: '행사가 끝나면 감사 인사를 보냅니다.',
     subject_ko: '[{행사}] 참여에 깊이 감사드립니다 — {호칭}', subject_en: '[{행사}] Thank You for Your Contribution',
@@ -94,8 +104,10 @@ const needOf = (sp, key) => {
 };
 
 /* 아직 못 받은 자료 — 숙박·항공은 자기 단계가 따로 있어 뺀다 */
+/* 숙박·항공과 발표자료는 자기 단계가 따로 있다 — «자료 받기»를 막지 않게 뺀다 */
+const OWN_STEP = ['travel', 'slides'];
 export function missingItems(sp){
-  return SP_COLS.filter(c => c.key !== 'travel')
+  return SP_COLS.filter(c => !OWN_STEP.includes(c.key))
     .map(c => ({ c, st: spCell(sp, sp.event_id, c.key) }))
     .filter(x => x.st.state === 'todo' || x.st.state === 'part');
 }
@@ -106,25 +118,39 @@ function isDone(sp, step){
   if(step.done.startsWith('field:')) return !!sp[step.done.slice(6)];
   if(step.done === 'needs') return !missingItems(sp).length;
   if(step.done === 'log') return sentLog(sp, step.key);
+  if(step.done.startsWith('cell:')){
+    const st = spCell(sp, sp.event_id, step.done.slice(5)).state;
+    return st === 'done' || st === 'na';
+  }
   return false;
 }
 
-/* 연사 한 명의 단계 상태 — current는 해당되면서 아직 안 끝난 첫 단계 */
+/* 우리가 연락하지 않는 사람 — 맡은 역할이 모두 noMail(VIP)이면.
+   역할이 하나도 없으면(아직 배정 전) 연락 대상으로 본다. */
+export function noFlow(sp){
+  const roles = rolesOfSpeaker(sp.id);
+  return roles.length > 0 && roles.every(r => (SPEAKER_ROLES.find(x => x.key === r) || {}).noMail);
+}
+
+/* 연사 한 명의 단계 상태 — current는 해당되면서 아직 안 끝난 첫 단계.
+   skip이면 연락 단계 자체가 없다(주최사 전달) — 집계에서 빼야 한다. */
 export function flowStatus(sp){
+  const skip = noFlow(sp);
   const steps = flowSteps(sp.event_id).map(s => {
-    const applies = !s.need || !!needOf(sp, s.need);
+    const applies = !skip && (!s.need || !!needOf(sp, s.need));
     return { ...s, applies, isDone: applies && isDone(sp, s) };
   });
   const current = steps.find(s => s.applies && !s.isDone) || null;
   /* 자료 요청을 이미 보냈는데 아직 덜 받았으면 다음 메일은 독촉이다 */
   const remind = !!current && current.key === 'collect' && sentLog(sp, 'collect');
   const live = steps.filter(s => s.applies);
-  return { steps, current, remind, nDone: live.filter(s => s.isDone).length, nAll: live.length };
+  return { steps, current, remind, skip, nDone: live.filter(s => s.isDone).length, nAll: live.length };
 }
 
 /* 표·CRM에 쓸 한 줄 */
 export function nextActionLabel(sp){
   const f = flowStatus(sp);
+  if(f.skip) return { text: '주최사 전달', done: true, skip: true };
   if(!f.current) return { text: '연락 완료', done: true };
   const label = f.remind ? '자료 독촉' : f.current.label;
   const left = f.current.key === 'collect' ? missingItems(sp).length : 0;

@@ -38,10 +38,11 @@ export function confDashHtml(ev){
       아직 연사가 없어요. «Program»에서 세션을 만들고 사람을 배정하면 여기에 진행이 모여요.</div>`;
   }
   const today = td();
-  const flows = live.map(sp => ({ sp, f: flowStatus(sp) }));
+  /* VIP처럼 주최사가 정보를 넘겨주는 사람은 우리가 연락하지 않는다 — 단계·처리 필요에서 뺀다 */
+  const flows = live.map(sp => ({ sp, f: flowStatus(sp) })).filter(x => !x.f.skip);
 
   /* ── 연락 단계 ── 단계 정의는 행사 설정(conf.flow)을 따른다 */
-  const steps = flows[0].f.steps.map(s => {
+  const steps = (flows[0]?.f.steps || []).map(s => {
     const rows = flows.map(({ sp, f }) => ({ sp, st: f.steps.find(x => x.key === s.key) }))
       .filter(r => r.st && r.st.applies);
     const done = rows.filter(r => r.st.isDone).length;

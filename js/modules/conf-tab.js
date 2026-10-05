@@ -958,11 +958,12 @@ export const SP_COLS = [
   { key: 'photo',    label: '사진' },
   { key: 'title',    label: '발제명' },
   { key: 'abstract', label: '초록' },
-  { key: 'slides',   label: '발표자료' },
   { key: 'consent',  label: '동의서' },
   { key: 'bank',     label: '계좌' },
   { key: 'passport', label: '여권' },
   { key: 'travel',   label: '숙박·항공' },
+  /* 발표자료는 늘 가장 늦게 온다 — 현장에서 USB로 받는 일도 있다. 맨 뒤에 둔다 */
+  { key: 'slides',   label: '발표자료' },
 ];
 
 /* 우리가 보낸 것 — 받을 것과 성격이 다르다. 받을 것은 상대가 주는 것이고
@@ -987,6 +988,7 @@ const SP_SENT = [
 /* 지금 할 일 칸 — 누르면 그 연사의 메일 탭에 그 단계 초안이 열린다 */
 function nextActionTd(sp){
   const na = nextActionLabel(sp);
+  if(na.skip) return `<td style="font-size:10.5px;color:var(--i4);white-space:nowrap" title="주최사가 정보를 넘겨주는 역할이라 메일로 연락하지 않아요">— 주최사 전달</td>`;
   if(na.done) return `<td style="font-size:10.5px;color:var(--g);white-space:nowrap">✓ 연락 완료</td>`;
   return `<td style="white-space:nowrap" onclick="event.stopPropagation();openSpeakerDr('${escAttr(sp.id)}');openFlowDraft('${escAttr(na.step)}')"
     title="이 단계의 메일 초안 열기">
@@ -1456,7 +1458,7 @@ function peopleHtml(ev){
           <span style="font-size:10.5px;color:var(--i4);white-space:nowrap">${pr.n}/${pr.of}</span>
         </div>
         ${(() => { const na = nextActionLabel(sp); return `<div style="font-size:11px;margin-top:6px;font-weight:600;color:${
-          na.done ? 'var(--g)' : 'var(--a)'}">${na.done ? '✓ ' : '● '}${escapeHtml(na.text)}${
+          na.skip ? 'var(--i4)' : na.done ? 'var(--g)' : 'var(--a)'}">${na.skip ? '— ' : na.done ? '✓ ' : '● '}${escapeHtml(na.text)}${
           na.due ? ` <span style="font-weight:400;color:${na.due < td() ? 'var(--re)' : 'var(--i4)'}">~${escapeHtml(na.due)}</span>` : ''}</div>`; })()}
         ${left.length
           ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:7px">

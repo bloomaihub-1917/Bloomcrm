@@ -238,6 +238,8 @@ export function renderSpeakerDr(){
 let pendingDraft = '';
 function flowBoxHtml(sp){
   const f = flowStatus(sp);
+  if(f.skip) return `<div style="padding:8px 11px;border:1px solid var(--i6);border-radius:8px;margin-bottom:12px;
+    background:var(--i8);font-size:11px;color:var(--i4)">연락 단계 없음 — VIP는 주최사에서 정보를 받아 전달받으므로 메일로 연락하지 않아요.</div>`;
   const chip = (s) => {
     const cur = f.current && f.current.key === s.key;
     const st = !s.applies ? { m: '–', c: 'var(--i5)', bg: 'transparent', t: '이 연사에게는 해당 없음' }
@@ -1036,7 +1038,7 @@ function mailTabHtml(sp, evKey){
         `<option value="${x.key}"${f.current && f.current.key === x.key ? ' selected' : ''}>${
           x.isDone ? '✓ ' : f.current && f.current.key === x.key ? '● ' : ''}${escapeHtml(
           x.key === 'collect' && f.remind ? '자료 독촉' : x.label)}</option>`).join('');
-      const extra = MAIL_KINDS.filter(k => !['invite', 'travel'].includes(k.key));
+      const extra = MAIL_KINDS.filter(k => !['invite', 'travel', 'slides'].includes(k.key));
       return fg('무슨 메일인가', `<select class="fi" id="sp-mail-kind" onchange="fillSpeakerMail(this.value)">
         <optgroup label="연락 단계">${stepOpts}</optgroup>
         <optgroup label="개별 요청">${extra.map(k => `<option value="${k.key}">${k.label}</option>`).join('')}</optgroup>

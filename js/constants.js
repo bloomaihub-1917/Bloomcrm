@@ -229,8 +229,10 @@ export const SPEAKER_ROLES = [
      연사료가 없어 계좌를 묻지 않고, 발제·초록·발표자료·동의서도 받지 않는다.
      키를 마스터DB 참가 역할(PART_TYPES_SEED의 VIP)과 같게 둔다 — 세션 역할을
      바꾸면 그 행사의 참가 역할도 VIP/연사로 따라간다(conf-tab.js syncPartRole). */
-  { key: 'VIP', label: 'VIP (축사)', cls: 'p-gold', needs: {
-    profile: 'req', bio_profile: 'opt', photo: 'req',
+  /* noMail — 주최사가 정보를 받아 넘겨주므로 우리가 메일로 연락하지 않는다.
+     받을 자료도 없다. 연락 단계·지금 할 일·대시보드 집계에서 빠진다(speaker-flow.js). */
+  { key: 'VIP', label: 'VIP (축사)', cls: 'p-gold', noMail: true, needs: {
+    profile: '', bio_profile: '', photo: '',
     title: '', abstract: '', slides: '',
     consent: '', bank: '', passport: '', travel: '' } },
 ];

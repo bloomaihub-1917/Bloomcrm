@@ -444,7 +444,8 @@ function coOf(t){
 /* 화면에 쓸 담당자·행사 이력 — 기업DB에 없으면 빈 배열 */
 const conOf = (t) => coOf(t)?.contacts || [];
 /* 이 기업 담당자 중 연사로 들어간 사람 — 행사마다 한 줄 */
-const spkOf = (t) => conOf(t).flatMap(p => speakersOfContact(p.id).map(sp => ({ p, sp })));
+const spkOf = (t) => conOf(t).flatMap(p => speakersOfContact(p.id).map(sp => ({ p, sp })))
+  .filter(({ sp }) => !flowStatus(sp).skip);   // VIP(주최사 전달)는 우리가 연락하지 않는다
 
 /* 연사 연락 — 컨퍼런스의 연락 단계를 CRM에서도 본다. 고치는 곳은 연사 화면이다. */
 export function dSpk(t) {
