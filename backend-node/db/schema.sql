@@ -859,7 +859,11 @@ CREATE TABLE IF NOT EXISTS speakers (
   id_card_received_at   TEXT,
   bankbook_file         TEXT,
   bankbook_received_at  TEXT,
-  bank_mode             TEXT    -- '' 자동(국적·거주지 둘 다 한국이면 국내) | 'domestic' | 'overseas'
+  bank_mode             TEXT,   -- '' 자동(국적·거주지 둘 다 한국이면 국내) | 'domestic' | 'overseas'
+  -- 지난 행사에서 약력·사진·CV를 가져왔으면 어디서(행사 key, 쉼표로) 언제 가져왔나.
+  -- 받은 날짜는 옮기지 않는다 — 연사가 맞다고 확인할 때 찍는다. add-speaker-reuse.js
+  reuse_from            TEXT,
+  reused_at             TEXT
 );
 
 -- 배정 한 줄 = 세션 × 사람 × 역할. 발제 정보가 여기 붙는다.

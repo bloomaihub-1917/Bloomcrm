@@ -65,6 +65,10 @@ import { trackColorOf, pickTrackColorIndex } from '../track-colors.js';
 import { saveConf } from './settings-tab.js';
 import { nextActionLabel } from './speaker-flow.js';
 import { confDashHtml } from './conf-dash.js';
+import { reusePending } from './contact-speaker.js';
+
+const reuseState = (sp, key, need) => reusePending(sp).some(g => g.key === key)
+  ? { state: 'part', text: '가져옴 · 확인 대기', need } : null;
 
 /* ── 모듈 상태 ── */
 let confEvent = '';
@@ -1017,8 +1021,10 @@ export function spCell(sp, evKey, key){
       return { state: org ? 'done' : 'todo',
         text: [org, title].filter(Boolean).join(' · '), need };
     }
-    case 'bio_pro':  return done(sp.profile_received_at);
-    case 'photo':    return done(sp.photo_received_at);
+    /* 지난 행사에서 가져온 자료는 연사가 맞다고 할 때까지 «일부»로 센다 —
+       받은 날이 찍혀야 끝난다(contact-speaker.js reusePending) */
+    case 'bio_pro':  return reuseState(sp, 'bio', need) || done(sp.profile_received_at);
+    case 'photo':    return reuseState(sp, 'photo', need) || done(sp.photo_received_at);
     case 'consent': {
       const no = consentRefused(sp);
       return done(sp.consent_at, no.length ? `${no.join('·')} ✕` : '');

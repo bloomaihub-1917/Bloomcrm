@@ -19,6 +19,7 @@ import { EVENT_LIST, CONF_SESSIONS, confCfg, assignmentsFor, rolesOfSpeaker,
   logsOfSpeaker, speakerNeed, currentUser } from '../state.js';
 import { SP_COLS, spCell } from './conf-tab.js';
 import { SPEAKER_ROLES } from '../constants.js';
+import { reusePending, reuseSummary } from './contact-speaker.js';
 
 /* 문투 — 비즈니스 메일 기준(global-email-expert 스킬)을 따른다.
    ① 첫 세 문장 안에 목적을 밝힌다  ② 세부사항은 항목(■ / -)으로 나눈다
@@ -45,6 +46,10 @@ export const FLOW_STEPS = [
     subject_ko: '[{행사}] 연사 자료 제출 요청 — {호칭}', subject_en: '[{행사}] Request for Speaker Materials',
     body_ko: '{호칭}께\n\n안녕하십니까. {행사} 사무국 {담당자}입니다.\n프로그램북 제작과 현장 준비를 위해 아래 자료를 요청드리고자 연락드립니다.\n\n■ 제출 요청 자료\n{남은자료}\n\n■ 제출 기한\n- {마감일}\n\n■ 제출 양식\n- {양식}\n\n바쁘신 중에 번거로우시겠지만 기한 내 회신 부탁드립니다. 작성 중 궁금하신 점은 언제든 문의해 주십시오.\n\n{담당자} 드림\n{행사} 사무국',
     body_en: 'Dear {호칭},\n\nTo prepare the programme book and on-site arrangements for {행사}, may I kindly ask you to send us the following materials.\n\nRequested materials:\n{남은자료}\n\nDeadline: {마감일}\nSubmission form: {양식}\n\nPlease feel free to contact me if you have any questions.\n\nSincerely,\n{담당자}\n{행사} Secretariat',
+    /* 지난 행사에서 가져온 자료가 있으면 새로 달라고 하지 않고 확인을 부탁한다 */
+    reuse_subject_ko: '[{행사}] 연사 자료 확인 요청 — {호칭}', reuse_subject_en: '[{행사}] Kindly Confirm Your Speaker Profile',
+    reuse_body_ko: '{호칭}께\n\n안녕하십니까. {행사} 사무국 {담당자}입니다.\n지난 행사 때 보내주신 자료로 이번 프로그램북과 현장 안내를 준비하고자 합니다. 번거로우시지 않도록 새로 작성을 요청드리는 대신, 아래 내용이 지금도 맞는지 확인을 부탁드립니다.\n\n■ 확인 부탁드릴 자료\n{가져온자료}\n\n■ 추가로 필요한 자료\n{남은자료}\n\n바뀐 내용이 있으시면 수정본을, 그대로이시면 «변동 없음»으로 {마감일}까지 회신해 주십시오.\n\n{담당자} 드림\n{행사} 사무국',
+    reuse_body_en: 'Dear {호칭},\n\nFor {행사}, we would like to use the materials you kindly provided for a previous event. Rather than asking you to fill in the form again, may we ask you to confirm that the details below are still current?\n\nFor your confirmation:\n{가져온자료}\n\nAdditional materials needed:\n{남은자료}\n\nIf anything has changed, please send us the updated version; otherwise a simple "no changes" reply by {마감일} would be much appreciated.\n\nSincerely,\n{담당자}\n{행사} Secretariat',
     remind_subject_ko: '[{행사}] 연사 자료 제출 재요청 — {호칭}', remind_subject_en: '[{행사}] Gentle Reminder: Speaker Materials',
     remind_body_ko: '{호칭}께\n\n안녕하십니까. {행사} 사무국 {담당자}입니다.\n앞서 요청드린 연사 자료 중 아직 받지 못한 항목이 있어 다시 한번 안내드립니다.\n\n■ 미제출 자료\n{남은자료}\n\n■ 제출 기한\n- {마감일}\n\n프로그램북 인쇄 일정이 있어 기한 내 제출을 정중히 부탁드립니다. 이미 보내주셨다면 이 메일은 넘기셔도 됩니다.\n\n{담당자} 드림\n{행사} 사무국',
     remind_body_en: 'Dear {호칭},\n\nThis is a gentle reminder regarding the speaker materials for {행사}. We have not yet received the following items:\n\n{남은자료}\n\nDeadline: {마감일}\n\nAs the programme book goes to print shortly, we would greatly appreciate your submission by the deadline. If you have already sent them, please disregard this message.\n\nSincerely,\n{담당자}\n{행사} Secretariat',
@@ -171,7 +176,9 @@ export function fillTemplate(text, sp, step){
     const when = a.start_at ? `${a.start_at}${a.end_at ? '–' + a.end_at : ''}` : (s.start_at || '');
     return `- ${en ? (s.title_en || s.title_ko) : (s.title_ko || s.title_en)}${s.date ? ` (${s.date}${when ? ' ' + when : ''})` : ''} — ${en ? (ROLE_EN[a.role] || a.role) : a.role}`;
   }).filter(Boolean);
-  const items = missingItems(sp).map(({ c, st }) =>
+  /* 확인 메일에서는 가져온 자료를 «남은 자료»에 또 적지 않는다 */
+  const pend = new Set(step?.reuse ? reusePending(sp).map(g => g.key === 'bio' ? 'bio_pro' : g.key) : []);
+  const items = missingItems(sp).filter(({ c }) => !pend.has(c.key)).map(({ c, st }) =>
     `- ${en ? (ITEM_EN[c.key] || c.label) : c.label}${st.state === 'part' && st.text ? ` (${en ? 'partly received' : '일부만 받음'})` : ''}`);
   const name = sp[en ? 'name_en' : 'name_snapshot'] || sp.name_snapshot || sp.name_en || '';
   const titleKo = String(sp.title_ko || '').split(/[\/·,]/)[0].trim();
@@ -188,11 +195,13 @@ export function fillTemplate(text, sp, step){
     소속: en ? (sp.org_en || sp.org_ko || '') : (sp.org_ko || sp.org_en || ''),
     행사: evName,
     세션: sessions.join('\n'),
-    남은자료: items.length ? items.join('\n') : (en ? '(nothing outstanding)' : '(남은 자료 없음)'),
+    /* 확인 메일에서 더 받을 게 없으면 «추가로 필요한 자료» 제목째 빠지게 비운다 */
+    남은자료: items.length ? items.join('\n') : step?.reuse ? '' : (en ? '(nothing outstanding)' : '(남은 자료 없음)'),
     마감일: step?.due || (en ? 'your earliest convenience' : '가급적 빠른 시일'),
     가이드: docs[en ? 'guide_en' : 'guide_ko'] || docs.guide_ko || docs.guide_en || '',
     양식: docs[en ? 'form_en' : 'form_ko'] || docs.form_ko || docs.form_en || '',
     담당자: currentUser?.name || (en ? '' : '담당자'),
+    가져온자료: reuseSummary(sp, en),
   };
   /* 마감일이 없으면 «까지»·«by»가 붙은 문장이 어색해진다 — 문장째 바꾼다 */
   let t = String(text || '');
@@ -202,7 +211,7 @@ export function fillTemplate(text, sp, step){
     .replace(/^■ 제출 기한\n- \{마감일\}\n?/gm, '')
     .replace(/^Deadline: \{마감일\}\n?/gm, '');
   return t
-    .replace(/\{(이름|호칭|직함|소속|행사|세션|남은자료|마감일|가이드|양식|담당자)\}/g, (_, k) => vars[k] ?? '')
+    .replace(/\{(이름|호칭|직함|소속|행사|세션|남은자료|가져온자료|마감일|가이드|양식|담당자)\}/g, (_, k) => vars[k] ?? '')
     .replace(/^\s*드림\s*$/gm, '')          // 담당자 이름이 없으면 «드림»만 남는다
     // 값이 비어 남은 항목 줄 — «- 가이드라인: », «- », «Submission form: »
     .replace(/^- [^\n:：]{1,24}[:：] ?$/gm, '')
@@ -210,7 +219,7 @@ export function fillTemplate(text, sp, step){
     .replace(/^(Deadline|Submission form|Speaker guidelines): ?$/gm, '')
     .replace(/\n{3,}/g, '\n\n')
     // 내용이 다 빠진 제목 줄(■ 안내 자료, Your session: 따위)을 걷어낸다
-    .replace(/^(■[^\n]*|Your session:|For your reference:|Requested materials:)\n(?=\n|$)/gm, '')
+    .replace(/^(■[^\n]*|Your session:|For your reference:|Requested materials:|For your confirmation:|Additional materials needed:)\n(?=\n|$)/gm, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
@@ -221,13 +230,17 @@ export function draftFor(sp, stepKey){
   const step = f.steps.find(s => s.key === stepKey);
   if(!step) return null;
   const en = sp.lang_pref === 'en';
+  /* 확인 요청은 처음 한 번 — 보냈는데도 답이 없으면 그다음은 독촉이다 */
+  const reuse = stepKey === 'collect' && !f.remind && reusePending(sp).length > 0;
   const remind = stepKey === 'collect' && f.remind;
-  const pick = (k) => step[`${remind ? 'remind_' : ''}${k}_${en ? 'en' : 'ko'}`] || step[`${k}_${en ? 'en' : 'ko'}`] || '';
+  const pre = reuse ? 'reuse_' : remind ? 'remind_' : '';
+  const pick = (k) => step[`${pre}${k}_${en ? 'en' : 'ko'}`] || step[`${k}_${en ? 'en' : 'ko'}`] || '';
+  const st = reuse ? { ...step, reuse: true } : step;
   return {
-    subject: fillTemplate(pick('subject'), sp, step),
-    body: fillTemplate(pick('body'), sp, step),
-    kind: stepKey, category: remind ? '자료 독촉' : step.label,
+    subject: fillTemplate(pick('subject'), sp, st),
+    body: fillTemplate(pick('body'), sp, st),
+    kind: stepKey, category: reuse ? '자료 확인 요청' : remind ? '자료 독촉' : step.label,
   };
 }
 
-export const FLOW_VARS = ['{호칭}', '{이름}', '{직함}', '{소속}', '{행사}', '{세션}', '{남은자료}', '{마감일}', '{가이드}', '{양식}', '{담당자}'];
+export const FLOW_VARS = ['{호칭}', '{이름}', '{직함}', '{소속}', '{행사}', '{세션}', '{남은자료}', '{가져온자료}', '{마감일}', '{가이드}', '{양식}', '{담당자}'];

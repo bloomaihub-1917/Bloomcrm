@@ -92,3 +92,64 @@ export function speakerMaterialsHtml(c){
     <div class="sct">연사 이력</div>
     <div style="margin-bottom:14px">${hist}</div>`;
 }
+
+/* ══════════════════════════════════════════
+   지난 자료 가져오기
+
+   같은 사람을 다시 부르면 작년에 받은 약력·사진·CV를 새 연사 줄에 옮긴다.
+   받은 날짜는 옮기지 않는다 — 옮기면 «다 받음»으로 세어져 아무도 최신인지
+   묻지 않는다. 가져온 자료는 «확인 대기»로 남고, 연사가 맞다고 하면 그때
+   받은 날을 찍는다(confirmReuse). 그 전까지 자료 받기 단계의 메일은
+   «새로 보내 주세요»가 아니라 «이 자료가 맞는지 확인해 주세요»로 바뀐다.
+
+   비어 있는 칸만 채운다. 이번 행사에서 이미 받은 값을 작년 값으로 덮으면 안 된다.
+══════════════════════════════════════════ */
+const BIO = ['profile', 'pro', 'work', 'edu', 'awards', 'credentials', 'teaching', 'affil', 'pubs']
+  .flatMap(k => [`bio_${k}_ko`, `bio_${k}_en`]);
+/* 묶음 하나 = 받은 날 칸 하나. 확인하면 그 칸에 오늘을 찍는다 */
+export const REUSE_GROUPS = [
+  { key: 'bio',   label: '약력',     fields: [...BIO, 'languages'], at: 'profile_received_at' },
+  { key: 'photo', label: '사진',     fields: ['photo_file'],        at: 'photo_received_at' },
+  { key: 'cv',    label: 'CV',       fields: ['cv_file'],           at: 'cv_received_at' },
+  { key: 'name',  label: '영문 성명', fields: ['name_en'],           at: '' },
+];
+const filled = (v) => String(v ?? '').trim() !== '';
+
+/* 이 연사 줄에 가져올 수 있는 것 — {patch, from, groups} 또는 null */
+export function reuseCandidates(sp){
+  if(!sp || !sp.contact_id) return null;
+  const others = speakersOfContact(sp.contact_id).filter(x => x.id !== sp.id && x.event_id !== sp.event_id);
+  if(!others.length) return null;
+  const patch = {}, from = {}, groups = [];
+  REUSE_GROUPS.forEach(g => {
+    /* 묶음 단위로 한 줄에서 가져온다 — 경력은 작년, 학력은 재작년에서 섞으면
+       어느 때 기준 약력인지 말할 수 없다 */
+    if(g.fields.some(f => filled(sp[f]))) return;
+    const src = others.filter(o => g.fields.some(f => filled(o[f])))
+      .sort((a, b) => dateOf(b[g.at] || b.updated_at).localeCompare(dateOf(a[g.at] || a.updated_at)))[0];
+    if(!src) return;
+    g.fields.forEach(f => { if(filled(src[f])) patch[f] = src[f]; });
+    from[src.event_id] = true;
+    groups.push(g);
+  });
+  if(!groups.length) return null;
+  return { patch, groups, from: Object.keys(from) };
+}
+
+/* 가져왔는데 아직 연사에게 확인받지 못한 묶음 */
+export function reusePending(sp){
+  if(!sp || !sp.reused_at) return [];
+  return REUSE_GROUPS.filter(g => g.at && !sp[g.at] && g.fields.some(f => filled(sp[f])));
+}
+
+/* 확인 메일에 넣을 내용 — 무엇을 확인해 달라는지 본문에 실어야 상대가 첨부를 뒤지지 않는다 */
+export function reuseSummary(sp, en){
+  return reusePending(sp).map(g => {
+    if(g.key === 'photo') return `- ${en ? 'Portrait photo' : '사진'}: ${sp.photo_file}`;
+    if(g.key === 'cv') return `- CV: ${sp.cv_file}`;
+    const bio = en ? (sp.bio_profile_en || sp.bio_pro_en || sp.bio_profile_ko || sp.bio_pro_ko)
+      : (sp.bio_profile_ko || sp.bio_pro_ko || sp.bio_profile_en || sp.bio_pro_en);
+    /* «- 약력:»처럼 콜론으로 끝나는 줄은 fillTemplate가 빈 항목으로 보고 지운다 — 콜론 없이 들여 쓴다 */
+    return `- ${en ? 'Biography' : '약력'}${bio ? '\n' + String(bio).trim().split('\n').map(l => '  ' + l).join('\n') : ''}`;
+  }).join('\n');
+}

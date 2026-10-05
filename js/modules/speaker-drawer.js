@@ -36,6 +36,7 @@ import { trackAction, changed, removed } from './audit-tab.js';
 import { patchContact } from './db-tab.js';
 import { confLocked, confLockNotice, renderConf, buildConfEvList, syncPartRole } from './conf-tab.js';
 import { flowStatus, draftFor, missingItems } from './speaker-flow.js';
+import { reuseCandidates, reusePending } from './contact-speaker.js';
 
 let spId = null;
 let spTab = 'basic';
@@ -214,7 +215,7 @@ export function renderSpeakerDr(){
   const b = document.getElementById('sp-drbd');
   if(b){
     b.classList.toggle('ro', confLocked());
-    b.innerHTML = flowBoxHtml(sp) + (spTab === 'bio' ? bioHtml(sp, evKey)
+    b.innerHTML = flowBoxHtml(sp) + reuseBoxHtml(sp) + (spTab === 'bio' ? bioHtml(sp, evKey)
       : spTab === 'talk' ? talkHtml(sp, evKey)
       : spTab === 'offer' ? offerHtml(sp, evKey)
       : spTab === 'bank' ? bankHtml(sp, evKey)
@@ -236,6 +237,47 @@ export function renderSpeakerDr(){
    연사 화면 맨 위. 지금 어느 단계인지, 다음에 무엇을 하면 되는지, 그 메일 초안.
    단계와 끝난 기준은 speaker-flow.js, 행사별 문구는 설정 › 행사 › 컨퍼런스. */
 let pendingDraft = '';
+/* ── 지난 자료 ──
+   같은 사람을 지난 행사에서도 불렀으면 그때 받은 약력·사진·CV를 가져온다.
+   가져온 뒤에는 «확인 대기» — 연사가 맞다고 하면 «확인됨»으로 받은 날을 찍는다.
+   규칙은 contact-speaker.js에 있다. */
+function reuseBoxHtml(sp){
+  const pend = reusePending(sp);
+  if(pend.length){
+    return `<div style="padding:8px 11px;border:1px solid var(--am);border-radius:8px;margin-bottom:12px;background:var(--ab)">
+      <div style="font-size:11.5px;font-weight:700;color:var(--am)">지난 자료 확인 대기 · ${escapeHtml(pend.map(g => g.label).join(' · '))}</div>
+      <div style="font-size:10.5px;color:var(--i3);margin-top:2px;line-height:1.6">${escapeHtml(sp.reuse_from || '')}에서 ${escapeHtml(sp.reused_at)}에 가져왔어요.
+        자료 받기 메일이 «확인 요청»으로 나갑니다. 연사가 맞다고 하면 확인됨을 누르세요 — 고친 자료가 오면 칸을 고친 뒤 누릅니다.</div>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <button class="btn bp" style="font-size:10.5px" onclick="confirmSpReuse()">확인됨 — 받은 날 찍기</button>
+      </div></div>`;
+  }
+  const c = reuseCandidates(sp);
+  if(!c) return '';
+  return `<div style="padding:8px 11px;border:1px dashed var(--a);border-radius:8px;margin-bottom:12px">
+    <div style="font-size:11.5px;font-weight:700;color:var(--i2)">지난 행사에서 받은 자료가 있어요 · ${escapeHtml(c.groups.map(g => g.label).join(' · '))}</div>
+    <div style="font-size:10.5px;color:var(--i4);margin-top:2px;line-height:1.6">${escapeHtml(c.from.join(', '))}에서 가장 최근 것을 비어 있는 칸에만 넣습니다.
+      새로 작성을 부탁하는 대신 «맞는지 확인» 메일을 보내게 돼요.</div>
+    <div style="display:flex;gap:6px;margin-top:6px">
+      <button class="btn bp" style="font-size:10.5px" onclick="applySpReuse()">지난 자료 가져오기</button>
+    </div></div>`;
+}
+export async function applySpReuse(){
+  const sp = getSpeakerById(spId);
+  const c = reuseCandidates(sp);
+  if(!c) return;
+  await patchSpeaker({ ...c.patch, reuse_from: c.from.join(','), reused_at: td() },
+    `지난 자료 가져오기 (${c.from.join(', ')} · ${c.groups.map(g => g.label).join('·')})`);
+}
+export async function confirmSpReuse(){
+  const sp = getSpeakerById(spId);
+  const pend = reusePending(sp);
+  if(!pend.length) return;
+  const patch = {};
+  pend.forEach(g => { patch[g.at] = td(); });
+  await patchSpeaker(patch, `지난 자료 확인됨 (${pend.map(g => g.label).join('·')})`);
+}
+
 function flowBoxHtml(sp){
   const f = flowStatus(sp);
   if(f.skip) return `<div style="padding:8px 11px;border:1px solid var(--i6);border-radius:8px;margin-bottom:12px;
@@ -1559,6 +1601,8 @@ window.switchSpeakerDT      = switchSpeakerDT;
 window.spField              = spField;
 window.asField              = asField;
 window.spStamp              = spStamp;
+window.applySpReuse         = applySpReuse;
+window.confirmSpReuse       = confirmSpReuse;
 window.asStamp              = asStamp;
 window.searchSpeakerContact = searchSpeakerContact;
 window.linkSpeakerContact   = linkSpeakerContact;

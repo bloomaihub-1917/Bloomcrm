@@ -3115,6 +3115,8 @@ const FLOW_FIELDS = [
   ['subject_en', '제목 (영문)'], ['body_en', '본문 (영문)'],
   ['remind_subject_ko', '독촉 제목 (국문)'], ['remind_body_ko', '독촉 본문 (국문)'],
   ['remind_subject_en', '독촉 제목 (영문)'], ['remind_body_en', '독촉 본문 (영문)'],
+  ['reuse_subject_ko', '지난 자료 확인 제목 (국문)'], ['reuse_body_ko', '지난 자료 확인 본문 (국문)'],
+  ['reuse_subject_en', '지난 자료 확인 제목 (영문)'], ['reuse_body_en', '지난 자료 확인 본문 (영문)'],
 ];
 function flowEditorHtml(evKey){
   const steps = flowSteps(evKey, { withOff: true });
