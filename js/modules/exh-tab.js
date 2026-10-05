@@ -1893,6 +1893,18 @@ const MONEY_CATS = [['booth', '부스'], ['equip', '비품'], ['graphic', '그�
 
    완납 판정은 통화별로 한다. 원화는 다 냈는데 달러가 남은 기업이 있어서,
    기업 하나를 한 상태로 묶으면 어느 쪽이 남았는지가 사라진다. */
+/* total을 weights 비율대로 정수로 나눈다 — 합이 total과 정확히 같다(최대 나머지 방식) */
+function splitInt(total, weights){
+  const sum = weights.reduce((a, b) => a + b, 0);
+  if(!sum || !total) return weights.map(() => 0);
+  const raw = weights.map(w => total * w / sum);
+  const res = raw.map(Math.floor);
+  let left = total - res.reduce((a, b) => a + b, 0);
+  raw.map((r, i) => [r - res[i], i]).sort((x, y) => y[0] - x[0])
+    .forEach(([, i]) => { if(left > 0){ res[i]++; left--; } });
+  return res;
+}
+
 export function catSettleByCurrency(list){
   const out = {};
   const partial = new Set();
@@ -1913,24 +1925,30 @@ export function catSettleByCurrency(list){
          한 기업이 한 수단으로만 내는 경우가 대부분이라 그럴 때는 그대로 맞고,
          섞어 낸 곳만 비율로 갈린다. 수단이 안 적힌 옛 건은 미확인으로 남긴다. */
       const tot = st[cur] && st[cur].paid > 0 ? st[cur].paid : 0;
-      // 그 통화 청구 중 받은 비율 — 완납이면 1, 부분 입금이면 낸 만큼
       const billedCur = by[cur].합계 || 0;
-      const paidRatio = paidUp ? 1 : (billedCur && tot ? Math.min(1, tot / billedCur) : 0);
       const mix = tot
         ? { bank: st[cur].bank / tot, card: st[cur].card / tot, unknown: st[cur].etc / tot }
         : { bank: 0, card: 0, unknown: 0 };
 
-      MONEY_CATS.forEach(([k]) => {
-        const v = by[cur][k] || 0;
-        if(!v) return;
+      /* 비율로 나누면 끝전(0.214원 같은)이 생긴다. 돈은 원·센트 단위라 기업마다
+         정수로 나누고 남는 끝전은 큰 자리부터 하나씩 얹어, 분류를 더하면 그
+         기업이 실제로 낸 돈과 정확히 같게 한다. */
+      const cats = MONEY_CATS.map(([k]) => k).filter(k => by[cur][k]);
+      const gotTotal = paidUp ? billedCur : Math.round(Math.min(tot, billedCur));
+      const gots = splitInt(gotTotal, cats.map(k => by[cur][k]));
+      const bankT = Math.round(gotTotal * mix.bank), unkT = Math.round(gotTotal * mix.unknown);
+      const banks = splitInt(bankT, gots);
+      const unks = splitInt(unkT, gots.map((g, i) => g - banks[i]));   // 카드 몫이 음수가 되지 않게
+
+      cats.forEach((k, i) => {
+        const v = by[cur][k];
         if(!out[cur][k]) out[cur][k] = { billed: 0, paid: 0, unpaid: 0, bank: 0, card: 0, unknown: 0 };
         out[cur][k].billed += v;
-        const got = v * paidRatio;
-        out[cur][k].paid += got;
-        out[cur][k].unpaid += v - got;
-        out[cur][k].bank += got * mix.bank;
-        out[cur][k].card += got * mix.card;
-        out[cur][k].unknown += got * mix.unknown;
+        out[cur][k].paid += gots[i];
+        out[cur][k].unpaid += v - gots[i];
+        out[cur][k].bank += banks[i];
+        out[cur][k].unknown += unks[i];
+        out[cur][k].card += gots[i] - banks[i] - unks[i];
       });
     });
   });
