@@ -31,7 +31,9 @@ import {
   EVENT_LIST,
   CO_DB,
   contacts,
+  speakersOfContact,
 } from '../state.js';
+import { flowStatus, nextActionLabel } from './speaker-flow.js';
 import { RP, SC, LC, EC, STGS, avB, avF } from '../constants.js';
 import { ab, td, escapeHtml, escAttr, isMobile } from '../utils.js';
 import { trackAction, changed } from './audit-tab.js';
@@ -372,7 +374,10 @@ export function renderDr() {
     <div class="drav" style="background:${avB(i)};color:${avF(i)}">${escapeHtml(ab(t.name))}</div>
     <div style="flex:1"><div class="drnm">${escapeHtml(t.name)}</div><div class="drmt"><span>📍 ${escapeHtml(t.hq)}</span><span>🏭 ${escapeHtml(t.sector)}</span><span style="color:${SC[t.status] || 'var(--i3)'}">● ${escapeHtml(t.status)}</span></div></div>
     <button class="drcls" onclick="closeDr()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>`;
-  const tabs = ['CRM', '컨택 이력', '행사 기록', '담당자'];
+  /* 이 기업 사람이 연사로 들어가 있으면 연락 단계 탭을 붙인다 */
+  const nSp = spkOf(t).length;
+  const tabs = ['CRM', '컨택 이력', '행사 기록', '담당자', ...(nSp ? [`연사 연락 ${nSp}`] : [])];
+  if(drTab >= tabs.length) setDrTab(0);
   document.getElementById('drtabs').innerHTML = tabs.map((tb, k) => `<div class="drtab${drTab === k ? ' on' : ''}" onclick="switchDT(${k})">${tb}</div>`).join('');
   renderDrBd(t);
 }
@@ -386,6 +391,7 @@ export function renderDrBd(t) {
   if (drTab === 0) b.innerHTML = dCRM(t);
   else if (drTab === 1) b.innerHTML = dLog(t);
   else if (drTab === 2) b.innerHTML = dEv(t);
+  else if (drTab === 4) b.innerHTML = dSpk(t);
   else b.innerHTML = dCon(t);
 }
 export function dCRM(t) {
@@ -437,6 +443,32 @@ function coOf(t){
 
 /* 화면에 쓸 담당자·행사 이력 — 기업DB에 없으면 빈 배열 */
 const conOf = (t) => coOf(t)?.contacts || [];
+/* 이 기업 담당자 중 연사로 들어간 사람 — 행사마다 한 줄 */
+const spkOf = (t) => conOf(t).flatMap(p => speakersOfContact(p.id).map(sp => ({ p, sp })));
+
+/* 연사 연락 — 컨퍼런스의 연락 단계를 CRM에서도 본다. 고치는 곳은 연사 화면이다. */
+export function dSpk(t) {
+  const rows = spkOf(t);
+  if (!rows.length) return '<div class="empty"><p>이 기업 사람 중 연사로 들어간 사람이 없어요</p></div>';
+  return rows.map(({ p, sp }) => {
+    const f = flowStatus(sp);
+    const na = nextActionLabel(sp);
+    const ev = EVENT_LIST.find(e => e.key === sp.event_id);
+    return `<div class="evc2">
+      <div class="evc2tp"><div class="evnm">${escapeHtml(sp.name_snapshot || sp.name_en || p.name)}</div>
+        <div class="evdt">${escapeHtml(ev ? (ev.short || ev.name || ev.key) : sp.event_id)}</div></div>
+      <div style="display:flex;flex-wrap:wrap;gap:3px;margin:5px 0">${f.steps.filter(s => s.applies).map(s => {
+        const cur = f.current && f.current.key === s.key;
+        return `<span style="font-size:10px;padding:1px 6px;border-radius:9px;background:${s.isDone ? 'var(--gb)' : cur ? 'var(--ad)' : 'var(--i8)'};color:${
+          s.isDone ? 'var(--g)' : cur ? 'var(--a)' : 'var(--i4)'}${cur ? ';font-weight:700' : ''}">${s.isDone ? '✓' : cur ? '●' : '○'} ${escapeHtml(s.label)}</span>`;
+      }).join('')}</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="font-size:11.5px;font-weight:600;color:${na.done ? 'var(--g)' : 'var(--a)'};flex:1">${na.done ? '✓ 연락 완료' : `지금 할 일 · ${escapeHtml(na.text)}`}${
+          na.due ? ` <span style="font-weight:400;color:${na.due < td() ? 'var(--re)' : 'var(--i4)'};font-size:10.5px">마감 ${escapeHtml(na.due)}</span>` : ''}</div>
+        <button class="btn" style="font-size:10.5px" onclick="closeDr();openSpeakerDr('${escAttr(sp.id)}'${na.done ? '' : `);openFlowDraft('${escAttr(na.step)}'`})">${na.done ? '연사 열기' : '✉ 메일 초안'}</button>
+      </div></div>`;
+  }).join('');
+}
 const evOf  = (t) => {
   const evs = coOf(t)?.events || [];
   // 최근 행사부터 — 이력은 최근 것이 먼저 보여야 쓸모가 있다
