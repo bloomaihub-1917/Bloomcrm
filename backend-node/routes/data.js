@@ -132,7 +132,7 @@ const TABLES = {
   equip_catalog: {
     table: 'equip_catalog', pk: 'id', idPrefix: 'EC-',
     columns: ['id', 'event_id', 'category', 'code', 'name_ko', 'name_en', 'spec',
-      'price_krw', 'price_usd', 'note', 'active', 'sort_order', 'kind'],
+      'price_krw', 'price_usd', 'note', 'active', 'sort_order', 'kind', 'base_id'],
   },
   exhibitor_invoices: {
     table: 'exhibitor_invoices', pk: 'id', idPrefix: 'XV-',

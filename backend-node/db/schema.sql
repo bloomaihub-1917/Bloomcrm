@@ -1073,3 +1073,10 @@ ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS builder_org_id TEXT;
 -- 런치·갈라 디너다. 식사·휴식도 프로그램북 시간표에 한 줄로 나가야 하지만
 -- 연사를 배정할 자리는 아니다 — 그래서 세션과 같은 표에 두고 종류로 가른다.
 ALTER TABLE conf_sessions ADD COLUMN IF NOT EXISTS kind TEXT;
+
+/* ── 전체 품목표 ──
+   품목은 전체 품목표(event_id = '') 하나에서 이름·규격·기본 단가를 관리하고,
+   행사는 그중 쓸 품목을 골라 사본을 만든 뒤 그 행사 단가만 고친다. 사본이
+   어느 품목에서 왔는지가 base_id다. 신청 내역(catalog_id)은 지금처럼 행사 사본을
+   가리킨다 — 지난 행사의 단가가 그대로 남아야 옛 주문 금액이 바뀌지 않는다. */
+ALTER TABLE equip_catalog ADD COLUMN IF NOT EXISTS base_id TEXT;

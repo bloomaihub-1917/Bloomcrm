@@ -139,6 +139,7 @@
         <button id="arch-tab-org"    class="nr"    onclick="switchArchTab('org')"    >🏭 기업 분류</button>
         <button id="arch-tab-people" class="nr"    onclick="switchArchTab('people')" >👤 사람 분류</button>
         <button id="arch-tab-common" class="nr"    onclick="switchArchTab('common')" >📋 공통 목록</button>
+        <button id="arch-tab-equip"  class="nr"    onclick="switchArchTab('equip')"  >🪑 비품 목록</button>
         <button id="arch-tab-clean"  class="nr"    onclick="switchArchTab('clean')"  >🧹 데이터 정리</button>
         <button id="arch-tab-sys"    class="nr"    onclick="switchArchTab('sys')"    >⚙️ 시스템 정보</button>
         <!-- 업로드는 매일 쓰는 탭이 아니라 위 탭줄에서 내렸다 — 설정 안에서 들어간다 -->
@@ -442,6 +443,7 @@
       <button class="seg-b"    id="arch-mtab-org"    onclick="switchArchTab('org')"    style="flex:1">기업</button>
       <button class="seg-b"    id="arch-mtab-people" onclick="switchArchTab('people')" style="flex:1">사람</button>
       <button class="seg-b"    id="arch-mtab-common" onclick="switchArchTab('common')" style="flex:1">공통</button>
+      <button class="seg-b"    id="arch-mtab-equip"  onclick="switchArchTab('equip')"  style="flex:1">비품</button>
       <button class="seg-b"    id="arch-mtab-clean"  onclick="switchArchTab('clean')"  style="flex:1">정리</button>
       <button class="seg-b"    id="arch-mtab-sys"    onclick="switchArchTab('sys')"    style="flex:1">시스템</button>
       <button class="seg-b"    onclick="switchApp('up',null)" style="flex:1">업로드</button>
@@ -652,7 +654,15 @@
     </div>
 
     <div style="font-size:12px;font-weight:700;color:var(--i2);margin:22px 0 4px">🪑 비품 카탈로그</div>
-    <div style="font-size:11px;color:var(--i4);margin-bottom:10px">렌탈사 품목표입니다. 품목을 추가하고 단가를 고칠 수 있어요. 이미 신청이 들어온 품목은 지우지 않고 <b>숨김</b>으로 내립니다 — 지우면 그 신청이 무엇이었는지 알 수 없게 되니까요. 아무도 신청하지 않은 품목만 완전히 지울 수 있습니다.</div>
+    <div style="font-size:11px;color:var(--i4)">렌탈사 품목표는 <a href="javascript:void(0)" onclick="switchArchTab('equip')" style="color:var(--a)">🪑 비품 목록</a>에서 관리해요.</div>
+  </div>
+
+  <!-- ── 비품 목록 탭 ──
+       렌탈사 품목표 한 곳. 전에는 설정값(공통 목록) 아래와 행사 상세 › 비품 두 자리가
+       같은 편집기를 나눠 써서, 어디서 고쳤는지 찾게 됐다. 행사를 골라 그 행사의 품목표를 고친다. -->
+  <div id="arch-pane-equip" style="padding:16px 20px;max-width:1100px;display:none">
+    <div style="font-size:13px;font-weight:700;color:var(--i1);margin-bottom:6px">비품 목록</div>
+    <div style="font-size:11px;color:var(--i4);margin-bottom:14px">행사마다 렌탈사 품목표가 따로 있습니다. 행사를 골라 품목을 추가하고 단가를 고치세요. 이미 신청이 들어온 품목은 지우지 않고 <b>숨김</b>으로 내립니다 — 지우면 그 신청이 무엇이었는지 알 수 없게 되니까요. 아무도 신청하지 않은 품목만 완전히 지울 수 있습니다.</div>
     <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:14px">
       <div id="eqcat-rows"></div>
     </div>

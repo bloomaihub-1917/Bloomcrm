@@ -1424,7 +1424,7 @@ export function switchArchTab(tab){
   tab = ({ sector: 'org', val: 'common' })[tab] || tab;
   /* 업로드 화면에서도 설정 사이드바가 보이므로, 거기서 누르면 설정으로 먼저 돌아온다 */
   if(window.curApp && window.curApp !== 'arch') window.switchApp?.('arch', null);
-  ['ev','org','people','common','clean','sys'].forEach(t => {
+  ['ev','org','people','common','equip','clean','sys'].forEach(t => {
     const btn  = document.getElementById('arch-tab-'+t);
     const pane = document.getElementById('arch-pane-'+t);
     // 모바일 본문 전환줄 — 사이드바 버튼과 같은 상태를 유지해야 지금 어느 탭인지 보인다
@@ -1438,7 +1438,8 @@ export function switchArchTab(tab){
   if(tab==='ev')     { closeEvDetail(); }   // 목록부터 — 상세는 카드를 눌러서 연다
   if(tab==='org')    { renderSectorList(); mountCodeList('org'); }
   if(tab==='people') { renderPartTypeList(); renderTagList(); renderAliasList(); mountCodeList('people'); }
-  if(tab==='common') { mountCodeList('common'); mountEquipCatalog('eqcat-rows', ''); }
+  if(tab==='common') { mountCodeList('common'); }
+  if(tab==='equip')  { mountEquipCatalog('eqcat-rows', ''); }
   if(tab==='clean')  { renderSectorList(); renderCleanCounts(); }
   if(tab==='sys')    { renderSysInfo(); }
 }
@@ -2082,9 +2083,11 @@ const eqMoney = (v) => { const n = Number(eqNum(v)); return n ? n.toLocaleString
 
 /* 이 품목을 몇 곳이 신청했나 — 지워도 되는지 판단하는 근거 */
 const eqUsedBy = (id) => EXH_ITEMS.filter(i => i.catalog_id === id).length;
+/* 전체 품목을 쓰는 행사 — 지워도 되는지는 여기서 갈린다(행사 사본이 이 품목을 가리킨다) */
+const eqEventsUsing = (id) => EQUIP_CATALOG.filter(c => c.base_id === id && c.event_id);
 
 const eqRows = () => EQUIP_CATALOG
-  .filter(c => c.event_id === eqEvent)
+  .filter(c => (c.event_id || '') === (eqEvent || ''))
   .filter(c => (c.kind || 'equip') === eqKind)
   .filter(c => !eqCatFil || (c.category || '') === eqCatFil)
   .filter(c => {
@@ -2102,18 +2105,27 @@ export function renderEquipCatalog(){
   // 처음 열 때는 품목이 실제로 들어 있는 행사를 연다 — 빈 화면을 보여주면
   // 품목표가 없는 줄 안다(설정값 탭의 선택 목록과 같은 이유)
   const evs = [...new Set(EQUIP_CATALOG.map(c => c.event_id).filter(Boolean))];
+  /* eqEvent가 비어 있으면 전체 품목표다 */
   if(eqLockEv) eqEvent = eqLockEv;
-  else if(!eqEvent) eqEvent = evs[0] || (EVENT_LIST[0]?.key || '');
 
-  const all = EQUIP_CATALOG.filter(c => c.event_id === eqEvent && (c.kind || 'equip') === eqKind);
-  const cats = [...new Set(all.map(c => c.category || '').filter(Boolean))];
+  const all = EQUIP_CATALOG.filter(c => (c.event_id || '') === (eqEvent || '') && (c.kind || 'equip') === eqKind);
+  const masterAll = EQUIP_CATALOG.filter(c => !c.event_id && (c.kind || 'equip') === eqKind);
+  const cats = [...new Set((eqEvent ? masterAll : all).map(c => c.category || '').filter(Boolean))];
 
   el.innerHTML = `
     <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-bottom:10px">
-      ${eqLockEv ? '' : `<div style="min-width:170px"><div class="mlbl">행사</div>
+      ${eqLockEv ? '' : `<div style="min-width:200px"><div class="mlbl">보기</div>
         <select class="fi" style="width:100%" onchange="setEqEvent(this.value)">
-          ${(evs.length ? evs : EVENT_LIST.map(e => e.key)).map(k =>
-            `<option value="${escAttr(k)}"${k === eqEvent ? ' selected' : ''}>${escapeHtml(k)}</option>`).join('')}
+          <option value=""${!eqEvent ? ' selected' : ''}>📦 전체 품목표 (${EQUIP_CATALOG.filter(c => !c.event_id).length})</option>
+          ${(() => {
+            /* 품목표가 아직 없는 행사도 고를 수 있어야 새로 만든다 — 품목 수를 붙여 구분한다 */
+            const keys = [...new Set([...EVENT_LIST.map(e => e.key), ...evs])].filter(Boolean);
+            if(eqEvent && !keys.includes(eqEvent)) keys.unshift(eqEvent);
+            return keys.map(k => {
+              const n = EQUIP_CATALOG.filter(c => c.event_id === k).length;
+              return `<option value="${escAttr(k)}"${k === eqEvent ? ' selected' : ''}>행사 · ${escapeHtml(k)}${n ? ` (${n})` : ' — 아직 안 고름'}</option>`;
+            }).join('');
+          })()}
         </select></div>`}
       <div style="min-width:120px"><div class="mlbl">종류</div>
         <select class="fi" style="width:100%" onchange="setEqKind(this.value)">
@@ -2129,11 +2141,14 @@ export function renderEquipCatalog(){
         <input class="fi" style="width:100%" value="${escAttr(eqQuery)}" placeholder="코드·품명·규격"
           oninput="setEqQuery(this.value)"></div>
     </div>
+    ${eqEvent ? `<div style="font-size:11px;color:var(--i4);margin-bottom:8px;line-height:1.6">
+        전체 품목표에서 이 행사에 쓸 품목을 체크하고 이 행사 단가를 적으세요. 체크하면 기본 단가가 먼저 들어갑니다.
+        품명·규격은 <a href="javascript:void(0)" onclick="setEqEvent('')" style="color:var(--a)">전체 품목표</a>에서 고칩니다.</div>` : ''}
     <div id="eqcat-count" style="font-size:11px;color:var(--i4);margin-bottom:8px">${eqCountHtml()}</div>
 
     <div id="eqcat-list">${eqListHtml()}</div>
 
-    <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--i6)">
+    ${eqEvent ? '' : `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--i6)">
       <div style="font-size:11.5px;font-weight:700;color:var(--i2);margin-bottom:8px">품목 추가</div>
       <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
         <div style="width:90px"><div class="mlbl">코드</div>
@@ -2153,17 +2168,20 @@ export function renderEquipCatalog(){
         <button class="btn bp" onclick="addEquipItem()" style="min-width:60px;height:36px">추가</button>
       </div>
       <div id="eq-new-msg" style="font-size:11px;margin-top:6px"></div>
-    </div>`;
+    </div>`}`;
 }
 
 function eqRowHtml(c){
   const off = c.active === 'no';
-  const used = eqUsedBy(c.id);
+  const used = c.event_id ? eqUsedBy(c.id) : eqEventsUsing(c.id).length;
   return `<div class="clrow" style="padding:6px 0;border-bottom:1px solid var(--i7)${off ? ';opacity:.5' : ''}">
     <div style="display:flex;gap:8px;align-items:center;min-width:0;flex:0 0 auto">
       <code style="font-size:11px;color:var(--i4);min-width:64px">${escapeHtml(c.code || '')}</code>
-      ${used ? `<span class="pill p-blue" title="이 품목을 신청한 내역">${used}건</span>`
-             : `<span class="pill p-gray" title="아무도 신청하지 않았어요">미사용</span>`}
+      ${c.event_id
+        ? (used ? `<span class="pill p-blue" title="이 품목을 신청한 내역">${used}건</span>`
+                : `<span class="pill p-gray" title="아무도 신청하지 않았어요">미사용</span>`)
+        : (used ? `<span class="pill p-blue" title="${escAttr(eqEventsUsing(c.id).map(x => x.event_id).join(', '))}">행사 ${used}</span>`
+                : `<span class="pill p-gray" title="아직 고른 행사가 없어요">행사 0</span>`)}
     </div>
     <label class="clf clf-grow"><span class="clf-l">국문</span>
       <input class="fi" value="${escAttr(c.name_ko || '')}" placeholder="품명(국문)" style="min-width:110px"
@@ -2185,6 +2203,11 @@ function eqRowHtml(c){
 
 export function setEqKind(v){ eqKind = v; eqCatFil = ''; eqQuery = ''; renderEquipCatalog(); }
 export function setEqEvent(v){ eqEvent = v; eqCatFil = ''; renderEquipCatalog(); }
+/* 행사 상세의 바로가기 — 그 행사를 고른 채로 비품 목록을 연다 */
+export function openEquipFor(evKey){
+  eqEvent = evKey; eqCatFil = ''; eqQuery = '';
+  switchArchTab('equip');
+}
 export function setEqCatFil(v){ eqCatFil = v; renderEquipCatalog(); }
 export function setEqQuery(v){
   eqQuery = v;
@@ -2199,16 +2222,126 @@ export function setEqQuery(v){
 }
 /* 개수 안내 — 검색할 때 목록만 갈아 끼우면 이 줄이 옛 숫자로 남는다 */
 const eqCountHtml = () => {
-  const all = EQUIP_CATALOG.filter(c => c.event_id === eqEvent && (c.kind || 'equip') === eqKind);
+  if(eqEvent){
+    const mine = EQUIP_CATALOG.filter(c => c.event_id === eqEvent && (c.kind || 'equip') === eqKind && c.active !== 'no');
+    const total = EQUIP_CATALOG.filter(c => !c.event_id && (c.kind || 'equip') === eqKind && c.active !== 'no').length;
+    return `${escapeHtml(eqEvent)} — 전체 ${eqKind === 'graphic' ? '그래픽' : '비품'} ${total}개 중 <b>${mine.length}개</b> 사용`;
+  }
+  const all = EQUIP_CATALOG.filter(c => !c.event_id && (c.kind || 'equip') === eqKind);
   const hidden = all.filter(c => c.active === 'no').length;
   const shown = eqRows().length;
-  return `${escapeHtml(eqEvent)} ${eqKind === 'graphic' ? '그래픽' : '비품'} ${all.length}개${hidden ? ` (숨김 ${hidden}개 포함)` : ''}`
+  return `전체 품목표 ${eqKind === 'graphic' ? '그래픽' : '비품'} ${all.length}개${hidden ? ` (숨김 ${hidden}개 포함)` : ''}`
     + (shown !== all.length ? ` · 지금 보이는 것 ${shown}개` : '');
 };
 
-const eqListHtml = () => { const rows = eqRows();
+const eqListHtml = () => {
+  if(eqEvent) return eqEventListHtml();
+  const rows = eqRows();
   return rows.length ? rows.map(eqRowHtml).join('')
     : '<div style="font-size:12px;color:var(--i4);padding:8px 0">해당하는 품목이 없어요.</div>'; };
+
+/* 행사 보기 — 전체 품목 한 줄마다 «이 행사에 쓰나»와 이 행사 단가 */
+function eqEventListHtml(){
+  const q = eqQuery.toLowerCase();
+  const masters = EQUIP_CATALOG
+    .filter(c => !c.event_id && (c.kind || 'equip') === eqKind)
+    .filter(c => !eqCatFil || (c.category || '') === eqCatFil)
+    .filter(c => !q || [c.code, c.name_ko, c.name_en, c.spec].some(v => String(v || '').toLowerCase().includes(q)))
+    .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0)
+      || String(a.code || '').localeCompare(String(b.code || '')));
+  const mineOf = (m) => EQUIP_CATALOG.find(c => c.event_id === eqEvent && c.base_id === m.id);
+  const row = (m) => {
+    const e = mineOf(m);
+    const on = !!e && e.active !== 'no';
+    if(m.active === 'no' && !on) return '';   // 전체에서 내린 품목은 이미 쓰던 행사에서만 보인다
+    const used = e ? eqUsedBy(e.id) : 0;
+    const diff = on && (eqNum(e.price_krw) !== eqNum(m.price_krw) || eqNum(e.price_usd) !== eqNum(m.price_usd));
+    return `<div class="clrow" style="padding:6px 0;border-bottom:1px solid var(--i7)${on ? '' : ';opacity:.6'}">
+      <label style="display:flex;gap:8px;align-items:center;flex:1;min-width:200px;cursor:pointer">
+        <input type="checkbox" ${on ? 'checked' : ''} onchange="toggleEqUse('${escAttr(m.id)}',this.checked)">
+        <code style="font-size:11px;color:var(--i4);min-width:56px">${escapeHtml(m.code || '')}</code>
+        <span style="font-size:12px">${escapeHtml(m.name_ko || m.name_en || '')}</span>
+        ${used ? `<span class="pill p-blue" title="이 행사에서 이 품목을 신청한 내역">${used}건</span>` : ''}
+      </label>
+      <span style="font-size:10.5px;color:var(--i4);white-space:nowrap">기본 ${eqMoney(m.price_krw) || '-'}원${
+        m.price_usd ? ` · $${eqMoney(m.price_usd)}` : ''}</span>
+      ${on ? `<label class="clf"><span class="clf-l">이 행사 KRW</span>
+          <input class="fi" value="${escAttr(eqMoney(e.price_krw))}" style="width:96px;text-align:right${diff ? ';border-color:var(--am)' : ''}"
+            onchange="editEquipItem('${escAttr(e.id)}','price_krw',this.value)"></label>
+        <label class="clf"><span class="clf-l">USD</span>
+          <input class="fi" value="${escAttr(eqMoney(e.price_usd))}" style="width:80px;text-align:right${diff ? ';border-color:var(--am)' : ''}"
+            onchange="editEquipItem('${escAttr(e.id)}','price_usd',this.value)"></label>` : ''}
+    </div>`;
+  };
+  const list = masters.map(row).join('');
+  /* 전체 품목표에 없는 이 행사만의 품목 — 전시 화면에서 바로 만든 것 따위 */
+  const own = EQUIP_CATALOG.filter(c => c.event_id === eqEvent && !c.base_id && (c.kind || 'equip') === eqKind);
+  const ownHtml = own.length ? `
+    <div style="font-size:11.5px;font-weight:700;color:var(--i2);margin:14px 0 4px">이 행사에만 있는 품목 ${own.length}개</div>
+    <div style="font-size:11px;color:var(--i4);margin-bottom:6px">전체 품목표에 없는 품목입니다. 다른 행사에서도 쓸 거면 «전체에 올리기»를 누르세요.</div>
+    ${own.map(c => eqRowHtml(c) + `<div style="text-align:right;margin:2px 0 6px">
+      <button class="btn" style="font-size:10.5px" onclick="promoteEqItem('${escAttr(c.id)}')">전체에 올리기</button></div>`).join('')}` : '';
+  return (list || '<div style="font-size:12px;color:var(--i4);padding:8px 0">전체 품목표에 해당하는 품목이 없어요.</div>') + ownHtml;
+}
+
+/* 이 행사에 쓰기 / 빼기 */
+export async function toggleEqUse(masterId, on){
+  const m = EQUIP_CATALOG.find(c => c.id === masterId);
+  if(!m || !eqEvent) return;
+  const e = EQUIP_CATALOG.find(c => c.event_id === eqEvent && c.base_id === masterId);
+  const nm = `${m.code || ''} ${m.name_ko || m.name_en || ''}`.trim();
+  if(on){
+    if(e){   // 전에 뺐던 것 — 숨김만 푼다(이 행사 단가가 남아 있다)
+      e.active = '';
+      const r = await saveEquipCatalog(e);
+      if(!r.ok) e.active = 'no';
+    } else {
+      const rec = { ...m, id: `EC-${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        event_id: eqEvent, base_id: m.id, active: '' };
+      EQUIP_CATALOG.push(rec);
+      const r = await saveEquipCatalog(rec);
+      if(!r.ok){ EQUIP_CATALOG.splice(EQUIP_CATALOG.indexOf(rec), 1); renderEquipCatalog(); return; }
+      if(r.id && r.id !== rec.id) rec.id = r.id;
+    }
+    trackAction('edit', '품목 사용', eqEvent, `<b>${escapeHtml(nm)}</b> — ${escapeHtml(eqEvent)}에서 씀`);
+  } else if(e){
+    /* 신청이 있으면 지우지 않고 숨긴다 — 옛 신청이 무엇을 가리키는지 남아야 한다 */
+    const used = eqUsedBy(e.id);
+    if(used){
+      if(!confirm(`"${nm}"은(는) 이 행사에서 ${used}건 신청돼 있어요.\n빼면 새로 고를 수 없지만 기존 신청과 금액은 그대로 남습니다. 뺄까요?`)){
+        renderEquipCatalog(); return;
+      }
+      e.active = 'no';
+      const r = await saveEquipCatalog(e);
+      if(!r.ok) e.active = '';
+    } else {
+      const i = EQUIP_CATALOG.indexOf(e);
+      EQUIP_CATALOG.splice(i, 1);
+      const r = await deleteEquipCatalog(e.id);
+      if(!r.ok) EQUIP_CATALOG.splice(i, 0, e);
+    }
+    trackAction('edit', '품목 빼기', eqEvent, `<b>${escapeHtml(nm)}</b> — ${escapeHtml(eqEvent)}에서 뺌`);
+  }
+  renderEquipCatalog();
+  window.renderExh?.();
+}
+
+/* 이 행사에만 있던 품목을 전체 품목표로 올린다 — 행사 사본은 그대로 두고 잇기만 한다 */
+export async function promoteEqItem(id){
+  const c = EQUIP_CATALOG.find(x => x.id === id);
+  if(!c) return;
+  const m = { ...c, id: `EC-${Date.now()}_${Math.floor(Math.random() * 1000)}`, event_id: '', base_id: '', active: '' };
+  EQUIP_CATALOG.push(m);
+  const r = await saveEquipCatalog(m);
+  if(!r.ok){ EQUIP_CATALOG.splice(EQUIP_CATALOG.indexOf(m), 1); return; }
+  if(r.id && r.id !== m.id) m.id = r.id;
+  c.base_id = m.id;
+  const r2 = await saveEquipCatalog(c);
+  if(!r2.ok) c.base_id = '';
+  trackAction('add', '품목 등록', '',
+    `<b>${escapeHtml(c.code || '')}</b> ${escapeHtml(c.name_ko || c.name_en || '')} — ${escapeHtml(eqEvent)}에서 전체 품목표로 올림`);
+  renderEquipCatalog();
+}
 
 /* 값 하나 고치기 — 금액은 쉼표를 떼고 숫자만 남긴다 */
 export async function editEquipItem(id, field, value){
@@ -2239,7 +2372,8 @@ export async function removeEquipItem(id){
   const c = EQUIP_CATALOG.find(x => x.id === id);
   if(!c) return;
   const nm = `${c.code || ''} ${c.name_ko || c.name_en || ''}`.trim();
-  const used = eqUsedBy(c.id);
+  /* 전체 품목은 «쓰는 행사가 있나»로, 행사 품목은 «신청이 있나»로 지울지 정한다 */
+  const used = c.event_id ? eqUsedBy(c.id) : eqEventsUsing(c.id).length;
 
   // 되살리기
   if(c.active === 'no'){
@@ -2251,7 +2385,9 @@ export async function removeEquipItem(id){
   }
 
   if(used){
-    if(!confirm(`"${nm}"을(를) 숨길까요?\n${used}곳이 이미 신청해 둔 품목이라 지우지 않고 숨깁니다.\n앞으로 새로 고를 수 없지만, 기존 신청 내역과 금액은 그대로 남습니다.`)) return;
+    if(!confirm(c.event_id
+      ? `"${nm}"을(를) 숨길까요?\n${used}곳이 이미 신청해 둔 품목이라 지우지 않고 숨깁니다.\n앞으로 새로 고를 수 없지만, 기존 신청 내역과 금액은 그대로 남습니다.`
+      : `"${nm}"을(를) 전체 품목표에서 숨길까요?\n${used}개 행사가 쓰고 있어 지우지 않고 숨깁니다.\n그 행사들의 품목표는 그대로이고, 다른 행사에서 새로 고를 수만 없게 됩니다.`)) return;
     c.active = 'no';
     const r = await saveEquipCatalog(c);
     if(!r.ok){ c.active = ''; renderEquipCatalog(); return; }
@@ -2278,7 +2414,7 @@ export async function addEquipItem(){
   const ko = g('eq-new-ko'), en = g('eq-new-en');
   if(!ko && !en){ say('품명을 국문이나 영문 중 하나는 입력해주세요.'); return; }
 
-  const mine = EQUIP_CATALOG.filter(c => c.event_id === eqEvent && (c.kind || 'equip') === eqKind);
+  const mine = EQUIP_CATALOG.filter(c => (c.event_id || '') === (eqEvent || '') && (c.kind || 'equip') === eqKind);
   // 같은 이름이 이미 있으면 새로 만들지 않는다 — 품목표를 둔 이유가 없어진다
   const key = (v) => String(v || '').toLowerCase().replace(/\s+/g, '');
   const dup = mine.find(c => (ko && key(c.name_ko) === key(ko)) || (en && key(c.name_en) === key(en)));
@@ -2296,7 +2432,7 @@ export async function addEquipItem(){
 
   const rec = {
     id: `EC-${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-    event_id: eqEvent, kind: eqKind,
+    event_id: eqEvent || '', base_id: '', kind: eqKind,
     category: g('eq-new-cat') || (eqKind === 'graphic' ? '기타그래픽' : '기타비품'), code,
     name_ko: ko, name_en: en, spec: '',
     price_krw: eqNum(g('eq-new-krw')), price_usd: eqNum(g('eq-new-usd')),
@@ -2308,7 +2444,7 @@ export async function addEquipItem(){
   if(r.id && r.id !== rec.id) rec.id = r.id;
 
   trackAction('add', '품목 등록', eqEvent,
-    `<b>${escapeHtml(code)}</b> ${escapeHtml(ko || en)} — ${escapeHtml(eqEvent)} 품목표에 추가`);
+    `<b>${escapeHtml(code)}</b> ${escapeHtml(ko || en)} — ${escapeHtml(eqEvent || '전체')} 품목표에 추가`);
   ['eq-new-code', 'eq-new-ko', 'eq-new-en', 'eq-new-krw', 'eq-new-usd']
     .forEach(id => { const e = document.getElementById(id); if(e) e.value = ''; });
   renderEquipCatalog();
@@ -2318,6 +2454,9 @@ export async function addEquipItem(){
 
 window.renderEquipCatalog = renderEquipCatalog;
 window.setEqKind    = setEqKind;
+window.openEquipFor = openEquipFor;
+window.toggleEqUse = toggleEqUse;
+window.promoteEqItem = promoteEqItem;
 window.setEqEvent   = setEqEvent;
 window.setEqCatFil  = setEqCatFil;
 window.setEqQuery   = setEqQuery;
@@ -2412,7 +2551,14 @@ export function renderEvDetail(){
        </div>`
     : evDetailSeg === 'parts' ? evPartsHtml(ev, parts)
     : evDetailSeg === 'booth' ? evBoothHtml(ev)
-    : evDetailSeg === 'equip' ? '<div id="ev-eqcat-rows"></div>'
+    /* 품목표는 설정 › 비품 목록 한 곳에서 고친다 — 여기서는 몇 품목인지와 바로가기만 */
+    : evDetailSeg === 'equip' ? (() => {
+        const n = EQUIP_CATALOG.filter(c => c.event_id === ev.key && c.active !== 'no').length;
+        return `<div style="font-size:12px;color:var(--i3);padding:12px 0;line-height:1.7">
+          이 행사의 품목표: <b>${n ? `${n}품목` : '아직 없음'}</b><br>
+          <button class="btn bp" style="margin-top:8px;font-size:11px"
+            onclick="openEquipFor('${escAttr(ev.key)}')">🪑 비품 목록에서 열기</button></div>`;
+      })()
     : evDetailSeg === 'due'   ? evDueHtml(ev)
     : evDetailSeg === 'conf'  ? evConfHtml(ev)
     : evBasicHtml(ev);
@@ -2434,9 +2580,8 @@ export function renderEvDetail(){
     <div class="${readonly && EV_SEG_PART[evDetailSeg] ? 'ro' : ''}"
       style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:16px">${body}</div>`;
 
-  // 비품 편집기는 문자열이 아니라 자기 함수가 그린다 — 자리를 만든 뒤 붙인다
-  if(evDetailSeg === 'equip' && !locked) mountEquipCatalog('ev-eqcat-rows', ev.key);
-  else mountEquipCatalogIdle();
+  // 비품 편집기는 이제 비품 목록 탭에만 붙는다 — 다른 자리를 가리키고 있으면 돌려놓는다
+  mountEquipCatalogIdle();
 }
 
 /* ── 기본 정보 ──
