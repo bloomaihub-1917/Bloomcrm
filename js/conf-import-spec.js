@@ -28,7 +28,7 @@ export const IMPORT_SHEETS = [
       { key: 'title_ko',  label: '세션명(국문)', hint: '국문·영문 중 하나는 있어야 합니다' },
       { key: 'title_en',  label: '세션명(영문)', hint: '' },
       { key: 'note',      label: '메모',        hint: '' },
-      { key: 'kind',      label: '종류',        hint: '비우면 발표 세션. 커피 브레이크·런치·갈라 디너는 회색으로 그려지고 연사를 배정하지 않습니다' },
+      { key: 'kind',      label: '종류',        hint: '비우면 세션. 세션이 아니면 «커피 브레이크·런치·갈라 디너·기타» 중 하나 — 기념촬영·등록처럼 나머지는 «기타». 회색으로 그려지고 연사를 배정하지 않습니다' },
     ],
     sample: [
       ['2026-10-16', '09:30', '10:00', '', '', '개회사', 'Opening Remarks', '', ''],

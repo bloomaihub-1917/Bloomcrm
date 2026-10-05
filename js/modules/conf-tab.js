@@ -280,21 +280,29 @@ const emptyBox = (msg) => `<div style="padding:40px 16px">
 ══════════════════════════════════════════ */
 /* 세션 종류 — 식사·휴식은 시간표에는 나가지만 연사를 배정하지 않는다.
    회색으로 그려 발표 세션과 눈으로 갈라지게 한다. */
+/* 두 묶음으로만 가른다 — 세션(연사를 배정하고 집계에 넣는다)과 세션 아님.
+   세션 아닌 것은 식사·휴식 말고도 기념촬영·등록·이동처럼 끝없이 생긴다. 하나하나
+   종류를 만들면 매번 «이건 뭘로 고르지»가 되므로 «기타»로 받고 이름은 세션명에 적는다. */
 const SESSION_KINDS = [
-  { key: '',       label: '세션' },
-  { key: 'break',  label: '커피 브레이크', ko: '커피 브레이크', en: 'Coffee Break' },
-  { key: 'lunch',  label: '런치',         ko: '오찬',          en: 'Lunch' },
-  { key: 'dinner', label: '갈라 디너',     ko: '갈라 디너',     en: 'Gala Dinner' },
+  { key: '',       label: '세션', pill: '세션' },
+  { key: 'break',  label: '커피 브레이크', pill: '휴식', ko: '커피 브레이크', en: 'Coffee Break' },
+  { key: 'lunch',  label: '런치',         pill: '식사', ko: '오찬',          en: 'Lunch' },
+  { key: 'dinner', label: '갈라 디너',     pill: '식사', ko: '갈라 디너',     en: 'Gala Dinner' },
+  { key: 'other',  label: '기타 (기념촬영·등록·이동 등)', pill: '세션 아님' },
 ];
 /* 종류를 안 고르고 만든 «커피 브레이크»«만찬»도 식사·휴식으로 본다 — 엑셀에서
    종류 칸을 비우는 일이 잦다. 다만 연사가 배정된 세션은 제목이 어떻든 발표 세션이다. */
-const MEAL_TITLE = /브레이크|휴식|커피|오찬|점심|중식|만찬|디너|갈라|네트워킹|coffee\s*break|lunch|dinner|reception|networking/i;
+const MEAL_TITLE = /브레이크|휴식|커피|오찬|점심|중식|만찬|디너|갈라|네트워킹|기념\s*촬영|단체\s*사진|등록|coffee\s*break|lunch|dinner|reception|networking|photo\s*session|group\s*photo|registration/i;
 const isBreak = (s) => !!(s && (s.kind || (MEAL_TITLE.test(`${s.title_ko || ''} ${s.title_en || ''}`)
   && !SESSION_SPEAKERS.some(a => a.session_id === s.id))));
 const kindOf = (k) => SESSION_KINDS.find(x => x.key === (k || '')) || SESSION_KINDS[0];
 const kindSelect = (id, cur, titleIds) => `<select class="fi" id="${id}"
   onchange="fillSessionKind(this.value,'${titleIds[0]}','${titleIds[1]}')">
-  ${SESSION_KINDS.map(k => `<option value="${k.key}"${(cur || '') === k.key ? ' selected' : ''}>${escapeHtml(k.label)}</option>`).join('')}
+  ${(() => {
+    const o = (k) => `<option value="${k.key}"${(cur || '') === k.key ? ' selected' : ''}>${escapeHtml(k.label)}</option>`;
+    return `<option value=""${!cur ? ' selected' : ''}>세션 — 연사 배정·집계에 넣음</option>
+      <optgroup label="세션 아님 — 회색, 배정·집계에서 뺌">${SESSION_KINDS.filter(k => k.key).map(o).join('')}</optgroup>`;
+  })()}
 </select>`;
 /* 종류를 고르면 세션명이 비어 있을 때만 채운다 — 적어 둔 이름(«환영 오찬»)을 덮지 않는다 */
 export function fillSessionKind(k, koId, enId){
@@ -472,7 +480,7 @@ function sessionCard(ev, s, days, cfg){
     <div style="display:flex;align-items:flex-start;gap:9px">
       <div style="flex:1;min-width:0">
         <div style="font-size:12.5px;font-weight:600${brk ? ';color:var(--i4)' : ''}">${
-          brk ? `<span class="pill p-gray" style="font-size:9px;margin-right:5px">${escapeHtml(kindOf(s.kind).label)}</span>` : ''}${
+          brk ? `<span class="pill p-gray" style="font-size:9px;margin-right:5px">${escapeHtml(s.kind ? (kindOf(s.kind).pill || '세션 아님') : '세션 아님')}</span>` : ''}${
           escapeHtml(s.title_ko || s.title_en || '(세션명 없음)')}</div>
         ${s.title_ko && s.title_en ? `<div style="font-size:10.5px;color:var(--i4)">${escapeHtml(s.title_en)}</div>` : ''}
         ${meta ? `<div style="font-size:10.5px;color:var(--i5);margin-top:2px">${escapeHtml(meta)}</div>` : ''}
@@ -728,7 +736,7 @@ function pgaHtml(ev){
     title="${escAttr([ss.title_ko, ss.title_en, timeLabel(ss.start_at, ss.end_at), ss.room].filter(Boolean).join(' · '))}"
     style="cursor:pointer;background:var(--i7);border:1px solid var(--i6);border-radius:4px;padding:7px;
     text-align:center;margin-bottom:5px;color:var(--i4)">
-    <div style="font-size:11px;font-weight:600">${escapeHtml(ss.title_ko || ss.title_en || kindOf(ss.kind).label)}</div>
+    <div style="font-size:11px;font-weight:600">${escapeHtml(ss.title_ko || ss.title_en || kindOf(ss.kind).pill || '')}</div>
     ${ss.title_ko && ss.title_en ? `<div style="font-size:9.5px;margin-top:1px">${escapeHtml(ss.title_en)}</div>` : ''}
   </div>`;
 
@@ -1677,6 +1685,7 @@ function normKind(v){
   if(/브레이크|휴식|커피|break|coffee/.test(s)) return 'break';
   if(/런치|오찬|점심|중식|lunch|luncheon/.test(s)) return 'lunch';
   if(/디너|만찬|갈라|저녁|석식|dinner|gala/.test(s)) return 'dinner';
+  if(/기타|세션아님|아님|기념촬영|촬영|사진|등록|이동|other|photo|registration/.test(s)) return 'other';
   return null;
 }
 
