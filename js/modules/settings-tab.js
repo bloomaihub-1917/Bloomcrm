@@ -3138,7 +3138,7 @@ function flowEditorHtml(evKey){
       연사마다 지금 어느 단계인지 계산해 연사 화면 맨 위와 연사 표의 «지금 할 일»에 보여주고, 그 단계 양식으로 메일 초안을 만듭니다.
       양식에 쓸 수 있는 칸: ${FLOW_VARS.map(v => `<code>${escapeHtml(v)}</code>`).join(' ')}
       — 연사가 영문(EN)이면 영문 양식을 씁니다.</div>
-    ${steps.map((st, i) => `<details style="border:1px solid var(--i6);border-radius:8px;margin-bottom:6px;background:var(--W)">
+    ${steps.map((st, i) => `<details id="flowstep-${st.key}" style="border:1px solid var(--i6);border-radius:8px;margin-bottom:6px;background:var(--W)">
       <summary style="padding:8px 11px;cursor:pointer;font-size:12px;display:flex;gap:8px;align-items:center">
         <b>${i + 1}. ${escapeHtml(st.label)}</b>
         ${st.due ? `<span class="pill p-gray">마감 ${escapeHtml(st.due)}</span>` : ''}
@@ -3159,6 +3159,17 @@ function flowEditorHtml(evKey){
         </div>
       </div>
     </details>`).join('')}`;
+}
+
+/* 메일 탭의 «양식 고치기» — 그 행사의 컨퍼런스 설정을 열고 그 단계를 펼쳐 보여준다 */
+export function openFlowSettings(evKey, stepKey){
+  window.closeSpeakerDr?.();
+  window.switchApp?.('arch', null);
+  switchArchTab('ev');
+  openEvDetail(evKey);
+  setEvDetailSeg('conf');
+  const d = document.getElementById(`flowstep-${stepKey}`);
+  if(d){ d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'start' }); d.style.borderColor = 'var(--a)'; }
 }
 
 /* 단계별 기본 첨부 — 목록은 서버에서 받아 각 단계 자리에 끼운다 */
@@ -3421,6 +3432,7 @@ export async function saveEvConf(){
 
 window.cycleSpeakerNeed  = cycleSpeakerNeed;
 window.uploadFlowFiles = uploadFlowFiles;
+window.openFlowSettings = openFlowSettings;
 window.removeFlowFile = removeFlowFile;
 window.resetSpeakerNeeds = resetSpeakerNeeds;
 window.addConfDay        = addConfDay;

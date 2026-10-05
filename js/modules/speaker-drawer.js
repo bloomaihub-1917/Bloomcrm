@@ -1024,7 +1024,10 @@ function mailTabHtml(sp, evKey){
       return fg('무슨 메일인가', `<select class="fi" id="sp-mail-kind" onchange="fillSpeakerMail(this.value)">
         <optgroup label="연락 단계">${stepOpts}</optgroup>
         <optgroup label="개별 요청">${extra.map(k => `<option value="${k.key}">${k.label}</option>`).join('')}</optgroup>
-      </select>`, '고르면 그 단계의 양식으로 제목·본문이 채워집니다 — 양식은 설정 › 행사 › 컨퍼런스에서 고칩니다');
+      </select>
+        <button class="btn" style="font-size:10.5px;margin-top:5px" title="이 행사의 연락 순서 설정을 열어 고른 단계의 기본 제목·본문·첨부를 고칩니다"
+          onclick="openFlowSettings('${escAttr(evKey)}',document.getElementById('sp-mail-kind').value)">⚙ 이 단계 기본 문구 고치기</button>`,
+        '고르면 그 단계의 기본 문구로 제목·본문이 채워집니다. 행사마다 다른 기본 문구는 위 단추로 설정에서 고칩니다');
     })()}
     ${fg('제목', `<input class="fi" id="sp-mail-subject" value="${escAttr(`[${evName}] 연사 안내`)}">`)}
     ${fg('내용', `<textarea class="fi" id="sp-mail-body" rows="10" style="resize:vertical"></textarea>`)}

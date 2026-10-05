@@ -136,6 +136,23 @@ export function buildConfEvList(){
       group(doing, '', true)
     + group(done, '진행 완료', true)
   ) || '<div style="font-size:11px;color:var(--i4);padding:6px 2px">진행 중인 컨퍼런스가 없어요</div>') + hiddenNote;
+
+  /* 휴대폰 머리줄 — «연사»라는 탭 이름만으로는 어느 행사를 보고 있는지 모른다.
+     사이드바를 열지 않고도 바꿀 수 있게 행사 이름 자체를 고르는 칸으로 둔다. */
+  const mt = document.getElementById('mob-conf-ttl');
+  if(mt){
+    mt.style.minWidth = '0';   // 긴 행사명이 오른쪽 단추를 밀어내지 않게
+    const live = [...doing, ...done];
+    const opt = (e) => `<option value="${escAttr(e.key)}"${confEvent === e.key ? ' selected' : ''}>${escapeHtml(e.short || e.name || e.key)}</option>`;
+    mt.innerHTML = live.length ? `<select onchange="setConfEvent(this.value)" aria-label="행사 고르기"
+        style="max-width:100%;font:inherit;font-weight:700;color:inherit;background:transparent;border:0;
+        padding:2px 18px 2px 0;appearance:none;-webkit-appearance:none;cursor:pointer;
+        background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);
+        background-position:calc(100% - 9px) 55%,calc(100% - 4px) 55%;background-size:5px 5px;background-repeat:no-repeat;
+        text-overflow:ellipsis;overflow:hidden;white-space:nowrap">
+        ${doing.map(opt).join('')}${done.length ? `<optgroup label="진행 완료">${done.map(opt).join('')}</optgroup>` : ''}
+      </select>` : '컨퍼런스';
+  }
 }
 
 export function setConfEvent(key){
@@ -1614,6 +1631,13 @@ function normDate(v){
   if(!s) return '';
   const m = /^(\d{4})[-./](\d{1,2})[-./](\d{1,2})/.exec(s);
   if(m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  /* 엑셀이 날짜 칸을 «11/19/26»(월/일/연 두 자리)로 내보내는 일이 있다.
+     그대로 두면 화면이 날짜로 못 읽어 요일이 비고 정렬도 어긋난다 */
+  const us = /^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/.exec(s);
+  if(us){
+    const y = us[3].length === 2 ? `20${us[3]}` : us[3];
+    return `${y}-${us[1].padStart(2, '0')}-${us[2].padStart(2, '0')}`;
+  }
   /* 엑셀 일련번호(1900 기준) */
   const n = Number(s);
   if(Number.isFinite(n) && n > 20000 && n < 80000){
