@@ -251,7 +251,11 @@ const SESSION_KINDS = [
   { key: 'lunch',  label: '런치',         ko: '오찬',          en: 'Lunch' },
   { key: 'dinner', label: '갈라 디너',     ko: '갈라 디너',     en: 'Gala Dinner' },
 ];
-const isBreak = (s) => !!(s && s.kind);
+/* 종류를 안 고르고 만든 «커피 브레이크»«만찬»도 식사·휴식으로 본다 — 엑셀에서
+   종류 칸을 비우는 일이 잦다. 다만 연사가 배정된 세션은 제목이 어떻든 발표 세션이다. */
+const MEAL_TITLE = /브레이크|휴식|커피|오찬|점심|중식|만찬|디너|갈라|네트워킹|coffee\s*break|lunch|dinner|reception|networking/i;
+const isBreak = (s) => !!(s && (s.kind || (MEAL_TITLE.test(`${s.title_ko || ''} ${s.title_en || ''}`)
+  && !SESSION_SPEAKERS.some(a => a.session_id === s.id))));
 const kindOf = (k) => SESSION_KINDS.find(x => x.key === (k || '')) || SESSION_KINDS[0];
 const kindSelect = (id, cur, titleIds) => `<select class="fi" id="${id}"
   onchange="fillSessionKind(this.value,'${titleIds[0]}','${titleIds[1]}')">
@@ -1673,9 +1677,10 @@ export async function handleConfFile(e){
   rowsS.forEach(r => {
     const k = normKind(r.kind);
     if(k === null){ badKind.push(r.kind); r.kind = ''; return; }
-    r.kind = k;
-    const d = kindOf(k);
-    if(k && !r.title_ko && !r.title_en){ r.title_ko = d.ko; r.title_en = d.en; }
+    /* 종류 칸이 비었으면 세션명으로 짐작한다 — «커피 브레이크»«만찬»을 종류 없이 올리는 일이 잦다 */
+    r.kind = k || [r.title_ko, r.title_en].map(normKind).find(Boolean) || '';
+    const d = kindOf(r.kind);
+    if(r.kind && !r.title_ko && !r.title_en){ r.title_ko = d.ko; r.title_en = d.en; }
   });
 
   const newSess = rowsS.filter(r => !findSess(r));
