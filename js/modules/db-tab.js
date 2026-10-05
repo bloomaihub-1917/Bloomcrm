@@ -8,6 +8,7 @@
    cancelContactEdit 래퍼 함수 호출로 바꿨다 — 동작은 동일)
 ═══════════════════════════════════════════════════════════════ */
 
+import { speakerMaterialsHtml } from './contact-speaker.js';
 import {
   EVENT_LIST,
   contacts,
@@ -2094,6 +2095,8 @@ export function contactViewPanel(c){
       <div class="ic"><div class="il">연락처 1</div><div class="iv">${escapeHtml(c.phone1)||'-'}</div></div>
       <div class="ic"><div class="il">연락처 2</div><div class="iv">${escapeHtml(c.phone2)||'-'}</div></div>
     </div>
+
+    ${speakerMaterialsHtml(c)}
 
     <div class="sct" style="margin-top:14px;display:flex;align-items:center;justify-content:space-between">
       <span>참여 행사</span>
