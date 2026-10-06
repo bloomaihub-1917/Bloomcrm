@@ -973,10 +973,23 @@ const CONTACT_KINDS = ['연사 본인', '실무진', '비서', '기관 담당', 
 const SEND_LABEL = { to: '수신', cc: '참조', '': '안 보냄' };
 
 /* 이 연사에게 메일 보낼 때의 수신·참조 — 상대 목록에서 만든다 */
+/* 연사 본인의 메일·전화는 기본 정보(마스터DB 연락처)가 정본이다. 연락 상대에
+   또 적게 하면 두 곳이 갈라진다 — «연사 본인» 줄은 칸이 비어 있으면 기본 정보를
+   그대로 읽고, 연락 상대가 하나도 없으면 연사 본인을 수신으로 본다. */
+const selfCon = (sp) => sp && sp.contact_id ? contacts.find(c => String(c.id) === String(sp.contact_id)) : null;
+const selfEmail = (sp) => String(selfCon(sp)?.email1 || '').trim();
+const selfPhone = (sp) => String(selfCon(sp)?.phone1 || selfCon(sp)?.phone2 || '').trim();
+const isSelf = (r) => r.kind === '연사 본인';
+export const rowEmail = (sp, r) => String(r.email || '').trim() || (isSelf(r) ? selfEmail(sp) : '');
+
 export function mailTargets(speakerId){
+  const sp = getSpeakerById(speakerId);
   const rows = contactsOfSpeaker(speakerId);
-  const pick = (s) => rows.filter(r => r.send === s && String(r.email || '').trim())
-    .map(r => String(r.email).trim());
+  if(!rows.length){
+    const em = selfEmail(sp);
+    return { to: em ? [em] : [], cc: [] };
+  }
+  const pick = (s) => rows.filter(r => r.send === s).map(r => rowEmail(sp, r)).filter(Boolean);
   return { to: pick('to'), cc: pick('cc') };
 }
 
@@ -992,9 +1005,14 @@ function peopleTabHtml(sp){
       </select>`)}
     </div>
     <div class="fgr">
-      ${fg('메일', txt(r.email, `scField('${escAttr(r.id)}','email',this.value,'연락 상대 메일')`, 'name@org.kr'))}
-      ${fg('전화', txt(r.phone, `scField('${escAttr(r.id)}','phone',this.value,'연락 상대 전화')`))}
+      ${fg('메일', txt(r.email, `scField('${escAttr(r.id)}','email',this.value,'연락 상대 메일')`,
+        isSelf(r) && selfEmail(sp) ? selfEmail(sp) : 'name@org.kr'))}
+      ${fg('전화', txt(r.phone, `scField('${escAttr(r.id)}','phone',this.value,'연락 상대 전화')`,
+        isSelf(r) && selfPhone(sp) ? selfPhone(sp) : ''))}
     </div>
+    ${isSelf(r) && !r.email ? `<div style="font-size:10px;color:var(--i4);margin:-2px 0 5px">${selfEmail(sp)
+      ? '비워 두면 기본 정보의 메일·전화를 씁니다 — 다른 주소로 보낼 때만 적으세요'
+      : '<span style="color:var(--re)">기본 정보에 메일이 없어요</span> — 기본 탭에서 넣으면 여기도 따라옵니다'}</div>` : ''}
     <div style="display:flex;align-items:center;gap:9px;margin-top:2px">
       <div class="seg">
         ${['to', 'cc', ''].map(s => `<button class="seg-b${(r.send || '') === s ? ' on' : ''}"
@@ -1013,7 +1031,8 @@ function peopleTabHtml(sp){
   return summary
     + (rows.length ? rows.map(row).join('')
       : `<div style="font-size:11.5px;color:var(--i5);line-height:1.7;margin-bottom:9px">
-        아직 연락 상대가 없어요. 실무진을 수신으로, 연사를 참조로 두는 게 보통입니다.</div>`)
+        따로 정한 연락 상대가 없어 <b>연사 본인</b>(기본 정보의 메일)에게 보냅니다.
+        실무진을 거쳐야 하면 추가해서 실무진을 수신, 연사를 참조로 두세요.</div>`)
     + `<button class="btn" style="font-size:11px" onclick="addSpeakerContact()">+ 연락 상대 추가</button>`;
 }
 
@@ -1024,6 +1043,7 @@ export async function addSpeakerContact(){
   /* 첫 상대는 연사 본인으로 두고 수신으로 잡는다 — 실무진이 붙으면 그때
      수신을 옮기면 된다. 처음부터 비워 두면 수신 없는 채로 메일 칸을 연다. */
   const first = !contactsOfSpeaker(sp.id).length;
+  /* 연사 본인 줄은 메일·전화를 비워 둔다 — 기본 정보를 읽는다(rowEmail) */
   const row = {
     speaker_id: sp.id, contact_id: '',
     name: first ? (sp.name_snapshot || sp.name_en || '') : '', email: '', phone: '',
