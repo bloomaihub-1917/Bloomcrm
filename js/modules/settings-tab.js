@@ -67,7 +67,7 @@ import {
   saveExhCfgToSheet,
   saveConfSession,
   loadMailFiles, mailFilesOf, uploadMailFile, deleteMailFile, fileToBase64,
-  loadMailAccounts, saveMailAccount, deleteMailAccount, testMailAccount,
+  loadMailAccounts, saveMailAccount, deleteMailAccount, testMailAccount, eventMailFrom,
 } from '../api.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 
@@ -2648,6 +2648,7 @@ export async function saveEvMailbox(evKey){
   const r = await saveMailAccount(evKey, rec);
   if(!r.ok){ evmbSay(r.error || '저장하지 못했어요.'); return; }
   mailAccounts.accounts = [...(mailAccounts.accounts || []).filter(a => a.event_id !== evKey), r.account];
+  eventMailFrom(evKey, true);
   trackAction('edit', '행사 메일 설정', evKey, `${rec.username}${rec.password ? ' (비밀번호 변경)' : ''}`);
   await renderEvMailbox(evKey);
   // 저장만 하고 끝내면 비밀번호가 틀린 걸 첫 발송 때 알게 된다 — 바로 확인한다
@@ -2663,6 +2664,7 @@ export async function removeEvMailbox(evKey){
   const r = await deleteMailAccount(evKey);
   if(!r.ok){ evmbSay(r.error || '끊지 못했어요.'); return; }
   mailAccounts.accounts = (mailAccounts.accounts || []).filter(a => a.event_id !== evKey);
+  eventMailFrom(evKey, true);
   trackAction('delete', '행사 메일 설정', evKey, '연결 끊음');
   renderEvMailbox(evKey);
 }

@@ -30,7 +30,7 @@ import { td, escapeHtml, escAttr, countryOptions, countryName } from '../utils.j
 import {
   saveSpeaker, saveSessionSpeaker,
   saveSpeakerContact, deleteSpeakerContact,
-  saveSpeakerLog, sendMail, loadMailFiles, mailFilesOf, fileToBase64,
+  saveSpeakerLog, sendMail, eventMailFrom, loadMailFiles, mailFilesOf, fileToBase64,
 } from '../api.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 import { patchContact } from './db-tab.js';
@@ -230,6 +230,10 @@ export function renderSpeakerDr(){
     }
     /* 기본 첨부 목록은 서버에서 받아야 해서 늦게 온다 — 오면 첨부 칸만 다시 그린다 */
     if(spTab === 'mail') loadMailFiles(evKey).then(() => renderSpMailFiles());
+    if(spTab === 'mail') eventMailFrom(evKey).then(f => {
+      const el = document.getElementById('sp-mail-from');
+      if(el) el.innerHTML = f.ok ? `발신 <b>${escapeHtml(f.text)}</b>` : `<b style="color:var(--re)">발신 ${escapeHtml(f.text)}</b>`;
+    });
   }
 }
 
@@ -1120,6 +1124,7 @@ function mailTabHtml(sp, evKey){
   return `
     <div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;
       font-size:11.5px;color:var(--i3);line-height:1.7;margin-bottom:11px">
+      <span id="sp-mail-from">발신 확인 중…</span><br>
       ${t.to.length ? `수신 <b>${escapeHtml(t.to.join(', '))}</b>` : '<b style="color:var(--re)">수신이 없어요</b> — «연락 상대»에서 먼저 정해주세요'}
       ${t.cc.length ? `<br>참조 ${escapeHtml(t.cc.join(', '))}` : ''}
     </div>
@@ -1286,7 +1291,9 @@ export async function sendSpeakerMail(){
 
   /* 밖으로 나가는 일은 한 번 묻는다 — 받는 사람을 눈으로 확인하지 않으면
      엉뚱한 사람에게 간 걸 나중에 알게 된다. */
-  if(!confirm(`이 내용으로 보낼까요?\n\n수신 ${t.to.join(', ')}${t.cc.length ? `\n참조 ${t.cc.join(', ')}` : ''}\n제목 ${subject}`)) return;
+  const from = await eventMailFrom(sp.event_id);
+  if(!from.ok){ say(from.text, false); return; }
+  if(!confirm(`이 내용으로 보낼까요?\n\n발신 ${from.text}\n수신 ${t.to.join(', ')}${t.cc.length ? `\n참조 ${t.cc.join(', ')}` : ''}\n제목 ${subject}`)) return;
 
   const fileIds = mailFilesOf(sp.event_id).filter(f => f.step === kind && !spSkipDefault.has(f.id)).map(f => f.id);
   if(spLocalFiles.reduce((n, f) => n + f.size, 0) > 3 * 1024 * 1024){ say('PC에서 고른 첨부가 3MB를 넘어요.', false); return; }

@@ -911,6 +911,17 @@ async function mailApi(path, method = 'GET', body){
   } catch(e){ return { ok: false, error: e.message }; }
 }
 export const loadMailAccounts  = () => mailApi('/accounts');
+/* 이 행사 메일이 어느 주소로 나가는지 — 보내기 전에 눈으로 확인하게 보여 준다.
+   계정을 저장·삭제하면 새로 고칠 수 있게 force를 둔다. */
+let mailAcctCache = null;
+export async function eventMailFrom(evKey, force){
+  if(!mailAcctCache || force) mailAcctCache = await loadMailAccounts();
+  const r = mailAcctCache || {};
+  if(r.offline) return { ok: false, text: '테스트 모드 — 보내지 않음' };
+  const b = (r.accounts || []).find(a => a.event_id === evKey);
+  if(!b) return { ok: false, text: '이 행사에 공용 메일이 없어요 — 설정 › 행사 관리 › 메일에서 넣어주세요' };
+  return { ok: true, addr: b.from_addr, text: b.from_name ? `${b.from_name} <${b.from_addr}>` : b.from_addr };
+}
 export const saveMailAccount   = (evKey, rec) => mailApi(`/accounts/${encodeURIComponent(evKey)}`, 'PUT', rec);
 export const deleteMailAccount = (evKey) => mailApi(`/accounts/${encodeURIComponent(evKey)}`, 'DELETE');
 export const testMailAccount   = (evKey) => mailApi(`/accounts/${encodeURIComponent(evKey)}/test`, 'POST', {});

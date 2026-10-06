@@ -24,7 +24,7 @@ import {
   saveExhContact as _saveExhContact, saveExhItem as _saveExhItem, saveExhInvoice as _saveExhInvoice, saveExhTax as _saveExhTax, saveExhPayment as _saveExhPayment, saveExhLog as _saveExhLog, saveExhApp as _saveExhApp,
   deleteExhContact as _deleteExhContact, deleteExhItem as _deleteExhItem, deleteExhInvoice as _deleteExhInvoice, deleteExhTax as _deleteExhTax, deleteExhPayment as _deleteExhPayment, deleteExhLog as _deleteExhLog, deleteExhApp as _deleteExhApp,
   deleteExhibitor as _deleteExhibitor,
-  sendMail, loadMailAccounts, fileToBase64,
+  sendMail, eventMailFrom, fileToBase64,
 } from '../api.js';
 
 /* 진행 완료된 행사는 열람만 — exh-tab의 가드를 그대로 쓴다.
@@ -3660,7 +3660,6 @@ window.forfeitExh = forfeitExh;
    보낸 메일은 서버가 문의·기록(exhibitor_logs)에 남긴다.
 ══════════════════════════════════════════════════════════════ */
 let exhMailFiles = [];
-let mailAcctCache = null;
 function dMail(x){
   const ppl = exhContacts(x).filter(p => p.email);
   const ev = EVENT_LIST.find(e => e.key === x.event_id);
@@ -3706,13 +3705,11 @@ function dMail(x){
 }
 
 async function fillExhMailFrom(x){
-  if(!mailAcctCache) mailAcctCache = await loadMailAccounts();
+  const f = await eventMailFrom(x.event_id);
   const el = document.getElementById('exm-from');
   if(!el) return;
-  const box = (mailAcctCache.accounts || []).find(a => a.event_id === x.event_id);
-  el.innerHTML = mailAcctCache.offline ? '테스트 모드에서는 보내지 않아요.'
-    : box ? `보내는 주소 <b>${escapeHtml(box.from_name ? `${box.from_name} <${box.from_addr}>` : box.from_addr)}</b> — 행사 공용 메일`
-    : `<b style="color:var(--re)">이 행사엔 공용 메일이 없어 보낼 수 없어요</b> — 설정 › 행사 관리 › 메일에서 넣어주세요.`;
+  el.innerHTML = f.ok ? `발신 <b>${escapeHtml(f.text)}</b> — 행사 공용 메일`
+    : `<b style="color:var(--re)">${escapeHtml(f.text)}</b>`;
   renderExhMailFiles();
 }
 function renderExhMailFiles(){
@@ -3736,7 +3733,9 @@ export async function sendExhMail(exhId){
   if(!subject && !text){ say('제목이나 내용 중 하나는 있어야 해요.'); return; }
   if(exhMailFiles.reduce((n, f) => n + f.size, 0) > 3 * 1024 * 1024){ say('첨부가 합쳐서 3MB를 넘어요.'); return; }
   // 밖으로 나가는 일은 한 번 묻는다 — 받는 사람을 눈으로 확인하게
-  if(!confirm(`이 내용으로 보낼까요?\n\n수신 ${to.join(', ')}${cc.length ? `\n참조 ${cc.join(', ')}` : ''}\n제목 ${subject}`)) return;
+  const from = await eventMailFrom(x.event_id);
+  if(!from.ok){ say(from.text); return; }
+  if(!confirm(`이 내용으로 보낼까요?\n\n발신 ${from.text}\n수신 ${to.join(', ')}${cc.length ? `\n참조 ${cc.join(', ')}` : ''}\n제목 ${subject}`)) return;
 
   say('보내는 중…', true);
   const attachments = [];
