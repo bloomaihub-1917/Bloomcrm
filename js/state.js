@@ -248,8 +248,11 @@ export const EXH_APPS     = [];  // 신청서 접수 이력 (최초 + 변경/취
    폴더를 지켜보기로 했나»와 «무엇이 들어와 있었나»다. */
 export const WATCH_FOLDERS = [];
 export const WATCH_FILES   = [];
-export const watchFoldersFor = (evKey) => WATCH_FOLDERS
-  .filter(f => String(f.event_id || '') === String(evKey || '') && f.active !== 'no')
+/* part — 'exh'(전시) | 'conf'(연사). 칸이 생기기 전에 만든 폴더는 비어 있고 전시 것이다. */
+export const watchPartOf = (f) => f.part || 'exh';
+export const watchFoldersFor = (evKey, part = 'exh') => WATCH_FOLDERS
+  .filter(f => String(f.event_id || '') === String(evKey || '') && f.active !== 'no'
+    && watchPartOf(f) === part)
   .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0)
     || String(a.name || '').localeCompare(String(b.name || ''), 'ko'));
 

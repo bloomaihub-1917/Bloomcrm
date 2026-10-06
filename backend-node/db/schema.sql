@@ -970,7 +970,8 @@ CREATE TABLE IF NOT EXISTS watch_folders (
   sort_order  INTEGER,
   scanned_at  TEXT,          -- 마지막으로 훑은 시각
   scanned_by  TEXT,
-  created_at  TEXT
+  created_at  TEXT,
+  part        TEXT           -- 'exh'(전시) | 'conf'(연사). 비어 있으면 전시
 );
 
 -- 훑어서 본 파일 한 개. 사라진 파일은 지우지 않고 gone_at을 적는다 —

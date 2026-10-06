@@ -120,7 +120,7 @@ const TABLES = {
   watch_folders: {
     table: 'watch_folders', pk: 'id', idPrefix: 'WF-',
     columns: ['id', 'event_id', 'name', 'path_hint', 'note', 'active', 'sort_order',
-      'scanned_at', 'scanned_by', 'created_at'],
+      'scanned_at', 'scanned_by', 'created_at', 'part'],
   },
   watch_files: {
     table: 'watch_files', pk: 'id', idPrefix: 'WFI-',

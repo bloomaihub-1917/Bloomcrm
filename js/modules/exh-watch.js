@@ -64,9 +64,9 @@ const boundNames = {};
 const lastAuto = {};
 const AUTO_GAP_MS = 60 * 1000;
 
-export async function initWatchFolders(evKey){
+export async function initWatchFolders(evKey, part = 'exh'){
   if(!supported()) return;
-  const folders = watchFoldersFor(evKey);
+  const folders = watchFoldersFor(evKey, part);
   await Promise.all(folders.map(async (f) => {
     boundNames[f.id] = await folderLabel(handleKey(f.id));
   }));
@@ -116,13 +116,14 @@ const fmtWhen = (iso) => {
 /* ══════════════════════════════════════════
    폴더 등록 · 매기 · 잊기
 ══════════════════════════════════════════ */
-export async function addWatchFolder(evKey){
-  const name = prompt('이 폴더를 뭐라고 부를까요?\n예: 로고, 부스도면, 그래픽 원본');
+export async function addWatchFolder(evKey, part = 'exh'){
+  const name = prompt('이 폴더를 뭐라고 부를까요?\n' + (part === 'conf'
+    ? '예: 연사 사진, 발표자료, CV' : '예: 로고, 부스도면, 그래픽 원본'));
   if(!name || !name.trim()) return;
   const row = {
     id: 'WF-' + Date.now(),
-    event_id: evKey, name: name.trim(), path_hint: '', note: '', active: 'yes',
-    sort_order: watchFoldersFor(evKey).length + 1,
+    event_id: evKey, part, name: name.trim(), path_hint: '', note: '', active: 'yes',
+    sort_order: watchFoldersFor(evKey, part).length + 1,
     scanned_at: '', scanned_by: '', created_at: now(),
   };
   WATCH_FOLDERS.push(row);
@@ -365,15 +366,15 @@ export async function scanWatchFolder(folderId, { quiet = false } = {}){
 /* 하나씩 권한을 물으면 창이 연달아 뜨는데, 두 번째부터는 «사람이 누른 직후»가
    아니라서 조용히 거절당한다(거절로 기억되기도 한다). 그래서 여기서는 묻지
    않고, 잠겨 있던 폴더만 모아서 한 번 알려준다. */
-export async function scanAllWatchFolders(evKey){
-  const folders = watchFoldersFor(evKey);
+export async function scanAllWatchFolders(evKey, part = 'exh'){
+  const folders = watchFoldersFor(evKey, part);
   const locked = [];
   for(const f of folders){
     if(await readyFolderQuiet(handleKey(f.id))) await scanWatchFolder(f.id, { quiet: true });
     else locked.push(f.name);
   }
   if(locked.length){
-    alert(`${locked.join(', ')} — 이 폴더는 잠겨 있어요.` + B + `n`
+    alert(`${locked.join(', ')} — 이 폴더는 잠겨 있어요.` + '\n'
       + `폴더마다 「다시 훑기」를 누르면 권한을 다시 물어봅니다.`);
   }
 }
@@ -433,23 +434,27 @@ export function toggleWatchFolder(id){
   renderWatchBodyIfOpen();
 }
 
+/* 전시 탭과 연사 탭이 둘 다 이 화면을 쓴다. 어느 쪽이 그려져 있든 다시 그린다. */
 function renderWatchBodyIfOpen(){
-  const el = document.getElementById('exh-watch-body');
-  if(el) el.innerHTML = watchBodyHtml(el.dataset.ev || '');
+  document.querySelectorAll('.watch-body').forEach(el => {
+    el.innerHTML = watchBodyHtml(el.dataset.ev || '', el.dataset.part || 'exh');
+  });
 }
 
-export function renderWatchView(evKey){
-  return `<div id="exh-watch-body" data-ev="${escAttr(evKey)}">${watchBodyHtml(evKey)}</div>`;
+export function renderWatchView(evKey, part = 'exh'){
+  return `<div class="watch-body" data-ev="${escAttr(evKey)}" data-part="${escAttr(part)}">${
+    watchBodyHtml(evKey, part)}</div>`;
 }
 
-function watchBodyHtml(evKey){
-  const folders = watchFoldersFor(evKey);
+function watchBodyHtml(evKey, part){
+  const folders = watchFoldersFor(evKey, part);
+  const args = `'${escAttr(evKey)}','${escAttr(part)}'`;
   const canScan = supported();
 
   const head = `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-    <button class="btn bp bs" onclick="addWatchFolder('${escAttr(evKey)}')">폴더 추가</button>
+    <button class="btn bp bs" onclick="addWatchFolder(${args})">폴더 추가</button>
     ${canScan && folders.length
-      ? `<button class="btn bs" onclick="scanAllWatchFolders('${escAttr(evKey)}')">전부 다시 훑기</button>` : ''}
+      ? `<button class="btn bs" onclick="scanAllWatchFolders(${args})">전부 다시 훑기</button>` : ''}
     ${!canScan ? `<span style="font-size:11px;color:var(--i4)">
       폴더를 읽는 건 PC의 Chrome·Edge에서만 돼요 — 여기서는 훑어 둔 결과를 보고 확인만 합니다</span>` : ''}
   </div>`;
@@ -458,7 +463,7 @@ function watchBodyHtml(evKey){
     return head + `<div class="empty" style="padding:26px 16px">
       <div style="font-size:13px;font-weight:700;margin-bottom:6px">지켜보는 폴더가 없어요</div>
       <div style="font-size:12px;color:var(--i4);line-height:1.6">
-        로고·도면처럼 기업이 보내오는 파일이 쌓이는 폴더를 등록해두면,<br>
+        ${part === 'conf' ? '사진·발표자료·CV처럼 연사가 보내오는' : '로고·도면처럼 기업이 보내오는'} 파일이 쌓이는 폴더를 등록해두면,<br>
         무엇이 새로 들어왔는지와 담당자가 확인했는지를 여기서 봅니다.<br>
         폴더를 고르는 건 PC에서 한 번만 하면 돼요.</div></div>`;
   }

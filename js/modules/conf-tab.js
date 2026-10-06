@@ -66,6 +66,7 @@ import { saveConf } from './settings-tab.js';
 import { nextActionLabel } from './speaker-flow.js';
 import { confDashHtml } from './conf-dash.js';
 import { reusePending } from './contact-speaker.js';
+import { renderWatchView, initWatchFolders } from './exh-watch.js';
 
 const reuseState = (sp, key, need) => reusePending(sp).some(g => g.key === key)
   ? { state: 'part', text: '가져옴 · 확인 대기', need } : null;
@@ -183,12 +184,14 @@ export function setConfEvent(key){
   clearConfQuery();
   buildConfEvList();
   renderConf();
+  if(confView === 'watch') initWatchFolders(confEvent, 'conf');
   if(isMobile()) window.closeSb?.();
 }
 
 export function setConfView(v){
   confView = v;
   renderConf();
+  if(v === 'watch') initWatchFolders(confEvent, 'conf');
 }
 
 /* ── 도움 함수 ── */
@@ -249,7 +252,7 @@ export function renderConf(){
     return;
   }
 
-  const segs = [['dash', '대시보드'], ['pga', 'Program at a Glance'], ['program', 'Program'], ['people', 'Speakers']];
+  const segs = [['dash', '대시보드'], ['pga', 'Program at a Glance'], ['program', 'Program'], ['people', 'Speakers'], ['watch', '파일 감시']];
   const seg = `<div class="seg" style="margin:0 0 12px">
     ${segs.map(([k, l]) => `<button class="seg-b${confView === k ? ' on' : ''}" onclick="setConfView('${k}')">${l}</button>`).join('')}
   </div>`;
@@ -266,6 +269,7 @@ export function renderConf(){
   const inner = (confView === 'people' || confQuery()) ? peopleHtml(ev)
     : confView === 'dash' ? confDashHtml(ev)
     : confView === 'pga' ? pgaHtml(ev)
+    : confView === 'watch' ? renderWatchView(ev.key, 'conf')
     : programHtml(ev);
   body.innerHTML = `<div style="padding:14px 16px 40px">${seg}${banner}`
     + (confLocked() ? `<div class="ro">${inner}</div>` : inner) + `</div>`;
