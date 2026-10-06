@@ -67,7 +67,9 @@ export async function pickFolder(key, startIn){
   if(!supported()) throw new Error('이 브라우저는 폴더 저장을 지원하지 않아요 (Chrome·Edge 데스크톱)');
   let h;
   try {
-    h = await window.showDirectoryPicker({ id: key, mode: 'readwrite', startIn });
+    // 고르기 창의 id는 영문·숫자·_·-만, 32자까지 받는다 ('watch:WF-…'의 ':'에서 터졌다)
+    const id = String(key).replace(/[^A-Za-z0-9_-]/g, '_').slice(-32);
+    h = await window.showDirectoryPicker({ id, mode: 'readwrite', startIn });
   } catch(e){
     if(e && e.name === 'AbortError') return null;   // 사람이 취소했다
     throw e;
