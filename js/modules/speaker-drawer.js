@@ -480,17 +480,13 @@ function basicHtml(sp, con, evKey){
         ${(() => {
           /* 메일·전화는 마스터DB 연락처에만 둔다 — 연사 쪽에 따로 적으면 번호가
              바뀌었을 때 어느 쪽이 맞는지 모르게 된다. 여기서 고치면 마스터DB가 고쳐진다. */
-          const f = (k, label, ph, type) => `<label style="display:flex;align-items:center;gap:6px">
-            <span style="font-size:10px;color:var(--i4);width:38px;flex:0 0 auto">${label}</span>
-            <input class="fi" type="${type}" style="font-size:11px;padding:3px 6px" placeholder="${ph}"
-              value="${escAttr(con[k] || '')}" onchange="spContactField('${k}',this.value)"></label>`;
-          return `<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;margin-top:6px">
-            ${f('email1', '메일', 'name@example.com', 'email')}
-            ${f('phone1', '휴대폰', '010-0000-0000', 'tel')}
-            ${f('email2', '메일 2', '', 'email')}
-            ${f('phone2', '전화', '02-000-0000', 'tel')}
-          </div>
-          <div style="font-size:10px;color:var(--i4);margin-top:3px">메일·전화는 마스터DB 연락처에 저장돼요</div>`;
+          /* 여기는 마스터DB에 «등록돼 있는 것»만 보여 준다. 고치는 칸은 위 «연락처»에 있다 —
+             빈 칸에 예시 글자가 흐리게 들어가 있으면 값이 있는 줄 안다. */
+          const have = [['email1', '메일'], ['email2', '메일 2'], ['phone1', '휴대폰'], ['phone2', '전화']]
+            .filter(([k]) => String(con[k] || '').trim());
+          return have.length ? `<div style="display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin-top:6px;font-size:11px">
+            ${have.map(([k, l]) => `<span style="color:var(--i4)">${l}</span><span style="color:var(--i2)">${escapeHtml(con[k])}</span>`).join('')}
+          </div>` : `<div style="font-size:10.5px;color:var(--i4);margin-top:6px">마스터DB에 등록된 메일·전화가 없어요</div>`;
         })()}
         ${diff.length ? `<div style="font-size:10.5px;color:var(--am);margin-top:5px;line-height:1.6">
           마스터DB의 ${escapeHtml(diff.join('·'))}이 아래와 달라요.
@@ -525,6 +521,18 @@ function basicHtml(sp, con, evKey){
     <div style="font-size:10px;color:var(--i4);margin:-4px 0 12px">
       프로그램에 나갈 이름입니다 — 연락처를 지워도 프로그램에서 사라지지 않도록 따로 굳혀 둡니다.
       해외 연사는 영문만 있어도 됩니다.</div>
+    ${con ? `<div class="fgr">
+      ${fg('메일', `<input class="fi" type="email" value="${escAttr(con.email1 || '')}" onchange="spContactField('email1',this.value)">`)}
+      ${fg('메일 2', `<input class="fi" type="email" value="${escAttr(con.email2 || '')}" onchange="spContactField('email2',this.value)">`)}
+    </div>
+    <div class="fgr">
+      ${fg('휴대폰', `<input class="fi" type="tel" value="${escAttr(con.phone1 || '')}" onchange="spContactField('phone1',this.value)">`)}
+      ${fg('전화', `<input class="fi" type="tel" value="${escAttr(con.phone2 || '')}" onchange="spContactField('phone2',this.value)">`)}
+    </div>
+    <div style="font-size:10px;color:var(--i4);margin:-4px 0 12px">
+      메일·전화는 마스터DB 연락처에 저장돼요 — 연사 메일도 여기 메일로 나갑니다.</div>`
+    : `<div style="font-size:10.5px;color:var(--i4);margin:-4px 0 12px">
+      메일·전화는 아래 «연락처 연결»에서 마스터DB 연락처를 연결하면 적을 수 있어요.</div>`}
     <div class="fgr">
       ${fg('소속 국문', txt(sp.org_ko, `spField('org_ko',this.value,'소속 국문')`, '○○대학교'))}
       ${fg('소속 영문', txt(sp.org_en, `spField('org_en',this.value,'소속 영문')`, 'XX University'))}
@@ -701,6 +709,8 @@ export async function spContactField(k, v){
   if(!res || res.ok === false){ alert('마스터DB에 저장하지 못했어요. 잠시 뒤 다시 해주세요.'); return; }
   trackAction('edit', '연락처', sp.event_id || '', `${c.nameKo || c.nameEn} — ${k} 고침 (연사 화면)`,
     { kind: 'contact', id: String(c.id) });
+  // 아래 마스터 카드·연락 상대·메일 수신이 새 값을 읽게 다시 그린다
+  renderSpeakerDr();
 }
 
 export async function linkSpeakerContact(cid){
