@@ -67,6 +67,7 @@ import {
   saveExhCfgToSheet,
   saveConfSession,
   loadMailFiles, mailFilesOf, uploadMailFile, deleteMailFile, fileToBase64,
+  loadMailAccounts, saveMailAccount, deleteMailAccount, testMailAccount,
 } from '../api.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 
@@ -2484,7 +2485,7 @@ let evDetailKey = '';        // 보고 있는 행사 (빈 문자열 = 목록 뷰
 let evDetailSeg = 'basic';
 
 const EV_SEGS = [['basic','기본 정보'], ['parts','진행 파트'],
-  ['booth','부스'], ['equip','비품'], ['due','일정'], ['conf','컨퍼런스']];
+  ['booth','부스'], ['equip','비품'], ['due','일정'], ['conf','컨퍼런스'], ['mail','메일']];
 
 /* 전시를 안 하는 행사에서는 부스·비품·일정이 뜻이 없다. 감추지 않고 잠그는 건
    "왜 없지"로 끝나지 않게 하려는 것이다 — 켜는 자리를 같은 화면에서 알려준다. */
@@ -2563,6 +2564,7 @@ export function renderEvDetail(){
       })()
     : evDetailSeg === 'due'   ? evDueHtml(ev)
     : evDetailSeg === 'conf'  ? evConfHtml(ev)
+    : evDetailSeg === 'mail'  ? '<div id="evd-mailbox"></div>'
     : evBasicHtml(ev);
 
   el.innerHTML = `
@@ -2585,6 +2587,85 @@ export function renderEvDetail(){
   // 비품 편집기는 이제 비품 목록 탭에만 붙는다 — 다른 자리를 가리키고 있으면 돌려놓는다
   mountEquipCatalogIdle();
   if(evDetailSeg === 'conf' && !locked) fillFlowFiles(ev.key);
+  if(evDetailSeg === 'mail') renderEvMailbox(ev.key);
+}
+
+/* ── 행사 공용 메일 ── (설정 › 행사 관리 › 메일)
+   정본은 여기 한 곳이다. 연사·참가사 «메일 보내기»는 이 값을 서버가 읽어 쓴다.
+   이 행사 사람(연사·참가사)에게 «메일 보내기»를 누르면 여기 적은 주소로 나간다.
+   비워 두면 보내지 않는다. 비밀번호는 서버만 알고, 화면에는
+   «저장됨»만 보인다 — 다른 칸만 고칠 때는 비밀번호 칸을 비워 둔다. */
+let mailAccounts = null;
+async function renderEvMailbox(evKey){
+  const el = document.getElementById('evd-mailbox');
+  if(!el) return;
+  if(!mailAccounts){
+    el.innerHTML = '<div style="font-size:11px;color:var(--i4)">메일 계정 불러오는 중…</div>';
+    mailAccounts = await loadMailAccounts();
+    if(document.getElementById('evd-mailbox') !== el) return;
+  }
+  const r = mailAccounts;
+  const box = (r.accounts || []).find(a => a.event_id === evKey) || {};
+  const inp = (id, label, val, ph, type = 'text') => `<div><div class="mlbl">${label}</div>
+    <input class="fi" id="evmb-${id}" type="${type}" value="${escAttr(val || '')}" placeholder="${escAttr(ph)}" autocomplete="off"></div>`;
+  el.innerHTML = `<div>
+    <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">행사 공용 메일
+      ${box.username ? '<span class="pill p-green" style="font-size:10px;margin-left:6px">연결됨</span>' : '<span class="pill p-gray" style="font-size:10px;margin-left:6px">없음 — 메일을 보낼 수 없음</span>'}</div>
+    <div style="font-size:11px;color:var(--i4);margin-bottom:12px">
+      이 행사의 연사·참가사에게 «메일 보내기»를 누르면 이 주소로 나가고, 답장도 이 메일함으로 옵니다. 메일플러그 › 환경설정 › IMAP/SMTP 사용에서 앱 비밀번호를 발급해 넣어주세요.
+      ${r.offline ? '<br><b style="color:var(--re)">테스트 모드에서는 설정할 수 없어요.</b>' : ''}
+      ${r.ok && !r.keyReady ? '<br><b style="color:var(--re)">서버에 MAIL_SECRET이 없어 비밀번호를 저장할 수 없어요 — Vercel 환경변수를 먼저 넣어주세요.</b>' : ''}
+      ${r.ok === false && !r.offline ? `<br><b style="color:var(--re)">${escapeHtml(r.error || '불러오지 못했어요')}</b>` : ''}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      ${inp('user', '로그인 주소 (메일플러그 계정)', box.username, '예: kic@13100m.net')}
+      ${inp('pass', box.has_password ? '앱 비밀번호 — 저장됨, 바꿀 때만 입력' : '앱 비밀번호 (메일 비밀번호 아님)', '', box.has_password ? '••••••••' : '메일플러그에서 발급한 앱 비밀번호', 'password')}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      ${inp('from', '받는 사람에게 보일 주소', box.from_addr, '비우면 로그인 주소')}
+      ${inp('name', '보내는 이름', box.from_name, '예: KIC 2026 사무국')}
+    </div>
+    <details style="margin-bottom:10px"><summary style="font-size:11px;color:var(--i4);cursor:pointer">서버 (보통 고칠 일 없음)</summary>
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-top:8px">
+        ${inp('host', 'SMTP 서버', box.host, 'smtp.mailplug.co.kr')}
+        ${inp('port', '포트', box.port, '465')}
+      </div></details>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn bp" onclick="saveEvMailbox('${escAttr(evKey)}')" style="min-width:80px">저장</button>
+      ${box.username ? `<button class="btn" onclick="testEvMailbox('${escAttr(evKey)}')">연결 확인</button>
+        <button class="btn" onclick="removeEvMailbox('${escAttr(evKey)}')">연결 끊기</button>` : ''}
+      <span id="evmb-msg" style="font-size:11px;color:var(--g)"></span>
+    </div>
+  </div>`;
+}
+const evmbSay = (t, ok) => { const m = document.getElementById('evmb-msg'); if(m){ m.style.color = ok ? 'var(--g)' : 'var(--re)'; m.textContent = t; } };
+
+export async function saveEvMailbox(evKey){
+  const g = (id) => (document.getElementById('evmb-' + id)?.value || '').trim();
+  const rec = { username: g('user'), password: g('pass'), from_addr: g('from'), from_name: g('name'), host: g('host'), port: g('port') };
+  if(!rec.username){ evmbSay('로그인 주소를 적어주세요.'); return; }
+  evmbSay('저장 중…', true);
+  const r = await saveMailAccount(evKey, rec);
+  if(!r.ok){ evmbSay(r.error || '저장하지 못했어요.'); return; }
+  mailAccounts.accounts = [...(mailAccounts.accounts || []).filter(a => a.event_id !== evKey), r.account];
+  trackAction('edit', '행사 메일 설정', evKey, `${rec.username}${rec.password ? ' (비밀번호 변경)' : ''}`);
+  await renderEvMailbox(evKey);
+  // 저장만 하고 끝내면 비밀번호가 틀린 걸 첫 발송 때 알게 된다 — 바로 확인한다
+  await testEvMailbox(evKey);
+}
+export async function testEvMailbox(evKey){
+  evmbSay('로그인 확인 중…', true);
+  const r = await testMailAccount(evKey);
+  evmbSay(r.ok ? r['연결'] : `${r.error || '실패'}${r['도움말'] ? ' — ' + r['도움말'] : ''}`, r.ok);
+}
+export async function removeEvMailbox(evKey){
+  if(!confirm('이 행사의 메일 계정 연결을 끊을까요?
+끊으면 이 행사 사람들에게 메일을 보낼 수 없어요.')) return;
+  const r = await deleteMailAccount(evKey);
+  if(!r.ok){ evmbSay(r.error || '끊지 못했어요.'); return; }
+  mailAccounts.accounts = (mailAccounts.accounts || []).filter(a => a.event_id !== evKey);
+  trackAction('delete', '행사 메일 설정', evKey, '연결 끊음');
+  renderEvMailbox(evKey);
 }
 
 /* ── 기본 정보 ──
@@ -3450,3 +3531,7 @@ window.addConfTrack      = addConfTrack;
 window.removeConfTrack   = removeConfTrack;
 window.renameConfTrack   = renameConfTrack;
 window.saveEvConf        = saveEvConf;
+
+window.saveEvMailbox   = saveEvMailbox;
+window.testEvMailbox   = testEvMailbox;
+window.removeEvMailbox = removeEvMailbox;

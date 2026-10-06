@@ -1,7 +1,9 @@
 /* ══════════════════════════════════════════════════════════════
    mail.js — CRM에서 메일 보내기 (1단계)
 
-   회사 메일은 메일플러그인데 Gmail 계정 하나를 CRM 메일함으로 쓴다.
+   발송은 행사별 공용 메일(메일플러그)로만 한다 — 아래 «행사별 공용 메일» 참고.
+   아래 GMAIL_* 설정은 2026-09-01에 만든 1단계의 흔적으로, 지금은 /status 확인에만
+   남아 있고 발송에는 쓰지 않는다.
    Gmail은 앱 비밀번호 + SMTP로 붙는다 — OAuth를 쓰면 Gmail 발송 권한이
    구글의 제한 스코프라 보안 심사를 받아야 하고, 심사 전에는 로그인이 7일마다
    풀린다. 메일함이 하나뿐이니 앱 비밀번호가 훨씬 간단하고 안전하다.
@@ -55,6 +57,134 @@ const transport = () => {
     auth: { user: c.user, pass: c.pass },
   });
 };
+
+/* ── 행사별 공용 메일 (메일플러그) ──
+   행사마다 참가사·연사가 아는 주소가 따로 있다. 회사 공용 Gmail 하나로 보내면
+   받는 쪽은 처음 보는 주소에서 온 메일을 받고, 답장도 행사 메일함이 아닌 곳으로
+   간다. 그래서 행사에 메일 계정을 붙이고, 그 행사 사람에게 보낼 때는 그 계정으로
+   보낸다. 계정이 없는 행사는 보내지 않는다(Gmail로 대신 보내지 않는다).
+
+   events 표에 두지 않고 따로 둔다 — /api/data는 events를 통째로(SELECT *)
+   화면에 내려 주므로, 거기 두면 암호문이라도 모든 브라우저에 흘러간다.
+
+   비밀번호는 MAIL_SECRET(Vercel 환경변수)로 AES-256-GCM 암호화해 넣는다.
+   키가 없으면 저장을 거절한다 — 평문으로 DB에 남느니 못 쓰는 편이 낫다.
+   어떤 경로로도 비밀번호를 화면에 돌려주지 않는다. */
+const crypto = require('crypto');
+const MAILPLUG = { host: 'smtp.mailplug.co.kr', port: 465 };
+let boxReady = null;
+const ensureBox = () => boxReady || (boxReady = pool.query(`
+  CREATE TABLE IF NOT EXISTS event_mailboxes (
+    event_id TEXT PRIMARY KEY, provider TEXT, host TEXT, port INTEGER,
+    username TEXT, pass_enc TEXT, from_addr TEXT, from_name TEXT,
+    updated_at TEXT, author_email TEXT)`).catch((e) => { boxReady = null; throw e; }));
+
+const secretKey = () => {
+  const s = (process.env.MAIL_SECRET || '').trim();
+  return s ? crypto.createHash('sha256').update(s).digest() : null;
+};
+const seal = (plain) => {
+  const key = secretKey();
+  if (!key) throw new Error('MAIL_SECRET 환경변수가 없어 비밀번호를 저장할 수 없어요');
+  const iv = crypto.randomBytes(12);
+  const c = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const enc = Buffer.concat([c.update(String(plain), 'utf8'), c.final()]);
+  return [iv, c.getAuthTag(), enc].map((b) => b.toString('base64')).join('.');
+};
+const unseal = (sealed) => {
+  const key = secretKey();
+  if (!key || !sealed) return '';
+  const [iv, tag, enc] = String(sealed).split('.').map((x) => Buffer.from(x, 'base64'));
+  const d = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  d.setAuthTag(tag);
+  return Buffer.concat([d.update(enc), d.final()]).toString('utf8');
+};
+
+const boxOf = async (eventId) => {
+  if (!eventId) return null;
+  await ensureBox();
+  const r = await pool.query('SELECT * FROM event_mailboxes WHERE event_id = $1', [String(eventId)]);
+  return r.rows[0] || null;
+};
+const boxTransport = (b) => {
+  const port = Number(b.port) || MAILPLUG.port;
+  return nodemailer.createTransport({
+    host: b.host || MAILPLUG.host, port, secure: port === 465,
+    auth: { user: b.username, pass: unseal(b.pass_enc) },
+  });
+};
+// 화면에 내려 줄 모양 — 비밀번호는 «있다/없다»만
+const boxPublic = (b) => ({
+  event_id: b.event_id, provider: b.provider || 'mailplug', host: b.host, port: b.port,
+  username: b.username, from_addr: b.from_addr, from_name: b.from_name,
+  has_password: !!b.pass_enc, updated_at: b.updated_at, author_email: b.author_email,
+});
+
+/* 보낼 계정 고르기 — 행사 공용 메일(메일플러그)만 쓴다 */
+const senderFor = async (eventId) => {
+  const b = await boxOf(eventId).catch(() => null);
+  if (b && b.username && b.pass_enc) {
+    const from = b.from_addr || b.username;
+    return { t: boxTransport(b), from, fromName: b.from_name || '', via: `행사 메일 ${from}` };
+  }
+  // Gmail로 대신 보내지 않는다 — 행사 사람에게 처음 보는 주소로 나가면 안 된다
+  return null;
+};
+
+router.get('/accounts', async (req, res) => {
+  try {
+    await ensureBox();
+    const r = await pool.query('SELECT * FROM event_mailboxes ORDER BY event_id');
+    res.json({ ok: true, keyReady: !!secretKey(), accounts: r.rows.map(boxPublic) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+/* 저장 — 비밀번호 칸을 비워 두면 예전 비밀번호를 그대로 쓴다
+   (화면은 비밀번호를 모르므로 다른 칸만 고칠 때 매번 다시 치게 할 수 없다) */
+router.put('/accounts/:eventId', async (req, res) => {
+  if (req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 고칠 수 없어요' });
+  const eventId = String(req.params.eventId);
+  const { username, password, from_addr, from_name, host, port } = req.body || {};
+  const user = String(username || '').trim();
+  if (!/^[^@\s]+@[^@\s]+$/.test(user)) return res.status(400).json({ ok: false, error: '로그인 메일 주소를 확인해주세요' });
+  try {
+    const prev = await boxOf(eventId);
+    let passEnc = prev ? prev.pass_enc : null;
+    if (String(password || '').trim()) passEnc = seal(String(password).trim());
+    if (!passEnc) return res.status(400).json({ ok: false, error: '비밀번호가 필요해요' });
+    const row = [eventId, 'mailplug', String(host || '').trim() || MAILPLUG.host, Number(port) || MAILPLUG.port,
+      user, passEnc, String(from_addr || '').trim() || user, String(from_name || '').trim(),
+      new Date().toISOString(), req.user?.email || ''];
+    await pool.query(`
+      INSERT INTO event_mailboxes (event_id, provider, host, port, username, pass_enc, from_addr, from_name, updated_at, author_email)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      ON CONFLICT (event_id) DO UPDATE SET provider=$2, host=$3, port=$4, username=$5, pass_enc=$6,
+        from_addr=$7, from_name=$8, updated_at=$9, author_email=$10`, row);
+    res.json({ ok: true, account: boxPublic(await boxOf(eventId)) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+router.delete('/accounts/:eventId', async (req, res) => {
+  if (req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 지울 수 없어요' });
+  try {
+    await ensureBox();
+    await pool.query('DELETE FROM event_mailboxes WHERE event_id = $1', [String(req.params.eventId)]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+/* 로그인만 해 본다 — 메일은 보내지 않는다 */
+router.post('/accounts/:eventId/test', async (req, res) => {
+  try {
+    const b = await boxOf(req.params.eventId);
+    if (!b) return res.status(404).json({ ok: false, error: '이 행사에 메일 계정이 없어요' });
+    await boxTransport(b).verify();
+    res.json({ ok: true, 연결: '로그인 성공 — 보낼 수 있어요' });
+  } catch (e) {
+    res.json({ ok: false, error: `로그인 실패: ${e.message}`,
+      도움말: '메일플러그 관리자 화면에서 이 계정의 IMAP/SMTP 사용이 켜져 있는지, 메일 비밀번호가 아니라 앱 비밀번호를 넣었는지 확인해주세요.' });
+  }
+});
 
 /* 설정이 됐는지 · 로그인이 되는지 — 메일을 보내지 않고 확인만 한다.
    비밀번호는 어떤 형태로도 돌려주지 않는다. */
@@ -130,11 +260,19 @@ router.delete('/files/:id', async (req, res) => {
    없다. */
 router.post('/send', async (req, res) => {
   if (req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 메일을 보낼 수 없어요' });
-  const t = transport();
-  if (!t) return res.status(400).json({ ok: false, error: '메일 계정이 설정되지 않았어요' });
-
   const { to, subject, text, html, cc, exhibitor_id, speaker_id, category, kind,
     attachments: localFiles, file_ids } = req.body || {};
+
+  /* 어느 행사 사람인지는 서버가 상대 기록에서 찾는다 — 화면이 보낸 event_id만
+     믿으면 다른 행사 주소로 나가는 실수를 막을 수 없다 */
+  let eventId = (req.body && req.body.event_id) || '';
+  try {
+    if (exhibitor_id) eventId = (await pool.query('SELECT event_id FROM exhibitors WHERE id = $1', [exhibitor_id])).rows[0]?.event_id || eventId;
+    else if (speaker_id) eventId = (await pool.query('SELECT event_id FROM speakers WHERE id = $1', [speaker_id])).rows[0]?.event_id || eventId;
+  } catch (e) { /* 행사를 못 찾으면 아래에서 막힌다 */ }
+  const sender = await senderFor(eventId);
+  if (!sender) return res.status(400).json({ ok: false, error: '이 행사에 공용 메일이 없어요 — 설정 › 행사 관리 › 메일에서 넣어주세요' });
+  const t = sender.t;
   const list = (v) => (Array.isArray(v) ? v : String(v || '').split(/[,;]/))
     .map((s) => String(s).trim()).filter(Boolean);
 
@@ -164,14 +302,13 @@ router.post('/send', async (req, res) => {
     } catch (e) { return res.status(500).json({ ok: false, error: `기본 첨부를 읽지 못했어요: ${e.message}` }); }
   }
 
-  const c = cfg();
   try {
     const info = await t.sendMail({
-      from: c.fromName ? `"${c.fromName}" <${c.from}>` : c.from,
+      from: sender.fromName ? `"${sender.fromName}" <${sender.from}>` : sender.from,
       to: toList.join(', '),
       cc: list(cc).join(', ') || undefined,
-      // 답장은 보낸 사람(로그인 계정)이 아니라 우리 회사 주소로 오게 한다
-      replyTo: c.from,
+      // 답장은 로그인 계정이 아니라 보이는 주소(행사 메일함)로 오게 한다
+      replyTo: sender.from,
       subject: String(subject || '').trim(),
       text: String(text || ''),
       html: html || undefined,
@@ -211,7 +348,7 @@ router.post('/send', async (req, res) => {
       } catch (e) { logError = e.message; }
     }
 
-    res.json({ ok: true, messageId: info.messageId, accepted: info.accepted, logged, logError });
+    res.json({ ok: true, messageId: info.messageId, accepted: info.accepted, via: sender.via, logged, logError });
   } catch (e) {
     console.error('[mail] 발송 실패:', e.message);
     res.status(502).json({ ok: false, error: `발송 실패: ${e.message}` });

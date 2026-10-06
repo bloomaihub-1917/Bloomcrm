@@ -897,6 +897,24 @@ export async function mailStatus(){
   } catch(e){ return { ok: false, error: e.message }; }
 }
 
+/* ── 행사 공용 메일 (메일플러그) ──
+   행사마다 그 행사 주소로 보낸다. 비밀번호는 서버가 암호화해 들고 있고
+   화면에는 «있다/없다»만 온다. */
+async function mailApi(path, method = 'GET', body){
+  if(!API_BASE_URL || !currentUser) return { ok: false, offline: true, error: '테스트 모드에서는 쓸 수 없어요' };
+  try {
+    const headers = { ...await authHeaders(), ...(body ? { 'Content-Type': 'application/json' } : {}) };
+    const res = await fetch(API_BASE_URL + '/api/mail' + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+    const j = await res.json().catch(() => ({}));
+    if(!res.ok && j.ok !== false) return { ok: false, error: `실패 (${res.status})` };
+    return j;
+  } catch(e){ return { ok: false, error: e.message }; }
+}
+export const loadMailAccounts  = () => mailApi('/accounts');
+export const saveMailAccount   = (evKey, rec) => mailApi(`/accounts/${encodeURIComponent(evKey)}`, 'PUT', rec);
+export const deleteMailAccount = (evKey) => mailApi(`/accounts/${encodeURIComponent(evKey)}`, 'DELETE');
+export const testMailAccount   = (evKey) => mailApi(`/accounts/${encodeURIComponent(evKey)}/test`, 'POST', {});
+
 /* ── 메일 기본 첨부 (단계별 가이드·양식 파일) ──
    행사별로 한 번 받아 두고 같이 쓴다. 테스트 모드에서는 서버에 올리지 않고
    이 탭 안에서만 들고 있는다 — 화면 동작은 확인할 수 있게. */
