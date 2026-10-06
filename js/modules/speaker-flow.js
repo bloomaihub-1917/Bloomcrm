@@ -176,6 +176,13 @@ export function fillTemplate(text, sp, step){
     const when = a.start_at ? `${a.start_at}${a.end_at ? '–' + a.end_at : ''}` : (s.start_at || '');
     return `- ${en ? (s.title_en || s.title_ko) : (s.title_ko || s.title_en)}${s.date ? ` (${s.date}${when ? ' ' + when : ''})` : ''} — ${en ? (ROLE_EN[a.role] || a.role) : a.role}`;
   }).filter(Boolean);
+  /* 발표 시간만 따로 — «■ 발표 시간» 아래에 날짜·시각만 적고 싶을 때 */
+  const talkTimes = assignmentsFor(sp.id).map(a => {
+    const s = CONF_SESSIONS.find(x => x.id === a.session_id);
+    if(!s || s.kind) return '';
+    const st = a.start_at || s.start_at || '', ed = a.start_at ? (a.end_at || '') : (s.end_at || '');
+    return [s.date, st ? `${st}${ed ? '–' + ed : ''}` : ''].filter(Boolean).join(' ');
+  }).filter(Boolean);
   /* 확인 메일에서는 가져온 자료를 «남은 자료»에 또 적지 않는다 */
   const pend = new Set(step?.reuse ? reusePending(sp).map(g => g.key === 'bio' ? 'bio_pro' : g.key) : []);
   const items = missingItems(sp).filter(({ c }) => !pend.has(c.key)).map(({ c, st }) =>
@@ -195,6 +202,7 @@ export function fillTemplate(text, sp, step){
     소속: en ? (sp.org_en || sp.org_ko || '') : (sp.org_ko || sp.org_en || ''),
     행사: evName,
     세션: sessions.join('\n'),
+    발표시간: talkTimes.join('\n'),
     /* 확인 메일에서 더 받을 게 없으면 «추가로 필요한 자료» 제목째 빠지게 비운다 */
     남은자료: items.length ? items.join('\n') : step?.reuse ? '' : (en ? '(nothing outstanding)' : '(남은 자료 없음)'),
     마감일: step?.due || (en ? 'your earliest convenience' : '가급적 빠른 시일'),
@@ -211,7 +219,7 @@ export function fillTemplate(text, sp, step){
     .replace(/^■ 제출 기한\n- \{마감일\}\n?/gm, '')
     .replace(/^Deadline: \{마감일\}\n?/gm, '');
   return t
-    .replace(/\{(이름|호칭|직함|소속|행사|세션|남은자료|가져온자료|마감일|가이드|양식|담당자)\}/g, (_, k) => vars[k] ?? '')
+    .replace(/\{(이름|호칭|직함|소속|행사|세션|발표시간|남은자료|가져온자료|마감일|가이드|양식|담당자)\}/g, (_, k) => vars[k] ?? '')
     .replace(/^\s*드림\s*$/gm, '')          // 담당자 이름이 없으면 «드림»만 남는다
     // 값이 비어 남은 항목 줄 — «- 가이드라인: », «- », «Submission form: »
     .replace(/^- [^\n:：]{1,24}[:：] ?$/gm, '')
@@ -243,4 +251,4 @@ export function draftFor(sp, stepKey){
   };
 }
 
-export const FLOW_VARS = ['{호칭}', '{이름}', '{직함}', '{소속}', '{행사}', '{세션}', '{남은자료}', '{가져온자료}', '{마감일}', '{가이드}', '{양식}', '{담당자}'];
+export const FLOW_VARS = ['{호칭}', '{이름}', '{직함}', '{소속}', '{행사}', '{세션}', '{발표시간}', '{남은자료}', '{가져온자료}', '{마감일}', '{가이드}', '{양식}', '{담당자}'];
