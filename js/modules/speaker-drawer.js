@@ -288,12 +288,20 @@ function flowBoxHtml(sp){
       : s.isDone ? { m: '✓', c: 'var(--g)', bg: 'var(--gb)', t: '끝남' }
       : cur ? { m: '●', c: 'var(--a)', bg: 'var(--ad)', t: '지금 할 일' }
       : { m: '○', c: 'var(--i4)', bg: 'var(--i8)', t: '아직' };
-    return `<span title="${escAttr(`${s.label} — ${st.t}`)}" style="display:inline-flex;align-items:center;gap:3px;
+    /* 날짜를 찍어 끝나는 단계만 되돌릴 수 있다 — 자료 받기처럼 받은 자료로 끝나는
+       단계는 자료 칸을 고쳐야 바뀐다 */
+    const undo = s.applies && s.isDone && s.done.startsWith('field:');
+    return `<span title="${escAttr(`${s.label} — ${st.t}${undo ? ' · 눌러서 되돌리기' : ''}`)}"${
+      undo ? ` onclick="undoSpStep('${escAttr(s.key)}')"` : ''} style="${undo ? 'cursor:pointer;' : ''}display:inline-flex;align-items:center;gap:3px;
       font-size:10px;padding:2px 7px;border-radius:10px;background:${st.bg};color:${st.c};
       ${cur ? 'font-weight:700;' : ''}${s.applies ? '' : 'text-decoration:line-through;'}white-space:nowrap">${st.m} ${escapeHtml(s.label)}</span>`;
   };
   const cur = f.current;
   const left = cur && cur.key === 'collect' ? missingItems(sp) : [];
+  /* 바로 앞에서 끝난, 날짜로 끝나는 단계 — 잘못 넘어갔을 때 한 번에 돌아간다 */
+  const curIdx = cur ? f.steps.indexOf(cur) : f.steps.length;
+  const prevUndo = f.steps.slice(0, curIdx).reverse()
+    .find(x => x.applies && x.isDone && x.done.startsWith('field:')) || null;
   /* 사람이 받아서 적는 단계 — 메일을 보낸다고 끝나지 않는다 */
   const markBtn = cur && cur.done.startsWith('field:') && cur.key !== 'invite'
     ? `<button class="btn" style="font-size:10.5px" onclick="spStamp('${cur.done.slice(6)}','${escAttr(cur.label)}')">${
@@ -312,10 +320,27 @@ function flowBoxHtml(sp){
         <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">
           <button class="btn bp" style="font-size:10.5px" onclick="openFlowDraft('${cur.key}')">✉ 메일 초안 만들기</button>
           ${markBtn}
+          ${prevUndo ? `<button class="btn" style="font-size:10.5px" onclick="undoSpStep('${escAttr(prevUndo.key)}')"
+            title="«${escAttr(prevUndo.label)}»을 안 한 것으로 되돌립니다">↶ 이전 단계로</button>` : ''}
         </div></div>`
-      : `<div style="font-size:11px;color:var(--g);margin-top:7px">이 행사의 연락 단계를 모두 마쳤어요.</div>`}
+      : `<div style="font-size:11px;color:var(--g);margin-top:7px">이 행사의 연락 단계를 모두 마쳤어요.${
+          prevUndo ? ` <button class="btn" style="font-size:10.5px;margin-left:6px" onclick="undoSpStep('${escAttr(prevUndo.key)}')">↶ 이전 단계로</button>` : ''}</div>`}
   </div>`;
 }
+/* 단계 되돌리기 — 찍힌 날짜를 지운다. 보낸 메일 기록은 그대로 둔다
+   (이미 나간 메일은 되돌릴 수 없고, 무엇을 보냈는지는 남아야 한다). */
+export async function undoSpStep(stepKey){
+  if(confLocked()){ confLockNotice(); return; }
+  const sp = getSpeakerById(spId);
+  if(!sp) return;
+  const step = flowStatus(sp).steps.find(x => x.key === stepKey);
+  if(!step || !step.done.startsWith('field:')) return;
+  const field = step.done.slice(6);
+  if(!confirm(`«${step.label}»을 안 한 것으로 되돌릴까요?\n\n찍힌 날짜 ${sp[field] || ''}를 지웁니다. 보낸 메일 기록은 그대로 남아요.`)) return;
+  await patchSpeaker({ [field]: '' }, `${step.label} 되돌림`);
+}
+window.undoSpStep = undoSpStep;
+
 export function openFlowDraft(stepKey){
   pendingDraft = stepKey;
   spTab = 'mail';
