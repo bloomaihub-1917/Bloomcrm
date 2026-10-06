@@ -1112,14 +1112,19 @@ function mailTabHtml(sp, evKey){
     .slice()
     .sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')));
 
-  const logRow = (l) => `<div style="border-top:1px solid var(--i7);padding:7px 0">
+  /* 줄을 누르면 보낸 본문을 펼친다 — «뭐라고 보냈지»를 메일함까지 가서 찾지 않게 */
+  const logRow = (l) => `<details style="border-top:1px solid var(--i7);padding:7px 0">
+    <summary style="cursor:pointer;list-style:none">
     <div style="display:flex;gap:7px;align-items:baseline">
       <span class="pill p-gray" style="font-size:10px">${escapeHtml(l.category || '기타')}</span>
       <div style="font-size:11.5px;font-weight:600;flex:1;min-width:0">${escapeHtml(l.subject || '(제목 없음)')}</div>
-      <div style="font-size:10.5px;color:var(--i4)">${escapeHtml(l.ts || '')}</div>
+      <div style="font-size:10.5px;color:var(--i4)">${escapeHtml(l.ts || '')} ▾</div>
     </div>
     <div style="font-size:10.5px;color:var(--i4);margin-top:2px">${escapeHtml(l.counterpart || '')}</div>
-  </div>`;
+    </summary>
+    <div style="margin-top:6px;padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;
+      font-size:11.5px;color:var(--i2);white-space:pre-wrap;line-height:1.6">${escapeHtml(l.body || '(본문 없음)')}</div>
+  </details>`;
 
   return `
     <div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;

@@ -3696,11 +3696,14 @@ function dMail(x){
     </div>
   </div>
   <div class="sct">보낸 메일 ${sent.length || ''}</div>
-  ${sent.length ? sent.map(l => `<div style="border-top:1px solid var(--i7);padding:7px 0">
+  ${sent.length ? sent.map(l => `<details style="border-top:1px solid var(--i7);padding:7px 0">
+      <summary style="cursor:pointer;list-style:none">
       <div style="display:flex;gap:7px;align-items:baseline">
         <div style="font-size:12px;font-weight:600;flex:1;min-width:0">${escapeHtml(l.subject || '(제목 없음)')}</div>
-        <div style="font-size:10.5px;color:var(--i4)">${escapeHtml(l.ts || '')}</div></div>
-      <div style="font-size:10.5px;color:var(--i4);margin-top:2px">${escapeHtml(l.counterpart || '')}</div></div>`).join('')
+        <div style="font-size:10.5px;color:var(--i4)">${escapeHtml(l.ts || '')} ▾</div></div>
+      <div style="font-size:10.5px;color:var(--i4);margin-top:2px">${escapeHtml(l.counterpart || '')}</div></summary>
+      <div style="margin-top:6px;padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;
+        font-size:12px;color:var(--i2);white-space:pre-wrap;line-height:1.6">${escapeHtml(l.body || '(본문 없음)')}</div></details>`).join('')
     : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">아직 보낸 메일이 없어요</div>'}`;
 }
 
