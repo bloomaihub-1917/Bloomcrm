@@ -71,7 +71,9 @@ const transport = () => {
    키가 없으면 저장을 거절한다 — 평문으로 DB에 남느니 못 쓰는 편이 낫다.
    어떤 경로로도 비밀번호를 화면에 돌려주지 않는다. */
 const crypto = require('crypto');
-const MAILPLUG = { host: 'smtp.mailplug.co.kr', port: 465 };
+const MailComposer = require('nodemailer/lib/mail-composer');
+const { ImapFlow } = require('imapflow');
+const MAILPLUG = { host: 'smtp.mailplug.co.kr', port: 465, imap: 'imap.mailplug.co.kr', imapPort: 993 };
 let boxReady = null;
 const ensureBox = () => boxReady || (boxReady = pool.query(`
   CREATE TABLE IF NOT EXISTS event_mailboxes (
@@ -120,12 +122,37 @@ const boxPublic = (b) => ({
   has_password: !!b.pass_enc, updated_at: b.updated_at, author_email: b.author_email,
 });
 
+/* 보낸메일함에 사본 넣기
+   SMTP는 메일을 내보내기만 하고 보낸메일함에 남기지 않는다. 메일 프로그램(Outlook 등)이
+   보낸 뒤 IMAP으로 사본을 따로 넣는 것과 같은 일을 여기서 한다 — 안 하면 팀원이
+   메일플러그에서 «이 사람에게 뭘 보냈지»를 볼 수 없다.
+   보낸메일함 이름은 서버가 붙인 표시(\Sent)로 찾고, 없으면 흔한 이름으로 찾는다.
+   실패해도 메일은 이미 나갔으므로 발송은 성공으로 두고 화면에 알려 준다. */
+const SENT_NAMES = /^(sent|sent messages|sent items|보낸\s*메일함|보낸\s*편지함)$/i;
+async function saveToSent(b, raw) {
+  const client = new ImapFlow({
+    host: MAILPLUG.imap, port: MAILPLUG.imapPort, secure: true,
+    auth: { user: b.username, pass: unseal(b.pass_enc) }, logger: false,
+  });
+  await client.connect();
+  try {
+    const boxes = await client.list();
+    const sent = boxes.find((x) => x.specialUse === '\\Sent')
+      || boxes.find((x) => SENT_NAMES.test(x.name || '') || SENT_NAMES.test(x.path || ''));
+    if (!sent) throw new Error(`보낸메일함을 찾지 못했어요 (${boxes.map((x) => x.path).join(', ')})`);
+    await client.append(sent.path, raw, ['\\Seen']);
+    return sent.path;
+  } finally {
+    await client.logout().catch(() => {});
+  }
+}
+
 /* 보낼 계정 고르기 — 행사 공용 메일(메일플러그)만 쓴다 */
 const senderFor = async (eventId) => {
   const b = await boxOf(eventId).catch(() => null);
   if (b && b.username && b.pass_enc) {
     const from = b.from_addr || b.username;
-    return { t: boxTransport(b), from, fromName: b.from_name || '', via: `행사 메일 ${from}` };
+    return { t: boxTransport(b), box: b, from, fromName: b.from_name || '', via: `행사 메일 ${from}` };
   }
   // Gmail로 대신 보내지 않는다 — 행사 사람에게 처음 보는 주소로 나가면 안 된다
   return null;
@@ -303,7 +330,9 @@ router.post('/send', async (req, res) => {
   }
 
   try {
-    const info = await t.sendMail({
+    /* 한 번 만든 메일을 보내고 그대로 보낸메일함에도 넣는다 — 따로 만들면
+       보낸 것과 남은 것이 달라질 수 있다 */
+    const mail = {
       from: sender.fromName ? `"${sender.fromName}" <${sender.from}>` : sender.from,
       to: toList.join(', '),
       cc: list(cc).join(', ') || undefined,
@@ -313,7 +342,17 @@ router.post('/send', async (req, res) => {
       text: String(text || ''),
       html: html || undefined,
       attachments: attachments.length ? attachments : undefined,
+    };
+    const raw = await new MailComposer(mail).compile().build();
+    const info = await t.sendMail({
+      envelope: { from: sender.from, to: [...toList, ...list(cc)] },
+      raw,
     });
+    let sentSaved = null, sentError = null;
+    if (sender.box) {
+      try { sentSaved = await saveToSent(sender.box, raw); }
+      catch (e) { sentError = e.message; console.error('[mail] 보낸메일함 저장 실패:', e.message); }
+    }
 
     /* 보낸 사실을 기록에 남긴다. 이게 실패해도 메일은 이미 나갔으므로 성공으로
        돌려주되, 기록이 빠졌다는 걸 알려준다 — 조용히 넘어가면 독촉 이력이
@@ -348,7 +387,7 @@ router.post('/send', async (req, res) => {
       } catch (e) { logError = e.message; }
     }
 
-    res.json({ ok: true, messageId: info.messageId, accepted: info.accepted, via: sender.via, logged, logError });
+    res.json({ ok: true, messageId: info.messageId, accepted: info.accepted, via: sender.via, logged, logError, sentSaved, sentError });
   } catch (e) {
     console.error('[mail] 발송 실패:', e.message);
     res.status(502).json({ ok: false, error: `발송 실패: ${e.message}` });

@@ -1268,7 +1268,8 @@ export async function sendSpeakerMail(){
   });
   trackAction('add', '연사 메일', sp.event_id, `${sp.name_snapshot || sp.name_en || sp.id} — ${category}`,
     { kind: 'speaker', id: sp.id });
-  say(res.logged === false ? '보냈어요 — 다만 기록 저장에 실패했어요.' : '보냈어요.', true);
+  say((res.logged === false ? '보냈어요 — 다만 기록 저장에 실패했어요.' : '보냈어요.')
+    + (res.sentError ? ` (보낸메일함에는 못 남겼어요: ${res.sentError})` : ''), true);
   spLocalFiles = []; spSkipDefault = new Set();
   /* 초청을 보냈으면 «보냄» 날짜를 찍는다 — 그래야 다음 단계로 넘어간다 */
   if(kind === 'invite' && !sp.guide_sent_at){ await patchSpeaker({ guide_sent_at: td() }, '초청·가이드 보냄'); return; }

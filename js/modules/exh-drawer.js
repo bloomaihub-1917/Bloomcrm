@@ -3756,7 +3756,8 @@ export async function sendExhMail(exhId){
   renderExhDr();
   const m = document.getElementById('exm-msg');
   if(m){ m.style.color = res.logged === false ? 'var(--re)' : 'var(--g)';
-    m.textContent = res.logged === false ? `보냈어요 (${res.via || ''}) — 다만 기록 저장에 실패했어요.` : `보냈어요 · ${res.via || ''}`; }
+    m.textContent = res.logged === false ? `보냈어요 (${res.via || ''}) — 다만 기록 저장에 실패했어요.` : `보냈어요 · ${res.via || ''}`;
+    if(res.sentError) m.textContent += ` (보낸메일함에는 못 남겼어요: ${res.sentError})`; }
 }
 window.addExhMailFiles = addExhMailFiles;
 window.dropExhMailFile = dropExhMailFile;
