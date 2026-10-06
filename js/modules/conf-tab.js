@@ -1370,6 +1370,9 @@ function peopleHtml(ev){
       return card('갈라디너', `${y}<span style="font-size:11px;font-weight:600;color:var(--i4)">명 참석</span>`,
         `불참 ${n} · 미확인 ${live.length - y - n}`); })()}
     ${feeLeft ? card('연사료', `${feeLeft}<span style="font-size:11px;font-weight:600;color:var(--i4)">명</span>`, '아직 미지급') : ''}
+    <div style="margin-left:auto;align-self:center">
+      <button class="btn bs" id="sp-export-btn" onclick="exportSpeakers('${escAttr(ev.key)}')"
+        title="프로그램표(Program At a Glance)·연사 전체 정보·약력과 초록을 엑셀 한 파일로 받습니다">엑셀 다운로드</button></div>
   </div>`;
 
   /* ── 세션 칩 ──

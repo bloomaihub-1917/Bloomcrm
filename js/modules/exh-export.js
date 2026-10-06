@@ -51,7 +51,7 @@ const EXCELJS_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/excelj
 /* ExcelJS는 누를 때 한 번만 받아 온다. 실패하면 붙잡지 않고 다시 받을 수 있게
    약속(promise)을 비운다 — 잠깐 끊긴 네트워크 때문에 영영 못 쓰게 되면 곤란하다. */
 let excelJs = null;
-function loadExcelJs(){
+export function loadExcelJs(){
   if(window.ExcelJS) return Promise.resolve(window.ExcelJS);
   if(excelJs) return excelJs;
   excelJs = new Promise((resolve, reject) => {
