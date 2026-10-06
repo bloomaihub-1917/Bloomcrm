@@ -460,6 +460,8 @@ const countHint = (val, limit) => {
 ══════════════════════════════════════════ */
 function basicHtml(sp, con, evKey){
   const roles = rolesOfSpeaker(sp.id);
+  // 연락 상대의 «연사 본인» 줄 — 마스터DB 연결이 없을 때 메일·전화가 여기 있다
+  const selfRow = contactsOfSpeaker(sp.id).find(r => r.kind === '연사 본인') || null;
   const nOf = (k) => needState(evKey, roles, k);
 
   /* 연락처는 «지금 어디 있는 사람인가»를 보여줄 뿐 여기서 고치지 않는다.
@@ -530,7 +532,14 @@ function basicHtml(sp, con, evKey){
       ${fg('전화', `<input class="fi" type="tel" value="${escAttr(con.phone2 || '')}" onchange="spContactField('phone2',this.value)">`)}
     </div>
     <div style="font-size:10px;color:var(--i4);margin:-4px 0 12px">
-      메일·전화는 마스터DB 연락처에 저장돼요 — 연사 메일도 여기 메일로 나갑니다.</div>`
+      메일·전화는 마스터DB 연락처에 저장돼요.${!con.email1 && selfRow && selfRow.email
+        ? ` <span style="color:var(--am)">마스터DB엔 메일이 없고, «연락 상대»의 연사 본인 줄에 ${escapeHtml(selfRow.email)}이 있어 메일은 그 주소로 나갑니다.</span>` : ''}</div>`
+    : selfRow ? `<div class="fgr">
+      ${fg('메일', `<input class="fi" type="email" value="${escAttr(selfRow.email || '')}" onchange="scField('${escAttr(selfRow.id)}','email',this.value,'연사 본인 메일')">`)}
+      ${fg('전화', `<input class="fi" type="tel" value="${escAttr(selfRow.phone || '')}" onchange="scField('${escAttr(selfRow.id)}','phone',this.value,'연사 본인 전화')">`)}
+    </div>
+    <div style="font-size:10px;color:var(--i4);margin:-4px 0 12px">
+      마스터DB 연락처가 연결되지 않아 «연락 상대»의 연사 본인 줄에 저장돼요. 아래에서 연결하면 마스터DB로 옮겨 적어 주세요.</div>`
     : `<div style="font-size:10.5px;color:var(--i4);margin:-4px 0 12px">
       메일·전화는 아래 «연락처 연결»에서 마스터DB 연락처를 연결하면 적을 수 있어요.</div>`}
     <div class="fgr">

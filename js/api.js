@@ -915,10 +915,12 @@ export const loadMailAccounts  = () => mailApi('/accounts');
    계정을 저장·삭제하면 새로 고칠 수 있게 force를 둔다. */
 let mailAcctCache = null;
 export async function eventMailFrom(evKey, force){
-  if(!mailAcctCache || force) mailAcctCache = await loadMailAccounts();
-  const r = mailAcctCache || {};
+  if(!mailAcctCache || force || mailAcctCache.ok === false) mailAcctCache = await loadMailAccounts();
+  let r = mailAcctCache || {};
   if(r.offline) return { ok: false, text: '테스트 모드 — 보내지 않음' };
-  const b = (r.accounts || []).find(a => a.event_id === evKey);
+  let b = (r.accounts || []).find(a => a.event_id === evKey);
+  /* 다른 사람이 방금 계정을 넣었을 수 있다 — 없다고 막기 전에 한 번 새로 읽는다 */
+  if(!b && !force){ mailAcctCache = r = await loadMailAccounts(); b = (r.accounts || []).find(a => a.event_id === evKey); }
   if(!b) return { ok: false, text: '이 행사에 공용 메일이 없어요 — 설정 › 행사 관리 › 메일에서 넣어주세요' };
   return { ok: true, addr: b.from_addr, text: b.from_name ? `${b.from_name} <${b.from_addr}>` : b.from_addr };
 }

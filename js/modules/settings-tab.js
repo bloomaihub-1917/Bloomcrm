@@ -2605,6 +2605,7 @@ async function renderEvMailbox(evKey){
     if(document.getElementById('evd-mailbox') !== el) return;
   }
   const r = mailAccounts;
+  if(r.ok === false) mailAccounts = null;   // 다음에 열 때 다시 불러온다
   const box = (r.accounts || []).find(a => a.event_id === evKey) || {};
   const inp = (id, label, val, ph, type = 'text') => `<div><div class="mlbl">${label}</div>
     <input class="fi" id="evmb-${id}" type="${type}" value="${escAttr(val || '')}" placeholder="${escAttr(ph)}" autocomplete="off"></div>`;
@@ -2649,6 +2650,7 @@ export async function saveEvMailbox(evKey){
   evmbSay('저장 중…', true);
   const r = await saveMailAccount(evKey, rec);
   if(!r.ok){ evmbSay(r.error || '저장하지 못했어요.'); return; }
+  mailAccounts = mailAccounts || { ok: true, accounts: [] };
   mailAccounts.accounts = [...(mailAccounts.accounts || []).filter(a => a.event_id !== evKey), r.account];
   eventMailFrom(evKey, true);
   trackAction('edit', '행사 메일 설정', evKey, `${rec.username}${rec.password ? ' (비밀번호 변경)' : ''}`);
@@ -2688,6 +2690,7 @@ export async function removeEvMailbox(evKey){
   if(!confirm('이 행사의 메일 계정 연결을 끊을까요?\n끊으면 이 행사 사람들에게 메일을 보낼 수 없어요.')) return;
   const r = await deleteMailAccount(evKey);
   if(!r.ok){ evmbSay(r.error || '끊지 못했어요.'); return; }
+  mailAccounts = mailAccounts || { ok: true, accounts: [] };
   mailAccounts.accounts = (mailAccounts.accounts || []).filter(a => a.event_id !== evKey);
   eventMailFrom(evKey, true);
   trackAction('delete', '행사 메일 설정', evKey, '연결 끊음');

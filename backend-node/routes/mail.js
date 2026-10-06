@@ -71,6 +71,9 @@ const transport = () => {
    키가 없으면 저장을 거절한다 — 평문으로 DB에 남느니 못 쓰는 편이 낫다.
    어떤 경로로도 비밀번호를 화면에 돌려주지 않는다. */
 const crypto = require('crypto');
+/* 기록 날짜는 한국 날짜로 — 서버(UTC) 날짜로 적으면 오전 9시 전에 보낸 메일이 전날로 남고,
+   보낸메일함과 맞출 때 같은 메일을 다른 날로 보고 두 번 남긴다 */
+const kstDate = (d) => new Date(new Date(d).getTime() + 9 * 3600e3).toISOString().slice(0, 10);
 const MailComposer = require('nodemailer/lib/mail-composer');
 const { ImapFlow } = require('imapflow');
 const MAILPLUG = { host: 'smtp.mailplug.co.kr', port: 465, imap: 'imap.mailplug.co.kr', imapPort: 993 };
@@ -297,7 +300,9 @@ router.post('/send', async (req, res) => {
     if (exhibitor_id) eventId = (await pool.query('SELECT event_id FROM exhibitors WHERE id = $1', [exhibitor_id])).rows[0]?.event_id || eventId;
     else if (speaker_id) eventId = (await pool.query('SELECT event_id FROM speakers WHERE id = $1', [speaker_id])).rows[0]?.event_id || eventId;
   } catch (e) { /* 행사를 못 찾으면 아래에서 막힌다 */ }
-  const sender = await senderFor(eventId);
+  let sender;
+  try { sender = await senderFor(eventId); }
+  catch (e) { return res.status(500).json({ ok: false, error: `메일 계정을 읽지 못했어요 — 설정 › 행사 › 메일에서 앱 비밀번호를 다시 넣어주세요 (${e.message})` }); }
   if (!sender) return res.status(400).json({ ok: false, error: '이 행사에 공용 메일이 없어요 — 설정 › 행사 관리 › 메일에서 넣어주세요' });
   const t = sender.t;
   const list = (v) => (Array.isArray(v) ? v : String(v || '').split(/[,;]/))
@@ -375,7 +380,7 @@ router.post('/send', async (req, res) => {
               subject, body, answered_at, answer, status, author_email, author_name)
            VALUES ($1,$2,$3,$4,'out','이메일',$5,$6,$7,$8,'','','done',$9,$10)`,
           [`${target.prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`, target.id,
-            kind || 'note', new Date().toISOString().slice(0, 10),
+            kind || 'note', kstDate(Date.now()),
             counterpart, category || '기타',
             String(subject || '').trim(),
             // 무엇을 붙여 보냈는지도 기록에 남긴다 — «양식 보냈나»를 나중에 다시 묻게 된다
@@ -404,11 +409,11 @@ router.post('/send', async (req, res) => {
    같은 날·같은 제목의 보낸 기록이 이미 있으면 건너뛴다(CRM에서 보낸 것, 두 번 누른 것). */
 const { simpleParser } = require('mailparser');
 const norm = (v) => String(v || '').trim().toLowerCase();
-const kstDate = (d) => new Date(new Date(d).getTime() + 9 * 3600e3).toISOString().slice(0, 10);
+const prevDay = (d) => new Date(new Date(`${d}T00:00:00Z`).getTime() - 864e5).toISOString().slice(0, 10);
 
 router.post('/accounts/:eventId/sync-sent', async (req, res) => {
   const apply = !!(req.body && req.body.apply);
-  if (apply && req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 바꿀 수 없어요' });
+  if (req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 바꿀 수 없어요' });
   const eventId = String(req.params.eventId);
   try {
     const b = await boxOf(eventId);
@@ -463,7 +468,7 @@ router.post('/accounts/:eventId/sync-sent', async (req, res) => {
           const files = (mail.attachments || []).map((a) => a.filename).filter(Boolean);
           for (const id of ids) {
             const s0 = spById.get(id);
-            const dup = seen.has(`${id}|${date}|${norm(subject)}`);
+            const dup = seen.has(`${id}|${date}|${norm(subject)}`) || seen.has(`${id}|${prevDay(date)}|${norm(subject)}`);
             const invite = /초청|invitation/i.test(subject);
             found.push({
               speaker_id: id, name: s0.name_snapshot || s0.name_en || id, date, subject,
