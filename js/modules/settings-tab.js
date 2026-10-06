@@ -2659,8 +2659,7 @@ export async function testEvMailbox(evKey){
   evmbSay(r.ok ? r['연결'] : `${r.error || '실패'}${r['도움말'] ? ' — ' + r['도움말'] : ''}`, r.ok);
 }
 export async function removeEvMailbox(evKey){
-  if(!confirm('이 행사의 메일 계정 연결을 끊을까요?
-끊으면 이 행사 사람들에게 메일을 보낼 수 없어요.')) return;
+  if(!confirm('이 행사의 메일 계정 연결을 끊을까요?\n끊으면 이 행사 사람들에게 메일을 보낼 수 없어요.')) return;
   const r = await deleteMailAccount(evKey);
   if(!r.ok){ evmbSay(r.error || '끊지 못했어요.'); return; }
   mailAccounts.accounts = (mailAccounts.accounts || []).filter(a => a.event_id !== evKey);
