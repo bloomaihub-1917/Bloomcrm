@@ -1141,7 +1141,7 @@ function spCellHtml(c, colLabel, name, col){
   /* 값을 보여주는 칸은 기호를 쓰지 않는다 — 기호와 값이 함께 있으면 눈이
      기호를 먼저 읽고 값을 흘린다. */
   if(col && col.show === 'text'){
-    if(c.state === 'na') return `<td style="text-align:center;color:var(--i6)">·</td>`;
+    if(c.state === 'na') return `<td title="${escAttr(`${name}의 역할은 ${colLabel}을(를) 받지 않아요`)}"></td>`;
     /* 칸 폭은 표가 정하므로 td의 max-width만으로는 글이 옆 칸으로 넘친다.
        안쪽 div에 폭을 박고 두 줄에서 자른다 — 전문은 title로 본다. */
     return `<td style="font-size:11px;line-height:1.4;color:${c.text ? 'var(--i2)' : 'var(--i5)'}"
@@ -1159,6 +1159,8 @@ function spCellMark(c, colLabel, name){
     todo: { bg: 'transparent', fg: 'var(--i5)', mark: '—' },
     na:   { bg: 'transparent', fg: 'var(--i6)', mark: '·' },
   }[c.state];
+  /* 받지 않는 칸은 비워 둔다 — 점이라도 찍혀 있으면 확인할 거리처럼 보인다 */
+  if(c.state === 'na') return `<td title="${escAttr(`${name}의 역할은 ${colLabel}을(를) 받지 않아요`)}"></td>`;
   const tip = c.state === 'na'
     ? `${name}의 역할은 ${colLabel}을(를) 받지 않아요`
     : c.state === 'done' ? `${colLabel} 받음${c.text ? ` (${c.text})` : ''}`
@@ -1546,6 +1548,10 @@ function peopleHtml(ev){
       + list.map(card).join('');
   }
 
+  /* 지금 보이는 연사 중 아무도 받지 않는 항목은 열째로 뺀다 — 숙박·항공을 아무에게도
+     제공하지 않는 행사에서 빈 열을 훑으며 체크할 이유가 없다 */
+  const cols = SP_COLS.filter(c => list.some(sp => spCell(sp, ev.key, c.key).state !== 'na'));
+
   const row = (sp) => {
     const name = sp.name_snapshot || sp.name_en || sp.id;
     const roles = rolesOfSpeaker(sp.id);
@@ -1582,7 +1588,7 @@ function peopleHtml(ev){
         ${progressBar(pr.pct, pr.pct === 100 ? 'var(--g)' : 'var(--a)')}
         <div style="font-size:9.5px;color:var(--i4);margin-top:2px">${pr.n}/${pr.of}</div></td>
       ${nextActionTd(sp)}
-      ${SP_COLS.map(c => spCellHtml(spCell(sp, ev.key, c.key), c.label, name, c)).join('')}
+      ${cols.map(c => spCellHtml(spCell(sp, ev.key, c.key), c.label, name, c)).join('')}
       ${SP_SENT.map(c => spSentHtml(sp, c)).join('')}
       <td style="text-align:center;padding:5px 3px">
         <button class="btn" style="font-size:10px;padding:2px 7px"
@@ -1613,7 +1619,7 @@ function peopleHtml(ev){
         <th style="min-width:120px">세션</th>
         <th style="min-width:70px">진행률</th>
         <th style="min-width:110px" title="연락 단계에서 다음에 할 일 — 누르면 그 메일 초안이 열립니다">지금 할 일</th>
-        ${SP_COLS.map(c => `<th style="text-align:${c.show === 'text' ? 'left' : 'center'};font-size:10px;line-height:1.2${
+        ${cols.map(c => `<th style="text-align:${c.show === 'text' ? 'left' : 'center'};font-size:10px;line-height:1.2${
           c.wide ? ';min-width:120px' : ''}">${escapeHtml(c.label)}</th>`).join('')}
         ${SP_SENT.map(c => `<th style="text-align:center;font-size:10px;line-height:1.2;color:var(--a)"
           title="${escAttr(c.tip || '')}">${escapeHtml(c.label)}</th>`).join('')}
@@ -1623,7 +1629,7 @@ function peopleHtml(ev){
         <th style="text-align:right;min-width:70px;font-size:10px">연사료</th>
       </tr></thead><tbody>${list.map(row).join('')}</tbody></table></div>
       <div style="font-size:10px;color:var(--i4);margin-top:7px;line-height:1.6">
-        ✓ 받음 · ◐ 일부 · — 아직 · <span style="color:var(--i6)">·</span> 그 역할은 묻지 않음(진행률에서 뺌)
+        ✓ 받음 · ◐ 일부 · — 아직 · 빈칸은 그 역할이 받지 않는 것(진행률에서 뺌) · 아무도 받지 않는 항목은 열째로 숨겨요
       </div>`;
 }
 
