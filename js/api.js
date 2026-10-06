@@ -925,6 +925,8 @@ export async function eventMailFrom(evKey, force){
 export const saveMailAccount   = (evKey, rec) => mailApi(`/accounts/${encodeURIComponent(evKey)}`, 'PUT', rec);
 export const deleteMailAccount = (evKey) => mailApi(`/accounts/${encodeURIComponent(evKey)}`, 'DELETE');
 export const testMailAccount   = (evKey) => mailApi(`/accounts/${encodeURIComponent(evKey)}/test`, 'POST', {});
+/* 보낸메일함을 읽어 연사 발송 기록으로 — apply 없이 부르면 미리보기만 */
+export const syncSentMail      = (evKey, apply) => mailApi(`/accounts/${encodeURIComponent(evKey)}/sync-sent`, 'POST', { apply: !!apply });
 
 /* ── 메일 기본 첨부 (단계별 가이드·양식 파일) ──
    행사별로 한 번 받아 두고 같이 쓴다. 테스트 모드에서는 서버에 올리지 않고

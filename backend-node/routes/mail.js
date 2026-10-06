@@ -394,4 +394,119 @@ router.post('/send', async (req, res) => {
   }
 });
 
+/* ── 보낸메일함 → 연사 발송 기록 ──
+   CRM이 생기기 전(또는 메일플러그 웹메일에서 직접) 보낸 메일은 기록에 없다. 행사
+   메일함의 보낸메일함을 읽어, 받는 사람이 이 행사 연사(기본 정보 메일·연락 상대)인
+   메일을 그 연사의 «보낸 기록»으로 옮긴다. 제목에 «초청»이 들어가면 초청·가이드를
+   보낸 것으로 보고 «보냄» 날짜(guide_sent_at)가 비어 있을 때만 찍는다.
+
+   apply가 없으면 무엇을 할지만 돌려준다 — 화면에서 확인한 뒤 apply로 다시 부른다.
+   같은 날·같은 제목의 보낸 기록이 이미 있으면 건너뛴다(CRM에서 보낸 것, 두 번 누른 것). */
+const { simpleParser } = require('mailparser');
+const norm = (v) => String(v || '').trim().toLowerCase();
+const kstDate = (d) => new Date(new Date(d).getTime() + 9 * 3600e3).toISOString().slice(0, 10);
+
+router.post('/accounts/:eventId/sync-sent', async (req, res) => {
+  const apply = !!(req.body && req.body.apply);
+  if (apply && req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 바꿀 수 없어요' });
+  const eventId = String(req.params.eventId);
+  try {
+    const b = await boxOf(eventId);
+    if (!b) return res.status(404).json({ ok: false, error: '이 행사에 공용 메일이 없어요' });
+
+    /* 이 행사 연사의 메일 주소 → 연사 */
+    const sp = (await pool.query(`
+      SELECT s.id, s.name_snapshot, s.name_en, s.guide_sent_at, c.email1, c.email2
+        FROM speakers s LEFT JOIN contacts c ON c.id = s.contact_id
+       WHERE s.event_id = $1`, [eventId])).rows;
+    const extra = (await pool.query(`
+      SELECT sc.speaker_id, sc.email FROM speaker_contacts sc
+        JOIN speakers s ON s.id = sc.speaker_id WHERE s.event_id = $1`, [eventId])).rows;
+    const byMail = new Map();
+    const add = (em, id) => { const k = norm(em); if (k && !byMail.has(k)) byMail.set(k, id); };
+    sp.forEach((r) => { add(r.email1, r.id); add(r.email2, r.id); });
+    extra.forEach((r) => add(r.email, r.speaker_id));
+    const spById = new Map(sp.map((r) => [r.id, r]));
+
+    const logs = (await pool.query(`
+      SELECT speaker_id, ts, subject FROM speaker_logs
+       WHERE direction = 'out' AND speaker_id = ANY($1)`, [sp.map((r) => r.id)])).rows;
+    const seen = new Set(logs.map((l) => `${l.speaker_id}|${l.ts}|${norm(l.subject)}`));
+
+    /* 보낸메일함 읽기 */
+    const client = new ImapFlow({
+      host: MAILPLUG.imap, port: MAILPLUG.imapPort, secure: true,
+      auth: { user: b.username, pass: unseal(b.pass_enc) }, logger: false,
+    });
+    await client.connect();
+    const found = [];
+    let sentPath = '', total = 0;
+    try {
+      const boxes = await client.list();
+      const sent = boxes.find((x) => x.specialUse === '\\Sent')
+        || boxes.find((x) => SENT_NAMES.test(x.name || '') || SENT_NAMES.test(x.path || ''));
+      if (!sent) throw new Error(`보낸메일함을 찾지 못했어요 (${boxes.map((x) => x.path).join(', ')})`);
+      sentPath = sent.path;
+      const lock = await client.getMailboxLock(sent.path);
+      try {
+        // 서버 한 번 부를 때 시간이 짧다(Vercel) — 최근 120일만 읽는다
+        const uids = await client.search({ since: new Date(Date.now() - 120 * 864e5) }, { uid: true });
+        for await (const m of (uids.length ? client.fetch(uids, { source: true }, { uid: true }) : [])) {
+          total++;
+          const mail = await simpleParser(m.source);
+          const to = (mail.to ? [].concat(mail.to).flatMap((a) => a.value) : []).map((a) => a.address);
+          const cc = (mail.cc ? [].concat(mail.cc).flatMap((a) => a.value) : []).map((a) => a.address);
+          const ids = new Set([...to, ...cc].map((a) => byMail.get(norm(a))).filter(Boolean));
+          if (!ids.size) continue;
+          const date = kstDate(mail.date || Date.now());
+          const subject = String(mail.subject || '').trim();
+          const files = (mail.attachments || []).map((a) => a.filename).filter(Boolean);
+          for (const id of ids) {
+            const s0 = spById.get(id);
+            const dup = seen.has(`${id}|${date}|${norm(subject)}`);
+            const invite = /초청|invitation/i.test(subject);
+            found.push({
+              speaker_id: id, name: s0.name_snapshot || s0.name_en || id, date, subject,
+              to: to.join(', '), cc: cc.join(', '), invite, dup,
+              stamp: invite && !s0.guide_sent_at,
+              body: String(mail.text || '').trim() + (files.length ? `\n\n[첨부] ${files.join(', ')}` : ''),
+            });
+            seen.add(`${id}|${date}|${norm(subject)}`);
+          }
+        }
+      } finally { lock.release(); }
+    } finally { await client.logout().catch(() => {}); }
+
+    /* 초청 날짜는 가장 이른 초청 메일 날짜로 */
+    const firstInvite = {};
+    found.filter((f) => f.stamp).forEach((f) => {
+      if (!firstInvite[f.speaker_id] || f.date < firstInvite[f.speaker_id]) firstInvite[f.speaker_id] = f.date;
+    });
+
+    let added = 0, stamped = 0;
+    if (apply) {
+      for (const f of found.filter((x) => !x.dup)) {
+        await pool.query(`
+          INSERT INTO speaker_logs (id, speaker_id, kind, ts, direction, channel, counterpart, category,
+            subject, body, answered_at, answer, status, author_email, author_name)
+          VALUES ($1,$2,$3,$4,'out','이메일',$5,$6,$7,$8,'','','done',$9,$10)`,
+        [`SL-${Date.now()}-${Math.floor(Math.random() * 100000)}`, f.speaker_id, f.invite ? 'invite' : 'note', f.date,
+          [f.to, f.cc ? `(cc) ${f.cc}` : ''].filter(Boolean).join(' '), f.invite ? '초청·가이드 발송' : '기타',
+          f.subject, f.body, req.user?.email || '', `${req.user?.name || ''} (보낸메일함에서 가져옴)`]);
+        added++;
+      }
+      for (const [id, d] of Object.entries(firstInvite)) {
+        await pool.query(`UPDATE speakers SET guide_sent_at = $1 WHERE id = $2 AND COALESCE(guide_sent_at,'') = ''`, [d, id]);
+        stamped++;
+      }
+    }
+    res.json({
+      ok: true, applied: apply, sentPath, scanned: total, added, stamped,
+      items: found.map(({ body, ...r }) => r),
+      unmatchedSpeakers: sp.filter((r) => !found.some((f) => f.speaker_id === r.id))
+        .map((r) => ({ id: r.id, name: r.name_snapshot || r.name_en, email: r.email1 || '' })),
+    });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 module.exports = router;

@@ -67,7 +67,7 @@ import {
   saveExhCfgToSheet,
   saveConfSession,
   loadMailFiles, mailFilesOf, uploadMailFile, deleteMailFile, fileToBase64,
-  loadMailAccounts, saveMailAccount, deleteMailAccount, testMailAccount, eventMailFrom,
+  loadMailAccounts, saveMailAccount, deleteMailAccount, testMailAccount, eventMailFrom, syncSentMail,
 } from '../api.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 
@@ -2633,7 +2633,9 @@ async function renderEvMailbox(evKey){
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <button class="btn bp" onclick="saveEvMailbox('${escAttr(evKey)}')" style="min-width:80px">저장</button>
       ${box.username ? `<button class="btn" onclick="testEvMailbox('${escAttr(evKey)}')">연결 확인</button>
-        <button class="btn" onclick="removeEvMailbox('${escAttr(evKey)}')">연결 끊기</button>` : ''}
+        <button class="btn" onclick="removeEvMailbox('${escAttr(evKey)}')">연결 끊기</button>
+        <button class="btn" onclick="syncEvSentMail('${escAttr(evKey)}')"
+          title="메일플러그 보낸메일함을 읽어, 이 행사 연사에게 보낸 메일을 연사의 «보낸 기록»에 남기고 초청 메일은 «보냄»으로 체크합니다">보낸메일함에서 발송 기록 가져오기</button>` : ''}
       <span id="evmb-msg" style="font-size:11px;color:var(--g)"></span>
     </div>
   </div>`;
@@ -2659,6 +2661,29 @@ export async function testEvMailbox(evKey){
   const r = await testMailAccount(evKey);
   evmbSay(r.ok ? r['연결'] : `${r.error || '실패'}${r['도움말'] ? ' — ' + r['도움말'] : ''}`, r.ok);
 }
+/* 보낸메일함 → 연사 발송 기록. 먼저 무엇을 할지 보여 주고, 확인하면 남긴다 */
+export async function syncEvSentMail(evKey){
+  evmbSay('보낸메일함 읽는 중… (메일이 많으면 30초쯤 걸려요)', true);
+  const r = await syncSentMail(evKey, false);
+  if(!r.ok){ evmbSay(r.error || '읽지 못했어요.'); return; }
+  const todo = (r.items || []).filter(x => !x.dup);
+  const stamp = [...new Set((r.items || []).filter(x => x.stamp).map(x => x.name))];
+  const lines = todo.map(x => `· ${x.date} ${x.name} — ${x.subject}${x.invite ? ' [초청]' : ''}`);
+  const miss = (r.unmatchedSpeakers || []).map(x => `${x.name}${x.email ? ` (${x.email})` : ' (메일 없음)'}`);
+  const msg = `«${r.sentPath}» ${r.scanned}통 중 이 행사 연사에게 보낸 메일 ${(r.items || []).length}통\n`
+    + `(이미 기록에 있는 ${(r.items || []).length - todo.length}통은 건너뜀)\n\n`
+    + (lines.length ? `기록에 남길 것\n${lines.slice(0, 25).join('\n')}${lines.length > 25 ? `\n… 외 ${lines.length - 25}통` : ''}\n\n` : '')
+    + (stamp.length ? `초청 «보냄»으로 체크: ${stamp.join(', ')}\n\n` : '')
+    + (miss.length ? `보낸 메일을 못 찾은 연사: ${miss.join(', ')}\n\n` : '');
+  if(!todo.length && !stamp.length){ evmbSay('새로 남길 게 없어요.', true); alert(msg + '새로 남길 게 없어요.'); return; }
+  if(!confirm(msg + '이대로 남길까요?')){ evmbSay('', true); return; }
+  evmbSay('남기는 중…', true);
+  const a = await syncSentMail(evKey, true);
+  if(!a.ok){ evmbSay(a.error || '남기지 못했어요.'); return; }
+  trackAction('edit', '보낸메일함 가져오기', evKey, `연사 보낸 기록 ${a.added}건 · 초청 체크 ${a.stamped}명`);
+  evmbSay(`보낸 기록 ${a.added}건, 초청 체크 ${a.stamped}명 남겼어요 — 새로고침하면 연사 화면에 보입니다.`, true);
+}
+
 export async function removeEvMailbox(evKey){
   if(!confirm('이 행사의 메일 계정 연결을 끊을까요?\n끊으면 이 행사 사람들에게 메일을 보낼 수 없어요.')) return;
   const r = await deleteMailAccount(evKey);
@@ -3536,3 +3561,4 @@ window.saveEvConf        = saveEvConf;
 window.saveEvMailbox   = saveEvMailbox;
 window.testEvMailbox   = testEvMailbox;
 window.removeEvMailbox = removeEvMailbox;
+window.syncEvSentMail  = syncEvSentMail;
