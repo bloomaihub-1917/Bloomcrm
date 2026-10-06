@@ -203,6 +203,8 @@ export function fillTemplate(text, sp, step){
     행사: evName,
     세션: sessions.join('\n'),
     발표시간: talkTimes.join('\n'),
+    /* 장소는 행사 설정(설정 › 행사 관리 › 기본 정보)이 정본 — 메일에 따로 적지 않는다 */
+    장소: ev ? (ev.location || '') : '',
     /* 확인 메일에서 더 받을 게 없으면 «추가로 필요한 자료» 제목째 빠지게 비운다 */
     남은자료: items.length ? items.join('\n') : step?.reuse ? '' : (en ? '(nothing outstanding)' : '(남은 자료 없음)'),
     마감일: step?.due || (en ? 'your earliest convenience' : '가급적 빠른 시일'),
@@ -219,7 +221,7 @@ export function fillTemplate(text, sp, step){
     .replace(/^■ 제출 기한\n- \{마감일\}\n?/gm, '')
     .replace(/^Deadline: \{마감일\}\n?/gm, '');
   return t
-    .replace(/\{(이름|호칭|직함|소속|행사|세션|발표시간|남은자료|가져온자료|마감일|가이드|양식|담당자)\}/g, (_, k) => vars[k] ?? '')
+    .replace(/\{(이름|호칭|직함|소속|행사|장소|세션|발표시간|남은자료|가져온자료|마감일|가이드|양식|담당자)\}/g, (_, k) => vars[k] ?? '')
     .replace(/^\s*드림\s*$/gm, '')          // 담당자 이름이 없으면 «드림»만 남는다
     // 값이 비어 남은 항목 줄 — «- 가이드라인: », «- », «Submission form: »
     .replace(/^- [^\n:：]{1,24}[:：] ?$/gm, '')
@@ -251,4 +253,4 @@ export function draftFor(sp, stepKey){
   };
 }
 
-export const FLOW_VARS = ['{호칭}', '{이름}', '{직함}', '{소속}', '{행사}', '{세션}', '{발표시간}', '{남은자료}', '{가져온자료}', '{마감일}', '{가이드}', '{양식}', '{담당자}'];
+export const FLOW_VARS = ['{호칭}', '{이름}', '{직함}', '{소속}', '{행사}', '{장소}', '{세션}', '{발표시간}', '{남은자료}', '{가져온자료}', '{마감일}', '{가이드}', '{양식}', '{담당자}'];
