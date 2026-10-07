@@ -131,12 +131,17 @@ const boxPublic = (b) => ({
    메일플러그에서 «이 사람에게 뭘 보냈지»를 볼 수 없다.
    보낸메일함 이름은 서버가 붙인 표시(\Sent)로 찾고, 없으면 흔한 이름으로 찾는다.
    실패해도 메일은 이미 나갔으므로 발송은 성공으로 두고 화면에 알려 준다. */
+/* 메일플러그 IMAP 접속. 서버는 AUTH=PLAIN을 지원한다고 알리면서 실제로
+   AUTHENTICATE PLAIN을 보내면 «invalid command»로 거절한다(2026-10-07 확인) —
+   기본 LOGIN 명령만 쓰고, 압축·ENABLE 같은 확장 명령도 끈다. */
+const imapClient = (b) => new ImapFlow({
+  host: MAILPLUG.imap, port: MAILPLUG.imapPort, secure: true,
+  auth: { user: b.username, pass: unseal(b.pass_enc), loginMethod: 'LOGIN' },
+  disableCompression: true, disableAutoEnable: true, logger: false,
+});
 const SENT_NAMES = /^(sent|sent messages|sent items|보낸\s*메일함|보낸\s*편지함)$/i;
 async function saveToSent(b, raw) {
-  const client = new ImapFlow({
-    host: MAILPLUG.imap, port: MAILPLUG.imapPort, secure: true,
-    auth: { user: b.username, pass: unseal(b.pass_enc) }, logger: false,
-  });
+  const client = imapClient(b);
   await client.connect();
   try {
     const boxes = await client.list();
@@ -454,10 +459,7 @@ router.post('/accounts/:eventId/sync-sent', async (req, res) => {
     const seen = new Set(logs.map((l) => `${l.speaker_id}|${l.ts}|${norm(l.subject)}`));
 
     /* 보낸메일함 읽기 */
-    const client = new ImapFlow({
-      host: MAILPLUG.imap, port: MAILPLUG.imapPort, secure: true,
-      auth: { user: b.username, pass: unseal(b.pass_enc) }, logger: false,
-    });
+    const client = imapClient(b);
     /* 어느 단계에서 막혔는지 알려 준다 — IMAP 서버는 «Command failed»만 돌려줘서
        무엇이 안 됐는지 알 수 없었다 */
     let stage = '메일함 로그인';
