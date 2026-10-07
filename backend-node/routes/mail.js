@@ -458,20 +458,31 @@ router.post('/accounts/:eventId/sync-sent', async (req, res) => {
       host: MAILPLUG.imap, port: MAILPLUG.imapPort, secure: true,
       auth: { user: b.username, pass: unseal(b.pass_enc) }, logger: false,
     });
-    await client.connect();
+    /* 어느 단계에서 막혔는지 알려 준다 — IMAP 서버는 «Command failed»만 돌려줘서
+       무엇이 안 됐는지 알 수 없었다 */
+    let stage = '메일함 로그인';
+    try { await client.connect(); }
+    catch (e) { throw new Error(`${stage} 실패: ${e.responseText || e.message} — 메일플러그 IMAP 사용이 켜져 있는지, 앱 비밀번호가 맞는지 확인해주세요`); }
     const found = [];
     let sentPath = '', total = 0;
     try {
+      stage = '메일함 목록 읽기';
       const boxes = await client.list();
       const sent = boxes.find((x) => x.specialUse === '\\Sent')
         || boxes.find((x) => SENT_NAMES.test(x.name || '') || SENT_NAMES.test(x.path || ''));
       if (!sent) throw new Error(`보낸메일함을 찾지 못했어요 (${boxes.map((x) => x.path).join(', ')})`);
       sentPath = sent.path;
+      stage = `«${sent.path}» 열기`;
       const lock = await client.getMailboxLock(sent.path);
       try {
-        // 서버 한 번 부를 때 시간이 짧다(Vercel) — 최근 120일만 읽는다
-        const uids = await client.search({ since: new Date(Date.now() - 120 * 864e5) }, { uid: true });
-        for await (const m of (uids.length ? client.fetch(uids, { source: true }, { uid: true }) : [])) {
+        /* 날짜 검색(SEARCH SINCE)은 메일플러그가 거절했다(«Command failed»). 검색 없이
+           마지막 300통을 번호로 읽고, 120일 지난 것은 여기서 거른다 — Vercel 한 번 부르는
+           시간 안에 끝내려고 개수를 묶는다 */
+        const n = (client.mailbox && client.mailbox.exists) || 0;
+        const since = Date.now() - 120 * 864e5;
+        stage = `«${sent.path}» 메일 읽기`;
+        for await (const m of (n ? client.fetch(`${Math.max(1, n - 299)}:*`, { source: true, internalDate: true }) : [])) {
+          if (m.internalDate && new Date(m.internalDate).getTime() < since) continue;
           total++;
           const mail = await simpleParser(m.source);
           const to = (mail.to ? [].concat(mail.to).flatMap((a) => a.value) : []).map((a) => a.address);
@@ -495,6 +506,10 @@ router.post('/accounts/:eventId/sync-sent', async (req, res) => {
           }
         }
       } finally { lock.release(); }
+    } catch (e) {
+      // 메일함 쪽 실패는 단계와 서버가 준 사유를 붙여 돌려준다
+      e.message = `${stage} 실패: ${e.responseText || e.message}${e.serverResponseCode ? ` (${e.serverResponseCode})` : ''}`;
+      throw e;
     } finally { await client.logout().catch(() => {}); }
 
     /* 초청 날짜는 가장 이른 초청 메일 날짜로 */
