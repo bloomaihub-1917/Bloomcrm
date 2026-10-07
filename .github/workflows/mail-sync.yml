@@ -32,7 +32,10 @@ jobs:
             [ -z "$ev" ] && continue
             n=$((n+1))
             enc=$(jq -rn --arg v "$ev" '$v|@uri')
-            res=$(curl -s --max-time 70 -X POST -H "x-cron-secret: $SECRET" "$API/api/cron/mail-sync?event=$enc")
-            echo "행사 $n: $(echo "$res" | jq -c '{ok, "보낸": .sent.added, "받은": .inbox.added, "회신체크": .inbox.replied, "오류": ((.sent.error // "") + (.inbox.error // ""))}' 2>/dev/null || echo '응답 없음')"
+            # 보낸메일함·받은메일함을 따로 부른다 — 큰 메일함은 둘을 60초 안에 못 끝낸다
+            for part in sent inbox; do
+            res=$(curl -s --max-time 70 -X POST -H "x-cron-secret: $SECRET" "$API/api/cron/mail-sync?event=$enc&part=$part")
+            echo "행사 $n $part: $(echo "$res" | jq -c '{ok, "보낸": .sent.added, "받은": .inbox.added, "회신체크": .inbox.replied, "오류": ((.sent.error // "") + (.inbox.error // ""))}' 2>/dev/null || echo '응답 없음(시간 초과일 수 있음 — 다음 차례에 이어서)')"
+            done
           done <<< "$events"
           echo "행사 ${n}개 처리"

@@ -631,7 +631,16 @@ const syncSentHandler = async (req, res) => {
           ids.forEach((id) => seen.add(`${id}|${date}|${norm(subject)}`));
         }
         /* 2) 새로 남길 메일만 본문을 받는다 */
-        const needUids = heads.filter((h) => [...h.dupEx.values(), ...h.dupSp.values()].some((d) => !d)).map((h) => h.uid);
+        let needUids = heads.filter((h) => [...h.dupEx.values(), ...h.dupSp.values()].some((d) => !d)).map((h) => h.uid);
+        // 한 번에 60통까지(최신부터) — 나머지는 다음 차례에. 본문 없이 남기지 않게 이번 목록에서도 뺀다
+        if (needUids.length > 60) {
+          const keep = new Set(needUids.slice(-60));
+          for (let i = heads.length - 1; i >= 0; i--) {
+            const h = heads[i];
+            if ([...h.dupEx.values(), ...h.dupSp.values()].some((d) => !d) && !keep.has(h.uid)) heads.splice(i, 1);
+          }
+          needUids = [...keep];
+        }
         const bodyOf = new Map();
         stage = `«${sent.path}» 메일 본문 읽기`;
         if (needUids.length) {
@@ -844,7 +853,14 @@ const syncInboxHandler = async (req, res) => {
           }
         }
         /* 2) 새로 남길 메일만 본문 */
-        const need = heads.filter((h) => !h.who || !h.dup).map((h) => h.uid);
+        /* 한 번에 본문을 받는 수를 묶는다 — 처음 도는 큰 메일함은 모르는 메일이 수백 통이라 60초를 넘겼고,
+           넘기면 저장도 못 해 매번 처음부터였다. 아는 사람 메일 먼저, 모르는 메일은 최신부터 40통씩 —
+           돌 때마다 쌓여 몇 번 안에 따라잡는다 */
+        const knownNew = heads.filter((h) => h.who && !h.dup);
+        const strangers = heads.filter((h) => !h.who).slice(-40);
+        const keep = new Set([...knownNew.slice(-60), ...strangers].map((h) => h.uid));
+        for (let i = heads.length - 1; i >= 0; i--) if ((!heads[i].who || !heads[i].dup) && !keep.has(heads[i].uid)) heads.splice(i, 1);
+        const need = [...keep];
         const parsed = new Map();
         stage = '받은메일함 본문 읽기';
         if (need.length) {
@@ -1193,8 +1209,11 @@ const runHandler = (handler, eventId) => new Promise((resolve) => {
 cron.post('/mail-sync', async (req, res) => {
   const eventId = String(req.query.event || '');
   if (!eventId) return res.status(400).json({ ok: false, error: 'event가 필요해요' });
-  const sent = await runHandler(syncSentHandler, eventId);
-  const inbox = await runHandler(syncInboxHandler, eventId);
+  // part=sent|inbox면 하나만 — 큰 메일함은 둘을 한 번(60초)에 못 끝낸다
+  const part = String(req.query.part || '');
+  const skip = { ok: true, added: 0, stamped: 0, replied: 0 };
+  const sent = part === 'inbox' ? skip : await runHandler(syncSentHandler, eventId);
+  const inbox = part === 'sent' ? skip : await runHandler(syncInboxHandler, eventId);
   res.json({
     ok: !!(sent.ok && inbox.ok),
     sent: sent.ok ? { added: sent.added, stamped: sent.stamped } : { error: sent.error },
