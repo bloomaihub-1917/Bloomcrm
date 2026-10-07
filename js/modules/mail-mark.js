@@ -44,8 +44,9 @@ export function setMailFil(k){
 /* 한 줄 머리에 붙는 표시 — 받은 메일만 */
 export function mailStateHtml(t, l){
   if(!isInbound(l)) return '';
-  const read = l.read_at
-    ? `<span class="pill p-gray" style="font-size:10px" title="${escAttr(`${l.read_by || ''} ${l.read_at}`)}">읽음</span>`
+  // 숫자와 같은 규칙(isUnread) — 처리한 메일은 읽은 시각이 없어도 «안 읽음»을 붙이지 않는다
+  const read = !isUnread(l)
+    ? `<span class="pill p-gray" style="font-size:10px" title="${escAttr(l.read_at ? `${l.read_by || ''} ${l.read_at}` : '처리함')}">읽음</span>`
     : `<span class="pill p-red" style="font-size:10px">● 안 읽음</span>`;
   const done = l.status === 'done'
     ? `<span class="pill p-green" style="font-size:10px" title="${escAttr(l.answered_at || '')}">처리함</span>`
