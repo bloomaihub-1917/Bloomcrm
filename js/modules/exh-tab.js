@@ -2587,6 +2587,8 @@ function renderEquipView(list){
      드로어를 다루는 방식과 같다. */
   const actions = `<button class="btn bs" id="exh-export-btn" onclick="exportEquipLedger()"
       title="쓰던 「비품 신청 종합관리대장」 형식(품목표 + 기업×코드 교차표)으로 받습니다">엑셀 내보내기</button>`
+    + `<button class="btn bs" id="exh-rental-export-btn" onclick="exportRentalOrder()"
+      title="금액 없이, 신청이 들어온 부스만 부스 번호순으로 받습니다 — 렌탈 업체에 보내는 용도">렌탈업체용 다운로드</button>`
     + `<button class="btn bp bs" onclick="openNewCatalogItem()">+ 품목 추가</button>`;
 
   /* 부스 기본 품목이 아직 안 깔린 기업 — 발주 수량이 그만큼 모자란 채로 보인다.

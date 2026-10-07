@@ -842,6 +842,193 @@ export async function exportEquipLedger(){
 window.exportEquipLedger = exportEquipLedger;
 
 /* ══════════════════════════════════════════
+   렌탈 업체 전달용 — 금액 없이 «무엇을 어느 부스에 몇 개»만
+
+   종합관리대장은 우리가 청구·정산까지 보는 표라 단가·소계·기타 금액이 들어
+   있다. 그대로 렌탈사에 보내면 우리 청구액이 업체에 넘어가고, 금액 열을 손으로
+   지우다 숨긴 단가 행(3행)이나 카탈로그 시트를 빠뜨리기 쉽다. 그래서 처음부터
+   금액이 없는 표를 따로 찍는다.
+
+     · 금액·단가는 아예 담지 않는다(숨긴 행·참조 시트도 없다)
+     · 신청이 들어온 기업만, 신청이 들어온 품목만 싣는다 — 빈 줄·빈 열 80개는
+       업체가 읽을 이유가 없다
+     · 부스 번호순 — 업체는 부스를 따라 설치하러 다닌다
+
+   수량은 대장의 「전체」(기본 제공 + 추가 신청)와 같다 — 업체가 실제로 가져다
+   놓는 숫자다. 집계 규칙(공동 부스 분담분 제외 등)은 buildLedger를 그대로 쓴다.
+══════════════════════════════════════════ */
+
+/* 부스 번호순 — «44-46»은 44로, 번호가 없는 기업은 맨 뒤로 */
+function boothOrder(a, b){
+  const na = String(a.x.booth_no ?? '').match(/\d+/), nb = String(b.x.booth_no ?? '').match(/\d+/);
+  if(!na !== !nb) return na ? -1 : 1;
+  if(na && nb && +na[0] !== +nb[0]) return +na[0] - +nb[0];
+  return String(a.x.booth_no ?? '').localeCompare(String(b.x.booth_no ?? ''), 'ko', { numeric: true });
+}
+
+export function buildRentalWorkbook(ExcelJS, evKey, meta){
+  const data = buildLedger(evKey);
+  const rows = data.rows.filter(r => r.qty.size).sort(boothOrder);
+  const total = new Map();
+  rows.forEach(r => r.qty.forEach((q, id) => total.set(id, (total.get(id) || 0) + q)));
+  const cols = data.cols.filter(c => total.get(c.id));
+  /* 카탈로그 밖 신청 — 교차표에 열이 없지만 발주에서 빠지면 안 된다.
+     비용만 나눠 낸 줄(실물은 상대 기업이 주문)은 업체가 가져올 물건이 아니다. */
+  const off = data.offCatalog
+    .filter(({ i }) => !String(i.shared_ref || '').trim())
+    .sort(boothOrder);
+
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Bloom CRM';
+  wb.created = meta.now || new Date();
+
+  const styleBody = (r, last, leftCols = []) => {
+    for(let c = 1; c <= last; c++){
+      const cell = r.getCell(c);
+      cell.font      = FONT;
+      cell.border    = { bottom: BORDER, right: BORDER };
+      cell.alignment = { vertical: 'middle', horizontal: leftCols.includes(c) ? 'left' : 'center', wrapText: leftCols.includes(c) };
+    }
+  };
+  const styleTotal = (r, last) => {
+    for(let c = 1; c <= last; c++){
+      const cell = r.getCell(c);
+      cell.font   = { ...FONT, bold: true };
+      cell.fill   = fill(C_TOTROW);
+      cell.border = { top: { style: 'medium', color: { argb: C_HEAD } }, bottom: BORDER };
+      cell.alignment = { vertical: 'middle', horizontal: c === 1 ? 'left' : 'center' };
+    }
+  };
+  const writeNotes = (ws, from, notes) => notes.forEach((t, i) => {
+    const cell = ws.getRow(from + i).getCell(1);
+    cell.value = t;
+    cell.font  = { ...FONT, color: { argb: 'FF808080' } };
+  });
+
+  /* ── 1. 품목별 수량 — 업체가 창고에서 챙길 숫자 ── */
+  const sum = wb.addWorksheet('품목별 수량', { views: [{ state: 'frozen', ySplit: 1 }] });
+  sum.columns = [{ width: 14 }, { width: 10 }, { width: 26 }, { width: 26 }, { width: 22 }, { width: 9 }, { width: 10 }];
+  const sh = sum.addRow(['분류', '품목코드', '품명(국문)', '품명(영문)', '규격', '수량', '신청 부스']);
+  sh.eachCell(c => Object.assign(c, headStyle(C_HEAD), { border: { bottom: BORDER } }));
+  sh.height = 20;
+  cols.forEach(c => {
+    const r = sum.addRow([
+      (c.kind || 'equip') === 'graphic' ? (c.category || '그래픽·부대시설') : (c.category || '기타비품'),
+      c.code || '', c.name_ko || '', c.name_en || '', c.spec || '',
+      total.get(c.id), rows.filter(rw => rw.qty.get(c.id)).length,
+    ]);
+    styleBody(r, 7, [3, 4, 5]);
+    r.getCell(6).font = { ...FONT, bold: true };
+  });
+  const sFirst = 2, sLast = 1 + cols.length;
+  const st = sum.addRow(['합계']);
+  if(cols.length) st.getCell(6).value = { formula: `SUM(F${sFirst}:F${sLast})` };
+  styleTotal(st, 7);
+  if(cols.length) sum.autoFilter = { from: { row: 1, column: 1 }, to: { row: sLast, column: 7 } };
+  writeNotes(sum, sLast + 3, [
+    `※ ${meta.eventLabel} · ${meta.stamp} 기준 비품·그래픽 신청 수량입니다(부스 기본 제공 + 추가 신청 합계).`,
+    '※ 부스별 내역은 「부스별 신청」 시트에 부스 번호순으로 있습니다.',
+  ]);
+
+  /* ── 2. 부스별 신청 — 부스 번호순 교차표 ── */
+  const ws = wb.addWorksheet('부스별 신청');
+  const INFO = 5;
+  const L = colLetter;
+  [5, 14, 10, 26, 28].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+  ws.getColumn(3).numFmt = '@';   // «44-46» 때문에 부스번호는 텍스트로 통일
+  const isGra = (c) => (c.kind || 'equip') === 'graphic';
+  cols.forEach((c, i) => { ws.getColumn(INFO + 1 + i).width = isGra(c) ? 14 : 8; });
+  const lastCol = INFO + cols.length;
+
+  const h = ws.getRow(1);
+  ['No.', '부스타입', '부스번호', '업체명(국문)', '업체명(영문)'].forEach((v, i) => { h.getCell(i + 1).value = v; });
+  /* 신청이 들어온 품목만 열로 세우니 수가 적다 — 코드 아래 품명까지 적어
+     카탈로그 시트 없이도 무엇인지 읽히게 한다. */
+  cols.forEach((c, i) => { h.getCell(INFO + 1 + i).value = `${c.code || ''}\n${c.name_ko || c.name_en || ''}`; });
+  for(let c = 1; c <= lastCol; c++) Object.assign(h.getCell(c), headStyle(C_HEAD));
+  h.height = 46;
+
+  const first = 2;
+  rows.forEach((row, idx) => {
+    const n = exhNames(row.x);
+    const r = ws.getRow(first + idx);
+    r.getCell(1).value = idx + 1;
+    r.getCell(2).value = row.x.booth_type || '';
+    r.getCell(3).value = String(row.x.booth_no ?? '');
+    r.getCell(4).value = n.ko || '';
+    r.getCell(5).value = n.en || '';
+    cols.forEach((c, i) => { const q = row.qty.get(c.id); if(q) r.getCell(INFO + 1 + i).value = q; });
+    styleBody(r, lastCol, [4, 5]);
+  });
+  const last = first + rows.length - 1;
+  const tr = ws.getRow(last + 1);
+  tr.getCell(1).value = '합계';
+  for(let c = INFO + 1; c <= lastCol; c++) tr.getCell(c).value = { formula: `SUM(${L(c)}${first}:${L(c)}${last})` };
+  styleTotal(tr, lastCol);
+  if(rows.length) ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: last, column: lastCol } };
+  ws.views = [{ state: 'frozen', xSplit: INFO, ySplit: 1 }];
+  writeNotes(ws, last + 3, [
+    `※ ${meta.eventLabel} · ${meta.stamp} 기준. 신청이 들어온 부스만 부스 번호순으로 담았습니다.`,
+    '※ 공동 부스는 실물을 주문한 한 기업 줄에만 수량이 있습니다 — 같은 물건을 두 번 세지 않았습니다.',
+    off.length ? '※ 품목표에 없는 신청은 「기타 신청」 시트에 따로 있습니다.' : '',
+  ].filter(Boolean));
+
+  /* ── 3. 기타 신청 — 품목표에 없는 항목(있을 때만) ── */
+  if(off.length){
+    const ows = wb.addWorksheet('기타 신청', { views: [{ state: 'frozen', ySplit: 1 }] });
+    ows.columns = [{ width: 10 }, { width: 24 }, { width: 26 }, { width: 10 }, { width: 34 }, { width: 8 }, { width: 30 }];
+    const oh = ows.addRow(['부스번호', '업체명(국문)', '업체명(영문)', '분류', '항목명', '수량', '비고']);
+    oh.eachCell(c => Object.assign(c, headStyle(C_HEAD), { border: { bottom: BORDER } }));
+    oh.height = 20;
+    off.forEach(({ x, i }) => {
+      const n = exhNames(x);
+      const r = ows.addRow([String(x.booth_no ?? ''), n.ko || '', n.en || '',
+        CAT_LABEL[i.category] || i.category || '', i.name || '', num(i.qty) || null, i.note || '']);
+      styleBody(r, 7, [2, 3, 5, 7]);
+    });
+  }
+
+  return { wb, rows, cols, off };
+}
+
+export async function exportRentalOrder(){
+  const evKey = exhEvent;
+  if(!evKey) return showSaveErrorToast('행사를 먼저 고르세요');
+
+  const btn = document.getElementById('exh-rental-export-btn');
+  const label = btn ? btn.innerHTML : '';
+  if(btn){ btn.disabled = true; btn.textContent = '만드는 중…'; }
+
+  try {
+    const ExcelJS = await loadExcelJs();
+    const ev = EVENT_LIST.find(e => e.key === evKey);
+    const evLabel = (ev && (ev.short || ev.key)) || evKey;
+    const stamp = stampNow();
+
+    const { wb, rows, cols, off } = buildRentalWorkbook(ExcelJS, evKey, { eventLabel: evLabel, stamp: stamp.text });
+    if(!rows.length && !off.length) return showSaveErrorToast('아직 신청이 들어온 부스가 없어 내보낼 게 없어요');
+    const buf = await wb.xlsx.writeBuffer();
+    const url = URL.createObjectURL(new Blob([buf],
+      { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${evLabel}_비품 신청 내역_렌탈업체 전달용_${stamp.file}.xlsx`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+    trackAction('add', '렌탈업체용 비품 내보내기', evLabel,
+      `${rows.length}개 부스 · ${cols.length}품목` + (off.length ? ` · 기타 ${off.length}건` : ''));
+  } catch(err){
+    console.error('[exh-export] 렌탈업체용 내보내기 실패', err);
+    showSaveErrorToast('내보내기 실패: ' + (err && err.message ? err.message : err));
+  } finally {
+    if(btn){ btn.disabled = false; btn.innerHTML = label; }
+  }
+}
+
+window.exportRentalOrder = exportRentalOrder;
+
+/* ══════════════════════════════════════════
    부스 현황 내보내기
 
    화면에 보이던 표를 그대로 한 장으로 받는다 — 같은 순서(부스 번호순), 같은
