@@ -47,7 +47,7 @@ import {
   EXH_INVOICES, EVENT_LIST, exhEvent,
 } from '../state.js';
 import { exhNames, isBillable, currencyOf, ourBillableItems } from './exh-tab.js';
-import { createInvoiceRow } from './exh-drawer.js';
+import { createInvoiceRow, setInvField } from './exh-drawer.js';
 import {
   supported, pickFolder, delHandle, readyFolder, folderLabel, subFolder, writeFile,
 } from './local-folder.js';
@@ -130,6 +130,37 @@ function itemName(i, lang){
 }
 
 /* ══════════════════════════════════════════
+   인보이스 번호 — EX-{부스번호}-{발행 순번}
+
+   예전엔 번호를 저장하지 않고 그 기업 인보이스 목록에서 몇 번째인지(무효 포함)로
+   매번 셌다. 그러면 앞 줄 하나를 지우는 순간 뒤 인보이스들의 번호가 한 칸씩
+   당겨져, 이미 기업에 나간 문서와 다시 뽑은 문서의 번호가 갈렸다.
+
+   번호 칸(no)은 테이블에 없다. 발행할 때 한 번 정해 제목 앞에 적어 둔다
+   («EX-01-02 부스 타입+비품 임대») — 옛 데이터에도 제목이 번호 그 자체인 줄
+   (EX-39-2-01)이 있어 같은 자리를 읽으면 그 줄도 제 번호를 찾는다. 비고(note)는
+   사람이 남긴 맥락이라 쓰지 않는다.
+══════════════════════════════════════════ */
+const NO_RE = /^(EX-\S*?-(\d+))(?=\s|$)/;
+const noMatch = (inv) => String((inv && inv.title) || '').trim().match(NO_RE);
+export const storedInvoiceNo = (inv) => { const m = noMatch(inv); return m ? m[1] : ''; };
+
+/* 부스가 한 칸이면 두 자리로 맞추고(EX-01-01), 두 칸을 쓰면 그대로(EX-42-43-04) */
+function boothCode(x){
+  const booth = String(x.booth_no ?? '').trim();
+  return /^\d+$/.test(booth) ? pad2(booth) : booth;
+}
+
+/* 새로 낼 번호 — 이 기업에 이미 있는 줄 수와 적힌 번호 중 큰 것 다음. 지운 줄의
+   번호를 다시 쓰지 않고, 번호 없는 옛 줄이 위치로 받는 번호와도 겹치지 않는다. */
+export function nextInvoiceNo(x){
+  const invs = invoicesFor(x.id);
+  const used = invs.map(i => { const m = noMatch(i); return m ? Number(m[2]) : 0; });
+  const seq = Math.max(invs.length, ...used) + 1;
+  return `EX-${boothCode(x) || '00'}-${pad2(seq)}`;
+}
+
+/* ══════════════════════════════════════════
    인보이스 한 장의 내용 — 엑셀을 모르는 순수 계산
 ══════════════════════════════════════════ */
 export function invoiceDoc(inv){
@@ -156,15 +187,14 @@ export function invoiceDoc(inv){
   });
 
   const { ko, en } = exhNames(x);
-  const seq = Math.max(invoicesFor(x.id).findIndex(i => i.id === inv.id) + 1, 1);
   const booth = String(x.booth_no ?? '').trim();
-  /* 인보이스 번호는 쓰던 규칙 그대로 — EX-{부스번호}-{발행 순번}.
-     부스가 한 칸이면 두 자리로 맞추고(EX-01-01), 두 칸을 쓰면 그대로(EX-42-43-04). */
-  const boothNo = /^\d+$/.test(booth) ? pad2(booth) : booth;
+  /* 발행할 때 제목 앞에 적어 둔 번호가 있으면 그것이 이 인보이스의 번호다.
+     없는 옛 줄만 목록 위치로 센다(예전 방식 — 앞 줄을 지우면 밀린다). */
+  const seq = Math.max(invoicesFor(x.id).findIndex(i => i.id === inv.id) + 1, 1);
 
   return {
     exhId: x.id,
-    no: `EX-${boothNo || '00'}-${pad2(seq)}`,
+    no: storedInvoiceNo(inv) || `EX-${boothCode(x) || '00'}-${pad2(seq)}`,
     date: inv.sent_at || today(),
     due: inv.due_date || '',
     booth,
@@ -568,15 +598,21 @@ export async function issueExhInvoice(exhId){
         /* 제목은 무엇이 담겼는지 — 정산 탭 목록에서 이 줄이 무슨 청구인지 알아야 한다 */
         const cats = GROUPS.filter(g => billable.some(i =>
           (i.currency || 'KRW') === cur && (CATS.includes(i.category) ? i.category : 'etc') === g.cat));
-        const inv = await createInvoiceRow(exhId, {
-          title: cats.map(g => g.ko).join('+') || '인보이스',
+        // 번호는 여기서 한 번 정해 제목 앞에 남긴다 — 다시 뽑아도, 앞 줄을 지워도 그대로다
+        const row = {
+          title: `${nextInvoiceNo(x)} ${cats.map(g => g.ko).join('+') || '인보이스'}`,
           amount: String(sum),
           currency: cur,
-        });
-        if(!inv) return;                    // 저장 실패 — createInvoiceRow가 이미 알렸다
-        const doc = invoiceDoc(inv);
+        };
+        /* 파일부터 만든다 — 양식을 못 읽어 멈추면 줄만 남아 «발행함»처럼 보였다 */
+        const doc = invoiceDoc({ ...row, id: '', exhibitor_id: exhId, sent_at: '', due_date: '' });
         const { fit, blob } = await buildInvoiceFile(doc);
-        msgs.push(reportSave(doc, await putInvoiceFile(doc, blob), fit, { allCurrencies: true }));
+        const inv = await createInvoiceRow(exhId, row);
+        if(!inv) return;                    // 저장 실패 — createInvoiceRow가 이미 알렸다
+        const res = await putInvoiceFile(doc, blob);
+        /* 발송일은 파일이 실제로 폴더에 저장되거나 내려받아진 뒤에 찍는다 */
+        await setInvField(inv.id, 'sent_at', doc.date);
+        msgs.push(reportSave(doc, res, fit, { allCurrencies: true }));
       } catch(err){
         console.error('[exh-invoice] 발행 실패', err);
         msgs.push(`${cur} 발행 실패: ` + (err && err.message ? err.message : err));

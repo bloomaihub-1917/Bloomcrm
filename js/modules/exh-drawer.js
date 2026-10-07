@@ -1289,13 +1289,34 @@ export const reopenExhApp = (appId) =>
 
 /* 품목을 취소한다. 지우지 않고 내린다 — 이미 나간 인보이스가 왜 그 금액이었는지
    설명할 수 있어야 한다. 발주·정산·대장에서는 빠진다. */
+/* 취소하면서 덮어쓴 회차·변경 종류. 되살릴 때 «N차 취소» 배지가 남으면 살아 있는
+   품목이 취소된 것처럼 보인다 — 이 창에서 취소한 것이면 원래 값으로 돌린다.
+   (칸을 새로 두지 않아 새로고침 뒤엔 남지 않는다 — 그땐 아래 대체 규칙을 쓴다) */
+const voidMemo = {};
 export async function voidExhItem(id){
   const i = EXH_ITEMS.find(r => r.id === id);
   if(!i) return;
-  if(isVoided(i)){ await setItemField(id, 'voided_at', ''); return; }
+  if(isVoided(i)){
+    if(!await setItemField(id, 'voided_at', '')) return;   // 못 되살렸으면(잠금·실패) 배지도 그대로
+    if(i.change_kind === '취소'){
+      const m = voidMemo[id];
+      if(m){
+        if((i.app_id || '') !== m.app_id) await setItemField(id, 'app_id', m.app_id);
+        await setItemField(id, 'change_kind', m.change_kind);
+      } else {
+        // 원래 값을 모르면 «취소»만 걷는다 — 수량·금액을 고친 흔적이 있으면 «변경»
+        await setItemField(id, 'change_kind', (i.prev_qty || i.prev_amount) ? '변경' : '');
+      }
+    }
+    delete voidMemo[id];
+    return;
+  }
   if(!confirm(`"${i.name}"을(를) 취소 처리할까요?\n지우지 않고 내려서 이력은 남습니다.`)) return;
   const open = openAppFor(i.exhibitor_id);
-  if(open){ await setItemField(id, 'app_id', open.id); await setItemField(id, 'change_kind', '취소'); }
+  if(open){
+    voidMemo[id] = { app_id: i.app_id || '', change_kind: i.change_kind || '' };
+    await setItemField(id, 'app_id', open.id); await setItemField(id, 'change_kind', '취소');
+  }
   await setItemField(id, 'voided_at', td());
 }
 
@@ -3154,10 +3175,12 @@ export const delExhInvoice = (id) => removeRow(EXH_INVOICES, id, deleteExhInvoic
    쓴다(신청 내역에서 곧바로 발행할 때는 사람이 금액을 두드리지 않는다).
    쓰기는 여기 모여 있어야 한다: 잠금(guardWrite)과 실패 되돌리기가 여기 있다. */
 export async function createInvoiceRow(exhId, { title, amount, currency }){
+  /* 발송일은 비워 둔다 — 파일 저장이 끝난 뒤 부르는 쪽(exh-invoice)이 찍는다.
+     만들 때 찍으면 파일이 안 만들어져도 «발송함»으로 남는다. */
   const rec = {
     id: localId('XV-'), exhibitor_id: exhId, title: title || '인보이스', amount,
     currency: currency || currencyOf(exhId),
-    created_at: td(), sent_at: td(), due_date: '', note: '',
+    created_at: td(), sent_at: '', due_date: '', note: '',
   };
   return (await addRow(EXH_INVOICES, rec, saveExhInvoice)) ? rec : null;
 }
@@ -3445,11 +3468,13 @@ export async function rewindTaxStage(id){
   const i = TAX_STAGES.findIndex(s => s.key === (v.stage || ''));
   if(i <= 0) return;
   const cur = TAX_STAGES[i], prev = TAX_STAGES[i - 1];
-  const before = v.stage;
+  // 감사 로그(changed)에 넘길 전후 값 — 예전엔 patch가 정의되지 않아 저장 뒤 기록이 터졌다
+  const patch = { stage: prev.key };
+  const before = { stage: v.stage };
   v.stage = prev.key;
   refreshExhViews();
-  const r = await saveExhTax({ id, stage: prev.key });
-  if(!r.ok){ v.stage = before; refreshExhViews(); saveFailed(r, '저장에 실패했어요.'); return; }
+  const r = await saveExhTax({ id, ...patch });
+  if(!r.ok){ v.stage = before.stage; refreshExhViews(); saveFailed(r, '저장에 실패했어요.'); return; }
   const x = getExhibitorById(v.exhibitor_id);
   trackAction('status', '세금계산서 단계', x?.company_name || '',
     `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(v.title || '세금계산서')} ${escapeHtml(cur.label)} → ${escapeHtml(prev.label)} (되돌림)`,
@@ -3570,7 +3595,15 @@ export async function toggleExhCancel(id){
   if(!x) return;
   const off = x.status === CANCELLED;
   if(!off && !confirm('참가 취소로 처리할까요?\n목록과 집계에서 빠지지만 기록은 그대로 남아요.')) return;
-  await patchExh(id, { status: off ? '준비중' : CANCELLED }, off ? '참가 취소 해제' : '참가 취소');
+  const patch = { status: off ? '준비중' : CANCELLED };
+  /* 취소 중에 «위약금으로 남김»(settled=yes)을 눌렀다면, 다시 참가할 때 그 표시가
+     남아 새 청구가 «완납 처리»로 닫혀 보인다. 같은 칸을 완납 처리(settleExh)도
+     쓰므로 어느 쪽에서 찍혔는지 알 수 없다 — 지우기 전에 사유를 보여 주고 묻는다. */
+  if(off && x.settled === 'yes' && confirm(`취소 중에 남긴 «위약금으로 남김» 표시도 지울까요?${
+    x.settled_note ? `\n사유: ${x.settled_note}` : ''}\n지우지 않으면 다시 참가해도 «완납 처리»로 보여요.`)){
+    patch.settled = ''; patch.settled_note = '';
+  }
+  await patchExh(id, patch, off ? '참가 취소 해제' : '참가 취소');
 }
 
 export async function holdExhLog(id){
@@ -3757,6 +3790,8 @@ export function dropExhMailFile(i){ exhMailFiles.splice(i, 1); renderExhMailFile
 export async function sendExhMail(exhId){
   const x = getExhibitorById(exhId);
   if(!x) return;
+  // 보내면 기록(exhibitor_logs)이 남는 쓰기다 — 다른 저장처럼 잠긴 행사면 묻기 전에 막는다
+  if(exhLocked()){ exhLockNotice(); return; }
   const msg = document.getElementById('exm-msg');
   const say = (t, ok) => { if(msg){ msg.style.color = ok ? 'var(--g)' : 'var(--re)'; msg.textContent = t; } };
   const to = [...document.querySelectorAll('.exm-to:checked')].map(el => el.value);

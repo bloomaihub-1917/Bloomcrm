@@ -111,6 +111,7 @@ export function buildLedger(evKey){
      그 기업의 수량이 대장에서 소리 없이 사라진다. */
   const used = new Set();
   const offCatalog = [];   // 카탈로그에 잇지 못한 신청 — 교차표에 담을 자리가 없다
+  const fxCurs = new Set(); // 「기타 금액」에 원화 말고 나온 통화 — 통화마다 칸을 따로 둔다
   const rows = [];         // 전체 — 대장의 한 줄 = 한 기업
   const base = [];         // 부스 타입에 딸려 오는 기본 제공만
   const extra = [];        // 기업이 따로 신청한 추가분만
@@ -118,9 +119,16 @@ export function buildLedger(evKey){
   exhs.forEach(x => {
     /* 같은 기업을 세 벌로 센다 — 전체·기본·추가. 한 번 훑으면서 해당하는
        주머니에 같이 담는다(두 번 훑으면 규칙이 갈라진다). */
-    const mk = () => ({ qty: new Map(), free: new Map(), direct: 0 });
+    const mk = () => ({ qty: new Map(), free: new Map(), direct: 0, fx: new Map() });
     const all = mk(), bse = mk(), ext = mk();
     const add = (i, fn) => { fn(all); fn(isBoothGiven(i) ? bse : ext); };
+    /* 수량×단가로 못 내는 금액은 그 줄의 청구 통화 그대로 담는다. 원화 칸에
+       달러 금액을 더하면 $500이 500원이 된다 — 외화는 통화별 칸(fx)으로 뗀다. */
+    const addDirect = (i) => {
+      const cur = String(i.currency || 'KRW').toUpperCase();
+      if(cur === 'KRW') add(i, b => { b.direct += num(i.amount); });
+      else { fxCurs.add(cur); add(i, b => b.fx.set(cur, (b.fx.get(cur) || 0) + num(i.amount))); }
+    };
     liveItemsFor(x.id).forEach(i => {
       if(!LEDGER_CATS.includes(i.category || '')) return;
       const cat = i.catalog_id ? catalogItem(i.catalog_id) : null;
@@ -131,7 +139,7 @@ export function buildLedger(evKey){
          청구서와 어긋난다. 무엇이었는지는 별도 시트에 품목별로 남는다. */
       if(!cat || cat.event_id !== evKey){
         offCatalog.push({ x, i });
-        if(isBillable(i)) add(i, b => { b.direct += num(i.amount); });
+        if(isBillable(i)) addDirect(i);
         return;
       }
       used.add(cat.id);
@@ -139,7 +147,7 @@ export function buildLedger(evKey){
          기업이 주문하므로 여기서 또 세면 없는 의자를 발주하게 된다.
          (비품 현황 화면과 같은 규칙) 다만 그 기업이 내는 돈이라 금액은 남긴다. */
       if(String(i.shared_ref || '').trim()){
-        if(isBillable(i)) add(i, b => { b.direct += num(i.amount); });
+        if(isBillable(i)) addDirect(i);
         return;
       }
       const q = num(i.qty) || 1;
@@ -154,8 +162,8 @@ export function buildLedger(evKey){
        대장에서 보여야 한다. 기본·추가 시트에서는 그쪽에 아무것도 없는 기업은
        빼 둔다(한쪽만 있는 기업이 절반이라 빈 줄이 표를 덮는다). */
     rows.push({ x, ...all });
-    if(bse.qty.size || bse.direct) base.push({ x, ...bse });
-    if(ext.qty.size || ext.direct) extra.push({ x, ...ext });
+    if(bse.qty.size || bse.direct || bse.fx.size) base.push({ x, ...bse });
+    if(ext.qty.size || ext.direct || ext.fx.size) extra.push({ x, ...ext });
   });
 
   const cols = EQUIP_CATALOG
@@ -170,7 +178,7 @@ export function buildLedger(evKey){
     });
 
   return {
-    exhs, rows, base, extra, cols, offCatalog,
+    exhs, rows, base, extra, cols, offCatalog, fxCurs: [...fxCurs].sort(),
     equipCols:   cols.filter(c => (c.kind || 'equip') !== 'graphic'),
     graphicCols: cols.filter(c => (c.kind || 'equip') === 'graphic'),
   };
@@ -243,6 +251,7 @@ const LEDGER_VIEWS = {
 
 function drawLedgerSheet(wb, data, meta, view = LEDGER_VIEWS.all){
   const { cols, equipCols, graphicCols, offCatalog } = data;
+  const fxCurs = data.fxCurs || [];
   const rows = view.rows || data.rows;
   const ws = wb.addWorksheet(view.name);
 
@@ -258,6 +267,10 @@ function drawLedgerSheet(wb, data, meta, view = LEDGER_VIEWS.all){
      금액인지 갈라 둔다. */
   const cDirect = (graphicCols.length ? cGraSub : cEqSub) + 1;
   const cTotal  = cDirect + 1;
+  /* 외화 「기타 금액」은 총액(원화) 오른쪽에 통화마다 한 칸씩 — 총액 수식에는
+     넣지 않는다(통화를 넘어 더하지 않는다). */
+  const cFx0    = cTotal + 1;
+  const lastCol = cTotal + fxCurs.length;
   const L = colLetter;
 
   /* 카탈로그 순서(cols)의 i번째 품목이 대장에서 몇 번째 열인가 —
@@ -282,6 +295,7 @@ function drawLedgerSheet(wb, data, meta, view = LEDGER_VIEWS.all){
   if(graphicCols.length) ws.getColumn(cGraSub).width = 15;
   ws.getColumn(cDirect).width = 17;
   ws.getColumn(cTotal).width = 14;
+  fxCurs.forEach((cur, k) => { ws.getColumn(cFx0 + k).width = 14; });
 
   /* 1행 — 그룹 머리글 */
   const r1 = ws.getRow(1);
@@ -290,6 +304,7 @@ function drawLedgerSheet(wb, data, meta, view = LEDGER_VIEWS.all){
   if(graphicCols.length) r1.getCell(cGra0).value = '그래픽·부대시설 신청 수량';
   r1.getCell(cDirect).value = '기타 금액';
   r1.getCell(cTotal).value  = view.reference ? '참고 금액' : '총 신청금액';
+  fxCurs.forEach((cur, k) => { r1.getCell(cFx0 + k).value = `기타 금액(${cur})`; });
   r1.height = 20;
 
   /* 2행 — 열 머리글. 가구비품은 코드만(80개 가까이라 이름까지 넣으면 읽히지
@@ -309,9 +324,10 @@ function drawLedgerSheet(wb, data, meta, view = LEDGER_VIEWS.all){
      정렬을 거부한다. 설명은 2행에 작은 글씨로 적는다. */
   r2.getCell(cDirect).value = view.reference ? '(카탈로그 외·분담)' : '(카탈로그 외·분담·무상)';
   r2.getCell(cTotal).value  = view.reference ? '(청구 안 함)' : '(원화 단가 기준)';
+  fxCurs.forEach((cur, k) => { r2.getCell(cFx0 + k).value = '(총액에 안 넣음)'; });
   r2.height = graphicCols.length ? 46 : 26;
 
-  for(let c = 1; c <= cTotal; c++){
+  for(let c = 1; c <= lastCol; c++){
     Object.assign(r1.getCell(c), headStyle(C_GROUP));
     Object.assign(r2.getCell(c), headStyle(C_HEAD));
   }
@@ -337,7 +353,7 @@ function drawLedgerSheet(wb, data, meta, view = LEDGER_VIEWS.all){
      신청하지 않았는지가 대장에서 보여야 한다). */
   const first = 4;
   rows.forEach((row, idx) => {
-    const { x, qty, direct, free } = row;
+    const { x, qty, direct, free, fx } = row;
     const rn = first + idx;
     const n  = exhNames(x);
     /* 담당자는 exhibitor_contacts 줄을 그대로 읽으면 안 된다 — 마스터DB로 이관된
@@ -382,8 +398,9 @@ function drawLedgerSheet(wb, data, meta, view = LEDGER_VIEWS.all){
     r.getCell(cTotal).value = { formula:
       [cEqSub, graphicCols.length ? cGraSub : null, cDirect]
         .filter(Boolean).map(c => `${L(c)}${rn}`).join('+') };
+    fxCurs.forEach((cur, k) => { const v = fx && fx.get(cur); if(v) r.getCell(cFx0 + k).value = v; });
 
-    for(let c = 1; c <= cTotal; c++){
+    for(let c = 1; c <= lastCol; c++){
       const cell = r.getCell(c);
       const nameCol = c === 5 || c === 6;
       cell.font      = FONT;
@@ -396,6 +413,12 @@ function drawLedgerSheet(wb, data, meta, view = LEDGER_VIEWS.all){
       cell.numFmt    = NUM_FMT;
       cell.alignment = { vertical: 'middle', horizontal: 'right' };
     });
+    fxCurs.forEach((cur, k) => {
+      const cell = r.getCell(cFx0 + k);
+      cell.fill      = fill(C_SUBTOT);
+      cell.numFmt    = '#,##0.##';
+      cell.alignment = { vertical: 'middle', horizontal: 'right' };
+    });
   });
 
   const last = first + rows.length - 1;
@@ -405,15 +428,19 @@ function drawLedgerSheet(wb, data, meta, view = LEDGER_VIEWS.all){
   const totRow = last + 1;
   const tot = ws.getRow(totRow);
   tot.getCell(1).value = '합계';
-  for(let c = cEquip0; c <= cTotal; c++){
+  for(let c = cEquip0; c <= lastCol; c++){
     const cell = tot.getCell(c);
     cell.value = { formula: `SUM(${L(c)}${first}:${L(c)}${last})` };
     if(c === cEqSub || c === cGraSub || c === cDirect || c === cTotal){
       cell.numFmt    = NUM_FMT;
       cell.alignment = { vertical: 'middle', horizontal: 'right' };
     }
+    if(c >= cFx0){
+      cell.numFmt    = '#,##0.##';
+      cell.alignment = { vertical: 'middle', horizontal: 'right' };
+    }
   }
-  for(let c = 1; c <= cTotal; c++){
+  for(let c = 1; c <= lastCol; c++){
     const cell = tot.getCell(c);
     cell.font   = { ...FONT, bold: true };
     cell.fill   = fill(C_TOTROW);
@@ -428,7 +455,7 @@ function drawLedgerSheet(wb, data, meta, view = LEDGER_VIEWS.all){
      오류를 보지 않도록. 합계 줄은 범위에서 뺀다(필터에 걸리면 합계가 숨는다). */
   if(rows.length) ws.autoFilter = {
     from: { row: 2, column: 1 },
-    to:   { row: last, column: cTotal },
+    to:   { row: last, column: lastCol },
   };
 
   /* 아래 주석 — 이 숫자가 어디서 왔고 무엇을 빼고 세었는지. 표만 넘겨받은
@@ -442,6 +469,7 @@ function drawLedgerSheet(wb, data, meta, view = LEDGER_VIEWS.all){
     '※ 한 기업은 한 줄입니다. 달러로 청구하는 기업의 신청도 같은 줄에 담았고, 금액은 모두 원화 단가로 계산했습니다 — 실제 청구 통화와 청구액은 인보이스를 따릅니다.',
   ];
   notes.push('※ 「기타 금액」은 수량×단가로 낼 수 없는 금액입니다 — 카탈로그에 없는 품목(디자인 제작비·전기 인입 등)과 공동 부스 분담분을 더하고, 무상 제공 항목은 뺍니다. 인보이스에는 함께 나가므로 총액에 넣었습니다.');
+  if(fxCurs.length) notes.push(`※ 원화가 아닌 통화로 적힌 카탈로그 외·분담 금액은 「기타 금액(${fxCurs.join('·')})」 칸에 따로 담았고 원화 총액에는 넣지 않았습니다 — 통화가 달라 더할 수 없습니다.`);
   if(!view.reference) notes.push('※ 무상 제공 항목은 수량은 그대로 세고(돈은 안 받아도 물건은 만들어야 하니 발주 대상입니다) 금액만 「기타 금액」에서 차감합니다 — 소계가 수량×단가로 계산되는 구조라 그냥 두면 없는 청구액이 붙습니다.');
   if(offCatalog.length) notes.push(
     `※ 그중 카탈로그에 없는 신청 ${offCatalog.length}건의 품목별 내역은 「카탈로그 외 신청내역」 시트에 있습니다 — 발주 전 확인이 필요합니다.`);
@@ -685,7 +713,11 @@ function drawChecklistSheet(wb, exhs, meta){
       font: { ...FONT, bold: true, color: { argb: 'FF991B1B' } }, fill: fill('FFFEE2E2') });
     r.getCell(cTail0 + 1).value = billedAmount(x.id) || null;
     r.getCell(cTail0 + 2).value = paidAmount(x.id) || null;
-    r.getCell(cTail0 + 3).value = { formula: `${colLetter(cTail0 + 1)}${rn}-${colLetter(cTail0 + 2)}${rn}` };
+    /* «완납 처리»한 곳은 남은 돈을 더 받지 않기로 닫았다 — 화면(settleState)처럼
+       잔액 0으로 찍는다. 수식으로 두면 화면은 완납인데 엑셀엔 미수로 남는다. */
+    r.getCell(cTail0 + 3).value = st.state === 'settled' ? 0
+      : { formula: `${colLetter(cTail0 + 1)}${rn}-${colLetter(cTail0 + 2)}${rn}` };
+    if(st.state === 'settled') r.getCell(cTail0 + 3).note = '완납 처리' + (x.settled_note ? ' — ' + x.settled_note : '');
     r.getCell(cTail0 + 4).value = st.cur || currencyOf(x.id);
     [cTail0 + 1, cTail0 + 2, cTail0 + 3].forEach(c => {
       r.getCell(c).numFmt = '#,##0';
@@ -709,7 +741,7 @@ function drawChecklistSheet(wb, exhs, meta){
     `※ ${meta.eventLabel} · CRM 「전시 → 기업리스트」 화면을 ${meta.stamp}에 그대로 옮긴 표입니다. 화면에서 보는 것과 같은 규칙으로 셉니다.`,
     '※ 칸의 뜻 — ✓ 완료 / ◐ 진행 중 / ! 확인 필요 / — 아직 / · 해당 없음(그 기업에는 없는 단계입니다. 진행률 분모에서도 빠집니다).',
     '※ 진행률은 «해당 없음»을 뺀 단계 중 완료된 비율입니다.',
-    '※ 잔액은 청구액 − 입금액 수식입니다. 통화가 다른 기업이 섞여 있으므로 세로로 더하지 마세요 — 통화 열을 보고 갈라 세야 합니다.',
+    '※ 잔액은 청구액 − 입금액 수식입니다(«완납 처리»한 기업은 0). 통화가 다른 기업이 섞여 있으므로 세로로 더하지 마세요 — 통화 열을 보고 갈라 세야 합니다.',
   ];
   notes.forEach((t, i) => {
     const cell = ws.getRow(lastRow + 2 + i).getCell(1);

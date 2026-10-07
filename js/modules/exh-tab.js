@@ -434,7 +434,11 @@ export function settleByCurrency(exhId){
     put(cur, 'paid', v);
     put(cur, payGroup(p.method), v);   // 계좌이체와 카드 결제를 갈라서도 담아 둔다
   });
-  Object.keys(out).forEach(c => { out[c].balance = out[c].billed - out[c].paid; });
+  /* «완납 처리»(settled=yes)한 기업은 남은 돈을 더 받지 않기로 닫은 것이다 —
+     settleState가 'settled'로 보는 것과 맞춰 잔액을 0으로 둔다. 안 그러면
+     같은 기업이 한 화면에선 완납, 통화별 표·미수금에선 미납으로 갈린다. */
+  const settled = getExhibitorById(exhId)?.settled === 'yes';
+  Object.keys(out).forEach(c => { out[c].balance = settled ? 0 : out[c].billed - out[c].paid; });
   return out;
 }
 
@@ -3352,7 +3356,8 @@ export async function advanceStage(id, field){
   const nx = stageOf(defs, st.next);
   const patch = { [field]: nx.key };
   if(nx.at && !String(x[nx.at] || '').trim()) patch[nx.at] = td();
-  await patchExh(id, patch, null);
+  // 저장이 안 됐으면(잠금·충돌·실패) 넘긴 적 없는 단계를 기록에 남기지 않는다
+  if(!(await patchExh(id, patch, null))?.ok) return;
   trackAction('status', `${STAGE_NAME[field]} 단계`, x.company_name || '',
     `<b>${escapeHtml(x.company_name || '')}</b> ${escapeHtml(STAGE_NAME[field])} ${escapeHtml(st.label)} → ${escapeHtml(nx.label)}`,
     { kind: 'exhibitor', id: x.id, tab: 'progress', field });
@@ -3369,7 +3374,7 @@ export async function rewindStage(id, field){
   const i = defs.findIndex(s => s.key === (x[field] || ''));
   if(i <= 0) return;
   const cur = defs[i], prev = defs[i - 1];
-  await patchExh(id, { [field]: prev.key }, null);
+  if(!(await patchExh(id, { [field]: prev.key }, null))?.ok) return;
   trackAction('status', `${STAGE_NAME[field]} 단계`, x.company_name || '',
     `<b>${escapeHtml(x.company_name || '')}</b> ${escapeHtml(STAGE_NAME[field])} ${escapeHtml(cur.label)} → ${escapeHtml(prev.label)} (되돌림)`,
     { kind: 'exhibitor', id: x.id, tab: 'progress', field });
@@ -3493,18 +3498,24 @@ export async function moveBookOrder(id, toPos){
    수정 기록이 마흔 줄 남는다. 여기서는 화면을 한 번만 그리고 기록도 한 줄이다.
    하나라도 실패하면 전부 되돌린다 — 절반만 밀린 순번은 안 민 것보다 나쁘다. */
 async function saveBookOrders(changes, what){
+  /* 끌기·«번호 정리»도 저장이다 — 예전엔 api.js를 직접 불러 진행 완료 잠금을
+     건너뛰었다. 화면을 먼저 바꾸기 전에 막아야 «바뀐 척»이 남지 않는다. */
+  if(exhLocked()){ exhLockNotice(); renderExh(); return; }
   const backup = changes.map(c => ({ o: c.o, was: c.o.book_order || '' }));
   changes.forEach(c => { c.o.book_order = c.no; });
   refreshExhViews();
 
-  const { saveExhibitor } = await import('../api.js');
-  const res = await Promise.all(changes.map(c =>
-    saveExhibitor({ id: c.o.id, book_order: c.no, updated_at: td() })));
+  // 모듈 위의 가드된 saveExhibitor — 내가 본 이전 번호(expect)를 함께 보내 남의 변경을 덮지 않는다
+  const res = await Promise.all(changes.map((c, i) =>
+    saveExhibitor({ id: c.o.id, book_order: c.no, updated_at: td() }, { book_order: backup[i].was })));
 
   if(res.some(r => !r.ok)){
     backup.forEach(b => { b.o.book_order = b.was; });
     refreshExhViews();
-    alert('순서 저장에 실패했어요. 원래 순서로 되돌렸습니다.');
+    if(res.some(r => r.locked)) return;   // 가드가 이미 알렸다
+    alert(res.some(r => r.conflict)
+      ? '그 사이 다른 사람이 도록 순서를 바꿨어요. 새로고침한 뒤 다시 옮겨 주세요.'
+      : '순서 저장에 실패했어요. 원래 순서로 되돌렸습니다.');
     return;
   }
   /* 순번은 한 곳을 옮기면 수십 곳이 함께 밀린다 — 줄마다 이전 번호를 담아야
@@ -3991,6 +4002,8 @@ export async function cycleBookLogo(id){
 
 /* 지금 목록을 부스 번호순으로 1번부터 다시 매긴다 */
 export async function fillBookOrder(){
+  // 잠긴 행사면 «다시 매길까요?»를 묻기 전에 막는다 — 물어 놓고 줄마다 막히면 헷갈린다
+  if(exhLocked()){ exhLockNotice(); return; }
   await reloadExhibitors();          // 위와 같은 이유 — 낡은 줄 세우기로 덮어쓰지 않게
   const rows = [...visibleList()].sort((a, b) => boothSortKey(a) - boothSortKey(b));
   if(!rows.length) return;
@@ -4143,12 +4156,13 @@ export async function submitNewCatalogItem(){
   };
 
   EQUIP_CATALOG.push(rec);
-  const { saveEquipCatalog } = await import('../api.js');
+  // 품목표도 이 행사의 기록이다 — api.js를 직접 부르면 진행 완료 잠금을 건너뛴다
+  const saveEquipCatalog = guardWrite((await import('../api.js')).saveEquipCatalog);
   const r = await saveEquipCatalog(rec);
   if(!r.ok){
     const i = EQUIP_CATALOG.indexOf(rec);
     if(i >= 0) EQUIP_CATALOG.splice(i, 1);
-    return fail('저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
+    return fail(r.locked ? '진행 완료된 행사라 추가할 수 없어요.' : '저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
   }
   if(r.id && r.id !== rec.id) rec.id = r.id;
 
@@ -4216,12 +4230,12 @@ export async function submitNewGraphicOrder(){
   };
 
   EXH_ITEMS.push(rec);
-  const { saveExhItem } = await import('../api.js');
+  // 모듈 위의 가드된 saveExhItem을 쓴다 — 예전엔 api.js를 직접 불러 잠금을 건너뛰었다
   const r = await saveExhItem(rec);
   if(!r.ok){
     const i = EXH_ITEMS.indexOf(rec);
     if(i >= 0) EXH_ITEMS.splice(i, 1);
-    return fail('저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
+    return fail(r.locked ? '진행 완료된 행사라 추가할 수 없어요.' : '저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
   }
   if(r.id && r.id !== rec.id) rec.id = r.id;
 
@@ -4279,8 +4293,10 @@ function renderDashboard(all){
     const s = settleState(x);
     byState[s.state] = (byState[s.state] || 0) + 1;
     if(s.billed){
-      const m = cash[s.cur] || (cash[s.cur] = { billed:0, paid:0, n:0 });
+      const m = cash[s.cur] || (cash[s.cur] = { billed:0, paid:0, due:0, n:0 });
       m.billed += s.billed; m.paid += s.paid; m.n++;
+      // «완납 처리»한 곳은 더 받을 돈이 없다 — settleState·정산 탭과 같은 기준
+      m.due += s.state === 'settled' ? 0 : s.balance;
     }
     if(s.overdue && s.balance > 0) overdue.push({ x, s });
     const noAmt = invoicesFor(x.id).some(i => i.status !== 'void' && String(i.amount ?? '').trim() === '');
@@ -4366,7 +4382,9 @@ function renderDashboard(all){
   inbox.sort((a, b) => String(a.l.ts || '').localeCompare(String(b.l.ts || '')));
   const todo = openInq.length + overdue.length + attention.length + myTurn.length + dueMiss.length + inbox.length;
   const curs = Object.keys(cash).filter(c => cash[c].n);   // 상단 KPI(미수금)가 쓰는 값
-  const dueTotal = curs.map(c => cash[c].billed - cash[c].paid).reduce((a, b) => a + b, 0);
+  /* 미수금은 통화마다 따로 본다 — 원화와 달러를 더한 값으로 색을 정하면
+     달러가 남았는데 원화 초과 입금에 묻혀 «다 받음»으로 보일 수 있다. */
+  const dueAny = curs.some(c => cash[c].due > 0);
 
   const card = (label, value, sub, color) => `<div class="cosi" style="flex:1 1 128px">
     <div class="cosn" style="color:${color || 'var(--i1)'}">${value}</div>
@@ -4654,8 +4672,8 @@ function renderDashboard(all){
     <div class="cost exh-dash-kpi" style="margin:0">
       ${card('참가기업', n + '곳', cancelledExhibitors(exhEvent).length ? ('취소 ' + cancelledExhibitors(exhEvent).length) : '')}
       ${card('평균 진행률', avg + '%')}
-      ${card('미수금', curs.length ? curs.map(c => fmtMoney(cash[c].billed - cash[c].paid, c)).join(' + ') : '-',
-        '', dueTotal > 0 ? 'var(--am)' : 'var(--g)')}
+      ${card('미수금', curs.length ? curs.map(c => fmtMoney(cash[c].due, c)).join(' · ') : '-',
+        '', dueAny ? 'var(--am)' : 'var(--g)')}
       ${card('처리 필요', todo + '건',
         '문의 ' + openInq.length + ' · 기한 ' + overdue.length + ' · 정산 ' + attention.length
         + (myTurn.length ? ' · 내 차례 ' + myTurn.length : '')

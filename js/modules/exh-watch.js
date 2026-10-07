@@ -28,7 +28,7 @@
    «없어짐»으로 남겨 두고, 확인을 누르면 목록에서 접힌다.
 ═══════════════════════════════════════════════════════════════ */
 
-import { WATCH_FOLDERS, WATCH_FILES, watchFoldersFor, currentUser } from '../state.js';
+import { WATCH_FOLDERS, WATCH_FILES, watchFoldersFor, currentUser, evPartDone } from '../state.js';
 import { escapeHtml, escAttr } from '../utils.js';
 import { saveWatchFolder, deleteWatchFolder, saveWatchFiles, deleteWatchFiles } from '../api.js';
 import { trackAction, changed, removed } from './audit-tab.js';
@@ -51,6 +51,17 @@ import {
    그것 말고는 방법이 없다. 서로 다른 깊이를 고르면(한쪽은 300.전시, 한쪽은
    그 안의 Logo) 파일 경로가 어긋나 모든 줄이 새 파일로 뜬다. */
 const handleKey = (folderId) => `watch:${folderId}`;
+
+/* 진행 완료 잠금 — 끝난 행사의 폴더 기록도 고쳐지면 안 된다. exh-tab의 exhLocked를
+   쓰면 좋겠지만 exh-tab이 이 모듈을 불러 순환이 된다. 그래서 같은 정본(state의
+   evPartDone)을 직접 본다 — 폴더 줄에 행사와 파트(exh/conf)가 함께 있다.
+   quiet(저절로 훑기)일 땐 말없이 건너뛴다. */
+function watchLocked(evKey, part, quiet = false){
+  if(!evKey || !evPartDone(evKey, part || 'exh')) return false;
+  if(!quiet) alert('진행 완료된 행사예요 — 열람만 됩니다.\n고치려면 설정 › 행사 관리 › 진행 파트에서 "진행 중"으로 되돌리세요.');
+  return true;
+}
+const folderLocked = (f, quiet) => !!f && watchLocked(f.event_id, f.part, quiet);
 
 const now = () => new Date().toISOString();
 const whoAmI = () => (currentUser && (currentUser.name || currentUser.email)) || '';
@@ -117,6 +128,7 @@ const fmtWhen = (iso) => {
    폴더 등록 · 매기 · 잊기
 ══════════════════════════════════════════ */
 export async function addWatchFolder(evKey, part = 'exh'){
+  if(watchLocked(evKey, part)) return;
   const name = prompt('이 폴더를 뭐라고 부를까요?\n' + (part === 'conf'
     ? '예: 연사 사진, 발표자료, CV' : '예: 로고, 부스도면, 그래픽 원본'));
   if(!name || !name.trim()) return;
@@ -144,7 +156,7 @@ export async function addWatchFolder(evKey, part = 'exh'){
 
 export async function bindWatchFolder(folderId){
   const f = WATCH_FOLDERS.find(x => x.id === folderId);
-  if(!f) return;
+  if(!f || folderLocked(f)) return;
   if(!supported()){
     alert('이 브라우저는 폴더를 읽지 못해요.\nPC의 Chrome이나 Edge에서 한 번 매어 두면, 휴대폰에서는 결과만 보면 됩니다.');
     return;
@@ -199,7 +211,7 @@ export async function bindWatchFolder(folderId){
 
 export async function renameWatchFolder(folderId){
   const f = WATCH_FOLDERS.find(x => x.id === folderId);
-  if(!f) return;
+  if(!f || folderLocked(f)) return;
   const v = prompt('이 폴더를 뭐라고 부를까요?', f.name || '');
   if(v === null || !v.trim() || v.trim() === f.name) return;
   const was = f.name;
@@ -217,7 +229,7 @@ export async function renameWatchFolder(folderId){
    전부다). 그래서 이건 사람이 적어야 한다. */
 export async function editWatchHint(folderId){
   const f = WATCH_FOLDERS.find(x => x.id === folderId);
-  if(!f) return;
+  if(!f || folderLocked(f)) return;
   const v = prompt(
     '다른 PC에서 이 폴더를 고를 사람에게 어디인지 알려주세요.\n'
     + '예: 2026 KIC ▸ 300. 전시 ▸ Logo\n\n'
@@ -233,7 +245,7 @@ export async function editWatchHint(folderId){
 
 export async function removeWatchFolder(folderId){
   const f = WATCH_FOLDERS.find(x => x.id === folderId);
-  if(!f) return;
+  if(!f || folderLocked(f)) return;
   const n = WATCH_FILES.filter(w => w.folder_id === folderId).length;
   if(!confirm(`«${f.name}» 폴더를 목록에서 뺄까요?\n`
     + `지금까지 본 파일 ${n}건의 확인 기록도 함께 사라집니다.\n`
@@ -320,7 +332,7 @@ let scanning = '';
    일로 경고창이 뜨면, 폴더가 잠깐 안 잡히는 날마다 창을 닫아야 한다. */
 export async function scanWatchFolder(folderId, { quiet = false } = {}){
   const f = WATCH_FOLDERS.find(x => x.id === folderId);
-  if(!f || scanning) return;
+  if(!f || scanning || folderLocked(f, quiet)) return;
   const dir = quiet ? await readyFolderQuiet(handleKey(folderId))
                     : await readyFolder(handleKey(folderId));
   if(!dir){
@@ -367,6 +379,7 @@ export async function scanWatchFolder(folderId, { quiet = false } = {}){
    아니라서 조용히 거절당한다(거절로 기억되기도 한다). 그래서 여기서는 묻지
    않고, 잠겨 있던 폴더만 모아서 한 번 알려준다. */
 export async function scanAllWatchFolders(evKey, part = 'exh'){
+  if(watchLocked(evKey, part)) return;
   const folders = watchFoldersFor(evKey, part);
   const locked = [];
   for(const f of folders){
@@ -384,7 +397,7 @@ export async function scanAllWatchFolders(evKey, part = 'exh'){
 ══════════════════════════════════════════ */
 export async function checkWatchFile(fileId){
   const w = WATCH_FILES.find(x => x.id === fileId);
-  if(!w) return;
+  if(!w || folderLocked(WATCH_FOLDERS.find(x => x.id === w.folder_id))) return;
   const on = !w.checked_at;
   const before = { checked_at: w.checked_at, checked_by: w.checked_by };
   w.checked_at = on ? now() : '';
@@ -402,6 +415,7 @@ export async function checkAllInFolder(folderId){
   const todo = WATCH_FILES.filter(w => w.folder_id === folderId && needsEye(w));
   if(!todo.length) return;
   const f = WATCH_FOLDERS.find(x => x.id === folderId);
+  if(folderLocked(f)) return;
   if(!confirm(`«${f ? f.name : ''}»의 확인 안 한 ${todo.length}건을 모두 확인 처리할까요?`)) return;
   const stamp = now(), who = whoAmI();
   const before = todo.map(w => ({ w, checked_at: w.checked_at, checked_by: w.checked_by }));
