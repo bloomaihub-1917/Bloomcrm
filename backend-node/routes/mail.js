@@ -434,6 +434,24 @@ const mailText = (mail) => String(mail.text || '').trim()
   || (mail.html ? htmlToText(mail.html, { wordwrap: false,
     selectors: [{ selector: 'img', format: 'skip' }, { selector: 'a', options: { ignoreHref: true } }] }).trim() : '');
 const norm = (v) => String(v || '').trim().toLowerCase();
+/* 보낸 메일이 연락 단계 중 무엇인지 — 행사마다 제목을 다르게 쓴다
+   (KPBMA «연사 가이드라인 송부», AIA «연사 확정 안내 및 자료 제출 요청»,
+   «Speaker Confirmation & Submission Request», «Reminder — Speaker Materials»).
+   단어 하나로 맞추면 다른 행사는 전부 «기타»가 됐다. 회신·전달(RE/FW)은 단계 메일이 아니다.
+   kind는 speaker-flow.js의 단계 키 — invite면 «보냄» 날짜를 찍고, collect가 있으면
+   다음 메일은 독촉으로 바뀐다. */
+const REPLY_RE = /^\s*(제목\s*:\s*)?\[?\s*(re|fw|fwd|답장|전달)\s*\]?\s*[:\]]?/i;
+function classifySent(subject) {
+  const t = String(subject || '');
+  if (REPLY_RE.test(t)) return { kind: 'note', category: '회신' };
+  if (/reminder|재요청|독촉|다시 요청/i.test(t)) return { kind: 'collect', category: '자료 독촉' };
+  if (/초청|가이드|확정 안내|invitation|guideline|confirmation/i.test(t)) return { kind: 'invite', category: '초청·가이드 발송' };
+  if (/자료\s*(제출|요청)|submission|materials|이력|초록|abstract|profile/i.test(t)) return { kind: 'collect', category: '자료 받기' };
+  if (/숙박|항공|accommodation|flight/i.test(t)) return { kind: 'travel', category: '숙박·항공 안내' };
+  if (/발표\s*자료|presentation|slides/i.test(t)) return { kind: 'slides', category: '발표자료 받기' };
+  if (/감사|thank/i.test(t)) return { kind: 'thanks', category: '감사 메일' };
+  return { kind: 'note', category: '기타' };
+}
 const prevDay = (d) => new Date(new Date(`${d}T00:00:00Z`).getTime() - 864e5).toISOString().slice(0, 10);
 
 router.post('/accounts/:eventId/sync-sent', async (req, res) => {
@@ -503,13 +521,11 @@ router.post('/accounts/:eventId/sync-sent', async (req, res) => {
           for (const id of ids) {
             const s0 = spById.get(id);
             const dup = seen.has(`${id}|${date}|${norm(subject)}`) || seen.has(`${id}|${prevDay(date)}|${norm(subject)}`);
-            /* «초청·가이드 발송» 단계 메일 — 사무국은 «연사 가이드라인 송부»처럼 보내기도 한다.
-               회신·전달(RE:/FW:)은 그 단계 메일이 아니다 */
-            const reply = /^\s*(\[?(re|fw|fwd|답장|전달)\]?\s*:?\s*)+/i.test(subject) && /^\s*\[?(re|fw|fwd|답장|전달)\b/i.test(subject);
-            const invite = !reply && /초청|가이드|invitation|guideline/i.test(subject);
+            const cls = classifySent(subject);
+            const invite = cls.kind === 'invite';
             found.push({
               speaker_id: id, name: s0.name_snapshot || s0.name_en || id, date, subject,
-              to: to.join(', '), cc: cc.join(', '), invite, dup,
+              to: to.join(', '), cc: cc.join(', '), invite, kind: cls.kind, category: cls.category, dup,
               stamp: invite && !s0.guide_sent_at,
               body: mailText(mail) + (files.length ? `\n\n[첨부] ${files.join(', ')}` : ''),
             });
@@ -529,7 +545,7 @@ router.post('/accounts/:eventId/sync-sent', async (req, res) => {
       if (!firstInvite[f.speaker_id] || f.date < firstInvite[f.speaker_id]) firstInvite[f.speaker_id] = f.date;
     });
 
-    let added = 0, stamped = 0, filled = 0;
+    let added = 0, stamped = 0, filled = 0, sorted = 0;
     if (apply) {
       /* 이미 들어간 기록 중 본문이 비어 있던 것(첨부 이름만 있던 것)은 본문을 채운다 —
          HTML 본문을 못 읽던 때 가져온 기록이다 */
@@ -540,14 +556,22 @@ router.post('/accounts/:eventId/sync-sent', async (req, res) => {
              AND btrim(split_part(COALESCE(body, ''), '[첨부]', 1)) = '' AND btrim($6) <> ''`,
         [f.body, f.speaker_id, f.date, prevDay(f.date), norm(f.subject), f.body.split('[첨부]')[0]]);
         filled += u.rowCount || 0;
+        if (f.kind !== 'note' || f.category !== '기타') {
+          const k = await pool.query(`
+            UPDATE speaker_logs SET kind = $1, category = $2
+             WHERE speaker_id = $3 AND ts IN ($4, $5) AND lower(btrim(subject)) = $6 AND direction = 'out'
+               AND kind = 'note' AND COALESCE(category, '기타') = '기타' AND author_name LIKE '%보낸메일함에서 가져옴%'`,
+          [f.kind, f.category, f.speaker_id, f.date, prevDay(f.date), norm(f.subject)]);
+          sorted += k.rowCount || 0;
+        }
       }
       for (const f of found.filter((x) => !x.dup)) {
         await pool.query(`
           INSERT INTO speaker_logs (id, speaker_id, kind, ts, direction, channel, counterpart, category,
             subject, body, answered_at, answer, status, author_email, author_name)
           VALUES ($1,$2,$3,$4,'out','이메일',$5,$6,$7,$8,'','','done',$9,$10)`,
-        [`SL-${Date.now()}-${Math.floor(Math.random() * 100000)}`, f.speaker_id, f.invite ? 'invite' : 'note', f.date,
-          [f.to, f.cc ? `(cc) ${f.cc}` : ''].filter(Boolean).join(' '), f.invite ? '초청·가이드 발송' : '기타',
+        [`SL-${Date.now()}-${Math.floor(Math.random() * 100000)}`, f.speaker_id, f.kind, f.date,
+          [f.to, f.cc ? `(cc) ${f.cc}` : ''].filter(Boolean).join(' '), f.category,
           f.subject, f.body, req.user?.email || '', `${req.user?.name || req.user?.email || ''} (보낸메일함에서 가져옴)`]);
         added++;
       }
@@ -557,7 +581,7 @@ router.post('/accounts/:eventId/sync-sent', async (req, res) => {
       }
     }
     res.json({
-      ok: true, applied: apply, sentPath, scanned: total, added, stamped, filled,
+      ok: true, applied: apply, sentPath, scanned: total, added, stamped, filled, sorted,
       items: found.map(({ body, ...r }) => r),
       unmatchedSpeakers: sp.filter((r) => !found.some((f) => f.speaker_id === r.id))
         .map((r) => ({ id: r.id, name: r.name_snapshot || r.name_en, email: r.email1 || '' })),

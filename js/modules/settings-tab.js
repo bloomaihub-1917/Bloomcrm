@@ -2673,7 +2673,7 @@ export async function syncEvSentMail(evKey){
   if(!r.ok){ evmbSay(r.error || '읽지 못했어요.'); return; }
   const todo = (r.items || []).filter(x => !x.dup);
   const stamp = [...new Set((r.items || []).filter(x => x.stamp).map(x => x.name))];
-  const lines = todo.map(x => `· ${x.date} ${x.name} — ${x.subject}${x.invite ? ' [초청]' : ''}`);
+  const lines = todo.map(x => `· ${x.date} ${x.name} — ${x.subject} [${x.category || '기타'}]`);
   const miss = (r.unmatchedSpeakers || []).map(x => `${x.name}${x.email ? ` (${x.email})` : ' (메일 없음)'}`);
   const msg = `«${r.sentPath}» ${r.scanned}통 중 이 행사 연사에게 보낸 메일 ${(r.items || []).length}통\n`
     + `(이미 기록에 있는 ${(r.items || []).length - todo.length}통은 건너뜀)\n\n`
@@ -2685,7 +2685,12 @@ export async function syncEvSentMail(evKey){
        (빈 본문만 채우고 다른 칸은 건드리지 않는다) */
     if((r.items || []).length){
       const f = await syncSentMail(evKey, true);
-      if(f.ok && f.filled){ await reloadSpeakerData(); evmbSay(`새로 남길 건 없고, 비어 있던 본문 ${f.filled}건을 채웠어요.`, true); return; }
+      if(f.ok && (f.filled || f.sorted || f.stamped)){
+        await reloadSpeakerData();
+        evmbSay(`새로 남길 건 없고, ${[f.filled ? `빈 본문 ${f.filled}건 채움` : '', f.sorted ? `단계 분류 ${f.sorted}건 고침` : '',
+          f.stamped ? `초청 체크 ${f.stamped}명` : ''].filter(Boolean).join(' · ')} — 연사 화면에 바로 보입니다.`, true);
+        return;
+      }
     }
     evmbSay('새로 남길 게 없어요.', true); alert(msg + '새로 남길 게 없어요.'); return;
   }
@@ -2696,7 +2701,7 @@ export async function syncEvSentMail(evKey){
   trackAction('edit', '보낸메일함 가져오기', evKey, `연사 보낸 기록 ${a.added}건 · 초청 체크 ${a.stamped}명`);
   // 서버가 바꾼 기록을 바로 다시 읽는다 — 새로고침해야 보이면 안 남은 줄 안다
   const fresh = await reloadSpeakerData();
-  evmbSay(`보낸 기록 ${a.added}건, 초청 체크 ${a.stamped}명${a.filled ? `, 빈 본문 ${a.filled}건 채움` : ''} 남겼어요${fresh ? ' — 연사 화면에 바로 보입니다.' : ' — 새로고침하면 연사 화면에 보입니다.'}`, true);
+  evmbSay(`보낸 기록 ${a.added}건, 초청 체크 ${a.stamped}명${a.filled ? `, 빈 본문 ${a.filled}건 채움` : ''}${a.sorted ? `, 단계 분류 ${a.sorted}건 고침` : ''} 남겼어요${fresh ? ' — 연사 화면에 바로 보입니다.' : ' — 새로고침하면 연사 화면에 보입니다.'}`, true);
 }
 
 export async function removeEvMailbox(evKey){
