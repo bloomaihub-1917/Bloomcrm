@@ -2680,7 +2680,15 @@ export async function syncEvSentMail(evKey){
     + (lines.length ? `기록에 남길 것\n${lines.slice(0, 25).join('\n')}${lines.length > 25 ? `\n… 외 ${lines.length - 25}통` : ''}\n\n` : '')
     + (stamp.length ? `초청 «보냄»으로 체크: ${stamp.join(', ')}\n\n` : '')
     + (miss.length ? `보낸 메일을 못 찾은 연사: ${miss.join(', ')}\n\n` : '');
-  if(!todo.length && !stamp.length){ evmbSay('새로 남길 게 없어요.', true); alert(msg + '새로 남길 게 없어요.'); return; }
+  if(!todo.length && !stamp.length){
+    /* 새로 남길 건 없어도, 예전에 본문 없이 들어간 기록은 본문을 채운다 — 묻지 않는다
+       (빈 본문만 채우고 다른 칸은 건드리지 않는다) */
+    if((r.items || []).length){
+      const f = await syncSentMail(evKey, true);
+      if(f.ok && f.filled){ await reloadSpeakerData(); evmbSay(`새로 남길 건 없고, 비어 있던 본문 ${f.filled}건을 채웠어요.`, true); return; }
+    }
+    evmbSay('새로 남길 게 없어요.', true); alert(msg + '새로 남길 게 없어요.'); return;
+  }
   if(!confirm(msg + '이대로 남길까요?')){ evmbSay('', true); return; }
   evmbSay('남기는 중…', true);
   const a = await syncSentMail(evKey, true);
@@ -2688,7 +2696,7 @@ export async function syncEvSentMail(evKey){
   trackAction('edit', '보낸메일함 가져오기', evKey, `연사 보낸 기록 ${a.added}건 · 초청 체크 ${a.stamped}명`);
   // 서버가 바꾼 기록을 바로 다시 읽는다 — 새로고침해야 보이면 안 남은 줄 안다
   const fresh = await reloadSpeakerData();
-  evmbSay(`보낸 기록 ${a.added}건, 초청 체크 ${a.stamped}명 남겼어요${fresh ? ' — 연사 화면에 바로 보입니다.' : ' — 새로고침하면 연사 화면에 보입니다.'}`, true);
+  evmbSay(`보낸 기록 ${a.added}건, 초청 체크 ${a.stamped}명${a.filled ? `, 빈 본문 ${a.filled}건 채움` : ''} 남겼어요${fresh ? ' — 연사 화면에 바로 보입니다.' : ' — 새로고침하면 연사 화면에 보입니다.'}`, true);
 }
 
 export async function removeEvMailbox(evKey){

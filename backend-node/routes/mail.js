@@ -427,6 +427,12 @@ router.post('/send', async (req, res) => {
    apply가 없으면 무엇을 할지만 돌려준다 — 화면에서 확인한 뒤 apply로 다시 부른다.
    같은 날·같은 제목의 보낸 기록이 이미 있으면 건너뛴다(CRM에서 보낸 것, 두 번 누른 것). */
 const { simpleParser } = require('mailparser');
+const { convert: htmlToText } = require('html-to-text');
+/* 본문 글자 — 메일플러그 웹메일은 본문을 HTML로만 보낸다(text 없음). text가 비면
+   HTML을 글자로 바꾼다. 안 그러면 기록에 첨부 이름만 남았다. 이미지·링크 주소는 뺀다 */
+const mailText = (mail) => String(mail.text || '').trim()
+  || (mail.html ? htmlToText(mail.html, { wordwrap: false,
+    selectors: [{ selector: 'img', format: 'skip' }, { selector: 'a', options: { ignoreHref: true } }] }).trim() : '');
 const norm = (v) => String(v || '').trim().toLowerCase();
 const prevDay = (d) => new Date(new Date(`${d}T00:00:00Z`).getTime() - 864e5).toISOString().slice(0, 10);
 
@@ -505,7 +511,7 @@ router.post('/accounts/:eventId/sync-sent', async (req, res) => {
               speaker_id: id, name: s0.name_snapshot || s0.name_en || id, date, subject,
               to: to.join(', '), cc: cc.join(', '), invite, dup,
               stamp: invite && !s0.guide_sent_at,
-              body: String(mail.text || '').trim() + (files.length ? `\n\n[첨부] ${files.join(', ')}` : ''),
+              body: mailText(mail) + (files.length ? `\n\n[첨부] ${files.join(', ')}` : ''),
             });
             seen.add(`${id}|${date}|${norm(subject)}`);
           }
@@ -523,8 +529,18 @@ router.post('/accounts/:eventId/sync-sent', async (req, res) => {
       if (!firstInvite[f.speaker_id] || f.date < firstInvite[f.speaker_id]) firstInvite[f.speaker_id] = f.date;
     });
 
-    let added = 0, stamped = 0;
+    let added = 0, stamped = 0, filled = 0;
     if (apply) {
+      /* 이미 들어간 기록 중 본문이 비어 있던 것(첨부 이름만 있던 것)은 본문을 채운다 —
+         HTML 본문을 못 읽던 때 가져온 기록이다 */
+      for (const f of found.filter((x) => x.dup)) {
+        const u = await pool.query(`
+          UPDATE speaker_logs SET body = $1
+           WHERE speaker_id = $2 AND ts IN ($3, $4) AND lower(btrim(subject)) = $5 AND direction = 'out'
+             AND btrim(split_part(COALESCE(body, ''), '[첨부]', 1)) = '' AND btrim($6) <> ''`,
+        [f.body, f.speaker_id, f.date, prevDay(f.date), norm(f.subject), f.body.split('[첨부]')[0]]);
+        filled += u.rowCount || 0;
+      }
       for (const f of found.filter((x) => !x.dup)) {
         await pool.query(`
           INSERT INTO speaker_logs (id, speaker_id, kind, ts, direction, channel, counterpart, category,
@@ -541,7 +557,7 @@ router.post('/accounts/:eventId/sync-sent', async (req, res) => {
       }
     }
     res.json({
-      ok: true, applied: apply, sentPath, scanned: total, added, stamped,
+      ok: true, applied: apply, sentPath, scanned: total, added, stamped, filled,
       items: found.map(({ body, ...r }) => r),
       unmatchedSpeakers: sp.filter((r) => !found.some((f) => f.speaker_id === r.id))
         .map((r) => ({ id: r.id, name: r.name_snapshot || r.name_en, email: r.email1 || '' })),
