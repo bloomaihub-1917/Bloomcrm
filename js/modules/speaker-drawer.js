@@ -39,6 +39,7 @@ import {
   saveSpeakerContact, deleteSpeakerContact,
   saveSpeakerLog, sendMail, eventMailFrom, loadMailFiles, mailFilesOf, fileToBase64,
 } from '../api.js';
+import { filterMail, mailFilBar, mailStateHtml, mailActionsHtml, mailToggleAttr, isPending } from './mail-mark.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 import { patchContact } from './db-tab.js';
 import { confLocked, setConfLockEv, confLockNotice, renderConf, buildConfEvList, syncPartRole, spCell } from './conf-tab.js';
@@ -218,7 +219,7 @@ export function renderSpeakerDr(){
     /* 수신이 없으면 메일을 못 보낸다 — 메일 탭을 열어 보고 알기보다
        탭에서 먼저 보이는 게 낫다 */
     people: mailTargets(sp.id).to.length ? 0 : 1,
-    mail: 0,
+    mail: logsOfSpeaker(sp.id).filter(isPending).length,   // 처리 안 한 받은 메일
     offer: missingOffer(sp, evKey).length,
     bank: missingBank(sp, evKey).length,
   };
@@ -1158,17 +1159,18 @@ function mailTabHtml(sp, evKey){
     .sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')));
 
   /* 줄을 누르면 보낸 본문을 펼친다 — «뭐라고 보냈지»를 메일함까지 가서 찾지 않게 */
-  const logRow = (l) => `<details style="border-top:1px solid var(--i7);padding:7px 0">
+  const logRow = (l) => `<details style="border-top:1px solid var(--i7);padding:7px 0"${mailToggleAttr('sp', l)}>
     <summary style="cursor:pointer;list-style:none">
     <div style="display:flex;gap:7px;align-items:baseline">
-      ${mailDirPill(l)}<span class="pill p-gray" style="font-size:10px">${escapeHtml(l.category || '기타')}</span>
-      <div style="font-size:11.5px;font-weight:600;flex:1;min-width:0">${escapeHtml(l.subject || '(제목 없음)')}</div>
+      ${mailDirPill(l)}${mailStateHtml('sp', l)}<span class="pill p-gray" style="font-size:10px">${escapeHtml(l.category || '기타')}</span>
+      <div style="font-size:11.5px;font-weight:${l.direction === 'in' && !l.read_at ? 800 : 600};flex:1;min-width:0">${escapeHtml(l.subject || '(제목 없음)')}</div>
       <div style="font-size:10.5px;color:var(--i4)">${escapeHtml(l.ts || '')} ▾</div>
     </div>
     <div style="font-size:10.5px;color:var(--i4);margin-top:2px">${escapeHtml(l.counterpart || '')}</div>
     </summary>
     <div style="margin-top:6px;padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;
       font-size:11.5px;color:var(--i2);white-space:pre-wrap;line-height:1.6">${mailBodyHtml(l.body)}</div>
+    ${mailActionsHtml('sp', l)}
   </details>`;
 
   return `
@@ -1206,7 +1208,8 @@ function mailTabHtml(sp, evKey){
     </div>
 
     <div style="font-size:11px;font-weight:700;color:var(--i3);margin:18px 0 2px">주고받은 기록 ${logs.length || ''}</div>
-    ${logs.length ? logs.map(logRow).join('')
+    ${logs.some(l => l.direction === 'in') ? mailFilBar(logs) : ''}
+    ${filterMail(logs).length ? filterMail(logs).map(logRow).join('')
       : `<div style="font-size:11px;color:var(--i4);padding:6px 0">아직 주고받은 메일이 없어요</div>`}`;
 }
 

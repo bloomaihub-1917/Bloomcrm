@@ -154,7 +154,8 @@ const TABLES = {
   exhibitor_logs: {
     table: 'exhibitor_logs', pk: 'id', idPrefix: 'XL-',
     columns: ['id', 'exhibitor_id', 'kind', 'ts', 'direction', 'channel', 'counterpart', 'category',
-      'subject', 'body', 'answered_at', 'answer', 'status', 'author_email', 'author_name'],
+      'subject', 'body', 'answered_at', 'answer', 'status', 'author_email', 'author_name',
+      'read_at', 'read_by'],
   },
 
   /* ── 컨퍼런스 · 연사 관리 ──
@@ -211,7 +212,8 @@ const TABLES = {
   speaker_logs: {
     table: 'speaker_logs', pk: 'id', idPrefix: 'SL-',
     columns: ['id', 'speaker_id', 'kind', 'ts', 'direction', 'channel', 'counterpart', 'category',
-      'subject', 'body', 'answered_at', 'answer', 'status', 'author_email', 'author_name'],
+      'subject', 'body', 'answered_at', 'answer', 'status', 'author_email', 'author_name',
+      'read_at', 'read_by'],
   },
 };
 

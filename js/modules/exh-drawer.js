@@ -59,6 +59,7 @@ function saveFailed(res, msg){
   if(res && res.locked) return;
   alert(msg || '저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
 }
+import { filterMail, mailFilBar, mailStateHtml, mailActionsHtml, mailToggleAttr, isPending } from './mail-mark.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 import { ieyo } from '../country-signal.js';
 import { normalizeCompanyKey, createOrg, patchOrgFields } from './company-tab.js';
@@ -176,6 +177,8 @@ export function renderExhDr(){
   const bookMiss = bookMissing(x);   // 도록에 낼 정보 중 아직 안 받은 칸
   // 아직 안 받은 그래픽 — 탭을 열어 보기 전에 받을 게 남았는지 알려 준다
   const gLeft = graphicUnreceived(x.id);
+  // 처리 안 한 받은 메일 — 메일 탭을 열기 전에 보이게
+  const mailLeft = logsFor(x.id).filter(isPending).length;
 
   const tabsEl = document.getElementById('exh-drtabs');
   if(tabsEl) tabsEl.innerHTML = TABS.map((tb) =>
@@ -183,7 +186,8 @@ export function renderExhDr(){
       tb.key === 'logs' && openN ? ` <span class="pill p-amber">${openN}</span>` : ''}${
       tb.key === 'apply' && appNeedsWork ? ' <span class="pill p-amber">확인</span>' : ''}${
       tb.key === 'book' && bookMiss.length ? ` <span class="pill p-amber">${bookMiss.length}</span>` : ''}${
-      tb.key === 'graphic' && gLeft ? ` <span class="pill p-amber">${gLeft}</span>` : ''}</button>`).join('');
+      tb.key === 'graphic' && gLeft ? ` <span class="pill p-amber">${gLeft}</span>` : ''}${
+      tb.key === 'mail' && mailLeft ? ` <span class="pill p-amber" title="처리 안 한 받은 메일">${mailLeft}</span>` : ''}</button>`).join('');
 
   const b = document.getElementById('exh-drbd');
   const VIEW = { contact: dContactTab, apply: dApply, progress: dProgress,
@@ -3710,15 +3714,16 @@ function dMail(x){
     </div>
   </div>
   <div class="sct">주고받은 메일 ${sent.length || ''}</div>
-  ${sent.length ? sent.map(l => `<details style="border-top:1px solid var(--i7);padding:7px 0">
+  ${sent.some(l => l.direction === 'in') ? mailFilBar(sent) : ''}
+  ${filterMail(sent).length ? filterMail(sent).map(l => `<details style="border-top:1px solid var(--i7);padding:7px 0"${mailToggleAttr('ex', l)}>
       <summary style="cursor:pointer;list-style:none">
       <div style="display:flex;gap:7px;align-items:baseline">
-        ${mailDirPill(l)}
-        <div style="font-size:12px;font-weight:600;flex:1;min-width:0">${escapeHtml(l.subject || '(제목 없음)')}</div>
+        ${mailDirPill(l)}${mailStateHtml('ex', l)}
+        <div style="font-size:12px;font-weight:${l.direction === 'in' && !l.read_at ? 800 : 600};flex:1;min-width:0">${escapeHtml(l.subject || '(제목 없음)')}</div>
         <div style="font-size:10.5px;color:var(--i4)">${escapeHtml(l.ts || '')} ▾</div></div>
       <div style="font-size:10.5px;color:var(--i4);margin-top:2px">${escapeHtml(l.counterpart || '')}</div></summary>
       <div style="margin-top:6px;padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;
-        font-size:12px;color:var(--i2);white-space:pre-wrap;line-height:1.6">${mailBodyHtml(l.body)}</div></details>`).join('')
+        font-size:12px;color:var(--i2);white-space:pre-wrap;line-height:1.6">${mailBodyHtml(l.body)}</div>${mailActionsHtml('ex', l)}</details>`).join('')
     : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">아직 주고받은 메일이 없어요</div>'}`;
 }
 

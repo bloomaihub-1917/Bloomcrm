@@ -47,8 +47,9 @@ import {
   evPartDone,
   codeList,
   confCfg, confDays, speakerNeed,
-  CONF_SESSIONS, EXHIBITORS, SPEAKERS,
+  CONF_SESSIONS, EXHIBITORS, SPEAKERS, SPEAKER_LOGS, EXH_LOGS,
 } from '../state.js';
+import { isUnread, isPending } from './mail-mark.js';
 
 import {
   upsertSectorRow,
@@ -2642,8 +2643,37 @@ async function renderEvMailbox(evKey){
           title="메일플러그 보낸메일함·받은메일함을 읽어, 이 행사 연사·참가사와 주고받은 메일을 그 사람 기록에 남기고 초청 메일은 «보냄»으로 체크합니다">메일함에서 주고받은 기록 가져오기</button>` : ''}
       <span id="evmb-msg" style="font-size:11px;color:var(--g)"></span>
     </div>
+    <div id="evd-inbox" style="margin-top:16px"></div>
   </div>`;
+  renderEvInbox(evKey);
 }
+
+/* 이 행사의 처리 안 한 받은 메일 — 사람마다 창을 열어 봐야 알면 놓친다.
+   한곳에 모아 두고, 누르면 그 사람 메일 탭이 열린다. 읽음·처리 규칙은 mail-mark.js */
+let inboxEv = '';
+export function renderEvInbox(evKey = inboxEv){
+  inboxEv = evKey;
+  const el = document.getElementById('evd-inbox');
+  if(!el) return;
+  const spIds = new Map(SPEAKERS.filter(x => x.event_id === evKey).map(x => [x.id, x.name_snapshot || x.name_en || x.id]));
+  const exIds = new Map(EXHIBITORS.filter(x => x.event_id === evKey).map(x => [x.id, x.company_name || x.id]));
+  const rows = [
+    ...SPEAKER_LOGS.filter(l => spIds.has(l.speaker_id) && isPending(l)).map(l => ({ l, t: 'sp', id: l.speaker_id, who: spIds.get(l.speaker_id) })),
+    ...EXH_LOGS.filter(l => exIds.has(l.exhibitor_id) && isPending(l)).map(l => ({ l, t: 'ex', id: l.exhibitor_id, who: exIds.get(l.exhibitor_id) })),
+  ].sort((a, b) => String(b.l.ts || '').localeCompare(String(a.l.ts || '')));
+  const unread = rows.filter(r => isUnread(r.l)).length;
+  el.innerHTML = `<div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:6px">처리 안 한 받은 메일 ${rows.length
+      ? `<span class="pill p-amber" style="font-size:10px">${rows.length}</span>${unread ? ` <span class="pill p-red" style="font-size:10px">안 읽음 ${unread}</span>` : ''}` : ''}</div>
+    ${rows.length ? rows.slice(0, 50).map(({ l, t, id, who }) => `<div style="display:flex;gap:7px;align-items:baseline;padding:6px 0;border-top:1px solid var(--i7);cursor:pointer"
+        onclick="${t === 'sp' ? `openSpeakerDr('${escAttr(id)}','mail')` : `openExhDr('${escAttr(id)}','mail')`}">
+        <span style="font-size:10.5px;color:var(--i4);white-space:nowrap">${escapeHtml(l.ts || '')}</span>
+        <span class="pill p-gray" style="font-size:10px">${t === 'sp' ? '연사' : '참가사'}</span>
+        <span style="font-size:11.5px;font-weight:${isUnread(l) ? 800 : 500}">${isUnread(l) ? '● ' : ''}${escapeHtml(who)}</span>
+        <span style="font-size:11.5px;color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(l.subject || '(제목 없음)')}</span>
+      </div>`).join('')
+      : '<div style="font-size:11px;color:var(--i4)">처리 안 한 받은 메일이 없어요. «메일함에서 주고받은 기록 가져오기»로 새 메일을 가져옵니다.</div>'}`;
+}
+window.renderEvInbox = renderEvInbox;
 const evmbSay = (t, ok) => { const m = document.getElementById('evmb-msg'); if(m){ m.style.color = ok ? 'var(--g)' : 'var(--re)'; m.textContent = t; } };
 
 export async function saveEvMailbox(evKey){
@@ -2693,7 +2723,7 @@ export async function syncEvSentMail(evKey){
     if(r.ok && (r.items || []).length){
       const f = await syncSentMail(evKey, true);
       if(f.ok && (f.filled || f.sorted || f.stamped)){
-        await reloadSpeakerData();
+        await reloadSpeakerData(); renderEvInbox(evKey);
         evmbSay(`새로 남길 건 없고, ${[f.filled ? `빈 본문 ${f.filled}건 채움` : '', f.sorted ? `단계 분류 ${f.sorted}건 고침` : '',
           f.stamped ? `초청 체크 ${f.stamped}명` : ''].filter(Boolean).join(' · ')} — 연사 화면에 바로 보입니다.`, true);
         return;
@@ -2708,6 +2738,7 @@ export async function syncEvSentMail(evKey){
   trackAction('edit', '메일함 가져오기', evKey, `보낸 ${a.added}건 · 받은 ${b.added}건 · 초청 체크 ${a.stamped}명`);
   // 서버가 바꾼 기록을 바로 다시 읽는다 — 새로고침해야 보이면 안 남은 줄 안다
   const fresh = await reloadSpeakerData();
+  renderEvInbox(evKey);   // 새로 들어온 받은 메일을 아래 목록에 바로
   evmbSay(`보낸 ${a.added}건 · 받은 ${b.added}건 · 초청 체크 ${a.stamped}명${a.filled ? ` · 빈 본문 ${a.filled}건 채움` : ''}${a.sorted ? ` · 단계 분류 ${a.sorted}건 고침` : ''} 남겼어요${fresh ? ' — 연사·참가사 화면에 바로 보입니다.' : ' — 새로고침하면 보입니다.'}`, true);
 }
 

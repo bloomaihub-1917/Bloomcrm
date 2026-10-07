@@ -303,7 +303,9 @@ CREATE TABLE IF NOT EXISTS exhibitor_logs (
   answer       TEXT,
   status       TEXT,  -- 'open' | 'hold' | 'done'
   author_email TEXT,
-  author_name  TEXT
+  author_name  TEXT,
+  read_at      TEXT,   -- 받은 메일을 처음 펼쳐 본 시각 (비면 안 읽음)
+  read_by      TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_exhibitor_logs_exh ON exhibitor_logs(exhibitor_id);
 CREATE INDEX IF NOT EXISTS idx_exhibitor_logs_open ON exhibitor_logs(kind, answered_at);
@@ -930,7 +932,9 @@ CREATE TABLE IF NOT EXISTS speaker_logs (
   answer       TEXT,
   status       TEXT,
   author_email TEXT,
-  author_name  TEXT
+  author_name  TEXT,
+  read_at      TEXT,   -- 받은 메일을 처음 펼쳐 본 시각 (비면 안 읽음)
+  read_by      TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_speakers_event      ON speakers(event_id);

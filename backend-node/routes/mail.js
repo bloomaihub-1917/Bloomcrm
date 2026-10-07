@@ -715,7 +715,7 @@ router.post('/accounts/:eventId/sync-inbox', async (req, res) => {
         await pool.query(`
           INSERT INTO ${sp0 ? 'speaker_logs' : 'exhibitor_logs'} (id, ${sp0 ? 'speaker_id' : 'exhibitor_id'}, kind, ts, direction,
             channel, counterpart, category, subject, body, answered_at, answer, status, author_email, author_name)
-          VALUES ($1,$2,'note',$3,'in','이메일',$4,'받은 메일',$5,$6,'','','done',$7,$8)`,
+          VALUES ($1,$2,'note',$3,'in','이메일',$4,'받은 메일',$5,$6,'','','open',$7,$8)`,
         [`${sp0 ? 'SL' : 'XL'}-${Date.now()}-${Math.floor(Math.random() * 100000)}`, f.id, f.at, f.from,
           f.subject, f.body, req.user?.email || '', `${req.user?.name || req.user?.email || ''} (받은메일함에서 가져옴)`]);
         added++;
