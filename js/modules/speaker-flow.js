@@ -119,6 +119,40 @@ export function missingItems(sp){
     .filter(x => x.st.need === 'req' && (x.st.state === 'todo' || x.st.state === 'part'));
 }
 
+/* ── 남은 일 ──
+   연사 화면의 «남은 일», 탭 배지, «안 받은 자료 한 번에 요청» 메일이 모두 이 목록을 쓴다.
+   따로 세면 위에서는 «동의서·계좌», 탭에서는 이력·발제·제공사항까지 «1»로 떠
+   무엇부터 할지 알 수 없었다. 필수·있으면 좋음은 설정 › 행사 › 컨퍼런스 격자가 정본.
+
+     when  now   지금 받을 것(필수) — 자료 받기 단계
+           later 다음에 받을 것(필수) — 발표자료처럼 자기 단계가 따로 있는 것
+           nice  있으면 좋음 — 받으면 표시만, 독촉하지 않는다
+           ours  우리가 할 일 — 연사료 지급·숙박·항공 예약
+     tab   그 항목이 있는 연사 화면 탭(파트) — 결과는 파트별로 쌓인다 */
+const TAB_OF = { profile: 'basic', photo: 'basic', consent: 'basic', bio_pro: 'bio', cv: 'bio',
+  title: 'talk', abstract: 'talk', slides: 'talk', bank: 'bank', passport: 'bank', travel: 'offer' };
+export const PART_LABEL = { basic: '기본', bio: '이력', talk: '발제', offer: '제공사항', bank: '계좌·여권' };
+export function pendingItems(sp){
+  if(!sp || noFlow(sp) || sp.status === '취소') return [];
+  const steps = flowSteps(sp.event_id, { withOff: true });
+  const dueOf = (k) => (steps.find(s => s.key === k) || {}).due || '';
+  const out = [];
+  SP_COLS.forEach(c => {
+    if(c.key === 'travel') return;                       // 숙박·항공은 우리가 할 일로
+    const st = spCell(sp, sp.event_id, c.key);
+    if(!(st.state === 'todo' || st.state === 'part')) return;
+    const own = c.key === 'slides';
+    out.push({ key: c.key, label: c.label, more: st.state === 'part' && st.text ? st.text : '',
+      tab: TAB_OF[c.key] || 'basic', when: st.need === 'req' ? (own ? 'later' : 'now') : 'nice',
+      due: own ? dueOf('slides') : dueOf('collect') });
+  });
+  if(sp.fee_amount && !sp.fee_paid_at) out.push({ key: 'fee', label: '연사료 지급', tab: 'offer', when: 'ours', due: '' });
+  const tr = spCell(sp, sp.event_id, 'travel');
+  if((tr.state === 'todo' || tr.state === 'part') && (sp.stay_hotel || sp.air_route))
+    out.push({ key: 'travel', label: '숙박·항공 예약', tab: 'offer', when: 'ours', due: dueOf('travel') });
+  return out;
+}
+
 const sentLog = (sp, key) => logsOfSpeaker(sp.id).some(l => l.kind === key);
 
 function isDone(sp, step){

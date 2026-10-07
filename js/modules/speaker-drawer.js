@@ -43,7 +43,7 @@ import { filterMail, mailFilBar, mailStateHtml, mailActionsHtml, mailToggleAttr,
 import { trackAction, changed, removed } from './audit-tab.js';
 import { patchContact } from './db-tab.js';
 import { confLocked, setConfLockEv, confLockNotice, renderConf, buildConfEvList, syncPartRole, spCell } from './conf-tab.js';
-import { flowStatus, draftFor, missingItems } from './speaker-flow.js';
+import { flowStatus, draftFor, missingItems, pendingItems, PART_LABEL } from './speaker-flow.js';
 import { reuseCandidates, reusePending } from './contact-speaker.js';
 
 let spId = null;
@@ -216,23 +216,28 @@ export function renderSpeakerDr(){
       onclick="removeSpeakerFromDr()" title="이 연사를 지웁니다 — 배정·연락 상대·기록도 함께">지우기</button>
     <button class="drcls" onclick="closeSpeakerDr()">✕</button>`;
 
-  /* 탭에 «아직 안 받은 것»의 수를 띄운다 — 열어 보기 전에 남은 일이 보이게 */
+  /* 탭 배지는 «남은 일»(pendingItems) 하나로 — 주황 숫자는 지금 받을 필수만,
+     나중 일·우리가 할 일은 회색 점, 있으면 좋음은 표시하지 않는다 */
+  const pend = pendingItems(sp);
+  const nowN = (tab) => pend.filter(x => x.tab === tab && x.when === 'now').length;
+  const dotOf = (tab) => pend.some(x => x.tab === tab && (x.when === 'later' || x.when === 'ours'));
   const left = {
-    basic: missingBasic(sp, con, evKey).length,
-    bio: missingBio(sp, evKey).length,
-    talk: missingTalk(sp, evKey).length,
+    basic: nowN('basic'),
+    bio: nowN('bio'),
+    talk: nowN('talk'),
     /* 수신이 없으면 메일을 못 보낸다 — 메일 탭을 열어 보고 알기보다
        탭에서 먼저 보이는 게 낫다 */
     people: mailTargets(sp.id).to.length ? 0 : 1,
     box: logsOfSpeaker(sp.id).filter(isPending).length,    // 처리 안 한 받은 메일
     mail: 0,
-    offer: missingOffer(sp, evKey).length,
-    bank: missingBank(sp, evKey).length,
+    offer: nowN('offer'),
+    bank: nowN('bank'),
   };
   const tabsEl = document.getElementById('sp-drtabs');
   if(tabsEl) tabsEl.innerHTML = TABS.map(t =>
     `<button class="drtab${spTab === t.key ? ' on' : ''}" onclick="switchSpeakerDT('${t.key}')">${t.label}${
-      left[t.key] ? ` <span class="pill p-amber">${left[t.key]}</span>` : ''}</button>`).join('');
+      left[t.key] ? ` <span class="pill p-amber">${left[t.key]}</span>`
+      : dotOf(t.key) ? ` <span title="나중 일·우리가 할 일이 있어요" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--i5);vertical-align:middle"></span>` : ''}</button>`).join('');
 
   const b = document.getElementById('sp-drbd');
   if(b){
@@ -306,6 +311,24 @@ export async function confirmSpReuse(){
   await patchSpeaker(patch, `지난 자료 확인됨 (${pend.map(g => g.label).join('·')})`);
 }
 
+/* 남은 일 — 순서대로 묶고, 항목마다 그 파트 탭으로 바로 간다 */
+function pendingHtml(sp){
+  const pend = pendingItems(sp);
+  if(!pend.length) return '';
+  const G = [['now', '지금 받을 것', 'var(--re)'], ['later', '다음에 받을 것', 'var(--am)'],
+    ['ours', '우리가 할 일', 'var(--a)'], ['nice', '있으면 좋음', 'var(--i4)']];
+  const item = (x) => `<a href="#" onclick="switchSpeakerDT('${x.tab}');return false"
+      style="display:inline-flex;gap:3px;align-items:center;margin:1px 8px 1px 0;color:var(--i2);text-decoration:none;font-size:11px">
+      ${escapeHtml(x.label)}${x.more ? `<span style="color:var(--i4)">(${escapeHtml(x.more)})</span>` : ''}
+      <span style="font-size:9.5px;color:var(--i5)">[${PART_LABEL[x.tab] || ''}]</span></a>`;
+  return `<div style="margin-top:6px;display:grid;grid-template-columns:auto 1fr;gap:3px 8px;align-items:baseline">
+    ${G.map(([k, l, c]) => { const xs = pend.filter(x => x.when === k); if(!xs.length) return '';
+      const due = xs.find(x => x.due)?.due || '';
+      return `<span style="font-size:10.5px;font-weight:700;color:${c};white-space:nowrap">${l}</span>
+        <div>${xs.map(item).join('')}${due && k !== 'nice' ? `<span style="font-size:10px;color:var(--i4)">— 마감 ${escapeHtml(due)}</span>` : ''}</div>`; }).join('')}
+  </div>`;
+}
+
 function flowBoxHtml(sp){
   const f = flowStatus(sp);
   if(f.skip) return `<div style="padding:8px 11px;border:1px solid var(--i6);border-radius:8px;margin-bottom:12px;
@@ -346,7 +369,7 @@ function flowBoxHtml(sp){
         <div style="font-size:12px;font-weight:700;color:var(--a)">지금 할 일 · ${escapeHtml(f.remind ? '자료 독촉' : cur.label)}${
           cur.due ? ` <span style="font-weight:400;color:${cur.due < td() ? 'var(--re)' : 'var(--i4)'};font-size:10.5px">마감 ${escapeHtml(cur.due)}</span>` : ''}</div>
         <div style="font-size:10.5px;color:var(--i4);margin-top:2px;line-height:1.6">${escapeHtml(cur.desc || '')}</div>
-        ${left.length ? `<div style="font-size:10.5px;color:var(--am);margin-top:3px">아직 못 받음: ${escapeHtml(left.map(x => x.c.label).join(' · '))}</div>` : ''}
+        ${pendingHtml(sp)}
         <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">
           <button class="btn bp" style="font-size:10.5px" onclick="openFlowDraft('${cur.key}')">✉ 메일 초안 만들기</button>
           ${markBtn}
@@ -1150,6 +1173,7 @@ export async function removeSpeakerContact(id){
    고쳐 보내는 걸 전제로 하고, 자동으로 나가는 일은 없다. */
 const MAIL_KINDS = [
   { key: 'invite',   label: '초청' },
+  { key: 'bulkreq',  label: '안 받은 자료 한 번에 요청' },
   { key: 'profile',  label: '이력·사진 요청' },
   { key: 'abstract', label: '발제명·초록 요청' },
   { key: 'slides',   label: '발표자료 요청' },
@@ -1228,6 +1252,7 @@ function mailTabHtml(sp, evKey){
           onclick="openFlowSettings('${escAttr(evKey)}',document.getElementById('sp-mail-kind').value)">⚙ 이 단계 기본 문구 고치기</button>`,
         '고르면 그 단계의 기본 문구로 제목·본문이 채워집니다. 행사마다 다른 기본 문구는 위 단추로 설정에서 고칩니다');
     })()}
+    <div id="sp-bulk-pick"></div>
     ${fg('제목', `<input class="fi" id="sp-mail-subject" value="${escAttr(`[${evName}] 연사 안내`)}">`)}
     ${fg('내용', `<textarea class="fi" id="sp-mail-body" rows="10" style="resize:vertical"></textarea>`)}
     ${fg('첨부', `<div id="sp-mail-files" style="font-size:11px"></div>
@@ -1295,12 +1320,66 @@ export function toggleSpDefaultFile(id, on){ if(on) spSkipDefault.delete(id); el
 
 /* 뼈대 채우기 — 무엇을 받아야 하는지는 역할에서 이미 알고 있다.
    해외 연사(영문만)에게는 영문으로 만든다. */
+/* 안 받은 자료를 한 통에 — 필수(지금·다음)와 있으면 좋음을 나눠 적는다.
+   목록은 «남은 일»(pendingItems)과 같다. 연사가 영문(EN)이면 영문으로 */
+/* 무엇을 이번에 요청할지 — 일부만 먼저 받는 일이 많아서 고를 수 있게 한다.
+   기본은 필수(지금·다음)만 켜 둔다. 연사가 바뀌면 다시 기본으로 */
+let bulkPick = null, bulkPickFor = '';
+function bulkDefault(sp){ return new Set(pendingItems(sp).filter(x => x.when === 'now' || x.when === 'later').map(x => x.key)); }
+export function toggleBulkItem(key, on){
+  const sp = getSpeakerById(spId);
+  if(!sp) return;
+  if(!bulkPick || bulkPickFor !== sp.id){ bulkPick = bulkDefault(sp); bulkPickFor = sp.id; }
+  on ? bulkPick.add(key) : bulkPick.delete(key);
+  fillBulkRequest(sp);
+}
+window.toggleBulkItem = toggleBulkItem;
+function renderBulkPick(sp){
+  const el = document.getElementById('sp-bulk-pick');
+  if(!el) return;
+  const pend = pendingItems(sp).filter(x => x.when !== 'ours');
+  const G = { now: '지금', later: '다음', nice: '있으면 좋음' };
+  el.innerHTML = pend.length ? `<div class="mlbl">이번에 요청할 것 <span style="font-size:9px;color:var(--i4)">이미 받은 건 빠져 있어요 — 일부만 받은 건 빠진 부분을 적어요</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px 12px;margin:2px 0 8px">${pend.map(x => `<label style="display:flex;gap:4px;align-items:center;font-size:11.5px;cursor:pointer">
+      <input type="checkbox" ${bulkPick.has(x.key) ? 'checked' : ''} onchange="toggleBulkItem('${escAttr(x.key)}',this.checked)">
+      ${escapeHtml(x.label)}${x.more ? `<span style="color:var(--i4)">(${escapeHtml(x.more)})</span>` : ''}
+      <span style="font-size:9.5px;color:var(--i5)">${G[x.when]}</span></label>`).join('')}</div>` : '';
+}
+
+function fillBulkRequest(sp){
+  if(!bulkPick || bulkPickFor !== sp.id){ bulkPick = bulkDefault(sp); bulkPickFor = sp.id; }
+  renderBulkPick(sp);
+  const en = sp.lang_pref === 'en';
+  const ev = EVENT_LIST.find(e => e.key === sp.event_id);
+  const evName = ev ? ((en && ev.name_en) || ev.name || ev.short || ev.key) : sp.event_id;
+  const pend = pendingItems(sp).filter(x => x.when !== 'ours' && bulkPick.has(x.key));
+  const titleKo = String(sp.title_ko || '').split(/[\/·,]/)[0].trim();
+  const name = en ? (sp.name_en || sp.name_snapshot || '') : (sp.name_snapshot || sp.name_en || '');
+  const honor = en ? name : (titleKo ? `${name} ${titleKo}님` : `${name} 님`);
+  const line = (x) => `- ${x.label}${x.more ? ` (${x.more})` : ''}${x.due ? (en ? ` — by ${x.due}` : ` — ${x.due}까지`) : ''}`;
+  const req = pend.filter(x => x.when === 'now' || x.when === 'later');
+  const nice = pend.filter(x => x.when === 'nice');
+  const me = currentUser?.name || '';
+  const body = en
+    ? `Dear ${honor},\n\nTo prepare for ${evName}, may we kindly ask you to send us the following.\n\n${
+        req.length ? `Required:\n${req.map(line).join('\n')}\n\n` : ''}${
+        nice.length ? `If available:\n${nice.map(line).join('\n')}\n\n` : ''}Thank you very much for your help.\n\nBest regards,\n${/[가-힣]/.test(me) ? '' : me}\n${evName} Secretariat`
+    : `${honor}께\n\n안녕하십니까. ${evName} 사무국 ${me}입니다.\n행사 준비를 위해 아래 자료를 한꺼번에 요청드립니다.\n\n${
+        req.length ? `■ 꼭 필요한 자료\n${req.map(line).join('\n')}\n\n` : ''}${
+        nice.length ? `■ 있으시면 함께 보내주실 자료\n${nice.map(line).join('\n')}\n\n` : ''}바쁘신 중에 번거로우시겠지만 부탁드립니다.\n\n감사합니다.\n${evName} 사무국 ${me} 드림`;
+  const s = document.getElementById('sp-mail-subject'), b = document.getElementById('sp-mail-body');
+  if(s) s.value = en ? `[${evName}] Request for Outstanding Materials` : `[${evName}] 미제출 자료 요청 — ${honor}`;
+  if(b) b.value = pend.length ? body : (en ? 'Nothing outstanding.' : '안 받은 자료가 없어요.');
+}
+
 export function fillSpeakerMail(kind){
   const sp = getSpeakerById(spId);
   if(!sp) return;
   const sel = document.getElementById('sp-mail-kind');
   if(sel && sel.value !== kind) sel.value = kind;
   renderSpMailFiles(kind, true);
+  if(kind === 'bulkreq'){ fillBulkRequest(sp); return; }
+  const bp = document.getElementById('sp-bulk-pick'); if(bp) bp.innerHTML = '';
   const d = draftFor(sp, kind);
   if(d){
     const s = document.getElementById('sp-mail-subject');
@@ -1389,9 +1468,12 @@ export async function sendSpeakerMail(){
   const text = (document.getElementById('sp-mail-body')?.value || '').trim();
   if(!subject && !text){ say('제목이나 내용 중 하나는 있어야 해요.', false); return; }
   // 회신은 연락 단계 메일이 아니다 — 단계 기록·기본 첨부·날짜 찍기를 하지 않는다
-  const kind = reply ? 'reply' : (document.getElementById('sp-mail-kind')?.value || 'note');
+  const pick = document.getElementById('sp-mail-kind')?.value || 'note';
+  // 일괄 요청은 «자료 받기» 메일로 남긴다 — 그래야 다음 메일이 «독촉»으로 바뀐다
+  const kind = reply ? 'reply' : pick === 'bulkreq' ? 'collect' : pick;
   const flowD = reply ? null : draftFor(sp, kind);
-  const category = reply ? '회신' : flowD ? flowD.category : ((MAIL_KINDS.find(k => k.key === kind) || {}).label || '기타');
+  const category = reply ? '회신' : pick === 'bulkreq' ? '자료 일괄 요청'
+    : flowD ? flowD.category : ((MAIL_KINDS.find(k => k.key === kind) || {}).label || '기타');
 
   /* 밖으로 나가는 일은 한 번 묻는다 — 받는 사람을 눈으로 확인하지 않으면
      엉뚱한 사람에게 간 걸 나중에 알게 된다. */
