@@ -1174,7 +1174,10 @@ const spLogRow = (l) => `<details style="border-top:1px solid var(--i7);padding:
 
 /* ── 회신 중 ── 받은 메일의 «↩ 회신»에서 들어온다(mail-mark.js replyMail) */
 let spReply = null;
-export function startSpeakerReply(d){ spReply = { ...d, filled: false }; spTab = 'mail'; renderSpeakerDr(); }
+export function startSpeakerReply(d){ spReply = { ...d, filled: false, pick: new Set() }; spTab = 'mail'; renderSpeakerDr(); }
+/* 회신에 붙일 행사 파일 — 단계 기본 첨부와 달리 처음엔 아무것도 안 고른 채로 */
+export function toggleSpReplyFile(id, on){ if(!spReply) return; on ? spReply.pick.add(id) : spReply.pick.delete(id); }
+window.toggleSpReplyFile = toggleSpReplyFile;
 export function cancelSpeakerReply(){ spReply = null; renderSpeakerDr(); }
 function fillSpeakerReply(){
   const s = document.getElementById('sp-mail-subject'), b = document.getElementById('sp-mail-body');
@@ -1267,12 +1270,15 @@ function renderSpMailFiles(kind, reset){
   if(!sp || !el) return;
   if(reset){ spSkipDefault = new Set(); }
   const k = kind || document.getElementById('sp-mail-kind')?.value || '';
-  const defs = mailFilesOf(sp.event_id).filter(f => f.step === k);
+  // 회신 중이면 이 행사에 올려 둔 파일 전부를 고를 수 있게(처음엔 꺼 둔다)
+  const defs = spReply ? mailFilesOf(sp.event_id) : mailFilesOf(sp.event_id).filter(f => f.step === k);
   const kb = (n) => n > 1048576 ? `${(n / 1048576).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`;
   const localTotal = spLocalFiles.reduce((n, f) => n + f.size, 0);
   el.innerHTML = (defs.map(f => `<label style="display:flex;gap:6px;align-items:center;padding:2px 0">
-      <input type="checkbox" ${spSkipDefault.has(f.id) ? '' : 'checked'} onchange="toggleSpDefaultFile('${escAttr(f.id)}',this.checked)">
-      📎 ${escapeHtml(f.filename)} <span style="color:var(--i4)">${kb(Number(f.size) || 0)} · 기본 첨부</span></label>`).join('')
+      ${spReply
+        ? `<input type="checkbox" ${spReply.pick.has(f.id) ? 'checked' : ''} onchange="toggleSpReplyFile('${escAttr(f.id)}',this.checked)">`
+        : `<input type="checkbox" ${spSkipDefault.has(f.id) ? '' : 'checked'} onchange="toggleSpDefaultFile('${escAttr(f.id)}',this.checked)">`}
+      📎 ${escapeHtml(f.filename)} <span style="color:var(--i4)">${kb(Number(f.size) || 0)} · ${spReply ? '행사 파일' : '기본 첨부'}</span></label>`).join('')
     + spLocalFiles.map((f, i) => `<div style="display:flex;gap:6px;align-items:center;padding:2px 0">
       📎 ${escapeHtml(f.name)} <span style="color:var(--i4)">${kb(f.size)}</span>
       <button class="btn" style="font-size:10px;padding:1px 6px" onclick="removeSpMailFile(${i})">빼기</button></div>`).join(''))
@@ -1393,7 +1399,8 @@ export async function sendSpeakerMail(){
   if(!from.ok){ say(from.text, false); return; }
   if(!confirm(`이 내용으로 보낼까요?\n\n발신 ${from.text}\n수신 ${t.to.join(', ')}${t.cc.length ? `\n참조 ${t.cc.join(', ')}` : ''}\n제목 ${subject}`)) return;
 
-  const fileIds = mailFilesOf(sp.event_id).filter(f => f.step === kind && !spSkipDefault.has(f.id)).map(f => f.id);
+  const fileIds = reply ? [...reply.pick]
+    : mailFilesOf(sp.event_id).filter(f => f.step === kind && !spSkipDefault.has(f.id)).map(f => f.id);
   if(spLocalFiles.reduce((n, f) => n + f.size, 0) > 3 * 1024 * 1024){ say('PC에서 고른 첨부가 3MB를 넘어요.', false); return; }
 
   say('보내는 중…', true);

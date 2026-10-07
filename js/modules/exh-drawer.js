@@ -3716,7 +3716,13 @@ window.forfeitExh = forfeitExh;
 let exhMailFiles = [];
 /* ── 회신 중 ── 받은 메일의 «↩ 회신»에서 들어온다(mail-mark.js replyMail) */
 let exhReply = null;
-export function startExhReply(d){ exhReply = { ...d, filled: false }; drTab = 'mail'; renderExhDr(); }
+export function startExhReply(d){ exhReply = { ...d, filled: false, pick: new Set() }; drTab = 'mail'; renderExhDr(); }
+export function toggleExhReplyFile(exhId, id){
+  if(!exhReply) return;
+  exhReply.pick.has(id) ? exhReply.pick.delete(id) : exhReply.pick.add(id);
+  const x = getExhibitorById(exhId); if(x) renderExhDefFiles(x);
+}
+window.toggleExhReplyFile = toggleExhReplyFile;
 export function cancelExhReply(){ exhReply = null; renderExhDr(); }
 function fillExhReply(x){
   const s = document.getElementById(`exm-sub-${x.id}`), b = document.getElementById(`exm-body-${x.id}`);
@@ -3727,6 +3733,7 @@ function fillExhReply(x){
   b.oninput = () => { exhReply && (exhReply.curBody = b.value); };
   b.dataset.touched = '1';
   b.focus(); b.setSelectionRange(0, 0);
+  loadMailFiles(x.event_id).then(() => renderExhDefFiles(x));
 }
 window.startExhReply = startExhReply;
 window.cancelExhReply = cancelExhReply;
@@ -3835,6 +3842,13 @@ export async function fillExhMail(exhId, first){
 function renderExhDefFiles(x){
   const el = document.getElementById('exm-deffiles');
   if(!el) return;
+  // 회신 중이면 이 행사에 올려 둔 파일 전부를 고를 수 있게(처음엔 꺼 둔다)
+  if(exhReply){
+    const all = mailFilesOf(x.event_id);
+    el.innerHTML = all.length ? `<span style="color:var(--i4)">행사 파일 붙이기</span> ${all.map(f => `<span class="pill ${exhReply.pick.has(f.id) ? 'p-blue' : 'p-gray'}" style="margin:2px 4px 0 0;cursor:pointer"
+      onclick="toggleExhReplyFile('${escAttr(x.id)}','${escAttr(f.id)}')">${exhReply.pick.has(f.id) ? '✓ ' : '+ '}📎 ${escapeHtml(f.filename)}</span>`).join('')}` : '';
+    return;
+  }
   const files = exhDefFiles(x);
   el.innerHTML = files.length ? `<span style="color:var(--i4)">단계 기본 첨부</span> ${files.map(f => `<span class="pill ${exhSkipDefault.has(f.id) ? 'p-gray' : 'p-blue'}" style="margin:2px 4px 0 0;${exhSkipDefault.has(f.id) ? 'text-decoration:line-through' : ''}">📎 ${escapeHtml(f.filename)}
     <a href="#" onclick="toggleExhDefFile('${escAttr(x.id)}','${escAttr(f.id)}');return false" style="margin-left:4px;color:var(--i4)">${exhSkipDefault.has(f.id) ? '넣기' : '빼기'}</a></span>`).join('')}` : '';
@@ -3889,7 +3903,7 @@ export async function sendExhMail(exhId){
   const stepKey = document.getElementById(`exm-step-${exhId}`)?.value || 'note';
   const st = exhMailSteps(x.event_id).find(s => s.key === stepKey);
   // 회신은 단계 메일이 아니다 — 단계 기본 첨부를 붙이지 않는다
-  const fileIds = reply ? [] : exhDefFiles(x).filter(f => !exhSkipDefault.has(f.id)).map(f => f.id);
+  const fileIds = reply ? [...reply.pick] : exhDefFiles(x).filter(f => !exhSkipDefault.has(f.id)).map(f => f.id);
   const kind = reply ? 'reply' : stepKey === 'note' ? 'note' : `exh-${stepKey}`;
   const category = reply ? '회신' : st ? st.label : '메일';
   const res = await sendMail({ to, cc, subject, text, exhibitor_id: x.id, category, kind, attachments, file_ids: fileIds });
@@ -3900,7 +3914,7 @@ export async function sendExhMail(exhId){
     id: res.logId, exhibitor_id: x.id, kind, ts: nowStamp(), direction: 'out', channel: '이메일',
     counterpart: [to.join(', '), cc.length ? `(cc) ${cc.join(', ')}` : ''].filter(Boolean).join(' '),
     category, subject, answered_at: '', answer: '', status: 'done',
-    body: text + ((attachments.length || fileIds.length) ? `\n\n[첨부] ${[...exhDefFiles(x).filter(f => fileIds.includes(f.id)).map(f => f.filename), ...attachments.map(a => a.filename)].join(', ')}` : ''),
+    body: text + ((attachments.length || fileIds.length) ? `\n\n[첨부] ${[...mailFilesOf(x.event_id).filter(f => fileIds.includes(f.id)).map(f => f.filename), ...attachments.map(a => a.filename)].join(', ')}` : ''),
     author_email: currentUser?.email || '', author_name: currentUser?.name || '',
   });
   trackAction('add', '참가사 메일', x.event_id, `${exhNames(x).ko || x.id} — ${subject}`, { kind: 'exhibitor', id: x.id, tab: 'mail' });
