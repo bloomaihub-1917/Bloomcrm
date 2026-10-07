@@ -61,6 +61,8 @@ app.get('/health', (req, res) => {
 app.use('/api/data', requireAuth, dataRoutes);
 // 메일 발송 — 로그인한 사람만. 보낸 이력이 남아야 해서 인증을 거른다.
 app.use('/api/mail', requireAuth, mailRoutes);
+// 메일 자동 가져오기 — 로그인 대신 비밀 키(CRON_SECRET)로. GitHub 예약 작업이 부른다
+app.use('/api/cron', mailRoutes.cron);
 
 // 에러 스택을 클라이언트에 노출하지 않는다 (기존 code.gs:349,398 문제 보완)
 app.use((err, req, res, next) => {

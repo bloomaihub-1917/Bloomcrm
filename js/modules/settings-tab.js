@@ -49,7 +49,7 @@ import {
   confCfg, confDays, speakerNeed,
   CONF_SESSIONS, EXHIBITORS, SPEAKERS, SPEAKER_LOGS, EXH_LOGS,
 } from '../state.js';
-import { isUnread, isPending } from './mail-mark.js';
+import { isUnread, isPending, runMailSync } from './mail-mark.js';
 
 import {
   upsertSectorRow,
@@ -2696,55 +2696,8 @@ export async function testEvMailbox(evKey){
   const r = await testMailAccount(evKey);
   evmbSay(r.ok ? r['연결'] : `${r.error || '실패'}${r['도움말'] ? ' — ' + r['도움말'] : ''}`, r.ok);
 }
-/* 메일함 → 기록. 보낸메일함(연사)과 받은메일함(연사·참가사)을 한 번에 읽어
-   무엇을 남길지 먼저 보여 주고, 확인하면 남긴다. 새로 남길 게 없어도 예전에 본문
-   없이 들어간 기록의 본문·분류·시각은 묻지 않고 채운다(그 칸만 바꾼다). */
-export async function syncEvSentMail(evKey){
-  evmbSay('보낸메일함·받은메일함 읽는 중… (메일이 많으면 1분쯤 걸려요)', true);
-  const [r, q] = await Promise.all([syncSentMail(evKey, false), syncInboxMail(evKey, false)]);
-  if(!r.ok && !q.ok){ evmbSay(r.error || q.error || '읽지 못했어요.'); return; }
-  const sTodo = r.ok ? (r.items || []).filter(x => !x.dup) : [];
-  const iTodo = q.ok ? (q.items || []).filter(x => !x.dup) : [];
-  const stamp = r.ok ? [...new Set((r.items || []).filter(x => x.stamp).map(x => x.name))] : [];
-  const list = (arr, fmt) => arr.slice(0, 15).map(fmt).join('\n') + (arr.length > 15 ? `\n… 외 ${arr.length - 15}통` : '');
-  const miss = r.ok ? (r.unmatchedSpeakers || []).map(x => `${x.name}${x.email ? ` (${x.email})` : ' (메일 없음)'}`) : [];
-  const msg = (r.ok ? `보낸메일함 «${r.sentPath}» ${r.scanned}통 → 연사에게 보낸 메일 ${(r.items || []).length}통 (이미 있는 ${(r.items || []).length - sTodo.length}통 건너뜀)\n`
-      : `보낸메일함을 읽지 못했어요: ${r.error}\n`)
-    + (q.ok ? `받은메일함 ${q.scanned}통 → 연사·참가사가 보낸 메일 ${(q.items || []).length}통 (이미 있는 ${(q.items || []).length - iTodo.length}통 건너뜀)${q.skipped && q.skipped.length ? ` · 진행 완료라 뺀 것: ${q.skipped.join(', ')}` : ''}\n\n`
-      : `받은메일함을 읽지 못했어요: ${q.error}\n\n`)
-    + (sTodo.length ? `[보낸 메일 남길 것]\n${list(sTodo, x => `· ${x.at || x.date} ${x.name} — ${x.subject} [${x.category || '기타'}]`)}\n\n` : '')
-    + (iTodo.length ? `[받은 메일 남길 것]\n${list(iTodo, x => `· ${x.at || x.date} ${x.t === 'ex' ? '(참가사) ' : ''}${x.name} — ${x.subject}`)}\n\n` : '')
-    + (stamp.length ? `초청 «보냄»으로 체크: ${stamp.join(', ')}\n\n` : '')
-    + (q.ok && (q.replyNames || []).length ? `«참석 회신 받음»으로 체크: ${q.replyNames.join(', ')}\n\n` : '')
-    + (miss.length ? `보낸 메일을 못 찾은 연사: ${miss.join(', ')}\n\n` : '');
-
-  let a = { added: 0, stamped: 0, filled: 0, sorted: 0 }, b = { added: 0 };
-  const replyN = q.ok ? (q.replyNames || []).length : 0;
-  if(!sTodo.length && !stamp.length && !iTodo.length && !replyN){
-    // 새로 남길 건 없어도 예전 기록의 빈 본문·분류·시각은 채운다
-    if(r.ok && (r.items || []).length){
-      const f = await syncSentMail(evKey, true);
-      if(f.ok && (f.filled || f.sorted || f.stamped)){
-        await reloadSpeakerData(); renderEvInbox(evKey);
-        evmbSay(`새로 남길 건 없고, ${[f.filled ? `빈 본문 ${f.filled}건 채움` : '', f.sorted ? `단계 분류 ${f.sorted}건 고침` : '',
-          f.stamped ? `초청 체크 ${f.stamped}명` : ''].filter(Boolean).join(' · ')} — 연사 화면에 바로 보입니다.`, true);
-        return;
-      }
-    }
-    evmbSay('새로 남길 게 없어요.', true); alert(msg + '새로 남길 게 없어요.'); return;
-  }
-  if(!confirm(msg + '이대로 남길까요?')){ evmbSay('', true); return; }
-  evmbSay('남기는 중…', true);
-  if(r.ok){ a = await syncSentMail(evKey, true); if(!a.ok){ evmbSay(a.error || '보낸 메일을 남기지 못했어요.'); return; } }
-  /* 받은메일함은 늘 한 번 더 부른다 — 바로 위에서 «초청 보냄»이 새로 찍힌 연사는 미리보기 땐
-     회신 대상이 아니었다가 지금은 맞을 수 있다(서버가 다시 계산한다) */
-  if(q.ok){ b = await syncInboxMail(evKey, true); if(!b.ok){ evmbSay(b.error || '받은 메일을 남기지 못했어요.'); return; } }
-  trackAction('edit', '메일함 가져오기', evKey, `보낸 ${a.added}건 · 받은 ${b.added}건 · 초청 체크 ${a.stamped}명 · 회신 체크 ${b.replied || 0}명`);
-  // 서버가 바꾼 기록을 바로 다시 읽는다 — 새로고침해야 보이면 안 남은 줄 안다
-  const fresh = await reloadSpeakerData();
-  renderEvInbox(evKey);   // 새로 들어온 받은 메일을 아래 목록에 바로
-  evmbSay(`보낸 ${a.added}건 · 받은 ${b.added}건 · 초청 체크 ${a.stamped}명${b.replied ? ` · 참석 회신 체크 ${b.replied}명` : ''}${a.filled ? ` · 빈 본문 ${a.filled}건 채움` : ''}${a.sorted ? ` · 단계 분류 ${a.sorted}건 고침` : ''} 남겼어요${fresh ? ' — 연사·참가사 화면에 바로 보입니다.' : ' — 새로고침하면 보입니다.'}`, true);
-}
+/* 메일함 → 기록 — 규칙과 순서는 mail-mark.js runMailSync(대시보드도 같은 걸 쓴다) */
+export const syncEvSentMail = (evKey) => runMailSync(evKey, evmbSay);
 
 export async function removeEvMailbox(evKey){
   if(!confirm('이 행사의 메일 계정 연결을 끊을까요?\n끊으면 이 행사 사람들에게 메일을 보낼 수 없어요.')) return;

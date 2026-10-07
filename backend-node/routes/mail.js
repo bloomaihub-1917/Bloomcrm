@@ -85,7 +85,14 @@ const ensureBox = () => boxReady || (boxReady = pool.query(`
   CREATE TABLE IF NOT EXISTS event_mailboxes (
     event_id TEXT PRIMARY KEY, provider TEXT, host TEXT, port INTEGER,
     username TEXT, pass_enc TEXT, from_addr TEXT, from_name TEXT,
-    updated_at TEXT, author_email TEXT)`).catch((e) => { boxReady = null; throw e; }));
+    updated_at TEXT, author_email TEXT)`)
+  // 마지막으로 메일함을 가져온 시각·누가(자동이면 «자동») — 대시보드 숫자가 언제 기준인지 보이게
+  .then(() => pool.query('ALTER TABLE event_mailboxes ADD COLUMN IF NOT EXISTS last_sync_at TEXT'))
+  .then(() => pool.query('ALTER TABLE event_mailboxes ADD COLUMN IF NOT EXISTS last_sync_by TEXT'))
+  .catch((e) => { boxReady = null; throw e; }));
+const markSynced = (eventId, who) => pool.query(
+  'UPDATE event_mailboxes SET last_sync_at = $1, last_sync_by = $2 WHERE event_id = $3',
+  [kstStamp(Date.now()), who || '', eventId]).catch(() => {});
 
 const secretKey = () => {
   const s = (process.env.MAIL_SECRET || '').trim();
@@ -126,6 +133,7 @@ const boxPublic = (b) => ({
   event_id: b.event_id, provider: b.provider || 'mailplug', host: b.host, port: b.port,
   username: b.username, from_addr: b.from_addr, from_name: b.from_name,
   has_password: !!b.pass_enc, updated_at: b.updated_at, author_email: b.author_email,
+  last_sync_at: b.last_sync_at || '', last_sync_by: b.last_sync_by || '',
 });
 
 /* 보낸메일함에 사본 넣기
@@ -469,7 +477,7 @@ function classifySent(subject) {
 }
 const prevDay = (d) => new Date(new Date(`${d}T00:00:00Z`).getTime() - 864e5).toISOString().slice(0, 10);
 
-router.post('/accounts/:eventId/sync-sent', async (req, res) => {
+const syncSentHandler = async (req, res) => {
   const apply = !!(req.body && req.body.apply);
   if (req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 바꿀 수 없어요' });
   const eventId = String(req.params.eventId);
@@ -605,6 +613,7 @@ router.post('/accounts/:eventId/sync-sent', async (req, res) => {
         stamped += u.rowCount || 0;
       }
     }
+    if (apply) await markSynced(eventId, req.user?.name || req.user?.email || '');
     res.json({
       ok: true, applied: apply, sentPath, scanned: total, added, stamped, filled, sorted,
       items: found.map(({ body, ...r }) => r),
@@ -612,7 +621,7 @@ router.post('/accounts/:eventId/sync-sent', async (req, res) => {
         .map((r) => ({ id: r.id, name: r.name_snapshot || r.name_en, email: r.email1 || '' })),
     });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
-});
+};
 
 /* ── 받은메일함 → 연사·참가사 기록 ──
    상대가 보낸 메일도 그 사람 기록에 쌓는다. 보낸 사람 주소가 이 행사 연사(마스터DB
@@ -623,7 +632,7 @@ router.post('/accounts/:eventId/sync-sent', async (req, res) => {
    «답변 대기» 문의로 만들지는 않는다(kind 'note'). 회신·자료 송부까지 전부 답할 일로
    잡히면 대기 목록이 쓸모없어진다. 문의로 돌릴 메일은 사람이 고른다.
    같은 날(또는 하루 전)·같은 제목·같은 사람의 받은 기록이 있으면 건너뛴다. */
-router.post('/accounts/:eventId/sync-inbox', async (req, res) => {
+const syncInboxHandler = async (req, res) => {
   const apply = !!(req.body && req.body.apply);
   if (req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 바꿀 수 없어요' });
   const eventId = String(req.params.eventId);
@@ -724,7 +733,8 @@ router.post('/accounts/:eventId/sync-inbox', async (req, res) => {
     let added = 0, replied = 0;
     if (apply) {
       for (const [id, d] of Object.entries(firstReply)) {
-        const u = await pool.query(`UPDATE speakers SET invite_replied_at = $1 WHERE id = $2 AND COALESCE(invite_replied_at, '') = ''`, [d, id]);
+        const u = await pool.query(`UPDATE speakers SET invite_replied_at = $1, reply_auto = 'yes'
+          WHERE id = $2 AND COALESCE(invite_replied_at, '') = ''`, [d, id]);
         replied += u.rowCount || 0;
       }
       for (const f of found.filter((x) => !x.dup)) {
@@ -738,12 +748,56 @@ router.post('/accounts/:eventId/sync-inbox', async (req, res) => {
         added++;
       }
     }
+    if (apply) await markSynced(eventId, req.user?.name || req.user?.email || '');
     res.json({
       ok: true, applied: apply, scanned: total, added, replied, replyNames,
       items: found.map(({ body, ...r }) => r),
       skipped: [confDone ? '컨퍼런스(진행 완료)' : '', exhDone ? '전시(진행 완료)' : ''].filter(Boolean),
     });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+};
+
+router.post('/accounts/:eventId/sync-sent', syncSentHandler);
+router.post('/accounts/:eventId/sync-inbox', syncInboxHandler);
+
+/* ── 자동 가져오기 ──
+   GitHub 예약 작업이 15분마다 부른다(.github/workflows/mail-sync.yml). 로그인한 사람이
+   아니라 비밀 키(CRON_SECRET, Vercel·GitHub 둘 다에 같은 값)로 들어온다.
+   한 번에 행사 하나 — Vercel 함수 한 번(60초) 안에 끝나게. 행사 목록은 따로 받는다.
+   처리 결과 숫자만 돌려준다(이름·제목은 GitHub 기록에 남기지 않는다). */
+const cron = express.Router();
+cron.use((req, res, next) => {
+  const want = (process.env.CRON_SECRET || '').trim();
+  if (!want) return res.status(503).json({ ok: false, error: 'CRON_SECRET이 설정되지 않았어요' });
+  const got = String(req.headers['x-cron-secret'] || '');
+  const a = Buffer.from(got), b = Buffer.from(want);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return res.status(401).json({ ok: false });
+  next();
+});
+cron.get('/mail-events', async (req, res) => {
+  try {
+    await ensureBox();
+    const r = await pool.query("SELECT event_id FROM event_mailboxes WHERE COALESCE(pass_enc, '') <> '' ORDER BY event_id");
+    res.json({ ok: true, events: r.rows.map((x) => x.event_id) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+// 처리기를 그대로 부른다 — 사람이 누를 때와 같은 규칙(중복 건너뛰기·진행 완료 제외·회신 체크)
+const runHandler = (handler, eventId) => new Promise((resolve) => {
+  const req = { params: { eventId }, body: { apply: true }, user: { email: 'auto@cron', name: '자동' } };
+  const res = { code: 200, status(c) { this.code = c; return this; }, json(o) { resolve({ code: this.code, ...o }); } };
+  handler(req, res).catch((e) => resolve({ code: 500, ok: false, error: e.message }));
+});
+cron.post('/mail-sync', async (req, res) => {
+  const eventId = String(req.query.event || '');
+  if (!eventId) return res.status(400).json({ ok: false, error: 'event가 필요해요' });
+  const sent = await runHandler(syncSentHandler, eventId);
+  const inbox = await runHandler(syncInboxHandler, eventId);
+  res.json({
+    ok: !!(sent.ok && inbox.ok),
+    sent: sent.ok ? { added: sent.added, stamped: sent.stamped } : { error: sent.error },
+    inbox: inbox.ok ? { added: inbox.added, replied: inbox.replied } : { error: inbox.error },
+  });
 });
 
 module.exports = router;
+module.exports.cron = cron;

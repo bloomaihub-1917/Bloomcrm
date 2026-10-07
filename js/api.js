@@ -944,6 +944,11 @@ export async function eventMailFrom(evKey, force){
   if(!b) return { ok: false, text: '이 행사에 공용 메일이 없어요 — 설정 › 행사 관리 › 메일에서 넣어주세요' };
   return { ok: true, addr: b.from_addr, text: b.from_name ? `${b.from_name} <${b.from_addr}>` : b.from_addr };
 }
+/* 행사 메일 계정 하나 — 마지막 가져온 시각(last_sync_at)을 대시보드에 보인다 */
+export async function mailAccountOf(evKey, force){
+  if(!mailAcctCache || force || mailAcctCache.ok === false) mailAcctCache = await loadMailAccounts();
+  return ((mailAcctCache || {}).accounts || []).find(a => a.event_id === evKey) || null;
+}
 export const saveMailAccount   = (evKey, rec) => mailApi(`/accounts/${encodeURIComponent(evKey)}`, 'PUT', rec);
 export const deleteMailAccount = (evKey) => mailApi(`/accounts/${encodeURIComponent(evKey)}`, 'DELETE');
 export const testMailAccount   = (evKey) => mailApi(`/accounts/${encodeURIComponent(evKey)}/test`, 'POST', {});

@@ -19,6 +19,8 @@
   (비어 있을 때만) 찍는다. 미리보기 → 확인. 같은 날(또는 하루 전)·같은 제목 기록은 건너뛴다.
 - 받은메일함(INBOX)도 같은 버튼으로 읽는다(`/sync-inbox`): 보낸 사람이 이 행사 연사면 `speaker_logs`, 참가사 담당자면 `exhibitor_logs`에 direction 'in', 분류 «받은 메일»로 남긴다. 둘 다 아니면 남기지 않는다. «답변 대기» 문의로는 만들지 않는다.
 - 메일플러그 IMAP은 `loginMethod: 'LOGIN'`이어야 한다(AUTHENTICATE PLAIN 거절). 날짜 검색 대신 마지막 300통을 번호로 읽는다.
+- 자동 가져오기: `.github/workflows/mail-sync.yml`이 15분마다 `/api/cron/mail-events` → 행사마다 `/api/cron/mail-sync?event=`를 부른다. 키는 `CRON_SECRET`(GitHub Secrets·Vercel 환경변수에 같은 값, 2026-10-07 설정). 바꾸면 둘 다 바꿀 것.
+- 대시보드 «메일함» 카드: 안 읽음·처리 안 함·3일 넘게 처리 안 함, 마지막 가져옴(event_mailboxes.last_sync_at), 새 회신(speakers.reply_auto=yes → 참석/불참 확인), 새 문의 후보(참가사 받은 메일 → 문의로 등록).
 - 기록 칸 ts는 2026-10-07부터 «YYYY-MM-DD HH:mm»(한국 시각). 같은 메일인지는 앞 10자리 날짜로 견준다.
 - 기록 날짜는 한국 날짜(KST). 2026-10-07 전 CRM 발송 기록은 UTC 날짜라 하루 이를 수 있다.
 - 보낸 뒤 IMAP(imap.mailplug.co.kr:993)으로 같은 메일을 보낸메일함에 넣는다(`saveToSent`). 실패해도 발송은 성공으로 두고 화면에 알린다.

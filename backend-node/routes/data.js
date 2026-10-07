@@ -172,7 +172,7 @@ const TABLES = {
       'org_ko', 'org_en', 'title_ko', 'title_en',
       'nationality', 'residence_country', 'pay_basis',
       'status', 'lang_pref', 'note', 'updated_at',
-      'invite_sent_at', 'invite_replied_at',
+      'invite_sent_at', 'invite_replied_at', 'reply_auto',
       'guide_sent_at', 'form_sent_at', 'reminded_at', 'confirmed_at',
       'bio_profile_ko', 'bio_profile_en',
       'bio_pro_ko', 'bio_pro_en', 'bio_work_ko', 'bio_work_en',

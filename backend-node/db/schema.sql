@@ -759,6 +759,7 @@ CREATE TABLE IF NOT EXISTS speakers (
   -- 섭외 · 프로필
   invite_sent_at      TEXT,
   invite_replied_at   TEXT,
+  reply_auto          TEXT,   -- 'yes' = 받은 메일로 자동 체크한 회신, 대시보드에서 참석·불참 확인 전
   -- 보낸 것도 적는다. 일의 절반은 «무엇을 보냈나»다 — 보낸 걸 모르면
   -- 안 보내고 기다리거나 보낸 걸 또 보낸다.
   guide_sent_at       TEXT,   -- 가이드라인

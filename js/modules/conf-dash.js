@@ -17,7 +17,7 @@ import { escapeHtml, escAttr, td } from '../utils.js';
 import { progressBar } from './exh-tab.js';
 import { SP_COLS, spCell } from './conf-tab.js';
 import { flowStatus, missingItems } from './speaker-flow.js';
-import { isPending, isUnread } from './mail-mark.js';
+import { isStale, isUnread, mailCardHtml } from './mail-mark.js';
 
 const dayDiff = (a, b) => Math.round((new Date(a) - new Date(b)) / 86400000);
 const spName = (sp) => sp.name_snapshot || sp.name_en || '(이름 없음)';
@@ -85,9 +85,10 @@ export function confDashHtml(ev){
   const sessions = sessionsForEvent(ev.key).filter(s => !s.kind);
   const emptySess = sessions.filter(s => !assignmentsOfSession(s.id).length);
   const unassigned = live.filter(sp => !assignmentsFor(sp.id).length);
-  /* 처리 안 한 받은 메일 — 연사가 보낸 메일을 아무도 안 챙기면 놓친다(규칙은 mail-mark.js) */
+  /* 처리 필요에는 3일 넘게 처리 안 한 받은 메일만 — 전부 넣으면 마감 지난 일이 묻힌다.
+     나머지는 «메일함» 카드에서 본다(규칙은 mail-mark.js) */
   const inbox = [];
-  live.forEach(sp => logsOfSpeaker(sp.id).filter(isPending).forEach(l => inbox.push({ sp, l })));
+  live.forEach(sp => logsOfSpeaker(sp.id).filter(isStale).forEach(l => inbox.push({ sp, l })));
   inbox.sort((a, b) => String(a.l.ts || '').localeCompare(String(b.l.ts || '')));   // 오래된 것부터
   const todo = dueMiss.length + silent.length + emptySess.length + unassigned.length + inbox.length;
 
@@ -177,7 +178,7 @@ export function confDashHtml(ev){
         style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:6px;cursor:pointer;background:var(--i9);margin-bottom:4px"
         title="메일함 탭 열기">
         <span style="flex:0 0 128px;font-weight:700;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(spName(sp))}</span>
-        <span class="pill ${isUnread(l) ? 'p-red' : 'p-gray'}" style="flex:0 0 auto">${isUnread(l) ? '● 안 읽은 메일' : '받은 메일'}</span>
+        <span class="pill ${isUnread(l) ? 'p-red' : 'p-gray'}" style="flex:0 0 auto">${isUnread(l) ? '● 안 읽은 메일 3일+' : '받은 메일 3일+'}</span>
         <span style="font-size:11.5px;color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(l.subject || '(제목 없음)')}</span>
         ${dayDiff(today, String(l.ts || '').slice(0, 10)) > 0 ? `<span class="pill ${dayDiff(today, String(l.ts).slice(0, 10)) >= 3 ? 'p-amber' : 'p-gray'}" style="flex:0 0 auto">${dayDiff(today, String(l.ts).slice(0, 10))}일</span>` : ''}
       </div>`).join('')}
@@ -218,12 +219,13 @@ export function confDashHtml(ev){
       ${card('참가 확정', `${confirmed}/${live.length}`, '', confirmed === live.length ? 'var(--g)' : '')}
       ${card('자료 진행률', avg + '%', `연락 완료 ${doneAll}명`)}
       ${card('처리 필요', todo + '건',
-        `${inbox.length ? `받은 메일 ${inbox.length} · ` : ''}마감 지남 ${dueMiss.length} · 답 없음 ${silent.length} · 미배정 ${emptySess.length + unassigned.length}`,
+        `${inbox.length ? `묵은 메일 ${inbox.length} · ` : ''}마감 지남 ${dueMiss.length} · 답 없음 ${silent.length} · 미배정 ${emptySess.length + unassigned.length}`,
         todo ? 'var(--re)' : 'var(--g)')}
     </div>
     <div class="exh-dash-third">${cardFlow}</div>
     <div class="exh-dash-third">${cardNeeds}</div>
     <div class="exh-dash-third">${cardPeople}</div>
+    <div class="exh-dash-wide">${mailCardHtml(ev.key, 'conf')}</div>
     <div class="exh-dash-wide">${cardTodo}</div>
     <div class="exh-dash-side">${cardRecent}</div>
   </div>`;

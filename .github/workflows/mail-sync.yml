@@ -1,0 +1,38 @@
+# 행사 공용 메일(메일플러그) 자동 가져오기 — 15분마다
+#
+# 보낸메일함·받은메일함을 읽어 연사·참가사 기록에 남긴다(사람이 «지금 가져오기»를
+# 누를 때와 같은 서버 처리기). 로그인 대신 CRON_SECRET(GitHub 저장소 Secrets와
+# Vercel backend-node 환경변수에 같은 값)으로 서버를 부른다.
+# 이 기록은 공개 저장소에서 보이므로 건수만 찍는다 — 행사·사람 이름, 메일 제목은 남기지 않는다.
+name: mail-sync
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: mail-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 행사 메일함 가져오기
+        env:
+          API: https://backend-node-jade-delta.vercel.app
+          SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$SECRET" ]; then echo "CRON_SECRET이 없어 건너뜀"; exit 0; fi
+          events=$(curl -sf -H "x-cron-secret: $SECRET" "$API/api/cron/mail-events" | jq -r '.events[]') || { echo "행사 목록을 못 읽음"; exit 1; }
+          n=0
+          while IFS= read -r ev; do
+            [ -z "$ev" ] && continue
+            n=$((n+1))
+            enc=$(jq -rn --arg v "$ev" '$v|@uri')
+            res=$(curl -s --max-time 70 -X POST -H "x-cron-secret: $SECRET" "$API/api/cron/mail-sync?event=$enc")
+            echo "행사 $n: $(echo "$res" | jq -c '{ok, 보낸: .sent.added, 받은: .inbox.added, 회신체크: .inbox.replied, 오류: ((.sent.error // "") + (.inbox.error // ""))}' 2>/dev/null || echo '응답 없음')"
+          done <<< "$events"
+          echo "행사 ${n}개 처리"
