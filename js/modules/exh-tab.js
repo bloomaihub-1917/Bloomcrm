@@ -882,7 +882,8 @@ export function shortCell(v){
 
 export function daysSince(dateStr){
   if(!dateStr) return 0;
-  const d = new Date(dateStr);
+  // 기록 칸은 «날짜 시각»일 수 있다 — 날짜만 본다
+  const d = new Date(String(dateStr).slice(0, 10));
   if(isNaN(d)) return 0;
   return Math.floor((Date.now() - d.getTime()) / 86400000);
 }

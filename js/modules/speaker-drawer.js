@@ -26,7 +26,7 @@ import {
   isDomesticSpeaker, autoDomestic, bankDocs, paysFee,
 } from '../state.js';
 import { SPEAKER_ROLES, NEED_MARK, NEED_LABEL, SP_CONSENTS } from '../constants.js';
-import { td, escapeHtml, escAttr, countryOptions, countryName, splitQuotedMail } from '../utils.js';
+import { td, nowStamp, mailDirPill, escapeHtml, escAttr, countryOptions, countryName, splitQuotedMail } from '../utils.js';
 /* 보낸 기록 본문 — 이전 메일(인용)은 접어 둔다(utils.js splitQuotedMail) */
 const mailBodyHtml = (body) => {
   const m = splitQuotedMail(body);
@@ -1161,7 +1161,7 @@ function mailTabHtml(sp, evKey){
   const logRow = (l) => `<details style="border-top:1px solid var(--i7);padding:7px 0">
     <summary style="cursor:pointer;list-style:none">
     <div style="display:flex;gap:7px;align-items:baseline">
-      <span class="pill p-gray" style="font-size:10px">${escapeHtml(l.category || '기타')}</span>
+      ${mailDirPill(l)}<span class="pill p-gray" style="font-size:10px">${escapeHtml(l.category || '기타')}</span>
       <div style="font-size:11.5px;font-weight:600;flex:1;min-width:0">${escapeHtml(l.subject || '(제목 없음)')}</div>
       <div style="font-size:10.5px;color:var(--i4)">${escapeHtml(l.ts || '')} ▾</div>
     </div>
@@ -1205,9 +1205,9 @@ function mailTabHtml(sp, evKey){
       <span id="sp-mail-msg" style="font-size:10.5px;color:var(--i4)"></span>
     </div>
 
-    <div style="font-size:11px;font-weight:700;color:var(--i3);margin:18px 0 2px">보낸 기록 ${logs.length || ''}</div>
+    <div style="font-size:11px;font-weight:700;color:var(--i3);margin:18px 0 2px">주고받은 기록 ${logs.length || ''}</div>
     ${logs.length ? logs.map(logRow).join('')
-      : `<div style="font-size:11px;color:var(--i4);padding:6px 0">아직 보낸 메일이 없어요</div>`}`;
+      : `<div style="font-size:11px;color:var(--i4);padding:6px 0">아직 주고받은 메일이 없어요</div>`}`;
 }
 
 /* ── 메일 첨부 ──
@@ -1362,7 +1362,7 @@ export async function sendSpeakerMail(){
   /* 서버가 남긴 기록 id를 쓴다 — 임시 id로 두면 연사를 지울 때 이 기록이 안 지워졌다.
      기록 저장에 실패했으면 화면에도 끼우지 않는다(없는 기록을 보여 주면 안 된다) */
   if(res.logId) SPEAKER_LOGS.push({
-    id: res.logId, speaker_id: sp.id, kind, ts: td(),
+    id: res.logId, speaker_id: sp.id, kind, ts: nowStamp(),
     direction: 'out', channel: '이메일',
     counterpart: [t.to.join(', '), t.cc.length ? `(cc) ${t.cc.join(', ')}` : ''].filter(Boolean).join(' '),
     category, subject, answered_at: '', answer: '', status: 'done',

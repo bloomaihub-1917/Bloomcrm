@@ -19,7 +19,7 @@ import {
   EXH_APPS, appsFor, openAppFor, isVoided, liveItemsFor, exhEvent, exhibitorsForEvent,
   nextItemSort, EVENT_LIST,
 } from '../state.js';
-import { td, escapeHtml, escAttr, countryOptions, leftPill, splitQuotedMail } from '../utils.js';
+import { td, nowStamp, mailDirPill, escapeHtml, escAttr, countryOptions, leftPill, splitQuotedMail } from '../utils.js';
 /* 보낸 기록 본문 — 이전 메일(인용)은 접어 둔다(utils.js splitQuotedMail) */
 const mailBodyHtml = (body) => {
   const m = splitQuotedMail(body);
@@ -3679,7 +3679,7 @@ function dMail(x){
   const ev = EVENT_LIST.find(e => e.key === x.event_id);
   const evName = ev ? (ev.short || ev.name || ev.key) : '';
   const id = escAttr(x.id);
-  const sent = logsFor(x.id).filter(l => l.direction === 'out' && l.channel === '이메일')
+  const sent = logsFor(x.id).filter(l => (l.direction === 'out' || l.direction === 'in') && l.channel === '이메일')
     .sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')));
   return `
   <div class="uc" style="margin-bottom:14px">
@@ -3709,16 +3709,17 @@ function dMail(x){
       <span id="exm-msg" style="font-size:11px;color:var(--i4)"></span>
     </div>
   </div>
-  <div class="sct">보낸 메일 ${sent.length || ''}</div>
+  <div class="sct">주고받은 메일 ${sent.length || ''}</div>
   ${sent.length ? sent.map(l => `<details style="border-top:1px solid var(--i7);padding:7px 0">
       <summary style="cursor:pointer;list-style:none">
       <div style="display:flex;gap:7px;align-items:baseline">
+        ${mailDirPill(l)}
         <div style="font-size:12px;font-weight:600;flex:1;min-width:0">${escapeHtml(l.subject || '(제목 없음)')}</div>
         <div style="font-size:10.5px;color:var(--i4)">${escapeHtml(l.ts || '')} ▾</div></div>
       <div style="font-size:10.5px;color:var(--i4);margin-top:2px">${escapeHtml(l.counterpart || '')}</div></summary>
       <div style="margin-top:6px;padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;
         font-size:12px;color:var(--i2);white-space:pre-wrap;line-height:1.6">${mailBodyHtml(l.body)}</div></details>`).join('')
-    : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">아직 보낸 메일이 없어요</div>'}`;
+    : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">아직 주고받은 메일이 없어요</div>'}`;
 }
 
 async function fillExhMailFrom(x){
@@ -3762,7 +3763,7 @@ export async function sendExhMail(exhId){
   // 서버가 기록을 남긴다 — 화면에도 바로 끼워 방금 보낸 게 안 보여 또 보내는 일을 막는다
   /* 서버가 남긴 기록 id를 쓴다 — 임시 id로 두면 이 줄을 지울 때 서버에서 안 지워진다 */
   if(res.logId) EXH_LOGS.push({
-    id: res.logId, exhibitor_id: x.id, kind: 'note', ts: td(), direction: 'out', channel: '이메일',
+    id: res.logId, exhibitor_id: x.id, kind: 'note', ts: nowStamp(), direction: 'out', channel: '이메일',
     counterpart: [to.join(', '), cc.length ? `(cc) ${cc.join(', ')}` : ''].filter(Boolean).join(' '),
     category: '메일', subject, answered_at: '', answer: '', status: 'done',
     body: text + (attachments.length ? `\n\n[첨부] ${attachments.map(a => a.filename).join(', ')}` : ''),

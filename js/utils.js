@@ -16,6 +16,18 @@ export function ab(n){
    toISOString()은 UTC로 바꾼다. 한국은 UTC+9라 오전 9시 전에는 어제가 찍혔다 —
    아침에 «받았다»고 체크하면 어제 받은 것으로 남는다. 우리가 적는 날짜는
    모두 «달력에서 오늘»이므로 지역 시각으로 만든다. */
+/* 지금 «날짜 시각» — 메일 기록 칸(ts)에 쓴다. 서버도 같은 꼴(한국 시각)로 적는다 */
+export function nowStamp(){
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+/* 메일 기록 한 줄 머리 — 보냄/받음과 일자·시각 */
+export function mailDirPill(l){
+  const inn = l.direction === 'in';
+  return `<span class="pill ${inn ? 'p-blue' : 'p-gray'}" style="font-size:10px">${inn ? '↘ 받음' : '↗ 보냄'}</span>`;
+}
+
 export function td(){
   const d = new Date();
   const p = (n) => String(n).padStart(2, '0');
