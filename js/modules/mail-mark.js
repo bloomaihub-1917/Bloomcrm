@@ -119,11 +119,11 @@ export async function runMailSync(evKey, say = () => {}){
   const stamp = r.ok ? [...new Set((r.items || []).filter(x => x.stamp).map(x => x.name))] : [];
   const list = (arr, fmt) => arr.slice(0, 15).map(fmt).join('\n') + (arr.length > 15 ? `\n… 외 ${arr.length - 15}통` : '');
   const miss = r.ok ? (r.unmatchedSpeakers || []).map(x => `${x.name}${x.email ? ` (${x.email})` : ' (메일 없음)'}`) : [];
-  const msg = (r.ok ? `보낸메일함 «${r.sentPath}» ${r.scanned}통 → 연사에게 보낸 메일 ${(r.items || []).length}통 (이미 있는 ${(r.items || []).length - sTodo.length}통 건너뜀)\n`
+  const msg = (r.ok ? `보낸메일함 «${r.sentPath}» ${r.scanned}통 → 연사·참가사에게 보낸 메일 ${(r.items || []).length}통 (이미 있는 ${(r.items || []).length - sTodo.length}통 건너뜀)\n`
       : `보낸메일함을 읽지 못했어요: ${r.error}\n`)
     + (q.ok ? `받은메일함 ${q.scanned}통 → 연사·참가사가 보낸 메일 ${(q.items || []).length}통 (이미 있는 ${(q.items || []).length - iTodo.length}통 건너뜀)${q.skipped && q.skipped.length ? ` · 진행 완료라 뺀 것: ${q.skipped.join(', ')}` : ''}\n\n`
       : `받은메일함을 읽지 못했어요: ${q.error}\n\n`)
-    + (sTodo.length ? `[보낸 메일 남길 것]\n${list(sTodo, x => `· ${x.at || x.date} ${x.name} — ${x.subject} [${x.category || '기타'}]`)}\n\n` : '')
+    + (sTodo.length ? `[보낸 메일 남길 것]\n${list(sTodo, x => `· ${x.at || x.date} ${x.t === 'ex' ? '(참가사) ' : ''}${x.name} — ${x.subject} [${x.category || '기타'}]`)}\n\n` : '')
     + (iTodo.length ? `[받은 메일 남길 것]\n${list(iTodo, x => `· ${x.at || x.date} ${x.t === 'ex' ? '(참가사) ' : ''}${x.name} — ${x.subject}`)}\n\n` : '')
     + (stamp.length ? `초청 «보냄»으로 체크: ${stamp.join(', ')}\n\n` : '')
     + (q.ok && (q.replyNames || []).length ? `«참석 회신 받음»으로 체크: ${q.replyNames.join(', ')}\n\n` : '')

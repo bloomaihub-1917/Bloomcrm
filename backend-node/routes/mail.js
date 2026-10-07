@@ -475,6 +475,21 @@ function classifySent(subject) {
   if (/감사|thank/i.test(t)) return { kind: 'thanks', category: '감사 메일' };
   return { kind: 'note', category: '기타' };
 }
+/* 참가사에게 보낸 메일이 어느 단계인지 — js/modules/exh-mail.js EXH_MAIL_STEPS와 같은 키 */
+const EXH_LABEL = { manual: '참가 매뉴얼 안내', app: '신청서 제출 요청', booth: '부스 배정 안내',
+  payment: '인보이스·입금 안내', graphic: '그래픽 자료 요청', directory: '도록 정보 요청', movein: '반입·설치 안내' };
+function classifyExhSent(subject) {
+  const t = String(subject || '');
+  if (REPLY_RE.test(t)) return { kind: 'note', category: '회신' };
+  const k = /매뉴얼|manual/i.test(t) ? 'manual'
+    : /신청서|application/i.test(t) ? 'app'
+    : /인보이스|입금|invoice|payment/i.test(t) ? 'payment'
+    : /그래픽|graphic|디자인 파일/i.test(t) ? 'graphic'
+    : /도록|디렉토리|directory|프로그램북/i.test(t) ? 'directory'
+    : /반입|설치|move-?in|installation/i.test(t) ? 'movein'
+    : /부스\s*(배정|위치|도면)|booth/i.test(t) ? 'booth' : '';
+  return k ? { kind: `exh-${k}`, category: EXH_LABEL[k] } : { kind: 'note', category: '기타' };
+}
 const prevDay = (d) => new Date(new Date(`${d}T00:00:00Z`).getTime() - 864e5).toISOString().slice(0, 10);
 
 const syncSentHandler = async (req, res) => {
@@ -499,6 +514,26 @@ const syncSentHandler = async (req, res) => {
     sp.forEach((r) => { add(r.email1, r.id); add(r.email2, r.id); });
     extra.forEach((r) => add(r.email, r.speaker_id));
     const spById = new Map(sp.map((r) => [r.id, r]));
+
+    /* 참가사 담당자 주소 → 기업. 같은 주소가 연사면 연사로 본다(위에서 먼저 잡힌다).
+       전시가 진행 완료면 참가사 기록은 건드리지 않는다 */
+    const exhDone = await partDone(eventId, 'exh');
+    const exByMail = new Map();
+    const exName = new Map();
+    if (!exhDone) {
+      (await pool.query(`SELECT id, company_name FROM exhibitors WHERE event_id = $1`, [eventId])).rows
+        .forEach((r) => exName.set(r.id, r.company_name || r.id));
+      (await pool.query(`
+        SELECT xc.exhibitor_id, xc.email, c.email1, c.email2 FROM exhibitor_contacts xc
+          JOIN exhibitors x ON x.id = xc.exhibitor_id LEFT JOIN contacts c ON c.id = xc.contact_id
+         WHERE x.event_id = $1`, [eventId])).rows
+        .forEach((r) => [r.email, r.email1, r.email2].forEach((em) => {
+          const k = norm(em); if (k && !byMail.has(k) && !exByMail.has(k)) exByMail.set(k, r.exhibitor_id);
+        }));
+    }
+    const exSeen = new Set((await pool.query(
+      `SELECT exhibitor_id id, ts, subject FROM exhibitor_logs WHERE direction = 'out' AND exhibitor_id = ANY($1)`,
+      [[...exName.keys()]])).rows.map((l) => `${l.id}|${String(l.ts || '').slice(0, 10)}|${norm(l.subject)}`));
 
     const logs = (await pool.query(`
       SELECT speaker_id, ts, subject FROM speaker_logs
@@ -537,13 +572,24 @@ const syncSentHandler = async (req, res) => {
           const to = (mail.to ? [].concat(mail.to).flatMap((a) => a.value) : []).map((a) => a.address);
           const cc = (mail.cc ? [].concat(mail.cc).flatMap((a) => a.value) : []).map((a) => a.address);
           const ids = new Set([...to, ...cc].map((a) => byMail.get(norm(a))).filter(Boolean));
-          if (!ids.size) continue;
+          const exIds = new Set([...to, ...cc].map((a) => exByMail.get(norm(a))).filter(Boolean));
+          if (!ids.size && !exIds.size) continue;
           const date = kstDate(mail.date || Date.now());
           const at = kstStamp(mail.date || m.internalDate || Date.now());
           const subject = String(mail.subject || '').trim();
           // 본문으로 쓴 조각은 첨부 목록에서 뺀다
           const asBody = new Set(String(mail.text || '').trim() || mail.html ? [] : bodyParts(mail));
           const files = (mail.attachments || []).filter((a) => !asBody.has(a)).map((a) => a.filename).filter(Boolean);
+          for (const id of exIds) {
+            const d = exSeen.has(`${id}|${date}|${norm(subject)}`) || exSeen.has(`${id}|${prevDay(date)}|${norm(subject)}`);
+            const cls = classifyExhSent(subject);
+            found.push({
+              t: 'ex', exhibitor_id: id, name: exName.get(id) || id, date, at, subject,
+              to: to.join(', '), cc: cc.join(', '), kind: cls.kind, category: cls.category, dup: d,
+              body: mailText(mail) + (files.length ? `\n\n[첨부] ${files.join(', ')}` : ''),
+            });
+            exSeen.add(`${id}|${date}|${norm(subject)}`);
+          }
           for (const id of ids) {
             const s0 = spById.get(id);
             const dup = seen.has(`${id}|${date}|${norm(subject)}`) || seen.has(`${id}|${prevDay(date)}|${norm(subject)}`);
@@ -577,7 +623,7 @@ const syncSentHandler = async (req, res) => {
          HTML 본문을 못 읽던 때 가져온 기록이다 */
       /* 비었는지는 공백·줄바꿈을 다 지우고 본다 — btrim은 줄바꿈을 안 지워서
          «줄바꿈 두 개 + [첨부]…»로 들어간 빈 본문을 못 알아봤다 */
-      for (const f of found.filter((x) => x.dup)) {
+      for (const f of found.filter((x) => x.dup && x.t !== 'ex')) {
         const u = await pool.query(`
           UPDATE speaker_logs SET body = $1
            WHERE speaker_id = $2 AND left(ts, 10) IN ($3, $4) AND lower(btrim(subject)) = $5 AND direction = 'out'
@@ -598,7 +644,17 @@ const syncSentHandler = async (req, res) => {
           sorted += k.rowCount || 0;
         }
       }
-      for (const f of found.filter((x) => !x.dup)) {
+      for (const f of found.filter((x) => !x.dup && x.t === 'ex')) {
+        await pool.query(`
+          INSERT INTO exhibitor_logs (id, exhibitor_id, kind, ts, direction, channel, counterpart, category,
+            subject, body, answered_at, answer, status, author_email, author_name)
+          VALUES ($1,$2,$3,$4,'out','이메일',$5,$6,$7,$8,'','','done',$9,$10)`,
+        [`XL-${Date.now()}-${Math.floor(Math.random() * 100000)}`, f.exhibitor_id, f.kind, f.at,
+          [f.to, f.cc ? `(cc) ${f.cc}` : ''].filter(Boolean).join(' '), f.category,
+          f.subject, f.body, req.user?.email || '', `${req.user?.name || req.user?.email || ''} (보낸메일함에서 가져옴)`]);
+        added++;
+      }
+      for (const f of found.filter((x) => !x.dup && x.t !== 'ex')) {
         await pool.query(`
           INSERT INTO speaker_logs (id, speaker_id, kind, ts, direction, channel, counterpart, category,
             subject, body, answered_at, answer, status, author_email, author_name)
