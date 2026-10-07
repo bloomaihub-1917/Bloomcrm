@@ -24,7 +24,8 @@ const spName = (sp) => sp.name_snapshot || sp.name_en || '(이름 없음)';
 /* 이 연사와 마지막으로 무엇이든 주고받은 날 — 보낸 날짜 칸과 메일 기록 중 가장 늦은 것 */
 function lastTouch(sp){
   const ds = [sp.guide_sent_at, sp.invite_replied_at, sp.reminded_at, sp.confirmed_at,
-    ...logsOfSpeaker(sp.id).map(l => l.ts)].filter(Boolean).map(d => String(d).slice(0, 10));
+    // 계좌 열람 같은 내부 기록은 연락이 아니다 — 세면 «답 없음» 알림이 사라진다
+    ...logsOfSpeaker(sp.id).filter(l => l.kind !== 'view').map(l => l.ts)].filter(Boolean).map(d => String(d).slice(0, 10));
   return ds.sort().pop() || '';
 }
 

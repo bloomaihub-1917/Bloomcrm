@@ -429,7 +429,9 @@ export function dLog(t) {
    만들었다), 통합 기업명(branches)에 옛 사명·영문명이 함께 들어 있어서
    그중 하나만 맞아도 찾아낸다. */
 const nameKey = (v) => String(v || '').toLowerCase()
-  .replace(/\(주\)|주식회사|㈜|inc\.?|corp\.?|co\.?|ltd\.?/gi, '')
+  /* 법인 표기는 따로 떨어진 낱말일 때만 뗀다 — 경계 없이 떼면 «Coway»가 «way»,
+     «Incheon»이 «heon»이 되어 엉뚱한 회사와 같은 키가 됐다. */
+  .replace(/\(주\)|주식회사|㈜|\b(?:inc|corp|co|ltd)\b\.?/gi, '')
   .replace(/[^a-z0-9가-힣]/g, '');
 
 function coOf(t){
@@ -652,6 +654,14 @@ export function pickCo(el, name, nameEn, sector, hq) {
 
 export async function addTarget() {
   if (!mSel) { alert('기업을 선택해주세요.'); return; }
+  /* 같은 행사에 같은 기업이 두 줄이면 진행 단계가 갈려 어느 쪽이 최신인지 알 수
+     없다. 표기가 흔들려도(«(주)코웨이» / «코웨이») 같은 곳으로 보도록 nameKey로 맞춘다.
+     지사·부서별로 따로 쫓는 경우가 있어 막지는 않고 묻는다. */
+  const evSel = document.getElementById('m-ev').value;
+  const k = nameKey(mSel.name);
+  const dup = k && targets.find(x => x.event === evSel
+    && [x.name, x.nameEn, ...(x.branches || [])].some(n => nameKey(n) === k));
+  if (dup && !confirm(`«${dup.name}»은(는) 이미 ${evSel || '이 행사'} 타겟에 있어요(${dup.status || '미접촉'}).\n그래도 한 줄 더 추가할까요?`)) return;
   const t = {
     id: Date.now(),
     name: mSel.name,

@@ -111,10 +111,12 @@ const needOf = (sp, key) => {
 /* 아직 못 받은 자료 — 숙박·항공은 자기 단계가 따로 있어 뺀다 */
 /* 숙박·항공과 발표자료는 자기 단계가 따로 있다 — «자료 받기»를 막지 않게 뺀다 */
 const OWN_STEP = ['travel', 'slides'];
+/* «필수»만 센다 — 설정 범례대로 «있으면 좋음»은 받으면 표시만 하고 독촉하지 않는다.
+   그걸 세면 해외 연사는 여권, 패널은 초록 때문에 «자료 받기»가 끝나지 않았다. */
 export function missingItems(sp){
   return SP_COLS.filter(c => !OWN_STEP.includes(c.key))
     .map(c => ({ c, st: spCell(sp, sp.event_id, c.key) }))
-    .filter(x => x.st.state === 'todo' || x.st.state === 'part');
+    .filter(x => x.st.need === 'req' && (x.st.state === 'todo' || x.st.state === 'part'));
 }
 
 const sentLog = (sp, key) => logsOfSpeaker(sp.id).some(l => l.kind === key);
@@ -122,10 +124,13 @@ const sentLog = (sp, key) => logsOfSpeaker(sp.id).some(l => l.kind === key);
 function isDone(sp, step){
   if(step.done.startsWith('field:')) return !!sp[step.done.slice(6)];
   if(step.done === 'needs') return !missingItems(sp).length;
-  if(step.done === 'log') return sentLog(sp, step.key);
+  /* 숙박·항공은 안내 메일을 보냈거나, 제공사항 탭에서 예약을 다 마쳤으면 끝이다 */
+  if(step.done === 'log') return sentLog(sp, step.key)
+    || (step.key === 'travel' && spCell(sp, sp.event_id, 'travel').state === 'done');
   if(step.done.startsWith('cell:')){
-    const st = spCell(sp, sp.event_id, step.done.slice(5)).state;
-    return st === 'done' || st === 'na';
+    const c = spCell(sp, sp.event_id, step.done.slice(5));
+    // «있으면 좋음»이면 안 받아도 이 단계를 막지 않는다
+    return c.state === 'done' || c.state === 'na' || c.need !== 'req';
   }
   return false;
 }
@@ -140,21 +145,29 @@ export function noFlow(sp){
 /* 연사 한 명의 단계 상태 — current는 해당되면서 아직 안 끝난 첫 단계.
    skip이면 연락 단계 자체가 없다(주최사 전달) — 집계에서 빼야 한다. */
 export function flowStatus(sp){
-  const skip = noFlow(sp);
+  /* 취소한 연사에게는 더 연락하지 않는다 — 할 일·독촉 목록에서 빠진다 */
+  const cancelled = sp.status === '취소';
+  const skip = noFlow(sp) || cancelled;
   const steps = flowSteps(sp.event_id).map(s => {
-    const applies = !skip && (!s.need || !!needOf(sp, s.need));
+    /* 숙박·항공은 기본이 «있으면 좋음»이라 그대로 두면 국내 연사 모두에게 걸린다 —
+       필수로 정했거나 제공사항에 숙박·항공을 적은 연사에게만 단계가 선다 */
+    const need = s.need ? needOf(sp, s.need) : '';
+    const applies = !skip && (!s.need || (s.key === 'travel'
+      ? (need === 'req' || !!sp.stay_hotel || !!sp.air_route)
+      : !!need));
     return { ...s, applies, isDone: applies && isDone(sp, s) };
   });
   const current = steps.find(s => s.applies && !s.isDone) || null;
   /* 자료 요청을 이미 보냈는데 아직 덜 받았으면 다음 메일은 독촉이다 */
   const remind = !!current && current.key === 'collect' && sentLog(sp, 'collect');
   const live = steps.filter(s => s.applies);
-  return { steps, current, remind, skip, nDone: live.filter(s => s.isDone).length, nAll: live.length };
+  return { steps, current, remind, skip, cancelled, nDone: live.filter(s => s.isDone).length, nAll: live.length };
 }
 
 /* 표·CRM에 쓸 한 줄 */
 export function nextActionLabel(sp){
   const f = flowStatus(sp);
+  if(f.cancelled) return { text: '취소', done: true, skip: true };
   if(f.skip) return { text: '주최사 전달', done: true, skip: true };
   if(!f.current) return { text: '연락 완료', done: true };
   const label = f.remind ? '자료 독촉' : f.current.label;

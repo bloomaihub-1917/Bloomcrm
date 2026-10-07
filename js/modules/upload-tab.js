@@ -47,6 +47,7 @@ import {
   participations,
   CO_DB,
   getOrgById,
+  getContactById,
   EVENT_LIST,
   COMPANY_SECTORS,
   ORG_KINDS,
@@ -738,6 +739,17 @@ function applyColumnMap(colMap){
     const isDup = !!existByEmail;
     const isSuspect = !isDup && !!suspectMatch;
     if(isDup) dupCount++;
+    /* 같은 파일 안에서 같은 이메일이 두 번 나오는 일도 있다(세션별 명단을 이어 붙인
+       파일). 기존 연락처만 보면 둘 다 새 사람으로 들어가 한 사람이 둘이 된다.
+       처음 나온 줄을 표에 올려 두면 뒤의 줄은 중복으로 잡히고, 저장 단계에서
+       먼저 들어간 그 연락처에 행사만 붙는다. */
+    if(!isDup && (nameKo || nameEn)){   // 이름 없는 줄은 연락처가 안 생기니 기준이 될 수 없다
+      const email2Val = (colMap.email2 && colMap.email2 !== colMap.email1)
+        ? String(r[colMap.email2]||'').trim().toLowerCase() : '';
+      const self = { nameKo, nameEn, email1: email1Val };
+      if(email1Val && !emailMap[email1Val]) emailMap[email1Val] = self;
+      if(email2Val && !emailMap[email2Val]) emailMap[email2Val] = self;
+    }
     const countryRaw = colMap.country ? String(r[colMap.country]||'').trim() : '';
     const countryCode = normalizeCountry(countryRaw);
     if(countryCode) countryDetectedCount++;
@@ -1209,7 +1221,10 @@ export async function runValidationStep(newRows, dupRows){
     // "의심 케이스" 확인창에서 사용자가 "동일 인물"로 결정한 경우 포함) 이름+기업으로도 찾는다.
     // ※ 예전엔 이메일 값이 있으면 이름+기업 폴백을 아예 안 해서, "동일 인물"로 확인해도
     //    이메일이 다르면 기존 연락처를 못 찾아 행사 추가가 조용히 무시되는 버그가 있었다.
-    const existing = (email && contacts.find(c => c.email1 && c.email1.toLowerCase() === email))
+    // 확인창에서 «동일 인물»로 고른 줄은 그때 가리킨 사람이 정답이다 — 이름+기업으로
+    // 다시 찾으면 동명이인이나 소속이 바뀐 사람에게서 엇나간다.
+    const existing = (r._suspectId != null && getContactById(r._suspectId))
+      || (email && contacts.find(c => c.email1 && c.email1.toLowerCase() === email))
       || contacts.find(c =>
           (c.nameKo||c.name||'') === (r.nameKo||'') &&
           (c.orgKo||c.org||'')   === (r.orgKo||''));

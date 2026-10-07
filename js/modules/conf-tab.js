@@ -1018,7 +1018,8 @@ const SP_SENT = [
 /* 지금 할 일 칸 — 누르면 그 연사의 메일 탭에 그 단계 초안이 열린다 */
 function nextActionTd(sp){
   const na = nextActionLabel(sp);
-  if(na.skip) return `<td style="font-size:10.5px;color:var(--i4);white-space:nowrap" title="주최사가 정보를 넘겨주는 역할이라 메일로 연락하지 않아요">— 주최사 전달</td>`;
+  if(na.skip) return `<td style="font-size:10.5px;color:var(--i4);white-space:nowrap" title="${na.text === '취소'
+    ? '취소한 연사라 더 연락하지 않아요' : '주최사가 정보를 넘겨주는 역할이라 메일로 연락하지 않아요'}">— ${escapeHtml(na.text)}</td>`;
   if(na.done) return `<td style="font-size:10.5px;color:var(--g);white-space:nowrap">✓ 연락 완료</td>`;
   return `<td style="white-space:nowrap" onclick="event.stopPropagation();openSpeakerDr('${escAttr(sp.id)}');openFlowDraft('${escAttr(na.step)}')"
     title="이 단계의 메일 초안 열기">
@@ -2253,7 +2254,11 @@ export async function removeConfSession(sid){
   const goneAssigns = asg.map(a => ({ ...a }));
   for(const a of asg){
     const r = await gDelAssign(a.id);
-    if(r && r.ok === false) return;
+    if(r && r.ok === false){
+      if(!r.locked) alert('배정을 푸는 중에 멈췄어요 — 세션은 지우지 않았습니다.');
+      renderConf();
+      return;
+    }
     const i = SESSION_SPEAKERS.findIndex(x => x.id === a.id);
     if(i >= 0) SESSION_SPEAKERS.splice(i, 1);
   }
@@ -2265,6 +2270,7 @@ export async function removeConfSession(sid){
   /* 세션을 지우면 배정도 함께 없어진다 — 둘 다 담아야 되살릴 수 있다 */
   trackAction('delete', '컨퍼런스 세션', confEvent, s.title_ko || s.title_en || sid,
     removed('conf_sessions', sid, s, { kind: 'session', id: sid, also: goneAssigns }));
+  for(const spId of new Set(goneAssigns.map(a => a.speaker_id))) await syncPartRole(spId);
   renderConf();
 }
 
@@ -2350,7 +2356,8 @@ export async function syncPartRole(spId){
   if(!p){
     /* 참가 기록이 없으면 만든다 — 연사 화면이 정본이고 마스터DB는 따라온다 */
     const part = { id: `P-${Date.now()}-0`, eventId: sp.event_id, event: sp.event_id,
-      contactId: sp.contact_id, contact: '', role: want, note: '', matched: '✅ 연사 화면에서 추가' };
+      // 참여 기록의 contactId는 숫자다(api.js가 +r.cid로 읽는다) — 문자열이면 === 비교에서 빠진다
+      contactId: Number(sp.contact_id), contact: '', role: want, note: '', matched: '✅ 연사 화면에서 추가' };
     const r = await postToSheet({ sheet: 'participations',
       row: [part.id, part.eventId, '', part.contactId, '', '', '', part.role, part.note, part.matched] },
       '행사 참가 추가', { silent: true });
@@ -2379,6 +2386,8 @@ export async function removeAssign(aid){
   if(i >= 0) SESSION_SPEAKERS.splice(i, 1);
   trackAction('delete', '세션 배정', confEvent, `${speakerName(a.speaker_id)} — ${a.role}`,
     removed('session_speakers', aid, a, { kind: 'speaker', id: a.speaker_id }));
+  // 발표 배정을 빼서 VIP만 남으면 마스터DB 참가 역할도 VIP로 — 따로 두면 «연사»로 남는다
+  await syncPartRole(a.speaker_id);
   renderConf();
 }
 
@@ -2420,8 +2429,16 @@ export async function removeConfSpeaker(spId){
     if(k >= 0) SESSION_SPEAKERS.splice(k, 1);
   }
 
-  for(const c of goneCons) await gDelSpeakerContact(c.id);
-  for(const l of goneLogs) await gDelSpeakerLog(l.id);
+  for(const [del, list, what] of [[gDelSpeakerContact, goneCons, '연락 상대'], [gDelSpeakerLog, goneLogs, '주고받은 기록']]){
+    for(const g of list){
+      const r = await del(g.id);
+      if(r && r.ok === false){
+        if(!r.locked) alert(`${what}을 지우는 중에 멈췄어요 — 연사는 지우지 않았습니다. 잠시 뒤 다시 해주세요.`);
+        renderConf();
+        return;
+      }
+    }
+  }
   [[SPEAKER_CONTACTS, goneCons], [SPEAKER_LOGS, goneLogs]].forEach(([arr, gone]) => {
     gone.forEach(g => { const k = arr.findIndex(x => x.id === g.id); if(k >= 0) arr.splice(k, 1); });
   });

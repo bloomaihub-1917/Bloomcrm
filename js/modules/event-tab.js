@@ -189,7 +189,10 @@ export function buildEvDbList(){
 export function setEvDbEvent(key){
   evdbEvent = key;
   evdbRoleFil = ''; evdbQuery = '';
-  evdbPicked.clear();
+  /* 고른 사람·기업과 확정/타겟 필터는 이전 행사의 것이다 — 남겨 두면 다른 행사
+     화면에서 안 보이는 사람이 골라진 채로 «확정»·내보내기에 섞인다. */
+  evdbStatFil = '';
+  evdbPicked.clear(); evdbPickedPeople.clear(); evdbPickedTgt.clear();
   buildEvDbList();
   renderEvDb();
 }
@@ -646,15 +649,18 @@ async function linkExhibitorPeople(orgsSent, toEv){
   const add = [];
   orgsSent.forEach(o => {
     (o.people || []).forEach(pr => {
-      if(!pr.id) return;
-      const had = participations.filter(p => p.eventId === toEv && String(p.contactId) === String(pr.id));
+      /* evPeople의 사람은 연락처 id를 cid에 둔다(id 칸은 없다) — pr.id로 보면
+         늘 비어서 참여 기록이 한 줄도 안 생겼다. */
+      const cid = pr.cid != null && pr.cid !== '' ? Number(pr.cid) : null;
+      if(cid == null || !Number.isSafeInteger(cid)) return;
+      const had = participations.filter(p => p.eventId === toEv && Number(p.contactId) === cid);
       if(had.length){
         had.forEach(p => { if(!p.confirmedAt) p.confirmedAt = when; });
         return;
       }
       add.push({
         id: 'P-' + Date.now() + '-x' + add.length,
-        eventId: toEv, event: toEv, contactId: pr.id, contact: pr.name || '',
+        eventId: toEv, event: toEv, contactId: cid, contact: pr.name || '',
         role: '전시참가기업', note: '', matched: '✅ 전시 참가기업에서', confirmedAt: when,
       });
     });

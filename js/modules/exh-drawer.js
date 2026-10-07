@@ -953,7 +953,9 @@ async function addExhParticipation(contactId, eventId, role){
 
   const part = {
     id: 'P-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
-    eventId, event: eventId, contactId: String(contactId), contact: '',
+    /* 숫자로 둔다 — api.js가 불러올 때 +r.cid로 숫자로 바꾸고, 행사 참여자·기업DB는
+       contactId === c.id로 맞춘다. 문자열로 넣으면 새로고침 전까지 이 사람이 빠져 보였다. */
+    eventId, event: eventId, contactId: Number(contactId), contact: '',
     role: '전시참가기업', note: role ? `전시 ${role}` : '',
     matched: '✅ 전시 담당자 등록',
   };
@@ -3751,8 +3753,9 @@ export async function sendExhMail(exhId){
   const res = await sendMail({ to, cc, subject, text, exhibitor_id: x.id, category: '메일', kind: 'note', attachments });
   if(!res.ok){ say(res.offline ? '테스트 모드에서는 보내지 않아요.' : (res.error || '보내지 못했어요.')); return; }
   // 서버가 기록을 남긴다 — 화면에도 바로 끼워 방금 보낸 게 안 보여 또 보내는 일을 막는다
-  EXH_LOGS.push({
-    id: `XL-tmp-${Date.now()}`, exhibitor_id: x.id, kind: 'note', ts: td(), direction: 'out', channel: '이메일',
+  /* 서버가 남긴 기록 id를 쓴다 — 임시 id로 두면 이 줄을 지울 때 서버에서 안 지워진다 */
+  if(res.logId) EXH_LOGS.push({
+    id: res.logId, exhibitor_id: x.id, kind: 'note', ts: td(), direction: 'out', channel: '이메일',
     counterpart: [to.join(', '), cc.length ? `(cc) ${cc.join(', ')}` : ''].filter(Boolean).join(' '),
     category: '메일', subject, answered_at: '', answer: '', status: 'done',
     body: text + (attachments.length ? `\n\n[첨부] ${attachments.map(a => a.filename).join(', ')}` : ''),

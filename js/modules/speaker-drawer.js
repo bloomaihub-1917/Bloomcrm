@@ -293,7 +293,9 @@ export async function confirmSpReuse(){
 function flowBoxHtml(sp){
   const f = flowStatus(sp);
   if(f.skip) return `<div style="padding:8px 11px;border:1px solid var(--i6);border-radius:8px;margin-bottom:12px;
-    background:var(--i8);font-size:11px;color:var(--i4)">연락 단계 없음 — VIP는 주최사에서 정보를 받아 전달받으므로 메일로 연락하지 않아요.</div>`;
+    background:var(--i8);font-size:11px;color:var(--i4)">${f.cancelled
+      ? '연락 단계 없음 — 취소한 연사라 더 연락하지 않아요. 섭외 상태를 바꾸면 다시 나타납니다.'
+      : '연락 단계 없음 — VIP는 주최사에서 정보를 받아 전달받으므로 메일로 연락하지 않아요.'}</div>`;
   const chip = (s) => {
     const cur = f.current && f.current.key === s.key;
     const st = !s.applies ? { m: '–', c: 'var(--i5)', bg: 'transparent', t: '이 연사에게는 해당 없음' }
@@ -1143,7 +1145,8 @@ function mailTabHtml(sp, evKey){
   const t = mailTargets(sp.id);
   const ev = EVENT_LIST.find(e => e.key === evKey);
   const evName = ev ? (ev.name || ev.short || ev.key) : evKey;
-  const logs = logsOfSpeaker(sp.id)
+  /* 계좌 열람(kind 'view') 같은 내부 기록은 «보낸 기록»이 아니다 */
+  const logs = logsOfSpeaker(sp.id).filter(l => l.kind !== 'view')
     .slice()
     .sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')));
 
@@ -1349,8 +1352,10 @@ export async function sendSpeakerMail(){
   }
   /* 서버가 기록을 남긴다. 화면에도 같은 줄을 바로 끼운다 — 새로 고쳐야
      보이면 방금 보낸 게 안 남은 줄 알고 또 보낸다. */
-  SPEAKER_LOGS.push({
-    id: `SL-tmp-${Date.now()}`, speaker_id: sp.id, kind, ts: td(),
+  /* 서버가 남긴 기록 id를 쓴다 — 임시 id로 두면 연사를 지울 때 이 기록이 안 지워졌다.
+     기록 저장에 실패했으면 화면에도 끼우지 않는다(없는 기록을 보여 주면 안 된다) */
+  if(res.logId) SPEAKER_LOGS.push({
+    id: res.logId, speaker_id: sp.id, kind, ts: td(),
     direction: 'out', channel: '이메일',
     counterpart: [t.to.join(', '), t.cc.length ? `(cc) ${t.cc.join(', ')}` : ''].filter(Boolean).join(' '),
     category, subject, answered_at: '', answer: '', status: 'done',
@@ -1363,8 +1368,10 @@ export async function sendSpeakerMail(){
   say((res.logged === false ? '보냈어요 — 다만 기록 저장에 실패했어요.' : '보냈어요.')
     + (res.sentError ? ` (보낸메일함에는 못 남겼어요: ${res.sentError})` : ''), true);
   spLocalFiles = []; spSkipDefault = new Set();
-  /* 초청을 보냈으면 «보냄» 날짜를 찍는다 — 그래야 다음 단계로 넘어간다 */
-  /* sp.id를 넘긴다 — 보내는 몇 초 사이 다른 연사를 열면 그 사람에게 찍혔다 */
+  /* 자료 독촉을 보냈으면 «마지막 독촉» 날짜를 찍는다 — 표의 독촉 칸·엑셀이 이걸 읽는다 */
+  if(category === '자료 독촉'){ await patchSpeaker({ reminded_at: td() }, '자료 독촉 보냄', sp.id); }
+  /* 초청을 보냈으면 «보냄» 날짜를 찍는다 — 그래야 다음 단계로 넘어간다.
+     sp.id를 넘긴다 — 보내는 몇 초 사이 다른 연사를 열면 그 사람에게 찍혔다 */
   if(kind === 'invite' && !sp.guide_sent_at){ await patchSpeaker({ guide_sent_at: td() }, '초청·가이드 보냄', sp.id); return; }
   renderSpeakerDr();
 }

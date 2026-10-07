@@ -375,7 +375,7 @@ router.post('/send', async (req, res) => {
     /* 보낸 사실을 기록에 남긴다. 이게 실패해도 메일은 이미 나갔으므로 성공으로
        돌려주되, 기록이 빠졌다는 걸 알려준다 — 조용히 넘어가면 독촉 이력이
        비어 있는 이유를 알 수 없다. */
-    let logged = false, logError = null;
+    let logged = false, logError = null, logId = null;
     /* 참조까지 상대로 남긴다 — 연사 메일은 실무진이 수신, 연사가 참조인 경우가
        많아 수신만 적으면 정작 연사에게 보낸 기록이 비어 보인다. */
     const counterpart = [toList.join(', '), list(cc).length ? `(cc) ${list(cc).join(', ')}` : '']
@@ -392,7 +392,7 @@ router.post('/send', async (req, res) => {
              (id, ${target.col}, kind, ts, direction, channel, counterpart, category,
               subject, body, answered_at, answer, status, author_email, author_name)
            VALUES ($1,$2,$3,$4,'out','이메일',$5,$6,$7,$8,'','','done',$9,$10)`,
-          [`${target.prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`, target.id,
+          [(logId = `${target.prefix}-${Date.now()}-${Math.floor(Math.random() * 1000)}`), target.id,
             kind || 'note', kstDate(Date.now()),
             counterpart, category || '기타',
             String(subject || '').trim(),
@@ -402,10 +402,11 @@ router.post('/send', async (req, res) => {
 [첨부] ${attachments.map((a) => a.filename).join(', ')}` : ''),
             req.user?.email || '', req.user?.name || '']);
         logged = true;
-      } catch (e) { logError = e.message; }
+      } catch (e) { logError = e.message; logId = null; }
     }
 
-    res.json({ ok: true, messageId: info.messageId, accepted: info.accepted, via: sender.via, logged, logError, sentSaved, sentError });
+    // logId를 돌려준다 — 화면이 임시 id로 들고 있으면 나중에 그 기록을 지울 수 없다
+    res.json({ ok: true, messageId: info.messageId, accepted: info.accepted, via: sender.via, logged, logError, logId, sentSaved, sentError });
   } catch (e) {
     console.error('[mail] 발송 실패:', e.message);
     res.status(502).json({ ok: false, error: `발송 실패: ${e.message}` });

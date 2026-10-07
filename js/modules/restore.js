@@ -24,7 +24,7 @@
    어떤 값으로 되돌리는지 물음에 그대로 적는다.
 ═══════════════════════════════════════════════════════════════ */
 
-import { auditLog, currentUser } from '../state.js';
+import { auditLog, currentUser, participations } from '../state.js';
 import { postToSheet, loadFromSheets } from '../api.js';
 import { escapeHtml } from '../utils.js';
 import { trackAction } from './audit-tab.js';
@@ -84,7 +84,31 @@ const fmt = (v) => (v === '' || v === undefined || v === null) ? '(빈값)' : St
 
 /* 한 줄 쓰기 — data 경로는 넘긴 칸만 고친다. 지워진 줄을 되살릴 때는 모든
    칸을 넘기므로 그대로 다시 만들어지고, 값을 되돌릴 때는 그 칸만 바뀐다. */
-const put = (table, row) => postToSheet({ sheet: table, data: row }, '되돌리기');
+const put = (table, row) => table === 'participations'
+  ? postToSheet({ sheet: table, row: partRow(row) }, '되돌리기')
+  : postToSheet({ sheet: table, data: row }, '되돌리기');
+
+/* 행사 참여는 data 경로가 없다 — 서버(routes/data.js participationFromRow)가
+   시트 시절의 위치 배열만 읽고 data는 버린다. 그래서 전에는 되살리면 id만 있는
+   빈 줄이 생겼다. 위치 배열로 바꿔 보낸다.
+   기록에 담긴 값은 화면 모양(eventId·contactId·confirmedAt)일 때도, DB 모양
+   (event_id·contact_id·confirmed_at)일 때도 있다 — 둘 다 읽는다.
+   값 하나만 되돌리는 경우(확정일만 등)는 나머지 칸이 비어 지워지지 않게
+   지금 화면에 있는 그 줄 위에 얹는다.
+   (id, ev_id, 행사명, cid, 소속, 성명, 직함, type, note, matched, confirmed_at) */
+function partRow(r){
+  const cur = participations.find(p => String(p.id) === String(r.id)) || {};
+  const pick = (a, b, c) => r[a] !== undefined ? r[a] : r[b] !== undefined ? r[b] : cur[c];
+  const cid = pick('contactId', 'contact_id', 'contactId');
+  const conf = pick('confirmedAt', 'confirmed_at', 'confirmedAt');
+  return [r.id, pick('eventId', 'event_id', 'eventId') || '', '',
+    cid == null || cid === '' ? '' : Number(cid), '', '', '',
+    pick('role', 'role', 'role') || '', pick('note', 'note', 'note') || '',
+    pick('matched', 'matched', 'matched') || '', conf || ''];
+}
+/* 표 이름 없이 담긴 딸린 줄 — 연락처 일괄 삭제가 참여 기록을 표 이름 없이 넣던
+   옛 기록이 남아 있다. 그대로 두면 참여 기록이 연락처 표로 들어간다. */
+const looksLikePart = (row) => row && row.eventId !== undefined && row.contactId !== undefined;
 const drop = (table, id) => postToSheet({ sheet: table, action: 'delete', row: [id] }, '되돌리기');
 
 export async function restoreFromLog(entryId){
@@ -109,8 +133,8 @@ export async function restoreFromLog(entryId){
     /* 딸린 줄은 제 표를 들고 다닌다(세션에 딸린 배정, 연락처에 딸린 참여처럼
        본체와 다른 표다). 표가 안 적혀 있으면 본체와 같은 표로 본다. */
     for(const a of (x.also || [])){
-      const t = a.table || x.table;
       const row = a.before || a;
+      const t = a.table || (looksLikePart(row) ? 'participations' : x.table);
       if(row && row.id) await run(put(t, row));
     }
   } else if(x.op === 'create'){

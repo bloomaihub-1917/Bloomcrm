@@ -43,6 +43,10 @@ import {
   hasLeft,
   movedTo,
   EXH_CONTACTS,
+  EXHIBITORS,
+  SPEAKERS,
+  SPEAKER_CONTACTS,
+  getSpeakerById,
   speakersOfContact,
 } from '../state.js';
 import { CP, CL, RP, CAT_KEYS, ROLE_TO_CAT, COUNTRIES, avB, avF } from '../constants.js';
@@ -652,7 +656,9 @@ export function renderMDBSelectionBar(){
 ══════════════════════════════════════════ */
 
 const nameKeyOf = (v) => String(v || '').toLowerCase()
-  .replace(/\(주\)|주식회사|㈜|inc\.?|corp\.?|co\.?|ltd\.?/gi, '')
+  /* 법인 표기는 따로 떨어진 낱말일 때만 뗀다 — 경계 없이 떼면 «Coway»가 «way»,
+     «Incheon»이 «heon»이 되어 엉뚱한 회사와 같은 키가 됐다. */
+  .replace(/\(주\)|주식회사|㈜|\b(?:inc|corp|co|ltd)\b\.?/gi, '')
   .replace(/[^a-z0-9가-힣]/g, '');
 
 /* 고른 사람들을 그대로 들고 온다. 소속은 CRM 타겟을 만들 때만 쓴다 —
@@ -1005,6 +1011,34 @@ export async function applyMDBBulkEdit(){
 export async function bulkDeleteMDBContacts(){
   const ids = [...mdbSelected];
   if(!ids.length) return;
+
+  /* 전시 담당자·연사·연사 연락 상대로 걸린 사람은 지우지 않는다.
+     참여 기록과 달리 이 줄들은 같이 지우면 전시 체크리스트·연사 섭외 기록이
+     통째로 사라지고, 남겨 두면 없는 사람을 가리키는 줄이 된다(이름 칸이 비어
+     «누구였는지» 알 수 없다). 어느 쪽도 조용히 해선 안 되니 먼저 풀게 한다. */
+  const blocked = [];
+  ids.forEach(id => {
+    const k = String(id);
+    const where = [];
+    EXH_CONTACTS.filter(r => String(r.contact_id || '') === k).forEach(r => {
+      const x = EXHIBITORS.find(e => e.id === r.exhibitor_id);
+      where.push(`전시 담당자(${(x && (x.company_name || x.event_id)) || r.exhibitor_id})`);
+    });
+    SPEAKERS.filter(r => String(r.contact_id || '') === k).forEach(r =>
+      where.push(`연사(${r.event_id || r.id})`));
+    SPEAKER_CONTACTS.filter(r => String(r.contact_id || '') === k).forEach(r => {
+      const sp = getSpeakerById(r.speaker_id);
+      where.push(`연사 연락 상대(${(sp && (sp.name_snapshot || sp.name_en)) || r.speaker_id})`);
+    });
+    if(where.length) blocked.push(`· ${personName(getContactById(id)) || id} — ${where.join(', ')}`);
+  });
+  if(blocked.length){
+    alert(`아래 ${blocked.length}명이 다른 곳에 연결돼 있어 삭제를 멈췄어요(아무도 지우지 않았습니다).\n`
+      + `전시 담당자·연사 쪽에서 먼저 연결을 풀거나 다른 사람으로 바꾼 뒤 지워주세요.\n\n`
+      + blocked.slice(0, 15).join('\n') + (blocked.length > 15 ? `\n… 외 ${blocked.length - 15}명` : ''));
+    return;
+  }
+
   if(!confirm(`선택한 ${ids.length}명의 연락처를 삭제할까요?\n관련 행사 참여 기록도 함께 삭제되며, 되돌릴 수 없습니다.`)) return;
 
   const idSet = new Set(ids);
@@ -1029,7 +1063,9 @@ export async function bulkDeleteMDBContacts(){
   /* 지운 연락처와 딸린 참여 기록을 통째로 담는다 — «되돌릴 수 없습니다»라고
      물어 놓고 정말 아무것도 안 남기면, 잘못 지운 날 할 수 있는 게 없다. */
   trackAction('edit', '연락처 일괄 삭제', `${ids.length}명`, `연락처 ${ids.length}명 삭제`,
-    removedMeta('contacts', ids.join(','), goneContacts, { also: removedParts }));
+    removedMeta('contacts', ids.join(','), goneContacts,
+      /* 참여 기록은 제 표 이름을 달고 간다 — 없으면 되돌릴 때 연락처 표로 들어간다 */
+      { also: removedParts.map(p => ({ table: 'participations', before: p })) }));
 }
 
 /* ── View toggle (원본 1767~1772행) ── */
@@ -2258,6 +2294,18 @@ export async function saveContactEdit(){
     const el = document.getElementById('ce-' + k);
     if(el) c[k] = el.value.trim();
   });
+
+  /* 소속을 바꿨으면 기업 연결(org_id)도 새 소속을 따라가야 한다 — patchContact와
+     같은 이유다. 안 그러면 이름은 새 회사인데 기업DB·섹터는 옛 회사에 매달린다.
+     섹터 저장이 org_id를 보므로 그보다 먼저 한다. */
+  if((c.orgKo !== prev.orgKo || c.orgEn !== prev.orgEn) && (c.orgKo || c.orgEn)){
+    const nm = (c.orgKo || c.orgEn).trim();
+    try {
+      await ensureOrgsForNames([nm]);
+      const oid = orgIdForName(nm);
+      if(oid) c.org_id = oid;
+    } catch(e){ console.warn('[db-tab] 기업 재연결 실패:', e); }
+  }
 
   /* 섹터는 기업에 저장된다 — 연락처 저장과 별개의 길이라 따로 부른다 */
   try { saveContactSectorField(c); } catch(e){ console.warn('[db-tab] 섹터 반영 실패:', e); }

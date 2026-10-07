@@ -105,7 +105,9 @@ function drawGlance(wb, evKey, title){
       body(c, { bold: true, left: true, fill: 'FFD9D9D9' });
       r++;
     }
-    const asg = assignmentsOfSession(s.id).slice().sort(asgSort);
+    /* 취소한 연사는 주최측에 보내는 프로그램표에 싣지 않는다 — 배정을 안 풀어 둔 채로 나갔다 */
+    const asg = assignmentsOfSession(s.id)
+      .filter(a => (getSpeakerById(a.speaker_id) || {}).status !== '취소').slice().sort(asgSort);
     const rows = asg.length ? asg : [null];
     const start = r;
     const sessMin = minsBetween(s.start_at, s.end_at);
@@ -251,7 +253,7 @@ function sortedSpeakers(evKey){
     }).sort()[0];
     return t || '~';
   };
-  return speakersForEvent(evKey).slice().sort((a, b) => firstAt(a).localeCompare(firstAt(b))
+  return speakersForEvent(evKey).filter(sp => sp.status !== '취소').slice().sort((a, b) => firstAt(a).localeCompare(firstAt(b))
     || nameOf(a).localeCompare(nameOf(b), 'ko'));
 }
 

@@ -60,10 +60,10 @@ import {
 } from '../state.js';
 import { RP, avB, avF } from '../constants.js';
 import { escapeHtml, escAttr, levenshteinDist, phoneMatch, parseSectorScope, sectorKey, countryName, isMobile, td, leftPill, safeUrl, parseLinks, slugifySectorName } from '../utils.js';
-import { postToSheet, batchCreateExhibitors, upsertSectorRow } from '../api.js';
+import { postToSheet, batchCreateExhibitors, upsertSectorRow, saveExhibitor } from '../api.js';
 import { parseSectors, joinSectors, mainSectors, sectorNamesInDomain, domainName, domainOfSector, findSectorByName, UNASSIGNED_DOMAIN } from './settings-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
-import { trackAction, changed } from './audit-tab.js';
+import { trackAction, changed, removed as removedMeta } from './audit-tab.js';
 import { billedAmount, paidAmount, currencyOf, exhibitorTradeFor, fmtMoney,
   EXH_ROLES, reloadExhibitors } from './exh-tab.js';
 
@@ -463,19 +463,26 @@ export function renderSimilarCompanyList(){
 export async function mergeCompanies(loserKey, winnerKey){
   const winner = CO_DB.find(c => c.key === winnerKey);
   const loser  = CO_DB.find(c => c.key === loserKey);
-  if(!winner || !loser) return;
-  if(!confirm(`"${loser.nameKo||loser.nameEn}"(${loser.contacts.length}명) 을(를) "${winner.nameKo||winner.nameEn}"로 합칠까요?\n소속 연락처들의 기업명이 변경됩니다.`)) return;
+  if(!winner || !loser || winner.key === loser.key) return;
+  const wOrg = getOrgById(winner.key), lOrg = getOrgById(loser.key);
+  const lName = loser.nameKo || loser.nameEn, wName = winner.nameKo || winner.nameEn;
+  if(!confirm(`"${lName}"(${loser.contacts.length}명) 을(를) "${wName}"로 합칠까요?\n`
+    + `소속 연락처·전시 참가 기록이 "${wName}"로 옮겨지고, "${lName}"는 옛 이름으로 남은 뒤 기업 목록에서 지워집니다.`)) return;
 
+  /* 이름만 바꾸면 합쳐지지 않는다. 기업DB는 org_id로 사람을 묶기 때문에(buildCoDB)
+     전에는 이름이 바뀐 뒤에도 연락처가 진 쪽 기업에 그대로 매달려, «합쳤어요» 뒤에도
+     두 기업이 그대로 보였다. 연결(org_id)을 이긴 쪽으로 옮기는 게 본체다. */
   const changed = [];
-  const backup = []; // 저장 실패 시 롤백용 (id → 원래 orgKo/orgEn)
+  const backup = []; // 저장 실패 시 롤백용 (원래 orgKo/orgEn/org_id)
   loser.contacts.forEach(pc => {
     const c = contacts.find(x => x.id === pc.id);
     if(!c) return;
-    backup.push({ c, orgKo: c.orgKo, orgEn: c.orgEn });
+    backup.push({ c, orgKo: c.orgKo, orgEn: c.orgEn, org_id: c.org_id });
     if(c.orgKo) c.orgKo = winner.nameKo || c.orgKo;
     if(c.orgEn) c.orgEn = winner.nameEn || c.orgEn;
     if(!c.orgKo && winner.nameKo) c.orgKo = winner.nameKo;
     if(!c.orgEn && winner.nameEn) c.orgEn = winner.nameEn;
+    if(wOrg) c.org_id = winner.key;
     changed.push(c);
   });
 
@@ -485,7 +492,7 @@ export async function mergeCompanies(loserKey, winnerKey){
     const r = await postToSheet({ sheet: 'contacts', action: 'batchUpsert', rows }, '기업 병합');
     if(!r.ok){
       // 저장 실패 → 로컬 변경 롤백 (기존엔 실패해도 "합쳤어요"가 떠서 새로고침 시 원복되는 거짓 성공이었음)
-      backup.forEach(b => { b.c.orgKo = b.orgKo; b.c.orgEn = b.orgEn; });
+      backup.forEach(b => { b.c.orgKo = b.orgKo; b.c.orgEn = b.orgEn; b.c.org_id = b.org_id; });
       buildCoDB(); buildCoCAT();
       try { renderCoList(); } catch(e){}
       alert('병합 저장에 실패해서 취소했어요. 네트워크 확인 후 다시 시도해주세요.');
@@ -493,10 +500,60 @@ export async function mergeCompanies(loserKey, winnerKey){
     }
   }
 
+  /* 기업 레코드가 둘 다 있을 때만 아래를 한다 — 옛 이름 기반 기업(ORGS에 없는 것)은
+     연락처 이름만 바꾸면 끝이었다. */
+  const fails = [];
+  if(wOrg && lOrg){
+    /* 전시 참가·시공 기록도 org_id로 묶인다 — 안 옮기면 진 쪽 기업을 지우는 순간
+       그 거래 이력이 어느 기업에도 안 붙는다. */
+    const exhMoved = [];
+    for(const x of EXHIBITORS){
+      const patch = { id: x.id };
+      if(x.org_id === loser.key) patch.org_id = winner.key;
+      if(x.builder_org_id === loser.key) patch.builder_org_id = winner.key;
+      if(Object.keys(patch).length === 1) continue;
+      const r = await saveExhibitor(patch);
+      if(r && r.ok !== false){ Object.assign(x, patch); exhMoved.push(x.id); }
+      else fails.push(`전시 참가 ${x.company_name || x.id}`);
+    }
+
+    /* 진 쪽 이름은 이긴 쪽의 옛 이름(aliases)으로 남긴다 — 다음 업로드에 옛 표기가
+       들어와도 findOrgByName이 이긴 쪽으로 이어 준다. */
+    const have = new Set([wOrg.name_ko, wOrg.name_en, ...String(wOrg.aliases || '').split('\n')]
+      .map(v => String(v || '').trim()).filter(Boolean));
+    const add = [lOrg.name_ko, lOrg.name_en, ...String(lOrg.aliases || '').split('\n')]
+      .map(v => String(v || '').trim()).filter(v => v && !have.has(v));
+    const aliasesBefore = wOrg.aliases || '';
+    if(add.length){
+      const next = [...String(aliasesBefore).split('\n').map(v => v.trim()).filter(Boolean), ...add].join('\n');
+      const r = await patchOrgFields(winner.key, { aliases: next });
+      if(!r || r.ok === false){ applyOrgLocal({ id: winner.key, aliases: aliasesBefore }); fails.push('옛 이름 추가'); }
+    }
+
+    /* 옮길 것을 다 옮겼을 때만 진 쪽 기업을 지운다. 하나라도 남았으면 지우지 않는다 —
+       지우면 남은 줄이 없는 기업을 가리키게 된다. */
+    if(!fails.length){
+      const gone = { ...lOrg };
+      const r = await postToSheet({ sheet: 'orgs', action: 'delete', row: [loser.key] }, '기업 병합');
+      if(r && r.ok !== false){
+        const i = ORGS.findIndex(o => o.id === loser.key);
+        if(i >= 0) ORGS.splice(i, 1);
+        trackAction('edit', '기업 병합', wName,
+          `<b>${escapeHtml(lName)}</b> → <b>${escapeHtml(wName)}</b> 병합 (연락처 ${changed.length}명, 전시 ${exhMoved.length}건 이동)`,
+          removedMeta('orgs', loser.key, gone, { kind: 'company', id: winner.key }));
+      } else fails.push('진 쪽 기업 삭제');
+    }
+  }
+
   buildCoDB(); buildCoCAT();
   try { renderCoList(); } catch(e){}
   renderSimilarCompanyList();
-  alert(`"${loser.nameKo||loser.nameEn}"를 "${winner.nameKo||winner.nameEn}"로 합쳤어요.`);
+  if(fails.length){
+    alert(`연락처는 "${wName}"로 옮겼지만 일부가 저장되지 않았어요: ${fails.join(', ')}\n`
+      + `"${lName}" 기업은 지우지 않고 남겨 뒀어요. 네트워크 확인 후 다시 합쳐주세요.`);
+    return;
+  }
+  alert(`"${lName}"를 "${wName}"로 합쳤어요.`);
 }
 // 계획서에서 언급한 이름과의 호환을 위한 별칭 (핵심 로직은 mergeCompanies와 동일)
 export { mergeCompanies as mergeCoInto };
