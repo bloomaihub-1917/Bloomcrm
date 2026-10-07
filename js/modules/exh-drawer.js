@@ -60,6 +60,7 @@ function saveFailed(res, msg){
   alert(msg || '저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
 }
 import { filterMail, mailFilBar, mailStateHtml, mailActionsHtml, mailToggleAttr, isPending, setMailDone } from './mail-mark.js';
+import { decorate as decorateMailPane } from './mail-pane.js';
 import { EXH_MAIL_STEPS, exhMailSteps, exhIsEnglish, fillExhTemplate, exhMailFileStep } from './exh-mail.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 import { ieyo } from '../country-signal.js';
@@ -201,7 +202,11 @@ export function renderExhDr(){
     b.innerHTML = (VIEW[drTab] || dContactTab)(x);
     if(drTab === 'mail'){ fillExhMailFrom(x); if(exhReply) fillExhReply(x); else fillExhMail(x.id, true); }
   }
+  // 메일함 나란히·고정 띠(mail-pane.js)
+  decorateMailPane('ex');
 }
+window.__exhDrId = () => drId;
+window.__exhBoxHtml = (id) => { const x = getExhibitorById(id); return x ? dMailBox(x) : ''; };
 
 /* ── 진행 단계 막대 ──
    세금계산서와 그래픽은 우리 손을 떠났다 돌아오기를 반복한다. 어느 칸까지 왔고

@@ -59,6 +59,7 @@ export function mailActionsHtml(t, l){
   const id = escAttr(l.id);
   return `<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
     <button class="btn bp" style="font-size:10.5px" onclick="replyMail('${t}','${id}')">↩ 회신</button>
+    <button class="btn" style="font-size:10.5px" onclick="pinMail('${t}','${id}')" title="이 메일을 모든 탭 위에 붙여 두고 내용을 칸에 넣습니다">📌 고정</button>
     ${l.status === 'done'
       ? `<button class="btn" style="font-size:10.5px" onclick="setMailDone('${t}','${id}',false)">처리 취소</button>`
       : `<button class="btn bp" style="font-size:10.5px" onclick="setMailDone('${t}','${id}',true)">✓ 처리 완료</button>`}

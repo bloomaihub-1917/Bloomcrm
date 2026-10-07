@@ -40,6 +40,7 @@ import {
   saveSpeakerLog, sendMail, eventMailFrom, loadMailFiles, mailFilesOf, fileToBase64,
 } from '../api.js';
 import { filterMail, mailFilBar, mailStateHtml, mailActionsHtml, mailToggleAttr, isPending, setMailDone } from './mail-mark.js';
+import { decorate as decorateMailPane } from './mail-pane.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 import { patchContact } from './db-tab.js';
 import { confLocked, setConfLockEv, confLockNotice, renderConf, buildConfEvList, syncPartRole, spCell } from './conf-tab.js';
@@ -264,7 +265,12 @@ export function renderSpeakerDr(){
       if(el) el.innerHTML = f.ok ? `발신 <b>${escapeHtml(f.text)}</b>` : `<b style="color:var(--re)">발신 ${escapeHtml(f.text)}</b>`;
     });
   }
+  // 메일함 나란히·고정 띠(mail-pane.js)
+  decorateMailPane('sp');
 }
+// mail-pane.js가 왼쪽 칸에 이 연사 메일함을 그릴 때 쓴다
+window.__spDrId = () => spId;
+window.__spBoxHtml = (id) => { const s = getSpeakerById(id); return s ? boxTabHtml(s) : ''; };
 
 /* ── 연락 단계 ──
    연사 화면 맨 위. 지금 어느 단계인지, 다음에 무엇을 하면 되는지, 그 메일 초안.
