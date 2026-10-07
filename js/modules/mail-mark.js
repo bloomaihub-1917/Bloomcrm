@@ -17,7 +17,8 @@ import { nowStamp, td, escapeHtml, escAttr } from '../utils.js';
 import { trackAction } from './audit-tab.js';
 
 export const isInbound = (l) => l && l.direction === 'in';
-export const isUnread  = (l) => isInbound(l) && !l.read_at;
+// 처리까지 끝난 메일은 안 읽음으로 세지 않는다 — 다 처리했는데 «안 읽음 1»이 남았다
+export const isUnread  = (l) => isInbound(l) && !l.read_at && l.status !== 'done';
 export const isPending = (l) => isInbound(l) && l.status !== 'done';
 
 const listOf = (t) => (t === 'sp' ? SPEAKER_LOGS : EXH_LOGS);
@@ -72,6 +73,8 @@ const me = () => (currentUser && (currentUser.email || currentUser.name)) || '';
 /* 읽음은 줄 표시만 바꾼다 — 창을 다시 그리면 방금 펼친 칸이 접힌다 */
 function repaint(t, l){
   document.querySelectorAll(`[data-mst="${t}|${l.id}"]`).forEach((el) => { el.outerHTML = mailStateHtml(t, l); });
+  // 창은 다시 그리지 않고(펼친 칸이 접힌다) 대시보드·설정 목록만 다시 그린다
+  window.renderEvInbox?.(); window.renderConf?.(); window.renderExh?.();
 }
 
 export async function markMailRead(t, id){
