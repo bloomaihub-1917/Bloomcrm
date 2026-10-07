@@ -2618,14 +2618,22 @@ async function renderEvMailbox(evKey){
     <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">행사 공용 메일
       ${box.username ? '<span class="pill p-green" style="font-size:10px;margin-left:6px">연결됨</span>' : '<span class="pill p-gray" style="font-size:10px;margin-left:6px">없음 — 메일을 보낼 수 없음</span>'}</div>
     <div style="font-size:11px;color:var(--i4);margin-bottom:12px">
-      이 행사의 연사·참가사에게 «메일 보내기»를 누르면 이 주소로 나가고, 답장도 이 메일함으로 옵니다. 메일플러그 › 환경설정 › IMAP/SMTP 사용에서 앱 비밀번호를 발급해 넣어주세요.
+      이 행사의 연사·참가사에게 «메일 보내기»를 누르면 이 주소로 나가고, 답장도 이 메일함으로 옵니다.
+      <span id="evmb-help">${(box.provider || 'mailplug') === 'gmail'
+        ? 'Gmail: 2단계 인증을 켠 뒤 Google 계정 › 보안 › 앱 비밀번호에서 발급해 넣어주세요. 회사 주소로 보내려면 Gmail 설정 › 계정 › «다른 주소에서 메일 보내기»에 그 주소를 먼저 등록하세요.'
+        : '메일플러그 › 환경설정 › IMAP/SMTP 사용에서 앱 비밀번호를 발급해 넣어주세요.'}</span>
       ${r.offline ? '<br><b style="color:var(--re)">테스트 모드에서는 설정할 수 없어요.</b>' : ''}
       ${r.ok && !r.keyReady ? '<br><b style="color:var(--re)">서버에 MAIL_SECRET이 없어 비밀번호를 저장할 수 없어요 — Vercel 환경변수를 먼저 넣어주세요.</b>' : ''}
       ${r.ok === false && !r.offline ? `<br><b style="color:var(--re)">${escapeHtml(r.error || '불러오지 못했어요')}</b>` : ''}
     </div>
+    <div style="margin-bottom:10px"><div class="mlbl">메일 서비스</div>
+      <select class="fi" id="evmb-provider" style="width:220px" onchange="evmbProvider(this.value)">
+        <option value="mailplug"${(box.provider || 'mailplug') === 'mailplug' ? ' selected' : ''}>메일플러그 (회사 메일)</option>
+        <option value="gmail"${box.provider === 'gmail' ? ' selected' : ''}>Gmail</option>
+      </select></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-      ${inp('user', '로그인 주소 (메일플러그 계정)', box.username, '예: kic@13100m.net')}
-      ${inp('pass', box.has_password ? '앱 비밀번호 — 저장됨, 바꿀 때만 입력' : '앱 비밀번호 (메일 비밀번호 아님)', '', box.has_password ? '••••••••' : '메일플러그에서 발급한 앱 비밀번호', 'password')}
+      ${inp('user', '로그인 주소', box.username, (box.provider === 'gmail') ? '예: kic.secretariat@gmail.com' : '예: kic@13100m.net')}
+      ${inp('pass', box.has_password ? '앱 비밀번호 — 저장됨, 바꿀 때만 입력' : '앱 비밀번호 (메일 비밀번호 아님)', '', box.has_password ? '••••••••' : '발급한 앱 비밀번호 (메일 비밀번호 아님)', 'password')}
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
       ${inp('from', '받는 사람에게 보일 주소', box.from_addr, '비우면 로그인 주소')}
@@ -2633,7 +2641,7 @@ async function renderEvMailbox(evKey){
     </div>
     <details style="margin-bottom:10px"><summary style="font-size:11px;color:var(--i4);cursor:pointer">서버 (보통 고칠 일 없음)</summary>
       <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-top:8px">
-        ${inp('host', 'SMTP 서버', box.host, 'smtp.mailplug.co.kr')}
+        ${inp('host', 'SMTP 서버', box.host, box.provider === 'gmail' ? 'smtp.gmail.com' : 'smtp.mailplug.co.kr')}
         ${inp('port', '포트', box.port, '465')}
       </div></details>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -2731,6 +2739,20 @@ export async function saveExhMailTpl(evKey){
 }
 window.saveExhMailTpl = saveExhMailTpl;
 
+/* 서비스를 바꾸면 서버 칸·안내를 그 서비스 것으로 — 서버 칸은 비워 두면 서버가 기본값을 쓴다 */
+export function evmbProvider(v){
+  const host = document.getElementById('evmb-host');
+  const defaults = ['smtp.mailplug.co.kr', 'smtp.gmail.com'];
+  if(host && (!host.value || defaults.includes(host.value.trim()))){
+    host.value = ''; host.placeholder = v === 'gmail' ? 'smtp.gmail.com' : 'smtp.mailplug.co.kr';
+  }
+  const help = document.getElementById('evmb-help');
+  if(help) help.textContent = v === 'gmail'
+    ? 'Gmail: 2단계 인증을 켠 뒤 Google 계정 › 보안 › 앱 비밀번호에서 발급해 넣어주세요. 회사 주소로 보내려면 Gmail 설정 › 계정 › «다른 주소에서 메일 보내기»에 그 주소를 먼저 등록하세요.'
+    : '메일플러그 › 환경설정 › IMAP/SMTP 사용에서 앱 비밀번호를 발급해 넣어주세요.';
+}
+window.evmbProvider = evmbProvider;
+
 /* 이 행사의 처리 안 한 받은 메일 — 사람마다 창을 열어 봐야 알면 놓친다.
    한곳에 모아 두고, 누르면 그 사람 메일 탭이 열린다. 읽음·처리 규칙은 mail-mark.js */
 let inboxEv = '';
@@ -2761,7 +2783,7 @@ const evmbSay = (t, ok) => { const m = document.getElementById('evmb-msg'); if(m
 
 export async function saveEvMailbox(evKey){
   const g = (id) => (document.getElementById('evmb-' + id)?.value || '').trim();
-  const rec = { username: g('user'), password: g('pass'), from_addr: g('from'), from_name: g('name'), host: g('host'), port: g('port') };
+  const rec = { provider: g('provider') || 'mailplug', username: g('user'), password: g('pass'), from_addr: g('from'), from_name: g('name'), host: g('host'), port: g('port') };
   if(!rec.username){ evmbSay('로그인 주소를 적어주세요.'); return; }
   evmbSay('저장 중…', true);
   const r = await saveMailAccount(evKey, rec);

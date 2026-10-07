@@ -80,6 +80,14 @@ const kstStamp = (d) => new Date(new Date(d).getTime() + 9 * 3600e3).toISOString
 const MailComposer = require('nodemailer/lib/mail-composer');
 const { ImapFlow } = require('imapflow');
 const MAILPLUG = { host: 'smtp.mailplug.co.kr', port: 465, imap: 'imap.mailplug.co.kr', imapPort: 993 };
+/* 메일 서비스별 서버 — 행사마다 메일플러그나 Gmail을 고른다.
+   saveSent: 보낸 뒤 보낸메일함에 사본을 우리가 넣어야 하는지. Gmail은 SMTP로 보내면
+   보낸편지함에 저절로 남아서, 넣으면 두 통이 된다 */
+const PROVIDERS = {
+  mailplug: { host: 'smtp.mailplug.co.kr', port: 465, imap: 'imap.mailplug.co.kr', imapPort: 993, saveSent: true },
+  gmail:    { host: 'smtp.gmail.com',      port: 465, imap: 'imap.gmail.com',      imapPort: 993, saveSent: false },
+};
+const prov = (b) => PROVIDERS[(b && b.provider) || 'mailplug'] || PROVIDERS.mailplug;
 let boxReady = null;
 const ensureBox = () => boxReady || (boxReady = pool.query(`
   CREATE TABLE IF NOT EXISTS event_mailboxes (
@@ -122,9 +130,9 @@ const boxOf = async (eventId) => {
   return r.rows[0] || null;
 };
 const boxTransport = (b) => {
-  const port = Number(b.port) || MAILPLUG.port;
+  const port = Number(b.port) || prov(b).port;
   return nodemailer.createTransport({
-    host: b.host || MAILPLUG.host, port, secure: port === 465,
+    host: b.host || prov(b).host, port, secure: port === 465,
     auth: { user: b.username, pass: unseal(b.pass_enc) },
   });
 };
@@ -146,7 +154,7 @@ const boxPublic = (b) => ({
    AUTHENTICATE PLAIN을 보내면 «invalid command»로 거절한다(2026-10-07 확인) —
    기본 LOGIN 명령만 쓰고, 압축·ENABLE 같은 확장 명령도 끈다. */
 const imapClient = (b) => new ImapFlow({
-  host: MAILPLUG.imap, port: MAILPLUG.imapPort, secure: true,
+  host: prov(b).imap, port: prov(b).imapPort, secure: true,
   auth: { user: b.username, pass: unseal(b.pass_enc), loginMethod: 'LOGIN' },
   disableCompression: true, disableAutoEnable: true, logger: false,
 });
@@ -200,6 +208,12 @@ router.put('/accounts/:eventId', async (req, res) => {
   if (req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 고칠 수 없어요' });
   const eventId = String(req.params.eventId);
   const { username, password, from_addr, from_name, host, port } = req.body || {};
+  const provider = PROVIDERS[req.body && req.body.provider] ? req.body.provider : 'mailplug';
+  const P = PROVIDERS[provider];
+  // 다른 서비스의 기본 서버가 남아 있으면 고른 서비스 것으로 바꾼다(서비스를 바꿀 때)
+  const otherHosts = Object.values(PROVIDERS).map((x) => x.host);
+  const smtpHost = (!String(host || '').trim() || (otherHosts.includes(String(host).trim()) && String(host).trim() !== P.host))
+    ? P.host : String(host).trim();
   const user = String(username || '').trim();
   if (!/^[^@\s]+@[^@\s]+$/.test(user)) return res.status(400).json({ ok: false, error: '로그인 메일 주소를 확인해주세요' });
   try {
@@ -207,7 +221,7 @@ router.put('/accounts/:eventId', async (req, res) => {
     let passEnc = prev ? prev.pass_enc : null;
     if (String(password || '').trim()) passEnc = seal(String(password).trim());
     if (!passEnc) return res.status(400).json({ ok: false, error: '비밀번호가 필요해요' });
-    const row = [eventId, 'mailplug', String(host || '').trim() || MAILPLUG.host, Number(port) || MAILPLUG.port,
+    const row = [eventId, provider, smtpHost, Number(port) || P.port,
       user, passEnc, String(from_addr || '').trim() || user, String(from_name || '').trim(),
       new Date().toISOString(), req.user?.email || ''];
     await pool.query(`
@@ -230,14 +244,17 @@ router.delete('/accounts/:eventId', async (req, res) => {
 
 /* 로그인만 해 본다 — 메일은 보내지 않는다 */
 router.post('/accounts/:eventId/test', async (req, res) => {
+  let b = null;
   try {
-    const b = await boxOf(req.params.eventId);
+    b = await boxOf(req.params.eventId);
     if (!b) return res.status(404).json({ ok: false, error: '이 행사에 메일 계정이 없어요' });
     await boxTransport(b).verify();
     res.json({ ok: true, 연결: '로그인 성공 — 보낼 수 있어요' });
   } catch (e) {
     res.json({ ok: false, error: `로그인 실패: ${e.message}`,
-      도움말: '메일플러그 관리자 화면에서 이 계정의 IMAP/SMTP 사용이 켜져 있는지, 메일 비밀번호가 아니라 앱 비밀번호를 넣었는지 확인해주세요.' });
+      도움말: b && b.provider === 'gmail'
+        ? 'Gmail 2단계 인증을 켜고 앱 비밀번호를 넣었는지, Gmail 설정에서 IMAP이 켜져 있는지 확인해주세요.'
+        : '메일플러그 관리자 화면에서 이 계정의 IMAP/SMTP 사용이 켜져 있는지, 메일 비밀번호가 아니라 앱 비밀번호를 넣었는지 확인해주세요.' });
   }
 });
 
@@ -383,7 +400,7 @@ router.post('/send', async (req, res) => {
       raw,
     });
     let sentSaved = null, sentError = null;
-    if (sender.box) {
+    if (sender.box && prov(sender.box).saveSent) {
       try { sentSaved = await saveToSent(sender.box, raw); }
       catch (e) { sentError = e.message; console.error('[mail] 보낸메일함 저장 실패:', e.message); }
     }
