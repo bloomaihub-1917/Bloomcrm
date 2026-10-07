@@ -224,7 +224,9 @@ function genId(prefix) {
   return `${prefix}${Date.now()}_${seq}`;
 }
 
-const q = (col) => `"${col}"`;
+/* 칸 이름을 따옴표로 감싼다. 안의 «"»는 두 번 써서 이름 밖으로 못 나가게 한다 —
+   칸 이름이 요청에서 올 수 있는 곳(expect)이 있어 SQL에 끼어들 틈이 됐다 */
+const q = (col) => `"${String(col).replace(/"/g, '""')}"`;
 
 // Postgres 바인드 파라미터 상한(65535)에 안전하게 걸치지 않도록 청크 단위로 나눠 처리한다.
 const CHUNK_SIZE = 500;
@@ -314,7 +316,8 @@ function pickColumns(columns, obj) {
    빈 값과 null은 같게 본다 — 화면은 빈 칸을 ''로, DB는 NULL로 들고 있어서
    그대로 견주면 아무도 안 고쳤는데 매번 부딪힌다. */
 async function checkExpect(client, def, obj, expect) {
-  const fields = Object.keys(expect || {});
+  // 그 표에 있는 칸만 견준다 — 요청이 보낸 이름을 그대로 SQL에 넣지 않는다
+  const fields = Object.keys(expect || {}).filter((f) => def.columns.includes(f));
   if (!fields.length || !obj[def.pk]) return null;
   const { rows } = await client.query(
     `SELECT ${fields.map(q).join(', ')} FROM ${def.table} WHERE ${q(def.pk)} = $1`,
@@ -385,11 +388,18 @@ router.get('/', async (req, res) => {
   const { sheet } = req.query;
   // 시험 계정은 기업명·이름을 가리고 연락처는 통째로 지운 값을 받는다(test-mask.js)
   const send = (rows) => res.json(req.user && req.user.isTest ? maskRows(sheet, rows) : rows);
-  if (sheet === 'participations') return send(await readParticipations());
-  const def = TABLES[sheet];
-  if (!def) return res.status(400).json({ ok: false, error: 'unknown sheet' });
-  const { rows } = await pool.query(`SELECT * FROM ${def.table} ORDER BY ${q(def.pk)}`);
-  send(rows);
+  /* Express 4는 async 처리기의 예외를 잡지 않는다 — DB가 한 번 삐끗하면 응답 없이
+     멈추거나 프로세스가 죽었다. 로딩 때 26개를 한꺼번에 읽어서 더 잘 걸린다 */
+  try {
+    if (sheet === 'participations') return send(await readParticipations());
+    const def = TABLES[sheet];
+    if (!def) return res.status(400).json({ ok: false, error: 'unknown sheet' });
+    const { rows } = await pool.query(`SELECT * FROM ${def.table} ORDER BY ${q(def.pk)}`);
+    send(rows);
+  } catch (e) {
+    console.error(`[data] ${sheet} 읽기 실패:`, e.message);
+    res.status(500).json({ ok: false, error: '읽기에 실패했어요' });
+  }
 });
 
 router.post('/', async (req, res) => {
@@ -401,7 +411,9 @@ router.post('/', async (req, res) => {
   }
 
   let savedId = null;
-  const client = await pool.connect();
+  let client;
+  try { client = await pool.connect(); }
+  catch (e) { console.error('[data] DB 연결 실패:', e.message); return res.status(503).json({ ok: false, error: '데이터베이스에 연결하지 못했어요' }); }
   try {
     await client.query('BEGIN');
 
@@ -474,7 +486,7 @@ router.post('/', async (req, res) => {
     await client.query('COMMIT');
     res.json(savedId ? { ok: true, id: savedId } : { ok: true }); // 신규 생성 시 프론트가 id를 받도록
   } catch (e) {
-    await client.query('ROLLBACK');
+    await client.query('ROLLBACK').catch(() => {});
     console.error(`[data] ${sheet}/${action} 실패:`, e.message);
     res.status(500).json({ ok: false, error: '저장에 실패했어요' }); // 스택은 클라이언트에 노출하지 않음
   } finally {

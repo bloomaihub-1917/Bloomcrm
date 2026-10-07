@@ -211,7 +211,9 @@ function splitTitle(name){
     };
 
     for (const t of plan) {
-      const id = String(Date.now()) + String(seq++).padStart(4, '0');
+      // 16자리 이하(CLAUDE.md) — 4자리 순번으로 17자리를 만들어 2026-09-29 사고가 났다
+      const id = String(Date.now()) + String(seq++).padStart(3, '0');
+      if (!Number.isSafeInteger(Number(id))) throw new Error(`안전하지 않은 연락처 id ${id} — 한 번에 1000명 넘게는 CLAUDE.md대로 최대 id+1부터 매기세요`);
       await client.query(
         `INSERT INTO contacts (id,"nameKo","nameEn","orgKo","orgEn","titleKo","titleEn","deptKo","deptEn",
            country,cat,lang,source,date,status,email1,email2,phone1,phone2,beat,products,tags,org_id)

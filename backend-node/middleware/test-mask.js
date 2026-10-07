@@ -42,7 +42,8 @@ const RULES = {
     website: H, biz_no: H, phone: H, email: H, address: H, notes: H,
   },
   crm_targets: { name: N, nameEn: N, log: H },
-  activity_log: { target: N, detail: H },
+  // link에는 되돌리기용 원본 행(before/after/also)이 통째로 들어 있다 — 메일·전화가 그대로 보였다
+  activity_log: { target: N, detail: H, link: 'link' },
   exhibitors: {
     company_key: N, company_name: N, fascia_name: N, book_name_ko: N, book_name_en: N,
     note: H, settled_note: H, onsite_note: H, base_note: H, directory_note: H,
@@ -63,10 +64,23 @@ const RULES = {
     bank_holder_address: H, bank_holder_postal: H, bank_branch: H, bank_code: H, bank_note: H,
     bank_first_name: H, bank_last_name: H, bank_form_file: H,
     id_card_file: H, bankbook_file: H,
+    fee_note: H, stay_note: H, air_note: H, consent_note: H,
   },
+  // 파일 이름에 회사명·사람 이름이 들어간다
+  watch_files: { name: N, rel_path: H, note: H },
   speaker_contacts: { name: N, email: H, phone: H, note: H },
   speaker_logs: { counterpart: N, subject: H, body: H, answer: H },
 };
+
+/* 감사 기록의 link — 화면이 어디로 이동할지(kind·id)는 남기고 원본 값은 뺀다 */
+function maskLink(v) {
+  if (!v) return v;
+  try {
+    const o = JSON.parse(v);
+    ['before', 'after', 'also', 'row'].forEach((k) => { if (k in o) o[k] = '***'; });
+    return JSON.stringify(o);
+  } catch (e) { return hide(v); }
+}
 
 function maskRows(sheet, rows) {
   const rule = RULES[sheet];
@@ -74,7 +88,8 @@ function maskRows(sheet, rows) {
   return rows.map((r) => {
     const out = { ...r };
     Object.entries(rule).forEach(([col, how]) => {
-      if (col in out) out[col] = how === N ? keep2(out[col]) : hide(out[col]);
+      if (!(col in out)) return;
+      out[col] = how === N ? keep2(out[col]) : how === 'link' ? maskLink(out[col]) : hide(out[col]);
     });
     return out;
   });

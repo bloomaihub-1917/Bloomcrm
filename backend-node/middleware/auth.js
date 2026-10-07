@@ -2,6 +2,12 @@ const admin = require('firebase-admin');
 const { isTestAccount } = require('./test-mask');
 
 const ALLOWED_DOMAIN = process.env.ALLOWED_DOMAIN || '@13100m.net';
+/* 허용 계정 목록 — 도메인만 보면, Firebase에서 누구나 가입이 열려 있을 때
+   «아무개@13100m.net»으로 만든 계정이 전체 데이터에 들어온다(메일이 진짜인지
+   확인하지 않으므로 없는 주소도 된다). ALLOWED_EMAILS에 쉼표로 적으면 그 계정만
+   들인다. 비워 두면 예전처럼 도메인만 본다. */
+const ALLOWED_EMAILS = new Set((process.env.ALLOWED_EMAILS || '').split(',')
+  .map((s) => s.trim().toLowerCase()).filter(Boolean));
 
 /* Firebase Admin 초기화를 지연시킨다 — 모듈 로드 시점에 바로 던지면
    FIREBASE_SERVICE_ACCOUNT를 넣기 전까지 /health조차 확인할 수 없다
@@ -32,6 +38,9 @@ async function requireAuth(req, res, next) {
     const decoded = await admin.auth().verifyIdToken(token);
     if (!decoded.email || !decoded.email.endsWith(ALLOWED_DOMAIN)) {
       return res.status(403).json({ ok: false, error: 'domain not allowed' });
+    }
+    if (ALLOWED_EMAILS.size && !ALLOWED_EMAILS.has(decoded.email.toLowerCase())) {
+      return res.status(403).json({ ok: false, error: 'account not allowed' });
     }
     // 보낸 메일 기록에 누가 보냈는지 적으려면 이름도 필요하다
     req.user = { email: decoded.email, name: decoded.name || '', isTest: isTestAccount(decoded.email) };
