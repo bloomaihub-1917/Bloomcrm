@@ -1102,3 +1102,19 @@ CREATE TABLE IF NOT EXISTS mail_files (
   id TEXT PRIMARY KEY, event_id TEXT, step TEXT, filename TEXT, content_type TEXT,
   size INTEGER, data TEXT, created_at TEXT, author_email TEXT
 );
+
+-- 메일 원문 위치·주인 없는 메일 (2026-10-08) — routes/mail.js ensureExtra가 처음 쓸 때 만든다
+-- mail_box·mail_uid: 그 기록이 메일함의 어느 메일인지(«원문 보기»가 그때 가져온다, 저장하지 않는다)
+ALTER TABLE speaker_logs   ADD COLUMN IF NOT EXISTS mail_box TEXT;
+ALTER TABLE speaker_logs   ADD COLUMN IF NOT EXISTS mail_uid TEXT;
+ALTER TABLE exhibitor_logs ADD COLUMN IF NOT EXISTS mail_box TEXT;
+ALTER TABLE exhibitor_logs ADD COLUMN IF NOT EXISTS mail_uid TEXT;
+ALTER TABLE event_mailboxes ADD COLUMN IF NOT EXISTS ignore_domains TEXT;   -- «이 도메인 늘 무시»
+-- 아는 사람과 주소가 안 맞은 받은 메일 — 사람이 연결하거나 무시하기 전까지 어디에도 붙지 않는다
+CREATE TABLE IF NOT EXISTS mail_unassigned (
+  id TEXT PRIMARY KEY, event_id TEXT, mail_box TEXT, mail_uid TEXT, ts TEXT,
+  from_addr TEXT, from_name TEXT, subject TEXT, body TEXT, warnings TEXT,   -- warnings: JSON 배열(경고 문구)
+  status TEXT,          -- new | linked | ignored
+  linked_t TEXT, linked_id TEXT, created_at TEXT, handled_by TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS mail_unassigned_uniq ON mail_unassigned (event_id, mail_box, mail_uid);

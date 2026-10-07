@@ -15,6 +15,7 @@ import { SPEAKER_LOGS, EXH_LOGS, SPEAKERS, EXHIBITORS, currentUser } from '../st
 import { saveSpeakerLog, saveExhLog, saveSpeaker, syncSentMail, syncInboxMail, reloadSpeakerData, mailAccountOf } from '../api.js';
 import { nowStamp, td, escapeHtml, escAttr } from '../utils.js';
 import { trackAction } from './audit-tab.js';
+import { unassignedCount } from './mail-original.js';
 
 export const isInbound = (l) => l && l.direction === 'in';
 // 처리까지 끝난 메일은 안 읽음으로 세지 않는다 — 다 처리했는데 «안 읽음 1»이 남았다
@@ -55,9 +56,12 @@ export function mailStateHtml(t, l){
 }
 /* 펼친 본문 아래 단추 */
 export function mailActionsHtml(t, l){
-  if(!isInbound(l)) return '';
   const id = escAttr(l.id);
+  // 원문 보기 — 이미지·표를 봐야 할 때 메일함에서 원본을 가져와 안전한 칸에 띄운다(mail-original.js)
+  const orig = l.mail_uid ? `<button class="btn" style="font-size:10.5px" onclick="openMailOriginal('${t}','${id}')">원문 보기</button>` : '';
+  if(!isInbound(l)) return orig ? `<div style="display:flex;gap:6px;margin-top:6px">${orig}</div>` : '';
   return `<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+    ${orig}
     <button class="btn bp" style="font-size:10.5px" onclick="replyMail('${t}','${id}')">↩ 회신</button>
     <button class="btn" style="font-size:10.5px" onclick="pinMail('${t}','${id}')" title="이 메일을 모든 탭 위에 붙여 두고 내용을 칸에 넣습니다">📌 고정</button>
     ${l.status === 'done'
@@ -229,6 +233,7 @@ export function mailCardHtml(evKey, part){
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <div class="uc-ttl" style="margin:0">메일함</div>
       <span style="font-size:10.5px;color:var(--i4)" id="mcard-last-${part}">마지막 가져옴 확인 중…</span>
+      <span id="mcard-un-${part}"></span>
       <button class="btn" style="font-size:10.5px;margin-left:auto" onclick="dashMailSync('${escAttr(evKey)}','${part}')">↻ 지금 가져오기</button>
     </div>
     <div id="mcard-msg-${part}" style="font-size:10.5px;color:var(--i4);min-height:0"></div>
@@ -260,6 +265,13 @@ export async function fillMailCard(evKey, part){
   el.textContent = !acc ? '이 행사엔 공용 메일이 없어요 — 설정 › 행사 › 메일'
     : acc.last_sync_at ? `마지막 가져옴 ${acc.last_sync_at}${acc.last_sync_by === '자동' ? ' (자동)' : acc.last_sync_by ? ` (${acc.last_sync_by})` : ''}`
     : '아직 가져온 적 없어요';
+  /* 주인 없는 메일 — 아는 사람과 주소가 안 맞은 받은 메일. 있으면 단추로 띄운다 */
+  if(acc){
+    const n = await unassignedCount(evKey);
+    const u = document.getElementById(`mcard-un-${part}`);
+    if(u) u.innerHTML = n ? `<button class="btn" style="font-size:10.5px;color:var(--am);font-weight:700" onclick="openUnassigned('${escAttr(evKey)}')"
+      title="아는 사람과 주소가 안 맞은 받은 메일 — 연사·참가사에 연결하거나 무시합니다">주인 없는 메일 ${n}</button>` : '';
+  }
 }
 export function setDashMailFil(part, k){ dashFil[part] = k; afterSync(); }
 export async function dashMailSync(evKey, part){

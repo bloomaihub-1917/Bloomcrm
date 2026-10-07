@@ -708,8 +708,15 @@ export async function reloadSpeakerData(){
   if(Array.isArray(sp)) SPEAKERS.splice(0, SPEAKERS.length, ...sp);
   if(Array.isArray(logs)) SPEAKER_LOGS.splice(0, SPEAKER_LOGS.length, ...logs);
   // 받은 메일은 참가사 기록에도 들어간다
-  const xl = await safeFetch(base + 'exhibitor_logs', 'exhibitor_logs', 1, headers);
+  const [xl, sc, xc] = await Promise.all([
+    safeFetch(base + 'exhibitor_logs', 'exhibitor_logs', 1, headers),
+    // 주인 없는 메일을 연결하면 연락 상대·담당자가 새로 생긴다
+    safeFetch(base + 'speaker_contacts', 'speaker_contacts', 1, headers),
+    safeFetch(base + 'exhibitor_contacts', 'exhibitor_contacts', 1, headers),
+  ]);
   if(Array.isArray(xl)) EXH_LOGS.splice(0, EXH_LOGS.length, ...xl);
+  if(Array.isArray(sc)) SPEAKER_CONTACTS.splice(0, SPEAKER_CONTACTS.length, ...sc);
+  if(Array.isArray(xc)) EXH_CONTACTS.splice(0, EXH_CONTACTS.length, ...xc);
   return Array.isArray(sp) && Array.isArray(logs);
 }
 export const deleteSpeakerLog   = (id) => removeRow('speaker_logs', id, '연사 기록 삭제');
@@ -957,6 +964,11 @@ export const testMailAccount   = (evKey) => mailApi(`/accounts/${encodeURICompon
 /* 보낸메일함을 읽어 연사 발송 기록으로 — apply 없이 부르면 미리보기만 */
 export const syncSentMail      = (evKey, apply) => mailApi(`/accounts/${encodeURIComponent(evKey)}/sync-sent`, 'POST', { apply: !!apply });
 /* 받은메일함을 읽어 연사·참가사 기록으로 — apply 없이 부르면 미리보기만 */
+/* 원문 보기·주인 없는 메일 — t: 'sp' | 'ex' | 'un'(주인 없는 메일) */
+export const mailOriginal      = (t, id, remote) => mailApi(`/original/${t}/${encodeURIComponent(id)}${remote ? '?remote=1' : ''}`);
+export const loadUnassigned    = (evKey) => mailApi(`/unassigned/${encodeURIComponent(evKey)}`);
+export const linkUnassigned    = (id, body) => mailApi(`/unassigned/${encodeURIComponent(id)}/link`, 'POST', body);
+export const ignoreUnassigned  = (id, domain) => mailApi(`/unassigned/${encodeURIComponent(id)}/ignore`, 'POST', { domain: !!domain });
 export const syncInboxMail     = (evKey, apply) => mailApi(`/accounts/${encodeURIComponent(evKey)}/sync-inbox`, 'POST', { apply: !!apply });
 
 /* ── 메일 기본 첨부 (단계별 가이드·양식 파일) ──

@@ -464,8 +464,27 @@ const H2T = { wordwrap: false,
    («def3907333c4» 같은 이름). 글자·HTML 본문이 둘 다 비면 이걸 본문으로 쓴다 */
 const bodyParts = (mail) => (mail.attachments || [])
   .filter((a) => /^text\/(html|plain)/i.test(a.contentType || '') && a.content && a.size < 512 * 1024);
+/* 이미지 자리 — 글자로 바꾸면 이미지가 사라져 «아래 사진 참고»를 놓친다.
+   자리에 [🖼 이미지: 이름]을 남긴다(1×1 추적 픽셀은 뺀다). 이미지는 «원문 보기»로 본다 */
+function markImages(html, mail) {
+  return String(html || '').replace(/<img\b[^>]*>/gi, (tag) => {
+    if (/\b(width|height)\s*=\s*["']?1["'\s>]/i.test(tag)) return '';
+    const attr = (k) => ((tag.match(new RegExp(k + '\\s*=\\s*["\']([^"\']*)["\']', 'i')) || [])[1] || '');
+    const src = attr('src');
+    let name = attr('alt');
+    if (!name && /^cid:/i.test(src)) {
+      const a = (mail.attachments || []).find((x) => String(x.cid || '').replace(/[<>]/g, '') === src.slice(4));
+      name = (a && a.filename) || '';
+    }
+    if (!name) name = (src.split('/').pop() || '').split('?')[0];
+    if (/^data:/i.test(name)) name = '';
+    return ` [🖼 이미지${name ? ': ' + name.slice(0, 60) : ''}] `;
+  });
+}
 const mailText = (mail) => {
-  const direct = String(mail.text || '').trim()
+  // 본문에 이미지가 있으면 HTML 쪽을 글자로 바꾼다 — 글자 본문에는 이미지 자리가 없다
+  const direct = (mail.html && /<img\b/i.test(mail.html) ? htmlToText(markImages(mail.html, mail), H2T).trim() : '')
+    || String(mail.text || '').trim()
     || (mail.html ? htmlToText(mail.html, H2T).trim() : '');
   if (direct) return direct;
   return bodyParts(mail).map((a) => {
@@ -521,6 +540,7 @@ const prevDay = (d) => new Date(new Date(`${d}T00:00:00Z`).getTime() - 864e5).to
 
 const syncSentHandler = async (req, res) => {
   const apply = !!(req.body && req.body.apply);
+  await ensureExtra().catch(() => {});
   if (req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 바꿀 수 없어요' });
   const eventId = String(req.params.eventId);
   try {
@@ -611,7 +631,7 @@ const syncSentHandler = async (req, res) => {
             const d = exSeen.has(`${id}|${date}|${norm(subject)}`) || exSeen.has(`${id}|${prevDay(date)}|${norm(subject)}`);
             const cls = classifyExhSent(subject);
             found.push({
-              t: 'ex', exhibitor_id: id, name: exName.get(id) || id, date, at, subject,
+              t: 'ex', exhibitor_id: id, name: exName.get(id) || id, date, at, subject, box: sentPath, uid: String(m.uid || ''),
               to: to.join(', '), cc: cc.join(', '), kind: cls.kind, category: cls.category, dup: d,
               body: mailText(mail) + (files.length ? `\n\n[첨부] ${files.join(', ')}` : ''),
             });
@@ -623,7 +643,7 @@ const syncSentHandler = async (req, res) => {
             const cls = classifySent(subject);
             const invite = cls.kind === 'invite';
             found.push({
-              speaker_id: id, name: s0.name_snapshot || s0.name_en || id, date, at, subject,
+              speaker_id: id, name: s0.name_snapshot || s0.name_en || id, date, at, subject, box: sentPath, uid: String(m.uid || ''),
               to: to.join(', '), cc: cc.join(', '), invite, kind: cls.kind, category: cls.category, dup,
               stamp: invite && !s0.guide_sent_at,
               body: mailText(mail) + (files.length ? `\n\n[첨부] ${files.join(', ')}` : ''),
@@ -671,24 +691,32 @@ const syncSentHandler = async (req, res) => {
           sorted += k.rowCount || 0;
         }
       }
+      /* 이미 가져온 기록에 원문 위치(메일함·번호)를 채운다 — «원문 보기»가 쓴다 */
+      for (const f of found.filter((x) => x.dup && x.uid)) {
+        const ex0 = f.t === 'ex';
+        await pool.query(`UPDATE ${ex0 ? 'exhibitor_logs' : 'speaker_logs'} SET mail_box = $1, mail_uid = $2
+           WHERE ${ex0 ? 'exhibitor_id' : 'speaker_id'} = $3 AND left(ts, 10) IN ($4, $5) AND lower(btrim(subject)) = $6
+             AND direction = 'out' AND COALESCE(mail_uid, '') = ''`,
+        [f.box, f.uid, ex0 ? f.exhibitor_id : f.speaker_id, f.date, prevDay(f.date), norm(f.subject)]);
+      }
       for (const f of found.filter((x) => !x.dup && x.t === 'ex')) {
         await pool.query(`
           INSERT INTO exhibitor_logs (id, exhibitor_id, kind, ts, direction, channel, counterpart, category,
-            subject, body, answered_at, answer, status, author_email, author_name)
-          VALUES ($1,$2,$3,$4,'out','이메일',$5,$6,$7,$8,'','','done',$9,$10)`,
+            subject, body, answered_at, answer, status, author_email, author_name, mail_box, mail_uid)
+          VALUES ($1,$2,$3,$4,'out','이메일',$5,$6,$7,$8,'','','done',$9,$10,$11,$12)`,
         [`XL-${Date.now()}-${Math.floor(Math.random() * 100000)}`, f.exhibitor_id, f.kind, f.at,
           [f.to, f.cc ? `(cc) ${f.cc}` : ''].filter(Boolean).join(' '), f.category,
-          f.subject, f.body, req.user?.email || '', `${req.user?.name || req.user?.email || ''} (보낸메일함에서 가져옴)`]);
+          f.subject, f.body, req.user?.email || '', `${req.user?.name || req.user?.email || ''} (보낸메일함에서 가져옴)`, f.box, f.uid]);
         added++;
       }
       for (const f of found.filter((x) => !x.dup && x.t !== 'ex')) {
         await pool.query(`
           INSERT INTO speaker_logs (id, speaker_id, kind, ts, direction, channel, counterpart, category,
-            subject, body, answered_at, answer, status, author_email, author_name)
-          VALUES ($1,$2,$3,$4,'out','이메일',$5,$6,$7,$8,'','','done',$9,$10)`,
+            subject, body, answered_at, answer, status, author_email, author_name, mail_box, mail_uid)
+          VALUES ($1,$2,$3,$4,'out','이메일',$5,$6,$7,$8,'','','done',$9,$10,$11,$12)`,
         [`SL-${Date.now()}-${Math.floor(Math.random() * 100000)}`, f.speaker_id, f.kind, f.at,
           [f.to, f.cc ? `(cc) ${f.cc}` : ''].filter(Boolean).join(' '), f.category,
-          f.subject, f.body, req.user?.email || '', `${req.user?.name || req.user?.email || ''} (보낸메일함에서 가져옴)`]);
+          f.subject, f.body, req.user?.email || '', `${req.user?.name || req.user?.email || ''} (보낸메일함에서 가져옴)`, f.box, f.uid]);
         added++;
       }
       for (const [id, d] of Object.entries(firstInvite)) {
@@ -717,6 +745,7 @@ const syncSentHandler = async (req, res) => {
    같은 날(또는 하루 전)·같은 제목·같은 사람의 받은 기록이 있으면 건너뛴다. */
 const syncInboxHandler = async (req, res) => {
   const apply = !!(req.body && req.body.apply);
+  await ensureExtra().catch(() => {});
   if (req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 바꿀 수 없어요' });
   const eventId = String(req.params.eventId);
   try {
@@ -757,6 +786,9 @@ const syncInboxHandler = async (req, res) => {
       [ex.map((r) => r.id)])).rows.forEach((l) => seen.add(`ex|${l.id}|${String(l.ts || '').slice(0, 10)}|${norm(l.subject)}`));
 
     const self = new Set([norm(b.username), norm(b.from_addr)]);
+    // 행사 메일 설정의 «늘 무시» 도메인
+    const ignored = new Set(String(b.ignore_domains || '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean));
+    const unknown = [];
     const client = imapClient(b);
     let stage = '메일함 로그인';
     try { await client.connect(); }
@@ -779,8 +811,21 @@ const syncInboxHandler = async (req, res) => {
           // 부재중·자동 답장·반송은 사람 메일이 아니다 — 쌓이면 처리할 메일이 묻힌다
           if (isAutoReply(mail)) continue;
           if (!from || self.has(norm(from))) continue;
+          if (ignored.has(domainOf(from))) continue;
           const who = byMail.get(norm(from));
-          if (!who) continue;
+          const spam = isSpam(mail);
+          if (!who) {
+            /* 모르는 사람 — 스팸·대량 발송은 버리고, 나머지는 «주인 없는 메일»로 모은다.
+               사람이 확인하고 연결하기 전까지 어디에도 붙이지 않는다 */
+            if (spam || isBulk(mail)) continue;
+            const fromName0 = (mail.from && mail.from.value[0] && mail.from.value[0].name) || '';
+            const asBody0 = new Set(String(mail.text || '').trim() || mail.html ? [] : bodyParts(mail));
+            const files0 = (mail.attachments || []).filter((a) => !asBody0.has(a)).map((a) => a.filename).filter(Boolean);
+            unknown.push({ uid: String(m.uid || ''), at: kstStamp(mail.date || m.internalDate || Date.now()),
+              from, fromName: fromName0, subject: String(mail.subject || '').trim(),
+              body: mailText(mail) + (files0.length ? `\n\n[첨부] ${files0.join(', ')}` : ''), warnings: mailWarnings(mail) });
+            continue;
+          }
           const date = kstDate(mail.date || m.internalDate || Date.now());
           const subject = String(mail.subject || '').trim();
           const key = (d) => `${who.t}|${who.id}|${d}|${norm(subject)}`;
@@ -789,8 +834,11 @@ const syncInboxHandler = async (req, res) => {
           const asBody = new Set(String(mail.text || '').trim() || mail.html ? [] : bodyParts(mail));
           const files = (mail.attachments || []).filter((a) => !asBody.has(a)).map((a) => a.filename).filter(Boolean);
           const fromName = (mail.from && mail.from.value[0] && mail.from.value[0].name) || '';
+          const warns = mailWarnings(mail);
           found.push({
-            t: who.t, id: who.id, name: who.t === 'sp' ? spName.get(who.id) : exName.get(who.id),
+            t: who.t, id: who.id, name: who.t === 'sp' ? spName.get(who.id) : exName.get(who.id), uid: String(m.uid || ''),
+            // 아는 사람이어도 스팸 표시·경고가 있으면 분류에 남긴다(버리지 않는다 — 실제 회신이 잘못 걸리기도 한다)
+            category: spam ? '받은 메일 · ⚠ 스팸 의심' : warns.length ? '받은 메일 · ⚠ 확인' : '받은 메일',
             date, at: kstStamp(mail.date || m.internalDate || Date.now()), subject, from: fromName ? `${fromName} <${from}>` : from, dup,
             files: files.length,
             body: mailText(mail) + (files.length ? `\n\n[첨부] ${files.join(', ')}` : ''),
@@ -815,7 +863,7 @@ const syncInboxHandler = async (req, res) => {
     });
     const replyNames = Object.keys(firstReply).map((id) => spName.get(id));
 
-    let added = 0, replied = 0;
+    let added = 0, replied = 0, unassigned = 0;
     if (apply) {
       for (const [id, d] of Object.entries(firstReply)) {
         const u = await pool.query(`UPDATE speakers SET invite_replied_at = $1, reply_auto = 'yes'
@@ -826,21 +874,256 @@ const syncInboxHandler = async (req, res) => {
         const sp0 = f.t === 'sp';
         await pool.query(`
           INSERT INTO ${sp0 ? 'speaker_logs' : 'exhibitor_logs'} (id, ${sp0 ? 'speaker_id' : 'exhibitor_id'}, kind, ts, direction,
-            channel, counterpart, category, subject, body, answered_at, answer, status, author_email, author_name)
-          VALUES ($1,$2,'note',$3,'in','이메일',$4,'받은 메일',$5,$6,'','','open',$7,$8)`,
-        [`${sp0 ? 'SL' : 'XL'}-${Date.now()}-${Math.floor(Math.random() * 100000)}`, f.id, f.at, f.from,
-          f.subject, f.body, req.user?.email || '', `${req.user?.name || req.user?.email || ''} (받은메일함에서 가져옴)`]);
+            channel, counterpart, category, subject, body, answered_at, answer, status, author_email, author_name, mail_box, mail_uid)
+          VALUES ($1,$2,'note',$3,'in','이메일',$4,$5,$6,$7,'','','open',$8,$9,'INBOX',$10)`,
+        [`${sp0 ? 'SL' : 'XL'}-${Date.now()}-${Math.floor(Math.random() * 100000)}`, f.id, f.at, f.from, f.category,
+          f.subject, f.body, req.user?.email || '', `${req.user?.name || req.user?.email || ''} (받은메일함에서 가져옴)`, f.uid]);
         added++;
+      }
+      // 이미 가져온 받은 기록에 원문 위치를 채운다
+      for (const f of found.filter((x) => x.dup && x.uid)) {
+        const sp0 = f.t === 'sp';
+        await pool.query(`UPDATE ${sp0 ? 'speaker_logs' : 'exhibitor_logs'} SET mail_box = 'INBOX', mail_uid = $1
+           WHERE ${sp0 ? 'speaker_id' : 'exhibitor_id'} = $2 AND left(ts, 10) IN ($3, $4) AND lower(btrim(subject)) = $5
+             AND direction = 'in' AND COALESCE(mail_uid, '') = ''`, [f.uid, f.id, f.date, prevDay(f.date), norm(f.subject)]);
+      }
+      // 주인 없는 메일 — 같은 메일(메일함·번호)은 한 번만
+      for (const u of unknown) {
+        const r = await pool.query(`INSERT INTO mail_unassigned (id, event_id, mail_box, mail_uid, ts, from_addr, from_name, subject, body,
+            warnings, status, created_at) VALUES ($1,$2,'INBOX',$3,$4,$5,$6,$7,$8,$9,'new',$10)
+          ON CONFLICT (event_id, mail_box, mail_uid) DO NOTHING`,
+        [`MU-${Date.now()}-${Math.floor(Math.random() * 100000)}`, eventId, u.uid, u.at, u.from, u.fromName, u.subject, u.body,
+          JSON.stringify(u.warnings), kstStamp(Date.now())]);
+        unassigned += r.rowCount || 0;
       }
     }
     if (apply) await markSynced(eventId, req.user?.name || req.user?.email || '');
     res.json({
-      ok: true, applied: apply, scanned: total, added, replied, replyNames,
+      ok: true, applied: apply, scanned: total, added, replied, replyNames, unassigned, unknown: unknown.length,
       items: found.map(({ body, ...r }) => r),
       skipped: [confDone ? '컨퍼런스(진행 완료)' : '', exhDone ? '전시(진행 완료)' : ''].filter(Boolean),
     });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 };
+
+
+/* ══════════════════════════════════════════════════════════════
+   원문 보기 · 주인 없는 메일
+══════════════════════════════════════════════════════════════ */
+
+/* 기록이 메일함의 어느 메일인지 — 원문을 다시 가져오려고 남긴다(mail_box·mail_uid).
+   주인 없는 메일은 따로 모은다. 연결하기 전까지 어느 사람 기록에도 붙지 않는다. */
+let extraReady = null;
+const ensureExtra = () => extraReady || (extraReady = (async () => {
+  for (const t of ['speaker_logs', 'exhibitor_logs']) {
+    await pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS mail_box TEXT`);
+    await pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS mail_uid TEXT`);
+  }
+  await pool.query('ALTER TABLE event_mailboxes ADD COLUMN IF NOT EXISTS ignore_domains TEXT');
+  await pool.query(`CREATE TABLE IF NOT EXISTS mail_unassigned (
+    id TEXT PRIMARY KEY, event_id TEXT, mail_box TEXT, mail_uid TEXT, ts TEXT,
+    from_addr TEXT, from_name TEXT, subject TEXT, body TEXT, warnings TEXT,
+    status TEXT, linked_t TEXT, linked_id TEXT, created_at TEXT, handled_by TEXT)`);
+  await pool.query('CREATE UNIQUE INDEX IF NOT EXISTS mail_unassigned_uniq ON mail_unassigned (event_id, mail_box, mail_uid)');
+})().catch((e) => { extraReady = null; throw e; }));
+
+/* 스팸 — 메일 서버가 붙인 표시. 받은편지함에 남겨 둔 «의심» 메일이다 */
+function isSpam(mail) {
+  const h = mail.headers || new Map();
+  if (/^\s*\[(spam|스팸)\]/i.test(String(mail.subject || ''))) return true;
+  if (/^yes/i.test(String(h.get('x-spam-flag') || '')) || /^yes/i.test(String(h.get('x-spam-status') || ''))) return true;
+  return false;
+}
+/* 대량 발송(뉴스레터·광고) — 사람이 한 사람에게 보낸 메일이 아니다 */
+function isBulk(mail) {
+  const h = mail.headers || new Map();
+  return !!(h.get('list-unsubscribe') || h.get('list-id')) || /^(bulk|list)$/i.test(String(h.get('precedence') || ''));
+}
+const domainOf = (a) => String(a || '').toLowerCase().split('@')[1] || '';
+const FREE_MAIL = new Set(['gmail.com', 'naver.com', 'daum.net', 'hanmail.net', 'kakao.com', 'nate.com', 'hotmail.com',
+  'outlook.com', 'yahoo.com', 'icloud.com', 'live.com', 'me.com', 'qq.com', '163.com']);
+/* 경고 — 사람이 속지 않게. 자동으로 막지는 않고 보이게만 한다 */
+function mailWarnings(mail) {
+  const w = [];
+  const from = (mail.from && mail.from.value[0]) || {};
+  const rt = (mail.replyTo && mail.replyTo.value[0] && mail.replyTo.value[0].address) || '';
+  if (rt && domainOf(rt) !== domainOf(from.address)) w.push(`회신 주소가 보낸 주소와 달라요(${rt})`);
+  const risky = (mail.attachments || []).map((a) => a.filename || '')
+    .filter((n) => /\.(exe|scr|js|jse|vbs|bat|cmd|ps1|msi|jar|iso|img|zip|rar|7z|html?|lnk|hta)$/i.test(n));
+  if (risky.length) w.push(`위험할 수 있는 첨부: ${risky.join(', ')}`);
+  const text = `${mail.subject || ''}\n${String(mail.text || '').slice(0, 4000)}`;
+  if (/계좌\s*(변경|바뀌)|입금\s*계좌|bank (details|account).{0,20}(change|update|new)|new (bank|account) details|wire transfer|긴급\s*송금/i.test(text))
+    w.push('결제 정보 변경 요청 — 전화로 꼭 확인하세요');
+  if (from.name && from.address && /@/.test(from.name) && domainOf(from.name.match(/[^\s<>"]+@[^\s<>"]+/)?.[0]) !== domainOf(from.address))
+    w.push('보낸 사람 이름에 다른 주소가 적혀 있어요');
+  return w;
+}
+
+/* 원문을 안전한 HTML로 — 스크립트·폼·외부 불러오기를 걷어 내고, 본문에 붙은 이미지만
+   data:로 넣는다. 외부 이미지는 기본으로 막는다(열람 추적). 화면은 이 결과를 스크립트가
+   돌지 않는 iframe(sandbox, CSP)에 띄운다 */
+function safeOriginalHtml(mail, { remote = false, noLinks = false } = {}) {
+  const esc = (s) => String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  let h = mail.html || (bodyParts(mail).find((a) => /html/i.test(a.contentType))?.content.toString('utf8'))
+    || `<pre style="white-space:pre-wrap;font-family:inherit">${esc(mail.text || '')}</pre>`;
+  h = h.replace(/<(script|iframe|frame|object|embed|applet|form|meta|link|base|svg)\b[\s\S]*?(<\/\1\s*>|\/?>)/gi, '')
+    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/(href|src|action)\s*=\s*(["'])\s*(javascript|vbscript|data:text)[^"']*\2/gi, '$1=""');
+  const cid = new Map((mail.attachments || [])
+    .filter((a) => a.cid && /^image\//i.test(a.contentType || '') && a.size < 3 * 1024 * 1024)
+    .map((a) => [String(a.cid).replace(/[<>]/g, ''), `data:${a.contentType};base64,${a.content.toString('base64')}`]));
+  h = h.replace(/src\s*=\s*(["'])cid:([^"']+)\1/gi, (m, q, c) => `src="${cid.get(c) || ''}"`);
+  if (!remote) {
+    h = h.replace(/(<img\b[^>]*?)\ssrc\s*=\s*(["'])(https?:|\/\/)[^"']*\2/gi, '$1 src="" data-blocked="1"')
+      .replace(/url\(\s*(["']?)(https?:|\/\/)[^)]*\)/gi, 'url()');
+  }
+  if (noLinks) h = h.replace(/\shref\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+  return h;
+}
+
+/* 원문 보기 — 기록에 남긴 메일함·번호로 그때 가져온다(저장하지 않는다) */
+router.get('/original/:t/:id', async (req, res) => {
+  const t = req.params.t === 'ex' ? 'ex' : req.params.t === 'un' ? 'un' : 'sp';
+  try {
+    await ensureExtra();
+    let row;
+    if (t === 'un') {
+      // 주인 없는 메일 — 연결하기 전에 원문을 보고 판단한다
+      row = (await pool.query(`SELECT mail_box, mail_uid, '' category, event_id FROM mail_unassigned WHERE id = $1`, [req.params.id])).rows[0];
+    } else {
+      const tbl = t === 'sp' ? 'speaker_logs' : 'exhibitor_logs';
+      const own = t === 'sp' ? 'speakers' : 'exhibitors';
+      const col = t === 'sp' ? 'speaker_id' : 'exhibitor_id';
+      const r = await pool.query(`SELECT l.mail_box, l.mail_uid, l.category, o.event_id FROM ${tbl} l
+        JOIN ${own} o ON o.id = l.${col} WHERE l.id = $1`, [req.params.id]);
+      row = r.rows[0];
+    }
+    if (!row || !row.mail_uid) return res.status(404).json({ ok: false, error: '원문 위치가 없어요 — «지금 가져오기»를 한 번 누르면 채워져요' });
+    const b = await boxOf(row.event_id);
+    if (!b) return res.status(404).json({ ok: false, error: '이 행사에 공용 메일이 없어요' });
+    const client = imapClient(b);
+    await client.connect();
+    let mail;
+    try {
+      const lock = await client.getMailboxLock(row.mail_box || 'INBOX');
+      try {
+        const m = await client.fetchOne(String(row.mail_uid), { source: true }, { uid: true });
+        if (!m || !m.source) return res.status(404).json({ ok: false, error: '메일함에서 이 메일을 찾지 못했어요(지워졌을 수 있어요)' });
+        mail = await simpleParser(m.source);
+      } finally { lock.release(); }
+    } finally { await client.logout().catch(() => {}); }
+    const spam = isSpam(mail) || /스팸/.test(row.category || '');
+    res.json({
+      ok: true, subject: mail.subject || '', date: mail.date ? kstStamp(mail.date) : '',
+      from: mail.from ? mail.from.text : '', to: mail.to ? [].concat(mail.to).map((x) => x.text).join(', ') : '',
+      html: safeOriginalHtml(mail, { remote: req.query.remote === '1', noLinks: spam }),
+      blocked: /data-blocked="1"/.test(safeOriginalHtml(mail, { remote: false })) && req.query.remote !== '1',
+      spam, warnings: mailWarnings(mail),
+      attachments: (mail.attachments || []).filter((a) => !a.cid || !/^image\//i.test(a.contentType || ''))
+        .map((a) => ({ filename: a.filename || '(이름 없음)', size: a.size || 0 })),
+    });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+/* ── 주인 없는 메일 ── */
+router.get('/unassigned/:eventId', async (req, res) => {
+  const eventId = String(req.params.eventId);
+  try {
+    await ensureExtra();
+    const rows = (await pool.query(`SELECT * FROM mail_unassigned WHERE event_id = $1 AND status = 'new' ORDER BY ts DESC`, [eventId])).rows;
+    /* 추천 — 보낸 주소의 도메인이 이미 아는 사람과 같으면(무료 메일 도메인은 빼고) */
+    const people = [];
+    (await pool.query(`SELECT s.id, COALESCE(NULLIF(s.name_snapshot,''), s.name_en) nm, c.email1, c.email2,
+        (SELECT string_agg(sc.email, ',') FROM speaker_contacts sc WHERE sc.speaker_id = s.id) more
+       FROM speakers s LEFT JOIN contacts c ON c.id = s.contact_id WHERE s.event_id = $1`, [eventId])).rows
+      .forEach((r) => [r.email1, r.email2, ...String(r.more || '').split(',')].forEach((e) => e && people.push({ t: 'sp', id: r.id, name: r.nm, email: e })));
+    (await pool.query(`SELECT x.id, x.company_name nm, xc.email, c.email1, c.email2 FROM exhibitors x
+       JOIN exhibitor_contacts xc ON xc.exhibitor_id = x.id LEFT JOIN contacts c ON c.id = xc.contact_id
+      WHERE x.event_id = $1`, [eventId])).rows
+      .forEach((r) => [r.email, r.email1, r.email2].forEach((e) => e && people.push({ t: 'ex', id: r.id, name: r.nm, email: e })));
+    const out = rows.map((r) => {
+      const d = domainOf(r.from_addr);
+      const sug = [];
+      if (d && !FREE_MAIL.has(d)) {
+        people.filter((p) => domainOf(p.email) === d).forEach((p) => {
+          if (!sug.some((s) => s.t === p.t && s.id === p.id)) sug.push({ t: p.t, id: p.id, name: p.name, why: `같은 도메인 @${d}` });
+        });
+      }
+      return { ...r, warnings: r.warnings ? JSON.parse(r.warnings) : [], suggestions: sug.slice(0, 3) };
+    });
+    res.json({ ok: true, items: out });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+router.post('/unassigned/:id/link', async (req, res) => {
+  if (req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 바꿀 수 없어요' });
+  const { t, ownerId, addContact } = req.body || {};
+  const sp = t === 'sp';
+  try {
+    await ensureExtra();
+    const u = (await pool.query(`SELECT * FROM mail_unassigned WHERE id = $1`, [req.params.id])).rows[0];
+    if (!u || u.status !== 'new') return res.status(404).json({ ok: false, error: '이미 처리한 메일이에요' });
+    const own = (await pool.query(`SELECT id, event_id FROM ${sp ? 'speakers' : 'exhibitors'} WHERE id = $1`, [ownerId])).rows[0];
+    if (!own || own.event_id !== u.event_id) return res.status(400).json({ ok: false, error: '이 행사의 연사·참가사를 골라주세요' });
+    if (await partDone(u.event_id, sp ? 'conf' : 'exh')) return res.status(423).json({ ok: false, error: '진행 완료된 행사예요' });
+    const logId = `${sp ? 'SL' : 'XL'}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+    const warn = u.warnings ? JSON.parse(u.warnings) : [];
+    await pool.query(`
+      INSERT INTO ${sp ? 'speaker_logs' : 'exhibitor_logs'} (id, ${sp ? 'speaker_id' : 'exhibitor_id'}, kind, ts, direction,
+        channel, counterpart, category, subject, body, answered_at, answer, status, author_email, author_name, mail_box, mail_uid)
+      VALUES ($1,$2,'note',$3,'in','이메일',$4,$5,$6,$7,'','','open',$8,$9,$10,$11)`,
+    [logId, ownerId, u.ts, u.from_name ? `${u.from_name} <${u.from_addr}>` : u.from_addr,
+      warn.length ? '받은 메일 · ⚠ 확인' : '받은 메일', u.subject, u.body, req.user?.email || '',
+      `${req.user?.name || req.user?.email || ''} (주인 없는 메일에서 연결)`, u.mail_box, u.mail_uid]);
+    let contactAdded = false;
+    if (addContact) {
+      const em = String(u.from_addr || '').trim();
+      if (sp) {
+        const has = (await pool.query(`SELECT 1 FROM speaker_contacts WHERE speaker_id = $1 AND lower(email) = lower($2)`, [ownerId, em])).rowCount;
+        if (!has) {
+          // 받는 사람이 갑자기 늘지 않게 «안 보냄»으로 넣는다 — 연락 상대 탭에서 수신·참조로 바꾼다
+          await pool.query(`INSERT INTO speaker_contacts (id, speaker_id, contact_id, name, email, phone, kind, send, note)
+            VALUES ($1,$2,'',$3,$4,'','실무진','','메일에서 연결')`, [`SC-${Date.now()}-${Math.floor(Math.random() * 1000)}`, ownerId, u.from_name || '', em]);
+          contactAdded = true;
+        }
+      } else {
+        const has = (await pool.query(`SELECT 1 FROM exhibitor_contacts WHERE exhibitor_id = $1 AND lower(email) = lower($2)`, [ownerId, em])).rowCount;
+        if (!has) {
+          await pool.query(`INSERT INTO exhibitor_contacts (id, exhibitor_id, contact_id, name, email, phone, role, is_primary, note)
+            VALUES ($1,$2,'',$3,$4,'','기타','','메일에서 연결')`, [`XC-${Date.now()}-${Math.floor(Math.random() * 1000)}`, ownerId, u.from_name || '', em]);
+          contactAdded = true;
+        }
+      }
+    }
+    await pool.query(`UPDATE mail_unassigned SET status = 'linked', linked_t = $1, linked_id = $2, handled_by = $3 WHERE id = $4`,
+      [sp ? 'sp' : 'ex', ownerId, req.user?.email || '', u.id]);
+    res.json({ ok: true, logId, contactAdded });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+router.post('/unassigned/:id/ignore', async (req, res) => {
+  if (req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 바꿀 수 없어요' });
+  try {
+    await ensureExtra();
+    const u = (await pool.query(`SELECT * FROM mail_unassigned WHERE id = $1`, [req.params.id])).rows[0];
+    if (!u) return res.status(404).json({ ok: false, error: '없는 메일이에요' });
+    let n = 0;
+    if (req.body && req.body.domain) {
+      // 이 도메인은 늘 무시 — 행사 메일 설정에 적어 두고, 쌓여 있던 같은 도메인 메일도 함께 숨긴다
+      const d = domainOf(u.from_addr);
+      if (!d || FREE_MAIL.has(d)) return res.status(400).json({ ok: false, error: '무료 메일 도메인은 통째로 무시할 수 없어요' });
+      const b = await boxOf(u.event_id);
+      const list = new Set(String((b && b.ignore_domains) || '').split(',').map((x) => x.trim()).filter(Boolean));
+      list.add(d);
+      await pool.query('UPDATE event_mailboxes SET ignore_domains = $1 WHERE event_id = $2', [[...list].join(','), u.event_id]);
+      n = (await pool.query(`UPDATE mail_unassigned SET status = 'ignored', handled_by = $1
+        WHERE event_id = $2 AND status = 'new' AND lower(split_part(from_addr, '@', 2)) = $3`, [req.user?.email || '', u.event_id, d])).rowCount;
+    } else {
+      n = (await pool.query(`UPDATE mail_unassigned SET status = 'ignored', handled_by = $1 WHERE id = $2`, [req.user?.email || '', u.id])).rowCount;
+    }
+    res.json({ ok: true, ignored: n });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 
 router.post('/accounts/:eventId/sync-sent', syncSentHandler);
 router.post('/accounts/:eventId/sync-inbox', syncInboxHandler);

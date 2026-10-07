@@ -2767,7 +2767,14 @@ export function renderEvInbox(evKey = inboxEv){
     ...EXH_LOGS.filter(l => exIds.has(l.exhibitor_id) && isPending(l)).map(l => ({ l, t: 'ex', id: l.exhibitor_id, who: exIds.get(l.exhibitor_id) })),
   ].sort((a, b) => String(b.l.ts || '').localeCompare(String(a.l.ts || '')));
   const unread = rows.filter(r => isUnread(r.l)).length;
-  el.innerHTML = `<div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:6px">처리 안 한 받은 메일 ${rows.length
+  // 주인 없는 메일 단추는 늦게 채운다(서버에서 센다)
+  setTimeout(async () => {
+    const m = await import('./mail-original.js');
+    const n = await m.unassignedCount(evKey);
+    const b = document.getElementById('evd-un-btn');
+    if(b) b.innerHTML = n ? `<button class="btn" style="font-size:10.5px;color:var(--am);font-weight:700;margin-left:6px" onclick="openUnassigned('${escAttr(evKey)}')">주인 없는 메일 ${n}</button>` : '';
+  }, 0);
+  el.innerHTML = `<span id="evd-un-btn" style="float:right"></span><div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:6px">처리 안 한 받은 메일 ${rows.length
       ? `<span class="pill p-amber" style="font-size:10px">${rows.length}</span>${unread ? ` <span class="pill p-red" style="font-size:10px">안 읽음 ${unread}</span>` : ''}` : ''}</div>
     ${rows.length ? rows.slice(0, 50).map(({ l, t, id, who }) => `<div style="display:flex;gap:7px;align-items:baseline;padding:6px 0;border-top:1px solid var(--i7);cursor:pointer"
         onclick="${t === 'sp' ? `openSpeakerDr('${escAttr(id)}','box')` : `openExhDr('${escAttr(id)}','box')`}">
