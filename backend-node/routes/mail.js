@@ -606,49 +606,61 @@ const syncSentHandler = async (req, res) => {
       stage = `«${sent.path}» 열기`;
       const lock = await client.getMailboxLock(sent.path);
       try {
-        /* 날짜 검색(SEARCH SINCE)은 메일플러그가 거절했다(«Command failed»). 검색 없이
-           마지막 300통을 번호로 읽고, 120일 지난 것은 여기서 거른다 — Vercel 한 번 부르는
-           시간 안에 끝내려고 개수를 묶는다 */
         const n = (client.mailbox && client.mailbox.exists) || 0;
         const since = Date.now() - 120 * 864e5;
-        stage = `«${sent.path}» 메일 읽기`;
-        for await (const m of (n ? client.fetch(`${Math.max(1, n - 299)}:*`, { source: true, internalDate: true }) : [])) {
+        /* 1) 머리만 훑는다 — 받는 사람·제목·날짜. 본문은 새로 남길 메일만 2)에서 받는다.
+           300통 본문을 다 받아 읽으면 Gmail처럼 큰 메일함은 60초(Vercel)를 넘겼다.
+           날짜 검색(SEARCH SINCE)은 메일플러그가 거절해 번호로 마지막 300통을 본다 */
+        stage = `«${sent.path}» 메일 머리 읽기`;
+        const heads = [];
+        for await (const m of (n ? client.fetch(`${Math.max(1, n - 299)}:*`, { envelope: true, internalDate: true, uid: true }) : [])) {
           if (m.internalDate && new Date(m.internalDate).getTime() < since) continue;
           total++;
-          const mail = await simpleParser(m.source);
-          const to = (mail.to ? [].concat(mail.to).flatMap((a) => a.value) : []).map((a) => a.address);
-          const cc = (mail.cc ? [].concat(mail.cc).flatMap((a) => a.value) : []).map((a) => a.address);
-          const ids = new Set([...to, ...cc].map((a) => byMail.get(norm(a))).filter(Boolean));
-          const exIds = new Set([...to, ...cc].map((a) => exByMail.get(norm(a))).filter(Boolean));
-          if (!ids.size && !exIds.size) continue;
-          const date = kstDate(mail.date || Date.now());
-          const at = kstStamp(mail.date || m.internalDate || Date.now());
-          const subject = String(mail.subject || '').trim();
-          // 본문으로 쓴 조각은 첨부 목록에서 뺀다
-          const asBody = new Set(String(mail.text || '').trim() || mail.html ? [] : bodyParts(mail));
-          const files = (mail.attachments || []).filter((a) => !asBody.has(a)).map((a) => a.filename).filter(Boolean);
-          for (const id of exIds) {
-            const d = exSeen.has(`${id}|${date}|${norm(subject)}`) || exSeen.has(`${id}|${prevDay(date)}|${norm(subject)}`);
-            const cls = classifyExhSent(subject);
-            found.push({
-              t: 'ex', exhibitor_id: id, name: exName.get(id) || id, date, at, subject, box: sentPath, uid: String(m.uid || ''),
-              to: to.join(', '), cc: cc.join(', '), kind: cls.kind, category: cls.category, dup: d,
-              body: mailText(mail) + (files.length ? `\n\n[첨부] ${files.join(', ')}` : ''),
-            });
-            exSeen.add(`${id}|${date}|${norm(subject)}`);
+          const env = m.envelope || {};
+          const to = (env.to || []).map((a) => a.address).filter(Boolean);
+          const cc = (env.cc || []).map((a) => a.address).filter(Boolean);
+          const ids = [...new Set([...to, ...cc].map((a) => byMail.get(norm(a))).filter(Boolean))];
+          const exIds = [...new Set([...to, ...cc].map((a) => exByMail.get(norm(a))).filter(Boolean))];
+          if (!ids.length && !exIds.length) continue;
+          const dt = env.date || m.internalDate || Date.now();
+          const date = kstDate(dt), at = kstStamp(dt), subject = String(env.subject || '').trim();
+          const dupIn = (set, id) => set.has(`${id}|${date}|${norm(subject)}`) || set.has(`${id}|${prevDay(date)}|${norm(subject)}`);
+          heads.push({ uid: String(m.uid || ''), to, cc, ids, exIds, date, at, subject,
+            dupEx: new Map(exIds.map((id) => [id, dupIn(exSeen, id)])), dupSp: new Map(ids.map((id) => [id, dupIn(seen, id)])) });
+          exIds.forEach((id) => exSeen.add(`${id}|${date}|${norm(subject)}`));
+          ids.forEach((id) => seen.add(`${id}|${date}|${norm(subject)}`));
+        }
+        /* 2) 새로 남길 메일만 본문을 받는다 */
+        const needUids = heads.filter((h) => [...h.dupEx.values(), ...h.dupSp.values()].some((d) => !d)).map((h) => h.uid);
+        const bodyOf = new Map();
+        stage = `«${sent.path}» 메일 본문 읽기`;
+        if (needUids.length) {
+          for await (const m of client.fetch(needUids.join(','), { source: true }, { uid: true })) {
+            const mail = await simpleParser(m.source);
+            // 본문으로 쓴 조각은 첨부 목록에서 뺀다
+            const asBody = new Set(String(mail.text || '').trim() || mail.html ? [] : bodyParts(mail));
+            const files = (mail.attachments || []).filter((a) => !asBody.has(a)).map((a) => a.filename).filter(Boolean);
+            bodyOf.set(String(m.uid), mailText(mail) + (files.length ? `\n\n[첨부] ${files.join(', ')}` : ''));
           }
-          for (const id of ids) {
+        }
+        for (const h of heads) {
+          const body = bodyOf.get(h.uid) || '';
+          for (const id of h.exIds) {
+            const cls = classifyExhSent(h.subject);
+            found.push({
+              t: 'ex', exhibitor_id: id, name: exName.get(id) || id, date: h.date, at: h.at, subject: h.subject, box: sentPath, uid: h.uid,
+              to: h.to.join(', '), cc: h.cc.join(', '), kind: cls.kind, category: cls.category, dup: h.dupEx.get(id), body,
+            });
+          }
+          for (const id of h.ids) {
             const s0 = spById.get(id);
-            const dup = seen.has(`${id}|${date}|${norm(subject)}`) || seen.has(`${id}|${prevDay(date)}|${norm(subject)}`);
-            const cls = classifySent(subject);
+            const cls = classifySent(h.subject);
             const invite = cls.kind === 'invite';
             found.push({
-              speaker_id: id, name: s0.name_snapshot || s0.name_en || id, date, at, subject, box: sentPath, uid: String(m.uid || ''),
-              to: to.join(', '), cc: cc.join(', '), invite, kind: cls.kind, category: cls.category, dup,
-              stamp: invite && !s0.guide_sent_at,
-              body: mailText(mail) + (files.length ? `\n\n[첨부] ${files.join(', ')}` : ''),
+              speaker_id: id, name: s0.name_snapshot || s0.name_en || id, date: h.date, at: h.at, subject: h.subject, box: sentPath, uid: h.uid,
+              to: h.to.join(', '), cc: h.cc.join(', '), invite, kind: cls.kind, category: cls.category, dup: h.dupSp.get(id),
+              stamp: invite && !s0.guide_sent_at, body,
             });
-            seen.add(`${id}|${date}|${norm(subject)}`);
           }
         }
       } finally { lock.release(); }
@@ -799,49 +811,72 @@ const syncInboxHandler = async (req, res) => {
       stage = '받은메일함 열기';
       const lock = await client.getMailboxLock('INBOX');
       try {
-        // 보낸메일함과 같은 이유로 날짜 검색 없이 마지막 300통 — 120일 지난 것은 거른다
         const n = (client.mailbox && client.mailbox.exists) || 0;
         const since = Date.now() - 120 * 864e5;
-        stage = '받은메일함 메일 읽기';
-        for await (const m of (n ? client.fetch(`${Math.max(1, n - 299)}:*`, { source: true, internalDate: true }) : [])) {
+        // 주인 없는 메일로 이미 본 것(걸러진 것 포함)은 다시 받지 않는다
+        const knownUn = new Set((await pool.query(
+          `SELECT mail_uid FROM mail_unassigned WHERE event_id = $1 AND mail_box = 'INBOX'`, [eventId])).rows.map((r) => String(r.mail_uid)));
+        /* 1) 머리만 훑는다(보낸 사람·제목·날짜). 본문은 새로 남길 메일만 2)에서 받는다 —
+           300통 본문을 다 받아 읽으면 큰 메일함은 60초를 넘겼다 */
+        stage = '받은메일함 머리 읽기';
+        const heads = [];
+        for await (const m of (n ? client.fetch(`${Math.max(1, n - 299)}:*`, { envelope: true, internalDate: true, uid: true }) : [])) {
           if (m.internalDate && new Date(m.internalDate).getTime() < since) continue;
           total++;
-          const mail = await simpleParser(m.source);
-          const from = (mail.from ? mail.from.value : []).map((a) => a.address)[0] || '';
-          // 부재중·자동 답장·반송은 사람 메일이 아니다 — 쌓이면 처리할 메일이 묻힌다
-          if (isAutoReply(mail)) continue;
+          const env = m.envelope || {};
+          const f0 = (env.from || [])[0] || {};
+          const from = f0.address || '';
           if (!from || self.has(norm(from))) continue;
           if (ignored.has(domainOf(from))) continue;
+          // 부재중·자동 답장·반송은 제목만 보고도 거른다 — 사람 메일이 아니다
+          if (AUTO_SUBJ.test(String(env.subject || ''))) continue;
           const who = byMail.get(norm(from));
-          const spam = isSpam(mail);
-          if (!who) {
-            /* 모르는 사람 — 스팸·대량 발송은 버리고, 나머지는 «주인 없는 메일»로 모은다.
-               사람이 확인하고 연결하기 전까지 어디에도 붙이지 않는다 */
-            if (spam || isBulk(mail)) continue;
-            const fromName0 = (mail.from && mail.from.value[0] && mail.from.value[0].name) || '';
-            const asBody0 = new Set(String(mail.text || '').trim() || mail.html ? [] : bodyParts(mail));
-            const files0 = (mail.attachments || []).filter((a) => !asBody0.has(a)).map((a) => a.filename).filter(Boolean);
-            unknown.push({ uid: String(m.uid || ''), at: kstStamp(mail.date || m.internalDate || Date.now()),
-              from, fromName: fromName0, subject: String(mail.subject || '').trim(),
-              body: mailText(mail) + (files0.length ? `\n\n[첨부] ${files0.join(', ')}` : ''), warnings: mailWarnings(mail) });
-            continue;
+          const dt = env.date || m.internalDate || Date.now();
+          const date = kstDate(dt), subject = String(env.subject || '').trim(), uid = String(m.uid || '');
+          const base = { uid, from, fromName: f0.name || '', date, at: kstStamp(dt), subject };
+          if (who) {
+            const key = (d) => `${who.t}|${who.id}|${d}|${norm(subject)}`;
+            const dup = seen.has(key(date)) || seen.has(key(prevDay(date)));
+            seen.add(key(date));
+            heads.push({ ...base, who, dup });
+          } else if (!knownUn.has(uid)) {
+            heads.push({ ...base, who: null });
           }
-          const date = kstDate(mail.date || m.internalDate || Date.now());
-          const subject = String(mail.subject || '').trim();
-          const key = (d) => `${who.t}|${who.id}|${d}|${norm(subject)}`;
-          const dup = seen.has(key(date)) || seen.has(key(prevDay(date)));
-          seen.add(key(date));
+        }
+        /* 2) 새로 남길 메일만 본문 */
+        const need = heads.filter((h) => !h.who || !h.dup).map((h) => h.uid);
+        const parsed = new Map();
+        stage = '받은메일함 본문 읽기';
+        if (need.length) {
+          for await (const m of client.fetch(need.join(','), { source: true }, { uid: true })) parsed.set(String(m.uid), await simpleParser(m.source));
+        }
+        const bodyText = (mail) => {
           const asBody = new Set(String(mail.text || '').trim() || mail.html ? [] : bodyParts(mail));
           const files = (mail.attachments || []).filter((a) => !asBody.has(a)).map((a) => a.filename).filter(Boolean);
-          const fromName = (mail.from && mail.from.value[0] && mail.from.value[0].name) || '';
-          const warns = mailWarnings(mail);
+          return { text: mailText(mail) + (files.length ? `\n\n[첨부] ${files.join(', ')}` : ''), files: files.length };
+        };
+        for (const h of heads) {
+          const mail = parsed.get(h.uid);
+          if (mail && isAutoReply(mail)) continue;
+          if (!h.who) {
+            /* 모르는 사람 — 스팸·대량 발송은 «걸러짐»으로만 기억하고(다음에 다시 안 받게),
+               나머지는 «주인 없는 메일»로 모은다. 사람이 연결하기 전까지 어디에도 붙지 않는다 */
+            if (!mail) continue;
+            const filtered = isSpam(mail) || isBulk(mail);
+            const bt = filtered ? { text: '' } : bodyText(mail);
+            unknown.push({ uid: h.uid, at: h.at, from: h.from, fromName: h.fromName, subject: h.subject,
+              body: bt.text, warnings: filtered ? [] : mailWarnings(mail), status: filtered ? 'filtered' : 'new' });
+            continue;
+          }
+          const spam = mail ? isSpam(mail) : /^\s*\[(spam|스팸)\]/i.test(h.subject);
+          const warns = mail ? mailWarnings(mail) : [];
+          const bt = mail ? bodyText(mail) : { text: '', files: 0 };
           found.push({
-            t: who.t, id: who.id, name: who.t === 'sp' ? spName.get(who.id) : exName.get(who.id), uid: String(m.uid || ''),
+            t: h.who.t, id: h.who.id, name: h.who.t === 'sp' ? spName.get(h.who.id) : exName.get(h.who.id), uid: h.uid,
             // 아는 사람이어도 스팸 표시·경고가 있으면 분류에 남긴다(버리지 않는다 — 실제 회신이 잘못 걸리기도 한다)
             category: spam ? '받은 메일 · ⚠ 스팸 의심' : warns.length ? '받은 메일 · ⚠ 확인' : '받은 메일',
-            date, at: kstStamp(mail.date || m.internalDate || Date.now()), subject, from: fromName ? `${fromName} <${from}>` : from, dup,
-            files: files.length,
-            body: mailText(mail) + (files.length ? `\n\n[첨부] ${files.join(', ')}` : ''),
+            date: h.date, at: h.at, subject: h.subject, from: h.fromName ? `${h.fromName} <${h.from}>` : h.from, dup: h.dup,
+            files: bt.files, body: bt.text,
           });
         }
       } finally { lock.release(); }
@@ -890,16 +925,16 @@ const syncInboxHandler = async (req, res) => {
       // 주인 없는 메일 — 같은 메일(메일함·번호)은 한 번만
       for (const u of unknown) {
         const r = await pool.query(`INSERT INTO mail_unassigned (id, event_id, mail_box, mail_uid, ts, from_addr, from_name, subject, body,
-            warnings, status, created_at) VALUES ($1,$2,'INBOX',$3,$4,$5,$6,$7,$8,$9,'new',$10)
+            warnings, status, created_at) VALUES ($1,$2,'INBOX',$3,$4,$5,$6,$7,$8,$9,$10,$11)
           ON CONFLICT (event_id, mail_box, mail_uid) DO NOTHING`,
         [`MU-${Date.now()}-${Math.floor(Math.random() * 100000)}`, eventId, u.uid, u.at, u.from, u.fromName, u.subject, u.body,
-          JSON.stringify(u.warnings), kstStamp(Date.now())]);
-        unassigned += r.rowCount || 0;
+          JSON.stringify(u.warnings), u.status || 'new', kstStamp(Date.now())]);
+        if (u.status !== 'filtered') unassigned += r.rowCount || 0;
       }
     }
     if (apply) await markSynced(eventId, req.user?.name || req.user?.email || '');
     res.json({
-      ok: true, applied: apply, scanned: total, added, replied, replyNames, unassigned, unknown: unknown.length,
+      ok: true, applied: apply, scanned: total, added, replied, replyNames, unassigned, unknown: unknown.filter((u) => u.status !== 'filtered').length,
       items: found.map(({ body, ...r }) => r),
       skipped: [confDone ? '컨퍼런스(진행 완료)' : '', exhDone ? '전시(진행 완료)' : ''].filter(Boolean),
     });
