@@ -497,7 +497,10 @@ router.post('/accounts/:eventId/sync-sent', async (req, res) => {
           for (const id of ids) {
             const s0 = spById.get(id);
             const dup = seen.has(`${id}|${date}|${norm(subject)}`) || seen.has(`${id}|${prevDay(date)}|${norm(subject)}`);
-            const invite = /초청|invitation/i.test(subject);
+            /* «초청·가이드 발송» 단계 메일 — 사무국은 «연사 가이드라인 송부»처럼 보내기도 한다.
+               회신·전달(RE:/FW:)은 그 단계 메일이 아니다 */
+            const reply = /^\s*(\[?(re|fw|fwd|답장|전달)\]?\s*:?\s*)+/i.test(subject) && /^\s*\[?(re|fw|fwd|답장|전달)\b/i.test(subject);
+            const invite = !reply && /초청|가이드|invitation|guideline/i.test(subject);
             found.push({
               speaker_id: id, name: s0.name_snapshot || s0.name_en || id, date, subject,
               to: to.join(', '), cc: cc.join(', '), invite, dup,
@@ -529,7 +532,7 @@ router.post('/accounts/:eventId/sync-sent', async (req, res) => {
           VALUES ($1,$2,$3,$4,'out','이메일',$5,$6,$7,$8,'','','done',$9,$10)`,
         [`SL-${Date.now()}-${Math.floor(Math.random() * 100000)}`, f.speaker_id, f.invite ? 'invite' : 'note', f.date,
           [f.to, f.cc ? `(cc) ${f.cc}` : ''].filter(Boolean).join(' '), f.invite ? '초청·가이드 발송' : '기타',
-          f.subject, f.body, req.user?.email || '', `${req.user?.name || ''} (보낸메일함에서 가져옴)`]);
+          f.subject, f.body, req.user?.email || '', `${req.user?.name || req.user?.email || ''} (보낸메일함에서 가져옴)`]);
         added++;
       }
       for (const [id, d] of Object.entries(firstInvite)) {

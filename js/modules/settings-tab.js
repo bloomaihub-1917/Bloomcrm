@@ -67,7 +67,7 @@ import {
   saveExhCfgToSheet,
   saveConfSession,
   loadMailFiles, mailFilesOf, uploadMailFile, deleteMailFile, fileToBase64,
-  loadMailAccounts, saveMailAccount, deleteMailAccount, testMailAccount, eventMailFrom, syncSentMail,
+  loadMailAccounts, saveMailAccount, deleteMailAccount, testMailAccount, eventMailFrom, syncSentMail, reloadSpeakerData,
 } from '../api.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 
@@ -2686,7 +2686,9 @@ export async function syncEvSentMail(evKey){
   const a = await syncSentMail(evKey, true);
   if(!a.ok){ evmbSay(a.error || '남기지 못했어요.'); return; }
   trackAction('edit', '보낸메일함 가져오기', evKey, `연사 보낸 기록 ${a.added}건 · 초청 체크 ${a.stamped}명`);
-  evmbSay(`보낸 기록 ${a.added}건, 초청 체크 ${a.stamped}명 남겼어요 — 새로고침하면 연사 화면에 보입니다.`, true);
+  // 서버가 바꾼 기록을 바로 다시 읽는다 — 새로고침해야 보이면 안 남은 줄 안다
+  const fresh = await reloadSpeakerData();
+  evmbSay(`보낸 기록 ${a.added}건, 초청 체크 ${a.stamped}명 남겼어요${fresh ? ' — 연사 화면에 바로 보입니다.' : ' — 새로고침하면 연사 화면에 보입니다.'}`, true);
 }
 
 export async function removeEvMailbox(evKey){

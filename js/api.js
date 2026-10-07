@@ -693,6 +693,20 @@ export const deleteSessionSpeaker = (id) => removeRow('session_speakers', id, '�
 export const saveSpeakerContact = (r) => upsertPartial('speaker_contacts', r, '연사 연락 상대');
 export const deleteSpeakerContact = (id) => removeRow('speaker_contacts', id, '연락 상대 삭제');
 export const saveSpeakerLog     = (r) => upsertPartial('speaker_logs', r, '연사 기록');
+/* 연사·연사 기록만 다시 읽는다 — 서버가 직접 바꾼 뒤(보낸메일함 가져오기) 새로고침 없이
+   화면에 보이게. 전부 다시 읽으면 열려 있는 화면 상태가 날아간다 */
+export async function reloadSpeakerData(){
+  if(!API_BASE_URL || !currentUser) return false;
+  const base = API_BASE_URL + '/api/data?sheet=';
+  const headers = await authHeaders();
+  const [sp, logs] = await Promise.all([
+    safeFetch(base + 'speakers', 'speakers', 1, headers),
+    safeFetch(base + 'speaker_logs', 'speaker_logs', 1, headers),
+  ]);
+  if(Array.isArray(sp)) SPEAKERS.splice(0, SPEAKERS.length, ...sp);
+  if(Array.isArray(logs)) SPEAKER_LOGS.splice(0, SPEAKER_LOGS.length, ...logs);
+  return Array.isArray(sp) && Array.isArray(logs);
+}
 export const deleteSpeakerLog   = (id) => removeRow('speaker_logs', id, '연사 기록 삭제');
 
 export async function deleteEventFromSheet(key){
