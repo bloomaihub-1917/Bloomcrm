@@ -33,6 +33,6 @@ jobs:
             n=$((n+1))
             enc=$(jq -rn --arg v "$ev" '$v|@uri')
             res=$(curl -s --max-time 70 -X POST -H "x-cron-secret: $SECRET" "$API/api/cron/mail-sync?event=$enc")
-            echo "행사 $n: $(echo "$res" | jq -c '{ok, 보낸: .sent.added, 받은: .inbox.added, 회신체크: .inbox.replied, 오류: ((.sent.error // "") + (.inbox.error // ""))}' 2>/dev/null || echo '응답 없음')"
+            echo "행사 $n: $(echo "$res" | jq -c '{ok, "보낸": .sent.added, "받은": .inbox.added, "회신체크": .inbox.replied, "오류": ((.sent.error // "") + (.inbox.error // ""))}' 2>/dev/null || echo '응답 없음')"
           done <<< "$events"
           echo "행사 ${n}개 처리"
