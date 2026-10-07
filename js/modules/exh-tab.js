@@ -188,7 +188,9 @@ export const liveInvoices = (exhId) =>
    청구액(billedAmount)과 같은 순서라 통화와 합계가 서로 다른 곳을 가리키지 않는다.
    서로 다른 통화가 섞이면 합계를 낼 수 없으므로 하나를 고르고 경고를 띄운다. */
 export function currencyOf(exhId){
-  const src = liveItemsFor(exhId);
+  /* 청구하는 항목만 본다 — 부스 기본 제공(청구 안 함) 줄은 KRW로 들어가 맨 앞에
+     서기 때문에, 이걸 보면 해외 기업의 통화가 원화로 잡혀 청구액이 0이 됐다 */
+  const src = billableItems(exhId);
   const hit = (src.length ? src : liveInvoices(exhId)).find(r => r.currency);
   return (hit && hit.currency) || 'KRW';
 }
@@ -198,7 +200,7 @@ const sumIn = (rows, cur) => rows
 
 /* 한 기업에 통화가 섞였는지 — 섞이면 한쪽이 합계에서 빠지므로 화면에 알린다 */
 export function mixedCurrency(exhId){
-  const cs = new Set([...liveInvoices(exhId), ...paymentsFor(exhId).filter(hasAmount)]
+  const cs = new Set([...billableItems(exhId).filter(hasAmount), ...liveInvoices(exhId), ...paymentsFor(exhId).filter(hasAmount)]
     .map(r => r.currency).filter(Boolean));
   return cs.size > 1 ? [...cs] : null;
 }
@@ -237,6 +239,13 @@ export function exrentalBilled(exhId){
   if(!ids.size) return 0;
   const cur = currencyOf(exhId);
   return sumIn(billableItems(exhId).filter(i => ids.has(String(i.app_id || ''))), cur);
+}
+
+/* 우리가 인보이스를 내야 할 항목 — 엑스렌탈 회차 몫은 엑스렌탈이 이미 청구·수금했다.
+   발행 금액·양식 줄은 이것만 쓴다(안 빼면 카드로 낸 비품을 기업에 또 청구한다). */
+export function ourBillableItems(exhId){
+  const ids = new Set(appsFor(exhId).filter(isExrentalApp).map(a => a.id));
+  return billableItems(exhId).filter(i => !ids.has(String(i.app_id || '')));
 }
 
 export function needsReissue(exhId){
@@ -588,7 +597,11 @@ export const DUE_STEPS = [
 
    가드는 exh-drawer도 함께 쓴다(같은 행사를 다루므로 판단 기준이 하나여야 한다).
 ══════════════════════════════════════════ */
-export const exhLocked = () => !!exhEvent && evPartDone(exhEvent, 'exh');
+/* 참가기업 창은 감사 로그 등에서 다른 행사 기업으로도 열린다 — 창이 열려 있는
+   동안은 «그 기업의 행사»로 잠금을 판단한다(인보이스 파일 폴더도 같은 이유). */
+let exhLockEv = null;
+export function setExhLockEv(v){ exhLockEv = v || null; }
+export const exhLocked = () => { const ev = exhLockEv || exhEvent; return !!ev && evPartDone(ev, 'exh'); };
 
 let _lockToastAt = 0;
 /* 막혔다는 걸 알린다. 연달아 누르면 알림이 쌓이므로 잠깐 사이엔 한 번만. */

@@ -62,7 +62,7 @@ import {
   isSharedBooth, isBookOnly, hostOptions, baseKind, BASE_KINDS, bookName, fasciaName,
   BOOTH_ORIGIN, BOOTH_EXC, isBoothExc, itemCode,
   baseRecvAt, baseDoneAt, baseDoneCheck, baseItems, baseRecvItems, TCELL, TPILL,
-  guardWrite, exhLocked, exhLockNotice, isBoothGiven, boothIncluded, applyBoothItems, boothItemsPending,
+  guardWrite, exhLocked, setExhLockEv, exhLockNotice, isBoothGiven, boothIncluded, applyBoothItems, boothItemsPending,
   patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar, needsReissue,
   settleState, liveInvoices, payDueDate, paidBreakdown, invoiceGap, refundDue, eventDeadlines,
 } from './exh-tab.js';
@@ -97,7 +97,10 @@ const tabKey = (v) => {
 };
 
 export function openExhDr(id, tab){
+  // 다른 기업으로 옮기면 PC에서 고른 메일 첨부를 비운다 — 다음 기업으로 나가지 않게
+  if(drId !== id) exhMailFiles = [];
   drId = id;
+  setExhLockEv(getExhibitorById(id)?.event_id);
   if(tab !== undefined) drTab = tabKey(tab);
   document.getElementById('exh-dr')?.classList.add('on');
   document.getElementById('exh-bd')?.classList.add('on');
@@ -108,6 +111,8 @@ export function closeExhDr(){
   // 무리가 없지만 통화는 기업마다 다르다)
   lastItemCur = null;
   drId = null;
+  setExhLockEv(null);
+  exhMailFiles = [];
   document.getElementById('exh-dr')?.classList.remove('on');
   document.getElementById('exh-bd')?.classList.remove('on');
 }

@@ -46,7 +46,7 @@ import {
   getExhibitorById, invoicesFor, liveItemsFor, catalogItem, findCatalogByName,
   EXH_INVOICES, EVENT_LIST, exhEvent,
 } from '../state.js';
-import { exhNames, isBillable, currencyOf } from './exh-tab.js';
+import { exhNames, isBillable, currencyOf, ourBillableItems } from './exh-tab.js';
 import { createInvoiceRow } from './exh-drawer.js';
 import {
   supported, pickFolder, delHandle, readyFolder, folderLabel, subFolder, writeFile,
@@ -136,7 +136,7 @@ export function invoiceDoc(inv){
   const x = inv && getExhibitorById(inv.exhibitor_id);
   if(!x) return null;
   const cur = inv.currency || currencyOf(x.id);
-  const all = liveItemsFor(x.id).filter(isBillable);
+  const all = ourBillableItems(x.id);
   const mine = all.filter(i => (i.currency || 'KRW') === cur);
 
   const rows = [];
@@ -378,13 +378,16 @@ function invoiceWarnings(doc, fit, { allCurrencies = false } = {}){
 /* 파일 이름·폴더 이름 — 지금 손으로 쓰는 규칙을 따른다.
    폴더: "42-43. Parexel"  파일: "2026 KIC Exhibition Invoice_Parexel_EX-42-43-02.xlsx" */
 const BAD_CHARS = /[\\/:*?"<>|]/g;
-const evLabelNow = () => {
-  const ev = EVENT_LIST.find(e => e.key === exhEvent);
-  return (ev && (ev.short || ev.key)) || exhEvent || '';
+/* 인보이스의 행사는 «그 기업의 행사»다 — 지금 탭에서 고른 행사로 하면 다른 행사
+   기업을 감사 로그에서 열어 발행했을 때 남의 행사 폴더·접두어로 저장됐다 */
+const docEv = (doc) => getExhibitorById(doc && doc.exhId)?.event_id || exhEvent;
+const evLabelOf = (key) => {
+  const ev = EVENT_LIST.find(e => e.key === key);
+  return (ev && (ev.short || ev.key)) || key || '';
 };
 function fileNames(doc){
   const name = (doc.to.en || doc.to.ko).replace(BAD_CHARS, ' ').trim();
-  const ev = evLabelNow();
+  const ev = evLabelOf(docEv(doc));
   return {
     file: `${ev ? ev + ' ' : ''}Exhibition Invoice_${name}_${doc.no}.xlsx`,
     dir: (doc.booth ? `${doc.booth}. ${name}` : name).replace(BAD_CHARS, ' ').trim(),
@@ -464,7 +467,7 @@ export async function forgetInvoiceFolder(evKey){
 async function putInvoiceFile(doc, blob){
   const nm = fileNames(doc);
   if(!supported()) { download(blob, nm.file); return { how: 'download', why: 'unsupported' }; }
-  const dir = await readyFolder(folderKey(exhEvent));
+  const dir = await readyFolder(folderKey(docEv(doc)));
   if(!dir) { download(blob, nm.file); return { how: 'download', why: 'no-folder' }; }
   try {
     const sub = await subFolder(dir, nm.dir, nm.dirPrefix);
@@ -549,9 +552,9 @@ export async function issueExhInvoice(exhId){
   const x = getExhibitorById(exhId);
   if(!x) return showSaveErrorToast('참가기업을 찾지 못했어요');
 
-  const billable = liveItemsFor(exhId).filter(isBillable);
+  const billable = ourBillableItems(exhId);
   if(!billable.length) return showSaveErrorToast(
-    '청구할 금액 항목이 없어요 — 신청 내역을 금액 항목으로 옮긴 뒤 발행하세요');
+    '우리가 청구할 금액 항목이 없어요 — 신청 내역을 금액 항목으로 옮겼는지, 엑스렌탈 회차 몫만 있는지 확인해주세요');
 
   /* 통화 순서는 항목에 나온 순서대로 — 주 통화가 먼저 나오는 게 자연스럽다 */
   const curs = [...new Set(billable.map(i => i.currency || 'KRW'))];

@@ -34,7 +34,7 @@ import {
 } from '../api.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 import { patchContact } from './db-tab.js';
-import { confLocked, confLockNotice, renderConf, buildConfEvList, syncPartRole, spCell } from './conf-tab.js';
+import { confLocked, setConfLockEv, confLockNotice, renderConf, buildConfEvList, syncPartRole, spCell } from './conf-tab.js';
 import { flowStatus, draftFor, missingItems } from './speaker-flow.js';
 import { reuseCandidates, reusePending } from './contact-speaker.js';
 
@@ -57,8 +57,14 @@ const STATUSES = ['섭외중', '확정', '보류', '취소'];
 export function openSpeakerDr(id, tab){
   /* 다른 연사로 옮기면 계좌를 다시 가린다 — 한 번 연 게 다음 사람까지
      따라오면 열람 기록과 실제로 본 것이 어긋난다. */
-  if(spId !== id) bankRevealed = false;
+  if(spId !== id){
+    bankRevealed = false;
+    /* PC에서 고른 첨부는 그 사람 몫이다 — 다음 연사 메일로 따라가면 여권·계좌
+       서류가 엉뚱한 사람에게 나간다 */
+    spLocalFiles = []; spSkipDefault = new Set();
+  }
   spId = id;
+  setConfLockEv(getSpeakerById(id)?.event_id);
   if(tab && TABS.some(t => t.key === tab)) spTab = tab;
   document.getElementById('sp-dr')?.classList.add('on');
   document.getElementById('sp-bd')?.classList.add('on');
@@ -66,6 +72,8 @@ export function openSpeakerDr(id, tab){
 }
 export function closeSpeakerDr(){
   spId = null;
+  setConfLockEv(null);
+  spLocalFiles = []; spSkipDefault = new Set();
   bankRevealed = false;
   document.getElementById('sp-dr')?.classList.remove('on');
   document.getElementById('sp-bd')?.classList.remove('on');
@@ -75,9 +83,9 @@ export function switchSpeakerDT(v){ spTab = v; renderSpeakerDr(); }
 /* ── 저장 ──
    화면을 먼저 바꾸고 실패하면 되돌린다. 저장이 안 됐는데 화면만 바뀌면
    받은 줄 알고 다시 묻지 않게 된다. */
-async function patchSpeaker(patch, label){
+async function patchSpeaker(patch, label, id = spId){
   if(confLocked()){ confLockNotice(); return { ok: false, locked: true }; }
-  const sp = getSpeakerById(spId);
+  const sp = getSpeakerById(id);
   if(!sp) return { ok: false };
   const backup = {};
   Object.keys(patch).forEach(k => { backup[k] = sp[k]; });
@@ -1003,7 +1011,12 @@ const selfCon = (sp) => sp && sp.contact_id ? contacts.find(c => String(c.id) ==
 const selfEmail = (sp) => String(selfCon(sp)?.email1 || '').trim();
 const selfPhone = (sp) => String(selfCon(sp)?.phone1 || selfCon(sp)?.phone2 || '').trim();
 const isSelf = (r) => r.kind === '연사 본인';
-export const rowEmail = (sp, r) => String(r.email || '').trim() || (isSelf(r) ? selfEmail(sp) : '');
+const norm = (v) => String(v || '').trim().toLowerCase();
+/* 연사 본인은 마스터DB 메일이 정본 — 있으면 그걸 쓰고, 줄에 적힌 메일은 마스터에
+   메일이 없을 때만 쓴다. 반대로 하면 기본 탭에서 메일을 고쳐도 옛 주소로 나갔다. */
+export const rowEmail = (sp, r) => isSelf(r)
+  ? (selfEmail(sp) || String(r.email || '').trim())
+  : String(r.email || '').trim();
 
 export function mailTargets(speakerId){
   const sp = getSpeakerById(speakerId);
@@ -1033,9 +1046,12 @@ function peopleTabHtml(sp){
       ${fg('전화', txt(r.phone, `scField('${escAttr(r.id)}','phone',this.value,'연락 상대 전화')`,
         isSelf(r) && selfPhone(sp) ? selfPhone(sp) : ''))}
     </div>
-    ${isSelf(r) && !r.email ? `<div style="font-size:10px;color:var(--i4);margin:-2px 0 5px">${selfEmail(sp)
-      ? '비워 두면 기본 정보의 메일·전화를 씁니다 — 다른 주소로 보낼 때만 적으세요'
-      : '<span style="color:var(--re)">기본 정보에 메일이 없어요</span> — 기본 탭에서 넣으면 여기도 따라옵니다'}</div>` : ''}
+    ${isSelf(r) ? `<div style="font-size:10px;color:var(--i4);margin:-2px 0 5px">${
+      selfEmail(sp) && r.email && norm(r.email) !== norm(selfEmail(sp))
+        ? `<span style="color:var(--am)">기본 정보(마스터DB)의 ${escapeHtml(selfEmail(sp))}로 나갑니다</span> — 여기 적힌 주소는 쓰지 않아요. 바꾸려면 기본 탭에서 고치세요`
+        : selfEmail(sp) ? '기본 정보(마스터DB)의 메일로 나갑니다 — 고치려면 기본 탭에서'
+        : r.email ? '마스터DB에 메일이 없어 여기 적힌 주소로 나갑니다'
+        : '<span style="color:var(--re)">메일이 없어요</span> — 기본 탭에서 넣어주세요'}</div>` : ''}
     <div style="display:flex;align-items:center;gap:9px;margin-top:2px">
       <div class="seg">
         ${['to', 'cc', ''].map(s => `<button class="seg-b${(r.send || '') === s ? ' on' : ''}"
@@ -1348,7 +1364,8 @@ export async function sendSpeakerMail(){
     + (res.sentError ? ` (보낸메일함에는 못 남겼어요: ${res.sentError})` : ''), true);
   spLocalFiles = []; spSkipDefault = new Set();
   /* 초청을 보냈으면 «보냄» 날짜를 찍는다 — 그래야 다음 단계로 넘어간다 */
-  if(kind === 'invite' && !sp.guide_sent_at){ await patchSpeaker({ guide_sent_at: td() }, '초청·가이드 보냄'); return; }
+  /* sp.id를 넘긴다 — 보내는 몇 초 사이 다른 연사를 열면 그 사람에게 찍혔다 */
+  if(kind === 'invite' && !sp.guide_sent_at){ await patchSpeaker({ guide_sent_at: td() }, '초청·가이드 보냄', sp.id); return; }
   renderSpeakerDr();
 }
 

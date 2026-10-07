@@ -354,6 +354,9 @@ export async function loadFromSheets(hooks = {}){
           /* 퇴사 — 비어 있으면 재직. moved_to_id는 이직해 새로 만든 연락처 id */
           left_at:     r.left_at||'',
           moved_to_id: r.moved_to_id||'',
+          /* 메모·경칭 — 저장(contactRow)은 이 넷을 실어 보낸다. 읽을 때 안 담으면
+             연락처를 고칠 때마다 빈칸으로 덮여 업로드한 회원번호·경칭이 지워진다. */
+          memo1: r.memo1||'', memo2: r.memo2||'', memo3: r.memo3||'', prefix: r.prefix||'',
         };
       }));
       console.log('[CRM] contacts loaded & cleaned:', contacts.length);

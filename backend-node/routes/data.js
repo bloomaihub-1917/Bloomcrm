@@ -218,6 +218,9 @@ const TABLES = {
 let seq = 0;
 function genId(prefix) {
   seq = (seq + 1) % 1000;
+  /* 접두어 없는 표(contacts·crm_targets)는 화면이 id를 숫자로 읽는다(+r.id).
+     '…_3' 꼴은 NaN이 되므로 숫자로 만든다 — ×1000 + 순번은 16자리 이하(CLAUDE.md) */
+  if (!prefix) return String(Date.now() * 1000 + seq);
   return `${prefix}${Date.now()}_${seq}`;
 }
 
@@ -414,7 +417,11 @@ router.post('/', async (req, res) => {
         await bulkUpsert(client, 'participations', 'id', PARTICIPATION_COLS, (rows || []).map(participationFromRow), { onConflict });
       } else {
         // upsert(단건) / append(폴백)
-        await bulkUpsert(client, 'participations', 'id', PARTICIPATION_COLS, [participationFromRow(row || [])]);
+        /* 확정일(11번째 칸)을 안 보낸 저장은 확정일을 건드리지 않는다 — 역할만
+           고치는 저장이 «참가 확정»을 지우고 있었다 */
+        const r = row || [];
+        const cols = r.length > 10 ? PARTICIPATION_COLS : PARTICIPATION_COLS.filter((c) => c !== 'confirmed_at');
+        await bulkUpsert(client, 'participations', 'id', cols, [participationFromRow(r)]);
       }
     } else {
       const def = TABLES[sheet];

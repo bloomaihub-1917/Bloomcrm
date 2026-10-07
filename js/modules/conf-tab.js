@@ -88,7 +88,12 @@ let confSessFil = '';          // 세션으로 거르기
    그때 무엇을 했는지가 지금 값으로 덮인다. 화면을 비활성하는 것만으로는
    인라인 핸들러나 콘솔로 값이 들어가므로, 저장 함수를 감싸는 자리를 둔다.
 ══════════════════════════════════════════ */
-export const confLocked = () => !!confEvent && evPartDone(confEvent, 'conf');
+/* 연사 창은 컨퍼런스 탭 밖(연락처·감사 로그·CRM)에서도 열린다. 그때는 탭에서
+   고른 행사가 아니라 «그 연사의 행사»로 잠금을 판단해야 한다 — 안 그러면 끝난
+   행사의 연사가 고쳐지고, 반대로 진행 중인 연사가 막힌다. 창이 열려 있는 동안만 쓴다. */
+let confLockEv = null;
+export function setConfLockEv(v){ confLockEv = v || null; }
+export const confLocked = () => { const ev = confLockEv || confEvent; return !!ev && evPartDone(ev, 'conf'); };
 
 let _lockToastAt = 0;
 export function confLockNotice(){
@@ -2357,7 +2362,7 @@ export async function syncPartRole(spId){
   if(p.role === want) return;
   const was = p.role;
   const r = await postToSheet({ sheet: 'participations',
-    row: [p.id, p.eventId, '', p.contactId, '', '', '', want, p.note || '', p.matched || ''] },
+    row: [p.id, p.eventId, '', p.contactId, '', '', '', want, p.note || '', p.matched || '', p.confirmedAt || ''] },
     '행사 참가 역할', { silent: true });
   if(!r || !r.ok) return;
   p.role = want;

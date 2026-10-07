@@ -1156,9 +1156,12 @@ export async function openEvDbTargetSend(){
     + `진행 단계는 «타겟 등록»부터 시작합니다.`)) return;
 
   const made = [];
+  /* 타겟 id는 숫자여야 한다 — 화면이 +r.id로 읽어 'T-…'는 NaN이 되고, 열리지도
+     않고 저장할 때마다 서버가 새 줄을 만들었다. ×1000 + 순번은 16자리 이하다. */
+  const idBase = Date.now() * 1000;
   for(const co of picked){
     const t = {
-      id: 'T-' + Date.now() + '-' + made.length,
+      id: idBase + made.length,
       name: co.nameKo || co.nameEn || '', nameEn: co.nameEn || '',
       sector: (co.sectors || [])[0] || '', hq: co.hq || co.country || '',
       event: ev.key, role: '', status: '미접촉', priority: 'mid', assignee: '',

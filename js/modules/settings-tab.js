@@ -2037,9 +2037,12 @@ export function renderEvCfgList(){
 }
 
 /* 전시 탭의 DUE_STEPS와 같은 이름표 — 그쪽을 import하면 순환 참조가 된다 */
+/* exh-tab.js의 DUE_STEPS와 같은 키·같은 순서여야 한다 — 여기 빠진 키는 설정에서
+   저장할 때 지워졌다(부스 도면·기본 시공). 서로 import하면 순환이 생겨 따로 둔다. */
 const DUE_LABEL = {
   'manual_replied_at': '매뉴얼 회신', 'app_received_at': '신청서', 'booth_confirmed_at': '부스',
-  'calc:payment': '입금', 'calc:graphic': '그래픽', 'directory_received_at': '도록', 'movein_at': '반입',
+  'calc:design': '부스 도면', 'calc:payment': '입금', 'calc:graphic': '그래픽', 'calc:base': '기본 시공',
+  'directory_received_at': '도록', 'movein_at': '반입',
 };
 
 window.renderAliasList = renderAliasList;
@@ -2973,7 +2976,9 @@ export async function saveEvDue(){
   const words = Number(document.getElementById('evd-book-words')?.value);
   if(!(chars > 0) || !(words > 0)){ say('글자수·단어수 한도는 1 이상이어야 해요.'); return; }
 
-  const due = {};
+  /* 이 화면에 없는 마감(다른 화면에서 정한 것)은 그대로 둔다 */
+  const due = { ...((EXH_CFG[ev.key] || {}).due || {}) };
+  EV_DUE_STEPS.forEach(([k]) => { delete due[k]; });
   EV_DUE_STEPS.forEach(([k]) => {
     const v = (document.getElementById(`evd-due-${k}`)?.value || '').trim();
     if(v) due[k] = v;   // 빈 칸은 안 담는다 — 마감 없음과 빈 문자열을 구분할 필요가 없다

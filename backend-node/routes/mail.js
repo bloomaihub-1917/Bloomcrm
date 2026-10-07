@@ -150,6 +150,15 @@ async function saveToSent(b, raw) {
   }
 }
 
+/* 행사 파트가 진행 완료인지 — 설정 exh_cfg_<행사>.parts[part] === 'done' */
+async function partDone(eventId, part) {
+  try {
+    const r = await pool.query('SELECT value FROM settings WHERE key = $1', [`exh_cfg_${eventId}`]);
+    const v = JSON.parse((r.rows[0] && r.rows[0].value) || '{}');
+    return ((v.parts || {})[part]) === 'done';
+  } catch (e) { return false; }
+}
+
 /* 보낼 계정 고르기 — 행사 공용 메일(메일플러그)만 쓴다 */
 const senderFor = async (eventId) => {
   const b = await boxOf(eventId).catch(() => null);
@@ -300,6 +309,10 @@ router.post('/send', async (req, res) => {
     if (exhibitor_id) eventId = (await pool.query('SELECT event_id FROM exhibitors WHERE id = $1', [exhibitor_id])).rows[0]?.event_id || eventId;
     else if (speaker_id) eventId = (await pool.query('SELECT event_id FROM speakers WHERE id = $1', [speaker_id])).rows[0]?.event_id || eventId;
   } catch (e) { /* 행사를 못 찾으면 아래에서 막힌다 */ }
+  /* 진행 완료된 행사(그 파트)는 열람만 — 화면 잠금을 피해 들어와도 여기서 막는다 */
+  if (eventId && await partDone(eventId, exhibitor_id ? 'exh' : 'conf')) {
+    return res.status(423).json({ ok: false, error: '진행 완료된 행사라 메일을 보낼 수 없어요' });
+  }
   let sender;
   try { sender = await senderFor(eventId); }
   catch (e) { return res.status(500).json({ ok: false, error: `메일 계정을 읽지 못했어요 — 설정 › 행사 › 메일에서 앱 비밀번호를 다시 넣어주세요 (${e.message})` }); }
@@ -418,6 +431,7 @@ router.post('/accounts/:eventId/sync-sent', async (req, res) => {
   try {
     const b = await boxOf(eventId);
     if (!b) return res.status(404).json({ ok: false, error: '이 행사에 공용 메일이 없어요' });
+    if (apply && await partDone(eventId, 'conf')) return res.status(423).json({ ok: false, error: '컨퍼런스가 진행 완료라 기록을 바꿀 수 없어요' });
 
     /* 이 행사 연사의 메일 주소 → 연사 */
     const sp = (await pool.query(`
@@ -501,8 +515,8 @@ router.post('/accounts/:eventId/sync-sent', async (req, res) => {
         added++;
       }
       for (const [id, d] of Object.entries(firstInvite)) {
-        await pool.query(`UPDATE speakers SET guide_sent_at = $1 WHERE id = $2 AND COALESCE(guide_sent_at,'') = ''`, [d, id]);
-        stamped++;
+        const u = await pool.query(`UPDATE speakers SET guide_sent_at = $1 WHERE id = $2 AND COALESCE(guide_sent_at,'') = ''`, [d, id]);
+        stamped += u.rowCount || 0;
       }
     }
     res.json({
