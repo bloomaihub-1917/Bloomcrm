@@ -48,6 +48,7 @@ const deleteExhLog = guardWrite(_deleteExhLog);
 const batchCreateExhibitors = guardWrite(_batchCreateExhibitors);
 const saveExhCfgToSheet = guardWrite(_saveExhCfgToSheet);
 import { trackAction, changed } from './audit-tab.js';
+import { isPending, isUnread } from './mail-mark.js';
 import { renderWatchView, initWatchFolders } from './exh-watch.js';
 import { normalizeCompanyKey, createOrg, reloadOrgs } from './company-tab.js';
 
@@ -4358,7 +4359,11 @@ function renderDashboard(all){
   waiting.sort((a, b) => (b.days || 0) - (a.days || 0));
 
   const avg = Math.round(all.reduce((s, x) => s + progressOf(x), 0) / n);
-  const todo = openInq.length + overdue.length + attention.length + myTurn.length + dueMiss.length;
+  /* 처리 안 한 받은 메일 — 담당자가 보낸 메일을 아무도 안 챙기면 놓친다(규칙은 mail-mark.js) */
+  const inbox = [];
+  all.forEach(x => logsFor(x.id).filter(isPending).forEach(l => inbox.push({ x, l })));
+  inbox.sort((a, b) => String(a.l.ts || '').localeCompare(String(b.l.ts || '')));
+  const todo = openInq.length + overdue.length + attention.length + myTurn.length + dueMiss.length + inbox.length;
   const curs = Object.keys(cash).filter(c => cash[c].n);   // 상단 KPI(미수금)가 쓰는 값
   const dueTotal = curs.map(c => cash[c].billed - cash[c].paid).reduce((a, b) => a + b, 0);
 
@@ -4602,6 +4607,7 @@ function renderDashboard(all){
   const cardTodo = todo ? `<div class="uc" style="border-left:3px solid var(--am)">
       <div class="uc-ttl">처리 필요 <span class="pill p-amber">${todo}건</span></div>
       ${myTurn.slice(0, 5).map(o => attnRow(o.x, o.label, o.st.action, o.days, o.label === '그래픽' ? 'graphic' : 'billing')).join('')}
+      ${inbox.slice(0, 5).map(o => attnRow(o.x, isUnread(o.l) ? '● 안 읽은 메일' : '받은 메일', o.l.subject || '', daysSince(o.l.ts), 'box')).join('')}
       ${openInq.slice(0, 5).map(o => attnRow(o.x, '미답변 문의', o.l.subject || o.l.body || '', daysSince(o.l.ts), 'logs')).join('')}
       ${overdue.slice(0, 5).map(o => attnRow(o.x, '입금 기한', fmtMoney(o.s.balance, o.s.cur) + ' 미납', daysSince(o.s.due), 'billing')).join('')}
       ${dueMiss.slice(0, 8).map(o => attnRow(o.x, o.label + ' 마감', `${o.date} 마감 · 아직 안 됨`, o.days, o.tab)).join('')}

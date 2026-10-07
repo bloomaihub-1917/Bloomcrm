@@ -56,6 +56,9 @@ const TABS = [
   { key: 'offer',  label: '제공사항' },
   { key: 'bank',   label: '계좌·여권' },
   { key: 'people', label: '연락 상대' },
+  /* 주고받은 기록은 쓰는 칸과 따로 둔다 — 한 탭에 있으면 받은 메일을 챙기려고
+     매번 쓰기 칸을 지나 내려가야 했다 */
+  { key: 'box',    label: '메일함' },
   { key: 'mail',   label: '메일' },
 ];
 
@@ -219,7 +222,8 @@ export function renderSpeakerDr(){
     /* 수신이 없으면 메일을 못 보낸다 — 메일 탭을 열어 보고 알기보다
        탭에서 먼저 보이는 게 낫다 */
     people: mailTargets(sp.id).to.length ? 0 : 1,
-    mail: logsOfSpeaker(sp.id).filter(isPending).length,   // 처리 안 한 받은 메일
+    box: logsOfSpeaker(sp.id).filter(isPending).length,    // 처리 안 한 받은 메일
+    mail: 0,
     offer: missingOffer(sp, evKey).length,
     bank: missingBank(sp, evKey).length,
   };
@@ -236,6 +240,7 @@ export function renderSpeakerDr(){
       : spTab === 'offer' ? offerHtml(sp, evKey)
       : spTab === 'bank' ? bankHtml(sp, evKey)
       : spTab === 'people' ? peopleTabHtml(sp)
+      : spTab === 'box' ? boxTabHtml(sp)
       : spTab === 'mail' ? mailTabHtml(sp, evKey)
       : basicHtml(sp, con, evKey));
     /* 초안 만들기로 넘어왔으면 메일 칸을 채운다 — 칸은 위에서 막 그려졌다 */
@@ -1149,6 +1154,21 @@ const MAIL_KINDS = [
   { key: 'note',     label: '기타' },
 ];
 
+/* 줄을 누르면 보낸 본문을 펼친다 — «뭐라고 보냈지»를 메일함까지 가서 찾지 않게 */
+const spLogRow = (l) => `<details style="border-top:1px solid var(--i7);padding:7px 0"${mailToggleAttr('sp', l)}>
+  <summary style="cursor:pointer;list-style:none">
+  <div style="display:flex;gap:7px;align-items:baseline">
+    ${mailDirPill(l)}${mailStateHtml('sp', l)}<span class="pill p-gray" style="font-size:10px">${escapeHtml(l.category || '기타')}</span>
+    <div style="font-size:11.5px;font-weight:${l.direction === 'in' && !l.read_at ? 800 : 600};flex:1;min-width:0">${escapeHtml(l.subject || '(제목 없음)')}</div>
+    <div style="font-size:10.5px;color:var(--i4)">${escapeHtml(l.ts || '')} ▾</div>
+  </div>
+  <div style="font-size:10.5px;color:var(--i4);margin-top:2px">${escapeHtml(l.counterpart || '')}</div>
+  </summary>
+  <div style="margin-top:6px;padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;
+    font-size:11.5px;color:var(--i2);white-space:pre-wrap;line-height:1.6">${mailBodyHtml(l.body)}</div>
+  ${mailActionsHtml('sp', l)}
+</details>`;
+
 function mailTabHtml(sp, evKey){
   const t = mailTargets(sp.id);
   const ev = EVENT_LIST.find(e => e.key === evKey);
@@ -1158,20 +1178,6 @@ function mailTabHtml(sp, evKey){
     .slice()
     .sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')));
 
-  /* 줄을 누르면 보낸 본문을 펼친다 — «뭐라고 보냈지»를 메일함까지 가서 찾지 않게 */
-  const logRow = (l) => `<details style="border-top:1px solid var(--i7);padding:7px 0"${mailToggleAttr('sp', l)}>
-    <summary style="cursor:pointer;list-style:none">
-    <div style="display:flex;gap:7px;align-items:baseline">
-      ${mailDirPill(l)}${mailStateHtml('sp', l)}<span class="pill p-gray" style="font-size:10px">${escapeHtml(l.category || '기타')}</span>
-      <div style="font-size:11.5px;font-weight:${l.direction === 'in' && !l.read_at ? 800 : 600};flex:1;min-width:0">${escapeHtml(l.subject || '(제목 없음)')}</div>
-      <div style="font-size:10.5px;color:var(--i4)">${escapeHtml(l.ts || '')} ▾</div>
-    </div>
-    <div style="font-size:10.5px;color:var(--i4);margin-top:2px">${escapeHtml(l.counterpart || '')}</div>
-    </summary>
-    <div style="margin-top:6px;padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;
-      font-size:11.5px;color:var(--i2);white-space:pre-wrap;line-height:1.6">${mailBodyHtml(l.body)}</div>
-    ${mailActionsHtml('sp', l)}
-  </details>`;
 
   return `
     <div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;
@@ -1207,10 +1213,24 @@ function mailTabHtml(sp, evKey){
       <span id="sp-mail-msg" style="font-size:10.5px;color:var(--i4)"></span>
     </div>
 
-    <div style="font-size:11px;font-weight:700;color:var(--i3);margin:18px 0 2px">주고받은 기록 ${logs.length || ''}</div>
+    ${logs.length ? `<div style="font-size:11px;color:var(--i4);margin-top:16px;cursor:pointer" onclick="switchSpeakerDT('box')">
+      주고받은 기록 ${logs.length}건은 «메일함» 탭에 있어요 ›</div>` : ''}`;
+}
+
+/* ── 메일함 — 이 연사와 주고받은 기록 ──
+   보낸 메일·받은 메일을 최신순으로. 받은 메일은 읽음·처리를 체크한다(mail-mark.js) */
+function boxTabHtml(sp){
+  const logs = logsOfSpeaker(sp.id).filter(l => l.kind !== 'view')
+    .slice().sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')));
+  const list = filterMail(logs);
+  return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
+      <div style="font-size:12px;font-weight:700;color:var(--i2)">주고받은 기록 ${logs.length || ''}</div>
+      <button class="btn" style="font-size:10.5px;margin-left:auto" onclick="switchSpeakerDT('mail')">✉ 메일 쓰기</button>
+    </div>
     ${logs.some(l => l.direction === 'in') ? mailFilBar(logs) : ''}
-    ${filterMail(logs).length ? filterMail(logs).map(logRow).join('')
-      : `<div style="font-size:11px;color:var(--i4);padding:6px 0">아직 주고받은 메일이 없어요</div>`}`;
+    ${list.length ? list.map(spLogRow).join('')
+      : `<div style="font-size:11px;color:var(--i4);padding:6px 0">${logs.length ? '이 조건에 맞는 메일이 없어요'
+        : '아직 주고받은 메일이 없어요 — 설정 › 행사 › 메일에서 메일함 기록을 가져올 수 있어요'}</div>`}`;
 }
 
 /* ── 메일 첨부 ──

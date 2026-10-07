@@ -2665,7 +2665,7 @@ export function renderEvInbox(evKey = inboxEv){
   el.innerHTML = `<div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:6px">처리 안 한 받은 메일 ${rows.length
       ? `<span class="pill p-amber" style="font-size:10px">${rows.length}</span>${unread ? ` <span class="pill p-red" style="font-size:10px">안 읽음 ${unread}</span>` : ''}` : ''}</div>
     ${rows.length ? rows.slice(0, 50).map(({ l, t, id, who }) => `<div style="display:flex;gap:7px;align-items:baseline;padding:6px 0;border-top:1px solid var(--i7);cursor:pointer"
-        onclick="${t === 'sp' ? `openSpeakerDr('${escAttr(id)}','mail')` : `openExhDr('${escAttr(id)}','mail')`}">
+        onclick="${t === 'sp' ? `openSpeakerDr('${escAttr(id)}','box')` : `openExhDr('${escAttr(id)}','box')`}">
         <span style="font-size:10.5px;color:var(--i4);white-space:nowrap">${escapeHtml(l.ts || '')}</span>
         <span class="pill p-gray" style="font-size:10px">${t === 'sp' ? '연사' : '참가사'}</span>
         <span style="font-size:11.5px;font-weight:${isUnread(l) ? 800 : 500}">${isUnread(l) ? '● ' : ''}${escapeHtml(who)}</span>

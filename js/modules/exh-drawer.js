@@ -95,6 +95,7 @@ const TABS = [
   { key: 'graphic',  label: '그래픽' },
   { key: 'book',     label: '프로그램북' },
   { key: 'logs',     label: '문의·기록' },
+  { key: 'box',      label: '메일함' },
   { key: 'mail',     label: '메일' },
 ];
 /* 옛 번호로 부르는 곳이 남아 있어도 맞는 탭이 열리게 한다 */
@@ -187,11 +188,11 @@ export function renderExhDr(){
       tb.key === 'apply' && appNeedsWork ? ' <span class="pill p-amber">확인</span>' : ''}${
       tb.key === 'book' && bookMiss.length ? ` <span class="pill p-amber">${bookMiss.length}</span>` : ''}${
       tb.key === 'graphic' && gLeft ? ` <span class="pill p-amber">${gLeft}</span>` : ''}${
-      tb.key === 'mail' && mailLeft ? ` <span class="pill p-amber" title="처리 안 한 받은 메일">${mailLeft}</span>` : ''}</button>`).join('');
+      tb.key === 'box' && mailLeft ? ` <span class="pill p-amber" title="처리 안 한 받은 메일">${mailLeft}</span>` : ''}</button>`).join('');
 
   const b = document.getElementById('exh-drbd');
   const VIEW = { contact: dContactTab, apply: dApply, progress: dProgress,
-    billing: dBilling, graphic: dGraphic, book: dBook, logs: dLogs, mail: dMail };
+    billing: dBilling, graphic: dGraphic, book: dBook, logs: dLogs, box: dMailBox, mail: dMail };
   if(b){
     // 끝난 행사는 드로어도 열람만 — 목록은 잠갔는데 드로어에서 고쳐지면 소용없다
     b.classList.toggle('ro', exhLocked());
@@ -3713,7 +3714,17 @@ function dMail(x){
       <span id="exm-msg" style="font-size:11px;color:var(--i4)"></span>
     </div>
   </div>
-  <div class="sct">주고받은 메일 ${sent.length || ''}</div>
+  ${sent.length ? `<div style="font-size:11px;color:var(--i4);margin-top:4px;cursor:pointer" onclick="switchExhDT('box')">주고받은 메일 ${sent.length}건은 «메일함» 탭에 있어요 ›</div>` : ''}`;
+}
+
+/* ── 메일함 — 이 기업 담당자와 주고받은 메일 ──
+   받은 메일은 읽음·처리를 체크한다(mail-mark.js) */
+function dMailBox(x){
+  const sent = logsFor(x.id).filter(l => (l.direction === 'out' || l.direction === 'in') && l.channel === '이메일')
+    .sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')));
+  return `<div style="display:flex;align-items:center;gap:8px">
+    <div class="sct" style="margin:0">주고받은 메일 ${sent.length || ''}</div>
+    <button class="btn bs" style="margin-left:auto" onclick="switchExhDT('mail')">✉ 메일 쓰기</button></div>
   ${sent.some(l => l.direction === 'in') ? mailFilBar(sent) : ''}
   ${filterMail(sent).length ? filterMail(sent).map(l => `<details style="border-top:1px solid var(--i7);padding:7px 0"${mailToggleAttr('ex', l)}>
       <summary style="cursor:pointer;list-style:none">
