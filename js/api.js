@@ -500,6 +500,8 @@ export async function loadFromSheets(hooks = {}){
         /* 이 행사가 어느 분야였나 — 마스터DB에서 «건축 행사에 왔던 사람»을
            찾는 근거다. DOMAINS의 id, 여러 분야면 파이프로 잇는다. */
         domain:     r.domain     || '',
+        // 영문 행사명 — 영문 메일·엑셀은 이것을 쓴다(없으면 행사명)
+        name_en:    r.name_en    || '',
       })).filter(e => e.key));
       console.log('[CRM] events loaded:', EVENT_LIST.length, '건');
     }
@@ -666,7 +668,7 @@ export async function saveEventToSheet(ev){
     // 위치 배열이라 data.js의 events.columns와 순서가 정확히 같아야 한다
     row: [ev.key, ev.name, ev.short, ev.date_start||ev.date||'', ev.date_end||'', ev.location||'', ev.color,
       ev.host||'', ev.organizer||'', ev.our_role||'', ev.theme||'',
-      ev.scale||'', ev.homepage||'', ev.summary||'', ev.outcome||'', ev.domain||''],
+      ev.scale||'', ev.homepage||'', ev.summary||'', ev.outcome||'', ev.domain||'', ev.name_en||''],
   }, '행사 저장');
   if(r.ok) console.log('[CRM] event saved:', ev.key);
   return r;

@@ -1052,6 +1052,8 @@ CREATE INDEX IF NOT EXISTS idx_parts_confirmed ON participations(confirmed_at);
    값은 DOMAINS의 id다(settings.domains). 한 행사가 두 분야에 걸치면
    섹터와 같은 방식으로 파이프로 잇는다. */
 ALTER TABLE events ADD COLUMN IF NOT EXISTS domain TEXT;
+-- 영문 행사명 — 해외 연사·참가사에게 가는 영문 메일·엑셀이 한글 행사명을 쓰지 않게 (2026-10-07)
+ALTER TABLE events ADD COLUMN IF NOT EXISTS name_en TEXT;
 
 /* 부스 타입에 딸려 오는 기본 제공 품목 — 매뉴얼에만 있던 걸 데이터로 옮긴다.
    JSON 배열: [{cat, code, name, qty}, …]. 부스 타입은 행사별이라 품목도 함께

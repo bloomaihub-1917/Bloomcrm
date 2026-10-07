@@ -1172,7 +1172,8 @@ const spLogRow = (l) => `<details style="border-top:1px solid var(--i7);padding:
 function mailTabHtml(sp, evKey){
   const t = mailTargets(sp.id);
   const ev = EVENT_LIST.find(e => e.key === evKey);
-  const evName = ev ? (ev.name || ev.short || ev.key) : evKey;
+  // 영문 연사에게는 영문 행사명(설정 › 행사 › 기본 정보)
+  const evName = ev ? ((sp.lang_pref === 'en' && ev.name_en) || ev.name || ev.short || ev.key) : evKey;
   /* 계좌 열람(kind 'view') 같은 내부 기록은 «보낸 기록»이 아니다 */
   const logs = logsOfSpeaker(sp.id).filter(l => l.kind !== 'view')
     .slice()
@@ -1282,7 +1283,7 @@ export function fillSpeakerMail(kind){
   }
   const evKey = sp.event_id;
   const ev = EVENT_LIST.find(e => e.key === evKey);
-  const evName = ev ? (ev.name || ev.short || ev.key) : evKey;
+  const evName = ev ? ((sp.lang_pref === 'en' && ev.name_en) || ev.name || ev.short || ev.key) : evKey;
   const cfg = confCfg(evKey);
   const lim = cfg.limits || {};
   const asg = assignmentsFor(sp.id);

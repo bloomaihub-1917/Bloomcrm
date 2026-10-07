@@ -179,10 +179,15 @@ export function nextActionLabel(sp){
 export function fillTemplate(text, sp, step){
   const en = sp.lang_pref === 'en';
   const ev = EVENT_LIST.find(e => e.key === sp.event_id);
-  const evName = ev ? (ev.name || ev.short || ev.key) : sp.event_id;
+  /* 영문 메일은 영문 행사명(설정 › 행사 › 기본 정보)을 쓴다 — 없으면 행사명 */
+  const evName = ev ? ((en && ev.name_en) || ev.name || ev.short || ev.key) : sp.event_id;
   const cfg = confCfg(sp.event_id);
+  /* 여러 세션이면 발표 순서대로 — 배정한 순서로 나가면 날짜가 뒤섞인다 */
+  const whenOf = (a) => { const s = CONF_SESSIONS.find(x => x.id === a.session_id) || {};
+    return `${s.date || '9999'} ${a.start_at || s.start_at || '99:99'}`; };
+  const asgSorted = assignmentsFor(sp.id).slice().sort((a, b) => whenOf(a).localeCompare(whenOf(b)));
   const docs = cfg.docs || {};
-  const sessions = assignmentsFor(sp.id).map(a => {
+  const sessions = asgSorted.map(a => {
     const s = CONF_SESSIONS.find(x => x.id === a.session_id);
     if(!s || s.kind) return '';
     /* 연사에게는 세션 시간이 아니라 «본인 발표 시각»을 알린다 */
@@ -190,7 +195,7 @@ export function fillTemplate(text, sp, step){
     return `- ${en ? (s.title_en || s.title_ko) : (s.title_ko || s.title_en)}${s.date ? ` (${s.date}${when ? ' ' + when : ''})` : ''} — ${en ? (ROLE_EN[a.role] || a.role) : a.role}`;
   }).filter(Boolean);
   /* 발표 시간만 따로 — «■ 발표 시간» 아래에 날짜·시각만 적고 싶을 때 */
-  const talkTimes = assignmentsFor(sp.id).map(a => {
+  const talkTimes = asgSorted.map(a => {
     const s = CONF_SESSIONS.find(x => x.id === a.session_id);
     if(!s || s.kind) return '';
     const st = a.start_at || s.start_at || '', ed = a.start_at ? (a.end_at || '') : (s.end_at || '');
@@ -212,7 +217,7 @@ export function fillTemplate(text, sp, step){
     이름: name,
     호칭: honor,
     직함: en ? titleEn : (sp.title_ko || ''),
-    소속: en ? (sp.org_en || sp.org_ko || '') : (sp.org_ko || sp.org_en || ''),
+    소속: en ? (sp.org_en || '') : (sp.org_ko || sp.org_en || ''),
     행사: evName,
     세션: sessions.join('\n'),
     발표시간: talkTimes.join('\n'),
@@ -223,7 +228,8 @@ export function fillTemplate(text, sp, step){
     마감일: step?.due || (en ? 'your earliest convenience' : '가급적 빠른 시일'),
     가이드: docs[en ? 'guide_en' : 'guide_ko'] || docs.guide_ko || docs.guide_en || '',
     양식: docs[en ? 'form_en' : 'form_ko'] || docs.form_ko || docs.form_en || '',
-    담당자: currentUser?.name || (en ? '' : '담당자'),
+    담당자: en ? (/[가-힣]/.test(currentUser?.name || '') ? '' : (currentUser?.name || ''))
+      : (currentUser?.name || '담당자'),
     가져온자료: reuseSummary(sp, en),
   };
   /* 마감일이 없으면 «까지»·«by»가 붙은 문장이 어색해진다 — 문장째 바꾼다 */

@@ -2722,6 +2722,8 @@ function evBasicHtml(ev){
       <div><div class="mlbl">약칭</div>
         <input class="fi" id="evd-short" value="${escAttr(ev.short || '')}" style="width:100%"></div>
     </div>
+    <div style="margin-bottom:8px"><div class="mlbl">영문 행사명 <span style="font-size:9.5px;color:var(--i4)">영문 메일·엑셀의 {행사}에 들어갑니다 — 비우면 행사명</span></div>
+      <input class="fi" id="evd-name-en" value="${escAttr(ev.name_en || '')}" placeholder="예: 2026 AIA East Asia Symposium" style="width:100%"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
       <div><div class="mlbl">시작일</div>
         <input class="fi" id="evd-date-start" type="date" value="${escAttr(ev.date_start || '')}" style="width:100%"></div>
@@ -2755,7 +2757,7 @@ export async function saveEvBasic(){
   const prev = { ...ev };
   const start = g('evd-date-start');
   Object.assign(ev, {
-    name, short: g('evd-short') || name,
+    name, short: g('evd-short') || name, name_en: g('evd-name-en'),
     date_start: start, date: start,       // date는 하위 호환용 시작일
     date_end: g('evd-date-end'), location: g('evd-loc'),
     color: document.getElementById('evd-color')?.value || ev.color,
@@ -2764,7 +2766,7 @@ export async function saveEvBasic(){
   const r = await saveEventToSheet(ev);
   if(r && r.ok === false){ Object.assign(ev, prev); say('저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.'); renderEvDetail(); return; }
 
-  const changed = ['name','short','date_start','date_end','location','color']
+  const changed = ['name','short','name_en','date_start','date_end','location','color']
     .filter(f => (prev[f] || '') !== (ev[f] || ''))
     .map(f => `${f} ${prev[f] || '없음'} → ${ev[f] || '없음'}`);
   if(changed.length) trackAction('edit', '행사 정보 수정', ev.key, changed.join(' / '));

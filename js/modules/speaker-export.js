@@ -220,7 +220,7 @@ function drawList(wb, evKey){
 const BIO_COLS = [
   ['성명', 12], ['Name (EN)', 20], ['Affiliation (EN)', 28], ['Title (EN)', 24], ['자격·면허', 18],
   ['Professional Profile (EN)', 60], ['Professional Profile', 50],
-  ['Education', 40], ['Professional Experience', 50], ['Awards', 40],
+  ['Education', 40], ['Professional Experience', 50], ['Working Experience', 50], ['Awards', 40],
   ['발제명 (EN)', 40], ['Abstract (EN)', 70], ['발제명', 30], ['초록', 60],
 ];
 function drawBio(wb, evKey){
@@ -233,7 +233,8 @@ function drawBio(wb, evKey){
     const vals = [sp.name_snapshot || '', sp.name_en || '', sp.org_en || sp.org_ko || '', sp.title_en || sp.title_ko || '',
       sp.bio_credentials_en || sp.bio_credentials_ko || '',
       sp.bio_profile_en || '', sp.bio_profile_ko || '',
-      sp.bio_edu_en || sp.bio_edu_ko || '', sp.bio_pro_en || sp.bio_pro_ko || '', sp.bio_awards_en || sp.bio_awards_ko || '',
+      sp.bio_edu_en || sp.bio_edu_ko || '', sp.bio_pro_en || sp.bio_pro_ko || '', sp.bio_work_en || sp.bio_work_ko || '',
+      sp.bio_awards_en || sp.bio_awards_ko || '',
       j('title_en'), j('abstract_en'), j('title_ko'), j('abstract_ko')];
     vals.forEach((v, k) => {
       const c = ws.getCell(i + 2, k + 1);
@@ -271,7 +272,7 @@ export async function exportSpeakers(evKey){
     const wb = new ExcelJS.Workbook();
     wb.creator = 'Bloom CRM';
     wb.created = d;
-    drawGlance(wb, evKey, `${(ev && ev.name) || evLabel} — Program At a Glance (${today} 기준)`);
+    drawGlance(wb, evKey, `${(ev && (ev.name_en || ev.name)) || evLabel} — Program At a Glance (${today} 기준)`);
     const n = drawList(wb, evKey);
     drawBio(wb, evKey);
 
