@@ -430,9 +430,21 @@ const { simpleParser } = require('mailparser');
 const { convert: htmlToText } = require('html-to-text');
 /* 본문 글자 — 메일플러그 웹메일은 본문을 HTML로만 보낸다(text 없음). text가 비면
    HTML을 글자로 바꾼다. 안 그러면 기록에 첨부 이름만 남았다. 이미지·링크 주소는 뺀다 */
-const mailText = (mail) => String(mail.text || '').trim()
-  || (mail.html ? htmlToText(mail.html, { wordwrap: false,
-    selectors: [{ selector: 'img', format: 'skip' }, { selector: 'a', options: { ignoreHref: true } }] }).trim() : '');
+const H2T = { wordwrap: false,
+  selectors: [{ selector: 'img', format: 'skip' }, { selector: 'a', options: { ignoreHref: true } }] };
+/* 본문으로 쓸 첨부 — 어떤 메일은 본문(text/html)을 이름 붙은 조각으로 넣어 첨부로 잡힌다
+   («def3907333c4» 같은 이름). 글자·HTML 본문이 둘 다 비면 이걸 본문으로 쓴다 */
+const bodyParts = (mail) => (mail.attachments || [])
+  .filter((a) => /^text\/(html|plain)/i.test(a.contentType || '') && a.content && a.size < 512 * 1024);
+const mailText = (mail) => {
+  const direct = String(mail.text || '').trim()
+    || (mail.html ? htmlToText(mail.html, H2T).trim() : '');
+  if (direct) return direct;
+  return bodyParts(mail).map((a) => {
+    const t = a.content.toString('utf8');
+    return /html/i.test(a.contentType) ? htmlToText(t, H2T).trim() : t.trim();
+  }).filter(Boolean).join('\n\n');
+};
 const norm = (v) => String(v || '').trim().toLowerCase();
 /* 보낸 메일이 연락 단계 중 무엇인지 — 행사마다 제목을 다르게 쓴다
    (KPBMA «연사 가이드라인 송부», AIA «연사 확정 안내 및 자료 제출 요청»,
@@ -517,7 +529,9 @@ router.post('/accounts/:eventId/sync-sent', async (req, res) => {
           if (!ids.size) continue;
           const date = kstDate(mail.date || Date.now());
           const subject = String(mail.subject || '').trim();
-          const files = (mail.attachments || []).map((a) => a.filename).filter(Boolean);
+          // 본문으로 쓴 조각은 첨부 목록에서 뺀다
+          const asBody = new Set(String(mail.text || '').trim() || mail.html ? [] : bodyParts(mail));
+          const files = (mail.attachments || []).filter((a) => !asBody.has(a)).map((a) => a.filename).filter(Boolean);
           for (const id of ids) {
             const s0 = spById.get(id);
             const dup = seen.has(`${id}|${date}|${norm(subject)}`) || seen.has(`${id}|${prevDay(date)}|${norm(subject)}`);
@@ -549,11 +563,14 @@ router.post('/accounts/:eventId/sync-sent', async (req, res) => {
     if (apply) {
       /* 이미 들어간 기록 중 본문이 비어 있던 것(첨부 이름만 있던 것)은 본문을 채운다 —
          HTML 본문을 못 읽던 때 가져온 기록이다 */
+      /* 비었는지는 공백·줄바꿈을 다 지우고 본다 — btrim은 줄바꿈을 안 지워서
+         «줄바꿈 두 개 + [첨부]…»로 들어간 빈 본문을 못 알아봤다 */
       for (const f of found.filter((x) => x.dup)) {
         const u = await pool.query(`
           UPDATE speaker_logs SET body = $1
            WHERE speaker_id = $2 AND ts IN ($3, $4) AND lower(btrim(subject)) = $5 AND direction = 'out'
-             AND btrim(split_part(COALESCE(body, ''), '[첨부]', 1)) = '' AND btrim($6) <> ''`,
+             AND regexp_replace(split_part(COALESCE(body, ''), '[첨부]', 1), '\\s', '', 'g') = ''
+             AND regexp_replace($6, '\\s', '', 'g') <> ''`,
         [f.body, f.speaker_id, f.date, prevDay(f.date), norm(f.subject), f.body.split('[첨부]')[0]]);
         filled += u.rowCount || 0;
         if (f.kind !== 'note' || f.category !== '기타') {
