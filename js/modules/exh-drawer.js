@@ -59,7 +59,7 @@ function saveFailed(res, msg){
   if(res && res.locked) return;
   alert(msg || '저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
 }
-import { filterMail, mailFilBar, mailStateHtml, mailActionsHtml, mailToggleAttr, isPending } from './mail-mark.js';
+import { filterMail, mailFilBar, mailStateHtml, mailActionsHtml, mailToggleAttr, isPending, setMailDone } from './mail-mark.js';
 import { EXH_MAIL_STEPS, exhMailSteps, exhIsEnglish, fillExhTemplate, exhMailFileStep } from './exh-mail.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 import { ieyo } from '../country-signal.js';
@@ -108,7 +108,7 @@ const tabKey = (v) => {
 
 export function openExhDr(id, tab){
   // 다른 기업으로 옮기면 PC에서 고른 메일 첨부를 비운다 — 다음 기업으로 나가지 않게
-  if(drId !== id){ exhMailFiles = []; exhSkipDefault = new Set(); }
+  if(drId !== id){ exhMailFiles = []; exhSkipDefault = new Set(); exhReply = null; }
   drId = id;
   setExhLockEv(getExhibitorById(id)?.event_id);
   if(tab !== undefined) drTab = tabKey(tab);
@@ -121,6 +121,7 @@ export function closeExhDr(){
   // 무리가 없지만 통화는 기업마다 다르다)
   lastItemCur = null;
   drId = null;
+  exhReply = null;
   setExhLockEv(null);
   exhMailFiles = [];
   document.getElementById('exh-dr')?.classList.remove('on');
@@ -198,7 +199,7 @@ export function renderExhDr(){
     // 끝난 행사는 드로어도 열람만 — 목록은 잠갔는데 드로어에서 고쳐지면 소용없다
     b.classList.toggle('ro', exhLocked());
     b.innerHTML = (VIEW[drTab] || dContactTab)(x);
-    if(drTab === 'mail'){ fillExhMailFrom(x); fillExhMail(x.id, true); }
+    if(drTab === 'mail'){ fillExhMailFrom(x); if(exhReply) fillExhReply(x); else fillExhMail(x.id, true); }
   }
 }
 
@@ -3713,8 +3714,30 @@ window.forfeitExh = forfeitExh;
    보낸 메일은 서버가 문의·기록(exhibitor_logs)에 남긴다.
 ══════════════════════════════════════════════════════════════ */
 let exhMailFiles = [];
+/* ── 회신 중 ── 받은 메일의 «↩ 회신»에서 들어온다(mail-mark.js replyMail) */
+let exhReply = null;
+export function startExhReply(d){ exhReply = { ...d, filled: false }; drTab = 'mail'; renderExhDr(); }
+export function cancelExhReply(){ exhReply = null; renderExhDr(); }
+function fillExhReply(x){
+  const s = document.getElementById(`exm-sub-${x.id}`), b = document.getElementById(`exm-body-${x.id}`);
+  if(!s || !b || !exhReply) return;
+  if(!exhReply.filled){ exhReply.filled = true; exhReply.curSubject = exhReply.subject; exhReply.curBody = exhReply.body; }
+  s.value = exhReply.curSubject; b.value = exhReply.curBody;
+  s.oninput = () => { exhReply && (exhReply.curSubject = s.value); };
+  b.oninput = () => { exhReply && (exhReply.curBody = b.value); };
+  b.dataset.touched = '1';
+  b.focus(); b.setSelectionRange(0, 0);
+}
+window.startExhReply = startExhReply;
+window.cancelExhReply = cancelExhReply;
+
 function dMail(x){
-  const ppl = exhContacts(x).filter(p => p.email);
+  /* 회신 중이면 보낸 사람을 받는 사람 맨 위에(체크), 담당자는 아래에(해제)로 */
+  const ppl0 = exhContacts(x).filter(p => p.email);
+  const ppl = exhReply
+    ? [...exhReply.to.map(e => ({ email: e, name: '회신 대상', primary: false, reply: true })),
+       ...ppl0.filter(p => !exhReply.to.includes(String(p.email).trim()))]
+    : ppl0;
   const ev = EVENT_LIST.find(e => e.key === x.event_id);
   const evName = ev ? (ev.short || ev.name || ev.key) : '';
   const id = escAttr(x.id);
@@ -3723,11 +3746,13 @@ function dMail(x){
   return `
   <div class="uc" style="margin-bottom:14px">
     <div class="uc-ttl">메일 보내기</div>
+    ${exhReply ? `<div style="font-size:11.5px;color:var(--a);font-weight:700;margin-top:6px">↩ 회신 중 — 이 메일을 보낸 사람에게 답합니다
+      <a href="#" onclick="cancelExhReply();return false" style="font-weight:400;margin-left:6px">회신 취소</a></div>` : ''}
     <div id="exm-from" style="font-size:11px;color:var(--i4);margin:6px 0 10px">보내는 주소 확인 중…</div>
     <div class="mlbl">받는 사람</div>
     <div style="display:flex;flex-direction:column;gap:4px;margin:4px 0 10px">
       ${ppl.length ? ppl.map((p, i) => `<label style="display:flex;gap:6px;align-items:center;font-size:12px;cursor:pointer">
-        <input type="checkbox" class="exm-to" value="${escAttr(p.email)}"${(p.primary || i === 0) ? ' checked' : ''}>
+        <input type="checkbox" class="exm-to" value="${escAttr(p.email)}"${(exhReply ? p.reply : (p.primary || i === 0)) ? ' checked' : ''}>
         <b>${escapeHtml(p.name || '')}</b> <span style="color:var(--i4)">${escapeHtml(p.email)}</span>
         ${p.primary ? '<span class="pill p-blue" style="font-size:9.5px">메인</span>' : ''}</label>`).join('')
       : `<div style="font-size:11.5px;color:var(--re)">메일 주소가 있는 담당자가 없어요 —
@@ -3860,11 +3885,13 @@ export async function sendExhMail(exhId){
   say('보내는 중…', true);
   const attachments = [];
   for(const f of exhMailFiles) attachments.push({ filename: f.name, content_type: f.type, data: await fileToBase64(f) });
+  const reply = exhReply;
   const stepKey = document.getElementById(`exm-step-${exhId}`)?.value || 'note';
   const st = exhMailSteps(x.event_id).find(s => s.key === stepKey);
-  const fileIds = exhDefFiles(x).filter(f => !exhSkipDefault.has(f.id)).map(f => f.id);
-  const kind = stepKey === 'note' ? 'note' : `exh-${stepKey}`;
-  const category = st ? st.label : '메일';
+  // 회신은 단계 메일이 아니다 — 단계 기본 첨부를 붙이지 않는다
+  const fileIds = reply ? [] : exhDefFiles(x).filter(f => !exhSkipDefault.has(f.id)).map(f => f.id);
+  const kind = reply ? 'reply' : stepKey === 'note' ? 'note' : `exh-${stepKey}`;
+  const category = reply ? '회신' : st ? st.label : '메일';
   const res = await sendMail({ to, cc, subject, text, exhibitor_id: x.id, category, kind, attachments, file_ids: fileIds });
   if(!res.ok){ say(res.offline ? '테스트 모드에서는 보내지 않아요.' : (res.error || '보내지 못했어요.')); return; }
   // 서버가 기록을 남긴다 — 화면에도 바로 끼워 방금 보낸 게 안 보여 또 보내는 일을 막는다
@@ -3878,6 +3905,8 @@ export async function sendExhMail(exhId){
   });
   trackAction('add', '참가사 메일', x.event_id, `${exhNames(x).ko || x.id} — ${subject}`, { kind: 'exhibitor', id: x.id, tab: 'mail' });
   exhMailFiles = []; exhSkipDefault = new Set();
+  // 회신이었으면 그 받은 메일을 처리함으로 닫는다
+  if(reply){ exhReply = null; await setMailDone('ex', reply.logId, true); }
   renderExhDr();
   const m = document.getElementById('exm-msg');
   if(m){ m.style.color = res.logged === false ? 'var(--re)' : 'var(--g)';

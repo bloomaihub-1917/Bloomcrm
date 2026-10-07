@@ -56,6 +56,7 @@ export function mailActionsHtml(t, l){
   if(!isInbound(l)) return '';
   const id = escAttr(l.id);
   return `<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+    <button class="btn bp" style="font-size:10.5px" onclick="replyMail('${t}','${id}')">↩ 회신</button>
     ${l.status === 'done'
       ? `<button class="btn" style="font-size:10.5px" onclick="setMailDone('${t}','${id}',false)">처리 취소</button>`
       : `<button class="btn bp" style="font-size:10.5px" onclick="setMailDone('${t}','${id}',true)">✓ 처리 완료</button>`}
@@ -290,6 +291,29 @@ export async function mailToInquiry(logId){
   afterSync();
 }
 
+/* ── 회신 ──
+   받은 메일에서 바로 답장한다. 받는 사람은 그 메일을 보낸 사람, 제목은 «RE: …»,
+   본문 아래에 원문을 인용한다. 보내면 그 받은 메일을 «처리함»으로 닫는다(창 쪽에서). */
+const addrOf = (s) => {
+  const m = String(s || '').match(/<([^>]+)>/);
+  return (m ? m[1] : String(s || '').split(/[\s,;]+/)[0] || '').trim();
+};
+export function replyDraft(l){
+  const to = addrOf(l.counterpart);
+  const subject = /^\s*re\s*:/i.test(l.subject || '') ? (l.subject || '') : `RE: ${l.subject || ''}`;
+  const orig = String(l.body || '').replace(/\n*\[첨부\][^\n]*\s*$/, '').trim();
+  const body = `\n\n\n----- Original Message -----\nFrom: ${l.counterpart || to}\nDate: ${l.ts || ''}\nSubject: ${l.subject || ''}\n\n${orig}`;
+  return { logId: l.id, to: to ? [to] : [], subject, body };
+}
+export function replyMail(t, id){
+  const l = find(t, id);
+  if(!l || !isInbound(l)) return;
+  const d = replyDraft(l);
+  if(!d.to.length){ alert('보낸 사람 주소를 알 수 없어요.'); return; }
+  if(t === 'sp') window.startSpeakerReply?.(d); else window.startExhReply?.(d);
+}
+
+window.replyMail = replyMail;
 window.setMailFil = setMailFil;
 window.setDashMailFil = setDashMailFil;
 window.dashMailSync = dashMailSync;

@@ -39,7 +39,7 @@ import {
   saveSpeakerContact, deleteSpeakerContact,
   saveSpeakerLog, sendMail, eventMailFrom, loadMailFiles, mailFilesOf, fileToBase64,
 } from '../api.js';
-import { filterMail, mailFilBar, mailStateHtml, mailActionsHtml, mailToggleAttr, isPending } from './mail-mark.js';
+import { filterMail, mailFilBar, mailStateHtml, mailActionsHtml, mailToggleAttr, isPending, setMailDone } from './mail-mark.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 import { patchContact } from './db-tab.js';
 import { confLocked, setConfLockEv, confLockNotice, renderConf, buildConfEvList, syncPartRole, spCell } from './conf-tab.js';
@@ -69,6 +69,7 @@ export function openSpeakerDr(id, tab){
   /* 다른 연사로 옮기면 계좌를 다시 가린다 — 한 번 연 게 다음 사람까지
      따라오면 열람 기록과 실제로 본 것이 어긋난다. */
   if(spId !== id){
+    spReply = null;
     bankRevealed = false;
     /* PC에서 고른 첨부는 그 사람 몫이다 — 다음 연사 메일로 따라가면 여권·계좌
        서류가 엉뚱한 사람에게 나간다 */
@@ -83,6 +84,7 @@ export function openSpeakerDr(id, tab){
 }
 export function closeSpeakerDr(){
   spId = null;
+  spReply = null;
   setConfLockEv(null);
   spLocalFiles = []; spSkipDefault = new Set();
   bankRevealed = false;
@@ -244,7 +246,8 @@ export function renderSpeakerDr(){
       : spTab === 'mail' ? mailTabHtml(sp, evKey)
       : basicHtml(sp, con, evKey));
     /* 초안 만들기로 넘어왔으면 메일 칸을 채운다 — 칸은 위에서 막 그려졌다 */
-    if(spTab === 'mail' && pendingDraft){ fillSpeakerMail(pendingDraft); pendingDraft = ''; }
+    if(spTab === 'mail' && spReply){ fillSpeakerReply(); }
+    else if(spTab === 'mail' && pendingDraft){ fillSpeakerMail(pendingDraft); pendingDraft = ''; }
     else if(spTab === 'mail'){
       const k = document.getElementById('sp-mail-kind')?.value;
       if(k && !document.getElementById('sp-mail-body')?.value) fillSpeakerMail(k);
@@ -1169,8 +1172,25 @@ const spLogRow = (l) => `<details style="border-top:1px solid var(--i7);padding:
   ${mailActionsHtml('sp', l)}
 </details>`;
 
+/* ── 회신 중 ── 받은 메일의 «↩ 회신»에서 들어온다(mail-mark.js replyMail) */
+let spReply = null;
+export function startSpeakerReply(d){ spReply = { ...d, filled: false }; spTab = 'mail'; renderSpeakerDr(); }
+export function cancelSpeakerReply(){ spReply = null; renderSpeakerDr(); }
+function fillSpeakerReply(){
+  const s = document.getElementById('sp-mail-subject'), b = document.getElementById('sp-mail-body');
+  if(!s || !b || !spReply) return;
+  // 한 번 채운 뒤에는 고친 글을 지키려고 다시 덮지 않는다(창을 다시 그리면 마지막 글로)
+  if(!spReply.filled){ spReply.filled = true; spReply.curSubject = spReply.subject; spReply.curBody = spReply.body; }
+  s.value = spReply.curSubject; b.value = spReply.curBody;
+  s.oninput = () => { spReply && (spReply.curSubject = s.value); };
+  b.oninput = () => { spReply && (spReply.curBody = b.value); };
+  b.focus(); b.setSelectionRange(0, 0);
+}
+window.startSpeakerReply = startSpeakerReply;
+window.cancelSpeakerReply = cancelSpeakerReply;
+
 function mailTabHtml(sp, evKey){
-  const t = mailTargets(sp.id);
+  const t = spReply ? { to: spReply.to, cc: [] } : mailTargets(sp.id);
   const ev = EVENT_LIST.find(e => e.key === evKey);
   // 영문 연사에게는 영문 행사명(설정 › 행사 › 기본 정보)
   const evName = ev ? ((sp.lang_pref === 'en' && ev.name_en) || ev.name || ev.short || ev.key) : evKey;
@@ -1183,6 +1203,8 @@ function mailTabHtml(sp, evKey){
   return `
     <div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;
       font-size:11.5px;color:var(--i3);line-height:1.7;margin-bottom:11px">
+      ${spReply ? `<div style="color:var(--a);font-weight:700">↩ 회신 중 — 이 메일을 보낸 사람에게 답합니다
+        <a href="#" onclick="cancelSpeakerReply();return false" style="font-weight:400;margin-left:6px">회신 취소</a></div>` : ''}
       <span id="sp-mail-from">발신 확인 중…</span><br>
       ${t.to.length ? `수신 <b>${escapeHtml(t.to.join(', '))}</b>` : '<b style="color:var(--re)">수신이 없어요</b> — «연락 상대»에서 먼저 정해주세요'}
       ${t.cc.length ? `<br>참조 ${escapeHtml(t.cc.join(', '))}` : ''}
@@ -1354,14 +1376,16 @@ export async function sendSpeakerMail(){
   const msg = document.getElementById('sp-mail-msg');
   const say = (t, ok) => { if(msg){ msg.style.color = ok ? 'var(--g)' : 'var(--re)'; msg.textContent = t; } };
 
-  const t = mailTargets(sp.id);
+  const reply = spReply;
+  const t = reply ? { to: reply.to, cc: [] } : mailTargets(sp.id);
   if(!t.to.length){ say('수신이 없어요 — «연락 상대»에서 먼저 정해주세요.', false); return; }
   const subject = (document.getElementById('sp-mail-subject')?.value || '').trim();
   const text = (document.getElementById('sp-mail-body')?.value || '').trim();
   if(!subject && !text){ say('제목이나 내용 중 하나는 있어야 해요.', false); return; }
-  const kind = document.getElementById('sp-mail-kind')?.value || 'note';
-  const flowD = draftFor(sp, kind);
-  const category = flowD ? flowD.category : ((MAIL_KINDS.find(k => k.key === kind) || {}).label || '기타');
+  // 회신은 연락 단계 메일이 아니다 — 단계 기록·기본 첨부·날짜 찍기를 하지 않는다
+  const kind = reply ? 'reply' : (document.getElementById('sp-mail-kind')?.value || 'note');
+  const flowD = reply ? null : draftFor(sp, kind);
+  const category = reply ? '회신' : flowD ? flowD.category : ((MAIL_KINDS.find(k => k.key === kind) || {}).label || '기타');
 
   /* 밖으로 나가는 일은 한 번 묻는다 — 받는 사람을 눈으로 확인하지 않으면
      엉뚱한 사람에게 간 걸 나중에 알게 된다. */
@@ -1399,6 +1423,8 @@ export async function sendSpeakerMail(){
   say((res.logged === false ? '보냈어요 — 다만 기록 저장에 실패했어요.' : '보냈어요.')
     + (res.sentError ? ` (보낸메일함에는 못 남겼어요: ${res.sentError})` : ''), true);
   spLocalFiles = []; spSkipDefault = new Set();
+  // 회신이었으면 그 받은 메일을 처리함으로 닫는다
+  if(reply){ spReply = null; await setMailDone('sp', reply.logId, true); renderSpeakerDr(); return; }
   /* 자료 독촉을 보냈으면 «마지막 독촉» 날짜를 찍는다 — 표의 독촉 칸·엑셀이 이걸 읽는다 */
   if(category === '자료 독촉'){ await patchSpeaker({ reminded_at: td() }, '자료 독촉 보냄', sp.id); }
   /* 초청을 보냈으면 «보냄» 날짜를 찍는다 — 그래야 다음 단계로 넘어간다.
