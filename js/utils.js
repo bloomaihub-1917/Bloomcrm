@@ -380,3 +380,48 @@ export function phoneMatch(q, ...phones){
     return pd.includes(d) || raw.includes(bare);
   });
 }
+
+/* ══════════════════════════════════════════
+   메일 본문에서 «이전 메일(인용)»을 갈라낸다 — 화면에서 접어 보이려고
+
+   전체 답장은 아래에 예전 메일이 통째로 따라온다. 그대로 펼치면 같은 문단이
+   기록마다 반복돼 이번에 무엇을 썼는지 묻힌다. 저장된 본문은 건드리지 않는다 —
+   상대가 인용 안에 코멘트를 달아 줬을 수 있어서, 접기만 하고 누르면 다 보인다.
+   끝에 우리가 붙인 «[첨부] …» 줄은 인용이 아니므로 위쪽에 남긴다.
+
+   돌려주는 값: { head: 새로 쓴 부분, quoted: 이전 메일('' 이면 없음), attach: 첨부 줄 }
+══════════════════════════════════════════ */
+const QUOTE_START = [
+  /^\s*-{2,}\s*(original message|원본 메일|원본 메시지|forwarded message|전달된 메시지)\s*-{2,}/i,
+  /^\s*_{5,}\s*$/,                                        // 아웃룩 구분선
+  /^\s*on .{4,200}wrote:\s*$/i,                          // Gmail(영문)
+  /^\s*\d{4}년 .{2,80}(작성|wrote):?\s*$/,                 // Gmail(한글)
+];
+const HEADER_FROM = /^\s*(from|보낸\s*사람|발신자?)\s*:/i;
+const HEADER_NEXT = /^\s*(sent|date|보낸\s*날짜|날짜|to|받는\s*사람|subject|제목)\s*:/i;
+
+/* 빈 줄은 한 줄로 — 웹메일 HTML은 빈 줄마다 <p><br></p>를 넣어, 글자로 바꾸면
+   문단 사이에 줄바꿈이 서너 개씩 쌓인다. 줄 끝 공백도 지운다 */
+const squeezeBlank = (t) => String(t || '').replace(/\r/g, '')
+  .replace(/[ \t\u00a0]+$/gm, '')
+  .replace(/\n{3,}/g, '\n\n');
+
+export function splitQuotedMail(text){
+  let body = squeezeBlank(text);
+  let attach = '';
+  const am = body.match(/\n*(\[첨부\][^\n]*)\s*$/);
+  if(am){ attach = am[1]; body = body.slice(0, am.index); }
+  const lines = body.split('\n');
+  let cut = -1;
+  for(let i = 0; i < lines.length && cut < 0; i++){
+    const ln = lines[i];
+    if(QUOTE_START.some(re => re.test(ln))) cut = i;
+    // «From: … / Sent: …» 머리 묶음 — From 다음 세 줄 안에 날짜·받는 사람 줄이 이어질 때만
+    else if(HEADER_FROM.test(ln) && lines.slice(i + 1, i + 4).some(l => HEADER_NEXT.test(l))) cut = i;
+    // «>» 인용이 두 줄 넘게 이어지는 곳
+    else if(/^\s*>/.test(ln) && /^\s*>/.test(lines[i + 1] || '')) cut = i;
+  }
+  // 맨 첫 줄부터 인용이면 접을 «새 부분»이 없다 — 그대로 보여 준다
+  if(cut <= 0) return { head: body.trim(), quoted: '', attach };
+  return { head: lines.slice(0, cut).join('\n').trim(), quoted: lines.slice(cut).join('\n').trim(), attach };
+}

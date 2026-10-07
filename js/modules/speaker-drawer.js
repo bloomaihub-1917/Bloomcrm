@@ -26,7 +26,14 @@ import {
   isDomesticSpeaker, autoDomestic, bankDocs, paysFee,
 } from '../state.js';
 import { SPEAKER_ROLES, NEED_MARK, NEED_LABEL, SP_CONSENTS } from '../constants.js';
-import { td, escapeHtml, escAttr, countryOptions, countryName } from '../utils.js';
+import { td, escapeHtml, escAttr, countryOptions, countryName, splitQuotedMail } from '../utils.js';
+/* 보낸 기록 본문 — 이전 메일(인용)은 접어 둔다(utils.js splitQuotedMail) */
+const mailBodyHtml = (body) => {
+  const m = splitQuotedMail(body);
+  if(!m.head && !m.quoted) return escapeHtml(m.attach || '(본문 없음)');
+  return `${escapeHtml(m.head || '(새로 쓴 내용 없음)')}${m.attach ? `\n\n${escapeHtml(m.attach)}` : ''}${m.quoted
+    ? `<details style="margin-top:8px"><summary style="cursor:pointer;color:var(--i4);font-size:10.5px">▸ 이전 메일 보기 (${m.quoted.split('\n').length}줄)</summary><div style="margin-top:6px;padding-left:8px;border-left:2px solid var(--i6);color:var(--i3)">${escapeHtml(m.quoted)}</div></details>` : ''}`;
+};
 import {
   saveSpeaker, saveSessionSpeaker,
   saveSpeakerContact, deleteSpeakerContact,
@@ -1161,7 +1168,7 @@ function mailTabHtml(sp, evKey){
     <div style="font-size:10.5px;color:var(--i4);margin-top:2px">${escapeHtml(l.counterpart || '')}</div>
     </summary>
     <div style="margin-top:6px;padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;
-      font-size:11.5px;color:var(--i2);white-space:pre-wrap;line-height:1.6">${escapeHtml(l.body || '(본문 없음)')}</div>
+      font-size:11.5px;color:var(--i2);white-space:pre-wrap;line-height:1.6">${mailBodyHtml(l.body)}</div>
   </details>`;
 
   return `
