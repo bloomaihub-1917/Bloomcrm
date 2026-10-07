@@ -638,7 +638,7 @@ router.post('/accounts/:eventId/sync-inbox', async (req, res) => {
     const byMail = new Map();
     const add = (em, who) => { const k = norm(em); if (k && !byMail.has(k)) byMail.set(k, who); };
     const sp = (await pool.query(`
-      SELECT s.id, s.name_snapshot, s.name_en, c.email1, c.email2
+      SELECT s.id, s.name_snapshot, s.name_en, s.guide_sent_at, s.invite_replied_at, c.email1, c.email2
         FROM speakers s LEFT JOIN contacts c ON c.id = s.contact_id WHERE s.event_id = $1`, [eventId])).rows;
     const spName = new Map(sp.map((r) => [r.id, r.name_snapshot || r.name_en || r.id]));
     if (!confDone) {
@@ -708,8 +708,25 @@ router.post('/accounts/:eventId/sync-inbox', async (req, res) => {
       throw e;
     } finally { await client.logout().catch(() => {}); }
 
-    let added = 0;
+    /* 참석 회신 — 초청·가이드를 보낸 연사에게서 그날 이후 메일이 오면 «회신 받음»을 찍는다.
+       날짜는 그 조건의 가장 이른 메일. 이미 찍혀 있으면 두고, 보내기 전에 온 메일은
+       회신이 아니다(섭외 전 문의일 수 있다). 이미 가져온 메일(dup)도 센다 */
+    const spRow = new Map(sp.map((r) => [r.id, r]));
+    const firstReply = {};
+    found.filter((f) => f.t === 'sp').forEach((f) => {
+      const r = spRow.get(f.id);
+      if (!r || !r.guide_sent_at || r.invite_replied_at) return;
+      if (f.date < String(r.guide_sent_at).slice(0, 10)) return;
+      if (!firstReply[f.id] || f.date < firstReply[f.id]) firstReply[f.id] = f.date;
+    });
+    const replyNames = Object.keys(firstReply).map((id) => spName.get(id));
+
+    let added = 0, replied = 0;
     if (apply) {
+      for (const [id, d] of Object.entries(firstReply)) {
+        const u = await pool.query(`UPDATE speakers SET invite_replied_at = $1 WHERE id = $2 AND COALESCE(invite_replied_at, '') = ''`, [d, id]);
+        replied += u.rowCount || 0;
+      }
       for (const f of found.filter((x) => !x.dup)) {
         const sp0 = f.t === 'sp';
         await pool.query(`
@@ -722,7 +739,7 @@ router.post('/accounts/:eventId/sync-inbox', async (req, res) => {
       }
     }
     res.json({
-      ok: true, applied: apply, scanned: total, added,
+      ok: true, applied: apply, scanned: total, added, replied, replyNames,
       items: found.map(({ body, ...r }) => r),
       skipped: [confDone ? '컨퍼런스(진행 완료)' : '', exhDone ? '전시(진행 완료)' : ''].filter(Boolean),
     });
