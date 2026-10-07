@@ -49,6 +49,8 @@ const batchCreateExhibitors = guardWrite(_batchCreateExhibitors);
 const saveExhCfgToSheet = guardWrite(_saveExhCfgToSheet);
 import { trackAction, changed } from './audit-tab.js';
 import { isStale, isUnread, mailCardHtml } from './mail-mark.js';
+// 여러 기업에 메일 — 창을 띄우는 함수만 window에 둔다(목록 단추가 부른다)
+import './exh-bulkmail.js';
 import { renderWatchView, initWatchFolders } from './exh-watch.js';
 import { normalizeCompanyKey, createOrg, reloadOrgs } from './company-tab.js';
 
@@ -549,6 +551,18 @@ export function exhibitorTradeFor(x){
 }
 
 /* 금액 표시 — 통화 기호를 붙인다 */
+/* 전시 메일 문구에 넣을 이 기업의 값(exh-mail.js fillExhTemplate의 ctx).
+   계산은 여기 있는 정산 함수를 그대로 쓴다 — 메일에 적힌 금액과 정산 탭이 갈리지 않게 */
+export function exhMailCtx(x){
+  const s = settleState(x);
+  return {
+    names: exhNames(x),
+    contact: exhContact(x),
+    billed: s.billed ? fmtMoney(s.billed, s.cur) : '',
+    unpaid: s.state === 'settled' ? fmtMoney(0, s.cur) : s.billed ? fmtMoney(Math.max(0, s.balance), s.cur) : '',
+  };
+}
+
 export function fmtMoney(v, cur){
   return (cur === 'USD' ? '$' : '') + money(v) + (cur === 'USD' ? '' : '원');
 }
@@ -4730,7 +4744,8 @@ function renderChecklistCards(list, all){
     </div>
     ${list.length ? `<div style="margin-bottom:10px">
       <button class="btn bs" id="exh-list-export-btn" onclick="exportChecklist()"
-        title="지금 보이는 ${list.length}곳의 진행현황을 엑셀로 받습니다">엑셀 다운로드</button></div>` : ''}
+        title="지금 보이는 ${list.length}곳의 진행현황을 엑셀로 받습니다">엑셀 다운로드</button>
+      <button class="btn bs" onclick="openExhBulkMail()" title="지금 보이는 기업 중 골라 같은 안내를 기업마다 한 통씩 보냅니다">✉ 여러 기업에 메일</button></div>` : ''}
     ${list.map(x => {
       const p = progressOf(x);
       const openN = openInquiriesFor(x.id).length;

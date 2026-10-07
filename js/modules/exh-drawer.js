@@ -31,7 +31,7 @@ import {
   saveExhContact as _saveExhContact, saveExhItem as _saveExhItem, saveExhInvoice as _saveExhInvoice, saveExhTax as _saveExhTax, saveExhPayment as _saveExhPayment, saveExhLog as _saveExhLog, saveExhApp as _saveExhApp,
   deleteExhContact as _deleteExhContact, deleteExhItem as _deleteExhItem, deleteExhInvoice as _deleteExhInvoice, deleteExhTax as _deleteExhTax, deleteExhPayment as _deleteExhPayment, deleteExhLog as _deleteExhLog, deleteExhApp as _deleteExhApp,
   deleteExhibitor as _deleteExhibitor,
-  sendMail, eventMailFrom, fileToBase64,
+  sendMail, eventMailFrom, fileToBase64, loadMailFiles, mailFilesOf,
 } from '../api.js';
 
 /* 진행 완료된 행사는 열람만 — exh-tab의 가드를 그대로 쓴다.
@@ -60,6 +60,7 @@ function saveFailed(res, msg){
   alert(msg || '저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
 }
 import { filterMail, mailFilBar, mailStateHtml, mailActionsHtml, mailToggleAttr, isPending } from './mail-mark.js';
+import { EXH_MAIL_STEPS, exhMailSteps, exhIsEnglish, fillExhTemplate, exhMailFileStep } from './exh-mail.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 import { ieyo } from '../country-signal.js';
 import { normalizeCompanyKey, createOrg, patchOrgFields } from './company-tab.js';
@@ -71,7 +72,7 @@ import {
   BOOTH_ORIGIN, BOOTH_EXC, isBoothExc, itemCode,
   baseRecvAt, baseDoneAt, baseDoneCheck, baseItems, baseRecvItems, TCELL, TPILL,
   guardWrite, exhLocked, setExhLockEv, exhLockNotice, isBoothGiven, boothIncluded, applyBoothItems, boothItemsPending,
-  patchExh, refreshExhViews, exhContact, exhContacts, contactsForExhibitor, cleanEmail, progressBar, needsReissue,
+  patchExh, refreshExhViews, exhContact, exhContacts, exhMailCtx, contactsForExhibitor, cleanEmail, progressBar, needsReissue,
   settleState, liveInvoices, payDueDate, paidBreakdown, invoiceGap, refundDue, eventDeadlines,
 } from './exh-tab.js';
 
@@ -107,7 +108,7 @@ const tabKey = (v) => {
 
 export function openExhDr(id, tab){
   // 다른 기업으로 옮기면 PC에서 고른 메일 첨부를 비운다 — 다음 기업으로 나가지 않게
-  if(drId !== id) exhMailFiles = [];
+  if(drId !== id){ exhMailFiles = []; exhSkipDefault = new Set(); }
   drId = id;
   setExhLockEv(getExhibitorById(id)?.event_id);
   if(tab !== undefined) drTab = tabKey(tab);
@@ -197,7 +198,7 @@ export function renderExhDr(){
     // 끝난 행사는 드로어도 열람만 — 목록은 잠갔는데 드로어에서 고쳐지면 소용없다
     b.classList.toggle('ro', exhLocked());
     b.innerHTML = (VIEW[drTab] || dContactTab)(x);
-    if(drTab === 'mail') fillExhMailFrom(x);
+    if(drTab === 'mail'){ fillExhMailFrom(x); fillExhMail(x.id, true); }
   }
 }
 
@@ -3732,6 +3733,16 @@ function dMail(x){
       : `<div style="font-size:11.5px;color:var(--re)">메일 주소가 있는 담당자가 없어요 —
           <a href="#" onclick="switchExhDT('contact');return false" style="color:var(--a)">담당자 탭</a>에서 먼저 넣어주세요.</div>`}
     </div>
+    <div style="display:grid;grid-template-columns:1fr auto;gap:6px;margin-bottom:8px">
+      <div><div class="mlbl">무슨 메일인가 <span style="font-size:9px;color:var(--i4)">고르면 그 단계 문구로 채워져요 — 문구는 설정 › 행사 › 메일</span></div>
+        <select class="fi" id="exm-step-${id}" onchange="fillExhMail('${id}')" style="font-size:12px">
+          ${exhMailSteps(x.event_id).map(st => `<option value="${st.key}"${st.key === exhMailStep ? ' selected' : ''}>${escapeHtml(st.label)}</option>`).join('')}
+        </select></div>
+      <div><div class="mlbl">언어</div>
+        <select class="fi" id="exm-lang-${id}" onchange="fillExhMail('${id}')" style="font-size:12px">
+          <option value="ko"${exhIsEnglish(x) ? '' : ' selected'}>국문</option><option value="en"${exhIsEnglish(x) ? ' selected' : ''}>영문</option>
+        </select></div>
+    </div>
     <div class="mlbl">참조 <span style="font-size:9px;color:var(--i4)">쉼표로 여러 개</span></div>
     <input class="fi" id="exm-cc-${id}" style="font-size:12px;margin-bottom:8px">
     <div class="mlbl">제목</div>
@@ -3739,7 +3750,8 @@ function dMail(x){
     <div class="mlbl">내용</div>
     <textarea class="fi" id="exm-body-${id}" rows="9" style="font-size:12px;resize:vertical">${escapeHtml(
       `${exhNames(x).ko || ''} 담당자님, 안녕하세요.\n\n\n\n감사합니다.`)}</textarea>
-    <div id="exm-files" style="font-size:11px;margin-top:6px"></div>
+    <div id="exm-deffiles" style="font-size:11px;margin-top:6px"></div>
+    <div id="exm-files" style="font-size:11px;margin-top:4px"></div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
       <label class="btn bs" style="cursor:pointer">+ 첨부 (합쳐서 3MB)
         <input type="file" multiple style="display:none" onchange="addExhMailFiles(this)"></label>
@@ -3770,6 +3782,45 @@ function dMailBox(x){
         font-size:12px;color:var(--i2);white-space:pre-wrap;line-height:1.6">${mailBodyHtml(l.body)}</div>${mailActionsHtml('ex', l)}</details>`).join('')
     : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">아직 주고받은 메일이 없어요</div>'}`;
 }
+
+/* ── 단계 문구 채우기 ──
+   단계·언어를 바꾸면 제목·본문을 그 단계 문구로 바꾼다. 처음 열 때(first)는 이미 적어 둔
+   글이 있으면 덮지 않는다 — 쓰다 만 메일이 탭을 오가다 사라지면 안 된다. */
+let exhMailStep = 'note';
+let exhSkipDefault = new Set();
+const exhDefFiles = (x) => mailFilesOf(x.event_id).filter(f => f.step === exhMailFileStep(exhMailStep));
+export async function fillExhMail(exhId, first){
+  const x = getExhibitorById(exhId);
+  if(!x) return;
+  const sEl = document.getElementById(`exm-sub-${exhId}`), bEl = document.getElementById(`exm-body-${exhId}`);
+  const stepKey = document.getElementById(`exm-step-${exhId}`)?.value || exhMailStep;
+  const en = document.getElementById(`exm-lang-${exhId}`)?.value === 'en';
+  if(stepKey !== exhMailStep) exhSkipDefault = new Set();
+  exhMailStep = stepKey;
+  const st = exhMailSteps(x.event_id).find(s => s.key === stepKey);
+  if(sEl && bEl && st && !(first && bEl.dataset.touched)){
+    const ctx = exhMailCtx(x);
+    sEl.value = fillExhTemplate(st[en ? 'subject_en' : 'subject_ko'] || st.subject_ko, x, st, en, ctx);
+    bEl.value = fillExhTemplate(st[en ? 'body_en' : 'body_ko'] || st.body_ko, x, st, en, ctx);
+    bEl.oninput = () => { bEl.dataset.touched = '1'; };
+  }
+  await loadMailFiles(x.event_id);
+  renderExhDefFiles(x);
+}
+function renderExhDefFiles(x){
+  const el = document.getElementById('exm-deffiles');
+  if(!el) return;
+  const files = exhDefFiles(x);
+  el.innerHTML = files.length ? `<span style="color:var(--i4)">단계 기본 첨부</span> ${files.map(f => `<span class="pill ${exhSkipDefault.has(f.id) ? 'p-gray' : 'p-blue'}" style="margin:2px 4px 0 0;${exhSkipDefault.has(f.id) ? 'text-decoration:line-through' : ''}">📎 ${escapeHtml(f.filename)}
+    <a href="#" onclick="toggleExhDefFile('${escAttr(x.id)}','${escAttr(f.id)}');return false" style="margin-left:4px;color:var(--i4)">${exhSkipDefault.has(f.id) ? '넣기' : '빼기'}</a></span>`).join('')}` : '';
+}
+export function toggleExhDefFile(exhId, fid){
+  if(exhSkipDefault.has(fid)) exhSkipDefault.delete(fid); else exhSkipDefault.add(fid);
+  const x = getExhibitorById(exhId);
+  if(x) renderExhDefFiles(x);
+}
+window.fillExhMail = fillExhMail;
+window.toggleExhDefFile = toggleExhDefFile;
 
 async function fillExhMailFrom(x){
   const f = await eventMailFrom(x.event_id);
@@ -3809,19 +3860,24 @@ export async function sendExhMail(exhId){
   say('보내는 중…', true);
   const attachments = [];
   for(const f of exhMailFiles) attachments.push({ filename: f.name, content_type: f.type, data: await fileToBase64(f) });
-  const res = await sendMail({ to, cc, subject, text, exhibitor_id: x.id, category: '메일', kind: 'note', attachments });
+  const stepKey = document.getElementById(`exm-step-${exhId}`)?.value || 'note';
+  const st = exhMailSteps(x.event_id).find(s => s.key === stepKey);
+  const fileIds = exhDefFiles(x).filter(f => !exhSkipDefault.has(f.id)).map(f => f.id);
+  const kind = stepKey === 'note' ? 'note' : `exh-${stepKey}`;
+  const category = st ? st.label : '메일';
+  const res = await sendMail({ to, cc, subject, text, exhibitor_id: x.id, category, kind, attachments, file_ids: fileIds });
   if(!res.ok){ say(res.offline ? '테스트 모드에서는 보내지 않아요.' : (res.error || '보내지 못했어요.')); return; }
   // 서버가 기록을 남긴다 — 화면에도 바로 끼워 방금 보낸 게 안 보여 또 보내는 일을 막는다
   /* 서버가 남긴 기록 id를 쓴다 — 임시 id로 두면 이 줄을 지울 때 서버에서 안 지워진다 */
   if(res.logId) EXH_LOGS.push({
-    id: res.logId, exhibitor_id: x.id, kind: 'note', ts: nowStamp(), direction: 'out', channel: '이메일',
+    id: res.logId, exhibitor_id: x.id, kind, ts: nowStamp(), direction: 'out', channel: '이메일',
     counterpart: [to.join(', '), cc.length ? `(cc) ${cc.join(', ')}` : ''].filter(Boolean).join(' '),
-    category: '메일', subject, answered_at: '', answer: '', status: 'done',
-    body: text + (attachments.length ? `\n\n[첨부] ${attachments.map(a => a.filename).join(', ')}` : ''),
+    category, subject, answered_at: '', answer: '', status: 'done',
+    body: text + ((attachments.length || fileIds.length) ? `\n\n[첨부] ${[...exhDefFiles(x).filter(f => fileIds.includes(f.id)).map(f => f.filename), ...attachments.map(a => a.filename)].join(', ')}` : ''),
     author_email: currentUser?.email || '', author_name: currentUser?.name || '',
   });
   trackAction('add', '참가사 메일', x.event_id, `${exhNames(x).ko || x.id} — ${subject}`, { kind: 'exhibitor', id: x.id, tab: 'mail' });
-  exhMailFiles = [];
+  exhMailFiles = []; exhSkipDefault = new Set();
   renderExhDr();
   const m = document.getElementById('exm-msg');
   if(m){ m.style.color = res.logged === false ? 'var(--re)' : 'var(--g)';
