@@ -507,6 +507,16 @@ function classifyExhSent(subject) {
     : /부스\s*(배정|위치|도면)|booth/i.test(t) ? 'booth' : '';
   return k ? { kind: `exh-${k}`, category: EXH_LABEL[k] } : { kind: 'note', category: '기타' };
 }
+/* 자동 답장·반송 — 헤더(Auto-Submitted, X-Autoreply 등)나 제목으로 알아본다 */
+const AUTO_SUBJ = /(^|\W)(automatic reply|auto[- ]?reply|autoreply|out of (the )?office|자동 ?회신|자동 ?응답|부재중|undeliverable|delivery status notification|mail delivery failed)/i;
+function isAutoReply(mail) {
+  const h = mail.headers || new Map();
+  const as = String(h.get('auto-submitted') || '').toLowerCase();
+  if (as && as !== 'no') return true;
+  if (h.get('x-autoreply') || h.get('x-autorespond') || h.get('x-auto-response-suppress') === 'All') return true;
+  if (/^(auto_reply|bulk|junk)$/i.test(String(h.get('precedence') || ''))) return true;
+  return AUTO_SUBJ.test(String(mail.subject || ''));
+}
 const prevDay = (d) => new Date(new Date(`${d}T00:00:00Z`).getTime() - 864e5).toISOString().slice(0, 10);
 
 const syncSentHandler = async (req, res) => {
@@ -766,6 +776,8 @@ const syncInboxHandler = async (req, res) => {
           total++;
           const mail = await simpleParser(m.source);
           const from = (mail.from ? mail.from.value : []).map((a) => a.address)[0] || '';
+          // 부재중·자동 답장·반송은 사람 메일이 아니다 — 쌓이면 처리할 메일이 묻힌다
+          if (isAutoReply(mail)) continue;
           if (!from || self.has(norm(from))) continue;
           const who = byMail.get(norm(from));
           if (!who) continue;

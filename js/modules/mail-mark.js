@@ -103,8 +103,11 @@ export async function setMailDone(t, id, done){
   if(r && r.ok === false){ Object.assign(l, prev); if(!r.locked) alert('저장하지 못했어요.'); }
   rerender();
 }
+/* 처리·읽음을 바꾸면 그 메일이 보이는 곳을 모두 다시 그린다 — 대시보드를 빠뜨려
+   «처리 완료»를 눌러도 대시보드에 그대로 남아 있었다 */
 function rerender(){
   window.renderSpeakerDr?.(); window.renderExhDr?.(); window.renderEvInbox?.();
+  window.renderConf?.(); window.renderExh?.();
 }
 
 /* 메일함 → 기록. 보낸메일함(연사)과 받은메일함(연사·참가사)을 한 번에 읽어
