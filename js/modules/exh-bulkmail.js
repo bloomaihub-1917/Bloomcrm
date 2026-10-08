@@ -17,6 +17,7 @@ import { escapeHtml, escAttr, nowStamp } from '../utils.js';
 import { visibleList, exhNames, exhContacts, exhMailCtx, exhLocked, exhLockNotice } from './exh-tab.js';
 import { exhMailSteps, exhIsEnglish, fillExhTemplate, exhMailFileStep } from './exh-mail.js';
 import { trackAction } from './audit-tab.js';
+import './exh-mail-editor.js';
 
 let bm = null;   // { evKey, ids:Set, step, lang, who, tpl:{subject_ko,...}, sending }
 
@@ -28,11 +29,14 @@ const mailsOf = (x, who) => {
 };
 const enOf = (x) => bm.lang === 'en' ? true : bm.lang === 'ko' ? false : exhIsEnglish(x);
 
-export async function openExhBulkMail(){
+/* stepKey를 주면 그 단계가 골라진 채로 연다(전시 메일 단계 편집 창의 «📨 여러 기업에») */
+export async function openExhBulkMail(stepKey){
   const list = visibleList();
-  if(!list.length){ alert('지금 목록에 기업이 없어요.'); return; }
+  if(!list.length){ alert('지금 전시 목록에 기업이 없어요 — 전시 탭에서 행사를 열고 보내 주세요.'); return; }
   const evKey = list[0].event_id;
-  const st = exhMailSteps(evKey)[0];
+  const steps = exhMailSteps(evKey);
+  if(!steps.length){ alert('이 행사에 켜진 메일 단계가 없어요.'); return; }
+  const st = steps.find(s => s.key === stepKey) || steps[0];
   bm = { evKey, ids: new Set(list.filter(x => mailsOf(x, 'primary').length).map(x => x.id)),
     step: st.key, lang: 'auto', who: 'primary', tpl: pickTpl(evKey, st.key), sending: false };
   await loadMailFiles(evKey);
@@ -97,7 +101,8 @@ function render(){
         <details${bm.lang === 'en' ? ' open' : ''} style="margin-top:6px"><summary style="cursor:pointer;font-size:11.5px;font-weight:700;margin-bottom:4px">영문 문구</summary>
           <input class="fi" style="font-size:11.5px;margin-bottom:4px" value="${escAttr(bm.tpl.subject_en)}" oninput="bmTpl('subject_en',this.value)">
           <textarea class="fi" rows="7" style="font-size:11.5px;width:100%" oninput="bmTpl('body_en',this.value)">${escapeHtml(bm.tpl.body_en)}</textarea></details>
-        <div style="font-size:10.5px;color:var(--i4);margin-top:4px">{기업}·{담당자}·{부스}·{청구액}·{미납액}은 기업마다 채워집니다. 여기서 고친 문구는 이번 발송에만 쓰고, 기본 문구는 설정 › 행사 › 메일에서 고칩니다.</div>
+        <div style="font-size:10.5px;color:var(--i4);margin-top:4px">{기업}·{담당자}·{부스}·{청구액}·{미납액}은 기업마다 채워집니다. 여기서 고친 문구는 이번 발송에만 쓰고, 기본 문구와 단계는
+          <a href="#" onclick="openExhMailEditor('${escAttr(bm.evKey)}','${escAttr(bm.step)}');return false">✎ 단계 편집</a>에서 고칩니다.</div>
         ${files.length ? `<div style="font-size:11px;margin-top:6px">기본 첨부 ${files.map(f => `<span class="pill p-blue" style="margin:2px 3px 0 0">📎 ${escapeHtml(f.filename)}</span>`).join('')}</div>` : ''}
         ${prev ? `<div style="margin-top:10px;padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;font-size:11.5px;white-space:pre-wrap;line-height:1.55;max-height:220px;overflow:auto"><div style="font-size:10px;color:var(--i4);margin-bottom:4px">미리보기 — ${escapeHtml(exhNames(sample).ko)}</div><b>${escapeHtml(prev.s)}</b>\n\n${escapeHtml(prev.b)}</div>` : ''}
       </div>
@@ -167,6 +172,15 @@ export async function sendExhBulkMail(){
   window.renderExh?.();
 }
 
+/* 단계 편집 창에서 단계를 고치면 — 고른 단계가 없어졌으면 첫 단계로, 문구는 새 기본 문구로 */
+window.refreshExhBulkMail = () => {
+  if(!bm || bm.sending) return;
+  const steps = exhMailSteps(bm.evKey);
+  if(!steps.length){ close(); return; }
+  if(!steps.some(s => s.key === bm.step)) bm.step = steps[0].key;
+  bm.tpl = pickTpl(bm.evKey, bm.step);
+  render();
+};
 window.openExhBulkMail = openExhBulkMail;
 window.closeExhBulkMail = close;
 window.bmSet = bmSet;

@@ -62,6 +62,7 @@ function saveFailed(res, msg){
 import { filterMail, mailFilBar, mailStateHtml, mailActionsHtml, mailToggleAttr, isPending, setMailDone } from './mail-mark.js';
 import { decorate as decorateMailPane } from './mail-pane.js';
 import { EXH_MAIL_STEPS, exhMailSteps, exhIsEnglish, fillExhTemplate, exhMailFileStep } from './exh-mail.js';
+import './exh-mail-editor.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 import { ieyo } from '../country-signal.js';
 import { normalizeCompanyKey, createOrg, patchOrgFields } from './company-tab.js';
@@ -3771,7 +3772,9 @@ function dMail(x){
           <a href="#" onclick="switchExhDT('contact');return false" style="color:var(--a)">담당자 탭</a>에서 먼저 넣어주세요.</div>`}
     </div>
     <div style="display:grid;grid-template-columns:1fr auto;gap:6px;margin-bottom:8px">
-      <div><div class="mlbl">무슨 메일인가 <span style="font-size:9px;color:var(--i4)">고르면 그 단계 문구로 채워져요 — 문구는 설정 › 행사 › 메일</span></div>
+      <div><div class="mlbl">무슨 메일인가 <span style="font-size:9px;color:var(--i4)">고르면 그 단계 문구로 채워져요</span>
+        <a href="#" style="font-size:10px;margin-left:4px" title="이 행사의 전시 메일 단계를 더하고, 고치고, 끄거나 지웁니다"
+          onclick="openExhMailEditor('${escAttr(x.event_id)}',document.getElementById('exm-step-${id}').value);return false">✎ 단계 편집</a></div>
         <select class="fi" id="exm-step-${id}" onchange="fillExhMail('${id}')" style="font-size:12px">
           ${exhMailSteps(x.event_id).map(st => `<option value="${st.key}"${st.key === exhMailStep ? ' selected' : ''}>${escapeHtml(st.label)}</option>`).join('')}
         </select></div>

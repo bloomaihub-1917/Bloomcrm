@@ -70,10 +70,22 @@ export const EXH_MAIL_FIELDS = [
 ];
 export const exhMailFileStep = (key) => `exh-${key}`;
 
-/* 이 행사의 단계 — 기본 문구 위에 행사에서 바꾼 칸을 얹는다 */
-export function exhMailSteps(evKey){
-  const over = ((EXH_CFG[evKey] || {}).exhMail) || {};
-  return EXH_MAIL_STEPS.map(s => ({ ...s, ...(over[s.key] || {}), key: s.key, due: s.due }));
+/* 이 행사의 단계 — 기본 문구 위에 행사에서 바꾼 칸(exhMail[key])을 얹고,
+   행사를 돌리다 더한 단계(exhMailCustom)를 «after» 단계 뒤에 끼운다(없으면 맨 끝).
+   더한 단계의 마감은 날짜를 바로 적는다(due_date) — 일정 탭에 없는 마감이라서.
+   끈 단계(off)는 메일 탭·여러 기업에 보내기에서 빠진다. */
+export const isCustomExhStep = (key) => String(key || '').startsWith('c-');
+export function exhMailSteps(evKey, { withOff = false } = {}){
+  const cfg = EXH_CFG[evKey] || {};
+  const over = cfg.exhMail || {};
+  const out = EXH_MAIL_STEPS.map(s => ({ ...s, ...(over[s.key] || {}), key: s.key, due: s.due }));
+  (cfg.exhMailCustom || []).forEach(c => {
+    const st = { ...c, custom: true, due: '' };
+    if(c.after === ''){ out.unshift(st); return; }
+    const i = out.findIndex(x => x.key === c.after);
+    out.splice(i < 0 ? out.length : i + 1, 0, st);
+  });
+  return out.filter(s => withOff || !s.off);
 }
 
 /* 해외 기업이면 영문으로 — 기업DB의 국가. 모르면 국문 */
@@ -88,7 +100,8 @@ export function exhIsEnglish(x){
 export function fillExhTemplate(text, x, step, en, ctx = {}){
   const ev = EVENT_LIST.find(e => e.key === x.event_id);
   const evName = ev ? ((en && ev.name_en) || ev.name || ev.short || ev.key) : x.event_id;
-  const due = step && step.due ? String(((EXH_CFG[x.event_id] || {}).due || {})[step.due] || '') : '';
+  const due = step && step.due_date ? String(step.due_date)
+    : step && step.due ? String(((EXH_CFG[x.event_id] || {}).due || {})[step.due] || '') : '';
   const me = currentUser?.name || '';
   const names = ctx.names || {};
   const vars = {

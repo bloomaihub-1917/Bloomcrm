@@ -51,7 +51,8 @@ import {
   CONF_SESSIONS, EXHIBITORS, SPEAKERS, SPEAKER_LOGS, EXH_LOGS,
 } from '../state.js';
 import { isUnread, isPending, runMailSync } from './mail-mark.js';
-import { EXH_MAIL_STEPS, EXH_MAIL_VARS, EXH_MAIL_FIELDS, exhMailSteps, exhMailFileStep } from './exh-mail.js';
+import { exhMailSteps, exhMailFileStep } from './exh-mail.js';
+import './exh-mail-editor.js';
 
 import {
   upsertSectorRow,
@@ -2702,47 +2703,25 @@ async function renderEvMailbox(evKey){
 }
 
 /* ── 전시 메일 양식 ──
-   단계와 기본 문구는 exh-mail.js. 여기서는 행사마다 바꾼 칸만 EXH_CFG[행사].exhMail에
-   담는다(기본값과 같으면 담지 않는다 — 코드의 기본 문구를 고치면 손대지 않은 행사에
-   따라온다). 마감일은 «일정»의 마감을 그대로 읽는다. */
+   고치는 곳은 편집 창 하나(exh-mail-editor.js) — 참가사 메일 탭·«여러 기업에 메일»에서도
+   같은 창이 열린다. 여기서는 지금 단계만 보여 주고 창을 연다. */
 function exhMailEditorHtml(evKey){
-  const steps = exhMailSteps(evKey);
-  const due = ((EXH_CFG[evKey] || {}).due) || {};
-  const fld = (st, f, l) => {
-    const id = `exm-${st.key}-${f}`, v = st[f] ?? '';
-    if(f.includes('body')) return `<div style="grid-column:1/-1"><div class="mlbl">${l}</div>
-      <textarea class="fi" id="${id}" rows="6" style="width:100%;resize:vertical;font-size:11.5px">${escapeHtml(v)}</textarea></div>`;
-    return `<div><div class="mlbl">${l}</div><input class="fi" id="${id}" value="${escAttr(v)}" style="width:100%"></div>`;
-  };
+  const steps = exhMailSteps(evKey, { withOff: true });
   return `<div style="margin-top:22px;padding-top:14px;border-top:1px solid var(--i6)">
-    <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">전시 메일 양식</div>
-    <div style="font-size:11px;color:var(--i4);margin-bottom:8px;line-height:1.6">
-      참가사 메일 탭과 «여러 기업에 보내기»에서 단계를 고르면 이 문구로 채워집니다. 해외 기업(기업DB 국가)은 영문 양식을 씁니다.
-      쓸 수 있는 칸: ${EXH_MAIL_VARS.map(v => `<code>${escapeHtml(v)}</code>`).join(' ')} — {마감일}은 «일정» 탭의 마감을 읽습니다.</div>
-    ${steps.map((st, i) => `<details id="exmstep-${st.key}" style="border:1px solid var(--i6);border-radius:8px;margin-bottom:6px;background:var(--W)">
-      <summary style="padding:8px 11px;cursor:pointer;font-size:12px;display:flex;gap:8px;align-items:center">
-        <b>${i + 1}. ${escapeHtml(st.label)}</b>
-        ${st.due && due[st.due] ? `<span class="pill p-gray">마감 ${escapeHtml(due[st.due])}</span>` : st.due ? '<span class="pill p-gray">마감 없음</span>' : ''}
-      </summary>
-      <div style="padding:4px 11px 11px">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${EXH_MAIL_FIELDS.map(([f, l]) => fld(st, f, l)).join('')}</div>
-        <div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--i7)">
-          <div class="mlbl">기본 첨부 <span style="font-weight:400;color:var(--i4)">— 이 단계 메일에 자동으로 붙어요 (파일당 3MB)</span></div>
-          <div id="exmfiles-${st.key}" style="font-size:11px;color:var(--i4)">불러오는 중…</div>
-          <label class="btn" style="font-size:10.5px;margin-top:5px;display:inline-block;cursor:pointer">+ 파일 올리기
-            <input type="file" multiple style="display:none" onchange="uploadFlowFiles('${escAttr(evKey)}','${exhMailFileStep(st.key)}',this)"></label>
-        </div>
-      </div>
-    </details>`).join('')}
-    <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
-      <button class="btn bp" onclick="saveExhMailTpl('${escAttr(evKey)}')">양식 저장</button>
-      <span id="exm-tpl-msg" style="font-size:11px;color:var(--g)"></span>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+      <span style="font-size:12px;font-weight:700;color:var(--i2)">전시 메일 양식</span>
+      <button class="btn" style="font-size:10.5px;margin-left:auto" onclick="openExhMailEditor('${escAttr(evKey)}')">✎ 단계 편집</button>
     </div>
+    <div style="font-size:11px;color:var(--i4);margin-bottom:6px;line-height:1.6">
+      단계 추가·고치기·끄기와 메일 문구·기본 첨부는 «단계 편집»에서 합니다. 참가사 메일 탭에서도 같은 창이 열리고, 고치면 바로 저장돼요.</div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px">${steps.map((st, i) => `<span class="pill ${st.off ? 'p-gray' : st.custom ? 'p-amber' : 'p-blue'}"
+      style="font-size:10.5px;cursor:pointer;${st.off ? 'text-decoration:line-through' : ''}" onclick="openExhMailEditor('${escAttr(evKey)}','${escAttr(st.key)}')"
+      >${i + 1}. ${escapeHtml(st.label)}</span>`).join('')}</div>
   </div>`;
 }
 export async function fillExhMailFiles(evKey){
   await loadMailFiles(evKey);
-  EXH_MAIL_STEPS.forEach(st => {
+  exhMailSteps(evKey, { withOff: true }).forEach(st => {
     const el = document.getElementById(`exmfiles-${st.key}`);
     if(!el) return;
     const files = mailFilesOf(evKey).filter(f => f.step === exhMailFileStep(st.key));
@@ -2753,33 +2732,6 @@ export async function fillExhMailFiles(evKey){
           onclick="removeFlowFile('${escAttr(evKey)}','${escAttr(f.id)}')">삭제</button></div>`).join('') : '없음';
   });
 }
-export async function saveExhMailTpl(evKey){
-  const msg = document.getElementById('exm-tpl-msg');
-  const over = {};
-  EXH_MAIL_STEPS.forEach(def => {
-    const o = {};
-    EXH_MAIL_FIELDS.forEach(([f]) => {
-      const el = document.getElementById(`exm-${def.key}-${f}`);
-      if(!el) return;
-      const v = el.value;
-      if(v.trim() && v !== (def[f] ?? '')) o[f] = v;
-    });
-    if(Object.keys(o).length) over[def.key] = o;
-  });
-  const prev = EXH_CFG[evKey] ? JSON.parse(JSON.stringify(EXH_CFG[evKey])) : undefined;
-  const cfg = { ...(prev || {}), exhMail: over };
-  if(!Object.keys(over).length) delete cfg.exhMail;
-  EXH_CFG[evKey] = cfg;
-  const r = await saveExhCfgToSheet(evKey, cfg);
-  if(r && r.ok === false){
-    if(prev) EXH_CFG[evKey] = prev; else delete EXH_CFG[evKey];
-    if(msg){ msg.style.color = 'var(--re)'; msg.textContent = '저장하지 못했어요.'; }
-    return;
-  }
-  trackAction('edit', '전시 메일 양식', evKey, `바꾼 단계 ${Object.keys(over).length}개`);
-  if(msg){ msg.style.color = 'var(--g)'; msg.textContent = '저장했어요.'; setTimeout(() => { msg.textContent = ''; }, 2000); }
-}
-window.saveExhMailTpl = saveExhMailTpl;
 
 /* 서비스를 바꾸면 서버 칸·안내를 그 서비스 것으로 — 서버 칸은 비워 두면 서버가 기본값을 쓴다 */
 export function evmbProvider(v){
