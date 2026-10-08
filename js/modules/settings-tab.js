@@ -33,6 +33,7 @@ import {
   contacts,
   participations,
   CO_DB,
+  ORGS,
   EVENT_LIST,
   COMPANY_SECTORS,
   DOMAINS,
@@ -83,6 +84,7 @@ import { slugifySectorName, escapeHtml, escAttr, countryName, scopedSectorName, 
 import { buildCoDB, buildCoCAT, renderCoDashboard, setCoCat } from './company-tab.js';
 import { renderMDB, buildMDBEvList, buildMDBTagList } from './db-tab.js';
 import { populateUploadEvDropdown } from './upload-tab.js';
+import { contactFillCount, renderContactFill, enrichCounts, saveOrgFields } from './data-clean.js';
 
 /* 드래그 중인 섹터 id (원본 3693행 전역 변수 → 모듈 스코프로 축소) */
 let _draggedSectorId = null;
@@ -1322,11 +1324,21 @@ export async function normalizeAllCountries(){
   }
 
   const targets = raw.filter(r => r.country && r.country !== countryName(r.country));
-  if(!targets.length){
+  const orgN = orgCountryTargets().length;
+  if(!targets.length && !orgN){
     if(msgEl) msgEl.textContent = '이미 모두 한글 국가명으로 정리돼 있어요.';
     return;
   }
-  if(!confirm(`${targets.length}건의 국가명을 한글로 통일해서 구글시트에 저장할까요?`)) return;
+  if(!confirm(`국가명을 한글로 통일할까요?\n연락처 ${targets.length}건 · 기업 ${orgN}곳`)) return;
+  if(orgN){
+    if(msgEl) msgEl.textContent = `기업 저장 중... (${orgN}곳)`;
+    if(await normalizeOrgCountries(msgEl) < 0) return;
+    renderCleanCounts();
+  }
+  if(!targets.length){
+    if(msgEl) msgEl.textContent = `완료: 기업 ${orgN}곳 정리했어요.`;
+    return;
+  }
 
   if(msgEl) msgEl.textContent = `저장 중... (${targets.length}건)`;
   const rows = targets.map(r => {
@@ -1343,6 +1355,26 @@ export async function normalizeAllCountries(){
     : '저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.';
   if(r.ok) trackAction('edit', '국가명 정리', 'contacts', `국가명 한글 통일 ${targets.length}건`);
   try { renderMDB(); buildCoDB(); } catch(e){}
+}
+
+/* 기업의 국가·본사 칸 — 전에는 연락처만 정리해서 기업에 «한국»이 94곳 남아 있었다 */
+function orgCountryTargets(){
+  const fix = (v) => { const t = String(v || '').trim(); return t && t !== '-' && t !== countryName(t) ? countryName(t) : null; };
+  return ORGS.map(o => {
+    const p = { id: o.id };
+    const c = fix(o.country), h = fix(o.hq);
+    if(c) p.country = c;
+    if(h) p.hq = h;
+    return (c || h) ? p : null;
+  }).filter(Boolean);
+}
+async function normalizeOrgCountries(msgEl){
+  const patches = orgCountryTargets();
+  if(!patches.length) return 0;
+  const r = await saveOrgFields(patches, '기업 국가명 정리');
+  if(!r.ok){ if(msgEl) msgEl.textContent = '기업 국가명 저장에 실패했어요. 다시 시도해주세요.'; return -1; }
+  trackAction('edit', '국가명 정리', 'orgs', `기업 국가명 한글 통일 ${r.saved}건`);
+  return r.saved;
 }
 
 // ── 기업명 국문/영문 분리: "한국보건산업진흥원 Korea Health Industry Development Institute" 처럼
@@ -1460,7 +1492,15 @@ function renderCleanCounts(){
     el.textContent = n ? `${n.toLocaleString()}건` : '할 일 없음';
     el.className = 'pill ' + (n ? 'p-amber' : 'p-gray');
   };
-  set('country', contacts.filter(c => c.country && c.country !== countryName(c.country)).length);
+  /* 연락처는 불러올 때 이미 국가명을 바꿔 보여 줘서(api.js) 여기서는 늘 0이었다 —
+     «한국»이 서버에 남아 있어도 «할 일 없음». 기업은 바꾸지 않고 불러오므로 기업으로 센다 */
+  set('country', orgCountryTargets().length);
+  set('ctryfill', contactFillCount());
+  const ec = enrichCounts();
+  set('orgenrich', ec.total);
+  const ecEl = document.getElementById('org-enrich-sub');
+  if(ecEl) ecEl.textContent = ec.total ? `국가 빈 곳 ${ec.country} · 업종 미정·빈칸 ${ec.sector}` : '';
+  renderContactFill();
   set('orgsplit', contacts.filter(c => BILINGUAL_FIELD_PAIRS.some(({ ko, en }) =>
     c[ko] && !c[en] && splitMixedOrgName(c[ko]))).length);
   try { set('unreg', collectUnregisteredSectors().length); } catch(e){ set('unreg', 0); }
@@ -1553,6 +1593,7 @@ window.autoFillEvId          = autoFillEvId;
 window.addEventToList        = addEventToList;
 window.removeEventFromList   = removeEventFromList;
 window.normalizeAllCountries = normalizeAllCountries;
+window.renderCleanCounts = renderCleanCounts;
 window.splitMixedOrgNames    = splitMixedOrgNames;
 window.switchArchTab         = switchArchTab;
 window.switchAV              = switchAV;

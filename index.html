@@ -699,11 +699,29 @@
     <div style="font-size:11px;color:var(--i4);margin-bottom:14px">한 번씩 돌리는 청소 도구입니다. 여러 줄을 한꺼번에 바꾸니 무엇이 바뀌는지 확인하고 누르세요.</div>
     <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:16px;margin-top:0">
       <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:6px">🌐 국가 데이터 정리 <span id="clean-cnt-country" class="pill p-gray" style="margin-left:4px;font-weight:600"></span></div>
-      <div style="font-size:11px;color:var(--i4);margin-bottom:10px">시트에 "KR", "SG" 같은 약자·영문명이 섞여 있으면 한글 국가명(예: 대한민국)으로 통일해서 구글시트까지 다시 저장해요.</div>
+      <div style="font-size:11px;color:var(--i4);margin-bottom:10px">"KR", "한국", "USA" 같은 약자·다른 표기를 한글 국가명(예: 대한민국)으로 통일해서 저장해요. 연락처와 기업 둘 다 정리합니다.</div>
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn bp" onclick="normalizeAllCountries()" style="min-width:120px">국가명 일괄 정리</button>
         <span id="country-fix-msg" style="font-size:11px;color:var(--i3)"></span>
       </div>
+    </div>
+
+    <!-- 연락처 빈 국가 채우기 (data-clean.js) — AI 없이, «국가 확인» 칩과 같은 짐작 -->
+    <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:16px;margin-top:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:6px">📍 연락처 빈 국가 채우기 <span id="clean-cnt-ctryfill" class="pill p-gray" style="margin-left:4px;font-weight:600"></span></div>
+      <div style="font-size:11px;color:var(--i4);margin-bottom:10px">국가가 비어 있는 연락처를 전화 국가번호·이메일 도메인 등으로 짐작해 근거별로 묶었어요. 고른 묶음만 채우고, 이미 적힌 국가는 건드리지 않아요.</div>
+      <div id="ctry-fill-list"></div>
+    </div>
+
+    <!-- 기업 국가·업종 추천 (data-clean.js → routes/ai.js /org-enrich) -->
+    <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:16px;margin-top:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:6px">✨ 기업 국가·업종 채우기 <span id="clean-cnt-orgenrich" class="pill p-gray" style="margin-left:4px;font-weight:600"></span>
+        <span id="org-enrich-sub" style="font-size:11px;color:var(--i4);font-weight:400;margin-left:4px"></span></div>
+      <div style="font-size:11px;color:var(--i4);margin-bottom:10px">국가가 비었거나 업종이 «○○ 업종 미정»·빈칸인 기업에 AI가 국가·업종을 추천해요. 기업명·웹주소·품목만 보내고 사람 정보는 보내지 않아요. 표에서 확인하고 체크한 것만 저장합니다.</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+        <button class="btn bp" id="org-enrich-btn" onclick="runOrgEnrich()" style="min-width:120px">✨ 추천 받기</button>
+      </div>
+      <div id="org-enrich-list"></div>
     </div>
 
     <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:16px;margin-top:16px">

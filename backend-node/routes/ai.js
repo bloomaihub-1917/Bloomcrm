@@ -320,5 +320,82 @@ router.post('/org-query-plan', async (req, res) => {
   }
 });
 
+/* 기업 국가·업종 추천 — 국가가 비었거나 업종이 «미정»인 기업
+   보내는 것: 기업명(국문·영문), 웹사이트, 전시 품목·소개 앞부분, 지금 업종. 사람 정보는 보내지 않는다.
+   body: { orgs:[{id, ko, en, web, about, sectors, wantCountry, sectorChoices:[업종 이름…]}], countries:[국가 이름…] }
+   답: { ok, items:[{ id, country, sector, sure, reason }] } — 고를 수 없으면 ''. 저장은 화면에서 사람이 고른 것만 */
+router.post('/org-enrich', async (req, res) => {
+  if (!enabled()) return res.status(503).json({ ok: false, error: 'AI가 꺼져 있어요(ANTHROPIC_API_KEY 없음)' });
+  const b = req.body || {};
+  const str = (v, n) => String(v || '').slice(0, n);
+  const countries = (Array.isArray(b.countries) ? b.countries : []).map((c) => str(c, 40)).filter(Boolean).slice(0, 300);
+  const orgs = (Array.isArray(b.orgs) ? b.orgs : []).slice(0, 80).map((o) => ({
+    id: str(o.id, 60), ko: str(o.ko, 80), en: str(o.en, 80), web: str(o.web, 80), about: str(o.about, 160),
+    sectors: str(o.sectors, 80), wantCountry: !!o.wantCountry,
+    sectorChoices: (Array.isArray(o.sectorChoices) ? o.sectorChoices : []).map((s) => str(s, 40)).filter(Boolean).slice(0, 60),
+  })).filter((o) => o.id && (o.ko || o.en) && (o.wantCountry || o.sectorChoices.length));
+  if (!orgs.length) return res.status(400).json({ ok: false, error: '추천할 기업이 없어요' });
+
+  const schema = {
+    type: 'object', additionalProperties: false, required: ['items'],
+    properties: { items: { type: 'array', items: {
+      type: 'object', additionalProperties: false, required: ['id', 'country', 'sector', 'sure', 'reason'],
+      properties: { id: { type: 'string' }, country: { type: 'string' }, sector: { type: 'string' }, sure: { type: 'boolean' }, reason: { type: 'string' } },
+    } } },
+  };
+  const prompt = [
+    '행사 CRM의 기업 목록입니다. 기업마다 빠진 국가와 업종을 채워 주세요.',
+    '- country: «국가 필요»인 기업만. 본사 국가를 아래 국가 목록의 이름 그대로 적으세요. 한국어 이름이나 .kr 웹사이트, ㈜·주식회사가 붙은 회사는 대개 대한민국입니다. 모르면 "".',
+    '- sector: «업종 후보»가 있는 기업만. 그 후보 중 하나를 그대로 적으세요. 이름·품목으로 판단이 안 되면 "".',
+    '- 필요 없는 칸은 ""로 두세요.',
+    '- sure: 잘 알려진 회사이거나 이름·품목만으로 분명하면 true, 짐작이면 false.',
+    '- reason: 한국어 한 줄 근거.',
+    '',
+    `국가 목록: ${countries.join(', ')}`,
+    '',
+    '기업:',
+    ...orgs.map((o) => [
+      `[${o.id}] ${[o.ko, o.en].filter(Boolean).join(' / ')}`,
+      o.web ? `웹: ${o.web}` : '',
+      o.about ? `품목·소개: ${o.about}` : '',
+      o.sectors ? `지금 업종: ${o.sectors}` : '',
+      o.wantCountry ? '국가 필요' : '',
+      o.sectorChoices.length ? `업종 후보: ${o.sectorChoices.join(', ')}` : '',
+    ].filter(Boolean).join(' · ')),
+  ].join(NL);
+
+  try {
+    const r = await ai().beta.messages.create({
+      model: MODEL,
+      max_tokens: 16000,
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      output_config: { effort: 'low', format: { type: 'json_schema', schema } },
+      messages: [{ role: 'user', content: prompt }],
+    }, { timeout: 55000, maxRetries: 0 });
+    if (r.stop_reason === 'refusal') return res.status(502).json({ ok: false, error: 'AI가 답하지 않았어요' });
+    const out = JSON.parse(r.content.filter((x) => x.type === 'text').map((x) => x.text).join(''));
+    const byId = new Map(orgs.map((o) => [o.id, o]));
+    const cset = new Set(countries);
+    const items = (out.items || []).filter((it) => byId.has(it.id)).map((it) => {
+      const o = byId.get(it.id);
+      return {
+        id: it.id,
+        country: o.wantCountry && cset.has(it.country) ? it.country : '',
+        sector: o.sectorChoices.includes(it.sector) ? it.sector : '',
+        sure: !!it.sure,
+        reason: String(it.reason || '').slice(0, 160),
+      };
+    }).filter((it) => it.country || it.sector);
+    res.json({ ok: true, items });
+  } catch (e) {
+    if (e instanceof Anthropic.APIConnectionTimeoutError) return res.status(504).json({ ok: false, error: '시간 안에 끝나지 않았어요' });
+    if (e instanceof Anthropic.RateLimitError) return res.status(429).json({ ok: false, error: 'AI 요청이 많아요 — 잠시 뒤에 다시' });
+    if (e instanceof Anthropic.AuthenticationError) return res.status(503).json({ ok: false, error: 'AI 키가 맞지 않아요' });
+    if (e instanceof Anthropic.APIError) return res.status(502).json({ ok: false, error: `AI 오류 (${e.status || '연결'})` });
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 module.exports = router;
 module.exports.shape = shape;

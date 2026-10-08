@@ -11,6 +11,7 @@
 import './modules/db-tab.js';
 import './modules/upload-tab.js';
 import './modules/settings-tab.js';
+import './modules/data-clean.js';
 import './modules/company-tab.js';
 import './modules/crm-tab.js';
 import './modules/audit-tab.js';
