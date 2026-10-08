@@ -35,12 +35,12 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import {
-  EQUIP_CATALOG, catalogItem, liveItemsFor,
+  EQUIP_CATALOG, catalogItem, liveItemsFor, getExhibitorById,
   exhEvent, EVENT_LIST,
 } from '../state.js';
 import { activeExhibitors, exhNames, exhContact, isBillable, isBoothGiven,
   boothViewRows, parseBooth, isSharedBooth, boothDesignState, SELF_BUILD_TYPE, hostOf, boothTypeText,
-  STEPS, cellState, progressOf, billedAmount, paidAmount, currencyOf, settleState, isOwing,
+  STEPS, cellState, progressOf, billedAmount, paidAmount, currencyOf, settleState, settleByCurrency, isOwing,
   visibleList } from './exh-tab.js';
 import { openInquiriesFor } from '../state.js';
 import { showSaveErrorToast } from '../api.js';
@@ -1178,8 +1178,9 @@ window.exportChecklist   = exportChecklist;
        달라 보여 되묻는다. 통화가 섞이면 합계를 통화별로 둔다
      · 부스 기본 제공은 «Included», 무상 제공은 «Complimentary» — 청구하지
        않는 줄에 단가가 찍혀 있으면 돈을 내야 하는 줄로 읽힌다
-     · 미납액이 남은 기업은 합계 옆에 «*» — 현장 데스크가 그 부스에서 수금할
-       곳을 알아보게 한다. 금액은 적지 않는다(종이는 부스에 그대로 놓인다)
+     · 미납액이 남은 기업은 합계 옆에 «*», 아래에 남은 금액을 통화별로 적는다 —
+       현장 데스크가 그 부스에서 얼마를 받을지 바로 알게 한다. 부스비까지 합친
+       기업 전체 잔액이다(정산 화면과 같은 숫자)
      · 공동 부스에서 비용만 나눠 낸 줄은 뺀다 — 실물은 상대 기업 줄에 있다
 
    엑셀이 아니라 인쇄 창으로 낸다. 받는 사람이 고칠 표가 아니라 바로 뽑아
@@ -1236,7 +1237,12 @@ export function boothSheetRows(x){
 function boothSheetHtml(x, rows, evLabel){
   const n = exhNames(x);
   const company = n.en || n.ko;
-  const owing = isOwing(settleState(x));
+  const st = settleState(x);
+  const owing = isOwing(st);
+  /* 남은 금액 — 통화가 섞인 기업은 통화마다. 통화별 잔액이 안 잡히면 정산 상태의 숫자 */
+  const dues = owing ? Object.entries(settleByCurrency(x.id))
+    .filter(([, v]) => v.balance > 0).map(([cur, v]) => `${cur} ${fmtCur(v.balance, cur)}`) : [];
+  if(owing && !dues.length) dues.push(`${st.cur} ${fmtCur(st.balance, st.cur)}`);
   const totals = new Map();
   rows.filter(r => r.charge === 'billed')
     .forEach(r => totals.set(r.cur, (totals.get(r.cur) || 0) + r.amount));
@@ -1269,7 +1275,7 @@ function boothSheetHtml(x, rows, evLabel){
         <th style="width:14%">Unit Price</th><th style="width:15%">Amount</th><th style="width:6%">Check</th></tr></thead>
       <tbody>${body}${totalRows}</tbody>
     </table>
-    ${owing ? '<p class="note">* Outstanding balance — please visit the Organizer Office.</p>' : ''}
+    ${owing ? `<p class="note due">* Outstanding balance: <b>${escHtml(dues.join(' + '))}</b> — please visit the Organizer Office.</p>` : ''}
     <p class="note">Please check that all items above are in your booth. For missing or damaged items, contact the Organizer Office.</p>
   </section>`;
 }
@@ -1297,22 +1303,28 @@ const SHEET_CSS = `
   .tot td { font-weight: bold; background: #F2F2F2; }
   .star { color: #C00000; font-size: 13pt; margin-left: 3px; }
   .note { font-size: 9pt; color: #444; margin: 8px 0 0; }
+  .note.due { font-size: 10.5pt; color: #C00000; }
   @media screen { body { background: #888; } .sheet { background: #fff; width: 210mm; min-height: 297mm;
     margin: 12px auto; padding: 14mm; } }
 `;
 
-/* 부스 비치용 비품 목록 인쇄 — 비품 신청이 있는 기업만, 부스 번호순 */
-export function printBoothEquipSheets(){
-  const evKey = exhEvent;
+/* 부스 비치용 비품 목록 인쇄 — 비품 신청이 있는 기업만, 부스 번호순.
+   exhId를 주면 그 기업 한 장만(기업 드로어에서 부른다) */
+export function printBoothEquipSheets(exhId){
+  const one = exhId ? getExhibitorById(exhId) : null;
+  if(exhId && !one) return showSaveErrorToast('기업을 찾지 못했어요');
+  const evKey = one ? one.event_id : exhEvent;
   if(!evKey) return showSaveErrorToast('행사를 먼저 고르세요');
   const ev = EVENT_LIST.find(e => e.key === evKey);
   const evLabel = (ev && ev.key) || evKey;
 
-  const list = activeExhibitors(evKey)
+  const list = (one ? [one] : activeExhibitors(evKey))
     .map(x => ({ x, rows: boothSheetRows(x) }))
     .filter(s => s.rows.length)
     .sort(boothOrder);
-  if(!list.length) return showSaveErrorToast('비품 신청이 들어온 기업이 없어 출력할 게 없어요');
+  if(!list.length) return showSaveErrorToast(one
+    ? '이 기업은 출력할 비품·X배너 신청이 없어요'
+    : '비품 신청이 들어온 기업이 없어 출력할 게 없어요');
 
   /* 누른 순간 연다 — await 뒤에 열면 팝업 차단에 걸린다 */
   const w = window.open('', '_blank');
@@ -1326,7 +1338,7 @@ export function printBoothEquipSheets(){
 
   const owing = list.filter(s => isOwing(settleState(s.x))).length;
   trackAction('add', '부스 비치용 비품 목록 출력', evLabel,
-    `${list.length}개사` + (owing ? ` · 미납 ${owing}곳(*)` : ''));
+    (one ? exhNames(one).ko : `${list.length}개사`) + (owing ? ` · 미납 ${owing}곳(*)` : ''));
 }
 
 window.printBoothEquipSheets = printBoothEquipSheets;

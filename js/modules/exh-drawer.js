@@ -1681,7 +1681,11 @@ function dApply(x){
       </div>
       <div style="font-size:10.5px;color:var(--i5);margin-top:7px">금액을 고치거나 항목을 더하려면 <b>정산</b> 탭에서 하세요</div>`
     : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">아직 등록된 비품이 없어요</div>',
-    items.length ? `<span class="pill p-gray">${items.length}종</span>` : '')}
+    (items.length ? `<span class="pill p-gray">${items.length}종</span>` : '')
+    /* 이 기업 한 장만 — 현장에서 다시 뽑거나 신청이 바뀐 곳만 갈아 끼울 때.
+       출력은 exh-export.js가 한다(window 경유 — 인보이스 발행과 같은 이유) */
+    + `<button class="btn bs bl-mini" style="margin-left:auto" onclick="printBoothEquipSheets('${escAttr(x.id)}')"
+        title="이 기업의 비품(X배너 포함)·금액을 영문 A4 한 장으로 뽑습니다 — 부스에 넣어 두는 용도. 미납액이 남았으면 합계에 *">부스 비치용 출력</button>`)}
   `;
 }
 
