@@ -23,6 +23,7 @@
 const express = require('express');
 const nodemailer = require('nodemailer');
 const pool = require('../db/pool');
+const { suggestOwners } = require('./mail-suggest');
 
 const router = express.Router();
 
@@ -1082,26 +1083,37 @@ router.get('/unassigned/:eventId', async (req, res) => {
   try {
     await ensureExtra();
     const rows = (await pool.query(`SELECT * FROM mail_unassigned WHERE event_id = $1 AND status = 'new' ORDER BY ts DESC`, [eventId])).rows;
-    /* 추천 — 보낸 주소의 도메인이 이미 아는 사람과 같으면(무료 메일 도메인은 빼고) */
-    const people = [];
-    (await pool.query(`SELECT s.id, COALESCE(NULLIF(s.name_snapshot,''), s.name_en) nm, c.email1, c.email2,
-        (SELECT string_agg(sc.email, ',') FROM speaker_contacts sc WHERE sc.speaker_id = s.id) more
-       FROM speakers s LEFT JOIN contacts c ON c.id = s.contact_id WHERE s.event_id = $1`, [eventId])).rows
-      .forEach((r) => [r.email1, r.email2, ...String(r.more || '').split(',')].forEach((e) => e && people.push({ t: 'sp', id: r.id, name: r.nm, email: e })));
-    (await pool.query(`SELECT x.id, x.company_name nm, xc.email, c.email1, c.email2 FROM exhibitors x
-       JOIN exhibitor_contacts xc ON xc.exhibitor_id = x.id LEFT JOIN contacts c ON c.id = xc.contact_id
+    /* 추천 — 이름·주소·도메인·답장 제목·본문의 소속을 견줘 점수를 매긴다(mail-suggest.js). 바깥으로는 보내지 않는다 */
+    const owners = new Map();
+    const own = (t, id, label) => {
+      const k = `${t}:${id}`;
+      if (!owners.has(k)) owners.set(k, { t, id, label, names: [], orgs: [], emails: [], sentSubjects: [] });
+      return owners.get(k);
+    };
+    const push = (arr, ...v) => v.forEach((x) => { x = String(x || '').trim(); if (x && !arr.includes(x)) arr.push(x); });
+    (await pool.query(`SELECT s.id, COALESCE(NULLIF(s.name_snapshot,''), s.name_en) nm, s.name_snapshot, s.name_en, s.org_ko, s.org_en,
+        c.email1, c.email2 FROM speakers s LEFT JOIN contacts c ON c.id = s.contact_id WHERE s.event_id = $1`, [eventId])).rows
+      .forEach((r) => { const o = own('sp', r.id, r.nm); push(o.names, r.name_snapshot, r.name_en); push(o.orgs, r.org_ko, r.org_en); push(o.emails, r.email1, r.email2); });
+    (await pool.query(`SELECT sc.speaker_id, sc.name, sc.email FROM speaker_contacts sc JOIN speakers s ON s.id = sc.speaker_id
+       WHERE s.event_id = $1`, [eventId])).rows
+      .forEach((r) => { const o = owners.get(`sp:${r.speaker_id}`); if (o) { push(o.names, r.name); push(o.emails, r.email); } });
+    (await pool.query(`SELECT x.id, x.company_name, xc.name, xc.email, c.email1, c.email2 FROM exhibitors x
+       LEFT JOIN exhibitor_contacts xc ON xc.exhibitor_id = x.id LEFT JOIN contacts c ON c.id = xc.contact_id
       WHERE x.event_id = $1`, [eventId])).rows
-      .forEach((r) => [r.email, r.email1, r.email2].forEach((e) => e && people.push({ t: 'ex', id: r.id, name: r.nm, email: e })));
-    const out = rows.map((r) => {
-      const d = domainOf(r.from_addr);
-      const sug = [];
-      if (d && !FREE_MAIL.has(d)) {
-        people.filter((p) => domainOf(p.email) === d).forEach((p) => {
-          if (!sug.some((s) => s.t === p.t && s.id === p.id)) sug.push({ t: p.t, id: p.id, name: p.name, why: `같은 도메인 @${d}` });
-        });
-      }
-      return { ...r, warnings: r.warnings ? JSON.parse(r.warnings) : [], suggestions: sug.slice(0, 3) };
-    });
+      .forEach((r) => { const o = own('ex', r.id, r.company_name); push(o.names, r.name); push(o.orgs, r.company_name); push(o.emails, r.email, r.email1, r.email2); });
+    (await pool.query(`SELECT l.speaker_id oid, l.subject FROM speaker_logs l JOIN speakers s ON s.id = l.speaker_id
+       WHERE s.event_id = $1 AND l.direction = 'out' AND l.subject <> ''`, [eventId])).rows
+      .forEach((r) => { const o = owners.get(`sp:${r.oid}`); if (o) push(o.sentSubjects, r.subject); });
+    (await pool.query(`SELECT l.exhibitor_id oid, l.subject FROM exhibitor_logs l JOIN exhibitors x ON x.id = l.exhibitor_id
+       WHERE x.event_id = $1 AND l.direction = 'out' AND l.subject <> ''`, [eventId])).rows
+      .forEach((r) => { const o = owners.get(`ex:${r.oid}`); if (o) push(o.sentSubjects, r.subject); });
+    const linkedBefore = new Map();
+    (await pool.query(`SELECT lower(from_addr) a, linked_t, linked_id FROM mail_unassigned
+       WHERE event_id = $1 AND status = 'linked' ORDER BY ts`, [eventId])).rows
+      .forEach((r) => linkedBefore.set(r.a, { t: r.linked_t, id: r.linked_id }));
+    const list = [...owners.values()];
+    const out = rows.map((r) => ({ ...r, warnings: r.warnings ? JSON.parse(r.warnings) : [],
+      suggestions: suggestOwners(r, list, linkedBefore) }));
     res.json({ ok: true, items: out });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
