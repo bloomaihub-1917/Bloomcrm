@@ -1034,3 +1034,4 @@ export const aiStatus     = () => aiApi('/status');
 export const aiMapColumns = (body) => aiApi('/map-columns', 'POST', body);
 export const aiCompanyPairs = (body) => aiApi('/company-pairs', 'POST', body);
 export const aiQueryPlan    = (body) => aiApi('/query-plan', 'POST', body);
+export const aiOrgQueryPlan = (body) => aiApi('/org-query-plan', 'POST', body);

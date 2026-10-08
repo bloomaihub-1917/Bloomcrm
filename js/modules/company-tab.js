@@ -60,7 +60,7 @@ import {
 } from '../state.js';
 import { RP, avB, avF } from '../constants.js';
 import { escapeHtml, escAttr, levenshteinDist, phoneMatch, parseSectorScope, sectorKey, countryName, isMobile, td, leftPill, safeUrl, parseLinks, slugifySectorName } from '../utils.js';
-import { postToSheet, batchCreateExhibitors, upsertSectorRow, saveExhibitor, aiCompanyPairs } from '../api.js';
+import { postToSheet, batchCreateExhibitors, upsertSectorRow, saveExhibitor, aiCompanyPairs, aiOrgQueryPlan } from '../api.js';
 import { parseSectors, joinSectors, mainSectors, sectorNamesInDomain, domainName, domainOfSector, findSectorByName, UNASSIGNED_DOMAIN } from './settings-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
 import { trackAction, changed, removed as removedMeta } from './audit-tab.js';
@@ -884,6 +884,99 @@ export function setCoCountry(v){
    renderCoList — 기업 리스트 (원본 3486~3512행)
    Twenty Record Table 벤치마킹: 컬럼(국가/웹사이트/메모) 표시/숨김 토글 추가
 ══════════════════════════════════════════ */
+/* ══════════════════════════════════════════
+   질문으로 찾기 — «2026 KIC 참가사 중 미납 있는 곳»
+   질문을 서버(routes/ai.js /org-query-plan)가 Claude에게 보내 «조건표»로 받아 온다.
+   기업명·금액은 보내지 않는다 — 행사·역할·종류·업종·국가 이름과 질문만 간다.
+   거르기는 여기서 제 데이터로 한다. 사이드바 거르개·검색어와 «그리고»로 겹친다.
+══════════════════════════════════════════ */
+let coAi = null;   // { q, plan }
+function coAiMatches(c, plan){
+  const evs = c.events || [];
+  const has = (k) => evs.some(e => e.key === k);
+  const anyEv = plan.events_any || [], allEv = plan.events_all || [], noEv = plan.events_none || [], roles = plan.roles || [];
+  if(allEv.length && !allEv.every(has)) return false;
+  const scope = [...anyEv, ...allEv];
+  if(scope.length){
+    const hit = evs.filter(e => scope.includes(e.key));
+    if(!hit.length) return false;
+    if(roles.length && !hit.some(e => (e.roles || []).some(r => roles.includes(r)))) return false;
+  } else if(roles.length && !evs.some(e => (e.roles || []).some(r => roles.includes(r)))) return false;
+  if(noEv.length && noEv.some(has)) return false;
+  if((plan.kinds || []).length && !plan.kinds.includes(c.kind)) return false;
+  if((plan.sectors || []).length){
+    const want = new Set(plan.sectors.map(sectorKey));
+    if(!(c.sectors && c.sectors.length ? c.sectors : [c.sector]).some(s => s && want.has(sectorKey(s)))) return false;
+  }
+  if((plan.countries || []).length && !plan.countries.includes(c.country || c.hq || '')) return false;
+  const hay = (vals) => vals.filter(Boolean).join(' ').toLowerCase();
+  const hit = (vals, words) => { const h = hay(vals); return words.some(w => h.includes(String(w).toLowerCase())); };
+  if((plan.name_keywords || []).length && !hit([c.nameKo, c.nameEn, ...(c.aliases || [])], plan.name_keywords)) return false;
+  if((plan.product_keywords || []).length && !hit([c.products, c.intro, c.notes], plan.product_keywords)) return false;
+  if(plan.unpaid || plan.overdue){
+    // 행사 조건이 있으면 그 행사의 청구만 본다 — «2026 KIC 미납»에 작년 잔금이 섞이면 안 된다
+    const trades = (c.trade || []).filter(t => !t.cancelled && (!scope.length || scope.includes(t.eventId)));
+    if(plan.unpaid && !trades.some(t => t.balance > 0)) return false;
+    if(plan.overdue && !trades.some(t => t.balance > 0 && t.overdue)) return false;
+  }
+  return true;
+}
+export async function askCoAi(){
+  const q = String(document.getElementById('co-ai-q')?.value || '').trim();
+  if(!q) return;
+  coAiMsg = '✨ 질문을 조건으로 바꾸는 중…';
+  renderCoList();
+  const roles = new Set(['전시참가기업', '시공사', ...PART_TYPES.map(t => t.key)]);
+  CO_DB.forEach(c => (c.events || []).forEach(e => (e.roles || []).forEach(r => roles.add(r))));
+  const sectors = new Set(), countries = new Set();
+  CO_DB.forEach(c => { (c.sectors || []).forEach(s => s && sectors.add(s)); const k = c.country || c.hq; if(k) countries.add(k); });
+  const r = await aiOrgQueryPlan({
+    question: q,
+    today: new Date().toISOString().slice(0, 10),
+    events: EVENT_LIST.map(e => ({ key: e.key, short: e.short || '', date: e.date || '' })),
+    roles: [...roles],
+    kinds: ORG_KINDS.map(k => ({ key: k.key, label: k.label })),
+    sectors: [...sectors],
+    countries: [...countries],
+  });
+  if(!r.ok){ coAiMsg = '<span style="color:var(--re)">찾지 못했어요: ' + escapeHtml(r.error || '') + '</span>'; renderCoList(); return; }
+  coAiMsg = '';
+  coAi = { q, plan: r.plan };
+  renderCoList();
+}
+export function clearCoAi(){
+  coAi = null; coAiMsg = '';
+  const inp = document.getElementById('co-ai-q');
+  if(inp) inp.value = '';
+  renderCoList();
+}
+let coAiMsg = '';
+function coAiBarHtml(n){
+  if(coAiMsg) return `<div style="padding:8px 12px;font-size:11px;color:var(--i3)">${coAiMsg}</div>`;
+  if(!coAi) return '';
+  const p = coAi.plan;
+  const evs = (k) => (p[k] || []).map(e => (EVENT_LIST.find(x => x.key === e) || {}).short || e).join(', ');
+  const bits = [
+    p.events_any?.length ? '참가: ' + evs('events_any') : '',
+    p.events_all?.length ? '모두 참가: ' + evs('events_all') : '',
+    p.events_none?.length ? '불참: ' + evs('events_none') : '',
+    p.roles?.length ? '역할: ' + p.roles.join(', ') : '',
+    p.kinds?.length ? '종류: ' + p.kinds.join(', ') : '',
+    p.sectors?.length ? '업종: ' + p.sectors.join(', ') : '',
+    p.countries?.length ? '국가: ' + p.countries.join(', ') : '',
+    p.name_keywords?.length ? '이름: ' + p.name_keywords.join('/') : '',
+    p.product_keywords?.length ? '품목: ' + p.product_keywords.join('/') : '',
+    p.unpaid ? '미납 있음' : '',
+    p.overdue ? '기한 지난 미납' : '',
+  ].filter(Boolean);
+  return `<div style="padding:8px 12px;border-bottom:1px solid var(--i6);font-size:11px;display:flex;flex-direction:column;gap:3px">
+    <div><span class="pill p-blue" style="cursor:default" title="${escAttr(coAi.q)}">✨ ${escapeHtml(p.explain || coAi.q)}</span> <b>${n}곳</b></div>
+    <div style="color:var(--i4)">${escapeHtml(bits.join(' · '))}</div>
+    ${p.unsupported ? `<div style="color:var(--am)">⚠️ 반영 못 한 조건: ${escapeHtml(p.unsupported)}</div>` : ''}
+    <div><button class="btn bs" style="font-size:10px" onclick="clearCoAi()">✕ 질문 지우기</button></div>
+  </div>`;
+}
+
 export function renderCoList(q2=''){
   const listEl = document.getElementById('co-ls');
   if(!listEl) return;
@@ -924,8 +1017,9 @@ export function renderCoList(q2=''){
   }
   if(coCodeF)list=list.filter(c=>c.catCode && c.catCode.startsWith(coCodeF+'-'));
   if(coCountryF)list=list.filter(c=>companyCountryGroup(c)===coCountryF);
+  if(coAi) list = list.filter(c => coAiMatches(c, coAi.plan));
 
-  const toggleHtml = renderCoColumnToggleHtml();
+  const toggleHtml = coAiBarHtml(list.length) + renderCoColumnToggleHtml();
 
   if(!list.length){
     listEl.innerHTML = toggleHtml + (CO_DB.length === 0
@@ -2551,6 +2645,8 @@ window.onCoDropToSector = onCoDropToSector;
 window.setCoDomain = setCoDomain;
 window.toggleCoDomain = toggleCoDomain;
 window.searchCo = searchCo;
+window.askCoAi = askCoAi;
+window.clearCoAi = clearCoAi;
 window.searchCoM = searchCoM;
 window.openCoSearch = openCoSearch;
 window.switchCoT = switchCoT;

@@ -235,5 +235,90 @@ router.post('/query-plan', async (req, res) => {
   }
 });
 
+/* 기업 질문으로 찾기 — 위와 같은 방식, 기업DB용 조건표.
+   보내는 것: 질문, 행사 목록, 행사 역할·기업 종류·업종·국가 이름. 기업명·금액은 보내지 않는다.
+   거르기는 화면(js/modules/company-tab.js의 coAiMatches)이 한다.
+   body: { question, today, events, roles, kinds:[{key,label}], sectors:[…], countries:[…] } */
+router.post('/org-query-plan', async (req, res) => {
+  if (!enabled()) return res.status(503).json({ ok: false, error: 'AI가 꺼져 있어요(ANTHROPIC_API_KEY 없음)' });
+  const b = req.body || {};
+  const question = String(b.question || '').trim().slice(0, 300);
+  if (!question) return res.status(400).json({ ok: false, error: '질문을 적어주세요' });
+  const str = (v, n) => String(v || '').slice(0, n);
+  const events = (Array.isArray(b.events) ? b.events : []).slice(0, 300)
+    .map((e) => ({ key: str(e.key, 80), short: str(e.short, 40), date: str(e.date, 10) })).filter((e) => e.key);
+  const strs = (a, n, m) => (Array.isArray(a) ? a : []).map((x) => str(x, n)).filter(Boolean).slice(0, m);
+  const roles = strs(b.roles, 30, 40);
+  const kinds = (Array.isArray(b.kinds) ? b.kinds : []).map((k) => ({ key: str(k.key, 30), label: str(k.label, 30) })).filter((k) => k.key).slice(0, 20);
+  const sectors = strs(b.sectors, 40, 300);
+  const countries = strs(b.countries, 40, 250);
+
+  const list = (items) => ({ type: 'array', items });
+  const en = (vals) => (vals.length ? { type: 'string', enum: vals } : { type: 'string' });
+  const evKeys = events.map((e) => e.key);
+  const schema = {
+    type: 'object', additionalProperties: false,
+    required: ['explain', 'unsupported', 'events_any', 'events_all', 'events_none', 'roles', 'kinds', 'sectors', 'countries',
+      'name_keywords', 'product_keywords', 'unpaid', 'overdue'],
+    properties: {
+      explain: { type: 'string' },
+      unsupported: { type: 'string' },
+      events_any: list(en(evKeys)),
+      events_all: list(en(evKeys)),
+      events_none: list(en(evKeys)),
+      roles: list(en(roles)),
+      kinds: list(en(kinds.map((k) => k.key))),
+      sectors: list(en(sectors)),
+      countries: list(en(countries)),
+      name_keywords: list({ type: 'string' }),
+      product_keywords: list({ type: 'string' }),
+      unpaid: { type: 'boolean' },
+      overdue: { type: 'boolean' },
+    },
+  };
+  const prompt = [
+    '행사 CRM의 기업 검색 질문을 아래 조건표로 바꿔 주세요. 조건은 모두 «그리고»로 겹칩니다. 쓰지 않는 조건은 빈 목록·false로 두세요.',
+    '- events_any: 이 행사들 중 하나라도 참가한 기업. events_all: 모두 참가한 기업(«둘 다», «연속»). events_none: 참가하지 않은 기업.',
+    '- roles: 행사에서의 역할(예: 전시참가기업, 시공사, 스폰서). 행사 조건이 있으면 그 행사에서의 역할.',
+    '- kinds: 기업 종류. sectors: 업종(목록에 있는 이름만). countries: 국가(목록에 있는 이름만).',
+    '- name_keywords: 기업명에 들어갈 낱말, product_keywords: 전시 품목·소개에 들어갈 낱말(하나라도 맞으면). 국문·영문을 함께 넣으세요.',
+    '- unpaid: 청구했는데 아직 다 받지 못한 돈(미납·미수금·잔금)이 있는 기업. 행사 조건이 있으면 그 행사의 청구만 봅니다.',
+    '- overdue: 납부 기한이 지난 미납이 있는 기업(«연체», «기한 지난»).',
+    '- «전시 참가 기업», «참가사», «전시사»는 역할 전시참가기업 또는 기업 종류 전시참가기업입니다 — 행사 조건이 있으면 역할로, 없으면 종류로 거세요.',
+    '- «작년», «올해»는 오늘 날짜와 행사 날짜로 풀고, «KIC»처럼 이름 일부만 말하면 해당 행사를 모두 고르세요.',
+    '- 표현할 수 없는 부분은 unsupported에 한국어로 적고 나머지만 바꾸세요. 없으면 "". explain과 unsupported에는 칸 이름(events_any 등)을 쓰지 말고 사람이 읽는 말로.',
+    '- explain: 어떻게 해석했는지 한국어 한 줄.',
+    '',
+    `오늘: ${str(b.today, 10)}`,
+    `행사 (key | 약칭 | 날짜):${NL}${events.map((e) => [e.key, e.short, e.date].join(' | ')).join(NL)}`,
+    `행사 역할: ${roles.join(', ')}`,
+    `기업 종류 (key=이름): ${kinds.map((k) => `${k.key}=${k.label}`).join(', ')}`,
+    `업종: ${sectors.join(', ')}`,
+    `국가: ${countries.join(', ')}`,
+    '',
+    `질문: ${question}`,
+  ].join(NL);
+
+  try {
+    const r = await ai().beta.messages.create({
+      model: MODEL,
+      max_tokens: 8000,
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      output_config: { effort: 'low', format: { type: 'json_schema', schema } },
+      messages: [{ role: 'user', content: prompt }],
+    }, { timeout: 55000, maxRetries: 0 });
+    if (r.stop_reason === 'refusal') return res.status(502).json({ ok: false, error: 'AI가 답하지 않았어요' });
+    const plan = JSON.parse(r.content.filter((x) => x.type === 'text').map((x) => x.text).join(''));
+    res.json({ ok: true, plan });
+  } catch (e) {
+    if (e instanceof Anthropic.APIConnectionTimeoutError) return res.status(504).json({ ok: false, error: '시간 안에 끝나지 않았어요' });
+    if (e instanceof Anthropic.RateLimitError) return res.status(429).json({ ok: false, error: 'AI 요청이 많아요 — 잠시 뒤에 다시' });
+    if (e instanceof Anthropic.AuthenticationError) return res.status(503).json({ ok: false, error: 'AI 키가 맞지 않아요' });
+    if (e instanceof Anthropic.APIError) return res.status(502).json({ ok: false, error: `AI 오류 (${e.status || '연결'})` });
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 module.exports = router;
 module.exports.shape = shape;
