@@ -490,6 +490,17 @@ export function runMatchColumnsStep(headers, rows){
     colMap[key] = matched;
     if(matched) usedHeaders.add(matched);
   }
+  /* 머리글은 «이름»인데 값이 영문인 명단(해외 참가자) — 한글 이름 칸이 아니라 영문 이름 칸으로.
+     값 있는 줄의 70% 넘게 한글이 없으면 영문 이름으로 본다. 영문 이름 열이 따로 있으면 그대로 둔다. */
+  if(colMap.nameKo && !colMap.nameEn && !colMap.nameEnFirst && !colMap.lastName){
+    const vals = rows.map(r => String(r[colMap.nameKo] ?? '').trim()).filter(Boolean);
+    const latin = vals.filter(v => !/[가-힣]/.test(v) && /[A-Za-z]/.test(v)).length;
+    if(vals.length && latin / vals.length > 0.7){
+      addAiLog('ok', '«' + escapeHtml(colMap.nameKo) + '» 열은 값이 영문이라 이름(영문)으로 넣어요 (' + latin + '/' + vals.length + '줄)');
+      colMap.nameEn = colMap.nameKo;
+      colMap.nameKo = null;
+    }
+  }
 
   // ── 매핑 결과 상세 로그 ──
   const mappedKeys = Object.entries(colMap).filter(([,v])=>v).map(([k,v])=>v+'→'+k);
@@ -552,12 +563,17 @@ function renderColumnMappingPreview(headers, rows, colMap){
   // 매핑되지 않았는데 데이터는 있는 컬럼 — 조용히 버리지 않고 사용자에게 결정을 묻는다
   const unmappedWithData = headers.filter(h => !Object.values(colMap).includes(h) && hasData(h));
 
+  /* 머리글 없는 열(__EMPTY, __EMPTY_2…)은 병합 셀·비고 찌꺼기가 많다 — 이름을 늘어놓지 않고 개수로 묶는다 */
+  const named = unmappedWithData.filter(h => !/^__EMPTY/.test(h));
+  const blankN = unmappedWithData.length - named.length;
+  const warnCols = [named.length ? `<b>${escapeHtml(named.join(', '))}</b>` : '', blankN ? `<b>머리글 없는 열 ${blankN}개</b>` : '']
+    .filter(Boolean).join(', ');
   const warnRow = unmappedWithData.length
     ? `<tr><td colspan="4" style="padding:10px 12px;background:var(--ab);border-bottom:1px solid #FDE68A;font-size:11px;color:var(--am)">
-        ⚠️ <b>${escapeHtml(unmappedWithData.join(', '))}</b> 컬럼에는 데이터가 있지만 아직 어느 DB 항목에 넣을지 정하지 않았어요.
-        아래 표에서 노란색으로 표시된 행의 "DB 컬럼" 드롭다운으로 매핑해주세요 — 매핑하지 않으면 이 데이터는 저장되지 않고 그대로 버려집니다.
-        ${_aiOn ? `<button class="btn" id="ai-map-btn" style="font-size:10.5px;margin-left:6px" onclick="aiFillColumns()"
+        ${_aiOn ? `<button class="btn" id="ai-map-btn" style="font-size:10.5px;margin-right:6px" onclick="aiFillColumns()"
           title="머리글과 값의 모양(한글=가, 영문=a, 숫자=9)만 보냅니다. 실제 이름·메일·전화는 보내지 않아요">✨ AI로 남은 열 맞추기</button>` : ''}
+        ⚠️ ${warnCols} 에는 데이터가 있지만 아직 어느 DB 항목에 넣을지 정하지 않았어요.
+        노란색 행의 "DB 컬럼" 드롭다운으로 매핑해주세요 — 매핑하지 않으면 저장되지 않고 버려집니다.
       </td></tr>`
     : '';
 
