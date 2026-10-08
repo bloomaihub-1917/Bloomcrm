@@ -175,11 +175,12 @@ router.post('/query-plan', async (req, res) => {
   const en = (vals) => (vals.length ? { type: 'string', enum: vals } : { type: 'string' });
   const schema = {
     type: 'object', additionalProperties: false,
-    required: ['explain', 'unsupported', 'events_any', 'events_none', 'roles', 'cats', 'tags', 'clevel', 'countries', 'org_keywords', 'title_keywords', 'include_left'],
+    required: ['explain', 'unsupported', 'events_any', 'events_all', 'events_none', 'roles', 'cats', 'tags', 'clevel', 'countries', 'org_keywords', 'title_keywords', 'include_left'],
     properties: {
       explain: { type: 'string' },
       unsupported: { type: 'string' },
       events_any: list(en(events.map((e) => e.key))),
+      events_all: list(en(events.map((e) => e.key))),
       events_none: list(en(events.map((e) => e.key))),
       roles: list(en(roles)),
       cats: list(en(cats.map((c) => c.key))),
@@ -193,13 +194,14 @@ router.post('/query-plan', async (req, res) => {
   };
   const prompt = [
     '행사 CRM의 연락처 검색 질문을 아래 조건표로 바꿔 주세요. 조건은 모두 «그리고»로 겹칩니다. 쓰지 않는 조건은 빈 목록·false로 두세요.',
-    '- events_any: 이 행사들 중 하나라도 참가한 사람. events_none: 이 행사들에는 참가하지 않은 사람.',
-    '- roles: 참가 역할. events_any가 있으면 그 행사에서의 역할, 없으면 어느 행사에서든 그 역할.',
+    '- events_any: 이 행사들 중 하나라도 참가한 사람. events_all: 이 행사들에 모두 참가한 사람(«둘 다», «모두», «연속»). events_none: 이 행사들에는 참가하지 않은 사람.',
+    '- roles: 참가 역할. events_any·events_all이 있으면 그 행사에서의 역할, 없으면 어느 행사에서든 그 역할.',
+    '- «기업 담당자», «참가사», «전시사», «부스»는 카테고리 exhibitor(전시참가기업)를 뜻합니다. «연사»는 speaker, «후원사»는 sponsor.',
     '- cats: 연락처 카테고리. tags: 태그. clevel: 대표·임원(C-level)만.',
     '- countries: 국가(목록에 있는 이름만). org_keywords / title_keywords: 기업명·직함에 들어갈 낱말(하나라도 맞으면). 국문·영문 표기를 함께 넣으세요(예: 대표, CEO).',
     '- include_left: 퇴사자도 포함할지. 질문에 없으면 false.',
     '- «작년», «올해», «최근» 같은 말은 오늘 날짜와 행사 날짜로 풀어서 행사를 고르세요. «BIO KOREA», «KIC»처럼 행사 이름 일부만 말하면 해당하는 행사를 모두 고르세요.',
-    '- 이 조건표로 표현할 수 없는 부분(예: 회신 여부, 메일 내용, 연사료)은 unsupported에 한국어로 적고 나머지만 바꾸세요. 없으면 "".',
+    '- 이 조건표로 표현할 수 없는 부분(예: 회신 여부, 메일 내용, 연사료)은 unsupported에 한국어로 적고 나머지만 바꾸세요. 없으면 "". 이 칸과 explain에는 events_any 같은 칸 이름을 쓰지 말고 사람이 읽는 말로 적으세요.',
     '- explain: 어떻게 해석했는지 한국어 한 줄 (예: «2025년 KIC 행사 연사 중 2026년 행사에 없는 미국 사람»).',
     '',
     `오늘: ${str(b.today, 10)}`,

@@ -1212,9 +1212,11 @@ export const hidingLeft = () => !mdbShowLeft && !mdbEvFilter && !mdbQuery() && !
 let mdbAi = null;   // { q, plan }
 function aiMatches(c, plan){
   const parts = participations.filter(p => p.contactId === c.id);
-  const anyEv = plan.events_any || [], noEv = plan.events_none || [], roles = plan.roles || [];
-  if(anyEv.length){
-    const hit = parts.filter(p => anyEv.includes(p.eventId));
+  const anyEv = plan.events_any || [], allEv = plan.events_all || [], noEv = plan.events_none || [], roles = plan.roles || [];
+  if(allEv.length && !allEv.every(e => parts.some(p => p.eventId === e))) return false;
+  const evScope = [...anyEv, ...allEv];
+  if(evScope.length){
+    const hit = parts.filter(p => evScope.includes(p.eventId));
     if(!hit.length) return false;
     if(roles.length && !hit.some(p => roles.includes(p.role || '참가자'))) return false;
   } else if(roles.length && !parts.some(p => roles.includes(p.role || '참가자'))) return false;
@@ -1261,6 +1263,7 @@ function renderMdbAiBar(msg){
   const evs = (k) => (p[k] || []).map(e => escapeHtml(evShort(e))).join(', ');
   const bits = [
     p.events_any?.length ? '참가: ' + evs('events_any') : '',
+    p.events_all?.length ? '모두 참가: ' + evs('events_all') : '',
     p.events_none?.length ? '불참: ' + evs('events_none') : '',
     p.roles?.length ? '역할: ' + escapeHtml(p.roles.join(', ')) : '',
     p.cats?.length ? '카테고리: ' + escapeHtml(p.cats.map(k => CL[k] || k).join(', ')) : '',
