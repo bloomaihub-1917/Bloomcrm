@@ -157,7 +157,6 @@
     <!-- CO sidebar -->
     <div class="sbp" id="sbp-co">
       <div class="sbs s-q"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">기업 검색</div></div>
-      <div class="sb-srch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" placeholder="기업명·옛 이름·전화번호 검색…" oninput="searchCo(this.value)" id="co-si"></div>
       <!-- 질문으로 찾기 (company-tab.js:askCoAi) — 질문만 서버로 가고, 거르기는 화면이 한다 -->
       <div style="display:flex;gap:4px;padding:4px 10px 0">
         <input class="fi" id="co-ai-q" style="flex:1;min-width:0;font-size:11px;padding:4px 6px"
@@ -805,9 +804,20 @@
   <div class="mob-title">기업 DB</div>
   <button class="mob-action-btn" onclick="openCoSearch()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></button>
 </div>
+  <!-- 모바일 검색 — Master DB와 같다(.tb가 모바일에서 숨겨진다) -->
+  <div class="mob-srch">
+    <div class="srch" style="width:100%">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input type="text" id="co-q-m" placeholder="기업명·영문명·약칭·전화번호 검색…" style="width:100%"
+        oninput="setCoDashQ(this.value)">
+    </div>
+  </div>
   <div class="tb">
     <div class="tb-t">Company DB <span class="tb-s">기업별 행사 참여 이력</span></div>
-    <div class="srch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" placeholder="기업명, 섹터 검색…" oninput="searchCoM(this.value)"></div>
+    <div class="srch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg><input type="text" id="co-q" placeholder="기업명·영문명·약칭·전화번호 검색…" oninput="setCoDashQ(this.value)"></div>
+    <button class="btn bp" onclick="openAddOrgModal()" style="gap:4px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>기업 추가
+    </button>
   </div>
   <div class="dbm">
     <div class="co-dash" id="co-dash" style="flex:1;overflow:auto;padding:18px 22px"></div>

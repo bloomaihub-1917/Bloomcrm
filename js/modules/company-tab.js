@@ -980,7 +980,7 @@ function coAiBarHtml(n){
 export function renderCoList(q2=''){
   const listEl = document.getElementById('co-ls');
   if(!listEl) return;
-  const q=q2||(document.getElementById('co-si')||{}).value||'';
+  const q=q2||_coDashQ;  // 검색칸은 위쪽 바 하나(setCoDashQ)
   let list=[...CO_DB];
   /* 옛 이름으로도 찾을 수 있어야 한다 — 사명이 바뀐 회사를 옛 이름으로 기억하는
      사람이 있다. 국문·영문 어느 쪽으로 쳐도 같은 기업이 나와야 하고(한쪽만 있는
@@ -1188,24 +1188,13 @@ export async function submitAddOrg(){
 }
 
 export function searchCo(v){renderCoList(v)}
-export function searchCoM(v){
-  renderCoList(v);
-  // 본문 검색칸과 사이드바 검색칸이 서로 다른 값을 들고 있으면, 어느 쪽을 믿어야
-  // 할지 알 수 없다 — 한쪽에 치면 다른 쪽도 같은 값으로 맞춘다
-  const si = document.getElementById('co-si');
-  if(si && si.value !== v) si.value = v;
-}
+export function searchCoM(v){ setCoDashQ(v); }
 
-/* 모바일 기업 검색 — 검색칸과 결과 목록이 둘 다 사이드바(화면 밖 서랍) 안에 있다.
-   헤더의 돋보기는 서랍을 열지 않고 그 칸에 포커스만 줘서, 눌러도 아무 일이
-   일어나지 않는 것처럼 보였다. 서랍을 열고 나서 포커스를 준다. */
+/* 기업 검색칸은 위쪽 바(#co-q)와 모바일 줄(#co-q-m) — 사이드바 검색칸은 없앴다.
+   모바일에서는 .tb가 숨으니 모바일 칸에 포커스를 준다. */
 export function openCoSearch(){
-  const si = document.getElementById('co-si');
-  if(!isMobile()){ si?.focus(); si?.select(); return; }
-  const sb = document.querySelector('.sb');
-  if(sb && !sb.classList.contains('sb-open')) window.toggleSb?.();
-  // 서랍이 밀려 들어오는 동안(.22s) 포커스를 주면 위치가 튄다
-  setTimeout(() => { si?.focus(); si?.select(); }, 240);
+  const si = document.getElementById(isMobile() ? 'co-q-m' : 'co-q');
+  si?.focus(); si?.select();
 }
 
 /* 기업을 열었다가 돌아오면 보던 줄에 다시 서 있어야 한다 */
@@ -1236,6 +1225,7 @@ function coListLabel(){
 // ── 기업DB 진입 시 기본 화면: 섹터별 대시보드 ──
 export function showCoDashboard(){
   setSelCo(null); setCoCatF(null); setCoCodeF(null); setCoDomainF(null); setCoCountryF(null); _coDashQ = '';
+  ['co-q','co-q-m'].forEach(id => { const e = document.getElementById(id); if(e) e.value = ''; });
   renderCoList(); buildCoCAT(); buildCoCodeF(); buildCoCountryF();
   const cdtEl = document.getElementById('cdt'); if(cdtEl) cdtEl.style.display='none';
   const dashEl = document.getElementById('co-dash'); if(dashEl) dashEl.style.display='block';
@@ -1372,7 +1362,15 @@ function coSectorOrder(){
 }
 
 let _coDashQ = '';
-export function setCoDashQ(v){ _coDashQ = v; renderCoDashTable(); }
+/* 검색칸은 Master DB처럼 위쪽 바 하나 — 기업을 열어 둔 채 치면 목록으로 돌아간다 */
+export function setCoDashQ(v){
+  _coDashQ = v;
+  // 데스크톱·모바일 칸이 서로 다른 값을 들고 있지 않게 맞춘다
+  ['co-q','co-q-m'].forEach(id => { const e = document.getElementById(id); if(e && e.value !== v) e.value = v; });
+  renderCoList();
+  if(document.getElementById('cdt')?.style.display !== 'none') showCoFilteredList();
+  else renderCoDashTable();
+}
 
 /* 표 위 필터를 다 거친 목록 — 검색어만 빼고. 칩 숫자는 이것으로 센다 */
 function coDashBase(){
@@ -1452,19 +1450,14 @@ export function renderCoDashboard(){
   const base = coDashBase();
   const rowLbl = t => `<div style="flex:0 0 34px;font-size:11px;font-weight:700;color:var(--i4);padding-top:5px">${t}</div>`;
   const secChips = coSectorChipsHtml(base);
+  /* 제목·검색·「기업 추가」는 Master DB처럼 위쪽 바(.tb)에 있다 — 본문은
+     거르기 줄과 숫자, 표만 */
   el.innerHTML = `
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
-      <div style="font-size:13px;font-weight:700;color:var(--i1);flex:1;min-width:0">기업 DB</div>
-      ${CO_ADD_BTN}
-    </div>
     ${/* 분야는 왼쪽 트리에서 고른다 — 본문에 같은 줄을 또 두지 않는다 */''}
-    ${secChips ? `<div style="display:flex;gap:8px;margin-bottom:6px">${rowLbl('섹터')}
-      <div style="display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:0">${secChips}</div></div>` : ''}
-    <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
-      <input class="fi" style="flex:1;max-width:280px;font-size:12px" placeholder="이 목록에서 이름·전화 검색"
-        value="${escAttr(_coDashQ)}" oninput="setCoDashQ(this.value)">
-      ${coCountryF ? `<span class="pill p-gray" style="font-size:10px">${{domestic:'국내',overseas:'해외',unknown:'미확인'}[coCountryF]}</span>` : ''}
-      <span id="co-dash-cnt" style="margin-left:auto;font-size:11px;color:var(--i4)"></span>
+    <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:10px">
+      ${secChips ? `${rowLbl('섹터')}<div style="display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:0">${secChips}</div>` : '<div style="flex:1"></div>'}
+      ${coCountryF ? `<span class="pill p-gray" style="font-size:10px;margin-top:4px">${{domestic:'국내',overseas:'해외',unknown:'미확인'}[coCountryF]}</span>` : ''}
+      <span id="co-dash-cnt" style="flex-shrink:0;font-size:11px;color:var(--i4);padding-top:5px"></span>
     </div>
     <div id="co-dash-tbl"></div>`;
   renderCoDashTable();
