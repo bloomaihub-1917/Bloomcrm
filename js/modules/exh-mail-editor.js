@@ -99,6 +99,7 @@ function rowHtml(st, i, ro){
       <b>${i + 1}. ${escapeHtml(st.label || '(이름 없음)')}</b>
       ${st.custom ? '<span class="pill p-amber" style="font-size:9.5px">더한 단계</span>' : ''}
       ${due ? `<span class="pill p-gray" style="font-size:9.5px">${escapeHtml(due)}</span>` : ''}
+      ${st.since ? `<span class="pill p-amber" style="font-size:9.5px" title="이날 이후 이 메일을 받지 않은 곳에 다시 보냅니다">기준일 ${escapeHtml(st.since)}</span>` : ''}
       ${ro ? '' : `<span style="margin-left:auto;display:flex;gap:4px">
         ${st.off ? '' : `<button class="btn" style="font-size:10.5px" title="이 단계 메일을 여러 기업에 한 번에 보냅니다"
           onclick="openExhBulkMail('${escAttr(st.key)}')">📨 여러 기업에</button>`}
@@ -127,9 +128,17 @@ function formHtml(st, isNew){
     <div><div class="mlbl">마감일 <span style="font-weight:400;color:var(--i4)">— {마감일} 자리에 들어가요</span></div>
       <input class="fi" type="date" id="xe-due_date" value="${escAttr(st.due_date || '')}" style="width:160px"></div>`
     : `<div style="grid-column:1/-1;font-size:10.5px;color:var(--i4)">{마감일}은 설정 › 행사 › 일정의 마감을 읽어요${st.due ? ` — 지금 ${escapeHtml(dueText(st))}` : ' — 이 단계는 마감이 없어요'}.</div>`;
+  const sinceFld = st.key === 'note' ? '' : `
+    <div style="grid-column:1/-1"><div class="mlbl">기준일 <span style="font-weight:400;color:var(--i4)">— 다시 보낼 때만. 비우면 평소대로</span></div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <input class="fi" type="date" id="xe-since" value="${escAttr(st.since || '')}" style="width:160px">
+        <button class="btn" style="font-size:10.5px" onclick="document.getElementById('xe-since').value=new Date(Date.now()+9*3600e3).toISOString().slice(0,10)">오늘</button>
+        <button class="btn" style="font-size:10.5px" onclick="document.getElementById('xe-since').value=''">비우기</button>
+      </div>
+      <div style="font-size:10px;color:var(--i4);margin-top:2px;line-height:1.5">적으면 «여러 기업에 메일»에서 이날 이후 이 메일을 받지 않은 곳이 모두 보낼 차례가 됩니다 — 진행 칸이 끝난 곳도요(예: 매뉴얼 개정판). 다 보냈으면 비워 두세요.</div></div>`;
   return `<div style="padding:4px 11px 11px;border-top:1px solid var(--i7)">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
-      ${FIELDS.map(([f, l]) => fld(f, l)).join('')}${extra}
+      ${FIELDS.map(([f, l]) => fld(f, l)).join('')}${extra}${sinceFld}
     </div>
     <div style="font-size:10.5px;color:var(--i4);margin-top:6px;line-height:1.6">쓸 수 있는 칸: ${EXH_MAIL_VARS.map(v => `<code>${escapeHtml(v)}</code>`).join(' ')}</div>
     ${isNew ? '' : `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i7)">
@@ -169,7 +178,7 @@ export function newExhMailStep(){
 
 const readForm = () => {
   const o = {};
-  [...FIELDS.map(([f]) => f), 'after', 'due_date'].forEach(f => {
+  [...FIELDS.map(([f]) => f), 'after', 'due_date', 'since'].forEach(f => {
     const el = document.getElementById(`xe-${f}`);
     if(el) o[f] = f.includes('body') ? el.value.replace(/\s+$/, '') : el.value.trim();
   });
@@ -187,6 +196,7 @@ export async function saveExhMailStep(key){
       const rec = { key: nk };
       FIELDS.forEach(([f]) => { if(v[f]) rec[f] = v[f]; });
       if(v.due_date) rec.due_date = v.due_date;
+      if(v.since) rec.since = v.since;
       if(v.after !== '__end') rec.after = v.after;
       if(i >= 0 && list[i].off) rec.off = true;
       if(i >= 0) list[i] = rec; else list.push(rec);
@@ -201,8 +211,9 @@ export async function saveExhMailStep(key){
     const over = cfg.exhMail = cfg.exhMail || {};
     const o = over[key]?.off ? { off: true } : {};
     FIELDS.forEach(([f]) => { if(v[f] !== undefined && v[f] !== String(def[f] ?? '')) o[f] = v[f]; });
+    if(v.since) o.since = v.since;
     if(Object.keys(o).length) over[key] = o; else delete over[key];
-  }, `«${v.label}» 단계 고침`);
+  }, `«${v.label}» 단계 고침${v.since ? ` (기준일 ${v.since})` : ''}`);
   if(ok){ edOpen = null; render(); }
 }
 
@@ -211,7 +222,10 @@ export async function resetExhMailStep(key){
   if(!def || !confirm(`«${def.label}»을 기본 문구로 되돌릴까요?\n이 행사에서 고친 이름·메일 문구가 지워집니다.`)) return;
   const ok = await pushCfg(cfg => {
     const over = cfg.exhMail || {};
-    if(over[key]?.off) over[key] = { off: true }; else delete over[key];
+    const keep = {};
+    if(over[key]?.off) keep.off = true;
+    if(over[key]?.since) keep.since = over[key].since;
+    if(Object.keys(keep).length) over[key] = keep; else delete over[key];
     cfg.exhMail = over;
   }, `«${def.label}» 기본 문구로`);
   if(ok){ edOpen = null; render(); }

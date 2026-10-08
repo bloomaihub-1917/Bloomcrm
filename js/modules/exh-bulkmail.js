@@ -34,10 +34,18 @@ const mailsOf = (x, who) => {
      late  메일은 보냈는데 마감이 지났다 → 다시 보낼 차례(독촉)
      sent  보냈고 아직 기다리는 중 → 고르지 않는다
      due   아직 안 보냈다 → 보낼 차례
-   더한 단계는 칸이 없으니 이 단계 메일을 보낸 기록만 본다. «기타 안내»는 차례가 없다(free). */
-const sentOf = (x, key) => logsFor(x.id).some(l => l.kind === `exh-${key}` && l.direction !== 'in');
+   더한 단계는 칸이 없으니 이 단계 메일을 보낸 기록만 본다. «기타 안내»는 차례가 없다(free).
+   기준일(since)을 적으면 «다시 보내기»다 — 매뉴얼이 개정됐을 때처럼 이미 끝난 기업도 새 판을
+   받아야 하므로 칸은 보지 않고, 그날 이후 이 메일을 보냈는지만 본다(해당 없음만 뺀다). */
+const sentOf = (x, key, since) => logsFor(x.id).some(l => l.kind === `exh-${key}` && l.direction !== 'in'
+  && (!since || String(l.ts || '').slice(0, 10) >= since));
 export function exhMailState(x, st){
   if(!st || st.key === 'note') return 'free';
+  if(st.since){
+    const step = !st.custom && st.due && STEPS.find(s => s.key === st.due);
+    if(step && cellState(x, step).state === 'na') return 'done';
+    return sentOf(x, st.key, st.since) ? 'sent' : 'due';
+  }
   const sent = sentOf(x, st.key);
   if(st.custom) return sent ? 'sent' : 'due';
   const step = st.due && STEPS.find(s => s.key === st.due);
@@ -115,6 +123,7 @@ function render(){
       <div><div class="mlbl">언어</div><select class="fi" onchange="bmSet('lang',this.value)">${opt('auto', bm.lang, '기업별 자동 (해외는 영문)')}${opt('ko', bm.lang, '모두 국문')}${opt('en', bm.lang, '모두 영문')}</select></div>
       <div><div class="mlbl">받는 사람</div><select class="fi" onchange="bmSet('who',this.value)">${opt('primary', bm.who, '메인 담당자만')}${opt('all', bm.who, '메일 있는 담당자 모두')}</select></div>
     </div>
+    ${st && st.since ? `<div style="font-size:10.5px;color:var(--am);margin:-4px 0 8px">기준일 ${escapeHtml(st.since)} — 다시 보내기: 이날 이후 이 메일을 받지 않은 곳이 보낼 차례예요(진행 칸이 끝난 곳도 포함).</div>` : ''}
     <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:14px">
       <div>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
