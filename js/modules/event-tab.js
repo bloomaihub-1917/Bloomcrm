@@ -47,7 +47,7 @@ const evdbPickedPeople = new Set();   // 고른 사람의 cid
 let evdbTgtFil = 'new';         // 'new'(아직 타겟 아님) | 'on'(이미 타겟)
 const evdbPickedTgt = new Set();      // 고른 기업의 org id
 
-const VIEWS = [['profile', '개요'], ['people', '참여자'], ['orgs', '기업'], ['target', 'CRM 타겟']];
+const VIEWS = [['profile', '개요'], ['people', '참여자'], ['orgs', '기업'], ['target', '협의 대상']];
 
 /* ══════════════════════════════════════════
    집계 — participations를 행사 기준으로 다시 세운다
@@ -309,7 +309,7 @@ function profileHtml(ev){
       ${stat(orgs.length.toLocaleString(), '참여 기업',
         orgs.length ? `1개사당 평균 ${avg.toFixed(1)}명` + (noOrg.length ? ` · 소속 없음 ${noOrg.length}명 제외` : '') : '')}
       ${stat(exhN.toLocaleString(), '전시 참가기업')}
-      ${stat(already.toLocaleString(), 'CRM 타겟으로 잡힌 기업')}
+      ${stat(already.toLocaleString(), '협의 대상으로 잡힌 기업')}
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px">
@@ -579,7 +579,7 @@ function orgsRowsHtml(){
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <span style="font-size:13px;font-weight:600;color:var(--i1)">${escapeHtml(o.name)}</span>
-          ${isT ? '<span class="pill p-green">CRM 타겟</span>' : ''}
+          ${isT ? '<span class="pill p-green">협의 대상</span>' : ''}
           ${isX ? '<span class="pill p-purple">전시 참가</span>' : ''}
         </div>
         <div style="font-size:11px;color:var(--i4);margin-top:3px">
@@ -709,11 +709,11 @@ export function openEvDbSend(){
 
       <div class="fg"><div class="fl">어디로</div>
         <div class="seg" style="flex-wrap:wrap">
-          <button class="seg-b on" id="evdb-dest-crm" onclick="setEvDbDest('crm')">CRM 타겟</button>
+          <button class="seg-b on" id="evdb-dest-crm" onclick="setEvDbDest('crm')">협의 대상</button>
           <button class="seg-b" id="evdb-dest-exh" onclick="setEvDbDest('exh')">전시 참가기업</button>
         </div>
         <div id="evdb-dest-hint" style="font-size:10.5px;color:var(--i5);margin-top:6px">
-          아직 영업 전인 곳 — 미접촉부터 파이프라인을 태웁니다.
+          아직 영업 전인 곳 — 미접촉부터 협의 보드에 올립니다.
         </div>
       </div>
 
@@ -766,7 +766,7 @@ export function setEvDbDest(d){
   if(opts) opts.style.display = d === 'crm' ? 'block' : 'none';
   const hint = document.getElementById('evdb-dest-hint');
   if(hint) hint.innerHTML = d === 'crm'
-    ? '아직 영업 전인 곳 — 미접촉부터 파이프라인을 태웁니다.'
+    ? '아직 영업 전인 곳 — 미접촉부터 협의 보드에 올립니다.'
     : '참가가 정해진 곳 — 매뉴얼·신청서·부스 체크리스트가 바로 생깁니다.';
 }
 
@@ -814,7 +814,7 @@ export async function confirmEvDbSend(){
   // ── CRM 타겟 ──
   const have = targetKeys();
   const fresh = picked.filter(o => !have.has(o.key));
-  if(!fresh.length){ say('고른 기업이 이미 전부 CRM 타겟으로 잡혀 있어요.'); return; }
+  if(!fresh.length){ say('고른 기업이 이미 전부 협의 대상으로 잡혀 있어요.'); return; }
 
   const role = document.getElementById('evdb-send-role')?.value || '전시참가기업';
   const pri = document.getElementById('evdb-send-pri')?.value || 'mid';

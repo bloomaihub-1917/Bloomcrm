@@ -247,7 +247,7 @@ export const AUDIT_PARTS = [
   ['all', '전체'], ['exh', '전시'], ['conf', '연사'], ['crm', 'CRM'],
   ['db', '연락처·기업'], ['set', '설정'], ['del', '삭제'], ['login', '로그인'],
 ];
-const KIND_PART = { exhibitor: 'exh', speaker: 'conf', session: 'conf', target: 'crm', contact: 'db', company: 'db' };
+const KIND_PART = { exhibitor: 'exh', speaker: 'conf', session: 'conf', target: 'crm', round_member: 'crm', contact: 'db', company: 'db' };
 
 export function auditPart(e){
   const x = e.extra || {};

@@ -229,6 +229,14 @@ export { detectedCatFromFilename };
 export const targets = [];
 
 /* ══════════════════════════════════════════
+   컨택 — TM/DM 차수 (contact-tab.js)
+   협의 보드(targets)와 따로다. 서버 컬럼명(snake_case) 그대로 담는다.
+══════════════════════════════════════════ */
+export const CONTACT_ROUNDS   = [];  // 차수
+export const ROUND_MEMBERS    = [];  // 차수 명단 한 줄 = 기업 하나
+export const CONTACT_ATTEMPTS = [];  // 한 번 걸고 한 번 보낸 기록
+
+/* ══════════════════════════════════════════
    전시 참가기업 진행관리 (전시 탭)
    CRM targets(일반 영업 파이프라인)와 별개로, 전시 참가기업의
    매뉴얼→신청서→부스→정산→그래픽→도록→현장 실무 흐름을 추적한다.
@@ -419,7 +427,7 @@ export function setCoCountryF(v){ coCountryF = v; } // 'domestic' | 'overseas' |
 export { selCo, coTab, coCatF, coCodeF, coDomainF, coCountryF };
 
 /* ── CRM(crm) 탭 상태 ── */
-let crmV = 'pipeline', crmEvF = null, crmStF = null, tblSt = '전체';
+let crmV = 'today', crmEvF = null, crmStF = null, tblSt = '전체';
 export function setCrmV(v){ crmV = v; }
 export function setCrmEvF(v){ crmEvF = v; }
 export function setCrmStF(v){ crmStF = v; }

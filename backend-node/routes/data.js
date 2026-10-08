@@ -209,6 +209,22 @@ const TABLES = {
     table: 'speaker_contacts', pk: 'id', idPrefix: 'SC-',
     columns: ['id', 'speaker_id', 'contact_id', 'name', 'email', 'phone', 'kind', 'send', 'note'],
   },
+  /* ── 컨택 — TM/DM 차수 (schema.sql «컨택 — TM/DM 차수» 참고) ── */
+  contact_rounds: {
+    table: 'contact_rounds', pk: 'id', idPrefix: 'CR-',
+    columns: ['id', 'event_id', 'name', 'channel', 'purpose', 'goal', 'date_from', 'date_to',
+      'noanswer_limit', 'status', 'note', 'created_at', 'created_by'],
+  },
+  round_members: {
+    table: 'round_members', pk: 'id', idPrefix: 'RM-',
+    columns: ['id', 'round_id', 'org_id', 'org_name', 'source', 'caution', 'hold_until', 'call_hours',
+      'next_at', 'goal_at', 'closed_at', 'closed_reason', 'created_at'],
+  },
+  contact_attempts: {
+    table: 'contact_attempts', pk: 'id', idPrefix: 'CA-',
+    columns: ['id', 'round_id', 'member_id', 'org_id', 'contact_id', 'contact_name', 'phone',
+      'channel', 'at', 'by_email', 'by_name', 'reaction', 'note'],
+  },
   speaker_logs: {
     table: 'speaker_logs', pk: 'id', idPrefix: 'SL-',
     columns: ['id', 'speaker_id', 'kind', 'ts', 'direction', 'channel', 'counterpart', 'category',

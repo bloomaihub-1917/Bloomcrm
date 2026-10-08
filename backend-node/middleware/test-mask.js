@@ -70,6 +70,8 @@ const RULES = {
   watch_files: { name: N, rel_path: H, note: H },
   speaker_contacts: { name: N, email: H, phone: H, note: H },
   speaker_logs: { counterpart: N, subject: H, body: H, answer: H },
+  round_members: { org_name: N, caution: H },
+  contact_attempts: { contact_name: N, phone: H, note: H },
 };
 
 /* 감사 기록의 link — 화면이 어디로 이동할지(kind·id)는 남기고 원본 값은 뺀다 */

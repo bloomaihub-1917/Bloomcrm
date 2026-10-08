@@ -38,6 +38,7 @@ import { RP, SC, LC, EC, STGS, avB, avF } from '../constants.js';
 import { ab, td, escapeHtml, escAttr, isMobile } from '../utils.js';
 import { trackAction, changed } from './audit-tab.js';
 import { postToSheet } from '../api.js';
+import { renderToday, renderRoundNav, openFillRound, openRoundEditor } from './contact-tab.js';
 
 /* ── 타겟 1건을 crm_targets 시트에 upsert (신규) ──
    기존에는 chgSt/chgStD/setStg/addLog가 메모리(targets)만 수정하고
@@ -96,6 +97,7 @@ export function crmEvSel(){
 }
 
 export function buildEvFil() {
+  renderRoundNav();
   const el = document.getElementById('ev-fil');
   if (!el) return;
   const evs = [...new Set(targets.map(t => t.event).filter(Boolean))];
@@ -133,18 +135,37 @@ export function updBadges() {
   ['ct-pipe', 'ct-tbl'].forEach(id => { const e = g(id); if (e) e.textContent = targets.length; });
   ['미접촉', '컨택중', '협의중', '확정'].forEach((s, i) => { const e = g('ct-s' + i); if (e) e.textContent = targets.filter(t => t.status === s).length; });
 }
+/* 컨택 탭의 보기 셋 — 오늘 할 컨택(TM/DM 차수, contact-tab.js)과 협의 보드·목록.
+   협의는 스폰서·기관처럼 몇 번 만나 결정되는 소수의 건이라 따로 둔다. */
+const CV_TITLE = {
+  today:    ['오늘 할 컨택', 'TM/DM 차수별로 걸 곳과 다시 걸 곳'],
+  pipeline: ['협의 보드', '몇 번 만나 결정되는 곳 — 스폰서·기관 협의'],
+  table:    ['협의 목록', '몇 번 만나 결정되는 곳 — 스폰서·기관 협의'],
+};
 export function switchCV(v, btn) {
   setCrmV(v);
-  document.querySelectorAll('.view').forEach(el => el.classList.remove('on'));
+  document.querySelectorAll('#page-crm .view').forEach(el => el.classList.remove('on'));
   document.getElementById('v-' + v).classList.add('on');
+  const [ttl, sub] = CV_TITLE[v] || CV_TITLE.today;
   // 모바일 헤더 타이틀 동기화
   const mh = document.getElementById('mob-crm-ttl');
-  if (mh) mh.textContent = v === 'pipeline' ? '파이프라인' : '전체 목록';
-  document.querySelectorAll('.s-v .nr').forEach(b => b.classList.remove('on'));
-  btn.classList.add('on');
-  const tt = { pipeline: '파이프라인', table: '전체 목록' };
-  document.getElementById('crm-ttl').innerHTML = `${tt[v]} <span class="tb-s">행사 타겟 기업 컨택 현황</span>`;
+  if (mh) mh.textContent = ttl;
+  document.querySelectorAll('.s-v .nr').forEach(b => b.classList.toggle('on', b.dataset.cv === v));
+  if (btn) btn.classList.add('on');
+  document.getElementById('crm-ttl').innerHTML = `${ttl} <span class="tb-s">${sub}</span>`;
+  // 사이드바 — 차수는 오늘 할 컨택에서만, 행사별·협의 현황은 협의 보기에서만
+  const today = v === 'today';
+  const show = (id, on) => { const e = document.getElementById(id); if (e) e.style.display = on ? '' : 'none'; };
+  show('crm-sb-rounds', today); show('crm-sb-ev', !today); show('crm-sb-st', !today);
+  const lbl = document.getElementById('crm-add-lbl');
+  if (lbl) lbl.textContent = today ? '명단 채우기' : '협의 추가';
   renderCrm();
+}
+/* 위쪽 + 단추 — 보고 있는 보기에 맞는 것을 더한다 */
+export function crmAdd() {
+  if (crmV !== 'today') return openModal();
+  if (!document.querySelector('#round-nav .nr.on')) return openRoundEditor();
+  openFillRound();
 }
 
 /* ══════════════════════════════════════════
@@ -160,7 +181,8 @@ export function searchCrmM(v){
 
 export function renderCrm() {
   try {
-    if (crmV === 'pipeline') renderPipeline(); else renderTable2();
+    if (crmV === 'today') renderToday();
+    else if (crmV === 'pipeline') renderPipeline(); else renderTable2();
   } catch (e) {
     console.error('[CRM] renderCrm 오류:', e);
     const el = document.getElementById('kanban') || document.getElementById('crm-tbody');
@@ -718,6 +740,7 @@ window.setEvF = setEvF;
 window.clearEvF = clearEvF;
 window.filterSt2 = filterSt2;
 window.switchCV = switchCV;
+window.crmAdd = crmAdd;
 window.renderCrm = renderCrm;
 window.searchCrmM = searchCrmM;
 window.tblF = tblF;

@@ -21,7 +21,7 @@ const pool = require('./pool');
 
 const APPLY = process.argv.includes('--apply');
 const REFS = [['participations', 'contact_id'], ['exhibitor_contacts', 'contact_id'],
-  ['speakers', 'contact_id'], ['speaker_contacts', 'contact_id']];
+  ['speakers', 'contact_id'], ['speaker_contacts', 'contact_id'], ['contact_attempts', 'contact_id']];
 const unsafe = (id) => !Number.isSafeInteger(Number(id));
 const filled = (v) => v != null && String(v).trim() !== '';
 

@@ -218,6 +218,7 @@ const AUDIT_GO = {
   exhibitor: (x) => { window.switchApp?.('exh');  window.openExhDr?.(x.id, x.tab); },
   contact:   (x) => { window.switchApp?.('mdb');  window.openContactDr?.(x.id); },
   target:    (x) => { window.switchApp?.('crm');  window.openDr?.(x.id); },
+  round_member: (x) => { window.switchApp?.('crm'); window.openRoundMember?.(x.id); },
   company:   (x) => { window.switchApp?.('co');   window.selectCo?.(x.id); },
   speaker:   (x) => { window.switchApp?.('conf'); window.openSpeakerDr?.(x.id, x.tab); },
   session:   (x) => { window.switchApp?.('conf'); window.openAuditSession?.(x.id, x.ev); },

@@ -14,5 +14,5 @@
 - 연락처를 넣는 스크립트를 새로 만들면, 넣은 뒤 긴 id가 생겼는지 확인한다.
   생겼다면 `node db/fix-unsafe-contact-ids.js`(시험 실행) → `--apply`로 고친다.
 - 연락처 id를 가리키는 곳: `participations.contact_id`, `exhibitor_contacts.contact_id`,
-  `speakers.contact_id`, `speaker_contacts.contact_id`, `activity_log.link`(JSON 안).
-  id를 바꿀 때는 이 다섯 곳을 같이 고친다.
+  `speakers.contact_id`, `speaker_contacts.contact_id`, `contact_attempts.contact_id`,
+  `activity_log.link`(JSON 안). id를 바꿀 때는 이 여섯 곳을 같이 고친다.

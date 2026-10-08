@@ -1118,3 +1118,68 @@ CREATE TABLE IF NOT EXISTS mail_unassigned (
   linked_t TEXT, linked_id TEXT, created_at TEXT, handled_by TEXT
 );
 CREATE UNIQUE INDEX IF NOT EXISTS mail_unassigned_uniq ON mail_unassigned (event_id, mail_box, mail_uid);
+
+/* ══════════════════════════════════════════════════════════════
+   컨택 — TM/DM 차수 (2026-10-08)
+
+   전시 참가 독려·주선신청 안내처럼 수백 곳에 차수를 정해 전화·메일을 돌리는
+   일이다. 엑셀에서는 «TM일자/TM내용» 칸이 오른쪽으로 계속 늘어났고, 한 칸에
+   «계인_부재중 1106 / 예지_부재중_1324»처럼 누가·몇 시에·어떻게 됐는지를 손으로
+   적었다. 그 한 번 한 번을 줄로 쌓는다.
+
+     contact_rounds     차수 — «2차 TM · 주선신청 안내». 행사마다 여러 개
+     round_members      차수의 명단 한 줄 = 기업 하나. 주의사항·다음 연락일·목표 달성
+     contact_attempts   한 번 걸고 한 번 보낸 기록. 사람(contact_id)에 붙는다
+
+   협의 보드(crm_targets)와는 따로다 — 그쪽은 몇 번 만나 결정되는 소수의 건이다.
+══════════════════════════════════════════════════════════════ */
+CREATE TABLE IF NOT EXISTS contact_rounds (
+  id             TEXT PRIMARY KEY,   -- CR-xxxxx
+  event_id       TEXT,
+  name           TEXT,   -- 2차 TM · 주선신청 안내
+  channel        TEXT,   -- TM | DM | 문자 (기본 채널 — 기록마다 바꿀 수 있다)
+  purpose        TEXT,   -- 무엇을 안내하나
+  goal           TEXT,   -- 목표: 주선신청 · FCA 등록 …
+  date_from      TEXT,
+  date_to        TEXT,
+  noanswer_limit TEXT,   -- 부재중이 이만큼 이어지면 «DM으로 넘길까요?»
+  status         TEXT,   -- open | closed
+  note           TEXT,
+  created_at     TEXT,
+  created_by     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_contact_rounds_ev ON contact_rounds(event_id);
+
+CREATE TABLE IF NOT EXISTS round_members (
+  id            TEXT PRIMARY KEY,   -- RM-xxxxx
+  round_id      TEXT,
+  org_id        TEXT,
+  org_name      TEXT,   -- 넣을 때의 기업명 (기업이 지워져도 누구였는지 남게)
+  source        TEXT,   -- 명단 이름: 2022 전시 국내 · 2025 한국전자전 참가기업 …
+  caution       TEXT,   -- 주의사항: 성명 노출 원치 않음 …
+  hold_until    TEXT,   -- 이날 전에는 연락하지 않는다
+  call_hours    TEXT,   -- 통화 가능 시간 (해외 시차)
+  next_at       TEXT,   -- 다음 연락일 — 비면 바로 «다시 걸 차례»
+  goal_at       TEXT,   -- 목표 달성일
+  closed_at     TEXT,   -- 끝냄 (부정·대상 아님 …)
+  closed_reason TEXT,
+  created_at    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_round_members_round ON round_members(round_id);
+
+CREATE TABLE IF NOT EXISTS contact_attempts (
+  id           TEXT PRIMARY KEY,   -- CA-xxxxx
+  round_id     TEXT,
+  member_id    TEXT,
+  org_id       TEXT,
+  contact_id   TEXT,   -- contacts.id — 바뀌면 같이 고친다(CLAUDE.md)
+  contact_name TEXT,   -- 그때 통화한 사람 이름
+  phone        TEXT,   -- 건 번호 / 보낸 주소
+  channel      TEXT,   -- TM | DM | 문자
+  at           TEXT,   -- YYYY-MM-DD HH:mm
+  by_email     TEXT,
+  by_name      TEXT,
+  reaction     TEXT,   -- positive | hold | negative | noanswer | wrongnum | sent | bounce | reply
+  note         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_contact_attempts_member ON contact_attempts(member_id);

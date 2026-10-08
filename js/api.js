@@ -36,6 +36,7 @@ import {
   contacts,
   participations,
   targets,
+  CONTACT_ROUNDS, ROUND_MEMBERS, CONTACT_ATTEMPTS,
   EXHIBITORS,
   EXH_CONTACTS,
   EXH_ITEMS,
@@ -250,7 +251,8 @@ export async function loadFromSheets(hooks = {}){
            exhData, exhConData, exhItemData, exhInvData, exhTaxData, exhPayData, exhLogData, exhAppData, equipCatData,
            codeListData,
            confSessData, speakerData, sessSpData, spConData, spLogData,
-           watchFolderData, watchFileData] = await Promise.all([
+           watchFolderData, watchFileData,
+           roundData, roundMemberData, attemptData] = await Promise.all([
       safeFetch(base + 'contacts',       'contacts',       1, headers),
       safeFetch(base + 'participations', 'participations', 1, headers),
       safeFetch(base + 'crm_targets',    'crm_targets',    1, headers),
@@ -277,6 +279,9 @@ export async function loadFromSheets(hooks = {}){
       safeFetch(base + 'speaker_logs',       'speaker_logs',       1, headers),
       safeFetch(base + 'watch_folders',      'watch_folders',      1, headers),
       safeFetch(base + 'watch_files',        'watch_files',        1, headers),
+      safeFetch(base + 'contact_rounds',     'contact_rounds',     1, headers),
+      safeFetch(base + 'round_members',      'round_members',      1, headers),
+      safeFetch(base + 'contact_attempts',   'contact_attempts',   1, headers),
     ]);
 
     // ── 실패 감지 (신규) ──
@@ -287,6 +292,7 @@ export async function loadFromSheets(hooks = {}){
       exhData, exhConData, exhItemData, exhInvData, exhTaxData, exhPayData, exhLogData, exhAppData, equipCatData,
       confSessData, speakerData, sessSpData, spConData, spLogData,
       watchFolderData, watchFileData,
+      roundData, roundMemberData, attemptData,
       codeListData];
     const _failed  = _results.filter(r => r === null).length;
     if(_failed === _results.length){
@@ -559,6 +565,11 @@ export async function loadFromSheets(hooks = {}){
       const open = EXH_LOGS.filter(l => l.kind === 'inquiry' && !l.answered_at).length;
       if(open) console.log('[CRM] 미답변 문의:', open, '건');
     }
+
+    /* ── 컨택 — TM/DM 차수 ── 표가 아직 없으면(마이그레이션 전) null이라 건너뛴다 */
+    if(Array.isArray(roundData))       CONTACT_ROUNDS.splice(0, CONTACT_ROUNDS.length, ...roundData);
+    if(Array.isArray(roundMemberData)) ROUND_MEMBERS.splice(0, ROUND_MEMBERS.length, ...roundMemberData);
+    if(Array.isArray(attemptData))     CONTACT_ATTEMPTS.splice(0, CONTACT_ATTEMPTS.length, ...attemptData);
 
     /* ── 컨퍼런스 · 연사 ──
        서버 컬럼명(snake_case)을 그대로 쓰므로 변환 없이 통째로 담는다.
@@ -883,6 +894,18 @@ export const deleteExhTax        = (id) => deleteExhRow('exhibitor_tax_invoices'
 export const deleteExhPayment    = (id) => deleteExhRow('exhibitor_payments', id, '입금 내역 삭제');
 export const deleteExhLog        = (id) => deleteExhRow('exhibitor_logs',     id, '문의/기록 삭제');
 export const deleteExhApp        = (id) => deleteExhRow('exhibitor_apps',     id, '신청서 접수 삭제');
+
+/* ── 컨택 — TM/DM 차수 ── */
+export const saveRound       = (o) => saveExhRow('contact_rounds',   o, '컨택 차수 저장');
+export const deleteRound     = (id) => deleteExhRow('contact_rounds', id, '컨택 차수 삭제');
+export const saveRoundMember = (o) => saveExhRow('round_members',    o, '컨택 명단 저장');
+export const deleteRoundMembers = (ids) => postToSheet(
+  { sheet: 'round_members', action: 'delete', row: ids }, '컨택 명단 빼기');
+/* 명단 채우기는 수백 곳이 한 번에 들어간다 — 한 줄씩 보내면 그만큼 왕복한다 */
+export const addRoundMembers = (rows) => postToSheet(
+  { sheet: 'round_members', action: 'batchAppend', dataRows: rows }, '컨택 명단 채우기');
+export const saveAttempt     = (o) => saveExhRow('contact_attempts', o, '컨택 기록 저장');
+export const deleteAttempt   = (id) => deleteExhRow('contact_attempts', id, '컨택 기록 삭제');
 
 /* 참가기업 일괄 등록 — 기업DB에서 전시참가기업을 뽑아 한 번에 만든다. */
 export async function batchCreateExhibitors(rows){
