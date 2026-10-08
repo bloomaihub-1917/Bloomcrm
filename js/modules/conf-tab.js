@@ -63,6 +63,7 @@ import { trackAction, changed, removed, created } from './audit-tab.js';
 import { IMPORT_SHEETS, IMPORT_GUIDE } from '../conf-import-spec.js';
 import { trackColorOf, pickTrackColorIndex } from '../track-colors.js';
 import { saveConf } from './settings-tab.js';
+import './speaker-bulkmail.js';
 import { nextActionLabel } from './speaker-flow.js';
 import { confDashHtml } from './conf-dash.js';
 import { reusePending } from './contact-speaker.js';
@@ -1382,7 +1383,9 @@ function peopleHtml(ev){
       return card('갈라디너', `${y}<span style="font-size:11px;font-weight:600;color:var(--i4)">명 참석</span>`,
         `불참 ${n} · 미확인 ${live.length - y - n}`); })()}
     ${feeLeft ? card('연사료', `${feeLeft}<span style="font-size:11px;font-weight:600;color:var(--i4)">명</span>`, '아직 미지급') : ''}
-    <div style="margin-left:auto;align-self:center">
+    <div style="margin-left:auto;align-self:center;display:flex;gap:6px">
+      <button class="btn bs" onclick="openSpeakerBulkMail('${escAttr(ev.key)}')"
+        title="연락 단계 메일(일정 변경 안내·자료 요청 등)을 여러 연사에게 한 번에 — 연사마다 한 통씩 따로 나갑니다">📨 여러 연사에게 메일</button>
       <button class="btn bs" id="sp-export-btn" onclick="exportSpeakers('${escAttr(ev.key)}')"
         title="프로그램표(Program At a Glance)·연사 전체 정보·약력과 초록을 엑셀 한 파일로 받습니다">엑셀 다운로드</button></div>
   </div>`;

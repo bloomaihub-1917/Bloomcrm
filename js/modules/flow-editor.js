@@ -111,6 +111,8 @@ function rowHtml(st, i, ro){
       ${st.due ? `<span class="pill p-gray" style="font-size:9.5px">마감 ${escapeHtml(st.due)}</span>` : ''}
       <span style="font-size:10.5px;color:var(--i4);margin-left:auto;text-align:right">${escapeHtml(ruleOf(st))}</span>
       ${ro ? '' : `<button class="btn" style="font-size:10.5px" onclick="editFlowStep('${escAttr(st.key)}')">${open ? '접기' : '고치기'}</button>
+      ${st.off ? '' : `<button class="btn" style="font-size:10.5px" title="이 단계 메일을 여러 연사에게 한 번에 보냅니다"
+        onclick="openSpeakerBulkMail('${escAttr(edEv)}','${escAttr(st.key)}')">📨 여러 명에게</button>`}
       ${st.custom ? `<button class="btn" style="font-size:10.5px;color:var(--re)" onclick="deleteFlowStep('${escAttr(st.key)}')">지우기</button>` : ''}`}
     </div>
     ${open ? formHtml(st, false) : ''}

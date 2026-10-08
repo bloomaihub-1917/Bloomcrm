@@ -381,6 +381,8 @@ function flowBoxHtml(sp){
         ${pendingHtml(sp)}
         <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">
           <button class="btn bp" style="font-size:10.5px" onclick="openFlowDraft('${cur.key}')">✉ 메일 초안 만들기</button>
+          <button class="btn" style="font-size:10.5px" title="이 단계가 보낼 차례인 연사들에게 한 번에 보냅니다"
+            onclick="openSpeakerBulkMail('${escAttr(sp.event_id)}','${cur.key}')">📨 여러 연사에게</button>
           ${markBtn}
           ${prevUndo ? `<button class="btn" style="font-size:10.5px" onclick="undoSpStep('${escAttr(prevUndo.key)}')"
             title="«${escAttr(prevUndo.label)}»을 안 한 것으로 되돌립니다">↶ 이전 단계로</button>` : ''}
