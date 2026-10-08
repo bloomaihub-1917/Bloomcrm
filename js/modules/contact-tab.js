@@ -61,7 +61,13 @@ let curRoundId = (() => { try { return localStorage.getItem(LS_ROUND) || null; }
 let stFil = 'now';                 // now(걸 차례+다시 걸 차례) | todo | again | wait | done | all
 const histOpen = new Set();        // 기록을 펼친 명단 줄
 const editOpen = new Set();        // 주의사항 등을 고치는 중인 줄
-const pickedContact = {};          // 줄마다 고른 사람
+const pickedContact = {};          // 줄마다 고른 사람 — 반응 단추를 누르면 이 사람으로 기록된다
+/* 고른 사람 — 고른 적이 없으면 지난번에 연락한 사람, 그것도 없으면 맨 위 사람 */
+export function pickedPersonId(m, people = peopleOf(m)){
+  if(pickedContact[m.id] !== undefined) return pickedContact[m.id];
+  const lastCid = attemptsOf(m.id)[0]?.contact_id;
+  return people.some(p => String(p.id) === String(lastCid)) ? String(lastCid) : String(people[0]?.id ?? '');
+}
 const pickedChannel = {};          // 줄마다 고른 채널
 let showLimit = 150;
 
@@ -271,8 +277,7 @@ function card(r, { m, atts, st }){
   const verb = verbOf(r.channel);
   const ch = pickedChannel[m.id] || r.channel || 'TM';
   const people = peopleOf(m);
-  const lastCid = atts[0]?.contact_id;
-  const pick = pickedContact[m.id] ?? (people.some(p => String(p.id) === String(lastCid)) ? String(lastCid) : String(people[0]?.id ?? ''));
+  const pick = pickedPersonId(m, people);
   const co = coOf(m.org_id);
   const s = STATES[st];
   const miss = missStreak(atts);
@@ -317,6 +322,7 @@ function card(r, { m, atts, st }){
     ${histOpen.has(m.id) ? hist(m, atts) : ''}
     ${miss >= limit && st !== 'done' ? `<div style="font-size:11px;color:var(--am);margin-top:4px">미연결이 ${miss}번 이어졌어요 — 채널을 DM으로 바꿔 보내거나, 끝내기를 고려하세요</div>` : ''}
     <div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--i7)">
+      ${people.length > 1 ? `<div style="font-size:10.5px;color:var(--i4);margin-bottom:2px">${ch === 'TM' ? '누구와 통화했나요' : '누구에게 보냈나요'} — 반응 단추를 누르면 고른 사람으로 기록돼요</div>` : ''}
       ${people.length ? people.map(person).join('')
         : `<div style="font-size:11.5px;color:var(--i4)">기업DB에 담당자가 없어요${co?.phone ? ` · 대표번호 <a href="tel:${escapeHtml(String(co.phone).replace(/[^\d+]/g, ''))}" style="color:var(--a)">${escapeHtml(co.phone)}</a>` : ''}</div>`}
     </div>
@@ -325,6 +331,7 @@ function card(r, { m, atts, st }){
         ${CHANNELS.map(c => `<option${c === ch ? ' selected' : ''}>${c}</option>`).join('')}</select>
       ${CH_REACTIONS[ch].map(k => `<button class="btn bs" onclick="recordContact('${escAttr(m.id)}','${k}')">${REACTIONS[k].label}</button>`).join('')}
       <input type="text" id="ca-memo-${escAttr(m.id)}" placeholder="메모 — 반응 단추를 누르면 함께 남아요" style="flex:1;min-width:140px;font-size:11.5px;padding:4px 8px;border:1px solid var(--i6);border-radius:5px">
+      ${people.some(p => String(p.email1 || '').includes('@')) ? `<button class="btn bs" onclick="openRoundMail('${escAttr(r.id)}','${escAttr(m.id)}')" title="이 기업에만 메일 한 통 — 보낸 것은 DM 기록으로 남아요">✉ 이 기업에 메일</button>` : ''}
     </div>`}
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;font-size:11px;color:var(--i4)">
       ${m.closed_at || m.goal_at ? '' : `<span>다음 연락 <input type="date" value="${escapeHtml(m.next_at || '')}" onchange="setContactNext('${escAttr(m.id)}',this.value)" style="font-size:11px;border:1px solid var(--i6);border-radius:4px;padding:1px 3px"></span>`}
@@ -393,8 +400,7 @@ export async function recordContact(mid, reaction){
   if(!m || !r || !R) return;
   const ch = pickedChannel[mid] || r.channel || 'TM';
   const people = peopleOf(m);
-  const lastCid = attemptsOf(mid)[0]?.contact_id;
-  const pid = pickedContact[mid] ?? (people.some(p => String(p.id) === String(lastCid)) ? String(lastCid) : String(people[0]?.id ?? ''));
+  const pid = pickedPersonId(m, people);
   const p = people.find(x => String(x.id) === String(pid));
   const memoEl = document.getElementById('ca-memo-' + mid);
   const note = (memoEl?.value || '').trim();

@@ -17,7 +17,7 @@ import { sendMail, eventMailFrom, saveRound, saveAttempt, saveRoundMember } from
 import { escapeHtml, escAttr, nowStamp } from '../utils.js';
 import { trackAction } from './audit-tab.js';
 import {
-  roundById, membersOf, attemptsOf, memberState, memberName, peopleOf, coOf, evLabel, renderRoundNav,
+  roundById, membersOf, attemptsOf, memberState, memberName, peopleOf, coOf, evLabel, renderRoundNav, pickedPersonId,
 } from './contact-tab.js';
 
 const NEXT_DAYS = 3;
@@ -27,8 +27,11 @@ let cm = null;   // { rid, ids:Set, who, lang, tpl, sending }
 const isEn = (m) => { const c = coOf(m.org_id)?.country; return !!c && !KO.test(String(c).trim()); };
 const enOf = (m) => (cm.lang === 'en' ? true : cm.lang === 'ko' ? false : isEn(m));
 /* 받는 사람 — 한 명이면 최근에 연락한 사람이 먼저 */
+const mailable = (m) => peopleOf(m).filter(p => String(p.email1 || '').includes('@'));
 function peopleTo(m, who){
-  const ppl = peopleOf(m).filter(p => String(p.email1 || '').includes('@'));
+  const ppl = mailable(m);
+  // 한 기업만 보낼 때는 창에서 체크한 사람들
+  if(cm && cm.only === m.id) return ppl.filter(p => cm.toIds.has(String(p.id)));
   if(who === 'all') return ppl;
   const lastCid = attemptsOf(m.id)[0]?.contact_id;
   return [ppl.find(p => String(p.id) === String(lastCid)) || ppl[0]].filter(Boolean);
@@ -49,14 +52,24 @@ function fill(t, m, person, en){
     .replace(/\{행사\}/g, (en ? (ev.name_en || ev.name) : ev.name) || evLabel(ev.key));
 }
 
-export function openRoundMail(rid){
+/* mid를 주면 그 기업 한 곳만 — 카드의 «✉ 이 기업에 메일». 받는 사람은 카드에서
+   고른 사람이 먼저 체크돼 있고, 창에서 담당자를 더하거나 뺀다 */
+export function openRoundMail(rid, mid){
   const r = roundById(rid);
   if(!r) return;
-  cm = { rid, ids: new Set(), who: 'one', lang: 'auto', sending: false,
+  cm = { rid, ids: new Set(), who: 'one', lang: 'auto', sending: false, only: null, toIds: new Set(),
     tpl: { subject_ko: r.mail_subject_ko || '', body_ko: r.mail_body_ko || '', subject_en: r.mail_subject_en || '', body_en: r.mail_body_en || '' } };
-  pickTurn();
+  const m = mid && membersOf(rid).find(x => x.id === mid);
+  if(m){
+    cm.only = m.id;
+    cm.ids = new Set([m.id]);
+    const ppl = mailable(m);
+    const pid = pickedPersonId(m);
+    cm.toIds = new Set([String((ppl.find(p => String(p.id) === String(pid)) || ppl[0] || {}).id ?? '')].filter(Boolean));
+  } else pickTurn();
   render();
 }
+export function rmTo(id, on){ if(!cm) return; on ? cm.toIds.add(String(id)) : cm.toIds.delete(String(id)); render(); }
 const close = () => { document.getElementById('round-mail')?.remove(); cm = null; };
 function pickTurn(){
   cm.ids = new Set(membersOf(cm.rid).filter(m => isTurn(m) && peopleTo(m, cm.who).length).map(m => m.id));
@@ -65,7 +78,8 @@ function pickTurn(){
 function render(){
   if(!cm) return;
   const r = roundById(cm.rid);
-  const list = membersOf(cm.rid).slice().sort((a, b) => isTurn(b) - isTurn(a) || memberName(a).localeCompare(memberName(b), 'ko'));
+  const list = cm.only ? membersOf(cm.rid).filter(m => m.id === cm.only)
+    : membersOf(cm.rid).slice().sort((a, b) => isTurn(b) - isTurn(a) || memberName(a).localeCompare(memberName(b), 'ko'));
   const picked = list.filter(m => cm.ids.has(m.id));
   const sample = picked[0];
   const sp = sample && peopleTo(sample, cm.who)[0];
@@ -82,16 +96,24 @@ function render(){
   }
   el.innerHTML = `<div style="background:var(--W);border-radius:12px;width:min(980px,100%);max-height:92vh;overflow:auto;padding:16px 18px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-      <div style="font-size:14px;font-weight:700">메일 보내기 — ${escapeHtml(r.name)}</div>
-      <span style="font-size:11px;color:var(--i4)">기업마다 한 통씩 따로 보내고 그 기업 컨택 기록에 «DM · 보냄»으로 남깁니다</span>
+      <div style="font-size:14px;font-weight:700">메일 보내기 — ${cm.only && list[0] ? `${escapeHtml(memberName(list[0]))} <span style="font-weight:400;color:var(--i4)">· ${escapeHtml(r.name)}</span>` : escapeHtml(r.name)}</div>
+      <span style="font-size:11px;color:var(--i4)">${cm.only ? '이 기업에 한 통 — 컨택 기록에 «DM · 보냄»으로 남깁니다' : '기업마다 한 통씩 따로 보내고 그 기업 컨택 기록에 «DM · 보냄»으로 남깁니다'}</span>
       <button class="drcls" style="margin-left:auto" onclick="closeRoundMail()">✕</button>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
       <div><div class="mlbl">언어</div><select class="fi" onchange="rmSet('lang',this.value)">${opt('auto', cm.lang, '기업별 자동 (해외는 영문)')}${opt('ko', cm.lang, '모두 국문')}${opt('en', cm.lang, '모두 영문')}</select></div>
-      <div><div class="mlbl">받는 사람</div><select class="fi" onchange="rmSet('who',this.value)">${opt('one', cm.who, '한 명 (최근 연락한 사람)')}${opt('all', cm.who, '메일 있는 담당자 모두')}</select></div>
+      ${cm.only ? '<div></div>' : `<div><div class="mlbl">받는 사람</div><select class="fi" onchange="rmSet('who',this.value)">${opt('one', cm.who, '한 명 (최근 연락한 사람)')}${opt('all', cm.who, '메일 있는 담당자 모두')}</select></div>`}
     </div>
     <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:14px">
-      <div>
+      ${cm.only && list[0] ? `<div>
+        <div class="mlbl" style="margin:0 0 4px">받는 사람 — 체크한 사람 모두가 한 통의 받는 사람이 돼요</div>
+        <div style="border:1px solid var(--i6);border-radius:8px;max-height:360px;overflow:auto">
+          ${peopleOf(list[0]).map(p => { const has = String(p.email1 || '').includes('@'); return `<label style="display:flex;gap:6px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--i8);font-size:11.5px;opacity:${has ? 1 : .5}">
+            <input type="checkbox" ${cm.toIds.has(String(p.id)) ? 'checked' : ''} ${has ? '' : 'disabled'} onchange="rmTo('${escAttr(String(p.id))}',this.checked)">
+            <b>${escapeHtml(p.nameKo || p.nameEn || '')}</b><span style="color:var(--i4)">${escapeHtml([p.deptKo, p.titleKo].filter(Boolean).join(' '))}</span>
+            <span style="color:var(--i3);margin-left:auto">${has ? escapeHtml(p.email1) : '메일 없음'}</span></label>`; }).join('')}
+        </div>
+      </div>` : `<div>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
           <div class="mlbl" style="margin:0">받는 곳 ${picked.length}/${list.length}</div>
           <button class="btn" style="font-size:10px;margin-left:auto" onclick="rmAll('turn')" title="걸 차례·다시 걸 차례인 곳만">보낼 차례만</button>
@@ -107,7 +129,7 @@ function render(){
             <span style="color:var(--i4);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ps.length ? escapeHtml(ps.map(p => p.email1).join(', ')) : '메일 있는 담당자 없음'}</span>
           </label>`; }).join('') || '<div style="padding:12px;font-size:11.5px;color:var(--i4)">명단이 비어 있어요</div>'}
         </div>
-      </div>
+      </div>`}
       <div>
         <details${cm.lang !== 'en' ? ' open' : ''}><summary style="cursor:pointer;font-size:11.5px;font-weight:700;margin-bottom:4px">국문 문구</summary>
           <input class="fi" style="font-size:11.5px;margin-bottom:4px" placeholder="[{행사}] 비즈니스 상담회 주선신청 안내" value="${escapeHtml(cm.tpl.subject_ko)}" oninput="rmTpl('subject_ko',this.value)">
@@ -123,7 +145,7 @@ function render(){
       </div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:12px">
-      <button class="btn bp" onclick="sendRoundMail()" ${picked.length && !cm.sending ? '' : 'disabled'}>${picked.length}곳에 보내기</button>
+      <button class="btn bp" onclick="sendRoundMail()" ${picked.length && !cm.sending ? '' : 'disabled'}>${cm.only ? '보내기' : `${picked.length}곳에 보내기`}</button>
       <span id="rm-msg" style="font-size:11px;color:var(--i4)"></span>
     </div>
   </div>`;
@@ -169,9 +191,17 @@ export async function sendRoundMail(){
   }
   const from = await eventMailFrom(r.event_id);
   if(!from.ok){ msg(from.text); return; }
+  if(cm.only){
+    const to = peopleTo(list[0]).map(p => p.email1);
+    if(!to.length){ msg('받는 사람을 체크해 주세요.'); return; }
+    if(!confirm(`«${memberName(list[0])}»에 «${r.name}» 메일을 보낼까요?
+
+받는 사람: ${to.join(', ')}
+발신 ${from.text}`)) return;
+  }
   const notTurn = list.filter(m => !isTurn(m)).length;
   // 밖으로 나가는 일 — 한 번 묻는다
-  if(!confirm(`${list.length}곳에 «${r.name}» 메일을 보낼까요?${notTurn ? `\n\n이 중 ${notTurn}곳은 보낼 차례가 아니에요(기다림·끝남).` : ''}\n\n발신 ${from.text}\n받는 사람: ${cm.who === 'all' ? '메일 있는 담당자 모두' : '한 명'}\n기업마다 한 통씩 따로 나갑니다.`)) return;
+  if(!cm.only && !confirm(`${list.length}곳에 «${r.name}» 메일을 보낼까요?${notTurn ? `\n\n이 중 ${notTurn}곳은 보낼 차례가 아니에요(기다림·끝남).` : ''}\n\n발신 ${from.text}\n받는 사람: ${cm.who === 'all' ? '메일 있는 담당자 모두' : '한 명'}\n기업마다 한 통씩 따로 나갑니다.`)) return;
 
   cm.sending = true;
   render();
@@ -201,10 +231,10 @@ export async function sendRoundMail(){
   }
   trackAction('add', '컨택 DM 보냄', r.name, `«${escapeHtml(r.name)}» ${ok}곳 보냄${fails.length ? ` · 실패 ${fails.length}곳` : ''}`);
   cm.sending = false;
-  pickTurn();   // 보낸 곳은 «기다림»으로 넘어가 빠진다
+  if(!cm.only) pickTurn();   // 보낸 곳은 «기다림»으로 넘어가 빠진다
   render();
   msg(`${ok}곳에 보냈어요${fails.length ? ` — 실패 ${fails.length}곳: ${fails.slice(0, 5).join(' / ')}${fails.length > 5 ? ' …' : ''}` : ''}`, !fails.length);
   window.renderCrm?.(); renderRoundNav();
 }
 
-Object.assign(window, { openRoundMail, closeRoundMail: close, rmSet, rmPick, rmAll, rmTpl, saveRoundMailTpl, sendRoundMail });
+Object.assign(window, { openRoundMail, rmTo, closeRoundMail: close, rmSet, rmPick, rmAll, rmTpl, saveRoundMailTpl, sendRoundMail });
