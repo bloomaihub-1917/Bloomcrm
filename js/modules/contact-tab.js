@@ -27,6 +27,8 @@ import {
 } from '../api.js';
 import { escapeHtml, escAttr, td, nowStamp } from '../utils.js';
 import { trackAction } from './audit-tab.js';
+import { postToSheet } from '../api.js';
+import { buildCoDB } from './company-tab.js';
 
 /* ── 반응 — 채널마다 누를 수 있는 것이 다르다. next: 다음 연락까지 며칠(0=곧바로),
    close: 이 반응이면 끝낸다. 값은 여기 한 곳에만 둔다. ── */
@@ -60,6 +62,7 @@ const LS_ROUND = 'contact_round';
 let curRoundId = (() => { try { return localStorage.getItem(LS_ROUND) || null; } catch(e){ return null; } })();
 let stFil = 'now';                 // now(걸 차례+다시 걸 차례) | todo | again | wait | done | all
 const histOpen = new Set();        // 기록을 펼친 명단 줄
+const personForm = {};             // 줄마다 열어 둔 담당자 칸 — { mid: 'new' | 연락처 id }
 const editOpen = new Set();        // 주의사항 등을 고치는 중인 줄
 const pickedContact = {};          // 줄마다 고른 사람 — 반응 단추를 누르면 이 사람으로 기록된다
 /* 고른 사람 — 고른 적이 없으면 지난번에 연락한 사람, 그것도 없으면 맨 위 사람 */
@@ -296,7 +299,9 @@ function card(r, { m, atts, st }){
       ${ch === 'TM'
         ? nums.map(n => `<a href="tel:${escapeHtml(n.replace(/[^\d+]/g, ''))}" onclick="event.stopPropagation()" style="color:var(--a)">${escapeHtml(n)}</a>`).join(' · ') || '<span style="color:var(--re)">번호 없음</span>'
         : (p.email1 ? `<span style="color:var(--i3)">${escapeHtml(p.email1)}</span>` : '<span style="color:var(--re)">메일 없음</span>')}
-    </label>`;
+      <a href="javascript:void(0)" onclick="event.preventDefault();openPersonForm('${escAttr(m.id)}','${escAttr(id)}')" title="번호·메일·직위 고치기" style="color:var(--i4);margin-left:2px">✎</a>
+    </label>
+    ${personForm[m.id] === id ? personFormHtml(m, p) : ''}`;
   };
 
   return `<div id="rm-${escAttr(m.id)}" style="border:1px solid var(--i6);border-radius:var(--r);background:var(--W);padding:9px 12px">
@@ -325,6 +330,9 @@ function card(r, { m, atts, st }){
       ${people.length > 1 ? `<div style="font-size:10.5px;color:var(--i4);margin-bottom:2px">${ch === 'TM' ? '누구와 통화했나요' : '누구에게 보냈나요'} — 반응 단추를 누르면 고른 사람으로 기록돼요</div>` : ''}
       ${people.length ? people.map(person).join('')
         : `<div style="font-size:11.5px;color:var(--i4)">기업DB에 담당자가 없어요${co?.phone ? ` · 대표번호 <a href="tel:${escapeHtml(String(co.phone).replace(/[^\d+]/g, ''))}" style="color:var(--a)">${escapeHtml(co.phone)}</a>` : ''}</div>`}
+      ${personForm[m.id] === 'new' ? personFormHtml(m, null)
+        : String(m.org_id).startsWith('name:') ? ''
+        : `<a href="javascript:void(0)" onclick="openPersonForm('${escAttr(m.id)}','new')" style="font-size:11px;color:var(--a);display:inline-block;margin-top:3px">+ 담당자 추가</a>`}
     </div>
     ${m.closed_at || m.goal_at ? '' : `<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:6px">
       <select onchange="pickContactChannel('${escAttr(m.id)}',this.value)" style="font-size:11px;padding:3px 4px;border:1px solid var(--i6);border-radius:5px">
@@ -365,6 +373,87 @@ function hist(m, atts){
     ${atts.map(a => line(a, false)).join('')}
     ${others.length ? `<div style="font-size:10.5px;color:var(--i4);margin-top:6px">다른 차수 기록</div>${others.slice(0, 20).map(a => line(a, true)).join('')}` : ''}
   </div>`;
+}
+
+/* ══════════════════════════════════════════
+   담당자 더하기·고치기 — 통화하다 새 사람을 알게 되거나 번호·메일이 바뀌면
+   그 자리에서 마스터DB에 넣는다. 기업DB·전시·연사 화면이 같은 연락처를 본다.
+══════════════════════════════════════════ */
+function personFormHtml(m, p){
+  const k = p ? String(p.id) : 'new';
+  const f = (key, label, val, ph = '', w = 120) => `<label style="display:flex;flex-direction:column;gap:2px;font-size:10.5px;color:var(--i4);flex:1;min-width:${w}px">${label}
+    <input id="pf-${key}-${escAttr(m.id)}" value="${escapeHtml(val || '')}" placeholder="${escapeHtml(ph)}" style="font-size:11.5px;padding:4px 6px;border:1px solid var(--i6);border-radius:4px"></label>`;
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;margin:4px 0 6px;padding:8px;background:var(--i9);border-radius:5px">
+    ${p ? `<div style="width:100%;font-size:11px;font-weight:600">${escapeHtml(p.nameKo || p.nameEn || '')} 고치기</div>`
+        : f('name', '이름', '', '홍길동 / John Kim', 110)}
+    ${f('dept', '부서', p?.deptKo, '사업개발팀', 100)}${f('title', '직위', p?.titleKo, '팀장', 80)}
+    ${f('phone1', '전화', p?.phone1, '010-0000-0000')}${f('phone2', '다른 번호', p?.phone2, '02-000-0000')}
+    ${f('email', '메일', p?.email1, 'name@company.com', 170)}
+    <button class="btn bs bp" onclick="savePersonForm('${escAttr(m.id)}','${escAttr(k)}')">${p ? '저장' : '추가'}</button>
+    <button class="btn bs" onclick="openPersonForm('${escAttr(m.id)}','')">닫기</button>
+  </div>`;
+}
+export function openPersonForm(mid, k){
+  if(k && personForm[mid] !== k) personForm[mid] = k; else delete personForm[mid];
+  renderToday();
+}
+/* 연락처 한 줄 — 앞 23칸(기업 연결까지)만 보낸다. 위치 배열은 보낸 칸까지만 덮으므로
+   퇴사·메모 칸은 그대로 남는다(routes/data.js) */
+const contactRow23 = (c) => [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
+  c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
+  c.beat, c.products, c.tags || '', c.org_id || ''];
+/* 새 연락처 id — 16자리 이하(CLAUDE.md): ${Date.now()}${순번 3자리} */
+const newContactId = () => Number(`${Date.now()}${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`);
+
+export async function savePersonForm(mid, k){
+  const m = ROUND_MEMBERS.find(x => x.id === mid);
+  if(!m) return;
+  const v = (key) => (document.getElementById(`pf-${key}-${mid}`)?.value || '').trim();
+  const email = v('email');
+  if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ alert('메일 주소 모양이 아니에요.'); return; }
+  const co = coOf(m.org_id);
+  const org = co?.org || {};
+  if(k === 'new'){
+    const name = v('name');
+    if(!name){ alert('이름을 적어주세요.'); return; }
+    const ko = /[가-힣]/.test(name);
+    const r = roundById(m.round_id);
+    const c = {
+      id: newContactId(), nameKo: ko ? name : '', nameEn: ko ? '' : name,
+      orgKo: co?.nameKo || org.name_ko || m.org_name || '', orgEn: co?.nameEn || org.name_en || '',
+      titleKo: v('title'), titleEn: '', deptKo: v('dept'), deptEn: '',
+      country: co?.country || '', cat: 'attendee', lang: ko ? 'KO' : 'EN',
+      source: `${evLabel(r?.event_id)} 컨택(${r?.name || ''})`, date: td(), status: 'new',
+      email1: email, email2: '', phone1: v('phone1'), phone2: v('phone2'),
+      beat: '', products: '', tags: '', org_id: m.org_id,
+      left_at: '', moved_to_id: '', memo1: '', memo2: '', memo3: '', prefix: '',
+    };
+    if(!Number.isSafeInteger(c.id)){ alert('연락처 번호를 만들지 못했어요. 다시 눌러 주세요.'); return; }
+    contacts.push(c);
+    const res = await postToSheet({ sheet: 'contacts', row: contactRow23(c) }, '담당자 추가');
+    if(!res.ok){ contacts.splice(contacts.indexOf(c), 1); return; }
+    try { buildCoDB(); } catch(e){}
+    pickedContact[mid] = String(c.id);      // 방금 넣은 사람과 연락 중일 테니 그 사람을 고른다
+    delete personForm[mid];
+    trackAction('add', '연락처 추가', name, `${escapeHtml(name)} / ${escapeHtml(c.orgKo || c.orgEn)} 추가 — 컨택 «${escapeHtml(r?.name || '')}»에서`,
+      { kind: 'contact', id: c.id });
+  } else {
+    const c = contacts.find(x => String(x.id) === String(k));
+    if(!c) return;
+    const patch = { deptKo: v('dept'), titleKo: v('title'), phone1: v('phone1'), phone2: v('phone2'), email1: email };
+    const before = Object.fromEntries(Object.keys(patch).map(x => [x, c[x] || '']));
+    const changedKeys = Object.keys(patch).filter(x => before[x] !== patch[x]);
+    if(!changedKeys.length){ delete personForm[mid]; renderToday(); return; }
+    Object.assign(c, patch);
+    const res = await postToSheet({ sheet: 'contacts', action: 'upsert', row: contactRow23(c) }, '담당자 고침');
+    if(!res.ok){ Object.assign(c, before); renderToday(); return; }
+    try { buildCoDB(); } catch(e){}
+    delete personForm[mid];
+    const what = changedKeys.map(x => ({ deptKo: '부서', titleKo: '직위', phone1: '전화', phone2: '다른 번호', email1: '메일' })[x]).join('·');
+    trackAction('edit', '연락처 정보 수정', c.nameKo || c.nameEn,
+      `${escapeHtml(c.nameKo || c.nameEn)} (${escapeHtml(c.orgKo || c.orgEn)}) ${what} 고침 — 컨택에서`, { kind: 'contact', id: c.id });
+  }
+  renderToday();
 }
 
 function editForm(m){
@@ -761,6 +850,6 @@ Object.assign(window, {
   pickRound, renderToday, setContactFil, contactShowMore, toggleContactHist, toggleContactEdit,
   pickContactPerson, pickContactChannel, recordContact, undoContactAttempt, setContactNext,
   toggleContactGoal, closeContactMember, reopenContactMember, saveContactMemberEdit, removeContactMember,
-  openContactCo, openRoundMember, openRoundEditor, saveRoundEditor, toggleRoundClosed, removeRound,
+  openContactCo, openRoundMember, openPersonForm, savePersonForm, openRoundEditor, saveRoundEditor, toggleRoundClosed, removeRound,
   openFillRound, fillPickEv, fillToggleRole, fillToggle, fillAll, fillCommit, fillSearch, fillAddOne,
 });
