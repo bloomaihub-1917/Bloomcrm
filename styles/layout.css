@@ -296,8 +296,11 @@ button{font-family:inherit;cursor:pointer}input,select,textarea{font-family:inhe
   .tlno { font-size: 11px; }
 
   /* ── CRM Kanban ── */
-  .kanban { padding: 12px; gap: 10px; }
+  /* 휴대폰은 보드 하나가 위아래·좌우로 함께 움직인다. 가로로 넘기는 보드 안에 열마다
+     세로 스크롤을 또 두면, 손가락으로 쓸 때 어느 쪽을 움직일지 갈려 세로가 먹지 않았다 */
+  .kanban { padding: 12px; gap: 10px; overflow: auto; align-items: flex-start; -webkit-overflow-scrolling: touch; }
   .kcol { width: 200px; }
+  .kcs { flex: none; overflow: visible; }
   .knm { font-size: 13px; }
   .ksc { font-size: 11px; }
   .kwh, .kdt { font-size: 11px; }
