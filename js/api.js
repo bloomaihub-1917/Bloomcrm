@@ -1032,3 +1032,4 @@ async function aiApi(path, method = 'GET', body){
 }
 export const aiStatus     = () => aiApi('/status');
 export const aiMapColumns = (body) => aiApi('/map-columns', 'POST', body);
+export const aiCompanyPairs = (body) => aiApi('/company-pairs', 'POST', body);

@@ -10,6 +10,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 
 const router = express.Router();
 const MODEL = 'claude-sonnet-5-5';
+const NL = String.fromCharCode(10);
 let client = null;
 const ai = () => (client || (client = new Anthropic()));
 const enabled = () => !!process.env.ANTHROPIC_API_KEY;
@@ -77,6 +78,75 @@ router.post('/map-columns', async (req, res) => {
     });
     res.json({ ok: true, mappings });
   } catch (e) {
+    if (e instanceof Anthropic.RateLimitError) return res.status(429).json({ ok: false, error: 'AI 요청이 많아요 — 잠시 뒤에 다시' });
+    if (e instanceof Anthropic.AuthenticationError) return res.status(503).json({ ok: false, error: 'AI 키가 맞지 않아요' });
+    if (e instanceof Anthropic.APIError) return res.status(502).json({ ok: false, error: `AI 오류 (${e.status || '연결'})` });
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+/* 같은 회사 다른 표기 찾기 — 회사명만 보낸다(개인정보 아님)
+   body: { known: [{id, ko, en}], incoming?: [이름…] }
+   incoming이 있으면: 그 이름들이 known의 어느 회사와 같은지 (업로드 때)
+   없으면: known 안에서 같은 회사끼리 (기업DB 정리)
+   답: { ok, pairs: [{ a, b, reason, caution }] } — a는 incoming 이름 또는 known id, b는 known id */
+router.post('/company-pairs', async (req, res) => {
+  if (!enabled()) return res.status(503).json({ ok: false, error: 'AI가 꺼져 있어요(ANTHROPIC_API_KEY 없음)' });
+  const { known, incoming } = req.body || {};
+  const ks = (Array.isArray(known) ? known : []).slice(0, 3000)
+    .map((o) => ({ id: String(o.id || '').slice(0, 60), ko: String(o.ko || '').slice(0, 80), en: String(o.en || '').slice(0, 80) }))
+    .filter((o) => o.id && (o.ko || o.en));
+  const inc = Array.isArray(incoming) ? [...new Set(incoming.map((x) => String(x || '').trim().slice(0, 80)).filter(Boolean))].slice(0, 500) : null;
+  if (!ks.length || (inc && !inc.length)) return res.status(400).json({ ok: false, error: '회사명이 없어요' });
+
+  const ids = ks.map((o) => o.id);
+  const schema = {
+    type: 'object', additionalProperties: false, required: ['pairs'],
+    properties: { pairs: { type: 'array', items: {
+      type: 'object', additionalProperties: false, required: ['a', 'b', 'reason', 'caution'],
+      properties: { a: { type: 'string' }, b: { type: 'string' }, reason: { type: 'string' }, caution: { type: 'string' } },
+    } } },
+  };
+  const list = ks.map((o) => [o.id, o.ko, o.en].join(' | ')).join(NL);
+  const rules = [
+    '같은 법인을 다르게 적은 것만 고르세요: 국문/영문 표기, 약칭, 옛 이름, 띄어쓰기·오타 (예: 한국엠에스디 = MSD Korea, 엘지화학 = LG Chem).',
+    '이름이 비슷해도 다른 회사면 고르지 마세요 (예: Merck KGaA와 MSD(Merck & Co.)는 다른 회사, 삼성바이오로직스와 삼성바이오에피스는 다른 회사).',
+    '한국 법인과 해외 본사(예: 한국화이자제약 ↔ Pfizer Inc.)처럼 같은 그룹이지만 법인이 다를 수 있으면 고르되 caution에 그렇게 적으세요. 아니면 caution은 "".',
+    '확신이 없으면 고르지 마세요. 놓치는 것보다 잘못 합치는 것이 더 나쁩니다.',
+    'reason은 한국어 한 줄로 근거를 적으세요.',
+  ];
+  const prompt = (inc
+    ? ['행사 CRM에 새로 올라온 회사명이 이미 등록된 회사와 같은 곳인지 찾아 주세요.', ...rules,
+      'a에는 새 회사명을 그대로, b에는 같은 곳인 등록 회사의 id를 적으세요. 같은 곳이 없으면 넣지 마세요.',
+      '', '등록된 회사 (id | 국문 | 영문):', list, '', '새로 올라온 회사명:', ...inc]
+    : ['행사 CRM의 회사 목록에서 같은 회사가 두 번 등록된 쌍을 찾아 주세요.', ...rules,
+      'a와 b에는 두 회사의 id를 적으세요. 가장 확실한 것부터 최대 40쌍.',
+      '', '회사 (id | 국문 | 영문):', list]).join(NL);
+
+  try {
+    const r = await ai().beta.messages.create({
+      model: MODEL,
+      max_tokens: 16000,
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      output_config: { effort: 'low', format: { type: 'json_schema', schema } },
+      messages: [{ role: 'user', content: prompt }],
+    }, { timeout: 55000, maxRetries: 0 }); // Vercel 함수는 60초에 끊긴다 — 그 전에 알아듣게 실패한다
+    if (r.stop_reason === 'refusal') return res.status(502).json({ ok: false, error: 'AI가 답하지 않았어요' });
+    const out = JSON.parse(r.content.filter((b) => b.type === 'text').map((b) => b.text).join(''));
+    const incSet = new Set(inc || []);
+    const seen = new Set();
+    const pairs = (out.pairs || []).filter((p) => {
+      if (!ids.includes(p.b)) return false;
+      if (inc ? !incSet.has(p.a) : (!ids.includes(p.a) || p.a === p.b)) return false;
+      const k = inc ? p.a : [p.a, p.b].sort().join('|');
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    }).map((p) => ({ a: p.a, b: p.b, reason: String(p.reason || '').slice(0, 160), caution: String(p.caution || '').slice(0, 160) }));
+    res.json({ ok: true, pairs });
+  } catch (e) {
+    if (e instanceof Anthropic.APIConnectionTimeoutError) return res.status(504).json({ ok: false, error: '기업이 많아 시간 안에 끝나지 않았어요' });
     if (e instanceof Anthropic.RateLimitError) return res.status(429).json({ ok: false, error: 'AI 요청이 많아요 — 잠시 뒤에 다시' });
     if (e instanceof Anthropic.AuthenticationError) return res.status(503).json({ ok: false, error: 'AI 키가 맞지 않아요' });
     if (e instanceof Anthropic.APIError) return res.status(502).json({ ok: false, error: `AI 오류 (${e.status || '연결'})` });

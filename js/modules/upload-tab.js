@@ -58,8 +58,8 @@ import {
 } from '../state.js';
 import { CL } from '../constants.js';
 import { td, normalizeCat, normalizeCountry, escapeHtml, escAttr, scopedSectorName, slugifySectorName, sectorRowValues, sectorKey } from '../utils.js';
-import { postToSheet, saveCatmap, aiStatus, aiMapColumns } from '../api.js';
-import { buildCoDB, buildCoCAT, batchUpsertCompanies, ensureOrgsForNames, orgIdForName, suggestSector } from './company-tab.js';
+import { postToSheet, saveCatmap, aiStatus, aiMapColumns, aiCompanyPairs } from '../api.js';
+import { buildCoDB, buildCoCAT, batchUpsertCompanies, ensureOrgsForNames, orgIdForName, suggestSector, patchOrgFields } from './company-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
 import { trackAction } from './audit-tab.js';
 
@@ -185,6 +185,7 @@ export function runUploadStep(file){
   if(upBtns) upBtns.style.display = 'none';
   const mergeWrap = document.getElementById('merge-wrap');
   if(mergeWrap) mergeWrap.innerHTML = '';
+  _coNew = []; _coPairs = [];
   const prevEl = document.getElementById('parser-prev');
   if(prevEl) prevEl.innerHTML =
     '<tr><td colspan="4" style="padding:18px;text-align:center;color:var(--i4);font-size:11px">파일을 분석하고 있어요…</td></tr>';
@@ -450,35 +451,75 @@ function guessColumn(headers, aliases, usedHeaders){
    이미 있으면 업로드 폼(#merge-wrap) 안에 병합 제안 카드를 보여준다.
    ※ "기업병합관리" 사이드 하위탭(switchUV('merge'))의 mergeProps 목록과는
      별개의 기능 — 이건 업로드 직후 즉석에서 보여주는 간단한 휴리스틱 제안이다. */
+/* 전에는 4쌍(삼성전자·현대자동차·구글·AWS)을 코드에 적어 두고, 승인을 눌러도
+   아무것도 저장하지 않았다. 이제는 기업DB에 없는 파일의 회사명만 모아
+   «✨ 기존 기업과 같은 곳 찾기»를 띄운다 — 매핑을 바꿀 때마다 다시 그려지므로 AI는 눌렀을 때만 부른다.
+   «기존 기업으로 넣기»는 그 표기를 기존 기업의 옛 이름(aliases)에 더한다. 그러면 저장할 때
+   ensureOrgsForNames가 새 기업을 만들지 않고 기존 기업에 붙인다. */
+let _coNew = [];        // 기업DB에 없는 파일의 회사명
+let _coPairs = [];      // AI 추천 [{ a: 파일 이름, b: org id, reason, caution }]
 function checkMergeCandidate(rows){
-  const KNOWN_PAIRS = [
-    ['Samsung Electronics','삼성전자'], ['Hyundai Motor','현대자동차'],
-    ['Google LLC','구글'], ['AWS','Amazon Web Services'],
-  ];
   const mergeWrap = document.getElementById('merge-wrap');
   if(!mergeWrap) return;
-  const orgsInFile = new Set(rows.map(r=>r.orgKo||r.org).filter(Boolean));
-  for(const [a,b] of KNOWN_PAIRS){
-    if(orgsInFile.has(a) || orgsInFile.has(b)){
-      const existingOrgs = new Set(contacts.map(c=>c.orgKo||c.org||'').filter(Boolean));
-      if((orgsInFile.has(a) && existingOrgs.has(b)) || (orgsInFile.has(b) && existingOrgs.has(a))){
-        mergeWrap.innerHTML = `
-          <div class="ma">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>
-            <div>
-              <div class="ma-t">"${a}" ↔ "${b}" 병합 제안</div>
-              <div class="ma-s">동일 기업 다국어 표기로 감지. 병합 시 모든 이력이 통합됩니다.</div>
-              <div class="ma-b">
-                <button class="btn bp bs" onclick="this.closest('.ma').innerHTML='<div style=\\'font-size:11px;color:var(--g);padding:4px 0\\'>✓ 병합 승인됨 (다음 동기화 시 반영)</div>'">병합 승인</button>
-                <button class="btn bs" onclick="this.closest('.ma').remove()">별도 유지</button>
-              </div>
-            </div>
-          </div>`;
-        return;
-      }
-    }
-  }
+  const names = [...new Set(rows.map(r => String(r.orgKo || r.orgEn || r.org || '').trim()).filter(Boolean))];
+  const fresh = names.filter(n => !orgIdForName(n));
+  const same = fresh.length === _coNew.length && fresh.every((n, i) => n === _coNew[i]);
+  if(!same){ _coNew = fresh; _coPairs = []; }
+  renderCoMatch();
 }
+function renderCoMatch(msg){
+  const mergeWrap = document.getElementById('merge-wrap');
+  if(!mergeWrap) return;
+  if(!_aiOn || !_coNew.length){ mergeWrap.innerHTML = ''; return; }
+  const cards = _coPairs.map((p, i) => {
+    const o = getOrgById(p.b);
+    if(!o) return '';
+    const on = o.name_ko || o.name_en;
+    return `<div style="border:1px solid var(--i6);border-radius:8px;padding:8px 10px;margin-top:6px;background:var(--W)">
+      <div style="font-size:12px"><b>${escapeHtml(p.a)}</b> <span style="color:var(--i4)">(파일)</span> → <b>${escapeHtml(on)}</b>
+        ${o.name_ko && o.name_en ? `<span style="color:var(--i4)">${escapeHtml(o.name_en)}</span>` : ''} <span style="color:var(--i4)">(기업DB)</span></div>
+      <div style="font-size:11px;color:var(--i4);margin-top:2px">✨ ${escapeHtml(p.reason)}</div>
+      ${p.caution ? `<div style="font-size:11px;color:var(--am);margin-top:2px">⚠️ ${escapeHtml(p.caution)}</div>` : ''}
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <button class="btn bp bs" onclick="coMatchApply(${i})">기존 «${escapeHtml(on)}»으로 넣기</button>
+        <button class="btn bs" onclick="coMatchSkip(${i})">새 기업으로 둠</button>
+      </div></div>`;
+  }).join('');
+  mergeWrap.innerHTML = `<div style="border:1px solid var(--i6);border-radius:10px;padding:10px 12px;margin:8px 0;background:var(--i8)">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px">
+      <span>기업DB에 없는 회사 <b>${_coNew.length}곳</b>이 새 기업으로 들어갈 예정이에요.</span>
+      <button class="btn bs" id="co-match-btn" style="font-size:11px" onclick="coMatchFind()"
+        title="회사명만 보냅니다 — 국문·영문 표기나 약칭이 달라 같은 회사인데 새로 생기는 것을 막아요">✨ 기존 기업과 같은 곳 찾기</button>
+    </div>
+    ${msg ? `<div style="font-size:11px;color:var(--i3);margin-top:6px">${msg}</div>` : ''}
+    ${cards}</div>`;
+}
+export async function coMatchFind(){
+  const btn = document.getElementById('co-match-btn');
+  if(btn){ btn.disabled = true; btn.textContent = '✨ 찾는 중…'; }
+  const known = CO_DB.map(c => ({ id: c.key, ko: c.nameKo || '', en: c.nameEn || '' })).filter(o => o.ko || o.en);
+  const r = await aiCompanyPairs({ known, incoming: _coNew });
+  if(!r.ok){ renderCoMatch('<span style="color:var(--re)">AI로 찾지 못했어요: ' + escapeHtml(r.error || '') + '</span>'); return; }
+  _coPairs = r.pairs || [];
+  addAiLog('ok', '✨ 새 회사 ' + _coNew.length + '곳 중 ' + _coPairs.length + '곳이 기존 기업과 같아 보여요');
+  renderCoMatch(_coPairs.length ? '' : '✨ 기존 기업과 같은 곳을 찾지 못했어요 — 모두 새 기업으로 들어갑니다.');
+}
+export async function coMatchApply(i){
+  const p = _coPairs[i];
+  const o = p && getOrgById(p.b);
+  if(!o) return;
+  const before = o.aliases || '';
+  const list = String(before).split('\n').map(v => v.trim()).filter(Boolean);
+  if(!list.includes(p.a)) list.push(p.a);
+  const r = await patchOrgFields(o.id, { aliases: list.join('\n') });
+  if(r && r.ok === false){ alert('저장하지 못했어요 — 다시 시도해주세요.'); return; }
+  trackAction('edit', '기업 옛 이름 추가', o.name_ko || o.name_en, `업로드 표기 «${escapeHtml(p.a)}»를 같은 기업으로 연결`);
+  addAiLog('ok', '«' + escapeHtml(p.a) + '» → 기존 «' + escapeHtml(o.name_ko || o.name_en) + '»에 붙여요');
+  _coNew = _coNew.filter(n => n !== p.a);
+  _coPairs.splice(i, 1);
+  renderCoMatch();
+}
+export function coMatchSkip(i){ _coPairs.splice(i, 1); renderCoMatch(); }
 
 /* STEP 3 본체 (원본 mapColumns, 2541~2805행) */
 export function runMatchColumnsStep(headers, rows){
@@ -1690,4 +1731,7 @@ window.toggleEvInput          = toggleEvInput;
 window.populateUploadEvDropdown = populateUploadEvDropdown;
 window.onColumnMapChange      = onColumnMapChange;
 window.aiFillColumns          = aiFillColumns;
+window.coMatchFind            = coMatchFind;
+window.coMatchApply           = coMatchApply;
+window.coMatchSkip            = coMatchSkip;
 window.toggleCatmap           = toggleCatmap;

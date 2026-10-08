@@ -60,7 +60,7 @@ import {
 } from '../state.js';
 import { RP, avB, avF } from '../constants.js';
 import { escapeHtml, escAttr, levenshteinDist, phoneMatch, parseSectorScope, sectorKey, countryName, isMobile, td, leftPill, safeUrl, parseLinks, slugifySectorName } from '../utils.js';
-import { postToSheet, batchCreateExhibitors, upsertSectorRow, saveExhibitor } from '../api.js';
+import { postToSheet, batchCreateExhibitors, upsertSectorRow, saveExhibitor, aiCompanyPairs } from '../api.js';
 import { parseSectors, joinSectors, mainSectors, sectorNamesInDomain, domainName, domainOfSector, findSectorByName, UNASSIGNED_DOMAIN } from './settings-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
 import { trackAction, changed, removed as removedMeta } from './audit-tab.js';
@@ -452,6 +452,36 @@ export function renderSimilarCompanyList(){
         <button class="btn bp bs" onclick="mergeCompanies('${escAttr(b.key)}','${escAttr(a.key)}')">"${escapeHtml(a.nameKo||a.nameEn)}"로 합치기</button>
         <button class="btn bp bs" onclick="mergeCompanies('${escAttr(a.key)}','${escAttr(b.key)}')">"${escapeHtml(b.nameKo||b.nameEn)}"로 합치기</button>
         <button class="btn bs" onclick="this.closest('div[style*=\\'border-radius:8px\\']').remove()">다른 기업임</button>
+      </div>
+    </div>`).join('');
+}
+
+/* ── AI로 다른 표기 찾기 ──
+   글자 거리로는 못 잡는 짝(한국엠에스디 ↔ MSD Korea, 엘지화학 ↔ LG Chem)을 Claude에게 묻는다.
+   보내는 것은 기업 id와 국문·영문 이름뿐이다. 합치기는 위와 같은 mergeCompanies — 사람이 누른다. */
+export async function aiFindCompanyPairs(){
+  const el = document.getElementById('similar-co-list');
+  if(!el) return;
+  const known = CO_DB.map(c => ({ id: c.key, ko: c.nameKo || '', en: c.nameEn || '' })).filter(o => o.ko || o.en);
+  el.innerHTML = `<div style="font-size:12px;color:var(--i4)">✨ 기업 ${known.length}곳을 AI가 살펴보는 중… (1분쯤 걸릴 수 있어요)</div>`;
+  const r = await aiCompanyPairs({ known });
+  if(!r.ok){ el.innerHTML = `<div style="font-size:12px;color:var(--re)">AI로 찾지 못했어요: ${escapeHtml(r.error || '')}</div>`; return; }
+  const pairs = (r.pairs || []).map(p => ({ ...p, A: CO_DB.find(c => c.key === p.a), B: CO_DB.find(c => c.key === p.b) })).filter(p => p.A && p.B);
+  if(!pairs.length){ el.innerHTML = '<div style="font-size:12px;color:var(--i4)">✨ AI도 같은 회사로 보이는 짝을 못 찾았어요.</div>'; return; }
+  const nm = (c) => escapeHtml(c.nameKo || c.nameEn);
+  el.innerHTML = pairs.map(({ A, B, reason, caution }) => `
+    <div style="background:var(--W);border:1px solid var(--i6);border-radius:8px;padding:10px 12px">
+      <div style="font-size:11px;color:var(--i4);margin-bottom:6px">✨ AI 추천 — ${escapeHtml(reason)}</div>
+      ${caution ? `<div style="font-size:11px;color:var(--am);margin-bottom:6px">⚠️ ${escapeHtml(caution)}</div>` : ''}
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:120px;font-size:13px;font-weight:600">${nm(A)} <span style="font-size:11px;color:var(--i4);font-weight:400">${A.nameKo && A.nameEn ? escapeHtml(A.nameEn) + ' · ' : ''}(${A.contacts.length}명)</span></div>
+        <span style="color:var(--i4)">↔</span>
+        <div style="flex:1;min-width:120px;font-size:13px;font-weight:600">${nm(B)} <span style="font-size:11px;color:var(--i4);font-weight:400">${B.nameKo && B.nameEn ? escapeHtml(B.nameEn) + ' · ' : ''}(${B.contacts.length}명)</span></div>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="btn bp bs" onclick="mergeCompanies('${escAttr(B.key)}','${escAttr(A.key)}')">"${nm(A)}"로 합치기</button>
+        <button class="btn bp bs" onclick="mergeCompanies('${escAttr(A.key)}','${escAttr(B.key)}')">"${nm(B)}"로 합치기</button>
+        <button class="btn bs" onclick="this.parentElement.parentElement.remove()">다른 기업임</button>
       </div>
     </div>`).join('');
 }
@@ -2554,3 +2584,4 @@ window.mergeCoInto = mergeCompanies;
 window.toggleCoColMenu = toggleCoColMenu;
 window.toggleCoCol = toggleCoCol;
 window.renderSimilarCompanyList = renderSimilarCompanyList;
+window.aiFindCompanyPairs = aiFindCompanyPairs;
