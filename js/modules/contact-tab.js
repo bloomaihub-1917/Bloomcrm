@@ -30,7 +30,7 @@ import { trackAction } from './audit-tab.js';
 
 /* ── 반응 — 채널마다 누를 수 있는 것이 다르다. next: 다음 연락까지 며칠(0=곧바로),
    close: 이 반응이면 끝낸다. 값은 여기 한 곳에만 둔다. ── */
-const REACTIONS = {
+export const REACTIONS = {
   positive: { label: '긍정',     cls: 'p-green', next: 2 },
   hold:     { label: '보류',     cls: 'p-amber', next: 3 },
   negative: { label: '부정',     cls: 'p-red',   close: true },
@@ -68,12 +68,12 @@ let showLimit = 150;
 /* ══════════════════════════════════════════
    조회
 ══════════════════════════════════════════ */
-const roundById = (id) => CONTACT_ROUNDS.find(r => r.id === id) || null;
-const membersOf = (rid) => ROUND_MEMBERS.filter(m => m.round_id === rid);
-const attemptsOf = (mid) => CONTACT_ATTEMPTS.filter(a => a.member_id === mid)
+export const roundById = (id) => CONTACT_ROUNDS.find(r => r.id === id) || null;
+export const membersOf = (rid) => ROUND_MEMBERS.filter(m => m.round_id === rid);
+export const attemptsOf = (mid) => CONTACT_ATTEMPTS.filter(a => a.member_id === mid)
   .sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
 const evOf = (key) => EVENT_LIST.find(e => e.key === key) || null;
-const evLabel = (key) => { const e = evOf(key); return e ? (e.short || e.name || e.key) : (key || '행사 없음'); };
+export const evLabel = (key) => { const e = evOf(key); return e ? (e.short || e.name || e.key) : (key || '행사 없음'); };
 const today = () => td();
 function addDays(n){
   const d = new Date(); d.setDate(d.getDate() + n);
@@ -109,10 +109,10 @@ function coList(){
   fbSig = sig;
   return (fbCache = [...map.values()]);
 }
-const coOf = (orgId) => coList().find(c => c.key === orgId) || null;
+export const coOf = (orgId) => coList().find(c => c.key === orgId) || null;
 const coName = (co) => (co ? (co.nameKo || co.nameEn || '') : '');
-const memberName = (m) => coName(coOf(m.org_id)) || m.org_name || '(이름 없음)';
-function peopleOf(m){
+export const memberName = (m) => coName(coOf(m.org_id)) || m.org_name || '(이름 없음)';
+export function peopleOf(m){
   const co = coOf(m.org_id);
   return (co ? co.contacts : []).filter(c => !hasLeft(c))
     .sort((a, b) => (!!(b.phone1 || b.phone2) - !!(a.phone1 || a.phone2)));
@@ -166,8 +166,11 @@ export function renderRoundNav(){
 export function pickRound(id){
   curRoundId = id; stFil = 'now'; showLimit = 150;
   try { localStorage.setItem(LS_ROUND, id); } catch(e){}
-  renderRoundNav(); renderToday();
+  // 오늘 할 컨택·현황표 중 보고 있는 쪽을 다시 그린다(crm-tab.js의 renderCrm이 고른다)
+  renderRoundNav(); (window.renderCrm || renderToday)();
 }
+/* 현황표(contact-grid.js)가 어느 차수를 보고 있는지 읽는다 */
+export const currentRoundId = () => curRoundId;
 
 /* ══════════════════════════════════════════
    가운데 — 오늘 할 컨택
@@ -495,7 +498,7 @@ export function openRoundMember(mid){
   curRoundId = m.round_id; stFil = 'all';
   const q = document.getElementById('crm-q'); if(q) q.value = '';
   histOpen.add(mid);
-  renderRoundNav(); renderToday();
+  renderRoundNav(); (window.renderCrm || renderToday)();
   const el = document.getElementById('rm-' + mid);
   if(el){ el.scrollIntoView({ block: 'center' }); el.style.outline = '2px solid var(--a)'; setTimeout(() => { el.style.outline = ''; }, 1800); }
 }
@@ -577,7 +580,7 @@ export async function saveRoundEditor(id){
     trackAction('add', '컨택 차수 만듦', name, `${escapeHtml(evLabel(data.event_id))} — 차수 «${escapeHtml(name)}» 만듦 (${escapeHtml(ch)})`);
   }
   document.getElementById('round-ed')?.remove();
-  renderRoundNav(); renderToday();
+  renderRoundNav(); (window.renderCrm || renderToday)();
   if(!old && !membersOf(curRoundId).length) openFillRound();
 }
 export async function toggleRoundClosed(id){
@@ -588,7 +591,7 @@ export async function toggleRoundClosed(id){
   const res = await saveRound({ id, status: r.status });
   if(!res.ok){ r.status = prev; return; }
   document.getElementById('round-ed')?.remove();
-  renderRoundNav(); renderToday();
+  renderRoundNav(); (window.renderCrm || renderToday)();
 }
 export async function removeRound(id){
   const r = roundById(id);
@@ -606,7 +609,7 @@ export async function removeRound(id){
   if(curRoundId === id) curRoundId = null;
   trackAction('edit', '컨택 차수 지움', r.name, `${escapeHtml(evLabel(r.event_id))} — 차수 «${escapeHtml(r.name)}» 지움`);
   document.getElementById('round-ed')?.remove();
-  renderRoundNav(); renderToday();
+  renderRoundNav(); (window.renderCrm || renderToday)();
 }
 
 /* ── 명단 채우기 — 행사 참가 기록(기업DB의 행사 이력)에서 고르거나, 한 곳씩 찾아 넣는다 ── */
@@ -696,7 +699,7 @@ async function addMembers(cos, source){
   const rows = cos.map((c, i) => ({ id: genId('RM-', i), round_id: r.id, org_id: c.key, org_name: coName(c),
     source, caution: '', hold_until: '', call_hours: '', next_at: '', goal_at: '', closed_at: '', closed_reason: '', created_at: now }));
   ROUND_MEMBERS.push(...rows);
-  renderToday(); renderRoundNav();
+  (window.renderCrm || renderToday)(); renderRoundNav();
   const res = await addRoundMembers(rows);
   if(!res.ok){
     rows.forEach(x => ROUND_MEMBERS.splice(ROUND_MEMBERS.indexOf(x), 1));

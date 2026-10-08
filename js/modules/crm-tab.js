@@ -39,6 +39,7 @@ import { ab, td, escapeHtml, escAttr, isMobile } from '../utils.js';
 import { trackAction, changed } from './audit-tab.js';
 import { postToSheet } from '../api.js';
 import { renderToday, renderRoundNav, openFillRound, openRoundEditor } from './contact-tab.js';
+import { renderGrid, exportContactGrid } from './contact-grid.js';
 
 /* ── 타겟 1건을 crm_targets 시트에 upsert (신규) ──
    기존에는 chgSt/chgStD/setStg/addLog가 메모리(targets)만 수정하고
@@ -139,6 +140,7 @@ export function updBadges() {
    협의는 스폰서·기관처럼 몇 번 만나 결정되는 소수의 건이라 따로 둔다. */
 const CV_TITLE = {
   today:    ['오늘 할 컨택', 'TM/DM 차수별로 걸 곳과 다시 걸 곳'],
+  grid:     ['현황표', '한 줄에 한 기업 · 차수마다 최근 반응 — 엑셀 보고 양식으로 내려받기'],
   pipeline: ['협의 보드', '몇 번 만나 결정되는 곳 — 스폰서·기관 협의'],
   table:    ['협의 목록', '몇 번 만나 결정되는 곳 — 스폰서·기관 협의'],
 };
@@ -154,15 +156,16 @@ export function switchCV(v, btn) {
   if (btn) btn.classList.add('on');
   document.getElementById('crm-ttl').innerHTML = `${ttl} <span class="tb-s">${sub}</span>`;
   // 사이드바 — 차수는 오늘 할 컨택에서만, 행사별·협의 현황은 협의 보기에서만
-  const today = v === 'today';
+  const contact = v === 'today' || v === 'grid';
   const show = (id, on) => { const e = document.getElementById(id); if (e) e.style.display = on ? '' : 'none'; };
-  show('crm-sb-rounds', today); show('crm-sb-ev', !today); show('crm-sb-st', !today);
+  show('crm-sb-rounds', contact); show('crm-sb-ev', !contact); show('crm-sb-st', !contact);
   const lbl = document.getElementById('crm-add-lbl');
-  if (lbl) lbl.textContent = today ? '명단 채우기' : '협의 추가';
+  if (lbl) lbl.textContent = v === 'today' ? '명단 채우기' : v === 'grid' ? '엑셀로 내려받기' : '협의 추가';
   renderCrm();
 }
 /* 위쪽 + 단추 — 보고 있는 보기에 맞는 것을 더한다 */
 export function crmAdd() {
+  if (crmV === 'grid') return exportContactGrid();
   if (crmV !== 'today') return openModal();
   if (!document.querySelector('#round-nav .nr.on')) return openRoundEditor();
   openFillRound();
@@ -182,6 +185,7 @@ export function searchCrmM(v){
 export function renderCrm() {
   try {
     if (crmV === 'today') renderToday();
+    else if (crmV === 'grid') renderGrid();
     else if (crmV === 'pipeline') renderPipeline(); else renderTable2();
   } catch (e) {
     console.error('[CRM] renderCrm 오류:', e);
