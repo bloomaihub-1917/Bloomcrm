@@ -51,7 +51,7 @@ import {
 } from '../state.js';
 import { CP, CL, RP, CAT_KEYS, ROLE_TO_CAT, COUNTRIES, avB, avF } from '../constants.js';
 import { td, ab, phoneMatch, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseSectorScope, parseTags, joinTags, isMobile, cleanEmail, personName, personFullName, leftPill, slugifySectorName } from '../utils.js';
-import { postToSheet, upsertSectorRow } from '../api.js';
+import { postToSheet, upsertSectorRow, aiQueryPlan } from '../api.js';
 import { buildCoDB, ensureOrgsForNames, orgIdForName, applyCoSectors,
   coDomainOptionsHtml, coSectorOptionsHtml, currentCoSectorPick } from './company-tab.js';
 import { domainOfSector, domainName, findSectorByName, mainSectors, UNASSIGNED_DOMAIN } from './settings-tab.js';
@@ -1201,7 +1201,81 @@ export const mdbQuery = () => String((document.getElementById('mdb-q')||{}).valu
    - 검색 중일 때 — 이름을 콕 집어 찾는 건 «숨겨둔 것까지 보여달라»는 뜻이다.
      여기서 빼면 «분명히 있었는데 검색이 안 되네» 하고 같은 사람을 또 등록하게
      된다. 찾는 걸 막는 건 감추는 것보다 나쁘다. */
-export const hidingLeft = () => !mdbShowLeft && !mdbEvFilter && !mdbQuery();
+export const hidingLeft = () => !mdbShowLeft && !mdbEvFilter && !mdbQuery() && !(mdbAi && mdbAi.plan.include_left);
+
+/* ══════════════════════════════════════════
+   질문으로 찾기 — «작년 KIC 연사 중 올해 안 온 미국 사람»
+   질문을 서버(routes/ai.js /query-plan)가 Claude에게 보내 «조건표»로 받아 온다.
+   연락처는 보내지 않는다 — 행사·역할·카테고리·태그·국가 이름과 질문만 간다.
+   거르기는 여기서 제 데이터로 한다. 사이드바 거르개·검색어와 «그리고»로 겹친다.
+══════════════════════════════════════════ */
+let mdbAi = null;   // { q, plan }
+function aiMatches(c, plan){
+  const parts = participations.filter(p => p.contactId === c.id);
+  const anyEv = plan.events_any || [], noEv = plan.events_none || [], roles = plan.roles || [];
+  if(anyEv.length){
+    const hit = parts.filter(p => anyEv.includes(p.eventId));
+    if(!hit.length) return false;
+    if(roles.length && !hit.some(p => roles.includes(p.role || '참가자'))) return false;
+  } else if(roles.length && !parts.some(p => roles.includes(p.role || '참가자'))) return false;
+  if(noEv.length && parts.some(p => noEv.includes(p.eventId))) return false;
+  if((plan.cats || []).length && !plan.cats.some(k => c.cat === k || parts.some(p => ROLE_TO_CAT[p.role] === k))) return false;
+  if((plan.tags || []).length && !plan.tags.some(t => matchesTagFilter(c, t))) return false;
+  if(plan.clevel && !isCLevelContact(c)) return false;
+  if((plan.countries || []).length && !plan.countries.includes(String(c.country || ''))) return false;
+  const has = (keys, words) => { const h = hay(c, keys); return words.some(w => h.includes(String(w).toLowerCase())); };
+  if((plan.org_keywords || []).length && !has(['orgKo', 'orgEn'], plan.org_keywords)) return false;
+  if((plan.title_keywords || []).length && !has(['titleKo', 'titleEn'], plan.title_keywords)) return false;
+  return true;
+}
+export async function askMdbAi(){
+  const inp = document.getElementById('mdb-ai-q');
+  const q = String(inp?.value || '').trim();
+  if(!q) return;
+  renderMdbAiBar('✨ 질문을 조건으로 바꾸는 중…');
+  const r = await aiQueryPlan({
+    question: q,
+    today: new Date().toISOString().slice(0, 10),
+    events: EVENT_LIST.map(e => ({ key: e.key, short: e.short || '', date: e.date || '' })),
+    roles: [...new Set(['참가자', ...PART_TYPES.map(t => t.key), ...participations.map(p => p.role).filter(Boolean)])],
+    cats: CAT_KEYS.map(k => ({ key: k, label: CL[k] || k })),
+    tags: TAGS.map(t => ({ key: t.key, label: t.label || t.key })),
+    countries: [...new Set(contacts.map(c => String(c.country || '').trim()).filter(Boolean))],
+  });
+  if(!r.ok){ renderMdbAiBar('<span style="color:var(--re)">찾지 못했어요: ' + escapeHtml(r.error || '') + '</span>'); return; }
+  mdbAi = { q, plan: r.plan };
+  renderMDB();
+}
+export function clearMdbAi(){
+  mdbAi = null;
+  const inp = document.getElementById('mdb-ai-q');
+  if(inp) inp.value = '';
+  renderMDB();
+}
+function renderMdbAiBar(msg){
+  const el = document.getElementById('mdb-ai-msg');
+  if(!el) return;
+  if(msg){ el.innerHTML = msg; return; }
+  if(!mdbAi){ el.innerHTML = ''; return; }
+  const p = mdbAi.plan;
+  const evs = (k) => (p[k] || []).map(e => escapeHtml(evShort(e))).join(', ');
+  const bits = [
+    p.events_any?.length ? '참가: ' + evs('events_any') : '',
+    p.events_none?.length ? '불참: ' + evs('events_none') : '',
+    p.roles?.length ? '역할: ' + escapeHtml(p.roles.join(', ')) : '',
+    p.cats?.length ? '카테고리: ' + escapeHtml(p.cats.map(k => CL[k] || k).join(', ')) : '',
+    p.tags?.length ? '태그: ' + escapeHtml(p.tags.join(', ')) : '',
+    p.clevel ? 'C-level' : '',
+    p.countries?.length ? '국가: ' + escapeHtml(p.countries.join(', ')) : '',
+    p.org_keywords?.length ? '기업: ' + escapeHtml(p.org_keywords.join('/')) : '',
+    p.title_keywords?.length ? '직함: ' + escapeHtml(p.title_keywords.join('/')) : '',
+    p.include_left ? '퇴사자 포함' : '',
+  ].filter(Boolean);
+  el.innerHTML = `<span class="pill p-blue" style="cursor:default" title="${escAttr(mdbAi.q)}">✨ ${escapeHtml(p.explain || mdbAi.q)}</span>
+    <span style="color:var(--i4)">${bits.join(' · ')}</span>
+    ${p.unsupported ? `<span style="color:var(--am)">⚠️ 반영 못 한 조건: ${escapeHtml(p.unsupported)}</span>` : ''}
+    <button class="btn bs" style="font-size:10.5px" onclick="clearMdbAi()">✕ 질문 지우기</button>`;
+}
 
 export function mdbFilterPairs(pairs){
   let out = pairs;
@@ -1213,6 +1287,7 @@ export function mdbFilterPairs(pairs){
       : participations.some(x => x.contactId === c.id && (x.role || '참가자') === mdbTypeFilter));
   }
   if(hidingLeft()) out = out.filter(({ c }) => !hasLeft(c));
+  if(mdbAi) out = out.filter(({ c }) => aiMatches(c, mdbAi.plan));
   if(mdbStat) out = out.filter(({ c }) => c.status === mdbStat);
   if(mdbCtryOnly) out = out.filter(({ c }) => !!ctryCheck(c));
   if(mdbRegion) out = out.filter(({ c }) =>
@@ -1243,6 +1318,7 @@ export function renderMDB(){
   const pairs = getMDBPairs();
   renderCtryChip();
   renderLeftChip();
+  renderMdbAiBar();
   buildMDBFilterBar();
   /* 행사 목록도 여기서 다시 그린다 — 분야를 바꾸면 그 안의 인원으로 세어야
      하는데, 지금까지는 행사를 고를 때만 그려서 숫자가 옛것으로 남아 있었다. */
@@ -2744,6 +2820,8 @@ window.filterStat = filterStat;
 window.segCat = segCat;
 window.toggleMdbCtry = toggleMdbCtry;
 window.toggleMdbLeft = toggleMdbLeft;
+window.askMdbAi = askMdbAi;
+window.clearMdbAi = clearMdbAi;
 window.openLeaveModal = openLeaveModal;
 window.closeLeaveModal = closeLeaveModal;
 window.toggleLeaveMoved = toggleLeaveMoved;
