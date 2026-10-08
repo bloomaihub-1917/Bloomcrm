@@ -410,20 +410,27 @@ function abbrOf(nm){
    (원본 3320~3413행) — 레벤슈타인 거리는 utils.js의 levenshteinDist를 재사용
 ══════════════════════════════════════════ */
 export function findSimilarCompanyPairs(){
-  const items = CO_DB.map(c => ({ c, norm: c.key.replace(/\s+/g,'') }))
-    .filter(x => x.norm.length >= 3);
+  /* 이름끼리 견준다. 전에는 c.key를 견줬는데, 기업이 레코드가 된 뒤로 key는 기업 id
+     (O-1789709803776_bio4)라서 id 끝자리만 다른 아무 기업이나 «유사도 95%»로 나왔다.
+     국문은 국문끼리, 영문은 영문끼리 — 둘 중 더 가까운 쪽을 쓴다. */
+  const items = CO_DB.map(c => ({ c, names: [c.nameKo, c.nameEn].map(normalizeCompanyKey) }))
+    .filter(x => x.names.some(n => n.length >= 3));
   const pairs = [];
   for(let i=0; i<items.length; i++){
     for(let j=i+1; j<items.length; j++){
       const a = items[i], b = items[j];
-      const maxLen = Math.max(a.norm.length, b.norm.length);
-      const dist = levenshteinDist(a.norm, b.norm);
-      const similarity = 1 - dist/maxLen;
-      // 너무 짧은 이름은 오탐이 많아 임계치를 더 엄격하게
-      const threshold = maxLen <= 5 ? 1 : (maxLen <= 8 ? 2 : 3);
-      if(dist > 0 && dist <= threshold && similarity >= 0.75){
-        pairs.push({ a: a.c, b: b.c, similarity });
+      let best = null;
+      for(let k=0; k<2; k++){
+        const x = a.names[k], y = b.names[k];
+        if(x.length < 3 || y.length < 3) continue;
+        const maxLen = Math.max(x.length, y.length);
+        const dist = levenshteinDist(x, y);
+        const similarity = 1 - dist/maxLen;
+        // 너무 짧은 이름은 오탐이 많아 임계치를 더 엄격하게
+        const threshold = maxLen <= 5 ? 1 : (maxLen <= 8 ? 2 : 3);
+        if(dist > 0 && dist <= threshold && similarity >= 0.75 && (!best || similarity > best)) best = similarity;
       }
+      if(best) pairs.push({ a: a.c, b: b.c, similarity: best });
     }
   }
   return pairs.sort((x,y) => y.similarity - x.similarity).slice(0, 50);
