@@ -350,7 +350,7 @@ function flowBoxHtml(sp){
       : { m: '○', c: 'var(--i4)', bg: 'var(--i8)', t: '아직' };
     /* 날짜를 찍어 끝나는 단계만 되돌릴 수 있다 — 자료 받기처럼 받은 자료로 끝나는
        단계는 자료 칸을 고쳐야 바뀐다 */
-    const undo = s.applies && s.isDone && s.done.startsWith('field:');
+    const undo = s.applies && s.isDone && !s.resend && s.done.startsWith('field:');
     return `<span title="${escAttr(`${s.label} — ${st.t}${undo ? ' · 눌러서 되돌리기' : ''}`)}"${
       undo ? ` onclick="undoSpStep('${escAttr(s.key)}')"` : ''} style="${undo ? 'cursor:pointer;' : ''}display:inline-flex;align-items:center;gap:3px;
       font-size:10px;padding:2px 7px;border-radius:10px;background:${st.bg};color:${st.c};
@@ -361,9 +361,9 @@ function flowBoxHtml(sp){
   /* 바로 앞에서 끝난, 날짜로 끝나는 단계 — 잘못 넘어갔을 때 한 번에 돌아간다 */
   const curIdx = cur ? f.steps.indexOf(cur) : f.steps.length;
   const prevUndo = f.steps.slice(0, curIdx).reverse()
-    .find(x => x.applies && x.isDone && x.done.startsWith('field:')) || null;
+    .find(x => x.applies && x.isDone && !x.resend && x.done.startsWith('field:')) || null;
   /* 사람이 받아서 적는 단계 — 메일을 보낸다고 끝나지 않는다 */
-  const markBtn = cur && cur.done.startsWith('field:') && cur.key !== 'invite'
+  const markBtn = cur && !cur.resend && cur.done.startsWith('field:') && cur.key !== 'invite'
     ? `<button class="btn" style="font-size:10.5px" onclick="spStamp('${cur.done.slice(6)}','${escAttr(cur.label)}')">${
         cur.key === 'reply' ? '회신 받음 표시' : cur.key === 'confirm' ? '참가 확정 표시' : '끝남 표시'}</button>` : '';
   return `<div style="padding:9px 11px;border:1px solid var(--a);border-radius:8px;margin-bottom:12px;background:var(--W)">
@@ -375,7 +375,7 @@ function flowBoxHtml(sp){
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:4px">${f.steps.map(chip).join('')}</div>
     ${cur ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i7)">
-        <div style="font-size:12px;font-weight:700;color:var(--a)">지금 할 일 · ${escapeHtml(f.remind ? '자료 독촉' : cur.label)}${
+        <div style="font-size:12px;font-weight:700;color:var(--a)">지금 할 일 · ${escapeHtml(f.remind ? '자료 독촉' : cur.resend ? `${cur.label} (다시 보내기 · 기준일 ${cur.since})` : cur.label)}${
           cur.due ? ` <span style="font-weight:400;color:${cur.due < td() ? 'var(--re)' : 'var(--i4)'};font-size:10.5px">마감 ${escapeHtml(cur.due)}</span>` : ''}</div>
         <div style="font-size:10.5px;color:var(--i4);margin-top:2px;line-height:1.6">${escapeHtml(cur.desc || '')}</div>
         ${pendingHtml(sp)}

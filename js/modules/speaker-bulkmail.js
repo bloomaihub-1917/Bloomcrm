@@ -100,7 +100,9 @@ function render(){
         <option value="due"${bm.show === 'due' ? ' selected' : ''}>보낼 차례인 연사만 (${nDue}명)</option>
         <option value="all"${bm.show === 'all' ? ' selected' : ''}>모든 연사 (${all.length}명)</option></select></div>
     </div>
-    ${st && st.since ? `<div style="font-size:10.5px;color:var(--i4);margin:-4px 0 8px">기준일 ${escapeHtml(st.since)} — 이날까지 초청한 연사가 대상이고, 이날 이후 보낸 메일이 있으면 «보냄»으로 봅니다.</div>` : ''}
+    ${st && st.since ? `<div style="font-size:10.5px;color:var(--am);margin:-4px 0 8px">기준일 ${escapeHtml(st.since)} — ${st.custom
+      ? '이날까지 초청한 연사가 대상이고, 이날 이후 보낸 메일이 있으면 «보냄»으로 봅니다.'
+      : '다시 보내기: 이 단계를 이미 받았거나 끝낸 연사 중 이날 이후 이 메일을 받지 않은 연사가 보낼 차례예요.'}</div>` : ''}
     <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:14px">
       <div>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">

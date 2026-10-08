@@ -219,11 +219,22 @@ export function flowStatus(sp){
     const applies = !skip && (!s.need || (s.key === 'travel'
       ? (need === 'req' || !!sp.stay_hotel || !!sp.air_route)
       : !!need));
+    /* 기본 단계에 기준일을 적으면 «다시 보내기» — 이미 이 단계를 받았거나 끝낸 연사에게만
+       다시 걸고(그날 이후 이 단계 메일을 보내면 끝), 아직 이 단계까지 오지 않은 연사는
+       평소대로 간다. 안 그러면 확정 전 연사에게 «참가 확정 안내»가 나간다 */
+    if(s.since && applies){
+      const normal = isDone(sp, s);
+      if(normal || sentLog(sp, s.key)){
+        const again = logsOfSpeaker(sp.id).some(l => l.kind === s.key && String(l.ts || '').slice(0, 10) >= s.since);
+        return { ...s, applies, isDone: again, resend: true };
+      }
+      return { ...s, applies, isDone: normal };
+    }
     return { ...s, applies, isDone: applies && isDone(sp, s) };
   });
   const current = steps.find(s => s.applies && !s.isDone) || null;
   /* 자료 요청을 이미 보냈는데 아직 덜 받았으면 다음 메일은 독촉이다 */
-  const remind = !!current && current.key === 'collect' && sentLog(sp, 'collect');
+  const remind = !!current && current.key === 'collect' && !current.resend && sentLog(sp, 'collect');
   const live = steps.filter(s => s.applies);
   return { steps, current, remind, skip, cancelled, nDone: live.filter(s => s.isDone).length, nAll: live.length };
 }
@@ -234,7 +245,7 @@ export function nextActionLabel(sp){
   if(f.cancelled) return { text: '취소', done: true, skip: true };
   if(f.skip) return { text: '주최사 전달', done: true, skip: true };
   if(!f.current) return { text: '연락 완료', done: true };
-  const label = f.remind ? '자료 독촉' : f.current.label;
+  const label = f.remind ? '자료 독촉' : f.current.resend ? `${f.current.label} (다시)` : f.current.label;
   const left = f.current.key === 'collect' ? missingItems(sp).length : 0;
   return { text: `${label}${left ? ` (${left})` : ''}`, step: f.current.key, due: f.current.due || '', done: false };
 }
