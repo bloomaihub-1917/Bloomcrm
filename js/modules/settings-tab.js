@@ -74,7 +74,8 @@ import {
 import { trackAction, changed, removed } from './audit-tab.js';
 
 import { TRACK_COLORS, trackColorOf, trackColorIndex, pickTrackColorIndex } from '../track-colors.js';
-import { FLOW_STEPS, FLOW_VARS, flowSteps } from './speaker-flow.js';
+import { flowSteps } from './speaker-flow.js';
+import { openFlowEditor } from './flow-editor.js';
 import { CL, CAT_KEYS, EVENT_PARTS, PART_STATES, partStateOf,
   SPEAKER_ROLES, SPEAKER_NEEDS, SPEAKER_NEEDS_ON_TALK,
   NEED_CYCLE, NEED_MARK, NEED_LABEL } from '../constants.js';
@@ -3346,78 +3347,29 @@ function evConfHtml(ev){
 }
 
 /* ── 연사 연락 순서 ──
-   단계와 «끝난 기준»은 코드(speaker-flow.js)가 정하고, 여기서는 이름·설명·
-   마감일·메일 양식과 끄기만 고친다. 저장은 아래 «저장» 단추로 한꺼번에. */
-const FLOW_FIELDS = [
-  ['label', '단계 이름'], ['desc', '설명'], ['due', '마감일'],
-  ['subject_ko', '제목 (국문)'], ['body_ko', '본문 (국문)'],
-  ['subject_en', '제목 (영문)'], ['body_en', '본문 (영문)'],
-  ['remind_subject_ko', '독촉 제목 (국문)'], ['remind_body_ko', '독촉 본문 (국문)'],
-  ['remind_subject_en', '독촉 제목 (영문)'], ['remind_body_en', '독촉 본문 (영문)'],
-  ['reuse_subject_ko', '지난 자료 확인 제목 (국문)'], ['reuse_body_ko', '지난 자료 확인 본문 (국문)'],
-  ['reuse_subject_en', '지난 자료 확인 제목 (영문)'], ['reuse_body_en', '지난 자료 확인 본문 (영문)'],
-];
+   고치는 곳은 편집 창 하나(flow-editor.js) — 연사 화면에서도 같은 창이 열린다.
+   여기서는 지금 순서만 보여 주고 창을 연다. 고치면 그 자리에서 저장된다. */
 function flowEditorHtml(evKey){
   const steps = flowSteps(evKey, { withOff: true });
-  const rule = (st) => st.done === 'needs' ? '역할이 요구하는 자료(발표자료·숙박항공 제외)를 다 받으면 끝'
-    : st.done.startsWith('cell:') ? '발표자료를 받음으로 표시하면 끝'
-    : st.done === 'log' ? '이 단계 메일을 보내면 끝'
-    : ({ guide_sent_at: '«보냄» 날짜가 있으면 끝 (초청 메일을 보내면 자동으로 찍힘)',
-         invite_replied_at: '«초청 회신» 날짜가 있으면 끝', confirmed_at: '«참가 확정» 날짜가 있으면 끝' })[st.done.slice(6)] || '';
-  const fld = (st, f, l) => {
-    const def = FLOW_STEPS.find(x => x.key === st.key);
-    if(def[f] === undefined && !['label', 'desc', 'due'].includes(f)) return '';
-    const id = `flow-${st.key}-${f}`, v = st[f] ?? '';
-    if(f === 'due') return `<div><div class="mlbl">${l}</div><input class="fi" type="date" id="${id}" value="${escAttr(v)}" style="width:160px"></div>`;
-    if(f.includes('body')) return `<div style="grid-column:1/-1"><div class="mlbl">${l}</div>
-      <textarea class="fi" id="${id}" rows="6" style="width:100%;resize:vertical;font-size:11.5px">${escapeHtml(v)}</textarea></div>`;
-    return `<div${f === 'desc' ? ' style="grid-column:1/-1"' : ''}><div class="mlbl">${l}</div>
-      <input class="fi" id="${id}" value="${escAttr(v)}" style="width:100%"></div>`;
-  };
   return `
-    <div style="font-size:12px;font-weight:700;color:var(--i2);margin:22px 0 4px">연사 연락 순서</div>
-    <div style="font-size:11px;color:var(--i4);margin-bottom:8px;line-height:1.6">
-      연사마다 지금 어느 단계인지 계산해 연사 화면 맨 위와 연사 표의 «지금 할 일»에 보여주고, 그 단계 양식으로 메일 초안을 만듭니다.
-      양식에 쓸 수 있는 칸: ${FLOW_VARS.map(v => `<code>${escapeHtml(v)}</code>`).join(' ')}
-      — 연사가 영문(EN)이면 영문 양식을 씁니다.</div>
-    ${steps.map((st, i) => `<details id="flowstep-${st.key}" style="border:1px solid var(--i6);border-radius:8px;margin-bottom:6px;background:var(--W)">
-      <summary style="padding:8px 11px;cursor:pointer;font-size:12px;display:flex;gap:8px;align-items:center">
-        <b>${i + 1}. ${escapeHtml(st.label)}</b>
-        ${st.due ? `<span class="pill p-gray">마감 ${escapeHtml(st.due)}</span>` : ''}
-        ${st.off ? '<span class="pill p-gray">끔</span>' : ''}
-        <span style="font-size:10.5px;color:var(--i4);margin-left:auto">${escapeHtml(rule(st))}</span>
-      </summary>
-      <div style="padding:4px 11px 11px">
-        <label style="display:flex;gap:6px;align-items:center;font-size:11.5px;margin-bottom:8px">
-          <input type="checkbox" id="flow-${st.key}-off" ${st.off ? '' : 'checked'}> 이 행사에서 이 단계를 씀</label>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-          ${FLOW_FIELDS.map(([f, l]) => fld(st, f, l)).join('')}
-        </div>
-        <div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--i7)">
-          <div class="mlbl">기본 첨부 <span style="font-weight:400;color:var(--i4)">— 이 단계 메일에 자동으로 붙어요 (파일당 3MB)</span></div>
-          <div id="flowfiles-${st.key}" style="font-size:11px;color:var(--i4)">불러오는 중…</div>
-          <label class="btn" style="font-size:10.5px;margin-top:5px;display:inline-block;cursor:pointer">+ 파일 올리기
-            <input type="file" multiple style="display:none" onchange="uploadFlowFiles('${escAttr(evKey)}','${st.key}',this)"></label>
-        </div>
-      </div>
-    </details>`).join('')}`;
+    <div style="display:flex;align-items:center;gap:8px;margin:22px 0 6px">
+      <span style="font-size:12px;font-weight:700;color:var(--i2)">연사 연락 순서</span>
+      <button class="btn" style="font-size:10.5px;margin-left:auto" onclick="openFlowEditor('${escAttr(evKey)}')">✎ 단계 편집</button>
+    </div>
+    <div style="font-size:11px;color:var(--i4);margin-bottom:6px;line-height:1.6">
+      단계 추가·고치기·끄기와 메일 양식·기본 첨부는 «단계 편집»에서 합니다. 연사 화면에서도 같은 창이 열리고, 고치면 바로 저장돼요.</div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px">${steps.map((st, i) => `<span class="pill ${st.off ? 'p-gray' : st.custom ? 'p-amber' : 'p-blue'}"
+      style="font-size:10.5px;cursor:pointer;${st.off ? 'text-decoration:line-through' : ''}" onclick="openFlowEditor('${escAttr(evKey)}','${escAttr(st.key)}')"
+      >${i + 1}. ${escapeHtml(st.label)}</span>`).join('')}</div>`;
 }
 
-/* 메일 탭의 «양식 고치기» — 그 행사의 컨퍼런스 설정을 열고 그 단계를 펼쳐 보여준다 */
-export function openFlowSettings(evKey, stepKey){
-  window.closeSpeakerDr?.();
-  window.switchApp?.('arch', null);
-  switchArchTab('ev');
-  openEvDetail(evKey);
-  setEvDetailSeg('conf');
-  const d = document.getElementById(`flowstep-${stepKey}`);
-  if(d){ d.open = true; d.scrollIntoView({ behavior: 'smooth', block: 'start' }); d.style.borderColor = 'var(--a)'; }
-}
+/* 예전 «양식 고치기» 자리 — 이제 단계 편집 창을 그 단계가 펼쳐진 채로 연다 */
+export function openFlowSettings(evKey, stepKey){ openFlowEditor(evKey, stepKey); }
 
 /* 단계별 기본 첨부 — 목록은 서버에서 받아 각 단계 자리에 끼운다 */
 export async function fillFlowFiles(evKey){
   await loadMailFiles(evKey);
-  FLOW_STEPS.forEach(st => {
+  flowSteps(evKey, { withOff: true }).forEach(st => {
     const el = document.getElementById(`flowfiles-${st.key}`);
     if(!el) return;
     const files = mailFilesOf(evKey).filter(f => f.step === st.key);
@@ -3649,25 +3601,10 @@ export async function saveEvConf(){
   const folder = g('conf-folder');
   if(folder) cfg.folder = folder; else delete cfg.folder;
 
-  /* 연락 순서 — 코드 기본값과 다른 칸만 담는다. 기본 문구를 나중에 고치면
-     손대지 않은 행사에는 그것이 따라오게 */
-  const flow = {};
-  FLOW_STEPS.forEach(st => {
-    const o = {};
-    FLOW_FIELDS.forEach(([f]) => {
-      if(st[f] === undefined && !['label', 'desc', 'due'].includes(f)) return;
-      const el = document.getElementById(`flow-${st.key}-${f}`);
-      if(!el) return;
-      const v = el.value.trim();
-      if(v !== String(st[f] ?? '')) o[f] = v;
-    });
-    if(document.getElementById(`flow-${st.key}-off`)?.checked === false) o.off = true;
-    if(Object.keys(o).length) flow[st.key] = o;
-  });
-  if(Object.keys(flow).length) cfg.flow = flow; else delete cfg.flow;
+  /* 연락 순서(cfg.flow·flow_custom)는 단계 편집 창이 따로 저장한다 — 여기선 건드리지 않는다 */
 
   if(!await saveConf(ev.key, cfg)) return;
-  trackAction('edit', '컨퍼런스 설정', ev.key, `${ev.name || ev.key} — 글자수 한도·양식·폴더·연락 순서 저장`);
+  trackAction('edit', '컨퍼런스 설정', ev.key, `${ev.name || ev.key} — 글자수 한도·양식·폴더 저장`);
   say('저장했어요.', true);
   setTimeout(() => { const m = document.getElementById('conf-msg'); if(m) m.textContent = ''; }, 2000);
 }

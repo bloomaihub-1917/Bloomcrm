@@ -26,6 +26,7 @@ import {
   isDomesticSpeaker, autoDomestic, bankDocs, paysFee,
 } from '../state.js';
 import { SPEAKER_ROLES, NEED_MARK, NEED_LABEL, SP_CONSENTS } from '../constants.js';
+import './flow-editor.js';
 import { td, nowStamp, mailDirPill, escapeHtml, escAttr, countryOptions, countryName, splitQuotedMail } from '../utils.js';
 /* 보낸 기록 본문 — 이전 메일(인용)은 접어 둔다(utils.js splitQuotedMail) */
 const mailBodyHtml = (body) => {
@@ -369,6 +370,8 @@ function flowBoxHtml(sp){
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
       <span style="font-size:11px;font-weight:700;color:var(--i2)">연락 단계</span>
       <span style="font-size:10.5px;color:var(--i4)">${f.nDone}/${f.nAll}</span>
+      <button class="btn" style="font-size:10px;padding:1px 7px;margin-left:auto" title="이 행사의 연락 단계를 더하고, 고치고, 끄거나 지웁니다"
+        onclick="openFlowEditor('${escAttr(sp.event_id)}')">✎ 단계 편집</button>
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:4px">${f.steps.map(chip).join('')}</div>
     ${cur ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i7)">
@@ -1255,8 +1258,9 @@ function mailTabHtml(sp, evKey){
         <optgroup label="개별 요청">${extra.map(k => `<option value="${k.key}">${k.label}</option>`).join('')}</optgroup>
       </select>
         <button class="btn" style="font-size:10.5px;margin-top:5px" title="이 행사의 연락 순서 설정을 열어 고른 단계의 기본 제목·본문·첨부를 고칩니다"
-          onclick="openFlowSettings('${escAttr(evKey)}',document.getElementById('sp-mail-kind').value)">⚙ 이 단계 기본 문구 고치기</button>`,
-        '고르면 그 단계의 기본 문구로 제목·본문이 채워집니다. 행사마다 다른 기본 문구는 위 단추로 설정에서 고칩니다');
+          onclick="openFlowEditor('${escAttr(evKey)}',document.getElementById('sp-mail-kind').value)">✎ 이 단계 기본 문구 고치기</button>
+        <button class="btn" style="font-size:10.5px;margin-top:5px" onclick="openFlowEditor('${escAttr(evKey)}')">+ 단계 추가</button>`,
+        '고르면 그 단계의 기본 문구로 제목·본문이 채워집니다. 기본 문구·단계는 위 단추로 바로 고칩니다');
     })()}
     <div id="sp-bulk-pick"></div>
     ${fg('제목', `<input class="fi" id="sp-mail-subject" value="${escAttr(`[${evName}] 연사 안내`)}">`)}
@@ -1264,7 +1268,7 @@ function mailTabHtml(sp, evKey){
     ${fg('첨부', `<div id="sp-mail-files" style="font-size:11px"></div>
       <label class="btn" style="font-size:10.5px;margin-top:5px;display:inline-block;cursor:pointer">+ PC에서 파일 추가
         <input type="file" multiple style="display:none" onchange="addSpMailFiles(this)"></label>`,
-      '단계의 기본 첨부는 설정 › 행사 › 컨퍼런스 › 연사 연락 순서에서 올려 둡니다. PC에서 고른 파일은 합쳐서 3MB까지')}
+      '단계의 기본 첨부는 «단계 편집»에서 올려 둡니다. PC에서 고른 파일은 합쳐서 3MB까지')}
     <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
       <button class="btn bp" style="font-size:11px" onclick="sendSpeakerMail()">보내기</button>
       <span id="sp-mail-msg" style="font-size:10.5px;color:var(--i4)"></span>

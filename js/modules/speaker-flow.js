@@ -92,11 +92,33 @@ const ITEM_EN = { profile: 'Affiliation & job title', bio_pro: 'Biography', cv: 
   title: 'Presentation title', abstract: 'Abstract', slides: 'Presentation file', consent: 'Consent form',
   bank: 'Bank details', passport: 'Copy of passport', travel: 'Travel details' };
 
-/* 이 행사의 단계 — 코드 기본값 위에 행사 설정(conf.flow[key])을 얹는다 */
+/* 행사를 돌리다 생기는 연락 — 담당자가 연사 화면에서 바로 더하는 단계(conf.flow_custom).
+   끝난 기준은 하나: 그 단계 메일을 보내면 끝. «기준일»을 적으면 그날까지 초청한
+   연사에게만 서고, 그날 이후 보낸 메일만 센다 — 일정표가 또 바뀌면 날짜만 고친다. */
+export const CUSTOM_PRESETS = [
+  {
+    label: '일정 변경 안내',
+    desc: '프로그램 일정표가 바뀌어, 바뀌기 전에 안내받은 연사에게 바뀐 발표 일정을 다시 알립니다.',
+    subject_ko: '[{행사}] 프로그램 일정 변경 안내 — {호칭}', subject_en: '[{행사}] Updated Programme Schedule',
+    body_ko: '{호칭}께\n\n안녕하십니까. {행사} 사무국 {담당자}입니다.\n{행사} 프로그램 일정표가 변경되어, 앞서 안내드린 발표 일정을 아래와 같이 정정하여 다시 알려드립니다.\n\n■ 변경된 발표 일정\n{세션}\n\n혼란을 드려 대단히 죄송합니다. 변경된 일정에 참석이 어려우시면 {마감일}까지 회신해 주십시오. 일정을 다시 조율하겠습니다.\n\n{담당자} 드림\n{행사} 사무국',
+    body_en: 'Dear {호칭},\n\nPlease note that the programme schedule for {행사} has been revised. We would like to share your updated session details below, which supersede our previous information.\n\nYour session:\n{세션}\n\nWe apologise for any inconvenience. Should the new schedule not suit you, please let us know by {마감일} and we will be happy to work out an alternative.\n\nSincerely,\n{담당자}\n{행사} Secretariat',
+    after: 'invite', since: 'today',
+  },
+];
+export const isCustomStep = (key) => String(key || '').startsWith('c-');
+
+/* 이 행사의 단계 — 코드 기본값 위에 행사 설정(conf.flow[key])을 얹고,
+   더한 단계(conf.flow_custom)를 «after» 단계 뒤에 끼운다(없으면 맨 끝) */
 export function flowSteps(evKey, { withOff = false } = {}){
-  const over = confCfg(evKey).flow || {};
-  return FLOW_STEPS.map(s => ({ ...s, ...(over[s.key] || {}), key: s.key, done: s.done, need: s.need }))
-    .filter(s => withOff || !s.off);
+  const cfg = confCfg(evKey);
+  const over = cfg.flow || {};
+  const out = FLOW_STEPS.map(s => ({ ...s, ...(over[s.key] || {}), key: s.key, done: s.done, need: s.need }));
+  (cfg.flow_custom || []).forEach(c => {
+    const st = { ...c, custom: true, done: c.since ? 'since' : 'log', need: undefined };
+    const i = c.after === '' ? -1 : out.findIndex(x => x.key === c.after);
+    if(c.after === '') out.unshift(st); else out.splice(i < 0 ? out.length : i + 1, 0, st);
+  });
+  return out.filter(s => withOff || !s.off);
 }
 
 const needOf = (sp, key) => {
@@ -158,6 +180,8 @@ const sentLog = (sp, key) => logsOfSpeaker(sp.id).some(l => l.kind === key);
 function isDone(sp, step){
   if(step.done.startsWith('field:')) return !!sp[step.done.slice(6)];
   if(step.done === 'needs') return !missingItems(sp).length;
+  if(step.done === 'since') return logsOfSpeaker(sp.id)
+    .some(l => l.kind === step.key && String(l.ts || '').slice(0, 10) >= step.since);
   /* 숙박·항공은 안내 메일을 보냈거나, 제공사항 탭에서 예약을 다 마쳤으면 끝이다 */
   if(step.done === 'log') return sentLog(sp, step.key)
     || (step.key === 'travel' && spCell(sp, sp.event_id, 'travel').state === 'done');
@@ -186,6 +210,12 @@ export function flowStatus(sp){
     /* 숙박·항공은 기본이 «있으면 좋음»이라 그대로 두면 국내 연사 모두에게 걸린다 —
        필수로 정했거나 제공사항에 숙박·항공을 적은 연사에게만 단계가 선다 */
     const need = s.need ? needOf(sp, s.need) : '';
+    /* 일정 변경 안내는 바뀐 날까지 초청(세션 안내)을 받은 연사에게만 — 그 뒤에 초청한
+       연사는 이미 바뀐 일정을 받았다 */
+    if(s.done === 'since'){
+      const applies = !skip && !!s.since && !!sp.guide_sent_at && String(sp.guide_sent_at).slice(0, 10) <= s.since;
+      return { ...s, applies, isDone: applies && isDone(sp, s) };
+    }
     const applies = !skip && (!s.need || (s.key === 'travel'
       ? (need === 'req' || !!sp.stay_hotel || !!sp.air_route)
       : !!need));
