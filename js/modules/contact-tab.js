@@ -112,9 +112,19 @@ export function coList(){
 export const coOf = (orgId) => coList().find(c => c.key === orgId) || null;
 const coName = (co) => (co ? (co.nameKo || co.nameEn || '') : '');
 export const memberName = (m) => coName(coOf(m.org_id)) || m.org_name || '(이름 없음)';
+/* 기업에 딸린 담당자 — 원본 연락처로 돌려준다.
+   기업DB(CO_DB)의 contacts는 화면용으로 줄인 사본이라(name·email·phone, 휴대폰·부서·
+   두 번째 메일 없음) 그대로 쓰면 메일이 있는 사람도 «메일 없음»으로 보였다. */
+let cById = null, cByIdN = -1;
+function contactOf(id){
+  if(!cById || cByIdN !== contacts.length){ cById = new Map(contacts.map(c => [String(c.id), c])); cByIdN = contacts.length; }
+  return cById.get(String(id)) || null;
+}
+export function fullContacts(co){
+  return (co ? co.contacts : []).map(p => contactOf(p.id) || p);
+}
 export function peopleOf(m){
-  const co = coOf(m.org_id);
-  return (co ? co.contacts : []).filter(c => !hasLeft(c))
+  return fullContacts(coOf(m.org_id)).filter(c => !hasLeft(c))
     .sort((a, b) => (!!(b.phone1 || b.phone2) - !!(a.phone1 || a.phone2)));
 }
 
@@ -179,7 +189,7 @@ function matchQ(m, q){
   if(!q) return true;
   const co = coOf(m.org_id);
   const hay = [memberName(m), co?.nameEn, m.source, m.caution,
-    ...(co ? co.contacts : []).flatMap(c => [c.nameKo, c.nameEn, c.phone1, c.phone2, c.email1])]
+    ...fullContacts(co).flatMap(c => [c.nameKo, c.nameEn, c.phone1, c.phone2, c.email1])]
     .filter(Boolean).join(' ').toLowerCase();
   return q.toLowerCase().split(/\s+/).filter(Boolean).every(w => hay.includes(w));
 }

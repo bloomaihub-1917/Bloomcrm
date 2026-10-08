@@ -23,7 +23,7 @@ import { addRoundMembers, addAttempts, saveRoundMember } from '../api.js';
 import { escapeHtml, nowStamp } from '../utils.js';
 import { trackAction } from './audit-tab.js';
 import { normalizeCompanyKey } from './company-tab.js';
-import { REACTIONS, roundById, membersOf, coList, coOf, renderRoundNav } from './contact-tab.js';
+import { REACTIONS, roundById, membersOf, coList, coOf, fullContacts, renderRoundNav } from './contact-tab.js';
 
 /* ── 머리글 알아보기 ── 띄어쓰기·줄바꿈을 지우고 견준다 */
 const norm = (v) => String(v ?? '').replace(/\s+/g, '').trim();
@@ -354,7 +354,7 @@ export async function commitRoundImport(){
     }
     // 같은 기록은 한 번만 — 이미 있는 것과 이번 파일 안의 겹침 둘 다
     const seen = new Set(CONTACT_ATTEMPTS.filter(x => x.member_id === m.id).map(x => `${x.at}|${x.reaction}|${x.note}`));
-    const people = coOf(g.orgId)?.contacts || [];
+    const people = fullContacts(coOf(g.orgId));
     g.attempts.forEach(x => {
       const k = `${x.at}|${x.reaction}|${x.note}`;
       if(seen.has(k)) return;

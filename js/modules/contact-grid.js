@@ -15,7 +15,7 @@
 ══════════════════════════════════════════════════════════════ */
 import { CONTACT_ROUNDS, CONTACT_ATTEMPTS } from '../state.js';
 import {
-  REACTIONS, roundById, membersOf, attemptsOf, memberState, memberName, peopleOf, coOf,
+  REACTIONS, roundById, membersOf, attemptsOf, memberState, memberName, peopleOf, coOf, fullContacts,
   evLabel, currentRoundId,
 } from './contact-tab.js';
 import { loadExcelJs } from './exh-export.js';
@@ -89,7 +89,7 @@ export function renderGrid(){
     if(gFil === 'open' && !(c && c.st !== 'done')) return false;
     if(!q) return true;
     const co = coOf(row.org_id);
-    return [row.name, co?.nameEn, ...row.sources, ...(co ? co.contacts : []).flatMap(p => [p.nameKo, p.phone1, p.phone2])]
+    return [row.name, co?.nameEn, ...row.sources, ...fullContacts(co).flatMap(p => [p.nameKo, p.nameEn, p.phone1, p.phone2])]
       .filter(Boolean).join(' ').toLowerCase().includes(q);
   });
   const stats = Object.fromEntries(rounds.map(r => [r.id, roundStats(r, rows)]));
