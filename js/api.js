@@ -1018,3 +1018,17 @@ export const fileToBase64 = (file) => new Promise((ok, no) => {
   r.onerror = () => no(r.error);
   r.readAsDataURL(file);
 });
+
+/* ── Claude에게 묻는 일 (backend-node/routes/ai.js) — 개인정보는 보내지 않는다 ── */
+async function aiApi(path, method = 'GET', body){
+  if(!API_BASE_URL || !currentUser) return { ok: false, offline: true, error: '테스트 모드에서는 쓸 수 없어요' };
+  try {
+    const headers = { ...await authHeaders(), ...(body ? { 'Content-Type': 'application/json' } : {}) };
+    const res = await fetch(API_BASE_URL + '/api/ai' + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+    const j = await res.json().catch(() => ({}));
+    if(!res.ok && j.ok !== false) return { ok: false, error: `실패 (${res.status})` };
+    return j;
+  } catch(e){ return { ok: false, error: e.message }; }
+}
+export const aiStatus     = () => aiApi('/status');
+export const aiMapColumns = (body) => aiApi('/map-columns', 'POST', body);

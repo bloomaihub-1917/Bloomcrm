@@ -58,7 +58,7 @@ import {
 } from '../state.js';
 import { CL } from '../constants.js';
 import { td, normalizeCat, normalizeCountry, escapeHtml, escAttr, scopedSectorName, slugifySectorName, sectorRowValues, sectorKey } from '../utils.js';
-import { postToSheet, saveCatmap } from '../api.js';
+import { postToSheet, saveCatmap, aiStatus, aiMapColumns } from '../api.js';
 import { buildCoDB, buildCoCAT, batchUpsertCompanies, ensureOrgsForNames, orgIdForName, suggestSector } from './company-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
 import { trackAction } from './audit-tab.js';
@@ -503,6 +503,8 @@ export function runMatchColumnsStep(headers, rows){
   // 재사용을 위해 보관 — 사용자가 드롭다운으로 매핑을 고치면 이 값들로 다시 계산한다
   _lastHeaders = headers;
   _lastRows = rows;
+  for(const k in _aiPicks){ delete _aiPicks[k]; delete _aiReasons[k]; }
+  checkAiOn();
 
   renderColumnMappingPreview(headers, rows, colMap);
   applyColumnMap(colMap);
@@ -554,12 +556,15 @@ function renderColumnMappingPreview(headers, rows, colMap){
     ? `<tr><td colspan="4" style="padding:10px 12px;background:var(--ab);border-bottom:1px solid #FDE68A;font-size:11px;color:var(--am)">
         ⚠️ <b>${escapeHtml(unmappedWithData.join(', '))}</b> 컬럼에는 데이터가 있지만 아직 어느 DB 항목에 넣을지 정하지 않았어요.
         아래 표에서 노란색으로 표시된 행의 "DB 컬럼" 드롭다운으로 매핑해주세요 — 매핑하지 않으면 이 데이터는 저장되지 않고 그대로 버려집니다.
+        ${_aiOn ? `<button class="btn" id="ai-map-btn" style="font-size:10.5px;margin-left:6px" onclick="aiFillColumns()"
+          title="머리글과 값의 모양(한글=가, 영문=a, 숫자=9)만 보냅니다. 실제 이름·메일·전화는 보내지 않아요">✨ AI로 남은 열 맞추기</button>` : ''}
       </td></tr>`
     : '';
 
   const bodyRows = headers.map(h => {
     const matchedKey = Object.keys(colMap).find(k => colMap[k] === h) || '';
     const isAuto = !!matchedKey;
+    const aiWhy = matchedKey && _aiPicks[h] === matchedKey ? _aiReasons[h] : '';
     const needsDecision = !isAuto && hasData(h);
     return `
       <tr${needsDecision ? ' style="background:var(--ab)"' : ''}>
@@ -570,7 +575,7 @@ function renderColumnMappingPreview(headers, rows, colMap){
           </select>
         </td>
         <td style="padding:7px 10px;border-bottom:1px solid var(--i7);font-size:11px;color:var(--i3)">${escapeHtml(String(sample[h] ?? ''))}</td>
-        <td style="padding:7px 10px;border-bottom:1px solid var(--i7);font-size:10px;color:${needsDecision?'var(--am)':'var(--i3)'}" class="cm-badge">${isAuto ? '자동 인식' : (needsDecision ? '⚠️ 매핑 필요' : '미매핑')}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid var(--i7);font-size:10px;color:${needsDecision?'var(--am)':'var(--i3)'}" class="cm-badge"${aiWhy ? ` title="${escAttr(aiWhy)}"` : ''}>${aiWhy ? '✨ AI 추천 — ' + escapeHtml(aiWhy) : isAuto ? '자동 인식' : (needsDecision ? '⚠️ 매핑 필요' : '미매핑')}</td>
       </tr>`;
   }).join('');
 
@@ -608,6 +613,61 @@ export function onColumnMapChange(){
   // (각 행의 선택값은 newColMap을 통해 그대로 유지된다)
   renderColumnMappingPreview(_lastHeaders, _lastRows, newColMap);
   applyColumnMap(newColMap);
+}
+
+/* ── AI로 남은 열 맞추기 ──
+   규칙(COLUMN_ALIASES)으로 못 맞춘 열만 묻는다. 사람이 이미 고른 칸은 건드리지 않는다.
+   보내는 것: 머리글, 값 있는 줄 수, 값 3개의 «모양»(한글=가, 영문=a/A, 숫자=9).
+   실제 값은 보내지 않는다 — 서버(routes/ai.js)도 한 번 더 모양으로 바꾼다. */
+let _aiOn = false;
+const _aiPicks = {}, _aiReasons = {};
+let _aiAsked = false;
+// 로그인 뒤 첫 업로드 때 한 번 묻는다 — 서버에 키가 있을 때만 단추가 보인다
+function checkAiOn(){
+  if(_aiAsked) return;
+  _aiAsked = true;
+  aiStatus().then(r => {
+    if(r && r.offline){ _aiAsked = false; return; }
+    _aiOn = !!(r && r.enabled);
+    if(_aiOn && _lastHeaders) onColumnMapChange();
+  }).catch(() => { _aiAsked = false; });
+}
+const shapeOf = (v) => String(v ?? '').slice(0, 40)
+  .replace(/[가-힣ㄱ-ㅎㅏ-ㅣ]/g, '가').replace(/[A-Z]/g, 'A').replace(/[a-z]/g, 'a').replace(/[0-9]/g, '9')
+  .replace(/[^가Aa9@.-_/()+:,# ]/g, '?');
+export async function aiFillColumns(){
+  if(!_lastHeaders || !_lastRows) return;
+  const selects = Array.from(document.querySelectorAll('#parser-prev .cm-select'));
+  const usedKeys = new Set(selects.map(s => s.value).filter(Boolean));
+  const open = selects.filter(s => !s.value && _lastRows.some(r => String(r[s.dataset.header] ?? '').trim() !== ''));
+  if(!open.length){ addAiLog('ok', '맞출 열이 남아 있지 않아요.'); return; }
+  const fields = Object.entries(DB_FIELD_LABELS).filter(([k]) => k && !usedKeys.has(k)).map(([key, label]) => ({ key, label }));
+  const columns = open.map(s => {
+    const h = s.dataset.header;
+    const vals = _lastRows.map(r => String(r[h] ?? '').trim()).filter(Boolean);
+    return { header: h, filled: vals.length, samples: vals.slice(0, 3).map(shapeOf) };
+  });
+  const btn = document.getElementById('ai-map-btn');
+  if(btn){ btn.disabled = true; btn.textContent = '✨ 맞추는 중…'; }
+  addAiLog('ok', '✨ AI에게 열 ' + columns.length + '개를 물어봐요 (머리글과 값의 모양만 보냄)');
+  const r = await aiMapColumns({ fields, columns });
+  if(!r.ok){
+    addAiLog('warn', '⚠️ AI 열 맞추기 실패: ' + escapeHtml(r.error || ''));
+    if(btn){ btn.disabled = false; btn.textContent = '✨ AI로 남은 열 맞추기'; }
+    return;
+  }
+  let n = 0;
+  (r.mappings || []).forEach(m => {
+    if(!m.field || usedKeys.has(m.field)) return;
+    const sel = open.find(s => s.dataset.header === m.header);
+    if(!sel) return;
+    sel.value = m.field; usedKeys.add(m.field);
+    _aiPicks[m.header] = m.field; _aiReasons[m.header] = m.reason || '';
+    n++;
+    addAiLog('ok', '✨ ' + escapeHtml(m.header) + ' → ' + escapeHtml(DB_FIELD_LABELS[m.field] || m.field) + (m.reason ? ' — ' + escapeHtml(m.reason) : ''));
+  });
+  addAiLog(n ? 'ok' : 'warn', n ? '✨ ' + n + '개 열을 맞췄어요. 표에서 확인하고, 틀리면 드롭다운으로 고쳐주세요.' : 'AI도 맞는 칸을 찾지 못했어요. 직접 골라주세요.');
+  onColumnMapChange();
 }
 
 let _lastHeaders = null;
@@ -1613,4 +1673,5 @@ window.rejectMg               = rejectMg;
 window.toggleEvInput          = toggleEvInput;
 window.populateUploadEvDropdown = populateUploadEvDropdown;
 window.onColumnMapChange      = onColumnMapChange;
+window.aiFillColumns          = aiFillColumns;
 window.toggleCatmap           = toggleCatmap;

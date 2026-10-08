@@ -8,6 +8,7 @@
     "create-user": "node scripts/create-user.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.132.1",
     "@neondatabase/serverless": "^1.1.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
