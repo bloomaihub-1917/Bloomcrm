@@ -1183,3 +1183,9 @@ CREATE TABLE IF NOT EXISTS contact_attempts (
   note         TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_contact_attempts_member ON contact_attempts(member_id);
+
+-- 컨택 DM 양식 (2026-10-08) — 차수마다 보낼 메일 문구. «메일 보내기» 창에서 고쳐 저장한다
+ALTER TABLE contact_rounds ADD COLUMN IF NOT EXISTS mail_subject_ko TEXT;
+ALTER TABLE contact_rounds ADD COLUMN IF NOT EXISTS mail_body_ko    TEXT;
+ALTER TABLE contact_rounds ADD COLUMN IF NOT EXISTS mail_subject_en TEXT;
+ALTER TABLE contact_rounds ADD COLUMN IF NOT EXISTS mail_body_en    TEXT;

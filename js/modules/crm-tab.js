@@ -41,6 +41,8 @@ import { postToSheet } from '../api.js';
 import { renderToday, renderRoundNav, openFillRound, openRoundEditor } from './contact-tab.js';
 import { renderGrid, exportContactGrid } from './contact-grid.js';
 import { renderReport, copyDailyReport } from './contact-report.js';
+import './contact-mail.js';     // 차수 «메일 보내기» 창 (window.openRoundMail)
+import './contact-import.js';   // 옛 엑셀 기록 가져오기 (window.openRoundImport)
 
 /* ── 타겟 1건을 crm_targets 시트에 upsert (신규) ──
    기존에는 chgSt/chgStD/setStg/addLog가 메모리(targets)만 수정하고

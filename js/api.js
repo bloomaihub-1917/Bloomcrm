@@ -906,6 +906,9 @@ export const addRoundMembers = (rows) => postToSheet(
   { sheet: 'round_members', action: 'batchAppend', dataRows: rows }, '컨택 명단 채우기');
 export const saveAttempt     = (o) => saveExhRow('contact_attempts', o, '컨택 기록 저장');
 export const deleteAttempt   = (id) => deleteExhRow('contact_attempts', id, '컨택 기록 삭제');
+/* 옛 엑셀 기록 가져오기 — 수백 건이 한 번에 들어간다 */
+export const addAttempts     = (rows) => postToSheet(
+  { sheet: 'contact_attempts', action: 'batchAppend', dataRows: rows }, '컨택 기록 가져오기');
 
 /* 참가기업 일괄 등록 — 기업DB에서 전시참가기업을 뽑아 한 번에 만든다. */
 export async function batchCreateExhibitors(rows){

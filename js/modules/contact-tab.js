@@ -84,7 +84,7 @@ const genId = (prefix, i = 0) => `${prefix}${Date.now()}_${i}`;
 
 /* 기업 목록 — 기업DB(CO_DB)가 정본이다. 비어 있으면(시험 모드) 연락처의 소속으로 묶는다. */
 let fbCache = null, fbSig = '';
-function coList(){
+export function coList(){
   if(CO_DB.length) return CO_DB;
   // 카드마다 부르므로 연락처·참가 기록이 그대로면 다시 묶지 않는다
   const sig = `${contacts.length}|${participations.length}`;
@@ -231,6 +231,7 @@ export function renderToday(){
         ${r.status === 'closed' ? '<span class="pill p-gray">닫은 차수</span>' : ''}
         <span style="margin-left:auto;display:flex;gap:5px">
           <button class="btn bs" onclick="openRoundEditor('${escAttr(r.id)}')">차수 고치기</button>
+          <button class="btn bs" onclick="openRoundMail('${escAttr(r.id)}')" title="명단에 기업마다 한 통씩 — 보낸 것은 DM 기록으로 남아요">✉ 메일 보내기</button>
           <button class="btn bs bp" onclick="openFillRound()">명단 채우기</button>
         </span>
       </div>
@@ -672,6 +673,9 @@ function renderFill(){
       </div>
       ${fld('rf-src', '명단 이름 — 보고를 이 이름별로 나눠요', memoSrc ?? defSource)}
       <button class="btn bp" id="rf-go" onclick="fillCommit()">${fill.picked.size}곳 넣기</button>` : ''}
+    <div style="font-size:12px;font-weight:600;margin:16px 0 6px;padding-top:12px;border-top:1px solid var(--i7)">옛 엑셀 TM 기록에서</div>
+    <div style="font-size:11.5px;color:var(--i3);margin-bottom:6px">«TM일자/TM내용» 칸이나 «TM_1차~4차·긍정/보류/부정» 칸이 있는 엑셀 — 명단과 기록을 함께 넣어요.</div>
+    <button class="btn bs" onclick="document.getElementById('round-fill').remove();openRoundImport('${escAttr(r.id)}')">엑셀 기록 가져오기</button>
     <div style="font-size:12px;font-weight:600;margin:16px 0 6px;padding-top:12px;border-top:1px solid var(--i7)">한 곳씩 찾아 넣기</div>
     <input type="text" id="rf-q" placeholder="기업명 검색" oninput="fillSearch(this.value)" style="width:100%;font-size:12.5px;padding:6px 8px;border:1px solid var(--i6);border-radius:var(--rs)">
     <div id="rf-res" style="margin-top:4px"></div>`);

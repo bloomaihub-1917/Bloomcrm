@@ -334,7 +334,9 @@ router.delete('/files/:id', async (req, res) => {
 router.post('/send', async (req, res) => {
   if (req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 메일을 보낼 수 없어요' });
   const { to, subject, text, html, cc, exhibitor_id, speaker_id, category, kind,
-    attachments: localFiles, file_ids } = req.body || {};
+    attachments: localFiles, file_ids,
+    // 컨택 DM — 차수 명단 한 줄(round_members)과 받는 사람
+    round_member_id, contact_id, contact_name } = req.body || {};
 
   /* 어느 행사 사람인지는 서버가 상대 기록에서 찾는다 — 화면이 보낸 event_id만
      믿으면 다른 행사 주소로 나가는 실수를 막을 수 없다 */
@@ -342,9 +344,13 @@ router.post('/send', async (req, res) => {
   try {
     if (exhibitor_id) eventId = (await pool.query('SELECT event_id FROM exhibitors WHERE id = $1', [exhibitor_id])).rows[0]?.event_id || eventId;
     else if (speaker_id) eventId = (await pool.query('SELECT event_id FROM speakers WHERE id = $1', [speaker_id])).rows[0]?.event_id || eventId;
+    else if (round_member_id) eventId = (await pool.query(
+      `SELECT r.event_id FROM round_members m JOIN contact_rounds r ON r.id = m.round_id WHERE m.id = $1`, [round_member_id])).rows[0]?.event_id || eventId;
   } catch (e) { /* 행사를 못 찾으면 아래에서 막힌다 */ }
-  /* 진행 완료된 행사(그 파트)는 열람만 — 화면 잠금을 피해 들어와도 여기서 막는다 */
-  if (eventId && await partDone(eventId, exhibitor_id ? 'exh' : 'conf')) {
+  /* 진행 완료된 행사(그 파트)는 열람만 — 화면 잠금을 피해 들어와도 여기서 막는다.
+     컨택 DM은 전시·컨퍼런스 어느 파트도 아니라 묻지 않는다(행사 전 모객이다) */
+  const part = exhibitor_id ? 'exh' : speaker_id ? 'conf' : null;
+  if (eventId && part && await partDone(eventId, part)) {
     return res.status(423).json({ ok: false, error: '진행 완료된 행사라 메일을 보낼 수 없어요' });
   }
   let sender;
@@ -419,6 +425,24 @@ router.post('/send', async (req, res) => {
       : speaker_id
         ? { table: 'speaker_logs', col: 'speaker_id', id: speaker_id, prefix: 'SL' }
         : null;
+    /* 컨택 DM — 차수 기록(contact_attempts)에 «DM 보냄» 한 줄. 본문은 남기지 않는다
+       (제목과 첨부 이름만) — 기록은 «언제 누구에게 무엇을»이면 충분하다 */
+    if (!target && round_member_id) {
+      try {
+        const m = (await pool.query('SELECT round_id, org_id FROM round_members WHERE id = $1', [round_member_id])).rows[0];
+        if (m) {
+          logId = `CA-${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+          await pool.query(
+            `INSERT INTO contact_attempts (id, round_id, member_id, org_id, contact_id, contact_name, phone,
+               channel, at, by_email, by_name, reaction, note)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,'DM',$8,$9,$10,'sent',$11)`,
+            [logId, m.round_id, round_member_id, m.org_id, contact_id ? String(contact_id) : '', contact_name || '',
+              toList.join(', '), kstStamp(Date.now()), req.user?.email || '', req.user?.name || '',
+              String(subject || '').trim() + (attachments.length ? ` [첨부] ${attachments.map((a) => a.filename).join(', ')}` : '')]);
+          logged = true;
+        }
+      } catch (e) { logError = e.message; logId = null; }
+    }
     if (target) {
       try {
         await pool.query(
