@@ -40,7 +40,7 @@ import {
 } from '../state.js';
 import { activeExhibitors, exhNames, exhContact, isBillable, isBoothGiven,
   boothViewRows, parseBooth, isSharedBooth, boothDesignState, SELF_BUILD_TYPE, hostOf, boothTypeText,
-  STEPS, cellState, progressOf, billedAmount, paidAmount, currencyOf, settleState,
+  STEPS, cellState, progressOf, billedAmount, paidAmount, currencyOf, settleState, isOwing,
   visibleList } from './exh-tab.js';
 import { openInquiriesFor } from '../state.js';
 import { showSaveErrorToast } from '../api.js';
@@ -1164,3 +1164,169 @@ export async function exportBoothStatus(){
 
 window.exportBoothStatus = exportBoothStatus;
 window.exportChecklist   = exportChecklist;
+
+/* ══════════════════════════════════════════
+   부스 비치용 비품 목록 — 기업 한 곳 = A4 한 장, 영문
+
+   현장에서 각 부스에 넣어 두는 종이다. 기업 담당자가 «우리가 신청한 게 다
+   왔나»를 부스 안에서 맞춰 보는 용도라, 해외 기업도 읽도록 영문만 쓴다.
+
+     · 비품(equip)과 X배너만 싣는다. 그래픽 중 X배너는 부스 안에 세워 두는
+       낱개 물건이라 비품처럼 «왔나»를 맞춰 본다. 랩핑·족자봉·폼보드는 벽에
+       붙어 나가는 시공물이라 기업이 셀 일이 없어 뺀다
+     · 금액은 신청한 통화 그대로(KRW·USD). 원화로 바꾸면 기업이 낸 숫자와
+       달라 보여 되묻는다. 통화가 섞이면 합계를 통화별로 둔다
+     · 부스 기본 제공은 «Included», 무상 제공은 «Complimentary» — 청구하지
+       않는 줄에 단가가 찍혀 있으면 돈을 내야 하는 줄로 읽힌다
+     · 미납액이 남은 기업은 합계 옆에 «*» — 현장 데스크가 그 부스에서 수금할
+       곳을 알아보게 한다. 금액은 적지 않는다(종이는 부스에 그대로 놓인다)
+     · 공동 부스에서 비용만 나눠 낸 줄은 뺀다 — 실물은 상대 기업 줄에 있다
+
+   엑셀이 아니라 인쇄 창으로 낸다. 받는 사람이 고칠 표가 아니라 바로 뽑아
+   넣을 종이라서, 파일을 열어 인쇄 영역을 맞추는 걸음을 없앤다.
+══════════════════════════════════════════ */
+
+const escHtml = (s) => String(s ?? '').replace(/[&<>"']/g,
+  ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+
+function fmtCur(v, cur){
+  const n = num(v);
+  return cur === 'KRW'
+    ? n.toLocaleString('en-US', { maximumFractionDigits: 0 })
+    : n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/* 기업 한 곳의 인쇄 줄 — 비품만, 비용만 나눈 줄은 빼고 */
+/* X배너인가 — 품목표 분류(«X-배너»)로 보고, 품목표에 잇지 못한 줄은 이름으로 본다
+   («X배너», «X-Banner», «엑스배너»처럼 적혀 들어온다) */
+const X_BANNER = /(^|[^a-z])x\s*-?\s*(배너|banner)|엑스\s*배너/i;
+function isXBanner(i, cat){
+  if(cat) return /x\s*-?\s*배너/i.test(cat.category || '') || X_BANNER.test(cat.name_en || '') || X_BANNER.test(cat.name_ko || '');
+  return X_BANNER.test(i.name || '');
+}
+
+export function boothSheetRows(x){
+  return liveItemsFor(x.id)
+    .filter(i => !String(i.shared_ref || '').trim())
+    .map(i => ({ i, cat: i.catalog_id ? catalogItem(i.catalog_id) : null }))
+    .filter(({ i, cat }) => (i.category || '') === 'equip'
+      || ((i.category || '') === 'graphic' && isXBanner(i, cat)))
+    .map(({ i, cat }) => {
+      const cur = String(i.currency || 'KRW').toUpperCase();
+      const qty = num(i.qty) || 1;
+      const amount = num(i.amount);
+      const unit = num(i.unit_price) || (amount && qty ? amount / qty : 0);
+      const charge = isBoothGiven(i) ? 'included' : !isBillable(i) ? 'free' : 'billed';
+      return {
+        code: (cat && cat.code) || '',
+        /* 카탈로그 영문명을 쓴다. 카탈로그 밖 항목은 기업이 적어 보낸 이름 그대로 —
+           다만 X배너는 «X배너 추가»처럼 국문으로 적혀 오는 일이 많아 영문으로 바꾼다 */
+        name: (cat && (cat.name_en || cat.name_ko))
+          || ((i.category || '') === 'graphic' ? 'X-Banner' : i.name) || '',
+        spec: (cat && cat.spec) || '',
+        qty, unit, amount, cur, charge, booth: isBoothGiven(i),
+      };
+    })
+    /* 기본 제공을 먼저, 그다음 추가 신청 — 부스에 놓인 순서대로 맞춰 보게 */
+    /* 카탈로그 밖 항목(코드 없음)은 맨 뒤 */
+    .sort((a, b) => (b.booth - a.booth) || (!a.code - !b.code)
+      || String(a.code).localeCompare(String(b.code), 'en', { numeric: true }));
+}
+
+function boothSheetHtml(x, rows, evLabel){
+  const n = exhNames(x);
+  const company = n.en || n.ko;
+  const owing = isOwing(settleState(x));
+  const totals = new Map();
+  rows.filter(r => r.charge === 'billed')
+    .forEach(r => totals.set(r.cur, (totals.get(r.cur) || 0) + r.amount));
+
+  const body = rows.map((r, idx) => {
+    const money = r.charge === 'billed'
+      ? `<td class="r">${r.cur} ${fmtCur(r.unit, r.cur)}</td><td class="r">${r.cur} ${fmtCur(r.amount, r.cur)}</td>`
+      : `<td class="r muted" colspan="2">${r.charge === 'included' ? 'Included in booth package' : 'Complimentary'}</td>`;
+    return `<tr><td class="c">${idx + 1}</td><td class="c">${escHtml(r.code)}</td>
+      <td>${escHtml(r.name)}</td><td class="muted">${escHtml(r.spec)}</td>
+      <td class="c">${r.qty}</td>${money}<td class="c chk">&#9744;</td></tr>`;
+  }).join('');
+
+  const totalRows = [...totals].map(([cur, v]) =>
+    `<tr class="tot"><td colspan="6" class="r">Total (${cur})</td>
+      <td class="r">${cur} ${fmtCur(v, cur)}${owing ? '<span class="star">*</span>' : ''}</td><td></td></tr>`).join('');
+
+  return `<section class="sheet">
+    <header>
+      <div class="ev">${escHtml(evLabel)}</div>
+      <h1>Rental Equipment List</h1>
+    </header>
+    <table class="info">
+      <tr><th>Booth No.</th><td class="booth">${escHtml(x.booth_no || '-')}</td></tr>
+      <tr><th>Company</th><td>${escHtml(company)}</td></tr>
+    </table>
+    <table class="items">
+      <thead><tr><th style="width:6%">No.</th><th style="width:10%">Code</th><th>Item</th>
+        <th style="width:17%">Specification</th><th style="width:6%">Qty</th>
+        <th style="width:14%">Unit Price</th><th style="width:15%">Amount</th><th style="width:6%">Check</th></tr></thead>
+      <tbody>${body}${totalRows}</tbody>
+    </table>
+    ${owing ? '<p class="note">* Outstanding balance — please visit the Organizer Office.</p>' : ''}
+    <p class="note">Please check that all items above are in your booth. For missing or damaged items, contact the Organizer Office.</p>
+  </section>`;
+}
+
+const SHEET_CSS = `
+  @page { size: A4; margin: 14mm; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 10.5pt; }
+  .sheet { page-break-after: always; break-after: page; }
+  .sheet:last-child { page-break-after: auto; break-after: auto; }
+  header { border-bottom: 2px solid #1F3864; padding-bottom: 6px; margin-bottom: 12px; }
+  .ev { font-size: 10pt; color: #555; }
+  h1 { margin: 2px 0 0; font-size: 18pt; color: #1F3864; }
+  table { width: 100%; border-collapse: collapse; }
+  .info { margin-bottom: 14px; }
+  .info th { width: 22%; text-align: left; background: #F2F2F2; padding: 7px 10px; border: 1px solid #ccc; }
+  .info td { padding: 7px 10px; border: 1px solid #ccc; font-size: 12pt; font-weight: bold; }
+  .info .booth { font-size: 16pt; }
+  .items th { background: #305496; color: #fff; padding: 6px 5px; font-size: 9.5pt; border: 1px solid #305496; }
+  .items td { padding: 6px 5px; border: 1px solid #ccc; vertical-align: middle; }
+  .items tr { page-break-inside: avoid; }
+  .c { text-align: center; } .r { text-align: right; white-space: nowrap; }
+  .muted { color: #666; font-size: 9.5pt; }
+  .chk { font-size: 13pt; }
+  .tot td { font-weight: bold; background: #F2F2F2; }
+  .star { color: #C00000; font-size: 13pt; margin-left: 3px; }
+  .note { font-size: 9pt; color: #444; margin: 8px 0 0; }
+  @media screen { body { background: #888; } .sheet { background: #fff; width: 210mm; min-height: 297mm;
+    margin: 12px auto; padding: 14mm; } }
+`;
+
+/* 부스 비치용 비품 목록 인쇄 — 비품 신청이 있는 기업만, 부스 번호순 */
+export function printBoothEquipSheets(){
+  const evKey = exhEvent;
+  if(!evKey) return showSaveErrorToast('행사를 먼저 고르세요');
+  const ev = EVENT_LIST.find(e => e.key === evKey);
+  const evLabel = (ev && ev.key) || evKey;
+
+  const list = activeExhibitors(evKey)
+    .map(x => ({ x, rows: boothSheetRows(x) }))
+    .filter(s => s.rows.length)
+    .sort(boothOrder);
+  if(!list.length) return showSaveErrorToast('비품 신청이 들어온 기업이 없어 출력할 게 없어요');
+
+  /* 누른 순간 연다 — await 뒤에 열면 팝업 차단에 걸린다 */
+  const w = window.open('', '_blank');
+  if(!w) return showSaveErrorToast('팝업이 막혀 있어요 — 이 사이트의 팝업을 허용해 주세요');
+  w.document.write(`<!doctype html><html lang="en"><head><meta charset="utf-8">
+    <title>${escHtml(evLabel)} - Rental Equipment List</title><style>${SHEET_CSS}</style></head>
+    <body>${list.map(s => boothSheetHtml(s.x, s.rows, evLabel)).join('')}</body></html>`);
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 300);
+
+  const owing = list.filter(s => isOwing(settleState(s.x))).length;
+  trackAction('add', '부스 비치용 비품 목록 출력', evLabel,
+    `${list.length}개사` + (owing ? ` · 미납 ${owing}곳(*)` : ''));
+}
+
+window.printBoothEquipSheets = printBoothEquipSheets;
