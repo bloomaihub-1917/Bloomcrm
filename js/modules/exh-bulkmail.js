@@ -11,10 +11,10 @@
    - 받는 사람: 메인 담당자만 / 메일 있는 담당자 모두
    - 첨부: 그 단계의 기본 첨부(설정 › 행사 › 메일)
 ══════════════════════════════════════════════════════════════ */
-import { EXH_LOGS, EXHIBITORS, currentUser, getExhibitorById } from '../state.js';
+import { EXH_LOGS, EXHIBITORS, currentUser, getExhibitorById, logsFor } from '../state.js';
 import { sendMail, eventMailFrom, loadMailFiles, mailFilesOf } from '../api.js';
 import { escapeHtml, escAttr, nowStamp } from '../utils.js';
-import { visibleList, exhNames, exhContacts, exhMailCtx, exhLocked, exhLockNotice } from './exh-tab.js';
+import { visibleList, exhNames, exhContacts, exhMailCtx, exhLocked, exhLockNotice, STEPS, cellState } from './exh-tab.js';
 import { exhMailSteps, exhIsEnglish, fillExhTemplate, exhMailFileStep } from './exh-mail.js';
 import { trackAction } from './audit-tab.js';
 import './exh-mail-editor.js';
@@ -27,6 +27,42 @@ const mailsOf = (x, who) => {
   const pick = who === 'all' ? ppl : [ppl.find(p => p.primary) || ppl[0]].filter(Boolean);
   return [...new Set(pick.map(p => String(p.email).trim()).filter(Boolean))];
 };
+/* ── 이 기업에게 이 메일이 지금 보낼 차례인가 ──
+   기본 단계는 진행 체크리스트의 그 칸(due 키 = STEPS 키)을 본다 — 매뉴얼은 «매뉴얼 회신»,
+   신청서는 «신청서 접수»처럼 기업에서 받아야 끝나는 칸이다.
+     done  그 칸이 끝났거나 해당 없음 → 보내지 않는다
+     late  메일은 보냈는데 마감이 지났다 → 다시 보낼 차례(독촉)
+     sent  보냈고 아직 기다리는 중 → 고르지 않는다
+     due   아직 안 보냈다 → 보낼 차례
+   더한 단계는 칸이 없으니 이 단계 메일을 보낸 기록만 본다. «기타 안내»는 차례가 없다(free). */
+const sentOf = (x, key) => logsFor(x.id).some(l => l.kind === `exh-${key}` && l.direction !== 'in');
+export function exhMailState(x, st){
+  if(!st || st.key === 'note') return 'free';
+  const sent = sentOf(x, st.key);
+  if(st.custom) return sent ? 'sent' : 'due';
+  const step = st.due && STEPS.find(s => s.key === st.due);
+  if(step){
+    const c = cellState(x, step);
+    if(c.state === 'done' || c.state === 'na') return 'done';
+    if(sent) return c.due && c.due.days < 0 ? 'late' : 'sent';
+    return 'due';
+  }
+  return sent ? 'sent' : 'due';
+}
+const isTurn = (s) => s === 'due' || s === 'late';
+const STATE_PILL = {
+  due:  '<span class="pill p-amber" style="font-size:9.5px">보낼 차례</span>',
+  late: '<span class="pill p-red" style="font-size:9.5px;background:var(--rb);color:var(--re)">마감 지남·재발송</span>',
+  sent: '<span class="pill p-blue" style="font-size:9.5px">보냄·기다림</span>',
+  done: '<span class="pill p-green" style="font-size:9.5px">끝남</span>',
+  free: '',
+};
+/* 보낼 차례이고 메일 받을 사람이 있는 기업 */
+function pickTurn(){
+  const st = exhMailSteps(bm.evKey).find(s => s.key === bm.step);
+  const list = visibleList().filter(x => mailsOf(x, bm.who).length);
+  bm.ids = new Set((!st || st.key === 'note' ? list : list.filter(x => isTurn(exhMailState(x, st)))).map(x => x.id));
+}
 const enOf = (x) => bm.lang === 'en' ? true : bm.lang === 'ko' ? false : exhIsEnglish(x);
 
 /* stepKey를 주면 그 단계가 골라진 채로 연다(전시 메일 단계 편집 창의 «📨 여러 기업에») */
@@ -37,8 +73,8 @@ export async function openExhBulkMail(stepKey){
   const steps = exhMailSteps(evKey);
   if(!steps.length){ alert('이 행사에 켜진 메일 단계가 없어요.'); return; }
   const st = steps.find(s => s.key === stepKey) || steps[0];
-  bm = { evKey, ids: new Set(list.filter(x => mailsOf(x, 'primary').length).map(x => x.id)),
-    step: st.key, lang: 'auto', who: 'primary', tpl: pickTpl(evKey, st.key), sending: false };
+  bm = { evKey, ids: new Set(), step: st.key, lang: 'auto', who: 'primary', tpl: pickTpl(evKey, st.key), sending: false };
+  pickTurn();
   await loadMailFiles(evKey);
   render();
 }
@@ -74,7 +110,8 @@ function render(){
       <button class="drcls" style="margin-left:auto" onclick="closeExhBulkMail()">✕</button>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
-      <div><div class="mlbl">무슨 메일인가</div><select class="fi" onchange="bmSet('step',this.value)">${steps.map(s => opt(s.key, bm.step, escapeHtml(s.label))).join('')}</select></div>
+      <div><div class="mlbl">무슨 메일인가</div><select class="fi" onchange="bmSet('step',this.value)">${steps.map(s => { const n = s.key === 'note' ? 0 : list.filter(x => isTurn(exhMailState(x, s))).length;
+          return opt(s.key, bm.step, escapeHtml(s.label) + (n ? ` — 보낼 차례 ${n}곳` : '')); }).join('')}</select></div>
       <div><div class="mlbl">언어</div><select class="fi" onchange="bmSet('lang',this.value)">${opt('auto', bm.lang, '기업별 자동 (해외는 영문)')}${opt('ko', bm.lang, '모두 국문')}${opt('en', bm.lang, '모두 영문')}</select></div>
       <div><div class="mlbl">받는 사람</div><select class="fi" onchange="bmSet('who',this.value)">${opt('primary', bm.who, '메인 담당자만')}${opt('all', bm.who, '메일 있는 담당자 모두')}</select></div>
     </div>
@@ -82,14 +119,15 @@ function render(){
       <div>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
           <div class="mlbl" style="margin:0">받는 기업 ${picked.length}/${list.length}</div>
-          <button class="btn" style="font-size:10px;margin-left:auto" onclick="bmAll(true)">전체</button>
+          ${st && st.key !== 'note' ? `<button class="btn" style="font-size:10px;margin-left:auto" onclick="bmAll('turn')" title="이 메일이 보낼 차례인 기업만 고릅니다">보낼 차례만</button>` : ''}
+          <button class="btn" style="font-size:10px;${st && st.key !== 'note' ? '' : 'margin-left:auto'}" onclick="bmAll(true)">전체</button>
           <button class="btn" style="font-size:10px" onclick="bmAll(false)">해제</button>
         </div>
         <div style="border:1px solid var(--i6);border-radius:8px;max-height:360px;overflow:auto">
           ${list.map(x => { const ms = mailsOf(x, bm.who); return `<label style="display:flex;gap:6px;align-items:center;padding:5px 8px;border-bottom:1px solid var(--i8);font-size:11.5px;cursor:${ms.length ? 'pointer' : 'default'};opacity:${ms.length ? 1 : .5}">
             <input type="checkbox" ${bm.ids.has(x.id) ? 'checked' : ''} ${ms.length ? '' : 'disabled'} onchange="bmPick('${escAttr(x.id)}',this.checked)">
             <b style="flex:0 0 auto">${escapeHtml(exhNames(x).ko)}</b>
-            <span class="pill p-gray" style="font-size:9.5px">${enOf(x) ? 'EN' : 'KO'}</span>
+            <span class="pill p-gray" style="font-size:9.5px">${enOf(x) ? 'EN' : 'KO'}</span>${STATE_PILL[exhMailState(x, st)] || ''}
             <span style="color:var(--i4);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ms.length ? escapeHtml(ms.join(', ')) : '메일 있는 담당자 없음'}</span>
           </label>`; }).join('')}
         </div>
@@ -117,13 +155,14 @@ function render(){
 export function bmSet(k, v){
   if(!bm || bm.sending) return;
   bm[k] = v;
-  if(k === 'step') bm.tpl = pickTpl(bm.evKey, v);
+  if(k === 'step'){ bm.tpl = pickTpl(bm.evKey, v); pickTurn(); }
   if(k === 'who') visibleList().forEach(x => { if(!mailsOf(x, v).length) bm.ids.delete(x.id); });
   render();
 }
 export function bmPick(id, on){ if(!bm) return; on ? bm.ids.add(id) : bm.ids.delete(id); render(); }
 export function bmAll(on){
   if(!bm) return;
+  if(on === 'turn'){ pickTurn(); render(); return; }
   bm.ids = new Set(on ? visibleList().filter(x => mailsOf(x, bm.who).length).map(x => x.id) : []);
   render();
 }
@@ -142,7 +181,10 @@ export async function sendExhBulkMail(){
   const st = steps.find(s => s.key === bm.step);
   const fileIds = mailFilesOf(bm.evKey).filter(f => f.step === exhMailFileStep(bm.step)).map(f => f.id);
   // 밖으로 나가는 일 — 한 번 묻는다
-  if(!confirm(`${list.length}곳에 «${st.label}» 메일을 보낼까요?\n\n발신 ${from.text}\n받는 사람: ${bm.who === 'all' ? '메일 있는 담당자 모두' : '메인 담당자'}\n기업마다 한 통씩 따로 나갑니다.`)) return;
+  const notTurn = st.key === 'note' ? 0 : list.filter(x => !isTurn(exhMailState(x, st))).length;
+  if(!confirm(`${list.length}곳에 «${st.label}» 메일을 보낼까요?${notTurn ? `
+
+이 중 ${notTurn}곳은 보낼 차례가 아니에요(이미 보냈거나 끝남).` : ''}\n\n발신 ${from.text}\n받는 사람: ${bm.who === 'all' ? '메일 있는 담당자 모두' : '메인 담당자'}\n기업마다 한 통씩 따로 나갑니다.`)) return;
 
   bm.sending = true;
   render();
@@ -167,6 +209,7 @@ export async function sendExhBulkMail(){
   }
   trackAction('add', '참가사 일괄 메일', bm.evKey, `«${st.label}» ${ok}곳 보냄${fails.length ? ` · 실패 ${fails.length}곳` : ''}`);
   bm.sending = false;
+  pickTurn();   // 보낸 곳은 «보냄»으로 넘어가 빠진다
   render();
   msg(`${ok}곳에 보냈어요${fails.length ? ` — 실패 ${fails.length}곳: ${fails.slice(0, 5).join(' / ')}${fails.length > 5 ? ' …' : ''}` : ''}`, !fails.length);
   window.renderExh?.();
@@ -179,6 +222,7 @@ window.refreshExhBulkMail = () => {
   if(!steps.length){ close(); return; }
   if(!steps.some(s => s.key === bm.step)) bm.step = steps[0].key;
   bm.tpl = pickTpl(bm.evKey, bm.step);
+  pickTurn();
   render();
 };
 window.openExhBulkMail = openExhBulkMail;
