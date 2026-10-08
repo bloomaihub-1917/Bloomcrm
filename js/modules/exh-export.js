@@ -40,7 +40,7 @@ import {
 } from '../state.js';
 import { activeExhibitors, exhNames, exhContact, isBillable, isBoothGiven,
   boothViewRows, parseBooth, isSharedBooth, boothDesignState, SELF_BUILD_TYPE, hostOf, boothTypeText,
-  STEPS, cellState, progressOf, billedAmount, paidAmount, currencyOf, settleState, settleByCurrency, isOwing,
+  STEPS, cellState, progressOf, billedAmount, paidAmount, currencyOf, settleState, settleByCurrency,
   visibleList } from './exh-tab.js';
 import { openInquiriesFor } from '../state.js';
 import { showSaveErrorToast } from '../api.js';
@@ -1234,15 +1234,20 @@ export function boothSheetRows(x){
       || String(a.code).localeCompare(String(b.code), 'en', { numeric: true }));
 }
 
+/* 남은 금액 — 기업 전체(부스비 포함), 통화마다 모두.
+   settleState는 대표 통화 하나만 보므로, 원화는 다 냈는데 달러가 남은 기업이
+   «완납»으로 빠진다. 통화별 잔액을 다 본다(«완납 처리»한 기업은 0으로 닫혀 있다). */
+function outstandingOf(x){
+  return Object.entries(settleByCurrency(x.id))
+    .filter(([, v]) => v.balance > 0)
+    .map(([cur, v]) => `${cur} ${fmtCur(v.balance, cur)}`);
+}
+
 function boothSheetHtml(x, rows, evLabel){
   const n = exhNames(x);
   const company = n.en || n.ko;
-  const st = settleState(x);
-  const owing = isOwing(st);
-  /* 남은 금액 — 통화가 섞인 기업은 통화마다. 통화별 잔액이 안 잡히면 정산 상태의 숫자 */
-  const dues = owing ? Object.entries(settleByCurrency(x.id))
-    .filter(([, v]) => v.balance > 0).map(([cur, v]) => `${cur} ${fmtCur(v.balance, cur)}`) : [];
-  if(owing && !dues.length) dues.push(`${st.cur} ${fmtCur(st.balance, st.cur)}`);
+  const dues = outstandingOf(x);
+  const owing = dues.length > 0;
   const totals = new Map();
   rows.filter(r => r.charge === 'billed')
     .forEach(r => totals.set(r.cur, (totals.get(r.cur) || 0) + r.amount));
@@ -1336,7 +1341,7 @@ export function printBoothEquipSheets(exhId){
   w.focus();
   setTimeout(() => w.print(), 300);
 
-  const owing = list.filter(s => isOwing(settleState(s.x))).length;
+  const owing = list.filter(s => outstandingOf(s.x).length).length;
   trackAction('add', '부스 비치용 비품 목록 출력', evLabel,
     (one ? exhNames(one).ko : `${list.length}개사`) + (owing ? ` · 미납 ${owing}곳(*)` : ''));
 }
