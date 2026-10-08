@@ -240,6 +240,7 @@
       <div class="sbi">
         <button class="nr on" data-cv="today" onclick="switchCV('today',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 3.07 4.18 2 2 0 0 1 5.06 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L9.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>오늘 할 컨택</button>
         <button class="nr" data-cv="grid" onclick="switchCV('grid',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>현황표</button>
+        <button class="nr" data-cv="report" onclick="switchCV('report',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 16v-4M12 16V8M17 16v-7"/></svg>보고</button>
         <button class="nr" data-cv="pipeline" onclick="switchCV('pipeline',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="5" height="18"/><rect x="10" y="3" width="5" height="18"/><rect x="17" y="3" width="4" height="18"/></svg>협의 보드<span class="nbg" id="ct-pipe">12</span></button>
         <button class="nr" data-cv="table" onclick="switchCV('table',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>협의 목록<span class="nbg" id="ct-tbl">12</span></button>
       </div></div>
@@ -921,6 +922,7 @@
   </div>
   <div class="view on" id="v-today" style="overflow:auto;background:var(--i9)"></div>
   <div class="view" id="v-grid"></div>
+  <div class="view" id="v-report" style="overflow:auto;background:var(--i9)"></div>
   <div class="view" id="v-pipeline"><div id="crm-selbar" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 14px;border-bottom:1px solid var(--i7);background:var(--i9)"></div><div class="kanban" id="kanban"></div></div>
   <div class="view" id="v-table">
     <div class="tbar"><div class="seg"><button class="seg-b on" onclick="tblF('전체',this)">전체</button><button class="seg-b" onclick="tblF('미접촉',this)">미접촉</button><button class="seg-b" onclick="tblF('컨택중',this)">컨택중</button><button class="seg-b" onclick="tblF('협의중',this)">협의중</button><button class="seg-b" onclick="tblF('확정',this)">확정</button></div><span class="tct" id="tct"></span></div>
