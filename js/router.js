@@ -175,7 +175,15 @@ export function applyDrawerWidth(){
   const saved = parseInt(localStorage.getItem(DR_WIDTH_KEY), 10);
   const w = Math.max(DR_MIN_W, Math.min(drMaxW(), saved || drDefaultW()));
   document.documentElement.style.setProperty('--dr-w', w + 'px');
+  const sw = parseInt(localStorage.getItem(DR_SPLIT_KEY), 10);
+  if(sw) document.documentElement.style.setProperty('--dr-sw', Math.max(DR_SPLIT_MIN, Math.min(drSplitMax(), sw)) + 'px');
+  else document.documentElement.style.removeProperty('--dr-sw');
 }
+/* 메일함 나란히(mail-pane.js)일 때의 너비는 따로 기억한다 — 평소 너비의 두 배를
+   쓰고 있어서 가장자리를 끌어도 따라오지 않았다(화면 96%에 걸려 있기도 했다) */
+const DR_SPLIT_KEY = 'crm_dr_split_width';
+const DR_SPLIT_MIN = 760;
+const drSplitMax = () => Math.max(DR_SPLIT_MIN, window.innerWidth - 40);
 
 export function initDrawerResize(){
   applyDrawerWidth();
@@ -200,6 +208,11 @@ export function initDrawerResize(){
     // 드로어는 오른쪽에 붙어 있으므로 왼쪽 가장자리를 끌면 너비가 반대로 움직인다
     document.addEventListener('mousemove', e => {
       if(!dragging) return;
+      if(dr.classList.contains('split')){
+        const sw = Math.max(DR_SPLIT_MIN, Math.min(drSplitMax(), window.innerWidth - e.clientX));
+        document.documentElement.style.setProperty('--dr-sw', sw + 'px');
+        return;
+      }
       const w = Math.max(DR_MIN_W, Math.min(drMaxW(), window.innerWidth - e.clientX));
       document.documentElement.style.setProperty('--dr-w', w + 'px');
     });
@@ -208,11 +221,17 @@ export function initDrawerResize(){
       dragging = false;
       handle.classList.remove('dragging');
       document.body.style.userSelect = '';
-      const w = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--dr-w'), 10);
+      const cs = getComputedStyle(document.documentElement);
+      if(dr.classList.contains('split')){
+        const sw = parseInt(cs.getPropertyValue('--dr-sw'), 10);
+        if(sw) localStorage.setItem(DR_SPLIT_KEY, sw);
+        return;
+      }
+      const w = parseInt(cs.getPropertyValue('--dr-w'), 10);
       if(w) localStorage.setItem(DR_WIDTH_KEY, w);
     });
     handle.addEventListener('dblclick', () => {
-      localStorage.removeItem(DR_WIDTH_KEY);
+      localStorage.removeItem(dr.classList.contains('split') ? DR_SPLIT_KEY : DR_WIDTH_KEY);
       applyDrawerWidth();
     });
   });

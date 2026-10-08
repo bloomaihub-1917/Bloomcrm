@@ -132,15 +132,72 @@ export function decorate(t){
   let pane = dr.querySelector('.dr-mail');
   if(on){
     if(!pane){ pane = document.createElement('div'); pane.className = 'dr-mail'; dr.appendChild(pane); }
+    applyRatio(dr);
+    midHandle(dr);
     const box = t === 'sp' ? window.__spBoxHtml?.(owner) : window.__exhBoxHtml?.(owner);
+    /* 오른쪽 탭을 바꿀 때마다 드로어가 다시 그려지며 여기도 불린다. 전에는 왼쪽을
+       통째로 새로 그려서 펼쳐 둔 메일이 접히고 스크롤이 맨 위로 갔다.
+       같은 사람·같은 내용이면 손대지 않고, 내용이 바뀌었으면 펼침과 스크롤을 옮겨 심는다. */
+    const sig = `${owner}|${box || ''}`;
+    if(pane.dataset.sig === sig) return finishDecorate(t, dr, owner);
+    const sameOwner = pane.dataset.owner === String(owner);
+    const openKeys = sameOwner ? [...pane.querySelectorAll('details[open]')].map(detailsKey) : [];
+    const scroll = sameOwner ? pane.scrollTop : 0;
+    pane.dataset.sig = sig;
+    pane.dataset.owner = String(owner);
     pane.innerHTML = `<div style="position:sticky;top:0;background:var(--W);padding:10px 14px;border-bottom:1px solid var(--i6);z-index:1;display:flex;gap:8px;align-items:center">
         <b style="font-size:12px">메일함</b>
         <span class="mp-target" style="font-size:10.5px;color:var(--a)">${target ? '' : '오른쪽 탭에서 넣을 칸을 누르세요'}</span>
         <button class="btn bp bs" style="margin-left:auto" onmousedown="event.preventDefault()" onclick="paneInsertSelection()"
           title="왼쪽에서 끌어 고른 글을 오른쪽에서 고른 칸에 넣습니다">→ 고른 글 넣기</button></div>
       <div style="padding:10px 14px">${box || ''}</div>`;
-  } else if(pane){ pane.remove(); }
+    if(openKeys.length) pane.querySelectorAll('details').forEach(d => { if(openKeys.includes(detailsKey(d))) d.open = true; });
+    pane.scrollTop = scroll;
+  } else {
+    if(pane) pane.remove();
+    dr.querySelector('.dr-mid')?.remove();
+  }
+  finishDecorate(t, dr, owner);
+}
 
+/* 펼친 메일을 알아보는 열쇠 — 줄 안의 상태 표시(data-mst="sp|기록id"), 없으면 제목 줄 글 */
+function detailsKey(d){
+  return d.querySelector('[data-mst]')?.dataset.mst || (d.querySelector('summary')?.textContent || '').trim().slice(0, 120);
+}
+
+/* ── 가운데 경계 — 끌어서 메일함·탭 비율을 바꾼다(25~75%). 비율은 기억한다 ── */
+const RATIO_KEY = 'crm.mailSplitRatio';
+function applyRatio(dr){
+  let r = 50;
+  try { r = Number(localStorage.getItem(RATIO_KEY)) || 50; } catch(e){}
+  dr.style.setProperty('--mp-w', Math.max(25, Math.min(75, r)) + '%');
+}
+function midHandle(dr){
+  if(dr.querySelector('.dr-mid')) return;
+  const h = document.createElement('div');
+  h.className = 'dr-mid';
+  h.title = '끌어서 메일함·탭 너비 조절 (더블클릭하면 반반)';
+  dr.appendChild(h);
+  let drag = false;
+  h.addEventListener('mousedown', (e) => { drag = true; h.classList.add('dragging'); document.body.style.userSelect = 'none'; e.preventDefault(); });
+  document.addEventListener('mousemove', (e) => {
+    if(!drag) return;
+    const box = dr.getBoundingClientRect();
+    const r = Math.max(25, Math.min(75, ((e.clientX - box.left) / box.width) * 100));
+    dr.style.setProperty('--mp-w', r.toFixed(1) + '%');
+  });
+  document.addEventListener('mouseup', () => {
+    if(!drag) return;
+    drag = false; h.classList.remove('dragging'); document.body.style.userSelect = '';
+    try { localStorage.setItem(RATIO_KEY, parseFloat(dr.style.getPropertyValue('--mp-w')) || 50); } catch(e){}
+  });
+  h.addEventListener('dblclick', () => {
+    try { localStorage.removeItem(RATIO_KEY); } catch(e){}
+    dr.style.setProperty('--mp-w', '50%');
+  });
+}
+
+function finishDecorate(t, dr, owner){
   // 고정 띠 — 탭 줄 바로 아래
   let bar = dr.querySelector('.dr-pin');
   const html = pinHtml(t, owner);

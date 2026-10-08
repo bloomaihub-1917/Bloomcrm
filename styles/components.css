@@ -148,12 +148,15 @@ tr.row-sel{background:var(--ad)}
 /* 닫힌 서랍은 화면 밖에 있어도 그림자가 왼쪽으로 40px 번져 오른쪽 끝에 음영이 졌다 — 열렸을 때만 그림자 */
 .dr.on{transform:translateX(0);box-shadow:-12px 0 40px rgba(0,0,0,.08)}
 /* 메일함 나란히(mail-pane.js) — 드로어를 두 배로 넓혀 왼쪽은 메일함, 오른쪽은 평소 탭 */
-.dr.split{width:min(calc(var(--dr-w,560px) * 2),96vw)}
-.dr.split > .drh,.dr.split > .drtabs,.dr.split > .dr-pin,.dr.split > .drbd{margin-left:50%}
-.dr-mail{position:absolute;left:0;top:0;bottom:0;width:50%;border-right:1px solid var(--i6);overflow-y:auto;background:var(--i9)}
+.dr.split{width:var(--dr-sw,min(calc(var(--dr-w,560px) * 2),96vw))}
+.dr.split > .drh,.dr.split > .drtabs,.dr.split > .dr-pin,.dr.split > .drbd{margin-left:var(--mp-w,50%)}
+.dr-mail{position:absolute;left:0;top:0;bottom:0;width:var(--mp-w,50%);border-right:1px solid var(--i6);overflow-y:auto;background:var(--i9)}
 /* 왼쪽 가장자리를 끌어 너비를 조절한다(사이드바의 .sb-resize와 같은 방식) */
 .dr-resize{position:absolute;left:-3px;top:0;width:6px;height:100%;cursor:col-resize;z-index:5;background:transparent}
 .dr-resize:hover,.dr-resize.dragging{background:var(--a)}
+/* 나란히 보기의 가운데 경계 — 끌어서 메일함·탭 비율을 바꾼다(mail-pane.js) */
+.dr-mid{position:absolute;top:0;bottom:0;left:calc(var(--mp-w,50%) - 3px);width:6px;cursor:col-resize;z-index:6;background:transparent}
+.dr-mid:hover,.dr-mid.dragging{background:var(--a)}
 .drh{padding:14px 17px 12px;border-bottom:1px solid var(--i6);display:flex;align-items:flex-start;gap:10px;flex-shrink:0;background:var(--i9)}
 .drav{width:40px;height:40px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0}
 .drnm{font-size:15px;font-weight:800;color:var(--i0);letter-spacing:-.01em;line-height:1.2;margin-bottom:3px}
