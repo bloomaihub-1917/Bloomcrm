@@ -61,7 +61,8 @@ function saveFailed(res, msg){
 }
 import { filterMail, mailFilBar, mailStateHtml, mailActionsHtml, mailToggleAttr, isPending, setMailDone } from './mail-mark.js';
 import { decorate as decorateMailPane } from './mail-pane.js';
-import { EXH_MAIL_STEPS, exhMailSteps, exhIsEnglish, fillExhTemplate, exhMailFileStep } from './exh-mail.js';
+import { EXH_MAIL_STEPS, exhMailSteps, exhIsEnglish, fillExhTemplate, exhMailFileStep, exhStepVariants } from './exh-mail.js';
+import { libItems, libItem } from './mail-templates.js';
 import './exh-mail-editor.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 import { ieyo } from '../country-signal.js';
@@ -3778,10 +3779,15 @@ function dMail(x){
     <div style="display:grid;grid-template-columns:1fr auto;gap:6px;margin-bottom:8px">
       <div><div class="mlbl">무슨 메일인가 <span style="font-size:9px;color:var(--i4)">고르면 그 단계 문구로 채워져요</span>
         <a href="#" style="font-size:10px;margin-left:4px" title="이 행사의 전시 메일 단계를 더하고, 고치고, 끄거나 지웁니다"
-          onclick="openExhMailEditor('${escAttr(x.event_id)}',document.getElementById('exm-step-${id}').value);return false">✎ 단계 편집</a></div>
+          onclick="openExhMailEditor('${escAttr(x.event_id)}',document.getElementById('exm-step-${id}').value);return false">✎ 단계 편집</a>
+        <a href="#" style="font-size:10px;margin-left:4px" title="단계와 상관없이 꺼내 쓰는 양식 — 이 행사만 또는 모든 행사 공통"
+          onclick="openMailTemplates('exh','${escAttr(x.event_id)}');return false">📚 양식 보관함</a></div>
         <select class="fi" id="exm-step-${id}" onchange="fillExhMail('${id}')" style="font-size:12px">
-          ${exhMailSteps(x.event_id).map(st => `<option value="${st.key}"${st.key === exhMailStep ? ' selected' : ''}>${escapeHtml(st.label)}</option>`).join('')}
-        </select></div>
+          <optgroup label="메일 단계">${exhMailSteps(x.event_id).map(st => `<option value="${st.key}"${st.key === exhMailStep ? ' selected' : ''}>${escapeHtml(st.label)}</option>`).join('')}</optgroup>
+          ${libItems('exh', x.event_id).length ? `<optgroup label="양식 보관함">${libItems('exh', x.event_id).map(it =>
+            `<option value="lib:${escAttr(it.id)}"${'lib:' + it.id === exhMailStep ? ' selected' : ''}>${escapeHtml(it.name)}</option>`).join('')}</optgroup>` : ''}
+        </select>
+        <div id="exm-var-${id}"></div></div>
       <div><div class="mlbl">언어</div>
         <select class="fi" id="exm-lang-${id}" onchange="fillExhMail('${id}')" style="font-size:12px">
           <option value="ko"${exhIsEnglish(x) ? '' : ' selected'}>국문</option><option value="en"${exhIsEnglish(x) ? ' selected' : ''}>영문</option>
@@ -3841,11 +3847,24 @@ export async function fillExhMail(exhId, first){
   const en = document.getElementById(`exm-lang-${exhId}`)?.value === 'en';
   if(stepKey !== exhMailStep) exhSkipDefault = new Set();
   exhMailStep = stepKey;
-  const st = exhMailSteps(x.event_id).find(s => s.key === stepKey);
+  /* 양식 보관함이면 그 양식을, 단계면 고른 변형(없으면 단계 문구)을 쓴다 */
+  const lib = String(stepKey).startsWith('lib:') ? libItem(String(stepKey).slice(4)) : null;
+  const st = lib ? { key: stepKey, label: lib.name, due: '' } : exhMailSteps(x.event_id).find(s => s.key === stepKey);
+  const vs = lib ? [] : exhStepVariants(x.event_id, stepKey);
+  const vEl = document.getElementById(`exm-var-${exhId}`);
+  const prevVar = document.getElementById(`exm-varsel-${exhId}`)?.value || '';
+  const vId = vs.some(v => v.id === prevVar) ? prevVar : '';
+  if(vEl) vEl.innerHTML = vs.length ? `<div style="display:flex;gap:6px;align-items:center;margin-top:5px;font-size:11px">
+      <span style="color:var(--i4)">양식</span>
+      <select class="fi" id="exm-varsel-${escAttr(exhId)}" style="font-size:11.5px;flex:1" onchange="fillExhMail('${escAttr(exhId)}')">
+        <option value="">기본 문구</option>
+        ${vs.map(v => `<option value="${escAttr(v.id)}"${vId === v.id ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}
+      </select></div>` : '';
+  const src = lib || vs.find(v => v.id === vId) || st;
   if(sEl && bEl && st && !(first && bEl.dataset.touched)){
     const ctx = exhMailCtx(x);
-    sEl.value = fillExhTemplate(st[en ? 'subject_en' : 'subject_ko'] || st.subject_ko, x, st, en, ctx);
-    bEl.value = fillExhTemplate(st[en ? 'body_en' : 'body_ko'] || st.body_ko, x, st, en, ctx);
+    sEl.value = fillExhTemplate(src[en ? 'subject_en' : 'subject_ko'] || src.subject_ko || st.subject_ko, x, st, en, ctx);
+    bEl.value = fillExhTemplate(src[en ? 'body_en' : 'body_ko'] || src.body_ko || st.body_ko, x, st, en, ctx);
     bEl.oninput = () => { bEl.dataset.touched = '1'; };
   }
   await loadMailFiles(x.event_id);
@@ -3913,10 +3932,11 @@ export async function sendExhMail(exhId){
   for(const f of exhMailFiles) attachments.push({ filename: f.name, content_type: f.type, data: await fileToBase64(f) });
   const reply = exhReply;
   const stepKey = document.getElementById(`exm-step-${exhId}`)?.value || 'note';
-  const st = exhMailSteps(x.event_id).find(s => s.key === stepKey);
+  const lib = String(stepKey).startsWith('lib:') ? libItem(String(stepKey).slice(4)) : null;
+  const st = lib ? { key: 'note', label: lib.name } : exhMailSteps(x.event_id).find(s => s.key === stepKey);
   // 회신은 단계 메일이 아니다 — 단계 기본 첨부를 붙이지 않는다
   const fileIds = reply ? [...reply.pick] : exhDefFiles(x).filter(f => !exhSkipDefault.has(f.id)).map(f => f.id);
-  const kind = reply ? 'reply' : stepKey === 'note' ? 'note' : `exh-${stepKey}`;
+  const kind = reply ? 'reply' : stepKey === 'note' || lib ? 'note' : `exh-${stepKey}`;
   const category = reply ? '회신' : st ? st.label : '메일';
   const res = await sendMail({ to, cc, subject, text, exhibitor_id: x.id, category, kind, attachments, file_ids: fileIds });
   if(!res.ok){ say(res.offline ? '테스트 모드에서는 보내지 않아요.' : (res.error || '보내지 못했어요.')); return; }

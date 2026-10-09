@@ -436,8 +436,16 @@ export function fillTemplate(text, sp, step){
     .trim();
 }
 
-/* 단계의 메일 초안 */
-export function draftFor(sp, stepKey){
+/* 양식 변형(mail-templates.js) — 역할 조건이 맞는 첫 변형이 저절로 골라진다.
+   조건 없는 변형은 보낼 때 직접 고른다 */
+export const stepVariants = (evKey, stepKey) => ((confCfg(evKey).flow_variants) || {})[stepKey] || [];
+export function autoVariant(sp, stepKey){
+  const roles = rolesOfSpeaker(sp.id);
+  return stepVariants(sp.event_id, stepKey).find(v => (v.roles || []).some(r => roles.includes(r))) || null;
+}
+
+/* 단계의 메일 초안 — variantId: 없으면 역할로 자동, 'base'면 기본 문구, 그 밖엔 그 변형 */
+export function draftFor(sp, stepKey, variantId){
   const f = flowStatus(sp);
   const step = f.steps.find(s => s.key === stepKey);
   if(!step) return null;
@@ -446,12 +454,17 @@ export function draftFor(sp, stepKey){
   const reuse = stepKey === 'collect' && !f.remind && reusePending(sp).length > 0;
   const remind = stepKey === 'collect' && f.remind;
   const pre = reuse ? 'reuse_' : remind ? 'remind_' : '';
-  const pick = (k) => step[`${pre}${k}_${en ? 'en' : 'ko'}`] || step[`${k}_${en ? 'en' : 'ko'}`] || '';
+  /* 변형은 첫 메일 문구만 바꾼다 — 독촉·지난 자료 확인은 단계 문구 그대로 */
+  const variant = variantId === 'base' ? null : variantId
+    ? (stepVariants(sp.event_id, stepKey).find(v => v.id === variantId) || null) : autoVariant(sp, stepKey);
+  const lang = en ? 'en' : 'ko';
+  const pick = (k) => (!pre && variant && variant[`${k}_${lang}`]) || step[`${pre}${k}_${lang}`] || step[`${k}_${lang}`] || '';
   const st = reuse ? { ...step, reuse: true } : step;
   return {
     subject: fillTemplate(pick('subject'), sp, st),
     body: fillTemplate(pick('body'), sp, st),
     kind: stepKey, category: reuse ? '자료 확인 요청' : remind ? '자료 독촉' : step.label,
+    variant: !pre && variant ? variant.id : '', variantLabel: !pre && variant ? variant.label : '',
   };
 }
 

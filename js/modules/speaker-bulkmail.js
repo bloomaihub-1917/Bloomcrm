@@ -20,12 +20,14 @@ import { EVENT_LIST, SPEAKER_LOGS, currentUser, speakersForEvent, evPartDone, co
 import { sendMail, eventMailFrom, loadMailFiles, mailFilesOf, saveSpeaker } from '../api.js';
 import { escapeHtml, escAttr, nowStamp, td } from '../utils.js';
 import { flowSteps, flowStatus, draftFor, fillTemplate, roundTargets, resentAfter,
-  sessionItems, toldSchedule } from './speaker-flow.js';
+  sessionItems, toldSchedule, stepVariants, autoVariant } from './speaker-flow.js';
+import { libItems, libItem } from './mail-templates.js';
 import { mailTargets } from './speaker-drawer.js';
 import { saveConf } from './settings-tab.js';
 import { trackAction } from './audit-tab.js';
 
-let bm = null;   // { evKey, step, ids:Set, show:'due'|'all', tpl, sending, pi, failed:Set }
+let bm = null;   // { evKey, step, variant:''|'base'|id, ids:Set, show:'due'|'all', tpl, sending, pi, failed:Set }
+const isLib = (key) => String(key || '').startsWith('lib:');
 
 const nameOf = (sp) => sp.name_snapshot || sp.name_en || sp.id;
 const isEn = (sp) => sp.lang_pref === 'en';
@@ -34,6 +36,7 @@ const isEn = (sp) => sp.lang_pref === 'en';
      done    이미 끝              na      해당 없음
      unknown 일정 변경 안내인데 알린 일정을 메일에서 못 읽었다(앱 밖에서 다른 모양으로 보냈을 때) */
 function stateOf(sp, key){
+  if(isLib(key)) return 'free';     // 보관함 양식 — 차례가 없다. 직접 고른다
   const f = flowStatus(sp);
   const s = f.steps.find(x => x.key === key);
   if(key === 'schedule' && !(s && s.applies))
@@ -53,7 +56,11 @@ const PILL = {
 const liveSpeakers = (evKey) => speakersForEvent(evKey)
   .slice().sort((a, b) => nameOf(a).localeCompare(nameOf(b), 'ko'));
 const close = () => { document.getElementById('sp-bulkmail')?.remove(); bm = null; };
-const curStep = () => flowSteps(bm.evKey).find(s => s.key === bm.step);
+/* 지금 고른 메일 — 보관함 양식이면 단계 모양으로 바꿔 돌려준다 */
+const curStep = () => {
+  if(isLib(bm.step)){ const it = libItem(bm.step.slice(4)); return it ? { ...it, key: bm.step, label: it.name, lib: true } : null; }
+  return flowSteps(bm.evKey).find(s => s.key === bm.step);
+};
 
 export async function openSpeakerBulkMail(evKey, stepKey){
   const steps = flowSteps(evKey);
@@ -62,7 +69,7 @@ export async function openSpeakerBulkMail(evKey, stepKey){
   const cnt = (k) => liveSpeakers(evKey).filter(sp => isTurn(stateOf(sp, k))).length;
   const step = steps.some(s => s.key === stepKey) ? stepKey
     : steps.slice().sort((a, b) => cnt(b.key) - cnt(a.key))[0].key;
-  bm = { evKey, step, ids: new Set(), show: 'due', tpl: null, sending: false, pi: 0, failed: new Set() };
+  bm = { evKey, step, variant: '', ids: new Set(), show: 'due', tpl: null, sending: false, pi: 0, failed: new Set() };
   pickDue();
   await loadMailFiles(evKey);
   render();
@@ -76,11 +83,25 @@ function pickDue(){
 /* 문구 — 고치지 않았으면 연사마다 그 단계 초안(자료 독촉·지난 자료 확인도 연사별로 갈린다)을,
    고쳤으면 고친 문구를 연사마다 채워 쓴다 */
 function mailFor(sp){
-  if(!bm.tpl) return draftFor(sp, bm.step);
-  const st = flowStatus(sp).steps.find(s => s.key === bm.step) || curStep();
+  const lib = isLib(bm.step) ? curStep() : null;
+  if(lib && !bm.tpl){
+    const en = isEn(sp);
+    return { subject: fillTemplate((en ? lib.subject_en : lib.subject_ko) || lib.subject_ko || lib.subject_en || '', sp, {}),
+      body: fillTemplate((en ? lib.body_en : lib.body_ko) || lib.body_ko || lib.body_en || '', sp, {}), kind: 'note', category: lib.name };
+  }
+  if(!bm.tpl) return draftFor(sp, bm.step, bm.variant || undefined);
+  const st = lib || flowStatus(sp).steps.find(s => s.key === bm.step) || curStep();
   const en = isEn(sp);
   return { subject: fillTemplate(bm.tpl[en ? 'subject_en' : 'subject_ko'], sp, st),
-    body: fillTemplate(bm.tpl[en ? 'body_en' : 'body_ko'], sp, st), kind: bm.step, category: st.label };
+    body: fillTemplate(bm.tpl[en ? 'body_en' : 'body_ko'], sp, st), kind: lib ? 'note' : bm.step, category: st.label };
+}
+/* «이번 발송 문구 고치기»에 처음 띄울 글 — 고른 변형(자동이면 기본 문구) 또는 보관함 양식 */
+function baseTpl(){
+  const st = curStep() || {};
+  const v = !st.lib && bm.variant && bm.variant !== 'base' ? stepVariants(bm.evKey, bm.step).find(x => x.id === bm.variant) : null;
+  const src = v || st;
+  return { subject_ko: src.subject_ko || st.subject_ko || '', body_ko: src.body_ko || st.body_ko || '',
+    subject_en: src.subject_en || st.subject_en || '', body_en: src.body_en || st.body_en || '' };
 }
 
 /* ── 다시 보내기 묶음 — 행사 설정(conf.mailRounds)에 둔다. 묶음은 단계당 하나만 열린다 ── */
@@ -140,14 +161,16 @@ export async function closeSpRound(silent){
 function render(){
   if(!bm) return;
   const steps = flowSteps(bm.evKey);
-  const st = steps.find(s => s.key === bm.step) || steps[0];
+  const st = curStep() || steps[0];
   const all = liveSpeakers(bm.evKey);
+  const libs = libItems('conf', bm.evKey);
+  const vs = st.lib ? [] : stepVariants(bm.evKey, st.key);
   const rows = all.map(sp => ({ sp, s: stateOf(sp, bm.step), to: mailTargets(sp.id) }))
     .filter(r => bm.show === 'all' || isTurn(r.s) || r.s === 'unknown' || bm.ids.has(r.sp.id));
   const picked = all.filter(sp => bm.ids.has(sp.id));
   const nDue = all.filter(sp => isTurn(stateOf(sp, bm.step))).length;
   const nUnknown = st && st.key === 'schedule' ? all.filter(sp => stateOf(sp, 'schedule') === 'unknown').length : 0;
-  const tpl = bm.tpl || { subject_ko: st.subject_ko || '', body_ko: st.body_ko || '', subject_en: st.subject_en || '', body_en: st.body_en || '' };
+  const tpl = bm.tpl || baseTpl();
   const files = mailFilesOf(bm.evKey).filter(f => f.step === bm.step);
   const ev = EVENT_LIST.find(e => e.key === bm.evKey) || {};
   const rp = roundProgress(st);
@@ -169,7 +192,14 @@ function render(){
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
       <div><div class="mlbl">무슨 메일인가</div><select class="fi" onchange="sbmSet('step',this.value)" ${bm.sending ? 'disabled' : ''}>
         ${steps.map(s => { const n = all.filter(sp => isTurn(stateOf(sp, s.key))).length;
-          return `<option value="${escAttr(s.key)}"${s.key === bm.step ? ' selected' : ''}>${escapeHtml(s.label)}${s.round ? ' ↻' : ''}${n ? ` — 보낼 차례 ${n}명` : ''}</option>`; }).join('')}</select></div>
+          return `<option value="${escAttr(s.key)}"${s.key === bm.step ? ' selected' : ''}>${escapeHtml(s.label)}${s.round ? ' ↻' : ''}${n ? ` — 보낼 차례 ${n}명` : ''}</option>`; }).join('')}
+        ${libs.length ? `<optgroup label="양식 보관함">${libs.map(it => `<option value="lib:${escAttr(it.id)}"${'lib:' + it.id === bm.step ? ' selected' : ''}>${escapeHtml(it.name)}</option>`).join('')}</optgroup>` : ''}</select>
+        ${vs.length ? `<div style="display:flex;gap:6px;align-items:center;margin-top:5px;font-size:11px"><span style="color:var(--i4)">양식</span>
+          <select class="fi" style="font-size:11.5px;flex:1" onchange="sbmSet('variant',this.value)" ${bm.sending ? 'disabled' : ''}>
+            <option value=""${!bm.variant ? ' selected' : ''}>자동 — 역할에 맞는 변형, 없으면 기본 문구</option>
+            <option value="base"${bm.variant === 'base' ? ' selected' : ''}>모두 기본 문구</option>
+            ${vs.map(v => `<option value="${escAttr(v.id)}"${bm.variant === v.id ? ' selected' : ''}>모두 «${escapeHtml(v.label)}»</option>`).join('')}
+          </select></div>` : ''}</div>
       <div><div class="mlbl">목록</div><select class="fi" onchange="sbmSet('show',this.value)">
         <option value="due"${bm.show === 'due' ? ' selected' : ''}>보낼 차례인 연사만 (${nDue}명)</option>
         <option value="all"${bm.show === 'all' ? ' selected' : ''}>모든 연사 (${all.length}명)</option></select></div>
@@ -224,7 +254,7 @@ function render(){
 }
 
 function roundBarHtml(st, rp){
-  if(!st || st.key === 'schedule') return '';
+  if(!st || st.lib || st.key === 'schedule') return '';
   if(rp) return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:-2px 0 10px;padding:7px 10px;border:1px solid var(--am);border-radius:8px;font-size:11px">
       <b style="color:var(--am)">↻ 다시 보내기 «${escapeHtml(rp.r.label)}»</b>
       <span style="color:var(--i3)">다시 보냄 ${rp.done}/${rp.total}명</span>
@@ -245,7 +275,7 @@ function prevHtml(picked){
       <button class="btn" style="font-size:10px;padding:1px 7px" onclick="sbmPrev(-1)">◀</button>
       <span>${i + 1}/${picked.length}</span>
       <button class="btn" style="font-size:10px;padding:1px 7px" onclick="sbmPrev(1)">▶</button>
-      <b style="color:var(--i2)">${escapeHtml(nameOf(sp))}</b>${isEn(sp) ? ' (영문)' : ''}
+      <b style="color:var(--i2)">${escapeHtml(nameOf(sp))}</b>${isEn(sp) ? ' (영문)' : ''}${m && m.variantLabel ? ` <span class="pill p-blue" style="font-size:9.5px">${escapeHtml(m.variantLabel)}</span>` : ''}
       <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">→ ${escapeHtml(t.to.join(', '))}${t.cc.length ? ` (cc ${escapeHtml(t.cc.join(', '))})` : ''}</span>
     </div>
     ${m ? `<div style="white-space:pre-wrap;max-height:300px;overflow:auto"><b>${escapeHtml(m.subject)}</b>\n\n${escapeHtml(m.body)}</div>` : '<div style="color:var(--re)">이 연사에게는 이 단계가 없어요.</div>'}
@@ -260,7 +290,8 @@ export function sbmPrev(d){ if(!bm) return; bm.pi += d; refreshPrev(); }
 export function sbmSet(k, v){
   if(!bm || bm.sending) return;
   bm[k] = v;
-  if(k === 'step'){ bm.tpl = null; bm.failed = new Set(); pickDue(); }
+  if(k === 'step'){ bm.tpl = null; bm.variant = ''; bm.failed = new Set(); pickDue(); if(isLib(v)) bm.show = 'all'; }
+  if(k === 'variant'){ bm.tpl = null; }
   render();
 }
 export function sbmPick(id, on){ if(!bm || bm.sending) return; on ? bm.ids.add(id) : bm.ids.delete(id); render(); }
@@ -274,8 +305,7 @@ export function sbmAll(mode){
 /* 문구는 다시 그리지 않고 담아만 둔다 — 그리면 입력 중인 칸이 초기화된다. 미리보기만 고친다 */
 export function sbmTpl(k, v){
   if(!bm) return;
-  if(!bm.tpl){ const st = curStep() || {};
-    bm.tpl = { subject_ko: st.subject_ko || '', body_ko: st.body_ko || '', subject_en: st.subject_en || '', body_en: st.body_en || '' }; }
+  if(!bm.tpl) bm.tpl = baseTpl();
   bm.tpl[k] = v;
   refreshPrev();
 }
@@ -307,7 +337,7 @@ export async function sendSpBulkMail(){
   if(!st) return;
   const from = await eventMailFrom(bm.evKey);
   if(!from.ok){ say(from.text); return; }
-  const notTurn = list.filter(sp => !isTurn(stateOf(sp, bm.step))).length;
+  const notTurn = st.lib ? 0 : list.filter(sp => !isTurn(stateOf(sp, bm.step))).length;
   // 밖으로 나가는 일 — 한 번 묻는다
   if(!confirm(`${list.length}명에게 «${st.label}» 메일을 보낼까요?\n\n발신 ${from.text}\n연사마다 한 통씩 따로 나갑니다(받는 사람은 각 연사의 «연락 상대» 수신·참조).${
     notTurn ? `\n\n이 중 ${notTurn}명은 보낼 차례가 아니에요(이미 받았거나 해당 없음).` : ''}`)) return;
@@ -324,18 +354,19 @@ export async function sendSpBulkMail(){
     const t = mailTargets(sp.id);
     const m = mailFor(sp);
     if(!m){ fails.push(`${nameOf(sp)}: 이 단계가 없어요`); bm.failed.add(sp.id); continue; }
+    const kind = st.lib ? 'note' : bm.step;
     const res = await sendMail({ to: t.to, cc: t.cc, subject: m.subject, text: m.body, speaker_id: sp.id,
-      category: m.category, kind: bm.step, file_ids: fileIds });
+      category: m.category, kind, file_ids: fileIds });
     if(!res.ok){ fails.push(`${nameOf(sp)}: ${res.error || '실패'}`); bm.failed.add(sp.id); continue; }
     ok++;
     if(res.logId) SPEAKER_LOGS.push({
-      id: res.logId, speaker_id: sp.id, kind: bm.step, ts: nowStamp(), direction: 'out', channel: '이메일',
+      id: res.logId, speaker_id: sp.id, kind, ts: nowStamp(), direction: 'out', channel: '이메일',
       counterpart: [t.to.join(', '), t.cc.length ? `(cc) ${t.cc.join(', ')}` : ''].filter(Boolean).join(' '),
       category: m.category, subject: m.subject, answered_at: '', answer: '', status: 'done', body: m.body + fileNote,
       author_email: currentUser?.email || '', author_name: currentUser?.name || '',
     });
     /* 연사 화면에서 한 통 보낼 때와 같이 — 초청은 «보냄», 자료 독촉은 «마지막 독촉» 날짜를 찍는다 */
-    const patch = bm.step === 'invite' && !sp.guide_sent_at ? { guide_sent_at: td() }
+    const patch = st.lib ? null : bm.step === 'invite' && !sp.guide_sent_at ? { guide_sent_at: td() }
       : m.category === '자료 독촉' ? { reminded_at: td() } : null;
     if(patch){ const r = await saveSpeaker({ id: sp.id, ...patch, updated_at: td() }); if(r && r.ok !== false) Object.assign(sp, patch); }
   }
@@ -351,5 +382,7 @@ export async function sendSpBulkMail(){
   window.renderConf?.(); window.renderSpeakerDr?.();
 }
 
+/* 양식(변형·보관함)을 고치면 창을 다시 그린다 — 보내는 중이면 건드리지 않는다 */
+window.refreshSpBulkMail = () => { if(!bm || bm.sending) return; if(!curStep()) { bm.step = flowSteps(bm.evKey)[0]?.key || ''; pickDue(); } bm.tpl = null; render(); };
 Object.assign(window, { openSpeakerBulkMail, closeSpBulkMail: close, sbmSet, sbmPick, sbmAll, sbmTpl, sbmPrev,
   sendSpBulkMail, sendSpTestMail, startSpRound, closeSpRound });

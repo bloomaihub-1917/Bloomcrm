@@ -28,7 +28,7 @@
 import { normalizeCat, countryName, sectorRowValues } from './utils.js';
 import { auth } from './firebase.js';
 import {
-  API_BASE_URL,
+  API_BASE_URL, MAIL_LIBRARY,
   authToken,
   setAuthToken,
   EVENT_LIST,
@@ -780,6 +780,15 @@ export async function saveExhCfgToSheet(evKey, cfg){
   }, '행사 설정 저장');
   if(r.ok) console.log('[CRM] 행사 설정 저장:', evKey);
   return r;
+}
+
+/* 메일 양식 보관함 — settings 시트 key='mail_library' JSON(state.js MAIL_LIBRARY) */
+export async function saveMailLibrary(){
+  return postToSheet({
+    sheet:  'settings',
+    action: 'upsert',
+    row:    ['mail_library', JSON.stringify(MAIL_LIBRARY)],
+  }, '메일 양식 보관함 저장');
 }
 
 export async function saveTags(){

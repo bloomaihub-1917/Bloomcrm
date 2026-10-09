@@ -13,6 +13,7 @@ import { EVENT_LIST, EXH_CFG, evPartDone } from '../state.js';
 import { EXH_MAIL_STEPS, EXH_MAIL_VARS, EXH_CUSTOM_PRESETS, exhMailSteps, exhMailFileStep, isCustomExhStep } from './exh-mail.js';
 import { saveExhCfgToSheet, loadMailFiles, mailFilesOf, uploadMailFile, deleteMailFile, fileToBase64 } from '../api.js';
 import { trackAction } from './audit-tab.js';
+import { variantsHtml } from './mail-templates.js';
 import { escapeHtml, escAttr } from '../utils.js';
 
 let edEv = null, edOpen = null, edDraft = null;
@@ -76,7 +77,11 @@ function render(){
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
       <b style="font-size:14px">전시 메일 단계</b>
       <span style="font-size:11.5px;color:var(--i4)">${escapeHtml(ev.name || ev.short || edEv)}</span>
-      <button class="btn" style="margin-left:auto;font-size:11px" onclick="closeExhMailEditor()">닫기</button>
+      <button class="btn" style="margin-left:auto;font-size:11px" title="단계와 상관없이 꺼내 쓰는 양식 — 이 행사만 또는 모든 행사 공통"
+        onclick="openMailTemplates('exh','${escAttr(edEv)}')">📚 양식 보관함</button>
+      <button class="btn" style="font-size:11px" title="다른 행사에서 다듬은 문구·더한 단계·변형을 이번 행사로 복사합니다"
+        onclick="openMailTemplates('exh','${escAttr(edEv)}','import')">⇩ 지난 행사에서 가져오기</button>
+      <button class="btn" style="font-size:11px" onclick="closeExhMailEditor()">닫기</button>
     </div>
     <div style="font-size:11px;color:var(--i4);line-height:1.6;margin-bottom:10px">
       참가사 메일 탭과 «여러 기업에 메일»에서 단계를 고르면 이 문구로 채워집니다. 고치면 바로 저장돼요.
@@ -138,6 +143,7 @@ function formHtml(st, isNew){
       ${FIELDS.map(([f, l]) => fld(f, l)).join('')}${extra}${sinceFld}
     </div>
     <div style="font-size:10.5px;color:var(--i4);margin-top:6px;line-height:1.6">쓸 수 있는 칸: ${EXH_MAIL_VARS.map(v => `<code>${escapeHtml(v)}</code>`).join(' ')}</div>
+    ${isNew ? '' : variantsHtml('exh', edEv, st.key, locked())}
     ${isNew ? '' : `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i7)">
       <div class="mlbl">기본 첨부 <span style="font-weight:400;color:var(--i4)">— 이 단계 메일에 자동으로 붙어요 (파일당 3MB)</span></div>
       <div id="xe-files" data-step="${escAttr(exhMailFileStep(st.key))}" style="font-size:11px;color:var(--i4)">불러오는 중…</div>
@@ -273,5 +279,7 @@ export async function removeExhMailEdFile(id){
   fillFiles();
 }
 
+/* 양식 변형·보관함(mail-templates.js)을 고치면 이 창도 다시 그린다 */
+window.__refreshExhMailEditor = () => { if(edEv) render(); };
 Object.assign(window, { openExhMailEditor, closeExhMailEditor, editExhMailStep, newExhMailStep, saveExhMailStep,
   resetExhMailStep, toggleExhMailStep, deleteExhMailStep, uploadExhMailEdFiles, removeExhMailEdFile });

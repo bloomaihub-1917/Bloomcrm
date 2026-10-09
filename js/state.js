@@ -493,10 +493,20 @@ export const CATMAPS = {};
    여기서는 담아만 둔다 — api.js가 전시 탭을 import하면 순환 참조가 된다.
 ══════════════════════════════════════════ */
 export const EXH_CFG = {};
+/* 메일 양식 보관함 — 단계와 무관한 자유 양식. 행사 설정에 두면 «모든 행사 공통»을 둘 자리가
+   없어 settings 표 key='mail_library' 한 줄에 둔다(mail-templates.js).
+   { id, name, part:'conf'|'exh', scope:'all'|행사키, subject_ko, body_ko, subject_en, body_en } */
+export const MAIL_LIBRARY = [];
 export function loadExhCfg(settingsRows){
   for(const k in EXH_CFG) delete EXH_CFG[k];
+  MAIL_LIBRARY.splice(0, MAIL_LIBRARY.length);
   (settingsRows || []).forEach(r => {
     const k = String(r.key || '');
+    if(k === 'mail_library'){
+      try { const v = JSON.parse(r.value); if(Array.isArray(v)) MAIL_LIBRARY.push(...v); }
+      catch(e){ console.warn('[CRM] 메일 양식 보관함 파싱 실패:', e); }
+      return;
+    }
     if(!k.startsWith('exh_cfg_')) return;
     try {
       const v = JSON.parse(r.value);

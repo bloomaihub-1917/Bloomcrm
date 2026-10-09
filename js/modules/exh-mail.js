@@ -148,6 +148,9 @@ export function exhMailSteps(evKey, { withOff = false } = {}){
   return out.filter(s => withOff || !s.off);
 }
 
+/* 양식 변형(mail-templates.js) — 전시는 조건 없이 보낼 때 고른다 */
+export const exhStepVariants = (evKey, key) => (((EXH_CFG[evKey] || {}).exhMailVariants) || {})[key] || [];
+
 /* 해외 기업이면 영문으로 — 기업DB의 국가. 모르면 국문 */
 export function exhIsEnglish(x){
   const o = x && x.org_id ? getOrgById(x.org_id) : null;

@@ -19,11 +19,13 @@ import { EXH_LOGS, EXHIBITORS, EXH_CFG, currentUser, logsFor } from '../state.js
 import { sendMail, eventMailFrom, loadMailFiles, mailFilesOf, saveExhCfgToSheet } from '../api.js';
 import { escapeHtml, escAttr, nowStamp } from '../utils.js';
 import { visibleList, exhNames, exhContacts, exhMailCtx, exhLocked, exhLockNotice, STEPS, cellState } from './exh-tab.js';
-import { exhMailSteps, exhIsEnglish, fillExhTemplate, exhMailFileStep, boothChange } from './exh-mail.js';
+import { exhMailSteps, exhIsEnglish, fillExhTemplate, exhMailFileStep, boothChange, exhStepVariants } from './exh-mail.js';
+import { libItems, libItem } from './mail-templates.js';
 import { trackAction } from './audit-tab.js';
 import './exh-mail-editor.js';
 
-let bm = null;   // { evKey, ids:Set, step, lang, who, tpl, sending, pi, failed:Set }
+let bm = null;   // { evKey, ids:Set, step, variant, lang, who, tpl, sending, pi, failed:Set }
+const isLib = (key) => String(key || '').startsWith('lib:');
 
 const close = () => { document.getElementById('exh-bulkmail')?.remove(); bm = null; };
 const mailsOf = (x, who) => {
@@ -57,7 +59,7 @@ function baseState(x, st){
   return sent ? 'sent' : 'due';
 }
 export function exhMailState(x, st){
-  if(!st || st.key === 'note') return 'free';
+  if(!st || st.key === 'note' || st.lib) return 'free';
   if(st.round && (st.round.targets || []).includes(x.id)) return sentOf(x, st.key, st.round.since) ? 'sent' : 'resend';
   return baseState(x, st);
 }
@@ -71,12 +73,16 @@ const STATE_PILL = {
   na:     '<span class="pill p-gray" style="font-size:9.5px">해당 없음</span>',
   free: '',
 };
-const curStep = () => exhMailSteps(bm.evKey).find(s => s.key === bm.step);
+/* 지금 고른 메일 — 보관함 양식이면 단계 모양으로 바꿔 돌려준다(차례가 없어 «기타 안내»처럼 다룬다) */
+const curStep = () => {
+  if(isLib(bm.step)){ const it = libItem(bm.step.slice(4)); return it ? { ...it, key: bm.step, label: it.name, due: '', lib: true } : null; }
+  return exhMailSteps(bm.evKey).find(s => s.key === bm.step);
+};
 /* 보낼 차례이고 메일 받을 사람이 있는 기업 */
 function pickTurn(){
   const st = curStep();
   const list = visibleList().filter(x => mailsOf(x, bm.who).length);
-  bm.ids = new Set((!st || st.key === 'note' ? list : list.filter(x => isTurn(exhMailState(x, st)))).map(x => x.id));
+  bm.ids = new Set((!st || st.key === 'note' || st.lib ? list : list.filter(x => isTurn(exhMailState(x, st)))).map(x => x.id));
   bm.pi = 0;
 }
 const enOf = (x) => bm.lang === 'en' ? true : bm.lang === 'ko' ? false : exhIsEnglish(x);
@@ -89,15 +95,19 @@ export async function openExhBulkMail(stepKey){
   const steps = exhMailSteps(evKey);
   if(!steps.length){ alert('이 행사에 켜진 메일 단계가 없어요.'); return; }
   const st = steps.find(s => s.key === stepKey) || steps[0];
-  bm = { evKey, ids: new Set(), step: st.key, lang: 'auto', who: 'primary', tpl: pickTpl(evKey, st.key),
+  bm = { evKey, ids: new Set(), step: st.key, variant: '', lang: 'auto', who: 'primary', tpl: pickTpl(evKey, st.key),
     sending: false, pi: 0, failed: new Set() };
   pickTurn();
   await loadMailFiles(evKey);
   render();
 }
-function pickTpl(evKey, key){
-  const st = exhMailSteps(evKey).find(s => s.key === key) || {};
-  return { subject_ko: st.subject_ko || '', body_ko: st.body_ko || '', subject_en: st.subject_en || '', body_en: st.body_en || '' };
+/* 처음 채울 문구 — 보관함 양식, 고른 변형, 아니면 단계 문구 */
+function pickTpl(evKey, key, variant){
+  const st = isLib(key) ? (libItem(key.slice(4)) || {}) : (exhMailSteps(evKey).find(s => s.key === key) || {});
+  const v = variant ? exhStepVariants(evKey, key).find(x => x.id === variant) : null;
+  const src = v || st;
+  return { subject_ko: src.subject_ko || st.subject_ko || '', body_ko: src.body_ko || st.body_ko || '',
+    subject_en: src.subject_en || st.subject_en || '', body_en: src.body_en || st.body_en || '' };
 }
 function mailFor(x){
   const st = curStep();
@@ -169,7 +179,9 @@ function render(){
   if(!bm) return;
   const list = visibleList();
   const steps = exhMailSteps(bm.evKey);
-  const st = steps.find(s => s.key === bm.step);
+  const st = curStep();
+  const libs = libItems('exh', bm.evKey);
+  const vs = st && !st.lib ? exhStepVariants(bm.evKey, st.key) : [];
   const files = mailFilesOf(bm.evKey).filter(f => f.step === exhMailFileStep(bm.step));
   const picked = list.filter(x => bm.ids.has(x.id));
   const rp = roundProgress(st);
@@ -190,7 +202,11 @@ function render(){
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
       <div><div class="mlbl">무슨 메일인가</div><select class="fi" onchange="bmSet('step',this.value)" ${bm.sending ? 'disabled' : ''}>${steps.map(s => { const n = s.key === 'note' ? 0 : list.filter(x => isTurn(exhMailState(x, s))).length;
-          return opt(s.key, bm.step, escapeHtml(s.label) + (s.round ? ' ↻' : '') + (n ? ` — 보낼 차례 ${n}곳` : '')); }).join('')}</select></div>
+          return opt(s.key, bm.step, escapeHtml(s.label) + (s.round ? ' ↻' : '') + (n ? ` — 보낼 차례 ${n}곳` : '')); }).join('')}
+        ${libs.length ? `<optgroup label="양식 보관함">${libs.map(it => opt(`lib:${escAttr(it.id)}`, bm.step, escapeHtml(it.name))).join('')}</optgroup>` : ''}</select>
+        ${vs.length ? `<div style="display:flex;gap:6px;align-items:center;margin-top:5px;font-size:11px"><span style="color:var(--i4)">양식</span>
+          <select class="fi" style="font-size:11.5px;flex:1" onchange="bmSet('variant',this.value)">
+            ${opt('', bm.variant, '기본 문구')}${vs.map(v => opt(escAttr(v.id), bm.variant, escapeHtml(v.label))).join('')}</select></div>` : ''}</div>
       <div><div class="mlbl">언어</div><select class="fi" onchange="bmSet('lang',this.value)">${opt('auto', bm.lang, '기업별 자동 (해외는 영문)')}${opt('ko', bm.lang, '모두 국문')}${opt('en', bm.lang, '모두 영문')}</select></div>
       <div><div class="mlbl">받는 사람</div><select class="fi" onchange="bmSet('who',this.value)">${opt('primary', bm.who, '메인 담당자만')}${opt('all', bm.who, '메일 있는 담당자 모두')}</select></div>
     </div>
@@ -241,7 +257,7 @@ function render(){
 }
 
 function roundBarHtml(st, rp){
-  if(!st || st.key === 'note' || st.key === 'booth_change') return '';
+  if(!st || st.lib || st.key === 'note' || st.key === 'booth_change') return '';
   if(rp) return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:-2px 0 10px;padding:7px 10px;border:1px solid var(--am);border-radius:8px;font-size:11px">
       <b style="color:var(--am)">↻ 다시 보내기 «${escapeHtml(rp.r.label)}»</b>
       <span style="color:var(--i3)">다시 보냄 ${rp.done}/${rp.total}곳</span>
@@ -274,7 +290,8 @@ export function bmPrev(d){ if(!bm) return; bm.pi += d; refreshPrev(); }
 export function bmSet(k, v){
   if(!bm || bm.sending) return;
   bm[k] = v;
-  if(k === 'step'){ bm.tpl = pickTpl(bm.evKey, v); bm.failed = new Set(); pickTurn(); }
+  if(k === 'step'){ bm.variant = ''; bm.tpl = pickTpl(bm.evKey, v); bm.failed = new Set(); pickTurn(); }
+  if(k === 'variant') bm.tpl = pickTpl(bm.evKey, bm.step, v);
   if(k === 'who') visibleList().forEach(x => { if(!mailsOf(x, v).length) bm.ids.delete(x.id); });
   render();
 }
@@ -317,12 +334,12 @@ export async function sendExhBulkMail(){
   if(!st) return;
   const fileIds = mailFilesOf(bm.evKey).filter(f => f.step === exhMailFileStep(bm.step)).map(f => f.id);
   // 밖으로 나가는 일 — 한 번 묻는다
-  const notTurn = st.key === 'note' ? 0 : list.filter(x => !isTurn(exhMailState(x, st))).length;
+  const notTurn = st.key === 'note' || st.lib ? 0 : list.filter(x => !isTurn(exhMailState(x, st))).length;
   if(!confirm(`${list.length}곳에 «${st.label}»${st.round ? ` (${st.round.label})` : ''} 메일을 보낼까요?${notTurn ? `\n\n이 중 ${notTurn}곳은 보낼 차례가 아니에요(이미 보냈거나 끝남).` : ''}\n\n발신 ${from.text}\n받는 사람: ${bm.who === 'all' ? '메일 있는 담당자 모두' : '메인 담당자'}\n기업마다 한 통씩 따로 나갑니다.`)) return;
 
   bm.sending = true;
   render();
-  const kind = bm.step === 'note' ? 'note' : `exh-${bm.step}`;
+  const kind = bm.step === 'note' || st.lib ? 'note' : `exh-${bm.step}`;
   let ok = 0;
   const fails = [];
   bm.failed = new Set();
@@ -357,8 +374,9 @@ window.refreshExhBulkMail = () => {
   if(!bm || bm.sending) return;
   const steps = exhMailSteps(bm.evKey);
   if(!steps.length){ close(); return; }
-  if(!steps.some(s => s.key === bm.step)) bm.step = steps[0].key;
-  bm.tpl = pickTpl(bm.evKey, bm.step);
+  if(!curStep()){ bm.step = steps[0].key; bm.variant = ''; }
+  if(bm.variant && !exhStepVariants(bm.evKey, bm.step).some(v => v.id === bm.variant)) bm.variant = '';
+  bm.tpl = pickTpl(bm.evKey, bm.step, bm.variant);
   pickTurn();
   render();
 };

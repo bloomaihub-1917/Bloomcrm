@@ -46,7 +46,8 @@ import { decorate as decorateMailPane } from './mail-pane.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 import { patchContact } from './db-tab.js';
 import { confLocked, setConfLockEv, confLockNotice, renderConf, buildConfEvList, syncPartRole, spCell } from './conf-tab.js';
-import { flowStatus, draftFor, missingItems, pendingItems, PART_LABEL, changeLines } from './speaker-flow.js';
+import { flowStatus, draftFor, missingItems, pendingItems, PART_LABEL, changeLines, stepVariants, autoVariant, fillTemplate } from './speaker-flow.js';
+import { libItems, libItem } from './mail-templates.js';
 import { reuseCandidates, reusePending } from './contact-speaker.js';
 
 let spId = null;
@@ -1357,9 +1358,14 @@ function mailTabHtml(sp, evKey){
       return fg('무슨 메일인가', `<select class="fi" id="sp-mail-kind" onchange="fillSpeakerMail(this.value)">
         <optgroup label="연락 단계">${stepOpts}</optgroup>
         <optgroup label="개별 요청">${extra.map(k => `<option value="${k.key}">${k.label}</option>`).join('')}</optgroup>
+        ${libItems('conf', evKey).length ? `<optgroup label="양식 보관함">${libItems('conf', evKey).map(it =>
+          `<option value="lib:${escAttr(it.id)}">${escapeHtml(it.name)}</option>`).join('')}</optgroup>` : ''}
       </select>
+        <div id="sp-mail-var"></div>
         <button class="btn" style="font-size:10.5px;margin-top:5px" title="이 행사의 연락 순서 설정을 열어 고른 단계의 기본 제목·본문·첨부를 고칩니다"
           onclick="openFlowEditor('${escAttr(evKey)}',document.getElementById('sp-mail-kind').value)">✎ 이 단계 기본 문구 고치기</button>
+        <button class="btn" style="font-size:10.5px;margin-top:5px" title="단계와 상관없이 꺼내 쓰는 양식 — 이 행사만 또는 모든 행사 공통"
+          onclick="openMailTemplates('conf','${escAttr(evKey)}')">📚 양식 보관함</button>
         <button class="btn" style="font-size:10.5px;margin-top:5px" onclick="openFlowEditor('${escAttr(evKey)}')">+ 단계 추가</button>`,
         '고르면 그 단계의 기본 문구로 제목·본문이 채워집니다. 기본 문구·단계는 위 단추로 바로 고칩니다');
     })()}
@@ -1483,15 +1489,39 @@ function fillBulkRequest(sp){
   if(b) b.value = pend.length ? body : (en ? 'Nothing outstanding.' : '안 받은 자료가 없어요.');
 }
 
-export function fillSpeakerMail(kind){
+export function fillSpeakerMail(kind, variantId){
   const sp = getSpeakerById(spId);
   if(!sp) return;
   const sel = document.getElementById('sp-mail-kind');
   if(sel && sel.value !== kind) sel.value = kind;
   renderSpMailFiles(kind, true);
+  /* 양식 변형 — 이 단계에 변형이 있으면 «자동(역할) / 기본 / 변형들» 고르기를 띄운다 */
+  const vbox = document.getElementById('sp-mail-var');
+  const vs = String(kind).startsWith('lib:') ? [] : stepVariants(sp.event_id, kind);
+  if(vbox){
+    const auto = vs.length ? autoVariant(sp, kind) : null;
+    const cur = variantId || '';
+    vbox.innerHTML = vs.length ? `<div style="display:flex;gap:6px;align-items:center;margin-top:5px;font-size:11px">
+      <span style="color:var(--i4)">양식</span>
+      <select class="fi" style="font-size:11.5px;flex:1" onchange="fillSpeakerMail('${escAttr(kind)}',this.value)">
+        <option value=""${!cur ? ' selected' : ''}>자동 — ${escapeHtml(auto ? auto.label : '기본 문구')}${auto ? ' (역할)' : ''}</option>
+        <option value="base"${cur === 'base' ? ' selected' : ''}>기본 문구</option>
+        ${vs.map(v => `<option value="${escAttr(v.id)}"${cur === v.id ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}
+      </select></div>` : '';
+  }
   if(kind === 'bulkreq'){ fillBulkRequest(sp); return; }
   const bp = document.getElementById('sp-bulk-pick'); if(bp) bp.innerHTML = '';
-  const d = draftFor(sp, kind);
+  /* 양식 보관함 — 단계와 무관한 자유 양식. 칸은 단계 메일과 같이 채운다 */
+  if(String(kind).startsWith('lib:')){
+    const it = libItem(String(kind).slice(4));
+    if(!it) return;
+    const en = sp.lang_pref === 'en';
+    const s = document.getElementById('sp-mail-subject'), b = document.getElementById('sp-mail-body');
+    if(s) s.value = fillTemplate((en ? it.subject_en : it.subject_ko) || it.subject_ko || it.subject_en || '', sp, {});
+    if(b) b.value = fillTemplate((en ? it.body_en : it.body_ko) || it.body_ko || it.body_en || '', sp, {});
+    return;
+  }
+  const d = draftFor(sp, kind, variantId || undefined);
   if(d){
     const s = document.getElementById('sp-mail-subject');
     const b = document.getElementById('sp-mail-body');
@@ -1581,9 +1611,10 @@ export async function sendSpeakerMail(){
   // 회신은 연락 단계 메일이 아니다 — 단계 기록·기본 첨부·날짜 찍기를 하지 않는다
   const pick = document.getElementById('sp-mail-kind')?.value || 'note';
   // 일괄 요청은 «자료 받기» 메일로 남긴다 — 그래야 다음 메일이 «독촉»으로 바뀐다
-  const kind = reply ? 'reply' : pick === 'bulkreq' ? 'collect' : pick;
+  const lib = !reply && pick.startsWith('lib:') ? libItem(pick.slice(4)) : null;
+  const kind = reply ? 'reply' : pick === 'bulkreq' ? 'collect' : pick.startsWith('lib:') ? 'note' : pick;
   const flowD = reply ? null : draftFor(sp, kind);
-  const category = reply ? '회신' : pick === 'bulkreq' ? '자료 일괄 요청'
+  const category = reply ? '회신' : lib ? lib.name : pick === 'bulkreq' ? '자료 일괄 요청'
     : flowD ? flowD.category : ((MAIL_KINDS.find(k => k.key === kind) || {}).label || '기타');
 
   /* 밖으로 나가는 일은 한 번 묻는다 — 받는 사람을 눈으로 확인하지 않으면
