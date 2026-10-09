@@ -301,6 +301,18 @@ button{font-family:inherit;cursor:pointer}input,select,textarea{font-family:inhe
   .kanban { padding: 12px; gap: 10px; overflow: auto; align-items: flex-start; -webkit-overflow-scrolling: touch; }
   .kcol { width: 200px; }
   .kcs { flex: none; overflow: visible; }
+
+  /* ── 컨택 · 오늘 할 컨택 ──
+     통화하면서 한 손으로 누른다. 단추가 28px이고 «긍정»과 «부정»이 붙어 있어 잘못 누르기
+     쉬웠다. 요약 칸 여섯 개가 두 줄을 차지해 첫 카드가 화면 절반 아래에서 시작했다 */
+  .ct-tiles { display: flex !important; overflow-x: auto; gap: 6px !important; }
+  .ct-tiles > button { flex: 0 0 auto; min-width: 86px; padding: 5px 9px !important; }
+  .ct-purpose { display: none; }
+  .ct-acts .ct-r { min-height: 40px; padding: 8px 13px; font-size: 13px; }
+  .ct-acts input[type=text] { flex-basis: 100% !important; order: 5; min-height: 38px; font-size: 13px !important; }
+  /* 휴대폰은 번호를 누르면 «거는 중»이 저절로 찍힌다 — 단추는 한 줄만 차지한다.
+     내가 거는 중일 때(풀기)는 보인다 */
+  .ct-acts .ct-call:not([style*="background"]) { display: none; }
   .knm { font-size: 13px; }
   .ksc { font-size: 11px; }
   .kwh, .kdt { font-size: 11px; }

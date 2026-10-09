@@ -1194,3 +1194,6 @@ ALTER TABLE contact_rounds ADD COLUMN IF NOT EXISTS mail_body_en    TEXT;
 -- 전화번호를 누르거나 «거는 중»을 누르면 찍히고, 반응을 남기면 지워진다. 10분 지나면 없는 것으로 본다
 ALTER TABLE round_members ADD COLUMN IF NOT EXISTS calling_by TEXT;
 ALTER TABLE round_members ADD COLUMN IF NOT EXISTS calling_at TEXT;
+
+-- 컨택 부재중 다시 걸 시간 (2026-10-09) — 부재중이면 몇 시간 뒤에 «다시 걸 차례». 비면 2시간
+ALTER TABLE contact_rounds ADD COLUMN IF NOT EXISTS retry_hours TEXT;

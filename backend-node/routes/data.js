@@ -214,7 +214,7 @@ const TABLES = {
     table: 'contact_rounds', pk: 'id', idPrefix: 'CR-',
     columns: ['id', 'event_id', 'name', 'channel', 'purpose', 'goal', 'date_from', 'date_to',
       'noanswer_limit', 'status', 'note', 'created_at', 'created_by',
-      'mail_subject_ko', 'mail_body_ko', 'mail_subject_en', 'mail_body_en'],
+      'mail_subject_ko', 'mail_body_ko', 'mail_subject_en', 'mail_body_en', 'retry_hours'],
   },
   round_members: {
     table: 'round_members', pk: 'id', idPrefix: 'RM-',

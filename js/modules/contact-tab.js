@@ -36,7 +36,7 @@ export const REACTIONS = {
   positive: { label: '긍정',     cls: 'p-green', next: 2 },
   hold:     { label: '보류',     cls: 'p-amber', next: 3 },
   negative: { label: '부정',     cls: 'p-red',   close: true },
-  noanswer: { label: '부재중',   cls: 'p-gray',  next: 0, miss: true },
+  noanswer: { label: '부재중',   cls: 'p-gray',  next: 0, miss: true, retry: true },
   wrongnum: { label: '번호 오류', cls: 'p-red',   next: 0, miss: true },
   sent:     { label: '보냄',     cls: 'p-blue',  next: 3 },
   bounce:   { label: '반송',     cls: 'p-red',   next: 0, miss: true },
@@ -56,6 +56,22 @@ const STATES = {
 };
 const verbOf = (ch) => (ch === 'TM' ? '걸' : '보낼');
 const DEFAULT_NOANSWER_LIMIT = 4;
+const DEFAULT_RETRY_HOURS = 2;
+/* 부재중이면 몇 시간 뒤에 다시 «다시 걸 차례» — 바로 다시 서면 방금 안 받은 곳을 맨 위에서
+   또 잡게 된다(엑셀에서도 «부재중 1106, 1725»처럼 몇 시간 뒤에 다시 걸었다).
+   차수마다 정한다(contact_rounds.retry_hours). 비면 2시간 */
+function retryAt(m, atts){
+  const a = atts[0];
+  if(!a || !REACTIONS[a.reaction]?.retry) return '';
+  const r = roundById(m.round_id);
+  const h = r && r.retry_hours !== '' && r.retry_hours != null && !isNaN(+r.retry_hours) ? +r.retry_hours : DEFAULT_RETRY_HOURS;
+  if(!h) return '';
+  const d = new Date(String(a.at).replace(' ', 'T'));
+  if(isNaN(d)) return '';
+  d.setMinutes(d.getMinutes() + Math.round(h * 60));
+  const p = (x) => String(x).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
 
 /* ── 화면 상태 ── */
 const LS_ROUND = 'contact_round';
@@ -159,6 +175,8 @@ export function memberState(m, atts = attemptsOf(m.id)){
   if(m.hold_until && m.hold_until > t) return 'wait';
   if(!atts.length) return 'todo';
   if(m.next_at && m.next_at > t) return 'wait';
+  const ra = retryAt(m, atts);
+  if(ra && ra > nowStamp()) return 'wait';
   return 'again';
 }
 /* 끊기지 않고 이어진 미연결 횟수 — 부재중이 계속되면 DM으로 넘길지 묻는다 */
@@ -222,6 +240,8 @@ export function renderToday(){
   const el = document.getElementById('v-today');
   if(!el) return;
   const r = roundById(curRoundId);
+  const addLbl = document.getElementById('crm-add-lbl');
+  if(addLbl && crmV === 'today') addLbl.textContent = r ? '명단 채우기' : '차수 만들기';
   if(!r){
     el.innerHTML = `<div class="empty" style="height:auto;padding:60px 20px;text-align:center">
       <div style="font-size:14px;font-weight:600;color:var(--i2)">첫 차수를 만드세요</div>
@@ -240,14 +260,17 @@ export function renderToday(){
   const sources = [...new Set(all.map(x => x.m.source || ''))].filter(Boolean).sort();
   if(srcFil && !sources.includes(srcFil)) srcFil = '';
   const missN = all.filter(x => x.st !== 'done' && missStreak(x.atts) >= limit).length;
-  let list = all.filter(x => stFil === 'all' ? true : stFil === 'now' ? (x.st === 'todo' || x.st === 'again') : x.st === stFil)
+  // 미연결 거르기를 켜면 상태(지금 할 곳·기다림)와 상관없이 안 끝난 곳을 다 본다 — 세는 숫자와 맞게
+  let list = all.filter(x => missFil || stFil === 'all' ? true : stFil === 'now' ? (x.st === 'todo' || x.st === 'again') : x.st === stFil)
     .filter(x => matchQ(x.m, q))
     .filter(x => !srcFil || (x.m.source || '') === srcFil)
     .filter(x => !missFil || (x.st !== 'done' && missStreak(x.atts) >= limit));
   // 다시 걸 차례 → 걸 차례 → 기다림 → 끝남. 다시 걸 차례는 오래 전에 건 곳부터
   const ORDER = { again: 0, todo: 1, wait: 2, done: 3 };
   // 팀원이 거는 중인 곳은 그 묶음 맨 뒤로 — 같은 곳에 둘이 걸지 않게
-  list.sort((a, b) => ORDER[a.st] - ORDER[b.st]
+  // 번호 오류·반송은 맨 뒤로 — 번호를 고치기 전엔 걸 수 없는데 맨 위에 남아 다음 곳을 막았다
+  const needsFix = (x) => (x.st === 'again' && ['wrongnum', 'bounce'].includes(x.atts[0]?.reaction) ? 1 : 0);
+  list.sort((a, b) => needsFix(a) - needsFix(b) || ORDER[a.st] - ORDER[b.st]
     || othersCalling(a.m) - othersCalling(b.m)
     || (a.st === 'again' ? String(a.atts[0]?.at || '').localeCompare(String(b.atts[0]?.at || '')) : 0)
     || (a.st === 'wait' ? String(a.m.next_at || a.m.hold_until || '').localeCompare(String(b.m.next_at || b.m.hold_until || '')) : 0)
@@ -277,8 +300,8 @@ export function renderToday(){
           <button class="btn bs bp" onclick="openFillRound()">명단 채우기</button>
         </span>
       </div>
-      ${r.purpose ? `<div style="font-size:11.5px;color:var(--i3);margin-top:4px">${escapeHtml(r.purpose)}</div>` : ''}
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:6px;margin-top:10px">
+      ${r.purpose ? `<div class="ct-purpose" style="font-size:11.5px;color:var(--i3);margin-top:4px">${escapeHtml(r.purpose)}</div>` : ''}
+      <div class="ct-tiles" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:6px;margin-top:10px">
         ${tile('now', `지금 할 곳`, cnt.todo + cnt.again, 'var(--a)')}
         ${tile('todo', STATES.todo.label(verb), cnt.todo)}
         ${tile('again', STATES.again.label(verb), cnt.again, 'var(--am)')}
@@ -289,7 +312,8 @@ export function renderToday(){
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--i4)">
         ${sources.length > 1 ? `<select onchange="setContactSrc(this.value)" style="font-size:11px;padding:3px 4px;border:1px solid ${srcFil ? 'var(--a)' : 'var(--i6)'};border-radius:5px;color:${srcFil ? 'var(--a)' : 'var(--i2)'}">
           <option value="">명단 전체</option>${sources.map(x => `<option${x === srcFil ? ' selected' : ''}>${escapeHtml(x)}</option>`).join('')}</select>` : ''}
-        ${missN ? `<label style="display:flex;align-items:center;gap:3px;cursor:pointer;color:${missFil ? 'var(--am)' : 'var(--i3)'}"><input type="checkbox" ${missFil ? 'checked' : ''} onchange="setContactMiss(this.checked)" style="margin:0">미연결 ${limit}번 넘게 이어진 곳 ${missN}</label>` : ''}
+        ${missN ? `<label style="display:flex;align-items:center;gap:3px;cursor:pointer;color:${missFil ? 'var(--am)' : 'var(--i3)'}"><input type="checkbox" ${missFil ? 'checked' : ''} onchange="setContactMiss(this.checked)" style="margin:0">미연결 ${limit}번 이상 이어진 곳 ${missN}</label>` : ''}
+        ${missFil && list.length ? `<button class="btn bs" onclick="openRoundMail('${escAttr(r.id)}',null,[${list.map(x => `'${escAttr(x.m.id)}'`).join(',')}])" title="전화가 안 닿는 곳 — 메일로 넘긴다">✉ 이 ${list.length}곳에 메일</button>` : ''}
         <span>오늘 기록 ${todayAtts.length}건 · 내 기록 ${mine}건</span>
         <span style="margin-left:auto" title="팀원이 남긴 기록을 30초마다 받아 와요">${lastSync ? `${escapeHtml(lastSync)} 받아 옴` : ''}
           <a href="javascript:void(0)" onclick="syncContactNow()" style="color:var(--a);margin-left:4px">지금 받기</a></span>
@@ -304,6 +328,15 @@ export function renderToday(){
           : list.slice(0, showLimit).map(x => card(r, x)).join('')
             + (list.length > showLimit ? `<button class="btn" style="align-self:center" onclick="contactShowMore()">${list.length - showLimit}곳 더 보기</button>` : '')}
     </div>`;
+}
+
+/* 기다림이 언제 풀리나 — 연락 자제일 › 다음 연락일 › 부재중 다시 걸 시각 */
+function waitUntil(m, atts){
+  const t = today();
+  if(m.hold_until && m.hold_until > t) return m.hold_until.slice(5);
+  if(m.next_at && m.next_at > t) return m.next_at.slice(5);
+  const ra = retryAt(m, atts);
+  return ra ? (ra.slice(0, 10) === t ? ra.slice(11) : ra.slice(5)) : '';
 }
 
 function card(r, { m, atts, st }){
@@ -326,9 +359,9 @@ function card(r, { m, atts, st }){
   const person = (p) => {
     const id = String(p.id);
     const nums = [p.phone1, p.phone2].filter(Boolean);
-    return `<label style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:2px 0;cursor:pointer">
+    return `<label style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 6px;font-size:11.5px;padding:2px 0;cursor:pointer">
       <input type="radio" name="cp-${escAttr(m.id)}" ${id === pick ? 'checked' : ''} onchange="pickContactPerson('${escAttr(m.id)}','${escAttr(id)}')" style="margin:0">
-      <span style="font-weight:600">${escapeHtml(p.nameKo || p.nameEn || '')}</span>
+      <span style="font-weight:600;white-space:nowrap">${escapeHtml(p.nameKo || p.nameEn || '')}</span>
       <span style="color:var(--i4)">${escapeHtml([p.deptKo, p.titleKo].filter(Boolean).join(' '))}</span>
       ${ch === 'TM'
         ? nums.map(n => `<a href="tel:${escapeHtml(n.replace(/[^\d+]/g, ''))}" onclick="event.stopPropagation();return markCalling('${escAttr(m.id)}',true)" style="color:var(--a)">${escapeHtml(n)}</a>`).join(' · ') || '<span style="color:var(--re)">번호 없음</span>'
@@ -346,7 +379,7 @@ function card(r, { m, atts, st }){
       <span style="margin-left:auto;display:flex;gap:4px;align-items:center">
         ${atts.length ? `<span style="font-size:10.5px;color:var(--i4)">${atts.length}번째${miss ? ` · 미연결 ${miss}번 이어짐` : ''}</span>` : ''}
         <span class="pill ${m.goal_at ? 'p-green' : s.cls}">${m.goal_at ? `목표 달성 ${escapeHtml(m.goal_at.slice(5))}` : m.closed_at ? `끝냄${m.closed_reason ? ` · ${escapeHtml(m.closed_reason)}` : ''}` : escapeHtml(s.label(verb))}${
-          st === 'wait' ? ` · ${escapeHtml(String((m.hold_until > t ? m.hold_until : m.next_at) || '').slice(5))}부터` : ''}</span>
+          st === 'wait' ? ` · ${escapeHtml(waitUntil(m, atts))}부터` : ''}</span>
       </span>
     </div>
     ${calling && !calling.me ? `<div style="font-size:11.5px;color:var(--am);background:var(--ab);border-radius:4px;padding:3px 7px;margin-top:5px;font-weight:600">📞 ${escapeHtml(calling.by)} 님이 거는 중 · ${calling.mins ? `${calling.mins}분 전부터` : '방금'}</div>` : ''}
@@ -361,6 +394,8 @@ function card(r, { m, atts, st }){
         <a href="javascript:void(0)" onclick="toggleContactHist('${escAttr(m.id)}')" style="color:var(--a);margin-left:4px">${histOpen.has(m.id) ? '기록 접기' : `기록 ${atts.length}건`}</a>
       </div>` : ''}
     ${histOpen.has(m.id) ? hist(m, atts) : ''}
+    ${last && !m.closed_at && !m.goal_at && last.reaction === 'wrongnum' ? `<div style="font-size:11px;color:var(--re);margin-top:4px">번호가 틀렸어요 — 담당자 옆 ✎로 번호를 고치거나 «+ 담당자 추가»로 새 사람을 넣으세요</div>` : ''}
+    ${last && !m.closed_at && !m.goal_at && last.reaction === 'bounce' ? `<div style="font-size:11px;color:var(--re);margin-top:4px">메일이 반송됐어요 — 담당자 옆 ✎로 메일 주소를 고치세요</div>` : ''}
     ${miss >= limit && st !== 'done' ? `<div style="font-size:11px;color:var(--am);margin-top:4px">미연결이 ${miss}번 이어졌어요 — 채널을 DM으로 바꿔 보내거나, 끝내기를 고려하세요</div>` : ''}
     <div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--i7)">
       ${people.length > 1 ? `<div style="font-size:10.5px;color:var(--i4);margin-bottom:2px">${ch === 'TM' ? '누구와 통화했나요' : '누구에게 보냈나요'} — 반응 단추를 누르면 고른 사람으로 기록돼요</div>` : ''}
@@ -370,12 +405,12 @@ function card(r, { m, atts, st }){
         : String(m.org_id).startsWith('name:') ? ''
         : `<a href="javascript:void(0)" onclick="openPersonForm('${escAttr(m.id)}','new')" style="font-size:11px;color:var(--a);display:inline-block;margin-top:3px">+ 담당자 추가</a>`}
     </div>
-    ${m.closed_at || m.goal_at ? '' : `<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:6px">
+    ${m.closed_at || m.goal_at ? '' : `<div class="ct-acts" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:6px">
       <select onchange="pickContactChannel('${escAttr(m.id)}',this.value)" style="font-size:11px;padding:3px 4px;border:1px solid var(--i6);border-radius:5px">
         ${CHANNELS.map(c => `<option${c === ch ? ' selected' : ''}>${c}</option>`).join('')}</select>
-      ${CH_REACTIONS[ch].map(k => `<button class="btn bs" onclick="recordContact('${escAttr(m.id)}','${k}')">${REACTIONS[k].label}</button>`).join('')}
+      ${CH_REACTIONS[ch].map(k => `<button class="btn bs ct-r${k === 'negative' ? ' ct-neg' : ''}" onclick="recordContact('${escAttr(m.id)}','${k}')">${REACTIONS[k].label}</button>`).join('')}
       <input type="text" id="ca-memo-${escAttr(m.id)}" value="${escapeHtml(memoDraft[m.id] || '')}" oninput="contactMemo('${escAttr(m.id)}',this.value)" placeholder="메모 — 반응 단추를 누르면 함께 남아요" style="flex:1;min-width:140px;font-size:11.5px;padding:4px 8px;border:1px solid var(--i6);border-radius:5px">
-      ${ch === 'TM' ? `<button class="btn bs" onclick="markCalling('${escAttr(m.id)}')" title="다른 사람이 같은 곳에 걸지 않게 «거는 중»으로 보여 줘요 — 반응을 남기면 풀려요"
+      ${ch === 'TM' ? `<button class="btn bs ct-call" onclick="markCalling('${escAttr(m.id)}')" title="다른 사람이 같은 곳에 걸지 않게 «거는 중»으로 보여 줘요 — 반응을 남기면 풀려요"
         style="${calling && calling.me ? 'background:var(--ad);border-color:var(--a);color:var(--a)' : ''}">${calling && calling.me ? '📞 거는 중 · 풀기' : '📞 거는 중'}</button>` : ''}
       ${people.some(p => String(p.email1 || '').includes('@')) ? `<button class="btn bs" onclick="openRoundMail('${escAttr(r.id)}','${escAttr(m.id)}')" title="이 기업에만 메일 한 통 — 보낸 것은 DM 기록으로 남아요">✉ 이 기업에 메일</button>` : ''}
     </div>`}
@@ -761,7 +796,7 @@ export function openRoundEditor(id){
     ${fld('re-purpose', '무엇을 안내하나', r?.purpose || '', { ph: '주선신청 방법 안내, 바이어 리스트 전달' })}
     ${fld('re-goal', '목표 — 이걸 하면 그 기업은 끝나요', r?.goal || '', { ph: '주선신청' })}
     <div style="display:flex;gap:8px">${fld('re-from', '시작', r?.date_from || today(), { type: 'date' })}${fld('re-to', '마감', r?.date_to || '', { type: 'date' })}</div>
-    ${fld('re-limit', '부재중·반송이 몇 번 이어지면 알려 줄까요', r?.noanswer_limit || String(DEFAULT_NOANSWER_LIMIT), { type: 'number' })}
+    <div style="display:flex;gap:8px">${fld('re-retry', '부재중이면 몇 시간 뒤 다시 걸까요', r?.retry_hours ?? String(DEFAULT_RETRY_HOURS), { type: 'number' })}${fld('re-limit', '부재중·반송이 몇 번 이어지면 알려 줄까요', r?.noanswer_limit || String(DEFAULT_NOANSWER_LIMIT), { type: 'number' })}</div>
     ${fld('re-note', '메모', r?.note || '')}
     <div style="display:flex;gap:6px;align-items:center;margin-top:6px">
       ${r ? (nAtt
@@ -780,7 +815,7 @@ export async function saveRoundEditor(id){
   if(!v('re-ev')){ alert('행사를 골라주세요.'); return; }
   const ch = document.querySelector('#re-ch .seg-b.on')?.dataset.ch || 'TM';
   const data = { event_id: v('re-ev'), name, channel: ch, purpose: v('re-purpose'), goal: v('re-goal'),
-    date_from: v('re-from'), date_to: v('re-to'), noanswer_limit: v('re-limit'), note: v('re-note') };
+    date_from: v('re-from'), date_to: v('re-to'), noanswer_limit: v('re-limit'), retry_hours: v('re-retry'), note: v('re-note') };
   const old = id ? roundById(id) : null;
   if(old){
     const before = { ...old };

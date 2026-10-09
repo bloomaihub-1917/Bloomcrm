@@ -54,7 +54,7 @@ function fill(t, m, person, en){
 
 /* mid를 주면 그 기업 한 곳만 — 카드의 «✉ 이 기업에 메일». 받는 사람은 카드에서
    고른 사람이 먼저 체크돼 있고, 창에서 담당자를 더하거나 뺀다 */
-export function openRoundMail(rid, mid){
+export function openRoundMail(rid, mid, preIds){
   const r = roundById(rid);
   if(!r) return;
   cm = { rid, ids: new Set(), who: 'one', lang: 'auto', sending: false, only: null, toIds: new Set(),
@@ -66,6 +66,9 @@ export function openRoundMail(rid, mid){
     const ppl = mailable(m);
     const pid = pickedPersonId(m);
     cm.toIds = new Set([String((ppl.find(p => String(p.id) === String(pid)) || ppl[0] || {}).id ?? '')].filter(Boolean));
+  } else if(Array.isArray(preIds) && preIds.length){
+    // 오늘 할 컨택에서 «미연결 n번 이상» 곳을 넘겨받았다 — 그 곳만 골라 둔다
+    cm.ids = new Set(preIds.filter(id => { const x = membersOf(rid).find(y => y.id === id); return x && peopleTo(x, cm.who).length; }));
   } else pickTurn();
   render();
 }
@@ -117,6 +120,7 @@ function render(){
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
           <div class="mlbl" style="margin:0">받는 곳 ${picked.length}/${list.length}</div>
           <button class="btn" style="font-size:10px;margin-left:auto" onclick="rmAll('turn')" title="걸 차례·다시 걸 차례인 곳만">보낼 차례만</button>
+          <button class="btn" style="font-size:10px" onclick="rmAll('miss')" title="부재중·번호 오류·반송이 차수에 정한 횟수 이상 이어진 곳 — 전화로 안 닿는 곳">미연결만</button>
           <button class="btn" style="font-size:10px" onclick="rmAll(true)">전체</button>
           <button class="btn" style="font-size:10px" onclick="rmAll(false)">해제</button>
         </div>
@@ -161,6 +165,12 @@ export function rmPick(id, on){ if(!cm) return; on ? cm.ids.add(id) : cm.ids.del
 export function rmAll(on){
   if(!cm) return;
   if(on === 'turn') pickTurn();
+  else if(on === 'miss'){
+    const r = roundById(cm.rid);
+    const lim = +r?.noanswer_limit || 4;
+    const streak = (m) => { let n = 0; for(const a of attemptsOf(m.id)){ if(['noanswer', 'wrongnum', 'bounce'].includes(a.reaction)) n++; else break; } return n; };
+    cm.ids = new Set(membersOf(cm.rid).filter(m => memberState(m) !== 'done' && streak(m) >= lim && peopleTo(m, cm.who).length).map(m => m.id));
+  }
   else cm.ids = new Set(on ? membersOf(cm.rid).filter(m => peopleTo(m, cm.who).length).map(m => m.id) : []);
   render();
 }
