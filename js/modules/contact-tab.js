@@ -18,7 +18,7 @@
    데이터: contact_rounds · round_members · contact_attempts (schema.sql 참고)
 ══════════════════════════════════════════════════════════════ */
 import {
-  EVENT_LIST, CO_DB, contacts, participations, currentUser, hasLeft,
+  EVENT_LIST, CO_DB, contacts, participations, currentUser, hasLeft, crmV, curApp,
   CONTACT_ROUNDS, ROUND_MEMBERS, CONTACT_ATTEMPTS,
 } from '../state.js';
 import {
@@ -27,7 +27,7 @@ import {
 } from '../api.js';
 import { escapeHtml, escAttr, td, nowStamp } from '../utils.js';
 import { trackAction } from './audit-tab.js';
-import { postToSheet } from '../api.js';
+import { postToSheet, reloadContactData } from '../api.js';
 import { buildCoDB } from './company-tab.js';
 
 /* ── 반응 — 채널마다 누를 수 있는 것이 다르다. next: 다음 연락까지 며칠(0=곧바로),
@@ -73,6 +73,21 @@ export function pickedPersonId(m, people = peopleOf(m)){
 }
 const pickedChannel = {};          // 줄마다 고른 채널
 let showLimit = 150;
+let srcFil = '';                   // 명단 거르기 — 명단을 나눠 맡을 때
+let missFil = false;               // 미연결이 정한 횟수 넘게 이어진 곳만
+const memoDraft = {};              // 줄마다 치던 메모 — 화면을 다시 그려도 남게
+let busy = 0;                      // 저장 중인 일 — 이 동안 받아 온 것은 덮어쓰지 않는다
+let lastSync = '';
+
+/* ── 거는 중 ── 전화번호를 누르거나 «거는 중»을 누르면 찍힌다. 10분 지나면 없는 것으로 본다 */
+const CALL_MIN = 10;
+const myName = () => currentUser?.name || currentUser?.email || '';
+function callingOf(m){
+  if(!m.calling_by || !m.calling_at) return null;
+  const mins = (Date.now() - new Date(String(m.calling_at).replace(' ', 'T')).getTime()) / 60000;
+  return mins >= -1 && mins < CALL_MIN ? { by: m.calling_by, mins: Math.max(0, Math.floor(mins)), me: m.calling_by === myName() } : null;
+}
+const othersCalling = (m) => { const c = callingOf(m); return c && !c.me ? 1 : 0; };
 
 /* ══════════════════════════════════════════
    조회
@@ -221,11 +236,19 @@ export function renderToday(){
   all.forEach(x => cnt[x.st]++);
   const goalN = all.filter(x => x.m.goal_at).length;
   const q = (document.getElementById('crm-q') || {}).value || '';
+  const limit = +r.noanswer_limit || DEFAULT_NOANSWER_LIMIT;
+  const sources = [...new Set(all.map(x => x.m.source || ''))].filter(Boolean).sort();
+  if(srcFil && !sources.includes(srcFil)) srcFil = '';
+  const missN = all.filter(x => x.st !== 'done' && missStreak(x.atts) >= limit).length;
   let list = all.filter(x => stFil === 'all' ? true : stFil === 'now' ? (x.st === 'todo' || x.st === 'again') : x.st === stFil)
-    .filter(x => matchQ(x.m, q));
+    .filter(x => matchQ(x.m, q))
+    .filter(x => !srcFil || (x.m.source || '') === srcFil)
+    .filter(x => !missFil || (x.st !== 'done' && missStreak(x.atts) >= limit));
   // 다시 걸 차례 → 걸 차례 → 기다림 → 끝남. 다시 걸 차례는 오래 전에 건 곳부터
   const ORDER = { again: 0, todo: 1, wait: 2, done: 3 };
+  // 팀원이 거는 중인 곳은 그 묶음 맨 뒤로 — 같은 곳에 둘이 걸지 않게
   list.sort((a, b) => ORDER[a.st] - ORDER[b.st]
+    || othersCalling(a.m) - othersCalling(b.m)
     || (a.st === 'again' ? String(a.atts[0]?.at || '').localeCompare(String(b.atts[0]?.at || '')) : 0)
     || (a.st === 'wait' ? String(a.m.next_at || a.m.hold_until || '').localeCompare(String(b.m.next_at || b.m.hold_until || '')) : 0)
     || memberName(a.m).localeCompare(memberName(b.m)));
@@ -263,7 +286,14 @@ export function renderToday(){
         ${tile('done', '끝남', cnt.done)}
         ${tile('all', `목표 달성`, `${goalN}<span style="font-size:11px;color:var(--i4);font-weight:500"> / ${all.length}</span>`, 'var(--g)')}
       </div>
-      <div style="font-size:11px;color:var(--i4);margin-top:7px">오늘 기록 ${todayAtts.length}건 · 내 기록 ${mine}건</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--i4)">
+        ${sources.length > 1 ? `<select onchange="setContactSrc(this.value)" style="font-size:11px;padding:3px 4px;border:1px solid ${srcFil ? 'var(--a)' : 'var(--i6)'};border-radius:5px;color:${srcFil ? 'var(--a)' : 'var(--i2)'}">
+          <option value="">명단 전체</option>${sources.map(x => `<option${x === srcFil ? ' selected' : ''}>${escapeHtml(x)}</option>`).join('')}</select>` : ''}
+        ${missN ? `<label style="display:flex;align-items:center;gap:3px;cursor:pointer;color:${missFil ? 'var(--am)' : 'var(--i3)'}"><input type="checkbox" ${missFil ? 'checked' : ''} onchange="setContactMiss(this.checked)" style="margin:0">미연결 ${limit}번 넘게 이어진 곳 ${missN}</label>` : ''}
+        <span>오늘 기록 ${todayAtts.length}건 · 내 기록 ${mine}건</span>
+        <span style="margin-left:auto" title="팀원이 남긴 기록을 30초마다 받아 와요">${lastSync ? `${escapeHtml(lastSync)} 받아 옴` : ''}
+          <a href="javascript:void(0)" onclick="syncContactNow()" style="color:var(--a);margin-left:4px">지금 받기</a></span>
+      </div>
     </div>
     <div style="padding:10px 16px 40px;display:flex;flex-direction:column;gap:7px">
       ${!all.length
@@ -282,6 +312,10 @@ function card(r, { m, atts, st }){
   const people = peopleOf(m);
   const pick = pickedPersonId(m, people);
   const co = coOf(m.org_id);
+  const calling = callingOf(m);
+  // 팀원이 30분 안에 남긴 기록 — 같은 곳에 또 걸기 전에 보이게
+  const recentOther = atts[0] && atts[0].by_email && atts[0].by_email !== currentUser?.email
+    && (Date.now() - new Date(String(atts[0].at).replace(' ', 'T')).getTime()) < 30 * 60000 ? atts[0] : null;
   const s = STATES[st];
   const miss = missStreak(atts);
   const limit = +r.noanswer_limit || DEFAULT_NOANSWER_LIMIT;
@@ -297,14 +331,14 @@ function card(r, { m, atts, st }){
       <span style="font-weight:600">${escapeHtml(p.nameKo || p.nameEn || '')}</span>
       <span style="color:var(--i4)">${escapeHtml([p.deptKo, p.titleKo].filter(Boolean).join(' '))}</span>
       ${ch === 'TM'
-        ? nums.map(n => `<a href="tel:${escapeHtml(n.replace(/[^\d+]/g, ''))}" onclick="event.stopPropagation()" style="color:var(--a)">${escapeHtml(n)}</a>`).join(' · ') || '<span style="color:var(--re)">번호 없음</span>'
+        ? nums.map(n => `<a href="tel:${escapeHtml(n.replace(/[^\d+]/g, ''))}" onclick="event.stopPropagation();return markCalling('${escAttr(m.id)}',true)" style="color:var(--a)">${escapeHtml(n)}</a>`).join(' · ') || '<span style="color:var(--re)">번호 없음</span>'
         : (p.email1 ? `<span style="color:var(--i3)">${escapeHtml(p.email1)}</span>` : '<span style="color:var(--re)">메일 없음</span>')}
       <a href="javascript:void(0)" onclick="event.preventDefault();openPersonForm('${escAttr(m.id)}','${escAttr(id)}')" title="번호·메일·직위 고치기" style="color:var(--i4);margin-left:2px">✎</a>
     </label>
     ${personForm[m.id] === id ? personFormHtml(m, p) : ''}`;
   };
 
-  return `<div id="rm-${escAttr(m.id)}" style="border:1px solid var(--i6);border-radius:var(--r);background:var(--W);padding:9px 12px">
+  return `<div id="rm-${escAttr(m.id)}" style="border:1px solid ${calling && !calling.me ? 'var(--am)' : calling ? 'var(--a)' : 'var(--i6)'};border-radius:var(--r);background:var(--W);padding:9px 12px">
     <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
       <a href="javascript:void(0)" onclick="openContactCo('${escAttr(m.org_id)}')" style="font-size:13px;font-weight:700;color:var(--i1)">${escapeHtml(memberName(m))}</a>
       ${co?.country ? `<span style="font-size:10.5px;color:var(--i4)">${escapeHtml(co.country)}</span>` : ''}
@@ -315,6 +349,8 @@ function card(r, { m, atts, st }){
           st === 'wait' ? ` · ${escapeHtml(String((m.hold_until > t ? m.hold_until : m.next_at) || '').slice(5))}부터` : ''}</span>
       </span>
     </div>
+    ${calling && !calling.me ? `<div style="font-size:11.5px;color:var(--am);background:var(--ab);border-radius:4px;padding:3px 7px;margin-top:5px;font-weight:600">📞 ${escapeHtml(calling.by)} 님이 거는 중 · ${calling.mins ? `${calling.mins}분 전부터` : '방금'}</div>` : ''}
+    ${recentOther ? `<div style="font-size:11px;color:var(--a);margin-top:4px">${escapeHtml(recentOther.by_name || '')} 님이 ${escapeHtml(String(recentOther.at).slice(11, 16))}에 기록했어요</div>` : ''}
     ${m.caution ? `<div style="font-size:11px;color:var(--re);margin-top:4px">⚠ ${escapeHtml(m.caution)}</div>` : ''}
     ${m.hold_until && m.hold_until > t ? `<div style="font-size:11px;color:var(--am);margin-top:2px">${escapeHtml(m.hold_until)} 전에는 연락하지 않기</div>` : ''}
     ${m.call_hours || overseas ? `<div style="font-size:11px;color:var(--i3);margin-top:2px">통화 가능 시간 ${escapeHtml(m.call_hours || '— 적어 두면 여기 보여요')}</div>` : ''}
@@ -338,7 +374,9 @@ function card(r, { m, atts, st }){
       <select onchange="pickContactChannel('${escAttr(m.id)}',this.value)" style="font-size:11px;padding:3px 4px;border:1px solid var(--i6);border-radius:5px">
         ${CHANNELS.map(c => `<option${c === ch ? ' selected' : ''}>${c}</option>`).join('')}</select>
       ${CH_REACTIONS[ch].map(k => `<button class="btn bs" onclick="recordContact('${escAttr(m.id)}','${k}')">${REACTIONS[k].label}</button>`).join('')}
-      <input type="text" id="ca-memo-${escAttr(m.id)}" placeholder="메모 — 반응 단추를 누르면 함께 남아요" style="flex:1;min-width:140px;font-size:11.5px;padding:4px 8px;border:1px solid var(--i6);border-radius:5px">
+      <input type="text" id="ca-memo-${escAttr(m.id)}" value="${escapeHtml(memoDraft[m.id] || '')}" oninput="contactMemo('${escAttr(m.id)}',this.value)" placeholder="메모 — 반응 단추를 누르면 함께 남아요" style="flex:1;min-width:140px;font-size:11.5px;padding:4px 8px;border:1px solid var(--i6);border-radius:5px">
+      ${ch === 'TM' ? `<button class="btn bs" onclick="markCalling('${escAttr(m.id)}')" title="다른 사람이 같은 곳에 걸지 않게 «거는 중»으로 보여 줘요 — 반응을 남기면 풀려요"
+        style="${calling && calling.me ? 'background:var(--ad);border-color:var(--a);color:var(--a)' : ''}">${calling && calling.me ? '📞 거는 중 · 풀기' : '📞 거는 중'}</button>` : ''}
       ${people.some(p => String(p.email1 || '').includes('@')) ? `<button class="btn bs" onclick="openRoundMail('${escAttr(r.id)}','${escAttr(m.id)}')" title="이 기업에만 메일 한 통 — 보낸 것은 DM 기록으로 남아요">✉ 이 기업에 메일</button>` : ''}
     </div>`}
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;font-size:11px;color:var(--i4)">
@@ -477,7 +515,9 @@ async function patchMember(m, patch){
   Object.keys(patch).forEach(k => { before[k] = m[k] ?? ''; });
   Object.assign(m, patch);
   renderToday(); renderRoundNav();
+  busy++;
   const res = await saveRoundMember({ id: m.id, ...patch });
+  busy--;
   if(!res.ok){ Object.assign(m, before); renderToday(); renderRoundNav(); return false; }
   return true;
 }
@@ -492,7 +532,7 @@ export async function recordContact(mid, reaction){
   const pid = pickedPersonId(m, people);
   const p = people.find(x => String(x.id) === String(pid));
   const memoEl = document.getElementById('ca-memo-' + mid);
-  const note = (memoEl?.value || '').trim();
+  const note = (memoEl?.value ?? memoDraft[mid] ?? '').trim();
   const a = {
     id: genId('CA-'), round_id: r.id, member_id: m.id, org_id: m.org_id,
     contact_id: p ? String(p.id) : '', contact_name: p ? (p.nameKo || p.nameEn || '') : '',
@@ -502,29 +542,40 @@ export async function recordContact(mid, reaction){
   };
   CONTACT_ATTEMPTS.push(a);
   const prev = { next_at: m.next_at || '', closed_at: m.closed_at || '', closed_reason: m.closed_reason || '' };
-  const patch = R.close
+  // 반응을 남기면 «거는 중»도 풀린다
+  const patch = { calling_by: '', calling_at: '', ...(R.close
     ? { closed_at: today(), closed_reason: R.label, next_at: '' }
-    : { next_at: R.next ? addDays(R.next) : '' };
+    : { next_at: R.next ? addDays(R.next) : '' }) };
+  prev.calling_by = m.calling_by || ''; prev.calling_at = m.calling_at || '';
+  delete memoDraft[mid];
+  busy++;
   Object.assign(m, patch);
   renderToday(); renderRoundNav();
   const res = await saveAttempt(a);
   if(!res.ok){
+    busy--;
     CONTACT_ATTEMPTS.splice(CONTACT_ATTEMPTS.indexOf(a), 1);
     Object.assign(m, prev);
+    if(note) memoDraft[mid] = note;
     renderToday(); renderRoundNav();
     return;
   }
   const res2 = await saveRoundMember({ id: m.id, ...patch });
+  busy--;
   if(!res2.ok){ Object.assign(m, prev); renderToday(); renderRoundNav(); }
+  // 카드가 순서 뒤로 가거나 «기다림»으로 빠져 눈앞에서 사라진다 — 무엇을 남겼는지 아래에 알린다
+  contactToast(`<b>${escapeHtml(memberName(m))}</b> — ${escapeHtml(ch)} ${escapeHtml(R.label)}${a.contact_name ? ` (${escapeHtml(a.contact_name)})` : ''} 기록함`,
+    `undoContactAttempt('${escAttr(a.id)}',true)`);
   trackAction('log', '컨택 기록', memberName(m),
     `<b>${escapeHtml(memberName(m))}</b> · ${escapeHtml(r.name)} · ${escapeHtml(ch)} <b>${escapeHtml(R.label)}</b>${
       a.contact_name ? ` (${escapeHtml(a.contact_name)})` : ''}${note ? ` — ${escapeHtml(note)}` : ''}`,
     { kind: 'round_member', id: m.id });
 }
 
-export async function undoContactAttempt(aid){
+export async function undoContactAttempt(aid, quiet){
   const a = CONTACT_ATTEMPTS.find(x => x.id === aid);
-  if(!a || !confirm('방금 남긴 기록을 지울까요?')) return;
+  if(!a || (!quiet && !confirm('방금 남긴 기록을 지울까요?'))) return;
+  document.getElementById('contact-toast')?.remove();
   const m = ROUND_MEMBERS.find(x => x.id === a.member_id);
   const i = CONTACT_ATTEMPTS.indexOf(a);
   CONTACT_ATTEMPTS.splice(i, 1);
@@ -581,6 +632,67 @@ export async function removeContactMember(mid){
 }
 
 export function setContactFil(k){ stFil = k; showLimit = 150; renderToday(); }
+export function setContactSrc(v){ srcFil = v; showLimit = 150; renderToday(); }
+export function setContactMiss(on){ missFil = !!on; showLimit = 150; renderToday(); }
+/* 치던 메모는 담아만 둔다 — 다시 그리지 않는다 */
+export function contactMemo(mid, v){ memoDraft[mid] = v; }
+
+/* «거는 중» — 전화번호를 누르면(fromTel) 찍고, 단추는 찍고 풀기를 오간다.
+   팀원이 거는 중이면 한 번 묻는다. 전화번호 링크에서 false를 돌려주면 전화가 걸리지 않는다 */
+export function markCalling(mid, fromTel){
+  const m = ROUND_MEMBERS.find(x => x.id === mid);
+  if(!m) return true;
+  const c = callingOf(m);
+  if(c && !c.me && !confirm(`${c.by} 님이 ${c.mins ? `${c.mins}분 전부터` : '방금'} 이곳에 거는 중이에요. 그래도 걸까요?`)) return false;
+  if(c && c.me && !fromTel){ patchMember(m, { calling_by: '', calling_at: '' }); return true; }
+  if(!(c && c.me)) patchMember(m, { calling_by: myName(), calling_at: nowStamp() });
+  return true;
+}
+
+/* 아래 알림 — 6초 뒤 사라진다. 되돌리기를 누르면 방금 기록을 지운다 */
+function contactToast(html, undo){
+  document.getElementById('contact-toast')?.remove();
+  const el = document.createElement('div');
+  el.id = 'contact-toast';
+  el.style.cssText = 'position:fixed;left:50%;bottom:84px;transform:translateX(-50%);z-index:1100;background:var(--i1);color:#fff;border-radius:8px;padding:9px 14px;font-size:12px;display:flex;gap:12px;align-items:center;box-shadow:var(--shl);max-width:calc(100vw - 32px)';
+  el.innerHTML = `<span>${html}</span>${undo ? `<a href="javascript:void(0)" onclick="${undo}" style="color:#9DB4FF;font-weight:700;white-space:nowrap">되돌리기</a>` : ''}`;
+  document.body.appendChild(el);
+  setTimeout(() => { if(el.isConnected) el.remove(); }, 6000);
+}
+
+/* ══════════════════════════════════════════
+   팀원 기록 받아 오기 — 여럿이 같은 명단을 동시에 돌린다.
+   컨택 화면을 보고 있을 때만 30초마다, 그리고 창으로 돌아올 때 받는다.
+   치던 칸이 있거나(입력에 손이 가 있거나 고치는 칸이 열려 있으면) 그 차례는 건너뛴다 —
+   다시 그리면 치던 글자가 날아간다. 저장 중일 때도 건너뛴다(방금 넣은 줄이 잠깐 사라진다).
+══════════════════════════════════════════ */
+const SYNC_MS = 30000;
+const sig = (o) => `${o.rounds.length}|${o.members.length}|${o.attempts.length}|${JSON.stringify(o.members.map(m => [m.id, m.next_at, m.goal_at, m.closed_at, m.calling_by, m.calling_at, m.caution, m.hold_until]))}|${o.attempts.map(a => a.id).join(',').length}`;
+const contactViewOn = () => curApp === 'crm' && ['today', 'grid', 'report'].includes(crmV);
+function typing(){
+  const a = document.activeElement;
+  const inView = a && a.closest && a.closest('#v-today') && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);
+  return inView || Object.keys(personForm).length || editOpen.size
+    || document.getElementById('round-ed') || document.getElementById('round-fill') || document.getElementById('round-import');
+}
+export async function syncContactNow(force){
+  if(busy) return;
+  const data = await reloadContactData();
+  if(!data || busy) return;
+  const before = sig({ rounds: CONTACT_ROUNDS, members: ROUND_MEMBERS, attempts: CONTACT_ATTEMPTS });
+  const p = (n) => String(n).padStart(2, '0');
+  const d = new Date();
+  lastSync = `${p(d.getHours())}:${p(d.getMinutes())}`;
+  if(sig(data) === before && !force){ const s2 = document.querySelector('#v-today [title^="팀원이 남긴"]'); if(s2) s2.firstChild.textContent = `${lastSync} 받아 옴`; return; }
+  if(!force && typing()) return;
+  CONTACT_ROUNDS.splice(0, CONTACT_ROUNDS.length, ...data.rounds);
+  ROUND_MEMBERS.splice(0, ROUND_MEMBERS.length, ...data.members);
+  CONTACT_ATTEMPTS.splice(0, CONTACT_ATTEMPTS.length, ...data.attempts);
+  renderRoundNav();
+  window.renderCrm?.();
+}
+setInterval(() => { if(document.visibilityState === 'visible' && contactViewOn()) syncContactNow(); }, SYNC_MS);
+document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible' && contactViewOn()) syncContactNow(); });
 export function contactShowMore(){ showLimit += 150; renderToday(); }
 export function toggleContactHist(mid){ histOpen.has(mid) ? histOpen.delete(mid) : histOpen.add(mid); renderToday(); }
 export function toggleContactEdit(mid){ editOpen.has(mid) ? editOpen.delete(mid) : editOpen.add(mid); renderToday(); }
@@ -850,6 +962,7 @@ Object.assign(window, {
   pickRound, renderToday, setContactFil, contactShowMore, toggleContactHist, toggleContactEdit,
   pickContactPerson, pickContactChannel, recordContact, undoContactAttempt, setContactNext,
   toggleContactGoal, closeContactMember, reopenContactMember, saveContactMemberEdit, removeContactMember,
-  openContactCo, openRoundMember, openPersonForm, savePersonForm, openRoundEditor, saveRoundEditor, toggleRoundClosed, removeRound,
+  openContactCo, openRoundMember, openPersonForm, savePersonForm,
+  setContactSrc, setContactMiss, contactMemo, markCalling, syncContactNow, openRoundEditor, saveRoundEditor, toggleRoundClosed, removeRound,
   openFillRound, fillPickEv, fillToggleRole, fillToggle, fillAll, fillCommit, fillSearch, fillAddOne,
 });

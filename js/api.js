@@ -906,6 +906,20 @@ export const addRoundMembers = (rows) => postToSheet(
   { sheet: 'round_members', action: 'batchAppend', dataRows: rows }, '컨택 명단 채우기');
 export const saveAttempt     = (o) => saveExhRow('contact_attempts', o, '컨택 기록 저장');
 export const deleteAttempt   = (id) => deleteExhRow('contact_attempts', id, '컨택 기록 삭제');
+/* 컨택 세 표만 다시 읽는다 — 여럿이 동시에 돌릴 때 팀원 기록을 받아 오려고.
+   전부 다시 읽으면 열려 있는 화면 상태가 날아간다. 하나라도 못 읽으면 아무것도 바꾸지 않는다 */
+export async function reloadContactData(){
+  if(!API_BASE_URL || !currentUser) return null;
+  const base = API_BASE_URL + '/api/data?sheet=';
+  const headers = await authHeaders();
+  const [r, m, a] = await Promise.all([
+    safeFetch(base + 'contact_rounds', 'contact_rounds', 1, headers),
+    safeFetch(base + 'round_members', 'round_members', 1, headers),
+    safeFetch(base + 'contact_attempts', 'contact_attempts', 1, headers),
+  ]);
+  if(!Array.isArray(r) || !Array.isArray(m) || !Array.isArray(a)) return null;
+  return { rounds: r, members: m, attempts: a };
+}
 /* 옛 엑셀 기록 가져오기 — 수백 건이 한 번에 들어간다 */
 export const addAttempts     = (rows) => postToSheet(
   { sheet: 'contact_attempts', action: 'batchAppend', dataRows: rows }, '컨택 기록 가져오기');

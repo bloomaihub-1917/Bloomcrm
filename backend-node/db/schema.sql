@@ -1189,3 +1189,8 @@ ALTER TABLE contact_rounds ADD COLUMN IF NOT EXISTS mail_subject_ko TEXT;
 ALTER TABLE contact_rounds ADD COLUMN IF NOT EXISTS mail_body_ko    TEXT;
 ALTER TABLE contact_rounds ADD COLUMN IF NOT EXISTS mail_subject_en TEXT;
 ALTER TABLE contact_rounds ADD COLUMN IF NOT EXISTS mail_body_en    TEXT;
+
+-- 컨택 «거는 중» (2026-10-09) — 여럿이 동시에 돌릴 때 같은 곳에 두 번 걸지 않게.
+-- 전화번호를 누르거나 «거는 중»을 누르면 찍히고, 반응을 남기면 지워진다. 10분 지나면 없는 것으로 본다
+ALTER TABLE round_members ADD COLUMN IF NOT EXISTS calling_by TEXT;
+ALTER TABLE round_members ADD COLUMN IF NOT EXISTS calling_at TEXT;
