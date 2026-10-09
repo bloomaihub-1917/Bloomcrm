@@ -64,7 +64,7 @@ import { IMPORT_SHEETS, IMPORT_GUIDE } from '../conf-import-spec.js';
 import { trackColorOf, pickTrackColorIndex } from '../track-colors.js';
 import { saveConf } from './settings-tab.js';
 import './speaker-bulkmail.js';
-import { nextActionLabel } from './speaker-flow.js';
+import { nextActionLabel, flowStatus as spFlowStatus } from './speaker-flow.js';
 import { confDashHtml } from './conf-dash.js';
 import { reusePending } from './contact-speaker.js';
 import { renderWatchView, initWatchFolders } from './exh-watch.js';
@@ -237,6 +237,20 @@ const speakerName = (id) => {
 /* ══════════════════════════════════════════
    렌더
 ══════════════════════════════════════════ */
+/* 일정 바뀐 연사 — 세션 시간·룸을 고치면 «알린 일정»과 달라진 연사가 생긴다.
+   사람이 «누구에게 정정 메일을 보내야 하지»를 기억하지 않게 목록 위에 띄운다 */
+function schedAlertHtml(evKey, all){
+  const ch = all.filter(sp => (spFlowStatus(sp).steps.find(s => s.key === 'schedule') || {}).applies);
+  if(!ch.length) return '';
+  const names = ch.slice(0, 4).map(sp => sp.name_snapshot || sp.name_en || sp.id).join(', ') + (ch.length > 4 ? ` 외 ${ch.length - 4}명` : '');
+  return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:9px 12px;margin:-4px 0 10px;
+      border:1px solid var(--am);border-radius:10px;background:var(--W);font-size:11.5px">
+    <b style="color:var(--am)">일정 바뀐 연사 ${ch.length}명</b>
+    <span style="color:var(--i3)">${escapeHtml(names)} — 알린 일정과 지금 일정이 달라요</span>
+    <button class="btn bp bs" style="margin-left:auto" onclick="openSpeakerBulkMail('${escAttr(evKey)}','schedule')">✉ 일정 변경 안내 보내기</button>
+  </div>`;
+}
+
 export function renderConf(){
   const body = document.getElementById('conf-body');
   const ttl = document.getElementById('conf-ttl');
@@ -1388,7 +1402,7 @@ function peopleHtml(ev){
         title="연락 단계 메일(일정 변경 안내·자료 요청 등)을 여러 연사에게 한 번에 — 연사마다 한 통씩 따로 나갑니다">📨 여러 연사에게 메일</button>
       <button class="btn bs" id="sp-export-btn" onclick="exportSpeakers('${escAttr(ev.key)}')"
         title="프로그램표(Program At a Glance)·연사 전체 정보·약력과 초록을 엑셀 한 파일로 받습니다">엑셀 다운로드</button></div>
-  </div>`;
+  </div>${schedAlertHtml(ev.key, all)}`;
 
   /* ── 세션 칩 ──
      세션명은 길다. 여덟 개가 늘어서면 칩 줄이 그대로 목록이 되어, 고르는

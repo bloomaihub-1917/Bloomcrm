@@ -15,7 +15,7 @@
      needs       역할이 요구하는 자료를 다 받았으면 끝 (숙박·항공은 따로 본다)
      log         그 단계 메일을 보낸 기록(speaker_logs.kind = 단계 key)이 있으면 끝
 ══════════════════════════════════════════════════════════════ */
-import { EVENT_LIST, CONF_SESSIONS, confCfg, assignmentsFor, rolesOfSpeaker,
+import { EVENT_LIST, CONF_SESSIONS, SPEAKER_LOGS, confCfg, assignmentsFor, rolesOfSpeaker,
   logsOfSpeaker, speakerNeed, currentUser } from '../state.js';
 import { SP_COLS, spCell } from './conf-tab.js';
 import { SPEAKER_ROLES } from '../constants.js';
@@ -32,6 +32,16 @@ export const FLOW_STEPS = [
     subject_ko: '[{행사}] 연사 초청의 건 — {호칭}', subject_en: '[{행사}] Invitation to Speak',
     body_ko: '{호칭}께\n\n안녕하십니까. {행사} 사무국 {담당자}입니다.\n{행사}에 {호칭}을 연사로 모시고자 정중히 초청의 말씀을 드립니다.\n\n■ 배정 세션\n{세션}\n\n■ 안내 자료\n- 가이드라인: {가이드}\n- 제출 양식: {양식}\n\n참석 가능 여부를 {마감일}까지 회신해 주시면, 이후 일정과 준비 사항을 상세히 안내드리겠습니다.\n바쁘신 가운데 검토해 주셔서 감사합니다.\n\n{담당자} 드림\n{행사} 사무국',
     body_en: 'Dear {호칭},\n\nOn behalf of the {행사} Secretariat, it is my pleasure to invite you to speak at {행사}.\n\nYour session:\n{세션}\n\nFor your reference:\n- Speaker guidelines: {가이드}\n- Submission form: {양식}\n\nWe would be grateful if you could confirm your availability by {마감일}. Upon your confirmation, we will share the detailed schedule and next steps.\n\nThank you for your kind consideration.\n\nSincerely,\n{담당자}\n{행사} Secretariat',
+  },
+  {
+    /* 일정표가 바뀌면 «알린 일정»(그 연사에게 마지막으로 보낸 메일의 세션 줄)과 지금 일정이
+       다른 연사에게만 선다. 바뀐 일정을 담은 메일(이 단계든 확정 안내든)을 보내면 끝 —
+       날짜를 적거나 끄고 켤 일이 없다. 안 바뀐 연사에게는 이 단계가 아예 안 보인다 */
+    key: 'schedule', label: '일정 변경 안내', done: 'sched',
+    desc: '알린 일정과 지금 일정이 달라졌어요. 바뀐 점과 새 일정을 담아 다시 알립니다. 보내면 끝납니다.',
+    subject_ko: '[{행사}] 발표 일정 변경 안내 — {호칭}', subject_en: '[{행사}] Change to Your Session Schedule',
+    body_ko: '{호칭}께\n\n안녕하십니까. {행사} 사무국 {담당자}입니다.\n{행사} 프로그램 일정이 조정되어, 앞서 안내드린 {호칭}의 발표 일정이 아래와 같이 변경되었음을 알려드립니다.\n\n■ 변경 내용\n{변경내용}\n\n■ 변경된 발표 일정\n{세션}\n\n혼란을 드려 대단히 죄송합니다. 변경된 일정에 참석이 어려우시면 {마감일}까지 회신해 주십시오. 일정을 다시 조율하겠습니다.\n\n{담당자} 드림\n{행사} 사무국',
+    body_en: 'Dear {호칭},\n\nPlease note that the programme for {행사} has been adjusted, and your session schedule has changed as follows.\n\nWhat has changed:\n{변경내용}\n\nYour updated session:\n{세션}\n\nWe apologise for any inconvenience. Should the new schedule not suit you, please let us know by {마감일} and we will be happy to work out an alternative.\n\nSincerely,\n{담당자}\n{행사} Secretariat',
   },
   {
     key: 'reply', label: '참석 회신 받기', done: 'field:invite_replied_at',
@@ -93,16 +103,31 @@ const ITEM_EN = { profile: 'Affiliation & job title', bio_pro: 'Biography', cv: 
   bank: 'Bank details', passport: 'Copy of passport', travel: 'Travel details' };
 
 /* 행사를 돌리다 생기는 연락 — 담당자가 연사 화면에서 바로 더하는 단계(conf.flow_custom).
-   끝난 기준은 하나: 그 단계 메일을 보내면 끝. «기준일»을 적으면 그날까지 초청한
-   연사에게만 서고, 그날 이후 보낸 메일만 센다 — 일정표가 또 바뀌면 날짜만 고친다. */
+   끝난 기준은 하나: 그 단계 메일을 보내면 끝. «대상 제한»(since)을 적으면 그날까지 초청한
+   연사에게만 선다. 일정 변경은 기본 단계(schedule)가 알아서 잡으니 여기 두지 않는다.
+   아래는 «+ 단계 추가» 옆에 미리 채워 두는 양식이다. */
+const SIGN_KO = '\n\n{담당자} 드림\n{행사} 사무국', SIGN_EN = '\n\nSincerely,\n{담당자}\n{행사} Secretariat';
 export const CUSTOM_PRESETS = [
   {
-    label: '일정 변경 안내',
-    desc: '프로그램 일정표가 바뀌어, 바뀌기 전에 안내받은 연사에게 바뀐 발표 일정을 다시 알립니다.',
-    subject_ko: '[{행사}] 프로그램 일정 변경 안내 — {호칭}', subject_en: '[{행사}] Updated Programme Schedule',
-    body_ko: '{호칭}께\n\n안녕하십니까. {행사} 사무국 {담당자}입니다.\n{행사} 프로그램 일정표가 변경되어, 앞서 안내드린 발표 일정을 아래와 같이 정정하여 다시 알려드립니다.\n\n■ 변경된 발표 일정\n{세션}\n\n혼란을 드려 대단히 죄송합니다. 변경된 일정에 참석이 어려우시면 {마감일}까지 회신해 주십시오. 일정을 다시 조율하겠습니다.\n\n{담당자} 드림\n{행사} 사무국',
-    body_en: 'Dear {호칭},\n\nPlease note that the programme schedule for {행사} has been revised. We would like to share your updated session details below, which supersede our previous information.\n\nYour session:\n{세션}\n\nWe apologise for any inconvenience. Should the new schedule not suit you, please let us know by {마감일} and we will be happy to work out an alternative.\n\nSincerely,\n{담당자}\n{행사} Secretariat',
-    after: 'invite', since: 'today',
+    label: '리허설 안내', after: 'confirm',
+    desc: '발표 전 리허설·장비 점검 일정을 알립니다.',
+    subject_ko: '[{행사}] 리허설 일정 안내 — {호칭}', subject_en: '[{행사}] Rehearsal Schedule',
+    body_ko: '{호칭}께\n\n안녕하십니까. {행사} 사무국 {담당자}입니다.\n원활한 발표를 위해 아래와 같이 리허설(장비 점검)을 진행하고자 합니다.\n\n■ 발표 일정\n{세션}\n\n■ 리허설\n- 일시: \n- 장소: {장소}\n\n참석이 어려우시면 {마감일}까지 알려주십시오. 다른 시간으로 조율하겠습니다.' + SIGN_KO,
+    body_en: 'Dear {호칭},\n\nTo ensure a smooth presentation, we would like to invite you to a short rehearsal and equipment check.\n\nYour session:\n{세션}\n\nRehearsal:\n- Date & time: \n- Venue: {장소}\n\nIf this time does not suit you, please let us know by {마감일} and we will arrange an alternative.' + SIGN_EN,
+  },
+  {
+    label: '현장 안내 (등록·동선)', after: 'confirm',
+    desc: '행사 당일 등록 위치, 연사 대기실, 도착 시각을 알립니다.',
+    subject_ko: '[{행사}] 행사 당일 현장 안내 — {호칭}', subject_en: '[{행사}] On-site Information for Speakers',
+    body_ko: '{호칭}께\n\n안녕하십니까. {행사} 사무국 {담당자}입니다.\n행사 당일 원활한 진행을 위해 현장 안내를 드립니다.\n\n■ 발표 일정\n{세션}\n\n■ 현장 안내\n- 장소: {장소}\n- 연사 등록: \n- 연사 대기실: \n- 도착 요청 시각: 발표 30분 전\n\n현장에서 궁금하신 점은 사무국으로 연락 주십시오.' + SIGN_KO,
+    body_en: 'Dear {호칭},\n\nPlease find below the on-site information for {행사}.\n\nYour session:\n{세션}\n\nOn site:\n- Venue: {장소}\n- Speaker registration: \n- Speaker lounge: \n- Please arrive: 30 minutes before your session\n\nPlease do not hesitate to contact the Secretariat on the day.' + SIGN_EN,
+  },
+  {
+    label: '갈라디너 안내', after: 'confirm',
+    desc: '갈라디너 일정을 알리고 참석 여부를 묻습니다. 회신은 연사 화면 «갈라디너» 칸에 적습니다.',
+    subject_ko: '[{행사}] 갈라디너 초대 — {호칭}', subject_en: '[{행사}] Invitation to the Gala Dinner',
+    body_ko: '{호칭}께\n\n안녕하십니까. {행사} 사무국 {담당자}입니다.\n{행사} 연사분들을 모시고 갈라디너를 마련하였습니다.\n\n■ 갈라디너\n- 일시: \n- 장소: \n\n참석 여부를 {마감일}까지 회신해 주시면 감사하겠습니다.' + SIGN_KO,
+    body_en: 'Dear {호칭},\n\nIt is our pleasure to invite you to the {행사} Gala Dinner.\n\n- Date & time: \n- Venue: \n\nWe would be grateful if you could let us know whether you will be able to attend by {마감일}.' + SIGN_EN,
   },
 ];
 export const isCustomStep = (key) => String(key || '').startsWith('c-');
@@ -112,9 +137,13 @@ export const isCustomStep = (key) => String(key || '').startsWith('c-');
 export function flowSteps(evKey, { withOff = false } = {}){
   const cfg = confCfg(evKey);
   const over = cfg.flow || {};
-  const out = FLOW_STEPS.map(s => ({ ...s, ...(over[s.key] || {}), key: s.key, done: s.done, need: s.need }));
+  const rounds = cfg.mailRounds || [];
+  const roundOf = (key) => rounds.find(r => r.step === key && !r.closed_at) || null;
+  /* 기본 단계의 since(예전 «다시 보내기 기준일»)는 읽지 않는다 — 다시 보내기는 이제 발송 묶음(round)이다 */
+  const out = FLOW_STEPS.map(s => ({ ...s, ...(over[s.key] || {}), key: s.key, done: s.done, need: s.need,
+    since: undefined, round: roundOf(s.key) }));
   (cfg.flow_custom || []).forEach(c => {
-    const st = { ...c, custom: true, done: c.since ? 'since' : 'log', need: undefined };
+    const st = { ...c, custom: true, done: c.since ? 'since' : 'log', need: undefined, round: roundOf(c.key) };
     const i = c.after === '' ? -1 : out.findIndex(x => x.key === c.after);
     if(c.after === '') out.unshift(st); else out.splice(i < 0 ? out.length : i + 1, 0, st);
   });
@@ -177,9 +206,83 @@ export function pendingItems(sp){
 
 const sentLog = (sp, key) => logsOfSpeaker(sp.id).some(l => l.kind === key);
 
+/* ── 알린 일정과 지금 일정 ──
+   {세션} 한 줄: «- 세션 제목 (2026-10-20 14:00–14:20, 201호) — 연사»
+   그 연사에게 마지막으로 나간 메일(앱에서 보냈거나 메일함에서 가져온 것) 본문에서 이 줄을
+   읽은 것이 «알린 일정»이다. 따로 적어 두지 않는다 — 실제로 나간 글이 정본이고, 메일
+   탭에서 손으로 고쳐 보냈어도 고친 그대로 맞는다. */
+const LINE_RE = /^- (.+) \((\d{4}-\d{2}-\d{2})(?: (\d{1,2}:\d{2})(?:[–-](\d{1,2}:\d{2}))?)?(?:, ([^)\n]+))?\)(?: — .+)?$/gm;
+export function sessionItems(sp){
+  const whenOf = (a) => { const s = CONF_SESSIONS.find(x => x.id === a.session_id) || {};
+    return `${s.date || '9999'} ${a.start_at || s.start_at || '99:99'}`; };
+  return assignmentsFor(sp.id).slice().sort((a, b) => whenOf(a).localeCompare(whenOf(b))).map(a => {
+    const s = CONF_SESSIONS.find(x => x.id === a.session_id);
+    if(!s || s.kind) return null;
+    /* 연사에게는 세션 시간이 아니라 «본인 발표 시각»을 알린다 */
+    const start = a.start_at || s.start_at || '', end = a.start_at ? (a.end_at || '') : (s.end_at || '');
+    return { title_ko: s.title_ko || s.title_en || '', title_en: s.title_en || s.title_ko || '', date: s.date || '',
+      start, end, room: s.room || '', role: a.role || '' };
+  }).filter(Boolean);
+}
+const whenText = (x) => [x.date, x.start ? `${x.start}${x.end ? '–' + x.end : ''}` : ''].filter(Boolean).join(' ');
+const sessLine = (x, en) => `- ${en ? x.title_en : x.title_ko}${x.date ? ` (${whenText(x)}${x.room ? ', ' + x.room : ''})` : ''} — ${en ? (ROLE_EN[x.role] || x.role) : x.role}`;
+/* 표를 그릴 때마다 연사 수 × 단계 수만큼 불린다 — 기록이 그대로면 다시 읽지 않는다.
+   기록은 보통 push로만 늘어나니 길이와 마지막 줄 id로 바뀜을 본다 */
+const toldCache = new Map();
+export function toldSchedule(sp){
+  const sig = `${SPEAKER_LOGS.length}|${(SPEAKER_LOGS[SPEAKER_LOGS.length - 1] || {}).id || ''}`;
+  const hit = toldCache.get(sp.id);
+  if(hit && hit.sig === sig) return hit.v;
+  const v = readTold(sp);
+  toldCache.set(sp.id, { sig, v });
+  return v;
+}
+function readTold(sp){
+  const logs = logsOfSpeaker(sp.id).filter(l => l.direction === 'out' && l.body)
+    .sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')));
+  for(const l of logs){
+    const items = [...String(l.body).split('[첨부]')[0].matchAll(LINE_RE)].map(m => ({
+      title: m[1].trim(), date: m[2], start: m[3] || '', end: m[4] || '', room: m[5] ? m[5].trim() : null }));
+    if(items.length) return { ts: l.ts, subject: l.subject || '', items };
+  }
+  return null;
+}
+/* 바뀐 점 — 제목으로 짝을 짓는다(국문·영문 어느 쪽으로 알렸든). 예전 메일엔 룸이 없었으니
+   알린 룸이 없으면 룸은 견주지 않는다. 시작·끝 시각도 알렸을 때만 견준다 */
+export function scheduleDiff(sp){
+  const told = toldSchedule(sp);
+  if(!told) return { known: false, changed: false, changes: [] };
+  const cur = sessionItems(sp);
+  const norm = (t) => String(t || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  const used = new Set();
+  const changes = [];
+  cur.forEach(c => {
+    const i = told.items.findIndex((t, k) => !used.has(k) && [norm(c.title_ko), norm(c.title_en)].includes(norm(t.title)));
+    if(i < 0){ changes.push({ type: 'added', cur: c }); return; }
+    used.add(i);
+    const t = told.items[i];
+    /* 알릴 때 비어 있던 시각을 나중에 정한 것은 «변경»이 아니다 — 확정 안내에서 알리면 된다 */
+    const moved = t.date !== c.date || (!!t.start && t.start !== c.start) || (!!t.end && t.end !== c.end);
+    const room = t.room != null && t.room !== c.room;
+    if(moved || room) changes.push({ type: 'moved', cur: c, told: t });
+  });
+  told.items.forEach((t, k) => { if(!used.has(k)) changes.push({ type: 'removed', told: t }); });
+  return { known: true, changed: changes.length > 0, changes, told };
+}
+export function changeLines(sp, en){
+  return scheduleDiff(sp).changes.map(x => {
+    if(x.type === 'added') return `- ${en ? 'New' : '새로 배정'}: ${sessLine(x.cur, en).slice(2)}`;
+    if(x.type === 'removed') return `- ${en ? 'No longer scheduled' : '빠짐'}: ${x.told.title} (${whenText(x.told)})`;
+    const was = `${whenText(x.told)}${x.told.room ? ', ' + x.told.room : ''}`;
+    const now = `${whenText(x.cur)}${x.cur.room ? ', ' + x.cur.room : ''}`;
+    return `- ${en ? x.cur.title_en : x.cur.title_ko}: ${was} → ${now}`;
+  });
+}
+
 function isDone(sp, step){
   if(step.done.startsWith('field:')) return !!sp[step.done.slice(6)];
   if(step.done === 'needs') return !missingItems(sp).length;
+  if(step.done === 'sched') return !scheduleDiff(sp).changed;
   if(step.done === 'since') return logsOfSpeaker(sp.id)
     .some(l => l.kind === step.key && String(l.ts || '').slice(0, 10) >= step.since);
   /* 숙박·항공은 안내 메일을 보냈거나, 제공사항 탭에서 예약을 다 마쳤으면 끝이다 */
@@ -200,6 +303,24 @@ export function noFlow(sp){
   return roles.length > 0 && roles.every(r => (SPEAKER_ROLES.find(x => x.key === r) || {}).noMail);
 }
 
+/* 다시 보내기 묶음(round, conf.mailRounds) — 묶음을 열 때 이미 이 단계를 받았거나 끝낸
+   연사(targets)에게만 다시 걸고, 묶음을 연 뒤 이 단계 메일을 보내면 끝. 아직 이 단계까지
+   오지 않은 연사는 평소대로 간다 — 안 그러면 확정 전 연사에게 «참가 확정 안내»가 나간다 */
+export const resentAfter = (sp, key, since) => logsOfSpeaker(sp.id)
+  .some(l => l.kind === key && l.direction !== 'in' && String(l.ts || '') >= since);
+function withRound(sp, s, applies){
+  if(applies && s.round && (s.round.targets || []).includes(sp.id))
+    return { ...s, applies, isDone: resentAfter(sp, s.key, s.round.since), resend: true };
+  return { ...s, applies, isDone: applies && isDone(sp, s) };
+}
+/* 묶음을 열 때 다시 받을 연사 — 이 단계가 해당되고, 이미 끝냈거나 이 단계 메일을 받은 연사 */
+export function roundTargets(stepKey, speakers){
+  return speakers.filter(sp => {
+    const s = flowStatus(sp).steps.find(x => x.key === stepKey);
+    return s && s.applies && (s.resend || isDone(sp, s) || sentLog(sp, stepKey));
+  }).map(sp => sp.id);
+}
+
 /* 연사 한 명의 단계 상태 — current는 해당되면서 아직 안 끝난 첫 단계.
    skip이면 연락 단계 자체가 없다(주최사 전달) — 집계에서 빼야 한다. */
 export function flowStatus(sp){
@@ -216,21 +337,12 @@ export function flowStatus(sp){
       const applies = !skip && !!s.since && !!sp.guide_sent_at && String(sp.guide_sent_at).slice(0, 10) <= s.since;
       return { ...s, applies, isDone: applies && isDone(sp, s) };
     }
+    /* 일정 변경 — 알린 일정이 있고 지금과 다를 때만 선다 */
+    if(s.done === 'sched') return { ...s, applies: !skip && scheduleDiff(sp).changed, isDone: false };
     const applies = !skip && (!s.need || (s.key === 'travel'
       ? (need === 'req' || !!sp.stay_hotel || !!sp.air_route)
       : !!need));
-    /* 기본 단계에 기준일을 적으면 «다시 보내기» — 이미 이 단계를 받았거나 끝낸 연사에게만
-       다시 걸고(그날 이후 이 단계 메일을 보내면 끝), 아직 이 단계까지 오지 않은 연사는
-       평소대로 간다. 안 그러면 확정 전 연사에게 «참가 확정 안내»가 나간다 */
-    if(s.since && applies){
-      const normal = isDone(sp, s);
-      if(normal || sentLog(sp, s.key)){
-        const again = logsOfSpeaker(sp.id).some(l => l.kind === s.key && String(l.ts || '').slice(0, 10) >= s.since);
-        return { ...s, applies, isDone: again, resend: true };
-      }
-      return { ...s, applies, isDone: normal };
-    }
-    return { ...s, applies, isDone: applies && isDone(sp, s) };
+    return withRound(sp, s, applies);
   });
   const current = steps.find(s => s.applies && !s.isDone) || null;
   /* 자료 요청을 이미 보냈는데 아직 덜 받았으면 다음 메일은 독촉이다 */
@@ -262,13 +374,8 @@ export function fillTemplate(text, sp, step){
     return `${s.date || '9999'} ${a.start_at || s.start_at || '99:99'}`; };
   const asgSorted = assignmentsFor(sp.id).slice().sort((a, b) => whenOf(a).localeCompare(whenOf(b)));
   const docs = cfg.docs || {};
-  const sessions = asgSorted.map(a => {
-    const s = CONF_SESSIONS.find(x => x.id === a.session_id);
-    if(!s || s.kind) return '';
-    /* 연사에게는 세션 시간이 아니라 «본인 발표 시각»을 알린다 */
-    const when = a.start_at ? `${a.start_at}${a.end_at ? '–' + a.end_at : ''}` : (s.start_at || '');
-    return `- ${en ? (s.title_en || s.title_ko) : (s.title_ko || s.title_en)}${s.date ? ` (${s.date}${when ? ' ' + when : ''})` : ''} — ${en ? (ROLE_EN[a.role] || a.role) : a.role}`;
-  }).filter(Boolean);
+  /* 세션 줄 모양은 sessLine 하나 — «알린 일정»을 이 모양 그대로 다시 읽는다 */
+  const sessions = sessionItems(sp).map(x => sessLine(x, en));
   /* 발표 시간만 따로 — «■ 발표 시간» 아래에 날짜·시각만 적고 싶을 때 */
   const talkTimes = asgSorted.map(a => {
     const s = CONF_SESSIONS.find(x => x.id === a.session_id);
@@ -306,6 +413,7 @@ export function fillTemplate(text, sp, step){
     담당자: en ? (/[가-힣]/.test(currentUser?.name || '') ? '' : (currentUser?.name || ''))
       : (currentUser?.name || '담당자'),
     가져온자료: reuseSummary(sp, en),
+    변경내용: /\{변경내용\}/.test(String(text || '')) ? changeLines(sp, en).join('\n') : '',
   };
   /* 마감일이 없으면 «까지»·«by»가 붙은 문장이 어색해진다 — 문장째 바꾼다 */
   let t = String(text || '');
@@ -315,7 +423,7 @@ export function fillTemplate(text, sp, step){
     .replace(/^■ 제출 기한\n- \{마감일\}\n?/gm, '')
     .replace(/^Deadline: \{마감일\}\n?/gm, '');
   return t
-    .replace(/\{(이름|호칭|직함|소속|행사|장소|세션|발표시간|남은자료|가져온자료|마감일|가이드|양식|담당자)\}/g, (_, k) => vars[k] ?? '')
+    .replace(/\{(이름|호칭|직함|소속|행사|장소|세션|발표시간|남은자료|가져온자료|마감일|가이드|양식|담당자|변경내용)\}/g, (_, k) => vars[k] ?? '')
     .replace(/^\s*드림\s*$/gm, '')          // 담당자 이름이 없으면 «드림»만 남는다
     // 값이 비어 남은 항목 줄 — «- 가이드라인: », «- », «Submission form: »
     .replace(/^- [^\n:：]{1,24}[:：] ?$/gm, '')
@@ -323,7 +431,7 @@ export function fillTemplate(text, sp, step){
     .replace(/^(Deadline|Submission form|Speaker guidelines): ?$/gm, '')
     .replace(/\n{3,}/g, '\n\n')
     // 내용이 다 빠진 제목 줄(■ 안내 자료, Your session: 따위)을 걷어낸다
-    .replace(/^(■[^\n]*|Your session:|For your reference:|Requested materials:|For your confirmation:|Additional materials needed:)\n(?=\n|$)/gm, '')
+    .replace(/^(■[^\n]*|Your session:|Your updated session:|What has changed:|For your reference:|Requested materials:|For your confirmation:|Additional materials needed:)\n(?=\n|$)/gm, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
@@ -347,4 +455,4 @@ export function draftFor(sp, stepKey){
   };
 }
 
-export const FLOW_VARS = ['{호칭}', '{이름}', '{직함}', '{소속}', '{행사}', '{장소}', '{세션}', '{발표시간}', '{남은자료}', '{가져온자료}', '{마감일}', '{가이드}', '{양식}', '{담당자}'];
+export const FLOW_VARS = ['{호칭}', '{이름}', '{직함}', '{소속}', '{행사}', '{장소}', '{세션}', '{발표시간}', '{남은자료}', '{가져온자료}', '{변경내용}', '{마감일}', '{가이드}', '{양식}', '{담당자}'];

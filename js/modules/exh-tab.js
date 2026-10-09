@@ -51,6 +51,7 @@ import { trackAction, changed } from './audit-tab.js';
 import { isStale, isUnread, mailCardHtml } from './mail-mark.js';
 // 여러 기업에 메일 — 창을 띄우는 함수만 window에 둔다(목록 단추가 부른다)
 import './exh-bulkmail.js';
+import { boothChange } from './exh-mail.js';
 import { renderWatchView, initWatchFolders } from './exh-watch.js';
 import { normalizeCompanyKey, createOrg, reloadOrgs } from './company-tab.js';
 
@@ -551,6 +552,21 @@ export function exhibitorTradeFor(x){
 }
 
 /* 금액 표시 — 통화 기호를 붙인다 */
+/* 부스 바뀐 곳 — 부스 번호를 고치면 «알린 부스»(마지막으로 보낸 메일의 «부스 번호:» 줄)와
+   달라진 기업이 생긴다. 누구에게 변경 안내를 보내야 하는지 사람이 기억하지 않게 목록 위에 띄운다 */
+function boothAlertHtml(all){
+  const ch = all.filter(x => boothChange(x).changed);
+  if(!ch.length) return '';
+  const names = ch.slice(0, 4).map(x => { const b = boothChange(x); return `${exhNames(x).ko} ${b.from}→${b.to}`; }).join(', ')
+    + (ch.length > 4 ? ` 외 ${ch.length - 4}곳` : '');
+  return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:9px 12px;margin-bottom:10px;
+      border:1px solid var(--am);border-radius:10px;background:var(--W);font-size:11.5px">
+    <b style="color:var(--am)">부스 바뀐 곳 ${ch.length}곳</b>
+    <span style="color:var(--i3)">${escapeHtml(names)} — 알린 부스와 지금 부스가 달라요</span>
+    <button class="btn bp bs" style="margin-left:auto" onclick="openExhBulkMail('booth_change')">✉ 부스 변경 안내 보내기</button>
+  </div>`;
+}
+
 /* 전시 메일 문구에 넣을 이 기업의 값(exh-mail.js fillExhTemplate의 ctx).
    계산은 여기 있는 정산 함수를 그대로 쓴다 — 메일에 적힌 금액과 정산 탭이 갈리지 않게 */
 export function exhMailCtx(x){
@@ -4748,6 +4764,7 @@ function renderChecklistCards(list, all){
       <button class="btn bs" id="exh-list-export-btn" onclick="exportChecklist()"
         title="지금 보이는 ${list.length}곳의 진행현황을 엑셀로 받습니다">엑셀 다운로드</button>
       <button class="btn bs" onclick="openExhBulkMail()" title="지금 보이는 기업 중 골라 같은 안내를 기업마다 한 통씩 보냅니다">✉ 여러 기업에 메일</button></div>` : ''}
+    ${boothAlertHtml(all)}
     ${list.map(x => {
       const p = progressOf(x);
       const openN = openInquiriesFor(x.id).length;

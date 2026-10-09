@@ -46,7 +46,7 @@ import { decorate as decorateMailPane } from './mail-pane.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 import { patchContact } from './db-tab.js';
 import { confLocked, setConfLockEv, confLockNotice, renderConf, buildConfEvList, syncPartRole, spCell } from './conf-tab.js';
-import { flowStatus, draftFor, missingItems, pendingItems, PART_LABEL } from './speaker-flow.js';
+import { flowStatus, draftFor, missingItems, pendingItems, PART_LABEL, changeLines } from './speaker-flow.js';
 import { reuseCandidates, reusePending } from './contact-speaker.js';
 
 let spId = null;
@@ -374,11 +374,13 @@ function flowBoxHtml(sp){
       <button class="btn" style="font-size:10px;padding:1px 7px;margin-left:auto" title="이 행사의 연락 단계를 더하고, 고치고, 끄거나 지웁니다"
         onclick="openFlowEditor('${escAttr(sp.event_id)}')">✎ 단계 편집</button>
     </div>
-    <div style="display:flex;flex-wrap:wrap;gap:4px">${f.steps.map(chip).join('')}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px">${f.steps.filter(s => s.done !== 'sched' || s.applies).map(chip).join('')}</div>
     ${cur ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i7)">
-        <div style="font-size:12px;font-weight:700;color:var(--a)">지금 할 일 · ${escapeHtml(f.remind ? '자료 독촉' : cur.resend ? `${cur.label} (다시 보내기 · 기준일 ${cur.since})` : cur.label)}${
+        <div style="font-size:12px;font-weight:700;color:var(--a)">지금 할 일 · ${escapeHtml(f.remind ? '자료 독촉' : cur.resend ? `${cur.label} (다시 보내기 · ${cur.round.label || ''})` : cur.label)}${
           cur.due ? ` <span style="font-weight:400;color:${cur.due < td() ? 'var(--re)' : 'var(--i4)'};font-size:10.5px">마감 ${escapeHtml(cur.due)}</span>` : ''}</div>
         <div style="font-size:10.5px;color:var(--i4);margin-top:2px;line-height:1.6">${escapeHtml(cur.desc || '')}</div>
+        ${cur.done === 'sched' ? `<div style="margin-top:5px;padding:6px 9px;background:var(--i8);border-radius:6px;font-size:11px;color:var(--i2);white-space:pre-wrap;line-height:1.6">${
+          escapeHtml(changeLines(sp, false).join('\n'))}</div>` : ''}
         ${pendingHtml(sp)}
         <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">
           <button class="btn bp" style="font-size:10.5px" onclick="openFlowDraft('${cur.key}')">✉ 메일 초안 만들기</button>

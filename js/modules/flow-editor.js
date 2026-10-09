@@ -15,7 +15,7 @@ import { FLOW_STEPS, FLOW_VARS, CUSTOM_PRESETS, flowSteps, isCustomStep } from '
 import { saveConf } from './settings-tab.js';
 import { trackAction } from './audit-tab.js';
 import { loadMailFiles, mailFilesOf, uploadMailFile, deleteMailFile, fileToBase64 } from '../api.js';
-import { escapeHtml, escAttr, td } from '../utils.js';
+import { escapeHtml, escAttr } from '../utils.js';
 
 let edEv = null;      // 고치는 행사
 let edOpen = null;    // 펼친 단계 key ('new'면 새 단계)
@@ -36,7 +36,7 @@ const locked = () => !!edEv && evPartDone(edEv, 'conf');
 
 function ruleOf(st){
   if(st.custom) return st.since ? `${st.since}까지 초청한 연사 — 그 뒤 이 메일을 보내면 끝` : '이 메일을 보내면 끝';
-  if(st.since) return `기준일 ${st.since} — 이미 받은 연사에게 다시 보내면 끝`;
+  if(st.done === 'sched') return '알린 일정과 지금 일정이 다른 연사에게만 섬 — 바뀐 일정을 담아 보내면 끝';
   if(st.done === 'needs') return '역할이 요구하는 자료를 다 받으면 끝';
   if(st.done.startsWith('cell:')) return '발표자료를 받음으로 표시하면 끝';
   if(st.done === 'log') return '이 단계 메일을 보내면 끝';
@@ -110,7 +110,7 @@ function rowHtml(st, i, ro){
       <b>${i + 1}. ${escapeHtml(st.label || '(이름 없음)')}</b>
       ${st.custom ? '<span class="pill p-amber" style="font-size:9.5px">더한 단계</span>' : ''}
       ${st.due ? `<span class="pill p-gray" style="font-size:9.5px">마감 ${escapeHtml(st.due)}</span>` : ''}
-      ${st.since && !st.custom ? `<span class="pill p-amber" style="font-size:9.5px">다시 보내기 ${escapeHtml(st.since)}</span>` : ''}
+      ${st.round ? `<span class="pill p-amber" style="font-size:9.5px" title="«여러 연사에게 메일»에서 연 다시 보내기 묶음">다시 보내기 중 · ${escapeHtml(st.round.label || '')}</span>` : ''}
       <span style="font-size:10.5px;color:var(--i4);margin-left:auto;text-align:right">${escapeHtml(ruleOf(st))}</span>
       ${ro ? '' : `<button class="btn" style="font-size:10.5px" onclick="editFlowStep('${escAttr(st.key)}')">${open ? '접기' : '고치기'}</button>
       ${st.off ? '' : `<button class="btn" style="font-size:10.5px" title="이 단계 메일을 여러 연사에게 한 번에 보냅니다"
@@ -142,15 +142,11 @@ function formHtml(st, isNew){
       <option value=""${st.after === '' ? ' selected' : ''}>맨 앞</option>
       ${others.map(x => `<option value="${escAttr(x.key)}"${st.after === x.key ? ' selected' : ''}>«${escapeHtml(x.label)}» 다음</option>`).join('')}
       <option value="__end"${st.after == null || st.after === '__end' ? ' selected' : ''}>맨 끝</option></select></div>
-    <div><div class="mlbl">기준일 <span style="font-weight:400;color:var(--i4)">— 비우면 모든 연사</span></div>
+    <div><div class="mlbl">대상 제한 <span style="font-weight:400;color:var(--i4)">— 비우면 모든 연사</span></div>
       <input class="fi" type="date" id="fe-since" value="${escAttr(st.since || '')}" style="width:160px">
       <div style="font-size:10px;color:var(--i4);margin-top:2px">이날까지 초청한 연사에게만 서고, 이날 이후 보낸 메일만 끝으로 셉니다</div></div>`
-    : `<div style="grid-column:1/-1"><div class="mlbl">기준일 — 다시 보내기 <span style="font-weight:400;color:var(--i4)">— 비우면 평소대로</span></div>
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <input class="fi" type="date" id="fe-since" value="${escAttr(st.since || '')}" style="width:160px">
-        <button class="btn" style="font-size:10.5px" onclick="document.getElementById('fe-since').value='${td()}'">오늘</button>
-        <button class="btn" style="font-size:10.5px" onclick="document.getElementById('fe-since').value=''">비우기</button></div>
-      <div style="font-size:10px;color:var(--i4);margin-top:2px;line-height:1.5">적으면 이 단계를 이미 받았거나 끝낸 연사에게 다시 «지금 할 일»로 서고, 이날 이후 이 메일을 보내면 끝납니다(예: 가이드라인 개정판). 아직 이 단계까지 오지 않은 연사는 평소대로 갑니다. 다 보냈으면 비워 두세요.</div></div>`;
+    : `<div style="grid-column:1/-1;font-size:10.5px;color:var(--i4);line-height:1.6">이미 받은 연사에게 개정판을 다시 보내려면
+      <a href="#" onclick="openSpeakerBulkMail('${escAttr(edEv)}','${escAttr(st.key)}');return false">📨 여러 연사에게 메일</a>에서 «↻ 이미 받은 연사에게 다시 보내기»를 누르세요.</div>`;
   return `<div style="padding:4px 11px 11px;border-top:1px solid var(--i7)">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
       ${FIELDS.map(([f, l]) => fld(f, l)).join('')}${extra}
@@ -188,7 +184,7 @@ export function newFlowStep(presetIdx){
   const p = CUSTOM_PRESETS[presetIdx] || { label: '', desc: '', subject_ko: '[{행사}]  — {호칭}', subject_en: '[{행사}] ',
     body_ko: '{호칭}께\n\n안녕하십니까. {행사} 사무국 {담당자}입니다.\n\n\n\n{담당자} 드림\n{행사} 사무국',
     body_en: 'Dear {호칭},\n\n\n\nSincerely,\n{담당자}\n{행사} Secretariat' };
-  edDraft = { ...p, since: p.since === 'today' ? td() : (p.since || ''), after: p.after ?? '__end' };
+  edDraft = { ...p, since: '', after: p.after ?? '__end' };
   edOpen = 'new';
   renderFlowEditor();
   document.getElementById('fe-label')?.focus();
@@ -229,9 +225,8 @@ export async function saveFlowStep(key){
     const flow = cfg.flow = cfg.flow || {};
     const o = { ...(flow[key] && flow[key].off !== undefined ? { off: flow[key].off } : {}) };
     FIELDS.forEach(([f]) => { if(v[f] !== undefined && v[f] !== String(def[f] ?? '')) o[f] = v[f]; });
-    if(v.since) o.since = v.since;
     if(Object.keys(o).length) flow[key] = o; else delete flow[key];
-  }, `«${v.label}» 단계 고침${v.since ? ` (기준일 ${v.since})` : ''}`);
+  }, `«${v.label}» 단계 고침`);
   if(ok){ edOpen = null; renderFlowEditor(); }
 }
 
@@ -242,7 +237,6 @@ export async function resetFlowStep(key){
     const flow = cfg.flow || {};
     const keep = {};
     if(flow[key]?.off !== undefined) keep.off = flow[key].off;
-    if(flow[key]?.since) keep.since = flow[key].since;
     if(Object.keys(keep).length) flow[key] = keep; else delete flow[key];
     cfg.flow = flow;
   }, `«${def.label}» 기본 문구로`);
