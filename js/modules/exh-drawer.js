@@ -31,8 +31,9 @@ import {
   saveExhContact as _saveExhContact, saveExhItem as _saveExhItem, saveExhInvoice as _saveExhInvoice, saveExhTax as _saveExhTax, saveExhPayment as _saveExhPayment, saveExhLog as _saveExhLog, saveExhApp as _saveExhApp,
   deleteExhContact as _deleteExhContact, deleteExhItem as _deleteExhItem, deleteExhInvoice as _deleteExhInvoice, deleteExhTax as _deleteExhTax, deleteExhPayment as _deleteExhPayment, deleteExhLog as _deleteExhLog, deleteExhApp as _deleteExhApp,
   deleteExhibitor as _deleteExhibitor,
-  sendMail, eventMailFrom, fileToBase64, loadMailFiles, mailFilesOf,
+  sendMail, eventMailFrom, fileToBase64, loadMailFiles, mailFilesOf, aiExhAdvice,
 } from '../api.js';
+import { exhMailState } from './exh-bulkmail.js';
 
 /* 진행 완료된 행사는 열람만 — exh-tab의 가드를 그대로 쓴다.
    판단 기준이 두 군데면 한쪽만 고치는 날이 온다. */
@@ -77,6 +78,7 @@ import {
   guardWrite, exhLocked, setExhLockEv, exhLockNotice, isBoothGiven, boothIncluded, applyBoothItems, boothItemsPending,
   patchExh, refreshExhViews, exhContact, exhContacts, exhMailCtx, contactsForExhibitor, cleanEmail, progressBar, needsReissue,
   settleState, liveInvoices, payDueDate, paidBreakdown, invoiceGap, refundDue, eventDeadlines,
+  STEPS, cellState,
 } from './exh-tab.js';
 
 let drId = null;
@@ -201,7 +203,7 @@ export function renderExhDr(){
   if(b){
     // 끝난 행사는 드로어도 열람만 — 목록은 잠갔는데 드로어에서 고쳐지면 소용없다
     b.classList.toggle('ro', exhLocked());
-    b.innerHTML = (VIEW[drTab] || dContactTab)(x);
+    b.innerHTML = exhAdviceHtml(x) + (VIEW[drTab] || dContactTab)(x);
     if(drTab === 'mail'){ fillExhMailFrom(x); if(exhReply) fillExhReply(x); else fillExhMail(x.id, true); }
   }
   // 메일함 나란히·고정 띠(mail-pane.js)
@@ -3049,6 +3051,109 @@ function dLogs(x){
    저장 액션 — 낙관적 반영 후 실패 시 롤백
 ══════════════════════════════════════════ */
 const localId = (p) => `${p}${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
+/* ══════════════════════════════════════════
+   ✨ 상황 물어보기 — 연사 드로어와 같은 틀(speaker-drawer.js adviceHtml)
+   «인보이스 금액이 틀려서 다시 보내야 해»처럼 적으면 이 CRM에서 할 일을 순서대로 답하고
+   줄마다 단추(메일 초안·탭 열기·메일 단계 편집)를 붙인다(backend-node/routes/ai.js /exh-advice).
+   보내는 것은 진행 항목·정산·메일 단계의 «상태»와 기록의 날짜·방향·종류뿐 —
+   회사명·담당자·금액·메일 제목·본문은 보내지 않는다.
+   드로어가 통째로 다시 그려지므로 질문·답은 여기 붙들어 둔다.
+══════════════════════════════════════════ */
+let exhAdvice = null;   // { id, q, loading, err, ans, saved }
+const ADVICE_TAB = { app_received_at: 'apply', 'calc:invoice': 'billing', 'calc:tax': 'billing', 'calc:payment': 'billing',
+  'calc:graphic': 'graphic', directory_received_at: 'book' };
+function exhAdviceHtml(x){
+  const a = exhAdvice && exhAdvice.id === x.id ? exhAdvice : null;
+  const btn = (t) => {
+    const label = { mail: '✉ 메일 초안', tab: '→ 탭 열기', mailedit: '✎ 메일 단계 편집' }[t.action];
+    return label ? ` <button class="btn" style="font-size:10px;padding:1px 7px" onclick="exhAdviceAct('${t.action}','${escAttr(t.arg)}')">${label}</button>` : '';
+  };
+  return `<div style="margin-bottom:10px;padding:7px 10px;border:1px solid var(--i6);border-radius:8px;background:var(--W)">
+    <div style="display:flex;gap:6px">
+      <input class="fi" id="exh-advice-q" style="flex:1;font-size:11.5px" value="${escAttr(a ? a.q : '')}"
+        placeholder="✨ 상황 물어보기 — 예: 인보이스 금액이 틀려서 다시 보내야 해"
+        onkeydown="if(event.key==='Enter')askExhAdvice()" title="질문과 이 참가사의 진행 상태만 AI에게 보냅니다. 회사명·금액·메일 내용은 보내지 않아요">
+      <button class="btn" style="font-size:10.5px" onclick="askExhAdvice()" ${a && a.loading ? 'disabled' : ''}>${a && a.loading ? '생각 중…' : '물어보기'}</button>
+    </div>
+    ${a && a.err ? `<div style="font-size:11px;color:var(--re);margin-top:5px">${escapeHtml(a.err)}</div>` : ''}
+    ${a && a.ans ? `<div style="margin-top:7px;padding:8px 10px;background:var(--ad);border-radius:7px;font-size:11.5px;line-height:1.6">
+        <div style="font-weight:700;color:var(--i1)">✨ ${escapeHtml(a.ans.summary)}</div>
+        <ol style="margin:4px 0 0 18px;padding:0">${a.ans.todo.map(t => `<li style="margin:2px 0">${escapeHtml(t.text)}${btn(t)}</li>`).join('')}</ol>
+        ${a.ans.caution ? `<div style="color:var(--am);margin-top:4px">⚠️ ${escapeHtml(a.ans.caution)}</div>` : ''}
+        <div style="display:flex;gap:6px;margin-top:6px;align-items:center">
+          ${a.saved ? '<span style="font-size:10.5px;color:var(--g)">✓ 문의·기록에 남겼어요</span>'
+            : `<button class="btn" style="font-size:10px" onclick="saveExhAdvice()" title="질문과 답을 이 참가사의 문의·기록에 메모로 남깁니다">기록에 남기기</button>`}
+          <button class="btn" style="font-size:10px" onclick="clearExhAdvice()">닫기</button>
+        </div></div>` : ''}
+  </div>`;
+}
+export async function askExhAdvice(){
+  const x = getExhibitorById(drId);
+  const q = String(document.getElementById('exh-advice-q')?.value || '').trim();
+  if(!x || !q) return;
+  exhAdvice = { id: x.id, q, loading: true };
+  renderExhDr();
+  const mailSteps = exhMailSteps(x.event_id);
+  const mailLabel = (kind) => {
+    if(kind === 'inquiry') return '문의';
+    if(kind === 'note') return '메모';
+    if(kind === 'reply') return '회신';
+    const k = String(kind || '').replace(/^exh-/, '');
+    return (mailSteps.find(s => s.key === k) || {}).label || '';
+  };
+  const st = settleState(x);
+  const r = await aiExhAdvice({
+    question: q,
+    today: td(),
+    lang: exhIsEnglish(x) ? '영문' : '국문',
+    cancelled: x.status === CANCELLED,
+    boothType: x.booth_type || '',
+    selfBuild: x.booth_type === SELF_BUILD_TYPE,
+    bookOnly: isBookOnly(x),
+    steps: STEPS.map(s => { const c = cellState(x, s); return { key: s.key, label: s.label, state: c.state, due: c.due?.date || '', tab: ADVICE_TAB[s.key] || 'progress' }; }),
+    settle: { state: st.state, due: st.due || '', overdue: !!st.overdue },
+    tax: taxNeed(x).kind || '',
+    inquiries: openInquiriesFor(x.id).length,
+    mails: mailSteps.map(s => ({ key: s.key, label: s.label, state: exhMailState(x, s) })),
+    // 기록은 날짜·방향·종류만 — 제목·본문·상대 주소는 보내지 않는다
+    logs: logsFor(x.id).filter(l => l.kind !== 'view')
+      .slice().sort((p, q2) => String(q2.ts || '').localeCompare(String(p.ts || ''))).slice(0, 15)
+      .map(l => ({ date: String(l.ts || '').slice(0, 10), dir: l.direction === 'in' ? '받음' : l.direction === 'out' ? '보냄' : '', kind: mailLabel(l.kind) })),
+  });
+  if(!exhAdvice || exhAdvice.id !== x.id) return;
+  exhAdvice = r.ok ? { id: x.id, q, ans: { summary: r.summary, todo: r.todo || [], caution: r.caution || '' } }
+    : { id: x.id, q, err: '답을 받지 못했어요: ' + (r.error || '') };
+  renderExhDr();
+}
+export function exhAdviceAct(action, arg){
+  const x = getExhibitorById(drId);
+  if(!x) return;
+  if(action === 'mail'){ exhMailStep = arg; exhSkipDefault = new Set(); exhReply = null; drTab = 'mail'; renderExhDr(); }
+  else if(action === 'tab') switchExhDT(arg);
+  else if(action === 'mailedit') window.openExhMailEditor?.(x.event_id, arg || undefined);
+}
+export async function saveExhAdvice(){
+  const x = getExhibitorById(drId);
+  const a = exhAdvice;
+  if(!x || !a || !a.ans || a.id !== x.id) return;
+  const body = [a.ans.summary, ...a.ans.todo.map((t, i) => `${i + 1}. ${t.text}`), a.ans.caution ? `주의: ${a.ans.caution}` : '']
+    .filter(Boolean).join('\n');
+  const ok = await addRow(EXH_LOGS, {
+    id: localId('XL-'), exhibitor_id: x.id, kind: 'note', ts: nowStamp(),
+    direction: '', channel: '메모', counterpart: '', category: '✨ 상황 상담',
+    subject: a.q, body, answered_at: '', answer: '', status: 'done',
+    author_email: currentUser?.email || '', author_name: currentUser?.name || '',
+  }, saveExhLog);
+  if(!ok) return;
+  exhAdvice = { ...a, saved: true };
+  renderExhDr();
+}
+export function clearExhAdvice(){ exhAdvice = null; renderExhDr(); }
+window.askExhAdvice = askExhAdvice;
+window.exhAdviceAct = exhAdviceAct;
+window.saveExhAdvice = saveExhAdvice;
+window.clearExhAdvice = clearExhAdvice;
 
 async function addRow(arr, rec, saveFn, label){
   arr.push(rec);

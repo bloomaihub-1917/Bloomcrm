@@ -500,5 +500,100 @@ router.post('/speaker-advice', async (req, res) => {
   }
 });
 
+/* 전시 참가사 상황 상담 — 연사 상담(/speaker-advice)과 같은 틀, 전시용 기능 설명·단추.
+   회사명·담당자·금액·메일 제목·본문은 보내지 않는다. 진행 항목의 상태, 정산 «상태»(미입금 등),
+   메일 단계별 차례, 기록의 날짜·방향·종류만 보낸다.
+   body: { question, today, lang, cancelled, boothType, selfBuild, bookOnly, steps:[{key,label,state,due,tab}],
+           settle:{state,due,overdue}, tax, inquiries, mails:[{key,label,state}], logs:[{date,dir,kind}] } */
+const EXH_CRM_GUIDE = [
+  '우리 CRM(전시 참가사 관리)에서 담당자가 할 수 있는 일:',
+  '- 진행 항목: 매뉴얼 발송 → 매뉴얼 회신 → 신청서 → 부스 배정 → (독립부스면) 부스 도면 → 인보이스 → 세금계산서 → 입금 → 그래픽 → 기본 시공 → 도록 → 현장. 항목마다 done/todo/warn(마감 지남·확인 필요)/part/na.',
+  '- 드로어 탭(action=tab): contact(담당자), apply(신청항목: 신청서·누락 항목), progress(진행: 매뉴얼·부스 배정·기본시공·현장 날짜 찍기/지우기), billing(정산: 인보이스 발행·재발행·무효, 세금계산서, 입금 기록, 완납 처리), graphic(그래픽 단계), book(프로그램북·도록), logs(문의·기록: 문의 답변·메모), box(메일함), mail(메일 쓰기).',
+  '- «메일 초안»(action=mail, arg=메일 단계 key): 그 단계 문구가 채워진 메일 쓰기를 연다. 이미 보낸 단계도 다시 보낼 수 있다. «note»는 자유 안내.',
+  '- «메일 단계 편집»(action=mailedit, arg=메일 단계 key 또는 ""): 행사 전체의 단계 문구를 고치거나 «다시 보내기 묶음»을 열어 여러 기업에 다시 보낼 대상을 정한다.',
+  '- 인보이스 금액이 틀리면 정산 탭에서 기존 인보이스를 무효 처리하고 새로 발행한 뒤 다시 보낸다. 입금은 정산 탭에 기록한다.',
+  '- 날짜로 끝나는 항목(매뉴얼 발송·회신, 부스 배정, 현장 등)은 진행 탭에서 날짜를 지워 되돌린다.',
+].join(NL);
+router.post('/exh-advice', async (req, res) => {
+  if (!enabled()) return res.status(503).json({ ok: false, error: 'AI가 꺼져 있어요(ANTHROPIC_API_KEY 없음)' });
+  const b = req.body || {};
+  const str = (v, n) => String(v || '').slice(0, n);
+  const question = str(b.question, 500).trim();
+  if (!question) return res.status(400).json({ ok: false, error: '상황을 적어주세요' });
+  const TABS = ['contact', 'apply', 'progress', 'billing', 'graphic', 'book', 'logs', 'box', 'mail'];
+  const steps = (Array.isArray(b.steps) ? b.steps : []).slice(0, 20).map((s) => ({
+    key: str(s.key, 40), label: str(s.label, 30), state: str(s.state, 10), due: str(s.due, 10), tab: TABS.includes(s.tab) ? s.tab : '',
+  }));
+  const mails = (Array.isArray(b.mails) ? b.mails : []).slice(0, 30).map((m) => ({ key: str(m.key, 40), label: str(m.label, 40), state: str(m.state, 10) })).filter((m) => m.key);
+  const logs = (Array.isArray(b.logs) ? b.logs : []).slice(0, 15).map((l) => ({ date: str(l.date, 10), dir: str(l.dir, 6), kind: str(l.kind, 40) }));
+  const settle = b.settle || {};
+  const mailKeys = mails.map((m) => m.key);
+
+  const schema = {
+    type: 'object', additionalProperties: false, required: ['summary', 'todo', 'caution'],
+    properties: {
+      summary: { type: 'string' },
+      todo: { type: 'array', items: {
+        type: 'object', additionalProperties: false, required: ['text', 'action', 'arg'],
+        properties: { text: { type: 'string' }, action: { type: 'string', enum: ['none', 'mail', 'tab', 'mailedit'] }, arg: { type: 'string' } },
+      } },
+      caution: { type: 'string' },
+    },
+  };
+  const ST = { done: '끝남', todo: '아직', warn: '확인 필요·마감 지남', part: '일부', na: '해당 없음' };
+  const MST = { due: '보낼 차례', late: '마감 지남·재발송', resend: '다시 보낼 차례', sent: '보냄·기다림', done: '끝남', na: '해당 없음', free: '자유' };
+  const prompt = [
+    '행사 사무국 담당자가 전시 참가사 한 곳에 대해 상황을 물어봅니다. 이 CRM에서 무엇을 어떤 순서로 하면 되는지 답해 주세요.',
+    '',
+    EXH_CRM_GUIDE,
+    '',
+    '답하는 법:',
+    '- summary: 한두 문장 결론.',
+    '- todo: 할 일 2~5개를 순서대로, 각 한국어 한 문장. 맞는 단추가 있으면 action·arg(메일 단계 key 또는 탭 key), 사람이 직접 할 일이면 action=none, arg="".',
+    '- 아래에 실제로 있는 메일 단계 key·탭만 쓰세요.',
+    '- caution: 실수하기 쉬운 점 한 줄, 없으면 "".',
+    '- 이 회사의 이름·금액·메일 내용은 모릅니다. 상태만 보고 답하세요.',
+    '',
+    `오늘: ${str(b.today, 10)}`,
+    `참가 상태: ${b.cancelled ? '취소' : '참가'} · 부스 종류: ${str(b.boothType, 30) || '-'}${b.selfBuild ? '(독립부스)' : ''}${b.bookOnly ? ' · 도록만 참가' : ''} · 메일 언어: ${str(b.lang, 10) || '국문'}`,
+    `진행 항목 (key | 이름 | 상태 | 마감 | 다루는 탭):${NL}${steps.map((s) => [s.key, s.label, ST[s.state] || s.state, s.due || '-', s.tab || '-'].join(' | ')).join(NL)}`,
+    `정산: ${str(settle.state, 10) || '-'}${settle.overdue ? ' · 입금 기한 지남' : ''}${settle.due ? ` · 기한 ${str(settle.due, 10)}` : ''} · 세금계산서: ${str(b.tax, 10) || '-'} · 답 안 한 문의: ${Number(b.inquiries) || 0}건`,
+    `메일 단계 (key | 이름 | 차례):${NL}${mails.map((m) => [m.key, m.label, MST[m.state] || m.state].join(' | ')).join(NL)}`,
+    `최근 기록 (날짜 | 방향 | 종류):${NL}${logs.map((l) => [l.date, l.dir, l.kind].join(' | ')).join(NL) || '없음'}`,
+    '',
+    `상황: ${question}`,
+  ].join(NL);
+
+  try {
+    const r = await ai().beta.messages.create({
+      model: MODEL,
+      max_tokens: 8000,
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      output_config: { effort: 'medium', format: { type: 'json_schema', schema } },
+      messages: [{ role: 'user', content: prompt }],
+    }, { timeout: 55000, maxRetries: 0 });
+    if (r.stop_reason === 'refusal') return res.status(502).json({ ok: false, error: 'AI가 답하지 않았어요' });
+    const out = JSON.parse(r.content.filter((x) => x.type === 'text').map((x) => x.text).join(''));
+    const todo = (out.todo || []).slice(0, 6).map((t) => {
+      let { action, arg } = t;
+      const ok = action === 'tab' ? TABS.includes(arg)
+        : action === 'mail' ? mailKeys.includes(arg)
+        : action === 'mailedit' ? (!arg || mailKeys.includes(arg))
+        : true;
+      if (!ok) { action = 'none'; arg = ''; }
+      if (action === 'none') arg = '';
+      return { text: String(t.text || '').slice(0, 300), action, arg };
+    });
+    res.json({ ok: true, summary: String(out.summary || '').slice(0, 400), todo, caution: String(out.caution || '').slice(0, 300) });
+  } catch (e) {
+    if (e instanceof Anthropic.APIConnectionTimeoutError) return res.status(504).json({ ok: false, error: '시간 안에 끝나지 않았어요' });
+    if (e instanceof Anthropic.RateLimitError) return res.status(429).json({ ok: false, error: 'AI 요청이 많아요 — 잠시 뒤에 다시' });
+    if (e instanceof Anthropic.AuthenticationError) return res.status(503).json({ ok: false, error: 'AI 키가 맞지 않아요' });
+    if (e instanceof Anthropic.APIError) return res.status(502).json({ ok: false, error: `AI 오류 (${e.status || '연결'})` });
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 module.exports = router;
 module.exports.shape = shape;
