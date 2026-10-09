@@ -156,16 +156,6 @@
     </div>
     <!-- CO sidebar -->
     <div class="sbp" id="sbp-co">
-      <div class="sbs s-q"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">기업 검색</div></div>
-      <!-- 질문으로 찾기 (company-tab.js:askCoAi) — 질문만 서버로 가고, 거르기는 화면이 한다 -->
-      <div style="display:flex;gap:4px;padding:4px 10px 0">
-        <input class="fi" id="co-ai-q" style="flex:1;min-width:0;font-size:11px;padding:4px 6px"
-          placeholder="✨ 질문으로 찾기 — 예: 2026 KIC 참가사 중 미납 있는 곳"
-          onkeydown="if(event.key==='Enter')askCoAi()"
-          title="질문과 행사·업종·국가 이름만 AI에게 보냅니다. 기업명·금액은 보내지 않아요">
-        <button class="btn bs" style="font-size:10.5px;padding:3px 7px" onclick="askCoAi()">찾기</button>
-      </div>
-      </div>
       <div class="sbs s-c"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">기업 섹터</div></div>
       <div class="sbi" id="co-catf"></div></div>
       <div class="sbs s-c"><div class="sbs-h"><div class="sbs-bar"></div><div class="sbs-lbl">카테고리 코드</div></div>
@@ -824,6 +814,16 @@
     <button class="btn bp" onclick="openAddOrgModal()" style="gap:4px">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>기업 추가
     </button>
+  </div>
+  <!-- 질문으로 찾기 (company-tab.js:askCoAi) — Master DB와 같은 자리(위쪽 바 바로 아래).
+       질문만 서버로 가고, 거르기는 화면이 한다. 본문 표와 사이드바 목록을 함께 거른다 -->
+  <div class="db-bar" id="co-ai-bar" style="gap:8px;flex-wrap:wrap;padding-top:6px;padding-bottom:6px;font-size:11.5px">
+    <input class="fi" id="co-ai-q" style="flex:1;min-width:240px;max-width:520px;font-size:12px"
+      placeholder="✨ 질문으로 찾기 — 예: 2026 KIC 참가사 중 미납 있는 곳"
+      onkeydown="if(event.key==='Enter')askCoAi()"
+      title="질문과 행사·업종·국가 이름만 AI에게 보냅니다. 기업명·금액은 보내지 않아요">
+    <button class="btn bs" style="font-size:11px" onclick="askCoAi()">찾기</button>
+    <span id="co-ai-msg" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"></span>
   </div>
   <div class="dbm">
     <div class="co-dash" id="co-dash" style="flex:1;overflow:auto;padding:18px 22px"></div>

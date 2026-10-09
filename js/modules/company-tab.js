@@ -942,6 +942,8 @@ export async function askCoAi(){
   if(!r.ok){ coAiMsg = '<span style="color:var(--re)">찾지 못했어요: ' + escapeHtml(r.error || '') + '</span>'; renderCoList(); return; }
   coAiMsg = '';
   coAi = { q, plan: r.plan };
+  // 기업을 열어 둔 채 물었으면 목록으로 돌아가 결과를 보여 준다
+  if(document.getElementById('cdt')?.style.display !== 'none') showCoFilteredList();
   renderCoList();
 }
 export function clearCoAi(){
@@ -951,9 +953,12 @@ export function clearCoAi(){
   renderCoList();
 }
 let coAiMsg = '';
-function coAiBarHtml(n){
-  if(coAiMsg) return `<div style="padding:8px 12px;font-size:11px;color:var(--i3)">${coAiMsg}</div>`;
-  if(!coAi) return '';
+/* 질문 결과는 위쪽 «질문으로 찾기» 줄(#co-ai-msg)에 한 줄로 — Master DB와 같은 자리 */
+function renderCoAiMsg(n){
+  const el = document.getElementById('co-ai-msg');
+  if(!el) return;
+  if(coAiMsg){ el.innerHTML = `<span style="color:var(--i3)">${coAiMsg}</span>`; return; }
+  if(!coAi){ el.innerHTML = ''; return; }
   const p = coAi.plan;
   const evs = (k) => (p[k] || []).map(e => (EVENT_LIST.find(x => x.key === e) || {}).short || e).join(', ');
   const bits = [
@@ -969,57 +974,63 @@ function coAiBarHtml(n){
     p.unpaid ? '미납 있음' : '',
     p.overdue ? '기한 지난 미납' : '',
   ].filter(Boolean);
-  return `<div style="padding:8px 12px;border-bottom:1px solid var(--i6);font-size:11px;display:flex;flex-direction:column;gap:3px">
-    <div><span class="pill p-blue" style="cursor:default" title="${escAttr(coAi.q)}">✨ ${escapeHtml(p.explain || coAi.q)}</span> <b>${n}곳</b></div>
-    <div style="color:var(--i4)">${escapeHtml(bits.join(' · '))}</div>
-    ${p.unsupported ? `<div style="color:var(--am)">⚠️ 반영 못 한 조건: ${escapeHtml(p.unsupported)}</div>` : ''}
-    <div><button class="btn bs" style="font-size:10px" onclick="clearCoAi()">✕ 질문 지우기</button></div>
-  </div>`;
+  el.innerHTML = `<span class="pill p-blue" style="cursor:default" title="${escAttr(coAi.q)}">✨ ${escapeHtml(p.explain || coAi.q)}</span>
+    <b>${n}곳</b>
+    <span style="color:var(--i4)">${escapeHtml(bits.join(' · '))}</span>
+    ${p.unsupported ? `<span style="color:var(--am)">⚠️ 반영 못 한 조건: ${escapeHtml(p.unsupported)}</span>` : ''}
+    <button class="btn bs" style="font-size:10px" onclick="clearCoAi()">✕ 질문 지우기</button>`;
 }
 
-export function renderCoList(q2=''){
-  const listEl = document.getElementById('co-ls');
-  if(!listEl) return;
-  const q=q2||_coDashQ;  // 검색칸은 위쪽 바 하나(setCoDashQ)
-  let list=[...CO_DB];
+/* 기업 DB의 거르기는 여기 한 곳 — 본문 표와 사이드바 목록이 같은 목록을 보여야 한다.
+   전에는 둘이 따로 걸러서, 카테고리 코드·종류·질문으로 찾기를 눌러도 본문 표는
+   그대로였고 검색 규칙(법인격·기호 무시)도 사이드바에만 있었다.
+   검색 → 분야 → 섹터 → 코드 → 국내/해외 → 종류 → 질문 순 */
+function coSearchHit(c, q){
+  const lq = q.trim().toLowerCase();
+  if(!lq) return true;
   /* 옛 이름으로도 찾을 수 있어야 한다 — 사명이 바뀐 회사를 옛 이름으로 기억하는
      사람이 있다. 국문·영문 어느 쪽으로 쳐도 같은 기업이 나와야 하고(한쪽만 있는
      기업도 있다), 연락처에 적힌 표기(branches)로도 찾혀야 한다.
 
      견줄 때는 양쪽을 같은 모양으로 눌러서 본다. 앞뒤 공백만 들어가도 못 찾거나
-     '(주)메디라마'를 '주메디라마'로 쳐서 못 찾는 일이 실제로 있었다. */
-  if(q && q.trim()){
-    const lq = q.trim().toLowerCase();
-    // 법인격을 떼는 규칙은 한 곳(stripLegalForm)만 둔다 — 검색과 식별이
-    // 서로 다른 규칙을 쓰면 "목록엔 있는데 검색은 안 되는" 회사가 생긴다
-    const squash = (v) => stripLegalForm(v).toLowerCase().replace(/[^a-z0-9가-힣]/g, '');
-    const sq = squash(lq);
-    list = list.filter(c => {
-      // 대표번호나 소속 연락처 번호로 쳐도 그 기업이 나온다
-      if(phoneMatch(lq, c.phone, (c.contacts || []).map(k => k.phone))) return true;
-      const fields = [c.nameKo, c.nameEn, c.sector, c.abbr, c.mainBranch,
-        ...(c.aliases || []), ...(c.branches || [])];
-      // 친 그대로 걸리면 그걸로 됐고(부분어·띄어쓰기 포함 검색),
-      // 아니면 기호·법인격을 눌러 없앤 뒤 다시 견준다
-      return fields.some(v => v && String(v).toLowerCase().includes(lq))
-        || (sq && fields.some(v => v && squash(v).includes(sq)));
-    });
-  }
-  if(coKindF) list = list.filter(c => c.kind === coKindF);
-  if(coCats().length){
-    const want = new Set(coCats().map(sectorKey));
-    list = list.filter(c => (c.sectors && c.sectors.length ? c.sectors : [c.sector]).some(s => s && want.has(sectorKey(s))));
-  }
+     '(주)메디라마'를 '주메디라마'로 쳐서 못 찾는 일이 실제로 있었다.
+     법인격을 떼는 규칙은 한 곳(stripLegalForm)만 둔다 — 검색과 식별이
+     서로 다른 규칙을 쓰면 "목록엔 있는데 검색은 안 되는" 회사가 생긴다 */
+  const squash = (v) => stripLegalForm(v).toLowerCase().replace(/[^a-z0-9가-힣]/g, '');
+  const sq = squash(lq);
+  // 대표번호나 소속 연락처 번호로 쳐도 그 기업이 나온다
+  if(phoneMatch(lq, c.phone, (c.contacts || []).map(k => k.phone))) return true;
+  const fields = [c.nameKo, c.nameEn, c.sector, c.abbr, c.mainBranch,
+    ...(c.aliases || []), ...(c.branches || [])];
+  return fields.some(v => v && String(v).toLowerCase().includes(lq))
+    || (sq && fields.some(v => v && squash(v).includes(sq)));
+}
+function coFilteredList(){
+  let list = CO_DB.filter(c => coSearchHit(c, _coDashQ));
   if(coDomainF){
     const names = coDomainNameSet();
-    if(names) list = list.filter(c =>
-      (c.sectors && c.sectors.length ? c.sectors : [c.sector||'미분류']).some(s => names.has(sectorKey(s))));
+    if(names) list = list.filter(c => coSecsOf(c).some(s => names.has(sectorKey(s))));
   }
-  if(coCodeF)list=list.filter(c=>c.catCode && c.catCode.startsWith(coCodeF+'-'));
-  if(coCountryF)list=list.filter(c=>companyCountryGroup(c)===coCountryF);
+  if(coCats().length){
+    const want = new Set(coCats().map(sectorKey));
+    list = list.filter(c => coSecsOf(c).some(s => s && want.has(sectorKey(s))));
+  }
+  if(coCodeF) list = list.filter(c => c.catCode && c.catCode.startsWith(coCodeF + '-'));
+  if(coCountryF) list = list.filter(c => companyCountryGroup(c) === coCountryF);
+  if(coKindF) list = list.filter(c => c.kind === coKindF);
   if(coAi) list = list.filter(c => coAiMatches(c, coAi.plan));
+  return list;
+}
 
-  const toggleHtml = coAiBarHtml(list.length) + renderCoColumnToggleHtml();
+export function renderCoList(){
+  const listEl = document.getElementById('co-ls');
+  // 본문 표도 같은 거르기를 따른다 — 사이드바만 바뀌고 표가 그대로인 일이 없게
+  renderCoDashTable();
+  if(!listEl) return;
+  const list = coFilteredList();
+  renderCoAiMsg(list.length);
+
+  const toggleHtml = renderCoColumnToggleHtml();
 
   if(!list.length){
     listEl.innerHTML = toggleHtml + (CO_DB.length === 0
@@ -1187,7 +1198,6 @@ export async function submitAddOrg(){
   selectCo(r.id);
 }
 
-export function searchCo(v){renderCoList(v)}
 export function searchCoM(v){ setCoDashQ(v); }
 
 /* 기업 검색칸은 위쪽 바(#co-q)와 모바일 줄(#co-q-m) — 사이드바 검색칸은 없앴다.
@@ -1367,34 +1377,15 @@ export function setCoDashQ(v){
   _coDashQ = v;
   // 데스크톱·모바일 칸이 서로 다른 값을 들고 있지 않게 맞춘다
   ['co-q','co-q-m'].forEach(id => { const e = document.getElementById(id); if(e && e.value !== v) e.value = v; });
-  renderCoList();
   if(document.getElementById('cdt')?.style.display !== 'none') showCoFilteredList();
-  else renderCoDashTable();
+  renderCoList();   // 본문 표도 함께 다시 그린다
 }
 
 /* 표 위 필터를 다 거친 목록 — 검색어만 빼고. 칩 숫자는 이것으로 센다 */
 function coDashBase(){
   return coCountryF ? CO_DB.filter(c => companyCountryGroup(c) === coCountryF) : CO_DB;
 }
-function coDashList(){
-  let list = coDashBase();
-  if(coDomainF){
-    const keys = coDomainKeys(coDomainF);
-    list = list.filter(c => coSecsOf(c).some(s => keys.has(sectorKey(s))));
-  }
-  const cats = coCats();
-  if(cats.length){
-    const want = new Set(cats.map(sectorKey));
-    list = list.filter(c => coSecsOf(c).some(s => want.has(sectorKey(s))));
-  }
-  const q = _coDashQ.trim().toLowerCase();
-  if(q){
-    list = list.filter(c => phoneMatch(q, c.phone, (c.contacts || []).map(k => k.phone))
-      || [c.nameKo, c.nameEn, c.abbr, ...(c.aliases || []), ...(c.branches || [])]
-        .some(v => v && String(v).toLowerCase().includes(q)));
-  }
-  return list;
-}
+function coDashList(){ return coFilteredList(); }
 
 function coChip(on, label, n, onclick, title){
   return `<button class="btn bs${on ? ' bp' : ''}" style="font-size:11px;padding:3px 10px;gap:5px" onclick="${onclick}"${title ? ` title="${escAttr(title)}"` : ''}>
@@ -2637,7 +2628,6 @@ window.onCoDragStart = onCoDragStart;
 window.onCoDropToSector = onCoDropToSector;
 window.setCoDomain = setCoDomain;
 window.toggleCoDomain = toggleCoDomain;
-window.searchCo = searchCo;
 window.askCoAi = askCoAi;
 window.clearCoAi = clearCoAi;
 window.searchCoM = searchCoM;
