@@ -397,5 +397,108 @@ router.post('/org-enrich', async (req, res) => {
   }
 });
 
+/* 연사 상황 상담 — «발표자료 파일이 깨져서 다시 받아야 해» 같은 질문에 할 일을 답한다.
+   메일 본문·이름·메일 주소·제목은 보내지 않는다(메일 제목에 이름이 들어간다).
+   보내는 것: 질문, 역할·섭외 상태·언어, 연락 단계(이름·끝났는지·지금 단계·마감), 남은 일 이름,
+   최근 기록의 날짜·방향·단계 이름. 화면이 답의 단추(action)를 실제 기능에 잇는다.
+   body: { question, today, lang, roles, status, steps:[{key,label,applies,done,current,resend,since,due,undoable}],
+           remind, pending:[{label,when,due}], logs:[{date,dir,step,channel}] } */
+const SPEAKER_CRM_GUIDE = [
+  '우리 CRM(행사 연사 관리)에서 담당자가 할 수 있는 일:',
+  '- 연락 단계: 행사마다 초청·가이드 발송 → 참석 회신 받기 → 자료 받기 → 참가 확정 → 숙박·항공 안내 → 발표자료 받기 → 감사 메일 순서(행사가 단계를 더하거나 끌 수 있다). 지금 할 일은 해당되면서 안 끝난 첫 단계.',
+  '- «✉ 메일 초안 만들기»(action=mail, arg=단계 key): 그 단계의 메일 양식이 채워진 초안을 연다. 다른 단계의 메일도 같은 단추로 다시 보낼 수 있다. 자료 받기 단계는 이미 요청을 보냈으면 자동으로 «독촉» 문구가 된다.',
+  '- «📨 여러 연사에게»(action=bulk, arg=단계 key): 같은 단계 메일을 그 단계 차례인 연사들에게 한 번에.',
+  '- «↶ 이전 단계로»(action=undo, arg=단계 key): 날짜를 찍어 끝나는 단계(초청 발송·참석 회신·참가 확정)를 안 한 것으로 되돌린다. 보낸 메일 기록은 남는다. undoable=true인 단계만 된다.',
+  '- 자료를 받았다고 표시한 칸을 다시 «안 받음»으로 돌리면 자료 받기 단계가 다시 열린다 — 그 자료가 있는 탭(action=tab)에서 칸을 고친다. 탭: basic(기본: 소속·사진·동의서), bio(이력: 약력·CV), talk(발제: 제목·초록·발표자료), offer(제공사항: 연사료·숙박·항공), bank(계좌·여권).',
+  '- «✎ 단계 편집»(action=editflow): 행사 전체의 단계를 고친다. 기본 단계에 «기준일»을 적으면 그 단계를 이미 받은 연사에게 «다시 보내기»가 걸린다(일정·장소가 바뀌어 모두에게 다시 알려야 할 때). 일정 변경 안내 같은 단계를 새로 더할 수도 있다.',
+  '- 받은 메일·통화는 연사 «메일함» 탭에 기록으로 남는다.',
+].join(NL);
+router.post('/speaker-advice', async (req, res) => {
+  if (!enabled()) return res.status(503).json({ ok: false, error: 'AI가 꺼져 있어요(ANTHROPIC_API_KEY 없음)' });
+  const b = req.body || {};
+  const str = (v, n) => String(v || '').slice(0, n);
+  const question = str(b.question, 500).trim();
+  if (!question) return res.status(400).json({ ok: false, error: '상황을 적어주세요' });
+  const steps = (Array.isArray(b.steps) ? b.steps : []).slice(0, 20).map((s) => ({
+    key: str(s.key, 40), label: str(s.label, 40), applies: !!s.applies, done: !!s.done, current: !!s.current,
+    resend: !!s.resend, since: str(s.since, 10), due: str(s.due, 10), undoable: !!s.undoable,
+  })).filter((s) => s.key);
+  const pending = (Array.isArray(b.pending) ? b.pending : []).slice(0, 20).map((p) => ({ label: str(p.label, 30), when: str(p.when, 10), due: str(p.due, 10) }));
+  const logs = (Array.isArray(b.logs) ? b.logs : []).slice(0, 15).map((l) => ({ date: str(l.date, 10), dir: str(l.dir, 6), step: str(l.step, 40), channel: str(l.channel, 10) }));
+  const TABS = ['basic', 'bio', 'talk', 'offer', 'bank'];
+  const stepKeys = steps.map((s) => s.key);
+
+  const schema = {
+    type: 'object', additionalProperties: false, required: ['summary', 'todo', 'caution'],
+    properties: {
+      summary: { type: 'string' },
+      todo: { type: 'array', items: {
+        type: 'object', additionalProperties: false, required: ['text', 'action', 'arg'],
+        properties: {
+          text: { type: 'string' },
+          action: { type: 'string', enum: ['none', 'mail', 'bulk', 'undo', 'tab', 'editflow'] },
+          arg: { type: 'string' },
+        },
+      } },
+      caution: { type: 'string' },
+    },
+  };
+  const when = { now: '지금 받을 것', later: '다음에 받을 것', ours: '우리가 할 일', nice: '있으면 좋음' };
+  const prompt = [
+    '행사 사무국 담당자가 연사 한 명에 대해 상황을 물어봅니다. 이 CRM에서 무엇을 어떤 순서로 하면 되는지 답해 주세요.',
+    '',
+    SPEAKER_CRM_GUIDE,
+    '',
+    '답하는 법:',
+    '- summary: 한두 문장으로 결론(예: «자료 받기를 다시 열고 발표자료 재요청 메일을 보내면 됩니다»).',
+    '- todo: 할 일을 순서대로 2~5개. 각 줄은 한국어 한 문장. 그 줄에 맞는 단추가 있으면 action과 arg(단계 key 또는 탭)를 적고, 사람이 직접 할 일(전화, 파일 확인 등)이면 action=none, arg="".',
+    '- 아래 연사 상태에 실제로 있는 단계 key만 쓰세요. undo는 undoable=true인 단계에만.',
+    '- caution: 실수하기 쉬운 점이 있으면 한 줄(예: 다른 연사에게도 같은 문제가 있는지 확인). 없으면 "".',
+    '- 이 연사의 이름이나 메일 내용은 모릅니다. 상태만 보고 답하세요.',
+    '',
+    `오늘: ${str(b.today, 10)}`,
+    `역할: ${(Array.isArray(b.roles) ? b.roles : []).map((r) => str(r, 20)).join(', ') || '(미배정)'} · 섭외 상태: ${str(b.status, 20) || '-'} · 메일 언어: ${str(b.lang, 10) || '국문'}`,
+    `연락 단계 (key | 이름 | 상태):${NL}${steps.map((s) => [s.key, s.label,
+      !s.applies ? '해당 없음' : s.current ? '지금 할 일' : s.done ? '끝남' : '아직',
+      s.resend ? `다시 보내기(기준일 ${s.since})` : '', s.due ? `마감 ${s.due}` : '', s.undoable ? 'undoable' : ''].filter(Boolean).join(' | ')).join(NL)}`,
+    b.remind ? '자료 요청 메일을 이미 보냈고 아직 덜 받음(다음 자료 메일은 독촉).' : '',
+    `남은 일: ${pending.map((p) => `${p.label}(${when[p.when] || p.when}${p.due ? `, 마감 ${p.due}` : ''})`).join(', ') || '없음'}`,
+    `최근 기록 (날짜 | 방향 | 단계 | 채널):${NL}${logs.map((l) => [l.date, l.dir, l.step || '-', l.channel].join(' | ')).join(NL) || '없음'}`,
+    '',
+    `상황: ${question}`,
+  ].filter((x) => x !== '').join(NL);
+
+  try {
+    const r = await ai().beta.messages.create({
+      model: MODEL,
+      max_tokens: 8000,
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      output_config: { effort: 'medium', format: { type: 'json_schema', schema } },
+      messages: [{ role: 'user', content: prompt }],
+    }, { timeout: 55000, maxRetries: 0 });
+    if (r.stop_reason === 'refusal') return res.status(502).json({ ok: false, error: 'AI가 답하지 않았어요' });
+    const out = JSON.parse(r.content.filter((x) => x.type === 'text').map((x) => x.text).join(''));
+    // 단추는 실제로 있는 단계·탭에만 — 아니면 글만 남긴다
+    const todo = (out.todo || []).slice(0, 6).map((t) => {
+      let { action, arg } = t;
+      const okArg = action === 'tab' ? TABS.includes(arg)
+        : ['mail', 'bulk'].includes(action) ? stepKeys.includes(arg)
+        : action === 'undo' ? steps.some((s) => s.key === arg && s.undoable)
+        : true;
+      if (!okArg) { action = 'none'; arg = ''; }
+      if (action === 'none' || action === 'editflow') arg = '';
+      return { text: String(t.text || '').slice(0, 300), action, arg };
+    });
+    res.json({ ok: true, summary: String(out.summary || '').slice(0, 400), todo, caution: String(out.caution || '').slice(0, 300) });
+  } catch (e) {
+    if (e instanceof Anthropic.APIConnectionTimeoutError) return res.status(504).json({ ok: false, error: '시간 안에 끝나지 않았어요' });
+    if (e instanceof Anthropic.RateLimitError) return res.status(429).json({ ok: false, error: 'AI 요청이 많아요 — 잠시 뒤에 다시' });
+    if (e instanceof Anthropic.AuthenticationError) return res.status(503).json({ ok: false, error: 'AI 키가 맞지 않아요' });
+    if (e instanceof Anthropic.APIError) return res.status(502).json({ ok: false, error: `AI 오류 (${e.status || '연결'})` });
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 module.exports = router;
 module.exports.shape = shape;

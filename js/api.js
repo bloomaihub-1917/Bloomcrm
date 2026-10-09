@@ -1062,3 +1062,4 @@ export const aiCompanyPairs = (body) => aiApi('/company-pairs', 'POST', body);
 export const aiQueryPlan    = (body) => aiApi('/query-plan', 'POST', body);
 export const aiOrgQueryPlan = (body) => aiApi('/org-query-plan', 'POST', body);
 export const aiOrgEnrich     = (body) => aiApi('/org-enrich', 'POST', body);
+export const aiSpeakerAdvice = (body) => aiApi('/speaker-advice', 'POST', body);

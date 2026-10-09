@@ -39,6 +39,7 @@ import {
   saveSpeaker, saveSessionSpeaker,
   saveSpeakerContact, deleteSpeakerContact,
   saveSpeakerLog, sendMail, eventMailFrom, loadMailFiles, mailFilesOf, fileToBase64,
+  aiSpeakerAdvice,
 } from '../api.js';
 import { filterMail, mailFilBar, mailStateHtml, mailActionsHtml, mailToggleAttr, isPending, setMailDone } from './mail-mark.js';
 import { decorate as decorateMailPane } from './mail-pane.js';
@@ -389,8 +390,104 @@ function flowBoxHtml(sp){
         </div></div>`
       : `<div style="font-size:11px;color:var(--g);margin-top:7px">이 행사의 연락 단계를 모두 마쳤어요.${
           prevUndo ? ` <button class="btn" style="font-size:10.5px;margin-left:6px" onclick="undoSpStep('${escAttr(prevUndo.key)}')">↶ 이전 단계로</button>` : ''}</div>`}
+    ${adviceHtml(sp)}
   </div>`;
 }
+
+/* ── ✨ 상황 물어보기 ──
+   «발표자료 파일이 깨져서 다시 받아야 해»처럼 적으면 이 CRM에서 무엇을 어떤 순서로
+   하면 되는지 답한다(backend-node/routes/ai.js /speaker-advice). 답의 줄마다 그 일을
+   하는 단추(메일 초안·이전 단계로·탭 이동·단계 편집)를 붙인다.
+   보내는 것은 질문과 이 연사의 «상태»뿐이다 — 단계·남은 일 이름, 기록의 날짜·방향·단계.
+   이름·메일 주소·메일 제목·본문은 보내지 않는다(제목에 이름이 들어간다).
+   드로어는 칸 하나만 바뀌어도 통째로 다시 그려지므로 질문·답은 여기 붙들어 둔다. */
+let spAdvice = null;   // { spId, q, loading, err, ans:{summary,todo,caution}, saved }
+function adviceHtml(sp){
+  const a = spAdvice && spAdvice.spId === sp.id ? spAdvice : null;
+  const btn = (t) => {
+    const label = { mail: '✉ 메일 초안', bulk: '📨 여러 연사에게', undo: '↶ 되돌리기', tab: '→ 탭 열기', editflow: '✎ 단계 편집' }[t.action];
+    return label ? ` <button class="btn" style="font-size:10px;padding:1px 7px" onclick="spAdviceAct('${t.action}','${escAttr(t.arg)}')">${label}</button>` : '';
+  };
+  return `<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--i6)">
+    <div style="display:flex;gap:6px">
+      <input class="fi" id="sp-advice-q" style="flex:1;font-size:11.5px" value="${escAttr(a ? a.q : '')}"
+        placeholder="✨ 상황 물어보기 — 예: 발표자료 파일이 깨져서 다시 받아야 해"
+        onkeydown="if(event.key==='Enter')askSpAdvice()" title="질문과 이 연사의 진행 상태만 AI에게 보냅니다. 이름·메일 내용은 보내지 않아요">
+      <button class="btn" style="font-size:10.5px" onclick="askSpAdvice()" ${a && a.loading ? 'disabled' : ''}>${a && a.loading ? '생각 중…' : '물어보기'}</button>
+    </div>
+    ${a && a.err ? `<div style="font-size:11px;color:var(--re);margin-top:5px">${escapeHtml(a.err)}</div>` : ''}
+    ${a && a.ans ? `<div style="margin-top:7px;padding:8px 10px;background:var(--ad);border-radius:7px;font-size:11.5px;line-height:1.6">
+        <div style="font-weight:700;color:var(--i1)">✨ ${escapeHtml(a.ans.summary)}</div>
+        <ol style="margin:4px 0 0 18px;padding:0">${a.ans.todo.map(t => `<li style="margin:2px 0">${escapeHtml(t.text)}${btn(t)}</li>`).join('')}</ol>
+        ${a.ans.caution ? `<div style="color:var(--am);margin-top:4px">⚠️ ${escapeHtml(a.ans.caution)}</div>` : ''}
+        <div style="display:flex;gap:6px;margin-top:6px;align-items:center">
+          ${a.saved ? '<span style="font-size:10.5px;color:var(--g)">✓ 연사 기록에 남겼어요</span>'
+            : `<button class="btn" style="font-size:10px" onclick="saveSpAdvice()" title="질문과 답을 이 연사의 메일함 기록에 메모로 남겨 다른 담당자도 보게 합니다">기록에 남기기</button>`}
+          <button class="btn" style="font-size:10px" onclick="clearSpAdvice()">닫기</button>
+        </div></div>` : ''}
+  </div>`;
+}
+export async function askSpAdvice(){
+  const sp = getSpeakerById(spId);
+  const q = String(document.getElementById('sp-advice-q')?.value || '').trim();
+  if(!sp || !q) return;
+  spAdvice = { spId: sp.id, q, loading: true };
+  renderSpeakerDr();
+  const f = flowStatus(sp);
+  const label = (k) => (f.steps.find(s => s.key === k) || {}).label || '';
+  const r = await aiSpeakerAdvice({
+    question: q,
+    today: td(),
+    lang: sp.lang_pref || '',
+    roles: rolesOfSpeaker(sp.id),
+    status: sp.status || '',
+    steps: f.steps.map(s => ({ key: s.key, label: s.label, applies: s.applies, done: s.isDone,
+      current: !!(f.current && f.current.key === s.key), resend: !!s.resend, since: s.since || '', due: s.due || '',
+      undoable: s.applies && s.isDone && !s.resend && String(s.done || '').startsWith('field:') })),
+    remind: !!f.remind,
+    pending: pendingItems(sp).map(x => ({ label: x.label, when: x.when, due: x.due || '' })),
+    // 기록은 날짜·방향·단계만 — 제목·본문·상대 주소는 보내지 않는다
+    logs: logsOfSpeaker(sp.id).filter(l => l.kind !== 'view')
+      .slice().sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || ''))).slice(0, 15)
+      .map(l => ({ date: String(l.ts || '').slice(0, 10), dir: l.direction === 'in' ? '받음' : l.direction === 'out' ? '보냄' : '',
+        step: label(l.kind), channel: l.channel || '' })),
+  });
+  if(!spAdvice || spAdvice.spId !== sp.id) return;
+  spAdvice = r.ok ? { spId: sp.id, q, ans: { summary: r.summary, todo: r.todo || [], caution: r.caution || '' } }
+    : { spId: sp.id, q, err: '답을 받지 못했어요: ' + (r.error || '') };
+  renderSpeakerDr();
+}
+export function spAdviceAct(action, arg){
+  const sp = getSpeakerById(spId);
+  if(!sp) return;
+  if(action === 'mail') openFlowDraft(arg);
+  else if(action === 'bulk') window.openSpeakerBulkMail?.(sp.event_id, arg);
+  else if(action === 'undo') undoSpStep(arg);
+  else if(action === 'tab') switchSpeakerDT(arg);
+  else if(action === 'editflow') window.openFlowEditor?.(sp.event_id);
+}
+export async function saveSpAdvice(){
+  const sp = getSpeakerById(spId);
+  const a = spAdvice;
+  if(!sp || !a || !a.ans || a.spId !== sp.id) return;
+  const body = [a.ans.summary, ...a.ans.todo.map((t, i) => `${i + 1}. ${t.text}`), a.ans.caution ? `주의: ${a.ans.caution}` : '']
+    .filter(Boolean).join('\n');
+  const row = {
+    speaker_id: sp.id, kind: 'note', ts: nowStamp(), direction: '', channel: '메모', counterpart: '',
+    category: '✨ 상황 상담', subject: a.q, body, answered_at: '', answer: '', status: 'done',
+    author_email: currentUser?.email || '', author_name: currentUser?.name || '',
+  };
+  const res = await saveSpeakerLog(row);
+  if(!res || (res.ok === false && !res.offline)){ alert('기록에 남기지 못했어요. 잠시 뒤 다시 해주세요.'); return; }
+  SPEAKER_LOGS.push({ ...row, id: res.id || `SL-tmp-${Date.now()}` });
+  spAdvice = { ...a, saved: true };
+  renderSpeakerDr();
+}
+export function clearSpAdvice(){ spAdvice = null; renderSpeakerDr(); }
+window.askSpAdvice = askSpAdvice;
+window.spAdviceAct = spAdviceAct;
+window.saveSpAdvice = saveSpAdvice;
+window.clearSpAdvice = clearSpAdvice;
 /* 단계 되돌리기 — 찍힌 날짜를 지운다. 보낸 메일 기록은 그대로 둔다
    (이미 나간 메일은 되돌릴 수 없고, 무엇을 보냈는지는 남아야 한다). */
 export async function undoSpStep(stepKey){
