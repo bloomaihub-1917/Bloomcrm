@@ -498,6 +498,7 @@ function logItemHtml(t, l, k) {
         ${editing || l.memo ? '' : `<button class="btn" style="${small}" onclick="editLogMemo(${t.id},${k})">+ 메모</button>`}</div>
       <div class="ltx">${escapeHtml(l.text)}</div>
       ${who ? `<div style="font-size:10.5px;color:var(--i4);overflow-wrap:anywhere">${escapeHtml(who)}</div>` : ''}
+      ${l.fwdBy ? `<div style="font-size:10.5px;color:var(--i4)">↪ ${escapeHtml(l.fwdBy)} 전달</div>` : ''}
       ${l.attach ? `<div style="font-size:10.5px;color:var(--i4);overflow-wrap:anywhere">📎 ${escapeHtml(l.attach)}</div>` : ''}
       ${l.cc ? `<div style="font-size:10.5px;color:var(--i4);overflow-wrap:anywhere">참조 ${escapeHtml(l.cc)}</div>` : ''}
       ${l.body ? `<details style="margin-top:4px"><summary style="cursor:pointer;font-size:11px;color:var(--a);font-weight:600">본문 보기</summary>
@@ -534,10 +535,11 @@ const FREE_MAIL = /^(gmail|naver|daum|hanmail|kakao|nate|hotmail|outlook|yahoo|i
 function inboxMatch(t, items) {
   const emails = new Set(mailConOf(t).map(p => p.email.trim().toLowerCase()));
   const doms = new Set([...emails].map(e => e.split('@')[1]).filter(d => d && !FREE_MAIL.test(d)));
-  return items.filter(u => {
-    const a = String(u.from_addr || '').trim().toLowerCase();
+  /* 직원이 전달한 메일은 원래 메일의 보낸 사람·받는 사람·참조로 견준다 */
+  return items.filter(u => (u.fwd ? u.fwd.addrs || [] : [u.from_addr]).some(x => {
+    const a = String(x || '').trim().toLowerCase();
     return emails.has(a) || doms.has(a.split('@')[1]);
-  });
+  }));
 }
 function inboxHtml(t) {
   const c = inboxCache[t.id] || { loading: true };
@@ -548,7 +550,9 @@ function inboxHtml(t) {
   return `<div style="margin-bottom:14px">${head}
     ${rows.length ? rows.map(u => `<div style="border:1px solid var(--i7);border-radius:7px;padding:8px 9px;margin-bottom:6px">
       <div style="font-size:12px;font-weight:600;color:var(--i1)">${escapeHtml(u.subject || '(제목 없음)')}</div>
-      <div style="font-size:10.5px;color:var(--i4);margin:2px 0 6px;overflow-wrap:anywhere">${escapeHtml(u.from_name ? `${u.from_name} <${u.from_addr}>` : u.from_addr)} · ${escapeHtml(u.ts || '')}</div>
+      <div style="font-size:10.5px;color:var(--i4);margin:2px 0 6px;overflow-wrap:anywhere">${u.fwd && u.fwd.from
+        ? `${escapeHtml(u.fwd.from)}${u.fwd.to ? ` → ${escapeHtml(u.fwd.to)}` : ''} · ${escapeHtml(u.fwd.sent || u.ts || '')} · ↪ ${escapeHtml(u.fwd.by)} 전달`
+        : `${escapeHtml(u.from_name ? `${u.from_name} <${u.from_addr}>` : u.from_addr)} · ${escapeHtml(u.ts || '')}`}</div>
       <input class="fi" id="ib-memo-${escAttr(u.id)}" placeholder="메모 (선택) — 무슨 내용인지 한 줄" style="font-size:12px;padding:5px 8px;margin-bottom:6px">
       <div style="display:flex;gap:6px"><button class="btn" style="font-size:11px" onclick="openMailOriginal('un','${escAttr(u.id)}')">원문 보기</button>
         <button class="lsub" style="flex:1" onclick="crmLinkMail(${t.id},'${escAttr(u.id)}')">이력에 넣기</button></div></div>`).join('')

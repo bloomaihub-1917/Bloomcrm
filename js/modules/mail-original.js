@@ -102,6 +102,9 @@ function renderUnassigned(err){
           <span style="font-size:11px;color:var(--i4)">${escapeHtml(u.from_addr || '')}</span>
         </div>
         <div style="font-size:12.5px;font-weight:600;margin-top:3px">${escapeHtml(u.subject || '(제목 없음)')}</div>
+        ${u.fwd ? `<div style="font-size:11px;color:var(--i3);margin-top:3px;padding:4px 7px;background:var(--i8);border-radius:5px;line-height:1.5;overflow-wrap:anywhere">↪ ${escapeHtml(u.fwd.by)} 전달${u.fwd.from
+          ? ` · 원래 <b>${escapeHtml(u.fwd.from)}</b>${u.fwd.to ? ` → ${escapeHtml(u.fwd.to)}` : ''}${u.fwd.sent ? ` · ${escapeHtml(u.fwd.sent)}` : ''}`
+          : ' · 원래 보낸 사람을 못 읽었어요 — 본문을 보고 골라 주세요'}</div>` : ''}
         ${(u.warnings || []).map(w => `<div style="font-size:11px;color:var(--re);margin-top:2px">⚠ ${escapeHtml(w)}</div>`).join('')}
         <details style="margin-top:4px"><summary style="cursor:pointer;font-size:11px;color:var(--i4)">본문 보기</summary>
           <div style="font-size:11.5px;white-space:pre-wrap;line-height:1.5;margin-top:4px;max-height:200px;overflow:auto;color:var(--i2)">${escapeHtml(String(u.body || '').slice(0, 3000))}</div></details>
@@ -110,11 +113,12 @@ function renderUnassigned(err){
             title="${escAttr(s.why)}">→ ${escapeHtml(s.name || '')}에 연결 <span style="font-weight:400">(${escapeHtml(s.why)})</span></button>`).join('')}
           <select class="fi" id="un-pick-${escAttr(u.id)}" style="font-size:11.5px;width:auto;max-width:240px">${opts}</select>
           <button class="btn" style="font-size:10.5px" onclick="linkUnPicked('${escAttr(u.id)}')">연결</button>
-          <label style="font-size:11px;display:flex;gap:4px;align-items:center"><input type="checkbox" id="un-add-${escAttr(u.id)}" checked>이 주소를 연락처로 추가</label>
+          ${u.contact_addr ? `<label style="font-size:11px;display:flex;gap:4px;align-items:center"><input type="checkbox" id="un-add-${escAttr(u.id)}" checked>${
+            u.fwd ? `${escapeHtml(u.contact_addr)}를 연락처로 추가` : '이 주소를 연락처로 추가'}</label>` : ''}
           <span style="flex:1"></span>
           <button class="btn" style="font-size:10.5px" onclick="openMailOriginal('un','${escAttr(u.id)}')">원문 보기</button>
           <button class="btn" style="font-size:10.5px" onclick="ignoreUn('${escAttr(u.id)}',false)">무시</button>
-          <button class="btn" style="font-size:10.5px;color:var(--re)" onclick="ignoreUn('${escAttr(u.id)}',true)">이 도메인 늘 무시</button>
+          ${u.fwd ? '' : `<button class="btn" style="font-size:10.5px;color:var(--re)" onclick="ignoreUn('${escAttr(u.id)}',true)">이 도메인 늘 무시</button>`}
         </div></div>`).join('')
       : (err ? '' : '<div style="font-size:12px;color:var(--i4);padding:10px 0">주인 없는 메일이 없어요.</div>')}
     </div>`);

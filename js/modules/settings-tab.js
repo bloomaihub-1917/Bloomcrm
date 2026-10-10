@@ -2682,6 +2682,8 @@ async function renderEvMailbox(evKey){
       ${inp('from', '받는 사람에게 보일 주소', box.from_addr, '비우면 로그인 주소')}
       ${inp('name', '보내는 이름', box.from_name, '예: KIC 2026 사무국')}
     </div>
+    <div style="margin-bottom:10px">${inp('hostdom', '주최사 메일 도메인 (쉼표로 여러 개)', box.host_domains, '예: kpbma.or.kr')}
+      <div style="font-size:10.5px;color:var(--i4);margin-top:3px;line-height:1.5">주최사 주소는 연락처로 넣지 않아요. 직원이 전달(FW)한 주최사 메일은 원래 받는 사람(연사·참가사) 기록에 붙어요.</div></div>
     <details style="margin-bottom:10px"><summary style="font-size:11px;color:var(--i4);cursor:pointer">서버 (보통 고칠 일 없음)</summary>
       <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-top:8px">
         ${inp('host', 'SMTP 서버', box.host, box.provider === 'gmail' ? 'smtp.gmail.com' : 'smtp.mailplug.co.kr')}
@@ -2784,7 +2786,7 @@ const evmbSay = (t, ok) => { const m = document.getElementById('evmb-msg'); if(m
 
 export async function saveEvMailbox(evKey){
   const g = (id) => (document.getElementById('evmb-' + id)?.value || '').trim();
-  const rec = { provider: g('provider') || 'mailplug', username: g('user'), password: g('pass'), from_addr: g('from'), from_name: g('name'), host: g('host'), port: g('port') };
+  const rec = { provider: g('provider') || 'mailplug', username: g('user'), password: g('pass'), from_addr: g('from'), from_name: g('name'), host: g('host'), port: g('port'), host_domains: g('hostdom') };
   if(!rec.username){ evmbSay('로그인 주소를 적어주세요.'); return; }
   evmbSay('저장 중…', true);
   const r = await saveMailAccount(evKey, rec);

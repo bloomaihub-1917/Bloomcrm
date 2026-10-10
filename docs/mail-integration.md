@@ -22,6 +22,11 @@
   연사(마스터DB 메일·연락 상대 메일)인 메일을 `speaker_logs`에 남기고, 제목에 «초청»이 있으면 `guide_sent_at`을
   (비어 있을 때만) 찍는다. 미리보기 → 확인. 같은 날(또는 하루 전)·같은 제목 기록은 건너뛴다.
 - 받은메일함(INBOX)도 같은 버튼으로 읽는다(`/sync-inbox`): 보낸 사람이 이 행사 연사면 `speaker_logs`, 참가사 담당자면 `exhibitor_logs`에 direction 'in', 분류 «받은 메일»로 남긴다. 둘 다 아니면 남기지 않는다. «답변 대기» 문의로는 만들지 않는다.
+- 직원이 전달(FW)한 메일(2026-10-10, `routes/mail-forward.js`): 보낸 사람이 우리 도메인(`MAIL_OUR_DOMAINS`, 기본 13100m.net)이면
+  본문의 원래 메일 머리(Original Message·Forwarded message·보낸 사람: …)를 읽어 원래 보낸 사람 → 받는 사람·참조 순으로 주인을 찾는다.
+  분류는 «받은 메일» 그대로, 시각은 원래 보낸 시각, 전달한 사람은 작성자 칸(«이시내 전달 …»)에만. 주최사가 연사에게 보낸 메일은
+  «회신 받음»으로 세지 않는다. 주인 없는 메일 창은 원래 주소로 추천하고, 직원·주최사 주소는 연락처로 넣지 않으며 «도메인 늘 무시»를 숨긴다.
+  주최사 도메인은 설정 › 행사 › 메일 «주최사 메일 도메인»(`event_mailboxes.host_domains`).
 - 메일플러그 IMAP은 `loginMethod: 'LOGIN'`이어야 한다(AUTHENTICATE PLAIN 거절). 날짜 검색 대신 마지막 300통을 번호로 읽는다.
 - 자동 가져오기: `.github/workflows/mail-sync.yml`이 15분마다 `/api/cron/mail-events` → 행사마다 `/api/cron/mail-sync?event=`를 부른다. 키는 `CRON_SECRET`(GitHub Secrets·Vercel 환경변수에 같은 값, 2026-10-07 설정). 바꾸면 둘 다 바꿀 것.
 - 대시보드 «메일함» 카드: 안 읽음·처리 안 함·3일 넘게 처리 안 함, 마지막 가져옴(event_mailboxes.last_sync_at), 새 회신(speakers.reply_auto=yes → 참석/불참 확인), 새 문의 후보(참가사 받은 메일 → 문의로 등록).

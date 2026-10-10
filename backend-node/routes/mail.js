@@ -24,6 +24,7 @@ const express = require('express');
 const nodemailer = require('nodemailer');
 const pool = require('../db/pool');
 const { suggestOwners } = require('./mail-suggest');
+const { isOurs, domainOf: domOf, domainList, parseForward, forwardOf, forwardCandidates, fmtAddr } = require('./mail-forward');
 
 const router = express.Router();
 
@@ -143,6 +144,7 @@ const boxPublic = (b) => ({
   username: b.username, from_addr: b.from_addr, from_name: b.from_name,
   has_password: !!b.pass_enc, updated_at: b.updated_at, author_email: b.author_email,
   last_sync_at: b.last_sync_at || '', last_sync_by: b.last_sync_by || '',
+  host_domains: b.host_domains || '',
 });
 
 /* 보낸메일함에 사본 넣기
@@ -225,11 +227,19 @@ router.put('/accounts/:eventId', async (req, res) => {
     const row = [eventId, provider, smtpHost, Number(port) || P.port,
       user, passEnc, String(from_addr || '').trim() || user, String(from_name || '').trim(),
       new Date().toISOString(), req.user?.email || ''];
+    if (req.body && req.body.host_domains !== undefined) {
+      await ensureExtra();
+      await pool.query('UPDATE event_mailboxes SET host_domains = $1 WHERE event_id = $2', [domainList(req.body.host_domains).join(','), eventId]);
+    }
     await pool.query(`
       INSERT INTO event_mailboxes (event_id, provider, host, port, username, pass_enc, from_addr, from_name, updated_at, author_email)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
       ON CONFLICT (event_id) DO UPDATE SET provider=$2, host=$3, port=$4, username=$5, pass_enc=$6,
         from_addr=$7, from_name=$8, updated_at=$9, author_email=$10`, row);
+    // 처음 만드는 계정이면 위 UPDATE가 아무 줄도 못 바꿨다 — 한 번 더
+    if (req.body && req.body.host_domains !== undefined) {
+      await pool.query('UPDATE event_mailboxes SET host_domains = $1 WHERE event_id = $2', [domainList(req.body.host_domains).join(','), eventId]);
+    }
     res.json({ ok: true, account: boxPublic(await boxOf(eventId)) });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
@@ -856,6 +866,7 @@ const syncInboxHandler = async (req, res) => {
     const self = new Set([norm(b.username), norm(b.from_addr)]);
     // 행사 메일 설정의 «늘 무시» 도메인
     const ignored = new Set(String(b.ignore_domains || '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean));
+    const hostDomains = domainList(b.host_domains);
     const unknown = [];
     const client = imapClient(b);
     let stage = '메일함 로그인';
@@ -921,6 +932,30 @@ const syncInboxHandler = async (req, res) => {
         for (const h of heads) {
           const mail = parsed.get(h.uid);
           if (mail && isAutoReply(mail)) continue;
+          if (!h.who && mail && isOurs(h.from) && !isSpam(mail)) {
+            /* 우리 직원이 전달한 메일 — 원래 메일의 보낸 사람·받는 사람·참조로 주인을 찾는다.
+               분류는 «받은 메일» 그대로, 전달한 사람은 작성자 칸에만. 시각은 원래 보낸 시각 */
+            const fw = parseForward(mailText(mail));
+            const hit = forwardCandidates(fw, hostDomains).map((a) => ({ a, who: byMail.get(norm(a.addr)) })).find((x) => x.who);
+            if (hit) {
+              const who = hit.who;
+              const at = fw.sent || h.at, date = at.slice(0, 10);
+              const subject = fw.subject || h.subject.replace(/^\s*((fw|fwd|전달)\s*[:\]]\s*|\[(fw|fwd)\]\s*)+/i, '').trim();
+              const key = (d) => `${who.t}|${who.id}|${d}|${norm(subject)}`;
+              const dup = seen.has(key(date)) || seen.has(key(prevDay(date)));
+              seen.add(key(date));
+              const bt = bodyText(mail);
+              found.push({
+                t: who.t, id: who.id, name: who.t === 'sp' ? spName.get(who.id) : exName.get(who.id), uid: h.uid,
+                category: '받은 메일', date, at, subject, dup, files: bt.files, body: bt.text,
+                from: [fmtAddr(fw.from), [...fw.to, ...fw.cc].length ? `→ ${[...fw.to, ...fw.cc].map((x) => x.addr).join(', ')}` : ''].filter(Boolean).join(' '),
+                fwdBy: h.fromName || h.from,
+                // 원래 보낸 사람이 그 연사 본인일 때만 «회신 받음»으로 센다 — 주최사가 연사에게 보낸 메일은 회신이 아니다
+                fromOwner: hit.a === fw.from,
+              });
+              continue;
+            }
+          }
           if (!h.who) {
             /* 모르는 사람 — 스팸·대량 발송은 «걸러짐»으로만 기억하고(다음에 다시 안 받게),
                나머지는 «주인 없는 메일»로 모은다. 사람이 연결하기 전까지 어디에도 붙지 않는다 */
@@ -956,6 +991,7 @@ const syncInboxHandler = async (req, res) => {
     found.filter((f) => f.t === 'sp').forEach((f) => {
       const r = spRow.get(f.id);
       if (!r || !r.guide_sent_at || r.invite_replied_at) return;
+      if (f.fwdBy && !f.fromOwner) return;
       if (f.date < String(r.guide_sent_at).slice(0, 10)) return;
       if (!firstReply[f.id] || f.date < firstReply[f.id]) firstReply[f.id] = f.date;
     });
@@ -975,7 +1011,8 @@ const syncInboxHandler = async (req, res) => {
             channel, counterpart, category, subject, body, answered_at, answer, status, author_email, author_name, mail_box, mail_uid)
           VALUES ($1,$2,'note',$3,'in','이메일',$4,$5,$6,$7,'','','open',$8,$9,'INBOX',$10)`,
         [`${sp0 ? 'SL' : 'XL'}-${Date.now()}-${Math.floor(Math.random() * 100000)}`, f.id, f.at, f.from, f.category,
-          f.subject, f.body, req.user?.email || '', `${req.user?.name || req.user?.email || ''} (받은메일함에서 가져옴)`, f.uid]);
+          f.subject, f.body, req.user?.email || '',
+          f.fwdBy ? `${f.fwdBy} 전달 (받은메일함에서 가져옴)` : `${req.user?.name || req.user?.email || ''} (받은메일함에서 가져옴)`, f.uid]);
         added++;
       }
       // 이미 가져온 받은 기록에 원문 위치를 채운다
@@ -1018,6 +1055,8 @@ const ensureExtra = () => extraReady || (extraReady = (async () => {
     await pool.query(`ALTER TABLE ${t} ADD COLUMN IF NOT EXISTS mail_uid TEXT`);
   }
   await pool.query('ALTER TABLE event_mailboxes ADD COLUMN IF NOT EXISTS ignore_domains TEXT');
+  // 주최사 메일 도메인 — 주최사 주소는 연락처로 넣지 않고, 전달 메일의 주인을 찾을 때 뺀다
+  await pool.query('ALTER TABLE event_mailboxes ADD COLUMN IF NOT EXISTS host_domains TEXT');
   await pool.query(`CREATE TABLE IF NOT EXISTS mail_unassigned (
     id TEXT PRIMARY KEY, event_id TEXT, mail_box TEXT, mail_uid TEXT, ts TEXT,
     from_addr TEXT, from_name TEXT, subject TEXT, body TEXT, warnings TEXT,
@@ -1158,8 +1197,25 @@ router.get('/unassigned/:eventId', async (req, res) => {
        WHERE event_id = $1 AND status = 'linked' ORDER BY ts`, [eventId])).rows
       .forEach((r) => linkedBefore.set(r.a, { t: r.linked_t, id: r.linked_id }));
     const list = [...owners.values()];
-    const out = rows.map((r) => ({ ...r, warnings: r.warnings ? JSON.parse(r.warnings) : [],
-      suggestions: suggestOwners(r, list, linkedBefore) }));
+    const hostDomains = domainList((await boxOf(eventId).catch(() => null))?.host_domains);
+    const out = rows.map((r) => {
+      const f = forwardOf(r);
+      const fw = f && f.fw;
+      /* 전달 메일이면 원래 보낸 사람으로 추천을 견주고, 원래 받는 사람·참조에 아는 주소가 있으면 그 사람을 맨 앞에 */
+      let sug = suggestOwners(fw ? { ...r, from_addr: fw.from.addr, from_name: fw.from.name, subject: fw.subject || r.subject } : r, list, linkedBefore);
+      if (fw) {
+        const exact = forwardCandidates(fw, hostDomains).map((a) => list.find((o) => o.emails.some((e) => norm(e) === a.addr)))
+          .filter(Boolean).filter((o, i, arr) => arr.indexOf(o) === i);
+        sug = [...exact.map((o) => ({ t: o.t, id: o.id, name: o.label, score: 99, why: '원래 메일의 주소' })),
+          ...sug.filter((s) => !exact.some((o) => o.t === s.t && o.id === s.id))].slice(0, 3);
+      }
+      const addr = fw ? fw.from.addr : r.from_addr;
+      return { ...r, warnings: r.warnings ? JSON.parse(r.warnings) : [], suggestions: sug,
+        fwd: f ? { by: f.by, from: fw ? fmtAddr(fw.from) : '', to: fw ? [...fw.to, ...fw.cc].map((x) => x.addr).join(', ') : '', sent: fw ? fw.sent : '',
+          addrs: fw ? [fw.from, ...fw.to, ...fw.cc].map((x) => x.addr) : [] } : null,
+        // 연락처로 넣을 주소 — 우리 직원·주최사 주소면 넣지 않는다
+        contact_addr: !addr || isOurs(addr) || hostDomains.includes(domOf(addr)) ? '' : addr };
+    });
     res.json({ ok: true, items: out });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
@@ -1177,29 +1233,36 @@ router.post('/unassigned/:id/link', async (req, res) => {
     if (await partDone(u.event_id, sp ? 'conf' : 'exh')) return res.status(423).json({ ok: false, error: '진행 완료된 행사예요' });
     const logId = `${sp ? 'SL' : 'XL'}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
     const warn = u.warnings ? JSON.parse(u.warnings) : [];
+    const hostDomains = domainList((await boxOf(u.event_id).catch(() => null))?.host_domains);
+    const f = forwardOf(u), fw = f && f.fw;
+    const counterpart = fw ? [fmtAddr(fw.from), [...fw.to, ...fw.cc].length ? `→ ${[...fw.to, ...fw.cc].map((x) => x.addr).join(', ')}` : ''].filter(Boolean).join(' ')
+      : (u.from_name ? `${u.from_name} <${u.from_addr}>` : u.from_addr);
+    const contactAddr = fw ? fw.from.addr : u.from_addr;
+    const contactName = fw ? fw.from.name : u.from_name;
+    const canAdd = contactAddr && !isOurs(contactAddr) && !hostDomains.includes(domOf(contactAddr));
     await pool.query(`
       INSERT INTO ${sp ? 'speaker_logs' : 'exhibitor_logs'} (id, ${sp ? 'speaker_id' : 'exhibitor_id'}, kind, ts, direction,
         channel, counterpart, category, subject, body, answered_at, answer, status, author_email, author_name, mail_box, mail_uid)
       VALUES ($1,$2,'note',$3,'in','이메일',$4,$5,$6,$7,'','','open',$8,$9,$10,$11)`,
-    [logId, ownerId, u.ts, u.from_name ? `${u.from_name} <${u.from_addr}>` : u.from_addr,
-      warn.length ? '받은 메일 · ⚠ 확인' : '받은 메일', u.subject, u.body, req.user?.email || '',
-      `${req.user?.name || req.user?.email || ''} (주인 없는 메일에서 연결)`, u.mail_box, u.mail_uid]);
+    [logId, ownerId, (fw && fw.sent) || u.ts, counterpart,
+      warn.length ? '받은 메일 · ⚠ 확인' : '받은 메일', (fw && fw.subject) || u.subject, u.body, req.user?.email || '',
+      `${f ? `${f.by} 전달 · ` : ''}${req.user?.name || req.user?.email || ''} (주인 없는 메일에서 연결)`, u.mail_box, u.mail_uid]);
     let contactAdded = false;
-    if (addContact) {
-      const em = String(u.from_addr || '').trim();
+    if (addContact && canAdd) {
+      const em = String(contactAddr || '').trim();
       if (sp) {
         const has = (await pool.query(`SELECT 1 FROM speaker_contacts WHERE speaker_id = $1 AND lower(email) = lower($2)`, [ownerId, em])).rowCount;
         if (!has) {
           // 받는 사람이 갑자기 늘지 않게 «안 보냄»으로 넣는다 — 연락 상대 탭에서 수신·참조로 바꾼다
           await pool.query(`INSERT INTO speaker_contacts (id, speaker_id, contact_id, name, email, phone, kind, send, note)
-            VALUES ($1,$2,'',$3,$4,'','실무진','','메일에서 연결')`, [`SC-${Date.now()}-${Math.floor(Math.random() * 1000)}`, ownerId, u.from_name || '', em]);
+            VALUES ($1,$2,'',$3,$4,'','실무진','','메일에서 연결')`, [`SC-${Date.now()}-${Math.floor(Math.random() * 1000)}`, ownerId, contactName || '', em]);
           contactAdded = true;
         }
       } else {
         const has = (await pool.query(`SELECT 1 FROM exhibitor_contacts WHERE exhibitor_id = $1 AND lower(email) = lower($2)`, [ownerId, em])).rowCount;
         if (!has) {
           await pool.query(`INSERT INTO exhibitor_contacts (id, exhibitor_id, contact_id, name, email, phone, role, is_primary, note)
-            VALUES ($1,$2,'',$3,$4,'','기타','','메일에서 연결')`, [`XC-${Date.now()}-${Math.floor(Math.random() * 1000)}`, ownerId, u.from_name || '', em]);
+            VALUES ($1,$2,'',$3,$4,'','기타','','메일에서 연결')`, [`XC-${Date.now()}-${Math.floor(Math.random() * 1000)}`, ownerId, contactName || '', em]);
           contactAdded = true;
         }
       }
@@ -1222,9 +1285,12 @@ router.post('/unassigned/:id/link-crm', async (req, res) => {
     const t = (await pool.query(`SELECT id, event FROM crm_targets WHERE id = $1`, [String(targetId || '')])).rows[0];
     if (!t) return res.status(404).json({ ok: false, error: 'CRM 타겟을 찾지 못했어요' });
     if (t.event !== u.event_id) return res.status(400).json({ ok: false, error: '다른 행사 메일함의 메일이에요' });
-    const entry = { type: '메일 받음', text: String(u.subject || '').trim() || '(제목 없음)',
-      from: u.from_name ? `${u.from_name} <${u.from_addr}>` : u.from_addr, mu: u.id, memo: String(memo || '').trim(),
-      date: String(u.ts || '').slice(0, 10), at: u.ts || '', by: req.user?.name || req.user?.email || '', color: '#0F766E' };
+    const f = forwardOf(u), fw = f && f.fw;
+    const at = (fw && fw.sent) || u.ts || '';
+    const entry = { type: '메일 받음', text: String((fw && fw.subject) || u.subject || '').trim() || '(제목 없음)',
+      from: fw ? fmtAddr(fw.from) : (u.from_name ? `${u.from_name} <${u.from_addr}>` : u.from_addr), mu: u.id, memo: String(memo || '').trim(),
+      ...(f ? { fwdBy: f.by } : {}),
+      date: at.slice(0, 10), at, by: req.user?.name || req.user?.email || '', color: '#0F766E' };
     await pool.query(
       `UPDATE crm_targets SET "lastActivity" = GREATEST(COALESCE("lastActivity", ''), $3),
          log = (jsonb_build_array($2::jsonb) || CASE WHEN left(btrim(COALESCE(log, '')), 1) = '[' THEN log::jsonb ELSE '[]'::jsonb END)::text
