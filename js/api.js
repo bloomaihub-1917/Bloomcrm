@@ -1017,6 +1017,8 @@ export const syncSentMail      = (evKey, apply) => mailApi(`/accounts/${encodeUR
 export const mailOriginal      = (t, id, remote) => mailApi(`/original/${t}/${encodeURIComponent(id)}${remote ? '?remote=1' : ''}`);
 export const loadUnassigned    = (evKey) => mailApi(`/unassigned/${encodeURIComponent(evKey)}`);
 export const linkUnassigned    = (id, body) => mailApi(`/unassigned/${encodeURIComponent(id)}/link`, 'POST', body);
+/* CRM 협의 타겟의 컨택 이력에 받은 메일을 붙인다 — { targetId, memo } */
+export const linkUnassignedCrm = (id, body) => mailApi(`/unassigned/${encodeURIComponent(id)}/link-crm`, 'POST', body);
 export const ignoreUnassigned  = (id, domain) => mailApi(`/unassigned/${encodeURIComponent(id)}/ignore`, 'POST', { domain: !!domain });
 export const syncInboxMail     = (evKey, apply) => mailApi(`/accounts/${encodeURIComponent(evKey)}/sync-inbox`, 'POST', { apply: !!apply });
 

@@ -32,12 +32,14 @@ import {
   CO_DB,
   contacts,
   speakersOfContact,
+  currentUser,
 } from '../state.js';
 import { flowStatus, nextActionLabel } from './speaker-flow.js';
 import { RP, SC, LC, EC, STGS, avB, avF } from '../constants.js';
 import { ab, td, escapeHtml, escAttr, isMobile } from '../utils.js';
 import { trackAction, changed } from './audit-tab.js';
-import { postToSheet } from '../api.js';
+import { postToSheet, sendMail, eventMailFrom, loadUnassigned, linkUnassignedCrm } from '../api.js';
+import './mail-original.js';   // window.openMailOriginal — 받은 메일 원문 보기
 import { renderToday, renderRoundNav, openFillRound, openRoundEditor } from './contact-tab.js';
 import { renderGrid, exportContactGrid } from './contact-grid.js';
 import { renderReport, copyDailyReport } from './contact-report.js';
@@ -442,13 +444,214 @@ export function dCRM(t) {
     <div class="sct">컨택 상태</div>
     <div class="stbs">${['미접촉', '컨택중', '협의중', '확정', '보류'].map(s => `<button class="stb${t.status === s ? ' on' : ''}" onclick="chgStD(${t.id},'${s}')">${s}</button>`).join('')}</div>`;
 }
+/* ── 컨택 이력 ──
+   메일은 행사 공용 메일로 여기서 바로 보낸다(서버가 이 타겟 log에 «메일 보냄»을 남긴다).
+   받은 메일은 그 행사 메일함의 «주인 없는 메일» 중 이 기업 담당자 주소·도메인에서 온 것을
+   골라 «메일 받음»으로 붙인다. 본문은 기록에 옮기지 않는다 — 원문은 «원문»으로 그때 연다.
+   기록마다 짧은 메모를 달아 «무엇을 약속했나·다음에 뭘 하나»를 따라간다. */
+const LOG_TYPES = ['메일 보냄', '메일 받음', '전화', '미팅', '메모', '계약'];
+const logUi = { compose: null, inbox: null, memoEdit: null };   // compose·inbox: 타겟 id, memoEdit: 'id:k'
+const inboxCache = {};   // 타겟 id → { loading, error, items }
+const fromCache = {};    // 행사 key → { ok, text } — 다시 그려도 «확인 중»으로 돌아가지 않게
+
+const ICO_MAIL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg>';
+const ICO_IN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>';
+
+/* 이 기업 담당자 중 메일 주소가 있는(퇴사 안 한) 사람 */
+const mailConOf = (t) => conOf(t).filter(p => /@/.test(p.email || '') && !p.left_at);
+
 export function dLog(t) {
-  return `<div class="sct" style="margin-bottom:7px">활동 기록 추가</div>
-    <div class="li"><select id="lt-${t.id}"><option>이메일</option><option>전화</option><option>미팅</option><option>메모</option><option>계약</option></select><input type="text" id="lx-${t.id}" placeholder="활동 내용 입력…"><button class="lsub" onclick="addLog(${t.id})">기록</button></div>
-    <div class="sct">활동 이력</div>
-    <div class="lls">${t.log.map((l, k) => `
-      <div class="lit"><div class="ltr"><div class="ld" style="background:${l.color}"></div>${k < t.log.length - 1 ? '<div class="lln"></div>' : ''}</div>
-      <div class="lb2"><div class="lty" style="color:${l.color}">${escapeHtml(l.type)}</div><div class="ltx">${escapeHtml(l.text)}</div><div class="lda">${escapeHtml(l.date)}</div></div></div>`).join('')}</div>`;
+  const compose = logUi.compose === t.id;
+  const inbox = logUi.inbox === t.id;
+  const on = 'border-color:var(--a);color:var(--a);background:var(--ad)';
+  return `<div style="display:flex;gap:6px;margin-bottom:12px">
+      <button class="btn" style="flex:1;justify-content:center;padding:8px 6px;${compose ? on : ''}" onclick="crmMailToggle(${t.id})">${ICO_MAIL} 메일 보내기</button>
+      <button class="btn" style="flex:1;justify-content:center;padding:8px 6px;${inbox ? on : ''}" onclick="crmInboxToggle(${t.id})">${ICO_IN} 받은 메일 가져오기</button>
+    </div>
+    ${compose ? composeHtml(t) : ''}
+    ${inbox ? inboxHtml(t) : ''}
+    <div class="sct" style="margin-bottom:7px">활동 기록 추가</div>
+    <div class="li" style="margin-bottom:6px"><select id="lt-${t.id}">${LOG_TYPES.map(x => `<option>${x}</option>`).join('')}</select><input type="text" id="lx-${t.id}" placeholder="활동 내용 (예: 견적서 요청 메일 받음)" onkeydown="if(event.key==='Enter')addLog(${t.id})"></div>
+    <div class="li"><input type="text" id="lm-${t.id}" placeholder="메모 (선택) — 약속·다음 할 일 (예: 10/15까지 회신)" onkeydown="if(event.key==='Enter')addLog(${t.id})"><button class="lsub" onclick="addLog(${t.id})">기록</button></div>
+    <div class="sct">활동 이력 <span style="font-weight:400;color:var(--i4)">${t.log.length ? t.log.length + '건' : ''}</span></div>
+    ${t.log.length ? '' : '<div style="font-size:11.5px;color:var(--i4);padding:6px 0 12px">아직 기록이 없어요 — 메일을 보내거나 위에서 한 줄 남겨 보세요</div>'}
+    <div class="lls">${t.log.map((l, k) => logItemHtml(t, l, k)).join('')}</div>`;
+}
+
+function logItemHtml(t, l, k) {
+  const color = l.color || LC[l.type] || '#9C9890';
+  const who = l.to ? `→ ${l.to}` : l.from ? `← ${l.from}` : '';
+  const editing = logUi.memoEdit === `${t.id}:${k}`;
+  const small = 'font-size:10.5px;padding:2px 8px';
+  const memo = editing
+    ? `<div style="display:flex;gap:5px;margin-top:5px"><input class="fi" id="lme-${t.id}-${k}" value="${escAttr(l.memo || '')}" placeholder="짧게 — 약속·다음 할 일" style="flex:1;min-width:0;font-size:12px;padding:5px 8px"
+         onkeydown="if(event.key==='Enter')saveLogMemo(${t.id},${k});if(event.key==='Escape')editLogMemo(${t.id},-1)">
+       <button class="lsub" style="width:auto" onclick="saveLogMemo(${t.id},${k})">저장</button></div>`
+    : l.memo
+      ? `<div onclick="editLogMemo(${t.id},${k})" title="눌러서 메모 고치기" style="cursor:pointer;margin-top:4px;padding:4px 8px;border-radius:5px;background:var(--ab);font-size:11.5px;color:var(--i2);line-height:1.45">📝 ${escapeHtml(l.memo)}</div>`
+      : '';
+  return `<div class="lit"><div class="ltr"><div class="ld" style="background:${color}"></div>${k < t.log.length - 1 ? '<div class="lln"></div>' : ''}</div>
+    <div class="lb2" style="min-width:0">
+      <div style="display:flex;align-items:center;gap:5px"><div class="lty" style="color:${color};flex:1">${escapeHtml(l.type)}</div>
+        ${l.mu ? `<button class="btn" style="${small}" onclick="openMailOriginal('un','${escAttr(l.mu)}')">원문</button>` : ''}
+        ${editing || l.memo ? '' : `<button class="btn" style="${small}" onclick="editLogMemo(${t.id},${k})">+ 메모</button>`}</div>
+      <div class="ltx">${escapeHtml(l.text)}</div>
+      ${who ? `<div style="font-size:10.5px;color:var(--i4);overflow-wrap:anywhere">${escapeHtml(who)}</div>` : ''}
+      ${l.attach ? `<div style="font-size:10.5px;color:var(--i4);overflow-wrap:anywhere">📎 ${escapeHtml(l.attach)}</div>` : ''}
+      ${memo}
+      <div class="lda">${escapeHtml(l.at || l.date)}${l.by ? ` · ${escapeHtml(l.by)}` : ''}</div></div></div>`;
+}
+
+function composeHtml(t) {
+  const cons = mailConOf(t);
+  const ev = EVENT_LIST.find(e => e.key === t.event);
+  return `<div style="border:1px solid var(--i6);border-radius:8px;padding:10px;margin-bottom:14px;background:var(--W)">
+    <div style="font-size:11px;color:var(--i4);margin-bottom:8px;overflow-wrap:anywhere">보내는 주소 · <span id="cm-from-${t.id}" style="color:${fromCache[t.event] ? (fromCache[t.event].ok ? 'var(--i2)' : 'var(--re)') : 'inherit'}">${escapeHtml(fromCache[t.event]?.text || `${ev ? (ev.short || ev.name || ev.key) : (t.event || '행사 없음')} 공용 메일 확인 중…`)}</span></div>
+    <div class="mlbl">받는 사람</div>
+    ${cons.length ? `<div style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px">${cons.map((p, k) => `
+      <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;min-width:0"><input type="checkbox" class="cm-to-${t.id}" value="${escAttr(p.email)}"${k === 0 ? ' checked' : ''}>
+        <span style="font-weight:600;flex-shrink:0">${escapeHtml(p.name)}</span><span style="color:var(--i4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(p.title ? p.title + ' · ' : '')}${escapeHtml(p.email)}</span></label>`).join('')}</div>`
+      : '<div style="font-size:11px;color:var(--i4);margin-bottom:6px">기업DB에 메일 주소가 있는 담당자가 없어요 — 아래에 직접 적어 주세요</div>'}
+    <input class="fi" id="cm-tox-${t.id}" type="email" placeholder="다른 주소 (쉼표로 여러 개)" style="margin-bottom:6px">
+    <input class="fi" id="cm-cc-${t.id}" type="email" placeholder="참조 (선택)" style="margin-bottom:8px">
+    <div class="mlbl">제목</div>
+    <input class="fi" id="cm-sub-${t.id}" style="margin-bottom:8px">
+    <div class="mlbl">내용</div>
+    <textarea class="fi" id="cm-txt-${t.id}" rows="7" style="resize:vertical;margin-bottom:8px;font-family:inherit"></textarea>
+    <div class="mlbl">기록 메모 (선택)</div>
+    <input class="fi" id="cm-memo-${t.id}" placeholder="이력에 남길 한 줄 — 본문은 기록에 남지 않아요" style="margin-bottom:10px">
+    <div style="display:flex;gap:6px"><button class="btn" style="flex:1;justify-content:center" onclick="crmMailToggle(${t.id})">닫기</button>
+      <button class="lsub" id="cm-send-${t.id}" style="flex:2" onclick="crmMailSend(${t.id})">보내기</button></div>
+  </div>`;
+}
+
+/* 받은 메일 후보 — 이 기업 담당자 주소와 같거나, 그 도메인(흔한 메일 서비스 제외)에서 온 것 */
+const FREE_MAIL = /^(gmail|naver|daum|hanmail|kakao|nate|hotmail|outlook|yahoo|icloud|live|me)\./i;
+function inboxMatch(t, items) {
+  const emails = new Set(mailConOf(t).map(p => p.email.trim().toLowerCase()));
+  const doms = new Set([...emails].map(e => e.split('@')[1]).filter(d => d && !FREE_MAIL.test(d)));
+  return items.filter(u => {
+    const a = String(u.from_addr || '').trim().toLowerCase();
+    return emails.has(a) || doms.has(a.split('@')[1]);
+  });
+}
+function inboxHtml(t) {
+  const c = inboxCache[t.id] || { loading: true };
+  const head = '<div class="sct" style="margin-bottom:7px">받은 메일 — 이 기업 주소에서 온 것</div>';
+  if (c.loading) return `<div style="margin-bottom:14px">${head}<div style="font-size:11.5px;color:var(--i4)">행사 메일함에서 찾는 중…</div></div>`;
+  if (c.error) return `<div style="margin-bottom:14px">${head}<div style="font-size:11.5px;color:var(--re)">${escapeHtml(c.error)}</div></div>`;
+  const rows = c.items || [];
+  return `<div style="margin-bottom:14px">${head}
+    ${rows.length ? rows.map(u => `<div style="border:1px solid var(--i7);border-radius:7px;padding:8px 9px;margin-bottom:6px">
+      <div style="font-size:12px;font-weight:600;color:var(--i1)">${escapeHtml(u.subject || '(제목 없음)')}</div>
+      <div style="font-size:10.5px;color:var(--i4);margin:2px 0 6px;overflow-wrap:anywhere">${escapeHtml(u.from_name ? `${u.from_name} <${u.from_addr}>` : u.from_addr)} · ${escapeHtml(u.ts || '')}</div>
+      <input class="fi" id="ib-memo-${escAttr(u.id)}" placeholder="메모 (선택) — 무슨 내용인지 한 줄" style="font-size:12px;padding:5px 8px;margin-bottom:6px">
+      <div style="display:flex;gap:6px"><button class="btn" style="font-size:11px" onclick="openMailOriginal('un','${escAttr(u.id)}')">원문 보기</button>
+        <button class="lsub" style="flex:1" onclick="crmLinkMail(${t.id},'${escAttr(u.id)}')">이력에 넣기</button></div></div>`).join('')
+      : `<div style="font-size:11.5px;color:var(--i4);line-height:1.5">새로 온 메일이 없어요.<br>행사 메일함은 15분마다 읽어요. 연사·참가사로 등록된 주소에서 온 메일은 그쪽 기록에 붙어 여기 나오지 않아요.<br>전화로 들은 것처럼 직접 남기려면 아래에서 «메일 받음»으로 기록하세요.</div>`}
+  </div>`;
+}
+
+export function crmMailToggle(id) {
+  logUi.compose = logUi.compose === id ? null : id;
+  const t = targets.find(x => x.id === id);
+  if (!t) return;
+  renderDrBd(t);
+  if (logUi.compose !== id) return;
+  document.getElementById('cm-sub-' + id)?.focus();
+  eventMailFrom(t.event).then(r => {
+    fromCache[t.event] = r;
+    const el = document.getElementById('cm-from-' + id);
+    if (!el) return;
+    el.textContent = r.text;
+    el.style.color = r.ok ? 'var(--i2)' : 'var(--re)';
+  });
+}
+
+export async function crmMailSend(id) {
+  const t = targets.find(x => x.id === id);
+  if (!t) return;
+  const v = (k) => (document.getElementById(`cm-${k}-${id}`)?.value || '').trim();
+  const to = [...document.querySelectorAll('.cm-to-' + id)].filter(x => x.checked).map(x => x.value)
+    .concat(v('tox').split(/[,;\s]+/).filter(Boolean));
+  if (!to.length) { alert('받는 사람을 골라 주세요.'); return; }
+  const bad = to.concat(v('cc').split(/[,;\s]+/).filter(Boolean)).find(a => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(a));
+  if (bad) { alert(`메일 주소가 이상해요: ${bad}`); return; }
+  if (!v('sub')) { alert('제목을 적어 주세요.'); return; }
+  if (!v('txt')) { alert('내용을 적어 주세요.'); return; }
+  if (!confirm(`${to.join(', ')}\n에게 «${v('sub')}» 메일을 보낼까요?`)) return;
+  const btn = document.getElementById('cm-send-' + id);
+  if (btn) { btn.disabled = true; btn.textContent = '보내는 중…'; }
+  const subject = v('sub');
+  const r = await sendMail({ to, cc: v('cc'), subject, text: v('txt'), crm_target_id: String(t.id), memo: v('memo') });
+  if (!r.ok) {
+    if (btn) { btn.disabled = false; btn.textContent = '보내기'; }
+    alert(r.error || '보내지 못했어요');
+    return;
+  }
+  if (r.crmEntry) { t.log.unshift(r.crmEntry); t.lastActivity = r.crmEntry.date; }
+  logUi.compose = null;
+  renderDrBd(t);
+  renderCrm();
+  if (!r.logged) alert(`메일은 보냈지만 이력에 남기지 못했어요${r.logError ? ` (${r.logError})` : ''} — 아래에서 «메일 보냄»으로 한 줄 남겨 주세요.`);
+  else if (r.sentError) alert(`메일은 보냈어요. 보낸메일함 사본은 넣지 못했어요 (${r.sentError})`);
+  trackAction('log', '메일 발송', t.name,
+    `<b>${escapeHtml(t.name)}</b>에 메일 «${escapeHtml(subject)}» 발송 → ${escapeHtml(to.join(', '))}`,
+    { kind: 'target', id: t.id });
+}
+
+export async function crmInboxToggle(id) {
+  logUi.inbox = logUi.inbox === id ? null : id;
+  const t = targets.find(x => x.id === id);
+  if (!t) return;
+  if (logUi.inbox !== id) { renderDrBd(t); return; }
+  inboxCache[id] = { loading: true };
+  renderDrBd(t);
+  const r = t.event ? await loadUnassigned(t.event) : { ok: false, error: '이 타겟에 행사가 없어요' };
+  inboxCache[id] = r.ok ? { items: inboxMatch(t, r.items || []) }
+    : { error: r.offline ? '테스트 모드에서는 메일함을 읽지 않아요' : (r.error || '메일함을 읽지 못했어요') };
+  if (logUi.inbox === id && drID === id && drTab === 1) renderDrBd(t);
+}
+
+export async function crmLinkMail(id, muId) {
+  const t = targets.find(x => x.id === id);
+  if (!t) return;
+  const memo = (document.getElementById('ib-memo-' + muId)?.value || '').trim();
+  const r = await linkUnassignedCrm(muId, { targetId: String(id), memo });
+  if (!r.ok) { alert(r.error || '넣지 못했어요'); return; }
+  t.log.unshift(r.entry);
+  /* 날짜순으로 — 예전에 온 메일을 지금 붙이면 맨 위가 아니라 제자리에 */
+  t.log.sort((a, b) => String(b.at || b.date || '').localeCompare(String(a.at || a.date || '')));
+  if (String(r.entry.date) > String(t.lastActivity || '')) t.lastActivity = r.entry.date;
+  const c = inboxCache[id];
+  if (c && c.items) c.items = c.items.filter(u => u.id !== muId);
+  renderDrBd(t);
+  renderCrm();
+  trackAction('log', '받은 메일 연결', t.name,
+    `<b>${escapeHtml(t.name)}</b> 컨택 이력에 받은 메일 «${escapeHtml(r.entry.text)}» 연결`, { kind: 'target', id: t.id });
+}
+
+export function editLogMemo(id, k) {
+  logUi.memoEdit = k < 0 ? null : `${id}:${k}`;
+  const t = targets.find(x => x.id === id);
+  if (!t) return;
+  renderDrBd(t);
+  if (k >= 0) { const el = document.getElementById(`lme-${id}-${k}`); if (el) { el.focus(); el.select(); } }
+}
+
+export async function saveLogMemo(id, k) {
+  const t = targets.find(x => x.id === id);
+  if (!t || !t.log[k]) return;
+  const val = (document.getElementById(`lme-${id}-${k}`)?.value || '').trim();
+  const prev = t.log[k].memo || '';
+  logUi.memoEdit = null;
+  if (val === prev) { renderDrBd(t); return; }
+  t.log[k].memo = val;
+  renderDrBd(t);
+  const r = await saveTargetToSheet(t);
+  if (!r.ok) { t.log[k].memo = prev; renderDrBd(t); return; }
+  trackAction('log', '컨택 메모', t.name,
+    `<b>${escapeHtml(t.name)}</b> 컨택 이력 «${escapeHtml(t.log[k].text)}» 메모: "${escapeHtml(val)}"`, { kind: 'target', id: t.id });
 }
 /* ══════════════════════════════════════════
    타겟 ↔ 기업DB 잇기
@@ -587,9 +790,11 @@ export async function addLog(id) {
   if (i < 0) return;
   const type = document.getElementById('lt-' + id).value;
   const text = document.getElementById('lx-' + id).value.trim();
-  if (!text) return;
+  const memo = (document.getElementById('lm-' + id)?.value || '').trim();
+  if (!text && !memo) return;
   const prevLastActivity = targets[i].lastActivity;
-  targets[i].log.unshift({ type, text, date: td(), color: LC[type] || '#9C9890' });
+  targets[i].log.unshift({ type, text: text || memo, ...(text && memo ? { memo } : {}), date: td(),
+    by: currentUser?.name || currentUser?.email || '', color: LC[type] || '#9C9890' });
   targets[i].lastActivity = td();
   renderDr();
   const r = await saveTargetToSheet(targets[i]);
@@ -763,6 +968,12 @@ window.switchDT = switchDT;
 window.setStg = setStg;
 window.chgStD = chgStD;
 window.addLog = addLog;
+window.crmMailToggle = crmMailToggle;
+window.crmMailSend = crmMailSend;
+window.crmInboxToggle = crmInboxToggle;
+window.crmLinkMail = crmLinkMail;
+window.editLogMemo = editLogMemo;
+window.saveLogMemo = saveLogMemo;
 window.openModal = openModal;
 window.closeModal = closeModal;
 window.mSrch = mSrch;

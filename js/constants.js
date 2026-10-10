@@ -23,7 +23,7 @@ export const CAT_KEYS = ['attendee', 'exhibitor', 'speaker', 'sponsor', 'buyer',
   'investor', 'bd', 'press', 'vip', 'organizer'];
 
 export const SC = {미접촉:'#9C9890',컨택중:'#3B5BDB',협의중:'#C97B0A',확정:'#16A34A',보류:'#DC2626'};
-export const LC = {이메일:'#6D28D9',전화:'#16A34A',미팅:'#3B5BDB',메모:'#9C9890',계약:'#16A34A'};
+export const LC = {이메일:'#6D28D9','메일 보냄':'#6D28D9','메일 받음':'#0F766E',전화:'#16A34A',미팅:'#3B5BDB',메모:'#9C9890',계약:'#16A34A'};
 export const BG = ['#EEF2FF','#F0FDF4','#FFFBEB','#F5F3FF','#F0FDFA','#FEF2F2'];
 export const FG = ['#3B5BDB','#16A34A','#C97B0A','#6D28D9','#0F766E','#DC2626'];
 export const EC = ['#3B5BDB','#16A34A','#C97B0A','#6D28D9'];

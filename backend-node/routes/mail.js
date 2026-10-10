@@ -336,7 +336,9 @@ router.post('/send', async (req, res) => {
   const { to, subject, text, html, cc, exhibitor_id, speaker_id, category, kind,
     attachments: localFiles, file_ids,
     // 컨택 DM — 차수 명단 한 줄(round_members)과 받는 사람
-    round_member_id, contact_id, contact_name } = req.body || {};
+    round_member_id, contact_id, contact_name,
+    // CRM 협의 — crm_targets 한 줄. 기록은 그 줄의 log(JSON)에 붙는다
+    crm_target_id, memo } = req.body || {};
 
   /* 어느 행사 사람인지는 서버가 상대 기록에서 찾는다 — 화면이 보낸 event_id만
      믿으면 다른 행사 주소로 나가는 실수를 막을 수 없다 */
@@ -346,6 +348,7 @@ router.post('/send', async (req, res) => {
     else if (speaker_id) eventId = (await pool.query('SELECT event_id FROM speakers WHERE id = $1', [speaker_id])).rows[0]?.event_id || eventId;
     else if (round_member_id) eventId = (await pool.query(
       `SELECT r.event_id FROM round_members m JOIN contact_rounds r ON r.id = m.round_id WHERE m.id = $1`, [round_member_id])).rows[0]?.event_id || eventId;
+    else if (crm_target_id) eventId = (await pool.query('SELECT event FROM crm_targets WHERE id = $1', [String(crm_target_id)])).rows[0]?.event || eventId;
   } catch (e) { /* 행사를 못 찾으면 아래에서 막힌다 */ }
   /* 진행 완료된 행사(그 파트)는 열람만 — 화면 잠금을 피해 들어와도 여기서 막는다.
      컨택 DM은 전시·컨퍼런스 어느 파트도 아니라 묻지 않는다(행사 전 모객이다) */
@@ -443,6 +446,24 @@ router.post('/send', async (req, res) => {
         }
       } catch (e) { logError = e.message; logId = null; }
     }
+    /* CRM 협의 — 타겟의 컨택 이력(log JSON) 맨 앞에 «메일 보냄» 한 줄. 본문은 남기지 않고
+       제목·받는 사람·첨부 이름과 사람이 적은 짧은 메모만 둔다. 한 문장으로 붙여서
+       같은 때 화면이 저장한 기록을 덮지 않는다 */
+    let crmEntry = null;
+    if (!target && !round_member_id && crm_target_id) {
+      const at = kstStamp(Date.now());
+      crmEntry = { type: '메일 보냄', text: String(subject || '').trim() || '(제목 없음)', to: counterpart,
+        attach: attachments.map((a) => a.filename).join(', '), memo: String(memo || '').trim(),
+        date: at.slice(0, 10), at, by: req.user?.name || req.user?.email || '', color: '#6D28D9' };
+      try {
+        const u = await pool.query(
+          `UPDATE crm_targets SET "lastActivity" = $3,
+             log = (jsonb_build_array($2::jsonb) || CASE WHEN left(btrim(COALESCE(log, '')), 1) = '[' THEN log::jsonb ELSE '[]'::jsonb END)::text
+           WHERE id = $1`, [String(crm_target_id), JSON.stringify(crmEntry), crmEntry.date]);
+        logged = u.rowCount > 0;
+        if (!logged) { logError = 'CRM 타겟을 찾지 못했어요'; crmEntry = null; }
+      } catch (e) { logError = e.message; crmEntry = null; }
+    }
     if (target) {
       try {
         await pool.query(
@@ -464,7 +485,7 @@ router.post('/send', async (req, res) => {
     }
 
     // logId를 돌려준다 — 화면이 임시 id로 들고 있으면 나중에 그 기록을 지울 수 없다
-    res.json({ ok: true, messageId: info.messageId, accepted: info.accepted, via: sender.via, logged, logError, logId, sentSaved, sentError });
+    res.json({ ok: true, messageId: info.messageId, accepted: info.accepted, via: sender.via, logged, logError, logId, crmEntry, sentSaved, sentError });
   } catch (e) {
     console.error('[mail] 발송 실패:', e.message);
     res.status(502).json({ ok: false, error: `발송 실패: ${e.message}` });
@@ -1185,6 +1206,31 @@ router.post('/unassigned/:id/link', async (req, res) => {
     await pool.query(`UPDATE mail_unassigned SET status = 'linked', linked_t = $1, linked_id = $2, handled_by = $3 WHERE id = $4`,
       [sp ? 'sp' : 'ex', ownerId, req.user?.email || '', u.id]);
     res.json({ ok: true, logId, contactAdded });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+/* CRM 협의에 붙이기 — 받은 메일을 타겟 컨택 이력(log JSON)에 «메일 받음»으로 남긴다.
+   본문은 옮기지 않는다(원문은 «원문 보기»로 메일함에서 그때 가져온다). 사람이 적은 메모만 둔다 */
+router.post('/unassigned/:id/link-crm', async (req, res) => {
+  if (req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 바꿀 수 없어요' });
+  const { targetId, memo } = req.body || {};
+  try {
+    await ensureExtra();
+    const u = (await pool.query(`SELECT * FROM mail_unassigned WHERE id = $1`, [req.params.id])).rows[0];
+    if (!u || u.status !== 'new') return res.status(404).json({ ok: false, error: '이미 처리한 메일이에요' });
+    const t = (await pool.query(`SELECT id, event FROM crm_targets WHERE id = $1`, [String(targetId || '')])).rows[0];
+    if (!t) return res.status(404).json({ ok: false, error: 'CRM 타겟을 찾지 못했어요' });
+    if (t.event !== u.event_id) return res.status(400).json({ ok: false, error: '다른 행사 메일함의 메일이에요' });
+    const entry = { type: '메일 받음', text: String(u.subject || '').trim() || '(제목 없음)',
+      from: u.from_name ? `${u.from_name} <${u.from_addr}>` : u.from_addr, mu: u.id, memo: String(memo || '').trim(),
+      date: String(u.ts || '').slice(0, 10), at: u.ts || '', by: req.user?.name || req.user?.email || '', color: '#0F766E' };
+    await pool.query(
+      `UPDATE crm_targets SET "lastActivity" = GREATEST(COALESCE("lastActivity", ''), $3),
+         log = (jsonb_build_array($2::jsonb) || CASE WHEN left(btrim(COALESCE(log, '')), 1) = '[' THEN log::jsonb ELSE '[]'::jsonb END)::text
+       WHERE id = $1`, [t.id, JSON.stringify(entry), entry.date]);
+    await pool.query(`UPDATE mail_unassigned SET status = 'linked', linked_t = 'crm', linked_id = $1, handled_by = $2 WHERE id = $3`,
+      [t.id, req.user?.email || '', u.id]);
+    res.json({ ok: true, entry });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
