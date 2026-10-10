@@ -447,7 +447,8 @@ export function dCRM(t) {
 /* ── 컨택 이력 ──
    메일은 행사 공용 메일로 여기서 바로 보낸다(서버가 이 타겟 log에 «메일 보냄»을 남긴다).
    받은 메일은 그 행사 메일함의 «주인 없는 메일» 중 이 기업 담당자 주소·도메인에서 온 것을
-   골라 «메일 받음»으로 붙인다. 본문은 기록에 옮기지 않는다 — 원문은 «원문»으로 그때 연다.
+   골라 «메일 받음»으로 붙인다. 받은 메일 본문은 옮기지 않는다 — «원문»으로 그때 연다.
+   보낸 메일은 본문까지 남겨 «본문 보기»로 무슨 메일을 보냈는지 다시 본다.
    기록마다 짧은 메모를 달아 «무엇을 약속했나·다음에 뭘 하나»를 따라간다. */
 const LOG_TYPES = ['메일 보냄', '메일 받음', '전화', '미팅', '메모', '계약'];
 const logUi = { compose: null, inbox: null, memoEdit: null };   // compose·inbox: 타겟 id, memoEdit: 'id:k'
@@ -498,6 +499,9 @@ function logItemHtml(t, l, k) {
       <div class="ltx">${escapeHtml(l.text)}</div>
       ${who ? `<div style="font-size:10.5px;color:var(--i4);overflow-wrap:anywhere">${escapeHtml(who)}</div>` : ''}
       ${l.attach ? `<div style="font-size:10.5px;color:var(--i4);overflow-wrap:anywhere">📎 ${escapeHtml(l.attach)}</div>` : ''}
+      ${l.cc ? `<div style="font-size:10.5px;color:var(--i4);overflow-wrap:anywhere">참조 ${escapeHtml(l.cc)}</div>` : ''}
+      ${l.body ? `<details style="margin-top:4px"><summary style="cursor:pointer;font-size:11px;color:var(--a);font-weight:600">본문 보기</summary>
+        <div style="margin-top:4px;padding:8px 9px;border:1px solid var(--i7);border-radius:6px;background:var(--i8);font-size:11.5px;color:var(--i2);line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere;max-height:320px;overflow:auto">${escapeHtml(l.body)}</div></details>` : ''}
       ${memo}
       <div class="lda">${escapeHtml(l.at || l.date)}${l.by ? ` · ${escapeHtml(l.by)}` : ''}</div></div></div>`;
 }
@@ -519,7 +523,7 @@ function composeHtml(t) {
     <div class="mlbl">내용</div>
     <textarea class="fi" id="cm-txt-${t.id}" rows="7" style="resize:vertical;margin-bottom:8px;font-family:inherit"></textarea>
     <div class="mlbl">기록 메모 (선택)</div>
-    <input class="fi" id="cm-memo-${t.id}" placeholder="이력에 남길 한 줄 — 본문은 기록에 남지 않아요" style="margin-bottom:10px">
+    <input class="fi" id="cm-memo-${t.id}" placeholder="이력에 남길 한 줄 (예: 견적 회신 요청 — 10/15까지)" style="margin-bottom:10px">
     <div style="display:flex;gap:6px"><button class="btn" style="flex:1;justify-content:center" onclick="crmMailToggle(${t.id})">닫기</button>
       <button class="lsub" id="cm-send-${t.id}" style="flex:2" onclick="crmMailSend(${t.id})">보내기</button></div>
   </div>`;

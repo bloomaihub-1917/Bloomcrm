@@ -446,14 +446,15 @@ router.post('/send', async (req, res) => {
         }
       } catch (e) { logError = e.message; logId = null; }
     }
-    /* CRM 협의 — 타겟의 컨택 이력(log JSON) 맨 앞에 «메일 보냄» 한 줄. 본문은 남기지 않고
-       제목·받는 사람·첨부 이름과 사람이 적은 짧은 메모만 둔다. 한 문장으로 붙여서
-       같은 때 화면이 저장한 기록을 덮지 않는다 */
+    /* CRM 협의 — 타겟의 컨택 이력(log JSON) 맨 앞에 «메일 보냄» 한 줄. 제목·받는 사람·첨부 이름·
+       본문(«무슨 메일을 보냈나»를 다시 보려고, 길면 앞부분만)과 사람이 적은 짧은 메모를 둔다.
+       한 문장으로 붙여서 같은 때 화면이 저장한 기록을 덮지 않는다 */
     let crmEntry = null;
     if (!target && !round_member_id && crm_target_id) {
       const at = kstStamp(Date.now());
-      crmEntry = { type: '메일 보냄', text: String(subject || '').trim() || '(제목 없음)', to: counterpart,
+      crmEntry = { type: '메일 보냄', text: String(subject || '').trim() || '(제목 없음)', to: toList.join(', '),
         attach: attachments.map((a) => a.filename).join(', '), memo: String(memo || '').trim(),
+        body: String(text || '').slice(0, 6000), cc: list(cc).join(', '),
         date: at.slice(0, 10), at, by: req.user?.name || req.user?.email || '', color: '#6D28D9' };
       try {
         const u = await pool.query(
