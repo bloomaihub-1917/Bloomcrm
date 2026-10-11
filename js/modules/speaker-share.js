@@ -38,6 +38,7 @@ export function buildProgram(evKey){
     const talks = assignmentsOfSession(s.id).filter(a => ok(a) && leadOf(a) === a).sort(asgSort).map(a => ({
       start: a.start_at || '', end: a.end_at || '', role: roleLabel(a),
       title_ko: a.title_ko || '', title_en: a.title_en || '',
+      abstract_ko: a.abstract_ko || '', abstract_en: a.abstract_en || '',
       people: [getSpeakerById(a.speaker_id), ...coOf(a).filter(ok).map(x => getSpeakerById(x.speaker_id))].filter(Boolean).map(person),
     }));
     day.sessions.push({ start: s.start_at || '', end: s.end_at || '', title_ko: s.title_ko || '', title_en: s.title_en || '',

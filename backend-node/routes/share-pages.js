@@ -66,10 +66,21 @@ function programPage(row, exhibitorsUrl) {
   const name = row.event_name || row.event_id;
   const people = (ps) => (ps || []).map((p) => `<div class="who">${bi(p.name_ko, p.name_en, 'b')}${
     (p.title_ko || p.title_en || p.org_ko || p.org_en) ? `<span class="aff">${bi([p.title_ko, p.org_ko].filter(Boolean).join(', '), [p.title_en, p.org_en].filter(Boolean).join(', '))}</span>` : ''}</div>`).join('');
-  const talk = (t) => `<li class="talk">
-      <div class="tt">${t.start ? `<span class="tm">${esc(time(t.start, t.end))}</span>` : ''}${t.role ? `<span class="role"><span class="ko">${esc(t.role)}</span><span class="en">${esc(ROLE_EN[t.role] || t.role)}</span></span>` : ''}</div>
+  /* 초록이 있으면 발제를 눌러 펼친다 — 목록은 짧게, 읽을 사람만 연다 */
+  const abs = (t) => {
+    const k = String(t.abstract_ko || '').trim(), e = String(t.abstract_en || '').trim();
+    if (!k && !e) return '';
+    return `<div class="abs">${k ? `<p class="ko">${esc(k)}</p>` : `<p class="ko">${esc(e)}</p>`}${e ? `<p class="en">${esc(e)}</p>` : `<p class="en">${esc(k)}</p>`}</div>`;
+  };
+  const talk = (t) => {
+    const a = abs(t);
+    const head = `<div class="tt">${t.start ? `<span class="tm">${esc(time(t.start, t.end))}</span>` : ''}${t.role ? `<span class="role"><span class="ko">${esc(t.role)}</span><span class="en">${esc(ROLE_EN[t.role] || t.role)}</span></span>` : ''}</div>
       ${t.title_ko || t.title_en ? `<div class="ttl">${bi(t.title_ko, t.title_en)}</div>` : ''}
-      ${people(t.people)}</li>`;
+      ${people(t.people)}`;
+    return a
+      ? `<li class="talk"><details><summary>${head}<span class="more"><span class="ko">초록 보기</span><span class="en">Abstract</span></span></summary>${a}</details></li>`
+      : `<li class="talk">${head}</li>`;
+  };
   const sess = (s) => `<section class="sess${s.brk ? ' brk' : ''}">
       <div class="when">${esc(time(s.start, s.end))}</div>
       <div class="what"><h3>${bi(s.title_ko, s.title_en)}</h3>${s.room ? `<span class="room">${esc(s.room)}</span>` : ''}
@@ -103,6 +114,15 @@ function programPage(row, exhibitorsUrl) {
   .who { font-size:14px; color:var(--body); }
   .who b { color:var(--ink); font-weight:600; margin-right:6px; }
   .aff { color:var(--dim); font-size:13px; }
+  .talk summary { list-style:none; cursor:pointer; }
+  .talk summary::-webkit-details-marker { display:none; }
+  .talk summary::marker { content:''; }
+  .more { display:inline-block; margin-top:4px; font-size:12px; color:var(--accent); font-weight:600; }
+  .more::after { content:' ▾'; }
+  details[open] .more::after { content:' ▴'; }
+  .abs { margin-top:8px; padding:10px 12px; border-radius:8px; background:var(--bg); border:1px solid var(--line);
+    font-size:14px; color:var(--body); line-height:1.7; }
+  .abs p { margin:0; white-space:pre-wrap; }
   body.l-ko .en, body.l-en .ko { display:none; }
   @media (max-width:560px) { .sess { grid-template-columns:1fr; gap:4px; } }
 </style>
