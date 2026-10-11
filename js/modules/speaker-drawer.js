@@ -40,6 +40,7 @@ import {
   saveSpeakerContact, deleteSpeakerContact,
   saveSpeakerLog, sendMail, eventMailFrom, loadMailFiles, mailFilesOf, fileToBase64,
   aiSpeakerAdvice,
+  loadSpeakerPhotos, speakerPhotosLoaded, speakerPhotoOf, saveSpeakerPhoto, deleteSpeakerPhoto, shrinkImage,
 } from '../api.js';
 import { filterMail, mailFilBar, mailStateHtml, mailActionsHtml, mailToggleAttr, isPending, setMailDone } from './mail-mark.js';
 import { decorate as decorateMailPane } from './mail-pane.js';
@@ -198,8 +199,14 @@ export function renderSpeakerDr(){
   const roles = rolesOfSpeaker(sp.id);
   const con = sp.contact_id ? contacts.find(c => String(c.id) === String(sp.contact_id)) : null;
 
+  /* 사진은 행사 단위로 처음 한 번 받아 온다 — 받으면 다시 그린다 */
+  if(!speakerPhotosLoaded(evKey)) loadSpeakerPhotos(evKey).then(() => { if(spId === sp.id) renderSpeakerDr(); });
+  const photo = speakerPhotoOf(evKey, sp.id);
+
   const h = document.getElementById('sp-drh');
-  if(h) h.innerHTML = `
+  if(h) h.innerHTML = `${photo ? `<img src="${photoSrc(photo)}" alt="" onclick="switchSpeakerDT('basic')"
+      title="연사 사진 — 기본 탭에서 바꿉니다"
+      style="width:44px;height:44px;border-radius:50%;object-fit:cover;object-position:50% 25%;flex:none;margin-right:10px;align-self:center;cursor:pointer;border:1px solid var(--i6)">` : ''}
     <div style="flex:1;min-width:0">
       <div class="drnm">${escapeHtml(sp.name_snapshot || sp.name_en || '(이름 없음)')}${
         sp.name_snapshot && sp.name_en
@@ -750,8 +757,9 @@ function basicHtml(sp, con, evKey){
     ${nOf('photo') ? gotRow('연사 사진', sp.photo_received_at,
       `spStamp('photo_received_at','사진 받음')`,
       `spField('photo_received_at',this.value,'사진 받은 날')`, nOf('photo')) : ''}
+    ${nOf('photo') ? photoBoxHtml(sp, evKey) : ''}
     ${nOf('photo') ? fg('사진 파일명', txt(sp.photo_file, `spField('photo_file',this.value,'사진 파일')`, '원드라이브 파일명'),
-      '파일은 원드라이브에 올리고 여기엔 파일명만 적습니다') : ''}
+      '원본은 원드라이브가 정본입니다 — 인쇄물에는 원본을 씁니다') : ''}
     ${nOf('consent') ? gotRow('개인정보 제공 동의서', sp.consent_at,
       `spStamp('consent_at','동의서 받음')`,
       `spField('consent_at',this.value,'동의서 받은 날')`, nOf('consent')) : ''}
@@ -1987,7 +1995,63 @@ export async function revealBank(){
 }
 export function hideBank(){ bankRevealed = false; renderSpeakerDr(); }
 
+/* ── 연사 사진 ──
+   원본은 OneDrive 연사 폴더에 있고, 여기에는 알아보는 용도로 줄인 사본을 둔다
+   (backend-node/routes/photos.js). 폴더에 있는 것을 한꺼번에 넣을 때는
+   backend-node/db/import-speaker-photos.js를 쓴다. */
+const photoSrc = (p) => `data:${p.content_type || 'image/jpeg'};base64,${p.data}`;
+
+function photoBoxHtml(sp, evKey){
+  const p = speakerPhotoOf(evKey, sp.id);
+  const loading = !speakerPhotosLoaded(evKey);
+  return `<div style="display:flex;gap:12px;align-items:flex-start;margin:8px 0 10px">
+    ${p ? `<img src="${photoSrc(p)}" alt=""
+        style="width:96px;height:120px;object-fit:cover;object-position:50% 25%;border-radius:6px;border:1px solid var(--i6);display:block;flex:none">`
+      : `<div style="width:96px;height:120px;border-radius:6px;border:1px dashed var(--i5);display:flex;align-items:center;justify-content:center;font-size:10.5px;color:var(--i4);text-align:center">${loading ? '불러오는 중' : '사진 없음'}</div>`}
+    <div style="font-size:10.5px;color:var(--i4);line-height:1.7">
+      ${p ? `${escapeHtml(p.file || '')}${p.updated_at ? `<br>${escapeHtml(String(p.updated_at).slice(0, 10))} 올림` : ''}<br>` : ''}
+      <label class="btn" style="font-size:10.5px;cursor:pointer;display:inline-block;margin-top:4px">${p ? '사진 바꾸기' : '사진 올리기'}
+        <input type="file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="uploadSpPhoto(this)"></label>
+      ${p ? `<button class="btn" style="font-size:10.5px;color:var(--re);margin-top:4px" onclick="removeSpPhoto()">지우기</button>` : ''}
+    </div>
+  </div>`;
+}
+
+export async function uploadSpPhoto(input){
+  const file = input.files?.[0];
+  input.value = '';
+  const sp = getSpeakerById(spId);
+  if(!file || !sp) return;
+  if(confLocked()){ confLockNotice(); return; }
+  let img;
+  try { img = await shrinkImage(file); }
+  catch(e){ alert(e.message); return; }
+  const r = await saveSpeakerPhoto(sp.event_id, sp.id, { file: file.name, ...img });
+  if(!r.ok){ alert(r.error || '사진을 올리지 못했어요.'); return; }
+  trackAction('edit', '연사', sp.event_id, `${sp.name_snapshot || sp.name_en || sp.id} — 사진 올림 (${file.name})`);
+  /* 받은 날과 파일명이 비어 있으면 함께 채운다 — 사진을 올렸는데 «사진 미수령»으로
+     남으면 독촉 메일에 사진이 또 들어간다 */
+  const patch = {};
+  if(!sp.photo_received_at) patch.photo_received_at = td();
+  if(!sp.photo_file) patch.photo_file = file.name;
+  if(Object.keys(patch).length) await patchSpeaker(patch, '사진 받음');
+  else renderSpeakerDr();
+}
+
+export async function removeSpPhoto(){
+  const sp = getSpeakerById(spId);
+  if(!sp) return;
+  if(confLocked()){ confLockNotice(); return; }
+  if(!confirm('CRM에 올린 사진을 지울까요? (원드라이브 원본은 그대로 있어요)')) return;
+  const r = await deleteSpeakerPhoto(sp.event_id, sp.id);
+  if(!r.ok){ alert(r.error || '지우지 못했어요.'); return; }
+  trackAction('edit', '연사', sp.event_id, `${sp.name_snapshot || sp.name_en || sp.id} — 사진 지움`);
+  renderSpeakerDr();
+}
+
 /* ── 노출 ── */
+window.uploadSpPhoto        = uploadSpPhoto;
+window.removeSpPhoto        = removeSpPhoto;
 window.openSpeakerDr        = openSpeakerDr;
 window.closeSpeakerDr       = closeSpeakerDr;
 window.removeSpeakerFromDr  = removeSpeakerFromDr;

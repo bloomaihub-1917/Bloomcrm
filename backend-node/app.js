@@ -10,6 +10,7 @@ const dataRoutes = require('./routes/data');
 const mailRoutes = require('./routes/mail');
 const publicRoutes = require('./routes/public');
 const aiRoutes = require('./routes/ai');
+const photoRoutes = require('./routes/photos');
 
 /* 로컬(server.js)과 Vercel 서버리스(api/index.js)가 이 app을 그대로
    공유한다 — app.listen()은 각 진입점에서 따로 한다(서버리스는 안 함). */
@@ -64,6 +65,8 @@ app.use('/api/data', requireAuth, dataRoutes);
 app.use('/api/mail', requireAuth, mailRoutes);
 // Claude에게 묻는 일 — 개인정보는 보내지 않는다(routes/ai.js)
 app.use('/api/ai', requireAuth, aiRoutes);
+// 연사 사진 — OneDrive 원본을 줄인 사본(routes/photos.js)
+app.use('/api/photos', requireAuth, photoRoutes);
 // 메일 자동 가져오기 — 로그인 대신 비밀 키(CRON_SECRET)로. GitHub 예약 작업이 부른다
 app.use('/api/cron', mailRoutes.cron);
 
