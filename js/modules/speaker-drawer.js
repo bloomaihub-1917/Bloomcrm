@@ -224,6 +224,9 @@ export function renderSpeakerDr(){
         con ? '' : ' · 연락처 연결 안 됨'}${
         assignmentsFor(sp.id).length ? ` · 세션 ${assignmentsFor(sp.id).length}` : ''}</div>
     </div>
+    <button class="btn" style="font-size:10.5px;color:var(--i3);align-self:center"
+      onclick="setSpeakerHidden('${escAttr(sp.id)}',${sp.hidden !== 'yes'})"
+      title="${sp.hidden === 'yes' ? '다시 목록에 보이고 받을 항목도 셉니다' : '목록에서 접고 받을 항목에서 뺍니다 — 지우지는 않아요'}">${sp.hidden === 'yes' ? '다시 보이기' : '숨기기'}</button>
     <button class="btn" style="font-size:10.5px;color:var(--re);align-self:center"
       onclick="removeSpeakerFromDr()" title="이 연사를 지웁니다 — 배정·연락 상대·기록도 함께">지우기</button>
     <button class="drcls" onclick="closeSpeakerDr()">✕</button>`;

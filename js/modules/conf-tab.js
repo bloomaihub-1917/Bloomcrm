@@ -82,6 +82,7 @@ let confEditSession = '';      // 수정 칸이 열려 있는 세션
 let confNewSession = false;    // 세션 추가 칸이 열려 있나
 let confNeedFil = null;        // {key, mode:'done'|'todo'} — 받을 것 칩으로 거르기
 let confRoleFil = '';          // 역할로 거르기
+let confShowHidden = false;    // 숨긴 연사도 보이기
 let confSessFil = '';          // 세션으로 거르기
 
 /* ══════════════════════════════════════════
@@ -321,6 +322,30 @@ const SESSION_KINDS = [
 /* 종류를 안 고르고 만든 «커피 브레이크»«만찬»도 식사·휴식으로 본다 — 엑셀에서
    종류 칸을 비우는 일이 잦다. 다만 연사가 배정된 세션은 제목이 어떻든 발표 세션이다. */
 const MEAL_TITLE = /브레이크|휴식|커피|오찬|점심|중식|만찬|디너|갈라|네트워킹|기념\s*촬영|단체\s*사진|등록|coffee\s*break|lunch|dinner|reception|networking|photo\s*session|group\s*photo|registration/i;
+/* 숨기기 — 목록에서 접고 받을 항목에서 뺀다(지우지 않는다. 프로그램·배정은 그대로) */
+export const isHiddenSp = (sp) => !!sp && sp.hidden === 'yes';
+export async function setSpeakerHidden(spId, on){
+  if(confLocked()){ confLockNotice(); return; }
+  const sp = getSpeakerById(spId);
+  if(!sp) return;
+  const backup = sp.hidden || '';
+  sp.hidden = on ? 'yes' : '';
+  renderConf();
+  window.renderSpeakerDr?.();
+  const res = await gSaveSpeaker({ id: spId, hidden: sp.hidden, updated_at: td() });
+  if(!res || res.ok === false){
+    sp.hidden = backup;
+    renderConf();
+    window.renderSpeakerDr?.();
+    if(!res?.locked) alert('저장에 실패했어요.');
+    return;
+  }
+  trackAction('edit', '연사 숨기기', confEvent, `${sp.name_snapshot || sp.name_en || spId} — ${on ? '숨김(받을 항목에서 뺌)' : '다시 보이기'}`);
+}
+export function toggleConfHidden(){ confShowHidden = !confShowHidden; renderConf(); }
+window.setSpeakerHidden = setSpeakerHidden;
+window.toggleConfHidden = toggleConfHidden;
+
 export const isBreak = (s) => !!(s && (s.kind || (MEAL_TITLE.test(`${s.title_ko || ''} ${s.title_en || ''}`)
   && !SESSION_SPEAKERS.some(a => a.session_id === s.id))));
 const kindOf = (k) => SESSION_KINDS.find(x => x.key === (k || '')) || SESSION_KINDS[0];
@@ -1072,6 +1097,8 @@ function nextActionTd(sp){
 }
 
 export function spCell(sp, evKey, key){
+  /* 숨긴 연사는 받을 것이 없다 — 진행률·대시보드·남은 일·외부 공유가 모두 여기서 센다 */
+  if(isHiddenSp(sp)) return { state: 'na' };
   const roles = rolesOfSpeaker(sp.id);
   const asg = assignmentsFor(sp.id);
   /* 역할이 여럿이면 센 쪽을 따른다 — 좌장이자 발표자면 발제도 받아야 한다 */
@@ -1359,8 +1386,11 @@ export function clearConfSearch(){
 }
 
 function peopleHtml(ev){
-  const all = speakersForEvent(ev.key);
-  if(!all.length){
+  const every = speakersForEvent(ev.key);
+  const hiddenN = every.filter(isHiddenSp).length;
+  /* 숨긴 연사는 목록·요약에서 뺀다 — «숨긴 연사 N명»을 눌러야 보인다 */
+  const all = confShowHidden ? every : every.filter(sp => !isHiddenSp(sp));
+  if(!every.length){
     return `<div style="padding:22px;background:var(--i8);border:1px solid var(--i6);border-radius:10px;
       font-size:12px;color:var(--i5);line-height:1.7">
       아직 연사가 없어요. «프로그램»에서 세션을 만들고 사람을 배정하면 여기 쌓여요.</div>`;
@@ -1493,6 +1523,8 @@ function peopleHtml(ev){
   /* ── 역할 칩 ── */
   const roleChips = `<div class="seg" style="flex-wrap:wrap;margin-bottom:8px">
     <button class="seg-b${!confRoleFil ? ' on' : ''}" onclick="setConfRoleFil('')">전체 ${all.length}명</button>
+    ${hiddenN ? `<button class="seg-b${confShowHidden ? ' on' : ''}" onclick="toggleConfHidden()"
+      title="숨긴 연사는 받을 항목에서 빠져요 — 눌러서 보이기/감추기">숨긴 연사 ${hiddenN}명</button>` : ''}
     ${SPEAKER_ROLES.map(r => {
       const n = all.filter(sp => rolesOfSpeaker(sp.id).includes(r.key)).length;
       return n ? `<button class="seg-b${confRoleFil === r.key ? ' on' : ''}"
@@ -1549,7 +1581,7 @@ function peopleHtml(ev){
         style="background:var(--W);border:1px solid var(--i6);border-radius:10px;padding:11px 12px;
         margin-bottom:8px;cursor:pointer">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <span style="font-size:13px;font-weight:700">${escapeHtml(sp.name_snapshot || sp.name_en || sp.id)}</span>${spLeftPill(sp)}${spFlagPills(sp)}
+          <span style="font-size:13px;font-weight:700">${escapeHtml(sp.name_snapshot || sp.name_en || sp.id)}</span>${spLeftPill(sp)}${spFlagPills(sp)}${isHiddenSp(sp) ? '<span class="pill p-gray" style="font-size:9px" title="받을 항목에서 빠진 연사예요">숨김</span>' : ''}
           ${roles.map(r => `<span class="pill ${(SPEAKER_ROLES.find(x => x.key === r) || {}).cls || 'p-gray'}"
             style="font-size:9px">${escapeHtml(r)}</span>`).join('')}
           ${countryChip(sp)}
@@ -1583,6 +1615,10 @@ function peopleHtml(ev){
             <button onclick="event.stopPropagation();removeConfSpeaker('${escAttr(sp.id)}')"
               style="border:0;font:inherit;cursor:pointer;font-size:10px;padding:3px 7px;border-radius:5px;
               background:var(--rb);color:var(--re);margin-left:auto">지우기</button>
+            <button onclick="event.stopPropagation();setSpeakerHidden('${escAttr(sp.id)}',${!isHiddenSp(sp)})"
+              title="${isHiddenSp(sp) ? '다시 목록에 보이고 받을 항목도 셉니다' : '목록에서 접고 받을 항목에서 뺍니다 — 지우지는 않아요'}"
+              style="border:0;font:inherit;cursor:pointer;font-size:10px;padding:3px 7px;border-radius:5px;
+              background:var(--i8);color:var(--i3)">${isHiddenSp(sp) ? '다시 보이기' : '숨기기'}</button>
             <button onclick="event.stopPropagation();receiveAll('${escAttr(sp.id)}')"
               style="border:0;font:inherit;cursor:pointer;font-size:10px;padding:3px 7px;border-radius:5px;
               background:var(--gb);color:var(--g);font-weight:600">한꺼번에 받음</button>
@@ -1621,7 +1657,7 @@ function peopleHtml(ev){
       <td><div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
           <span style="font-weight:700;font-size:12px">${escapeHtml(name)}</span>
           ${sp.name_snapshot && sp.name_en
-            ? `<span style="font-size:10.5px;color:var(--i4)">${escapeHtml(sp.name_en)}</span>` : ''}${spLeftPill(sp)}${spFlagPills(sp)}
+            ? `<span style="font-size:10.5px;color:var(--i4)">${escapeHtml(sp.name_en)}</span>` : ''}${spLeftPill(sp)}${spFlagPills(sp)}${isHiddenSp(sp) ? '<span class="pill p-gray" style="font-size:9px" title="받을 항목에서 빠진 연사예요">숨김</span>' : ''}
           ${roles.map(r => `<span class="pill ${(SPEAKER_ROLES.find(x => x.key === r) || {}).cls || 'p-gray'}"
             style="font-size:9px">${escapeHtml(r)}</span>`).join('')}
           ${countryChip(sp)}

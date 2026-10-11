@@ -65,7 +65,8 @@ function langOf(sp, evKey, key){
 }
 export function buildSupply(evKey){
   const sessOf = new Map(CONF_SESSIONS.map(s => [s.id, s]));
-  const rows = speakersForEvent(evKey).filter(sp => sp.status !== '취소')
+  // 숨긴 연사는 받을 것이 없으니 수급 표에서도 뺀다(프로그램에는 그대로)
+  const rows = speakersForEvent(evKey).filter(sp => sp.status !== '취소' && sp.hidden !== 'yes')
     .sort((a, b) => String(a.name_snapshot || a.name_en || '').localeCompare(String(b.name_snapshot || b.name_en || ''), 'ko'))
     .map(sp => {
       const asg = assignmentsFor(sp.id);
