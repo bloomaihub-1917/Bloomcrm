@@ -608,7 +608,28 @@ export const sessionsForEvent   = (evKey) => CONF_SESSIONS.filter(x => x.event_i
   .sort((a, b) => String(a.date || '').localeCompare(String(b.date || ''))
     || String(a.start_at || '').localeCompare(String(b.start_at || ''))
     || String(a.track || '').localeCompare(String(b.track || '')));
-export const assignmentsFor     = (speakerId) => SESSION_SPEAKERS.filter(x => x.speaker_id === speakerId);
+/* ── 공동 발표 ──
+   두 사람이 발표 시간 하나·자료 하나를 나눠 맡으면, 주 발표자의 배정 줄에만
+   시간·발제·초록·자료를 적고 공동 연사의 줄은 lead_id로 그 줄을 가리킨다
+   (backend-node/db/add-co-speaker.js). 한쪽에만 적으니 프로그램에 두 번 뜨지 않고,
+   자료를 받으면 두 사람 모두 «받음»이 된다. */
+export const TALK_FIELDS = ['start_at', 'end_at', 'duration_min', 'lang', 'keywords', 'talk_format', 'discussion',
+  'title_ko', 'title_en', 'abstract_ko', 'abstract_en', 'abstract_received_at',
+  'slides_file', 'slides_received_at', 'slides_version', 'note'];
+/* 주 발표자 줄 — 공동이 아니거나 가리키는 줄이 없어졌으면 자기 자신 */
+export const leadOf = (a) => (a && a.lead_id && SESSION_SPEAKERS.find(x => x.id === a.lead_id && x.id !== a.id)) || a;
+export const coOf   = (a) => a ? SESSION_SPEAKERS.filter(x => x.lead_id === a.id && x.id !== a.id) : [];
+/* 한 사람의 배정 — 공동 연사 줄은 발표 칸을 주 발표자 줄에서 읽어 채운 사본으로
+   돌려준다. 읽기 전용이다(고칠 때는 SESSION_SPEAKERS의 원래 줄을 찾는다).
+   talk_id: 발표 칸을 고칠 때 써야 할 줄 id */
+export const assignmentsFor     = (speakerId) => SESSION_SPEAKERS.filter(x => x.speaker_id === speakerId)
+  .map(a => {
+    const l = leadOf(a);
+    if(l === a) return a;
+    const v = { ...a, talk_id: l.id };
+    TALK_FIELDS.forEach(k => { v[k] = l[k]; });
+    return v;
+  });
 export const assignmentsOfSession = (sessionId) => SESSION_SPEAKERS.filter(x => x.session_id === sessionId)
   .sort((a, b) => (Number(a.seq) || 0) - (Number(b.seq) || 0));
 export const getSpeakerById     = (id) => SPEAKERS.find(x => x.id === id);

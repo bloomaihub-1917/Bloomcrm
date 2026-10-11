@@ -18,7 +18,7 @@
 import {
   EVENT_LIST, contacts,
   sessionsForEvent, speakersForEvent, assignmentsOfSession, assignmentsFor,
-  contactsOfSpeaker, getSpeakerById, CONF_SESSIONS,
+  contactsOfSpeaker, getSpeakerById, CONF_SESSIONS, leadOf, coOf,
 } from '../state.js';
 import { SP_CONSENTS } from '../constants.js';
 import { spCell, consentRefused } from './conf-tab.js';
@@ -106,8 +106,10 @@ function drawGlance(wb, evKey, title){
       r++;
     }
     /* 취소한 연사는 주최측에 보내는 프로그램표에 싣지 않는다 — 배정을 안 풀어 둔 채로 나갔다 */
+    const live = (a) => (getSpeakerById(a.speaker_id) || {}).status !== '취소';
+    /* 공동 발표는 한 줄 — 공동 연사 줄은 빼고 주 발표자 줄에 이름·소속을 이어 적는다 */
     const asg = assignmentsOfSession(s.id)
-      .filter(a => (getSpeakerById(a.speaker_id) || {}).status !== '취소').slice().sort(asgSort);
+      .filter(a => live(a) && leadOf(a) === a).slice().sort(asgSort);
     const rows = asg.length ? asg : [null];
     const start = r;
     const sessMin = minsBetween(s.start_at, s.end_at);
@@ -126,7 +128,9 @@ function drawGlance(wb, evKey, title){
       [cA, cB].forEach(c => { c.numFmt = 'h:mm'; body(c, { time: true }); });
       body(cC, { time: true });
 
-      const vals = [nameOf(sp || {}), orgOf(sp || {}), titleOf(sp || {}), a ? talkOf(a) : '', a ? (a.role || '') : ''];
+      const team = [sp, ...(a ? coOf(a).filter(live).map(x => getSpeakerById(x.speaker_id)) : [])].filter(Boolean);
+      const joinOf = (f) => team.length > 1 ? team.map(f).join('\n') : f(sp || {});
+      const vals = [joinOf(nameOf), joinOf(orgOf), joinOf(titleOf), a ? talkOf(a) : '', a ? (a.role || '') : ''];
       vals.forEach((v, k) => {
         const c = ws.getCell(r, 6 + k);
         c.value = v;

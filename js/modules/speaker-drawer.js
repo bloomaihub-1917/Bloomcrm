@@ -20,7 +20,7 @@
 import {
   contacts, EVENT_LIST, currentUser,
   SPEAKERS, SESSION_SPEAKERS, CONF_SESSIONS, SPEAKER_CONTACTS, SPEAKER_LOGS,
-  getSpeakerById, assignmentsFor, rolesOfSpeaker,
+  getSpeakerById, assignmentsFor, rolesOfSpeaker, leadOf, coOf,
   contactsOfSpeaker, logsOfSpeaker,
   confCfg, speakerNeed, speakerNeedList,
   isDomesticSpeaker, autoDomestic, bankDocs, paysFee,
@@ -1071,6 +1071,15 @@ function talkHtml(sp, evKey){
 
   const block = (a) => {
     const s = CONF_SESSIONS.find(x => x.id === a.session_id);
+    /* 공동 발표면 발표 칸은 주 발표자 줄에 적는다 — 어느 쪽 드로어에서 고쳐도 같은 줄 */
+    const tid = a.talk_id || a.id;
+    const raw = SESSION_SPEAKERS.find(x => x.id === a.id) || a;
+    const partners = [leadOf(raw), ...coOf(leadOf(raw))].filter(x => x && x.id !== a.id)
+      .map(x => getSpeakerById(x.speaker_id)).filter(Boolean)
+      .map(p => p.name_snapshot || p.name_en || p.id);
+    const coNote = partners.length ? `<div style="font-size:10.5px;color:var(--a);background:var(--i8);border-radius:6px;padding:6px 8px;margin-bottom:9px;line-height:1.6">
+      ${escapeHtml(partners.join(', '))}와(과) 공동 발표 — 시간·발제·초록·자료를 함께 씁니다.
+      여기서 고치면 상대 쪽에도 같이 바뀌어요.</div>` : '';
     const need = (k) => speakerNeed(evKey, a.role, k);
     const nTitle = need('title'), nAbs = need('abstract'), nSlides = need('slides');
     const head = `<div style="display:flex;align-items:baseline;gap:7px;margin-bottom:7px">
@@ -1088,60 +1097,60 @@ function talkHtml(sp, evKey){
     }
 
     return `<div style="border:1px solid var(--i6);border-radius:9px;padding:11px 12px;margin-bottom:11px">
-      ${head}
+      ${head}${coNote}
       ${nTitle ? `<div class="fgr">
-        ${fg(`발제명 국문 ${NEED_MARK[nTitle]}`, txt(a.title_ko, `asField('${escAttr(a.id)}','title_ko',this.value,'발제명 국문')`))}
-        ${fg(`발제명 영문 ${NEED_MARK[nTitle]}`, txt(a.title_en, `asField('${escAttr(a.id)}','title_en',this.value,'발제명 영문')`))}
+        ${fg(`발제명 국문 ${NEED_MARK[nTitle]}`, txt(a.title_ko, `asField('${escAttr(tid)}','title_ko',this.value,'발제명 국문')`))}
+        ${fg(`발제명 영문 ${NEED_MARK[nTitle]}`, txt(a.title_en, `asField('${escAttr(tid)}','title_en',this.value,'발제명 영문')`))}
       </div>` : ''}
       <div class="fgr">
         ${fg('발표 시작', `<input class="fi" type="time" value="${escAttr(a.start_at || '')}"
-          onchange="asField('${escAttr(a.id)}','start_at',this.value,'발표 시작')">`)}
+          onchange="asField('${escAttr(tid)}','start_at',this.value,'발표 시작')">`)}
         ${fg('발표 종료', `<input class="fi" type="time" value="${escAttr(a.end_at || '')}"
-          onchange="asField('${escAttr(a.id)}','end_at',this.value,'발표 종료')">`)}
+          onchange="asField('${escAttr(tid)}','end_at',this.value,'발표 종료')">`)}
       </div>
       <div style="font-size:10px;color:var(--i4);margin:-6px 0 10px">
         세션 시간이 아니라 이 사람이 올라가는 시각입니다 — 연사 안내와 프로그램북에 이 값이 나갑니다.</div>
       <div class="fgr">
-        ${fg('발표 언어', `<select class="fi" onchange="asField('${escAttr(a.id)}','lang',this.value,'발표 언어')">
+        ${fg('발표 언어', `<select class="fi" onchange="asField('${escAttr(tid)}','lang',this.value,'발표 언어')">
           <option value=""${!a.lang ? ' selected' : ''}>미정</option>
           <option value="ko"${a.lang === 'ko' ? ' selected' : ''}>국문</option>
           <option value="en"${a.lang === 'en' ? ' selected' : ''}>영문</option></select>`)}
-        ${fg('길이(분)', txt(a.duration_min, `asField('${escAttr(a.id)}','duration_min',this.value,'발표 길이')`, '20'))}
+        ${fg('길이(분)', txt(a.duration_min, `asField('${escAttr(tid)}','duration_min',this.value,'발표 길이')`, '20'))}
       </div>
 
       ${nAbs ? `<div style="margin-top:6px">
         ${gotRow('초록 받음', a.abstract_received_at,
-          `asStamp('${escAttr(a.id)}','abstract_received_at','초록 받음')`,
-          `asField('${escAttr(a.id)}','abstract_received_at',this.value,'초록 받은 날')`, nAbs)}
+          `asStamp('${escAttr(tid)}','abstract_received_at','초록 받음')`,
+          `asField('${escAttr(tid)}','abstract_received_at',this.value,'초록 받은 날')`, nAbs)}
         ${fg(`초록 국문 · ${countHint(a.abstract_ko, lim.abstract)}`,
-          area(a.abstract_ko, `asField('${escAttr(a.id)}','abstract_ko',this.value,'초록 국문')`, '', 5))}
+          area(a.abstract_ko, `asField('${escAttr(tid)}','abstract_ko',this.value,'초록 국문')`, '', 5))}
         ${fg(`초록 영문 · ${countHint(a.abstract_en, lim.abstract)}`,
-          area(a.abstract_en, `asField('${escAttr(a.id)}','abstract_en',this.value,'초록 영문')`, '', 5))}
+          area(a.abstract_en, `asField('${escAttr(tid)}','abstract_en',this.value,'초록 영문')`, '', 5))}
       </div>` : ''}
 
       ${nSlides ? `<div style="margin-top:6px">
         ${gotRow('발표자료 받음', a.slides_received_at,
-          `asStamp('${escAttr(a.id)}','slides_received_at','발표자료 받음')`,
-          `asField('${escAttr(a.id)}','slides_received_at',this.value,'발표자료 받은 날')`, nSlides)}
+          `asStamp('${escAttr(tid)}','slides_received_at','발표자료 받음')`,
+          `asField('${escAttr(tid)}','slides_received_at',this.value,'발표자료 받은 날')`, nSlides)}
         <div class="fgr">
-          ${fg('파일명', txt(a.slides_file, `asField('${escAttr(a.id)}','slides_file',this.value,'발표자료 파일')`, '원드라이브 파일명'))}
-          ${fg('판', txt(a.slides_version, `asField('${escAttr(a.id)}','slides_version',this.value,'발표자료 판')`, 'v2'))}
+          ${fg('파일명', txt(a.slides_file, `asField('${escAttr(tid)}','slides_file',this.value,'발표자료 파일')`, '원드라이브 파일명'))}
+          ${fg('판', txt(a.slides_version, `asField('${escAttr(tid)}','slides_version',this.value,'발표자료 판')`, 'v2'))}
         </div>
         <div style="font-size:10px;color:var(--i4);margin-top:-4px">
           발표자료는 현장에서 바뀝니다 — 어느 판을 받았는지 적어 두면 무엇을 틀지 헷갈리지 않아요.</div>
       </div>` : ''}
 
       ${nTitle ? `
-        ${fg('키워드', txt(a.keywords, `asField('${escAttr(a.id)}','keywords',this.value,'발제 키워드')`,
+        ${fg('키워드', txt(a.keywords, `asField('${escAttr(tid)}','keywords',this.value,'발제 키워드')`,
           '예: 적응형 재생 · 산업유산 · 저탄소'),
           '프로그램북 색인과 트랙 배정에 씁니다 — 연사가 해시태그로 보내오기도 해요')}
-        ${fg('발표 형식', txt(a.talk_format, `asField('${escAttr(a.id)}','talk_format',this.value,'발표 형식')`,
+        ${fg('발표 형식', txt(a.talk_format, `asField('${escAttr(tid)}','talk_format',this.value,'발표 형식')`,
           '예: 15분 발표 + 라운드테이블'),
           '연사가 제안서에 적어 보내는 값입니다 — 세션 시간을 짤 때 이걸 봅니다')}
         ${fg('라운드테이블 논의 주제', area(a.discussion,
-          `asField('${escAttr(a.id)}','discussion',this.value,'라운드테이블 주제')`, '', 3),
+          `asField('${escAttr(tid)}','discussion',this.value,'라운드테이블 주제')`, '', 3),
           '좌장이 진행할 때 쓰는 질문들 — 연사가 함께 보내오면 여기 옮겨 둡니다')}` : ''}
-      ${fg('메모', area(a.note, `asField('${escAttr(a.id)}','note',this.value,'발제 메모')`, '', 2))}
+      ${fg('메모', area(a.note, `asField('${escAttr(tid)}','note',this.value,'발제 메모')`, '', 2))}
     </div>`;
   };
 

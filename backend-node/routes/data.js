@@ -203,7 +203,9 @@ const TABLES = {
       'start_at', 'end_at', 'duration_min',
       'keywords', 'talk_format', 'discussion',
       'title_ko', 'title_en', 'abstract_ko', 'abstract_en', 'abstract_received_at',
-      'slides_file', 'slides_received_at', 'slides_version', 'note'],
+      'slides_file', 'slides_received_at', 'slides_version', 'note',
+      // 공동 발표 — 주 발표자의 배정 id. 시간·발제·자료는 그 줄 것을 같이 쓴다(db/add-co-speaker.js)
+      'lead_id'],
   },
   speaker_contacts: {
     table: 'speaker_contacts', pk: 'id', idPrefix: 'SC-',

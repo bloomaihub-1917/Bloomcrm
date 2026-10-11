@@ -27,6 +27,7 @@ import {
   contactsOfSpeaker, SPEAKER_CONTACTS, SPEAKER_LOGS,
   contacts, participations,
   isDomesticSpeaker, bankDocs, paysFee,
+  leadOf, coOf, TALK_FIELDS,
 } from '../state.js';
 import { SPEAKER_ROLES, NEED_MARK, SPEAKER_NEEDS, SP_CONSENTS } from '../constants.js';
 import { td, escapeHtml, escAttr, isMobile, leftPill, countryName } from '../utils.js';
@@ -448,11 +449,31 @@ function sessionCard(ev, s, days, cfg){
     return '';
   };
 
+  /* 공동 발표 고르기 — 같은 세션에서 발제를 받는 다른 줄 중 하나를 주 발표자로 */
+  const talkRows = asg.filter(x => speakerNeedList(ev.key, x.role).some(n => n.key === 'title'));
+  const coPick = (a) => {
+    if(talkRows.length < 2 || !talkRows.includes(a)) return '';
+    const mine = coOf(a);
+    if(mine.length) return `<span class="pill p-blue" style="font-size:9.5px" title="이 발표를 함께 하는 사람">공동 ${mine.length + 1}명</span>`;
+    const opts = talkRows.filter(x => x !== a && leadOf(x) === x);
+    if(!opts.length) return '';
+    return `<select class="fi" style="width:118px;font-size:10.5px;padding:3px 5px"
+      title="발표 시간 하나·자료 하나를 나눠 맡을 때 — 상대의 시간·발제·자료를 같이 씁니다"
+      onchange="setCoLead('${escAttr(a.id)}',this.value)">
+      <option value=""${!a.lead_id ? ' selected' : ''}>단독 발표</option>
+      ${opts.map(x => `<option value="${escAttr(x.id)}"${a.lead_id === x.id ? ' selected' : ''}>${escapeHtml(speakerName(x.speaker_id))}와 공동</option>`).join('')}
+    </select>`;
+  };
+
   const asgRow = (a, idx) => {
     const needsTalk = speakerNeedList(ev.key, a.role).some(n => n.key === 'title');
-    const warn = outOfSession(a);
-    /* 앞 사람이 끝나기 전에 시작하면 겹친다 — 같은 무대에 둘이 설 수는 없다 */
-    const prev = idx > 0 ? asg[idx - 1] : null;
+    /* 공동 연사 줄은 시간·발제를 주 발표자 줄에서 읽는다 — 따로 적지 않는다 */
+    const lead = leadOf(a);
+    const isCo = lead !== a;
+    const warn = isCo ? '' : outOfSession(a);
+    /* 앞 사람이 끝나기 전에 시작하면 겹친다 — 같은 무대에 둘이 설 수는 없다.
+       공동 연사 줄은 앞사람과 같은 시간이므로 견주지 않고, 견줄 때도 건너뛴다 */
+    const prev = isCo ? null : asg.slice(0, idx).reverse().find(x => leadOf(x) === x) || null;
     const overlap = prev && prev.end_at && a.start_at && a.start_at < prev.end_at;
     /* 순서는 끌어서 정하고 시간은 따로 적으니 둘이 어긋날 수 있다.
        어느 쪽이 맞는지는 우리가 모른다 — 어긋났다는 사실만 알린다. */
@@ -467,20 +488,24 @@ function sessionCard(ev, s, days, cfg){
       ${roleChip(a.role)}
       <div style="flex:1;min-width:0">
         <div><span onclick="openSpeakerDr('${escAttr(a.speaker_id)}')" style="font-size:12px;cursor:pointer;color:var(--a)">${escapeHtml(speakerName(a.speaker_id))}</span>
-          ${a.start_at ? `<span style="font-size:10.5px;color:var(--i3);margin-left:6px">${
+          ${!isCo && a.start_at ? `<span style="font-size:10.5px;color:var(--i3);margin-left:6px">${
             escapeHtml(timeLabel(a.start_at, a.end_at))}</span>` : ''}</div>
-        ${needsTalk
+        ${isCo
+          ? `<div style="font-size:10.5px;color:var(--i4)">↳ ${escapeHtml(speakerName(lead.speaker_id))}와 공동 발표${
+              lead.start_at ? ` · ${escapeHtml(timeLabel(lead.start_at, lead.end_at))}` : ''}</div>`
+          : needsTalk
           ? `<div style="font-size:10.5px;color:${a.title_ko || a.title_en ? 'var(--i5)' : 'var(--i4)'}">
               ${escapeHtml(a.title_ko || a.title_en || '발제명 아직 없음')}</div>`
           : ''}
       </div>
+      ${coPick(a)}
       <select class="fi" style="width:82px;font-size:10.5px;padding:3px 5px"
         onchange="setAssignRole('${escAttr(a.id)}',this.value)">
         ${SPEAKER_ROLES.map(r => `<option value="${escAttr(r.key)}"${a.role === r.key ? ' selected' : ''}>${escapeHtml(r.label)}</option>`).join('')}
       </select>
       <button class="btn" style="font-size:10.5px" onclick="removeAssign('${escAttr(a.id)}')">해제</button>
       </div>
-      <div style="display:flex;align-items:center;gap:6px;margin-top:4px;padding-left:2px;flex-wrap:wrap">
+      ${isCo ? '' : `<div style="display:flex;align-items:center;gap:6px;margin-top:4px;padding-left:2px;flex-wrap:wrap">
         <span style="font-size:10px;color:var(--i4);flex:0 0 auto">발표</span>
         <input class="fi" type="time" style="width:96px;font-size:10.5px;padding:2px 5px"
           value="${escAttr(a.start_at || '')}" onchange="setTalkTime('${escAttr(a.id)}','start_at',this.value)">
@@ -494,7 +519,7 @@ function sessionCard(ev, s, days, cfg){
         ${warn ? `<span style="font-size:10px;color:var(--am)">⚠ ${escapeHtml(warn)}</span>` : ''}
         ${overlap ? `<span style="font-size:10px;color:var(--re)">⚠ 앞 발표와 겹쳐요</span>` : ''}
         ${outOfOrder ? `<span style="font-size:10px;color:var(--am)">⚠ 앞 사람보다 이른 시각이에요 — 순서나 시간 중 하나를 고쳐주세요</span>` : ''}
-      </div>
+      </div>`}
     </div>`;
   };
 
@@ -2048,7 +2073,8 @@ export async function autoTalkTimes(sid){
   if(confLocked()){ confLockNotice(); return; }
   const sess = CONF_SESSIONS.find(x => x.id === sid);
   if(!sess || !sess.start_at) return;
-  const asg = assignmentsOfSession(sid);
+  /* 공동 연사 줄은 주 발표자와 같은 시간이다 — 따로 이어 붙이지 않는다 */
+  const asg = assignmentsOfSession(sid).filter(a => leadOf(a) === a);
   const usable = asg.filter(a => Number(a.duration_min) > 0);
   if(!usable.length){
     alert('각 발표의 «분»을 먼저 적어주세요. 그 길이대로 세션 시작부터 이어 붙입니다.');
@@ -2393,10 +2419,46 @@ export async function syncPartRole(spId){
   trackAction('edit', '행사 참가 역할', sp.event_id, `${speakerName(spId)} — ${was} → ${want}`);
 }
 
+/* 공동 발표로 묶거나 푼다. 묶으면 공동 연사 줄을 주 발표자 바로 뒤로 옮긴다 —
+   프로그램표에서 한 칸으로 읽혀야 하고, 떨어져 있으면 따로 발표하는 것처럼 보인다.
+   공동 연사 줄에 적혀 있던 시간·발제는 지우지 않는다(풀면 그대로 돌아온다). */
+export async function setCoLead(aid, leadId){
+  if(confLocked()){ confLockNotice(); return; }
+  const a = SESSION_SPEAKERS.find(x => x.id === aid);
+  if(!a || (a.lead_id || '') === (leadId || '')) return;
+  const lead = leadId ? SESSION_SPEAKERS.find(x => x.id === leadId) : null;
+  if(leadId && (!lead || lead.session_id !== a.session_id || leadOf(lead) !== lead)){ renderConf(); return; }
+  const was = a.lead_id || '';
+  const res = await gSaveAssign({ id: aid, lead_id: leadId || '' });
+  if(!res || res.ok === false){ if(!res?.locked) alert('공동 발표를 저장하지 못했어요.'); renderConf(); return; }
+  a.lead_id = leadId || '';
+  trackAction('edit', '공동 발표', confEvent,
+    lead ? `${speakerName(a.speaker_id)} — ${speakerName(lead.speaker_id)}와 공동 발표` : `${speakerName(a.speaker_id)} — 단독 발표로`,
+    changed('session_speakers', aid, { lead_id: was }, { lead_id: a.lead_id }, { kind: 'session', id: a.session_id, ev: confEvent }));
+  if(lead){
+    const list = assignmentsOfSession(a.session_id).filter(x => x.id !== aid);
+    const at = list.findIndex(x => x.id === lead.id) + 1 + coOf(lead).filter(x => x.id !== aid).length;
+    list.splice(at, 0, a);
+    await applyAsgOrder(list, `${speakerName(a.speaker_id)} — ${speakerName(lead.speaker_id)} 뒤로`);
+  }
+  renderConf();
+}
+
 export async function removeAssign(aid){
   if(confLocked()){ confLockNotice(); return; }
   const a = SESSION_SPEAKERS.find(x => x.id === aid);
   if(!a) return;
+  /* 주 발표자를 빼면 공동 연사가 시간·발제·자료를 잃는다 — 먼저 각자 줄로 옮겨 단독으로 돌린다 */
+  const cos = coOf(a);
+  if(cos.length && !confirm(`${speakerName(a.speaker_id)}와 공동 발표하던 ${cos.map(x => speakerName(x.speaker_id)).join(', ')}은(는) `
+    + '단독 발표로 바뀌고, 시간·발제·자료를 그대로 넘겨받아요. 해제할까요?')) return;
+  for(const c of cos){
+    const patch = { lead_id: '' };
+    TALK_FIELDS.forEach(k => { patch[k] = a[k] ?? ''; });
+    const r = await gSaveAssign({ id: c.id, ...patch });
+    if(!r || r.ok === false){ if(!r?.locked) alert('공동 연사를 옮기지 못해 해제를 멈췄어요.'); renderConf(); return; }
+    Object.assign(c, patch);
+  }
   const res = await gDelAssign(aid);
   if(res && res.ok === false){ if(!res.locked) alert('배정을 해제하지 못했어요.'); return; }
   const i = SESSION_SPEAKERS.findIndex(x => x.id === aid);
@@ -2510,4 +2572,5 @@ window.removeConfSession = removeConfSession;
 window.addAssign         = addAssign;
 window.setAssignRole     = setAssignRole;
 window.removeAssign      = removeAssign;
+window.setCoLead         = setCoLead;
 window.removeConfSpeaker = removeConfSpeaker;

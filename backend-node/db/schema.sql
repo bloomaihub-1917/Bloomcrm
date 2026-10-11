@@ -900,7 +900,9 @@ CREATE TABLE IF NOT EXISTS session_speakers (
   slides_received_at TEXT,
   slides_version     TEXT,
 
-  note TEXT
+  note TEXT,
+  -- 공동 발표: 주 발표자의 배정 id. 시간·발제·초록·자료는 그 줄에만 적는다
+  lead_id    TEXT
 );
 
 -- 연사 건마다 연락 상대를 줄로. 본인도 한 줄이다.
