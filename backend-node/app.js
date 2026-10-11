@@ -11,6 +11,8 @@ const mailRoutes = require('./routes/mail');
 const publicRoutes = require('./routes/public');
 const aiRoutes = require('./routes/ai');
 const photoRoutes = require('./routes/photos');
+const shareRoutes = require('./routes/share');
+const { supplyPage } = require('./routes/share-pages');
 
 /* 로컬(server.js)과 Vercel 서버리스(api/index.js)가 이 app을 그대로
    공유한다 — app.listen()은 각 진입점에서 따로 한다(서버리스는 안 함). */
@@ -32,6 +34,21 @@ app.use(express.json({ limit: '10mb' }));
    페이지를 동시에 열어도 DB를 매번 두드릴 이유가 없다.
    /api와 별도로 흐름을 막는다: 여기는 로그인한 팀원이 아니라 아무나 두드릴 수 있다. */
 app.use('/d', rateLimit({ windowMs: 60 * 1000, max: 300 }), publicRoutes);
+
+/* 연사 수급 현황 — 비밀 링크(/s/<열쇠>). 주최사에만 보낸다. 링크를 끄거나 새로 만들면 바로 막혀야 해서
+   캐시하지 않고, 검색엔진에 걸리지 않게 noindex를 단다(routes/share.js) */
+app.get('/s/:token', rateLimit({ windowMs: 60 * 1000, max: 60 }), async (req, res, next) => {
+  try {
+    res.set('Cache-Control', 'no-store');
+    res.set('X-Robots-Tag', 'noindex, nofollow');
+    const row = await shareRoutes.shareByToken(req.params.token);
+    if (!row || !row.data) {
+      return res.status(404).type('html').send('<!doctype html><meta charset="utf-8"><meta name="robots" content="noindex">'
+        + '<title>없는 링크</title><p style="font:15px/1.6 sans-serif;padding:32px">링크가 바뀌었거나 공유가 꺼졌어요. 사무국에 새 링크를 요청해 주세요.</p>');
+    }
+    res.type('html').send(supplyPage(row));
+  } catch (e) { next(e); }
+});
 
 // CORS 헤더는 요청 Origin에 따라 매번 달라지므로, CDN/브라우저 등 어떤 계층도
 // 이 응답을 캐시해 다른 origin에 잘못된 Access-Control-Allow-Origin을
@@ -67,6 +84,8 @@ app.use('/api/mail', requireAuth, mailRoutes);
 app.use('/api/ai', requireAuth, aiRoutes);
 // 연사 사진 — OneDrive 원본을 줄인 사본(routes/photos.js)
 app.use('/api/photos', requireAuth, photoRoutes);
+// 연사 프로그램·수급 현황 바깥 공유 — 켜고 끄기·스냅숏 올리기(routes/share.js)
+app.use('/api/share', requireAuth, shareRoutes);
 // 메일 자동 가져오기 — 로그인 대신 비밀 키(CRON_SECRET)로. GitHub 예약 작업이 부른다
 app.use('/api/cron', mailRoutes.cron);
 

@@ -7,6 +7,7 @@
 
      GET /d/2026-kic       기업 목록 (한 페이지)
      GET /d/2026-kic.json  같은 내용의 JSON
+     GET /d/2026-kic/program  연사 프로그램 (CRM «외부 공유»에서 켠 행사만, share.js)
 
    화면 글자는 전부 영어다. 국제 컨퍼런스라 참가기업 절반이 해외 법인이고,
    게재 정보(주소·연락처·회사소개)도 처음부터 영문으로 받았다. 기업명만 DB에
@@ -24,6 +25,8 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const pool = require('../db/pool');
+const { shareBySlug } = require('./share');
+const { programPage } = require('./share-pages');
 
 const router = express.Router();
 
@@ -375,7 +378,7 @@ function listHtml(list, slug) {
   return out.join('\n');
 }
 
-function page({ slug, event, list }) {
+function page({ slug, event, list, programUrl }) {
   const title = `${event.name || event.id} — Exhibitor Directory`;
   const meta = [periodText(event.date_start, event.date_end), dropKorean(event.location)]
     .filter(Boolean).join(' · ');
@@ -512,6 +515,7 @@ function page({ slug, event, list }) {
   <div class="top">
     <h1>${esc(event.name || event.id)}</h1>
     <div class="meta">Exhibitor Directory${meta ? ` · ${esc(meta)}` : ''}</div>
+    ${programUrl ? `<div style="font-size:13px;margin-top:6px"><a href="${esc(programUrl)}">Program →</a></div>` : ''}
   </div>
   <div class="bar">
     <input id="q" type="search" placeholder="Search by company, booth, or keyword" autocomplete="off" aria-label="Search exhibitors">
@@ -596,6 +600,21 @@ router.get('/:slug.json', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+/* 연사 프로그램 — CRM «외부 공유»에서 켠 행사만. 확정 연사만 싣는다(share.js) */
+router.get('/:slug/program', async (req, res, next) => {
+  try {
+    const row = await shareBySlug(req.params.slug, 'program');
+    if (!row || !row.data) {
+      return res.status(404).type('html').send(
+        '<!doctype html><meta charset="utf-8"><title>Not found</title>'
+        + '<p style="font:15px/1.6 sans-serif;padding:32px">No program for this event yet.</p>');
+    }
+    const dir = await loadDirectory(req.params.slug).catch(() => null);
+    res.set('Cache-Control', 'public, max-age=60, s-maxage=60');
+    res.type('html').send(programPage(row, dir && dir.list.length ? `/d/${dir.slug}` : ''));
+  } catch (e) { next(e); }
+});
+
 router.get('/:slug', async (req, res, next) => {
   try {
     const data = await loadDirectory(req.params.slug);
@@ -605,7 +624,8 @@ router.get('/:slug', async (req, res, next) => {
         + '<p style="font:15px/1.6 sans-serif;padding:32px">No directory for this event.</p>');
     }
     res.set('Cache-Control', 'public, max-age=300, s-maxage=300');
-    res.type('html').send(page(data));
+    const prog = await shareBySlug(req.params.slug, 'program').catch(() => null);
+    res.type('html').send(page({ ...data, programUrl: prog && prog.data ? `/d/${data.slug}/program` : '' }));
   } catch (e) { next(e); }
 });
 

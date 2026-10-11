@@ -989,6 +989,22 @@ async function mailApi(path, method = 'GET', body){
   } catch(e){ return { ok: false, error: e.message }; }
 }
 export const loadMailAccounts  = () => mailApi('/accounts');
+
+/* ── 연사 프로그램·수급 현황 바깥 공유 (routes/share.js) ── */
+async function shareApi(path, method = 'GET', body){
+  if(!API_BASE_URL || !currentUser) return { ok: false, offline: true, error: '테스트 모드에서는 공유할 수 없어요' };
+  try {
+    const headers = { ...await authHeaders(), ...(body ? { 'Content-Type': 'application/json' } : {}) };
+    const res = await fetch(API_BASE_URL + '/api/share' + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+    const j = await res.json().catch(() => ({}));
+    if(!res.ok && j.ok !== false) return { ok: false, error: `실패 (${res.status})` };
+    return j;
+  } catch(e){ return { ok: false, error: e.message }; }
+}
+export const loadShares    = (evKey) => shareApi(`/${encodeURIComponent(evKey)}`);
+export const setShare      = (evKey, kind, body) => shareApi(`/${encodeURIComponent(evKey)}/${kind}`, 'PUT', body);
+export const pushShareData = (evKey, kind, data) => shareApi(`/${encodeURIComponent(evKey)}/${kind}/data`, 'POST', { data });
+export const shareUrl      = (path) => (API_BASE_URL || '') + path;
 /* 이 행사 메일이 어느 주소로 나가는지 — 보내기 전에 눈으로 확인하게 보여 준다.
    계정을 저장·삭제하면 새로 고칠 수 있게 force를 둔다. */
 let mailAcctCache = null;

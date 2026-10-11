@@ -65,6 +65,7 @@ import { IMPORT_SHEETS, IMPORT_GUIDE } from '../conf-import-spec.js';
 import { trackColorOf, pickTrackColorIndex } from '../track-colors.js';
 import { saveConf } from './settings-tab.js';
 import './speaker-bulkmail.js';
+import { scheduleSharePublish } from './speaker-share.js';   // 프로그램·수급 현황 바깥 공유
 import { nextActionLabel, flowStatus as spFlowStatus } from './speaker-flow.js';
 import { confDashHtml } from './conf-dash.js';
 import { reusePending } from './contact-speaker.js';
@@ -272,6 +273,8 @@ export function renderConf(){
       + `설정 › 행사 관리 › ${escapeHtml(ev.short || ev.key)} › 진행 파트에서 컨퍼런스를 «진행 중»으로 켜면 여기서 프로그램을 짤 수 있어요.`);
     return;
   }
+  // 바깥 공유를 켜 둔 행사면 바뀐 것을 잠시 뒤 다시 올린다(speaker-share.js)
+  scheduleSharePublish(ev.key);
 
   const segs = [['dash', '대시보드'], ['pga', 'Program at a Glance'], ['program', 'Program'], ['people', 'Speakers'], ['watch', '파일 감시']];
   const seg = `<div class="seg" style="margin:0 0 12px">
@@ -318,7 +321,7 @@ const SESSION_KINDS = [
 /* 종류를 안 고르고 만든 «커피 브레이크»«만찬»도 식사·휴식으로 본다 — 엑셀에서
    종류 칸을 비우는 일이 잦다. 다만 연사가 배정된 세션은 제목이 어떻든 발표 세션이다. */
 const MEAL_TITLE = /브레이크|휴식|커피|오찬|점심|중식|만찬|디너|갈라|네트워킹|기념\s*촬영|단체\s*사진|등록|coffee\s*break|lunch|dinner|reception|networking|photo\s*session|group\s*photo|registration/i;
-const isBreak = (s) => !!(s && (s.kind || (MEAL_TITLE.test(`${s.title_ko || ''} ${s.title_en || ''}`)
+export const isBreak = (s) => !!(s && (s.kind || (MEAL_TITLE.test(`${s.title_ko || ''} ${s.title_en || ''}`)
   && !SESSION_SPEAKERS.some(a => a.session_id === s.id))));
 const kindOf = (k) => SESSION_KINDS.find(x => x.key === (k || '')) || SESSION_KINDS[0];
 const kindSelect = (id, cur, titleIds) => `<select class="fi" id="${id}"
@@ -1427,7 +1430,9 @@ function peopleHtml(ev){
       <button class="btn bs" onclick="openSpeakerBulkMail('${escAttr(ev.key)}')"
         title="연락 단계 메일(일정 변경 안내·자료 요청 등)을 여러 연사에게 한 번에 — 연사마다 한 통씩 따로 나갑니다">📨 여러 연사에게 메일</button>
       <button class="btn bs" id="sp-export-btn" onclick="exportSpeakers('${escAttr(ev.key)}')"
-        title="프로그램표(Program At a Glance)·연사 전체 정보·약력과 초록을 엑셀 한 파일로 받습니다">엑셀 다운로드</button></div>
+        title="프로그램표(Program At a Glance)·연사 전체 정보·약력과 초록을 엑셀 한 파일로 받습니다">엑셀 다운로드</button>
+      <button class="btn bs" onclick="openSpeakerShare('${escAttr(ev.key)}')"
+        title="프로그램(공개 주소)·수급 현황(비밀 링크)을 웹 페이지로 바깥에 보여 줍니다">🔗 외부 공유</button></div>
   </div>${schedAlertHtml(ev.key, all)}`;
 
   /* ── 세션 칩 ──
