@@ -619,6 +619,8 @@ export const TALK_FIELDS = ['start_at', 'end_at', 'duration_min', 'lang', 'keywo
 /* 주 발표자 줄 — 공동이 아니거나 가리키는 줄이 없어졌으면 자기 자신 */
 export const leadOf = (a) => (a && a.lead_id && SESSION_SPEAKERS.find(x => x.id === a.lead_id && x.id !== a.id)) || a;
 export const coOf   = (a) => a ? SESSION_SPEAKERS.filter(x => x.lead_id === a.id && x.id !== a.id) : [];
+/* 화면·프로그램표에 적는 역할 이름 — 공동 발표의 «연사»는 주 발표자까지 «공동연사» */
+export const roleLabel = (a) => !a ? '' : (a.role === '연사' && (leadOf(a) !== a || coOf(a).length)) ? '공동연사' : (a.role || '');
 /* 한 사람의 배정 — 공동 연사 줄은 발표 칸을 주 발표자 줄에서 읽어 채운 사본으로
    돌려준다. 읽기 전용이다(고칠 때는 SESSION_SPEAKERS의 원래 줄을 찾는다).
    talk_id: 발표 칸을 고칠 때 써야 할 줄 id */

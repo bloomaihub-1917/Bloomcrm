@@ -27,7 +27,7 @@ import {
   contactsOfSpeaker, SPEAKER_CONTACTS, SPEAKER_LOGS,
   contacts, participations,
   isDomesticSpeaker, bankDocs, paysFee,
-  leadOf, coOf, TALK_FIELDS,
+  leadOf, coOf, TALK_FIELDS, roleLabel,
 } from '../state.js';
 import { SPEAKER_ROLES, NEED_MARK, SPEAKER_NEEDS, SP_CONSENTS } from '../constants.js';
 import { td, escapeHtml, escAttr, isMobile, leftPill, countryName } from '../utils.js';
@@ -485,14 +485,13 @@ function sessionCard(ev, s, days, cfg){
       <div style="display:flex;align-items:center;gap:8px">
       <span style="cursor:grab;color:var(--i5);font-size:12px;line-height:1;user-select:none"
         title="끌어서 순서를 바꿉니다">⠿</span>
-      ${roleChip(a.role)}
+      <span class="pill ${roleCls(a.role)}" style="font-size:10px">${escapeHtml(roleLabel(a) || '역할 없음')}</span>
       <div style="flex:1;min-width:0">
         <div><span onclick="openSpeakerDr('${escAttr(a.speaker_id)}')" style="font-size:12px;cursor:pointer;color:var(--a)">${escapeHtml(speakerName(a.speaker_id))}</span>
           ${!isCo && a.start_at ? `<span style="font-size:10.5px;color:var(--i3);margin-left:6px">${
             escapeHtml(timeLabel(a.start_at, a.end_at))}</span>` : ''}</div>
         ${isCo
-          ? `<div style="font-size:10.5px;color:var(--i4)">↳ ${escapeHtml(speakerName(lead.speaker_id))}와 공동 발표${
-              lead.start_at ? ` · ${escapeHtml(timeLabel(lead.start_at, lead.end_at))}` : ''}</div>`
+          ? `<div style="font-size:10.5px;color:var(--i4)">↳ ${escapeHtml(speakerName(lead.speaker_id))}와 같은 발표</div>`
           : needsTalk
           ? `<div style="font-size:10.5px;color:${a.title_ko || a.title_en ? 'var(--i5)' : 'var(--i4)'}">
               ${escapeHtml(a.title_ko || a.title_en || '발제명 아직 없음')}</div>`
@@ -715,14 +714,16 @@ function pgaSpeakers(ss, opts){
       /* 발제명은 국·영문을 함께 보여준다. 프로그램북이 둘 다 싣고, 우리가
          고르면 어느 쪽이 빠졌는지 화면에서 알 수 없다 — 하나만 있으면
          그것만 나온다. */
-      const titleKo = a.title_ko || '';
-      const titleEn = a.title_en || '';
+      /* 공동연사 줄은 주 발표자 줄 아래 이름만 — 시각·발제명은 위 줄에 이미 있다 */
+      const isCo = leadOf(a) !== a;
+      const titleKo = isCo ? '' : (a.title_ko || '');
+      const titleEn = isCo ? '' : (a.title_en || '');
       const title = titleKo || titleEn;
-      const when = a.start_at ? timeLabel(a.start_at, a.end_at) : '';
+      const when = !isCo && a.start_at ? timeLabel(a.start_at, a.end_at) : '';
       const roleC = (SPEAKER_ROLES.find(r => r.key === a.role) || {}).cls || 'p-gray';
 
       const person = `<span class="pill ${roleC}" style="font-size:8.5px;padding:1px 4px;vertical-align:1px">${
-          escapeHtml(a.role || '')}</span>
+          escapeHtml(roleLabel(a))}</span>
         <span style="color:var(--i2)"> ${escapeHtml(nm)}</span>${
         (sp && sp.name_snapshot && sp.name_en)
           ? `<span style="color:var(--i4)"> ${escapeHtml(sp.name_en)}</span>` : ''}${

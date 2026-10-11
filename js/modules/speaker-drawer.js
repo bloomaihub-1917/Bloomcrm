@@ -79,6 +79,7 @@ export function openSpeakerDr(id, tab){
     /* PC에서 고른 첨부는 그 사람 몫이다 — 다음 연사 메일로 따라가면 여권·계좌
        서류가 엉뚱한 사람에게 나간다 */
     spLocalFiles = []; spSkipDefault = new Set();
+    spWithCo = true;
   }
   spId = id;
   setConfLockEv(getSpeakerById(id)?.event_id);
@@ -1198,6 +1199,38 @@ export function mailTargets(speakerId){
   return { to: pick('to'), cc: pick('cc') };
 }
 
+/* ── 공동연사에게 함께 보내기 ──
+   공동 발표는 시간·발제·자료가 하나라 안내도 같은 글이 두 번 나간다. 따로 보내면
+   한쪽만 받거나 내용이 갈린다. 상대의 수신·참조를 합쳐 한 통으로 보내고,
+   기록은 두 사람 모두에게 남긴다(그래야 상대 쪽 연락 단계도 함께 넘어간다). */
+let spWithCo = true;   // 공동연사가 있으면 기본으로 함께 — 다른 연사를 열면 다시 켠다
+export function coPartners(sp){
+  const out = new Map();
+  SESSION_SPEAKERS.filter(x => x.speaker_id === sp.id).forEach(a => {
+    const l = leadOf(a);
+    [l, ...coOf(l)].forEach(x => {
+      if(x.speaker_id === sp.id) return;
+      const p = getSpeakerById(x.speaker_id);
+      if(p && p.status !== '취소') out.set(p.id, p);
+    });
+  });
+  return [...out.values()];
+}
+function mailTargetsFor(sp){
+  const t = mailTargets(sp.id);
+  if(!spWithCo) return { ...t, partners: [] };
+  const partners = coPartners(sp);
+  const to = [...t.to], cc = [...t.cc];
+  const seen = new Set([...to, ...cc].map(norm));
+  partners.forEach(p => {
+    const pt = mailTargets(p.id);
+    pt.to.forEach(e => { if(!seen.has(norm(e))){ seen.add(norm(e)); to.push(e); } });
+    pt.cc.forEach(e => { if(!seen.has(norm(e))){ seen.add(norm(e)); cc.push(e); } });
+  });
+  return { to, cc, partners };
+}
+export function toggleSpWithCo(on){ spWithCo = !!on; renderSpeakerDr(); }
+
 function peopleTabHtml(sp){
   const rows = contactsOfSpeaker(sp.id);
   const t = mailTargets(sp.id);
@@ -1345,7 +1378,9 @@ window.startSpeakerReply = startSpeakerReply;
 window.cancelSpeakerReply = cancelSpeakerReply;
 
 function mailTabHtml(sp, evKey){
-  const t = spReply ? { to: spReply.to, cc: [] } : mailTargets(sp.id);
+  const t = spReply ? { to: spReply.to, cc: [] } : mailTargetsFor(sp);
+  const coAll = spReply ? [] : coPartners(sp);
+  const noMail = (p) => !mailTargets(p.id).to.length && !mailTargets(p.id).cc.length;
   const ev = EVENT_LIST.find(e => e.key === evKey);
   // 영문 연사에게는 영문 행사명(설정 › 행사 › 기본 정보)
   const evName = ev ? ((sp.lang_pref === 'en' && ev.name_en) || ev.name || ev.short || ev.key) : evKey;
@@ -1363,6 +1398,10 @@ function mailTabHtml(sp, evKey){
       <span id="sp-mail-from">발신 확인 중…</span><br>
       ${t.to.length ? `수신 <b>${escapeHtml(t.to.join(', '))}</b>` : '<b style="color:var(--re)">수신이 없어요</b> — «연락 상대»에서 먼저 정해주세요'}
       ${t.cc.length ? `<br>참조 ${escapeHtml(t.cc.join(', '))}` : ''}
+      ${coAll.length ? `<br><label style="cursor:pointer;color:var(--a)"><input type="checkbox"${spWithCo ? ' checked' : ''}
+        onchange="toggleSpWithCo(this.checked)" style="vertical-align:-2px"> 공동연사 ${escapeHtml(coAll.map(p => p.name_snapshot || p.name_en).join(', '))}에게도 한 통으로 함께 보내기</label>${
+        spWithCo && coAll.some(noMail)
+          ? ` <span style="color:var(--am)">— ${escapeHtml(coAll.filter(noMail).map(p => p.name_snapshot || p.name_en).join(', '))}은(는) 메일 주소가 없어요</span>` : ''}` : ''}
     </div>
     ${(() => {
       /* 연락 단계가 먼저 — 지금 할 일이 골라진 채로 열린다. 개별 요청은 아래에 */
@@ -1620,7 +1659,7 @@ export async function sendSpeakerMail(){
   const say = (t, ok) => { if(msg){ msg.style.color = ok ? 'var(--g)' : 'var(--re)'; msg.textContent = t; } };
 
   const reply = spReply;
-  const t = reply ? { to: reply.to, cc: [] } : mailTargets(sp.id);
+  const t = reply ? { to: reply.to, cc: [], partners: [] } : mailTargetsFor(sp);
   if(!t.to.length){ say('수신이 없어요 — «연락 상대»에서 먼저 정해주세요.', false); return; }
   const subject = (document.getElementById('sp-mail-subject')?.value || '').trim();
   const text = (document.getElementById('sp-mail-body')?.value || '').trim();
@@ -1666,7 +1705,22 @@ export async function sendSpeakerMail(){
       ? `\n\n[첨부] ${[...mailFilesOf(sp.event_id).filter(f => fileIds.includes(f.id)).map(f => f.filename), ...spLocalFiles.map(f => f.name)].join(', ')}` : ''),
     author_email: '', author_name: '',
   });
-  trackAction('add', '연사 메일', sp.event_id, `${sp.name_snapshot || sp.name_en || sp.id} — ${category}`,
+  /* 공동연사에게도 같은 기록을 남긴다 — 상대 드로어에서도 «보냄»으로 보이고 연락 단계가 넘어간다 */
+  for(const p of t.partners){
+    const row = { speaker_id: p.id, kind, ts: nowStamp(), direction: 'out', channel: '이메일',
+      counterpart: [t.to.join(', '), t.cc.length ? `(cc) ${t.cc.join(', ')}` : ''].filter(Boolean).join(' '),
+      category, subject, answered_at: '', answer: '', status: 'done',
+      body: `[공동연사 ${sp.name_snapshot || sp.name_en || ''}와 함께 보냄]
+
+${text}`,
+      author_email: currentUser?.email || '', author_name: currentUser?.name || '' };
+    const r = await saveSpeakerLog(row);
+    if(r && r.ok !== false && !r.offline) SPEAKER_LOGS.push({ ...row, id: r.id || `SL-tmp-${Date.now()}-${p.id}` });
+    if(category === '자료 독촉') await patchSpeaker({ reminded_at: td() }, '자료 독촉 보냄 (공동연사와 함께)', p.id);
+    if(kind === 'invite' && !p.guide_sent_at) await patchSpeaker({ guide_sent_at: td() }, '초청·가이드 보냄 (공동연사와 함께)', p.id);
+  }
+  trackAction('add', '연사 메일', sp.event_id, `${sp.name_snapshot || sp.name_en || sp.id}${
+    t.partners.length ? ` + 공동연사 ${t.partners.map(p => p.name_snapshot || p.name_en).join(', ')}` : ''} — ${category}`,
     { kind: 'speaker', id: sp.id });
   say((res.logged === false ? '보냈어요 — 다만 기록 저장에 실패했어요.' : '보냈어요.')
     + (res.sentError ? ` (보낸메일함에는 못 남겼어요: ${res.sentError})` : ''), true);
@@ -2060,6 +2114,7 @@ export async function removeSpPhoto(){
 
 /* ── 노출 ── */
 window.uploadSpPhoto        = uploadSpPhoto;
+window.toggleSpWithCo       = toggleSpWithCo;
 window.removeSpPhoto        = removeSpPhoto;
 window.openSpeakerDr        = openSpeakerDr;
 window.closeSpeakerDr       = closeSpeakerDr;

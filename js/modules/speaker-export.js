@@ -18,7 +18,7 @@
 import {
   EVENT_LIST, contacts,
   sessionsForEvent, speakersForEvent, assignmentsOfSession, assignmentsFor,
-  contactsOfSpeaker, getSpeakerById, CONF_SESSIONS, leadOf, coOf,
+  contactsOfSpeaker, getSpeakerById, CONF_SESSIONS, leadOf, coOf, roleLabel,
 } from '../state.js';
 import { SP_CONSENTS } from '../constants.js';
 import { spCell, consentRefused } from './conf-tab.js';
@@ -130,7 +130,7 @@ function drawGlance(wb, evKey, title){
 
       const team = [sp, ...(a ? coOf(a).filter(live).map(x => getSpeakerById(x.speaker_id)) : [])].filter(Boolean);
       const joinOf = (f) => team.length > 1 ? team.map(f).join('\n') : f(sp || {});
-      const vals = [joinOf(nameOf), joinOf(orgOf), joinOf(titleOf), a ? talkOf(a) : '', a ? (a.role || '') : ''];
+      const vals = [joinOf(nameOf), joinOf(orgOf), joinOf(titleOf), a ? talkOf(a) : '', a ? roleLabel(a) : ''];
       vals.forEach((v, k) => {
         const c = ws.getCell(r, 6 + k);
         c.value = v;
