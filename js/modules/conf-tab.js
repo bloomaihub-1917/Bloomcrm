@@ -2156,13 +2156,52 @@ export async function onAsgDrop(e, overId, el){
      배정을 다시 하는 일이고, 그때는 발제 정보를 어떻게 할지 정해야 한다. */
   if(!moving || !target || moving.session_id !== target.session_id) return;
 
-  const list = assignmentsOfSession(moving.session_id).slice();
-  const fromIdx = list.findIndex(x => x.id === from);
-  const toIdx = list.findIndex(x => x.id === overId);
-  if(fromIdx < 0 || toIdx < 0) return;
-  list.splice(toIdx, 0, list.splice(fromIdx, 1)[0]);
+  /* 공동 발표는 한 덩어리로 옮긴다 — 주 발표자를 끌면 공동연사가 따라오고,
+     공동연사를 끌면 주 발표자째 옮긴다. 떨어지면 따로 발표하는 것처럼 보인다. */
+  const all = assignmentsOfSession(moving.session_id).slice();
+  const head = leadOf(moving), over = leadOf(target);
+  if(head === over) return;
+  const group = (l) => [l, ...all.filter(x => x !== l && leadOf(x) === l)];
+  const block = group(head);
+  const rest = all.filter(x => !block.includes(x));
+  const fromIdx = all.indexOf(head);
+  const overIdx = all.indexOf(over);
+  /* 아래로 끌면 놓은 덩어리 뒤에, 위로 끌면 앞에 */
+  let at = rest.indexOf(over);
+  if(overIdx > fromIdx) at += group(over).length;
+  const list = [...rest.slice(0, at), ...block, ...rest.slice(at)];
   const sess = CONF_SESSIONS.find(s => s.id === moving.session_id);
-  await applyAsgOrder(list, `${sess ? (sess.title_ko || sess.title_en || '세션') + ' — ' : ''}${speakerName(moving.speaker_id)} ${toIdx + 1}번째로 옮김`);
+  const label = `${sess ? (sess.title_ko || sess.title_en || '세션') + ' — ' : ''}${speakerName(head.speaker_id)} ${list.indexOf(head) + 1}번째로 옮김`;
+  await applyAsgOrder(list, label);
+  await reflowTalkTimes(list, label);
+}
+
+/* 순서를 바꾸면 시간도 따라간다. 시간이 적힌 발표만 새 순서대로, 맨 처음 시각부터
+   각자의 길이(«분», 없으면 시작–종료)만큼 이어 붙인다. 시간이 없는 줄(좌장 등)과
+   공동연사 줄은 건드리지 않는다 — 공동연사는 주 발표자 시간을 읽는다. */
+async function reflowTalkTimes(list, label){
+  const timed = list.filter(a => leadOf(a) === a && a.start_at);
+  if(timed.length < 2) return;
+  const lenOf = (a) => Number(a.duration_min) || ((toMin(a.end_at) ?? null) !== null && toMin(a.start_at) !== null
+    ? toMin(a.end_at) - toMin(a.start_at) : 0);
+  if(timed.some(a => !(lenOf(a) > 0))) return;   // 길이를 모르는 발표가 있으면 손대지 않는다
+  let cur = Math.min(...timed.map(a => toMin(a.start_at)));
+  const plan = timed.map(a => { const st = toHHMM(cur); cur += lenOf(a); return { a, start_at: st, end_at: toHHMM(cur) }; })
+    .filter(p => p.a.start_at !== p.start_at || p.a.end_at !== p.end_at);
+  if(!plan.length) return;
+  for(const p of plan){
+    const backup = { start_at: p.a.start_at, end_at: p.a.end_at };
+    p.a.start_at = p.start_at; p.a.end_at = p.end_at;
+    const res = await gSaveAssign({ id: p.a.id, start_at: p.start_at, end_at: p.end_at });
+    if(!res || res.ok === false){
+      Object.assign(p.a, backup);
+      renderConf();
+      if(!res?.locked) alert('순서는 바꿨지만 시간을 옮기지 못했어요. «시간 배분»으로 다시 맞춰 주세요.');
+      return;
+    }
+  }
+  trackAction('edit', '발표 시간 배분', confEvent, `${label} — 시간 따라 옮김`);
+  renderConf();
 }
 
 /* seq를 1부터 다시 매긴다. 바뀐 줄만 보낸다 — 다섯 줄 중 둘만 움직였는데
