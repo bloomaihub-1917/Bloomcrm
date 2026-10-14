@@ -845,12 +845,11 @@ function pgaHtml(ev){
       <div style="font-size:11.5px;font-weight:600">${escapeHtml(ss.title_ko || ss.title_en || '(세션명 없음)')}</div>
       ${ss.title_en && ss.title_ko ? `<div style="font-size:9.5px;color:var(--i4);margin-top:2px">${escapeHtml(ss.title_en)}</div>` : ''}
       ${(() => {
-        /* 개막식 줄은 가운데 정렬이라 연사 줄을 그대로 넣으면 왼쪽으로 쏠린다.
-           개회사·환영사도 누가 하는지가 프로그램북에 나가므로 한 줄로 적는다. */
-        const asg = assignmentsOfSession(ss.id);
-        if(!asg.length) return '';
-        return `<div style="font-size:9.5px;color:var(--i4);margin-top:3px">${
-          escapeHtml(asg.map(a => `${speakerName(a.speaker_id)}${a.role ? ` (${a.role})` : ''}`).join(' · '))}</div>`;
+        /* 연사 항목은 장소가 있는 세션과 똑같이(시각·역할 배지·소속) 그린다.
+           제목은 가운데지만 연사 줄은 왼쪽 정렬해야 시각 열이 맞는다. */
+        const sp = pgaSpeakers(ss);
+        return sp ? `<div style="text-align:left;margin-top:6px;padding-top:4px;
+          border-top:1px solid var(--i6)">${sp}</div>` : '';
       })()}
     </div>`;
   };
