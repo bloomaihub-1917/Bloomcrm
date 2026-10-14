@@ -1331,6 +1331,9 @@ export async function voidExhItem(id){
   await setItemField(id, 'voided_at', td());
 }
 
+/* 접수 이름 — 현장에서 받은 건 차수 대신 «현장» */
+function appSeqLabel(a){ return a.channel === '현장' ? '현장' : `${a.seq}차`; }
+
 /* 품목이 몇 차 접수에서 어떻게 됐는지 — 이름 옆 배지 */
 function appMark(i){
   if(!i.app_id) return '';
@@ -1338,7 +1341,7 @@ function appMark(i){
   if(!a) return '';
   const cls = i.change_kind === '취소' ? 'p-red' : i.change_kind === '변경' ? 'p-amber' : 'p-teal';
   return ` <span class="pill ${cls}" style="font-size:9px" title="${escAttr(
-    (a.received_at || '') + (a.reason ? ' · ' + a.reason : ''))}">${escapeHtml(a.seq)}차 ${escapeHtml(i.change_kind || '추가')}</span>`;
+    `${a.seq}차 · ` + (a.received_at || '') + (a.reason ? ' · ' + a.reason : ''))}">${escapeHtml(appSeqLabel(a))} ${escapeHtml(i.change_kind || '추가')}</span>`;
 }
 
 /* ── 이 회차에서 무엇이 달라졌나 ──
@@ -1470,7 +1473,7 @@ function appsSection(x){
     const diff = live ? appDiffLines(a.id, x.id) : [];
     return `<div style="border:1px solid ${live ? 'var(--a)' : 'var(--i7)'};border-radius:8px;padding:9px 10px;margin-bottom:6px;background:${live ? 'var(--ad)' : 'var(--W)'}">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-        <span class="pill ${a.kind === '최초' ? 'p-blue' : a.kind === '취소' ? 'p-red' : 'p-amber'}">${escapeHtml(a.seq)}차 · ${escapeHtml(a.kind || '')}</span>
+        <span class="pill ${a.kind === '최초' ? 'p-blue' : a.kind === '취소' ? 'p-red' : 'p-amber'}">${escapeHtml(appSeqLabel(a))} · ${escapeHtml(a.kind || '')}</span>
         <select class="fi" style="width:auto;font-size:11px;padding:3px 6px"
           title="접수 경로 — 엑스렌탈은 거기서 직접 청구·수금한 건이에요"
           onchange="setAppField('${escAttr(a.id)}','channel',this.value)">${
@@ -2250,7 +2253,7 @@ function dBilling(x){
       <div style="font-size:12px;font-weight:700;color:var(--re)">인보이스 발행 뒤에 신청이 바뀌었어요</div>
       <div style="font-size:11px;color:var(--i3);margin-top:4px">
         마지막 인보이스 ${escapeHtml(r.last)} 이후 접수 ${r.apps.length}건 —
-        ${r.apps.map(a => escapeHtml(`${a.seq}차 ${a.received_at}${a.reason ? ' (' + a.reason + ')' : ''}`)).join(' · ')}
+        ${r.apps.map(a => escapeHtml(`${appSeqLabel(a)} ${a.received_at}${a.reason ? ' (' + a.reason + ')' : ''}`)).join(' · ')}
       </div>
       <div style="font-size:10.5px;color:var(--i4);margin-top:4px">청구액이 맞는지 보고, 다르면 옛 인보이스를 무효로 두고 다시 발행하세요.</div>
       <div style="margin-top:6px;text-align:right">
