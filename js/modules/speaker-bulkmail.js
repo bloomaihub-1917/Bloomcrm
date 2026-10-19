@@ -238,7 +238,7 @@ function render(){
           <div class="mlbl" style="margin-top:6px">영문</div>
           <input class="fi" style="font-size:11.5px;margin-bottom:4px" value="${escAttr(tpl.subject_en)}" oninput="sbmTpl('subject_en',this.value)">
           <textarea class="fi" rows="6" style="font-size:11.5px;width:100%" oninput="sbmTpl('body_en',this.value)">${escapeHtml(tpl.body_en)}</textarea>
-          ${varChipsHtml('conf')}
+          ${varChipsHtml('conf', { ev: bm.evKey })}
           <div style="font-size:10.5px;color:var(--i4);margin-top:4px">칸은 연사마다 채워집니다. 여기서 고친 문구는 이번 발송에만 쓰고, 기본 문구는
             <a href="#" onclick="openFlowEditor('${escAttr(bm.evKey)}','${escAttr(bm.step)}');return false">단계 편집</a>에서 고칩니다.</div>
         </details>

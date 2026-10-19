@@ -140,7 +140,7 @@ if(!window.__mailPreviewBound){
   new MutationObserver(() => {
     if(queued) return;
     queued = true;
-    requestAnimationFrame(() => {
+    setTimeout(() => {   // rAF는 창이 뒤에 있으면 돌지 않는다
       queued = false;
       document.querySelectorAll('.vprev:not([data-seen])').forEach(vp => { vp.dataset.seen = '1'; render(vp); });
     });

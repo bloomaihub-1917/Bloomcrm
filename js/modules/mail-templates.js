@@ -110,7 +110,7 @@ function formHtml(part, ev, step, v, roles){
       ${full(inp('subject_ko', '제목 (국문)'))}${area('body_ko', '본문 (국문)')}
       ${full(inp('subject_en', '제목 (영문)'))}${area('body_en', '본문 (영문)')}
     </div>
-    ${varChipsHtml(part)}
+    ${varChipsHtml(part, { ev })}
     ${previewHtml(part, { ev, step })}
     <div style="display:flex;gap:6px;margin-top:8px">
       <button class="btn bp" style="font-size:11px" onclick="tplVarSave()">${v.id ? '저장' : '추가'}</button>
@@ -246,7 +246,7 @@ function libForm(it){
       ${full(inp('subject_ko', '제목 (국문)'))}${area('body_ko', '본문 (국문)')}
       ${full(inp('subject_en', '제목 (영문)'))}${area('body_en', '본문 (영문)')}
     </div>
-    ${varChipsHtml(mg.part)}
+    ${varChipsHtml(mg.part, { ev: mg.ev })}
     ${previewHtml(mg.part, { ev: mg.ev })}
     <div style="display:flex;gap:6px;margin-top:8px">
       <button class="btn bp" style="font-size:11px" onclick="tplLibSave()">${it.id ? '저장' : '추가'}</button>

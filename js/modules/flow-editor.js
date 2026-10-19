@@ -159,7 +159,7 @@ function formHtml(st, isNew){
     <div data-vscope><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
       ${FIELDS.map(([f, l]) => fld(f, l)).join('')}${extra}
     </div>
-    ${varChipsHtml('conf', { note: '영문(EN) 연사에게는 영문 양식이 나가요' })}
+    ${varChipsHtml('conf', { ev: edEv, note: '영문(EN) 연사에게는 영문 양식이 나가요' })}
     ${previewHtml('conf', { ev: edEv, step: isNew ? '' : st.key })}</div>
     ${isNew ? '' : variantsHtml('conf', edEv, st.key, locked())}
     ${isNew ? '' : `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i7)">

@@ -145,7 +145,7 @@ function formHtml(st, isNew){
     <div data-vscope><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
       ${FIELDS.map(([f, l]) => fld(f, l)).join('')}${extra}${sinceFld}
     </div>
-    ${varChipsHtml('exh')}
+    ${varChipsHtml('exh', { ev: edEv })}
     ${previewHtml('exh', { ev: edEv, step: isNew ? '' : st.key })}</div>
     ${isNew ? '' : variantsHtml('exh', edEv, st.key, locked())}
     ${isNew ? '' : `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i7)">

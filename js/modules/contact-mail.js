@@ -153,7 +153,7 @@ function render(){
         <details${cm.lang === 'en' ? ' open' : ''} style="margin-top:6px"><summary style="cursor:pointer;font-size:11.5px;font-weight:700;margin-bottom:4px">영문 문구</summary>
           <input class="fi" style="font-size:11.5px;margin-bottom:4px" value="${escapeHtml(cm.tpl.subject_en)}" oninput="rmTpl('subject_en',this.value)">
           <textarea class="fi" rows="7" style="font-size:11.5px;width:100%" placeholder="Dear {담당자}," oninput="rmTpl('body_en',this.value)">${escapeHtml(cm.tpl.body_en)}</textarea></details>
-        ${varChipsHtml('contact')}
+        ${varChipsHtml('contact', { ev: r.event_id })}
         <div style="font-size:10.5px;color:var(--i4);margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <span>칸은 기업마다 채워집니다.</span>
           <a href="javascript:void(0)" onclick="saveRoundMailTpl()" style="color:var(--a)">이 문구를 차수 양식으로 저장</a>

@@ -700,3 +700,8 @@ tr.row-sel{background:var(--ad)}
 .vprev-body{white-space:pre-wrap;overflow-wrap:anywhere}
 .vprev-note{font-size:10.5px;color:var(--am);margin-top:5px}
 .vprev-raw{background:var(--ab);color:var(--am);border-radius:3px;padding:0 2px}
+.vchip.vc-empty{color:var(--i5);border-style:dashed;background:transparent}
+.vchip.vc-empty.on{color:var(--am);border-color:var(--am);background:var(--ab)}
+.vchips-info{font-size:10.5px;color:var(--i3);margin-top:5px;line-height:1.5}
+.vchips-info span{color:var(--i4)}
+.vchips-info:empty{display:none}
