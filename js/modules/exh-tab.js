@@ -1619,6 +1619,45 @@ const pillsOf = (cnt, cls = 'p-gray') => Object.entries(cnt)
 
 const emptyView = (msg) => `<div class="empty" style="padding:40px 20px;text-align:center;color:var(--i4);font-size:13px">${escapeHtml(msg)}</div>`;
 
+/* ── 현장 추가 (대시보드 카드) ──
+   현장에서 받은 접수(경로 '현장')로 들어온 품목을 기업마다 모은다. 차수 배지에는
+   «현장»으로 적히고, 여기서는 현장 정산·추가 청구할 곳을 한눈에 본다.
+   현장 처리(행사 기간에 «했음»)와는 다르다. 무효로 돌린 품목은 뺀다. */
+function onsiteAddCard(all){
+  const groups = [];
+  const sums = {};
+  for(const x of all){
+    const apps = new Set(appsFor(x.id).filter(a => a.channel === '현장').map(a => a.id));
+    if(!apps.size) continue;
+    const items = liveItemsFor(x.id).filter(i => apps.has(i.app_id));
+    if(!items.length) continue;
+    const sub = {};
+    items.filter(i => i.change_kind !== '취소').forEach(i => {
+      const c = i.currency || 'KRW';
+      sub[c] = (sub[c] || 0) + num(i.amount);
+      sums[c] = (sums[c] || 0) + num(i.amount);
+    });
+    groups.push({ x, items, sub });
+  }
+  if(!groups.length) return '';
+  groups.sort((p, q) => boothSortKey(p.x) - boothSortKey(q.x));
+  const n = groups.reduce((s, g) => s + g.items.length, 0);
+  const row = ({ x, items, sub }) => `<div onclick="openExhDr('${escAttr(x.id)}','billing')"
+      style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:6px;cursor:pointer;background:var(--i9);margin-bottom:4px">
+      ${x.booth_no ? `<span class="pill p-gray" style="flex:0 0 auto">${escapeHtml(x.booth_no)}</span>` : ''}
+      <span style="font-size:11.5px;font-weight:700;flex:0 0 auto">${escapeHtml(exhNames(x).ko)}</span>
+      <span style="font-size:11px;color:var(--i4);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${
+        escapeHtml(items.map(i => (i.name || '(이름 없음)') + (i.change_kind === '취소' ? '(취소)' : '')).join(' · '))}</span>
+      <span style="font-size:11.5px;font-weight:700;flex:0 0 auto">${
+        escapeHtml(Object.entries(sub).map(([c, v]) => fmtMoney(v, c)).join(' · '))}</span>
+    </div>`;
+  return `<div class="uc">
+      <div class="uc-ttl">현장 추가 <span style="font-weight:400;color:var(--i4);font-size:11px">${groups.length}곳 · ${n}건 · ${
+        escapeHtml(Object.entries(sums).map(([c, v]) => fmtMoney(v, c)).join(' · '))}</span></div>
+      ${groups.map(row).join('')}
+    </div>`;
+}
+
 /* 받침에 따라 '와/과'를 고른다 — 기업명이 값이라 문장에 그대로 이어 붙는다 */
 function wa(name){
   const ch = String(name || '').trim().slice(-1);
@@ -4716,6 +4755,7 @@ function renderDashboard(all){
     <div class="exh-dash-third">${cardBooth}</div>
     <div class="exh-dash-third">${cardSteps}</div>
     <div class="exh-dash-third">${cardCash}</div>
+    ${(() => { const c = onsiteAddCard(all); return c ? `<div class="exh-dash-wide">${c}</div>` : ''; })()}
     <div class="exh-dash-wide">${mailCardHtml(exhEvent, 'exh')}</div>
     <div class="exh-dash-wide">${cardTodo}</div>
     <div class="exh-dash-side">${cardRecent}</div>
