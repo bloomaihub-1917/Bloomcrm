@@ -18,6 +18,7 @@ import { variantsHtml } from './mail-templates.js';
 import { loadMailFiles, mailFilesOf, uploadMailFile, deleteMailFile, fileToBase64 } from '../api.js';
 import { escapeHtml, escAttr } from '../utils.js';
 import { varChipsHtml } from './var-chips.js';
+import { previewHtml } from './mail-preview.js';
 
 let edEv = null;      // 고치는 행사
 let edOpen = null;    // 펼친 단계 key ('new'면 새 단계)
@@ -158,7 +159,8 @@ function formHtml(st, isNew){
     <div data-vscope><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
       ${FIELDS.map(([f, l]) => fld(f, l)).join('')}${extra}
     </div>
-    ${varChipsHtml('conf', { note: '영문(EN) 연사에게는 영문 양식이 나가요' })}</div>
+    ${varChipsHtml('conf', { note: '영문(EN) 연사에게는 영문 양식이 나가요' })}
+    ${previewHtml('conf', { ev: edEv, step: isNew ? '' : st.key })}</div>
     ${isNew ? '' : variantsHtml('conf', edEv, st.key, locked())}
     ${isNew ? '' : `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i7)">
       <div class="mlbl">기본 첨부 <span style="font-weight:400;color:var(--i4)">— 이 단계 메일에 자동으로 붙어요 (파일당 3MB)</span></div>

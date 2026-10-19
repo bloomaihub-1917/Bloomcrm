@@ -463,7 +463,12 @@ export function settleState(x){
   const cur = currencyOf(x.id);
   const balance = billed - paid;
   const due = payDueDate(x);
-  const overdue = !!due && daysSince(due) > 0;
+  /* 기한이 지났어도 발행한 인보이스만큼 받았다면 밀린 게 아니다 — 남은 돈은
+     인보이스를 낸 뒤 늘어난 항목(현장 추가 등)이라 아직 청구하지 않은 것이다.
+     그걸 첫 인보이스 기한으로 세어 «59일 지남»이 떴다(서타라, 카달로그 홀더 추가분).
+     그쪽은 «추가 발행 필요»가 따로 알린다. */
+  const invoiced = sumIn(liveInvoices(x.id), cur);
+  const overdue = !!due && daysSince(due) > 0 && (!invoiced || paid < invoiced);
   if(x.settled === 'yes')   return { state:'settled', billed, paid, balance, cur, due, overdue:false };
   if(!billed)               return { state:'none',    billed, paid, balance, cur, due, overdue:false };
   if(paid > billed)         return { state:'over',    billed, paid, balance, cur, due, overdue:false };

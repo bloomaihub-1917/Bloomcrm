@@ -16,6 +16,7 @@ import { trackAction } from './audit-tab.js';
 import { variantsHtml } from './mail-templates.js';
 import { escapeHtml, escAttr } from '../utils.js';
 import { varChipsHtml } from './var-chips.js';
+import { previewHtml } from './mail-preview.js';
 
 let edEv = null, edOpen = null, edDraft = null;
 
@@ -144,7 +145,8 @@ function formHtml(st, isNew){
     <div data-vscope><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
       ${FIELDS.map(([f, l]) => fld(f, l)).join('')}${extra}${sinceFld}
     </div>
-    ${varChipsHtml('exh')}</div>
+    ${varChipsHtml('exh')}
+    ${previewHtml('exh', { ev: edEv, step: isNew ? '' : st.key })}</div>
     ${isNew ? '' : variantsHtml('exh', edEv, st.key, locked())}
     ${isNew ? '' : `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i7)">
       <div class="mlbl">기본 첨부 <span style="font-weight:400;color:var(--i4)">— 이 단계 메일에 자동으로 붙어요 (파일당 3MB)</span></div>

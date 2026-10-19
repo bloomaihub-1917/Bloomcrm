@@ -691,3 +691,12 @@ tr.row-sel{background:var(--ad)}
 .vchips[data-resolve] .vchip{border-style:dashed}
 .vchips-warn{font-size:10.5px;color:var(--am);margin-top:4px;line-height:1.5}
 .vchips-warn:empty{display:none}
+
+/* 메일 양식 미리보기 (js/modules/mail-preview.js) */
+.vprev{margin-top:6px;padding:7px 9px;border:1px solid var(--i6);border-radius:8px;background:var(--W);font-size:11.5px}
+.vprev-hd{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:10.5px;margin-bottom:5px}
+.vprev-out{max-height:260px;overflow:auto;line-height:1.55;color:var(--i2)}
+.vprev-subj{font-weight:700;margin-bottom:6px;overflow-wrap:anywhere}
+.vprev-body{white-space:pre-wrap;overflow-wrap:anywhere}
+.vprev-note{font-size:10.5px;color:var(--am);margin-top:5px}
+.vprev-raw{background:var(--ab);color:var(--am);border-radius:3px;padding:0 2px}

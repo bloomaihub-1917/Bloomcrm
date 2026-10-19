@@ -157,7 +157,8 @@ export const exhStepVariants = (evKey, key) => (((EXH_CFG[evKey] || {}).exhMailV
 export function exhIsEnglish(x){
   const o = x && x.org_id ? getOrgById(x.org_id) : null;
   const c = countryName((o && o.country) || '');
-  return !!c && c !== '대한민국';
+  // countryName은 빈 값을 «-»로 돌려준다 — 그걸 해외로 읽어 국가 없는 곳에 영문이 나갔다
+  return !!c && c !== '-' && c !== '대한민국';
 }
 
 /* 문구 채우기. ctx는 부르는 쪽이 넘긴다(exh-tab의 계산 함수를 여기서 부르면 순환이 된다):

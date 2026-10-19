@@ -21,6 +21,7 @@ import { EXH_MAIL_VARS, exhMailSteps } from './exh-mail.js';
 import { trackAction } from './audit-tab.js';
 import { escapeHtml, escAttr, nowStamp } from '../utils.js';
 import { varChipsHtml } from './var-chips.js';
+import { previewHtml } from './mail-preview.js';
 import { varTokens } from './mail-vars.js';
 
 /* 칸 하나를 두 열에 걸쳐 — 국문 제목·본문, 영문 제목·본문 순으로 위아래로 놓는다 */
@@ -100,7 +101,7 @@ export function variantsHtml(part, ev, step, ro){
 function formHtml(part, ev, step, v, roles){
   const inp = (f, l) => `<div${f === 'label' ? ' style="grid-column:1/-1"' : ''}><div class="mlbl">${l}</div><input class="fi" id="tv-${f}" value="${escAttr(v[f] || '')}" style="width:100%"></div>`;
   const area = (f, l) => `<div style="grid-column:1/-1"><div class="mlbl">${l}</div><textarea class="fi" id="tv-${f}" rows="6" style="width:100%;resize:vertical;font-size:11.5px">${escapeHtml(v[f] || '')}</textarea></div>`;
-  return `<div style="border:1px solid var(--a);border-radius:7px;padding:8px 10px;margin-top:6px;background:var(--W)">
+  return `<div data-vscope style="border:1px solid var(--a);border-radius:7px;padding:8px 10px;margin-top:6px;background:var(--W)">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       ${inp('label', '변형 이름 (예: 패널용, 해외 기조연사용)')}
       ${part === 'conf' ? `<div style="grid-column:1/-1"><div class="mlbl">이 역할 연사에게 저절로 <span style="font-weight:400;color:var(--i4)">— 안 고르면 보낼 때 직접 고릅니다</span></div>
@@ -110,6 +111,7 @@ function formHtml(part, ev, step, v, roles){
       ${full(inp('subject_en', '제목 (영문)'))}${area('body_en', '본문 (영문)')}
     </div>
     ${varChipsHtml(part)}
+    ${previewHtml(part, { ev, step })}
     <div style="display:flex;gap:6px;margin-top:8px">
       <button class="btn bp" style="font-size:11px" onclick="tplVarSave()">${v.id ? '저장' : '추가'}</button>
       <button class="btn" style="font-size:11px" onclick="tplVarCancel()">취소</button>
@@ -235,7 +237,7 @@ function libForm(it){
   const P = PART[mg.part];
   const inp = (f, l) => `<div><div class="mlbl">${l}</div><input class="fi" id="tl-${f}" value="${escAttr(it[f] || '')}" style="width:100%"></div>`;
   const area = (f, l) => `<div style="grid-column:1/-1"><div class="mlbl">${l}</div><textarea class="fi" id="tl-${f}" rows="7" style="width:100%;resize:vertical;font-size:11.5px">${escapeHtml(it[f] || '')}</textarea></div>`;
-  return `<div style="border:1px solid var(--a);border-radius:8px;padding:9px 11px;margin-bottom:6px">
+  return `<div data-vscope style="border:1px solid var(--a);border-radius:8px;padding:9px 11px;margin-bottom:6px">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       ${inp('name', '양식 이름')}
       <div><div class="mlbl">어디서 보일까</div><select class="fi" id="tl-scope" style="width:100%">
@@ -245,6 +247,7 @@ function libForm(it){
       ${full(inp('subject_en', '제목 (영문)'))}${area('body_en', '본문 (영문)')}
     </div>
     ${varChipsHtml(mg.part)}
+    ${previewHtml(mg.part, { ev: mg.ev })}
     <div style="display:flex;gap:6px;margin-top:8px">
       <button class="btn bp" style="font-size:11px" onclick="tplLibSave()">${it.id ? '저장' : '추가'}</button>
       <button class="btn" style="font-size:11px" onclick="tplLibEdit(null)">취소</button></div>
