@@ -1031,8 +1031,15 @@ function renderCoKindBar(n){
       ${CO_SORTS.map(([v, l]) => `<option value="${v}"${coSort === v ? ' selected' : ''}>${l}</option>`).join('')}
     </select>
     ${coCountryF ? `<span class="pill p-gray" style="font-size:10px">${{domestic:'국내',overseas:'해외',unknown:'미확인'}[coCountryF]}</span>` : ''}
-    <span class="db-ct">${n}개 기업</span>`;
+    <span class="db-ct">${n}개 기업</span>
+    ${n ? `<button class="btn bs" style="font-size:11px;padding:3px 8px" onclick="coSendToRound()"
+      title="지금 걸러 본 기업들을 컨택 차수의 명단에 넣습니다">컨택 명단에 넣기</button>` : ''}`;
 }
+/* 지금 걸러 본 목록을 컨택 명단으로 — 고르는 창은 컨택 탭(contact-tab.js)이 그린다 */
+export function coSendToRound(){
+  window.openSendToRound?.(coFilteredList().map(c => c.key), coListLabel() === '전체' ? '기업DB' : coListLabel());
+}
+window.coSendToRound = coSendToRound;
 
 /* ── 분야·섹터 고르기 (기업 추가 모달) ──
    기업을 넣을 때 섹터를 고를 자리가 없어서, 새로 넣은 회사는 전부 미분류로

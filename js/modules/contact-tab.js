@@ -25,7 +25,7 @@ import {
   saveRound, deleteRound, saveRoundMember, deleteRoundMembers, addRoundMembers,
   saveAttempt, deleteAttempt,
 } from '../api.js';
-import { escapeHtml, escAttr, td, nowStamp } from '../utils.js';
+import { escapeHtml, escAttr, td, nowStamp, sectorKey } from '../utils.js';
 import { trackAction } from './audit-tab.js';
 import { postToSheet, reloadContactData } from '../api.js';
 import { buildCoDB } from './company-tab.js';
@@ -865,14 +865,31 @@ export async function removeRound(id){
   renderRoundNav(); (window.renderCrm || renderToday)();
 }
 
-/* ── 명단 채우기 — 행사 참가 기록(기업DB의 행사 이력)에서 고르거나, 한 곳씩 찾아 넣는다 ── */
-let fill = null;   // { ev, roles:Set, picked:Set, source }
+/* ── 명단 채우기 — 행사 참가 기록(기업DB의 행사 이력)이나 분야로 고르거나, 한 곳씩 찾아 넣는다 ── */
+let fill = null;   // { mode:'ev'|'sec', ev, roles:Set, sec, picked:Set, source }
+const coSecs = (c) => (c.sectors && c.sectors.length ? c.sectors : [c.sector || '미분류']);
+/* 기업DB에 쓰인 분야 이름과 기업 수 — 많은 순 */
+function sectorCounts(){
+  const m = new Map();
+  coList().forEach(c => coSecs(c).forEach(s => {
+    if(!s) return;
+    const k = sectorKey(s);
+    if(!m.has(k)) m.set(k, { name: s, n: 0 });
+    m.get(k).n++;
+  }));
+  return [...m.values()].sort((a, b) => b.n - a.n || a.name.localeCompare(b.name, 'ko'));
+}
 function evRoles(evKey){
   const s = new Set();
   coList().forEach(c => (c.events || []).forEach(e => { if(e.key === evKey) (e.roles || []).forEach(r => s.add(r)); }));
   return [...s];
 }
 function fillCandidates(){
+  if(fill?.mode === 'sec'){
+    if(!fill.sec) return [];
+    const k = sectorKey(fill.sec);
+    return coList().filter(c => coSecs(c).some(s => s && sectorKey(s) === k));
+  }
   if(!fill?.ev) return [];
   return coList().filter(c => (c.events || []).some(e => e.key === fill.ev
     && (!fill.roles.size || (e.roles || []).some(r => fill.roles.has(r)))));
@@ -881,7 +898,7 @@ export function openFillRound(){
   const r = roundById(curRoundId);
   if(!r) return;
   const ev = r.event_id;
-  fill = { ev, roles: new Set(), picked: null, source: '' };
+  fill = { mode: 'ev', ev, roles: new Set(), sec: '', picked: null, source: '' };
   renderFill();
 }
 function renderFill(){
@@ -893,7 +910,10 @@ function renderFill(){
   const cands = fillCandidates();
   const fresh = cands.filter(c => !have.has(c.key));
   if(!fill.picked) fill.picked = new Set(fresh.map(c => c.key));
-  const defSource = `${evLabel(fill.ev)}${fill.roles.size ? ' ' + [...fill.roles].join('·') : ''}`;
+  const isSec = fill.mode === 'sec';
+  const secs = isSec ? sectorCounts() : [];
+  const defSource = isSec ? `분야 ${fill.sec}`
+    : `${evLabel(fill.ev)}${fill.roles.size ? ' ' + [...fill.roles].join('·') : ''}`;
   const memoSrc = document.getElementById('rf-src')?.value;
   overlay('round-fill', `
     <div style="display:flex;align-items:center;margin-bottom:4px">
@@ -901,7 +921,15 @@ function renderFill(){
       <button class="btn bs" style="margin-left:auto" onclick="document.getElementById('round-fill').remove()">닫기</button>
     </div>
     <div style="font-size:11.5px;color:var(--i4);margin-bottom:12px">${escapeHtml(r.name)} · 지금 ${have.size}곳</div>
-    <div style="font-size:12px;font-weight:600;margin-bottom:6px">행사 참가 기록에서</div>
+    <div class="seg" style="margin-bottom:8px">
+      <button class="seg-b${!isSec ? ' on' : ''}" onclick="fillMode('ev')">행사 참가 기록에서</button>
+      <button class="seg-b${isSec ? ' on' : ''}" onclick="fillMode('sec')">분야로</button>
+    </div>
+    ${isSec ? `
+    <select onchange="fillPickSec(this.value)" style="width:100%;font-size:12.5px;padding:6px 8px;border:1px solid var(--i6);border-radius:var(--rs);margin-bottom:8px">
+      <option value="">분야를 고르세요</option>
+      ${secs.map(x => `<option value="${escapeHtml(x.name)}"${x.name === fill.sec ? ' selected' : ''}>${escapeHtml(x.name)} (${x.n})</option>`).join('')}
+    </select>` : `
     <select onchange="fillPickEv(this.value)" style="width:100%;font-size:12.5px;padding:6px 8px;border:1px solid var(--i6);border-radius:var(--rs);margin-bottom:6px">
       ${evs.map(e => `<option value="${escapeHtml(e.key)}"${e.key === fill.ev ? ' selected' : ''}>${escapeHtml(e.short || e.name || e.key)}${e.date ? ` (${escapeHtml(e.date)})` : ''}</option>`).join('')}
     </select>
@@ -910,7 +938,7 @@ function renderFill(){
         style="${fill.roles.has(ro) ? 'background:var(--ad);border-color:var(--a);color:var(--a)' : ''}">${escapeHtml(ro)}</button>`).join('')
         : '<span style="font-size:11px;color:var(--i4)">이 행사에 참가 기록이 있는 기업이 없어요</span>'}
       ${roles.length ? `<span style="font-size:10.5px;color:var(--i4);align-self:center">${fill.roles.size ? '고른 유형만' : '유형을 안 고르면 전부'}</span>` : ''}
-    </div>
+    </div>`}
     ${cands.length ? `
       <div style="font-size:11px;color:var(--i3);margin-bottom:4px">${cands.length}곳 · 이미 명단에 ${cands.length - fresh.length}곳 · 넣을 곳 <span id="rf-n">${fill.picked.size}</span>곳
         <a href="javascript:void(0)" onclick="fillAll(true)" style="color:var(--a);margin-left:6px">모두</a>
@@ -932,6 +960,11 @@ function renderFill(){
     <input type="text" id="rf-q" placeholder="기업명 검색" oninput="fillSearch(this.value)" style="width:100%;font-size:12.5px;padding:6px 8px;border:1px solid var(--i6);border-radius:var(--rs)">
     <div id="rf-res" style="margin-top:4px"></div>`);
 }
+export function fillMode(m){
+  if(fill.mode === m) return;
+  fill.mode = m; fill.picked = null; document.getElementById('rf-src')?.remove(); renderFill();
+}
+export function fillPickSec(v){ fill.sec = v; fill.picked = null; document.getElementById('rf-src')?.remove(); renderFill(); }
 export function fillPickEv(ev){ fill.ev = ev; fill.roles = new Set(); fill.picked = null; const s = document.getElementById('rf-src'); if(s) s.remove(); renderFill(); }
 export function fillToggleRole(ro){
   fill.roles.has(ro) ? fill.roles.delete(ro) : fill.roles.add(ro);
@@ -948,8 +981,8 @@ export function fillAll(on){
   fill.picked = new Set(on ? fillCandidates().filter(c => !have.has(c.key)).map(c => c.key) : []);
   renderFill();
 }
-async function addMembers(cos, source){
-  const r = roundById(curRoundId);
+async function addMembers(cos, source, roundId = curRoundId){
+  const r = roundById(roundId);
   if(!r || !cos.length) return false;
   const now = nowStamp();
   const rows = cos.map((c, i) => ({ id: genId('RM-', i), round_id: r.id, org_id: c.key, org_name: coName(c),
@@ -993,7 +1026,52 @@ export async function fillAddOne(key){
 /* ══════════════════════════════════════════
    전역 노출 — 인라인 onclick에서 부른다
 ══════════════════════════════════════════ */
+/* ── 기업DB에서 보내기 — 기업DB에서 걸러 본 기업들을 고른 차수의 명단에 넣는다 ── */
+let sendCos = null;   // { keys:[], label }
+export function openSendToRound(keys, label){
+  const rounds = CONTACT_ROUNDS.filter(r => r.status !== 'closed')
+    .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+  if(!rounds.length){ alert('먼저 컨택 탭에서 차수를 만들어주세요.'); return; }
+  sendCos = { keys: [...new Set(keys)], label: label || '기업DB' };
+  overlay('round-send', `
+    <div style="display:flex;align-items:center;margin-bottom:4px">
+      <div style="font-size:15px;font-weight:700">컨택 명단에 넣기</div>
+      <button class="btn bs" style="margin-left:auto" onclick="document.getElementById('round-send').remove()">닫기</button>
+    </div>
+    <div style="font-size:11.5px;color:var(--i4);margin-bottom:12px">기업DB에서 걸러 본 ${sendCos.keys.length}곳 · ${escapeHtml(sendCos.label)}</div>
+    <div style="font-size:12px;font-weight:600;margin-bottom:6px">어느 차수에</div>
+    <select id="rs-round" onchange="sendRoundInfo()" style="width:100%;font-size:12.5px;padding:6px 8px;border:1px solid var(--i6);border-radius:var(--rs);margin-bottom:4px">
+      ${rounds.map(r => `<option value="${escAttr(r.id)}"${r.id === curRoundId ? ' selected' : ''}>${escapeHtml(evLabel(r.event_id))} · ${escapeHtml(r.name)}</option>`).join('')}
+    </select>
+    <div id="rs-info" style="font-size:11px;color:var(--i3);margin-bottom:8px"></div>
+    ${fld('rs-src', '명단 이름 — 보고를 이 이름별로 나눠요', sendCos.label)}
+    <button class="btn bp" id="rs-go" onclick="sendCommit()">넣기</button>`);
+  sendRoundInfo();
+}
+function sendFresh(){
+  const have = new Set(membersOf(document.getElementById('rs-round')?.value).map(m => m.org_id));
+  return { have, keys: sendCos.keys.filter(k => !have.has(k)) };
+}
+export function sendRoundInfo(){
+  const { have, keys } = sendFresh();
+  const el = document.getElementById('rs-info');
+  if(el) el.textContent = `지금 명단 ${have.size}곳 · 이미 들어 있는 ${sendCos.keys.length - keys.length}곳은 빼고 ${keys.length}곳을 넣어요`;
+  const b = document.getElementById('rs-go');
+  if(b){ b.textContent = `${keys.length}곳 넣기`; b.disabled = !keys.length; }
+}
+export async function sendCommit(){
+  const rid = document.getElementById('rs-round')?.value;
+  const cos = sendFresh().keys.map(coOf).filter(Boolean);
+  if(!cos.length) return;
+  const source = (document.getElementById('rs-src')?.value || '').trim();
+  if(await addMembers(cos, source, rid)){
+    document.getElementById('round-send')?.remove();
+    alert(`«${roundById(rid)?.name || ''}» 명단에 ${cos.length}곳을 넣었어요.`);
+  }
+}
+
 Object.assign(window, {
+  fillMode, fillPickSec, openSendToRound, sendRoundInfo, sendCommit,
   pickRound, renderToday, setContactFil, contactShowMore, toggleContactHist, toggleContactEdit,
   pickContactPerson, pickContactChannel, recordContact, undoContactAttempt, setContactNext,
   toggleContactGoal, closeContactMember, reopenContactMember, saveContactMemberEdit, removeContactMember,
