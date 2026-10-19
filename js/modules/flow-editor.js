@@ -11,12 +11,13 @@
      더한 단계  더하기·고치기·지우기, 어느 단계 뒤에 둘지, 기준일
 ══════════════════════════════════════════════════════════════ */
 import { EVENT_LIST, confCfg, evPartDone } from '../state.js';
-import { FLOW_STEPS, FLOW_VARS, CUSTOM_PRESETS, flowSteps, isCustomStep } from './speaker-flow.js';
+import { FLOW_STEPS, CUSTOM_PRESETS, flowSteps, isCustomStep } from './speaker-flow.js';
 import { saveConf } from './settings-tab.js';
 import { trackAction } from './audit-tab.js';
 import { variantsHtml } from './mail-templates.js';
 import { loadMailFiles, mailFilesOf, uploadMailFile, deleteMailFile, fileToBase64 } from '../api.js';
 import { escapeHtml, escAttr } from '../utils.js';
+import { varChipsHtml } from './var-chips.js';
 
 let edEv = null;      // 고치는 행사
 let edOpen = null;    // 펼친 단계 key ('new'면 새 단계)
@@ -137,7 +138,8 @@ function formHtml(st, isNew){
     if(f === 'due') return `<div><div class="mlbl">${l}</div><input class="fi" type="date" id="${id(f)}" value="${escAttr(v)}" style="width:160px"></div>`;
     if(f.includes('body')) return `<div style="grid-column:1/-1"><div class="mlbl">${l}</div>
       <textarea class="fi" id="${id(f)}" rows="7" style="width:100%;resize:vertical;font-size:11.5px">${escapeHtml(v)}</textarea></div>`;
-    return `<div${f === 'desc' ? ' style="grid-column:1/-1"' : ''}><div class="mlbl">${l}</div>
+    // 제목은 한 줄 통째로 — 국문 제목·본문, 영문 제목·본문 순으로 위아래로 놓인다
+    return `<div${f === 'desc' || f.includes('subject') ? ' style="grid-column:1/-1"' : ''}><div class="mlbl">${l}</div>
       <input class="fi" id="${id(f)}" value="${escAttr(v)}" style="width:100%"></div>`;
   };
   /* 더한 단계는 놓을 자리와 기준일을 고른다 — 자기 자신 뒤에는 둘 수 없다 */
@@ -153,10 +155,10 @@ function formHtml(st, isNew){
     : `<div style="grid-column:1/-1;font-size:10.5px;color:var(--i4);line-height:1.6">이미 받은 연사에게 개정판을 다시 보내려면
       <a href="#" onclick="openSpeakerBulkMail('${escAttr(edEv)}','${escAttr(st.key)}');return false">📨 여러 연사에게 메일</a>에서 «↻ 이미 받은 연사에게 다시 보내기»를 누르세요.</div>`;
   return `<div style="padding:4px 11px 11px;border-top:1px solid var(--i7)">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+    <div data-vscope><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
       ${FIELDS.map(([f, l]) => fld(f, l)).join('')}${extra}
     </div>
-    <div style="font-size:10.5px;color:var(--i4);margin-top:6px;line-height:1.6">쓸 수 있는 칸: ${FLOW_VARS.map(v => `<code>${escapeHtml(v)}</code>`).join(' ')} — 영문(EN) 연사에게는 영문 양식이 나가요</div>
+    ${varChipsHtml('conf', { note: '영문(EN) 연사에게는 영문 양식이 나가요' })}</div>
     ${isNew ? '' : variantsHtml('conf', edEv, st.key, locked())}
     ${isNew ? '' : `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i7)">
       <div class="mlbl">기본 첨부 <span style="font-weight:400;color:var(--i4)">— 이 단계 메일에 자동으로 붙어요 (파일당 3MB)</span></div>

@@ -25,6 +25,7 @@ import { libItems, libItem } from './mail-templates.js';
 import { mailTargets } from './speaker-drawer.js';
 import { saveConf } from './settings-tab.js';
 import { trackAction } from './audit-tab.js';
+import { varChipsHtml } from './var-chips.js';
 
 let bm = null;   // { evKey, step, variant:''|'base'|id, ids:Set, show:'due'|'all', tpl, sending, pi, failed:Set }
 const isLib = (key) => String(key || '').startsWith('lib:');
@@ -237,7 +238,8 @@ function render(){
           <div class="mlbl" style="margin-top:6px">영문</div>
           <input class="fi" style="font-size:11.5px;margin-bottom:4px" value="${escAttr(tpl.subject_en)}" oninput="sbmTpl('subject_en',this.value)">
           <textarea class="fi" rows="6" style="font-size:11.5px;width:100%" oninput="sbmTpl('body_en',this.value)">${escapeHtml(tpl.body_en)}</textarea>
-          <div style="font-size:10.5px;color:var(--i4);margin-top:4px">{호칭}·{세션}·{변경내용} 등은 연사마다 채워집니다. 여기서 고친 문구는 이번 발송에만 쓰고, 기본 문구는
+          ${varChipsHtml('conf')}
+          <div style="font-size:10.5px;color:var(--i4);margin-top:4px">칸은 연사마다 채워집니다. 여기서 고친 문구는 이번 발송에만 쓰고, 기본 문구는
             <a href="#" onclick="openFlowEditor('${escAttr(bm.evKey)}','${escAttr(bm.step)}');return false">단계 편집</a>에서 고칩니다.</div>
         </details>
         ${files.length ? `<div style="font-size:11px;margin-top:6px">기본 첨부 ${files.map(f => `<span class="pill p-blue" style="margin:2px 3px 0 0">📎 ${escapeHtml(f.filename)}</span>`).join('')}</div>` : ''}

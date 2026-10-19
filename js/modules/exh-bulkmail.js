@@ -22,6 +22,7 @@ import { visibleList, exhNames, exhContacts, exhMailCtx, exhLocked, exhLockNotic
 import { exhMailSteps, exhIsEnglish, fillExhTemplate, exhMailFileStep, boothChange, exhStepVariants } from './exh-mail.js';
 import { libItems, libItem } from './mail-templates.js';
 import { trackAction } from './audit-tab.js';
+import { varChipsHtml } from './var-chips.js';
 import './exh-mail-editor.js';
 
 let bm = null;   // { evKey, ids:Set, step, variant, lang, who, tpl, sending, pi, failed:Set }
@@ -241,7 +242,8 @@ function render(){
         <details${bm.lang === 'en' ? ' open' : ''} style="margin-top:6px"><summary style="cursor:pointer;font-size:11.5px;font-weight:700;margin-bottom:4px">영문 문구</summary>
           <input class="fi" style="font-size:11.5px;margin-bottom:4px" value="${escAttr(bm.tpl.subject_en)}" oninput="bmTpl('subject_en',this.value)">
           <textarea class="fi" rows="7" style="font-size:11.5px;width:100%" oninput="bmTpl('body_en',this.value)">${escapeHtml(bm.tpl.body_en)}</textarea></details>
-        <div style="font-size:10.5px;color:var(--i4);margin-top:4px">{기업}·{담당자}·{부스}·{변경내용}·{청구액}·{미납액}은 기업마다 채워집니다. 여기서 고친 문구는 이번 발송에만 쓰고, 기본 문구와 단계는
+        ${varChipsHtml('exh')}
+        <div style="font-size:10.5px;color:var(--i4);margin-top:4px">칸은 기업마다 채워집니다. 여기서 고친 문구는 이번 발송에만 쓰고, 기본 문구와 단계는
           <a href="#" onclick="openExhMailEditor('${escAttr(bm.evKey)}','${escAttr(bm.step)}');return false">✎ 단계 편집</a>에서 고칩니다.</div>
         ${files.length ? `<div style="font-size:11px;margin-top:6px">기본 첨부 ${files.map(f => `<span class="pill p-blue" style="margin:2px 3px 0 0">📎 ${escapeHtml(f.filename)}</span>`).join('')}</div>` : ''}
         <div id="bm-prev">${prevHtml(picked)}</div>

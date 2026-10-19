@@ -64,6 +64,7 @@ import { filterMail, mailFilBar, mailStateHtml, mailActionsHtml, mailToggleAttr,
 import { decorate as decorateMailPane } from './mail-pane.js';
 import { EXH_MAIL_STEPS, exhMailSteps, exhIsEnglish, fillExhTemplate, exhMailFileStep, exhStepVariants } from './exh-mail.js';
 import { libItems, libItem } from './mail-templates.js';
+import { varChipsHtml, registerVarResolver } from './var-chips.js';
 import './exh-mail-editor.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 import { ieyo } from '../country-signal.js';
@@ -3327,8 +3328,10 @@ async function setRowField(list, saver, label, id, field, value, opts = {}){
   const fl = { amount: '금액', currency: '통화',
     received_at: '받은 날', received_note: '받은 것',
     method: '결제 수단', note: '비고', paid_at: '입금일' }[field] || field;
+  // 금액은 그 줄의 통화로 적는다 — 달러 입금이 «1739»로만 남아 원화처럼 읽혔다
+  const show = (v) => !v ? '(없음)' : field === 'amount' ? fmtMoney(v, r.currency || 'KRW') : String(v);
   trackAction('edit', label + ' 수정', x?.company_name || '',
-    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(r.name || r.title || label)} ${escapeHtml(fl)} ${escapeHtml(String(before || '(없음)'))} → ${escapeHtml(String(value || '(없음)'))}`,
+    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(r.name || r.title || label)} ${escapeHtml(fl)} ${escapeHtml(show(before))} → ${escapeHtml(show(value))}`,
     /* 값 자체도 담는다 — 문장만으로는 되돌릴 수 없다 */
     { kind: 'exhibitor', id: x?.id, tab: 'billing', field, table, row: id,
       op: 'update', before: { [field]: before ?? '' }, after: { [field]: value ?? '' } });
@@ -3483,7 +3486,7 @@ export async function addExhPayment(exhId){
     clear(`py-n-${exhId}`);
     const x = getExhibitorById(exhId);
     trackAction('status', '입금 확인', x?.company_name || '',
-      `<b>${escapeHtml(x?.company_name || '')}</b> 입금 ${money(amount)}원 확인`,
+      `<b>${escapeHtml(x?.company_name || '')}</b> 입금 ${fmtMoney(amount, rec.currency)} 확인`,
       /* 새로 만든 줄은 되돌리는 게 «지우기»다 — 어느 줄인지만 알면 된다 */
       { kind: 'exhibitor', id: x?.id, tab: 'billing',
         table: 'exhibitor_payments', row: rec.id, op: 'create', after: rec });
@@ -3858,6 +3861,14 @@ window.startExhReply = startExhReply;
 window.cancelExhReply = cancelExhReply;
 
 function dMail(x){
+  /* 메일 «값 넣기» 칩 — 드로어 메일은 글 그대로 나가므로 이 기업의 실제 값을 넣는다.
+     언어·마감일은 지금 고른 «언어»·«무슨 메일인가»를 따른다 */
+  registerVarResolver('exh-drawer', (key) => {
+    const en = document.getElementById(`exm-lang-${x.id}`)?.value === 'en';
+    const stepKey = document.getElementById(`exm-step-${x.id}`)?.value || '';
+    const st = exhMailSteps(x.event_id).find(s => s.key === stepKey) || {};
+    return fillExhTemplate(`{${key}}`, x, st, en, exhMailCtx(x));
+  });
   /* 회신 중이면 보낸 사람을 받는 사람 맨 위에(체크), 담당자는 아래에(해제)로 */
   const ppl0 = exhContacts(x).filter(p => p.email);
   const ppl = exhReply
@@ -3903,11 +3914,14 @@ function dMail(x){
     </div>
     <div class="mlbl">참조 <span style="font-size:9px;color:var(--i4)">쉼표로 여러 개</span></div>
     <input class="fi" id="exm-cc-${id}" style="font-size:12px;margin-bottom:8px">
+    <div data-vscope>
     <div class="mlbl">제목</div>
     <input class="fi" id="exm-sub-${id}" value="${escAttr(evName ? `[${evName}] ` : '')}" style="font-size:12px;margin-bottom:8px">
     <div class="mlbl">내용</div>
     <textarea class="fi" id="exm-body-${id}" rows="9" style="font-size:12px;resize:vertical">${escapeHtml(
       `${exhNames(x).ko || ''} 담당자님, 안녕하세요.\n\n\n\n감사합니다.`)}</textarea>
+    ${varChipsHtml('exh', { resolve: 'exh-drawer', note: '이 기업의 값' })}
+    </div>
     <div id="exm-deffiles" style="font-size:11px;margin-top:6px"></div>
     <div id="exm-files" style="font-size:11px;margin-top:4px"></div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">

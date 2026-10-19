@@ -39,6 +39,8 @@ import { RP, SC, LC, EC, STGS, avB, avF } from '../constants.js';
 import { ab, td, escapeHtml, escAttr, isMobile } from '../utils.js';
 import { trackAction, changed } from './audit-tab.js';
 import { postToSheet, sendMail, eventMailFrom, loadUnassigned, linkUnassignedCrm } from '../api.js';
+import { varChipsHtml, registerVarResolver } from './var-chips.js';
+import { eventVarValues } from './mail-vars.js';
 import './mail-original.js';   // window.openMailOriginal — 받은 메일 원문 보기
 import { renderToday, renderRoundNav, openFillRound, openRoundEditor } from './contact-tab.js';
 import { renderGrid, exportContactGrid } from './contact-grid.js';
@@ -509,6 +511,16 @@ function logItemHtml(t, l, k) {
 
 function composeHtml(t) {
   const cons = mailConOf(t);
+  /* «값 넣기» 칩 — CRM 메일은 한 기업에 바로 쓰는 메일이라 칸 대신 실제 값을 넣는다.
+     담당자는 체크한 받는 사람 중 첫 사람 */
+  registerVarResolver(`crm-${t.id}`, (key) => {
+    if (key === '기업') return t.name || t.nameEn || '';
+    if (key === '담당자') {
+      const first = [...document.querySelectorAll('.cm-to-' + t.id)].find(x => x.checked)?.value;
+      return (cons.find(p => p.email === first) || {}).name || '';
+    }
+    return eventVarValues(t.event, false)[key] ?? '';
+  });
   const ev = EVENT_LIST.find(e => e.key === t.event);
   return `<div style="border:1px solid var(--i6);border-radius:8px;padding:10px;margin-bottom:14px;background:var(--W)">
     <div style="font-size:11px;color:var(--i4);margin-bottom:8px;overflow-wrap:anywhere">보내는 주소 · <span id="cm-from-${t.id}" style="color:${fromCache[t.event] ? (fromCache[t.event].ok ? 'var(--i2)' : 'var(--re)') : 'inherit'}">${escapeHtml(fromCache[t.event]?.text || `${ev ? (ev.short || ev.name || ev.key) : (t.event || '행사 없음')} 공용 메일 확인 중…`)}</span></div>
@@ -523,6 +535,7 @@ function composeHtml(t) {
     <input class="fi" id="cm-sub-${t.id}" style="margin-bottom:8px">
     <div class="mlbl">내용</div>
     <textarea class="fi" id="cm-txt-${t.id}" rows="7" style="resize:vertical;margin-bottom:8px;font-family:inherit"></textarea>
+    ${varChipsHtml('crm', { resolve: `crm-${t.id}`, note: '이 기업의 값' })}
     <div class="mlbl">기록 메모 (선택)</div>
     <input class="fi" id="cm-memo-${t.id}" placeholder="이력에 남길 한 줄 (예: 견적 회신 요청 — 10/15까지)" style="margin-bottom:10px">
     <div style="display:flex;gap:6px"><button class="btn" style="flex:1;justify-content:center" onclick="crmMailToggle(${t.id})">닫기</button>

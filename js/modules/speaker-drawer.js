@@ -50,8 +50,18 @@ import { confLocked, setConfLockEv, confLockNotice, renderConf, buildConfEvList,
 import { flowStatus, draftFor, missingItems, pendingItems, PART_LABEL, changeLines, stepVariants, autoVariant, fillTemplate } from './speaker-flow.js';
 import { libItems, libItem } from './mail-templates.js';
 import { reuseCandidates, reusePending } from './contact-speaker.js';
+import { varChipsHtml, registerVarResolver } from './var-chips.js';
 
 let spId = null;
+/* 메일 «값 넣기» 칩 — 드로어 메일은 글 그대로 나가므로 칸 대신 이 연사의 실제 값을 넣는다.
+   마감일 따위는 지금 고른 «무슨 메일인가» 단계를 따른다 */
+registerVarResolver('sp-drawer', (key) => {
+  const sp = getSpeakerById(spId);
+  if(!sp) return '';
+  const kind = document.getElementById('sp-mail-kind')?.value || '';
+  const step = flowStatus(sp).steps.find(s => s.key === kind) || {};
+  return fillTemplate(`{${key}}`, sp, step);
+});
 let spTab = 'basic';
 
 const TABS = [
@@ -1429,8 +1439,11 @@ function mailTabHtml(sp, evKey){
         '고르면 그 단계의 기본 문구로 제목·본문이 채워집니다. 기본 문구·단계는 위 단추로 바로 고칩니다');
     })()}
     <div id="sp-bulk-pick"></div>
+    <div data-vscope>
     ${fg('제목', `<input class="fi" id="sp-mail-subject" value="${escAttr(`[${evName}] 연사 안내`)}">`)}
-    ${fg('내용', `<textarea class="fi" id="sp-mail-body" rows="10" style="resize:vertical"></textarea>`)}
+    ${fg('내용', `<textarea class="fi" id="sp-mail-body" rows="10" style="resize:vertical"></textarea>
+      ${varChipsHtml('conf', { resolve: 'sp-drawer', note: '이 연사의 값' })}`)}
+    </div>
     ${fg('첨부', `<div id="sp-mail-files" style="font-size:11px"></div>
       <label class="btn" style="font-size:10.5px;margin-top:5px;display:inline-block;cursor:pointer">+ PC에서 파일 추가
         <input type="file" multiple style="display:none" onchange="addSpMailFiles(this)"></label>`,

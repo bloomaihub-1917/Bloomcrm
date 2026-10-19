@@ -16,6 +16,9 @@ import { CONTACT_ATTEMPTS, EVENT_LIST, currentUser } from '../state.js';
 import { sendMail, eventMailFrom, saveRound, saveAttempt, saveRoundMember } from '../api.js';
 import { escapeHtml, escAttr, nowStamp } from '../utils.js';
 import { trackAction } from './audit-tab.js';
+import { varPattern, eventVarValues } from './mail-vars.js';
+import { varChipsHtml } from './var-chips.js';
+import { libItems, libItem } from './mail-templates.js';
 import {
   roundById, membersOf, attemptsOf, memberState, memberName, peopleOf, coOf, evLabel, renderRoundNav, pickedPersonId,
 } from './contact-tab.js';
@@ -46,10 +49,13 @@ function fill(t, m, person, en){
   const ev = EVENT_LIST.find(e => e.key === roundById(cm.rid)?.event_id) || {};
   const nm = person ? (en ? (person.nameEn || person.nameKo) : (person.nameKo || person.nameEn)) : '';
   const co = coOf(m.org_id);
-  return String(t || '')
-    .replace(/\{기업\}/g, (en ? (co?.nameEn || memberName(m)) : memberName(m)))
-    .replace(/\{담당자\}/g, nm || (en ? 'Sir/Madam' : '담당자'))
-    .replace(/\{행사\}/g, (en ? (ev.name_en || ev.name) : ev.name) || evLabel(ev.key));
+  const vars = {
+    ...eventVarValues(ev.key, en),   // {행사일}·{장소}·{주최}… 행사 칸(mail-vars.js)
+    기업: en ? (co?.nameEn || memberName(m)) : memberName(m),
+    담당자: nm || (en ? 'Sir/Madam' : '담당자'),
+    행사: (en ? (ev.name_en || ev.name) : ev.name) || evLabel(ev.key),
+  };
+  return String(t || '').replace(varPattern('contact'), (_, k) => vars[k] ?? '');
 }
 
 /* mid를 주면 그 기업 한 곳만 — 카드의 «✉ 이 기업에 메일». 받는 사람은 카드에서
@@ -135,14 +141,21 @@ function render(){
         </div>
       </div>`}
       <div>
+        ${(() => { const libs = libItems('contact', r.event_id); return `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+          <select class="fi" style="font-size:11.5px;flex:1" onchange="rmLib(this.value);this.value=''">
+            <option value="">📚 양식 보관함에서 불러오기${libs.length ? '' : ' — 아직 없어요'}</option>
+            ${libs.map(it => `<option value="${escAttr(it.id)}">${escapeHtml(it.name)}${it.scope === 'all' ? ' · 공통' : ''}</option>`).join('')}</select>
+          <button class="btn" style="font-size:10.5px" title="컨택 메일 양식을 더하고 고칩니다 — 이 행사만 또는 모든 행사 공통"
+            onclick="openMailTemplates('contact','${escAttr(r.event_id || '')}')">양식 보관함</button></div>`; })()}
         <details${cm.lang !== 'en' ? ' open' : ''}><summary style="cursor:pointer;font-size:11.5px;font-weight:700;margin-bottom:4px">국문 문구</summary>
           <input class="fi" style="font-size:11.5px;margin-bottom:4px" placeholder="[{행사}] 비즈니스 상담회 주선신청 안내" value="${escapeHtml(cm.tpl.subject_ko)}" oninput="rmTpl('subject_ko',this.value)">
           <textarea class="fi" rows="7" style="font-size:11.5px;width:100%" placeholder="{기업} {담당자}님, 안녕하세요." oninput="rmTpl('body_ko',this.value)">${escapeHtml(cm.tpl.body_ko)}</textarea></details>
         <details${cm.lang === 'en' ? ' open' : ''} style="margin-top:6px"><summary style="cursor:pointer;font-size:11.5px;font-weight:700;margin-bottom:4px">영문 문구</summary>
           <input class="fi" style="font-size:11.5px;margin-bottom:4px" value="${escapeHtml(cm.tpl.subject_en)}" oninput="rmTpl('subject_en',this.value)">
           <textarea class="fi" rows="7" style="font-size:11.5px;width:100%" placeholder="Dear {담당자}," oninput="rmTpl('body_en',this.value)">${escapeHtml(cm.tpl.body_en)}</textarea></details>
+        ${varChipsHtml('contact')}
         <div style="font-size:10.5px;color:var(--i4);margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <span>{기업}·{담당자}·{행사}는 기업마다 채워집니다.</span>
+          <span>칸은 기업마다 채워집니다.</span>
           <a href="javascript:void(0)" onclick="saveRoundMailTpl()" style="color:var(--a)">이 문구를 차수 양식으로 저장</a>
           <span id="rm-saved" style="color:var(--g)"></span></div>
         ${prev ? `<div style="margin-top:10px;padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;font-size:11.5px;white-space:pre-wrap;line-height:1.55;max-height:220px;overflow:auto"><div style="font-size:10px;color:var(--i4);margin-bottom:4px">미리보기 — ${escapeHtml(memberName(sample))}</div><b>${escapeHtml(prev.s)}</b>\n\n${escapeHtml(prev.b)}</div>` : ''}
@@ -176,6 +189,18 @@ export function rmAll(on){
 }
 // 문구는 다시 그리지 않고 담아만 둔다 — 그리면 입력 중인 칸이 초기화된다
 export function rmTpl(k, v){ if(cm) cm.tpl[k] = v; }
+
+/* 양식 보관함에서 불러오기 — 이번 창의 문구만 바꾼다. 차수 양식으로 남기려면 «차수 양식으로 저장» */
+export function rmLib(id){
+  const it = cm && id && libItem(id);
+  if(!it) return;
+  const has = Object.values(cm.tpl).some(v => String(v || '').trim());
+  if(has && !confirm(`지금 문구를 «${it.name}» 양식으로 바꿀까요?`)) return;
+  cm.tpl = { subject_ko: it.subject_ko || '', body_ko: it.body_ko || '', subject_en: it.subject_en || '', body_en: it.body_en || '' };
+  render();
+}
+/* 양식 보관함을 고치면(mail-templates.js refreshAll) 불러오기 목록을 다시 그린다 — 문구는 cm.tpl에 담겨 있어 그대로 */
+export function refreshRoundMail(){ if(cm && document.getElementById('round-mail')) render(); }
 
 export async function saveRoundMailTpl(){
   const r = cm && roundById(cm.rid);
@@ -247,4 +272,4 @@ export async function sendRoundMail(){
   window.renderCrm?.(); renderRoundNav();
 }
 
-Object.assign(window, { openRoundMail, rmTo, closeRoundMail: close, rmSet, rmPick, rmAll, rmTpl, saveRoundMailTpl, sendRoundMail });
+Object.assign(window, { openRoundMail, rmLib, refreshRoundMail, rmTo, closeRoundMail: close, rmSet, rmPick, rmAll, rmTpl, saveRoundMailTpl, sendRoundMail });

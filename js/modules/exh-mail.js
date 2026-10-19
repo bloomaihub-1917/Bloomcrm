@@ -11,6 +11,7 @@
 ══════════════════════════════════════════════════════════════ */
 import { EVENT_LIST, EXH_CFG, EXH_LOGS, getOrgById, currentUser, logsFor } from '../state.js';
 import { countryName } from '../utils.js';
+import { varTokens, varPattern, eventVarValues } from './mail-vars.js';
 
 /* due: 설정 › 일정의 마감 키(exh-tab.js DUE_STEPS) */
 export const EXH_MAIL_STEPS = [
@@ -71,7 +72,8 @@ export const EXH_MAIL_STEPS = [
     body_en: 'Dear {담당자},\n\n\nBest regards,\n{보내는사람}\n{행사} Secretariat',
   },
 ];
-export const EXH_MAIL_VARS = ['{기업}', '{담당자}', '{행사}', '{부스}', '{변경내용}', '{마감일}', '{청구액}', '{미납액}', '{보내는사람}'];
+/* 칸 목록의 정본은 mail-vars.js */
+export const EXH_MAIL_VARS = varTokens('exh');
 
 /* «+ 단계 추가» 옆에 미리 채워 두는 양식 — 전시를 돌리다 자주 생기는 안내 */
 const SIGN_KO = '\n\n감사합니다.\n{행사} 사무국 {보내는사람} 드림', SIGN_EN = '\n\nBest regards,\n{보내는사람}\n{행사} Secretariat';
@@ -168,6 +170,7 @@ export function fillExhTemplate(text, x, step, en, ctx = {}){
   const me = currentUser?.name || '';
   const names = ctx.names || {};
   const vars = {
+    ...eventVarValues(x.event_id, en),   // {행사일}·{장소}·{주최}… 행사 칸(mail-vars.js)
     기업: en ? (names.en || names.ko || '') : (names.ko || names.en || ''),
     담당자: (ctx.contact && ctx.contact.name) || (en ? 'Sir/Madam' : '담당자'),
     행사: evName,
@@ -182,7 +185,7 @@ export function fillExhTemplate(text, x, step, en, ctx = {}){
   };
   let t = String(text || '');
   if(!due) t = t.replace(/\{마감일\}까지/g, '가급적 빠른 시일 내에').replace(/by \{마감일\}/g, 'at your earliest convenience');
-  return t.replace(/\{(기업|담당자|행사|부스|변경내용|마감일|청구액|미납액|보내는사람)\}/g, (_, k) => vars[k] ?? '')
+  return t.replace(varPattern('exh'), (_, k) => vars[k] ?? '')
     .replace(/^\s*드림\s*$/gm, '')
     .replace(/ +\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')

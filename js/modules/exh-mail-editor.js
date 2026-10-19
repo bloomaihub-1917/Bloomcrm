@@ -10,11 +10,12 @@
      더한 단계  더하기·고치기·지우기, 놓을 자리, 마감일(날짜를 바로 적는다)
 ══════════════════════════════════════════════════════════════ */
 import { EVENT_LIST, EXH_CFG, evPartDone } from '../state.js';
-import { EXH_MAIL_STEPS, EXH_MAIL_VARS, EXH_CUSTOM_PRESETS, exhMailSteps, exhMailFileStep, isCustomExhStep } from './exh-mail.js';
+import { EXH_MAIL_STEPS, EXH_CUSTOM_PRESETS, exhMailSteps, exhMailFileStep, isCustomExhStep } from './exh-mail.js';
 import { saveExhCfgToSheet, loadMailFiles, mailFilesOf, uploadMailFile, deleteMailFile, fileToBase64 } from '../api.js';
 import { trackAction } from './audit-tab.js';
 import { variantsHtml } from './mail-templates.js';
 import { escapeHtml, escAttr } from '../utils.js';
+import { varChipsHtml } from './var-chips.js';
 
 let edEv = null, edOpen = null, edDraft = null;
 
@@ -124,7 +125,8 @@ function formHtml(st, isNew){
     const v = st[f] ?? '';
     if(f.includes('body')) return `<div style="grid-column:1/-1"><div class="mlbl">${l}</div>
       <textarea class="fi" id="xe-${f}" rows="7" style="width:100%;resize:vertical;font-size:11.5px">${escapeHtml(v)}</textarea></div>`;
-    return `<div${f === 'label' ? ' style="grid-column:1/-1"' : ''}><div class="mlbl">${l}</div>
+    // 제목은 한 줄 통째로 — 국문 제목·본문, 영문 제목·본문 순으로 위아래로 놓인다
+    return `<div${f === 'label' || f.includes('subject') ? ' style="grid-column:1/-1"' : ''}><div class="mlbl">${l}</div>
       <input class="fi" id="xe-${f}" value="${escAttr(v)}" style="width:100%"></div>`;
   };
   const others = exhMailSteps(edEv, { withOff: true }).filter(x => x.key !== st.key);
@@ -139,10 +141,10 @@ function formHtml(st, isNew){
   const sinceFld = st.key === 'note' || st.key === 'booth_change' || isNew ? '' : `
     <div style="grid-column:1/-1;font-size:10.5px;color:var(--i4);line-height:1.6">이미 받은 곳에 개정판을 다시 보내려면 «여러 기업에 메일»에서 이 단계를 고르고 «↻ 이미 받은 곳에 다시 보내기»를 누르세요.</div>`;
   return `<div style="padding:4px 11px 11px;border-top:1px solid var(--i7)">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+    <div data-vscope><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
       ${FIELDS.map(([f, l]) => fld(f, l)).join('')}${extra}${sinceFld}
     </div>
-    <div style="font-size:10.5px;color:var(--i4);margin-top:6px;line-height:1.6">쓸 수 있는 칸: ${EXH_MAIL_VARS.map(v => `<code>${escapeHtml(v)}</code>`).join(' ')}</div>
+    ${varChipsHtml('exh')}</div>
     ${isNew ? '' : variantsHtml('exh', edEv, st.key, locked())}
     ${isNew ? '' : `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i7)">
       <div class="mlbl">기본 첨부 <span style="font-weight:400;color:var(--i4)">— 이 단계 메일에 자동으로 붙어요 (파일당 3MB)</span></div>

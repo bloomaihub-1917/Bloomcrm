@@ -677,3 +677,17 @@ tr.row-sel{background:var(--ad)}
 .tw, .uw, .aw, .cdt, .cotb, .drbd, .mb, .audit-list, .sbs.s-q{
   scrollbar-gutter: stable;
 }
+
+/* 메일 칸 칩 (js/modules/var-chips.js) — 끌어다 놓거나 눌러서 제목·본문에 넣는다 */
+.vchips{margin-top:6px;padding:7px 9px;border:1px dashed var(--i6);border-radius:8px;background:var(--i8);font-size:11px}
+.vchips-hd{font-size:10.5px;font-weight:700;color:var(--i3);margin-bottom:4px}
+.vchips-hd span{font-weight:400;color:var(--i4)}
+.vchips-row{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin-top:3px}
+.vchips-g{flex:0 0 64px;font-size:10px;color:var(--i4)}
+.vchip{display:inline-flex;align-items:center;padding:2px 8px;border-radius:99px;border:1px solid var(--i6);background:var(--W);color:var(--i2);font-size:10.5px;cursor:grab;user-select:none;white-space:nowrap}
+.vchip:hover{border-color:var(--a);color:var(--a)}
+.vchip:active{cursor:grabbing}
+.vchip.on{background:var(--ad);border-color:var(--a);color:var(--a);font-weight:600}
+.vchips[data-resolve] .vchip{border-style:dashed}
+.vchips-warn{font-size:10.5px;color:var(--am);margin-top:4px;line-height:1.5}
+.vchips-warn:empty{display:none}

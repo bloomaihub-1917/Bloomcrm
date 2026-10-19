@@ -20,7 +20,11 @@ import { FLOW_VARS, flowSteps } from './speaker-flow.js';
 import { EXH_MAIL_VARS, exhMailSteps } from './exh-mail.js';
 import { trackAction } from './audit-tab.js';
 import { escapeHtml, escAttr, nowStamp } from '../utils.js';
+import { varChipsHtml } from './var-chips.js';
+import { varTokens } from './mail-vars.js';
 
+/* 칸 하나를 두 열에 걸쳐 — 국문 제목·본문, 영문 제목·본문 순으로 위아래로 놓는다 */
+const full = (html) => html.replace(/^<div(?: style="[^"]*")?>/, '<div style="grid-column:1/-1">');
 const clone = (o) => JSON.parse(JSON.stringify(o || {}));
 const newId = (p) => `${p}-${Date.now().toString(36)}${Math.floor(Math.random() * 1296).toString(36)}`;
 const TEXT_FIELDS = ['label', 'desc', 'subject_ko', 'body_ko', 'subject_en', 'body_en',
@@ -50,13 +54,15 @@ const PART = {
     varKey: 'exhMailVariants', overKey: 'exhMail', customKey: 'exhMailCustom',
     locked: (ev) => evPartDone(ev, 'exh'),
   },
+  /* 컨택 차수 DM — 단계·변형이 없어 양식 보관함만 쓴다(가져오기 탭 없음) */
+  contact: { name: '컨택', unit: '곳', vars: () => varTokens('contact') },
 };
 
 /* 고친 뒤 열린 화면들을 다시 그린다 */
 function refreshAll(){
   window.__refreshFlowEditor?.(); window.__refreshExhMailEditor?.();
   window.renderSpeakerDr?.(); window.renderConf?.(); window.renderExhDr?.();
-  window.refreshExhBulkMail?.(); window.refreshSpBulkMail?.();
+  window.refreshExhBulkMail?.(); window.refreshSpBulkMail?.(); window.refreshRoundMail?.();
   if(document.getElementById('tpl-mgr')) renderMgr();
 }
 const evName = (ev) => { const e = EVENT_LIST.find(x => x.key === ev) || {}; return e.short || e.name || ev; };
@@ -100,10 +106,10 @@ function formHtml(part, ev, step, v, roles){
       ${part === 'conf' ? `<div style="grid-column:1/-1"><div class="mlbl">이 역할 연사에게 저절로 <span style="font-weight:400;color:var(--i4)">— 안 고르면 보낼 때 직접 고릅니다</span></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">${roles.map(r => `<label style="font-size:11.5px;display:flex;gap:4px;align-items:center">
           <input type="checkbox" class="tv-role" value="${escAttr(r.key)}" ${(v.roles || []).includes(r.key) ? 'checked' : ''}> ${escapeHtml(r.label)}</label>`).join('')}</div></div>` : ''}
-      ${inp('subject_ko', '제목 (국문)')}${inp('subject_en', '제목 (영문)')}
-      ${area('body_ko', '본문 (국문)')}${area('body_en', '본문 (영문)')}
+      ${full(inp('subject_ko', '제목 (국문)'))}${area('body_ko', '본문 (국문)')}
+      ${full(inp('subject_en', '제목 (영문)'))}${area('body_en', '본문 (영문)')}
     </div>
-    <div style="font-size:10.5px;color:var(--i4);margin-top:5px">쓸 수 있는 칸: ${PART[part].vars().map(x => `<code>${escapeHtml(x)}</code>`).join(' ')}</div>
+    ${varChipsHtml(part)}
     <div style="display:flex;gap:6px;margin-top:8px">
       <button class="btn bp" style="font-size:11px" onclick="tplVarSave()">${v.id ? '저장' : '추가'}</button>
       <button class="btn" style="font-size:11px" onclick="tplVarCancel()">취소</button>
@@ -197,10 +203,10 @@ function renderMgr(){
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
       <b style="font-size:14px">${P.name} 메일 양식</b>
       <span style="font-size:11.5px;color:var(--i4)">${escapeHtml(evName(mg.ev))}</span>
-      <span style="display:flex;gap:4px;margin-left:12px">${tab('lib', '📚 양식 보관함')}${tab('import', '⇩ 지난 행사에서 가져오기')}</span>
+      <span style="display:flex;gap:4px;margin-left:12px">${tab('lib', '📚 양식 보관함')}${P.steps ? tab('import', '⇩ 지난 행사에서 가져오기') : ''}</span>
       <button class="btn" style="margin-left:auto;font-size:11px" onclick="closeMailTemplates()">닫기</button>
     </div>
-    ${mg.tab === 'lib' ? libHtml() : importHtml()}
+    ${mg.tab === 'lib' || !P.steps ? libHtml() : importHtml()}
   </div>`;
 }
 export function tplTab(t){ if(!mg) return; mg.tab = t; mg.edit = null; renderMgr(); }
@@ -211,7 +217,8 @@ function libHtml(){
   const edit = mg.edit;
   const cur = edit === 'new' ? { name: '', scope: mg.ev, subject_ko: '', body_ko: '', subject_en: '', body_en: '' } : edit ? libItem(edit) : null;
   return `<div style="font-size:11px;color:var(--i4);line-height:1.6;margin-bottom:8px">
-      단계와 상관없이 꺼내 쓰는 양식이에요. ${P.name} 메일 탭의 «무슨 메일인가»와 «여러 ${P.name === '연사' ? '연사' : '기업'}에게 메일»에서 «양식 보관함» 묶음으로 보입니다.
+      단계와 상관없이 꺼내 쓰는 양식이에요. ${mg.part === 'contact' ? '컨택 차수 «메일 보내기» 창의 «양식 보관함에서 불러오기»에 보입니다.'
+        : `${P.name} 메일 탭의 «무슨 메일인가»와 «여러 ${P.name === '연사' ? '연사' : '기업'}에게 메일»에서 «양식 보관함» 묶음으로 보입니다.`}
       «모든 행사 공통»으로 두면 다른 행사에서도 보여요.</div>
     ${items.map(it => edit === it.id ? libForm(it) : `<div style="display:flex;gap:6px;align-items:center;padding:6px 8px;border:1px solid var(--i6);border-radius:7px;margin-bottom:5px;font-size:12px">
         <b>${escapeHtml(it.name || '(이름 없음)')}</b>
@@ -234,10 +241,10 @@ function libForm(it){
       <div><div class="mlbl">어디서 보일까</div><select class="fi" id="tl-scope" style="width:100%">
         <option value="${escAttr(mg.ev)}"${it.scope !== 'all' ? ' selected' : ''}>이 행사만 (${escapeHtml(evName(mg.ev))})</option>
         <option value="all"${it.scope === 'all' ? ' selected' : ''}>모든 행사 공통</option></select></div>
-      ${inp('subject_ko', '제목 (국문)')}${inp('subject_en', '제목 (영문)')}
-      ${area('body_ko', '본문 (국문)')}${area('body_en', '본문 (영문)')}
+      ${full(inp('subject_ko', '제목 (국문)'))}${area('body_ko', '본문 (국문)')}
+      ${full(inp('subject_en', '제목 (영문)'))}${area('body_en', '본문 (영문)')}
     </div>
-    <div style="font-size:10.5px;color:var(--i4);margin-top:5px">쓸 수 있는 칸: ${P.vars().map(x => `<code>${escapeHtml(x)}</code>`).join(' ')}</div>
+    ${varChipsHtml(mg.part)}
     <div style="display:flex;gap:6px;margin-top:8px">
       <button class="btn bp" style="font-size:11px" onclick="tplLibSave()">${it.id ? '저장' : '추가'}</button>
       <button class="btn" style="font-size:11px" onclick="tplLibEdit(null)">취소</button></div>

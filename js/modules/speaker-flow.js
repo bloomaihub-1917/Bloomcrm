@@ -20,6 +20,7 @@ import { EVENT_LIST, CONF_SESSIONS, SPEAKER_LOGS, confCfg, assignmentsFor, roles
 import { SP_COLS, spCell } from './conf-tab.js';
 import { SPEAKER_ROLES } from '../constants.js';
 import { reusePending, reuseSummary } from './contact-speaker.js';
+import { varTokens, varPattern, eventVarValues } from './mail-vars.js';
 
 /* 문투 — 비즈니스 메일 기준(global-email-expert 스킬)을 따른다.
    ① 첫 세 문장 안에 목적을 밝힌다  ② 세부사항은 항목(■ / -)으로 나눈다
@@ -396,6 +397,7 @@ export function fillTemplate(text, sp, step){
     ? (/professor|prof\./i.test(titleEn) ? `Professor ${name}` : /^dr\.?\b|ph\.?d/i.test(titleEn) ? `Dr. ${name}` : name)
     : (titleKo ? `${name} ${titleKo}님` : `${name} 님`);
   const vars = {
+    ...eventVarValues(sp.event_id, en),   // {행사일}·{주최}… 행사 칸(mail-vars.js)
     이름: name,
     호칭: honor,
     직함: en ? titleEn : (sp.title_ko || ''),
@@ -423,7 +425,7 @@ export function fillTemplate(text, sp, step){
     .replace(/^■ 제출 기한\n- \{마감일\}\n?/gm, '')
     .replace(/^Deadline: \{마감일\}\n?/gm, '');
   return t
-    .replace(/\{(이름|호칭|직함|소속|행사|장소|세션|발표시간|남은자료|가져온자료|마감일|가이드|양식|담당자|변경내용)\}/g, (_, k) => vars[k] ?? '')
+    .replace(varPattern('conf'), (_, k) => vars[k] ?? '')
     .replace(/^\s*드림\s*$/gm, '')          // 담당자 이름이 없으면 «드림»만 남는다
     // 값이 비어 남은 항목 줄 — «- 가이드라인: », «- », «Submission form: »
     .replace(/^- [^\n:：]{1,24}[:：] ?$/gm, '')
@@ -468,4 +470,5 @@ export function draftFor(sp, stepKey, variantId){
   };
 }
 
-export const FLOW_VARS = ['{호칭}', '{이름}', '{직함}', '{소속}', '{행사}', '{장소}', '{세션}', '{발표시간}', '{남은자료}', '{가져온자료}', '{변경내용}', '{마감일}', '{가이드}', '{양식}', '{담당자}'];
+/* 칸 목록의 정본은 mail-vars.js */
+export const FLOW_VARS = varTokens('conf');
