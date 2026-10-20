@@ -2741,7 +2741,7 @@ const MAIL_PROVIDERS = {
   gmail: { host: 'smtp.gmail.com', user: '예: kic.secretariat@gmail.com',
     help: 'Gmail: 2단계 인증을 켠 뒤 Google 계정 › 보안 › 앱 비밀번호에서 발급해 넣어주세요. 회사 주소로 보내려면 Gmail 설정 › 계정 › «다른 주소에서 메일 보내기»에 그 주소를 먼저 등록하세요.' },
   naverworks: { host: 'smtp.worksmobile.com', user: '예: kic@회사도메인',
-    help: '네이버 웍스: 메일 › 환경설정 › 고급 설정에서 IMAP/SMTP 사용을 켜고 넣어주세요. 2단계 인증을 쓰면 보안 설정에서 앱 비밀번호를 발급해 넣고, 안 되면 회사 관리자에게 외부 메일 프로그램 허용을 요청하세요.' },
+    help: '네이버 웍스: 관리자 화면 › 보안 › 서비스 권한 › 메일에서 IMAP/SMTP가 «사용»인지 확인한 뒤 웍스 로그인 비밀번호를 넣어주세요(2단계 인증을 쓰면 앱 비밀번호).' },
 };
 const mailProv = (v) => MAIL_PROVIDERS[v || 'mailplug'] || MAIL_PROVIDERS.mailplug;
 
