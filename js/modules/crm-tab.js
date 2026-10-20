@@ -511,6 +511,9 @@ function logItemHtml(t, l, k) {
 
 function composeHtml(t) {
   const cons = mailConOf(t);
+  /* 메일 있는 담당자가 없으면 기업DB «대표 메일»을 받는 사람으로 — 컨택 DM(contact-mail.js)과 같은 규칙 */
+  const reps = cons.length ? [] : [...new Set(String(coOf(t)?.email || '').split(/[,;\s]+/).map(e => e.trim())
+    .filter(e => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)))];
   /* «값 넣기» 칩 — CRM 메일은 한 기업에 바로 쓰는 메일이라 칸 대신 실제 값을 넣는다.
      담당자는 체크한 받는 사람 중 첫 사람 */
   registerVarResolver(`crm-${t.id}`, (key) => {
@@ -528,7 +531,11 @@ function composeHtml(t) {
     ${cons.length ? `<div style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px">${cons.map((p, k) => `
       <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;min-width:0"><input type="checkbox" class="cm-to-${t.id}" value="${escAttr(p.email)}"${k === 0 ? ' checked' : ''}>
         <span style="font-weight:600;flex-shrink:0">${escapeHtml(p.name)}</span><span style="color:var(--i4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(p.title ? p.title + ' · ' : '')}${escapeHtml(p.email)}</span></label>`).join('')}</div>`
-      : '<div style="font-size:11px;color:var(--i4);margin-bottom:6px">기업DB에 메일 주소가 있는 담당자가 없어요 — 아래에 직접 적어 주세요</div>'}
+      : reps.length ? `<div style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px">
+        <div style="font-size:11px;color:var(--i4)">메일 있는 담당자가 없어 기업DB 대표 메일로 보내요</div>
+        ${reps.map(e => `<label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;min-width:0"><input type="checkbox" class="cm-to-${t.id}" value="${escAttr(e)}" checked>
+          <span class="pill p-gray" style="font-size:9.5px">대표 메일</span><span style="color:var(--i4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(e)}</span></label>`).join('')}</div>`
+      : '<div style="font-size:11px;color:var(--i4);margin-bottom:6px">기업DB에 메일 있는 담당자도 대표 메일도 없어요 — 아래에 직접 적어 주세요</div>'}
     <input class="fi" id="cm-tox-${t.id}" type="email" placeholder="다른 주소 (쉼표로 여러 개)" style="margin-bottom:6px">
     <input class="fi" id="cm-cc-${t.id}" type="email" placeholder="참조 (선택)" style="margin-bottom:8px">
     <div class="mlbl">제목</div>

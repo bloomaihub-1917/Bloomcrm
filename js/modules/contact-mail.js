@@ -29,16 +29,37 @@ let cm = null;   // { rid, ids:Set, who, lang, tpl, sending }
 
 const isEn = (m) => { const c = coOf(m.org_id)?.country; return !!c && !KO.test(String(c).trim()); };
 const enOf = (m) => (cm.lang === 'en' ? true : cm.lang === 'ko' ? false : isEn(m));
-/* 받는 사람 — 한 명이면 최근에 연락한 사람이 먼저 */
-const mailable = (m) => peopleOf(m).filter(p => String(p.email1 || '').includes('@'));
+/* ── 받는 곳 ──
+   받는 곳 하나 = { id, name, nameEn, emails[], rep }. 담당자는 연락처 id, 대표 메일은 REP.
+
+   1) 담당자 메일이 있으면 담당자에게 — 한 명(최근 연락한 사람 먼저) 또는 «모두»
+   2) 메일 있는 담당자가 없으면 기업DB «대표 메일»로 — 담당자 이름을 몰라 {담당자}는
+      «담당자»(영문 Sir/Madam)로 채워지고, 기록에는 «대표 메일»로 남는다(contact_id 없음)
+   3) 둘 다 없으면 못 보낸다
+   대표 메일은 담당자가 있을 때 덧붙이지 않는다 — 같은 회사에 두 통이 간다. 꼭 같이 보내야 하면
+   «이 기업에 메일»(한 기업) 창에서 대표 메일을 함께 체크한다.
+   담당자 메일은 메일1이 없으면 메일2를 쓴다. */
+export const REP = 'co';
+const isMail = (e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
+const mailOfPerson = (p) => [p.email1, p.email2].map(e => String(e || '').trim()).find(isMail) || '';
+/* 기업DB «대표 메일» — 쉼표·세미콜론으로 여러 개 적힌 곳도 있다 */
+export const repMails = (m) => [...new Set(String(coOf(m.org_id)?.email || '').split(/[,;\s]+/).map(e => e.trim()).filter(isMail))];
+const personRcpt = (p) => ({ id: String(p.id), name: p.nameKo || p.nameEn || '', nameEn: p.nameEn || p.nameKo || '', emails: [mailOfPerson(p)], rep: false });
+const repRcpt = (m) => { const e = repMails(m); return e.length ? { id: REP, name: '', nameEn: '', emails: e, rep: true } : null; };
+const mailable = (m) => peopleOf(m).filter(mailOfPerson).map(personRcpt);
+/* 이 기업에 보낼 수 있는 곳 전부 — 한 기업 창의 체크 목록 */
+const allRcpts = (m) => [...mailable(m), repRcpt(m)].filter(Boolean);
 function peopleTo(m, who){
+  // 한 기업만 보낼 때는 창에서 체크한 곳들(담당자·대표 메일)
+  if(cm && cm.only === m.id) return allRcpts(m).filter(r => cm.toIds.has(r.id));
   const ppl = mailable(m);
-  // 한 기업만 보낼 때는 창에서 체크한 사람들
-  if(cm && cm.only === m.id) return ppl.filter(p => cm.toIds.has(String(p.id)));
+  if(!ppl.length){ const r = repRcpt(m); return r ? [r] : []; }
   if(who === 'all') return ppl;
   const lastCid = attemptsOf(m.id)[0]?.contact_id;
-  return [ppl.find(p => String(p.id) === String(lastCid)) || ppl[0]].filter(Boolean);
+  return [ppl.find(p => p.id === String(lastCid)) || ppl[0]];
 }
+const toOf = (rs) => [...new Set(rs.flatMap(r => r.emails))];
+const rcptLabel = (rs) => rs.map(r => r.rep ? `대표 메일 ${r.emails.join(', ')}` : r.emails.join(', ')).join(', ');
 const isTurn = (m) => ['todo', 'again'].includes(memberState(m));
 function addDays(n){
   const d = new Date(); d.setDate(d.getDate() + n);
@@ -47,7 +68,8 @@ function addDays(n){
 }
 function fill(t, m, person, en){
   const ev = EVENT_LIST.find(e => e.key === roundById(cm.rid)?.event_id) || {};
-  const nm = person ? (en ? (person.nameEn || person.nameKo) : (person.nameKo || person.nameEn)) : '';
+  // 대표 메일로 가는 곳은 이름이 없다 — {담당자}는 «담당자»/Sir/Madam
+  const nm = person ? (en ? person.nameEn : person.name) : '';
   const co = coOf(m.org_id);
   const vars = {
     ...eventVarValues(ev.key, en),   // {행사일}·{장소}·{주최}… 행사 칸(mail-vars.js)
@@ -71,7 +93,9 @@ export function openRoundMail(rid, mid, preIds){
     cm.ids = new Set([m.id]);
     const ppl = mailable(m);
     const pid = pickedPersonId(m);
-    cm.toIds = new Set([String((ppl.find(p => String(p.id) === String(pid)) || ppl[0] || {}).id ?? '')].filter(Boolean));
+    // 카드에서 고른 담당자 — 메일 있는 담당자가 없으면 대표 메일
+    const first = ppl.find(p => p.id === String(pid)) || ppl[0] || repRcpt(m);
+    cm.toIds = new Set(first ? [first.id] : []);
   } else if(Array.isArray(preIds) && preIds.length){
     // 오늘 할 컨택에서 «미연결 n번 이상» 곳을 넘겨받았다 — 그 곳만 골라 둔다
     cm.ids = new Set(preIds.filter(id => { const x = membersOf(rid).find(y => y.id === id); return x && peopleTo(x, cm.who).length; }));
@@ -117,10 +141,15 @@ function render(){
       ${cm.only && list[0] ? `<div>
         <div class="mlbl" style="margin:0 0 4px">받는 사람 — 체크한 사람 모두가 한 통의 받는 사람이 돼요</div>
         <div style="border:1px solid var(--i6);border-radius:8px;max-height:360px;overflow:auto">
-          ${peopleOf(list[0]).map(p => { const has = String(p.email1 || '').includes('@'); return `<label style="display:flex;gap:6px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--i8);font-size:11.5px;opacity:${has ? 1 : .5}">
+          ${peopleOf(list[0]).map(p => { const mail = mailOfPerson(p), has = !!mail; return `<label style="display:flex;gap:6px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--i8);font-size:11.5px;opacity:${has ? 1 : .5}">
             <input type="checkbox" ${cm.toIds.has(String(p.id)) ? 'checked' : ''} ${has ? '' : 'disabled'} onchange="rmTo('${escAttr(String(p.id))}',this.checked)">
             <b>${escapeHtml(p.nameKo || p.nameEn || '')}</b><span style="color:var(--i4)">${escapeHtml([p.deptKo, p.titleKo].filter(Boolean).join(' '))}</span>
-            <span style="color:var(--i3);margin-left:auto">${has ? escapeHtml(p.email1) : '메일 없음'}</span></label>`; }).join('')}
+            <span style="color:var(--i3);margin-left:auto">${has ? escapeHtml(mail) : '메일 없음'}</span></label>`; }).join('')}
+          ${(() => { const rp = repRcpt(list[0]); return rp ? `<label style="display:flex;gap:6px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--i8);font-size:11.5px">
+            <input type="checkbox" ${cm.toIds.has(REP) ? 'checked' : ''} onchange="rmTo('${REP}',this.checked)">
+            <span class="pill p-gray" style="font-size:9.5px">대표 메일</span><span style="color:var(--i4)">기업DB</span>
+            <span style="color:var(--i3);margin-left:auto">${escapeHtml(rp.emails.join(', '))}</span></label>`
+            : `<div style="padding:6px 8px;font-size:11px;color:var(--i4)">기업DB에 대표 메일이 없어요</div>`; })()}
         </div>
       </div>` : `<div>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
@@ -136,7 +165,8 @@ function render(){
             <b style="flex:0 0 auto">${escapeHtml(memberName(m))}</b>
             <span class="pill p-gray" style="font-size:9.5px">${enOf(m) ? 'EN' : 'KO'}</span>
             <span class="pill ${isTurn(m) ? 'p-blue' : 'p-gray'}" style="font-size:9.5px">${ST[st]}</span>
-            <span style="color:var(--i4);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ps.length ? escapeHtml(ps.map(p => p.email1).join(', ')) : '메일 있는 담당자 없음'}</span>
+            ${ps[0]?.rep ? '<span class="pill p-gray" style="font-size:9.5px" title="메일 있는 담당자가 없어 기업DB 대표 메일로 보내요">대표 메일</span>' : ''}
+            <span style="color:var(--i4);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ps.length ? escapeHtml(toOf(ps).join(', ')) : '메일 없음 — 담당자·대표 메일 모두 없어요'}</span>
           </label>`; }).join('') || '<div style="padding:12px;font-size:11.5px;color:var(--i4)">명단이 비어 있어요</div>'}
         </div>
       </div>`}
@@ -227,16 +257,18 @@ export async function sendRoundMail(){
   const from = await eventMailFrom(r.event_id);
   if(!from.ok){ msg(from.text); return; }
   if(cm.only){
-    const to = peopleTo(list[0]).map(p => p.email1);
+    const rs = peopleTo(list[0]);
+    const to = toOf(rs);
     if(!to.length){ msg('받는 사람을 체크해 주세요.'); return; }
     if(!confirm(`«${memberName(list[0])}»에 «${r.name}» 메일을 보낼까요?
 
-받는 사람: ${to.join(', ')}
+받는 사람: ${rcptLabel(rs)}
 발신 ${from.text}`)) return;
   }
   const notTurn = list.filter(m => !isTurn(m)).length;
+  const viaRep = cm.only ? 0 : list.filter(m => peopleTo(m, cm.who)[0]?.rep).length;
   // 밖으로 나가는 일 — 한 번 묻는다
-  if(!cm.only && !confirm(`${list.length}곳에 «${r.name}» 메일을 보낼까요?${notTurn ? `\n\n이 중 ${notTurn}곳은 보낼 차례가 아니에요(기다림·끝남).` : ''}\n\n발신 ${from.text}\n받는 사람: ${cm.who === 'all' ? '메일 있는 담당자 모두' : '한 명'}\n기업마다 한 통씩 따로 나갑니다.`)) return;
+  if(!cm.only && !confirm(`${list.length}곳에 «${r.name}» 메일을 보낼까요?${notTurn ? `\n\n이 중 ${notTurn}곳은 보낼 차례가 아니에요(기다림·끝남).` : ''}\n\n발신 ${from.text}\n받는 사람: ${cm.who === 'all' ? '메일 있는 담당자 모두' : '한 명'}${viaRep ? `\n이 중 ${viaRep}곳은 메일 있는 담당자가 없어 기업 대표 메일로 갑니다.` : ''}\n기업마다 한 통씩 따로 나갑니다.`)) return;
 
   cm.sending = true;
   render();
@@ -246,18 +278,21 @@ export async function sendRoundMail(){
   for(const [i, m] of list.entries()){
     msg(`보내는 중… ${i + 1}/${list.length} ${memberName(m)}`, true);
     const ppl = peopleTo(m, cm.who);
-    const p = ppl[0];
+    const p = ppl.find(x => !x.rep) || ppl[0];   // {담당자}는 사람 이름 먼저
     const en = enOf(m);
     const subject = fill(cm.tpl[en ? 'subject_en' : 'subject_ko'], m, p, en);
     const text = fill(cm.tpl[en ? 'body_en' : 'body_ko'], m, p, en);
-    const to = ppl.map(x => x.email1);
-    const contact_name = p ? (p.nameKo || p.nameEn || '') : '';
+    const to = toOf(ppl);
+    if(!to.length){ fails.push(`${memberName(m)}: 받는 메일 없음`); continue; }
+    // 대표 메일만 받는 곳은 사람이 아니다 — 기록에 «대표 메일»로 남기고 contact_id는 비운다
+    const person = ppl.find(x => !x.rep);
+    const contact_name = person ? person.name : '대표 메일';
     const res = await sendMail({ to, subject, text, round_member_id: m.id, event_id: r.event_id,
-      contact_id: p ? String(p.id) : '', contact_name, category: r.name, kind: 'contact-dm' });
+      contact_id: person ? person.id : '', contact_name, category: r.name, kind: 'contact-dm' });
     if(!res.ok){ fails.push(`${memberName(m)}: ${res.error || '실패'}`); continue; }
     ok++;
     const a = { id: res.logId || `CA-${Date.now()}_${i}`, round_id: r.id, member_id: m.id, org_id: m.org_id,
-      contact_id: p ? String(p.id) : '', contact_name, phone: to.join(', '), channel: 'DM', at: nowStamp(),
+      contact_id: person ? person.id : '', contact_name, phone: to.join(', '), channel: 'DM', at: nowStamp(),
       by_email: currentUser?.email || '', by_name: currentUser?.name || '', reaction: 'sent', note: subject };
     CONTACT_ATTEMPTS.push(a);
     // 서버가 기록을 못 남겼으면(예전 서버) 여기서 남긴다 — 메일은 이미 나갔다

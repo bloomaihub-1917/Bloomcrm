@@ -399,8 +399,10 @@ function card(r, { m, atts, st }){
     ${miss >= limit && st !== 'done' ? `<div style="font-size:11px;color:var(--am);margin-top:4px">미연결이 ${miss}번 이어졌어요 — 채널을 DM으로 바꿔 보내거나, 끝내기를 고려하세요</div>` : ''}
     <div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--i7)">
       ${people.length > 1 ? `<div style="font-size:10.5px;color:var(--i4);margin-bottom:2px">${ch === 'TM' ? '누구와 통화했나요' : '누구에게 보냈나요'} — 반응 단추를 누르면 고른 사람으로 기록돼요</div>` : ''}
+      ${people.length && !people.some(p => /@/.test(String(p.email1 || '') + String(p.email2 || ''))) && /@/.test(String(co?.email || ''))
+        ? `<div style="font-size:10.5px;color:var(--i4);margin-bottom:2px">담당자 메일이 없어 메일은 대표 메일(${escapeHtml(co.email)})로 가요</div>` : ''}
       ${people.length ? people.map(person).join('')
-        : `<div style="font-size:11.5px;color:var(--i4)">기업DB에 담당자가 없어요${co?.phone ? ` · 대표번호 <a href="tel:${escapeHtml(String(co.phone).replace(/[^\d+]/g, ''))}" style="color:var(--a)">${escapeHtml(co.phone)}</a>` : ''}</div>`}
+        : `<div style="font-size:11.5px;color:var(--i4)">기업DB에 담당자가 없어요${co?.phone ? ` · 대표번호 <a href="tel:${escapeHtml(String(co.phone).replace(/[^\d+]/g, ''))}" style="color:var(--a)">${escapeHtml(co.phone)}</a>` : ''}${co?.email ? ` · 대표 메일 <span style="color:var(--i2)">${escapeHtml(co.email)}</span>` : ''}</div>`}
       ${personForm[m.id] === 'new' ? personFormHtml(m, null)
         : String(m.org_id).startsWith('name:') ? ''
         : `<a href="javascript:void(0)" onclick="openPersonForm('${escAttr(m.id)}','new')" style="font-size:11px;color:var(--a);display:inline-block;margin-top:3px">+ 담당자 추가</a>`}
@@ -412,7 +414,7 @@ function card(r, { m, atts, st }){
       <input type="text" id="ca-memo-${escAttr(m.id)}" value="${escapeHtml(memoDraft[m.id] || '')}" oninput="contactMemo('${escAttr(m.id)}',this.value)" placeholder="메모 — 반응 단추를 누르면 함께 남아요" style="flex:1;min-width:140px;font-size:11.5px;padding:4px 8px;border:1px solid var(--i6);border-radius:5px">
       ${ch === 'TM' ? `<button class="btn bs ct-call" onclick="markCalling('${escAttr(m.id)}')" title="다른 사람이 같은 곳에 걸지 않게 «거는 중»으로 보여 줘요 — 반응을 남기면 풀려요"
         style="${calling && calling.me ? 'background:var(--ad);border-color:var(--a);color:var(--a)' : ''}">${calling && calling.me ? '📞 거는 중 · 풀기' : '📞 거는 중'}</button>` : ''}
-      ${people.some(p => String(p.email1 || '').includes('@')) ? `<button class="btn bs" onclick="openRoundMail('${escAttr(r.id)}','${escAttr(m.id)}')" title="이 기업에만 메일 한 통 — 보낸 것은 DM 기록으로 남아요">✉ 이 기업에 메일</button>` : ''}
+      ${people.some(p => /@/.test(String(p.email1 || '') + String(p.email2 || ''))) || /@/.test(String(co?.email || '')) ? `<button class="btn bs" onclick="openRoundMail('${escAttr(r.id)}','${escAttr(m.id)}')" title="이 기업에만 메일 한 통 — 보낸 것은 DM 기록으로 남아요">✉ 이 기업에 메일</button>` : ''}
     </div>`}
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;font-size:11px;color:var(--i4)">
       ${m.closed_at || m.goal_at ? '' : `<span>다음 연락 <input type="date" value="${escapeHtml(m.next_at || '')}" onchange="setContactNext('${escAttr(m.id)}',this.value)" style="font-size:11px;border:1px solid var(--i6);border-radius:4px;padding:1px 3px"></span>`}
