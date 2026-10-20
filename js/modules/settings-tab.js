@@ -2662,9 +2662,7 @@ async function renderEvMailbox(evKey){
       ${box.username ? '<span class="pill p-green" style="font-size:10px;margin-left:6px">연결됨</span>' : '<span class="pill p-gray" style="font-size:10px;margin-left:6px">없음 — 메일을 보낼 수 없음</span>'}</div>
     <div style="font-size:11px;color:var(--i4);margin-bottom:12px">
       이 행사의 연사·참가사에게 «메일 보내기»를 누르면 이 주소로 나가고, 답장도 이 메일함으로 옵니다.
-      <span id="evmb-help">${(box.provider || 'mailplug') === 'gmail'
-        ? 'Gmail: 2단계 인증을 켠 뒤 Google 계정 › 보안 › 앱 비밀번호에서 발급해 넣어주세요. 회사 주소로 보내려면 Gmail 설정 › 계정 › «다른 주소에서 메일 보내기»에 그 주소를 먼저 등록하세요.'
-        : '메일플러그 › 환경설정 › IMAP/SMTP 사용에서 앱 비밀번호를 발급해 넣어주세요.'}</span>
+      <span id="evmb-help">${mailProv(box.provider).help}</span>
       ${r.offline ? '<br><b style="color:var(--re)">테스트 모드에서는 설정할 수 없어요.</b>' : ''}
       ${r.ok && !r.keyReady ? '<br><b style="color:var(--re)">서버에 MAIL_SECRET이 없어 비밀번호를 저장할 수 없어요 — Vercel 환경변수를 먼저 넣어주세요.</b>' : ''}
       ${r.ok === false && !r.offline ? `<br><b style="color:var(--re)">${escapeHtml(r.error || '불러오지 못했어요')}</b>` : ''}
@@ -2673,9 +2671,10 @@ async function renderEvMailbox(evKey){
       <select class="fi" id="evmb-provider" style="width:220px" onchange="evmbProvider(this.value)">
         <option value="mailplug"${(box.provider || 'mailplug') === 'mailplug' ? ' selected' : ''}>메일플러그 (회사 메일)</option>
         <option value="gmail"${box.provider === 'gmail' ? ' selected' : ''}>Gmail</option>
+        <option value="naverworks"${box.provider === 'naverworks' ? ' selected' : ''}>네이버 웍스</option>
       </select></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-      ${inp('user', '로그인 주소', box.username, (box.provider === 'gmail') ? '예: kic.secretariat@gmail.com' : '예: kic@13100m.net')}
+      ${inp('user', '로그인 주소', box.username, mailProv(box.provider).user)}
       ${inp('pass', box.has_password ? '앱 비밀번호 — 저장됨, 바꿀 때만 입력' : '앱 비밀번호 (메일 비밀번호 아님)', '', box.has_password ? '••••••••' : '발급한 앱 비밀번호 (메일 비밀번호 아님)', 'password')}
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
@@ -2686,7 +2685,7 @@ async function renderEvMailbox(evKey){
       <div style="font-size:10.5px;color:var(--i4);margin-top:3px;line-height:1.5">주최사 주소는 연락처로 넣지 않아요. 직원이 전달(FW)한 주최사 메일은 원래 받는 사람(연사·참가사) 기록에 붙어요.</div></div>
     <details style="margin-bottom:10px"><summary style="font-size:11px;color:var(--i4);cursor:pointer">서버 (보통 고칠 일 없음)</summary>
       <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-top:8px">
-        ${inp('host', 'SMTP 서버', box.host, box.provider === 'gmail' ? 'smtp.gmail.com' : 'smtp.mailplug.co.kr')}
+        ${inp('host', 'SMTP 서버', box.host, mailProv(box.provider).host)}
         ${inp('port', '포트', box.port, '465')}
       </div></details>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -2694,7 +2693,7 @@ async function renderEvMailbox(evKey){
       ${box.username ? `<button class="btn" onclick="testEvMailbox('${escAttr(evKey)}')">연결 확인</button>
         <button class="btn" onclick="removeEvMailbox('${escAttr(evKey)}')">연결 끊기</button>
         <button class="btn" onclick="syncEvSentMail('${escAttr(evKey)}')"
-          title="메일플러그 보낸메일함·받은메일함을 읽어, 이 행사 연사·참가사와 주고받은 메일을 그 사람 기록에 남기고 초청 메일은 «보냄»으로 체크합니다">메일함에서 주고받은 기록 가져오기</button>` : ''}
+          title="행사 메일 보낸메일함·받은메일함을 읽어, 이 행사 연사·참가사와 주고받은 메일을 그 사람 기록에 남기고 초청 메일은 «보냄»으로 체크합니다">메일함에서 주고받은 기록 가져오기</button>` : ''}
       <span id="evmb-msg" style="font-size:11px;color:var(--g)"></span>
     </div>
     <div id="evd-inbox" style="margin-top:16px"></div>
@@ -2735,17 +2734,28 @@ export async function fillExhMailFiles(evKey){
   });
 }
 
+/* 메일 서비스별 안내·기본 서버 — 서버 쪽 PROVIDERS(routes/mail.js)와 맞춘다 */
+const MAIL_PROVIDERS = {
+  mailplug: { host: 'smtp.mailplug.co.kr', user: '예: kic@13100m.net',
+    help: '메일플러그 › 환경설정 › IMAP/SMTP 사용에서 앱 비밀번호를 발급해 넣어주세요.' },
+  gmail: { host: 'smtp.gmail.com', user: '예: kic.secretariat@gmail.com',
+    help: 'Gmail: 2단계 인증을 켠 뒤 Google 계정 › 보안 › 앱 비밀번호에서 발급해 넣어주세요. 회사 주소로 보내려면 Gmail 설정 › 계정 › «다른 주소에서 메일 보내기»에 그 주소를 먼저 등록하세요.' },
+  naverworks: { host: 'smtp.worksmobile.com', user: '예: kic@회사도메인',
+    help: '네이버 웍스: 메일 › 환경설정 › 고급 설정에서 IMAP/SMTP 사용을 켜고 넣어주세요. 2단계 인증을 쓰면 보안 설정에서 앱 비밀번호를 발급해 넣고, 안 되면 회사 관리자에게 외부 메일 프로그램 허용을 요청하세요.' },
+};
+const mailProv = (v) => MAIL_PROVIDERS[v || 'mailplug'] || MAIL_PROVIDERS.mailplug;
+
 /* 서비스를 바꾸면 서버 칸·안내를 그 서비스 것으로 — 서버 칸은 비워 두면 서버가 기본값을 쓴다 */
 export function evmbProvider(v){
   const host = document.getElementById('evmb-host');
-  const defaults = ['smtp.mailplug.co.kr', 'smtp.gmail.com'];
+  const defaults = Object.values(MAIL_PROVIDERS).map(p => p.host);
   if(host && (!host.value || defaults.includes(host.value.trim()))){
-    host.value = ''; host.placeholder = v === 'gmail' ? 'smtp.gmail.com' : 'smtp.mailplug.co.kr';
+    host.value = ''; host.placeholder = mailProv(v).host;
   }
+  const user = document.getElementById('evmb-user');
+  if(user) user.placeholder = mailProv(v).user;
   const help = document.getElementById('evmb-help');
-  if(help) help.textContent = v === 'gmail'
-    ? 'Gmail: 2단계 인증을 켠 뒤 Google 계정 › 보안 › 앱 비밀번호에서 발급해 넣어주세요. 회사 주소로 보내려면 Gmail 설정 › 계정 › «다른 주소에서 메일 보내기»에 그 주소를 먼저 등록하세요.'
-    : '메일플러그 › 환경설정 › IMAP/SMTP 사용에서 앱 비밀번호를 발급해 넣어주세요.';
+  if(help) help.textContent = mailProv(v).help;
 }
 window.evmbProvider = evmbProvider;
 

@@ -82,12 +82,13 @@ const kstStamp = (d) => new Date(new Date(d).getTime() + 9 * 3600e3).toISOString
 const MailComposer = require('nodemailer/lib/mail-composer');
 const { ImapFlow } = require('imapflow');
 const MAILPLUG = { host: 'smtp.mailplug.co.kr', port: 465, imap: 'imap.mailplug.co.kr', imapPort: 993 };
-/* 메일 서비스별 서버 — 행사마다 메일플러그나 Gmail을 고른다.
+/* 메일 서비스별 서버 — 행사마다 메일플러그·Gmail·네이버 웍스 중에서 고른다.
    saveSent: 보낸 뒤 보낸메일함에 사본을 우리가 넣어야 하는지. Gmail은 SMTP로 보내면
    보낸편지함에 저절로 남아서, 넣으면 두 통이 된다 */
 const PROVIDERS = {
   mailplug: { host: 'smtp.mailplug.co.kr', port: 465, imap: 'imap.mailplug.co.kr', imapPort: 993, saveSent: true },
   gmail:    { host: 'smtp.gmail.com',      port: 465, imap: 'imap.gmail.com',      imapPort: 993, saveSent: false },
+  naverworks: { host: 'smtp.worksmobile.com', port: 465, imap: 'imap.worksmobile.com', imapPort: 993, saveSent: true },
 };
 const prov = (b) => PROVIDERS[(b && b.provider) || 'mailplug'] || PROVIDERS.mailplug;
 let boxReady = null;
@@ -265,6 +266,8 @@ router.post('/accounts/:eventId/test', async (req, res) => {
     res.json({ ok: false, error: `로그인 실패: ${e.message}`,
       도움말: b && b.provider === 'gmail'
         ? 'Gmail 2단계 인증을 켜고 앱 비밀번호를 넣었는지, Gmail 설정에서 IMAP이 켜져 있는지 확인해주세요.'
+        : b && b.provider === 'naverworks'
+        ? '네이버 웍스 메일 › 환경설정 › 고급 설정 › IMAP/SMTP 사용이 켜져 있는지(관리자가 막아 두지 않았는지), 2단계 인증을 쓰면 앱 비밀번호를 넣었는지 확인해주세요.'
         : '메일플러그 관리자 화면에서 이 계정의 IMAP/SMTP 사용이 켜져 있는지, 메일 비밀번호가 아니라 앱 비밀번호를 넣었는지 확인해주세요.' });
   }
 });
