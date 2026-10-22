@@ -1166,6 +1166,14 @@ router.get('/original/:t/:id', async (req, res) => {
 });
 
 /* ── 주인 없는 메일 ── */
+/* 직원이 개인 메일(cdakyo@gmail.com)로 연사에게 보내고 행사 메일함을 참조로 넣으면
+   보낸 사람이 직원 자신이다. 그 주소를 연락처로 넣으면 그 뒤 그 직원이 보낸 메일이
+   모두 그 연사에게 붙는다(2026-10-22 AIA — 조정구 대표님께 보낸 메일이 Ronghao Chang에게 붙음).
+   연결하는 사람의 회사 주소와 아이디(@ 앞)가 같으면 본인 개인 주소로 보고 넣지 않는다. */
+const isSelfAlias = (addr, user) => {
+  const a = String(addr || '').toLowerCase().split('@')[0], me = String(user?.email || '').toLowerCase().split('@')[0];
+  return !!a && a === me;
+};
 router.get('/unassigned/:eventId', async (req, res) => {
   const eventId = String(req.params.eventId);
   try {
@@ -1217,7 +1225,7 @@ router.get('/unassigned/:eventId', async (req, res) => {
         fwd: f ? { by: f.by, from: fw ? fmtAddr(fw.from) : '', to: fw ? [...fw.to, ...fw.cc].map((x) => x.addr).join(', ') : '', sent: fw ? fw.sent : '',
           addrs: fw ? [fw.from, ...fw.to, ...fw.cc].map((x) => x.addr) : [] } : null,
         // 연락처로 넣을 주소 — 우리 직원·주최사 주소면 넣지 않는다
-        contact_addr: !addr || isOurs(addr) || hostDomains.includes(domOf(addr)) ? '' : addr };
+        contact_addr: !addr || isOurs(addr) || isSelfAlias(addr, req.user) || hostDomains.includes(domOf(addr)) ? '' : addr };
     });
     res.json({ ok: true, items: out });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
@@ -1242,7 +1250,7 @@ router.post('/unassigned/:id/link', async (req, res) => {
       : (u.from_name ? `${u.from_name} <${u.from_addr}>` : u.from_addr);
     const contactAddr = fw ? fw.from.addr : u.from_addr;
     const contactName = fw ? fw.from.name : u.from_name;
-    const canAdd = contactAddr && !isOurs(contactAddr) && !hostDomains.includes(domOf(contactAddr));
+    const canAdd = contactAddr && !isOurs(contactAddr) && !isSelfAlias(contactAddr, req.user) && !hostDomains.includes(domOf(contactAddr));
     await pool.query(`
       INSERT INTO ${sp ? 'speaker_logs' : 'exhibitor_logs'} (id, ${sp ? 'speaker_id' : 'exhibitor_id'}, kind, ts, direction,
         channel, counterpart, category, subject, body, answered_at, answer, status, author_email, author_name, mail_box, mail_uid)
