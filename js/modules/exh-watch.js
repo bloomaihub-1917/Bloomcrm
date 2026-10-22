@@ -448,6 +448,13 @@ export function toggleWatchFolder(id){
   renderWatchBodyIfOpen();
 }
 
+/* 하위 폴더는 접힌 게 기본 — 편 것만 담는다 («폴더id|경로») */
+const openDirs = new Set();
+export function toggleWatchDir(key){
+  if(openDirs.has(key)) openDirs.delete(key); else openDirs.add(key);
+  renderWatchBodyIfOpen();
+}
+
 /* 전시 탭과 연사 탭이 둘 다 이 화면을 쓴다. 어느 쪽이 그려져 있든 다시 그린다. */
 function renderWatchBodyIfOpen(){
   document.querySelectorAll('.watch-body').forEach(el => {
@@ -511,9 +518,8 @@ function folderBlock(f, canScan){
       || String(b.changed_at || '').localeCompare(String(a.changed_at || ''))
       || String(a.rel_path || '').localeCompare(String(b.rel_path || ''), 'ko', { numeric: true }));
 
-  const rows = shown.map(w => {
+  const fileRow = (w) => {
     const st = fileState(w);
-    const dir = w.rel_path.includes('/') ? w.rel_path.slice(0, w.rel_path.lastIndexOf('/')) : '';
     return `<div style="display:flex;align-items:center;gap:8px;padding:7px 2px;border-bottom:1px solid var(--i8)">
       <input type="checkbox" ${w.checked_at ? 'checked' : ''} onchange="checkWatchFile('${escAttr(w.id)}')"
         title="확인했으면 체크하세요" style="flex:0 0 auto;width:16px;height:16px">
@@ -522,13 +528,47 @@ function folderBlock(f, canScan){
           w.gone_at ? ';text-decoration:line-through;color:var(--i4)' : ''}"
           title="${escAttr(w.rel_path)}">${escapeHtml(w.name)}</div>
         <div style="font-size:10px;color:var(--i5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${
-          dir ? escapeHtml(dir) + ' · ' : ''}${escapeHtml(fmtWhen(w.changed_at))}${
+          escapeHtml(fmtWhen(w.changed_at))}${
           w.size ? ' · ' + escapeHtml(fmtSize(w.size)) : ''}${
           w.checked_at ? ` · ${escapeHtml(w.checked_by || '')} 확인 ${escapeHtml(fmtWhen(w.checked_at))}` : ''}</div>
       </div>
       <span class="pill ${st.cls}" style="flex:0 0 auto;font-size:9.5px">${escapeHtml(st.label)}</span>
     </div>`;
-  }).join('');
+  };
+
+  /* 하위 폴더는 하위 폴더째로 묶는다 — 파일을 한 줄로 다 늘어놓으면 어느 폴더
+     것인지 안 보인다. 하위 폴더는 처음엔 접혀 있고 눌러서 편다. */
+  const tree = { dirs: new Map(), files: [] };
+  for(const w of shown){
+    const parts = String(w.rel_path || w.name).split('/').slice(0, -1);
+    let node = tree;
+    for(const p of parts){
+      if(!node.dirs.has(p)) node.dirs.set(p, { dirs: new Map(), files: [] });
+      node = node.dirs.get(p);
+    }
+    node.files.push(w);
+  }
+  const allIn = (n) => [...n.files, ...[...n.dirs.values()].flatMap(allIn)];
+  const nodeHtml = (n, path) => [...n.dirs.entries()]
+    .sort(([a], [b]) => a.localeCompare(b, 'ko', { numeric: true }))
+    .map(([name, sub]) => {
+      const p = path ? `${path}/${name}` : name;
+      const key = `${f.id}|${p}`;
+      const isOpen = openDirs.has(key);
+      const inside = allIn(sub);
+      const subNeed = inside.filter(needsEye).length;
+      return `<div>
+        <div style="display:flex;align-items:center;gap:6px;padding:7px 2px;border-bottom:1px solid var(--i8);cursor:pointer"
+          onclick="toggleWatchDir('${escAttr(key)}')">
+          <span style="font-size:10px;color:var(--i5);width:16px;text-align:center">${isOpen ? '▾' : '▸'}</span>
+          <span style="font-size:12px;font-weight:700">📁 ${escapeHtml(name)}</span>
+          <span style="font-size:10.5px;color:var(--i5)">${inside.length}개</span>
+          ${subNeed ? `<span class="pill p-blue" style="font-size:9.5px">확인 필요 ${subNeed}</span>` : ''}
+        </div>
+        ${isOpen ? `<div style="padding-left:18px">${nodeHtml(sub, p)}</div>` : ''}
+      </div>`;
+    }).join('') + n.files.map(fileRow).join('');
+  const rows = nodeHtml(tree, '');
 
   return `<div style="border:1px solid var(--i6);border-radius:10px;padding:11px 13px;margin-bottom:10px;background:var(--i9)">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -582,3 +622,4 @@ window.renameWatchFolder    = renameWatchFolder;
 window.editWatchHint        = editWatchHint;
 window.setWatchFil          = setWatchFil;
 window.toggleWatchFolder    = toggleWatchFolder;
+window.toggleWatchDir       = toggleWatchDir;
