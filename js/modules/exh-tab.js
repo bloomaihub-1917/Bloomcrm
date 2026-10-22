@@ -1271,7 +1271,7 @@ export function renderExh(){
      끝낼 수 있어야 한다. */
   const VIEWS = [['dash','대시보드'], ['list','기업리스트'],
     ['booth','부스 현황'], ['equip','비품 현황'], ['graphic','그래픽 현황'],
-    ['money','금액 현황'], ['book','프로그램북'], ['watch','파일 감시']];
+    ['money','금액 현황'], ['book','프로그램북'], ['onsite','현장 처리'],['watch','파일 감시']];
   const seg = `<div class="tbar" style="padding:10px 16px 0">
     <div class="seg" style="flex-wrap:wrap">
       ${VIEWS.map(([k, l]) => `<button class="seg-b${exhView === k ? ' on' : ''}" onclick="setExhView('${k}')">${l}</button>`).join('')}
@@ -1297,7 +1297,8 @@ export function renderExh(){
     : exhView === 'base'    ? renderGraphicView(list)   /* 옛 주소로 들어와도 그래픽으로 */
     : exhView === 'money'   ? renderMoneyView(list)
     : exhView === 'book'    ? renderBookView(list)
-    : exhView === 'watch'   ? renderWatchView(exhEvent)
+    : exhView === 'onsite'  ? renderOnsiteView(list)
+    : exhView === 'watch'   ? `<div style="padding:14px 16px 40px">${renderWatchView(exhEvent)}</div>`
     : renderInquiryPanel() + renderChecklist(list, all);
   // 거를 목록이 없는 화면(대시보드·파일 감시)에는 필터 칩도 두지 않는다
   const chips = (searchOverride || !['dash', 'watch'].includes(exhView)) ? exhFilterChipsHtml() : '';
@@ -1623,6 +1624,55 @@ const pillsOf = (cnt, cls = 'p-gray') => Object.entries(cnt)
   .map(([k, n]) => `<span class="pill ${cls}">${escapeHtml(k)} ${n}</span>`).join('');
 
 const emptyView = (msg) => `<div class="empty" style="padding:40px 20px;text-align:center;color:var(--i4);font-size:13px">${escapeHtml(msg)}</div>`;
+
+/* ── 현장 처리 ──
+   행사 기간에 «했음»을 누른 항목은 전부 현장에서 한 일이다(2026-10-13 KIC부터
+   이렇게 쓴다). 메모 칸을 따로 두지 않는다 — 완료일(done_at)이 행사 기간 안이면
+   그게 곧 «현장»이라, 체크 한 번이면 여기 모인다. 행사 날짜는 설정 › 행사의
+   기간이 정본이다. 사전 준비분과 현장 대응분을 나눠 보고(정산·결과보고),
+   잘못 누른 것을 되돌리는 자리. */
+export function isOnsiteDate(d, evKey = exhEvent){
+  const ev = EVENT_LIST.find(e => e.key === evKey) || {};
+  const s = ev.date_start || ev.date || '', e = ev.date_end || s;
+  d = String(d || '').slice(0, 10);
+  return !!(s && d && d >= s && d <= e);
+}
+function renderOnsiteView(list){
+  const rows = [];
+  for(const x of list){
+    const items = liveItemsFor(x.id).filter(i => isOnsiteDate(i.done_at));
+    items.forEach(i => rows.push({ x, i, d: String(i.done_at).slice(0, 10) }));
+    // 항목이 없는 기업은 기본 시공 완료가 기업 칸에 적힌다
+    if(!liveItemsFor(x.id).some(i => (i.category || '') === 'graphic') && isOnsiteDate(x.base_done_at))
+      rows.push({ x, i: null, d: String(x.base_done_at).slice(0, 10) });
+  }
+  if(!rows.length) return emptyView('행사 기간에 «했음»으로 체크한 항목이 아직 없어요 — 현장에서 체크하면 여기에 모입니다');
+  rows.sort((a, b) => a.d.localeCompare(b.d) || boothSortKey(a.x) - boothSortKey(b.x));
+  const days = [...new Set(rows.map(r => r.d))];
+  const pills = `<span class="pill p-blue">현장 처리 ${rows.length}건</span>`
+    + `<span class="pill p-gray">${new Set(rows.map(r => r.x.id)).size}곳</span>`
+    + days.map(d => `<span class="pill p-gray">${escapeHtml(d.slice(5).replace('-', '/'))} ${rows.filter(r => r.d === d).length}</span>`).join('')
+    + '<span style="font-size:10.5px;color:var(--i5);margin-left:2px">행사 기간에 «했음»으로 체크한 것 — 체크를 풀면 여기서도 빠집니다</span>';
+  const line = (r) => {
+    const cat = r.i ? ((r.i.category || '') === 'graphic' ? '그래픽' : '비품') : '기본 시공';
+    const name = r.i ? (r.i.name || '(이름 없음)') : '기본 시공';
+    const undo = r.i
+      ? `toggleItemDone('${escAttr(r.i.id)}')`
+      : `toggleBaseDone('${escAttr(r.x.id)}')`;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--i8);flex-wrap:${isMobile() ? 'wrap' : 'nowrap'}">
+      <span class="pill p-gray" style="flex:0 0 auto">${r.x.booth_no ? '부스 ' + escapeHtml(r.x.booth_no) : '미배정'}</span>
+      <span onclick="openExhDr('${escAttr(r.x.id)}','progress')" style="font-size:12.5px;font-weight:700;cursor:pointer;min-width:120px">${escapeHtml(exhNames(r.x).ko)}</span>
+      <span class="pill ${cat === '그래픽' ? 'p-teal' : 'p-gray'}" style="flex:0 0 auto">${cat}</span>
+      <span style="flex:1;min-width:0;font-size:12.5px">${escapeHtml(name)}${r.i?.qty ? ` <span style="color:var(--i4);font-size:10.5px">· ${escapeHtml(String(r.i.qty))}개</span>` : ''}</span>
+      <button class="pill p-green" style="border:0;cursor:pointer;font:inherit;padding:0 10px;flex:0 0 auto"
+        onclick="${undo}" title="현장 처리 — 누르면 «안 했음»으로 되돌립니다">✓ 현장</button>
+    </div>`;
+  };
+  const inner = days.map(d => `<div style="margin-bottom:16px">
+      <div style="font-size:12px;font-weight:800;color:var(--i2);margin-bottom:4px">${escapeHtml(d)} · ${rows.filter(r => r.d === d).length}건</div>
+      ${rows.filter(r => r.d === d).map(line).join('')}</div>`).join('');
+  return viewShell(pills, `<div style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:6px 14px">${inner}</div>`);
+}
 
 /* ── 현장 추가 (대시보드 카드) ──
    현장에서 받은 접수(경로 '현장')로 들어온 품목을 기업마다 모은다. 차수 배지에는
