@@ -51,7 +51,9 @@ const spFlagPills = (sp) => {
   return (no.length ? `<span class="pill p-red" style="font-size:9px"
       title="${escAttr(`동의하지 않음: ${no.join(', ')} — 자료집·배포에서 빼야 해요`)}">공유 ✕ ${escapeHtml(no.join('·'))}</span>` : '')
     + (sp.gala_rsvp === 'yes' ? '<span class="pill p-green" style="font-size:9px" title="갈라디너 참석">갈라 참석</span>'
-      : sp.gala_rsvp === 'no' ? '<span class="pill p-gray" style="font-size:9px" title="갈라디너 불참">갈라 불참</span>' : '');
+      : sp.gala_rsvp === 'no' ? '<span class="pill p-gray" style="font-size:9px" title="갈라디너 불참">갈라 불참</span>' : '')
+    + (sp.video_publish === 'yes' ? '<span class="pill p-green" style="font-size:9px" title="발표 영상 게재 동의">영상 게재 ✓</span>'
+      : sp.video_publish === 'no' ? '<span class="pill p-red" style="font-size:9px" title="발표 영상 게재 비동의 — 올리면 안 돼요">영상 게재 ✕</span>' : '');
 };
 import {
   saveConfSession, deleteConfSession,

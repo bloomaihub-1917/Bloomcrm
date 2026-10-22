@@ -789,6 +789,16 @@ function basicHtml(sp, con, evKey){
     ${fg('동의서 파일명', txt(sp.consent_file, `spField('consent_file',this.value,'동의서 파일')`, '원드라이브 파일명'))}
     ${fg('동의 메모', txt(sp.consent_note, `spField('consent_note',this.value,'동의 메모')`, '예: 영상 촬영은 발표 앞부분만'))}` : ''}
 
+    <div class="fgr" style="margin-top:10px">
+      ${fg('발표 영상 게재', `<select class="fi" onchange="spField('video_publish',this.value,'영상 게재 동의')"
+        ${sp.video_publish === 'no' ? 'style="border-color:var(--re);color:var(--re)"' : ''}>
+        <option value=""${!sp.video_publish ? ' selected' : ''}>미확인</option>
+        <option value="yes"${sp.video_publish === 'yes' ? ' selected' : ''}>동의</option>
+        <option value="no"${sp.video_publish === 'no' ? ' selected' : ''}>비동의</option>
+      </select>`, '행사 뒤 홈페이지·교육 자료 게재')}
+      ${fg('회신 받은 날', dateIn(sp.video_publish_at, `spField('video_publish_at',this.value,'영상 게재 회신')`))}
+    </div>
+
     ${fg('메모', area(sp.note, `spField('note',this.value,'메모')`, '섭외 경위, 주의할 점 등', 3))}`;
 }
 

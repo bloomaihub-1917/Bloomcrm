@@ -39,6 +39,7 @@ const F = {
   air_class: '좌석 등급', air_ticketed_at: '발권일', air_note: '항공 메모',
   consent_basic: '동의(기본)', consent_photo: '동의(사진)', consent_abstract: '동의(초록)', consent_slides: '동의(발표자료)',
   consent_video: '동의(영상)', consent_at: '동의서 받은 날', consent_file: '동의서 파일', consent_note: '동의 메모',
+  video_publish: '영상 게재 동의', video_publish_at: '영상 게재 회신',
   passport_file: '여권 파일', passport_received_at: '여권 받은 날',
   reuse_from: '가져온 행사', reused_at: '가져온 날',
   // 연락처

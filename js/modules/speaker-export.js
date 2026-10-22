@@ -159,7 +159,7 @@ const LIST_COLS = [
   ['이력', 14], ['사진', 14], ['사진 파일', 20], ['CV', 14], ['초록', 14], ['발표자료', 14],
   ['동의서', 14], ...SP_CONSENTS.map(c => [`동의-${c.label}`, 9]), ['동의 메모', 22],
   ['신분증·여권', 14], ['계좌', 14],
-  ['갈라디너', 10], ['연사료', 12], ['연사료 지급', 12],
+  ['갈라디너', 10], ['영상 게재', 10], ['연사료', 12], ['연사료 지급', 12],
   ['숙박', 26], ['항공', 30],
   ['가이드 보냄', 12], ['마지막 독촉', 12], ['메모', 40],
 ];
@@ -196,6 +196,7 @@ function drawList(wb, evKey){
       got(sp.consent_at), ...SP_CONSENTS.map(c => yn(sp[c.key])), sp.consent_note || '',
       got(idDoc), st('bank'),
       sp.gala_rsvp === 'yes' ? '참석' : sp.gala_rsvp === 'no' ? '불참' : '',
+      sp.video_publish === 'yes' ? '동의' : sp.video_publish === 'no' ? '비동의' : '',
       sp.fee_amount ? Number(String(sp.fee_amount).replace(/[^\d.-]/g, '')) || sp.fee_amount : '',
       sp.fee_paid_at || '',
       [sp.stay_hotel, sp.stay_in && `${sp.stay_in}~${sp.stay_out || ''}`, sp.stay_room_type].filter(Boolean).join(' · '),
