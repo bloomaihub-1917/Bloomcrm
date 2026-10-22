@@ -595,5 +595,85 @@ router.post('/exh-advice', async (req, res) => {
   }
 });
 
+/* 메일 초안 — 상황에 맞는 제목·본문을 «변수가 든 틀»로 쓴다.
+   이름·소속·메일 주소·받은 메일 본문은 보내지 않는다(2026-10-08 결정). 사람 자리는 {호칭}·{기업}
+   같은 변수로 남기고, 화면이 실제 값을 넣는다. 회신도 같다 — 받은 메일 본문 대신 «회신»이라는
+   사실과 직원의 지시만 보낸다.
+   보내는 것: 파트(conf·exh), 언어, 연락 단계 이름·설명·그 단계의 기존 틀(변수 양식),
+   상태(역할·국내외·남은 자료·마감 같은 짧은 줄), 공개 행사 정보, 직원 지시, 쓸 수 있는 변수 이름.
+   body: { part, lang:'ko'|'en'|'both', reply, step:{label,desc,subject_ko,body_ko,subject_en,body_en},
+           state:[문자열], event:{name,date,venue}, instruction, vars:[변수 이름] } */
+// 지시에 섞여 들어온 메일 주소·전화번호는 서버에서도 지운다
+const scrub = (v) => String(v || '')
+  .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '[메일 주소]')
+  .replace(/\+?\d{2,4}[\s.-]\d{3,4}[\s.-]\d{4}/g, '[번호]');   // 010-1234-5678 꼴 — 날짜(2026-10-16)는 남긴다
+router.post('/mail-draft', async (req, res) => {
+  if (!enabled()) return res.status(503).json({ ok: false, error: 'AI가 꺼져 있어요(ANTHROPIC_API_KEY 없음)' });
+  const b = req.body || {};
+  const str = (v, n) => scrub(String(v || '').slice(0, n));
+  const part = b.part === 'exh' ? 'exh' : 'conf';
+  const lang = ['ko', 'en', 'both'].includes(b.lang) ? b.lang : 'ko';
+  const st = b.step || {};
+  const vars = (Array.isArray(b.vars) ? b.vars : []).map((v) => String(v || '').replace(/[{}]/g, '').slice(0, 20)).filter(Boolean).slice(0, 40);
+  const state = (Array.isArray(b.state) ? b.state : []).slice(0, 20).map((x) => str(x, 200)).filter(Boolean);
+  const ev = b.event || {};
+  const instruction = str(b.instruction, 800).trim();
+  const who = part === 'exh' ? '전시 참가기업 담당자' : '컨퍼런스 연사';
+  const nameVar = part === 'exh' ? '{담당자}' : '{호칭}';
+  const meVar = part === 'exh' ? '{보내는사람}' : '{담당자}';
+
+  const want = lang === 'both' ? ['ko', 'en'] : [lang];
+  const schema = {
+    type: 'object', additionalProperties: false, required: ['subject_ko', 'body_ko', 'subject_en', 'body_en', 'note'],
+    properties: { subject_ko: { type: 'string' }, body_ko: { type: 'string' }, subject_en: { type: 'string' }, body_en: { type: 'string' }, note: { type: 'string' } },
+  };
+  const prompt = [
+    `행사 사무국 담당자가 ${who}에게 보낼 메일${b.reply ? ' 회신' : ''}을 씁니다. 제목과 본문 초안을 써 주세요.`,
+    '',
+    '규칙:',
+    `- 받는 사람·회사 이름은 모릅니다. 이름 자리에는 반드시 아래 변수만 쓰세요(중괄호 그대로). 받는 사람 부르기는 ${nameVar}, 우리 쪽 서명은 ${meVar}.`,
+    `- 쓸 수 있는 변수: ${vars.map((v) => `{${v}}`).join(' ') || '(없음)'}. 목록에 없는 변수나 다른 괄호 표기는 만들지 마세요.`,
+    '- 지어내지 마세요: 날짜·금액·시간·장소·링크는 아래에 주어졌거나 변수로 대신할 수 있을 때만 씁니다. 모르는 값이 꼭 필요하면 본문에 [확인 필요: 무엇] 으로 남기고 note에 적습니다.',
+    '- 국문은 공손한 비즈니스 메일(«안녕하십니까. {행사} 사무국 … 입니다»로 시작, «감사합니다.»로 맺음). 영문은 간결한 비즈니스 영어(Dear …, / Best regards,).',
+    '- 본문은 짧은 문단과 «■ 소제목», «- 항목» 정도만. 마크다운 굵게·표는 쓰지 않습니다.',
+    `- 이번에 쓸 언어: ${want.map((l) => (l === 'ko' ? '국문' : '영문')).join('·')}. 쓰지 않는 언어의 subject·body는 ""로 둡니다.`,
+    b.reply ? '- 회신입니다: 제목은 ""로 두세요(화면이 «Re: 원래 제목»을 씁니다). 받은 메일 내용은 모르니, 직원 지시를 따라 답하는 말만 씁니다.' : '',
+    '- 아래 «기존 틀»이 있으면 그 말투와 구성을 따르되 지시에 맞게 고칩니다.',
+    '- note: 직원이 보내기 전에 확인할 점 한두 줄. 없으면 "".',
+    '',
+    `행사: ${str(ev.name, 120) || '{행사}'}${ev.date ? ` · ${str(ev.date, 60)}` : ''}${ev.venue ? ` · ${str(ev.venue, 80)}` : ''}`,
+    st.label ? `메일 종류(연락 단계): ${str(st.label, 60)}${st.desc ? ` — ${str(st.desc, 200)}` : ''}` : '메일 종류: 자유 안내',
+    state.length ? `받는 쪽 상태:${NL}${state.map((x) => `- ${x}`).join(NL)}` : '',
+    st.subject_ko || st.body_ko ? `기존 틀(국문):${NL}제목: ${str(st.subject_ko, 200)}${NL}${str(st.body_ko, 3000)}` : '',
+    st.subject_en || st.body_en ? `기존 틀(영문):${NL}Subject: ${str(st.subject_en, 200)}${NL}${str(st.body_en, 3000)}` : '',
+    '',
+    `직원 지시: ${instruction || '(없음 — 이 단계에 맞는 기본 안내로)'}`,
+  ].filter((x) => x !== '').join(NL);
+
+  try {
+    const r = await ai().beta.messages.create({
+      model: MODEL,
+      max_tokens: 8000,
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      output_config: { effort: 'medium', format: { type: 'json_schema', schema } },
+      messages: [{ role: 'user', content: prompt }],
+    }, { timeout: 55000, maxRetries: 0 });
+    if (r.stop_reason === 'refusal') return res.status(502).json({ ok: false, error: 'AI가 답하지 않았어요' });
+    const out = JSON.parse(r.content.filter((x) => x.type === 'text').map((x) => x.text).join(''));
+    const cut = (v, n) => String(v || '').slice(0, n);
+    res.json({ ok: true,
+      subject_ko: want.includes('ko') ? cut(out.subject_ko, 300) : '', body_ko: want.includes('ko') ? cut(out.body_ko, 8000) : '',
+      subject_en: want.includes('en') ? cut(out.subject_en, 300) : '', body_en: want.includes('en') ? cut(out.body_en, 8000) : '',
+      note: cut(out.note, 400) });
+  } catch (e) {
+    if (e instanceof Anthropic.APIConnectionTimeoutError) return res.status(504).json({ ok: false, error: '시간 안에 끝나지 않았어요' });
+    if (e instanceof Anthropic.RateLimitError) return res.status(429).json({ ok: false, error: 'AI 요청이 많아요 — 잠시 뒤에 다시' });
+    if (e instanceof Anthropic.AuthenticationError) return res.status(503).json({ ok: false, error: 'AI 키가 맞지 않아요' });
+    if (e instanceof Anthropic.APIError) return res.status(502).json({ ok: false, error: `AI 오류 (${e.status || '연결'})` });
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 module.exports = router;
 module.exports.shape = shape;

@@ -23,6 +23,7 @@ import { exhMailSteps, exhIsEnglish, fillExhTemplate, exhMailFileStep, boothChan
 import { libItems, libItem } from './mail-templates.js';
 import { trackAction } from './audit-tab.js';
 import { varChipsHtml } from './var-chips.js';
+import { aiDraftHtml, registerAiDraft } from './ai-mail-draft.js';
 import './exh-mail-editor.js';
 
 let bm = null;   // { evKey, ids:Set, step, variant, lang, who, tpl, sending, pi, failed:Set }
@@ -103,6 +104,15 @@ export async function openExhBulkMail(stepKey){
   render();
 }
 /* 처음 채울 문구 — 보관함 양식, 고른 변형, 아니면 단계 문구 */
+/* «✨ AI로 초안 쓰기» — 여러 기업에 같은 틀. 회사명·담당자 대신 변수가 든 틀을 받아 국문·영문 문구에 넣는다 */
+registerAiDraft('exbulk', () => {
+  if(!bm) return null;
+  const st = curStep() || {};
+  const n = bm.ids.size;
+  return { part: 'exh', ev: bm.evKey, lang: 'both', reply: false, step: { ...st, ...bm.tpl }, stepLabel: st.label,
+    state: [`여러 참가기업${n ? `(${n}곳)` : ''}에 같은 틀로 한꺼번에 보냄 — 기업마다 {기업}·{담당자}·{부스} 같은 변수가 채워짐`],
+    apply(tpl){ const next = { ...bm.tpl }; for(const k of ['subject_ko', 'body_ko', 'subject_en', 'body_en']) if(tpl[k]) next[k] = tpl[k]; bm.tpl = next; render(); } };
+});
 function pickTpl(evKey, key, variant){
   const st = isLib(key) ? (libItem(key.slice(4)) || {}) : (exhMailSteps(evKey).find(s => s.key === key) || {});
   const v = variant ? exhStepVariants(evKey, key).find(x => x.id === variant) : null;
@@ -236,6 +246,7 @@ function render(){
         </div>
       </div>
       <div>
+        ${aiDraftHtml('exbulk')}
         <details${bm.lang !== 'en' ? ' open' : ''}><summary style="cursor:pointer;font-size:11.5px;font-weight:700;margin-bottom:4px">국문 문구</summary>
           <input class="fi" style="font-size:11.5px;margin-bottom:4px" value="${escAttr(bm.tpl.subject_ko)}" oninput="bmTpl('subject_ko',this.value)">
           <textarea class="fi" rows="7" style="font-size:11.5px;width:100%" oninput="bmTpl('body_ko',this.value)">${escapeHtml(bm.tpl.body_ko)}</textarea></details>

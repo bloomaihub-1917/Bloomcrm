@@ -270,6 +270,13 @@ export async function tplLibSave(){
   mg.edit = null;
   refreshAll();
 }
+/* 다른 화면(AI 초안 등)에서 양식 하나를 보관함에 더한다 */
+export async function addLibItem(part, ev, rec){
+  const meta = { part, updated_at: nowStamp(), updated_by: currentUser?.name || currentUser?.email || '' };
+  const ok = await pushLibrary(list => { list.push({ id: newId('T'), scope: ev, ...rec, ...meta }); }, `추가 «${rec.name}»`);
+  if(ok) refreshAll();
+  return ok;
+}
 export async function tplLibCopy(id){
   const it = libItem(id);
   if(!it) return;

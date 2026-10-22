@@ -65,6 +65,7 @@ import { decorate as decorateMailPane } from './mail-pane.js';
 import { EXH_MAIL_STEPS, exhMailSteps, exhIsEnglish, fillExhTemplate, exhMailFileStep, exhStepVariants } from './exh-mail.js';
 import { libItems, libItem } from './mail-templates.js';
 import { varChipsHtml, registerVarResolver } from './var-chips.js';
+import { aiDraftHtml, registerAiDraft } from './ai-mail-draft.js';
 import './exh-mail-editor.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 import { ieyo } from '../country-signal.js';
@@ -3860,7 +3861,39 @@ function fillExhReply(x){
 window.startExhReply = startExhReply;
 window.cancelExhReply = cancelExhReply;
 
+/* «✨ AI로 초안 쓰기» — 회사명·담당자·금액은 보내지 않고 상태만. 돌아온 틀에 이 기업의 값을 채운다 */
+let aiExhId = '';
+registerAiDraft('ex', () => {
+  const x = getExhibitorById(aiExhId);
+  if(!x) return null;
+  const stepKey = document.getElementById(`exm-step-${x.id}`)?.value || '';
+  const en = document.getElementById(`exm-lang-${x.id}`)?.value === 'en';
+  const lib = String(stepKey).startsWith('lib:') ? libItem(String(stepKey).slice(4)) : null;
+  const st = lib ? { label: lib.name, subject_ko: lib.subject_ko, body_ko: lib.body_ko, subject_en: lib.subject_en, body_en: lib.body_en }
+    : exhMailSteps(x.event_id).find(s => s.key === stepKey) || {};
+  const ctx = exhMailCtx(x);
+  const state = [
+    x.booth_no ? '부스 배정됨({부스} 사용 가능)' : '부스 아직 배정 전',
+    ctx.billed ? `인보이스 발행됨({청구액}) · ${settleState(x).state === 'settled' ? '완납' : '미납 있음({미납액})'}` : '인보이스 발행 전',
+    st.due ? '이 단계 마감일 있음({마감일})' : '',
+  ].filter(Boolean);
+  return { part: 'exh', ev: x.event_id, lang: en ? 'en' : 'ko', reply: !!exhReply, step: exhReply ? {} : st, stepLabel: st.label, state,
+    apply(tpl){
+      const sEl = document.getElementById(`exm-sub-${x.id}`), bEl = document.getElementById(`exm-body-${x.id}`);
+      const subj = fillExhTemplate(en ? tpl.subject_en : tpl.subject_ko, x, st, en, ctx);
+      const body = fillExhTemplate(en ? tpl.body_en : tpl.body_ko, x, st, en, ctx);
+      if(exhReply){
+        // 회신은 제목을 두고, 처음 회신 초안(인용된 원래 메일) 위에 새 글을 얹는다 — 다시 눌러도 겹치지 않게
+        exhReply.curBody = `${body}\n\n${String(exhReply.body || '').replace(/^\s+/, '')}`;
+        if(bEl){ bEl.value = exhReply.curBody; bEl.dataset.touched = '1'; }
+        return;
+      }
+      if(sEl && subj) sEl.value = subj;
+      if(bEl){ bEl.value = body; bEl.dataset.touched = '1'; }
+    } };
+});
 function dMail(x){
+  aiExhId = x.id;
   /* 메일 «값 넣기» 칩 — 드로어 메일은 글 그대로 나가므로 이 기업의 실제 값을 넣는다.
      언어·마감일은 지금 고른 «언어»·«무슨 메일인가»를 따른다 */
   registerVarResolver('exh-drawer', (key) => {
@@ -3914,6 +3947,7 @@ function dMail(x){
     </div>
     <div class="mlbl">참조 <span style="font-size:9px;color:var(--i4)">쉼표로 여러 개</span></div>
     <input class="fi" id="exm-cc-${id}" style="font-size:12px;margin-bottom:8px">
+    ${aiDraftHtml('ex', { reply: !!exhReply })}
     <div data-vscope>
     <div class="mlbl">제목</div>
     <input class="fi" id="exm-sub-${id}" value="${escAttr(evName ? `[${evName}] ` : '')}" style="font-size:12px;margin-bottom:8px">

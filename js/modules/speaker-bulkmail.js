@@ -26,6 +26,7 @@ import { mailTargets } from './speaker-drawer.js';
 import { saveConf } from './settings-tab.js';
 import { trackAction } from './audit-tab.js';
 import { varChipsHtml } from './var-chips.js';
+import { aiDraftHtml, registerAiDraft } from './ai-mail-draft.js';
 
 let bm = null;   // { evKey, step, variant:''|'base'|id, ids:Set, show:'due'|'all', tpl, sending, pi, failed:Set }
 const isLib = (key) => String(key || '').startsWith('lib:');
@@ -97,6 +98,15 @@ function mailFor(sp){
     body: fillTemplate(bm.tpl[en ? 'body_en' : 'body_ko'], sp, st), kind: lib ? 'note' : bm.step, category: st.label };
 }
 /* «이번 발송 문구 고치기»에 처음 띄울 글 — 고른 변형(자동이면 기본 문구) 또는 보관함 양식 */
+/* «✨ AI로 초안 쓰기» — 여러 연사에게 같은 틀. 이름 대신 변수가 든 틀을 받아 «이번 발송 문구»에 넣는다 */
+registerAiDraft('spbulk', () => {
+  if(!bm) return null;
+  const st = curStep() || {};
+  const n = bm.ids.size;
+  return { part: 'conf', ev: bm.evKey, lang: 'both', reply: false, step: { ...st, ...(bm.tpl || baseTpl()) }, stepLabel: st.label,
+    state: [`여러 연사${n ? `(${n}명)` : ''}에게 같은 틀로 한꺼번에 보냄 — 연사마다 {호칭}·{남은자료}·{세션} 같은 변수가 채워짐`],
+    apply(tpl){ const next = { ...(bm.tpl || baseTpl()) }; for(const k of ['subject_ko', 'body_ko', 'subject_en', 'body_en']) if(tpl[k]) next[k] = tpl[k]; bm.tpl = next; render(); } };
+});
 function baseTpl(){
   const st = curStep() || {};
   const v = !st.lib && bm.variant && bm.variant !== 'base' ? stepVariants(bm.evKey, bm.step).find(x => x.id === bm.variant) : null;
@@ -231,6 +241,7 @@ function render(){
         </div>
       </div>
       <div>
+        ${aiDraftHtml('spbulk')}
         <details${bm.tpl ? ' open' : ''}><summary style="cursor:pointer;font-size:11.5px;font-weight:700;margin-bottom:4px">이번 발송 문구 고치기${bm.tpl ? ' <span style="color:var(--am);font-weight:400">(고침)</span>' : ''}</summary>
           <div class="mlbl">국문</div>
           <input class="fi" style="font-size:11.5px;margin-bottom:4px" value="${escAttr(tpl.subject_ko)}" oninput="sbmTpl('subject_ko',this.value)">

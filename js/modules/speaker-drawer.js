@@ -51,6 +51,7 @@ import { flowStatus, draftFor, missingItems, pendingItems, PART_LABEL, changeLin
 import { libItems, libItem } from './mail-templates.js';
 import { reuseCandidates, reusePending } from './contact-speaker.js';
 import { varChipsHtml, registerVarResolver } from './var-chips.js';
+import { aiDraftHtml, registerAiDraft } from './ai-mail-draft.js';
 
 let spId = null;
 /* 메일 «값 넣기» 칩 — 드로어 메일은 글 그대로 나가므로 칸 대신 이 연사의 실제 값을 넣는다.
@@ -61,6 +62,40 @@ registerVarResolver('sp-drawer', (key) => {
   const kind = document.getElementById('sp-mail-kind')?.value || '';
   const step = flowStatus(sp).steps.find(s => s.key === kind) || {};
   return fillTemplate(`{${key}}`, sp, step);
+});
+/* «✨ AI로 초안 쓰기» — 이름·소속·메일 주소는 보내지 않고 상태만. 돌아온 틀에 이 연사의 값을 채운다 */
+registerAiDraft('sp', () => {
+  const sp = getSpeakerById(spId);
+  if(!sp) return null;
+  const kind = document.getElementById('sp-mail-kind')?.value || '';
+  const lib = String(kind).startsWith('lib:') ? libItem(String(kind).slice(4)) : null;
+  const step = lib ? { label: lib.name, subject_ko: lib.subject_ko, body_ko: lib.body_ko, subject_en: lib.subject_en, body_en: lib.body_en }
+    : flowStatus(sp).steps.find(x => x.key === kind) || { label: (MAIL_KINDS.find(k => k.key === kind) || {}).label || '' };
+  const en = sp.lang_pref === 'en';
+  const pend = pendingItems(sp).filter(x => x.when !== 'ours');
+  const state = [
+    `역할: ${rolesOfSpeaker(sp.id).join(', ') || '미배정'} · ${isDomesticSpeaker(sp) ? '국내' : '해외'} 연사 · 섭외 ${sp.status || '-'}`,
+    pend.length ? `아직 안 받은 자료: ${pend.map(x => `${x.label}${x.due ? `(${x.due}까지)` : ''}`).join(', ')}` : '받을 자료는 다 받음',
+    sp.fee_amount && paysFee(sp) ? `연사료 ${sp.fee_paid_at ? '지급함' : '아직 미지급'}` : '',
+    step.due ? `이 단계 마감일 있음({마감일})` : '',
+    assignmentsFor(sp.id).length ? '발표 세션 배정됨({세션}·{발표시간} 사용 가능)' : '',
+  ].filter(Boolean);
+  return { part: 'conf', ev: sp.event_id, lang: en ? 'en' : 'ko', reply: !!spReply, step: spReply ? {} : step,
+    stepLabel: step.label, state,
+    apply(tpl){
+      const s = document.getElementById('sp-mail-subject'), b = document.getElementById('sp-mail-body');
+      const subj = fillTemplate(en ? tpl.subject_en : tpl.subject_ko, sp, step);
+      const body = fillTemplate(en ? tpl.body_en : tpl.body_ko, sp, step);
+      if(spReply){
+        // 회신은 «Re: 원래 제목»을 그대로 두고, 처음 회신 초안(인용된 원래 메일) 위에 새 글을 얹는다.
+        // 다시 눌러도 겹쳐 쌓이지 않게 늘 처음 초안에서 시작한다
+        spReply.curBody = `${body}\n\n${String(spReply.body || '').replace(/^\s+/, '')}`;
+        if(b) b.value = spReply.curBody;
+        return;
+      }
+      if(s && subj) s.value = subj;
+      if(b) b.value = body;
+    } };
 });
 let spTab = 'basic';
 
@@ -1449,6 +1484,7 @@ function mailTabHtml(sp, evKey){
         '고르면 그 단계의 기본 문구로 제목·본문이 채워집니다. 기본 문구·단계는 위 단추로 바로 고칩니다');
     })()}
     <div id="sp-bulk-pick"></div>
+    ${aiDraftHtml('sp', { reply: !!spReply })}
     <div data-vscope>
     ${fg('제목', `<input class="fi" id="sp-mail-subject" value="${escAttr(`[${evName}] 연사 안내`)}">`)}
     ${fg('내용', `<textarea class="fi" id="sp-mail-body" rows="10" style="resize:vertical"></textarea>
