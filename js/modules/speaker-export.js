@@ -175,7 +175,7 @@ function drawList(wb, evKey){
     const sess = asg.map(a => CONF_SESSIONS.find(s => s.id === a.session_id)).filter(Boolean);
     const me = selfContact(sp);
     const cell = (k) => spCell(sp, evKey, k);
-    const st = (k) => { const c = cell(k); return c.state === 'na' ? '해당 없음' : c.state === 'done' ? (c.text || '받음') : c.state === 'part' ? `일부 ${c.text || ''}` : ''; };
+    const st = (k) => { const c = cell(k); return c.state === 'na' ? (c.lapsed ? '지남(안 받음)' : '해당 없음') : c.state === 'done' ? (c.text || '받음') : c.state === 'part' ? `일부 ${c.text || ''}` : ''; };
     const talk = (f) => [...new Set(asg.map(a => a[f]).filter(Boolean))].join('\n');
     const recv = (f) => [...new Set(asg.map(a => a[f]).filter(Boolean))].join(', ');
     const idDoc = sp.id_card_received_at || sp.passport_received_at;

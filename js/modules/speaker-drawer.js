@@ -120,6 +120,7 @@ export function openSpeakerDr(id, tab){
      따라오면 열람 기록과 실제로 본 것이 어긋난다. */
   if(spId !== id){
     spReply = null;
+    spTravelForce = false;
     bankRevealed = false;
     /* PC에서 고른 첨부는 그 사람 몫이다 — 다음 연사 메일로 따라가면 여권·계좌
        서류가 엉뚱한 사람에게 나간다 */
@@ -293,8 +294,11 @@ export function renderSpeakerDr(){
     offer: nowN('offer'),
     bank: nowN('bank'),
   };
+  /* 설정에서 받지 않기로 한 것만 있는 탭은 접는다 — 적어 둔 값이 있으면 보인다 */
+  const shownTabs = TABS.filter(t => tabShown(sp, evKey, t.key));
+  if(!shownTabs.some(t => t.key === spTab)) spTab = 'basic';
   const tabsEl = document.getElementById('sp-drtabs');
-  if(tabsEl) tabsEl.innerHTML = TABS.map(t =>
+  if(tabsEl) tabsEl.innerHTML = shownTabs.map(t =>
     `<button class="drtab${spTab === t.key ? ' on' : ''}" onclick="switchSpeakerDT('${t.key}')">${t.label}${
       left[t.key] ? ` <span class="pill p-amber">${left[t.key]}</span>`
       : dotOf(t.key) ? ` <span title="나중 일·우리가 할 일이 있어요" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--i5);vertical-align:middle"></span>` : ''}</button>`).join('');
@@ -394,6 +398,11 @@ function pendingHtml(sp){
   </div>`;
 }
 
+/* 연락 단계 상자는 탭마다 맨 위에 붙는다 — 다 펼쳐 두면 설명·남은 일·질문 칸이
+   자료 칸을 밀어내 정작 데이터가 보이는 자리가 좁아진다. 평소엔 «지금 할 일» 한 줄만,
+   «자세히»를 누르면 단계 칩·설명·남은 일·상황 물어보기를 편다(드로어를 닫아도 기억한다) */
+let spFlowOpen = false;
+export function toggleSpFlow(){ spFlowOpen = !spFlowOpen; renderSpeakerDr(); }
 function flowBoxHtml(sp){
   const f = flowStatus(sp);
   if(f.skip) return `<div style="padding:8px 11px;border:1px solid var(--i6);border-radius:8px;margin-bottom:12px;
@@ -424,11 +433,28 @@ function flowBoxHtml(sp){
   const markBtn = cur && !cur.resend && cur.done.startsWith('field:') && cur.key !== 'invite'
     ? `<button class="btn" style="font-size:10.5px" onclick="spStamp('${cur.done.slice(6)}','${escAttr(cur.label)}')">${
         cur.key === 'reply' ? '회신 받음 표시' : cur.key === 'confirm' ? '참가 확정 표시' : '끝남 표시'}</button>` : '';
+  const toggle = `<button class="btn" style="font-size:10px;padding:1px 7px;margin-left:auto" onclick="toggleSpFlow()"
+    title="${spFlowOpen ? '단계 칩·설명·남은 일을 접고 한 줄로' : '단계 칩·설명·남은 일·상황 물어보기 펼치기'}">${spFlowOpen ? '접기 ▴' : '자세히 ▾'}</button>`;
+  if(!spFlowOpen){
+    const nowLeft = pendingItems(sp).filter(x => x.when === 'now').length;
+    return `<div style="padding:6px 11px;border:1px solid var(--a);border-radius:8px;margin-bottom:10px;background:var(--W);
+      display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+      <span style="font-size:11px;font-weight:700;color:var(--i2)">연락 단계</span>
+      <span style="font-size:10.5px;color:var(--i4)">${f.nDone}/${f.nAll}</span>
+      ${cur ? `<span style="font-size:11.5px;font-weight:700;color:var(--a);min-width:0">● ${escapeHtml(f.remind ? '자료 독촉' : cur.label)}${
+          cur.due ? ` <span style="font-weight:400;color:${cur.due < td() ? 'var(--re)' : 'var(--i4)'};font-size:10.5px">마감 ${escapeHtml(cur.due)}</span>` : ''}</span>
+        ${nowLeft ? `<span class="pill p-amber" style="font-size:10px" title="지금 받을 필수 자료">받을 것 ${nowLeft}</span>` : ''}
+        <button class="btn bp" style="font-size:10px;padding:1px 8px" onclick="openFlowDraft('${cur.key}')">✉ 초안</button>`
+      : `<span style="font-size:11px;color:var(--g)">모두 마쳤어요</span>`}
+      ${toggle}
+    </div>`;
+  }
   return `<div style="padding:9px 11px;border:1px solid var(--a);border-radius:8px;margin-bottom:12px;background:var(--W)">
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
       <span style="font-size:11px;font-weight:700;color:var(--i2)">연락 단계</span>
       <span style="font-size:10.5px;color:var(--i4)">${f.nDone}/${f.nAll}</span>
-      <button class="btn" style="font-size:10px;padding:1px 7px;margin-left:auto" title="이 행사의 연락 단계를 더하고, 고치고, 끄거나 지웁니다"
+      ${toggle}
+      <button class="btn" style="font-size:10px;padding:1px 7px" title="이 행사의 연락 단계를 더하고, 고치고, 끄거나 지웁니다"
         onclick="openFlowEditor('${escAttr(sp.event_id)}')">✎ 단계 편집</button>
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:4px">${f.steps.filter(s => s.done !== 'sched' || s.applies).map(chip).join('')}</div>
@@ -603,6 +629,15 @@ function missingBio(sp, evKey){
 }
 /* 제공사항은 «우리가 챙길 것»이다. 연사료를 적어 놓고 안 준 것,
    숙박·항공을 챙겨야 하는데 예약이 안 된 것만 센다. */
+const hasTravel = (sp) => !!(sp.stay_hotel || sp.stay_in || sp.stay_booked || sp.air_route || sp.air_ticketed_at
+  || sp.air_in_flight || sp.air_out_flight);
+const hasBankPass = (sp) => !!(sp.bank_account || sp.bank_holder || sp.bank_name || sp.bank_code || sp.bank_form_received_at
+  || sp.id_card_received_at || sp.bankbook_received_at || sp.passport_received_at || sp.passport_file);
+function tabShown(sp, evKey, key){
+  const roles = rolesOfSpeaker(sp.id);
+  if(key === 'bank') return !!(needState(evKey, roles, 'bank') || needState(evKey, roles, 'passport') || sp.fee_amount || hasBankPass(sp));
+  return true;
+}
 function missingOffer(sp, evKey){
   const roles = rolesOfSpeaker(sp.id);
   const out = [];
@@ -1822,6 +1857,8 @@ const money = (v, cur) => {
   return `${n.toLocaleString('ko-KR')} ${cur || 'KRW'}`;
 };
 
+let spTravelForce = false;
+export function spTravelShow(){ spTravelForce = true; renderSpeakerDr(); }
 function offerHtml(sp, evKey){
   const roles = rolesOfSpeaker(sp.id);
   const nTravel = needState(evKey, roles, 'travel');
@@ -1917,10 +1954,16 @@ function offerHtml(sp, evKey){
     ${fg('메모', area(sp.air_note, `spField('air_note',this.value,'항공 메모')`, '경유, 마일리지, 좌석 요청 등', 2))}
   </div>`;
 
+  /* 설정에서 숙박·항공을 «제공 안 함»으로 정한 역할은 빈 입력 칸을 늘어놓지 않는다 —
+     적어 둔 값이 있거나 «그래도 적기»를 누르면 편다 */
+  if(!nTravel && !hasTravel(sp) && !spTravelForce) return fee + `<div style="padding:8px 11px;background:var(--i8);
+    border:1px solid var(--i6);border-radius:7px;font-size:11px;color:var(--i4);display:flex;align-items:center;gap:8px">
+    숙박·항공 제공 안 함 — 설정 › 행사 › 컨퍼런스에서 이 역할(${escapeHtml(roles.join(' · ') || '배정 없음')})은 챙기지 않기로 했어요.
+    <button class="btn" style="font-size:10px;padding:1px 7px;margin-left:auto;white-space:nowrap" onclick="spTravelShow()">그래도 적기</button></div>`;
   const hint = !nTravel ? `<div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);
     border-radius:7px;font-size:11.5px;color:var(--i3);line-height:1.6;margin-bottom:11px">
     이 연사의 역할(${escapeHtml(roles.join(' · ') || '배정 없음')})은 숙박·항공을 챙기는 대상이 아니에요.
-    그래도 필요하면 아래에 적어 두세요.</div>` : '';
+    적어 둔 값은 남겨 두지만 할 일·독촉에는 세지 않아요.</div>` : '';
 
   return hint + fee + stay + air;
 }
@@ -2077,7 +2120,7 @@ function bankHtml(sp, evKey){
       <div style="font-size:10.5px;color:var(--i4);margin-top:-4px">
         연사료는 USD로 보냅니다 — USD를 받을 수 있는 계좌인지 확인하세요.</div>
     </div>
-    <div style="border:1px solid var(--i6);border-radius:9px;padding:11px 12px">
+    ${!nPass && !sp.passport_received_at && !sp.passport_file ? '' : `<div style="border:1px solid var(--i6);border-radius:9px;padding:11px 12px">
       <div style="font-size:12px;font-weight:700;margin-bottom:8px">여권 ${nPass ? NEED_MARK[nPass] : ''}</div>
       ${gotRow('여권 스캔 받음', sp.passport_received_at,
         `spStamp('passport_received_at','여권 받음')`,
@@ -2086,7 +2129,7 @@ function bankHtml(sp, evKey){
       <div style="font-size:10.5px;color:var(--i4);margin-top:-4px">
         스캔본은 원드라이브에 두고 여기엔 파일명만 적습니다 — 이미지가 이 화면에 뜨면
         누가 옆에서 봐도 그대로 보입니다.</div>
-    </div>`;
+    </div>`}`;
 }
 
 /* 열람을 기록에 남긴다. 저장이 실패하면 열지 않는다 — 기록 없이 보는 길이
@@ -2191,6 +2234,8 @@ window.asStamp              = asStamp;
 window.searchSpeakerContact = searchSpeakerContact;
 window.linkSpeakerContact   = linkSpeakerContact;
 window.openFlowDraft = openFlowDraft;
+window.toggleSpFlow = toggleSpFlow;
+window.spTravelShow = spTravelShow;
 window.addSpMailFiles = addSpMailFiles;
 window.removeSpMailFile = removeSpMailFile;
 window.toggleSpDefaultFile = toggleSpDefaultFile;

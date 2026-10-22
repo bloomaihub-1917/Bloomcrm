@@ -1106,7 +1106,21 @@ function nextActionTd(sp){
       na.due ? `<div style="font-size:9.5px;color:${na.due < td() ? 'var(--re)' : 'var(--i4)'}">마감 ${escapeHtml(na.due)}</div>` : ''}</td>`;
 }
 
+/* 행사가 끝나면 행사 전에 쓰려고 받던 자료는 더 받지 않는다 — 끝난 뒤에도 초록·사진이
+   «아직»으로 남아 독촉 대상·남은 일·진행률에 계속 잡혔다. 못 받은 채 끝난 칸은 «지남»으로
+   두고 분모에서 뺀다(받은 칸은 그대로 «받음»). 동의서(영상 게재)·계좌·여권은 정산에 쓰니 그대로 센다 */
+const BEFORE_EVENT = new Set(['bio_pro', 'cv', 'photo', 'title', 'abstract', 'slides', 'travel']);
+const evEnded = (evKey) => {
+  const ev = EVENT_LIST.find(e => e.key === evKey);
+  return !!ev && String(ev.date_end || ev.date_start || ev.date || '9999') < td();
+};
 export function spCell(sp, evKey, key){
+  const c = spCellBase(sp, evKey, key);
+  if((c.state === 'todo' || c.state === 'part') && BEFORE_EVENT.has(key) && evEnded(evKey))
+    return { state: 'na', lapsed: true, text: c.text || '', need: c.need };
+  return c;
+}
+function spCellBase(sp, evKey, key){
   /* 숨긴 연사는 받을 것이 없다 — 진행률·대시보드·남은 일·외부 공유가 모두 여기서 센다 */
   if(isHiddenSp(sp)) return { state: 'na' };
   const roles = rolesOfSpeaker(sp.id);
@@ -1247,6 +1261,8 @@ function spCellMark(c, colLabel, name){
     na:   { bg: 'transparent', fg: 'var(--i6)', mark: '·' },
   }[c.state];
   /* 받지 않는 칸은 비워 둔다 — 점이라도 찍혀 있으면 확인할 거리처럼 보인다 */
+  if(c.state === 'na' && c.lapsed) return `<td style="text-align:center;font-size:9.5px;color:var(--i5)"
+    title="${escAttr(`행사가 끝나 ${colLabel}은(는) 더 받지 않아요${c.text ? ` (${c.text})` : ''}`)}">지남</td>`;
   if(c.state === 'na') return `<td title="${escAttr(`${name}의 역할은 ${colLabel}을(를) 받지 않아요`)}"></td>`;
   const tip = c.state === 'na'
     ? `${name}의 역할은 ${colLabel}을(를) 받지 않아요`

@@ -341,7 +341,8 @@ export function flowStatus(sp){
     /* 일정 변경 — 알린 일정이 있고 지금과 다를 때만 선다 */
     if(s.done === 'sched') return { ...s, applies: !skip && scheduleDiff(sp).changed, isDone: false };
     const applies = !skip && (!s.need || (s.key === 'travel'
-      ? (need === 'req' || !!sp.stay_hotel || !!sp.air_route)
+      /* 설정에서 «제공 안 함»(빈 칸)으로 정한 역할은 예전에 적어 둔 숙박·항공이 있어도 단계를 세우지 않는다 */
+      ? (need === 'req' || (!!need && (!!sp.stay_hotel || !!sp.air_route)))
       : !!need));
     return withRound(sp, s, applies);
   });
