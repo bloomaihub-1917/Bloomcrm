@@ -196,6 +196,9 @@ export function setConfEvent(key){
   confEditSession = '';
   confNewSession = false;
   confNeedFil = null;
+  confSettleFil = '';
+  confCardFil = '';
+  confVideoFil = '';
   confRoleFil = '';
   confSessFil = '';
   clearConfQuery();
@@ -1443,13 +1446,14 @@ function peopleHtml(ev){
   }
   else if(confSessFil) list = list.filter(sp =>
     assignmentsFor(sp.id).some(a => a.session_id === confSessFil));
-  if(confVideoFil) list = list.filter(sp => (sp.video_publish || 'none') === confVideoFil);
+  // 칩이 보이는 단계에서만 건다 — 안 보이는 칩이 표를 몰래 좁히지 않게
   const phase = confPhaseOf(ev);
   if(phase === 'settle'){
+    if(confVideoFil) list = list.filter(sp => (sp.video_publish || 'none') === confVideoFil);
     if(confSettleFil === 'docs') list = list.filter(sp => settleMissing(sp).length);
     if(confSettleFil === 'unpaid') list = list.filter(sp => feeOn(sp) && !sp.fee_paid_at);
   }
-  if(confNeedFil){
+  if(confNeedFil && phase === 'prep'){
     list = list.filter(sp => {
       const c = spCell(sp, ev.key, confNeedFil.key);
       if(c.state === 'na') return false;

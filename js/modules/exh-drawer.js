@@ -3889,7 +3889,7 @@ registerAiDraft('ex', () => {
         return;
       }
       if(sEl && subj) sEl.value = subj;
-      if(bEl){ bEl.value = body; bEl.dataset.touched = '1'; }
+      if(bEl && body.trim()){ bEl.value = body; bEl.dataset.touched = '1'; }
     } };
 });
 function dMail(x){

@@ -94,7 +94,7 @@ registerAiDraft('sp', () => {
         return;
       }
       if(s && subj) s.value = subj;
-      if(b) b.value = body;
+      if(b && body.trim()) b.value = body;
     } };
 });
 let spTab = 'basic';

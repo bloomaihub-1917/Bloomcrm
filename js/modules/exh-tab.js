@@ -1231,7 +1231,7 @@ export function renderExh(){
   // 이 행사가 전시를 안 하기로 돼 있으면 목록을 열지 않는다 — 참가기업이
   // 남아 있어도 지금 다룰 일이 아니고, 여기서 손대면 설정과 화면이 어긋난다
   if(exhEvent && !evPartOn(exhEvent, 'exh')){
-    el.innerHTML = `<div class="empty" style="padding:60px 20px;text-align:center">
+    el.innerHTML = `<div class="empty" style="height:auto;padding:60px 20px;text-align:center">
       <div style="font-size:30px;margin-bottom:10px">🚧</div>
       <div style="font-weight:700;margin-bottom:6px">이 행사는 전시를 진행하지 않아요</div>
       <div style="font-size:12px;color:var(--i4)">설정 › 행사 관리에서 이 행사를 고른 뒤
@@ -1252,7 +1252,7 @@ export function renderExh(){
   const all = activeExhibitors(exhEvent);
 
   if(!all.length){
-    el.innerHTML = banner + `<div class="empty" style="padding:60px 20px;text-align:center">
+    el.innerHTML = banner + `<div class="empty" style="height:auto;padding:60px 20px;text-align:center">
       <div style="font-size:30px;margin-bottom:10px">🏢</div>
       <div style="font-weight:700;margin-bottom:6px">등록된 참가기업이 없어요</div>
       ${exhLocked()

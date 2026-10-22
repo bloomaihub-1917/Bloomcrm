@@ -226,7 +226,7 @@ export function renderEvDb(){
   if(mttl) mttl.textContent = ev ? (ev.short || ev.name || '행사 DB') : '행사 DB';
 
   if(!ev){
-    el.innerHTML = `<div class="empty" style="padding:60px 20px;text-align:center">
+    el.innerHTML = `<div class="empty" style="height:auto;padding:60px 20px;text-align:center">
       <div style="font-size:30px;margin-bottom:10px">🗓</div>
       <div style="font-weight:700;margin-bottom:6px">등록된 행사가 없어요</div>
       <div style="font-size:12px;color:var(--i4)">설정 › 행사 관리에서 행사를 먼저 만들어주세요</div></div>`;
