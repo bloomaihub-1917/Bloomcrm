@@ -59,6 +59,7 @@ import {
   saveSessionSpeaker, deleteSessionSpeaker,
   saveSpeakerContact, deleteSpeakerContact, deleteSpeakerLog,
   postToSheet,
+  loadSpeakerPhotos, speakerPhotosLoaded, speakerPhotoOf,
 } from '../api.js';
 import { trackAction, changed, removed, created } from './audit-tab.js';
 import { IMPORT_SHEETS, IMPORT_GUIDE } from '../conf-import-spec.js';
@@ -86,7 +87,10 @@ let confShowHidden = false;    // 숨긴 연사도 보이기
 let confSessFil = '';          // 세션으로 거르기
 let confPhase = '';           // 'prep' 준비 | 'settle' 정산 — 비우면 행사 끝난 날로 정한다
 let confSettleFil = '';       // 정산 거르기 'docs' 서류 남음 | 'unpaid' 미지급
-let confShowNoFee = false;     // 정산에서 연사료 없는 역할(VIP 등)도 펼치기
+let confShowNoFee = false;
+let confLayout = 'table';       // 준비 단계 보기 'table' 표 | 'cards' 사진 카드
+const confPhotoAsked = new Set();
+let confCardFil = '';          // 카드 거르기 'ok' 다 받음 | 'part' 일부 | 'todo' 하나도 못 받음     // 정산에서 연사료 없는 역할(VIP 등)도 펼치기
 let confVideoFil = '';         // 영상 게재 동의로 거르기 'yes' | 'no' | 'none'(미확인)
 
 /* ══════════════════════════════════════════
@@ -1357,6 +1361,8 @@ export function setConfRoleFil(role){
   confRoleFil = confRoleFil === role ? '' : role;
   renderConf();
 }
+export function setConfLayout(v){ confLayout = v; renderConf(); }
+export function setConfCardFil(v){ confCardFil = confCardFil === v ? '' : v; renderConf(); }
 export function setConfPhase(v){ confPhase = v; renderConf(); }
 export function setConfSettleFil(v){ confSettleFil = confSettleFil === v ? '' : v; renderConf(); }
 export function toggleConfNoFee(){ confShowNoFee = !confShowNoFee; renderConf(); }
@@ -1572,6 +1578,10 @@ function peopleHtml(ev){
       <button class="seg-b${phase === 'prep' ? ' on' : ''}" onclick="setConfPhase('prep')" title="행사 전 — 자료 받기·연락">준비</button>
       <button class="seg-b${phase === 'settle' ? ' on' : ''}" onclick="setConfPhase('settle')" title="행사 뒤 — 연사료 서류·지급·영상 게재">정산</button>
     </div>
+    ${phase === 'prep' ? `<div class="seg" style="margin:0">
+      <button class="seg-b${confLayout !== 'cards' ? ' on' : ''}" onclick="setConfLayout('table')">표</button>
+      <button class="seg-b${confLayout === 'cards' ? ' on' : ''}" onclick="setConfLayout('cards')" title="사진과 받은 자료를 연사마다 카드로 — 발표 순서대로">카드</button>
+    </div>` : ''}
     ${sessSel}${roleSel}
     ${hiddenN ? chip(confShowHidden, 'toggleConfHidden()', `숨긴 연사 ${hiddenN}명`, '숨긴 연사는 받을 항목에서 빠져요 — 눌러서 보이기/감추기') : ''}
     ${settleChips}
@@ -1604,6 +1614,60 @@ function peopleHtml(ev){
         font-size:12px;color:var(--i5)">${q
           ? `«${escapeHtml(q)}»로 찾은 연사가 없어요. 이름 대신 소속이나 세션명으로도 찾을 수 있어요.`
           : '이 조건에 맞는 연사가 없어요.'}</div>`;
+  }
+
+  /* ── 카드 보기 ──
+     사진이 왔는지는 체크 표시로는 모른다 — 웹에서 긁은 400px짜리인지, 인쇄할 원본인지는
+     봐야 안다. 발표 순서대로 사진과 받은 자료를 한 장씩 놓는다(100.연사관리/연사자료현황.html을
+     CRM으로 옮긴 것). 사진은 연사 창에서 올린 것을 쓴다. */
+  if(phase === 'prep' && confLayout === 'cards'){
+    /* 한 번만 묻는다 — 실패하면 캐시가 안 차서, 그릴 때마다 다시 부르면 요청이 끝없이 돈다 */
+    if(!speakerPhotosLoaded(ev.key) && !confPhotoAsked.has(ev.key)){
+      confPhotoAsked.add(ev.key);
+      loadSpeakerPhotos(ev.key).then(() => renderConf());
+    }
+    const firstAt = (sp) => assignmentsFor(sp.id).map(a => {
+      const ss = CONF_SESSIONS.find(x => x.id === a.session_id) || {};
+      return `${ss.date || '9999'} ${a.start_at || ss.start_at || '99:99'}`;
+    }).sort()[0] || '9999 99:99';
+    const stOf = (sp) => { const pr = spProgress(sp, ev.key); return !pr.of ? 'na' : pr.n === pr.of ? 'ok' : pr.n ? 'part' : 'todo'; };
+    const BADGE = { ok: ['다 받음', 'var(--g)'], part: ['일부', 'var(--am)'], todo: ['미수령', 'var(--re)'], na: ['받을 것 없음', 'var(--i5)'] };
+    const cnt = (k) => list.filter(sp => stOf(sp) === k).length;
+    const shownCards = list.filter(sp => !confCardFil || stOf(sp) === confCardFil).sort((a, b) => firstAt(a).localeCompare(firstAt(b)));
+    const scard = (sp) => {
+      const p = speakerPhotoOf(ev.key, sp.id);
+      const st = stOf(sp), [bl, bc] = BADGE[st];
+      const at = firstAt(sp).slice(11);
+      const org = [sp.title_en || sp.title_ko, sp.org_en || sp.org_ko].filter(Boolean).join(' · ');
+      const items = SP_COLS.filter(c => c.key !== 'profile').map(c => ({ c, x: spCell(sp, ev.key, c.key) })).filter(o => o.x.state !== 'na');
+      return `<section onclick="openSpeakerDr('${escAttr(sp.id)}')" style="background:var(--W);border:1px solid var(--i6);
+          border-radius:10px;padding:12px;cursor:pointer;display:flex;flex-direction:column;gap:8px">
+        <div style="display:flex;gap:6px;align-items:baseline;flex-wrap:wrap">
+          ${at && at !== '99:99' ? `<span style="font-size:11px;color:var(--i4)">${escapeHtml(at)}</span>` : ''}
+          <b style="font-size:13px">${escapeHtml(sp.name_snapshot || sp.name_en || sp.id)}</b>
+          ${sp.name_snapshot && sp.name_en ? `<span style="font-size:11px;color:var(--i4)">${escapeHtml(sp.name_en)}</span>` : ''}
+          <span style="margin-left:auto;font-size:10.5px;color:#fff;background:${bc};border-radius:99px;padding:1px 8px">${bl}</span>
+        </div>
+        ${org ? `<div style="font-size:11px;color:var(--i4);margin-top:-5px">${escapeHtml(org)}</div>` : ''}
+        ${p ? `<img src="data:${p.content_type || 'image/jpeg'};base64,${p.data}" alt="" loading="lazy"
+            style="width:100%;height:190px;object-fit:cover;object-position:50% 25%;border-radius:6px;background:var(--i8)">`
+          : `<div style="height:190px;display:grid;place-items:center;border:1px dashed var(--i6);border-radius:6px;
+            font-size:11px;color:var(--i4);background:var(--i8)">${speakerPhotosLoaded(ev.key) ? '사진 없음' : '불러오는 중'}</div>`}
+        <div style="display:flex;gap:4px;flex-wrap:wrap">${items.map(({ c, x }) => `<span title="${escAttr(
+          x.state === 'done' ? `${c.label} 받음${x.text ? ` (${x.text})` : ''}` : x.state === 'part' ? `${c.label} 일부 (${x.text})` : `${c.label} 아직`)}"
+          style="font-size:10.5px;border-radius:4px;padding:0 6px;border:1px solid ${
+          x.state === 'done' ? 'var(--g);color:var(--g)' : x.state === 'part' ? 'var(--am);color:var(--am)' : 'var(--i6);color:var(--i5)'}">${
+          x.state === 'part' ? '◐ ' : ''}${escapeHtml(c.label)}</span>`).join('')}</div>
+      </section>`;
+    };
+    const cchip = (k, label) => `<button class="pill ${confCardFil === k ? 'p-blue' : 'p-gray'}" style="border:0;cursor:pointer;font:inherit;font-size:11px"
+      onclick="setConfCardFil('${k}')">${label} ${cnt(k)}${confCardFil === k ? ' ✕' : ''}</button>`;
+    return summary + searchNote + filterBar
+      + `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+          ${cchip('ok', '다 받음')}${cchip('part', '일부')}${cchip('todo', '미수령')}
+          <span style="font-size:10.5px;color:var(--i4)">— 역할이 받는 항목 기준 · 발표 순서대로 · 카드를 누르면 연사 창이 열립니다</span></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(${isMobile() ? '100%' : '260px'},1fr));gap:12px">
+          ${shownCards.map(scard).join('')}</div>`;
   }
 
   /* ── 모바일 ──
@@ -2716,6 +2780,8 @@ window.openConfSess      = openConfSess;
 window.setConfRoleFil    = setConfRoleFil;
 window.setConfVideoFil   = setConfVideoFil;
 window.setConfPhase      = setConfPhase;
+window.setConfLayout     = setConfLayout;
+window.setConfCardFil    = setConfCardFil;
 window.setConfSettleFil  = setConfSettleFil;
 window.toggleConfNoFee   = toggleConfNoFee;
 window.searchConfM       = searchConfM;
