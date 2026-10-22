@@ -51,9 +51,7 @@ const spFlagPills = (sp) => {
   return (no.length ? `<span class="pill p-red" style="font-size:9px"
       title="${escAttr(`동의하지 않음: ${no.join(', ')} — 자료집·배포에서 빼야 해요`)}">공유 ✕ ${escapeHtml(no.join('·'))}</span>` : '')
     + (sp.gala_rsvp === 'yes' ? '<span class="pill p-green" style="font-size:9px" title="갈라디너 참석">갈라 참석</span>'
-      : sp.gala_rsvp === 'no' ? '<span class="pill p-gray" style="font-size:9px" title="갈라디너 불참">갈라 불참</span>' : '')
-    + (sp.video_publish === 'yes' ? '<span class="pill p-green" style="font-size:9px" title="발표 영상 게재 동의">영상 게재 ✓</span>'
-      : sp.video_publish === 'no' ? '<span class="pill p-red" style="font-size:9px" title="발표 영상 게재 비동의 — 올리면 안 돼요">영상 게재 ✕</span>' : '');
+      : sp.gala_rsvp === 'no' ? '<span class="pill p-gray" style="font-size:9px" title="갈라디너 불참">갈라 불참</span>' : '');
 };
 import {
   saveConfSession, deleteConfSession,
@@ -86,6 +84,9 @@ let confNeedFil = null;        // {key, mode:'done'|'todo'} — 받을 것 칩�
 let confRoleFil = '';          // 역할로 거르기
 let confShowHidden = false;    // 숨긴 연사도 보이기
 let confSessFil = '';          // 세션으로 거르기
+let confPhase = '';           // 'prep' 준비 | 'settle' 정산 — 비우면 행사 끝난 날로 정한다
+let confSettleFil = '';       // 정산 거르기 'docs' 서류 남음 | 'unpaid' 미지급
+let confShowNoFee = false;     // 정산에서 연사료 없는 역할(VIP 등)도 펼치기
 let confVideoFil = '';         // 영상 게재 동의로 거르기 'yes' | 'no' | 'none'(미확인)
 
 /* ══════════════════════════════════════════
@@ -1356,6 +1357,9 @@ export function setConfRoleFil(role){
   confRoleFil = confRoleFil === role ? '' : role;
   renderConf();
 }
+export function setConfPhase(v){ confPhase = v; renderConf(); }
+export function setConfSettleFil(v){ confSettleFil = confSettleFil === v ? '' : v; renderConf(); }
+export function toggleConfNoFee(){ confShowNoFee = !confShowNoFee; renderConf(); }
 export function setConfVideoFil(v){
   confVideoFil = confVideoFil === v ? '' : v;
   renderConf();
@@ -1391,6 +1395,23 @@ export function clearConfSearch(){
   renderConf();
 }
 
+/* ── 단계 ──
+   행사 전에 챙기는 것(이력·사진·초록·발표자료)과 끝난 뒤 챙기는 것(연사료 서류·지급·
+   영상 게재)은 겹치지 않는다. 한 표에 다 늘어놓으면 끝난 행사에서 «—»만 가득하다.
+   행사 마지막 날이 지나면 정산이 먼저 열린다. */
+const confPhaseOf = (ev) => confPhase
+  || (String(ev.date_end || ev.date_start || ev.date || '9999') < td() ? 'settle' : 'prep');
+const feeNum = (sp) => Number(String(sp.fee_amount || '').replace(/[^\d.-]/g, '')) || 0;
+/* 연사료를 줄 사람 — 금액이 있고 역할이 연사료를 받는다 */
+const feeOn = (sp) => feeNum(sp) > 0 && paysFee(sp);
+/* 연사료 서류 중 아직 안 온 것 — 국내 신분증·통장사본·계좌번호, 해외 계좌·여권 */
+export function settleMissing(sp){
+  if(!feeOn(sp)) return [];
+  const docs = bankDocs(sp).filter(d => !d.got).map(d => d.label);
+  if(!isDomesticSpeaker(sp) && !sp.passport_received_at) docs.push('여권');
+  return docs;
+}
+
 function peopleHtml(ev){
   const every = speakersForEvent(ev.key);
   const hiddenN = every.filter(isHiddenSp).length;
@@ -1417,6 +1438,11 @@ function peopleHtml(ev){
   else if(confSessFil) list = list.filter(sp =>
     assignmentsFor(sp.id).some(a => a.session_id === confSessFil));
   if(confVideoFil) list = list.filter(sp => (sp.video_publish || 'none') === confVideoFil);
+  const phase = confPhaseOf(ev);
+  if(phase === 'settle'){
+    if(confSettleFil === 'docs') list = list.filter(sp => settleMissing(sp).length);
+    if(confSettleFil === 'unpaid') list = list.filter(sp => feeOn(sp) && !sp.fee_paid_at);
+  }
   if(confNeedFil){
     list = list.filter(sp => {
       const c = spCell(sp, ev.key, confNeedFil.key);
@@ -1450,9 +1476,21 @@ function peopleHtml(ev){
     ${sub ? `<div style="font-size:10px;color:var(--i4);margin-top:2px">${sub}</div>` : ''}
   </div>`;
 
+  /* 정산 요약 — 연사료 대상·서류·지급·영상 게재 */
+  const settleCards = () => {
+    const fee = all.filter(feeOn), paid = fee.filter(sp => sp.fee_paid_at).length;
+    const docs = fee.filter(sp => settleMissing(sp).length).length;
+    const sum = fee.reduce((n, sp) => n + feeNum(sp), 0);
+    const u = (t) => `<span style="font-size:11px;font-weight:600;color:var(--i4)">${t}</span>`;
+    const v = (k) => all.filter(sp => (sp.video_publish || 'none') === k).length;
+    return card('연사료 대상', `${fee.length}${u('명')}`, `총 ${sum.toLocaleString('ko-KR')}`)
+      + card('서류', `${fee.length - docs}${u(`/${fee.length} 받음`)}`, docs ? `<span style="color:var(--am)">${docs}명 남음</span>` : '다 받음')
+      + card('지급', `${paid}${u(`/${fee.length}`)}`, paid < fee.length ? `<span style="color:var(--am)">${fee.length - paid}명 미지급</span>` : '모두 지급')
+      + card('영상 게재', `${v('yes')}${u('명 동의')}`, `비동의 ${v('no')} · 미확인 ${v('none')}`);
+  };
   const summary = `<div style="display:flex;flex-wrap:wrap;gap:${isMobile() ? '14px 22px' : '20px'};padding:12px 14px;margin-bottom:10px;
       background:var(--i8);border:1px solid var(--i6);border-radius:10px">
-    ${card('연사', `${all.length}<span style="font-size:11px;font-weight:600;color:var(--i4)">명</span>`,
+    ${phase === 'settle' ? settleCards() : `${card('연사', `${all.length}<span style="font-size:11px;font-weight:600;color:var(--i4)">명</span>`,
       `확정 ${byStatus('확정')} · 섭외중 ${byStatus('섭외중')}`)}
     ${card('평균 진행률', `${avg}<span style="font-size:11px;font-weight:600;color:var(--i4)">%</span>`,
       '역할이 묻는 항목만 셈')}
@@ -1462,7 +1500,7 @@ function peopleHtml(ev){
         n = live.filter(x => x.gala_rsvp === 'no').length;
       return card('갈라디너', `${y}<span style="font-size:11px;font-weight:600;color:var(--i4)">명 참석</span>`,
         `불참 ${n} · 미확인 ${live.length - y - n}`); })()}
-    ${feeLeft ? card('연사료', `${feeLeft}<span style="font-size:11px;font-weight:600;color:var(--i4)">명</span>`, '아직 미지급') : ''}
+    ${feeLeft ? card('연사료', `${feeLeft}<span style="font-size:11px;font-weight:600;color:var(--i4)">명</span>`, '아직 미지급') : ''}`}
     <div style="margin-left:auto;align-self:center;display:flex;gap:6px">
       <button class="btn bs" onclick="openSpeakerBulkMail('${escAttr(ev.key)}')"
         title="연락 단계 메일(일정 변경 안내·자료 요청 등)을 여러 연사에게 한 번에 — 연사마다 한 통씩 따로 나갑니다">📨 여러 연사에게 메일</button>
@@ -1491,59 +1529,52 @@ function peopleHtml(ev){
       onclick="clearConfSearch()">검색 지우기</button>
   </div>` : '';
 
-  /* 식사·휴식은 시간표에만 있고 연사가 없다 — 연사 화면의 세션 칩에서 뺀다 */
+  /* ── 거르기 한 줄 ──
+     세션·역할은 칩 두 줄이 화면 위 3분의 1을 먹었다. 고르는 자리이니 드롭다운으로
+     줄이고, 단계에 따라 바뀌는 칩(정산의 서류·지급·영상 게재)만 칩으로 둔다.
+     식사·휴식은 시간표에만 있고 연사가 없다 — 세션 고르기에서 뺀다 */
   const sessions = sessionsForEvent(ev.key).filter(s => !isBreak(s));
   const noSess = all.filter(sp => !assignmentsFor(sp.id).length).length;
   const headN = (ids) => all.filter(sp => assignmentsFor(sp.id).some(a => ids.has(a.session_id))).length;
   const chipTracks = [...new Set(sessions.map(s => s.track).filter(Boolean))];
   const looseSess = sessions.filter(s => !s.track);
-  const sessChips = (sessions.length || noSess) ? `<div class="seg" style="flex-wrap:wrap;margin-bottom:8px">
-    <button class="seg-b${!confSessFil ? ' on' : ''}" onclick="setConfSessFil('')">전체 세션</button>
-    ${chipTracks.map(t => {
-      const ss = sessions.filter(x => x.track === t);
-      const key = 't:' + t;
-      const c = trackColor(ev.key, t);
-      const on = confSessFil === key;
-      return `<button class="seg-b${on ? ' on' : ''}"
-        onclick="setConfSessFil('${escAttr(key)}')"
-        style="max-width:min(100%,260px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap${
-          on ? '' : `;background:${c.bg};border-color:${c.bd}55`}"
-        title="${escAttr(ss.map(x => [x.date ? x.date.slice(5) : '', x.start_at,
-          x.title_ko || x.title_en || x.id].filter(Boolean).join(' ')).join('\n'))}">${
-        escapeHtml(t)} <span style="opacity:.6">${ss.length}세션</span> ${
-        headN(new Set(ss.map(x => x.id)))}명</button>`;
-    }).join('')}
-    ${looseSess.map(ss => {
-      const n = all.filter(sp => assignmentsFor(sp.id).some(a => a.session_id === ss.id)).length;
-      const when = [ss.date ? ss.date.slice(5) : '', ss.start_at].filter(Boolean).join(' ');
-      return `<button class="seg-b${confSessFil === ss.id ? ' on' : ''}"
-        onclick="setConfSessFil('${escAttr(ss.id)}')"
-        style="max-width:min(100%,260px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-        title="${escAttr([ss.title_ko, ss.title_en, ss.room].filter(Boolean).join(' · '))}">${
-        escapeHtml(ss.title_ko || ss.title_en || ss.id)}${
-        when ? ` <span style="opacity:.6">${escapeHtml(when)}</span>` : ''} ${n}명</button>`;
-    }).join('')}
-    ${noSess ? `<button class="seg-b${confSessFil === '__none__' ? ' on' : ''}"
-      onclick="setConfSessFil('__none__')" title="아직 어느 세션에도 안 들어간 연사예요">배정 없음 ${noSess}명</button>` : ''}
-  </div>` : '';
-
-  /* ── 역할 칩 ── */
-  const roleChips = `<div class="seg" style="flex-wrap:wrap;margin-bottom:8px">
-    <button class="seg-b${!confRoleFil ? ' on' : ''}" onclick="setConfRoleFil('')">전체 ${all.length}명</button>
-    ${hiddenN ? `<button class="seg-b${confShowHidden ? ' on' : ''}" onclick="toggleConfHidden()"
-      title="숨긴 연사는 받을 항목에서 빠져요 — 눌러서 보이기/감추기">숨긴 연사 ${hiddenN}명</button>` : ''}
-    ${SPEAKER_ROLES.map(r => {
-      const n = all.filter(sp => rolesOfSpeaker(sp.id).includes(r.key)).length;
-      return n ? `<button class="seg-b${confRoleFil === r.key ? ' on' : ''}"
-        onclick="setConfRoleFil('${escAttr(r.key)}')">${escapeHtml(r.label)} ${n}명</button>` : '';
-    }).join('')}
-    ${(() => {
-      /* 영상 게재 동의 — 행사 뒤에 묻는다. 연사 드로어 «발표 영상 게재»에서 고른 값 */
-      const vn = (v) => all.filter(sp => (sp.video_publish || 'none') === v).length;
-      return [['yes', '동의'], ['no', '비동의'], ['none', '미확인']].map(([v, l]) =>
-        `<button class="seg-b${confVideoFil === v ? ' on' : ''}" onclick="setConfVideoFil('${v}')"
-          ${v === 'yes' ? 'style="margin-left:12px"' : ''} title="발표 영상 게재 동의">영상 게재 ${l} ${vn(v)}명</button>`).join('');
-    })()}
+  const opt = (v, label, on) => `<option value="${escAttr(v)}"${on ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+  const sessSel = (sessions.length || noSess) ? `<select class="fi" style="width:auto;max-width:240px;font-size:11.5px;padding:4px 7px"
+      onchange="setConfSessFil(this.value || '')" title="세션·트랙으로 거르기">
+    ${opt('', '전체 세션', !confSessFil)}
+    ${chipTracks.map(t => { const ss = sessions.filter(x => x.track === t);
+      return opt('t:' + t, `${t} · ${headN(new Set(ss.map(x => x.id)))}명`, confSessFil === 't:' + t); }).join('')}
+    ${looseSess.map(ss => opt(ss.id, `${ss.title_ko || ss.title_en || ss.id} · ${
+      all.filter(sp => assignmentsFor(sp.id).some(a => a.session_id === ss.id)).length}명`, confSessFil === ss.id)).join('')}
+    ${noSess ? opt('__none__', `배정 없음 · ${noSess}명`, confSessFil === '__none__') : ''}
+  </select>` : '';
+  const roleSel = `<select class="fi" style="width:auto;font-size:11.5px;padding:4px 7px"
+      onchange="setConfRoleFil(this.value || '')" title="역할로 거르기">
+    ${opt('', `전체 역할 · ${all.length}명`, !confRoleFil)}
+    ${SPEAKER_ROLES.map(r => { const n = all.filter(sp => rolesOfSpeaker(sp.id).includes(r.key)).length;
+      return n ? opt(r.key, `${r.label} · ${n}명`, confRoleFil === r.key) : ''; }).join('')}
+  </select>`;
+  const chip = (on, onclick, label, tip, tone) => `<button class="pill ${on ? 'p-blue' : tone || 'p-gray'}"
+    style="border:0;cursor:pointer;font:inherit;font-size:11px" title="${escAttr(tip || '')}" onclick="${onclick}">${label}${on ? ' ✕' : ''}</button>`;
+  const vn = (v) => all.filter(sp => (sp.video_publish || 'none') === v).length;
+  const settleChips = phase === 'settle' ? (() => {
+    const docsN = all.filter(sp => settleMissing(sp).length).length;
+    const unpaidN = all.filter(sp => feeOn(sp) && !sp.fee_paid_at).length;
+    return chip(confSettleFil === 'docs', "setConfSettleFil('docs')", `서류 남음 ${docsN}명`, '연사료 서류(신분증·통장·계좌·여권)가 아직 안 온 연사', docsN ? 'p-amber' : 'p-green')
+      + chip(confSettleFil === 'unpaid', "setConfSettleFil('unpaid')", `미지급 ${unpaidN}명`, '연사료를 아직 안 보낸 연사', unpaidN ? 'p-amber' : 'p-green')
+      + '<span style="width:1px;height:16px;background:var(--i6);margin:0 2px"></span>'
+      + [['yes', '동의'], ['no', '비동의'], ['none', '미확인']].map(([v, l]) =>
+        chip(confVideoFil === v, `setConfVideoFil('${v}')`, `영상 ${l} ${vn(v)}`, '발표 영상 게재 동의 — 연사 드로어 «발표 영상 게재»에서 고른 값',
+          v === 'no' && vn(v) ? 'p-red' : 'p-gray')).join('');
+  })() : '';
+  const filterBar = `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px">
+    <div class="seg" style="margin:0">
+      <button class="seg-b${phase === 'prep' ? ' on' : ''}" onclick="setConfPhase('prep')" title="행사 전 — 자료 받기·연락">준비</button>
+      <button class="seg-b${phase === 'settle' ? ' on' : ''}" onclick="setConfPhase('settle')" title="행사 뒤 — 연사료 서류·지급·영상 게재">정산</button>
+    </div>
+    ${sessSel}${roleSel}
+    ${hiddenN ? chip(confShowHidden, 'toggleConfHidden()', `숨긴 연사 ${hiddenN}명`, '숨긴 연사는 받을 항목에서 빠져요 — 눌러서 보이기/감추기') : ''}
+    ${settleChips}
   </div>`;
 
   /* ── 받을 것 칩 — 전시의 단계 칩과 같은 방식으로 누르면 걸러진다 ── */
@@ -1568,7 +1599,7 @@ function peopleHtml(ev){
   </div>`;
 
   if(!list.length){
-    return summary + searchNote + sessChips + roleChips + needChips
+    return summary + searchNote + filterBar + (phase === 'prep' ? needChips : '')
       + `<div style="padding:20px;background:var(--i8);border:1px solid var(--i6);border-radius:10px;
         font-size:12px;color:var(--i5)">${q
           ? `«${escapeHtml(q)}»로 찾은 연사가 없어요. 이름 대신 소속이나 세션명으로도 찾을 수 있어요.`
@@ -1647,28 +1678,16 @@ function peopleHtml(ev){
           · ${sp.fee_paid_at ? '지급' : '미지급'}</div>` : ''}
       </div>`;
     };
-    return summary + searchNote + sessChips + roleChips + needChips
+    return summary + searchNote + filterBar + (phase === 'prep' ? needChips : '')
       + `<div style="font-size:10px;color:var(--i4);margin-bottom:7px">딱지는 아직 안 받은 것이에요 — 카드를 누르면 그 연사가 열립니다</div>`
       + list.map(card).join('');
   }
 
-  /* 지금 보이는 연사 중 아무도 받지 않는 항목은 열째로 뺀다 — 숙박·항공을 아무에게도
-     제공하지 않는 행사에서 빈 열을 훑으며 체크할 이유가 없다 */
-  const cols = SP_COLS.filter(c => list.some(sp => spCell(sp, ev.key, c.key).state !== 'na'));
-
-  const row = (sp) => {
+  /* 이름·세션 칸 — 준비·정산 표가 같이 쓴다 */
+  const nameTd = (sp) => {
     const name = sp.name_snapshot || sp.name_en || sp.id;
     const roles = rolesOfSpeaker(sp.id);
-    const pr = spProgress(sp, ev.key);
-    const asg = assignmentsFor(sp.id);
-    const sess = asg.map(a => {
-      const ss = CONF_SESSIONS.find(x => x.id === a.session_id);
-      return ss ? (ss.title_ko || ss.title_en || '') : '';
-    }).filter(Boolean);
-    const to = contactsOfSpeaker(sp.id).filter(x => x.send === 'to' && x.email);
-
-    return `<tr style="cursor:pointer" onclick="openSpeakerDr('${escAttr(sp.id)}')">
-      <td><div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+    return `<td><div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
           <span style="font-weight:700;font-size:12px">${escapeHtml(name)}</span>
           ${sp.name_snapshot && sp.name_en
             ? `<span style="font-size:10.5px;color:var(--i4)">${escapeHtml(sp.name_en)}</span>` : ''}${spLeftPill(sp)}${spFlagPills(sp)}${isHiddenSp(sp) ? '<span class="pill p-gray" style="font-size:9px" title="받을 항목에서 빠진 연사예요">숨김</span>' : ''}
@@ -1682,12 +1701,77 @@ function peopleHtml(ev){
           const org = [sp.org_ko || sp.org_en, sp.title_ko || sp.title_en].filter(Boolean).join(' · ');
           return `<div style="font-size:10px;color:var(--i4);max-width:260px;white-space:nowrap;overflow:hidden;
             text-overflow:ellipsis" title="${escAttr(org)}">${escapeHtml(org)}</div>`;
-        })() : ''}</td>
-      <td style="max-width:170px">
+        })() : ''}</td>`;
+  };
+  const sessTd = (sp) => {
+    const sess = assignmentsFor(sp.id).map(a => {
+      const ss = CONF_SESSIONS.find(x => x.id === a.session_id);
+      return ss ? (ss.title_ko || ss.title_en || '') : '';
+    }).filter(Boolean);
+    return `<td style="max-width:170px">
         ${sess.length ? `<div style="font-size:10.5px;color:var(--i3);white-space:nowrap;overflow:hidden;
             text-overflow:ellipsis" title="${escAttr(sess.join(' / '))}">${escapeHtml(sess[0])}${
             sess.length > 1 ? ` 외 ${sess.length - 1}` : ''}</div>`
-          : '<span style="font-size:10.5px;color:var(--am)">배정 없음</span>'}</td>
+          : '<span style="font-size:10.5px;color:var(--am)">배정 없음</span>'}</td>`;
+  };
+
+  /* ── 정산 표 ──
+     연사료·서류·지급·영상 게재만. 연사료를 받지 않는 역할(VIP·축사)은 받을 것이
+     없어 «—»만 채우므로 맨 아래 한 줄로 접는다. */
+  if(phase === 'settle'){
+    const noFee = list.filter(sp => assignmentsFor(sp.id).length && !paysFee(sp));
+    const shown = list.filter(sp => !noFee.includes(sp));
+    const won = (sp) => feeNum(sp).toLocaleString('ko-KR');
+    const srow = (sp) => {
+      const on = feeOn(sp), miss = settleMissing(sp);
+      const dom = isDomesticSpeaker(sp);
+      const vp = sp.video_publish;
+      return `<tr style="cursor:pointer" onclick="openSpeakerDr('${escAttr(sp.id)}')">
+        ${nameTd(sp)}${sessTd(sp)}
+        <td style="text-align:right;font-size:11.5px;white-space:nowrap">${on ? won(sp)
+          : `<span style="font-size:10.5px;color:var(--i5)">${paysFee(sp) ? '없음' : '해당 없음'}</span>`}</td>
+        <td style="font-size:11px;white-space:nowrap">${on ? `<span style="font-size:9.5px;color:var(--i4);margin-right:5px">${dom ? '국내' : '해외'}</span>${
+          miss.length ? `<span style="color:var(--am);font-weight:600">${escapeHtml(miss.join('·'))} 아직</span>`
+            : '<span style="color:var(--g);font-weight:600">✓ 다 받음</span>'}` : ''}</td>
+        <td style="font-size:11px;white-space:nowrap">${on ? (sp.fee_paid_at
+          ? `<span style="color:var(--g)">✓ ${escapeHtml(shortCell(sp.fee_paid_at))}</span>`
+          : '<span style="color:var(--am)">미지급</span>') : ''}</td>
+        <td style="font-size:11px;white-space:nowrap">${vp === 'yes' ? '<span style="color:var(--g);font-weight:600">동의</span>'
+          : vp === 'no' ? '<span style="color:var(--re);font-weight:600">비동의</span>'
+          : '<span style="color:var(--i5)">미확인</span>'}${sp.video_publish_at
+          ? ` <span style="font-size:9.5px;color:var(--i4)">${escapeHtml(shortCell(sp.video_publish_at))}</span>` : ''}</td>
+      </tr>`;
+    };
+    return summary + searchNote + filterBar
+      + `<div class="tw"><table><thead><tr>
+          <th style="min-width:160px">연사</th>
+          <th style="min-width:120px">세션</th>
+          <th style="text-align:right;min-width:80px">연사료</th>
+          <th style="min-width:150px" title="국내: 신분증·통장사본·계좌번호 / 해외: 계좌·여권">서류</th>
+          <th style="min-width:70px">지급</th>
+          <th style="min-width:80px" title="행사 뒤 홈페이지·교육 자료 게재 동의">영상 게재</th>
+        </tr></thead><tbody>${shown.map(srow).join('')}
+        ${noFee.length ? `<tr onclick="toggleConfNoFee()" style="cursor:pointer;background:var(--i8)">
+          <td colspan="6" style="font-size:11px;color:var(--i4)">${confShowNoFee ? '▾' : '▸'} 연사료 없는 역할(VIP 등) ${noFee.length}명 — ${
+            escapeHtml(noFee.map(sp => sp.name_snapshot || sp.name_en || '').join(', '))}</td></tr>
+          ${confShowNoFee ? noFee.map(srow).join('') : ''}` : ''}
+        </tbody></table></div>
+        <div style="font-size:10px;color:var(--i4);margin-top:7px;line-height:1.6">
+          줄을 누르면 연사 창이 열립니다 — 서류·지급일은 «계좌·여권»·«제공사항» 탭, 영상 게재는 «기본» 탭에서 고칩니다
+        </div>`;
+  }
+
+  /* 지금 보이는 연사 중 아무도 받지 않는 항목은 열째로 뺀다 — 숙박·항공을 아무에게도
+     제공하지 않는 행사에서 빈 열을 훑으며 체크할 이유가 없다 */
+  const cols = SP_COLS.filter(c => list.some(sp => spCell(sp, ev.key, c.key).state !== 'na'));
+
+  const row = (sp) => {
+    const name = sp.name_snapshot || sp.name_en || sp.id;
+    const pr = spProgress(sp, ev.key);
+    const to = contactsOfSpeaker(sp.id).filter(x => x.send === 'to' && x.email);
+
+    return `<tr style="cursor:pointer" onclick="openSpeakerDr('${escAttr(sp.id)}')">
+      ${nameTd(sp)}${sessTd(sp)}
       <td style="min-width:70px">
         ${progressBar(pr.pct, pr.pct === 100 ? 'var(--g)' : 'var(--a)')}
         <div style="font-size:9.5px;color:var(--i4);margin-top:2px">${pr.n}/${pr.of}</div></td>
@@ -1701,10 +1785,6 @@ function peopleHtml(ev){
       <td style="text-align:center;font-size:10.5px;color:${to.length ? 'var(--i4)' : 'var(--am)'}"
         title="${escAttr(to.length ? to.map(x => x.email).join(', ') : '메일 수신자가 정해지지 않았어요')}">
         ${to.length ? '✓' : '—'}</td>
-      <td style="text-align:center;padding:5px 3px">
-        <button class="btn" style="font-size:10px;padding:2px 6px;color:var(--re)"
-          onclick="event.stopPropagation();removeConfSpeaker('${escAttr(sp.id)}')"
-          title="이 연사를 지웁니다 — 배정·연락 상대·기록도 함께">✕</button></td>
       <td style="text-align:right;font-size:11px;white-space:nowrap">
         ${!paysFee(sp) && assignmentsFor(sp.id).length
           ? '<span style="color:var(--i5);font-size:10px" title="맡은 역할이 연사료를 받지 않아요">해당 없음</span>'
@@ -1717,7 +1797,7 @@ function peopleHtml(ev){
     </tr>`;
   };
 
-  return summary + searchNote + sessChips + roleChips + needChips
+  return summary + searchNote + filterBar + (phase === 'prep' ? needChips : '')
     + `<div class="tw"><table><thead><tr>
         <th style="min-width:140px">연사</th>
         <th style="min-width:120px">세션</th>
@@ -1729,7 +1809,6 @@ function peopleHtml(ev){
           title="${escAttr(c.tip || '')}">${escapeHtml(c.label)}</th>`).join('')}
         <th style="text-align:center;font-size:10px;line-height:1.2" title="한 메일에 같이 온 것을 한 번에 표시합니다">한꺼번에</th>
         <th style="text-align:center;min-width:44px;font-size:10px">수신</th>
-        <th style="text-align:center;min-width:32px"></th>
         <th style="text-align:right;min-width:70px;font-size:10px">연사료</th>
       </tr></thead><tbody>${list.map(row).join('')}</tbody></table></div>
       <div style="font-size:10px;color:var(--i4);margin-top:7px;line-height:1.6">
@@ -2636,6 +2715,9 @@ window.openConfRole      = openConfRole;
 window.openConfSess      = openConfSess;
 window.setConfRoleFil    = setConfRoleFil;
 window.setConfVideoFil   = setConfVideoFil;
+window.setConfPhase      = setConfPhase;
+window.setConfSettleFil  = setConfSettleFil;
+window.toggleConfNoFee   = toggleConfNoFee;
 window.searchConfM       = searchConfM;
 window.clearConfSearch   = clearConfSearch;
 window.setConfSessFil    = setConfSessFil;
