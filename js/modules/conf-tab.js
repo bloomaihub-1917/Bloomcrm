@@ -86,6 +86,7 @@ let confNeedFil = null;        // {key, mode:'done'|'todo'} — 받을 것 칩�
 let confRoleFil = '';          // 역할로 거르기
 let confShowHidden = false;    // 숨긴 연사도 보이기
 let confSessFil = '';          // 세션으로 거르기
+let confVideoFil = '';         // 영상 게재 동의로 거르기 'yes' | 'no' | 'none'(미확인)
 
 /* ══════════════════════════════════════════
    진행 완료 잠금
@@ -1355,6 +1356,10 @@ export function setConfRoleFil(role){
   confRoleFil = confRoleFil === role ? '' : role;
   renderConf();
 }
+export function setConfVideoFil(v){
+  confVideoFil = confVideoFil === v ? '' : v;
+  renderConf();
+}
 
 /* ── 연사 찾기 ──
    연사가 열일곱이면 눈으로 훑어도 되지만, 행사가 커지면 백 명이 넘고 칩으로
@@ -1411,6 +1416,7 @@ function peopleHtml(ev){
   }
   else if(confSessFil) list = list.filter(sp =>
     assignmentsFor(sp.id).some(a => a.session_id === confSessFil));
+  if(confVideoFil) list = list.filter(sp => (sp.video_publish || 'none') === confVideoFil);
   if(confNeedFil){
     list = list.filter(sp => {
       const c = spCell(sp, ev.key, confNeedFil.key);
@@ -1531,6 +1537,13 @@ function peopleHtml(ev){
       return n ? `<button class="seg-b${confRoleFil === r.key ? ' on' : ''}"
         onclick="setConfRoleFil('${escAttr(r.key)}')">${escapeHtml(r.label)} ${n}명</button>` : '';
     }).join('')}
+    ${(() => {
+      /* 영상 게재 동의 — 행사 뒤에 묻는다. 연사 드로어 «발표 영상 게재»에서 고른 값 */
+      const vn = (v) => all.filter(sp => (sp.video_publish || 'none') === v).length;
+      return [['yes', '동의'], ['no', '비동의'], ['none', '미확인']].map(([v, l]) =>
+        `<button class="seg-b${confVideoFil === v ? ' on' : ''}" onclick="setConfVideoFil('${v}')"
+          ${v === 'yes' ? 'style="margin-left:12px"' : ''} title="발표 영상 게재 동의">영상 게재 ${l} ${vn(v)}명</button>`).join('');
+    })()}
   </div>`;
 
   /* ── 받을 것 칩 — 전시의 단계 칩과 같은 방식으로 누르면 걸러진다 ── */
@@ -2622,6 +2635,7 @@ window.openConfNeedTodo  = openConfNeedTodo;
 window.openConfRole      = openConfRole;
 window.openConfSess      = openConfSess;
 window.setConfRoleFil    = setConfRoleFil;
+window.setConfVideoFil   = setConfVideoFil;
 window.searchConfM       = searchConfM;
 window.clearConfSearch   = clearConfSearch;
 window.setConfSessFil    = setConfSessFil;
