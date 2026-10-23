@@ -9,6 +9,7 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import { speakerMaterialsHtml } from './contact-speaker.js';
+import { contactMailsHtml } from './contact-mails.js';
 import {
   EVENT_LIST,
   contacts,
@@ -2212,6 +2213,8 @@ export function contactViewPanel(c){
     </div>
 
     ${speakerMaterialsHtml(c)}
+
+    ${contactMailsHtml(c)}
 
     <div class="sct" style="margin-top:14px;display:flex;align-items:center;justify-content:space-between">
       <span>참여 행사</span>
