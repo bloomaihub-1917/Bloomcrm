@@ -239,7 +239,7 @@ export function mailCardHtml(evKey, part){
     <div id="mcard-msg-${part}" style="font-size:10.5px;color:var(--i4);min-height:0"></div>
     <div class="seg" style="margin:8px 0 6px">${num('unread', '● 안 읽음', 'var(--re)')}${num('pending', '처리 안 함', 'var(--am)')}${num('stale', `${STALE_DAYS}일 넘게 처리 안 함`, 'var(--re)')}</div>
     ${shown.slice(0, 8).map(row).join('') || '<div style="font-size:11px;color:var(--i5);padding:4px 2px">해당하는 메일이 없어요</div>'}
-    ${shown.length > 8 ? `<div style="font-size:10.5px;color:var(--i4);padding:2px">외 ${shown.length - 8}건 — 설정 › 행사 › 메일에서 모두 볼 수 있어요</div>` : ''}
+    ${shown.length > 8 ? `<div style="font-size:10.5px;color:var(--i4);padding:2px">외 ${shown.length - 8}건 — 설정 › 행사 관리 › 메일에서 모두 볼 수 있어요</div>` : ''}
     ${replies.length ? `<div style="font-size:11px;font-weight:700;color:var(--i2);margin:12px 0 4px">새 회신 <span style="font-weight:400;color:var(--i4)">— 자동으로 «회신 받음» 체크됨, 내용을 보고 참석 여부를 골라주세요</span></div>
       ${replies.map(sp => { const l = lastIn(sp.id); return `<div style="display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:6px;background:var(--i9);margin-bottom:4px">
         <span style="font-size:10.5px;color:var(--i4)">${escapeHtml(sp.invite_replied_at || '')}</span>

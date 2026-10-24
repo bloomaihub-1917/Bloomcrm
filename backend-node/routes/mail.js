@@ -27,6 +27,13 @@ const { suggestOwners } = require('./mail-suggest');
 const { isOurs, domainOf: domOf, domainList, parseForward, forwardOf, forwardCandidates, fmtAddr } = require('./mail-forward');
 
 const router = express.Router();
+/* 시험 계정은 메일 원문·주인 없는 메일·첨부·계정 목록을 읽지 못한다 — /api/data만 가리고 이 길은 열려 있었다 */
+router.use((req, res, next) => {
+  if (req.user && req.user.isTest && req.method === 'GET' && /^\/(original|unassigned|files|accounts)\b/.test(req.path)) {
+    return res.status(403).json({ ok: false, error: '시험 계정은 메일 내용을 볼 수 없어요' });
+  }
+  next();
+});
 
 /* ── 첨부파일 ──
    Vercel 함수는 요청 하나가 4.5MB를 넘으면 받지 않는다. 브라우저에서 고른 파일은
@@ -223,6 +230,12 @@ router.put('/accounts/:eventId', async (req, res) => {
   try {
     const prev = await boxOf(eventId);
     let passEnc = prev ? prev.pass_enc : null;
+    /* 서버 주소·포트·로그인 주소가 바뀌면 예전 비밀번호를 이어 쓰지 않는다 — 주소만 남의 서버로
+       바꾸고 «연결 시험»을 누르면 저장된 공용 메일 비밀번호가 그 서버로 넘어갔다 */
+    if (prev && !String(password || '').trim()
+      && (prev.host !== smtpHost || Number(prev.port) !== (Number(port) || P.port) || prev.username !== user)) {
+      return res.status(400).json({ ok: false, error: '서버 주소나 로그인 주소를 바꿀 때는 비밀번호를 다시 넣어주세요' });
+    }
     if (String(password || '').trim()) passEnc = seal(String(password).trim());
     if (!passEnc) return res.status(400).json({ ok: false, error: '비밀번호가 필요해요' });
     const row = [eventId, provider, smtpHost, Number(port) || P.port,
@@ -297,6 +310,10 @@ router.get('/status', async (req, res) => {
   res.json(out);
 });
 
+/* 실행·스크립트·웹 파일은 첨부로 받지도 보내지도 않는다 — 행사 공용 메일로 나가면 받는 쪽 메일 서버가
+   막거나, 우리 주소가 악성 메일 발신지로 찍힌다 */
+const BLOCKED_EXT = /\.(exe|bat|cmd|com|scr|pif|msi|msp|js|jse|vbs|vbe|wsf|wsh|ps1|psm1|hta|jar|lnk|reg|cpl|html?|svg|xhtml)$/i;
+
 /* 단계별 기본 첨부 — 목록은 내용 없이 이름·크기만 */
 router.get('/files', async (req, res) => {
   try {
@@ -312,6 +329,7 @@ router.post('/files', async (req, res) => {
   if (req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 올릴 수 없어요' });
   const { event_id, step, filename, content_type, data } = req.body || {};
   if (!event_id || !step || !filename || !data) return res.status(400).json({ ok: false, error: '행사·단계·파일이 필요해요' });
+  if (BLOCKED_EXT.test(String(filename).trim())) return res.status(400).json({ ok: false, error: '실행·스크립트·웹 파일은 첨부할 수 없어요' });
   const size = b64size(data);
   if (size > FILE_MAX) return res.status(413).json({ ok: false, error: `파일이 너무 커요 (${(size / 1048576).toFixed(1)}MB, 최대 3MB)` });
   try {
@@ -388,6 +406,7 @@ router.post('/send', async (req, res) => {
   let localTotal = 0;
   for (const f of (Array.isArray(localFiles) ? localFiles : [])) {
     if (!f || !f.data || !f.filename) continue;
+    if (BLOCKED_EXT.test(String(f.filename).trim())) return res.status(400).json({ ok: false, error: `«${String(f.filename).slice(0, 60)}»은 보낼 수 없는 형식이에요 (실행·스크립트·웹 파일)` });
     localTotal += b64size(f.data);
     attachments.push({ filename: String(f.filename), content: f.data, encoding: 'base64', contentType: f.content_type || undefined });
   }
@@ -1110,7 +1129,7 @@ function safeOriginalHtml(mail, { remote = false, noLinks = false } = {}) {
     .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
     .replace(/(href|src|action)\s*=\s*(["'])\s*(javascript|vbscript|data:text)[^"']*\2/gi, '$1=""');
   const cid = new Map((mail.attachments || [])
-    .filter((a) => a.cid && /^image\//i.test(a.contentType || '') && a.size < 3 * 1024 * 1024)
+    .filter((a) => a.cid && /^image\/(png|jpe?g|gif|webp)$/i.test(a.contentType || '') && a.size < 3 * 1024 * 1024)   // svg·이상한 형식은 넣지 않는다
     .map((a) => [String(a.cid).replace(/[<>]/g, ''), `data:${a.contentType};base64,${a.content.toString('base64')}`]));
   h = h.replace(/src\s*=\s*(["'])cid:([^"']+)\1/gi, (m, q, c) => `src="${cid.get(c) || ''}"`);
   if (!remote) {

@@ -57,7 +57,7 @@ import { buildCoDB, ensureOrgsForNames, orgIdForName, applyCoSectors,
   coDomainOptionsHtml, coSectorOptionsHtml, currentCoSectorPick } from './company-tab.js';
 import { domainOfSector, domainName, findSectorByName, mainSectors, UNASSIGNED_DOMAIN } from './settings-tab.js';
 /* removed는 removeParticipation 안의 지역 변수와 이름이 겹친다 — 별칭으로 들여온다 */
-import { trackAction, changed, removed as removedMeta } from './audit-tab.js';
+import { trackAction, changed, removed as removedMeta, sanitizeForCsv } from './audit-tab.js';
 import { countryCheck, countryCheckText, continentOf, CONTINENT_ORDER } from '../country-signal.js';
 
 /* 이 사람의 국가가 자료와 어긋나는지 — 소속 기업 국가도 함께 넘겨야
@@ -1940,7 +1940,7 @@ export function exportCSV(){
     c.tags||'',
     c.memo1||'',c.memo2||'',c.memo3||''
   ]);
-  const csv=[h,...rows].map(r=>r.map(v=>`"${(v||'').toString().replace(/"/g,'""')}"`).join(',')).join('\n');
+  const csv=[h,...rows].map(r=>r.map(v=>`"${sanitizeForCsv(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
   const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);a.download='master_db_export.csv';a.click();
 }
 
@@ -2275,6 +2275,7 @@ export function contactEditForm(c){
       </div>
       <div class="fg"><label class="fl">카테고리</label>
         <select class="fi" id="ce-cat">
+          ${c.cat && !CAT_KEYS.includes(c.cat) ? `<option value="${escAttr(c.cat)}" selected>${escapeHtml(CL[c.cat] || c.cat)} (목록에서 내림)</option>` : ''}
           ${CAT_KEYS.map(k=>`<option value="${k}"${c.cat===k?' selected':''}>${CL[k]}</option>`).join('')}
         </select>
       </div>
@@ -3050,7 +3051,7 @@ export function onMDBDropToDomain(e, domainId, el){
     && domainOfSector(s).includes(domainId));
   if(!secs.length){
     alert(`«${domainName(domainId)}» 분야에 섹터가 하나도 없어요.\n`
-      + `설정 › 섹터 관리에서 섹터를 만들고 분야에 «${domainName(domainId)}»을 체크해주세요.`);
+      + `설정 › 기업 분류에서 섹터를 만들고 분야에 «${domainName(domainId)}»을 체크해주세요.`);
     return;
   }
 

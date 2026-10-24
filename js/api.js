@@ -57,7 +57,7 @@ import {
   TAGS,
   setTags,
   CATMAPS,
-  PART_TYPES,
+  PART_TYPES, syncPartColors,
   currentUser,
   curApp,
   sheetsConnected,
@@ -477,6 +477,7 @@ export async function loadFromSheets(hooks = {}){
       PART_TYPES.splice(0, PART_TYPES.length, ...partTypesData
         .filter(r => r.key)
         .map(r => ({ key: r.key, label: r.label || r.key, cls: r.cls || 'p-gray' })));
+      syncPartColors();
       console.log('[CRM] part_types 시트 로드:', PART_TYPES.length, '개');
     } else if(API_BASE_URL && currentUser){
       // 시트가 비어있으면 기본값을 1회 저장 (마이그레이션)

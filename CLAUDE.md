@@ -9,8 +9,10 @@
   그 결과 옆 번호의 사람들이 한 사람으로 뭉개져 남의 행사 기록이 붙었고, 반올림된
   번호로 저장되면서 같은 사람이 한 번 더 생겼다. `backend-node/db/fix-unsafe-contact-ids.js`로
   158명을 다시 매기고 겹친 12쌍을 합쳤다.
-- **새 연락처 id**는 `${Date.now()}${순번 3자리}`(16자리)처럼 `Number.isSafeInteger(Number(id))`가
-  참인 값만 쓴다. 한 번에 1000명 이상 넣는다면 기존 최대 id + 1부터 차례로 매긴다.
+- **새 연락처 id**는 직접 만들지 않고 정해진 함수로 받는다 — 화면은 `nextContactId()`(`js/state.js`),
+  서버 스크립트는 `contactIdAllocator(client)`(`backend-node/db/contact-ids.js`).
+  둘 다 max(지금 ms × 1000, 기존 최대 id + 1)에서 1씩 올려 1000명·1만 명을 넣어도 16자리 그대로다.
+  `${Date.now()}${순번 3자리}`처럼 순번을 뒤에 붙이면 1000번째에서 17자리가 되니 쓰지 않는다.
 - 연락처를 넣는 스크립트를 새로 만들면, 넣은 뒤 긴 id가 생겼는지 확인한다.
   생겼다면 `node db/fix-unsafe-contact-ids.js`(시험 실행) → `--apply`로 고친다.
 - 연락처 id를 가리키는 곳: `participations.contact_id`, `exhibitor_contacts.contact_id`,

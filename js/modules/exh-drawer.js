@@ -629,7 +629,7 @@ function catalogPickMissing(exhId){
   const cat = val(`it-cat-${exhId}`) || 'etc';
   if(!needsCatalog(cat)) return false;
   if(document.getElementById(`it-nm-${exhId}`)?.dataset.catalogId) return false;
-  alert('비품·그래픽은 품목표 목록에서 골라 주세요.\n목록에 없는 품목이면 설정 > 품목표에 먼저 추가하세요.');
+  alert('비품·그래픽은 품목표 목록에서 골라 주세요.\n목록에 없는 품목이면 설정 › 비품 목록에 먼저 추가하세요.');
   document.getElementById(`it-nm-${exhId}`)?.focus();
   return true;
 }
@@ -2870,7 +2870,7 @@ function boothGivenBlock(x){
   const rows = itemsFor(x.id).filter(isBoothGiven);
   if(!rows.length){
     return `<div style="font-size:11.5px;color:var(--i5);padding:6px 2px">
-      이 부스 타입에 적어 둔 기본 제공 품목이 없어요 — 설정 › 행사 관리 › 선택 목록에서 부스 타입에 적습니다.</div>`;
+      이 부스 타입에 적어 둔 기본 제공 품목이 없어요 — 설정 › 행사 관리 › 부스에서 부스 타입에 적습니다.</div>`;
   }
   return `<div style="font-size:11px;color:var(--i4);margin-bottom:8px">
       부스 타입(<b>${escapeHtml(x.booth_type || '미정')}</b>)에 딸려 나가는 것들이에요 — 청구하지 않습니다.

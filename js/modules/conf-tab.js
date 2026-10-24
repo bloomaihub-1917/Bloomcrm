@@ -30,7 +30,7 @@ import {
   leadOf, coOf, TALK_FIELDS, roleLabel,
 } from '../state.js';
 import { SPEAKER_ROLES, NEED_MARK, SPEAKER_NEEDS, SP_CONSENTS } from '../constants.js';
-import { td, escapeHtml, escAttr, isMobile, leftPill, countryName } from '../utils.js';
+import { td, escapeHtml, escAttr, isMobile, leftPill, countryName, photoSrc } from '../utils.js';
 import { progressBar, shortCell } from './exh-tab.js';
 
 /* 이 연사가 회사를 떠났는지 — 연사 행은 이름·소속을 «발표 당시»로 굳혀 두므로
@@ -1669,7 +1669,7 @@ function peopleHtml(ev){
           <span style="margin-left:auto;font-size:10.5px;color:#fff;background:${bc};border-radius:99px;padding:1px 8px">${bl}</span>
         </div>
         ${org ? `<div style="font-size:11px;color:var(--i4);margin-top:-5px">${escapeHtml(org)}</div>` : ''}
-        ${p ? `<img src="data:${p.content_type || 'image/jpeg'};base64,${p.data}" alt="" loading="lazy"
+        ${p ? `<img src="${photoSrc(p)}" alt="" loading="lazy"
             style="width:100%;height:190px;object-fit:cover;object-position:50% 25%;border-radius:6px;background:var(--i8)">`
           : `<div style="height:190px;display:grid;place-items:center;border:1px dashed var(--i6);border-radius:6px;
             font-size:11px;color:var(--i4);background:var(--i8)">${speakerPhotosLoaded(ev.key) ? '사진 없음' : '불러오는 중'}</div>`}
@@ -2036,6 +2036,11 @@ export async function handleConfFile(e){
   /* 무엇이 새로 만들어지고 무엇이 이미 있는지 먼저 보여준다 — 올리고 나서
      알려 주면 되돌릴 수 없다. */
   const sessKey = (t) => String(t || '').trim().toLowerCase();
+  const contactIdByMail = (m) => {
+    const e = String(m || '').trim().toLowerCase();
+    const c = e && contacts.find(k => [k.email1, k.email2].some(x => x && String(x).trim().toLowerCase() === e));
+    return c ? String(c.id) : '';
+  };
   /* 식사·휴식은 이름으로 찾지 않는다 — «오찬»은 날마다 있다. 이름으로 찾으면
      둘째 날 오찬이 첫째 날 것을 덮는다. 종류·일자·시작으로 찾는다. */
   const haveSess = new Map(), haveBreak = new Map();
@@ -2135,7 +2140,9 @@ export async function handleConfFile(e){
         Object.assign(sp, patch); nP++;
       }
     } else {
-      const row = { event_id: ev.key, contact_id: '', status: '섭외중', lang_pref: '', note: '', ...patch };
+      /* 마스터DB에 같은 메일의 사람이 있으면 그 사람으로 잇는다 — 안 이으면 마스터DB에서
+         그 사람의 연사 이력·주고받은 메일이 안 보이고, 다음 행사 섭외 때도 못 찾는다 */
+      const row = { event_id: ev.key, contact_id: contactIdByMail(r.email), status: '섭외중', lang_pref: '', note: '', ...patch };
       const res = await gSaveSpeaker(row);
       if(!res || res.ok === false){ fail('연사'); return; }
       sp = { ...row, id: res.id || `SP-tmp-${Date.now()}-${nP}` };
@@ -2146,7 +2153,7 @@ export async function handleConfFile(e){
     /* 메일을 적었으면 연락 상대(수신)로 만들어 둔다 — 연사에게 무엇을
        보내려면 수신이 있어야 하고, 없으면 메일 칸이 열리지 않는다. */
     if(r.email && !contactsOfSpeaker(sp.id).some(x => x.email === r.email)){
-      const c = { speaker_id: sp.id, contact_id: '', name: sp.name_snapshot,
+      const c = { speaker_id: sp.id, contact_id: contactIdByMail(r.email), name: sp.name_snapshot,
         email: r.email, phone: r.phone || '', kind: '연사 본인',
         send: contactsOfSpeaker(sp.id).some(x => x.send === 'to') ? 'cc' : 'to', note: '' };
       const res = await saveSpeakerContact(c);

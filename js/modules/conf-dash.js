@@ -182,7 +182,7 @@ export function confDashHtml(ev){
         <span style="font-size:11.5px;color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(l.subject || '(제목 없음)')}</span>
         ${dayDiff(today, String(l.ts || '').slice(0, 10)) > 0 ? `<span class="pill ${dayDiff(today, String(l.ts).slice(0, 10)) >= 3 ? 'p-amber' : 'p-gray'}" style="flex:0 0 auto">${dayDiff(today, String(l.ts).slice(0, 10))}일</span>` : ''}
       </div>`).join('')}
-      ${inbox.length > 8 ? `<div style="font-size:11px;color:var(--i4);padding:2px 2px 6px">받은 메일 외 ${inbox.length - 8}건 — 설정 › 행사 › 메일에서 모아 볼 수 있어요</div>` : ''}
+      ${inbox.length > 8 ? `<div style="font-size:11px;color:var(--i4);padding:2px 2px 6px">받은 메일 외 ${inbox.length - 8}건 — 설정 › 행사 관리 › 메일에서 모아 볼 수 있어요</div>` : ''}
       ${dueMiss.slice(0, 10).map(attnRow).join('')}
       ${silent.slice(0, 6).map(o => attnRow({ ...o, label: '답 없음 · ' + o.label })).join('')}
       ${emptySess.slice(0, 5).map(s => `<div onclick="openPgaSession('${escAttr(s.id)}')"

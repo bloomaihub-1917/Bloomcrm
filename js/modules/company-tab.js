@@ -2058,7 +2058,7 @@ export function editCoDomain(key){
     </div>
     ${DOMAINS.map(d => `<button class="btn" style="width:100%;justify-content:flex-start;margin-bottom:5px;font-size:12px"
       data-dom="${escAttr(d.id)}">${escapeHtml(d.name)}${cur.includes(d.id) ? ' ✓' : ''}</button>`).join('')
-      || '<div style="font-size:11.5px;color:var(--i4)">설정 › 섹터 관리에서 분야를 먼저 만들어주세요.</div>'}
+      || '<div style="font-size:11.5px;color:var(--i4)">설정 › 기업 분류에서 분야를 먼저 만들어주세요.</div>'}
     <button class="btn bs" style="width:100%;justify-content:center;margin-top:8px"
       onclick="closeCoDomainPopover()">취소</button>
   </div>`;

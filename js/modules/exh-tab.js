@@ -53,7 +53,7 @@ import { isStale, isUnread, mailCardHtml } from './mail-mark.js';
 import './exh-bulkmail.js';
 import { boothChange } from './exh-mail.js';
 import { renderWatchView, initWatchFolders } from './exh-watch.js';
-import { normalizeCompanyKey, createOrg, reloadOrgs } from './company-tab.js';
+import { normalizeCompanyKey, createOrg, reloadOrgs, orgIdForName } from './company-tab.js';
 
 /* 전시 참가기업으로 취급할 참가 역할 — 데이터에 표기 흔들림이 있어 함께 본다 */
 export const EXH_ROLES = ['전시참가기업', '전시기업', '전시참가'];
@@ -5243,10 +5243,14 @@ export function exhibitorCandidates(evKey){
       if(!c) return;
       const raw = c.orgKo || c.orgEn || '';
       if(!raw) return;
-      const key = normalizeCompanyKey(raw);
+      /* 기업DB 연결 — 연락처에 붙은 org_id가 먼저, 없으면 이름(표기 차이 무시)으로 찾는다.
+         CO_DB.key는 org id라 이름 키로는 늘 못 찾았고, org_id 없이 들어가 기업DB·지난 참가와 끊겼다 */
+      const orgId = String(c.org_id || '') || orgIdForName(raw);
+      const org = orgId ? getOrgById(orgId) : null;
+      const key = orgId ? 'org:' + orgId : normalizeCompanyKey(raw);
       if(!map.has(key)){
-        const co = CO_DB.find(o => o.key === key);
-        map.set(key, { company_key: key, company_name: (co && co.nameKo) || raw, people: [] });
+        map.set(key, { company_key: normalizeCompanyKey((org && (org.name_ko || org.name_en)) || raw), org_id: orgId,
+          company_name: (org && (org.name_ko || org.name_en)) || raw, people: [] });
       }
       const nm = c.nameKo || c.nameEn || '';
       if(nm && !map.get(key).people.includes(nm)) map.get(key).people.push(nm);
@@ -5290,6 +5294,7 @@ export function renderExhImportList(){
   const evKey = document.getElementById('exh-imp-ev').value;
   const cands = exhibitorCandidates(evKey);
   const already = new Set(exhibitorsForEvent(evKey).map(x => x.company_key));
+  const alreadyOrg = new Set(exhibitorsForEvent(evKey).map(x => String(x.org_id || '')).filter(Boolean));
 
   if(!cands.length){
     el.innerHTML = `<div style="font-size:12px;color:var(--i4);padding:14px;text-align:center">
@@ -5298,7 +5303,7 @@ export function renderExhImportList(){
     return;
   }
   el.innerHTML = cands.map((c, i) => {
-    const dup = already.has(c.company_key);
+    const dup = already.has(c.company_key) || (!!c.org_id && alreadyOrg.has(String(c.org_id)));
     return `<label style="display:flex;align-items:center;gap:9px;padding:6px 7px;border-radius:6px;cursor:${dup ? 'default' : 'pointer'};opacity:${dup ? .45 : 1}">
       <input type="checkbox" class="exh-imp-cb" data-i="${i}" ${dup ? 'disabled' : 'checked'}>
       <span style="font-weight:600;font-size:12px;flex:1">${escapeHtml(c.company_name)}</span>
@@ -5327,7 +5332,7 @@ export async function confirmExhImport(){
   if(btn){ btn.disabled = true; btn.textContent = '등록 중…'; }
 
   const rows = picked.map(c => ({
-    event_id: evKey, company_key: c.company_key, company_name: c.company_name,
+    event_id: evKey, org_id: String(c.org_id || ''), company_key: c.company_key, company_name: c.company_name,
     status: '준비중', updated_at: td(),
   }));
 

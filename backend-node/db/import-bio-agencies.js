@@ -22,6 +22,7 @@
 ══════════════════════════════════════════════════════════════ */
 require('dotenv').config();
 const pool = require('./pool');
+const { contactIdAllocator } = require('./contact-ids');
 
 const DRY = process.argv.includes('--dry');
 const FILE = process.argv.slice(2).find((a) => !a.startsWith('--'));
@@ -107,6 +108,7 @@ const abbrOf = (nm) => String(nm || '').trim().slice(0, 2);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    const nextContactId = await contactIdAllocator(client);   // 16자리 고정 — 몇 명을 넣어도 자릿수가 늘지 않는다
 
     /* 분야를 다는 섹터가 없으면 만든다 — 화면 분야 버튼이 쓰는 그 자리다 */
     const secHave = await client.query(`SELECT id FROM sectors WHERE name = $1`, [DOMAIN_SECTOR]);
@@ -165,7 +167,7 @@ const abbrOf = (nm) => String(nm || '').trim().slice(0, 2);
                                  "deptKo", "deptEn", country, cat, lang, source, date, status,
                                  email1, email2, phone1, phone2, beat, products, tags, org_id)
            VALUES ($1,$2,'',$3,'','','',$4,'',$5,'bd','KO',$6,$7,'new',$8,'',$9,'','','','',$10)`,
-          [`${stamp}${String(++seq).padStart(3, '0')}` /* 16자리까지 — 넘으면 화면이 끝자리를 반올림한다 */, p.name, o.name, p.dept,
+          [nextContactId(), p.name, o.name, p.dept,
             p.country, p.source, TODAY, p.email, p.phone, o.id]);
         cMade++;
       }

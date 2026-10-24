@@ -17,7 +17,7 @@
      읽기만 하면 됩니다 — 라이브 바인딩이라 항상 최신값입니다.)
 ═══════════════════════════════════════════════════════════════ */
 
-import { EVENT_LIST_SEED, CL, CP, CAT_KEYS, EVENT_PARTS, PART_STATES,
+import { EVENT_LIST_SEED, CL, CP, RP, CAT_KEYS, EVENT_PARTS, PART_STATES,
   SPEAKER_ROLES, SPEAKER_NEEDS, COUNTRIES } from './constants.js';
 
 /* ── 백엔드 API 베이스 URL (Node/Express, backend-node/) ──
@@ -55,6 +55,16 @@ export function evShort(ev){ const f = EVENT_LIST.find(e => e.key === ev); retur
      p.contactId/p.event/p.eventId/p.role 로 옮겨써야 합니다.
 ══════════════════════════════════════════ */
 export const contacts = [];
+/* 새 연락처 id — 화면에서 만드는 곳(업로드·컨택 화면)은 모두 이것을 쓴다(CLAUDE.md 16자리 규칙).
+   max(지금 ms×1000, 지금 있는 최대 id + 1)에서 1씩 올린다 — 1만 명을 한 번에 넣어도 16자리 그대로,
+   기존 id와도 겹치지 않는다. 서버 스크립트는 backend-node/db/contact-ids.js가 같은 규칙이다 */
+let _lastContactId = 0;
+export function nextContactId(){
+  if(!_lastContactId) _lastContactId = contacts.reduce((m, c) => { const n = Number(c.id); return Number.isSafeInteger(n) && n > m ? n : m; }, 0);
+  _lastContactId = Math.max(Date.now() * 1000, _lastContactId + 1);
+  if(!Number.isSafeInteger(_lastContactId)) throw new Error('연락처 id가 안전 정수를 넘어요');
+  return _lastContactId;
+}
 export const participations = [];
 
 /* 회사를 떠난 담당자 — 행을 지우지 않고 표시만 해 둔다.
@@ -742,6 +752,13 @@ export const PART_TYPES = [
   {key:'주최사',        label:'주최사',        cls:'p-indigo'},
   {key:'참가자',        label:'참가자',        cls:'p-gray'},
 ];
+
+/* 참가 유형 색은 설정(PART_TYPES.cls)이 정본이다 — DB·기업DB·CRM 화면은 RP[유형]으로
+   색을 찾으니, 설정에서 고른 색을 RP에 얹는다. 안 그러면 새로 만든 유형은 늘 회색이었다 */
+export function syncPartColors(){
+  PART_TYPES.forEach(t => { if(t.cls){ RP[t.key] = t.cls; if(t.label) RP[t.label] = t.cls; } });
+}
+syncPartColors();   // 시트를 못 읽는 테스트 모드도 기본 목록 색을 쓴다
 
 /* ══════════════════════════════════════════
    TAGS — 연락처 영구 태그 목록(BD/C-level 등) (신규)

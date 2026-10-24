@@ -55,6 +55,14 @@ router.put('/:speakerId', async (req, res) => {
   if (!/^image\/(jpeg|png|webp)$/.test(content_type || '')) {
     return res.status(400).json({ ok: false, error: '사진은 JPG·PNG·WEBP만 받아요' });
   }
+  /* data는 화면이 <img src="data:…;base64,값">에 그대로 넣는다 — base64 글자만, 그리고 실제 그림
+     파일 머리(JPG FFD8FF · PNG 89504E47 · WEBP RIFF…WEBP)인지 본다. 안 보면 따옴표를 넣어 스크립트를 심을 수 있었다 */
+  if (typeof data !== 'string' || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) return res.status(400).json({ ok: false, error: '사진 데이터 형식이 아니에요' });
+  const head = Buffer.from(data.slice(0, 24), 'base64');
+  const isImg = (head[0] === 0xFF && head[1] === 0xD8 && head[2] === 0xFF)
+    || head.slice(0, 4).equals(Buffer.from([0x89, 0x50, 0x4E, 0x47]))
+    || (head.slice(0, 4).toString('latin1') === 'RIFF' && head.slice(8, 12).toString('latin1') === 'WEBP');
+  if (!isImg) return res.status(400).json({ ok: false, error: '사진 파일이 아니에요 (JPG·PNG·WEBP)' });
   const size = b64size(data);
   if (size > PHOTO_MAX) return res.status(413).json({ ok: false, error: `사진이 너무 커요 (${(size / 1048576).toFixed(1)}MB)` });
   try {

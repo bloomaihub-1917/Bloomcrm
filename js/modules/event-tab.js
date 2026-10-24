@@ -31,7 +31,7 @@ import { saveTargetToSheet, buildEvFil, renderCrm, updBadges } from './crm-tab.j
 import { normalizeCompanyKey } from './company-tab.js';
 import { domainOfSector, domainName, findSectorByName } from './settings-tab.js';
 /* changed는 이 파일의 지역 변수 이름과 겹친다 — 별칭으로 들여온다 */
-import { trackAction, changed as changeMeta } from './audit-tab.js';
+import { trackAction, changed as changeMeta, sanitizeForCsv } from './audit-tab.js';
 
 /* ── 모듈 상태 ──
    고른 행사와 보고 있는 화면. 다른 탭이 알 필요가 없어 state.js로 올리지 않는다. */
@@ -254,7 +254,7 @@ function domainField(ev){
       ${DOMAINS.map(d => `<label style="display:flex;align-items:center;gap:5px;font-size:11.5px;cursor:pointer">
         <input type="checkbox" class="evdb-dom" value="${escAttr(d.id)}"${on.includes(d.id) ? ' checked' : ''}>
         ${escapeHtml(d.name)}</label>`).join('')
-        || '<span style="font-size:11px;color:var(--i4)">설정 › 섹터 관리에서 분야를 먼저 만들어주세요</span>'}
+        || '<span style="font-size:11px;color:var(--i4)">설정 › 기업 분류에서 분야를 먼저 만들어주세요</span>'}
     </div></div>`;
 }
 
@@ -966,7 +966,7 @@ export function exportEvDbPeople(){
     [...r.roles].join('|'), countryName(r.country) || '', r.email, r.phone, r.confirmedAt,
   ]);
   const csv = [head, ...body]
-    .map(row => row.map(v => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"').join(','))
+    .map(row => row.map(v => '"' + sanitizeForCsv(v).replace(/"/g, '""') + '"').join(','))
     .join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,﻿' + encodeURIComponent(csv);

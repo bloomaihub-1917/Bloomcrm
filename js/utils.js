@@ -437,3 +437,7 @@ export function splitQuotedMail(text){
   if(cut <= 0) return { head: body.trim(), quoted: '', attach };
   return { head: lines.slice(0, cut).join('\n').trim(), quoted: lines.slice(cut).join('\n').trim(), attach };
 }
+
+/* 연사 사진 data URL — base64 글자가 아니면 그리지 않는다(서버도 막지만, 속성 밖으로 못 나가게 화면에서 한 번 더) */
+export const photoSrc = (p) => /^image\/(jpeg|png|webp)$/.test(p.content_type || 'image/jpeg') && /^[A-Za-z0-9+/]+={0,2}$/.test(String(p.data || ''))
+  ? `data:${p.content_type || 'image/jpeg'};base64,${p.data}` : '';

@@ -17,6 +17,7 @@
 ══════════════════════════════════════════════════════════════ */
 require('dotenv').config();
 const pool = require('./pool');
+const { contactIdAllocator } = require('./contact-ids');
 
 const DRY = process.argv.includes('--dry');
 const SOURCE = '타 행사 독립부스 시공사 명단';
@@ -78,6 +79,7 @@ const norm = (v) => clean(v).toLowerCase()
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    const nextContactId = await contactIdAllocator(client);   // 16자리 고정 — 몇 명을 넣어도 자릿수가 늘지 않는다
     const orgs = (await client.query(`SELECT id, name_ko, name_en, aliases, phone, kind FROM orgs`)).rows;
     const index = new Map();
     orgs.forEach((o) => [o.name_ko, o.name_en, ...String(o.aliases || '').split('\n')]
@@ -148,7 +150,7 @@ const norm = (v) => clean(v).toLowerCase()
           await join(dup.id, `${pn} (${org.name_ko})`);
           continue;
         }
-        const cid = `${stamp}${String(++seq).padStart(3, '0')}` /* 16자리까지 — 넘으면 화면이 끝자리를 반올림한다 */;
+        const cid = nextContactId();
         if (!DRY) await client.query(
           `INSERT INTO contacts (id, "nameKo", "orgKo", "titleKo", cat, lang, source, date, status,
                                  email1, phone1, phone2, org_id)

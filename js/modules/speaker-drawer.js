@@ -27,7 +27,7 @@ import {
 } from '../state.js';
 import { SPEAKER_ROLES, NEED_MARK, NEED_LABEL, SP_CONSENTS } from '../constants.js';
 import './flow-editor.js';
-import { td, nowStamp, mailDirPill, escapeHtml, escAttr, countryOptions, countryName, splitQuotedMail } from '../utils.js';
+import { td, nowStamp, mailDirPill, escapeHtml, escAttr, countryOptions, countryName, splitQuotedMail, photoSrc } from '../utils.js';
 /* 보낸 기록 본문 — 이전 메일(인용)은 접어 둔다(utils.js splitQuotedMail) */
 const mailBodyHtml = (body) => {
   const m = splitQuotedMail(body);
@@ -1551,7 +1551,7 @@ function boxTabHtml(sp){
     ${logs.some(l => l.direction === 'in') ? mailFilBar(logs) : ''}
     ${list.length ? list.map(spLogRow).join('')
       : `<div style="font-size:11px;color:var(--i4);padding:6px 0">${logs.length ? '이 조건에 맞는 메일이 없어요'
-        : '아직 주고받은 메일이 없어요 — 설정 › 행사 › 메일에서 메일함 기록을 가져올 수 있어요'}</div>`}`;
+        : '아직 주고받은 메일이 없어요 — 설정 › 행사 관리 › 메일에서 메일함 기록을 가져올 수 있어요'}</div>`}`;
 }
 
 /* ── 메일 첨부 ──
@@ -2167,8 +2167,6 @@ export function hideBank(){ bankRevealed = false; renderSpeakerDr(); }
    원본은 OneDrive 연사 폴더에 있고, 여기에는 알아보는 용도로 줄인 사본을 둔다
    (backend-node/routes/photos.js). 폴더에 있는 것을 한꺼번에 넣을 때는
    backend-node/db/import-speaker-photos.js를 쓴다. */
-const photoSrc = (p) => `data:${p.content_type || 'image/jpeg'};base64,${p.data}`;
-
 function photoBoxHtml(sp, evKey){
   const p = speakerPhotoOf(evKey, sp.id);
   const loading = !speakerPhotosLoaded(evKey);

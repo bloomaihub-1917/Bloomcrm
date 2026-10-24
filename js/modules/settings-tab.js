@@ -49,6 +49,7 @@ import {
   codeList,
   confCfg, confDays, speakerNeed,
   CONF_SESSIONS, EXHIBITORS, SPEAKERS, SPEAKER_LOGS, EXH_LOGS,
+  syncPartColors,
 } from '../state.js';
 import { isUnread, isPending, runMailSync } from './mail-mark.js';
 import { exhMailSteps, exhMailFileStep } from './exh-mail.js';
@@ -1145,6 +1146,13 @@ export function renderPartTypeList(){
   });
 }
 
+/* 행사를 더하고·고치고·지운 뒤 — 마스터DB 행사 목록·업로드 드롭다운뿐 아니라 기업DB도 다시 만든다.
+   기업DB(CO_DB)는 행사 약칭·이름을 복사해 들고 있어서, 안 그러면 새로고침 전까지 옛 이름이 보였다 */
+function refreshAfterEventChange(){
+  try { buildMDBEvList(); populateUploadEvDropdown(); } catch(e){}
+  try { buildCoDB(); if(document.getElementById('co-dash')) renderCoDashboard(); } catch(e){}
+}
+
 export async function addPartType(){
   const inp = document.getElementById('parttype-add-input');
   const colorSel = document.getElementById('parttype-add-color');
@@ -1154,6 +1162,7 @@ export async function addPartType(){
 
   const t = { key: val, label: val, cls: (colorSel && colorSel.value) || 'p-gray' };
   PART_TYPES.push(t);
+  syncPartColors();
   if(inp) inp.value = '';
   renderPartTypeList();
   await upsertPartTypeRow(t);
@@ -1275,7 +1284,7 @@ export function addEventToList(){
 
   // UI 갱신
   renderEvMgr();
-  try { buildMDBEvList(); populateUploadEvDropdown(); } catch(e){}
+  refreshAfterEventChange();
 
   // 구글시트 저장 + 감사 로그
   const newEv = EVENT_LIST[EVENT_LIST.length - 1];
@@ -1295,7 +1304,7 @@ export function removeEventFromList(idx){
   const key = ev.key;
   EVENT_LIST.splice(idx, 1);
   renderEvMgr();
-  try { buildMDBEvList(); populateUploadEvDropdown(); } catch(e){}
+  refreshAfterEventChange();
   deleteEventFromSheet(key);
   trackAction('edit', '행사 삭제', key, `행사 "${ev.name||key}" 삭제`
     + (partCount ? ` (참여 기록 ${partCount}건 잔존)` : ''),
@@ -2889,7 +2898,7 @@ export async function saveEvBasic(){
     .map(f => `${f} ${prev[f] || '없음'} → ${ev[f] || '없음'}`);
   if(changed.length) trackAction('edit', '행사 정보 수정', ev.key, changed.join(' / '));
 
-  try { buildMDBEvList(); populateUploadEvDropdown(); } catch(e){}
+  refreshAfterEventChange();
   say('저장했어요.', true);
   renderEvDetail();
   setTimeout(() => { const m = document.getElementById('evd-basic-msg'); if(m) m.textContent = ''; }, 2000);

@@ -22,6 +22,7 @@
      node db/import-evk-contacts.js <엑셀경로> [--dry]                       */
 require('dotenv').config();
 const pool = require('./pool');
+const { contactIdAllocator } = require('./contact-ids');
 
 const DRY = process.argv.includes('--dry');
 const FILE = process.argv.slice(2).find((a) => !a.startsWith('--'));
@@ -34,8 +35,6 @@ const isKo = (v) => /[가-힣]/.test(String(v || ''));
 const clean = (v) => String(v == null ? '' : v).trim();
 
 /* 앱의 genContactId와 같은 모양 — 밀리초 × 1000에서 하나씩 올린다 */
-let _id = Date.now() * 1000;
-const nextId = () => String(++_id);
 
 const SHEETS = [
   { name: '종합_셀러', org: '기업명', source: '셀러 명단',
@@ -51,6 +50,7 @@ const SHEETS = [
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    const nextContactId = await contactIdAllocator(client);   // 16자리 고정 — 몇 명을 넣어도 자릿수가 늘지 않는다
 
     /* 기업 — 이름으로 찾아 id와 섹터를 가져온다 */
     const orgMap = new Map();
@@ -92,7 +92,7 @@ const SHEETS = [
         if (!org) noOrg.push(orgName);
 
         const title = clean(r['직책']);
-        const id = nextId();
+        const id = nextContactId();
         await client.query(
           `INSERT INTO contacts
              (id, "nameKo", "nameEn", "orgKo", "orgEn", "titleKo", "titleEn",

@@ -20,6 +20,7 @@
 import {
   EVENT_LIST, CO_DB, contacts, participations, currentUser, hasLeft, crmV, curApp,
   CONTACT_ROUNDS, ROUND_MEMBERS, CONTACT_ATTEMPTS,
+  nextContactId,
 } from '../state.js';
 import {
   saveRound, deleteRound, saveRoundMember, deleteRoundMembers, addRoundMembers,
@@ -478,7 +479,7 @@ const contactRow23 = (c) => [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.title
   c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
   c.beat, c.products, c.tags || '', c.org_id || ''];
 /* 새 연락처 id — 16자리 이하(CLAUDE.md): ${Date.now()}${순번 3자리} */
-const newContactId = () => Number(`${Date.now()}${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`);
+const newContactId = () => nextContactId();   // 무작위 3자리는 겹칠 수 있었다 — state.js 규칙 하나로
 
 export async function savePersonForm(mid, k){
   const m = ROUND_MEMBERS.find(x => x.id === mid);

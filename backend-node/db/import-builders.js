@@ -16,6 +16,7 @@
 ══════════════════════════════════════════════════════════════ */
 require('dotenv').config();
 const pool = require('./pool');
+const { contactIdAllocator } = require('./contact-ids');
 
 const argv = process.argv.slice(2);
 const arg = (k) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : null; };
@@ -48,6 +49,7 @@ const phones = (v) => clean(v).split(/\s*[\/,]\s*/).map(clean).filter(Boolean);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    const nextContactId = await contactIdAllocator(client);   // 16자리 고정 — 몇 명을 넣어도 자릿수가 늘지 않는다
     await client.query('ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS builder_org_id TEXT');
 
     const exhs = (await client.query(
@@ -117,7 +119,7 @@ const phones = (v) => clean(v).split(/\s*[\/,]\s*/).map(clean).filter(Boolean);
         `INSERT INTO contacts (id, "nameKo", "orgKo", "titleKo", cat, lang, source, date, status,
                                email1, phone1, phone2, org_id)
          VALUES ($1, $2, $3, $4, '', 'ko', $5, $6, 'new', $7, $8, $9, $10)`,
-        [`${stamp}${String(++seq).padStart(3, '0')}` /* 16자리까지 — 넘으면 화면이 끝자리를 반올림한다 */, name, org.name_ko, title,
+        [nextContactId(), name, org.name_ko, title,
           `${EVENT} 독립부스 시공사`, today, email, m1 || tel, m1 ? (m2 || tel) : (m2 || ''), org.id]);
       people.push(`${name}${title ? ' ' + title : ''} (${org.name_ko})`);
     }

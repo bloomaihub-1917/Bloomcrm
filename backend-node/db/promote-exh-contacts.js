@@ -29,6 +29,7 @@
 ══════════════════════════════════════════════════════════════ */
 require('dotenv').config();
 const pool = require('./pool');
+const { contactIdAllocator } = require('./contact-ids');
 
 const DRY = process.argv.includes('--dry');
 
@@ -191,6 +192,8 @@ function splitTitle(name){
     if (DRY) { console.log('\n--dry 라서 아무것도 바꾸지 않았습니다.'); return; }
 
     await client.query('BEGIN');
+
+    const nextContactId = await contactIdAllocator(client);   // 16자리 고정 — 몇 명을 넣어도 자릿수가 늘지 않는다
     let made = 0, linked = 0, partN = 0, seq = 0;
     const today = new Date().toISOString().slice(0, 10);
     const stamp = () => `L-${Date.now()}-${seq++}`;
@@ -212,8 +215,7 @@ function splitTitle(name){
 
     for (const t of plan) {
       // 16자리 이하(CLAUDE.md) — 4자리 순번으로 17자리를 만들어 2026-09-29 사고가 났다
-      const id = String(Date.now()) + String(seq++).padStart(3, '0');
-      if (!Number.isSafeInteger(Number(id))) throw new Error(`안전하지 않은 연락처 id ${id} — 한 번에 1000명 넘게는 CLAUDE.md대로 최대 id+1부터 매기세요`);
+      const id = nextContactId();
       await client.query(
         `INSERT INTO contacts (id,"nameKo","nameEn","orgKo","orgEn","titleKo","titleEn","deptKo","deptEn",
            country,cat,lang,source,date,status,email1,email2,phone1,phone2,beat,products,tags,org_id)

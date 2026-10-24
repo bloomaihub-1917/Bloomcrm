@@ -527,7 +527,7 @@ ${listHtml(list, slug)}
   <p class="empty" id="empty">No matching companies.</p>
   <footer>
     ${esc(event.name || event.id)} Secretariat${event.homepage
-      ? ` · <a href="${esc(event.homepage)}" target="_blank" rel="noopener">Event website</a>` : ''}
+      ? ` · <a href="${esc((webLink(event.homepage) || {}).href || '#')}" target="_blank" rel="noopener">Event website</a>` : ''}
   </footer>
 </div>
 <script>

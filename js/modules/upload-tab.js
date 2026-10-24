@@ -55,6 +55,7 @@ import {
   PART_TYPES,
   API_BASE_URL,
   currentUser,
+  nextContactId,
 } from '../state.js';
 import { CL } from '../constants.js';
 import { td, normalizeCat, normalizeCountry, escapeHtml, escAttr, scopedSectorName, slugifySectorName, sectorRowValues, sectorKey } from '../utils.js';
@@ -85,12 +86,7 @@ let _evDirectMode = false;
    연락처가 조용히 누락되는 버그가 있었다. ms 타임스탬프 × 1000 + 단조
    증가 카운터로 세션 내 충돌을 원천 차단한다 (최대값 ≈ 1.7e15로
    Number.MAX_SAFE_INTEGER 이내 — 기존 숫자 id 체계와 호환). */
-let _lastGenId = 0;
-function genContactId(){
-  const base = Date.now() * 1000;
-  _lastGenId = base > _lastGenId ? base : _lastGenId + 1;
-  return _lastGenId;
-}
+const genContactId = () => nextContactId();   // state.js — 기존 최대 id보다 크게, 1씩
 
 /* ═══════════════════════════════════════
    AI 로그 한 줄 추가 (애니메이션 없이 즉시) (원본 2838행)
@@ -1341,7 +1337,9 @@ export async function runValidationStep(newRows, dupRows){
     // 확인창에서 «동일 인물»로 고른 줄은 그때 가리킨 사람이 정답이다 — 이름+기업으로
     // 다시 찾으면 동명이인이나 소속이 바뀐 사람에게서 엇나간다.
     const existing = (r._suspectId != null && getContactById(r._suspectId))
-      || (email && contacts.find(c => c.email1 && c.email1.toLowerCase() === email))
+      // 중복 판정(email1·email2 둘 다 본다)과 같은 기준으로 찾는다 — email1만 보면 기존 사람의
+      // email2로 들어온 줄이 «중복»으로 걸러지고도 행사가 안 붙었다
+      || (email && contacts.find(c => [c.email1, c.email2].some(e => e && String(e).toLowerCase() === email)))
       || contacts.find(c =>
           (c.nameKo||c.name||'') === (r.nameKo||'') &&
           (c.orgKo||c.org||'')   === (r.orgKo||''));

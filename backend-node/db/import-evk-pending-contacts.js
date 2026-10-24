@@ -16,6 +16,7 @@
      node db/import-evk-pending-contacts.js <엑셀경로> [--dry]              */
 require('dotenv').config();
 const pool = require('./pool');
+const { contactIdAllocator } = require('./contact-ids');
 
 const DRY = process.argv.includes('--dry');
 const FILE = process.argv.slice(2).find((a) => !a.startsWith('--'));
@@ -33,8 +34,6 @@ const key = (v) => clean(v).toLowerCase()
   .replace(/㈜|\(주\)|주식회사|\(유\)|유한회사/g, '').replace(/\s+/g, '');
 const isKo = (v) => /[가-힣]/.test(String(v || ''));
 
-let _id = Date.now() * 1000;
-const nextId = () => String(++_id);
 
 const SHEETS = [
   { name: '종합_셀러',  org: '기업명',           dept: null,     mobile: '핸드폰 번호', tel: null,
@@ -50,6 +49,7 @@ const SHEETS = [
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    const nextContactId = await contactIdAllocator(client);   // 16자리 고정 — 몇 명을 넣어도 자릿수가 늘지 않는다
 
     const orgMap = new Map();
     (await client.query(`SELECT id, name_ko, name_en, COALESCE(sectors,'') sectors FROM orgs`))
@@ -92,7 +92,7 @@ const SHEETS = [
               email1, email2, phone1, phone2, beat, products, tags, org_id, memo1)
            VALUES ($1,$2,$3,$4,$5,'','',$6,'','','attendee',$7,$8,$9,'pending',
                    $10,'',$11,$12,$13,'',$14,$15,$16)`,
-          [nextId(),
+          [nextContactId(),
            isKo(label) ? label : '', isKo(label) ? '' : label,
            isKo(orgName) ? orgName : '', isKo(orgName) ? '' : orgName,
            dept, isKo(label) ? 'KO' : 'EN', sh.source,
