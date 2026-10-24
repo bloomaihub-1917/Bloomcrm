@@ -21,6 +21,7 @@ import { SP_COLS, spCell } from './conf-tab.js';
 import { SPEAKER_ROLES } from '../constants.js';
 import { reusePending, reuseSummary } from './contact-speaker.js';
 import { varTokens, varPattern, eventVarValues } from './mail-vars.js';
+import { followState, resolveDue } from './follow-up.js';
 
 /* 문투 — 비즈니스 메일 기준(global-email-expert 스킬)을 따른다.
    ① 첫 세 문장 안에 목적을 밝힌다  ② 세부사항은 항목(■ / -)으로 나눈다
@@ -148,6 +149,8 @@ export function flowSteps(evKey, { withOff = false } = {}){
     const i = c.after === '' ? -1 : out.findIndex(x => x.key === c.after);
     if(c.after === '') out.unshift(st); else out.splice(i < 0 ? out.length : i + 1, 0, st);
   });
+  /* 마감은 «D-7»(행사 7일 전)으로도 적는다 — 화면·메일은 날짜로, 편집 창은 적은 그대로(due_raw) */
+  out.forEach(s => { s.due_raw = s.due || ''; s.due = resolveDue(evKey, s.due); });
   return out.filter(s => withOff || !s.off);
 }
 
@@ -329,6 +332,9 @@ export function roundTargets(stepKey, speakers){
 
 /* 연사 한 명의 단계 상태 — current는 해당되면서 아직 안 끝난 첫 단계.
    skip이면 연락 단계 자체가 없다(주최사 전달) — 집계에서 빼야 한다. */
+/* 연사에게서 받아야 끝나는 단계와, 그 요청으로 치는 메일 종류 */
+const WAIT_KINDS = { reply: ['invite', 'reply'], collect: ['collect'], slides: ['slides'] };
+
 export function flowStatus(sp){
   /* 취소한 연사에게는 더 연락하지 않는다 — 할 일·독촉 목록에서 빠진다 */
   const cancelled = sp.status === '취소';
@@ -352,10 +358,20 @@ export function flowStatus(sp){
     return withRound(sp, s, applies);
   });
   const current = steps.find(s => s.applies && !s.isDone) || null;
-  /* 자료 요청을 이미 보냈는데 아직 덜 받았으면 다음 메일은 독촉이다 */
-  const remind = !!current && current.key === 'collect' && !current.resend && sentLog(sp, 'collect');
+  /* 연사에게서 받아야 끝나는 단계 — 요청을 보냈으면 공은 연사에게 있다. 그래도 안 오면
+     리마인더를 보내는 것이 우리 일이다(follow-up.js). 보낸 날: 그 단계 메일 기록 + 손으로 찍은 날 */
+  let follow = null;
+  if(current && !current.resend && WAIT_KINDS[current.key]){
+    const logs = logsOfSpeaker(sp.id);
+    const sends = logs.filter(l => l.direction === 'out' && WAIT_KINDS[current.key].includes(l.kind)).map(l => l.ts);
+    if(current.key === 'reply' && sp.guide_sent_at) sends.push(sp.guide_sent_at);
+    if(current.key === 'collect' && sp.reminded_at) sends.push(sp.reminded_at);
+    follow = followState({ evKey: sp.event_id, sends, due: current.due, logs, stepKey: current.key });
+    if(follow.state === 'ask') follow = null;
+  }
+  const remind = !!follow && follow.state === 'nudge';
   const live = steps.filter(s => s.applies);
-  return { steps, current, remind, skip, cancelled, nDone: live.filter(s => s.isDone).length, nAll: live.length };
+  return { steps, current, remind, follow, skip, cancelled, nDone: live.filter(s => s.isDone).length, nAll: live.length };
 }
 
 /* 표·CRM에 쓸 한 줄 */
@@ -364,9 +380,14 @@ export function nextActionLabel(sp){
   if(f.cancelled) return { text: '취소', done: true, skip: true };
   if(f.skip) return { text: '주최사 전달', done: true, skip: true };
   if(!f.current) return { text: '연락 완료', done: true };
-  const label = f.remind ? '자료 독촉' : f.current.resend ? `${f.current.label} (다시)` : f.current.label;
   const left = f.current.key === 'collect' ? missingItems(sp).length : 0;
-  return { text: `${label}${left ? ` (${left})` : ''}`, step: f.current.key, due: f.current.due || '', done: false };
+  /* 요청하고 기다리는 중이면 우리 할 일이 아니다 — 기다림으로 보이고, 날이 차면 리마인더로 돌아온다 */
+  if(f.follow && f.follow.state !== 'nudge')
+    return { text: `${f.current.label} 기다림`, step: f.current.key, wait: true, follow: f.follow, done: false };
+  const label = f.remind ? (f.current.key === 'collect' ? '자료 독촉' : `${f.current.label} 리마인더`)
+    : f.current.resend ? `${f.current.label} (다시)` : f.current.label;
+  return { text: `${label}${left ? ` (${left})` : ''}`, step: f.current.key, due: f.current.due || '',
+    follow: f.follow, done: false };
 }
 
 /* ── 양식 채우기 ── */
@@ -459,8 +480,11 @@ export function draftFor(sp, stepKey, variantId){
   if(!step) return null;
   const en = sp.lang_pref === 'en';
   /* 확인 요청은 처음 한 번 — 보냈는데도 답이 없으면 그다음은 독촉이다 */
-  const reuse = stepKey === 'collect' && !f.remind && reusePending(sp).length > 0;
-  const remind = stepKey === 'collect' && f.remind;
+  /* 이미 요청한 단계(f.follow — 기다림이든 리마인더 때든)를 다시 쓰면 리마인더다 */
+  const asked = !!f.follow && f.current && f.current.key === stepKey;
+  const reuse = stepKey === 'collect' && !asked && reusePending(sp).length > 0;
+  const remind = stepKey === 'collect' && asked;
+  const tag = asked && !remind ? (en ? '[Reminder] ' : '[리마인더] ') : '';
   const pre = reuse ? 'reuse_' : remind ? 'remind_' : '';
   /* 변형은 첫 메일 문구만 바꾼다 — 독촉·지난 자료 확인은 단계 문구 그대로 */
   const variant = variantId === 'base' ? null : variantId
@@ -469,9 +493,9 @@ export function draftFor(sp, stepKey, variantId){
   const pick = (k) => (!pre && variant && variant[`${k}_${lang}`]) || step[`${pre}${k}_${lang}`] || step[`${k}_${lang}`] || '';
   const st = reuse ? { ...step, reuse: true } : step;
   return {
-    subject: fillTemplate(pick('subject'), sp, st),
+    subject: tag + fillTemplate(pick('subject'), sp, st),
     body: fillTemplate(pick('body'), sp, st),
-    kind: stepKey, category: reuse ? '자료 확인 요청' : remind ? '자료 독촉' : step.label,
+    kind: stepKey, category: reuse ? '자료 확인 요청' : remind ? '자료 독촉' : tag ? `${step.label} 리마인더` : step.label,
     variant: !pre && variant ? variant.id : '', variantLabel: !pre && variant ? variant.label : '',
   };
 }

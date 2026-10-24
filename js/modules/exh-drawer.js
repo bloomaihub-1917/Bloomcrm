@@ -33,7 +33,8 @@ import {
   deleteExhibitor as _deleteExhibitor,
   sendMail, eventMailFrom, fileToBase64, loadMailFiles, mailFilesOf, aiExhAdvice,
 } from '../api.js';
-import { exhMailState } from './exh-bulkmail.js';
+import { exhMailState, exhFollowOf } from './exh-bulkmail.js';
+import { followPill, snoozeFollow, addDays } from './follow-up.js';
 
 /* 진행 완료된 행사는 열람만 — exh-tab의 가드를 그대로 쓴다.
    판단 기준이 두 군데면 한쪽만 고치는 날이 온다. */
@@ -160,6 +161,36 @@ export function openOrgFromExh(exhId){
   } catch(e){ console.warn('[exh-drawer] 기업DB 이동 실패:', e); }
 }
 
+/* 기다리는 요청 — 이 기업에 요청해 두고 아직 못 받은 단계. 공은 기업에 있지만 날이 차면
+   리마인더가 우리 일이다(follow-up.js). 어느 탭에 있든 맨 위 한 줄로 본다 */
+function exhFollowHtml(x){
+  if(x.status === CANCELLED) return '';
+  const rows = exhMailSteps(x.event_id).map(s => ({ s, f: exhFollowOf(x, s) })).filter(r => r.f);
+  if(!rows.length) return '';
+  rows.sort((a, b) => (b.f.state === 'nudge') - (a.f.state === 'nudge'));
+  return `<div style="padding:7px 10px;border:1px solid ${rows.some(r => r.f.state === 'nudge') ? 'var(--am)' : 'var(--i6)'};border-radius:8px;margin-bottom:10px;background:var(--W)">
+    <div style="font-size:11px;font-weight:700;color:var(--i2);margin-bottom:4px">기다리는 요청</div>
+    ${rows.map(({ s, f }) => `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:3px 0">
+      <span style="font-size:11.5px;font-weight:600;min-width:96px">${escapeHtml(s.label)}</span>
+      ${followPill(f)}
+      <span style="margin-left:auto;display:inline-flex;gap:4px">
+        ${f.state === 'nudge' ? `<button class="btn bp" style="font-size:10px;padding:1px 8px" onclick="exhAdviceAct('mail','${escAttr(s.key)}')">✉ 리마인더 초안</button>` : ''}
+        <button class="btn" style="font-size:10px;padding:1px 6px" title="리마인더를 3일 뒤로" onclick="exhSnooze('${escAttr(s.key)}',3)">+3일</button>
+        <button class="btn" style="font-size:10px;padding:1px 6px" title="리마인더를 1주 뒤로" onclick="exhSnooze('${escAttr(s.key)}',7)">+1주</button>
+      </span></div>`).join('')}
+  </div>`;
+}
+export async function exhSnooze(stepKey, days){
+  const x = getExhibitorById(drId);
+  if(!x) return;
+  const until = addDays(td().slice(0, 10), days);
+  const why = prompt(`리마인더를 ${until}까지 미룹니다. 이유를 적어 두면 기록에 남아요 (비워도 돼요).`, '');
+  if(why === null) return;
+  if(!await snoozeFollow('ex', x.id, stepKey, until, why)){ alert('기록에 남기지 못했어요. 잠시 뒤 다시 해주세요.'); return; }
+  renderExhDr(); window.renderExh?.();
+}
+window.exhSnooze = exhSnooze;
+
 export function renderExhDr(){
   if(!drId) return;
   const x = getExhibitorById(drId);
@@ -205,7 +236,7 @@ export function renderExhDr(){
   if(b){
     // 끝난 행사는 드로어도 열람만 — 목록은 잠갔는데 드로어에서 고쳐지면 소용없다
     b.classList.toggle('ro', exhLocked());
-    b.innerHTML = exhAdviceHtml(x) + (VIEW[drTab] || dContactTab)(x);
+    b.innerHTML = exhFollowHtml(x) + exhAdviceHtml(x) + (VIEW[drTab] || dContactTab)(x);
     if(drTab === 'mail'){ fillExhMailFrom(x); if(exhReply) fillExhReply(x); else fillExhMail(x.id, true); }
   }
   // 메일함 나란히·고정 띠(mail-pane.js)
@@ -4019,7 +4050,9 @@ export async function fillExhMail(exhId, first){
   const src = lib || vs.find(v => v.id === vId) || st;
   if(sEl && bEl && st && !(first && bEl.dataset.touched)){
     const ctx = exhMailCtx(x);
-    sEl.value = fillExhTemplate(src[en ? 'subject_en' : 'subject_ko'] || src.subject_ko || st.subject_ko, x, st, en, ctx);
+    // 이미 요청한 단계를 다시 쓰면 리마인더다 — 제목 앞에 붙여 받는 쪽이 같은 요청임을 알게 한다
+    const again = exhFollowOf(x, st) ? (en ? '[Reminder] ' : '[리마인더] ') : '';
+    sEl.value = again + fillExhTemplate(src[en ? 'subject_en' : 'subject_ko'] || src.subject_ko || st.subject_ko, x, st, en, ctx);
     bEl.value = fillExhTemplate(src[en ? 'body_en' : 'body_ko'] || src.body_ko || st.body_ko, x, st, en, ctx);
     bEl.oninput = () => { bEl.dataset.touched = '1'; };
   }

@@ -1100,10 +1100,16 @@ function nextActionTd(sp){
   if(na.skip) return `<td style="font-size:10.5px;color:var(--i4);white-space:nowrap" title="${na.text === '취소'
     ? '취소한 연사라 더 연락하지 않아요' : '주최사가 정보를 넘겨주는 역할이라 메일로 연락하지 않아요'}">— ${escapeHtml(na.text)}</td>`;
   if(na.done) return `<td style="font-size:10.5px;color:var(--g);white-space:nowrap">✓ 연락 완료</td>`;
+  /* 요청하고 기다리는 중 — 공은 연사에게 있다. 날이 차면 «리마인더»로 돌아온다(follow-up.js) */
+  if(na.wait) return `<td style="white-space:nowrap" onclick="event.stopPropagation();openSpeakerDr('${escAttr(sp.id)}')"
+    title="${escAttr(`${na.text} — ${na.follow.text}`)}">
+    <span style="font-size:10.5px;color:var(--i4);cursor:pointer">⏳ ${escapeHtml(na.text)}</span>
+    <div style="font-size:9.5px;color:var(--i5)">${escapeHtml(na.follow.text)}</div></td>`;
   return `<td style="white-space:nowrap" onclick="event.stopPropagation();openSpeakerDr('${escAttr(sp.id)}');openFlowDraft('${escAttr(na.step)}')"
     title="이 단계의 메일 초안 열기">
-    <span style="font-size:10.5px;font-weight:600;color:var(--a);cursor:pointer">● ${escapeHtml(na.text)}</span>${
-      na.due ? `<div style="font-size:9.5px;color:${na.due < td() ? 'var(--re)' : 'var(--i4)'}">마감 ${escapeHtml(na.due)}</div>` : ''}</td>`;
+    <span style="font-size:10.5px;font-weight:600;color:${na.follow ? 'var(--am)' : 'var(--a)'};cursor:pointer">${na.follow ? '🔔' : '●'} ${escapeHtml(na.text)}</span>${
+      na.follow ? `<div style="font-size:9.5px;color:var(--am)">${escapeHtml(na.follow.text.replace(/^리마인더 보낼 때 · /, ''))}</div>`
+      : na.due ? `<div style="font-size:9.5px;color:${na.due < td() ? 'var(--re)' : 'var(--i4)'}">마감 ${escapeHtml(na.due)}</div>` : ''}</td>`;
 }
 
 /* 행사가 끝나면 행사 전에 쓰려고 받던 자료는 더 받지 않는다 — 끝난 뒤에도 초록·사진이

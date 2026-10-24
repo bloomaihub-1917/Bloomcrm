@@ -62,9 +62,17 @@ export function confDashHtml(ev){
   }).filter(x => x.of);
 
   /* ── 처리 필요 ── */
-  const dueMiss = [], silent = [];
+  const dueMiss = [], silent = [], nudge = [];
   flows.forEach(({ sp, f }) => {
     if(!f.current) return;
+    /* 요청하고 기다리는 단계 — 기다리는 동안은 우리 일이 아니고, 날이 차면 리마인더가 우리 일이다(follow-up.js) */
+    if(f.follow){
+      if(f.follow.state === 'nudge') nudge.push({ sp, step: f.current.key,
+        label: f.current.key === 'collect' ? '🔔 자료 독촉' : `🔔 ${f.current.label}`,
+        text: `${f.follow.text.replace(/^리마인더 보낼 때 · /, '')}${f.current.key === 'collect'
+          ? ' · ' + missingItems(sp).map(m => m.c.label).join('·') + ' 아직' : ''}`, days: f.follow.since });
+      return;
+    }
     const label = f.remind ? '자료 독촉' : f.current.label;
     if(f.current.due && f.current.due < today){
       dueMiss.push({ sp, step: f.current.key, label,
@@ -80,6 +88,7 @@ export function confDashHtml(ev){
     }
   });
   dueMiss.sort((a, b) => b.days - a.days);
+  nudge.sort((a, b) => b.days - a.days);
   silent.sort((a, b) => b.days - a.days);
 
   const sessions = sessionsForEvent(ev.key).filter(s => !s.kind);
@@ -90,7 +99,7 @@ export function confDashHtml(ev){
   const inbox = [];
   live.forEach(sp => logsOfSpeaker(sp.id).filter(isStale).forEach(l => inbox.push({ sp, l })));
   inbox.sort((a, b) => String(a.l.ts || '').localeCompare(String(b.l.ts || '')));   // 오래된 것부터
-  const todo = dueMiss.length + silent.length + emptySess.length + unassigned.length + inbox.length;
+  const todo = nudge.length + dueMiss.length + silent.length + emptySess.length + unassigned.length + inbox.length;
 
   const confirmed = live.filter(sp => sp.confirmed_at).length;
   const doneAll = flows.filter(({ f }) => !f.current).length;
@@ -183,6 +192,11 @@ export function confDashHtml(ev){
         ${dayDiff(today, String(l.ts || '').slice(0, 10)) > 0 ? `<span class="pill ${dayDiff(today, String(l.ts).slice(0, 10)) >= 3 ? 'p-amber' : 'p-gray'}" style="flex:0 0 auto">${dayDiff(today, String(l.ts).slice(0, 10))}일</span>` : ''}
       </div>`).join('')}
       ${inbox.length > 8 ? `<div style="font-size:11px;color:var(--i4);padding:2px 2px 6px">받은 메일 외 ${inbox.length - 8}건 — 설정 › 행사 관리 › 메일에서 모아 볼 수 있어요</div>` : ''}
+      ${nudge.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 6px">${[...new Set(nudge.map(o => o.step))].map(k => {
+          const n = nudge.filter(o => o.step === k).length, lb = nudge.find(o => o.step === k).label.replace('🔔 ', '');
+          return `<button class="btn" style="font-size:10.5px" onclick="openSpeakerBulkMail('${escAttr(ev.key)}','${escAttr(k)}')"
+            title="리마인더 보낼 때가 된 연사를 골라 둔 채로 엽니다">📨 ${escapeHtml(lb)} 리마인더 ${n}명 한 번에</button>`; }).join('')}</div>` : ''}
+      ${nudge.slice(0, 10).map(attnRow).join('')}
       ${dueMiss.slice(0, 10).map(attnRow).join('')}
       ${silent.slice(0, 6).map(o => attnRow({ ...o, label: '답 없음 · ' + o.label })).join('')}
       ${emptySess.slice(0, 5).map(s => `<div onclick="openPgaSession('${escAttr(s.id)}')"
@@ -194,7 +208,7 @@ export function confDashHtml(ev){
       ${unassigned.length ? `<div onclick="openConfSess('__none__')" style="font-size:11px;color:var(--am);padding:6px 2px;cursor:pointer">
         세션에 배정 안 된 연사 ${unassigned.length}명 — ${unassigned.slice(0, 4).map(sp => escapeHtml(spName(sp))).join(', ')}${
           unassigned.length > 4 ? ' …' : ''}</div>` : ''}
-      ${dueMiss.length > 10 || silent.length > 6 ? `<div style="font-size:11px;color:var(--i4);padding:6px 2px">나머지는 Speakers 표의 «지금 할 일»에서 볼 수 있어요</div>` : ''}
+      ${nudge.length > 10 || dueMiss.length > 10 || silent.length > 6 ? `<div style="font-size:11px;color:var(--i4);padding:6px 2px">나머지는 Speakers 표의 «지금 할 일»에서 볼 수 있어요</div>` : ''}
     </div>` : `<div class="uc" style="border-left:3px solid var(--g)">
       <div class="uc-ttl">처리 필요</div>
       <div style="font-size:12px;color:var(--g)">지금 처리할 게 없어요</div></div>`;
@@ -219,7 +233,7 @@ export function confDashHtml(ev){
       ${card('참가 확정', `${confirmed}/${live.length}`, '', confirmed === live.length ? 'var(--g)' : '')}
       ${card('자료 진행률', avg + '%', `연락 완료 ${doneAll}명`)}
       ${card('처리 필요', todo + '건',
-        `${inbox.length ? `묵은 메일 ${inbox.length} · ` : ''}마감 지남 ${dueMiss.length} · 답 없음 ${silent.length} · 미배정 ${emptySess.length + unassigned.length}`,
+        `${inbox.length ? `묵은 메일 ${inbox.length} · ` : ''}${nudge.length ? `리마인더 ${nudge.length} · ` : ''}마감 지남 ${dueMiss.length} · 답 없음 ${silent.length} · 미배정 ${emptySess.length + unassigned.length}`,
         todo ? 'var(--re)' : 'var(--g)')}
     </div>
     <div class="exh-dash-third">${cardFlow}</div>

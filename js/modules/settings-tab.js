@@ -52,6 +52,7 @@ import {
   syncPartColors,
 } from '../state.js';
 import { isUnread, isPending, runMailSync } from './mail-mark.js';
+import { dueInputHtml, readDueInput, followCfg, FOLLOW_DEFAULT } from './follow-up.js';
 import { exhMailSteps, exhMailFileStep } from './exh-mail.js';
 import './exh-mail-editor.js';
 
@@ -3084,12 +3085,20 @@ const EV_BOOK_DEFAULT = { chars: 1300, words: 200 };
 function evDueHtml(ev){
   const cfg = EXH_CFG[ev.key] || {};
   const due = cfg.due || {}, book = cfg.book || {};
+  const fl = followCfg(ev.key);
   return `
-    <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">단계별 마감일</div>
-    <div style="font-size:11px;color:var(--i4);margin-bottom:10px">기업에서 받아내야 해서 늦으면 준비가 밀리는 단계들이에요. 비워 두면 마감 없음입니다.</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-bottom:18px">
-      ${EV_DUE_STEPS.map(([k, l]) => `<div><div class="mlbl">${escapeHtml(l)}</div>
-        <input class="fi" type="date" id="evd-due-${escAttr(k)}" value="${escAttr(due[k] || '')}" style="width:100%"></div>`).join('')}
+    <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">리마인더 기준</div>
+    <div style="font-size:11px;color:var(--i4);margin-bottom:8px;line-height:1.6">요청 메일을 보내면 공은 연사·기업에 있어요. 그래도 자료가 안 오면
+      아래 날수가 지난 뒤 연사·전시 «처리 필요»에 «🔔 리마인더 보낼 때»로 올라옵니다. 사정이 있는 곳은 화면에서 «+3일 / +1주»로 미룹니다.</div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:18px;font-size:11.5px;color:var(--i3)">
+      <span>첫 요청 뒤 <input class="fi" type="number" min="1" max="60" id="evd-follow-first" value="${escAttr(fl.first)}" style="width:60px;padding:3px 6px">일</span>
+      <span>리마인더 뒤 <input class="fi" type="number" min="1" max="60" id="evd-follow-again" value="${escAttr(fl.again)}" style="width:60px;padding:3px 6px">일마다</span>
+    </div>
+    <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">꼭 지켜야 하는 마감 <span style="font-weight:400;color:var(--i4)">(전시)</span></div>
+    <div style="font-size:11px;color:var(--i4);margin-bottom:10px;line-height:1.6">대부분은 비워 두세요 — 비우면 ASAP이고 위 리마인더 기준으로 챙깁니다.
+      도록 인쇄·반입처럼 넘기면 안 되는 것만 «행사 N일 전»으로 적으면 행사 날짜가 바뀌어도 따라갑니다. 연사 단계 마감은 «연락 단계 편집»에서 같은 방식으로 적습니다.</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px 14px;margin-bottom:18px">
+      ${EV_DUE_STEPS.map(([k, l]) => `<div><div class="mlbl">${escapeHtml(l)}</div>${dueInputHtml(`evd-due-${k}`, due[k] || '', ev.key)}</div>`).join('')}
     </div>
     <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">프로그램북 한도</div>
     <div style="font-size:11px;color:var(--i4);margin-bottom:10px">지면 기준이 행사마다 달라요. 비워 두면 기본값(${EV_BOOK_DEFAULT.chars.toLocaleString()}자 · ${EV_BOOK_DEFAULT.words}단어)을 씁니다.</div>
@@ -3119,12 +3128,15 @@ export async function saveEvDue(){
   const due = { ...((EXH_CFG[ev.key] || {}).due || {}) };
   EV_DUE_STEPS.forEach(([k]) => { delete due[k]; });
   EV_DUE_STEPS.forEach(([k]) => {
-    const v = (document.getElementById(`evd-due-${k}`)?.value || '').trim();
+    const v = readDueInput(`evd-due-${k}`);
     if(v) due[k] = v;   // 빈 칸은 안 담는다 — 마감 없음과 빈 문자열을 구분할 필요가 없다
   });
 
   const prev = EXH_CFG[ev.key] ? JSON.parse(JSON.stringify(EXH_CFG[ev.key])) : undefined;
-  const cfg = { ...(prev || {}), due, book: { chars, words } };
+  const ff = Number(document.getElementById('evd-follow-first')?.value), fa = Number(document.getElementById('evd-follow-again')?.value);
+  if(!(ff >= 1) || !(fa >= 1)){ say('리마인더 날수는 1 이상이어야 해요.'); return; }
+  const follow = { first: ff, again: fa };
+  const cfg = { ...(prev || {}), due, book: { chars, words }, follow };
   EXH_CFG[ev.key] = cfg;
   const r = await saveExhCfgToSheet(ev.key, cfg);
   if(r && r.ok === false){
@@ -3137,6 +3149,8 @@ export async function saveEvDue(){
     const a = ((prev || {}).due || {})[k] || '', b = due[k] || '';
     if(a !== b) changed.push(`${l} ${a || '없음'} → ${b || '없음'}`);
   });
+  const pf = (prev || {}).follow || FOLLOW_DEFAULT;
+  if(Number(pf.first) !== ff || Number(pf.again) !== fa) changed.push(`리마인더 기준 ${pf.first}일·${pf.again}일 → ${ff}일·${fa}일`);
   const pb = (prev || {}).book || {};
   if(pb.chars !== chars || pb.words !== words){
     changed.push(`프로그램북 한도 ${pb.chars || EV_BOOK_DEFAULT.chars}자·${pb.words || EV_BOOK_DEFAULT.words}단어 → ${chars}자·${words}단어`);

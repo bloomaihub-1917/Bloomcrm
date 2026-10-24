@@ -12,6 +12,7 @@
 import { EVENT_LIST, EXH_CFG, EXH_LOGS, getOrgById, currentUser, logsFor } from '../state.js';
 import { countryName } from '../utils.js';
 import { varTokens, varPattern, eventVarValues } from './mail-vars.js';
+import { resolveDue } from './follow-up.js';
 
 /* due: 설정 › 일정의 마감 키(exh-tab.js DUE_STEPS) */
 export const EXH_MAIL_STEPS = [
@@ -167,7 +168,7 @@ export function fillExhTemplate(text, x, step, en, ctx = {}){
   const ev = EVENT_LIST.find(e => e.key === x.event_id);
   const evName = ev ? ((en && ev.name_en) || ev.name || ev.short || ev.key) : x.event_id;
   const due = step && step.due_date ? String(step.due_date)
-    : step && step.due ? String(((EXH_CFG[x.event_id] || {}).due || {})[step.due] || '') : '';
+    : step && step.due ? resolveDue(x.event_id, ((EXH_CFG[x.event_id] || {}).due || {})[step.due]) : '';
   const me = currentUser?.name || '';
   const names = ctx.names || {};
   const vars = {

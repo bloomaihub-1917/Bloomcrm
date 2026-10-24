@@ -45,12 +45,17 @@ function stateOf(sp, key){
     return !f.skip && sp.guide_sent_at && sessionItems(sp).length && !toldSchedule(sp) ? 'unknown' : 'na';
   if(!s || !s.applies) return 'na';
   if(s.resend) return s.isDone ? 'done' : 'resend';
-  return s.isDone ? 'done' : 'due';
+  if(s.isDone) return 'done';
+  /* 요청은 보냈고 기다리는 중이면 고르지 않는다 — 날이 차면 «리마인더 보낼 때»로 고른다(follow-up.js) */
+  if(f.current && f.current.key === key && f.follow) return f.follow.state === 'nudge' ? 'remind' : 'wait';
+  return 'due';
 }
-const isTurn = (s) => s === 'due' || s === 'resend';
+const isTurn = (s) => s === 'due' || s === 'resend' || s === 'remind';
 const PILL = {
   due: '<span class="pill p-amber" style="font-size:9.5px">보낼 차례</span>',
   resend: '<span class="pill p-amber" style="font-size:9.5px">다시 보낼 차례</span>',
+  remind: '<span class="pill p-amber" style="font-size:9.5px">🔔 리마인더 보낼 때</span>',
+  wait: '<span class="pill p-blue" style="font-size:9.5px">⏳ 요청함·기다림</span>',
   done: '<span class="pill p-green" style="font-size:9.5px">보냄</span>',
   na: '<span class="pill p-gray" style="font-size:9.5px">해당 없음</span>',
   unknown: '<span class="pill p-gray" style="font-size:9.5px" title="이 연사에게 보낸 메일에서 세션 줄을 못 읽었어요 — 바뀌었는지 직접 확인하세요">알린 일정 모름</span>',

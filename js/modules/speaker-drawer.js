@@ -47,6 +47,7 @@ import { decorate as decorateMailPane } from './mail-pane.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 import { patchContact } from './db-tab.js';
 import { confLocked, setConfLockEv, confLockNotice, renderConf, buildConfEvList, syncPartRole, spCell } from './conf-tab.js';
+import { followPill, snoozeFollow, addDays, resolveDue } from './follow-up.js';
 import { flowStatus, draftFor, missingItems, pendingItems, PART_LABEL, changeLines, stepVariants, autoVariant, fillTemplate } from './speaker-flow.js';
 import { libItems, libItem } from './mail-templates.js';
 import { reuseCandidates, reusePending } from './contact-speaker.js';
@@ -402,6 +403,16 @@ function pendingHtml(sp){
    자료 칸을 밀어내 정작 데이터가 보이는 자리가 좁아진다. 평소엔 «지금 할 일» 한 줄만,
    «자세히»를 누르면 단계 칩·설명·남은 일·상황 물어보기를 편다(드로어를 닫아도 기억한다) */
 let spFlowOpen = false;
+export async function spSnooze(days){
+  const sp = getSpeakerById(spId);
+  const f = sp && flowStatus(sp);
+  if(!f || !f.current) return;
+  const until = addDays(td().slice(0, 10), days);
+  const why = prompt(`리마인더를 ${until}까지 미룹니다. 이유를 적어 두면 기록에 남아요 (비워도 돼요).`, '');
+  if(why === null) return;
+  if(!await snoozeFollow('sp', sp.id, f.current.key, until, why)){ alert('기록에 남기지 못했어요. 잠시 뒤 다시 해주세요.'); return; }
+  renderSpeakerDr(); window.renderConf?.();
+}
 export function toggleSpFlow(){ spFlowOpen = !spFlowOpen; renderSpeakerDr(); }
 function flowBoxHtml(sp){
   const f = flowStatus(sp);
@@ -433,6 +444,11 @@ function flowBoxHtml(sp){
   const markBtn = cur && !cur.resend && cur.done.startsWith('field:') && cur.key !== 'invite'
     ? `<button class="btn" style="font-size:10.5px" onclick="spStamp('${cur.done.slice(6)}','${escAttr(cur.label)}')">${
         cur.key === 'reply' ? '회신 받음 표시' : cur.key === 'confirm' ? '참가 확정 표시' : '끝남 표시'}</button>` : '';
+  /* 요청하고 기다리는 중이면 공은 연사에게 있다 — 날이 차면 리마인더가 우리 일로 돌아온다(follow-up.js).
+     사정을 들었으면 «+3일 / +1주»로 미룬다 — 미룬 이유는 이 연사 기록에 남는다 */
+  const waiting = !!f.follow && f.follow.state !== 'nudge';
+  const stepTitle = !cur ? '' : waiting ? `${cur.label} 기다림` : f.remind ? (cur.key === 'collect' ? '자료 독촉' : `${cur.label} 리마인더`) : cur.label;
+  const snoozeBtns = f.follow ? ` <button class="btn" style="font-size:10px;padding:1px 6px" title="리마인더를 3일 뒤로 미룹니다" onclick="spSnooze(3)">+3일</button><button class="btn" style="font-size:10px;padding:1px 6px" title="리마인더를 1주 뒤로 미룹니다" onclick="spSnooze(7)">+1주</button>` : '';
   const toggle = `<button class="btn" style="font-size:10px;padding:1px 7px;margin-left:auto" onclick="toggleSpFlow()"
     title="${spFlowOpen ? '단계 칩·설명·남은 일을 접고 한 줄로' : '단계 칩·설명·남은 일·상황 물어보기 펼치기'}">${spFlowOpen ? '접기 ▴' : '자세히 ▾'}</button>`;
   if(!spFlowOpen){
@@ -441,10 +457,12 @@ function flowBoxHtml(sp){
       display:flex;align-items:center;gap:7px;flex-wrap:wrap">
       <span style="font-size:11px;font-weight:700;color:var(--i2)">연락 단계</span>
       <span style="font-size:10.5px;color:var(--i4)">${f.nDone}/${f.nAll}</span>
-      ${cur ? `<span style="font-size:11.5px;font-weight:700;color:var(--a);min-width:0">● ${escapeHtml(f.remind ? '자료 독촉' : cur.label)}${
-          cur.due ? ` <span style="font-weight:400;color:${cur.due < td() ? 'var(--re)' : 'var(--i4)'};font-size:10.5px">마감 ${escapeHtml(cur.due)}</span>` : ''}</span>
+      ${cur ? `<span style="font-size:11.5px;font-weight:700;color:${waiting ? 'var(--i4)' : f.remind ? 'var(--am)' : 'var(--a)'};min-width:0">${
+          waiting ? '⏳' : f.remind ? '🔔' : '●'} ${escapeHtml(stepTitle)}${
+          cur.due && !f.follow ? ` <span style="font-weight:400;color:${cur.due < td() ? 'var(--re)' : 'var(--i4)'};font-size:10.5px">마감 ${escapeHtml(cur.due)}</span>` : ''}</span>
+        ${followPill(f.follow)}${snoozeBtns}
         ${nowLeft ? `<span class="pill p-amber" style="font-size:10px" title="지금 받을 필수 자료">받을 것 ${nowLeft}</span>` : ''}
-        <button class="btn bp" style="font-size:10px;padding:1px 8px" onclick="openFlowDraft('${cur.key}')">✉ 초안</button>`
+        ${waiting ? '' : `<button class="btn bp" style="font-size:10px;padding:1px 8px" onclick="openFlowDraft('${cur.key}')">✉ ${f.remind ? '리마인더 초안' : '초안'}</button>`}`
       : `<span style="font-size:11px;color:var(--g)">모두 마쳤어요</span>`}
       ${toggle}
     </div>`;
@@ -459,7 +477,8 @@ function flowBoxHtml(sp){
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:4px">${f.steps.filter(s => s.done !== 'sched' || s.applies).map(chip).join('')}</div>
     ${cur ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i7)">
-        <div style="font-size:12px;font-weight:700;color:var(--a)">지금 할 일 · ${escapeHtml(f.remind ? '자료 독촉' : cur.resend ? `${cur.label} (다시 보내기 · ${cur.round.label || ''})` : cur.label)}${
+        <div style="font-size:12px;font-weight:700;color:${waiting ? 'var(--i4)' : 'var(--a)'}">${waiting ? '기다리는 중' : '지금 할 일'} · ${escapeHtml(cur.resend ? `${cur.label} (다시 보내기 · ${cur.round.label || ''})` : stepTitle)}${
+          f.follow ? ` ${followPill(f.follow)}${snoozeBtns}` : ''}${
           cur.due ? ` <span style="font-weight:400;color:${cur.due < td() ? 'var(--re)' : 'var(--i4)'};font-size:10.5px">마감 ${escapeHtml(cur.due)}</span>` : ''}</div>
         <div style="font-size:10.5px;color:var(--i4);margin-top:2px;line-height:1.6">${escapeHtml(cur.desc || '')}</div>
         ${cur.done === 'sched' ? `<div style="margin-top:5px;padding:6px 9px;background:var(--i8);border-radius:6px;font-size:11px;color:var(--i2);white-space:pre-wrap;line-height:1.6">${
@@ -1691,7 +1710,7 @@ export function fillSpeakerMail(kind, variantId){
   const en = sp.lang_pref === 'en';
   const name = sp.name_snapshot || sp.name_en || '';
 
-  const due = (k) => (cfg.due || {})[k] || '';
+  const due = (k) => resolveDue(evKey, (cfg.due || {})[k]);   // «D-7»도 날짜로
   const dueLine = (k, ko) => due(k) ? `\n- ${ko} 마감: ${due(k)}` : '';
 
   const sessions = asg.map(a => {
@@ -2233,6 +2252,7 @@ window.searchSpeakerContact = searchSpeakerContact;
 window.linkSpeakerContact   = linkSpeakerContact;
 window.openFlowDraft = openFlowDraft;
 window.toggleSpFlow = toggleSpFlow;
+window.spSnooze = spSnooze;
 window.spTravelShow = spTravelShow;
 window.addSpMailFiles = addSpMailFiles;
 window.removeSpMailFile = removeSpMailFile;

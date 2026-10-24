@@ -21,6 +21,7 @@ import { escapeHtml, escAttr, nowStamp } from '../utils.js';
 import { visibleList, exhNames, exhContacts, exhMailCtx, exhLocked, exhLockNotice, STEPS, cellState } from './exh-tab.js';
 import { exhMailSteps, exhIsEnglish, fillExhTemplate, exhMailFileStep, boothChange, exhStepVariants } from './exh-mail.js';
 import { libItems, libItem } from './mail-templates.js';
+import { followState } from './follow-up.js';
 import { trackAction } from './audit-tab.js';
 import { varChipsHtml } from './var-chips.js';
 import { aiDraftHtml, registerAiDraft } from './ai-mail-draft.js';
@@ -39,7 +40,7 @@ const mailsOf = (x, who) => {
    기본 단계는 진행 체크리스트의 그 칸(due 키 = STEPS 키)을 본다 — 매뉴얼은 «매뉴얼 회신»,
    신청서는 «신청서 접수»처럼 기업에서 받아야 끝나는 칸이다.
      done    그 칸이 끝났거나 해당 없음 → 보내지 않는다
-     late    메일은 보냈는데 마감이 지났다 → 다시 보낼 차례(독촉)
+     late    요청을 보냈는데 기다린 만큼 기다렸다(follow-up.js) → 리마인더 보낼 차례
      sent    보냈고 아직 기다리는 중 → 고르지 않는다
      due     아직 안 보냈다 → 보낼 차례
      resend  다시 보내기 묶음의 대상인데 묶음을 연 뒤 아직 다시 안 보냈다 → 보낼 차례
@@ -47,6 +48,21 @@ const mailsOf = (x, who) => {
    더한 단계는 칸이 없으니 이 단계 메일을 보낸 기록만 본다. «기타 안내»는 차례가 없다(free). */
 const sentOf = (x, key, since) => logsFor(x.id).some(l => l.kind === `exh-${key}` && l.direction !== 'in'
   && (!since || String(l.ts || '') >= since));
+/* 요청한 단계의 기다림·리마인더 — 기업에서 받아야 끝나는 단계를 요청했는데 아직 안 왔으면.
+   공은 기업에 있지만, 날이 차면 리마인더가 우리 일이다(follow-up.js). 끝났거나 아직 안 보냈으면 null */
+export function exhFollowOf(x, st){
+  if(!st || st.custom || st.lib || st.key === 'note' || st.key === 'booth_change') return null;
+  const step = st.due && STEPS.find(s => s.key === st.due);
+  if(!step) return null;
+  const c = cellState(x, step);
+  if(c.state === 'done' || c.state === 'na') return null;
+  const logs = logsFor(x.id);
+  const sends = logs.filter(l => l.kind === `exh-${st.key}` && l.direction !== 'in').map(l => l.ts);
+  if(!sends.length) return null;
+  const f = followState({ evKey: x.event_id, sends, due: ((EXH_CFG[x.event_id] || {}).due || {})[st.due], logs, stepKey: st.key });
+  return f.state === 'ask' ? null : f;
+}
+
 function baseState(x, st){
   if(st.key === 'booth_change') return boothChange(x).changed ? 'due' : 'na';
   const sent = sentOf(x, st.key);
@@ -55,7 +71,7 @@ function baseState(x, st){
   if(step){
     const c = cellState(x, step);
     if(c.state === 'done' || c.state === 'na') return c.state === 'na' ? 'na' : 'done';
-    if(sent) return c.due && c.due.days < 0 ? 'late' : 'sent';
+    if(sent){ const f = exhFollowOf(x, st); return f && f.state === 'nudge' ? 'late' : 'sent'; }
     return 'due';
   }
   return sent ? 'sent' : 'due';
@@ -69,8 +85,8 @@ const isTurn = (s) => s === 'due' || s === 'late' || s === 'resend';
 const STATE_PILL = {
   due:    '<span class="pill p-amber" style="font-size:9.5px">보낼 차례</span>',
   resend: '<span class="pill p-amber" style="font-size:9.5px">다시 보낼 차례</span>',
-  late:   '<span class="pill p-red" style="font-size:9.5px;background:var(--rb);color:var(--re)">마감 지남·재발송</span>',
-  sent:   '<span class="pill p-blue" style="font-size:9.5px">보냄·기다림</span>',
+  late:   '<span class="pill p-amber" style="font-size:9.5px">🔔 리마인더 보낼 때</span>',
+  sent:   '<span class="pill p-blue" style="font-size:9.5px">⏳ 요청함·기다림</span>',
   done:   '<span class="pill p-green" style="font-size:9.5px">끝남</span>',
   na:     '<span class="pill p-gray" style="font-size:9.5px">해당 없음</span>',
   free: '',
@@ -123,7 +139,8 @@ function pickTpl(evKey, key, variant){
 function mailFor(x){
   const st = curStep();
   const en = enOf(x), ctx = exhMailCtx(x);
-  return { subject: fillExhTemplate(bm.tpl[en ? 'subject_en' : 'subject_ko'], x, st, en, ctx),
+  const again = exhFollowOf(x, st) ? (en ? '[Reminder] ' : '[리마인더] ') : '';   // 이미 요청한 곳은 리마인더
+  return { subject: again + fillExhTemplate(bm.tpl[en ? 'subject_en' : 'subject_ko'], x, st, en, ctx),
     body: fillExhTemplate(bm.tpl[en ? 'body_en' : 'body_ko'], x, st, en, ctx), en };
 }
 

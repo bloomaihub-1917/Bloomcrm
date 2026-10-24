@@ -19,6 +19,7 @@ import { loadMailFiles, mailFilesOf, uploadMailFile, deleteMailFile, fileToBase6
 import { escapeHtml, escAttr } from '../utils.js';
 import { varChipsHtml } from './var-chips.js';
 import { previewHtml } from './mail-preview.js';
+import { dueInputHtml, readDueInput } from './follow-up.js';
 
 let edEv = null;      // 고치는 행사
 let edOpen = null;    // 펼친 단계 key ('new'면 새 단계)
@@ -136,7 +137,7 @@ function formHtml(st, isNew){
     if(!custom && def[f] === undefined && !['label', 'desc', 'due'].includes(f)) return '';
     if(custom && !CUSTOM_FIELDS.includes(f)) return '';
     const v = st[f] ?? '';
-    if(f === 'due') return `<div><div class="mlbl">${l}</div><input class="fi" type="date" id="${id(f)}" value="${escAttr(v)}" style="width:160px"></div>`;
+    if(f === 'due') return `<div style="grid-column:1/-1"><div class="mlbl">${l} <span style="font-weight:400;color:var(--i4)">— 비우면 ASAP(요청 뒤 며칠이면 리마인더)</span></div>${dueInputHtml(id(f), st.due_raw ?? v, edEv)}</div>`;
     if(f.includes('body')) return `<div style="grid-column:1/-1"><div class="mlbl">${l}</div>
       <textarea class="fi" id="${id(f)}" rows="7" style="width:100%;resize:vertical;font-size:11.5px">${escapeHtml(v)}</textarea></div>`;
     // 제목은 한 줄 통째로 — 국문 제목·본문, 영문 제목·본문 순으로 위아래로 놓인다
@@ -204,7 +205,7 @@ const readForm = () => {
   const o = {};
   [...FIELDS.map(([f]) => f), 'since', 'after'].forEach(f => {
     const el = document.getElementById(`fe-${f}`);
-    if(el) o[f] = el.value.trim();
+    if(el) o[f] = f === 'due' ? readDueInput('fe-due') : el.value.trim();
   });
   return o;
 };

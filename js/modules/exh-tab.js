@@ -50,8 +50,9 @@ const saveExhCfgToSheet = guardWrite(_saveExhCfgToSheet);
 import { trackAction, changed } from './audit-tab.js';
 import { isStale, isUnread, mailCardHtml } from './mail-mark.js';
 // 여러 기업에 메일 — 창을 띄우는 함수만 window에 둔다(목록 단추가 부른다)
-import './exh-bulkmail.js';
-import { boothChange } from './exh-mail.js';
+import { exhFollowOf } from './exh-bulkmail.js';
+import { resolveDue, dueInputHtml, readDueInput, followCfg } from './follow-up.js';
+import { boothChange, exhMailSteps } from './exh-mail.js';
 import { renderWatchView, initWatchFolders } from './exh-watch.js';
 import { normalizeCompanyKey, createOrg, reloadOrgs, orgIdForName } from './company-tab.js';
 
@@ -671,7 +672,12 @@ const DUE_TAB = {
   'directory_received_at': 'book', 'movein_at': 'progress',
 };
 
-export const eventDeadlines = (evKey) => exhCfg(evKey).due || {};
+/* 행사 공통 마감 — 날짜 또는 «D-7»(행사 7일 전). 읽는 쪽은 늘 날짜로 받는다 */
+export const eventDeadlines = (evKey) => {
+  const raw = exhCfg(evKey).due || {}, out = {};
+  Object.keys(raw).forEach(k => { const d = resolveDue(evKey, raw[k]); if(d) out[k] = d; });
+  return out;
+};
 
 /* 오늘 기준 남은 날 — 마감이 없으면 null.
    days > 0 남음, 0 오늘, 음수면 지났다. */
@@ -2926,7 +2932,15 @@ export function graphicItemsOf(exhId){
 export function graphicDueInfo(i){
   if(i.received_at) return { cls: 'p-green', text: '받음', rank: 4 };
   const d = String(i.due_at || '').trim();
-  if(!d) return { cls: 'p-gray', text: '마감 미정', rank: 3 };
+  /* 마감을 파일마다 넣지 않는다(대부분 ASAP) — 그래픽 자료를 요청한 지 며칠인지로 본다(follow-up.js) */
+  if(!d){
+    const x = getExhibitorById(i.exhibitor_id);
+    const st = x && exhMailSteps(x.event_id).find(s => s.key === 'graphic');
+    const f = st && exhFollowOf(x, st);
+    if(f && f.state === 'nudge') return { cls: 'p-amber', text: `리마인더 · 요청 ${f.since}일째`, rank: 1, soon: true };
+    if(f) return { cls: 'p-blue', text: `요청 ${f.since}일째`, rank: 2 };
+    return { cls: 'p-gray', text: '요청 전', rank: 3 };
+  }
   const over = daysSince(d);
   if(over > 0)   return { cls: 'p-red', text: `${over}일 지남`, rank: 0, late: true };
   if(over === 0) return { cls: 'p-red', text: '오늘 마감',      rank: 0, late: true };
@@ -2995,8 +3009,8 @@ function renderGraphicItemView(list){
     onclick="setGraphicFil('${k}')">${l} ${n}</button>`;
   const pills = fpill('all', '전체', all.length, 'p-blue')
     + fpill('todo', '미수령', todo.length, 'p-amber')
-    + fpill('late', '지남·임박', late.length + soon.length, 'p-red')
-    + fpill('none', '마감 미정', none.length, 'p-amber')
+    + fpill('late', '지남·리마인더', late.length + soon.length, 'p-red')
+    + fpill('none', '마감 없음', none.length, 'p-gray')
     + fpill('got', '받음', got.length, 'p-green');
 
   /* 마감 일괄 잡기 — 계획은 보통 "이 기업들 다 며칟날까지"로 세운다. 지금 걸러 놓은
@@ -4445,6 +4459,18 @@ function renderDashboard(all){
 
   /* 마감이 걸린 단계 중 아직 못 끝낸 것. 지난 것만 "처리 필요"에 올린다 —
      아직 남은 건 재촉할 일이 아니라 단계별 진행에서 날짜로만 보여준다. */
+  /* 요청해 두고 못 받은 단계 — 기다린 만큼 기다렸으면 리마인더가 우리 일이다(follow-up.js).
+     요청한 단계는 마감 지남(dueMiss)으로 따로 세지 않는다 — 리마인더 하나로 본다 */
+  const remind = [], asked = new Set();
+  const mSteps = exhMailSteps(exhEvent);
+  all.forEach(x => mSteps.forEach(s => {
+    const f = exhFollowOf(x, s);
+    if(!f) return;
+    asked.add(`${x.id}|${s.due}`);
+    if(f.state === 'nudge') remind.push({ x, s, f });
+  }));
+  remind.sort((a, b) => b.f.since - a.f.since);
+
   const dueMiss = [];
   DUE_STEPS.forEach(([key, label]) => {
     const d = dueInfo(key, exhEvent);
@@ -4454,6 +4480,7 @@ function renderDashboard(all){
     all.forEach(x => {
       const c = rawCellState(x, st);
       if(c.state === 'done' || c.state === 'na') return;
+      if(asked.has(`${x.id}|${key}`)) return;
       dueMiss.push({ x, label, days: -d.days, date: d.date, tab: DUE_TAB[key] || 'progress' });
     });
   });
@@ -4506,7 +4533,7 @@ function renderDashboard(all){
   // 처리 필요에는 3일 넘게 처리 안 한 받은 메일만 — 나머지는 «메일함» 카드
   all.forEach(x => logsFor(x.id).filter(isStale).forEach(l => inbox.push({ x, l })));
   inbox.sort((a, b) => String(a.l.ts || '').localeCompare(String(b.l.ts || '')));
-  const todo = openInq.length + overdue.length + attention.length + myTurn.length + dueMiss.length + inbox.length;
+  const todo = remind.length + openInq.length + overdue.length + attention.length + myTurn.length + dueMiss.length + inbox.length;
   const curs = Object.keys(cash).filter(c => cash[c].n);   // 상단 KPI(미수금)가 쓰는 값
   /* 미수금은 통화마다 따로 본다 — 원화와 달러를 더한 값으로 색을 정하면
      달러가 남았는데 원화 초과 입금에 묻혀 «다 받음»으로 보일 수 있다. */
@@ -4751,6 +4778,16 @@ function renderDashboard(all){
 
   const cardTodo = todo ? `<div class="uc" style="border-left:3px solid var(--am)">
       <div class="uc-ttl">처리 필요 <span class="pill p-amber">${todo}건</span></div>
+      ${remind.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 6px">${[...new Set(remind.map(o => o.s.key))].map(k => {
+          const r = remind.filter(o => o.s.key === k);
+          return `<button class="btn" style="font-size:10.5px" onclick="openExhBulkMail('${escAttr(k)}')"
+            title="리마인더 보낼 때가 된 기업을 골라 둔 채로 엽니다">📨 ${escapeHtml(r[0].s.label)} 리마인더 ${r.length}곳 한 번에</button>`; }).join('')}</div>` : ''}
+      ${remind.slice(0, 8).map(o => `<div onclick="openExhDr('${escAttr(o.x.id)}','mail');exhAdviceAct('mail','${escAttr(o.s.key)}')"
+        style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:6px;cursor:pointer;background:var(--i9);margin-bottom:4px" title="리마인더 초안 열기">
+        <span style="flex:0 0 128px;font-weight:700;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(exhNames(o.x).ko)}</span>
+        <span class="pill p-amber" style="flex:0 0 auto">🔔 ${escapeHtml(o.s.label)}</span>
+        <span style="font-size:11.5px;color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(o.f.text.replace(/^리마인더 보낼 때 · /, ''))}</span>
+      </div>`).join('')}
       ${myTurn.slice(0, 5).map(o => attnRow(o.x, o.label, o.st.action, o.days, o.label === '그래픽' ? 'graphic' : 'billing')).join('')}
       ${inbox.slice(0, 5).map(o => attnRow(o.x, isUnread(o.l) ? '● 안 읽은 메일 3일+' : '받은 메일 3일+', o.l.subject || '', daysSince(o.l.ts), 'box')).join('')}
       ${openInq.slice(0, 5).map(o => attnRow(o.x, '미답변 문의', o.l.subject || o.l.body || '', daysSince(o.l.ts), 'logs')).join('')}
@@ -5809,14 +5846,14 @@ export function openExhCfg(){
 
   modalShell('exh-cfg-modal', `${ev ? (ev.short || ev.name) : exhEvent} 설정`, `
     <div style="font-size:11.5px;color:var(--i4);margin-bottom:10px">
-      마감일을 지나도록 못 끝낸 기업은 <b>처리 필요</b>에 모이고, 기업리스트 칸이 빨갛게 바뀝니다.
-      비워 두면 그 단계는 마감을 보지 않습니다.</div>
+      대부분은 비워 두세요 — 마감이 없으면 ASAP로 보고, 요청한 뒤 ${followCfg(exhEvent).first}일이 지나면
+      <b>처리 필요</b>에 «리마인더 보낼 때»로 올라옵니다(기준은 설정 › 행사 관리 › 일정).
+      도록 인쇄·반입처럼 정말 넘기면 안 되는 것만 «행사 N일 전»으로 적으세요 — 행사 날짜가 바뀌면 따라갑니다.</div>
 
     ${DUE_STEPS.map(([key, label]) => `
-      <div class="fg" style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-        <label class="fl" style="flex:1;margin:0">${escapeHtml(label)}</label>
-        <input class="fi" type="date" id="cfg-due-${escAttr(key)}" style="width:160px"
-          value="${escAttr(due[key] || '')}">
+      <div class="fg" style="display:flex;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap">
+        <label class="fl" style="flex:1;margin:0;min-width:120px">${escapeHtml(label)}</label>
+        ${dueInputHtml(`cfg-due-${key}`, due[key] || '', exhEvent)}
       </div>`).join('')}
 
     <div style="font-size:12px;font-weight:700;color:var(--i2);margin:18px 0 4px">프로그램북 글자수 한도</div>
@@ -5841,7 +5878,7 @@ export async function saveExhCfg(){
 
   const due = {};
   DUE_STEPS.forEach(([key]) => {
-    const v = (document.getElementById(`cfg-due-${key}`)?.value || '').trim();
+    const v = readDueInput(`cfg-due-${key}`);
     if(v) due[key] = v;   // 빈 칸은 아예 안 담는다 — 마감 없음과 빈 문자열을 구분할 필요가 없다
   });
 
