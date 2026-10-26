@@ -675,5 +675,62 @@ router.post('/mail-draft', async (req, res) => {
   }
 });
 
+/* 업체 소개서 PDF 요약 — 받은 소개서·견적서를 읽어 기업 «회사소개»를 채운다.
+   다른 기능과 달리 문서 내용을 그대로 보낸다(2026-10-26 사용자 결정: 업체가 돌리는
+   소개서는 공개 홍보물이라 괜찮다). 화면이 PDF를 쪽마다 JPEG로 바꿔 보낸다 —
+   PDF 원본(4MB 넘음)은 Vercel 요청 한도(4.5MB)에 걸린다.
+   body: { name, files:[{ name, pages:[base64 JPEG…] }] }
+   답: { ok, intro, phone, email, website, address, products } — 모르는 칸은 '' */
+router.post('/org-pdf-summary', async (req, res) => {
+  if (!enabled()) return res.status(503).json({ ok: false, error: 'AI가 꺼져 있어요(ANTHROPIC_API_KEY 없음)' });
+  const b = req.body || {};
+  const files = (Array.isArray(b.files) ? b.files : []).slice(0, 5).map((f) => ({
+    name: String(f.name || '').slice(0, 120),
+    pages: (Array.isArray(f.pages) ? f.pages : []).filter((p) => typeof p === 'string' && /^[A-Za-z0-9+/=]+$/.test(p)),
+  })).filter((f) => f.pages.length);
+  const total = files.reduce((n, f) => n + f.pages.length, 0);
+  if (!total) return res.status(400).json({ ok: false, error: '읽을 쪽이 없어요' });
+  if (total > 30) return res.status(400).json({ ok: false, error: '한 번에 30쪽까지만 읽어요' });
+
+  const keys = ['intro', 'phone', 'email', 'website', 'address', 'products'];
+  const schema = {
+    type: 'object', additionalProperties: false, required: keys,
+    properties: Object.fromEntries(keys.map((k) => [k, { type: 'string' }])),
+  };
+  const content = [];
+  files.forEach((f) => {
+    content.push({ type: 'text', text: `── 파일: ${f.name} (${f.pages.length}쪽) ──` });
+    f.pages.forEach((p) => content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: p } }));
+  });
+  content.push({ type: 'text', text: [
+    `행사 운영대행사 CRM입니다. 위는 업체 «${String(b.name || '').slice(0, 80)}»가 보낸 소개서·견적서 쪽 이미지입니다.`,
+    '우리가 나중에 발주를 검토할 때 볼 «회사소개»를 한국어로 요약해 주세요.',
+    '- intro: «■ 항목: 내용» 꼴 줄 4~7개. 회사(무엇을 하는 곳, 인증·수상), 주요 제품·소재, 가격(규격별 단가 그대로, VAT 포함 여부가 없으면 «VAT 확인 필요»), 서비스·옵션, 할인 조건, 문의처 순서로. 문서에 없는 항목은 빼세요. 홍보 문구는 빼고 사실·숫자만.',
+    '- phone·email·website·address: 문서에 적힌 회사 대표 연락처. 없으면 "".',
+    '- products: 취급 품목을 쉼표로 짧게(예: 친환경 현수막, X배너). 없으면 "".',
+    '- 문서에 없는 내용을 짐작해 넣지 마세요.',
+  ].join(NL) });
+
+  try {
+    const r = await ai().beta.messages.create({
+      model: MODEL,
+      max_tokens: 8000,
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      output_config: { effort: 'low', format: { type: 'json_schema', schema } },
+      messages: [{ role: 'user', content }],
+    }, { timeout: 55000, maxRetries: 0 });
+    if (r.stop_reason === 'refusal') return res.status(502).json({ ok: false, error: 'AI가 답하지 않았어요' });
+    const out = JSON.parse(r.content.filter((x) => x.type === 'text').map((x) => x.text).join(''));
+    res.json({ ok: true, ...Object.fromEntries(keys.map((k) => [k, String(out[k] || '').trim().slice(0, k === 'intro' ? 3000 : 300)])) });
+  } catch (e) {
+    if (e instanceof Anthropic.APIConnectionTimeoutError) return res.status(504).json({ ok: false, error: '시간 안에 끝나지 않았어요 — 쪽 수를 줄여 보세요' });
+    if (e instanceof Anthropic.RateLimitError) return res.status(429).json({ ok: false, error: 'AI 요청이 많아요 — 잠시 뒤에 다시' });
+    if (e instanceof Anthropic.AuthenticationError) return res.status(503).json({ ok: false, error: 'AI 키가 맞지 않아요' });
+    if (e instanceof Anthropic.APIError) return res.status(502).json({ ok: false, error: `AI 오류 (${e.status || '연결'})` });
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 module.exports = router;
 module.exports.shape = shape;

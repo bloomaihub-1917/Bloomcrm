@@ -60,7 +60,7 @@ import {
 } from '../state.js';
 import { RP, avB, avF } from '../constants.js';
 import { escapeHtml, escAttr, levenshteinDist, phoneMatch, parseSectorScope, sectorKey, countryName, isMobile, td, leftPill, safeUrl, parseLinks, slugifySectorName } from '../utils.js';
-import { postToSheet, batchCreateExhibitors, upsertSectorRow, saveExhibitor, aiCompanyPairs, aiOrgQueryPlan } from '../api.js';
+import { postToSheet, batchCreateExhibitors, upsertSectorRow, saveExhibitor, aiCompanyPairs, aiOrgQueryPlan, aiOrgPdfSummary } from '../api.js';
 import { parseSectors, joinSectors, mainSectors, sectorNamesInDomain, domainName, domainOfSector, findSectorByName, UNASSIGNED_DOMAIN } from './settings-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
 import { trackAction, changed, removed as removedMeta } from './audit-tab.js';
@@ -1508,6 +1508,9 @@ export function renderCoDetail(c){
                 onclick="toggleCoGaps('${escAttr(c.key)}')">＋ 정보 추가 ${gap.length}</button>` : ''}
               ${c.catCode ? '' : `<button class="btn bs" style="font-size:10.5px;padding:2px 8px"
                 onclick="showAssignCatCodeUI('${escAttr(c.key)}')">코드 부여</button>`}
+              <button class="btn bs" style="font-size:10.5px;padding:2px 8px" title="업체가 보낸 소개서·견적서 PDF를 읽어 회사소개를 채웁니다"
+                onclick="fillCoIntroFromPdf('${escAttr(c.key)}')">📄 소개서 PDF로 채우기</button>
+              <span id="co-pdf-msg-${escapeHtml(c.key)}" style="font-size:10.5px;color:var(--i4)"></span>
               <span style="margin-left:auto;color:var(--i5);font-size:10.5px" title="${escAttr(c.updatedAt || '')}">${escapeHtml(shortDate(c.updatedAt) || '')}</span>
             </div>
           </div>`;
@@ -1964,6 +1967,75 @@ export function editCoCountry(key){ startCoInlineEdit(key, 'country'); }
 export function editCoAbbr(key){ startCoInlineEdit(key, 'abbr'); }
 export function editCoSource(key){ startCoInlineEdit(key, 'source'); }
 export function editCoBizNo(key){ startCoInlineEdit(key, 'bizNo'); }
+
+/* ── 소개서 PDF로 회사소개 채우기 ──
+   업체가 보낸 소개서·견적서는 대개 글자가 아니라 그림으로 된 PDF다. 그래서 글자를
+   뽑지 않고 쪽마다 JPEG로 바꿔 Claude에게 보여 준다(backend-node/routes/ai.js
+   /org-pdf-summary). PDF 원본을 그대로 보내면 서버 요청 한도(4.5MB)에 걸린다.
+   요약은 회사소개에 넣고(이미 있으면 덮을지 묻는다), 대표 연락처·품목은 빈 칸만 채운다. */
+const PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+let pdfjsReady = null;
+function loadPdfjs(){
+  return pdfjsReady || (pdfjsReady = new Promise((ok, fail) => {
+    const s = document.createElement('script');
+    s.src = PDFJS + 'pdf.min.js';
+    s.onload = () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js'; ok(window.pdfjsLib); };
+    s.onerror = () => { pdfjsReady = null; fail(new Error('PDF 읽기 도구를 못 불러왔어요')); };
+    document.head.appendChild(s);
+  }));
+}
+async function pdfToJpegs(file, maxPages){
+  const lib = await loadPdfjs();
+  const doc = await lib.getDocument({ data: await file.arrayBuffer() }).promise;
+  const out = [];
+  for(let i = 1; i <= Math.min(doc.numPages, maxPages); i++){
+    const page = await doc.getPage(i);
+    const base = page.getViewport({ scale: 1 });
+    const vp = page.getViewport({ scale: Math.min(2, 1400 / Math.max(base.width, base.height)) }); // 긴 변 1400px — 작은 글씨(단가표)까지 읽힌다
+    const cv = document.createElement('canvas');
+    cv.width = vp.width; cv.height = vp.height;
+    await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
+    out.push(cv.toDataURL('image/jpeg', 0.7).split(',')[1]);
+  }
+  return out;
+}
+export function fillCoIntroFromPdf(key){
+  const c = CO_DB.find(x => x.key === key);
+  if(!c) return;
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'application/pdf,.pdf'; inp.multiple = true;
+  inp.onchange = async () => {
+    const files = [...inp.files].slice(0, 5);
+    if(!files.length) return;
+    const msg = (t) => { const el = document.getElementById(`co-pdf-msg-${key}`); if(el) el.textContent = t; };
+    try {
+      msg('PDF 읽는 중…');
+      let left = 30;
+      const sent = [];
+      for(const f of files){
+        if(left <= 0) break;
+        const pages = await pdfToJpegs(f, left);
+        left -= pages.length;
+        sent.push({ name: f.name, pages });
+      }
+      msg('요약하는 중… (30초쯤)');
+      const r = await aiOrgPdfSummary({ name: c.nameKo || c.nameEn || '', files: sent });
+      if(!r.ok){ msg(''); alert('요약 실패 — ' + (r.error || '')); return; }
+      msg('');
+      if(!r.intro){ alert('문서에서 요약할 내용을 못 찾았어요.'); return; }
+      if(c.intro && c.intro.trim() && !confirm(`회사소개가 이미 있습니다. 새 요약으로 바꿀까요?\n\n── 새 요약 ──\n${r.intro}`)) return;
+      const fields = ['intro'];
+      c.intro = r.intro;
+      ['phone', 'email', 'website', 'address', 'products'].forEach(k => {
+        if(r[k] && !String(c[k] || '').trim()){ c[k] = r[k]; fields.push(k); }
+      });
+      await upsertCompanyRow(c, fields);
+      renderCoDetail(c);
+      msg(`✓ ${files.map(f => f.name).join(', ')} 요약 저장`);
+    } catch(e){ msg(''); alert('PDF를 읽지 못했어요 — ' + e.message); }
+  };
+  inp.click();
+}
 
 /* ── 기업 종류 ──
    무엇을 관리하는 회사인지에 따라 화면에서 다르게 다룬다. 값이 셋뿐이라
@@ -2586,6 +2658,7 @@ window.closeCoDomainPopover = closeCoDomainPopover;
 window.editCoPhone = editCoPhone;
 window.editCoAddress = editCoAddress;
 window.editCoIntro = editCoIntro;
+window.fillCoIntroFromPdf = fillCoIntroFromPdf;
 window.editCoEmail = editCoEmail;
 window.editCoWebsite = editCoWebsite;
 window.editCoCountry = editCoCountry;
