@@ -87,10 +87,10 @@ let confShowHidden = false;    // 숨긴 연사도 보이기
 let confSessFil = '';          // 세션으로 거르기
 let confPhase = '';           // 'prep' 준비 | 'settle' 정산 — 비우면 행사 끝난 날로 정한다
 let confSettleFil = '';       // 정산 거르기 'docs' 서류 남음 | 'unpaid' 미지급
-let confShowNoFee = false;
+let confShowNoFee = false;     // 정산에서 접은 «연사료 없음» 줄 펼치기
 let confLayout = 'table';       // 준비 단계 보기 'table' 표 | 'cards' 사진 카드
 const confPhotoAsked = new Set();
-let confCardFil = '';          // 카드 거르기 'ok' 다 받음 | 'part' 일부 | 'todo' 하나도 못 받음     // 정산에서 연사료 없는 역할(VIP 등)도 펼치기
+let confCardFil = '';          // 카드 거르기 'ok' 다 받음 | 'part' 일부 | 'todo' 하나도 못 받음
 let confVideoFil = '';         // 영상 게재 동의로 거르기 'yes' | 'no' | 'none'(미확인)
 
 /* ══════════════════════════════════════════
@@ -1806,10 +1806,11 @@ function peopleHtml(ev){
   };
 
   /* ── 정산 표 ──
-     연사료·서류·지급·영상 게재만. 연사료를 받지 않는 역할(VIP·축사)은 받을 것이
-     없어 «—»만 채우므로 맨 아래 한 줄로 접는다. */
+     연사료·서류·지급·영상 게재만. 줄 연사료가 없는 사람 — 연사료를 받지 않는 역할(VIP·축사)과
+     연사료 칸이 비었거나 0인 연사 — 은 챙길 서류·지급이 없으므로 맨 아래 한 줄로 접는다.
+     영상 게재 칩으로 거를 때는 접지 않는다(영상 동의는 연사료와 무관하게 받는다). */
   if(phase === 'settle'){
-    const noFee = list.filter(sp => assignmentsFor(sp.id).length && !paysFee(sp));
+    const noFee = confVideoFil ? [] : list.filter(sp => !feeOn(sp));
     const shown = list.filter(sp => !noFee.includes(sp));
     const won = (sp) => feeNum(sp).toLocaleString('ko-KR');
     const srow = (sp) => {
@@ -1842,7 +1843,7 @@ function peopleHtml(ev){
           <th style="min-width:80px" title="행사 뒤 홈페이지·교육 자료 게재 동의">영상 게재</th>
         </tr></thead><tbody>${shown.map(srow).join('')}
         ${noFee.length ? `<tr onclick="toggleConfNoFee()" style="cursor:pointer;background:var(--i8)">
-          <td colspan="6" style="font-size:11px;color:var(--i4)">${confShowNoFee ? '▾' : '▸'} 연사료 없는 역할(VIP 등) ${noFee.length}명 — ${
+          <td colspan="6" style="font-size:11px;color:var(--i4)">${confShowNoFee ? '▾' : '▸'} 연사료 없음 ${noFee.length}명 (VIP 등 포함) — ${
             escapeHtml(noFee.map(sp => sp.name_snapshot || sp.name_en || '').join(', '))}</td></tr>
           ${confShowNoFee ? noFee.map(srow).join('') : ''}` : ''}
         </tbody></table></div>
