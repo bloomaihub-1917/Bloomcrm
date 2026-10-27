@@ -449,7 +449,7 @@ function render(){
     <div style="display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap">
       <button class="btn bp" onclick="sendExhBulkMail()" ${picked.length && !bm.sending ? '' : 'disabled'}>${picked.length}곳에 보내기</button>
       <button class="btn" onclick="sendExhTestMail()" ${picked.length && !bm.sending ? '' : 'disabled'}
-        title="미리보기 중인 기업의 메일을 내 주소(${escAttr(currentUser?.email || '')})로 한 통 보냅니다 — 기록에 남지 않아요">나에게 먼저 1통</button>
+        title="미리보기 중인 기업의 메일을 내 주소(또는 적은 주소)로 한 통 보냅니다 — 기록에 남지 않아요">나에게 먼저 1통</button>
       <span id="bm-msg" style="font-size:11px;color:var(--i4)"></span>
     </div>
   </div>`;
@@ -517,8 +517,10 @@ const say = (t, ok) => { const m = document.getElementById('bm-msg'); if(m){ m.s
 /* 시험 발송 — 미리보기 중인 기업의 메일을 내 주소로. exhibitor_id를 안 넘겨 기록에 남지 않는다 */
 export async function sendExhTestMail(){
   if(!bm || bm.sending) return;
-  const me = currentUser?.email;
-  if(!me){ say('내 메일 주소를 몰라요 — 로그인 상태를 확인하세요.'); return; }
+  // 받을 주소는 기본이 내 주소 — 행사 공용 메일함 등 다른 곳에서 보고 싶으면 바꾼다
+  const me = (prompt('시험 메일을 받을 주소 (기록에 남지 않아요)', currentUser?.email || '') || '').trim();
+  if(!me) return;
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(me)){ say('메일 주소 모양이 아니에요.'); return; }
   const picked = visibleList().filter(x => bm.ids.has(x.id));
   if(!picked.length) return;
   const x = picked[((bm.pi % picked.length) + picked.length) % picked.length];
