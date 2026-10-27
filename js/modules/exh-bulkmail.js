@@ -14,10 +14,14 @@
    - 문구: 전시 메일 양식(exh-mail.js)의 단계 문구. 여기서 고친 문구는 이번 발송에만 쓴다
    - 언어: 기업별 자동(기업DB 국가) / 모두 국문 / 모두 영문
    - 받는 사람: 메인 담당자만 / 메일 있는 담당자 모두 / 첨부: 그 단계의 기본 첨부
+   - 기업별 사진: PC 폴더를 고르면 하위 폴더(기업명 또는 부스 번호)마다 그 기업 메일에
+     사진을 붙인다. 못 맞춘 폴더는 손으로 기업을 고른다. 사진은 보낼 때 줄여서(긴 변 1600px JPEG)
+     한 통 3MB(서버 LOCAL_MAX) 안에 넣는다. 폴더는 서버에 올리지 않고 이번 발송에만 쓴다
 ══════════════════════════════════════════════════════════════ */
 import { EXH_LOGS, EXHIBITORS, EXH_CFG, currentUser, logsFor } from '../state.js';
 import { sendMail, eventMailFrom, loadMailFiles, mailFilesOf, saveExhCfgToSheet } from '../api.js';
 import { escapeHtml, escAttr, nowStamp } from '../utils.js';
+import { normalizeCompanyKey } from './company-tab.js';
 import { visibleList, exhNames, exhContacts, exhMailCtx, exhLocked, exhLockNotice, STEPS, cellState } from './exh-tab.js';
 import { exhMailSteps, exhIsEnglish, fillExhTemplate, exhMailFileStep, boothChange, exhStepVariants } from './exh-mail.js';
 import { libItems, libItem } from './mail-templates.js';
@@ -27,8 +31,105 @@ import { varChipsHtml } from './var-chips.js';
 import { aiDraftHtml, registerAiDraft } from './ai-mail-draft.js';
 import './exh-mail-editor.js';
 
-let bm = null;   // { evKey, ids:Set, step, variant, lang, who, tpl, sending, pi, failed:Set }
+let bm = null;   // { evKey, ids:Set, step, variant, lang, who, tpl, sending, pi, failed:Set, photos }
 const isLib = (key) => String(key || '').startsWith('lib:');
+
+/* ── 기업별 사진 폴더 ──
+   bm.photos = { root, folders: [{ name, files:[File], exId }] } — 폴더 하나가 기업 하나.
+   고른 폴더 바로 아래에 사진이 있으면(하위 폴더 없음) 파일 이름 하나를 폴더 하나로 본다 */
+const IMG_RE = /\.(jpe?g|png|webp|gif|bmp|heic)$/i;
+const PHOTO_MAX = 3 * 1024 * 1024;   // 서버 LOCAL_MAX — PC에서 고른 첨부는 한 통에 합쳐서 3MB
+const keyOf = (s) => normalizeCompanyKey(String(s || '').replace(/[_\-]+/g, ' '));
+const boothKey = (s) => String(s || '').replace(/\s+/g, '').toLowerCase();
+function matchFolder(name, xs){
+  const k = keyOf(name), b = boothKey(name);
+  if(!k) return '';
+  const hit = (f) => xs.filter(f);
+  // 이름이 같은 곳 → 부스 번호가 같은 곳 → 폴더 이름에 기업명이 들어 있는 곳 (하나일 때만)
+  for(const f of [
+    x => [exhNames(x).ko, exhNames(x).en, x.company_name].some(n => n && keyOf(n) === k),
+    x => x.booth_no && boothKey(x.booth_no) === b,
+    x => [exhNames(x).ko, exhNames(x).en].some(n => { const nk = keyOf(n); return nk.length >= 2 && k.includes(nk); }),
+    x => x.booth_no && boothKey(x.booth_no).length >= 2 && b.includes(boothKey(x.booth_no)),
+  ]){ const r = hit(f); if(r.length === 1) return r[0].id; if(r.length > 1) return ''; }
+  return '';
+}
+const photosOf = (id) => (bm?.photos?.folders || []).filter(f => f.exId === id).flatMap(f => f.files);
+
+/* 사진을 줄여 base64로 — 긴 변 side px JPEG. 못 읽는 형식(HEIC 등)은 원본 그대로 */
+async function shrink(file, side, q){
+  try{
+    const img = await createImageBitmap(file);
+    const r = Math.min(1, side / Math.max(img.width, img.height));
+    const c = document.createElement('canvas');
+    c.width = Math.round(img.width * r); c.height = Math.round(img.height * r);
+    const g = c.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+    g.drawImage(img, 0, 0, c.width, c.height);
+    img.close?.();
+    const data = c.toDataURL('image/jpeg', q).split(',')[1];
+    return { filename: file.name.replace(/\.[^.]+$/, '') + '.jpg', content_type: 'image/jpeg', data, size: Math.floor(data.length * 3 / 4) };
+  }catch(e){
+    const data = await new Promise((ok, no) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1]); fr.onerror = no; fr.readAsDataURL(file); });
+    return { filename: file.name, content_type: file.type || 'application/octet-stream', data, size: file.size };
+  }
+}
+/* 한 기업의 사진 첨부 — 3MB를 넘으면 더 작게 다시 줄인다. 그래도 넘으면 error */
+async function photoAttachments(id){
+  const files = photosOf(id);
+  if(!files.length) return { list: [] };
+  for(const [side, q] of [[1600, .82], [1200, .75], [900, .7]]){
+    const list = [];
+    for(const f of files) list.push(await shrink(f, side, q));
+    if(list.reduce((n, a) => n + a.size, 0) <= PHOTO_MAX) return { list: list.map(({ size, ...a }) => a) };
+  }
+  return { error: `사진 ${files.length}장이 줄여도 3MB를 넘어요 — 사진 수를 줄여 주세요` };
+}
+
+export function bmPhotoPick(input){
+  if(!bm || bm.sending) return;
+  const all = [...(input.files || [])].filter(f => IMG_RE.test(f.name));
+  input.value = '';
+  if(!all.length){ alert('고른 폴더에 사진(jpg·png 등)이 없어요.'); return; }
+  const groups = new Map();
+  let root = '';
+  for(const f of all){
+    const parts = String(f.webkitRelativePath || f.name).split('/');
+    root = root || (parts.length > 1 ? parts[0] : '');
+    const name = parts.length > 2 ? parts[1] : f.name.replace(/\.[^.]+$/, '');
+    if(!groups.has(name)) groups.set(name, []);
+    groups.get(name).push(f);
+  }
+  const xs = eventExhibitors();
+  const folders = [...groups].map(([name, files]) => ({ name, files, exId: matchFolder(name, xs) }))
+    .sort((a, b) => (!!b.exId - !!a.exId) || a.name.localeCompare(b.name, 'ko'));
+  bm.photos = { root, folders };
+  render();
+}
+export function bmPhotoAssign(i, exId){ if(!bm?.photos || bm.sending) return; bm.photos.folders[i].exId = exId; render(); }
+export function bmPhotoClear(){ if(!bm || bm.sending) return; bm.photos = null; render(); }
+
+function photoBlockHtml(){
+  const p = bm.photos;
+  if(!p) return `<div style="margin-top:8px;font-size:11px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <label class="btn" style="font-size:10.5px;cursor:pointer">📷 기업별 사진 폴더 고르기
+        <input type="file" webkitdirectory multiple style="display:none" onchange="bmPhotoPick(this)"></label>
+      <span style="color:var(--i4)">폴더 안 하위 폴더 이름(기업명 또는 부스 번호)으로 기업을 찾아 그 기업 메일에만 붙여요</span></div>`;
+  const xs = eventExhibitors().slice().sort((a, b) => exhNames(a).ko.localeCompare(exhNames(b).ko, 'ko'));
+  const ok = p.folders.filter(f => f.exId), miss = p.folders.filter(f => !f.exId);
+  const opts = (cur) => `<option value="">— 기업 고르기 —</option>${xs.map(x => `<option value="${escAttr(x.id)}"${x.id === cur ? ' selected' : ''}>${escapeHtml(exhNames(x).ko)}${x.booth_no ? ` (${escapeHtml(x.booth_no)})` : ''}</option>`).join('')}`;
+  return `<div style="margin-top:8px;padding:7px 9px;border:1px solid var(--i6);border-radius:7px;font-size:11px">
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <b>📷 기업별 사진</b><span style="color:var(--i4)">${escapeHtml(p.root || '고른 폴더')} · 짝 맞음 ${ok.length}곳${miss.length ? ` · <span style="color:var(--am)">못 맞춘 폴더 ${miss.length}개</span>` : ''}</span>
+      <span style="margin-left:auto;display:flex;gap:4px">
+        <button class="btn" style="font-size:10px" onclick="bmAll('photo')" title="사진이 짝 맞은 기업만 고릅니다">사진 있는 곳만</button>
+        <button class="btn" style="font-size:10px" onclick="bmPhotoClear()">빼기</button></span></div>
+    <details${miss.length ? ' open' : ''} style="margin-top:4px"><summary style="cursor:pointer;color:var(--i3)">폴더별 짝 보기·고치기</summary>
+      <div style="max-height:180px;overflow:auto;margin-top:4px">${p.folders.map((f, i) => `<div style="display:flex;gap:6px;align-items:center;padding:2px 0">
+        <span style="flex:0 0 40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escAttr(f.name)}">📁 ${escapeHtml(f.name)} <span style="color:var(--i4)">${f.files.length}장</span></span>
+        <select class="fi" style="font-size:10.5px;flex:1;${f.exId ? '' : 'border-color:var(--am)'}" onchange="bmPhotoAssign(${i},this.value)" ${bm.sending ? 'disabled' : ''}>${opts(f.exId)}</select></div>`).join('')}</div></details>
+  </div>`;
+}
 
 const close = () => { document.getElementById('exh-bulkmail')?.remove(); bm = null; };
 const mailsOf = (x, who) => {
@@ -257,6 +358,7 @@ function render(){
             <b style="flex:0 0 auto">${escapeHtml(exhNames(x).ko)}</b>
             <span class="pill p-gray" style="font-size:9.5px">${enOf(x) ? 'EN' : 'KO'}</span>${STATE_PILL[exhMailState(x, st)] || ''}${
               bc && bc.changed ? `<span style="font-size:10px;color:var(--am)">${escapeHtml(bc.from)} → ${escapeHtml(bc.to)}</span>` : ''}${
+              bm.photos ? (photosOf(x.id).length ? `<span class="pill p-blue" style="font-size:9.5px">📷 ${photosOf(x.id).length}</span>` : '<span class="pill p-gray" style="font-size:9.5px">사진 없음</span>') : ''}${
               bm.failed.has(x.id) ? '<span class="pill p-red" style="font-size:9.5px;background:var(--rb);color:var(--re)">실패</span>' : ''}
             <span style="color:var(--i4);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ms.length ? escapeHtml(ms.join(', ')) : '메일 있는 담당자 없음'}</span>
           </label>`; }).join('')}
@@ -274,6 +376,7 @@ function render(){
         <div style="font-size:10.5px;color:var(--i4);margin-top:4px">칸은 기업마다 채워집니다. 여기서 고친 문구는 이번 발송에만 쓰고, 기본 문구와 단계는
           <a href="#" onclick="openExhMailEditor('${escAttr(bm.evKey)}','${escAttr(bm.step)}');return false">✎ 단계 편집</a>에서 고칩니다.</div>
         ${files.length ? `<div style="font-size:11px;margin-top:6px">기본 첨부 ${files.map(f => `<span class="pill p-blue" style="margin:2px 3px 0 0">📎 ${escapeHtml(f.filename)}</span>`).join('')}</div>` : ''}
+        ${photoBlockHtml()}
         <div id="bm-prev">${prevHtml(picked)}</div>
       </div>
     </div>
@@ -312,6 +415,8 @@ function prevHtml(picked){
       <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">→ ${escapeHtml(mailsOf(x, bm.who).join(', '))}</span>
     </div>
     <div style="white-space:pre-wrap;max-height:240px;overflow:auto"><b>${escapeHtml(m.subject)}</b>\n\n${escapeHtml(m.body)}</div>
+    ${bm.photos ? `<div style="margin-top:6px;font-size:10.5px;${photosOf(x.id).length ? '' : 'color:var(--am)'}">${photosOf(x.id).length
+      ? `📷 ${photosOf(x.id).map(f => escapeHtml(f.name)).join(', ')}` : '📷 이 기업에 맞는 사진 폴더가 없어요'}</div>` : ''}
   </div>`;
 }
 const refreshPrev = () => { const el = document.getElementById('bm-prev'); if(el) el.innerHTML = prevHtml(visibleList().filter(x => bm.ids.has(x.id))); };
@@ -330,6 +435,7 @@ export function bmAll(on){
   if(!bm || bm.sending) return;
   if(on === 'turn') pickTurn();
   else if(on === 'failed'){ bm.ids = new Set(bm.failed); bm.pi = 0; }
+  else if(on === 'photo'){ bm.ids = new Set(visibleList().filter(x => mailsOf(x, bm.who).length && photosOf(x.id).length).map(x => x.id)); bm.pi = 0; }
   else bm.ids = new Set(on ? visibleList().filter(x => mailsOf(x, bm.who).length).map(x => x.id) : []);
   render();
 }
@@ -349,7 +455,9 @@ export async function sendExhTestMail(){
   const m = mailFor(x);
   const fileIds = mailFilesOf(bm.evKey).filter(f => f.step === exhMailFileStep(bm.step)).map(f => f.id);
   say(`${me}로 보내는 중…`, true);
-  const res = await sendMail({ to: [me], subject: `[시험] ${m.subject}`, text: m.body, event_id: bm.evKey, file_ids: fileIds });
+  const ph = await photoAttachments(x.id);
+  if(ph.error){ say(`${exhNames(x).ko}: ${ph.error}`); return; }
+  const res = await sendMail({ to: [me], subject: `[시험] ${m.subject}`, text: m.body, event_id: bm.evKey, file_ids: fileIds, attachments: ph.list });
   say(res.ok ? `${me}로 «${exhNames(x).ko}» 메일을 보냈어요 — 받은편지함에서 확인하세요.` : (res.error || '보내지 못했어요.'), !!res.ok);
 }
 
@@ -365,7 +473,9 @@ export async function sendExhBulkMail(){
   const fileIds = mailFilesOf(bm.evKey).filter(f => f.step === exhMailFileStep(bm.step)).map(f => f.id);
   // 밖으로 나가는 일 — 한 번 묻는다
   const notTurn = st.key === 'note' || st.lib ? 0 : list.filter(x => !isTurn(exhMailState(x, st))).length;
-  if(!confirm(`${list.length}곳에 «${st.label}»${st.round ? ` (${st.round.label})` : ''} 메일을 보낼까요?${notTurn ? `\n\n이 중 ${notTurn}곳은 보낼 차례가 아니에요(이미 보냈거나 끝남).` : ''}\n\n발신 ${from.text}\n받는 사람: ${bm.who === 'all' ? '메일 있는 담당자 모두' : '메인 담당자'}\n기업마다 한 통씩 따로 나갑니다.`)) return;
+  const noPhoto = bm.photos ? list.filter(x => !photosOf(x.id).length).length : 0;
+  if(!confirm(`${list.length}곳에 «${st.label}»${st.round ? ` (${st.round.label})` : ''} 메일을 보낼까요?${notTurn ? `\n\n이 중 ${notTurn}곳은 보낼 차례가 아니에요(이미 보냈거나 끝남).` : ''}${
+    bm.photos ? `\n\n📷 기업별 사진: ${list.length - noPhoto}곳에 붙어요.${noPhoto ? ` ${noPhoto}곳은 맞는 사진이 없어 사진 없이 나가요.` : ''}` : ''}\n\n발신 ${from.text}\n받는 사람: ${bm.who === 'all' ? '메일 있는 담당자 모두' : '메인 담당자'}\n기업마다 한 통씩 따로 나갑니다.`)) return;
 
   bm.sending = true;
   render();
@@ -377,13 +487,16 @@ export async function sendExhBulkMail(){
     say(`보내는 중… ${i + 1}/${list.length} ${exhNames(x).ko}`, true);
     const to = mailsOf(x, bm.who);
     const { subject, body: text } = mailFor(x);
-    const res = await sendMail({ to, subject, text, exhibitor_id: x.id, category: st.label, kind, file_ids: fileIds });
+    const ph = await photoAttachments(x.id);
+    if(ph.error){ fails.push(`${exhNames(x).ko}: ${ph.error}`); bm.failed.add(x.id); continue; }
+    const res = await sendMail({ to, subject, text, exhibitor_id: x.id, category: st.label, kind, file_ids: fileIds, attachments: ph.list });
     if(!res.ok){ fails.push(`${exhNames(x).ko}: ${res.error || '실패'}`); bm.failed.add(x.id); continue; }
     ok++;
+    const names = [...mailFilesOf(bm.evKey).filter(f => fileIds.includes(f.id)).map(f => f.filename), ...ph.list.map(a => a.filename)];
     if(res.logId) EXH_LOGS.push({
       id: res.logId, exhibitor_id: x.id, kind, ts: nowStamp(), direction: 'out', channel: '이메일',
       counterpart: to.join(', '), category: st.label, subject, answered_at: '', answer: '', status: 'done',
-      body: text + (fileIds.length ? `\n\n[첨부] ${mailFilesOf(bm.evKey).filter(f => fileIds.includes(f.id)).map(f => f.filename).join(', ')}` : ''),
+      body: text + (names.length ? `\n\n[첨부] ${names.join(', ')}` : ''),
       author_email: currentUser?.email || '', author_name: currentUser?.name || '',
     });
   }
@@ -411,4 +524,4 @@ window.refreshExhBulkMail = () => {
   render();
 };
 Object.assign(window, { openExhBulkMail, closeExhBulkMail: close, bmSet, bmPick, bmAll, bmTpl, bmPrev,
-  sendExhBulkMail, sendExhTestMail, startExhRound, closeExhRound });
+  sendExhBulkMail, sendExhTestMail, startExhRound, closeExhRound, bmPhotoPick, bmPhotoAssign, bmPhotoClear });
