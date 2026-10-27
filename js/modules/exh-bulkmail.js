@@ -86,15 +86,18 @@ async function shrink(file, side, q){
   }
 }
 /* 한 기업의 사진 첨부 — 3MB를 넘으면 더 작게 다시 줄인다. 그래도 넘으면 error */
-async function photoAttachments(id){
+/* top — 맨 위 공통 이미지(이미 줄인 것). 3MB 안에 함께 센다 */
+async function photoAttachments(id, top){
   const files = photosOf(id);
-  if(!files.length) return { list: [] };
+  const topSize = top ? top.size : 0;
+  const strip = ({ size, ...a }) => a;
+  if(!files.length) return topSize > PHOTO_MAX ? { error: '맨 위 이미지가 3MB를 넘어요' } : { list: [], top: top && strip(top) };
   for(const [side, q] of [[1600, .82], [1200, .75], [900, .7]]){
     const list = [];
     for(const f of files) list.push(await shrink(f, side, q));
-    if(list.reduce((n, a) => n + a.size, 0) <= PHOTO_MAX) return { list: list.map(({ size, ...a }) => a) };
+    if(topSize + list.reduce((n, a) => n + a.size, 0) <= PHOTO_MAX) return { list: list.map(strip), top: top && strip(top) };
   }
-  return { error: `사진 ${files.length}장이 줄여도 3MB를 넘어요 — 사진 수를 줄여 주세요` };
+  return { error: `사진 ${files.length}장${top ? '과 맨 위 이미지' : ''}가 줄여도 3MB를 넘어요 — 사진 수를 줄여 주세요` };
 }
 
 export function bmPhotoPick(input){
@@ -262,24 +265,49 @@ function mailFor(x){
 }
 /* 사진이 든 html 본문 — srcs[i]는 i번째 사진 주소(보낼 때 cid:, 미리보기 때 blob:).
    {사진}이 없으면 본문 맨 끝에 넣는다 */
-function bodyHtml(raw, srcs){
+function bodyHtml(raw, srcs, top){
   const imgs = srcs.map(s => `<img src="${s}" style="display:block;max-width:100%;width:640px;height:auto;margin:8px 0;border-radius:4px">`).join('');
   const txt = (s) => escapeHtml(s).replace(/\n/g, '<br>');
   const parts = String(raw).split(PHOTO_MARK);
   const inner = parts.length > 1 ? parts.map(txt).join(imgs) : txt(raw) + (imgs ? `<br>${imgs}` : '');
-  return `<div style="font-family:'Malgun Gothic',Arial,sans-serif;font-size:14px;line-height:1.6;color:#222">${inner}</div>`;
+  const head = top ? `<img src="${top}" style="display:block;max-width:100%;width:640px;height:auto;margin:0 0 12px">` : '';
+  return `<div style="font-family:'Malgun Gothic',Arial,sans-serif;font-size:14px;line-height:1.6;color:#222">${head}${inner}</div>`;
+}
+/* ── 맨 위 공통 이미지(감사장 등) — 모든 기업에 같은 이미지. 국문·영문을 따로 고를 수 있고
+   영문을 안 고르면 국문 것을 쓴다. 긴 변 1400px로 줄인다(글씨가 든 이미지라 사진보다 크게) ── */
+const bannerOf = (en) => bm?.banner ? ((en && bm.banner.en) || bm.banner.ko || bm.banner.en || null) : null;
+export function bmBannerPick(input, lang){
+  if(!bm || bm.sending) return;
+  const f = [...(input.files || [])].find(f => IMG_RE.test(f.name));
+  input.value = '';
+  if(!f){ alert('이미지 파일(jpg·png 등)을 골라주세요.'); return; }
+  bm.banner = { ...(bm.banner || {}), [lang]: f };
+  render();
+}
+export function bmBannerClear(){ if(!bm || bm.sending) return; bm.banner = null; render(); }
+function bannerBlockHtml(){
+  const b = bm.banner || {};
+  const pick = (lang, l) => `<label class="btn" style="font-size:10.5px;cursor:pointer">${b[lang] ? `✓ ${l}: ${escapeHtml(b[lang].name)}` : `${l} 고르기`}
+      <input type="file" accept="image/*" style="display:none" onchange="bmBannerPick(this,'${lang}')"></label>`;
+  return `<div style="margin-top:8px;font-size:11px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+    <b>🖼 맨 위 공통 이미지</b>${pick('ko', '국문용')}${pick('en', '영문용')}
+    ${bm.banner ? '<button class="btn" style="font-size:10px" onclick="bmBannerClear()">빼기</button>' : ''}
+    <span style="color:var(--i4)">감사장처럼 모두에게 같은 이미지 — 본문 맨 위에 들어가요. 영문용이 없으면 국문용을 써요</span></div>`;
 }
 const thumbCache = new WeakMap();
 const thumbOf = (f) => { if(!thumbCache.has(f)) thumbCache.set(f, URL.createObjectURL(f)); return thumbCache.get(f); };
 /* 보낼 메일 한 통 — 사진이 있으면 본문(html)에 넣고 cid 첨부로 붙인다 */
 async function buildMail(x){
   const m = mailFor(x);
-  const ph = await photoAttachments(x.id);
+  const top = bannerOf(m.en);
+  const ph = await photoAttachments(x.id, top ? await shrink(top, 1400, .85) : null);
   if(ph.error) return { error: ph.error };
-  if(!ph.list.length) return { ...m, attachments: [] };
+  if(!ph.list.length && !ph.top) return { ...m, attachments: [] };
   const stamp = Date.now().toString(36);
   const attachments = ph.list.map((a, i) => ({ ...a, cid: `p${i}.${stamp}@bloom` }));
-  return { ...m, html: bodyHtml(m.raw, attachments.map(a => `cid:${a.cid}`)), attachments };
+  const head = ph.top ? { ...ph.top, cid: `top.${stamp}@bloom` } : null;
+  return { ...m, html: bodyHtml(m.raw, attachments.map(a => `cid:${a.cid}`), head && `cid:${head.cid}`),
+    attachments: head ? [head, ...attachments] : attachments };
 }
 
 /* ── 다시 보내기 묶음 — 행사 설정(EXH_CFG[행사].exhMailRounds). 단계당 하나만 열린다 ── */
@@ -413,6 +441,7 @@ function render(){
         <div style="font-size:10.5px;color:var(--i4);margin-top:4px">칸은 기업마다 채워집니다. 여기서 고친 문구는 이번 발송에만 쓰고, 기본 문구와 단계는
           <a href="#" onclick="openExhMailEditor('${escAttr(bm.evKey)}','${escAttr(bm.step)}');return false">✎ 단계 편집</a>에서 고칩니다.</div>
         ${files.length ? `<div style="font-size:11px;margin-top:6px">기본 첨부 ${files.map(f => `<span class="pill p-blue" style="margin:2px 3px 0 0">📎 ${escapeHtml(f.filename)}</span>`).join('')}</div>` : ''}
+        ${bannerBlockHtml()}
         ${photoBlockHtml()}
         <div id="bm-prev">${prevHtml(picked)}</div>
       </div>
@@ -451,9 +480,9 @@ function prevHtml(picked){
       <b style="color:var(--i2)">${escapeHtml(exhNames(x).ko)}</b>${m.en ? ' (영문)' : ''}
       <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">→ ${escapeHtml(mailsOf(x, bm.who).join(', '))}</span>
     </div>
-    ${photosOf(x.id).length
-      ? `<div style="max-height:360px;overflow:auto;background:#fff;padding:6px;border-radius:5px"><b>${escapeHtml(m.subject)}</b><br><br>${
-          bodyHtml(m.raw, photosOf(x.id).map(thumbOf)).replace('width:640px', 'width:320px')}</div>`
+    ${photosOf(x.id).length || bannerOf(m.en)
+      ? `<div style="max-height:420px;overflow:auto;background:#fff;padding:6px;border-radius:5px"><b>${escapeHtml(m.subject)}</b><br><br>${
+          bodyHtml(m.raw, photosOf(x.id).map(thumbOf), bannerOf(m.en) && thumbOf(bannerOf(m.en))).replace(/width:640px/g, 'width:320px')}</div>`
       : `<div style="white-space:pre-wrap;max-height:240px;overflow:auto"><b>${escapeHtml(m.subject)}</b>\n\n${escapeHtml(m.body)}</div>`}
     ${bm.photos ? `<div style="margin-top:6px;font-size:10.5px;${photosOf(x.id).length ? '' : 'color:var(--am)'}">${photosOf(x.id).length
       ? `📷 본문에 ${photosOf(x.id).length}장 — ${photosOf(x.id).map(f => escapeHtml(f.name)).join(', ')}${/\{사진\}/.test(bm.tpl[m.en ? 'body_en' : 'body_ko']) ? '' : ' · 문구에 {사진}을 넣으면 그 자리에, 없으면 맨 끝에 들어가요'}`
@@ -565,4 +594,4 @@ window.refreshExhBulkMail = () => {
   render();
 };
 Object.assign(window, { openExhBulkMail, closeExhBulkMail: close, bmSet, bmPick, bmAll, bmTpl, bmPrev,
-  sendExhBulkMail, sendExhTestMail, startExhRound, closeExhRound, bmPhotoPick, bmPhotoAssign, bmPhotoClear });
+  sendExhBulkMail, sendExhTestMail, startExhRound, closeExhRound, bmPhotoPick, bmPhotoAssign, bmPhotoClear, bmBannerPick, bmBannerClear });
