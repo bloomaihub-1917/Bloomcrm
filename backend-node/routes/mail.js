@@ -408,7 +408,10 @@ router.post('/send', async (req, res) => {
     if (!f || !f.data || !f.filename) continue;
     if (BLOCKED_EXT.test(String(f.filename).trim())) return res.status(400).json({ ok: false, error: `«${String(f.filename).slice(0, 60)}»은 보낼 수 없는 형식이에요 (실행·스크립트·웹 파일)` });
     localTotal += b64size(f.data);
-    attachments.push({ filename: String(f.filename), content: f.data, encoding: 'base64', contentType: f.content_type || undefined });
+    // cid가 있으면 본문(html)의 <img src="cid:…">로 들어가는 사진이다 — 첨부 목록에 따로 안 뜬다
+    const cid = /^[\w.@-]{1,100}$/.test(String(f.cid || '')) ? String(f.cid) : undefined;
+    attachments.push({ filename: String(f.filename), content: f.data, encoding: 'base64', contentType: f.content_type || undefined,
+      ...(cid ? { cid, contentDisposition: 'inline' } : {}) });
   }
   if (localTotal > LOCAL_MAX) return res.status(413).json({ ok: false, error: 'PC에서 고른 첨부가 합쳐서 3MB를 넘어요' });
   const ids = (Array.isArray(file_ids) ? file_ids : []).filter(Boolean);

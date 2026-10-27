@@ -182,6 +182,8 @@ export function fillExhTemplate(text, x, step, en, ctx = {}){
       return b.changed ? `- ${en ? 'Booth No.' : '부스 번호'}: ${b.from} → ${b.to}` : ''; })() : '',
     청구액: ctx.billed || '',
     미납액: ctx.unpaid || '',
+    // 사진은 여러 기업에 메일(exh-bulkmail.js)만 채운다 — 거기서 표시를 받아 본문 사진 자리로 바꾼다
+    사진: ctx.photoMark || '',
     // 영문 메일 서명에 한글 이름은 빼고 «… Secretariat»만 남긴다
     보내는사람: en && /[가-힣]/.test(me) ? '' : me,
   };

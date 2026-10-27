@@ -16,7 +16,8 @@
    - 받는 사람: 메인 담당자만 / 메일 있는 담당자 모두 / 첨부: 그 단계의 기본 첨부
    - 기업별 사진: PC 폴더를 고르면 하위 폴더(기업명 또는 부스 번호)마다 그 기업 메일에
      사진을 붙인다. 못 맞춘 폴더는 손으로 기업을 고른다. 사진은 보낼 때 줄여서(긴 변 1600px JPEG)
-     한 통 3MB(서버 LOCAL_MAX) 안에 넣는다. 폴더는 서버에 올리지 않고 이번 발송에만 쓴다
+     한 통 3MB(서버 LOCAL_MAX) 안에 넣는다. 폴더는 서버에 올리지 않고 이번 발송에만 쓴다.
+     사진은 첨부가 아니라 본문(html, cid)에 넣는다 — 문구의 {사진} 자리, 없으면 맨 끝
 ══════════════════════════════════════════════════════════════ */
 import { EXH_LOGS, EXHIBITORS, EXH_CFG, currentUser, logsFor } from '../state.js';
 import { sendMail, eventMailFrom, loadMailFiles, mailFilesOf, saveExhCfgToSheet } from '../api.js';
@@ -247,12 +248,38 @@ function pickTpl(evKey, key, variant){
   return { subject_ko: src.subject_ko || st.subject_ko || '', body_ko: src.body_ko || st.body_ko || '',
     subject_en: src.subject_en || st.subject_en || '', body_en: src.body_en || st.body_en || '' };
 }
+/* 본문의 {사진} 자리 — fillExhTemplate가 이 표시로 채우고, 여기서 사진(html)이나 안내(글)로 바꾼다 */
+const PHOTO_MARK = '⟦사진⟧';
 function mailFor(x){
   const st = curStep();
-  const en = enOf(x), ctx = exhMailCtx(x);
+  const en = enOf(x), ctx = { ...exhMailCtx(x), photoMark: PHOTO_MARK };
   const again = exhFollowOf(x, st) ? (en ? '[Reminder] ' : '[리마인더] ') : '';   // 이미 요청한 곳은 리마인더
+  const raw = fillExhTemplate(bm.tpl[en ? 'body_en' : 'body_ko'], x, st, en, ctx);
+  const n = photosOf(x.id).length;
+  const note = n ? (en ? `(${n} photo${n > 1 ? 's' : ''} below)` : `(사진 ${n}장)`) : '';
   return { subject: again + fillExhTemplate(bm.tpl[en ? 'subject_en' : 'subject_ko'], x, st, en, ctx),
-    body: fillExhTemplate(bm.tpl[en ? 'body_en' : 'body_ko'], x, st, en, ctx), en };
+    raw, body: raw.split(PHOTO_MARK).join(note).replace(/\n{3,}/g, '\n\n').trim(), en };
+}
+/* 사진이 든 html 본문 — srcs[i]는 i번째 사진 주소(보낼 때 cid:, 미리보기 때 blob:).
+   {사진}이 없으면 본문 맨 끝에 넣는다 */
+function bodyHtml(raw, srcs){
+  const imgs = srcs.map(s => `<img src="${s}" style="display:block;max-width:100%;width:640px;height:auto;margin:8px 0;border-radius:4px">`).join('');
+  const txt = (s) => escapeHtml(s).replace(/\n/g, '<br>');
+  const parts = String(raw).split(PHOTO_MARK);
+  const inner = parts.length > 1 ? parts.map(txt).join(imgs) : txt(raw) + (imgs ? `<br>${imgs}` : '');
+  return `<div style="font-family:'Malgun Gothic',Arial,sans-serif;font-size:14px;line-height:1.6;color:#222">${inner}</div>`;
+}
+const thumbCache = new WeakMap();
+const thumbOf = (f) => { if(!thumbCache.has(f)) thumbCache.set(f, URL.createObjectURL(f)); return thumbCache.get(f); };
+/* 보낼 메일 한 통 — 사진이 있으면 본문(html)에 넣고 cid 첨부로 붙인다 */
+async function buildMail(x){
+  const m = mailFor(x);
+  const ph = await photoAttachments(x.id);
+  if(ph.error) return { error: ph.error };
+  if(!ph.list.length) return { ...m, attachments: [] };
+  const stamp = Date.now().toString(36);
+  const attachments = ph.list.map((a, i) => ({ ...a, cid: `p${i}.${stamp}@bloom` }));
+  return { ...m, html: bodyHtml(m.raw, attachments.map(a => `cid:${a.cid}`)), attachments };
 }
 
 /* ── 다시 보내기 묶음 — 행사 설정(EXH_CFG[행사].exhMailRounds). 단계당 하나만 열린다 ── */
@@ -424,9 +451,13 @@ function prevHtml(picked){
       <b style="color:var(--i2)">${escapeHtml(exhNames(x).ko)}</b>${m.en ? ' (영문)' : ''}
       <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">→ ${escapeHtml(mailsOf(x, bm.who).join(', '))}</span>
     </div>
-    <div style="white-space:pre-wrap;max-height:240px;overflow:auto"><b>${escapeHtml(m.subject)}</b>\n\n${escapeHtml(m.body)}</div>
+    ${photosOf(x.id).length
+      ? `<div style="max-height:360px;overflow:auto;background:#fff;padding:6px;border-radius:5px"><b>${escapeHtml(m.subject)}</b><br><br>${
+          bodyHtml(m.raw, photosOf(x.id).map(thumbOf)).replace('width:640px', 'width:320px')}</div>`
+      : `<div style="white-space:pre-wrap;max-height:240px;overflow:auto"><b>${escapeHtml(m.subject)}</b>\n\n${escapeHtml(m.body)}</div>`}
     ${bm.photos ? `<div style="margin-top:6px;font-size:10.5px;${photosOf(x.id).length ? '' : 'color:var(--am)'}">${photosOf(x.id).length
-      ? `📷 ${photosOf(x.id).map(f => escapeHtml(f.name)).join(', ')}` : '📷 이 기업에 맞는 사진 폴더가 없어요'}</div>` : ''}
+      ? `📷 본문에 ${photosOf(x.id).length}장 — ${photosOf(x.id).map(f => escapeHtml(f.name)).join(', ')}${/\{사진\}/.test(bm.tpl[m.en ? 'body_en' : 'body_ko']) ? '' : ' · 문구에 {사진}을 넣으면 그 자리에, 없으면 맨 끝에 들어가요'}`
+      : '📷 이 기업에 맞는 사진 폴더가 없어요'}</div>` : ''}
   </div>`;
 }
 const refreshPrev = () => { const el = document.getElementById('bm-prev'); if(el) el.innerHTML = prevHtml(visibleList().filter(x => bm.ids.has(x.id))); };
@@ -462,12 +493,11 @@ export async function sendExhTestMail(){
   const picked = visibleList().filter(x => bm.ids.has(x.id));
   if(!picked.length) return;
   const x = picked[((bm.pi % picked.length) + picked.length) % picked.length];
-  const m = mailFor(x);
   const fileIds = mailFilesOf(bm.evKey).filter(f => f.step === exhMailFileStep(bm.step)).map(f => f.id);
   say(`${me}로 보내는 중…`, true);
-  const ph = await photoAttachments(x.id);
-  if(ph.error){ say(`${exhNames(x).ko}: ${ph.error}`); return; }
-  const res = await sendMail({ to: [me], subject: `[시험] ${m.subject}`, text: m.body, event_id: bm.evKey, file_ids: fileIds, attachments: ph.list });
+  const m = await buildMail(x);
+  if(m.error){ say(`${exhNames(x).ko}: ${m.error}`); return; }
+  const res = await sendMail({ to: [me], subject: `[시험] ${m.subject}`, text: m.body, html: m.html, event_id: bm.evKey, file_ids: fileIds, attachments: m.attachments });
   say(res.ok ? `${me}로 «${exhNames(x).ko}» 메일을 보냈어요 — 받은편지함에서 확인하세요.` : (res.error || '보내지 못했어요.'), !!res.ok);
 }
 
@@ -496,10 +526,11 @@ export async function sendExhBulkMail(){
   for(const [i, x] of list.entries()){
     say(`보내는 중… ${i + 1}/${list.length} ${exhNames(x).ko}`, true);
     const to = mailsOf(x, bm.who);
-    const { subject, body: text } = mailFor(x);
-    const ph = await photoAttachments(x.id);
+    const ph = await buildMail(x);
     if(ph.error){ fails.push(`${exhNames(x).ko}: ${ph.error}`); bm.failed.add(x.id); continue; }
-    const res = await sendMail({ to, subject, text, exhibitor_id: x.id, category: st.label, kind, file_ids: fileIds, attachments: ph.list });
+    const { subject, body: text, html } = ph;
+    ph.list = ph.attachments;
+    const res = await sendMail({ to, subject, text, html, exhibitor_id: x.id, category: st.label, kind, file_ids: fileIds, attachments: ph.attachments });
     if(!res.ok){ fails.push(`${exhNames(x).ko}: ${res.error || '실패'}`); bm.failed.add(x.id); continue; }
     ok++;
     const names = [...mailFilesOf(bm.evKey).filter(f => fileIds.includes(f.id)).map(f => f.filename), ...ph.list.map(a => a.filename)];
