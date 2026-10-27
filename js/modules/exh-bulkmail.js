@@ -41,7 +41,17 @@ const IMG_RE = /\.(jpe?g|png|webp|gif|bmp|heic)$/i;
 const PHOTO_MAX = 3 * 1024 * 1024;   // 서버 LOCAL_MAX — PC에서 고른 첨부는 한 통에 합쳐서 3MB
 const keyOf = (s) => normalizeCompanyKey(String(s || '').replace(/[_\-]+/g, ' '));
 const boothKey = (s) => String(s || '').replace(/\s+/g, '').toLowerCase();
+/* «10-11. DreamCIS»처럼 부스 번호를 앞에 붙인 이름은 번호와 기업명을 나눠 본다 */
+const PREFIX_RE = /^\s*([0-9A-Za-z]+(?:\s*[-~,]\s*[0-9A-Za-z]+)*)\s*[.)]\s+(.+)$/;
 function matchFolder(name, xs){
+  const m = String(name || '').match(PREFIX_RE);
+  if(m){
+    const byName = matchFolder(m[2], xs);
+    if(byName) return byName;
+    const nums = m[1].split(/\s*[-~,]\s*/).map(boothKey);
+    const r = xs.filter(x => x.booth_no && nums.some(n => boothKey(x.booth_no) === n || boothKey(x.booth_no).replace(/^[a-z]+-?/, '') === n));
+    if(r.length === 1) return r[0].id;
+  }
   const k = keyOf(name), b = boothKey(name);
   if(!k) return '';
   const hit = (f) => xs.filter(f);
