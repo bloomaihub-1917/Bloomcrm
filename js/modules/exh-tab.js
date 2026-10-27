@@ -4979,7 +4979,8 @@ function renderChecklistTable(list, all){
       ${stats.map(s => stepPill(s.step, s)).join('')}
       ${list.length ? `<span style="margin-left:auto;flex:0 0 auto">
         <button class="btn bs" id="exh-list-export-btn" onclick="exportChecklist()"
-          title="지금 보이는 ${list.length}곳의 진행현황을 엑셀로 받습니다">엑셀 다운로드</button></span>` : ''}
+          title="지금 보이는 ${list.length}곳의 진행현황을 엑셀로 받습니다">엑셀 다운로드</button>
+        <button class="btn bs" onclick="openExhBulkMail()" title="지금 보이는 기업 중 골라 같은 안내를 기업마다 한 통씩 보냅니다">✉ 여러 기업에 메일</button></span>` : ''}
     </div>
     <div class="tw"><table><thead><tr>
       <th style="min-width:44px;text-align:right">신청순</th>
