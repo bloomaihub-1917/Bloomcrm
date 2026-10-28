@@ -17,7 +17,7 @@ import {
   contactsFor, catalogFor, catalogItem, EQUIP_CATALOG, findCatalogByName,
   contacts, participations, getOrgById, findOrgByName, ORGS, codeList, codeLabel,
   EXH_APPS, appsFor, openAppFor, isVoided, liveItemsFor, exhEvent, exhibitorsForEvent,
-  nextItemSort, EVENT_LIST,
+  nextItemSort, EVENT_LIST, nextContactId,
 } from '../state.js';
 import { td, nowStamp, mailDirPill, escapeHtml, escAttr, countryOptions, leftPill, splitQuotedMail } from '../utils.js';
 /* 보낸 기록 본문 — 이전 메일(인용)은 접어 둔다(utils.js splitQuotedMail) */
@@ -734,7 +734,8 @@ function dContact(x){
     const r = p.row;
     return `<div style="padding:9px 11px;background:var(--i9);border-radius:8px;border-left:3px solid ${p.primary ? 'var(--a)' : 'var(--i6)'};margin-bottom:6px">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
-        <span style="font-size:13px;font-weight:700">${escapeHtml(p.name || p.email || '이름 없음')}</span>${leftPill(p)}
+        <span style="font-size:13px;font-weight:700${p.linked ? ';cursor:pointer;text-decoration:underline dotted' : ''}"${p.linked
+          ? ` onclick="openExhPerson('${escAttr(String(r.contact_id))}')" title="마스터DB 연락처 정보 보기"` : ''}>${escapeHtml(p.name || p.email || '이름 없음')}</span>${leftPill(p)}
         ${p.title ? `<span class="pill p-gray">${escapeHtml(p.title)}</span>` : ''}
         ${p.primary ? '<span class="pill p-blue">메인</span>' : ''}
         <select class="fi" style="width:74px;padding:2px 5px;font-size:10.5px;margin-left:auto"
@@ -799,7 +800,7 @@ function dContact(x){
     return `<div style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;margin-bottom:4px;
       background:${on ? 'var(--ad)' : 'var(--W)'};border:1px solid ${on ? 'var(--a)' : 'var(--i7)'}">
       <div style="flex:1;min-width:0">
-        <div style="font-size:12.5px;font-weight:600">${escapeHtml(c.nameKo || c.nameEn || '이름 없음')}${
+        <div style="font-size:12.5px;font-weight:600;cursor:pointer" onclick="openExhPerson('${escAttr(String(c.id))}')" title="마스터DB 연락처 정보 보기">${escapeHtml(c.nameKo || c.nameEn || '이름 없음')}${
           c.nameKo && c.nameEn ? `<span style="font-weight:400;color:var(--i4);margin-left:5px">${escapeHtml(c.nameEn)}</span>` : ''}</div>
         ${sub ? `<div style="font-size:10.5px;color:var(--i4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(sub)}</div>` : ''}
       </div>
@@ -811,7 +812,121 @@ function dContact(x){
     </div>`;
   }).join('')
   : `<div style="font-size:11.5px;color:var(--am);padding:8px 2px">
-      이 기업 연락처가 마스터DB에 없어요 — <b>직접 입력</b>으로 추가하면 마스터DB에도 함께 등록됩니다</div>`}`;
+      이 기업 연락처가 마스터DB에 없어요 — <b>직접 입력</b>으로 추가하면 마스터DB에도 함께 등록됩니다</div>`}
+  ${mailCandidates(x, list, cands)}`;
+}
+
+/* ── 메일함에 나온 주소 중 아직 담당자가 아닌 사람 ──
+   메일을 주고받다 보면 참조로 다른 담당자·시공사·대행사가 붙는다. 그 주소는 메일함에만
+   있고 담당자 칸에는 없어서, 다음 메일을 쓸 때 또 메일을 뒤져야 했다.
+
+   자동으로 넣지 않는다 — 이 사람이 기업 담당자인지, 이 기업 부스를 짓는 시공사인지,
+   우리와 상관없는 사람인지는 사람이 보고 정한다. 화면은 후보와 판단 자료(도메인,
+   몇 통에 나왔는지)만 보여 주고, 어디에 넣을지는 단추로 고르게 한다.
+
+   여러 기업 메일에 두루 나오는 도메인(사무국·주관사·우리 쪽)은 후보에서 뺀다 —
+   한 기업 사람이면 그 기업 메일에만 나온다. */
+const MAIL_RE = /[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g;
+const hideKey = (ev) => `bloom.mailcand.hide.${ev}`;
+const hiddenCands = (ev) => { try { return new Set(JSON.parse(localStorage.getItem(hideKey(ev)) || '[]')); } catch(e){ return new Set(); } };
+
+/* "이름 <주소>, 주소2 (cc) 주소3" → [{ email, name }] */
+function parseCounterpart(s){
+  const out = [];
+  String(s || '').replace(/\(cc\)/gi, ',').split(/[,;]/).forEach(part => {
+    const m = part.match(MAIL_RE);
+    if(!m) return;
+    const name = part.replace(/<[^>]*>/g, '').replace(MAIL_RE, '').replace(/["']/g, '').trim();
+    out.push({ email: m[0].toLowerCase(), name });
+  });
+  return out;
+}
+
+/* 이 행사에서 여러 기업 메일에 두루 나오는 도메인 — 우리 쪽이다 */
+function sharedDomains(evKey){
+  const seen = new Map();
+  const ids = new Set(exhibitorsForEvent(evKey).map(e => e.id));
+  EXH_LOGS.filter(l => ids.has(l.exhibitor_id) && l.channel === '이메일').forEach(l =>
+    parseCounterpart(l.counterpart).forEach(({ email }) => {
+      const d = mailDomain(email);
+      if(!seen.has(d)) seen.set(d, new Set());
+      seen.get(d).add(l.exhibitor_id);
+    }));
+  const own = mailDomain(currentUser?.email || '');
+  const out = new Set([...seen].filter(([, s]) => s.size >= 4).map(([d]) => d));
+  if(own) out.add(own);
+  return out;
+}
+
+function mailCandidates(x, list, cands){
+  const known = new Set([...list.map(p => p.email), ...cands.map(c => c.email1), ...cands.map(c => c.email2), x.builder_email]
+    .map(e => cleanEmail(e || '').toLowerCase()).filter(Boolean));
+  const shared = sharedDomains(x.event_id);
+  const hidden = hiddenCands(x.event_id);
+  const found = new Map();
+  logsFor(x.id).filter(l => l.channel === '이메일').forEach(l =>
+    parseCounterpart(l.counterpart).forEach(({ email, name }) => {
+      if(known.has(email) || hidden.has(email) || shared.has(mailDomain(email))) return;
+      const f = found.get(email) || { email, name: '', n: 0, last: '' };
+      if(name && !f.name) f.name = name;
+      f.n++;
+      if(String(l.ts || '') > f.last) f.last = String(l.ts || '');
+      found.set(email, f);
+    }));
+  if(!found.size) return '';
+  const rows = [...found.values()].sort((a, b) => b.n - a.n || b.last.localeCompare(a.last));
+  const a = (s) => escAttr(s);
+  return `
+  <div style="display:flex;align-items:center;gap:8px;margin:16px 0 4px;padding-top:12px;border-top:1px solid var(--i7)">
+    <span style="font-size:11px;font-weight:700;color:var(--i3)">메일함에 나온 주소 — 아직 담당자 아님</span>
+    <span style="font-size:10.5px;color:var(--i5)">${rows.length}명</span>
+  </div>
+  <div style="font-size:10.5px;color:var(--i5);margin-bottom:7px">기업 담당자인지, 시공사·벤더인지 보고 골라 주세요. 관계없는 주소는 숨기면 이 행사에서 다시 안 나와요.</div>
+  ${rows.map(f => {
+    const other = foreignDomain(f.email, cands);
+    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;margin-bottom:4px;border:1px dashed var(--i6)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12.5px;font-weight:600">${escapeHtml(f.name || f.email)}${other
+          ? `<span class="pill p-amber" style="margin-left:5px" title="이 기업의 마스터DB 연락처는 ${a(other)} 도메인을 씁니다 — 시공사·대행사일 수 있어요">다른 도메인</span>` : ''}</div>
+        <div style="font-size:10.5px;color:var(--i4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name ? escapeHtml(f.email) + ' · ' : ''}메일 ${f.n}통 · 최근 ${escapeHtml(f.last.slice(0, 10))}</div>
+      </div>
+      <button class="btn bp bs" style="flex:0 0 auto;font-size:10.5px" onclick="openNewContact('${a(x.id)}','${a(f.name)}','${a(f.email)}')"
+        title="이 기업 담당자로 마스터DB에 등록하고 배정합니다 — 창에서 이름·직함을 확인한 뒤 추가돼요">기업 담당자로</button>
+      <button class="btn bs" style="flex:0 0 auto;font-size:10.5px" onclick="mailCandAsBuilder('${a(x.id)}','${a(f.name)}','${a(f.email)}')"
+        title="이 기업 부스 시공사 담당자로 적습니다(진행 탭 «독립부스 시공사»)">시공사로</button>
+      <button class="btn bs" style="flex:0 0 auto;font-size:10.5px;opacity:.6" onclick="hideMailCand('${a(x.event_id)}','${a(f.email)}')"
+        title="담당자가 아닌 주소 — 이 행사에서 다시 보이지 않게 합니다(내 브라우저에만)">숨기기</button>
+    </div>`;
+  }).join('')}`;
+}
+
+/* 담당자 이름을 누르면 마스터DB 연락처 드로어를 띄운다(db-tab.js) — id는 숫자로 맞춘다 */
+export function openExhPerson(id){
+  const c = contacts.find(o => String(o.id) === String(id));
+  if(c) window.openContactDr?.(c.id);
+}
+
+export function hideMailCand(evKey, email){
+  const s = hiddenCands(evKey);
+  s.add(email);
+  try { localStorage.setItem(hideKey(evKey), JSON.stringify([...s])); } catch(e){}
+  refreshExhViews();
+}
+
+/* 시공사 담당자로 — 이미 다른 사람이 적혀 있으면 덮기 전에 묻는다 */
+export function mailCandAsBuilder(exhId, name, email){
+  if(exhLocked()){ exhLockNotice(); return; }
+  const x = getExhibitorById(exhId);
+  if(!x) return;
+  const cur = [x.builder_contact, x.builder_email].filter(Boolean).join(' · ');
+  if(cur && !confirm(`시공 담당자가 이미 적혀 있어요: ${cur}\n${name || email}(으)로 바꿀까요?`)) return;
+  if(!String(x.builder || '').trim()){
+    const b = prompt('시공사명을 적어 주세요 (기업 DB의 시공사와 연결됩니다). 모르면 비워 두세요.', '');
+    if(b === null) return;
+    if(b.trim()) setBuilderOrg(exhId, b.trim());
+  }
+  if(name) window.setExhField(exhId, 'builder_contact', name, '시공 담당자');
+  window.setExhField(exhId, 'builder_email', email, '시공사 이메일');
 }
 
 /* ── 담당자 직접 입력 ──
@@ -820,7 +935,7 @@ function dContact(x){
 
    성명·직함·부서를 국문·영문으로 나눠 받는다 — 해외 기업은 영문만, 국내는
    국문만 오는 일이 많아 한 칸에 몰아넣으면 나중에 갈라내야 한다. */
-export function openNewContact(exhId){
+export function openNewContact(exhId, name, email){
   const x = getExhibitorById(exhId);
   if(!x) return;
   const org = x.org_id ? getOrgById(x.org_id) : null;
@@ -858,6 +973,10 @@ export function openNewContact(exhId){
       <button class="btn bs" onclick="closeNewContact()">취소</button>
       <button class="btn bp" id="nc-save" onclick="submitNewContact('${escAttr(exhId)}')">추가</button>
     </div>`);
+  // 메일함에서 온 사람이면 이름·주소를 채워 둔다 — 이름이 한글이면 국문, 아니면 영문 칸
+  const setV = (id, v) => { const el = document.getElementById('nc-' + id); if(el && v) el.value = v; };
+  setV('email', email);
+  setV(/[가-힣]/.test(name || '') ? 'nameKo' : 'nameEn', name);
   document.getElementById('nc-nameKo')?.focus();
 }
 export const closeNewContact = () => document.getElementById('new-contact-modal')?.remove();
@@ -878,7 +997,7 @@ export async function submitNewContact(exhId){
   const org = x?.org_id ? getOrgById(x.org_id) : null;
   const today = td();
   const c = {
-    id: Date.now() + Math.floor(Math.random() * 10000),
+    id: nextContactId(),   // CLAUDE.md 16자리 규칙
     nameKo, nameEn,
     orgKo: org?.name_ko || x?.company_name || '', orgEn: org?.name_en || '',
     titleKo: v('titleKo'), titleEn: v('titleEn'),
@@ -3844,6 +3963,9 @@ window.delExhLog = delExhLog;
 window.answerExhLog = answerExhLog;
 window.holdExhLog = holdExhLog;
 window.promoteExhContact = promoteExhContact;
+window.hideMailCand = hideMailCand;
+window.openExhPerson = openExhPerson;
+window.mailCandAsBuilder = mailCandAsBuilder;
 window.noteExhContact = noteExhContact;
 window.delExhContact = delExhContact;
 window.setExhContactField = setExhContactField;
