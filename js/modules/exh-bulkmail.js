@@ -460,6 +460,8 @@ function render(){
       <button class="btn bp" onclick="sendExhBulkMail()" ${picked.length && !bm.sending ? '' : 'disabled'}>${picked.length}곳에 보내기</button>
       <button class="btn" onclick="sendExhTestMail()" ${picked.length && !bm.sending ? '' : 'disabled'}
         title="미리보기 중인 기업의 메일을 내 주소(또는 적은 주소)로 한 통 보냅니다 — 기록에 남지 않아요">나에게 먼저 1통</button>
+      <button class="btn" onclick="sendExhTestMail(true)" ${picked.length > 1 && !bm.sending ? '' : 'disabled'}
+        title="고른 기업 메일을 모두 내 주소(또는 적은 주소)로 보냅니다 — 제목 앞에 [시험·기업명], 기록에 남지 않아요">고른 ${picked.length}곳 모두 나에게</button>
       <span id="bm-msg" style="font-size:11px;color:var(--i4)"></span>
     </div>
   </div>`;
@@ -524,8 +526,10 @@ export function bmTpl(k, v){ if(!bm) return; bm.tpl[k] = v; refreshPrev(); }
 
 const say = (t, ok) => { const m = document.getElementById('bm-msg'); if(m){ m.style.color = ok ? 'var(--g)' : 'var(--re)'; m.textContent = t; } };
 
-/* 시험 발송 — 미리보기 중인 기업의 메일을 내 주소로. exhibitor_id를 안 넘겨 기록에 남지 않는다 */
-export async function sendExhTestMail(){
+/* 시험 발송 — 미리보기 중인 기업(all이면 고른 기업 모두)의 메일을 내 주소로.
+   exhibitor_id를 안 넘겨 기록에 남지 않는다 */
+const TEST_GAP = 5;   // 내 주소로만 가니 짧게 쉰다
+export async function sendExhTestMail(all){
   if(!bm || bm.sending) return;
   // 받을 주소는 기본이 내 주소 — 행사 공용 메일함 등 다른 곳에서 보고 싶으면 바꾼다
   const me = (prompt('시험 메일을 받을 주소 (기록에 남지 않아요)', currentUser?.email || '') || '').trim();
@@ -533,13 +537,26 @@ export async function sendExhTestMail(){
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(me)){ say('메일 주소 모양이 아니에요.'); return; }
   const picked = visibleList().filter(x => bm.ids.has(x.id));
   if(!picked.length) return;
-  const x = picked[((bm.pi % picked.length) + picked.length) % picked.length];
+  const list = all ? picked : [picked[((bm.pi % picked.length) + picked.length) % picked.length]];
+  if(all && !confirm(`고른 ${list.length}곳의 메일을 모두 ${me}로 보낼까요?
+기업에는 안 가고 기록에도 안 남아요. 약 ${Math.ceil((list.length - 1) * TEST_GAP / 60)}분 걸려요.`)) return;
   const fileIds = mailFilesOf(bm.evKey).filter(f => f.step === exhMailFileStep(bm.step)).map(f => f.id);
-  say(`${me}로 보내는 중…`, true);
-  const m = await buildMail(x);
-  if(m.error){ say(`${exhNames(x).ko}: ${m.error}`); return; }
-  const res = await sendMail({ to: [me], subject: `[시험] ${m.subject}`, text: m.body, html: m.html, event_id: bm.evKey, file_ids: fileIds, attachments: m.attachments });
-  say(res.ok ? `${me}로 «${exhNames(x).ko}» 메일을 보냈어요 — 받은편지함에서 확인하세요.` : (res.error || '보내지 못했어요.'), !!res.ok);
+  bm.sending = true;
+  render();
+  let ok = 0;
+  const fails = [];
+  for(const [i, x] of list.entries()){
+    if(i) for(let s = TEST_GAP; s > 0; s--){ say(`${i}/${list.length} 보냄 — ${s}초 뒤 다음 통 (${exhNames(x).ko})`, true); await new Promise(r => setTimeout(r, 1000)); }
+    say(`${me}로 보내는 중… ${i + 1}/${list.length} ${exhNames(x).ko}`, true);
+    const m = await buildMail(x);
+    if(m.error){ fails.push(`${exhNames(x).ko}: ${m.error}`); continue; }
+    const res = await sendMail({ to: [me], subject: `[시험${all ? `·${exhNames(x).ko}` : ''}] ${m.subject}`, text: m.body, html: m.html, event_id: bm.evKey, file_ids: fileIds, attachments: m.attachments });
+    if(res.ok) ok++; else fails.push(`${exhNames(x).ko}: ${res.error || '실패'}`);
+  }
+  bm.sending = false;
+  render();
+  say(ok ? `${me}로 ${all ? `${ok}통` : `«${exhNames(list[0]).ko}» 메일`}을 보냈어요 — 받은편지함에서 확인하세요.${fails.length ? ` 실패 ${fails.length}곳: ${fails.slice(0, 5).join(' / ')}` : ''}`
+         : (fails.join(' / ') || '보내지 못했어요.'), !fails.length);
 }
 
 export async function sendExhBulkMail(){
