@@ -253,6 +253,7 @@ function pickTpl(evKey, key, variant){
 }
 /* 본문의 {사진} 자리 — fillExhTemplate가 이 표시로 채우고, 여기서 사진(html)이나 안내(글)로 바꾼다 */
 const PHOTO_MARK = '⟦사진⟧';
+const SEND_GAP = 20;   // 통 사이 쉬는 초 — sendExhBulkMail
 function mailFor(x){
   const st = curStep();
   const en = enOf(x), ctx = { ...exhMailCtx(x), photoMark: PHOTO_MARK };
@@ -260,17 +261,26 @@ function mailFor(x){
   const raw = fillExhTemplate(bm.tpl[en ? 'body_en' : 'body_ko'], x, st, en, ctx);
   const n = photosOf(x.id).length;
   const note = n ? (en ? `(${n} photo${n > 1 ? 's' : ''} below)` : `(사진 ${n}장)`) : '';
+  const evName = fillExhTemplate('{행사}', x, st, en, ctx);
+  const firm = fillExhTemplate('{기업}', x, st, en, ctx);
+  // 이미지 대체 문구 — 이미지를 안 띄우는 메일 프로그램과 스팸 필터가 읽는 글
+  const alt = { top: en ? `${evName} Thank-you letter` : `${evName} 감사 서한`,
+    photo: (i) => en ? `${firm} booth photo ${i + 1}` : `${firm} 부스 사진 ${i + 1}` };
+  let body = raw.split(PHOTO_MARK).join(note).replace(/\n{3,}/g, '\n\n').trim();
+  // 글 없이 이미지만이면 글자 본문이 비지 않게 — 이미지만 든 메일은 스팸으로 잡히기 쉽다
+  if(bannerOf(en) && !body.replace(/\(.*?\)/g, '').trim()) body = `${alt.top}\n${body}`.trim();
   return { subject: again + fillExhTemplate(bm.tpl[en ? 'subject_en' : 'subject_ko'], x, st, en, ctx),
-    raw, body: raw.split(PHOTO_MARK).join(note).replace(/\n{3,}/g, '\n\n').trim(), en };
+    raw, body, en, alt };
 }
 /* 사진이 든 html 본문 — srcs[i]는 i번째 사진 주소(보낼 때 cid:, 미리보기 때 blob:).
-   {사진}이 없으면 본문 맨 끝에 넣는다 */
-function bodyHtml(raw, srcs, top){
-  const imgs = srcs.map(s => `<img src="${s}" style="display:block;max-width:100%;width:640px;height:auto;margin:8px 0;border-radius:4px">`).join('');
+   {사진}이 없으면 본문 맨 끝에 넣는다. alt는 mailFor의 대체 문구 */
+function bodyHtml(raw, srcs, top, alt){
+  const a = (s) => alt ? ` alt="${escAttr(s)}"` : '';
+  const imgs = srcs.map((s, i) => `<img src="${s}"${a(alt && alt.photo(i))} style="display:block;max-width:100%;width:640px;height:auto;margin:8px 0;border-radius:4px">`).join('');
   const txt = (s) => escapeHtml(s).replace(/\n/g, '<br>');
   const parts = String(raw).split(PHOTO_MARK);
   const inner = parts.length > 1 ? parts.map(txt).join(imgs) : txt(raw) + (imgs ? `<br>${imgs}` : '');
-  const head = top ? `<img src="${top}" style="display:block;max-width:100%;width:640px;height:auto;margin:0 0 12px">` : '';
+  const head = top ? `<img src="${top}"${a(alt && alt.top)} style="display:block;max-width:100%;width:640px;height:auto;margin:0 0 12px">` : '';
   return `<div style="font-family:'Malgun Gothic',Arial,sans-serif;font-size:14px;line-height:1.6;color:#222">${head}${inner}</div>`;
 }
 /* ── 맨 위 공통 이미지(감사장 등) — 모든 기업에 같은 이미지. 국문·영문을 따로 고를 수 있고
@@ -306,7 +316,7 @@ async function buildMail(x){
   const stamp = Date.now().toString(36);
   const attachments = ph.list.map((a, i) => ({ ...a, cid: `p${i}.${stamp}@bloom` }));
   const head = ph.top ? { ...ph.top, cid: `top.${stamp}@bloom` } : null;
-  return { ...m, html: bodyHtml(m.raw, attachments.map(a => `cid:${a.cid}`), head && `cid:${head.cid}`),
+  return { ...m, html: bodyHtml(m.raw, attachments.map(a => `cid:${a.cid}`), head && `cid:${head.cid}`, m.alt),
     attachments: head ? [head, ...attachments] : attachments };
 }
 
@@ -482,7 +492,7 @@ function prevHtml(picked){
     </div>
     ${photosOf(x.id).length || bannerOf(m.en)
       ? `<div style="max-height:420px;overflow:auto;background:#fff;padding:6px;border-radius:5px"><b>${escapeHtml(m.subject)}</b><br><br>${
-          bodyHtml(m.raw, photosOf(x.id).map(thumbOf), bannerOf(m.en) && thumbOf(bannerOf(m.en))).replace(/width:640px/g, 'width:320px')}</div>`
+          bodyHtml(m.raw, photosOf(x.id).map(thumbOf), bannerOf(m.en) && thumbOf(bannerOf(m.en)), m.alt).replace(/width:640px/g, 'width:320px')}</div>`
       : `<div style="white-space:pre-wrap;max-height:240px;overflow:auto"><b>${escapeHtml(m.subject)}</b>\n\n${escapeHtml(m.body)}</div>`}
     ${bm.photos ? `<div style="margin-top:6px;font-size:10.5px;${photosOf(x.id).length ? '' : 'color:var(--am)'}">${photosOf(x.id).length
       ? `📷 본문에 ${photosOf(x.id).length}장 — ${photosOf(x.id).map(f => escapeHtml(f.name)).join(', ')}${/\{사진\}/.test(bm.tpl[m.en ? 'body_en' : 'body_ko']) ? '' : ' · 문구에 {사진}을 넣으면 그 자리에, 없으면 맨 끝에 들어가요'}`
@@ -546,7 +556,8 @@ export async function sendExhBulkMail(){
   const notTurn = st.key === 'note' || st.lib ? 0 : list.filter(x => !isTurn(exhMailState(x, st))).length;
   const noPhoto = bm.photos ? list.filter(x => !photosOf(x.id).length).length : 0;
   if(!confirm(`${list.length}곳에 «${st.label}»${st.round ? ` (${st.round.label})` : ''} 메일을 보낼까요?${notTurn ? `\n\n이 중 ${notTurn}곳은 보낼 차례가 아니에요(이미 보냈거나 끝남).` : ''}${
-    bm.photos ? `\n\n📷 기업별 사진: ${list.length - noPhoto}곳에 붙어요.${noPhoto ? ` ${noPhoto}곳은 맞는 사진이 없어 사진 없이 나가요.` : ''}` : ''}\n\n발신 ${from.text}\n받는 사람: ${bm.who === 'all' ? '메일 있는 담당자 모두' : '메인 담당자'}\n기업마다 한 통씩 따로 나갑니다.`)) return;
+    bm.photos ? `\n\n📷 기업별 사진: ${list.length - noPhoto}곳에 붙어요.${noPhoto ? ` ${noPhoto}곳은 맞는 사진이 없어 사진 없이 나가요.` : ''}` : ''}\n\n발신 ${from.text}\n받는 사람: ${bm.who === 'all' ? '메일 있는 담당자 모두' : '메인 담당자'}\n기업마다 한 통씩 따로 나갑니다.${
+    list.length > 1 ? `\n\n스팸으로 잡히지 않게 통마다 ${SEND_GAP}초씩 쉬어요 — 약 ${Math.ceil((list.length - 1) * SEND_GAP / 60)}분 걸려요. 다 보낼 때까지 이 창을 닫지 마세요.` : ''}`)) return;
 
   bm.sending = true;
   render();
@@ -555,6 +566,12 @@ export async function sendExhBulkMail(){
   const fails = [];
   bm.failed = new Set();
   for(const [i, x] of list.entries()){
+    /* 통 사이에 쉰다 — 같은 모양 메일을 쉬지 않고 수십 통 보내면 받는 쪽이 대량 발송으로 보고
+       스팸함에 넣는다(특히 Gmail 같은 무료 메일 발신). 첫 통 앞에서는 쉬지 않는다 */
+    if(i) for(let s = SEND_GAP; s > 0; s--){
+      say(`${i}/${list.length} 보냄 — 스팸으로 잡히지 않게 ${s}초 쉬었다가 다음 통 (${exhNames(x).ko})`, true);
+      await new Promise(r => setTimeout(r, 1000));
+    }
     say(`보내는 중… ${i + 1}/${list.length} ${exhNames(x).ko}`, true);
     const to = mailsOf(x, bm.who);
     const ph = await buildMail(x);
