@@ -227,11 +227,14 @@ const curStep = () => {
 /* 보낼 차례이고 메일 받을 사람이 있는 기업 */
 function pickTurn(){
   const st = curStep();
-  const list = visibleList().filter(x => mailsOf(x, bm.who).length);
+  const list = shownList().filter(x => mailsOf(x, bm.who).length);
   bm.ids = new Set((!st || st.key === 'note' || st.lib ? list : list.filter(x => isTurn(exhMailState(x, st)))).map(x => x.id));
   bm.pi = 0;
 }
 const enOf = (x) => bm.lang === 'en' ? true : bm.lang === 'ko' ? false : exhIsEnglish(x);
+/* 목록 필터 — 국문으로 갈 곳 / 영문으로 갈 곳만 보기. «전체»·«보낼 차례만»·«사진 있는 곳만»도 보이는 곳 안에서 고른다 */
+const shownList = () => visibleList().filter(x => !bm.langF || (enOf(x) ? 'en' : 'ko') === bm.langF);
+export function bmLangF(v){ if(!bm || bm.sending) return; bm.langF = v; render(); }
 
 /* stepKey를 주면 그 단계가 골라진 채로 연다(전시 메일 단계 편집 창의 «📨 여러 기업에») */
 export async function openExhBulkMail(stepKey){
@@ -467,7 +470,7 @@ function render(){
     el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
     document.body.appendChild(el);
   }
-  el.innerHTML = `<div style="background:var(--W);border-radius:12px;width:min(980px,100%);max-height:92vh;overflow:auto;padding:16px 18px">
+  el.innerHTML = `<div style="background:var(--W);border-radius:12px;width:min(1240px,100%);max-height:94vh;overflow:auto;padding:16px 18px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
       <div style="font-size:14px;font-weight:700">여러 기업에 메일</div>
       <span style="font-size:11px;color:var(--i4)">기업마다 한 통씩 따로 보내고 그 기업 기록에 남깁니다</span>
@@ -485,27 +488,35 @@ function render(){
     </div>
     ${roundBarHtml(st, rp)}
     ${st && st.key === 'booth_change' ? `<div style="font-size:10.5px;color:var(--i4);margin:-4px 0 8px">알린 부스(그 기업에 마지막으로 보낸 메일의 «부스 번호:» 줄)와 지금 부스가 다른 곳만 잡혀요. 보내면 새 번호가 «알린 부스»가 됩니다.</div>` : ''}
-    <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:14px">
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:16px">
       <div>
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap">
-          <div class="mlbl" style="margin:0">받는 기업 ${picked.length}/${list.length}</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+          <div class="mlbl" style="margin:0">받는 기업 <b style="color:var(--i1)">${picked.length}</b>/${list.length}${
+            picked.length ? ` <span style="font-weight:400;color:var(--i4)">(국문 ${picked.filter(x => !enOf(x)).length} · 영문 ${picked.filter(enOf).length})</span>` : ''}</div>
           <span style="margin-left:auto;display:flex;gap:4px">
             ${failedN ? `<button class="btn" style="font-size:10px;color:var(--re)" onclick="bmAll('failed')">실패한 ${failedN}곳만</button>` : ''}
-            ${st && st.key !== 'note' ? `<button class="btn" style="font-size:10px" onclick="bmAll('turn')" title="이 메일이 보낼 차례인 기업만 고릅니다">보낼 차례만</button>` : ''}
-            <button class="btn" style="font-size:10px" onclick="bmAll(true)">전체</button>
+            ${st && st.key !== 'note' ? `<button class="btn" style="font-size:10px" onclick="bmAll('turn')" title="보이는 기업 중 이 메일이 보낼 차례인 곳만 고릅니다">보낼 차례만</button>` : ''}
+            <button class="btn" style="font-size:10px" onclick="bmAll(true)" title="보이는 기업을 모두 고릅니다">전체</button>
             <button class="btn" style="font-size:10px" onclick="bmAll(false)">해제</button></span>
         </div>
-        <div style="border:1px solid var(--i6);border-radius:8px;max-height:360px;overflow:auto">
-          ${list.map(x => { const ms = mailsOf(x, bm.who); const bc = st && st.key === 'booth_change' ? boothChange(x) : null;
-            return `<label style="display:flex;gap:6px;align-items:center;padding:5px 8px;border-bottom:1px solid var(--i8);font-size:11.5px;cursor:${ms.length ? 'pointer' : 'default'};opacity:${ms.length ? 1 : .5}">
-            <input type="checkbox" ${bm.ids.has(x.id) ? 'checked' : ''} ${ms.length && !bm.sending ? '' : 'disabled'} onchange="bmPick('${escAttr(x.id)}',this.checked)">
-            <b style="flex:0 0 auto">${escapeHtml(exhNames(x).ko)}</b>
-            <span class="pill p-gray" style="font-size:9.5px">${enOf(x) ? 'EN' : 'KO'}</span>${STATE_PILL[exhMailState(x, st)] || ''}${
-              bc && bc.changed ? `<span style="font-size:10px;color:var(--am)">${escapeHtml(bc.from)} → ${escapeHtml(bc.to)}</span>` : ''}${
-              bm.photos ? (photosOf(x.id).length ? `<span class="pill p-blue" style="font-size:9.5px">📷 ${photosOf(x.id).length}</span>` : '<span class="pill p-gray" style="font-size:9.5px">사진 없음</span>') : ''}${
-              bm.failed.has(x.id) ? '<span class="pill p-red" style="font-size:9.5px;background:var(--rb);color:var(--re)">실패</span>' : ''}
-            <span style="color:var(--i4);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ms.length ? escapeHtml(ms.join(', ')) : '메일 있는 담당자 없음'}</span>
-          </label>`; }).join('')}
+        <div style="display:flex;gap:4px;margin-bottom:6px;font-size:11px">
+          ${[['', '전체', list.length], ['ko', '🇰🇷 국문으로 갈 곳', list.filter(x => !enOf(x)).length], ['en', '🌐 영문으로 갈 곳', list.filter(enOf).length]].map(([v, l, n]) =>
+            `<button class="btn" style="font-size:10.5px;padding:3px 10px;${(bm.langF || '') === v ? 'background:var(--i1);color:var(--W);border-color:var(--i1)' : ''}" onclick="bmLangF('${v}')">${l} ${n}</button>`).join('')}
+        </div>
+        <div style="border:1px solid var(--i6);border-radius:8px;max-height:calc(94vh - 230px);min-height:300px;overflow:auto">
+          ${shownList().map(x => { const ms = mailsOf(x, bm.who); const bc = st && st.key === 'booth_change' ? boothChange(x) : null;
+            const np = photosOf(x.id).length, en = enOf(x);
+            return `<label style="display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:2px 8px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--i8);cursor:${ms.length ? 'pointer' : 'default'};opacity:${ms.length ? 1 : .45}">
+            <input type="checkbox" style="grid-row:span 2" ${bm.ids.has(x.id) ? 'checked' : ''} ${ms.length && !bm.sending ? '' : 'disabled'} onchange="bmPick('${escAttr(x.id)}',this.checked)">
+            <div style="display:flex;gap:6px;align-items:center;min-width:0">
+              <span style="font-size:9.5px;font-weight:700;padding:0 5px;border-radius:4px;flex:0 0 auto;${en ? 'background:#e8f0fe;color:#1a56c4' : 'background:var(--i8);color:var(--i3)'}">${en ? 'EN' : 'KO'}</span>
+              <b style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(exhNames(x).ko)}</b>${
+              bc && bc.changed ? `<span style="font-size:10px;color:var(--am);flex:0 0 auto">${escapeHtml(bc.from)} → ${escapeHtml(bc.to)}</span>` : ''}</div>
+            <div style="display:flex;gap:4px;align-items:center;justify-content:flex-end">${STATE_PILL[exhMailState(x, st)] || ''}${
+              bm.photos ? (np ? `<span style="font-size:10px;color:var(--i3)">📷 ${np}</span>` : '<span style="font-size:10px;color:var(--am)">사진 없음</span>') : ''}${
+              bm.failed.has(x.id) ? '<span class="pill p-red" style="font-size:9.5px;background:var(--rb);color:var(--re)">실패</span>' : ''}</div>
+            <div style="grid-column:2 / 4;font-size:10.5px;color:var(--i4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ms.length ? escapeHtml(ms.join(', ')) : '메일 있는 담당자 없음'}</div>
+          </label>`; }).join('') || '<div style="padding:14px;font-size:11px;color:var(--i4)">이 필터에 맞는 기업이 없어요.</div>'}
         </div>
       </div>
       <div>
@@ -593,8 +604,8 @@ export function bmAll(on){
   if(!bm || bm.sending) return;
   if(on === 'turn') pickTurn();
   else if(on === 'failed'){ bm.ids = new Set(bm.failed); bm.pi = 0; }
-  else if(on === 'photo'){ bm.ids = new Set(visibleList().filter(x => mailsOf(x, bm.who).length && photosOf(x.id).length).map(x => x.id)); bm.pi = 0; }
-  else bm.ids = new Set(on ? visibleList().filter(x => mailsOf(x, bm.who).length).map(x => x.id) : []);
+  else if(on === 'photo'){ bm.ids = new Set(shownList().filter(x => mailsOf(x, bm.who).length && photosOf(x.id).length).map(x => x.id)); bm.pi = 0; }
+  else bm.ids = new Set(on ? shownList().filter(x => mailsOf(x, bm.who).length).map(x => x.id) : []);
   render();
 }
 // 문구는 다시 그리지 않고 담아만 둔다 — 그리면 입력 중인 칸이 초기화된다. 미리보기만 고친다
@@ -706,4 +717,4 @@ window.refreshExhBulkMail = () => {
   render();
 };
 Object.assign(window, { openExhBulkMail, closeExhBulkMail: close, bmSet, bmPick, bmAll, bmTpl, bmPrev,
-  sendExhBulkMail, sendExhTestMail, startExhRound, closeExhRound, bmPhotoPick, bmPhotoAssign, bmPhotoClear, bmBannerPick, bmBannerClear, bmFooterSave, bmCcSave });
+  sendExhBulkMail, sendExhTestMail, startExhRound, closeExhRound, bmPhotoPick, bmPhotoAssign, bmPhotoClear, bmBannerPick, bmBannerClear, bmFooterSave, bmCcSave, bmLangF });
