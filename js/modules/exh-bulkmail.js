@@ -148,9 +148,22 @@ function photoBlockHtml(){
 const close = () => { document.getElementById('exh-bulkmail')?.remove(); bm = null; };
 const mailsOf = (x, who) => {
   const ppl = exhContacts(x).filter(p => p.email);
-  const pick = who === 'all' ? ppl : [ppl.find(p => p.primary) || ppl[0]].filter(Boolean);
-  return [...new Set(pick.map(p => String(p.email).trim()).filter(Boolean))];
+  const pick = who === 'primary' ? [ppl.find(p => p.primary) || ppl[0]].filter(Boolean) : ppl;
+  const out = [...new Set(pick.map(p => String(p.email).trim()).filter(Boolean))];
+  if(who !== 'rest') return out;
+  const got = gotMails(x);
+  return out.filter(m => !got.has(m.toLowerCase()));
 };
+/* 이 메일(같은 단계·같은 제목 묶음)을 이미 받은 주소 — «아직 못 받은 담당자만»에서 뺀다.
+   기타 안내·보관함 양식은 kind가 모두 'note'라 카테고리(단계 이름)까지 맞춘다 */
+function gotMails(x){
+  const st = curStep();
+  const kind = !st ? '' : bm.step === 'note' || st.lib ? 'note' : `exh-${bm.step}`;
+  const out = new Set();
+  logsFor(x.id).filter(l => l.direction !== 'in' && l.kind === kind && (kind !== 'note' || l.category === st.label))
+    .forEach(l => String(l.counterpart || '').replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, (m) => { out.add(m.toLowerCase()); return m; }));
+  return out;
+}
 /* ── 이 기업에게 이 메일이 지금 보낼 차례인가 ──
    기본 단계는 진행 체크리스트의 그 칸(due 키 = STEPS 키)을 본다 — 매뉴얼은 «매뉴얼 회신»,
    신청서는 «신청서 접수»처럼 기업에서 받아야 끝나는 칸이다.
@@ -468,7 +481,7 @@ function render(){
           <select class="fi" style="font-size:11.5px;flex:1" onchange="bmSet('variant',this.value)">
             ${opt('', bm.variant, '기본 문구')}${vs.map(v => opt(escAttr(v.id), bm.variant, escapeHtml(v.label))).join('')}</select></div>` : ''}</div>
       <div><div class="mlbl">언어</div><select class="fi" onchange="bmSet('lang',this.value)">${opt('auto', bm.lang, '기업별 자동 (해외는 영문)')}${opt('ko', bm.lang, '모두 국문')}${opt('en', bm.lang, '모두 영문')}</select></div>
-      <div><div class="mlbl">받는 사람</div><select class="fi" onchange="bmSet('who',this.value)">${opt('primary', bm.who, '메인 담당자만')}${opt('all', bm.who, '메일 있는 담당자 모두')}</select></div>
+      <div><div class="mlbl">받는 사람</div><select class="fi" onchange="bmSet('who',this.value)">${opt('primary', bm.who, '메인 담당자만')}${opt('all', bm.who, '메일 있는 담당자 모두')}${opt('rest', bm.who, '아직 못 받은 담당자만')}</select></div>
     </div>
     ${roundBarHtml(st, rp)}
     ${st && st.key === 'booth_change' ? `<div style="font-size:10.5px;color:var(--i4);margin:-4px 0 8px">알린 부스(그 기업에 마지막으로 보낸 메일의 «부스 번호:» 줄)와 지금 부스가 다른 곳만 잡혀요. 보내면 새 번호가 «알린 부스»가 됩니다.</div>` : ''}
@@ -636,7 +649,7 @@ export async function sendExhBulkMail(){
   const notTurn = st.key === 'note' || st.lib ? 0 : list.filter(x => !isTurn(exhMailState(x, st))).length;
   const noPhoto = bm.photos ? list.filter(x => !photosOf(x.id).length).length : 0;
   if(!confirm(`${list.length}곳에 «${st.label}»${st.round ? ` (${st.round.label})` : ''} 메일을 보낼까요?${notTurn ? `\n\n이 중 ${notTurn}곳은 보낼 차례가 아니에요(이미 보냈거나 끝남).` : ''}${
-    bm.photos ? `\n\n📷 기업별 사진: ${list.length - noPhoto}곳에 붙어요.${noPhoto ? ` ${noPhoto}곳은 맞는 사진이 없어 사진 없이 나가요.` : ''}` : ''}\n\n발신 ${from.text}\n받는 사람: ${bm.who === 'all' ? '메일 있는 담당자 모두' : '메인 담당자'}${ccList().length ? `\n참조: ${ccList().join(', ')}` : ''}\n기업마다 한 통씩 따로 나갑니다.${
+    bm.photos ? `\n\n📷 기업별 사진: ${list.length - noPhoto}곳에 붙어요.${noPhoto ? ` ${noPhoto}곳은 맞는 사진이 없어 사진 없이 나가요.` : ''}` : ''}\n\n발신 ${from.text}\n받는 사람: ${bm.who === 'all' ? '메일 있는 담당자 모두' : bm.who === 'rest' ? '이 메일을 아직 못 받은 담당자만 (이미 받은 주소는 빠짐)' : '메인 담당자'}${ccList().length ? `\n참조: ${ccList().join(', ')}` : ''}\n기업마다 한 통씩 따로 나갑니다.${
     list.length > 1 ? `\n\n스팸으로 잡히지 않게 통마다 ${SEND_GAP}초씩 쉬어요 — 약 ${Math.ceil((list.length - 1) * SEND_GAP / 60)}분 걸려요. 다 보낼 때까지 이 창을 닫지 마세요.` : ''}`)) return;
 
   bm.sending = true;
