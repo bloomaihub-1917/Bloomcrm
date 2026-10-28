@@ -269,6 +269,7 @@ function mailFor(x){
   let body = raw.split(PHOTO_MARK).join(note).replace(/\n{3,}/g, '\n\n').trim();
   // 글 없이 이미지만이면 글자 본문이 비지 않게 — 이미지만 든 메일은 스팸으로 잡히기 쉽다
   if(bannerOf(en) && !body.replace(/\(.*?\)/g, '').trim()) body = `${alt.top}\n${body}`.trim();
+  if(footerText()) body += `\n\n${footerPlain()}`;
   return { subject: again + fillExhTemplate(bm.tpl[en ? 'subject_en' : 'subject_ko'], x, st, en, ctx),
     raw, body, en, alt };
 }
@@ -281,7 +282,43 @@ function bodyHtml(raw, srcs, top, alt){
   const parts = String(raw).split(PHOTO_MARK);
   const inner = parts.length > 1 ? parts.map(txt).join(imgs) : txt(raw) + (imgs ? `<br>${imgs}` : '');
   const head = top ? `<img src="${top}"${a(alt && alt.top)} style="display:block;max-width:100%;width:640px;height:auto;margin:0 0 12px">` : '';
-  return `<div style="font-family:'Malgun Gothic',Arial,sans-serif;font-size:14px;line-height:1.6;color:#222">${head}${inner}</div>`;
+  return `<div style="font-family:'Malgun Gothic',Arial,sans-serif;font-size:14px;line-height:1.6;color:#222">${head}${inner}${footerHtml()}</div>`;
+}
+/* ── 맨 아래 푸터(사무국 주소·연락처) — 행사 설정(EXH_CFG[행사].mailFooter)에 한 번 적어 두면
+   이 행사의 모든 메일 맨 끝(사진 아래)에 붙는다. **굵게** · *기울임* · www.·http 주소는 링크 ── */
+const footerText = () => String((EXH_CFG[bm?.evKey] || {}).mailFooter || '').trim();
+const footerPlain = () => footerText().replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1');
+function footerHtml(){
+  const t = footerText();
+  if(!t) return '';
+  const line = (l) => escapeHtml(l)
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<i>$1</i>')
+    .replace(/\b((?:https?:\/\/|www\.)[^\s<]+)/g, (u) => `<a href="${u.startsWith('www.') ? 'https://' + u : u}" style="color:#1a0dab">${u}</a>`);
+  return `<div style="margin-top:20px;font-family:Arial,sans-serif;font-size:12px;line-height:1.45;color:#222">${t.split('\n').map(line).join('<br>')}</div>`;
+}
+export async function bmFooterSave(){
+  if(!bm || bm.sending) return;
+  const el = document.getElementById('bm-footer');
+  if(!el) return;
+  if(exhLocked()){ exhLockNotice(); return; }
+  const prev = EXH_CFG[bm.evKey];
+  EXH_CFG[bm.evKey] = { ...(prev || {}), mailFooter: el.value.trim() };
+  const r = await saveExhCfgToSheet(bm.evKey, EXH_CFG[bm.evKey]);
+  if(r && r.ok === false){
+    if(prev) EXH_CFG[bm.evKey] = prev; else delete EXH_CFG[bm.evKey];
+    alert('저장하지 못했어요. 네트워크 확인 후 다시 시도해주세요.');
+    return;
+  }
+  render();
+}
+function footerBlockHtml(){
+  const t = footerText();
+  return `<details style="margin-top:8px;font-size:11px"${t ? '' : ' open'}>
+    <summary style="cursor:pointer">📌 맨 아래 푸터 ${t ? '— 저장됨, 모든 메일 끝(사진 아래)에 붙어요' : '— 없음'}</summary>
+    <textarea id="bm-footer" rows="9" style="width:100%;margin-top:4px;font-size:11px;font-family:inherit">${escapeHtml(t)}</textarea>
+    <div style="display:flex;gap:6px;align-items:center;margin-top:3px;flex-wrap:wrap">
+      <button class="btn" style="font-size:10.5px" onclick="bmFooterSave()">푸터 저장</button>
+      <span style="color:var(--i4)">이 행사 메일에 계속 쓰여요 · **굵게** *기울임* · www. 주소는 링크</span></div></details>`;
 }
 /* ── 맨 위 공통 이미지(감사장 등) — 모든 기업에 같은 이미지. 국문·영문을 따로 고를 수 있고
    영문을 안 고르면 국문 것을 쓴다. 긴 변 1400px로 줄인다(글씨가 든 이미지라 사진보다 크게) ── */
@@ -312,7 +349,7 @@ async function buildMail(x){
   const top = bannerOf(m.en);
   const ph = await photoAttachments(x.id, top ? await shrink(top, 1400, .85) : null);
   if(ph.error) return { error: ph.error };
-  if(!ph.list.length && !ph.top) return { ...m, attachments: [] };
+  if(!ph.list.length && !ph.top) return { ...m, html: footerText() ? bodyHtml(m.raw, [], null, m.alt) : undefined, attachments: [] };
   const stamp = Date.now().toString(36);
   const attachments = ph.list.map((a, i) => ({ ...a, cid: `p${i}.${stamp}@bloom` }));
   const head = ph.top ? { ...ph.top, cid: `top.${stamp}@bloom` } : null;
@@ -453,6 +490,7 @@ function render(){
         ${files.length ? `<div style="font-size:11px;margin-top:6px">기본 첨부 ${files.map(f => `<span class="pill p-blue" style="margin:2px 3px 0 0">📎 ${escapeHtml(f.filename)}</span>`).join('')}</div>` : ''}
         ${bannerBlockHtml()}
         ${photoBlockHtml()}
+        ${footerBlockHtml()}
         <div id="bm-prev">${prevHtml(picked)}</div>
       </div>
     </div>
@@ -492,7 +530,7 @@ function prevHtml(picked){
       <b style="color:var(--i2)">${escapeHtml(exhNames(x).ko)}</b>${m.en ? ' (영문)' : ''}
       <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">→ ${escapeHtml(mailsOf(x, bm.who).join(', '))}</span>
     </div>
-    ${photosOf(x.id).length || bannerOf(m.en)
+    ${photosOf(x.id).length || bannerOf(m.en) || footerText()
       ? `<div style="max-height:420px;overflow:auto;background:#fff;padding:6px;border-radius:5px"><b>${escapeHtml(m.subject)}</b><br><br>${
           bodyHtml(m.raw, photosOf(x.id).map(thumbOf), bannerOf(m.en) && thumbOf(bannerOf(m.en)), m.alt).replace(/width:640px/g, 'width:320px')}</div>`
       : `<div style="white-space:pre-wrap;max-height:240px;overflow:auto"><b>${escapeHtml(m.subject)}</b>\n\n${escapeHtml(m.body)}</div>`}
@@ -630,4 +668,4 @@ window.refreshExhBulkMail = () => {
   render();
 };
 Object.assign(window, { openExhBulkMail, closeExhBulkMail: close, bmSet, bmPick, bmAll, bmTpl, bmPrev,
-  sendExhBulkMail, sendExhTestMail, startExhRound, closeExhRound, bmPhotoPick, bmPhotoAssign, bmPhotoClear, bmBannerPick, bmBannerClear });
+  sendExhBulkMail, sendExhTestMail, startExhRound, closeExhRound, bmPhotoPick, bmPhotoAssign, bmPhotoClear, bmBannerPick, bmBannerClear, bmFooterSave });
