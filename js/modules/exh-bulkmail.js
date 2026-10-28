@@ -311,6 +311,25 @@ export async function bmFooterSave(){
   }
   render();
 }
+/* 참조(CC) — 행사 설정(EXH_CFG[행사].mailCc). 실제 발송에만 붙고 시험 발송에는 안 붙는다 */
+const ccText = () => String((EXH_CFG[bm?.evKey] || {}).mailCc || '');
+const splitMails = (v) => String(v || '').split(/[,;\s]+/).map(s => s.trim()).filter(Boolean);
+const ccList = () => splitMails(ccText());
+export async function bmCcSave(v){
+  if(!bm || bm.sending) return;
+  const list = splitMails(v);
+  const bad = list.filter(s => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s));
+  if(bad.length){ alert(`메일 주소 모양이 아니에요: ${bad.join(', ')}`); return; }
+  if(exhLocked()){ exhLockNotice(); return; }
+  const prev = EXH_CFG[bm.evKey];
+  EXH_CFG[bm.evKey] = { ...(prev || {}), mailCc: list.join(', ') };
+  const r = await saveExhCfgToSheet(bm.evKey, EXH_CFG[bm.evKey]);
+  if(r && r.ok === false){
+    if(prev) EXH_CFG[bm.evKey] = prev; else delete EXH_CFG[bm.evKey];
+    alert('저장하지 못했어요. 네트워크 확인 후 다시 시도해주세요.');
+  }
+  render();
+}
 function footerBlockHtml(){
   const t = footerText();
   return `<details style="margin-top:8px;font-size:11px"${t ? '' : ' open'}>
@@ -494,6 +513,12 @@ function render(){
         <div id="bm-prev">${prevHtml(picked)}</div>
       </div>
     </div>
+    <div style="display:flex;gap:6px;align-items:center;margin-top:10px;font-size:11px;flex-wrap:wrap">
+      <b>참조(CC)</b>
+      <input id="bm-cc" value="${escAttr(ccText())}" placeholder="예: info-kic@konect.or.kr (여러 개는 쉼표)" onchange="bmCcSave(this.value)"
+        style="flex:1;min-width:220px;font-size:11px" ${bm.sending ? 'disabled' : ''}>
+      <span style="color:var(--i4)">기업마다 가는 메일에 모두 참조로 들어가요 · 이 행사에 저장 · 시험 발송엔 안 붙어요</span>
+    </div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap">
       <button class="btn bp" onclick="sendExhBulkMail()" ${picked.length && !bm.sending ? '' : 'disabled'}>${picked.length}곳에 보내기</button>
       <button class="btn" onclick="sendExhTestMail()" ${picked.length && !bm.sending ? '' : 'disabled'}
@@ -611,7 +636,7 @@ export async function sendExhBulkMail(){
   const notTurn = st.key === 'note' || st.lib ? 0 : list.filter(x => !isTurn(exhMailState(x, st))).length;
   const noPhoto = bm.photos ? list.filter(x => !photosOf(x.id).length).length : 0;
   if(!confirm(`${list.length}곳에 «${st.label}»${st.round ? ` (${st.round.label})` : ''} 메일을 보낼까요?${notTurn ? `\n\n이 중 ${notTurn}곳은 보낼 차례가 아니에요(이미 보냈거나 끝남).` : ''}${
-    bm.photos ? `\n\n📷 기업별 사진: ${list.length - noPhoto}곳에 붙어요.${noPhoto ? ` ${noPhoto}곳은 맞는 사진이 없어 사진 없이 나가요.` : ''}` : ''}\n\n발신 ${from.text}\n받는 사람: ${bm.who === 'all' ? '메일 있는 담당자 모두' : '메인 담당자'}\n기업마다 한 통씩 따로 나갑니다.${
+    bm.photos ? `\n\n📷 기업별 사진: ${list.length - noPhoto}곳에 붙어요.${noPhoto ? ` ${noPhoto}곳은 맞는 사진이 없어 사진 없이 나가요.` : ''}` : ''}\n\n발신 ${from.text}\n받는 사람: ${bm.who === 'all' ? '메일 있는 담당자 모두' : '메인 담당자'}${ccList().length ? `\n참조: ${ccList().join(', ')}` : ''}\n기업마다 한 통씩 따로 나갑니다.${
     list.length > 1 ? `\n\n스팸으로 잡히지 않게 통마다 ${SEND_GAP}초씩 쉬어요 — 약 ${Math.ceil((list.length - 1) * SEND_GAP / 60)}분 걸려요. 다 보낼 때까지 이 창을 닫지 마세요.` : ''}`)) return;
 
   bm.sending = true;
@@ -633,7 +658,7 @@ export async function sendExhBulkMail(){
     if(ph.error){ fails.push(`${exhNames(x).ko}: ${ph.error}`); bm.failed.add(x.id); continue; }
     const { subject, body: text, html } = ph;
     ph.list = ph.attachments;
-    const res = await sendMail({ to, subject, text, html, exhibitor_id: x.id, category: st.label, kind, file_ids: fileIds, attachments: ph.attachments });
+    const res = await sendMail({ to, cc: ccList(), subject, text, html, exhibitor_id: x.id, category: st.label, kind, file_ids: fileIds, attachments: ph.attachments });
     if(!res.ok){ fails.push(`${exhNames(x).ko}: ${res.error || '실패'}`); bm.failed.add(x.id); continue; }
     ok++;
     const names = [...mailFilesOf(bm.evKey).filter(f => fileIds.includes(f.id)).map(f => f.filename), ...ph.list.map(a => a.filename)];
@@ -668,4 +693,4 @@ window.refreshExhBulkMail = () => {
   render();
 };
 Object.assign(window, { openExhBulkMail, closeExhBulkMail: close, bmSet, bmPick, bmAll, bmTpl, bmPrev,
-  sendExhBulkMail, sendExhTestMail, startExhRound, closeExhRound, bmPhotoPick, bmPhotoAssign, bmPhotoClear, bmBannerPick, bmBannerClear, bmFooterSave });
+  sendExhBulkMail, sendExhTestMail, startExhRound, closeExhRound, bmPhotoPick, bmPhotoAssign, bmPhotoClear, bmBannerPick, bmBannerClear, bmFooterSave, bmCcSave });
