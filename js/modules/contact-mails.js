@@ -34,7 +34,13 @@ export function contactMailsHtml(c){
     if(logs.length) groups.push({ key: 'sp-' + sp.id, ev: sp.event_id, part: '연사', logs, mineAll: true,
       open: `closeContactDr();openSpeakerDr('${escAttr(sp.id)}','box')` });
   });
-  const exhIds = [...new Set(EXH_CONTACTS.filter(x => String(x.contact_id || '') === String(c.id)).map(x => x.exhibitor_id))];
+  /* 기업 담당자에 contact_id가 안 걸린 사람도 놓치지 않게 메일 주소로도 찾는다 — 담당자 주소가 같거나,
+     그 기업에 보낸·받은 메일의 상대(counterpart)에 이 사람 주소가 있으면 (여러 기업에 메일·일괄 발송 포함) */
+  const exhIds = [...new Set([
+    ...EXH_CONTACTS.filter(x => String(x.contact_id || '') === String(c.id)
+      || (x.email && mine.includes(String(x.email).trim().toLowerCase()))).map(x => x.exhibitor_id),
+    ...(mine.length ? EXH_LOGS.filter(l => isMail(l) && isMine(l)).map(l => l.exhibitor_id) : []),
+  ])];
   exhIds.forEach(id => {
     const x = EXHIBITORS.find(e => e.id === id);
     if(!x) return;
