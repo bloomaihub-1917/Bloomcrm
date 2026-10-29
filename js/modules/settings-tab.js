@@ -87,6 +87,7 @@ import { slugifySectorName, escapeHtml, escAttr, countryName, scopedSectorName, 
 import { buildCoDB, buildCoCAT, renderCoDashboard, setCoCat } from './company-tab.js';
 import { renderMDB, buildMDBEvList, buildMDBTagList } from './db-tab.js';
 import { populateUploadEvDropdown } from './upload-tab.js';
+import { renderAiSettings } from './ai-settings.js';
 import { contactFillCount, renderContactFill, enrichCounts, saveOrgFields } from './data-clean.js';
 
 /* 드래그 중인 섹터 id (원본 3693행 전역 변수 → 모듈 스코프로 축소) */
@@ -1473,7 +1474,7 @@ export function switchArchTab(tab){
   tab = ({ sector: 'org', val: 'common' })[tab] || tab;
   /* 업로드 화면에서도 설정 사이드바가 보이므로, 거기서 누르면 설정으로 먼저 돌아온다 */
   if(window.curApp && window.curApp !== 'arch') window.switchApp?.('arch', null);
-  ['ev','org','people','common','equip','clean','sys'].forEach(t => {
+  ['ev','org','people','common','equip','clean','ai','sys'].forEach(t => {
     const btn  = document.getElementById('arch-tab-'+t);
     const pane = document.getElementById('arch-pane-'+t);
     // 모바일 본문 전환줄 — 사이드바 버튼과 같은 상태를 유지해야 지금 어느 탭인지 보인다
@@ -1490,6 +1491,7 @@ export function switchArchTab(tab){
   if(tab==='common') { mountCodeList('common'); }
   if(tab==='equip')  { mountEquipCatalog('eqcat-rows', ''); }
   if(tab==='clean')  { renderSectorList(); renderCleanCounts(); }
+  if(tab==='ai')     { renderAiSettings(); }
   if(tab==='sys')    { renderSysInfo(); }
 }
 

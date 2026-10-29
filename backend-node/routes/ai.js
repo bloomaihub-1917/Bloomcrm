@@ -8,24 +8,161 @@
 const express = require('express');
 const Anthropic = require('@anthropic-ai/sdk');
 
+const pool = require('../db/pool');
+
 const router = express.Router();
-const MODEL = 'claude-sonnet-5-5';
 const NL = String.fromCharCode(10);
 let client = null;
 const ai = () => (client || (client = new Anthropic()));
 const enabled = () => !!process.env.ANTHROPIC_API_KEY;
+
+/* ── 설정 › AI 설정 (settings key='ai_config') ──
+   기능마다 켜기/끄기·모델·생각 깊이, 한 달 호출 한도. 저장된 게 없으면 아래 기본값.
+   { features: { [기능]: { on, model, effort } }, monthlyCap } — monthlyCap 0은 «한도 없음» */
+const MODELS = {
+  sonnet: 'claude-sonnet-5-5',
+  haiku: 'claude-haiku-5-5',
+  opus: 'claude-opus-5-5',
+};
+const FEATURES = {
+  'map-columns':     { label: '엑셀 열 맞추기',           effort: 'low',    where: '설정 › 데이터 업로드' },
+  'company-pairs':   { label: '같은 회사 다른 표기 찾기',  effort: 'low',    where: '데이터 업로드 · 기업 DB 정리' },
+  'query-plan':      { label: '연락처 질문으로 찾기',      effort: 'low',    where: 'Master DB' },
+  'org-query-plan':  { label: '기업 질문으로 찾기',        effort: 'low',    where: '기업 DB' },
+  'org-enrich':      { label: '기업 국가·업종 추천',       effort: 'low',    where: '설정 › 데이터 정리' },
+  'speaker-advice':  { label: '연사 상황 상담',            effort: 'medium', where: '연사 드로어' },
+  'exh-advice':      { label: '전시 참가사 상황 상담',      effort: 'medium', where: '전시 참가사 드로어' },
+  'mail-draft':      { label: 'AI로 메일 초안',            effort: 'medium', where: '메일 쓰기 · 여러 곳에 메일' },
+  'org-pdf-summary': { label: '업체 소개서 PDF 요약',       effort: 'low',    where: '기업 DB › 회사소개' },
+};
+const EFFORTS = ['low', 'medium', 'high'];
+
+let cfgCache = null;
+let cfgAt = 0;
+function normConfig(raw) {
+  const f = (raw && raw.features) || {};
+  const features = {};
+  Object.entries(FEATURES).forEach(([k, d]) => {
+    const v = f[k] || {};
+    features[k] = {
+      on: v.on !== false,
+      model: MODELS[v.model] ? v.model : 'sonnet',
+      effort: EFFORTS.includes(v.effort) ? v.effort : d.effort,
+    };
+  });
+  return { features, monthlyCap: Math.max(0, Math.floor(Number(raw && raw.monthlyCap) || 0)) };
+}
+async function loadConfig() {
+  if (cfgCache && Date.now() - cfgAt < 30000) return cfgCache;
+  let raw = {};
+  try {
+    const { rows } = await pool.query(`SELECT value FROM settings WHERE key = 'ai_config'`);
+    raw = rows[0] ? JSON.parse(rows[0].value || '{}') : {};
+  } catch (e) { raw = {}; }
+  cfgCache = normConfig(raw);
+  cfgAt = Date.now();
+  return cfgCache;
+}
+
+// 사용량 — 기능·모델·토큰 수만 남긴다(질문·답 내용은 남기지 않는다)
+let usageReady = null;
+const ensureUsage = () => usageReady || (usageReady = pool.query(`
+  CREATE TABLE IF NOT EXISTS ai_usage (
+    id SERIAL PRIMARY KEY, at TEXT, feature TEXT, model TEXT,
+    input_tokens INTEGER, output_tokens INTEGER, ok BOOLEAN, user_email TEXT)`).catch((e) => { usageReady = null; throw e; }));
+const monthStart = () => new Date().toISOString().slice(0, 7) + '-01';
+async function monthCalls() {
+  await ensureUsage();
+  const { rows } = await pool.query(`SELECT COUNT(*)::int AS n FROM ai_usage WHERE at >= $1`, [monthStart()]);
+  return rows[0]?.n || 0;
+}
+async function logUsage(req, feature, model, usage, ok) {
+  try {
+    await ensureUsage();
+    await pool.query(`INSERT INTO ai_usage (at, feature, model, input_tokens, output_tokens, ok, user_email) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [new Date().toISOString(), feature, model, usage?.input_tokens || 0, usage?.output_tokens || 0, ok, req.user?.email || '']);
+  } catch (e) { /* 기록이 안 돼도 기능은 막지 않는다 */ }
+}
+
+/* 공통 호출 — 설정을 읽어 꺼진 기능·한도 초과를 막고, 모델·생각 깊이를 정하고, 쓴 양을 남긴다.
+   답: 스키마에 맞춘 JSON. 실패하면 res로 바로 답하고 null */
+async function askJson(req, res, feature, { content, schema, maxTokens = 8000, timeoutMsg = '시간 안에 끝나지 않았어요' }) {
+  if (!enabled()) { res.status(503).json({ ok: false, error: 'AI가 꺼져 있어요(ANTHROPIC_API_KEY 없음)' }); return null; }
+  const cfg = await loadConfig();
+  const fc = cfg.features[feature];
+  if (!fc.on) { res.status(503).json({ ok: false, error: `«${FEATURES[feature].label}»은 설정 › AI 설정에서 꺼져 있어요` }); return null; }
+  if (cfg.monthlyCap && (await monthCalls().catch(() => 0)) >= cfg.monthlyCap) {
+    res.status(429).json({ ok: false, error: `이번 달 AI 호출 한도(${cfg.monthlyCap}회)를 다 썼어요 — 설정 › AI 설정` });
+    return null;
+  }
+  const model = MODELS[fc.model];
+  const output_config = { format: { type: 'json_schema', schema } };
+  if (fc.model !== 'haiku') output_config.effort = fc.effort;   // Haiku는 생각 깊이를 받지 않는다
+  try {
+    const r = await ai().beta.messages.create({
+      model,
+      max_tokens: maxTokens,
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      output_config,
+      messages: [{ role: 'user', content }],
+    }, { timeout: 55000, maxRetries: 0 }); // Vercel 함수는 60초에 끊긴다 — 그 전에 알아듣게 실패한다
+    await logUsage(req, feature, r.model || model, r.usage, r.stop_reason !== 'refusal');
+    if (r.stop_reason === 'refusal') { res.status(502).json({ ok: false, error: 'AI가 답하지 않았어요' }); return null; }
+    return JSON.parse(r.content.filter((b) => b.type === 'text').map((b) => b.text).join(''));
+  } catch (e) {
+    await logUsage(req, feature, model, null, false);
+    if (e instanceof Anthropic.APIConnectionTimeoutError) res.status(504).json({ ok: false, error: timeoutMsg });
+    else if (e instanceof Anthropic.RateLimitError) res.status(429).json({ ok: false, error: 'AI 요청이 많아요 — 잠시 뒤에 다시' });
+    else if (e instanceof Anthropic.AuthenticationError) res.status(503).json({ ok: false, error: 'AI 키가 맞지 않아요' });
+    else if (e instanceof Anthropic.APIError) res.status(502).json({ ok: false, error: `AI 오류 (${e.status || '연결'})` });
+    else res.status(500).json({ ok: false, error: e.message });
+    return null;
+  }
+}
 
 // 값의 모양 — 글자 종류만 남긴다(화면의 shapeOf와 같은 규칙)
 const shape = (v) => String(v || '').slice(0, 40)
   .replace(/[가-힣ㄱ-ㅎㅏ-ㅣ]/g, '가').replace(/[A-Z]/g, 'A').replace(/[a-z]/g, 'a').replace(/[0-9]/g, '9')
   .replace(/[^가Aa9@.\-_/()+:,# ]/g, '?');
 
-router.get('/status', (req, res) => res.json({ ok: true, enabled: enabled() }));
+// features: 기능별 켜짐 — 화면이 꺼진 기능의 단추를 숨길 때 쓴다
+router.get('/status', async (req, res) => {
+  const cfg = await loadConfig();
+  res.json({ ok: true, enabled: enabled(), features: Object.fromEntries(Object.entries(cfg.features).map(([k, v]) => [k, v.on])) });
+});
+
+/* 설정 › AI 설정 화면 — 기능 목록·지금 설정·이번 달 사용량 */
+router.get('/config', async (req, res) => {
+  try {
+    const cfg = await loadConfig();
+    let usage = [];
+    try {
+      await ensureUsage();
+      const { rows } = await pool.query(`SELECT feature, COUNT(*)::int AS calls, SUM(CASE WHEN ok THEN 0 ELSE 1 END)::int AS fails,
+        COALESCE(SUM(input_tokens),0)::int AS input_tokens, COALESCE(SUM(output_tokens),0)::int AS output_tokens
+        FROM ai_usage WHERE at >= $1 GROUP BY feature`, [monthStart()]);
+      usage = rows;
+    } catch (e) { usage = []; }
+    res.json({ ok: true, enabled: enabled(), month: monthStart().slice(0, 7),
+      models: Object.keys(MODELS).map((k) => ({ key: k, id: MODELS[k] })),
+      features: Object.entries(FEATURES).map(([k, d]) => ({ key: k, label: d.label, where: d.where, defaultEffort: d.effort })),
+      config: cfg, usage });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+router.put('/config', async (req, res) => {
+  if (req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 고칠 수 없어요' });
+  try {
+    const cfg = normConfig(req.body || {});
+    await pool.query(`INSERT INTO settings (key, value) VALUES ('ai_config', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [JSON.stringify(cfg)]);
+    cfgCache = cfg; cfgAt = Date.now();
+    res.json({ ok: true, config: cfg });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 
 /* 열 맞추기 — body: { fields: [{key,label}], columns: [{header, samples:[…], filled}] }
    답: { ok, mappings: [{ header, field, reason }] } — field ''는 «맞는 칸 없음» */
 router.post('/map-columns', async (req, res) => {
-  if (!enabled()) return res.status(503).json({ ok: false, error: 'AI가 꺼져 있어요(ANTHROPIC_API_KEY 없음)' });
   const { fields, columns } = req.body || {};
   const fs = (Array.isArray(fields) ? fields : [])
     .filter((f) => f && /^[A-Za-z0-9_]{1,30}$/.test(f.key)).slice(0, 60)
@@ -56,33 +193,17 @@ router.post('/map-columns', async (req, res) => {
     `엑셀 열:\n${cs.map((c) => `«${c.header}» (값 있는 줄 ${c.filled}) 모양: ${c.samples.join(' | ') || '(비어 있음)'}`).join('\n')}`,
   ].join('\n');
 
-  try {
-    const r = await ai().beta.messages.create({
-      model: MODEL,
-      max_tokens: 8000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      output_config: { effort: 'low', format: { type: 'json_schema', schema } },
-      messages: [{ role: 'user', content: prompt }],
-    });
-    if (r.stop_reason === 'refusal') return res.status(502).json({ ok: false, error: 'AI가 답하지 않았어요' });
-    const text = r.content.filter((b) => b.type === 'text').map((b) => b.text).join('');
-    const out = JSON.parse(text);
-    // 우리가 보낸 머리글·칸만, 한 칸에 한 열만 남긴다
-    const headers = new Set(cs.map((c) => c.header));
-    const used = new Set();
-    const mappings = (out.mappings || []).filter((m) => headers.has(m.header)).map((m) => {
-      const field = m.field && keys.includes(m.field) && !used.has(m.field) ? m.field : '';
-      if (field) used.add(field);
-      return { header: m.header, field, reason: String(m.reason || '').slice(0, 120) };
-    });
-    res.json({ ok: true, mappings });
-  } catch (e) {
-    if (e instanceof Anthropic.RateLimitError) return res.status(429).json({ ok: false, error: 'AI 요청이 많아요 — 잠시 뒤에 다시' });
-    if (e instanceof Anthropic.AuthenticationError) return res.status(503).json({ ok: false, error: 'AI 키가 맞지 않아요' });
-    if (e instanceof Anthropic.APIError) return res.status(502).json({ ok: false, error: `AI 오류 (${e.status || '연결'})` });
-    res.status(500).json({ ok: false, error: e.message });
-  }
+  const out = await askJson(req, res, 'map-columns', { content: prompt, schema });
+  if (!out) return;
+  // 우리가 보낸 머리글·칸만, 한 칸에 한 열만 남긴다
+  const headers = new Set(cs.map((c) => c.header));
+  const used = new Set();
+  const mappings = (out.mappings || []).filter((m) => headers.has(m.header)).map((m) => {
+    const field = m.field && keys.includes(m.field) && !used.has(m.field) ? m.field : '';
+    if (field) used.add(field);
+    return { header: m.header, field, reason: String(m.reason || '').slice(0, 120) };
+  });
+  res.json({ ok: true, mappings });
 });
 
 /* 같은 회사 다른 표기 찾기 — 회사명만 보낸다(개인정보 아님)
@@ -91,7 +212,6 @@ router.post('/map-columns', async (req, res) => {
    없으면: known 안에서 같은 회사끼리 (기업DB 정리)
    답: { ok, pairs: [{ a, b, reason, caution }] } — a는 incoming 이름 또는 known id, b는 known id */
 router.post('/company-pairs', async (req, res) => {
-  if (!enabled()) return res.status(503).json({ ok: false, error: 'AI가 꺼져 있어요(ANTHROPIC_API_KEY 없음)' });
   const { known, incoming } = req.body || {};
   const ks = (Array.isArray(known) ? known : []).slice(0, 3000)
     .map((o) => ({ id: String(o.id || '').slice(0, 60), ko: String(o.ko || '').slice(0, 80), en: String(o.en || '').slice(0, 80) }))
@@ -123,35 +243,19 @@ router.post('/company-pairs', async (req, res) => {
       'a와 b에는 두 회사의 id를 적으세요. 가장 확실한 것부터 최대 40쌍.',
       '', '회사 (id | 국문 | 영문):', list]).join(NL);
 
-  try {
-    const r = await ai().beta.messages.create({
-      model: MODEL,
-      max_tokens: 16000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      output_config: { effort: 'low', format: { type: 'json_schema', schema } },
-      messages: [{ role: 'user', content: prompt }],
-    }, { timeout: 55000, maxRetries: 0 }); // Vercel 함수는 60초에 끊긴다 — 그 전에 알아듣게 실패한다
-    if (r.stop_reason === 'refusal') return res.status(502).json({ ok: false, error: 'AI가 답하지 않았어요' });
-    const out = JSON.parse(r.content.filter((b) => b.type === 'text').map((b) => b.text).join(''));
-    const incSet = new Set(inc || []);
-    const seen = new Set();
-    const pairs = (out.pairs || []).filter((p) => {
-      if (!ids.includes(p.b)) return false;
-      if (inc ? !incSet.has(p.a) : (!ids.includes(p.a) || p.a === p.b)) return false;
-      const k = inc ? p.a : [p.a, p.b].sort().join('|');
-      if (seen.has(k)) return false;
-      seen.add(k);
-      return true;
-    }).map((p) => ({ a: p.a, b: p.b, reason: String(p.reason || '').slice(0, 160), caution: String(p.caution || '').slice(0, 160) }));
-    res.json({ ok: true, pairs });
-  } catch (e) {
-    if (e instanceof Anthropic.APIConnectionTimeoutError) return res.status(504).json({ ok: false, error: '기업이 많아 시간 안에 끝나지 않았어요' });
-    if (e instanceof Anthropic.RateLimitError) return res.status(429).json({ ok: false, error: 'AI 요청이 많아요 — 잠시 뒤에 다시' });
-    if (e instanceof Anthropic.AuthenticationError) return res.status(503).json({ ok: false, error: 'AI 키가 맞지 않아요' });
-    if (e instanceof Anthropic.APIError) return res.status(502).json({ ok: false, error: `AI 오류 (${e.status || '연결'})` });
-    res.status(500).json({ ok: false, error: e.message });
-  }
+  const out = await askJson(req, res, 'company-pairs', { content: prompt, schema, maxTokens: 16000, timeoutMsg: '기업이 많아 시간 안에 끝나지 않았어요' });
+  if (!out) return;
+  const incSet = new Set(inc || []);
+  const seen = new Set();
+  const pairs = (out.pairs || []).filter((p) => {
+    if (!ids.includes(p.b)) return false;
+    if (inc ? !incSet.has(p.a) : (!ids.includes(p.a) || p.a === p.b)) return false;
+    const k = inc ? p.a : [p.a, p.b].sort().join('|');
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  }).map((p) => ({ a: p.a, b: p.b, reason: String(p.reason || '').slice(0, 160), caution: String(p.caution || '').slice(0, 160) }));
+  res.json({ ok: true, pairs });
 });
 
 /* 질문으로 찾기 — 질문을 «조건표»로 바꾼다. 연락처는 보내지 않는다.
@@ -159,7 +263,6 @@ router.post('/company-pairs', async (req, res) => {
    거르기는 화면이 제 데이터로 한다(js/modules/db-tab.js의 aiMatches).
    body: { question, today, events:[{key,short,date}], roles:[…], cats:[{key,label}], tags:[{key,label}], countries:[…] } */
 router.post('/query-plan', async (req, res) => {
-  if (!enabled()) return res.status(503).json({ ok: false, error: 'AI가 꺼져 있어요(ANTHROPIC_API_KEY 없음)' });
   const b = req.body || {};
   const question = String(b.question || '').trim().slice(0, 300);
   if (!question) return res.status(400).json({ ok: false, error: '질문을 적어주세요' });
@@ -214,25 +317,9 @@ router.post('/query-plan', async (req, res) => {
     `질문: ${question}`,
   ].join(NL);
 
-  try {
-    const r = await ai().beta.messages.create({
-      model: MODEL,
-      max_tokens: 8000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      output_config: { effort: 'low', format: { type: 'json_schema', schema } },
-      messages: [{ role: 'user', content: prompt }],
-    }, { timeout: 55000, maxRetries: 0 });
-    if (r.stop_reason === 'refusal') return res.status(502).json({ ok: false, error: 'AI가 답하지 않았어요' });
-    const plan = JSON.parse(r.content.filter((x) => x.type === 'text').map((x) => x.text).join(''));
-    res.json({ ok: true, plan });
-  } catch (e) {
-    if (e instanceof Anthropic.APIConnectionTimeoutError) return res.status(504).json({ ok: false, error: '시간 안에 끝나지 않았어요' });
-    if (e instanceof Anthropic.RateLimitError) return res.status(429).json({ ok: false, error: 'AI 요청이 많아요 — 잠시 뒤에 다시' });
-    if (e instanceof Anthropic.AuthenticationError) return res.status(503).json({ ok: false, error: 'AI 키가 맞지 않아요' });
-    if (e instanceof Anthropic.APIError) return res.status(502).json({ ok: false, error: `AI 오류 (${e.status || '연결'})` });
-    res.status(500).json({ ok: false, error: e.message });
-  }
+  const plan = await askJson(req, res, 'query-plan', { content: prompt, schema });
+  if (!plan) return;
+  res.json({ ok: true, plan });
 });
 
 /* 기업 질문으로 찾기 — 위와 같은 방식, 기업DB용 조건표.
@@ -240,7 +327,6 @@ router.post('/query-plan', async (req, res) => {
    거르기는 화면(js/modules/company-tab.js의 coAiMatches)이 한다.
    body: { question, today, events, roles, kinds:[{key,label}], sectors:[…], countries:[…] } */
 router.post('/org-query-plan', async (req, res) => {
-  if (!enabled()) return res.status(503).json({ ok: false, error: 'AI가 꺼져 있어요(ANTHROPIC_API_KEY 없음)' });
   const b = req.body || {};
   const question = String(b.question || '').trim().slice(0, 300);
   if (!question) return res.status(400).json({ ok: false, error: '질문을 적어주세요' });
@@ -299,25 +385,9 @@ router.post('/org-query-plan', async (req, res) => {
     `질문: ${question}`,
   ].join(NL);
 
-  try {
-    const r = await ai().beta.messages.create({
-      model: MODEL,
-      max_tokens: 8000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      output_config: { effort: 'low', format: { type: 'json_schema', schema } },
-      messages: [{ role: 'user', content: prompt }],
-    }, { timeout: 55000, maxRetries: 0 });
-    if (r.stop_reason === 'refusal') return res.status(502).json({ ok: false, error: 'AI가 답하지 않았어요' });
-    const plan = JSON.parse(r.content.filter((x) => x.type === 'text').map((x) => x.text).join(''));
-    res.json({ ok: true, plan });
-  } catch (e) {
-    if (e instanceof Anthropic.APIConnectionTimeoutError) return res.status(504).json({ ok: false, error: '시간 안에 끝나지 않았어요' });
-    if (e instanceof Anthropic.RateLimitError) return res.status(429).json({ ok: false, error: 'AI 요청이 많아요 — 잠시 뒤에 다시' });
-    if (e instanceof Anthropic.AuthenticationError) return res.status(503).json({ ok: false, error: 'AI 키가 맞지 않아요' });
-    if (e instanceof Anthropic.APIError) return res.status(502).json({ ok: false, error: `AI 오류 (${e.status || '연결'})` });
-    res.status(500).json({ ok: false, error: e.message });
-  }
+  const plan = await askJson(req, res, 'org-query-plan', { content: prompt, schema });
+  if (!plan) return;
+  res.json({ ok: true, plan });
 });
 
 /* 기업 국가·업종 추천 — 국가가 비었거나 업종이 «미정»인 기업
@@ -325,7 +395,6 @@ router.post('/org-query-plan', async (req, res) => {
    body: { orgs:[{id, ko, en, web, about, sectors, wantCountry, sectorChoices:[업종 이름…]}], countries:[국가 이름…] }
    답: { ok, items:[{ id, country, sector, sure, reason }] } — 고를 수 없으면 ''. 저장은 화면에서 사람이 고른 것만 */
 router.post('/org-enrich', async (req, res) => {
-  if (!enabled()) return res.status(503).json({ ok: false, error: 'AI가 꺼져 있어요(ANTHROPIC_API_KEY 없음)' });
   const b = req.body || {};
   const str = (v, n) => String(v || '').slice(0, n);
   const countries = (Array.isArray(b.countries) ? b.countries : []).map((c) => str(c, 40)).filter(Boolean).slice(0, 300);
@@ -364,37 +433,21 @@ router.post('/org-enrich', async (req, res) => {
     ].filter(Boolean).join(' · ')),
   ].join(NL);
 
-  try {
-    const r = await ai().beta.messages.create({
-      model: MODEL,
-      max_tokens: 16000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      output_config: { effort: 'low', format: { type: 'json_schema', schema } },
-      messages: [{ role: 'user', content: prompt }],
-    }, { timeout: 55000, maxRetries: 0 });
-    if (r.stop_reason === 'refusal') return res.status(502).json({ ok: false, error: 'AI가 답하지 않았어요' });
-    const out = JSON.parse(r.content.filter((x) => x.type === 'text').map((x) => x.text).join(''));
-    const byId = new Map(orgs.map((o) => [o.id, o]));
-    const cset = new Set(countries);
-    const items = (out.items || []).filter((it) => byId.has(it.id)).map((it) => {
-      const o = byId.get(it.id);
-      return {
-        id: it.id,
-        country: o.wantCountry && cset.has(it.country) ? it.country : '',
-        sector: o.sectorChoices.includes(it.sector) ? it.sector : '',
-        sure: !!it.sure,
-        reason: String(it.reason || '').slice(0, 160),
-      };
-    }).filter((it) => it.country || it.sector);
-    res.json({ ok: true, items });
-  } catch (e) {
-    if (e instanceof Anthropic.APIConnectionTimeoutError) return res.status(504).json({ ok: false, error: '시간 안에 끝나지 않았어요' });
-    if (e instanceof Anthropic.RateLimitError) return res.status(429).json({ ok: false, error: 'AI 요청이 많아요 — 잠시 뒤에 다시' });
-    if (e instanceof Anthropic.AuthenticationError) return res.status(503).json({ ok: false, error: 'AI 키가 맞지 않아요' });
-    if (e instanceof Anthropic.APIError) return res.status(502).json({ ok: false, error: `AI 오류 (${e.status || '연결'})` });
-    res.status(500).json({ ok: false, error: e.message });
-  }
+  const out = await askJson(req, res, 'org-enrich', { content: prompt, schema, maxTokens: 16000 });
+  if (!out) return;
+  const byId = new Map(orgs.map((o) => [o.id, o]));
+  const cset = new Set(countries);
+  const items = (out.items || []).filter((it) => byId.has(it.id)).map((it) => {
+    const o = byId.get(it.id);
+    return {
+      id: it.id,
+      country: o.wantCountry && cset.has(it.country) ? it.country : '',
+      sector: o.sectorChoices.includes(it.sector) ? it.sector : '',
+      sure: !!it.sure,
+      reason: String(it.reason || '').slice(0, 160),
+    };
+  }).filter((it) => it.country || it.sector);
+  res.json({ ok: true, items });
 });
 
 /* 연사 상황 상담 — «발표자료 파일이 깨져서 다시 받아야 해» 같은 질문에 할 일을 답한다.
@@ -414,7 +467,6 @@ const SPEAKER_CRM_GUIDE = [
   '- 받은 메일·통화는 연사 «메일함» 탭에 기록으로 남는다.',
 ].join(NL);
 router.post('/speaker-advice', async (req, res) => {
-  if (!enabled()) return res.status(503).json({ ok: false, error: 'AI가 꺼져 있어요(ANTHROPIC_API_KEY 없음)' });
   const b = req.body || {};
   const str = (v, n) => String(v || '').slice(0, n);
   const question = str(b.question, 500).trim();
@@ -468,36 +520,20 @@ router.post('/speaker-advice', async (req, res) => {
     `상황: ${question}`,
   ].filter((x) => x !== '').join(NL);
 
-  try {
-    const r = await ai().beta.messages.create({
-      model: MODEL,
-      max_tokens: 8000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      output_config: { effort: 'medium', format: { type: 'json_schema', schema } },
-      messages: [{ role: 'user', content: prompt }],
-    }, { timeout: 55000, maxRetries: 0 });
-    if (r.stop_reason === 'refusal') return res.status(502).json({ ok: false, error: 'AI가 답하지 않았어요' });
-    const out = JSON.parse(r.content.filter((x) => x.type === 'text').map((x) => x.text).join(''));
-    // 단추는 실제로 있는 단계·탭에만 — 아니면 글만 남긴다
-    const todo = (out.todo || []).slice(0, 6).map((t) => {
-      let { action, arg } = t;
-      const okArg = action === 'tab' ? TABS.includes(arg)
-        : ['mail', 'bulk'].includes(action) ? stepKeys.includes(arg)
-        : action === 'undo' ? steps.some((s) => s.key === arg && s.undoable)
-        : true;
-      if (!okArg) { action = 'none'; arg = ''; }
-      if (action === 'none' || action === 'editflow') arg = '';
-      return { text: String(t.text || '').slice(0, 300), action, arg };
-    });
-    res.json({ ok: true, summary: String(out.summary || '').slice(0, 400), todo, caution: String(out.caution || '').slice(0, 300) });
-  } catch (e) {
-    if (e instanceof Anthropic.APIConnectionTimeoutError) return res.status(504).json({ ok: false, error: '시간 안에 끝나지 않았어요' });
-    if (e instanceof Anthropic.RateLimitError) return res.status(429).json({ ok: false, error: 'AI 요청이 많아요 — 잠시 뒤에 다시' });
-    if (e instanceof Anthropic.AuthenticationError) return res.status(503).json({ ok: false, error: 'AI 키가 맞지 않아요' });
-    if (e instanceof Anthropic.APIError) return res.status(502).json({ ok: false, error: `AI 오류 (${e.status || '연결'})` });
-    res.status(500).json({ ok: false, error: e.message });
-  }
+  const out = await askJson(req, res, 'speaker-advice', { content: prompt, schema });
+  if (!out) return;
+  // 단추는 실제로 있는 단계·탭에만 — 아니면 글만 남긴다
+  const todo = (out.todo || []).slice(0, 6).map((t) => {
+    let { action, arg } = t;
+    const okArg = action === 'tab' ? TABS.includes(arg)
+      : ['mail', 'bulk'].includes(action) ? stepKeys.includes(arg)
+      : action === 'undo' ? steps.some((s) => s.key === arg && s.undoable)
+      : true;
+    if (!okArg) { action = 'none'; arg = ''; }
+    if (action === 'none' || action === 'editflow') arg = '';
+    return { text: String(t.text || '').slice(0, 300), action, arg };
+  });
+  res.json({ ok: true, summary: String(out.summary || '').slice(0, 400), todo, caution: String(out.caution || '').slice(0, 300) });
 });
 
 /* 전시 참가사 상황 상담 — 연사 상담(/speaker-advice)과 같은 틀, 전시용 기능 설명·단추.
@@ -515,7 +551,6 @@ const EXH_CRM_GUIDE = [
   '- 날짜로 끝나는 항목(매뉴얼 발송·회신, 부스 배정, 현장 등)은 진행 탭에서 날짜를 지워 되돌린다.',
 ].join(NL);
 router.post('/exh-advice', async (req, res) => {
-  if (!enabled()) return res.status(503).json({ ok: false, error: 'AI가 꺼져 있어요(ANTHROPIC_API_KEY 없음)' });
   const b = req.body || {};
   const str = (v, n) => String(v || '').slice(0, n);
   const question = str(b.question, 500).trim();
@@ -564,35 +599,19 @@ router.post('/exh-advice', async (req, res) => {
     `상황: ${question}`,
   ].join(NL);
 
-  try {
-    const r = await ai().beta.messages.create({
-      model: MODEL,
-      max_tokens: 8000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      output_config: { effort: 'medium', format: { type: 'json_schema', schema } },
-      messages: [{ role: 'user', content: prompt }],
-    }, { timeout: 55000, maxRetries: 0 });
-    if (r.stop_reason === 'refusal') return res.status(502).json({ ok: false, error: 'AI가 답하지 않았어요' });
-    const out = JSON.parse(r.content.filter((x) => x.type === 'text').map((x) => x.text).join(''));
-    const todo = (out.todo || []).slice(0, 6).map((t) => {
-      let { action, arg } = t;
-      const ok = action === 'tab' ? TABS.includes(arg)
-        : action === 'mail' ? mailKeys.includes(arg)
-        : action === 'mailedit' ? (!arg || mailKeys.includes(arg))
-        : true;
-      if (!ok) { action = 'none'; arg = ''; }
-      if (action === 'none') arg = '';
-      return { text: String(t.text || '').slice(0, 300), action, arg };
-    });
-    res.json({ ok: true, summary: String(out.summary || '').slice(0, 400), todo, caution: String(out.caution || '').slice(0, 300) });
-  } catch (e) {
-    if (e instanceof Anthropic.APIConnectionTimeoutError) return res.status(504).json({ ok: false, error: '시간 안에 끝나지 않았어요' });
-    if (e instanceof Anthropic.RateLimitError) return res.status(429).json({ ok: false, error: 'AI 요청이 많아요 — 잠시 뒤에 다시' });
-    if (e instanceof Anthropic.AuthenticationError) return res.status(503).json({ ok: false, error: 'AI 키가 맞지 않아요' });
-    if (e instanceof Anthropic.APIError) return res.status(502).json({ ok: false, error: `AI 오류 (${e.status || '연결'})` });
-    res.status(500).json({ ok: false, error: e.message });
-  }
+  const out = await askJson(req, res, 'exh-advice', { content: prompt, schema });
+  if (!out) return;
+  const todo = (out.todo || []).slice(0, 6).map((t) => {
+    let { action, arg } = t;
+    const ok = action === 'tab' ? TABS.includes(arg)
+      : action === 'mail' ? mailKeys.includes(arg)
+      : action === 'mailedit' ? (!arg || mailKeys.includes(arg))
+      : true;
+    if (!ok) { action = 'none'; arg = ''; }
+    if (action === 'none') arg = '';
+    return { text: String(t.text || '').slice(0, 300), action, arg };
+  });
+  res.json({ ok: true, summary: String(out.summary || '').slice(0, 400), todo, caution: String(out.caution || '').slice(0, 300) });
 });
 
 /* 메일 초안 — 상황에 맞는 제목·본문을 «변수가 든 틀»로 쓴다.
@@ -608,7 +627,6 @@ const scrub = (v) => String(v || '')
   .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '[메일 주소]')
   .replace(/\+?\d{2,4}[\s.-]\d{3,4}[\s.-]\d{4}/g, '[번호]');   // 010-1234-5678 꼴 — 날짜(2026-10-16)는 남긴다
 router.post('/mail-draft', async (req, res) => {
-  if (!enabled()) return res.status(503).json({ ok: false, error: 'AI가 꺼져 있어요(ANTHROPIC_API_KEY 없음)' });
   const b = req.body || {};
   const str = (v, n) => scrub(String(v || '').slice(0, n));
   const part = b.part === 'exh' ? 'exh' : 'conf';
@@ -650,29 +668,13 @@ router.post('/mail-draft', async (req, res) => {
     `직원 지시: ${instruction || '(없음 — 이 단계에 맞는 기본 안내로)'}`,
   ].filter((x) => x !== '').join(NL);
 
-  try {
-    const r = await ai().beta.messages.create({
-      model: MODEL,
-      max_tokens: 8000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      output_config: { effort: 'medium', format: { type: 'json_schema', schema } },
-      messages: [{ role: 'user', content: prompt }],
-    }, { timeout: 55000, maxRetries: 0 });
-    if (r.stop_reason === 'refusal') return res.status(502).json({ ok: false, error: 'AI가 답하지 않았어요' });
-    const out = JSON.parse(r.content.filter((x) => x.type === 'text').map((x) => x.text).join(''));
-    const cut = (v, n) => String(v || '').slice(0, n);
-    res.json({ ok: true,
-      subject_ko: want.includes('ko') ? cut(out.subject_ko, 300) : '', body_ko: want.includes('ko') ? cut(out.body_ko, 8000) : '',
-      subject_en: want.includes('en') ? cut(out.subject_en, 300) : '', body_en: want.includes('en') ? cut(out.body_en, 8000) : '',
-      note: cut(out.note, 400) });
-  } catch (e) {
-    if (e instanceof Anthropic.APIConnectionTimeoutError) return res.status(504).json({ ok: false, error: '시간 안에 끝나지 않았어요' });
-    if (e instanceof Anthropic.RateLimitError) return res.status(429).json({ ok: false, error: 'AI 요청이 많아요 — 잠시 뒤에 다시' });
-    if (e instanceof Anthropic.AuthenticationError) return res.status(503).json({ ok: false, error: 'AI 키가 맞지 않아요' });
-    if (e instanceof Anthropic.APIError) return res.status(502).json({ ok: false, error: `AI 오류 (${e.status || '연결'})` });
-    res.status(500).json({ ok: false, error: e.message });
-  }
+  const out = await askJson(req, res, 'mail-draft', { content: prompt, schema });
+  if (!out) return;
+  const cut = (v, n) => String(v || '').slice(0, n);
+  res.json({ ok: true,
+    subject_ko: want.includes('ko') ? cut(out.subject_ko, 300) : '', body_ko: want.includes('ko') ? cut(out.body_ko, 8000) : '',
+    subject_en: want.includes('en') ? cut(out.subject_en, 300) : '', body_en: want.includes('en') ? cut(out.body_en, 8000) : '',
+    note: cut(out.note, 400) });
 });
 
 /* 업체 소개서 PDF 요약 — 받은 소개서·견적서를 읽어 기업 «회사소개»를 채운다.
@@ -682,7 +684,6 @@ router.post('/mail-draft', async (req, res) => {
    body: { name, files:[{ name, pages:[base64 JPEG…] }] }
    답: { ok, intro, phone, email, website, address, products } — 모르는 칸은 '' */
 router.post('/org-pdf-summary', async (req, res) => {
-  if (!enabled()) return res.status(503).json({ ok: false, error: 'AI가 꺼져 있어요(ANTHROPIC_API_KEY 없음)' });
   const b = req.body || {};
   const files = (Array.isArray(b.files) ? b.files : []).slice(0, 5).map((f) => ({
     name: String(f.name || '').slice(0, 120),
@@ -711,25 +712,9 @@ router.post('/org-pdf-summary', async (req, res) => {
     '- 문서에 없는 내용을 짐작해 넣지 마세요.',
   ].join(NL) });
 
-  try {
-    const r = await ai().beta.messages.create({
-      model: MODEL,
-      max_tokens: 8000,
-      betas: ['server-side-fallback-2026-07-01'],
-      fallbacks: 'default',
-      output_config: { effort: 'low', format: { type: 'json_schema', schema } },
-      messages: [{ role: 'user', content }],
-    }, { timeout: 55000, maxRetries: 0 });
-    if (r.stop_reason === 'refusal') return res.status(502).json({ ok: false, error: 'AI가 답하지 않았어요' });
-    const out = JSON.parse(r.content.filter((x) => x.type === 'text').map((x) => x.text).join(''));
-    res.json({ ok: true, ...Object.fromEntries(keys.map((k) => [k, String(out[k] || '').trim().slice(0, k === 'intro' ? 3000 : 300)])) });
-  } catch (e) {
-    if (e instanceof Anthropic.APIConnectionTimeoutError) return res.status(504).json({ ok: false, error: '시간 안에 끝나지 않았어요 — 쪽 수를 줄여 보세요' });
-    if (e instanceof Anthropic.RateLimitError) return res.status(429).json({ ok: false, error: 'AI 요청이 많아요 — 잠시 뒤에 다시' });
-    if (e instanceof Anthropic.AuthenticationError) return res.status(503).json({ ok: false, error: 'AI 키가 맞지 않아요' });
-    if (e instanceof Anthropic.APIError) return res.status(502).json({ ok: false, error: `AI 오류 (${e.status || '연결'})` });
-    res.status(500).json({ ok: false, error: e.message });
-  }
+  const out = await askJson(req, res, 'org-pdf-summary', { content: content, schema, timeoutMsg: '시간 안에 끝나지 않았어요 — 쪽 수를 줄여 보세요' });
+  if (!out) return;
+  res.json({ ok: true, ...Object.fromEntries(keys.map((k) => [k, String(out[k] || '').trim().slice(0, k === 'intro' ? 3000 : 300)])) });
 });
 
 module.exports = router;

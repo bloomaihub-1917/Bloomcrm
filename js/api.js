@@ -1175,3 +1175,6 @@ export const aiSpeakerAdvice = (body) => aiApi('/speaker-advice', 'POST', body);
 export const aiExhAdvice    = (body) => aiApi('/exh-advice', 'POST', body);
 export const aiMailDraft    = (body) => aiApi('/mail-draft', 'POST', body);
 export const aiOrgPdfSummary = (body) => aiApi('/org-pdf-summary', 'POST', body);
+// 설정 › AI 설정 — 기능별 켜기·모델·생각 깊이·월 한도, 이번 달 사용량
+export const aiConfig     = () => aiApi('/config');
+export const aiSaveConfig = (body) => aiApi('/config', 'PUT', body);

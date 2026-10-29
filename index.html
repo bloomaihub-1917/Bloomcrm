@@ -141,6 +141,7 @@
         <button id="arch-tab-common" class="nr"    onclick="switchArchTab('common')" >📋 공통 목록</button>
         <button id="arch-tab-equip"  class="nr"    onclick="switchArchTab('equip')"  >🪑 비품 목록</button>
         <button id="arch-tab-clean"  class="nr"    onclick="switchArchTab('clean')"  >🧹 데이터 정리</button>
+        <button id="arch-tab-ai"     class="nr"    onclick="switchArchTab('ai')"     >✨ AI 설정</button>
         <button id="arch-tab-sys"    class="nr"    onclick="switchArchTab('sys')"    >⚙️ 시스템 정보</button>
         <!-- 업로드는 매일 쓰는 탭이 아니라 위 탭줄에서 내렸다 — 설정 안에서 들어간다 -->
         <button class="nr" id="arch-tab-up" onclick="switchApp('up',null)">📤 데이터 업로드</button>
@@ -450,7 +451,7 @@
     <div class="mob-title" id="mob-arch-ttl">설정</div>
   </div>
   <div class="tb">
-    <div class="tb-t">설정 <span class="tb-s">행사 · 기업 분류 · 사람 분류 · 공통 목록 · 데이터 정리 · 시스템</span></div>
+    <div class="tb-t">설정 <span class="tb-s">행사 · 기업 분류 · 사람 분류 · 공통 목록 · 데이터 정리 · AI · 시스템</span></div>
   </div>
 
   <!-- 모바일 전용 탭 전환 — 사이드바를 열었다 닫지 않고 바로 옮겨 다닐 수 있게.
@@ -463,6 +464,7 @@
       <button class="seg-b"    id="arch-mtab-common" onclick="switchArchTab('common')" style="flex:1">공통</button>
       <button class="seg-b"    id="arch-mtab-equip"  onclick="switchArchTab('equip')"  style="flex:1">비품</button>
       <button class="seg-b"    id="arch-mtab-clean"  onclick="switchArchTab('clean')"  style="flex:1">정리</button>
+      <button class="seg-b"    id="arch-mtab-ai"     onclick="switchArchTab('ai')"     style="flex:1">AI</button>
       <button class="seg-b"    id="arch-mtab-sys"    onclick="switchArchTab('sys')"    style="flex:1">시스템</button>
       <button class="seg-b"    onclick="switchApp('up',null)" style="flex:1">업로드</button>
     </div>
@@ -784,6 +786,13 @@
   <!-- ── 시스템 정보 탭 ──
        예전엔 구글시트 시절 구조도가 있었다. 지금 돌아가는 것과 달라서 오히려
        헷갈렸다 — 실제 배포 버전·서버 상태·데이터 건수를 보여준다. -->
+  <!-- ── AI 설정 탭 — 내용은 js/modules/ai-settings.js가 그린다 ── -->
+  <div id="arch-pane-ai" style="padding:16px 20px;max-width:900px;display:none">
+    <div style="font-size:13px;font-weight:700;color:var(--i1);margin-bottom:6px">AI 설정</div>
+    <div style="font-size:11px;color:var(--i4);margin-bottom:14px">Claude를 쓰는 기능마다 켜고 끄거나 모델을 고릅니다. 이름·메일 주소·메일 본문은 어떤 기능도 보내지 않아요(업체 소개서 PDF만 예외).</div>
+    <div id="ai-settings"></div>
+  </div>
+
   <div id="arch-pane-sys" style="padding:16px 20px;max-width:900px;display:none">
     <div style="font-size:13px;font-weight:700;color:var(--i1);margin-bottom:6px">시스템 정보</div>
     <div style="font-size:11px;color:var(--i4);margin-bottom:14px">지금 쓰고 있는 버전과 서버 상태, 데이터 건수입니다. 문제가 생겼을 때 이 화면을 캡처해 보내주면 원인을 찾기 쉬워요.</div>
