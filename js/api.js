@@ -181,8 +181,18 @@ export function showSaveErrorToast(msg){
   _toastTimer = setTimeout(() => { el.style.display = 'none'; }, 6000);
 }
 
+let settingsReady = false;   // 로그인 때 settings 표를 읽었나 — loadFromSheets가 정한다
 export async function postToSheet(payload, label, { silent = false } = {}){
-  if(!API_BASE_URL || !currentUser) return { ok: true, offline: true };
+  if(!API_BASE_URL) return { ok: true, offline: true };   // 테스트 모드
+  /* 로그인이 풀렸으면 저장을 «성공»으로 돌려주지 않는다 — 전에는 다른 탭에서 로그아웃하면
+     이 탭의 저장이 성공처럼 보이고 서버에는 아무것도 안 갔다 */
+  if(!currentUser){ showSaveErrorToast(`저장 안 됨 (${label || '저장'}) — 로그인이 풀렸어요. 새로고침해서 다시 로그인하세요.`); return { ok: false, error: 'logged out' }; }
+  /* 설정 묶음(JSON 한 줄)은 화면의 사본을 통째로 올린다. 로그인 때 못 읽었으면 사본이 비어 있어
+     서버의 양식 보관함·행사 설정을 지운다 — 새로고침해 읽은 뒤에만 저장한다 */
+  if(payload && payload.sheet === 'settings' && !settingsReady){
+    showSaveErrorToast(`저장 안 됨 (${label || '설정'}) — 처음 불러올 때 설정을 못 읽었어요. 새로고침한 뒤 다시 해 주세요.`);
+    return { ok: false, error: 'settings not loaded' };
+  }
   try {
     const headers = { 'Content-Type': 'application/json', ...await authHeaders() };
     const res  = await fetch(API_BASE_URL + '/api/data', {
@@ -366,6 +376,10 @@ export async function loadFromSheets(hooks = {}){
         };
       }));
       console.log('[CRM] contacts loaded & cleaned:', contacts.length);
+    }
+
+    // 설정 묶음(양식 보관함·행사 설정·분야·태그)은 읽은 뒤에만 저장한다 — postToSheet가 본다
+    settingsReady = Array.isArray(settingsData);
 
     // ── settings 시트 → DOMAINS (분야 목록, key='domains' JSON) ──
     if(settingsData && Array.isArray(settingsData)){
@@ -419,7 +433,7 @@ export async function loadFromSheets(hooks = {}){
         domain: r.domain || '', canonical: r.canonical || '',
       })).filter(s => s.id && s.name));
       console.log('[CRM] sectors 시트 로드:', COMPANY_SECTORS.length, '개');
-    } else if(settingsData && Array.isArray(settingsData)){
+    } else if(Array.isArray(sectorsData) && settingsData && Array.isArray(settingsData)){
       // 구버전 호환: settings 시트의 JSON blob에서 마이그레이션 (1회) → sectors 시트로 옮겨 저장
       settingsData.forEach(row => {
         if(row.key === 'sectors'){
@@ -479,8 +493,8 @@ export async function loadFromSheets(hooks = {}){
         .map(r => ({ key: r.key, label: r.label || r.key, cls: r.cls || 'p-gray' })));
       syncPartColors();
       console.log('[CRM] part_types 시트 로드:', PART_TYPES.length, '개');
-    } else if(API_BASE_URL && currentUser){
-      // 시트가 비어있으면 기본값을 1회 저장 (마이그레이션)
+    } else if(Array.isArray(partTypesData) && API_BASE_URL && currentUser){
+      // 시트가 비어있으면 기본값을 1회 저장 (마이그레이션) — 읽기 실패(null)면 하지 않는다
       migratePartTypesToSheet();
     }
 
@@ -512,8 +526,7 @@ export async function loadFromSheets(hooks = {}){
       })).filter(e => e.key));
       console.log('[CRM] events loaded:', EVENT_LIST.length, '건');
     }
-      hooks.buildCoDB?.();
-    }
+    hooks.buildCoDB?.();
 
     // participations 업데이트 — 필드명 정규화 적용(핵심 개선사항)
     if(partsData && Array.isArray(partsData)){

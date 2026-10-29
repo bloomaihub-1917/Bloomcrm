@@ -837,7 +837,7 @@ export async function confirmEvDbSend(){
         text: `${fromName}에서 만남 — ${people.slice(0, 5).join(', ')}${people.length > 5 ? ` 외 ${people.length - 5}명` : ''}` }],
     };
     targets.unshift(t);
-    const r = await saveTargetToSheet(t);
+    const r = await saveTargetToSheet(t, { log: true });
     if(!r.ok){
       // 중간에 끊기면 넣은 것만 되돌린다 — 반쯤 들어간 채로 두면 다시 보낼 때
       // 무엇이 이미 들어갔는지 알 수 없다
@@ -1187,7 +1187,7 @@ export async function openEvDbTargetSend(){
      한 번에 보내면 어디까지 들어갔는지 알 수 없다. */
   const failed = [];
   for(const t of made){
-    const r = await saveTargetToSheet(t);
+    const r = await saveTargetToSheet(t, { log: true });
     if(!r || r.ok === false) failed.push(t);
   }
   if(failed.length){

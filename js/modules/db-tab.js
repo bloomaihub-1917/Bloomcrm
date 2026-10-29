@@ -828,7 +828,7 @@ export async function confirmMDBToCrm(){
   if(made.length){
     const { saveTargetToSheet } = await import('./crm-tab.js');
     made.forEach(t => targets.unshift(t));
-    const tRes = await Promise.all(made.map(t => saveTargetToSheet(t)));
+    const tRes = await Promise.all(made.map(t => saveTargetToSheet(t, { log: true })));
     tBad = made.filter((_, i) => !tRes[i].ok);
     tBad.forEach(t => { const k = targets.indexOf(t); if(k >= 0) targets.splice(k, 1); });
   }

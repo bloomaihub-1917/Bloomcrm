@@ -54,16 +54,32 @@ import './contact-import.js';   // 옛 엑셀 기록 가져오기 (window.openRo
    치명적 버그가 있었다. 모든 타겟 변경은 이 함수를 거쳐 저장한다.
    실패 시 postToSheet가 토스트로 알리고 {ok:false}를 반환하므로
    호출부에서 이전 상태로 롤백한다. */
-export async function saveTargetToSheet(t) {
-  return postToSheet({
-    sheet: 'crm_targets',
-    action: 'upsert',
-    row: [t.id, t.name, t.nameEn, t.sector, t.hq,
-      t.event, t.role, t.status, t.priority,
-      t.assignee, t.currentStage, t.lastActivity,
-      JSON.stringify(t.log || [])],
-  }, 'CRM 타겟');
+export async function saveTargetToSheet(t, { log = false } = {}) {
+  /* 컨택 이력(log)은 기본으로 안 보낸다 — 서버가 메일 보냄·받음을 log 맨 앞에 바로 붙이는데,
+     상태 하나 바꿀 때마다 화면의 낡은 log를 통째로 올려 방금 붙은 줄을 지우고 있었다.
+     위치 배열을 log 앞에서 끊으면 서버는 log 칸을 건드리지 않는다(columnsCoveredBy).
+     새 타겟·이력 추가·메모는 log: true — 이력을 고칠 때는 mergeTargetLog로 서버 log에 얹는다 */
+  const row = [t.id, t.name, t.nameEn, t.sector, t.hq,
+    t.event, t.role, t.status, t.priority,
+    t.assignee, t.currentStage, t.lastActivity];
+  if (log) row.push(JSON.stringify(t.log || []));
+  return postToSheet({ sheet: 'crm_targets', action: 'upsert', row }, 'CRM 타겟');
 }
+/* 서버의 지금 log를 읽어 fn으로 고친 뒤 t.log로 둔다 — 그 사이 서버가 붙인 메일 기록을 살린다.
+   못 읽으면 false(저장하지 않는다) */
+async function mergeTargetLog(t, fn) {
+  const { API_BASE_URL } = await import('../state.js');
+  const { safeFetch, authHeaders } = await import('../api.js');
+  if (!API_BASE_URL) { t.log = fn(t.log || []); return true; }
+  const rows = await safeFetch(API_BASE_URL + '/api/data?sheet=crm_targets', 'crm_targets', 1, await authHeaders());
+  if (!Array.isArray(rows)) return false;
+  const r = rows.find(x => String(x.id) === String(t.id));
+  let server = [];
+  try { server = r && r.log ? JSON.parse(r.log) : []; } catch (e) { server = []; }
+  t.log = fn(Array.isArray(server) ? server : []);
+  return true;
+}
+const sameEntry = (a, b) => a && b && a.type === b.type && a.text === b.text && a.date === b.date && (a.at || '') === (b.at || '');
 
 /* ── 우선순위 라벨 (원본은 renderTable2/dCRM 두 곳에 동일 객체가 중복 정의되어
    있었음 — 값 변경 없이 이 파일 안에서 한 번만 정의해서 공유) ── */
@@ -674,12 +690,18 @@ export async function saveLogMemo(id, k) {
   const prev = t.log[k].memo || '';
   logUi.memoEdit = null;
   if (val === prev) { renderDrBd(t); return; }
-  t.log[k].memo = val;
+  const entry = { ...t.log[k] };
+  const local = t.log;
+  if (!(await mergeTargetLog(t, (server) => {
+    const j = server.findIndex(e => sameEntry(e, entry));
+    if (j < 0) return local.map((e, n) => n === k ? { ...e, memo: val } : e);   // 서버에 없으면 화면 것으로
+    return server.map((e, n) => n === j ? { ...e, memo: val } : e);
+  }))) { alert('지금 이력을 읽지 못해 메모를 저장하지 않았어요. 잠시 뒤 다시 해 주세요.'); renderDrBd(t); return; }
   renderDrBd(t);
-  const r = await saveTargetToSheet(t);
-  if (!r.ok) { t.log[k].memo = prev; renderDrBd(t); return; }
+  const r = await saveTargetToSheet(t, { log: true });
+  if (!r.ok) { t.log = local; renderDrBd(t); return; }
   trackAction('log', '컨택 메모', t.name,
-    `<b>${escapeHtml(t.name)}</b> 컨택 이력 «${escapeHtml(t.log[k].text)}» 메모: "${escapeHtml(val)}"`, { kind: 'target', id: t.id });
+    `<b>${escapeHtml(t.name)}</b> 컨택 이력 «${escapeHtml(entry.text)}» 메모: "${escapeHtml(val)}"`, { kind: 'target', id: t.id });
 }
 /* ══════════════════════════════════════════
    타겟 ↔ 기업DB 잇기
@@ -821,13 +843,18 @@ export async function addLog(id) {
   const memo = (document.getElementById('lm-' + id)?.value || '').trim();
   if (!text && !memo) return;
   const prevLastActivity = targets[i].lastActivity;
-  targets[i].log.unshift({ type, text: text || memo, ...(text && memo ? { memo } : {}), date: td(),
-    by: currentUser?.name || currentUser?.email || '', color: LC[type] || '#9C9890' });
+  const prevLog = targets[i].log;
+  const entry = { type, text: text || memo, ...(text && memo ? { memo } : {}), date: td(),
+    by: currentUser?.name || currentUser?.email || '', color: LC[type] || '#9C9890' };
+  // 서버의 지금 log 맨 앞에 붙인다 — 화면을 연 뒤 서버가 붙인 메일 기록이 지워지지 않게
+  if (!(await mergeTargetLog(targets[i], (server) => [entry, ...server]))) {
+    alert('지금 이력을 읽지 못해 기록을 저장하지 않았어요. 잠시 뒤 다시 해 주세요.'); return;
+  }
   targets[i].lastActivity = td();
   renderDr();
-  const r = await saveTargetToSheet(targets[i]);
+  const r = await saveTargetToSheet(targets[i], { log: true });
   if (!r.ok) { // 저장 실패 → 롤백 (방금 넣은 기록 제거)
-    targets[i].log.shift();
+    targets[i].log = prevLog;
     targets[i].lastActivity = prevLastActivity;
     renderDr();
     return;
@@ -953,7 +980,7 @@ export async function addTarget() {
   updBadges();
 
   // 구글시트 저장 — 실패 시 방금 추가한 타겟을 목록에서 제거(롤백)
-  const r = await saveTargetToSheet(t);
+  const r = await saveTargetToSheet(t, { log: true });
   if (!r.ok) {
     const idx = targets.findIndex(x => x.id === t.id);
     if (idx >= 0) targets.splice(idx, 1);
