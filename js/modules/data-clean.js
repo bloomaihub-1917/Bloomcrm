@@ -84,7 +84,7 @@ export async function applyContactFill(){
   renderContactFill();
 }
 
-/* ── 기업 레코드 저장 — dataRows는 «전체 레코드»로 덮어쓰므로 원래 값에 고친 칸만 얹어 보낸다 ── */
+/* ── 기업 레코드 저장 — 원래 값에 고친 칸만 얹어 보낸다(서버는 보낸 칸만 쓴다) ── */
 export async function saveOrgFields(patches, label){
   const now = new Date().toISOString();
   const recs = patches.map(p => {

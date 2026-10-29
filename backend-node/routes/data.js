@@ -286,7 +286,7 @@ async function bulkUpsert(client, table, pk, cols, records, { onConflict = 'upda
 
   const colList = cols.map(q).join(', ');
   const updateSet = cols.filter((c) => c !== pk).map((c) => `${q(c)} = EXCLUDED.${q(c)}`).join(', ');
-  const conflictClause = onConflict === 'nothing'
+  const conflictClause = onConflict === 'nothing' || !updateSet
     ? `ON CONFLICT (${q(pk)}) DO NOTHING`
     : `ON CONFLICT (${q(pk)}) DO UPDATE SET ${updateSet}`;
 
@@ -314,14 +314,9 @@ async function upsertOne(client, def, record, opts = {}) {
 
 /* ── 객체형 입력 (신규 exhibitor_* 테이블용) ──
    위치 배열(row/rows)은 컬럼이 30개를 넘으면 순서가 어긋나는 사고가 나기 쉽다.
-   - dataRows(객체 배열): 전체 레코드로 취급 — 일괄 등록용
+   - dataRows(객체 배열): 일괄 등록용 — 줄마다 보낸 키만 쓴다(빠진 칸은 그대로 둔다)
    - data(객체 단건): 넘어온 키만 갱신하는 부분 upsert — 체크 하나 누를 때
      보내지 않은 필드가 실수로 비워지지 않게 한다 */
-function pickColumns(columns, obj) {
-  const rec = {};
-  columns.forEach((c) => { rec[c] = obj[c] === undefined ? null : obj[c]; });
-  return rec;
-}
 
 /* ══════════════════════════════════════════
    덮어쓰기 막기
@@ -463,14 +458,22 @@ router.post('/', async (req, res) => {
         const ids = row || [];
         await client.query(`DELETE FROM ${def.table} WHERE ${q(def.pk)} = ANY($1::text[])`, [ids]);
       } else if (dataRows) {
-        // 객체 배열 일괄 저장 — 전체 레코드로 취급
+        /* 객체 배열 일괄 저장 — 줄마다 «보낸 칸»만 쓴다.
+           전에는 전체 레코드로 취급해 빠진 칸을 null로 덮었다. 업종 빈칸 채우기가
+           {id, sectors, updated_at}만 보내면서 기업 이름·웹사이트·메모를 지우고 있었다.
+           보낸 칸 모양이 같은 줄끼리 묶어 한 번에 넣는다. */
         const onConflict = action === 'batchAppend' ? 'nothing' : 'update';
-        const records = dataRows.map((d) => {
-          const rec = pickColumns(def.columns, d);
+        const groups = new Map();   // 칸 목록 → 레코드들
+        dataRows.forEach((d) => {
+          const rec = {};
+          def.columns.forEach((c) => { if (d && d[c] !== undefined) rec[c] = d[c]; });
           if (def.idPrefix !== null && !rec[def.pk]) rec[def.pk] = genId(def.idPrefix);
-          return rec;
+          const cols = def.columns.filter((c) => c in rec);
+          const key = cols.join(',');
+          if (!groups.has(key)) groups.set(key, { cols, records: [] });
+          groups.get(key).records.push(rec);
         });
-        await bulkUpsert(client, def.table, def.pk, def.columns, records, { onConflict });
+        for (const g of groups.values()) await bulkUpsert(client, def.table, def.pk, g.cols, g.records, { onConflict });
       } else if (data) {
         // 객체 단건 — 넘어온 키만 갱신
         if (expect) {
