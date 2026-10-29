@@ -156,11 +156,15 @@ const mailsOf = (x, who) => {
 };
 /* 이 메일(같은 단계·같은 제목 묶음)을 이미 받은 주소 — «아직 못 받은 담당자만»에서 뺀다.
    기타 안내·보관함 양식은 kind가 모두 'note'라 카테고리(단계 이름)까지 맞춘다 */
-function gotMails(x){
+/* 이 기업에 이 메일(같은 단계, 기타 안내는 같은 이름)을 보낸 기록 */
+function sentLogs(x){
   const st = curStep();
   const kind = !st ? '' : bm.step === 'note' || st.lib ? 'note' : `exh-${bm.step}`;
+  return logsFor(x.id).filter(l => l.direction !== 'in' && l.kind === kind && (kind !== 'note' || l.category === st.label));
+}
+function gotMails(x){
   const out = new Set();
-  logsFor(x.id).filter(l => l.direction !== 'in' && l.kind === kind && (kind !== 'note' || l.category === st.label))
+  sentLogs(x)
     .forEach(l => String(l.counterpart || '').replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g, (m) => { out.add(m.toLowerCase()); return m; }));
   return out;
 }
@@ -374,6 +378,22 @@ async function pushRounds(fn){
   return true;
 }
 const eventExhibitors = () => EXHIBITORS.filter(x => x.event_id === bm.evKey);
+/* 이 메일을 보낸 기업·주소를 컨택 차수로 — 컨택에서 회신·후속을 체크한다(contact-tab.js importSentToRound) */
+export async function bmToContact(){
+  if(!bm || bm.sending) return;
+  const st = curStep();
+  if(!st) return;
+  const toOf = (l) => (String(l.counterpart || '').split('(cc)')[0].match(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g) || []);
+  const items = eventExhibitors().map(x => ({ name: exhNames(x).ko,
+    sends: sentLogs(x).map(l => ({ ts: l.ts, emails: toOf(l) })).filter(s => s.emails.length) })).filter(it => it.sends.length);
+  if(!items.length){ say('이 메일을 보낸 기록이 없어요.'); return; }
+  const name = `${st.label} — 회신 확인`;
+  if(!confirm(`«${st.label}»을 보낸 ${items.length}곳을 컨택 차수 «${name}»로 옮길까요?\n\n받은 주소마다 DM «보냄» 기록이 들어가고, 컨택에서 회신·부정·반송을 체크할 수 있어요.\n이미 옮긴 기업·기록은 다시 넣지 않아요.`)) return;
+  say('컨택으로 옮기는 중…', true);
+  const { importSentToRound } = await import('./contact-tab.js');
+  const r = await importSentToRound(bm.evKey, name, items);
+  say(r.ok ? `컨택 «${name}»에 ${r.members}곳 · 보낸 기록 ${r.attempts}건을 넣었어요${r.members || r.attempts ? '' : ' (이미 다 옮겨져 있어요)'}.` : '옮기지 못했어요. 네트워크 확인 후 다시 시도해주세요.', !!r.ok);
+}
 function roundProgress(st){
   const r = st && st.round;
   if(!r) return null;
@@ -424,6 +444,7 @@ function render(){
   const files = mailFilesOf(bm.evKey).filter(f => f.step === exhMailFileStep(bm.step));
   const picked = list.filter(x => bm.ids.has(x.id));
   const rp = roundProgress(st);
+  const sentN = st ? eventExhibitors().filter(x => sentLogs(x).length).length : 0;
   const failedN = [...bm.failed].filter(id => list.some(x => x.id === id)).length;
   const opt = (v, cur, l) => `<option value="${v}"${v === cur ? ' selected' : ''}>${l}</option>`;
   let el = document.getElementById('exh-bulkmail');
@@ -450,6 +471,9 @@ function render(){
       <div><div class="mlbl">받는 사람</div><select class="fi" onchange="bmSet('who',this.value)">${opt('primary', bm.who, '메인 담당자만')}${opt('all', bm.who, '메일 있는 담당자 모두')}${opt('rest', bm.who, '아직 못 받은 담당자만')}</select></div>
     </div>
     ${roundBarHtml(st, rp)}
+    ${sentN ? `<div style="margin:-4px 0 10px;font-size:10.5px"><button class="btn" style="font-size:10.5px" onclick="bmToContact()"
+      title="이 메일을 받은 기업·담당자를 컨택 차수(DM «보냄»)로 옮겨, 컨택에서 회신·후속을 체크합니다">📋 보낸 ${sentN}곳 컨택으로 옮기기</button>
+      <span style="color:var(--i4)">컨택 › «${escapeHtml(st.label)} — 회신 확인» 차수에서 회신·후속을 체크해요 · 다시 눌러도 겹치지 않아요</span></div>` : ''}
     ${st && st.key === 'booth_change' ? `<div style="font-size:10.5px;color:var(--i4);margin:-4px 0 8px">알린 부스(그 기업에 마지막으로 보낸 메일의 «부스 번호:» 줄)와 지금 부스가 다른 곳만 잡혀요. 보내면 새 번호가 «알린 부스»가 됩니다.</div>` : ''}
     <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:16px">
       <div>
@@ -680,4 +704,4 @@ window.refreshExhBulkMail = () => {
   render();
 };
 Object.assign(window, { openExhBulkMail, closeExhBulkMail: close, bmSet, bmPick, bmAll, bmTpl, bmPrev,
-  sendExhBulkMail, sendExhTestMail, startExhRound, closeExhRound, bmPhotoPick, bmPhotoAssign, bmPhotoClear, bmBannerPick, bmBannerClear, bmCcSave, bmLangF });
+  sendExhBulkMail, sendExhTestMail, startExhRound, closeExhRound, bmPhotoPick, bmPhotoAssign, bmPhotoClear, bmBannerPick, bmBannerClear, bmCcSave, bmLangF, bmToContact });

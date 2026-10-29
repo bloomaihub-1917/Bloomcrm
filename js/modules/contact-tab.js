@@ -24,7 +24,7 @@ import {
 } from '../state.js';
 import {
   saveRound, deleteRound, saveRoundMember, deleteRoundMembers, addRoundMembers,
-  saveAttempt, deleteAttempt,
+  saveAttempt, deleteAttempt, addAttempts,
 } from '../api.js';
 import { escapeHtml, escAttr, td, nowStamp, sectorKey } from '../utils.js';
 import { trackAction } from './audit-tab.js';
@@ -849,6 +849,68 @@ export async function toggleRoundClosed(id){
   document.getElementById('round-ed')?.remove();
   renderRoundNav(); (window.renderCrm || renderToday)();
 }
+/* 이미 보낸 일괄 메일을 컨택 차수로 옮긴다 — «여러 기업에 메일»로 보낸 단계(감사서한 등)를
+   컨택에서 회신·후속을 체크하게. 같은 행사·같은 이름 차수가 있으면 거기에 없는 기업·기록만 더한다.
+   items: [{ name(기업명), sends: [{ ts, emails: [] }] }] — 받은 주소마다 DM «보냄» 기록 한 줄 */
+export async function importSentToRound(evKey, name, items){
+  const norm = (s) => String(s || '').trim().toLowerCase();
+  const byMail = new Map();
+  contacts.forEach(c => [c.email1, c.email2].forEach(e => { if(e && !byMail.has(norm(e))) byMail.set(norm(e), c); }));
+  const nkey = (s) => String(s || '').toLowerCase().replace(/\(.*?\)|㈜|주식회사|co\.?,?|ltd\.?|inc\.?|corp\.?|[^a-z0-9가-힣]/g, '');
+  // 기업DB에서 그 기업 찾기 — 받은 주소의 담당자가 속한 기업이 먼저, 없으면 이름으로
+  const orgOf = (it) => {
+    const mails = new Set(it.sends.flatMap(s => s.emails).map(norm));
+    return coList().find(co => co.contacts.some(p => mails.has(norm(p.email)) || mails.has(norm(contactOf(p.id)?.email1))))
+      || coList().find(co => [co.nameKo, co.nameEn].some(n => n && nkey(n) === nkey(it.name))) || null;
+  };
+  let r = CONTACT_ROUNDS.find(x => x.event_id === evKey && x.name === name);
+  if(!r){
+    const first = items.flatMap(it => it.sends.map(s => s.ts)).sort()[0] || nowStamp();
+    r = { id: genId('CR-'), event_id: evKey, name, channel: 'DM', purpose: '보낸 메일의 회신·후속 확인', goal: '회신 받음',
+      date_from: String(first).slice(0, 10), date_to: '', noanswer_limit: String(DEFAULT_NOANSWER_LIMIT), retry_hours: String(DEFAULT_RETRY_HOURS),
+      note: '여러 기업에 메일 발송 기록에서 옮김', status: 'open', created_at: nowStamp(), created_by: currentUser?.email || '' };
+    CONTACT_ROUNDS.push(r);
+    const res = await saveRound(r);
+    if(!res.ok){ CONTACT_ROUNDS.splice(CONTACT_ROUNDS.indexOf(r), 1); return { ok: false }; }
+  }
+  const now = nowStamp();
+  const mem = [], atts = [];
+  items.forEach((it, i) => {
+    const co = orgOf(it);
+    const orgId = co ? co.key : 'name:' + it.name;
+    let m = ROUND_MEMBERS.find(x => x.round_id === r.id && x.org_id === orgId) || mem.find(x => x.org_id === orgId);
+    if(!m){
+      const last = it.sends.map(s => s.ts).sort().pop() || now;
+      m = { id: genId('RM-', i), round_id: r.id, org_id: orgId, org_name: co ? coName(co) : it.name, source: name,
+        caution: '', hold_until: '', call_hours: '', goal_at: '', closed_at: '', closed_reason: '', created_at: now,
+        // 마지막으로 보낸 날 + «보냄» 기다림 날수 뒤가 다음 확인일
+        next_at: (() => { const d = new Date(String(last).slice(0, 10)); d.setDate(d.getDate() + (REACTIONS.sent.next || 3)); return d.toISOString().slice(0, 10); })() };
+      mem.push(m);
+    }
+    it.sends.forEach(s => s.emails.forEach(e => {
+      const at = String(s.ts || now).slice(0, 16);
+      if([...CONTACT_ATTEMPTS, ...atts].some(a => a.member_id === m.id && norm(a.phone) === norm(e) && String(a.at).slice(0, 10) === at.slice(0, 10))) return;
+      const p = byMail.get(norm(e));
+      atts.push({ id: genId('CA-', atts.length), round_id: r.id, member_id: m.id, org_id: orgId,
+        contact_id: p ? String(p.id) : '', contact_name: p ? (p.nameKo || p.nameEn || '') : '', phone: e,
+        channel: 'DM', at, by_email: currentUser?.email || '', by_name: currentUser?.name || '', reaction: 'sent', note: '' });
+    }));
+  });
+  if(mem.length){
+    ROUND_MEMBERS.push(...mem);
+    const res = await addRoundMembers(mem);
+    if(!res.ok){ mem.forEach(x => ROUND_MEMBERS.splice(ROUND_MEMBERS.indexOf(x), 1)); return { ok: false }; }
+  }
+  if(atts.length){
+    CONTACT_ATTEMPTS.push(...atts);
+    const res = await addAttempts(atts);
+    if(!res.ok){ atts.forEach(x => CONTACT_ATTEMPTS.splice(CONTACT_ATTEMPTS.indexOf(x), 1)); return { ok: false, members: mem.length }; }
+  }
+  trackAction('add', '컨택 차수로 옮김', name, `${escapeHtml(evLabel(evKey))} — «${escapeHtml(name)}» ${mem.length}곳 · 보낸 기록 ${atts.length}건`);
+  try { (window.renderCrm || renderToday)(); renderRoundNav(); } catch(e){}
+  return { ok: true, round: r, members: mem.length, attempts: atts.length };
+}
+
 export async function removeRound(id){
   const r = roundById(id);
   if(!r || CONTACT_ATTEMPTS.some(a => a.round_id === id)) return;
