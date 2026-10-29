@@ -111,7 +111,8 @@ async function askJson(req, res, feature, { content, schema, maxTokens = 8000, t
     if (r.stop_reason === 'refusal') { res.status(502).json({ ok: false, error: 'AI가 답하지 않았어요' }); return null; }
     return JSON.parse(r.content.filter((b) => b.type === 'text').map((b) => b.text).join(''));
   } catch (e) {
-    await logUsage(req, feature, model, null, false);
+    // 답은 받았는데 JSON으로 못 읽은 경우는 위에서 이미 사용량을 남겼다 — 두 번 세면 월 한도가 빨리 찬다
+    if (!(e instanceof SyntaxError)) await logUsage(req, feature, model, null, false);
     if (e instanceof Anthropic.APIConnectionTimeoutError) res.status(504).json({ ok: false, error: timeoutMsg });
     else if (e instanceof Anthropic.RateLimitError) res.status(429).json({ ok: false, error: 'AI 요청이 많아요 — 잠시 뒤에 다시' });
     else if (e instanceof Anthropic.AuthenticationError) res.status(503).json({ ok: false, error: 'AI 키가 맞지 않아요' });
