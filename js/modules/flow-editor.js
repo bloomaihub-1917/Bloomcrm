@@ -142,17 +142,17 @@ function formHtml(st, isNew){
       <textarea class="fi" id="${id(f)}" rows="7" style="width:100%;resize:vertical;font-size:11.5px">${escapeHtml(v)}</textarea></div>`;
     // 제목은 한 줄 통째로 — 국문 제목·본문, 영문 제목·본문 순으로 위아래로 놓인다
     return `<div${f === 'desc' || f.includes('subject') ? ' style="grid-column:1/-1"' : ''}><div class="mlbl">${l}</div>
-      <input class="fi" id="${id(f)}" value="${escAttr(v)}" style="width:100%"></div>`;
+      <input class="fi" id="${id(f)}" value="${escapeHtml(v)}" style="width:100%"></div>`;
   };
   /* 더한 단계는 놓을 자리와 기준일을 고른다 — 자기 자신 뒤에는 둘 수 없다 */
   const others = flowSteps(edEv, { withOff: true }).filter(x => x.key !== st.key);
   const extra = custom ? `
     <div><div class="mlbl">놓을 자리</div><select class="fi" id="fe-after" style="width:100%">
       <option value=""${st.after === '' ? ' selected' : ''}>맨 앞</option>
-      ${others.map(x => `<option value="${escAttr(x.key)}"${st.after === x.key ? ' selected' : ''}>«${escapeHtml(x.label)}» 다음</option>`).join('')}
+      ${others.map(x => `<option value="${escapeHtml(x.key)}"${st.after === x.key ? ' selected' : ''}>«${escapeHtml(x.label)}» 다음</option>`).join('')}
       <option value="__end"${st.after == null || st.after === '__end' ? ' selected' : ''}>맨 끝</option></select></div>
     <div><div class="mlbl">대상 제한 <span style="font-weight:400;color:var(--i4)">— 비우면 모든 연사</span></div>
-      <input class="fi" type="date" id="fe-since" value="${escAttr(st.since || '')}" style="width:160px">
+      <input class="fi" type="date" id="fe-since" value="${escapeHtml(st.since || '')}" style="width:160px">
       <div style="font-size:10px;color:var(--i4);margin-top:2px">이날까지 초청한 연사에게만 서고, 이날 이후 보낸 메일만 끝으로 셉니다</div></div>`
     : `<div style="grid-column:1/-1;font-size:10.5px;color:var(--i4);line-height:1.6">이미 받은 연사에게 개정판을 다시 보내려면
       <a href="#" onclick="openSpeakerBulkMail('${escAttr(edEv)}','${escAttr(st.key)}');return false">📨 여러 연사에게 메일</a>에서 «↻ 이미 받은 연사에게 다시 보내기»를 누르세요.</div>`;
@@ -165,7 +165,7 @@ function formHtml(st, isNew){
     ${isNew ? '' : variantsHtml('conf', edEv, st.key, locked())}
     ${isNew ? '' : `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i7)">
       <div class="mlbl">기본 첨부 <span style="font-weight:400;color:var(--i4)">— 이 단계 메일에 자동으로 붙어요 (파일당 3MB)</span></div>
-      <div id="fe-files" data-step="${escAttr(st.key)}" style="font-size:11px;color:var(--i4)">불러오는 중…</div>
+      <div id="fe-files" data-step="${escapeHtml(st.key)}" style="font-size:11px;color:var(--i4)">불러오는 중…</div>
       <label class="btn" style="font-size:10.5px;margin-top:5px;display:inline-block;cursor:pointer">+ 파일 올리기
         <input type="file" multiple style="display:none" onchange="uploadFlowEdFiles('${escAttr(st.key)}',this)"></label></div>`}
     <div style="display:flex;gap:6px;margin-top:10px;align-items:center">

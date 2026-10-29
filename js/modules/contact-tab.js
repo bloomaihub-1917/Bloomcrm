@@ -1106,7 +1106,7 @@ export function openSendToRound(keys, label){
     <div style="font-size:11.5px;color:var(--i4);margin-bottom:12px">기업DB에서 걸러 본 ${sendCos.keys.length}곳 · ${escapeHtml(sendCos.label)}</div>
     <div style="font-size:12px;font-weight:600;margin-bottom:6px">어느 차수에</div>
     <select id="rs-round" onchange="sendRoundInfo()" style="width:100%;font-size:12.5px;padding:6px 8px;border:1px solid var(--i6);border-radius:var(--rs);margin-bottom:4px">
-      ${rounds.map(r => `<option value="${escAttr(r.id)}"${r.id === curRoundId ? ' selected' : ''}>${escapeHtml(evLabel(r.event_id))} · ${escapeHtml(r.name)}</option>`).join('')}
+      ${rounds.map(r => `<option value="${escapeHtml(r.id)}"${r.id === curRoundId ? ' selected' : ''}>${escapeHtml(evLabel(r.event_id))} · ${escapeHtml(r.name)}</option>`).join('')}
     </select>
     <div id="rs-info" style="font-size:11px;color:var(--i3);margin-bottom:8px"></div>
     ${fld('rs-src', '명단 이름 — 보고를 이 이름별로 나눠요', sendCos.label)}

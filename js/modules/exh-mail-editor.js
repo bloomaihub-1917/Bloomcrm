@@ -128,16 +128,16 @@ function formHtml(st, isNew){
       <textarea class="fi" id="xe-${f}" rows="7" style="width:100%;resize:vertical;font-size:11.5px">${escapeHtml(v)}</textarea></div>`;
     // 제목은 한 줄 통째로 — 국문 제목·본문, 영문 제목·본문 순으로 위아래로 놓인다
     return `<div${f === 'label' || f.includes('subject') ? ' style="grid-column:1/-1"' : ''}><div class="mlbl">${l}</div>
-      <input class="fi" id="xe-${f}" value="${escAttr(v)}" style="width:100%"></div>`;
+      <input class="fi" id="xe-${f}" value="${escapeHtml(v)}" style="width:100%"></div>`;
   };
   const others = exhMailSteps(edEv, { withOff: true }).filter(x => x.key !== st.key);
   const extra = custom ? `
     <div><div class="mlbl">놓을 자리</div><select class="fi" id="xe-after" style="width:100%">
       <option value=""${st.after === '' ? ' selected' : ''}>맨 앞</option>
-      ${others.map(x => `<option value="${escAttr(x.key)}"${st.after === x.key ? ' selected' : ''}>«${escapeHtml(x.label)}» 다음</option>`).join('')}
+      ${others.map(x => `<option value="${escapeHtml(x.key)}"${st.after === x.key ? ' selected' : ''}>«${escapeHtml(x.label)}» 다음</option>`).join('')}
       <option value="__end"${st.after == null || st.after === '__end' ? ' selected' : ''}>맨 끝</option></select></div>
     <div><div class="mlbl">마감일 <span style="font-weight:400;color:var(--i4)">— {마감일} 자리에 들어가요</span></div>
-      <input class="fi" type="date" id="xe-due_date" value="${escAttr(st.due_date || '')}" style="width:160px"></div>`
+      <input class="fi" type="date" id="xe-due_date" value="${escapeHtml(st.due_date || '')}" style="width:160px"></div>`
     : `<div style="grid-column:1/-1;font-size:10.5px;color:var(--i4)">{마감일}은 설정 › 행사 › 일정의 마감을 읽어요${st.due ? ` — 지금 ${escapeHtml(dueText(st))}` : ' — 이 단계는 마감이 없어요'}.</div>`;
   const sinceFld = st.key === 'note' || st.key === 'booth_change' || isNew ? '' : `
     <div style="grid-column:1/-1;font-size:10.5px;color:var(--i4);line-height:1.6">이미 받은 곳에 개정판을 다시 보내려면 «여러 기업에 메일»에서 이 단계를 고르고 «↻ 이미 받은 곳에 다시 보내기»를 누르세요.</div>`;
@@ -150,7 +150,7 @@ function formHtml(st, isNew){
     ${isNew ? '' : variantsHtml('exh', edEv, st.key, locked())}
     ${isNew ? '' : `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i7)">
       <div class="mlbl">기본 첨부 <span style="font-weight:400;color:var(--i4)">— 이 단계 메일에 자동으로 붙어요 (파일당 3MB)</span></div>
-      <div id="xe-files" data-step="${escAttr(exhMailFileStep(st.key))}" style="font-size:11px;color:var(--i4)">불러오는 중…</div>
+      <div id="xe-files" data-step="${escapeHtml(exhMailFileStep(st.key))}" style="font-size:11px;color:var(--i4)">불러오는 중…</div>
       <label class="btn" style="font-size:10.5px;margin-top:5px;display:inline-block;cursor:pointer">+ 파일 올리기
         <input type="file" multiple style="display:none" onchange="uploadExhMailEdFiles('${escAttr(exhMailFileStep(st.key))}',this)"></label></div>`}
     <div style="display:flex;gap:6px;margin-top:10px;align-items:center">

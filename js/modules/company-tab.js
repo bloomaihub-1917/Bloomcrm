@@ -937,7 +937,7 @@ function renderCoAiMsg(n){
     p.unpaid ? '미납 있음' : '',
     p.overdue ? '기한 지난 미납' : '',
   ].filter(Boolean);
-  el.innerHTML = `<span class="pill p-blue" style="cursor:default" title="${escAttr(coAi.q)}">✨ ${escapeHtml(p.explain || coAi.q)}</span>
+  el.innerHTML = `<span class="pill p-blue" style="cursor:default" title="${escapeHtml(coAi.q)}">✨ ${escapeHtml(p.explain || coAi.q)}</span>
     <b>${n}곳</b>
     <span style="color:var(--i4)">${escapeHtml(bits.join(' · '))}</span>
     ${p.unsupported ? `<span style="color:var(--am)">⚠️ 반영 못 한 조건: ${escapeHtml(p.unsupported)}</span>` : ''}
@@ -1055,7 +1055,7 @@ export function coSectorOptionsHtml(domainId, selected){
     return doms.length ? doms.includes(domainId) : domainId === UNASSIGNED_DOMAIN;
   };
   const opt = (value, label) =>
-    `<option value="${escAttr(value)}"${sectorKey(value) === sectorKey(selected||'') ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+    `<option value="${escapeHtml(value)}"${sectorKey(value) === sectorKey(selected||'') ? ' selected' : ''}>${escapeHtml(label)}</option>`;
   const rows = [];
   mainSectors().filter(inDomain).forEach(m => {
     rows.push(opt(m.name, parseSectorScope(m.name).plainName));
@@ -1066,7 +1066,7 @@ export function coSectorOptionsHtml(domainId, selected){
 }
 
 export function coDomainOptionsHtml(selected){
-  const opt = (v, l) => `<option value="${escAttr(v)}"${v === (selected||'') ? ' selected' : ''}>${escapeHtml(l)}</option>`;
+  const opt = (v, l) => `<option value="${escapeHtml(v)}"${v === (selected||'') ? ' selected' : ''}>${escapeHtml(l)}</option>`;
   return opt('', '전체 분야') + DOMAINS.map(d => opt(d.id, d.name)).join('') + opt(UNASSIGNED_DOMAIN, '미분류');
 }
 
@@ -1113,7 +1113,7 @@ export function openAddOrgModal(){
       <div class="fg"><label class="fl">기업명 (영문)</label><input class="fi" id="ao-nameEn" placeholder="예: Studio Bloom"></div>
       <div class="fg"><label class="fl">종류</label>
         <select class="fi" id="ao-kind">${ORG_KINDS.map(k =>
-          `<option value="${escAttr(k.key)}"${k.key === '잠재고객사' ? ' selected' : ''}>${escapeHtml(k.label)}</option>`).join('')}</select></div>
+          `<option value="${escapeHtml(k.key)}"${k.key === '잠재고객사' ? ' selected' : ''}>${escapeHtml(k.label)}</option>`).join('')}</select></div>
       <div class="fg"><label class="fl">분야</label>
         <select class="fi" id="ao-domain" onchange="onAddOrgDomainChange()">${coDomainOptionsHtml(pick.domain)}</select></div>
       <div class="fg"><label class="fl">섹터</label>
@@ -1346,7 +1346,7 @@ export function setCoDashQ(v){
 }
 
 function coChip(on, label, n, onclick, title){
-  return `<button class="btn bs${on ? ' bp' : ''}" style="font-size:11px;padding:3px 10px;gap:5px" onclick="${onclick}"${title ? ` title="${escAttr(title)}"` : ''}>
+  return `<button class="btn bs${on ? ' bp' : ''}" style="font-size:11px;padding:3px 10px;gap:5px" onclick="${onclick}"${title ? ` title="${escapeHtml(title)}"` : ''}>
     ${escapeHtml(label)}<span style="${on ? '' : 'color:var(--i4);'}font-weight:700">${n}</span></button>`;
 }
 
@@ -1511,7 +1511,7 @@ export function renderCoDetail(c){
               <button class="btn bs" style="font-size:10.5px;padding:2px 8px" title="업체가 보낸 소개서·견적서 PDF를 읽어 회사소개를 채웁니다"
                 onclick="fillCoIntroFromPdf('${escAttr(c.key)}')">📄 소개서 PDF로 채우기</button>
               <span id="co-pdf-msg-${escapeHtml(c.key)}" style="font-size:10.5px;color:var(--i4)"></span>
-              <span style="margin-left:auto;color:var(--i5);font-size:10.5px" title="${escAttr(c.updatedAt || '')}">${escapeHtml(shortDate(c.updatedAt) || '')}</span>
+              <span style="margin-left:auto;color:var(--i5);font-size:10.5px" title="${escapeHtml(c.updatedAt || '')}">${escapeHtml(shortDate(c.updatedAt) || '')}</span>
             </div>
           </div>`;
         })()}
@@ -2129,7 +2129,7 @@ export function editCoDomain(key){
       ${cur.length ? `<br>지금: <b>${escapeHtml(cur.map(d => domainName(d)).join(' · '))}</b>` : ''}
     </div>
     ${DOMAINS.map(d => `<button class="btn" style="width:100%;justify-content:flex-start;margin-bottom:5px;font-size:12px"
-      data-dom="${escAttr(d.id)}">${escapeHtml(d.name)}${cur.includes(d.id) ? ' ✓' : ''}</button>`).join('')
+      data-dom="${escapeHtml(d.id)}">${escapeHtml(d.name)}${cur.includes(d.id) ? ' ✓' : ''}</button>`).join('')
       || '<div style="font-size:11.5px;color:var(--i4)">설정 › 기업 분류에서 분야를 먼저 만들어주세요.</div>'}
     <button class="btn bs" style="width:100%;justify-content:center;margin-top:8px"
       onclick="closeCoDomainPopover()">취소</button>

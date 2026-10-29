@@ -429,7 +429,7 @@ function flowBoxHtml(sp){
     /* 날짜를 찍어 끝나는 단계만 되돌릴 수 있다 — 자료 받기처럼 받은 자료로 끝나는
        단계는 자료 칸을 고쳐야 바뀐다 */
     const undo = s.applies && s.isDone && !s.resend && s.done.startsWith('field:');
-    return `<span title="${escAttr(`${s.label} — ${st.t}${undo ? ' · 눌러서 되돌리기' : ''}`)}"${
+    return `<span title="${escapeHtml(`${s.label} — ${st.t}${undo ? ' · 눌러서 되돌리기' : ''}`)}"${
       undo ? ` onclick="undoSpStep('${escAttr(s.key)}')"` : ''} style="${undo ? 'cursor:pointer;' : ''}display:inline-flex;align-items:center;gap:3px;
       font-size:10px;padding:2px 7px;border-radius:10px;background:${st.bg};color:${st.c};
       ${cur ? 'font-weight:700;' : ''}${s.applies ? '' : 'text-decoration:line-through;'}white-space:nowrap">${st.m} ${escapeHtml(s.label)}</span>`;
@@ -514,7 +514,7 @@ function adviceHtml(sp){
   };
   return `<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--i6)">
     <div style="display:flex;gap:6px">
-      <input class="fi" id="sp-advice-q" style="flex:1;font-size:11.5px" value="${escAttr(a ? a.q : '')}"
+      <input class="fi" id="sp-advice-q" style="flex:1;font-size:11.5px" value="${escapeHtml(a ? a.q : '')}"
         placeholder="✨ 상황 물어보기 — 예: 발표자료 파일이 깨져서 다시 받아야 해"
         onkeydown="if(event.key==='Enter')askSpAdvice()" title="질문과 이 연사의 진행 상태만 AI에게 보냅니다. 이름·메일 내용은 보내지 않아요">
       <button class="btn" style="font-size:10.5px" onclick="askSpAdvice()" ${a && a.loading ? 'disabled' : ''}>${a && a.loading ? '생각 중…' : '물어보기'}</button>
@@ -697,13 +697,13 @@ function missingTalk(sp, evKey){
 const fg = (label, inner, hint) => `<div class="fg"><label class="fl">${label}</label>${inner}${
   hint ? `<div style="font-size:10px;color:var(--i4);margin-top:3px">${hint}</div>` : ''}</div>`;
 
-const txt = (val, handler, ph) => `<input class="fi" type="text" value="${escAttr(val || '')}"
-  placeholder="${escAttr(ph || '')}" onchange="${handler}">`;
+const txt = (val, handler, ph) => `<input class="fi" type="text" value="${escapeHtml(val || '')}"
+  placeholder="${escapeHtml(ph || '')}" onchange="${handler}">`;
 
 const area = (val, handler, ph, rows) => `<textarea class="fi" rows="${rows || 4}"
-  placeholder="${escAttr(ph || '')}" style="resize:vertical" onchange="${handler}">${escapeHtml(val || '')}</textarea>`;
+  placeholder="${escapeHtml(ph || '')}" style="resize:vertical" onchange="${handler}">${escapeHtml(val || '')}</textarea>`;
 
-const dateIn = (val, handler) => `<input class="fi" type="date" value="${escAttr(val || '')}" onchange="${handler}">`;
+const dateIn = (val, handler) => `<input class="fi" type="date" value="${escapeHtml(val || '')}" onchange="${handler}">`;
 
 /* 받았는지 — 체크는 오늘 날짜를 찍고, 날짜 칸은 손으로 고칠 수 있다 */
 const gotRow = (label, date, toggleH, dateH, need) => `<div style="display:flex;align-items:center;gap:9px;
@@ -711,9 +711,9 @@ const gotRow = (label, date, toggleH, dateH, need) => `<div style="display:flex;
     <input type="checkbox" ${date ? 'checked' : ''} onchange="${toggleH}">
     <div style="flex:1;min-width:0">
       <div style="font-size:12px">${escapeHtml(label)}
-        ${need ? `<span style="color:var(--i4);font-size:10px" title="${escAttr(NEED_LABEL[need] || '')}">${NEED_MARK[need] || ''}</span>` : ''}</div>
+        ${need ? `<span style="color:var(--i4);font-size:10px" title="${escapeHtml(NEED_LABEL[need] || '')}">${NEED_MARK[need] || ''}</span>` : ''}</div>
     </div>
-    <input class="fi" type="date" style="width:132px" value="${escAttr(date || '')}" onchange="${dateH}">
+    <input class="fi" type="date" style="width:132px" value="${escapeHtml(date || '')}" onchange="${dateH}">
   </div>`;
 
 /* 글자수 — 한도는 행사마다 다르고, 넘어도 막지 않는다.
@@ -794,19 +794,19 @@ function basicHtml(sp, con, evKey){
       프로그램에 나갈 이름입니다 — 연락처를 지워도 프로그램에서 사라지지 않도록 따로 굳혀 둡니다.
       해외 연사는 영문만 있어도 됩니다.</div>
     ${con ? `<div class="fgr">
-      ${fg('메일', `<input class="fi" type="email" value="${escAttr(con.email1 || '')}" onchange="spContactField('email1',this.value)">`)}
-      ${fg('메일 2', `<input class="fi" type="email" value="${escAttr(con.email2 || '')}" onchange="spContactField('email2',this.value)">`)}
+      ${fg('메일', `<input class="fi" type="email" value="${escapeHtml(con.email1 || '')}" onchange="spContactField('email1',this.value)">`)}
+      ${fg('메일 2', `<input class="fi" type="email" value="${escapeHtml(con.email2 || '')}" onchange="spContactField('email2',this.value)">`)}
     </div>
     <div class="fgr">
-      ${fg('휴대폰', `<input class="fi" type="tel" value="${escAttr(con.phone1 || '')}" onchange="spContactField('phone1',this.value)">`)}
-      ${fg('전화', `<input class="fi" type="tel" value="${escAttr(con.phone2 || '')}" onchange="spContactField('phone2',this.value)">`)}
+      ${fg('휴대폰', `<input class="fi" type="tel" value="${escapeHtml(con.phone1 || '')}" onchange="spContactField('phone1',this.value)">`)}
+      ${fg('전화', `<input class="fi" type="tel" value="${escapeHtml(con.phone2 || '')}" onchange="spContactField('phone2',this.value)">`)}
     </div>
     <div style="font-size:10px;color:var(--i4);margin:-4px 0 12px">
       메일·전화는 마스터DB 연락처에 저장돼요.${!con.email1 && selfRow && selfRow.email
         ? ` <span style="color:var(--am)">마스터DB엔 메일이 없고, «연락 상대»의 연사 본인 줄에 ${escapeHtml(selfRow.email)}이 있어 메일은 그 주소로 나갑니다.</span>` : ''}</div>`
     : selfRow ? `<div class="fgr">
-      ${fg('메일', `<input class="fi" type="email" value="${escAttr(selfRow.email || '')}" onchange="scField('${escAttr(selfRow.id)}','email',this.value,'연사 본인 메일')">`)}
-      ${fg('전화', `<input class="fi" type="tel" value="${escAttr(selfRow.phone || '')}" onchange="scField('${escAttr(selfRow.id)}','phone',this.value,'연사 본인 전화')">`)}
+      ${fg('메일', `<input class="fi" type="email" value="${escapeHtml(selfRow.email || '')}" onchange="scField('${escAttr(selfRow.id)}','email',this.value,'연사 본인 메일')">`)}
+      ${fg('전화', `<input class="fi" type="tel" value="${escapeHtml(selfRow.phone || '')}" onchange="scField('${escAttr(selfRow.id)}','phone',this.value,'연사 본인 전화')">`)}
     </div>
     <div style="font-size:10px;color:var(--i4);margin:-4px 0 12px">
       마스터DB 연락처가 연결되지 않아 «연락 상대»의 연사 본인 줄에 저장돼요. 아래에서 연결하면 마스터DB로 옮겨 적어 주세요.</div>`
@@ -832,7 +832,7 @@ function basicHtml(sp, con, evKey){
     ${fg('연락처 연결' + (nOf('profile') ? ` ${NEED_MARK[nOf('profile')]}` : ''), conBox)}
     <div class="fgr">
       ${fg('섭외 상태', `<select class="fi" onchange="spField('status',this.value,'섭외 상태')">
-        ${STATUSES.map(s => `<option value="${escAttr(s)}"${(sp.status || '섭외중') === s ? ' selected' : ''}>${s}</option>`).join('')}</select>`)}
+        ${STATUSES.map(s => `<option value="${escapeHtml(s)}"${(sp.status || '섭외중') === s ? ' selected' : ''}>${s}</option>`).join('')}</select>`)}
       ${fg('언어', `<select class="fi" onchange="spField('lang_pref',this.value,'언어')">
         <option value=""${!sp.lang_pref ? ' selected' : ''}>미정</option>
         <option value="both"${sp.lang_pref === 'both' ? ' selected' : ''}>국·영문 모두</option>
@@ -1137,7 +1137,7 @@ function bioHtml(sp, evKey){
     return `<div style="margin-bottom:16px">
       <div style="display:flex;align-items:baseline;gap:7px;margin-bottom:5px">
         <div style="font-size:11.5px;font-weight:700">${escapeHtml(p.label)}</div>
-        <div style="font-size:10px;color:var(--i4)" title="${escAttr(NEED_LABEL[p.state] || '')}">${NEED_MARK[p.state] || ''}</div>
+        <div style="font-size:10px;color:var(--i4)" title="${escapeHtml(NEED_LABEL[p.state] || '')}">${NEED_MARK[p.state] || ''}</div>
         ${p.hint ? `<div style="font-size:10px;color:var(--i4)">${escapeHtml(p.hint)}</div>` : ''}
       </div>
       ${enOnly ? '' : fg(`국문 · ${countHint(koVal, limit)}`,
@@ -1216,9 +1216,9 @@ function talkHtml(sp, evKey){
         ${fg(`발제명 영문 ${NEED_MARK[nTitle]}`, txt(a.title_en, `asField('${escAttr(tid)}','title_en',this.value,'발제명 영문')`))}
       </div>` : ''}
       <div class="fgr">
-        ${fg('발표 시작', `<input class="fi" type="time" value="${escAttr(a.start_at || '')}"
+        ${fg('발표 시작', `<input class="fi" type="time" value="${escapeHtml(a.start_at || '')}"
           onchange="asField('${escAttr(tid)}','start_at',this.value,'발표 시작')">`)}
-        ${fg('발표 종료', `<input class="fi" type="time" value="${escAttr(a.end_at || '')}"
+        ${fg('발표 종료', `<input class="fi" type="time" value="${escapeHtml(a.end_at || '')}"
           onchange="asField('${escAttr(tid)}','end_at',this.value,'발표 종료')">`)}
       </div>
       <div style="font-size:10px;color:var(--i4);margin:-6px 0 10px">
@@ -1351,7 +1351,7 @@ function peopleTabHtml(sp){
     <div class="fgr">
       ${fg('이름', txt(r.name, `scField('${escAttr(r.id)}','name',this.value,'연락 상대 이름')`, '홍길동'))}
       ${fg('관계', `<select class="fi" onchange="scField('${escAttr(r.id)}','kind',this.value,'연락 상대 관계')">
-        ${CONTACT_KINDS.map(k => `<option value="${escAttr(k)}"${(r.kind || '') === k ? ' selected' : ''}>${k}</option>`).join('')}
+        ${CONTACT_KINDS.map(k => `<option value="${escapeHtml(k)}"${(r.kind || '') === k ? ' selected' : ''}>${k}</option>`).join('')}
       </select>`)}
     </div>
     <div class="fgr">
@@ -1540,7 +1540,7 @@ function mailTabHtml(sp, evKey){
     <div id="sp-bulk-pick"></div>
     ${aiDraftHtml('sp', { reply: !!spReply })}
     <div data-vscope>
-    ${fg('제목', `<input class="fi" id="sp-mail-subject" value="${escAttr(`[${evName}] 연사 안내`)}">`)}
+    ${fg('제목', `<input class="fi" id="sp-mail-subject" value="${escapeHtml(`[${evName}] 연사 안내`)}">`)}
     ${fg('내용', `<textarea class="fi" id="sp-mail-body" rows="10" style="resize:vertical"></textarea>
       ${varChipsHtml('conf', { resolve: 'sp-drawer', note: '이 연사의 값' })}`)}
     </div>
@@ -1678,7 +1678,7 @@ export function fillSpeakerMail(kind, variantId){
       <select class="fi" style="font-size:11.5px;flex:1" onchange="fillSpeakerMail('${escAttr(kind)}',this.value)">
         <option value=""${!cur ? ' selected' : ''}>자동 — ${escapeHtml(auto ? auto.label : '기본 문구')}${auto ? ' (역할)' : ''}</option>
         <option value="base"${cur === 'base' ? ' selected' : ''}>기본 문구</option>
-        ${vs.map(v => `<option value="${escAttr(v.id)}"${cur === v.id ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}
+        ${vs.map(v => `<option value="${escapeHtml(v.id)}"${cur === v.id ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}
       </select></div>` : '';
   }
   if(kind === 'bulkreq'){ fillBulkRequest(sp); return; }
@@ -1885,7 +1885,7 @@ function offerHtml(sp, evKey){
 
   const sel = (val, opts, handler, blank) => `<select class="fi" onchange="${handler}">
     ${blank ? `<option value=""${!val ? ' selected' : ''}>${blank}</option>` : ''}
-    ${opts.map(o => `<option value="${escAttr(o)}"${val === o ? ' selected' : ''}>${escapeHtml(o)}</option>`).join('')}
+    ${opts.map(o => `<option value="${escapeHtml(o)}"${val === o ? ' selected' : ''}>${escapeHtml(o)}</option>`).join('')}
   </select>`;
 
   const fee = `<div style="border:1px solid var(--i6);border-radius:9px;padding:11px 12px;margin-bottom:11px">

@@ -131,7 +131,7 @@ function photoBlockHtml(){
       <span style="color:var(--i4)">폴더 안 하위 폴더 이름(기업명 또는 부스 번호)으로 기업을 찾아 그 기업 메일에만 붙여요</span></div>`;
   const xs = eventExhibitors().slice().sort((a, b) => exhNames(a).ko.localeCompare(exhNames(b).ko, 'ko'));
   const ok = p.folders.filter(f => f.exId), miss = p.folders.filter(f => !f.exId);
-  const opts = (cur) => `<option value="">— 기업 고르기 —</option>${xs.map(x => `<option value="${escAttr(x.id)}"${x.id === cur ? ' selected' : ''}>${escapeHtml(exhNames(x).ko)}${x.booth_no ? ` (${escapeHtml(x.booth_no)})` : ''}</option>`).join('')}`;
+  const opts = (cur) => `<option value="">— 기업 고르기 —</option>${xs.map(x => `<option value="${escapeHtml(x.id)}"${x.id === cur ? ' selected' : ''}>${escapeHtml(exhNames(x).ko)}${x.booth_no ? ` (${escapeHtml(x.booth_no)})` : ''}</option>`).join('')}`;
   return `<div style="margin-top:8px;padding:7px 9px;border:1px solid var(--i6);border-radius:7px;font-size:11px">
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
       <b>📷 기업별 사진</b><span style="color:var(--i4)">${escapeHtml(p.root || '고른 폴더')} · 짝 맞음 ${ok.length}곳${miss.length ? ` · <span style="color:var(--am)">못 맞춘 폴더 ${miss.length}개</span>` : ''}</span>
@@ -140,12 +140,32 @@ function photoBlockHtml(){
         <button class="btn" style="font-size:10px" onclick="bmPhotoClear()">빼기</button></span></div>
     <details${miss.length ? ' open' : ''} style="margin-top:4px"><summary style="cursor:pointer;color:var(--i3)">폴더별 짝 보기·고치기</summary>
       <div style="max-height:180px;overflow:auto;margin-top:4px">${p.folders.map((f, i) => `<div style="display:flex;gap:6px;align-items:center;padding:2px 0">
-        <span style="flex:0 0 40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escAttr(f.name)}">📁 ${escapeHtml(f.name)} <span style="color:var(--i4)">${f.files.length}장</span></span>
+        <span style="flex:0 0 40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(f.name)}">📁 ${escapeHtml(f.name)} <span style="color:var(--i4)">${f.files.length}장</span></span>
         <select class="fi" style="font-size:10.5px;flex:1;${f.exId ? '' : 'border-color:var(--am)'}" onchange="bmPhotoAssign(${i},this.value)" ${bm.sending ? 'disabled' : ''}>${opts(f.exId)}</select></div>`).join('')}</div></details>
   </div>`;
 }
 
-const close = () => { document.getElementById('exh-bulkmail')?.remove(); bm = null; };
+const close = () => {
+  if(bm?.sending){
+    if(bm.stop) return;
+    if(!confirm('보내는 중이에요. 지금 보내는 통까지만 보내고 멈출까요?')) return;
+    bm.stop = true;
+    say('멈추는 중… 지금 통이 끝나면 창이 닫혀요.');
+    return;
+  }
+  document.getElementById('exh-bulkmail')?.remove(); bm = null;
+};
+/* 통 사이 쉬기 — 1초씩 이어 붙이면 뒤로 보낸 탭에서 브라우저가 타이머를 1분 단위로 몰아
+   한 통에 수십 분이 걸렸다. 남은 시간은 시계로 재고, 멈춤을 누르면 바로 나온다 */
+async function pause(sec, label){
+  const end = Date.now() + sec * 1000;
+  while(bm && !bm.stop && Date.now() < end){
+    say(label(Math.ceil((end - Date.now()) / 1000)), true);
+    await new Promise(r => setTimeout(r, Math.min(1000, end - Date.now())));
+  }
+}
+let starting = false;   // «보내기»를 두 번 눌러 확인 창이 두 번 뜨는 것을 막는다
+addEventListener('beforeunload', (e) => { if(bm?.sending){ e.preventDefault(); e.returnValue = ''; } });
 const mailsOf = (x, who) => {
   const ppl = exhContacts(x).filter(p => p.email);
   const pick = who === 'primary' ? [ppl.find(p => p.primary) || ppl[0]].filter(Boolean) : ppl;
@@ -242,6 +262,7 @@ export function bmLangF(v){ if(!bm || bm.sending) return; bm.langF = v; render()
 
 /* stepKey를 주면 그 단계가 골라진 채로 연다(전시 메일 단계 편집 창의 «📨 여러 기업에») */
 export async function openExhBulkMail(stepKey){
+  if(bm?.sending){ alert('여러 기업에 메일을 보내는 중이에요 — 다 보낸 뒤에 다시 열어 주세요.'); return; }
   const list = visibleList();
   if(!list.length){ alert('지금 전시 목록에 기업이 없어요 — 전시 탭에서 행사를 열고 보내 주세요.'); return; }
   const evKey = list[0].event_id;
@@ -262,7 +283,7 @@ registerAiDraft('exbulk', () => {
   const n = bm.ids.size;
   return { part: 'exh', ev: bm.evKey, lang: 'both', reply: false, step: { ...st, ...bm.tpl }, stepLabel: st.label,
     state: [`여러 참가기업${n ? `(${n}곳)` : ''}에 같은 틀로 한꺼번에 보냄 — 기업마다 {기업}·{담당자}·{부스} 같은 변수가 채워짐`],
-    apply(tpl){ const next = { ...bm.tpl }; for(const k of ['subject_ko', 'body_ko', 'subject_en', 'body_en']) if(tpl[k]) next[k] = tpl[k]; bm.tpl = next; render(); } };
+    apply(tpl){ if(!bm || bm.sending) return; const next = { ...bm.tpl }; for(const k of ['subject_ko', 'body_ko', 'subject_en', 'body_en']) if(tpl[k]) next[k] = tpl[k]; bm.tpl = next; render(); } };
 });
 function pickTpl(evKey, key, variant){
   const st = isLib(key) ? (libItem(key.slice(4)) || {}) : (exhMailSteps(evKey).find(s => s.key === key) || {});
@@ -277,7 +298,8 @@ const SEND_GAP = 20;   // 통 사이 쉬는 초 — sendExhBulkMail
 function mailFor(x){
   const st = curStep();
   const en = enOf(x), ctx = { ...exhMailCtx(x), photoMark: PHOTO_MARK };
-  const again = exhFollowOf(x, st) ? (en ? '[Reminder] ' : '[리마인더] ') : '';   // 이미 요청한 곳은 리마인더
+  // 이미 요청한 곳은 리마인더 — 다시 보내기 묶음(개정판)은 새 안내라 붙이지 않는다
+  const again = !st?.round && exhFollowOf(x, st) ? (en ? '[Reminder] ' : '[리마인더] ') : '';
   const raw = fillExhTemplate(bm.tpl[en ? 'body_en' : 'body_ko'], x, st, en, ctx);
   const n = photosOf(x.id).length;
   const note = n ? (en ? `(${n} photo${n > 1 ? 's' : ''} below)` : `(사진 ${n}장)`) : '';
@@ -295,7 +317,7 @@ function mailFor(x){
 /* 사진이 든 html 본문 — srcs[i]는 i번째 사진 주소(보낼 때 cid:, 미리보기 때 blob:).
    {사진}이 없으면 본문 맨 끝에 넣는다. alt는 mailFor의 대체 문구 */
 function bodyHtml(raw, srcs, top, alt){
-  const a = (s) => alt ? ` alt="${escAttr(s)}"` : '';
+  const a = (s) => alt ? ` alt="${escapeHtml(s)}"` : '';
   const imgs = srcs.map((s, i) => `<img src="${s}"${a(alt && alt.photo(i))} style="display:block;max-width:100%;width:640px;height:auto;margin:8px 0;border-radius:4px">`).join('');
   const txt = (s) => escapeHtml(s).replace(/\n/g, '<br>');
   const parts = String(raw).split(PHOTO_MARK);
@@ -442,7 +464,7 @@ function render(){
   const libs = libItems('exh', bm.evKey);
   const vs = st && !st.lib ? exhStepVariants(bm.evKey, st.key) : [];
   const files = mailFilesOf(bm.evKey).filter(f => f.step === exhMailFileStep(bm.step));
-  const picked = list.filter(x => bm.ids.has(x.id));
+  const picked = shownList().filter(x => bm.ids.has(x.id));   // 국문/영문 필터로 가린 곳은 안 보낸다
   const rp = roundProgress(st);
   const sentN = st ? eventExhibitors().filter(x => sentLogs(x).length).length : 0;
   const failedN = [...bm.failed].filter(id => list.some(x => x.id === id)).length;
@@ -509,11 +531,11 @@ function render(){
       <div>
         ${aiDraftHtml('exbulk')}
         <details${bm.lang !== 'en' ? ' open' : ''}><summary style="cursor:pointer;font-size:11.5px;font-weight:700;margin-bottom:4px">국문 문구</summary>
-          <input class="fi" style="font-size:11.5px;margin-bottom:4px" value="${escAttr(bm.tpl.subject_ko)}" oninput="bmTpl('subject_ko',this.value)">
-          <textarea class="fi" rows="7" style="font-size:11.5px;width:100%" oninput="bmTpl('body_ko',this.value)">${escapeHtml(bm.tpl.body_ko)}</textarea></details>
+          <input class="fi" style="font-size:11.5px;margin-bottom:4px" value="${escapeHtml(bm.tpl.subject_ko)}" oninput="bmTpl('subject_ko',this.value)" ${bm.sending ? 'disabled' : ''}>
+          <textarea class="fi" rows="7" style="font-size:11.5px;width:100%" oninput="bmTpl('body_ko',this.value)" ${bm.sending ? 'disabled' : ''}>${escapeHtml(bm.tpl.body_ko)}</textarea></details>
         <details${bm.lang === 'en' ? ' open' : ''} style="margin-top:6px"><summary style="cursor:pointer;font-size:11.5px;font-weight:700;margin-bottom:4px">영문 문구</summary>
-          <input class="fi" style="font-size:11.5px;margin-bottom:4px" value="${escAttr(bm.tpl.subject_en)}" oninput="bmTpl('subject_en',this.value)">
-          <textarea class="fi" rows="7" style="font-size:11.5px;width:100%" oninput="bmTpl('body_en',this.value)">${escapeHtml(bm.tpl.body_en)}</textarea></details>
+          <input class="fi" style="font-size:11.5px;margin-bottom:4px" value="${escapeHtml(bm.tpl.subject_en)}" oninput="bmTpl('subject_en',this.value)" ${bm.sending ? 'disabled' : ''}>
+          <textarea class="fi" rows="7" style="font-size:11.5px;width:100%" oninput="bmTpl('body_en',this.value)" ${bm.sending ? 'disabled' : ''}>${escapeHtml(bm.tpl.body_en)}</textarea></details>
         ${varChipsHtml('exh', { ev: bm.evKey })}
         <div style="font-size:10.5px;color:var(--i4);margin-top:4px">칸은 기업마다 채워집니다. 여기서 고친 문구는 이번 발송에만 쓰고, 기본 문구와 단계는
           <a href="#" onclick="openExhMailEditor('${escAttr(bm.evKey)}','${escAttr(bm.step)}');return false">✎ 단계 편집</a>에서 고칩니다.</div>
@@ -526,7 +548,7 @@ function render(){
     </div>
     <div style="display:flex;gap:6px;align-items:center;margin-top:10px;font-size:11px;flex-wrap:wrap">
       <b>참조(CC)</b>
-      <input id="bm-cc" value="${escAttr(ccText())}" placeholder="예: info-kic@konect.or.kr (여러 개는 쉼표)" onchange="bmCcSave(this.value)"
+      <input id="bm-cc" value="${escapeHtml(ccText())}" placeholder="예: info-kic@konect.or.kr (여러 개는 쉼표)" onchange="bmCcSave(this.value)"
         style="flex:1;min-width:220px;font-size:11px" ${bm.sending ? 'disabled' : ''}>
       <span style="color:var(--i4)">기업마다 가는 메일에 모두 참조로 들어가요 · 이 행사에 저장 · 시험 발송엔 안 붙어요</span>
     </div>
@@ -596,7 +618,7 @@ export function bmAll(on){
   render();
 }
 // 문구는 다시 그리지 않고 담아만 둔다 — 그리면 입력 중인 칸이 초기화된다. 미리보기만 고친다
-export function bmTpl(k, v){ if(!bm) return; bm.tpl[k] = v; refreshPrev(); }
+export function bmTpl(k, v){ if(!bm || bm.sending) return; bm.tpl[k] = v; refreshPrev(); }
 
 const say = (t, ok) => { const m = document.getElementById('bm-msg'); if(m){ m.style.color = ok ? 'var(--g)' : 'var(--re)'; m.textContent = t; } };
 
@@ -609,7 +631,7 @@ export async function sendExhTestMail(all){
   const me = (prompt('시험 메일을 받을 주소 (기록에 남지 않아요)', currentUser?.email || '') || '').trim();
   if(!me) return;
   if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(me)){ say('메일 주소 모양이 아니에요.'); return; }
-  const picked = visibleList().filter(x => bm.ids.has(x.id));
+  const picked = shownList().filter(x => bm.ids.has(x.id));
   if(!picked.length) return;
   const list = all ? picked : [picked[((bm.pi % picked.length) + picked.length) % picked.length]];
   if(all && !confirm(`고른 ${list.length}곳의 메일을 모두 ${me}로 보낼까요?
@@ -620,7 +642,8 @@ export async function sendExhTestMail(all){
   let ok = 0;
   const fails = [];
   for(const [i, x] of list.entries()){
-    if(i) for(let s = TEST_GAP; s > 0; s--){ say(`${i}/${list.length} 보냄 — ${s}초 뒤 다음 통 (${exhNames(x).ko})`, true); await new Promise(r => setTimeout(r, 1000)); }
+    if(i) await pause(TEST_GAP, (s) => `${i}/${list.length} 보냄 — ${s}초 뒤 다음 통 (${exhNames(x).ko})`);
+    if(bm.stop) break;
     say(`${me}로 보내는 중… ${i + 1}/${list.length} ${exhNames(x).ko}`, true);
     const m = await buildMail(x);
     if(m.error){ fails.push(`${exhNames(x).ko}: ${m.error}`); continue; }
@@ -628,16 +651,28 @@ export async function sendExhTestMail(all){
     if(res.ok) ok++; else fails.push(`${exhNames(x).ko}: ${res.error || '실패'}`);
   }
   bm.sending = false;
+  if(bm.stop){ bm.stop = false; close(); return; }
   render();
   say(ok ? `${me}로 ${all ? `${ok}통` : `«${exhNames(list[0]).ko}» 메일`}을 보냈어요 — 받은편지함에서 확인하세요.${fails.length ? ` 실패 ${fails.length}곳: ${fails.slice(0, 5).join(' / ')}` : ''}`
          : (fails.join(' / ') || '보내지 못했어요.'), !fails.length);
 }
 
 export async function sendExhBulkMail(){
-  if(!bm || bm.sending) return;
+  if(!bm || bm.sending || starting) return;
+  starting = true;
+  try { await sendExhBulk(); } finally { starting = false; }
+}
+async function sendExhBulk(){
   if(exhLocked()){ exhLockNotice(); return; }
-  const list = visibleList().filter(x => bm.ids.has(x.id));
+  const list = shownList().filter(x => bm.ids.has(x.id));
   if(!list.length){ say('받을 기업을 골라주세요.'); return; }
+  /* 양식에 한쪽 말만 있으면 그쪽 기업에 제목 없는 메일(이미지만)이 나갔다 — 보내기 전에 막는다 */
+  for(const [en, lang] of [[true, '영문'], [false, '국문']]){
+    const n = list.filter(x => enOf(x) === en).length;
+    const k = en ? 'en' : 'ko';
+    if(n && !String(bm.tpl[`subject_${k}`] || '').trim()){
+      say(`${lang}으로 갈 곳이 ${n}곳인데 ${lang} 제목이 비었어요 — ${lang} 문구를 채우거나 «언어»를 바꿔 주세요.`); return; }
+  }
   const from = await eventMailFrom(bm.evKey);
   if(!from.ok){ say(from.text); return; }
   const st = curStep();
@@ -654,15 +689,13 @@ export async function sendExhBulkMail(){
   render();
   const kind = bm.step === 'note' || st.lib ? 'note' : `exh-${bm.step}`;
   let ok = 0;
-  const fails = [];
+  const fails = [], unlogged = [];
   bm.failed = new Set();
   for(const [i, x] of list.entries()){
     /* 통 사이에 쉰다 — 같은 모양 메일을 쉬지 않고 수십 통 보내면 받는 쪽이 대량 발송으로 보고
        스팸함에 넣는다(특히 Gmail 같은 무료 메일 발신). 첫 통 앞에서는 쉬지 않는다 */
-    if(i) for(let s = SEND_GAP; s > 0; s--){
-      say(`${i}/${list.length} 보냄 — 스팸으로 잡히지 않게 ${s}초 쉬었다가 다음 통 (${exhNames(x).ko})`, true);
-      await new Promise(r => setTimeout(r, 1000));
-    }
+    if(i) await pause(SEND_GAP, (s) => `${i}/${list.length} 보냄 — 스팸으로 잡히지 않게 ${s}초 쉬었다가 다음 통 (${exhNames(x).ko})`);
+    if(bm.stop) break;
     say(`보내는 중… ${i + 1}/${list.length} ${exhNames(x).ko}`, true);
     const to = mailsOf(x, bm.who);
     const ph = await buildMail(x);
@@ -673,22 +706,34 @@ export async function sendExhBulkMail(){
     if(!res.ok){ fails.push(`${exhNames(x).ko}: ${res.error || '실패'}`); bm.failed.add(x.id); continue; }
     ok++;
     const names = [...mailFilesOf(bm.evKey).filter(f => fileIds.includes(f.id)).map(f => f.filename), ...ph.list.map(a => a.filename)];
-    if(res.logId) EXH_LOGS.push({
-      id: res.logId, exhibitor_id: x.id, kind, ts: nowStamp(), direction: 'out', channel: '이메일',
+    /* 나갔는데 기록을 못 남겼어도 화면에는 «보냄»으로 넣는다 — 안 그러면 «보낼 차례»로 다시 골라져
+       같은 곳에 두 번 나간다. 서버 기록은 보낸메일함 가져오기가 채운다 */
+    if(!res.logId) unlogged.push(exhNames(x).ko);
+    EXH_LOGS.push({
+      id: res.logId || `nolog-${Date.now()}-${i}`, exhibitor_id: x.id, kind, ts: nowStamp(), direction: 'out', channel: '이메일',
       counterpart: to.join(', '), category: st.label, subject, answered_at: '', answer: '', status: 'done',
       body: text + (names.length ? `\n\n[첨부] ${names.join(', ')}` : ''),
       author_email: currentUser?.email || '', author_name: currentUser?.name || '',
     });
   }
-  trackAction('add', '참가사 일괄 메일', bm.evKey, `«${st.label}»${st.round ? ` (${st.round.label})` : ''} ${ok}곳 보냄${fails.length ? ` · 실패 ${fails.length}곳` : ''}`);
+  const stopped = bm.stop;
+  trackAction('add', '참가사 일괄 메일', bm.evKey, `«${st.label}»${st.round ? ` (${st.round.label})` : ''} ${ok}곳 보냄${fails.length ? ` · 실패 ${fails.length}곳` : ''}${stopped ? ' · 중간에 멈춤' : ''}`);
   bm.sending = false;
+  if(stopped){
+    bm.stop = false;
+    close();
+    alert(`멈췄어요 — ${list.length}곳 중 ${ok}곳에 보냈어요.${fails.length ? `\n실패 ${fails.length}곳: ${fails.slice(0, 5).join(' / ')}` : ''}${unlogged.length ? `\n\n${unlogged.length}곳은 보냈지만 기록을 못 남겼어요(${unlogged.slice(0, 5).join(', ')}). 메일 가져오기를 하면 채워져요.` : ''}`);
+    window.renderExh?.();
+    return;
+  }
   /* 묶음 대상에게 다 다시 보냈으면 묶음을 닫는다 */
   const rp = roundProgress(curStep());
   let closed = false;
   if(rp && rp.done >= rp.total){ await closeExhRound(true); closed = true; }
   pickTurn();   // 보낸 곳은 «보냄»으로 넘어가 빠진다
   render();
-  say(`${ok}곳에 보냈어요${closed ? ' · 다시 보내기 묶음을 다 보내 닫았어요' : ''}${fails.length ? ` — 실패 ${fails.length}곳: ${fails.slice(0, 5).join(' / ')}${fails.length > 5 ? ' …' : ''}` : ''}`, !fails.length);
+  say(`${ok}곳에 보냈어요${closed ? ' · 다시 보내기 묶음을 다 보내 닫았어요' : ''}${fails.length ? ` — 실패 ${fails.length}곳: ${fails.slice(0, 5).join(' / ')}${fails.length > 5 ? ' …' : ''}` : ''}${
+    unlogged.length ? ` · ${unlogged.length}곳은 보냈지만 기록을 못 남겼어요(${unlogged.slice(0, 3).join(', ')}) — 메일 가져오기를 하면 채워져요` : ''}`, !fails.length && !unlogged.length);
   window.renderExh?.();
 }
 

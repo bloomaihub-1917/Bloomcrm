@@ -33,9 +33,9 @@ export function previewHtml(part, { ev = '', step = '' } = {}){
   const list = targets(part, ev);
   const who = part === 'contact' ? '<span style="color:var(--i4)">예시 기업으로 채워요</span>'
     : list.length ? `<select class="fi vprev-who" style="font-size:11px;max-width:240px">${list.map(t =>
-        `<option value="${escAttr(t.id)}">${escapeHtml(t.label)}</option>`).join('')}</select>`
+        `<option value="${escapeHtml(t.id)}">${escapeHtml(t.label)}</option>`).join('')}</select>`
     : `<span style="color:var(--i4)">이 행사에 ${part === 'conf' ? '연사' : '참가사'}가 없어 행사 칸만 채워요</span>`;
-  return `<div class="vprev" data-part="${escAttr(part)}" data-ev="${escAttr(ev)}" data-step="${escAttr(step)}">
+  return `<div class="vprev" data-part="${escapeHtml(part)}" data-ev="${escapeHtml(ev)}" data-step="${escapeHtml(step)}">
     <div class="vprev-hd"><b>미리보기</b>${who}
       <select class="fi vprev-lang" style="font-size:11px;width:auto">
         <option value="auto">${part === 'contact' ? '국문' : '받는 쪽 언어'}</option><option value="ko">국문</option><option value="en">영문</option></select></div>

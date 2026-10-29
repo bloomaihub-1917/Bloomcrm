@@ -116,7 +116,7 @@ export function confDashHtml(ev){
   const barRow = (label, done, of, { onclick = '', tip = '', right = '', late = false } = {}) => {
     const pct = of ? Math.round(done / of * 100) : 0;
     return `<div style="display:flex;align-items:center;gap:9px;margin-bottom:7px${onclick ? ';cursor:pointer' : ''}"${
-        onclick ? ` onclick="${onclick}" title="${escAttr(tip)}"` : ''}>
+        onclick ? ` onclick="${onclick}" title="${escapeHtml(tip)}"` : ''}>
       <span style="font-size:11.5px;color:var(--i3);flex:0 0 92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(label)}</span>
       <div style="flex:1;min-width:0">${progressBar(pct, pct === 100 ? 'var(--g)' : late ? 'var(--re)' : 'var(--a)')}</div>
       <span style="font-size:11px;color:var(--i4);flex:0 0 44px;text-align:right">${done}/${of}</span>

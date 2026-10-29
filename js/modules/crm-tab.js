@@ -332,7 +332,7 @@ export function kCard(t) {
   const pri = (t.priority || 'mid')[0] || 'm';
   const evShortName = (t.event || '').replace('KIC Silicon Valley', 'KIC SV').replace('KIC New York', 'KIC NY');
   const sel = crmSelected.has(t.id);
-  return `<div class="kcard${sel ? ' sel' : ''}" data-tid="${escAttr(String(t.id))}" onclick="openDr(${t.id})"${
+  return `<div class="kcard${sel ? ' sel' : ''}" data-tid="${escapeHtml(String(t.id))}" onclick="openDr(${t.id})"${
     sel ? ' style="outline:2px solid var(--a);outline-offset:-2px;background:var(--ad)"' : ''}>
     <div class="kct2"><div class="kav" style="background:${avB(i)};color:${avF(i)}">${escapeHtml(ab(t.name || '?'))}</div><div><div class="knm">${escapeHtml(t.name || '(이름없음)')}</div><div class="ksc">${escapeHtml(t.sector || '')}</div></div></div>
     <div class="kps"><span class="pill ${RP[t.role] || 'p-gray'}">${escapeHtml(t.role || '')}</span><span class="pill p-gray">${escapeHtml(evShortName)}</span></div>
@@ -487,7 +487,7 @@ function logItemHtml(t, l, k) {
   const editing = logUi.memoEdit === `${t.id}:${k}`;
   const small = 'font-size:10.5px;padding:2px 8px';
   const memo = editing
-    ? `<div style="display:flex;gap:5px;margin-top:5px"><input class="fi" id="lme-${t.id}-${k}" value="${escAttr(l.memo || '')}" placeholder="짧게 — 약속·다음 할 일" style="flex:1;min-width:0;font-size:12px;padding:5px 8px"
+    ? `<div style="display:flex;gap:5px;margin-top:5px"><input class="fi" id="lme-${t.id}-${k}" value="${escapeHtml(l.memo || '')}" placeholder="짧게 — 약속·다음 할 일" style="flex:1;min-width:0;font-size:12px;padding:5px 8px"
          onkeydown="if(event.key==='Enter')saveLogMemo(${t.id},${k});if(event.key==='Escape')editLogMemo(${t.id},-1)">
        <button class="lsub" style="width:auto" onclick="saveLogMemo(${t.id},${k})">저장</button></div>`
     : l.memo
@@ -529,11 +529,11 @@ function composeHtml(t) {
     <div style="font-size:11px;color:var(--i4);margin-bottom:8px;overflow-wrap:anywhere">보내는 주소 · <span id="cm-from-${t.id}" style="color:${fromCache[t.event] ? (fromCache[t.event].ok ? 'var(--i2)' : 'var(--re)') : 'inherit'}">${escapeHtml(fromCache[t.event]?.text || `${ev ? (ev.short || ev.name || ev.key) : (t.event || '행사 없음')} 공용 메일 확인 중…`)}</span></div>
     <div class="mlbl">받는 사람</div>
     ${cons.length ? `<div style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px">${cons.map((p, k) => `
-      <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;min-width:0"><input type="checkbox" class="cm-to-${t.id}" value="${escAttr(p.email)}"${k === 0 ? ' checked' : ''}>
+      <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;min-width:0"><input type="checkbox" class="cm-to-${t.id}" value="${escapeHtml(p.email)}"${k === 0 ? ' checked' : ''}>
         <span style="font-weight:600;flex-shrink:0">${escapeHtml(p.name)}</span><span style="color:var(--i4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(p.title ? p.title + ' · ' : '')}${escapeHtml(p.email)}</span></label>`).join('')}</div>`
       : reps.length ? `<div style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px">
         <div style="font-size:11px;color:var(--i4)">메일 있는 담당자가 없어 기업DB 대표 메일로 보내요</div>
-        ${reps.map(e => `<label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;min-width:0"><input type="checkbox" class="cm-to-${t.id}" value="${escAttr(e)}" checked>
+        ${reps.map(e => `<label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;min-width:0"><input type="checkbox" class="cm-to-${t.id}" value="${escapeHtml(e)}" checked>
           <span class="pill p-gray" style="font-size:9.5px">대표 메일</span><span style="color:var(--i4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(e)}</span></label>`).join('')}</div>`
       : '<div style="font-size:11px;color:var(--i4);margin-bottom:6px">기업DB에 메일 있는 담당자도 대표 메일도 없어요 — 아래에 직접 적어 주세요</div>'}
     <input class="fi" id="cm-tox-${t.id}" type="email" placeholder="다른 주소 (쉼표로 여러 개)" style="margin-bottom:6px">

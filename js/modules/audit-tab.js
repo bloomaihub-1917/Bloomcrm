@@ -195,7 +195,7 @@ export function renderAudit(){
         <div class="audit-meta">
           ${TAG_MAP[e.type]||''}
           <span class="audit-time">${timeStr}</span>
-          ${undo ? `<button class="audit-undo" title="${escAttr(restorePlan(e).title)}"
+          ${undo ? `<button class="audit-undo" title="${escapeHtml(restorePlan(e).title)}"
             onclick="event.stopPropagation();restoreFromLog('${escAttr(String(e.id))}')">되돌리기</button>` : ''}
         </div>
       </div>
@@ -314,7 +314,7 @@ function buildAuditEventList(){
   const cur = sel.value;
   sel.innerHTML = '<option value="">전체 행사</option>' + Object.keys(last)
     .sort((a, b) => String(last[b]).localeCompare(String(last[a])))
-    .map(k => `<option value="${escAttr(k)}"${cur === k ? ' selected' : ''}>${escapeHtml(evName(k) || k)}</option>`).join('');
+    .map(k => `<option value="${escapeHtml(k)}"${cur === k ? ' selected' : ''}>${escapeHtml(evName(k) || k)}</option>`).join('');
 }
 
 /* (원본 5307~5313행) */

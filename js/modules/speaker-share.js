@@ -182,9 +182,9 @@ function shareSection(evKey, kind, sh){
       ? '누구나 여는 공개 주소예요 — 확정 연사만 실려요. 국문/영문을 바꿔 볼 수 있고, 참가기업 디렉토리와 서로 이어져요.'
       : '링크를 받은 사람만 보는 비밀 주소예요 — 주최사에만 보내 주세요. 연사별 자료를 받았는지(국문·영문 포함), 계좌·여권은 받음/안받음, 숙박·항공은 내용까지 보여요. 연락처·연사료·계좌번호는 싣지 않아요.'}</div>
     ${sh.enabled && url ? `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-        <input class="fi" readonly value="${escAttr(url)}" style="flex:1;min-width:0;font-size:11.5px" onclick="this.select()">
+        <input class="fi" readonly value="${escapeHtml(url)}" style="flex:1;min-width:0;font-size:11.5px" onclick="this.select()">
         <button class="btn" style="font-size:11px" onclick="copySpeakerShare('${escAttr(url)}',this)">복사</button>
-        <a class="btn" style="font-size:11px" href="${escAttr(url)}" target="_blank" rel="noopener">열기</a></div>
+        <a class="btn" style="font-size:11px" href="${escapeHtml(url)}" target="_blank" rel="noopener">열기</a></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11px;color:var(--i4)">
         <span>${sh.updated_at ? `마지막 갱신 ${escapeHtml(sh.updated_at)}${sh.updated_by ? ` · ${escapeHtml(sh.updated_by)}` : ''}` : '아직 안 올림'}</span>
         <button class="btn" style="font-size:10.5px;margin-left:auto" onclick="pushSpeakerShare('${escAttr(evKey)}','${kind}',this)">지금 갱신</button>

@@ -99,14 +99,14 @@ export function variantsHtml(part, ev, step, ro){
   </div>`;
 }
 function formHtml(part, ev, step, v, roles){
-  const inp = (f, l) => `<div${f === 'label' ? ' style="grid-column:1/-1"' : ''}><div class="mlbl">${l}</div><input class="fi" id="tv-${f}" value="${escAttr(v[f] || '')}" style="width:100%"></div>`;
+  const inp = (f, l) => `<div${f === 'label' ? ' style="grid-column:1/-1"' : ''}><div class="mlbl">${l}</div><input class="fi" id="tv-${f}" value="${escapeHtml(v[f] || '')}" style="width:100%"></div>`;
   const area = (f, l) => `<div style="grid-column:1/-1"><div class="mlbl">${l}</div><textarea class="fi" id="tv-${f}" rows="6" style="width:100%;resize:vertical;font-size:11.5px">${escapeHtml(v[f] || '')}</textarea></div>`;
   return `<div data-vscope style="border:1px solid var(--a);border-radius:7px;padding:8px 10px;margin-top:6px;background:var(--W)">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       ${inp('label', '변형 이름 (예: 패널용, 해외 기조연사용)')}
       ${part === 'conf' ? `<div style="grid-column:1/-1"><div class="mlbl">이 역할 연사에게 저절로 <span style="font-weight:400;color:var(--i4)">— 안 고르면 보낼 때 직접 고릅니다</span></div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">${roles.map(r => `<label style="font-size:11.5px;display:flex;gap:4px;align-items:center">
-          <input type="checkbox" class="tv-role" value="${escAttr(r.key)}" ${(v.roles || []).includes(r.key) ? 'checked' : ''}> ${escapeHtml(r.label)}</label>`).join('')}</div></div>` : ''}
+          <input type="checkbox" class="tv-role" value="${escapeHtml(r.key)}" ${(v.roles || []).includes(r.key) ? 'checked' : ''}> ${escapeHtml(r.label)}</label>`).join('')}</div></div>` : ''}
       ${full(inp('subject_ko', '제목 (국문)'))}${area('body_ko', '본문 (국문)')}
       ${full(inp('subject_en', '제목 (영문)'))}${area('body_en', '본문 (영문)')}
     </div>
@@ -235,13 +235,13 @@ function libHtml(){
 }
 function libForm(it){
   const P = PART[mg.part];
-  const inp = (f, l) => `<div><div class="mlbl">${l}</div><input class="fi" id="tl-${f}" value="${escAttr(it[f] || '')}" style="width:100%"></div>`;
+  const inp = (f, l) => `<div><div class="mlbl">${l}</div><input class="fi" id="tl-${f}" value="${escapeHtml(it[f] || '')}" style="width:100%"></div>`;
   const area = (f, l) => `<div style="grid-column:1/-1"><div class="mlbl">${l}</div><textarea class="fi" id="tl-${f}" rows="7" style="width:100%;resize:vertical;font-size:11.5px">${escapeHtml(it[f] || '')}</textarea></div>`;
   return `<div data-vscope style="border:1px solid var(--a);border-radius:8px;padding:9px 11px;margin-bottom:6px">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       ${inp('name', '양식 이름')}
       <div><div class="mlbl">어디서 보일까</div><select class="fi" id="tl-scope" style="width:100%">
-        <option value="${escAttr(mg.ev)}"${it.scope !== 'all' ? ' selected' : ''}>이 행사만 (${escapeHtml(evName(mg.ev))})</option>
+        <option value="${escapeHtml(mg.ev)}"${it.scope !== 'all' ? ' selected' : ''}>이 행사만 (${escapeHtml(evName(mg.ev))})</option>
         <option value="all"${it.scope === 'all' ? ' selected' : ''}>모든 행사 공통</option></select></div>
       ${full(inp('subject_ko', '제목 (국문)'))}${area('body_ko', '본문 (국문)')}
       ${full(inp('subject_en', '제목 (영문)'))}${area('body_en', '본문 (영문)')}
@@ -311,7 +311,7 @@ function importHtml(){
     ${srcs.length ? `<div class="mlbl">어느 행사에서</div>
       <select class="fi" style="width:100%;margin-bottom:10px" onchange="tplImportSrc(this.value)">
         <option value="">— 고르세요 —</option>
-        ${srcs.map(x => `<option value="${escAttr(x.e.key)}"${x.e.key === mg.src ? ' selected' : ''}>${escapeHtml(x.e.short || x.e.name || x.e.key)}${x.e.date ? ` (${escapeHtml(x.e.date)})` : ''} — 양식 ${x.s.any}개</option>`).join('')}
+        ${srcs.map(x => `<option value="${escapeHtml(x.e.key)}"${x.e.key === mg.src ? ' selected' : ''}>${escapeHtml(x.e.short || x.e.name || x.e.key)}${x.e.date ? ` (${escapeHtml(x.e.date)})` : ''} — 양식 ${x.s.any}개</option>`).join('')}
       </select>
       ${sel ? `<div style="display:flex;flex-direction:column;gap:5px;padding:9px 11px;border:1px solid var(--i6);border-radius:8px">
           ${box('over', '단계 문구 (고친 것)', sel.s.over)}

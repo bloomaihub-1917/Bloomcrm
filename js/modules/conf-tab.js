@@ -49,7 +49,7 @@ export const consentRefused = (sp) => SP_CONSENTS.filter(c => sp[c.key] === 'no'
 const spFlagPills = (sp) => {
   const no = consentRefused(sp);
   return (no.length ? `<span class="pill p-red" style="font-size:9px"
-      title="${escAttr(`동의하지 않음: ${no.join(', ')} — 자료집·배포에서 빼야 해요`)}">공유 ✕ ${escapeHtml(no.join('·'))}</span>` : '')
+      title="${escapeHtml(`동의하지 않음: ${no.join(', ')} — 자료집·배포에서 빼야 해요`)}">공유 ✕ ${escapeHtml(no.join('·'))}</span>` : '')
     + (sp.gala_rsvp === 'yes' ? '<span class="pill p-green" style="font-size:9px" title="갈라디너 참석">갈라 참석</span>'
       : sp.gala_rsvp === 'no' ? '<span class="pill p-gray" style="font-size:9px" title="갈라디너 불참">갈라 불참</span>' : '');
 };
@@ -165,7 +165,7 @@ export function buildConfEvList(){
      켜는 곳만 한 줄로 남긴다 */
   const hiddenNote = off.length
     ? `<div style="font-size:10px;color:var(--i5);margin:10px 0 0;padding-left:2px"
-         title="${escAttr(off.map(e => e.short || e.name || e.key).join(', '))}">컨퍼런스 안 하는 행사 ${off.length}개는 숨겼어요 — 설정 › 행사 관리에서 켜요</div>`
+         title="${escapeHtml(off.map(e => e.short || e.name || e.key).join(', '))}">컨퍼런스 안 하는 행사 ${off.length}개는 숨겼어요 — 설정 › 행사 관리에서 켜요</div>`
     : '';
   el.innerHTML = ((
       group(doing, '', true)
@@ -178,7 +178,7 @@ export function buildConfEvList(){
   if(mt){
     mt.style.minWidth = '0';   // 긴 행사명이 오른쪽 단추를 밀어내지 않게
     const live = [...doing, ...done];
-    const opt = (e) => `<option value="${escAttr(e.key)}"${confEvent === e.key ? ' selected' : ''}>${escapeHtml(e.short || e.name || e.key)}</option>`;
+    const opt = (e) => `<option value="${escapeHtml(e.key)}"${confEvent === e.key ? ' selected' : ''}>${escapeHtml(e.short || e.name || e.key)}</option>`;
     mt.innerHTML = live.length ? `<select onchange="setConfEvent(this.value)" aria-label="행사 고르기"
         style="max-width:100%;font:inherit;font-weight:700;color:inherit;background:transparent;border:0;
         padding:2px 18px 2px 0;appearance:none;-webkit-appearance:none;cursor:pointer;
@@ -237,7 +237,7 @@ function countryChip(sp){
   }
   const basis = sp.pay_basis === 'nationality' ? 'nationality' : 'residence';
   const mark = (which, v) => `<span class="pill ${which === basis ? 'p-teal' : 'p-gray'}" style="font-size:9px"
-    title="${escAttr(`${which === 'residence' ? '거주지' : '국적'}${which === basis ? ' — 지급 기준' : ''}`)}">${escapeHtml(countryName(v))}</span>`;
+    title="${escapeHtml(`${which === 'residence' ? '거주지' : '국적'}${which === basis ? ' — 지급 기준' : ''}`)}">${escapeHtml(countryName(v))}</span>`;
   return `${mark('residence', res)}${mark('nationality', nat)}`;
 }
 
@@ -437,7 +437,7 @@ function newSessionHtml(ev, days, cfg){
       <div><div class="fl">일자</div>
         <select class="fi" id="ns-date">
           <option value="">미정</option>
-          ${days.map(d => `<option value="${escAttr(d)}">${escapeHtml(d)}</option>`).join('')}
+          ${days.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('')}
         </select></div>
       <div><div class="fl">시간대</div>
         <select class="fi" id="ns-slot" onchange="fillSessionSlot(this.value)">
@@ -449,12 +449,12 @@ function newSessionHtml(ev, days, cfg){
       <div><div class="fl">트랙</div>
         ${tracks.length
           ? `<select class="fi" id="ns-track"><option value="">없음</option>
-              ${tracks.map(t => `<option value="${escAttr(t)}">${escapeHtml(t)}</option>`).join('')}</select>`
+              ${tracks.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')}</select>`
           : `<input class="fi" id="ns-track" placeholder="트랙">`}</div>
       <div><div class="fl">장소</div>
         ${roomList.length
           ? `<select class="fi" id="ns-room"><option value="">없음</option>
-              ${roomList.map(r => `<option value="${escAttr(r)}">${escapeHtml(r)}</option>`).join('')}</select>`
+              ${roomList.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('')}</select>`
           : `<input class="fi" id="ns-room" placeholder="회의실">`}</div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
@@ -500,7 +500,7 @@ function sessionCard(ev, s, days, cfg){
       title="발표 시간 하나·자료 하나를 나눠 맡을 때 — 상대의 시간·발제·자료를 같이 씁니다"
       onchange="setCoLead('${escAttr(a.id)}',this.value)">
       <option value=""${!a.lead_id ? ' selected' : ''}>단독 발표</option>
-      ${opts.map(x => `<option value="${escAttr(x.id)}"${a.lead_id === x.id ? ' selected' : ''}>${escapeHtml(speakerName(x.speaker_id))}와 공동</option>`).join('')}
+      ${opts.map(x => `<option value="${escapeHtml(x.id)}"${a.lead_id === x.id ? ' selected' : ''}>${escapeHtml(speakerName(x.speaker_id))}와 공동</option>`).join('')}
     </select>`;
   };
 
@@ -539,19 +539,19 @@ function sessionCard(ev, s, days, cfg){
       ${coPick(a)}
       <select class="fi" style="width:82px;font-size:10.5px;padding:3px 5px"
         onchange="setAssignRole('${escAttr(a.id)}',this.value)">
-        ${SPEAKER_ROLES.map(r => `<option value="${escAttr(r.key)}"${a.role === r.key ? ' selected' : ''}>${escapeHtml(r.label)}</option>`).join('')}
+        ${SPEAKER_ROLES.map(r => `<option value="${escapeHtml(r.key)}"${a.role === r.key ? ' selected' : ''}>${escapeHtml(r.label)}</option>`).join('')}
       </select>
       <button class="btn" style="font-size:10.5px" onclick="removeAssign('${escAttr(a.id)}')">해제</button>
       </div>
       ${isCo ? '' : `<div style="display:flex;align-items:center;gap:6px;margin-top:4px;padding-left:2px;flex-wrap:wrap">
         <span style="font-size:10px;color:var(--i4);flex:0 0 auto">발표</span>
         <input class="fi" type="time" style="width:96px;font-size:10.5px;padding:2px 5px"
-          value="${escAttr(a.start_at || '')}" onchange="setTalkTime('${escAttr(a.id)}','start_at',this.value)">
+          value="${escapeHtml(a.start_at || '')}" onchange="setTalkTime('${escAttr(a.id)}','start_at',this.value)">
         <span style="font-size:10px;color:var(--i4)">–</span>
         <input class="fi" type="time" style="width:96px;font-size:10.5px;padding:2px 5px"
-          value="${escAttr(a.end_at || '')}" onchange="setTalkTime('${escAttr(a.id)}','end_at',this.value)">
+          value="${escapeHtml(a.end_at || '')}" onchange="setTalkTime('${escAttr(a.id)}','end_at',this.value)">
         <input class="fi" type="text" style="width:58px;font-size:10.5px;padding:2px 5px"
-          placeholder="분" value="${escAttr(a.duration_min || '')}"
+          placeholder="분" value="${escapeHtml(a.duration_min || '')}"
           onchange="setTalkTime('${escAttr(a.id)}','duration_min',this.value)"
           title="분만 적어 두면 «시간 자동 배분»이 이 길이로 이어 붙입니다">
         ${warn ? `<span style="font-size:10px;color:var(--am)">⚠ ${escapeHtml(warn)}</span>` : ''}
@@ -624,29 +624,29 @@ function editSessionHtml(s, days, cfg){
       <div><div class="fl">일자</div>
         <select class="fi" id="${i('date')}">
           <option value=""${!s.date ? ' selected' : ''}>미정</option>
-          ${dayList.map(d => `<option value="${escAttr(d)}"${s.date === d ? ' selected' : ''}>${escapeHtml(d)}</option>`).join('')}
+          ${dayList.map(d => `<option value="${escapeHtml(d)}"${s.date === d ? ' selected' : ''}>${escapeHtml(d)}</option>`).join('')}
         </select></div>
       <div><div class="fl">시간대</div>
         <select class="fi" id="${i('slot')}" onchange="fillEditSlot('${escAttr(s.id)}',this.value)">
           <option value="">직접 입력</option>
           ${slots.map((sl, k) => `<option value="${k}">${escapeHtml(`${sl.start}–${sl.end}${sl.label ? ' ' + sl.label : ''}`)}</option>`).join('')}
         </select></div>
-      <div><div class="fl">시작</div><input class="fi" id="${i('start')}" type="time" value="${escAttr(s.start_at || '')}"></div>
-      <div><div class="fl">종료</div><input class="fi" id="${i('end')}" type="time" value="${escAttr(s.end_at || '')}"></div>
+      <div><div class="fl">시작</div><input class="fi" id="${i('start')}" type="time" value="${escapeHtml(s.start_at || '')}"></div>
+      <div><div class="fl">종료</div><input class="fi" id="${i('end')}" type="time" value="${escapeHtml(s.end_at || '')}"></div>
       <div><div class="fl">트랙</div>
         ${trackList.length
           ? `<select class="fi" id="${i('track')}"><option value=""${!s.track ? ' selected' : ''}>없음</option>
-              ${trackList.map(t => `<option value="${escAttr(t)}"${s.track === t ? ' selected' : ''}>${escapeHtml(t)}</option>`).join('')}</select>`
-          : `<input class="fi" id="${i('track')}" value="${escAttr(s.track || '')}" placeholder="트랙">`}</div>
+              ${trackList.map(t => `<option value="${escapeHtml(t)}"${s.track === t ? ' selected' : ''}>${escapeHtml(t)}</option>`).join('')}</select>`
+          : `<input class="fi" id="${i('track')}" value="${escapeHtml(s.track || '')}" placeholder="트랙">`}</div>
       <div><div class="fl">장소</div>
         ${roomList.length
           ? `<select class="fi" id="${i('room')}"><option value=""${!s.room ? ' selected' : ''}>없음</option>
-              ${roomList.map(r => `<option value="${escAttr(r)}"${s.room === r ? ' selected' : ''}>${escapeHtml(r)}</option>`).join('')}</select>`
-          : `<input class="fi" id="${i('room')}" value="${escAttr(s.room || '')}" placeholder="회의실">`}</div>
+              ${roomList.map(r => `<option value="${escapeHtml(r)}"${s.room === r ? ' selected' : ''}>${escapeHtml(r)}</option>`).join('')}</select>`
+          : `<input class="fi" id="${i('room')}" value="${escapeHtml(s.room || '')}" placeholder="회의실">`}</div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:7px">
-      <div><div class="fl">세션명 (국문)</div><input class="fi" id="${i('ko')}" value="${escAttr(s.title_ko || '')}"></div>
-      <div><div class="fl">세션명 (영문)</div><input class="fi" id="${i('en')}" value="${escAttr(s.title_en || '')}"></div>
+      <div><div class="fl">세션명 (국문)</div><input class="fi" id="${i('ko')}" value="${escapeHtml(s.title_ko || '')}"></div>
+      <div><div class="fl">세션명 (영문)</div><input class="fi" id="${i('en')}" value="${escapeHtml(s.title_en || '')}"></div>
     </div>
     <div style="margin-top:7px"><div class="fl">메모</div>
       <textarea class="fi" id="${i('note')}" rows="2" style="resize:vertical">${escapeHtml(s.note || '')}</textarea></div>
@@ -674,12 +674,12 @@ function assignFormHtml(ev, s){
       <div><div class="fl">이 행사의 연사</div>
         <select class="fi" id="as-pick">
           <option value="">새로 적기</option>
-          ${pool.map(({ sp, roles }) => `<option value="${escAttr(sp.id)}">${escapeHtml(sp.name_snapshot || sp.name_en || sp.id)}${roles.length ? ` (이 세션 ${roles.join('·')})` : ''}</option>`).join('')}
+          ${pool.map(({ sp, roles }) => `<option value="${escapeHtml(sp.id)}">${escapeHtml(sp.name_snapshot || sp.name_en || sp.id)}${roles.length ? ` (이 세션 ${roles.join('·')})` : ''}</option>`).join('')}
         </select></div>
       <div><div class="fl">이름 (새로 적을 때)</div><input class="fi" id="as-name" placeholder="성명"></div>
       <div><div class="fl">역할</div>
         <select class="fi" id="as-role">
-          ${SPEAKER_ROLES.map(r => `<option value="${escAttr(r.key)}">${escapeHtml(r.label)}</option>`).join('')}
+          ${SPEAKER_ROLES.map(r => `<option value="${escapeHtml(r.key)}">${escapeHtml(r.label)}</option>`).join('')}
         </select></div>
       <div><div class="fl">자리</div>
         <select class="fi" id="as-at">
@@ -822,7 +822,7 @@ function pgaHtml(ev){
 
   /* 식사·휴식 칸 — 트랙 색 없이 회색 한 칸 */
   const breakCell = (ss) => `<div onclick="openPgaSession('${escAttr(ss.id)}')"
-    title="${escAttr([ss.title_ko, ss.title_en, timeLabel(ss.start_at, ss.end_at), ss.room].filter(Boolean).join(' · '))}"
+    title="${escapeHtml([ss.title_ko, ss.title_en, timeLabel(ss.start_at, ss.end_at), ss.room].filter(Boolean).join(' · '))}"
     style="cursor:pointer;background:var(--i7);border:1px solid var(--i6);border-radius:4px;padding:7px;
     text-align:center;margin-bottom:5px;color:var(--i4)">
     <div style="font-size:11px;font-weight:600">${escapeHtml(ss.title_ko || ss.title_en || kindOf(ss.kind).pill || '')}</div>
@@ -832,7 +832,7 @@ function pgaHtml(ev){
   const cell = (ss) => {
     if(isBreak(ss)) return breakCell(ss);
     const c = trackColor(ev.key, ss.track);
-    return `<div onclick="openPgaSession('${escAttr(ss.id)}')" title="${escAttr(
+    return `<div onclick="openPgaSession('${escAttr(ss.id)}')" title="${escapeHtml(
         [ss.title_ko, ss.title_en, timeLabel(ss.start_at, ss.end_at), ss.room].filter(Boolean).join(' · '))}"
       style="cursor:pointer;border:1px solid ${c.bd}33;border-radius:4px;overflow:hidden;margin-bottom:5px">
       ${ss.track ? `<div style="background:${c.bg};border-left:3px solid ${c.bd};padding:3px 6px;
@@ -850,7 +850,7 @@ function pgaHtml(ev){
   const wideCell = (ss) => {
     if(isBreak(ss)) return breakCell(ss);
     const c = trackColor(ev.key, ss.track);
-    return `<div onclick="openPgaSession('${escAttr(ss.id)}')" title="${escAttr(ss.title_en || '')}"
+    return `<div onclick="openPgaSession('${escAttr(ss.id)}')" title="${escapeHtml(ss.title_en || '')}"
       style="cursor:pointer;background:${ss.track ? c.bg : 'var(--i8)'};border:1px solid ${ss.track ? c.bd + '55' : 'var(--i6)'};
       border-radius:4px;padding:9px;text-align:center;margin-bottom:5px">
       <div style="font-size:11.5px;font-weight:600">${escapeHtml(ss.title_ko || ss.title_en || '(세션명 없음)')}</div>
@@ -954,7 +954,7 @@ function pgaHtml(ev){
         ${escapeHtml(t)}</span>`;
     }).join('')}
     ${noTrack.length ? `<span style="font-size:10.5px;color:var(--am)"
-      title="${escAttr(noTrack.map(x => x.title_ko || x.title_en || x.id).join('\n'))}">
+      title="${escapeHtml(noTrack.map(x => x.title_ko || x.title_en || x.id).join('\n'))}">
       트랙 없는 세션 ${noTrack.length}개 — 색이 안 붙어요</span>` : ''}
   </div>` : '';
 
@@ -1102,7 +1102,7 @@ function nextActionTd(sp){
   if(na.done) return `<td style="font-size:10.5px;color:var(--g);white-space:nowrap">✓ 연락 완료</td>`;
   /* 요청하고 기다리는 중 — 공은 연사에게 있다. 날이 차면 «리마인더»로 돌아온다(follow-up.js) */
   if(na.wait) return `<td style="white-space:nowrap" onclick="event.stopPropagation();openSpeakerDr('${escAttr(sp.id)}')"
-    title="${escAttr(`${na.text} — ${na.follow.text}`)}">
+    title="${escapeHtml(`${na.text} — ${na.follow.text}`)}">
     <span style="font-size:10.5px;color:var(--i4);cursor:pointer">⏳ ${escapeHtml(na.text)}</span>
     <div style="font-size:9.5px;color:var(--i5)">${escapeHtml(na.follow.text)}</div></td>`;
   return `<td style="white-space:nowrap" onclick="event.stopPropagation();openSpeakerDr('${escAttr(sp.id)}');openFlowDraft('${escAttr(na.step)}')"
@@ -1237,7 +1237,7 @@ function spSentHtml(sp, col){
   const v = sp[col.key] || '';
   return `<td style="text-align:center;padding:5px 3px">
     <button onclick="event.stopPropagation();toggleSpeakerDate('${escAttr(sp.id)}','${col.key}')"
-      title="${escAttr(`${col.tip || col.label}\n${v ? `보낸 날 ${v} — 누르면 지웁니다` : '누르면 오늘 날짜로 표시'}`)}"
+      title="${escapeHtml(`${col.tip || col.label}\n${v ? `보낸 날 ${v} — 누르면 지웁니다` : '누르면 오늘 날짜로 표시'}`)}"
       style="border:0;cursor:pointer;font:inherit;min-width:44px;padding:3px 5px;border-radius:5px;
       background:${v ? 'var(--ad)' : 'transparent'};color:${v ? 'var(--a)' : 'var(--i5)'};
       font-size:${v ? '9.5' : '12'}px;font-weight:${v ? '600' : '800'};line-height:1.2">${
@@ -1248,11 +1248,11 @@ function spCellHtml(c, colLabel, name, col){
   /* 값을 보여주는 칸은 기호를 쓰지 않는다 — 기호와 값이 함께 있으면 눈이
      기호를 먼저 읽고 값을 흘린다. */
   if(col && col.show === 'text'){
-    if(c.state === 'na') return `<td title="${escAttr(`${name}의 역할은 ${colLabel}을(를) 받지 않아요`)}"></td>`;
+    if(c.state === 'na') return `<td title="${escapeHtml(`${name}의 역할은 ${colLabel}을(를) 받지 않아요`)}"></td>`;
     /* 칸 폭은 표가 정하므로 td의 max-width만으로는 글이 옆 칸으로 넘친다.
        안쪽 div에 폭을 박고 두 줄에서 자른다 — 전문은 title로 본다. */
     return `<td style="font-size:11px;line-height:1.4;color:${c.text ? 'var(--i2)' : 'var(--i5)'}"
-      title="${escAttr(c.text || '')}"><div style="width:180px;white-space:normal;overflow:hidden;
+      title="${escapeHtml(c.text || '')}"><div style="width:180px;white-space:normal;overflow:hidden;
       display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere">${
       c.text ? escapeHtml(c.text) : '—'}</div></td>`;
   }
@@ -1268,14 +1268,14 @@ function spCellMark(c, colLabel, name){
   }[c.state];
   /* 받지 않는 칸은 비워 둔다 — 점이라도 찍혀 있으면 확인할 거리처럼 보인다 */
   if(c.state === 'na' && c.lapsed) return `<td style="text-align:center;font-size:9.5px;color:var(--i5)"
-    title="${escAttr(`행사가 끝나 ${colLabel}은(는) 더 받지 않아요${c.text ? ` (${c.text})` : ''}`)}">지남</td>`;
-  if(c.state === 'na') return `<td title="${escAttr(`${name}의 역할은 ${colLabel}을(를) 받지 않아요`)}"></td>`;
+    title="${escapeHtml(`행사가 끝나 ${colLabel}은(는) 더 받지 않아요${c.text ? ` (${c.text})` : ''}`)}">지남</td>`;
+  if(c.state === 'na') return `<td title="${escapeHtml(`${name}의 역할은 ${colLabel}을(를) 받지 않아요`)}"></td>`;
   const tip = c.state === 'na'
     ? `${name}의 역할은 ${colLabel}을(를) 받지 않아요`
     : c.state === 'done' ? `${colLabel} 받음${c.text ? ` (${c.text})` : ''}`
     : c.state === 'part' ? `${colLabel} 일부만 (${c.text})`
     : `${colLabel} 아직${c.need === 'opt' ? ' — 있으면 좋음' : ''}`;
-  return `<td style="text-align:center;padding:5px 3px" title="${escAttr(tip)}">
+  return `<td style="text-align:center;padding:5px 3px" title="${escapeHtml(tip)}">
     <div style="display:inline-flex;flex-direction:column;align-items:center;gap:1px;min-width:40px;
       padding:3px 4px;border-radius:5px;background:${map.bg}">
       <span style="font-size:12px;font-weight:800;color:${map.fg};line-height:1">${map.mark}</span>
@@ -1570,7 +1570,7 @@ function peopleHtml(ev){
   const headN = (ids) => all.filter(sp => assignmentsFor(sp.id).some(a => ids.has(a.session_id))).length;
   const chipTracks = [...new Set(sessions.map(s => s.track).filter(Boolean))];
   const looseSess = sessions.filter(s => !s.track);
-  const opt = (v, label, on) => `<option value="${escAttr(v)}"${on ? ' selected' : ''}>${escapeHtml(label)}</option>`;
+  const opt = (v, label, on) => `<option value="${escapeHtml(v)}"${on ? ' selected' : ''}>${escapeHtml(label)}</option>`;
   const sessSel = (sessions.length || noSess) ? `<select class="fi" style="width:auto;max-width:240px;font-size:11.5px;padding:4px 7px"
       onchange="setConfSessFil(this.value || '')" title="세션·트랙으로 거르기">
     ${opt('', '전체 세션', !confSessFil)}
@@ -1587,7 +1587,7 @@ function peopleHtml(ev){
       return n ? opt(r.key, `${r.label} · ${n}명`, confRoleFil === r.key) : ''; }).join('')}
   </select>`;
   const chip = (on, onclick, label, tip, tone) => `<button class="pill ${on ? 'p-blue' : tone || 'p-gray'}"
-    style="border:0;cursor:pointer;font:inherit;font-size:11px" title="${escAttr(tip || '')}" onclick="${onclick}">${label}${on ? ' ✕' : ''}</button>`;
+    style="border:0;cursor:pointer;font:inherit;font-size:11px" title="${escapeHtml(tip || '')}" onclick="${onclick}">${label}${on ? ' ✕' : ''}</button>`;
   const vn = (v) => all.filter(sp => (sp.video_publish || 'none') === v).length;
   const settleChips = phase === 'settle' ? (() => {
     const docsN = all.filter(sp => settleMissing(sp).length).length;
@@ -1624,13 +1624,13 @@ function peopleHtml(ev){
         : n === of ? 'p-green' : 'p-gray';
       const tip = on ? (confNeedFil.mode === 'done' ? '받은 사람만 보는 중 — 한 번 더 누르면 안 받은 사람만'
         : '안 받은 사람만 보는 중 — 한 번 더 누르면 전체') : '눌러서 받은 사람만 보기';
-      return `<button class="pill ${cls}" title="${escAttr(tip)}" style="border:0;cursor:pointer;font:inherit"
+      return `<button class="pill ${cls}" title="${escapeHtml(tip)}" style="border:0;cursor:pointer;font:inherit"
         onclick="setConfNeedFil('${escAttr(col.key)}')">${escapeHtml(col.label)} ${
         on ? (confNeedFil.mode === 'done' ? `${n}명` : `${of - n}명`) : `${n}/${of}`}${
         on ? `<span style="margin-left:3px">${confNeedFil.mode === 'done' ? '받음' : '안 받음'} ✕</span>` : ''}</button>`;
     }).join('')}
     ${sentStats.filter(x => x.n).map(({ col, n, of }) =>
-      `<span class="pill p-blue" style="opacity:.85" title="${escAttr(`${col.label}을(를) 보낸 연사`)}">${
+      `<span class="pill p-blue" style="opacity:.85" title="${escapeHtml(`${col.label}을(를) 보낸 연사`)}">${
         escapeHtml(col.label)} 보냄 ${n}/${of}</span>`).join('')}
   </div>`;
 
@@ -1679,7 +1679,7 @@ function peopleHtml(ev){
             style="width:100%;height:190px;object-fit:cover;object-position:50% 25%;border-radius:6px;background:var(--i8)">`
           : `<div style="height:190px;display:grid;place-items:center;border:1px dashed var(--i6);border-radius:6px;
             font-size:11px;color:var(--i4);background:var(--i8)">${speakerPhotosLoaded(ev.key) ? '사진 없음' : '불러오는 중'}</div>`}
-        <div style="display:flex;gap:4px;flex-wrap:wrap">${items.map(({ c, x }) => `<span title="${escAttr(
+        <div style="display:flex;gap:4px;flex-wrap:wrap">${items.map(({ c, x }) => `<span title="${escapeHtml(
           x.state === 'done' ? `${c.label} 받음${x.text ? ` (${x.text})` : ''}` : x.state === 'part' ? `${c.label} 일부 (${x.text})` : `${c.label} 아직`)}"
           style="font-size:10.5px;border-radius:4px;padding:0 6px;border:1px solid ${
           x.state === 'done' ? 'var(--g);color:var(--g)' : x.state === 'part' ? 'var(--am);color:var(--am)' : 'var(--i6);color:var(--i5)'}">${
@@ -1790,7 +1790,7 @@ function peopleHtml(ev){
         ${sp.org_ko || sp.org_en ? (() => {
           const org = [sp.org_ko || sp.org_en, sp.title_ko || sp.title_en].filter(Boolean).join(' · ');
           return `<div style="font-size:10px;color:var(--i4);max-width:260px;white-space:nowrap;overflow:hidden;
-            text-overflow:ellipsis" title="${escAttr(org)}">${escapeHtml(org)}</div>`;
+            text-overflow:ellipsis" title="${escapeHtml(org)}">${escapeHtml(org)}</div>`;
         })() : ''}</td>`;
   };
   const sessTd = (sp) => {
@@ -1800,7 +1800,7 @@ function peopleHtml(ev){
     }).filter(Boolean);
     return `<td style="max-width:170px">
         ${sess.length ? `<div style="font-size:10.5px;color:var(--i3);white-space:nowrap;overflow:hidden;
-            text-overflow:ellipsis" title="${escAttr(sess.join(' / '))}">${escapeHtml(sess[0])}${
+            text-overflow:ellipsis" title="${escapeHtml(sess.join(' / '))}">${escapeHtml(sess[0])}${
             sess.length > 1 ? ` 외 ${sess.length - 1}` : ''}</div>`
           : '<span style="font-size:10.5px;color:var(--am)">배정 없음</span>'}</td>`;
   };
@@ -1874,7 +1874,7 @@ function peopleHtml(ev){
           onclick="event.stopPropagation();receiveAll('${escAttr(sp.id)}')"
           title="이 연사에게서 아직 안 받은 것을 모두 오늘 받은 것으로 표시합니다">받음</button></td>
       <td style="text-align:center;font-size:10.5px;color:${to.length ? 'var(--i4)' : 'var(--am)'}"
-        title="${escAttr(to.length ? to.map(x => x.email).join(', ') : '메일 수신자가 정해지지 않았어요')}">
+        title="${escapeHtml(to.length ? to.map(x => x.email).join(', ') : '메일 수신자가 정해지지 않았어요')}">
         ${to.length ? '✓' : '—'}</td>
       <td style="text-align:right;font-size:11px;white-space:nowrap">
         ${!paysFee(sp) && assignmentsFor(sp.id).length
@@ -1897,7 +1897,7 @@ function peopleHtml(ev){
         ${cols.map(c => `<th style="text-align:${c.show === 'text' ? 'left' : 'center'};font-size:10px;line-height:1.2${
           c.wide ? ';min-width:120px' : ''}">${escapeHtml(c.label)}</th>`).join('')}
         ${SP_SENT.map(c => `<th style="text-align:center;font-size:10px;line-height:1.2;color:var(--a)"
-          title="${escAttr(c.tip || '')}">${escapeHtml(c.label)}</th>`).join('')}
+          title="${escapeHtml(c.tip || '')}">${escapeHtml(c.label)}</th>`).join('')}
         <th style="text-align:center;font-size:10px;line-height:1.2" title="한 메일에 같이 온 것을 한 번에 표시합니다">한꺼번에</th>
         <th style="text-align:center;min-width:44px;font-size:10px">수신</th>
         <th style="text-align:right;min-width:70px;font-size:10px">연사료</th>

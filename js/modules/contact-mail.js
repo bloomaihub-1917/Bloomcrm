@@ -174,7 +174,7 @@ function render(){
         ${(() => { const libs = libItems('contact', r.event_id); return `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
           <select class="fi" style="font-size:11.5px;flex:1" onchange="rmLib(this.value);this.value=''">
             <option value="">📚 양식 보관함에서 불러오기${libs.length ? '' : ' — 아직 없어요'}</option>
-            ${libs.map(it => `<option value="${escAttr(it.id)}">${escapeHtml(it.name)}${it.scope === 'all' ? ' · 공통' : ''}</option>`).join('')}</select>
+            ${libs.map(it => `<option value="${escapeHtml(it.id)}">${escapeHtml(it.name)}${it.scope === 'all' ? ' · 공통' : ''}</option>`).join('')}</select>
           <button class="btn" style="font-size:10.5px" title="컨택 메일 양식을 더하고 고칩니다 — 이 행사만 또는 모든 행사 공통"
             onclick="openMailTemplates('contact','${escAttr(r.event_id || '')}')">양식 보관함</button></div>`; })()}
         <details${cm.lang !== 'en' ? ' open' : ''}><summary style="cursor:pointer;font-size:11.5px;font-weight:700;margin-bottom:4px">국문 문구</summary>

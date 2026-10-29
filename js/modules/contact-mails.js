@@ -66,7 +66,7 @@ export function contactMailsHtml(c){
     </summary>
     <div style="font-size:10.5px;color:var(--i4);margin-top:3px">${escapeHtml(l.counterpart || '')}</div>
     <div style="font-size:11px;color:var(--i2);white-space:pre-wrap;line-height:1.6;margin-top:4px;max-height:240px;overflow:auto">${escapeHtml(String(l.body || '').slice(0, 4000))}</div>
-    ${l.direction === 'out' ? manageHtml(l) : ''}
+    ${l.direction === 'out' && !String(l.id || '').startsWith('nolog-') ? manageHtml(l) : ''}
   </details>`;
 
   return `<div class="sct" style="margin-top:14px">주고받은 메일 · 연락 기록</div>
@@ -95,7 +95,7 @@ function manageHtml(l){
     <label style="display:flex;gap:4px;align-items:center;cursor:pointer;flex:none">
       <input type="checkbox" ${l.answered_at ? 'checked' : ''} onchange="contactMailReply('${id}',this.checked)"> 회신 받음</label>
     <span id="cm-ans-${id}" style="font-size:10px;color:var(--g);flex:none">${l.answered_at ? escapeHtml(String(l.answered_at).slice(0, 10)) : ''}</span>
-    <input class="fi" style="flex:1;min-width:160px;font-size:11px;padding:3px 6px" value="${escAttr(l.answer || '')}" placeholder="메모 (회신 내용·다음 할 일)"
+    <input class="fi" style="flex:1;min-width:160px;font-size:11px;padding:3px 6px" value="${escapeHtml(l.answer || '')}" placeholder="메모 (회신 내용·다음 할 일)"
       onchange="contactMailMemo('${id}',this.value)">
     <span id="cm-msg-${id}" style="font-size:10px;color:var(--i4);flex:none"></span>
   </div>`;
@@ -145,7 +145,7 @@ function attemptsHtml(atts){
             <span style="font-size:10px;color:var(--i4);flex:none">${escapeHtml(String(a.at || '').slice(0, 10))}${a.by_name ? ' · ' + escapeHtml(a.by_name) : ''}</span>
           </div>
           <div style="display:flex;gap:6px;align-items:center;margin-top:4px">
-            <input class="fi" style="flex:1;font-size:11px;padding:3px 6px" value="${escAttr(a.note || '')}" placeholder="메모" onchange="contactAttemptMemo('${id}',this.value)">
+            <input class="fi" style="flex:1;font-size:11px;padding:3px 6px" value="${escapeHtml(a.note || '')}" placeholder="메모" onchange="contactAttemptMemo('${id}',this.value)">
             <span id="cm-msg-${id}" style="font-size:10px;color:var(--i4);flex:none"></span></div>
         </div>`; }).join('')}
     </div>

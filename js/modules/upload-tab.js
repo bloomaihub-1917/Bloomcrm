@@ -628,7 +628,7 @@ function renderColumnMappingPreview(headers, rows, colMap){
           </select>
         </td>
         <td style="padding:7px 10px;border-bottom:1px solid var(--i7);font-size:11px;color:var(--i3)">${escapeHtml(String(sample[h] ?? ''))}</td>
-        <td style="padding:7px 10px;border-bottom:1px solid var(--i7);font-size:10px;color:${needsDecision?'var(--am)':'var(--i3)'}" class="cm-badge"${aiWhy ? ` title="${escAttr(aiWhy)}"` : ''}>${aiWhy ? '✨ AI 추천 — ' + escapeHtml(aiWhy) : isAuto ? '자동 인식' : (needsDecision ? '⚠️ 매핑 필요' : '미매핑')}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid var(--i7);font-size:10px;color:${needsDecision?'var(--am)':'var(--i3)'}" class="cm-badge"${aiWhy ? ` title="${escapeHtml(aiWhy)}"` : ''}>${aiWhy ? '✨ AI 추천 — ' + escapeHtml(aiWhy) : isAuto ? '자동 인식' : (needsDecision ? '⚠️ 매핑 필요' : '미매핑')}</td>
       </tr>`;
   }).join('');
 

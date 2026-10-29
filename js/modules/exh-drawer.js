@@ -326,7 +326,7 @@ function dateRow(x, field, label, hint){
       style="width:20px;height:20px;border-radius:5px;border:1.5px solid ${on ? 'var(--g)' : 'var(--i6)'};background:${on ? 'var(--g)' : 'transparent'};color:#fff;font-size:12px;font-weight:800;cursor:pointer;flex-shrink:0;line-height:1">${on ? '✓' : ''}</button>
     <span style="font-size:12.5px;font-weight:${on ? 600 : 500};color:${on ? 'var(--i1)' : 'var(--i3)'};flex:1">${escapeHtml(label)}
       ${hint ? `<span style="font-size:10.5px;color:var(--i5);font-weight:400"> ${escapeHtml(hint)}</span>` : ''}</span>
-    <input type="date" class="fi" style="width:140px;padding:4px 8px;font-size:11.5px" value="${escAttr(x[field] || '')}"
+    <input type="date" class="fi" style="width:140px;padding:4px 8px;font-size:11.5px" value="${escapeHtml(x[field] || '')}"
       onchange="setExhField('${escAttr(x.id)}','${field}',this.value,'${escAttr(label)}')">
   </div>`;
 }
@@ -342,16 +342,16 @@ function flagRow(x, flag, dateField, label, hint){
     <span style="font-size:12.5px;font-weight:${on ? 600 : 500};color:${on ? 'var(--i1)' : 'var(--i3)'};flex:1">${escapeHtml(label)}
       ${hint ? `<span style="font-size:10.5px;color:var(--i5);font-weight:400"> ${escapeHtml(hint)}</span>` : ''}
       ${on && !x[dateField] ? '<span style="font-size:10px;color:var(--i5)"> · 날짜 미상</span>' : ''}</span>
-    <input type="date" class="fi" style="width:140px;padding:4px 8px;font-size:11.5px" value="${escAttr(x[dateField] || '')}"
+    <input type="date" class="fi" style="width:140px;padding:4px 8px;font-size:11.5px" value="${escapeHtml(x[dateField] || '')}"
       onchange="setExhDateWithFlag('${escAttr(x.id)}','${dateField}','${flag}',this.value,'${escAttr(label)}')">
   </div>`;
 }
 
 function textRow(x, field, label, placeholder = '', multi = false){
   const el = multi
-    ? `<textarea class="fi" rows="2" style="font-size:12px" placeholder="${escAttr(placeholder)}"
+    ? `<textarea class="fi" rows="2" style="font-size:12px" placeholder="${escapeHtml(placeholder)}"
         onchange="setExhField('${escAttr(x.id)}','${field}',this.value,'${escAttr(label)}')">${escapeHtml(x[field] || '')}</textarea>`
-    : `<input class="fi" style="font-size:12px" placeholder="${escAttr(placeholder)}" value="${escAttr(x[field] || '')}"
+    : `<input class="fi" style="font-size:12px" placeholder="${escapeHtml(placeholder)}" value="${escapeHtml(x[field] || '')}"
         onchange="setExhField('${escAttr(x.id)}','${field}',this.value,'${escAttr(label)}')">`;
   return `<div class="fg"><label class="fl">${escapeHtml(label)}</label>${el}</div>`;
 }
@@ -416,7 +416,7 @@ function syncTag(x, f, org, orgKey, label){
   const t = SYNC_TONE[st];
   const db = syncNorm(org?.[orgKey]);
   const btn = (txt, on, tip) => `<button class="btn bs" style="font-size:10px;padding:1px 6px;flex:none"
-    title="${escAttr(tip)}" onclick="${on}">${txt}</button>`;
+    title="${escapeHtml(tip)}" onclick="${on}">${txt}</button>`;
   const a = `'${escAttr(x.id)}','${f}','${orgKey}','${escAttr(label)}'`;
   const action =
       st === 'db'   ? btn('확인받음 · 쓰기', `useOrgBookValue(${a})`, '기업이 이 값 그대로 쓰겠다고 확인해 줬을 때 누르세요')
@@ -427,7 +427,7 @@ function syncTag(x, f, org, orgKey, label){
       background:${t.b};border-left:3px solid ${t.c}">
     <span style="flex:none;color:${t.c};font-weight:700">● ${t.t}</span>
     ${db && st !== 'same' ? `<span style="flex:1;min-width:0;color:var(--i4);white-space:pre-line;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical"
-      title="${escAttr(db)}">${escapeHtml(db)}</span>` : '<span style="flex:1"></span>'}
+      title="${escapeHtml(db)}">${escapeHtml(db)}</span>` : '<span style="flex:1"></span>'}
     ${action}</div>`;
 }
 /* 참가기업 서랍에서 어느 기업 행을 보는지 — 시공사 칸은 시공사, 나머지는 참가기업 */
@@ -441,10 +441,10 @@ function builderNameRow(x){
     : (String(x.builder || '').trim() && !SELF_INSTALL.test(String(x.builder).trim())
       ? `<span style="color:${t.c};font-weight:700">● 기업 DB에 연결되지 않음</span> <span style="color:var(--i5)">— 다시 입력하면 연결됩니다</span>` : '');
   return `<div class="fg"><label class="fl">시공사명</label>
-    <input class="fi" style="font-size:12px" list="builder-orgs" value="${escAttr(x.builder || '')}"
+    <input class="fi" style="font-size:12px" list="builder-orgs" value="${escapeHtml(x.builder || '')}"
       placeholder="기업 DB의 시공사에서 고르거나 새 이름을 적으세요"
       onchange="setBuilderOrg('${escAttr(x.id)}',this.value)">
-    <datalist id="builder-orgs">${vendors.map(o => `<option value="${escAttr(o.name_ko || o.name_en)}">`).join('')}</datalist>
+    <datalist id="builder-orgs">${vendors.map(o => `<option value="${escapeHtml(o.name_ko || o.name_en)}">`).join('')}</datalist>
     ${note ? `<div style="font-size:10.5px;margin-top:3px">${note}</div>` : ''}</div>`;
 }
 export async function setBuilderOrg(id, value){
@@ -478,7 +478,7 @@ function builderBlock(x){
   const bOrg = getOrgById(x.builder_org_id);
   const B_ORG = { builder_tel: 'phone', builder_email: 'email' };
   const row = (f, label, ph) => `<div class="fg"><label class="fl">${escapeHtml(label)}</label>
-    <input class="fi" style="font-size:12px" value="${escAttr(x[f] || '')}" placeholder="${escAttr(ph)}"
+    <input class="fi" style="font-size:12px" value="${escapeHtml(x[f] || '')}" placeholder="${escapeHtml(ph)}"
       onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')">
     ${bOrg && B_ORG[f] ? syncTag(x, f, bOrg, B_ORG[f], label) : ''}</div>`;
   return `<div style="padding:9px 11px;background:var(--i9);border-radius:8px;border-left:3px solid var(--a);margin-bottom:10px">
@@ -516,7 +516,7 @@ function boothDesignBlock(x){
   const rows = boothDesignFeedback(x.id);
   const me = currentUser?.email || '';
   const dateCell = (f, label) => `<div class="fg"><label class="fl">${label}</label>
-    <input type="date" class="fi" style="font-size:12px" value="${escAttr(x[f] || '')}"
+    <input type="date" class="fi" style="font-size:12px" value="${escapeHtml(x[f] || '')}"
       onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${label}')"></div>`;
 
   return `<div style="padding:9px 11px;background:var(--i9);border-radius:8px;border-left:3px solid ${
@@ -645,7 +645,7 @@ function catalogDatalist(x){
     const list = itemCatalogFor(x.event_id, cat);
     if(!list.length) return '';
     return `<datalist id="${itemListId(x, cat)}">${list.map(o =>
-      `<option value="${escAttr(o.value)}">${escapeHtml(o.desc)}</option>`).join('')}</datalist>`;
+      `<option value="${escapeHtml(o.value)}">${escapeHtml(o.desc)}</option>`).join('')}</datalist>`;
   }).join('');
 }
 
@@ -740,7 +740,7 @@ function dContact(x){
         ${p.primary ? '<span class="pill p-blue">메인</span>' : ''}
         <select class="fi" style="width:74px;padding:2px 5px;font-size:10.5px;margin-left:auto"
           onchange="setExhContactField('${escAttr(r.id)}','role',this.value)">
-          ${cRoles().map(v => `<option value="${escAttr(v.code)}"${(r.role || '기타') === v.code ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}
+          ${cRoles().map(v => `<option value="${escapeHtml(v.code)}"${(r.role || '기타') === v.code ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}
         </select>
       </div>
       <div style="font-size:11.5px;color:var(--i3);display:flex;flex-direction:column;gap:2px">
@@ -750,7 +750,7 @@ function dContact(x){
             // 도메인이 다른 게 맞는 경우가 있고, 계속 경고하면 다들 무시하게 된다
             const memo = String(r.note || '').trim();
             if(memo) return `<span class="pill p-gray" style="margin-left:5px;cursor:help"
-              title="${escAttr(memo)}">${escapeHtml(memo.length > 14 ? memo.slice(0, 14) + '…' : memo)}</span>`;
+              title="${escapeHtml(memo)}">${escapeHtml(memo.length > 14 ? memo.slice(0, 14) + '…' : memo)}</span>`;
             const own = foreignDomain(p.email, cands);
             return own ? `<span class="pill p-amber" style="margin-left:5px;cursor:pointer"
               onclick="noteExhContact('${escAttr(r.id)}')"
@@ -760,12 +760,12 @@ function dContact(x){
         ${p.phone ? `<div>☎ ${escapeHtml(p.phone)}</div>` : ''}
         ${!p.linked ? `
           <div class="fgr" style="margin-top:5px">
-            <input class="fi" style="font-size:11.5px;padding:5px" placeholder="이름" value="${escAttr(r.name || '')}"
+            <input class="fi" style="font-size:11.5px;padding:5px" placeholder="이름" value="${escapeHtml(r.name || '')}"
               onchange="setExhContactField('${escAttr(r.id)}','name',this.value)">
-            <input class="fi" style="font-size:11.5px;padding:5px" placeholder="이메일" value="${escAttr(r.email || '')}"
+            <input class="fi" style="font-size:11.5px;padding:5px" placeholder="이메일" value="${escapeHtml(r.email || '')}"
               onchange="setExhContactField('${escAttr(r.id)}','email',this.value)">
           </div>
-          <input class="fi" style="font-size:11.5px;padding:5px;margin-top:4px" placeholder="연락처" value="${escAttr(r.phone || '')}"
+          <input class="fi" style="font-size:11.5px;padding:5px;margin-top:4px" placeholder="연락처" value="${escapeHtml(r.phone || '')}"
             onchange="setExhContactField('${escAttr(r.id)}','phone',this.value)">` : ''}
       </div>
       <div style="display:flex;gap:5px;margin-top:7px;align-items:center;flex-wrap:wrap">
@@ -952,7 +952,7 @@ export function openNewContact(exhId, name, email){
     ${pair('email', 'phone', '이메일', '연락처', 'name@company.com', '010-0000-0000')}
     <div class="fgr">
       <div class="fg"><label class="fl">이 전시에서의 역할</label>
-        <select class="fi" id="nc-role">${cRoles().map(v => `<option value="${escAttr(v.code)}"${v.code === '실무' ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}</select></div>
+        <select class="fi" id="nc-role">${cRoles().map(v => `<option value="${escapeHtml(v.code)}"${v.code === '실무' ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}</select></div>
       <div class="fg"><label class="fl">국가 <span style="font-weight:400;color:var(--i5)">— 이 사람이 있는 곳</span></label>
         <select class="fi" id="nc-country">
           <option value="" selected>— 모르면 비워두세요</option>
@@ -1492,7 +1492,7 @@ function appMark(i){
   const a = EXH_APPS.find(r => r.id === i.app_id);
   if(!a) return '';
   const cls = i.change_kind === '취소' ? 'p-red' : i.change_kind === '변경' ? 'p-amber' : 'p-teal';
-  return ` <span class="pill ${cls}" style="font-size:9px" title="${escAttr(
+  return ` <span class="pill ${cls}" style="font-size:9px" title="${escapeHtml(
     `${a.seq}차 · ` + (a.received_at || '') + (a.reason ? ' · ' + a.reason : ''))}">${escapeHtml(appSeqLabel(a))} ${escapeHtml(i.change_kind || '추가')}</span>`;
 }
 
@@ -1522,10 +1522,10 @@ function appItemRows(a, x, live){
         dead ? ';opacity:.55' : ''}">
         <span class="pill ${cls}" style="font-size:9px;min-width:34px;text-align:center">${lbl}</span>
         <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${
-          dead ? ';text-decoration:line-through' : ''}" title="${escAttr(i.name || '')}">${sg} ${escapeHtml(i.name || '')}</span>
-        ${live ? `<input class="fi" style="width:52px;font-size:11px;padding:3px 5px" value="${escAttr(i.qty || '')}"
+          dead ? ';text-decoration:line-through' : ''}" title="${escapeHtml(i.name || '')}">${sg} ${escapeHtml(i.name || '')}</span>
+        ${live ? `<input class="fi" style="width:52px;font-size:11px;padding:3px 5px" value="${escapeHtml(i.qty || '')}"
             placeholder="수량" onchange="setItemFieldDirect('${escAttr(i.id)}','qty',this.value)">
-          <input class="fi" style="width:86px;font-size:11px;padding:3px 5px;text-align:right" value="${escAttr(i.amount || '')}"
+          <input class="fi" style="width:86px;font-size:11px;padding:3px 5px;text-align:right" value="${escapeHtml(i.amount || '')}"
             placeholder="금액" onchange="setItemFieldDirect('${escAttr(i.id)}','amount',this.value)">
           <button class="btn bs" style="font-size:10.5px;padding:2px 7px" onclick="voidExhItem('${escAttr(i.id)}')"
             title="${dead ? '취소를 되돌립니다' : '지우지 않고 내립니다 — 이력은 남아요'}">${dead ? '되돌리기' : '취소'}</button>`
@@ -1560,11 +1560,11 @@ function appFinalRows(x){
     </div>
     ${live.map(i => `<div style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:2px 0">
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-        title="${escAttr(i.name || '')}">${escapeHtml(i.name || '')}${appMark(i)}</span>
+        title="${escapeHtml(i.name || '')}">${escapeHtml(i.name || '')}${appMark(i)}</span>
       <span style="color:var(--i4)">${escapeHtml(i.qty || '')}</span>
       <span style="min-width:76px;text-align:right">${i.amount ? escapeHtml(money(i.amount)) : '-'}</span>
       ${open ? `<button class="btn bs" style="font-size:10.5px;padding:2px 7px" onclick="voidExhItem('${escAttr(i.id)}')"
-        title="${escAttr(open.seq + '차 접수에 취소로 기록됩니다')}">취소</button>` : ''}
+        title="${escapeHtml(open.seq + '차 접수에 취소로 기록됩니다')}">취소</button>` : ''}
     </div>`).join('')}
     ${!open ? `<div style="font-size:10.5px;color:var(--i4);margin-top:4px">빼려면 접수를 하나 열어야 해요 — 몇 차에서 뺐는지가 남아야 하니까요.</div>` : ''}
   </div>`;
@@ -1603,10 +1603,10 @@ function appsSection(x){
   const picker = !open ? '' : `
     <div style="font-size:11px;color:var(--a);margin:10px 0 6px">이 접수에 넣을 품목 — 분류를 고르세요</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap" id="it-cats-${xid}">
-      ${itemCats().map(({ code: k, label: l }) => `<button class="btn bs${cur === k ? ' bp' : ''}" data-cat="${escAttr(k)}"
+      ${itemCats().map(({ code: k, label: l }) => `<button class="btn bs${cur === k ? ' bp' : ''}" data-cat="${escapeHtml(k)}"
         onclick="pickItemCat('${xid}','${escAttr(k)}')">${escapeHtml(l)}</button>`).join('')}
     </div>
-    <input type="hidden" id="it-cat-${xid}" value="${escAttr(cur)}">
+    <input type="hidden" id="it-cat-${xid}" value="${escapeHtml(cur)}">
     <div class="bl-row bl-item-add" id="it-row-${xid}" style="margin-top:6px;${cur ? '' : 'display:none'}">
       <input class="fi" id="it-nm-${xid}" placeholder="항목명" style="flex:1 1 120px;min-width:0;font-size:11.5px;padding:6px"
         ${cur ? `list="${itemListId(x, cur)}"` : ''} oninput="pickCatalogItem('${xid}')">
@@ -1629,9 +1629,9 @@ function appsSection(x){
         <select class="fi" style="width:auto;font-size:11px;padding:3px 6px"
           title="접수 경로 — 엑스렌탈은 거기서 직접 청구·수금한 건이에요"
           onchange="setAppField('${escAttr(a.id)}','channel',this.value)">${
-          APP_CHANNELS.map(([c]) => `<option value="${escAttr(c)}"${(a.channel || '') === c ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}${
-          APP_CHANNELS.some(([c]) => c === (a.channel || '')) ? '' : `<option value="${escAttr(a.channel || '')}" selected>${escapeHtml(a.channel || '')}</option>`}</select>
-        <input type="date" class="fi" style="width:132px;font-size:11px" value="${escAttr(a.received_at || '')}"
+          APP_CHANNELS.map(([c]) => `<option value="${escapeHtml(c)}"${(a.channel || '') === c ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}${
+          APP_CHANNELS.some(([c]) => c === (a.channel || '')) ? '' : `<option value="${escapeHtml(a.channel || '')}" selected>${escapeHtml(a.channel || '')}</option>`}</select>
+        <input type="date" class="fi" style="width:132px;font-size:11px" value="${escapeHtml(a.received_at || '')}"
           onchange="setAppField('${escAttr(a.id)}','received_at',this.value)">
         ${live ? '<span class="pill p-amber">반영 중</span>'
                : `<span style="font-size:10.5px;color:var(--i4)">반영 ${escapeHtml(a.handled_at)}${a.handler ? ' · ' + escapeHtml(a.handler) : ''}</span>`}
@@ -1642,7 +1642,7 @@ function appsSection(x){
         </span>
       </div>
       <input class="fi" style="margin-top:6px;font-size:11.5px" placeholder="왜 다시 받았나요 — 예: 프북 수정, 전시패스 추가"
-        value="${escAttr(a.reason || '')}" onchange="setAppField('${escAttr(a.id)}','reason',this.value)">
+        value="${escapeHtml(a.reason || '')}" onchange="setAppField('${escAttr(a.id)}','reason',this.value)">
       ${a.file_name ? `<div style="font-size:10.5px;color:var(--i4);margin-top:4px">📄 ${escapeHtml(a.file_name)}</div>` : ''}
       ${appItemRows(a, x, live)}
       ${live && open && a.id === open.id ? picker : ''}
@@ -1722,8 +1722,8 @@ function baseWorkBlock(x){
   return sct(`기본 시공 — ${v.label}`,
     (k === 'fascia'
       ? `<div class="fg"><label class="fl">간판명 (영문)</label>
-          <input class="fi" style="font-size:12px" value="${escAttr(x.fascia_name || '')}"
-            placeholder="${escAttr(bookName(x).en || '게재 영문명이 없어요')}"
+          <input class="fi" style="font-size:12px" value="${escapeHtml(x.fascia_name || '')}"
+            placeholder="${escapeHtml(bookName(x).en || '게재 영문명이 없어요')}"
             title="비우면 프로그램북 게재 영문명을 그대로 씁니다 — 간판만 다르면 여기에 적으세요"
             onchange="setExhField('${escAttr(x.id)}','fascia_name',this.value,'간판명')">
           ${fasciaName(x)
@@ -1731,13 +1731,13 @@ function baseWorkBlock(x){
                 x.fascia_name ? ' (간판만 따로 적음)' : ' (프로그램북 게재 영문명)'}</div>`
             : '<div style="font-size:10.5px;color:var(--re);margin-top:3px">게재 영문명이 비어 있어 간판을 만들 수 없어요 — 프로그램북 탭에서 넣거나 여기에 직접 적으세요.</div>'}</div>
         <div class="fg"><label class="fl">간판명 확정</label>
-          <input type="date" class="fi" style="font-size:12px" value="${escAttr(baseRecvAt(x))}"
+          <input type="date" class="fi" style="font-size:12px" value="${escapeHtml(baseRecvAt(x))}"
             onchange="setBaseRecvAt('${escAttr(x.id)}',this.value)"></div>`
       /* 이 날짜는 그래픽 현황의 «받을 파일»과 같은 자리다 — 기본 제공 그래픽
          항목의 받은 날을 읽고 쓴다. 두 화면이 각자 적던 시절에는 한쪽이 받음,
          다른 쪽이 미수령이었다. */
       : `<div class="fg"><label class="fl">디자인 수령일</label>
-          <input type="date" class="fi" style="font-size:12px" value="${escAttr(baseRecvAt(x))}"
+          <input type="date" class="fi" style="font-size:12px" value="${escapeHtml(baseRecvAt(x))}"
             onchange="setBaseRecvAt('${escAttr(x.id)}',this.value)">
           ${baseRecvItems(x).length
             ? `<div style="font-size:10.5px;color:var(--i5);margin-top:3px">그래픽 탭의 «${
@@ -1746,7 +1746,7 @@ function baseWorkBlock(x){
     + `<div class="fg"><label class="fl">${escapeHtml(v.done)}</label>
         <div style="padding:3px 0">${baseDoneCheck(x)}</div></div>
       <div class="fg"><label class="fl">비고</label>
-        <input class="fi" style="font-size:12px" value="${escAttr(x.base_note || '')}"
+        <input class="fi" style="font-size:12px" value="${escapeHtml(x.base_note || '')}"
           placeholder="색상·재질·시공 메모" onchange="setExhField('${escAttr(x.id)}','base_note',this.value,'기본 시공 비고')"></div>
       <div style="font-size:10.5px;color:var(--i5)">추가 발주가 아니라 계약에 들어 있는 항목이에요 — 기업이 조용해도 우리가 만들어 세웁니다.</div>`);
 }
@@ -1876,7 +1876,7 @@ function dBook(x){
   const known = (f, orgKey, label) => syncTag(x, f, getOrgById(x.org_id), orgKey, label);
   const ORG_OF = { book_address: 'address', book_website: 'website' };
   const row = (f, label, ph) => `<div class="fg"><label class="fl">${escapeHtml(label)}</label>
-    <input class="fi" style="font-size:12px" value="${escAttr(x[f] || '')}" placeholder="${escAttr(ph)}"
+    <input class="fi" style="font-size:12px" value="${escapeHtml(x[f] || '')}" placeholder="${escapeHtml(ph)}"
       onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')">
     ${ORG_OF[f] ? known(f, ORG_OF[f], label) : ''}</div>`;
 
@@ -1889,20 +1889,20 @@ function dBook(x){
           도록에 낼 정보가 모두 채워졌어요</div>`}
     <div class="fgr">
       <div class="fg"><label class="fl">게재 국문명</label>
-        <input class="fi" style="font-size:12px" value="${escAttr(x.book_name_ko || '')}"
-          placeholder="${escAttr(bookName(x).ko)}"
+        <input class="fi" style="font-size:12px" value="${escapeHtml(x.book_name_ko || '')}"
+          placeholder="${escapeHtml(bookName(x).ko)}"
           title="비우면 CRM 이름을 그대로 씁니다 — 신청서 표기가 다르면 여기에 적으세요"
           onchange="setExhField('${escAttr(x.id)}','book_name_ko',this.value,'게재 국문명')"></div>
       <div class="fg"><label class="fl">게재 영문명</label>
-        <input class="fi" style="font-size:12px" value="${escAttr(x.book_name_en || '')}"
-          placeholder="${escAttr(bookName(x).en)}"
+        <input class="fi" style="font-size:12px" value="${escapeHtml(x.book_name_en || '')}"
+          placeholder="${escapeHtml(bookName(x).en)}"
           onchange="setExhField('${escAttr(x.id)}','book_name_en',this.value,'게재 영문명')"></div>
     </div>
     <div style="font-size:10.5px;color:var(--i5);margin:-4px 0 8px">
       도록과 <b>기본부스 간판</b>에 실제로 나가는 이름이에요. 비우면 CRM 이름을 씁니다.</div>
     <div class="fgr">
       <div class="fg"><label class="fl">게재 순서</label>
-        <input class="fi" style="font-size:12px" value="${escAttr(x.book_order || '')}" placeholder="예: 1"
+        <input class="fi" style="font-size:12px" value="${escapeHtml(x.book_order || '')}" placeholder="예: 1"
           title="번호를 적으면 그 자리로 옮기고 나머지가 한 칸씩 밀려요"
           onchange="moveBookOrder('${escAttr(x.id)}',this.value)"></div>
       <div class="fg"><label class="fl">로고</label>
@@ -1942,10 +1942,10 @@ function dProgress(x){
   ${sct('부스 배정',
     `<div class="fgr">
       <div class="fg"><label class="fl">부스 번호</label>
-        <input class="fi" style="font-size:12px" value="${escAttr(x.booth_no || '')}"
+        <input class="fi" style="font-size:12px" value="${escapeHtml(x.booth_no || '')}"
           onchange="setExhField('${escAttr(x.id)}','booth_no',this.value,'부스 번호')"></div>
       <div class="fg"><label class="fl">층</label>
-        <input class="fi" style="font-size:12px" value="${escAttr(x.booth_floor || '')}"
+        <input class="fi" style="font-size:12px" value="${escapeHtml(x.booth_floor || '')}"
           onchange="setExhField('${escAttr(x.id)}','booth_floor',this.value,'부스 층')"></div>
     </div>
     <div class="fgr">
@@ -1954,12 +1954,12 @@ function dProgress(x){
           ${boothTypeOptions(x.booth_type)}
         </select></div>
       <div class="fg"><label class="fl">수량</label>
-        <input class="fi" style="font-size:12px" value="${escAttr(x.booth_qty || '')}"
+        <input class="fi" style="font-size:12px" value="${escapeHtml(x.booth_qty || '')}"
           onchange="setExhField('${escAttr(x.id)}','booth_qty',this.value,'부스 수량')"></div>
     </div>
     <div class="fg"><label class="fl">스폰서 등급</label>
       <select class="fi" style="font-size:12px" onchange="setExhField('${escAttr(x.id)}','grade',this.value,'등급')">
-        <option value=""${x.grade ? '' : ' selected'}>— 없음 —</option>${grades(x.event_id).map(g => `<option value="${escAttr(g.code)}"${(x.grade || '') === g.code ? ' selected' : ''}>${escapeHtml(g.label)}</option>`).join('')}
+        <option value=""${x.grade ? '' : ' selected'}>— 없음 —</option>${grades(x.event_id).map(g => `<option value="${escapeHtml(g.code)}"${(x.grade || '') === g.code ? ' selected' : ''}>${escapeHtml(g.label)}</option>`).join('')}
       </select></div>
     <div class="fg"><label class="fl">모기업</label>
       <select class="fi" style="font-size:12px"
@@ -1987,10 +1987,10 @@ function dProgress(x){
     boothDesignBlock(x) +
     `<div class="fgr">
       <div class="fg"><label class="fl">출입증 매수</label>
-        <input class="fi" style="font-size:12px" value="${escAttr(x.badge_count || '')}"
+        <input class="fi" style="font-size:12px" value="${escapeHtml(x.badge_count || '')}"
           onchange="setExhField('${escAttr(x.id)}','badge_count',this.value,'출입증')"></div>
       <div class="fg"><label class="fl">출입증 발급일</label>
-        <input type="date" class="fi" style="font-size:12px" value="${escAttr(x.badge_issued_at || '')}"
+        <input type="date" class="fi" style="font-size:12px" value="${escapeHtml(x.badge_issued_at || '')}"
           onchange="setExhField('${escAttr(x.id)}','badge_issued_at',this.value,'출입증 발급')"></div>
     </div>` +
     textRow(x, 'onsite_note', '현장 메모', '', true))}
@@ -2072,7 +2072,7 @@ function groupSameItems(list){
 /* 정산에서 고쳤다는 표 — 이 줄은 신청서가 아니라 여기서 바뀌었다 */
 function editMark(i){
   if(!String(i.edited_at || '').trim()) return '';
-  return ` <span class="pill p-amber" style="font-size:9px" title="${escAttr(
+  return ` <span class="pill p-amber" style="font-size:9px" title="${escapeHtml(
     `정산에서 직접 고침 — ${i.edited_at}${i.edited_by ? ' · ' + i.edited_by : ''}`)}">정산수정</span>`;
 }
 
@@ -2124,14 +2124,14 @@ function designTargets(evKey){
 }
 
 const designTargetList = (x) => `<datalist id="dsgt-${escAttr(x.id)}">${
-  designTargets(x.event_id).map(v => `<option value="${escAttr(v)}"></option>`).join('')}</datalist>`;
+  designTargets(x.event_id).map(v => `<option value="${escapeHtml(v)}"></option>`).join('')}</datalist>`;
 
 /* 항목 줄 아래에 한 줄 더 — 칸이 일곱으로 고정된 격자를 건드리지 않는다 */
 const designTargetRow = (x, i) => !isDesignItem(i) ? '' : `
   <div style="display:flex;gap:8px;align-items:center;padding:0 8px 7px;background:var(--i9);
       border-radius:0 0 6px 6px;margin-top:-1px">
     <span style="font-size:10.5px;color:var(--i5);flex:0 0 auto">무엇을 디자인했나</span>
-    <input class="fi" list="dsgt-${escAttr(x.id)}" value="${escAttr(i.note || '')}"
+    <input class="fi" list="dsgt-${escAttr(x.id)}" value="${escapeHtml(i.note || '')}"
       placeholder="부스 타입이나 품목을 고르세요 — 예: Block System C 1부스"
       style="flex:1;min-width:0;padding:4px 8px;font-size:11.5px"
       onchange="setItemField('${escAttr(i.id)}','note',this.value)">
@@ -2340,7 +2340,7 @@ function dBilling(x){
          내기로 미리 합의한 기업은 여기 날짜를 행사 뒤로 적으면 «입금 예정»으로 분류된다. */''}
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;margin-top:5px;color:var(--i4)">
       <span>입금 기한</span>
-      <input type="date" class="fi" style="width:132px;padding:2px 6px;font-size:11px" value="${escAttr(x.pay_due_date || '')}"
+      <input type="date" class="fi" style="width:132px;padding:2px 6px;font-size:11px" value="${escapeHtml(x.pay_due_date || '')}"
         onchange="setExhField('${escAttr(x.id)}','pay_due_date',this.value,'입금 기한')">
       <span style="color:${st.overdue && rest > 0 ? 'var(--re)' : 'var(--i5)'}">${
         !x.pay_due_date ? (st.due ? `행사 공통 기한 ${escapeHtml(st.due)} 적용 중` : '기한 없음 — 재촉 대상에서 빠져요')
@@ -2440,11 +2440,11 @@ function dBilling(x){
             isBillable(i) ? escapeHtml(l) : '제외'}</span>
           <span class="bl-nm" style="${
             isVoided(i) ? 'color:var(--i5);text-decoration:line-through' : isBillable(i) ? '' : 'color:var(--i5)'}"
-            title="${escAttr(i.name || '')}">${escapeHtml(i.name || '')}${appMark(i)}${editMark(i)}</span>
+            title="${escapeHtml(i.name || '')}">${escapeHtml(i.name || '')}${appMark(i)}${editMark(i)}</span>
           <span class="bl-qty">${escapeHtml(i.qty || '')}${
             i.unit_price ? `<span class="bl-up">${i.qty ? ' × ' : ''}${money(i.unit_price)}</span>` : ''}</span>
           ${open
-            ? `<input class="fi bl-amt-in" value="${escAttr(i.amount || '')}" placeholder="금액"
+            ? `<input class="fi bl-amt-in" value="${escapeHtml(i.amount || '')}" placeholder="금액"
                  onchange="setItemFieldDirect('${escAttr(i.id)}','amount',this.value)">`
             : `<span class="bl-amt-in" style="text-align:right;font-size:12px;padding:5px 2px">${
                  i.amount ? escapeHtml(money(i.amount)) : '<span style="color:var(--am)">금액 미입력</span>'}</span>`}
@@ -2479,7 +2479,7 @@ function dBilling(x){
           <span class="pill ${isBillable(head) ? 'p-gray' : 'p-amber'}" style="text-align:center">${
             isBillable(head) ? escapeHtml(l) : '제외'}</span>
           <span class="bl-nm" style="${isBillable(head) ? '' : 'color:var(--i5)'}"
-            title="${escAttr(head.name || '')}">${escapeHtml(head.name || '')}
+            title="${escapeHtml(head.name || '')}">${escapeHtml(head.name || '')}
             <span class="pill p-gray" style="font-size:9px">${open ? '▾' : '▸'} ${gr.rows.length}줄</span></span>
           <span class="bl-qty">${qty || ''}${
             head.unit_price ? `<span class="bl-up">${qty ? ' × ' : ''}${money(head.unit_price)}</span>` : ''}</span>
@@ -2525,7 +2525,7 @@ function dBilling(x){
           <div class="bl-row bl-inv-hd">
             <span style="min-width:0;font-size:12px;font-weight:700${v.status === 'void' ? ';text-decoration:line-through' : ''}">${escapeHtml(v.title || '인보이스')}</span>
             ${v.status === 'void' ? '<span class="pill p-gray">무효</span>' : '<span></span>'}
-            <input class="fi bl-amt-in" value="${escAttr(v.amount ?? '')}" placeholder="금액 미입력"
+            <input class="fi bl-amt-in" value="${escapeHtml(v.amount ?? '')}" placeholder="금액 미입력"
               onchange="setInvField('${escAttr(v.id)}','amount',this.value)">
             ${curSelect(v.currency, `setInvField('${escAttr(v.id)}','currency',this.value)`)}
             <button class="btn bs" onclick="toggleVoidInvoice('${escAttr(v.id)}')" title="${v.status === 'void' ? '되살리기' : '취소·대체됨으로 표시(합계에서 제외)'}">${v.status === 'void' ? '되살리기' : '무효'}</button>
@@ -2534,10 +2534,10 @@ function dBilling(x){
           ${v.status === 'void' && v.void_note ? `<div style="font-size:10.5px;color:var(--i5);margin-top:3px">${escapeHtml(v.void_note)}</div>` : ''}
           <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap">
             <label style="font-size:10.5px;color:var(--i4)">발송</label>
-            <input type="date" class="fi" style="flex:1 1 128px;min-width:0;padding:3px 6px;font-size:11px" value="${escAttr(v.sent_at || '')}"
+            <input type="date" class="fi" style="flex:1 1 128px;min-width:0;padding:3px 6px;font-size:11px" value="${escapeHtml(v.sent_at || '')}"
               onchange="setInvField('${escAttr(v.id)}','sent_at',this.value)">
             <label style="font-size:10.5px;color:var(--i4)">입금 예정</label>
-            <input type="date" class="fi" style="flex:1 1 128px;min-width:0;padding:3px 6px;font-size:11px" value="${escAttr(v.due_date || '')}"
+            <input type="date" class="fi" style="flex:1 1 128px;min-width:0;padding:3px 6px;font-size:11px" value="${escapeHtml(v.due_date || '')}"
               onchange="setInvField('${escAttr(v.id)}','due_date',this.value)">
             ${!v.sent_at ? '<span class="pill p-amber">미발송</span>'
               : (v.due_date && daysSince(v.due_date) > 0 && paid < billed) ? `<span class="pill p-red" style="background:var(--rb);color:var(--re)">${daysSince(v.due_date)}일 지남</span>` : ''}
@@ -2601,7 +2601,7 @@ function dBilling(x){
           <div class="bl-row bl-inv-hd">
             <span style="min-width:0;font-size:12px;font-weight:700${v.status === 'void' ? ';text-decoration:line-through' : ''}">${escapeHtml(v.title || '세금계산서')}</span>
             ${v.status === 'void' ? '<span class="pill p-gray">무효</span>' : '<span></span>'}
-            <input class="fi bl-amt-in" value="${escAttr(v.amount ?? '')}" placeholder="금액 미입력"
+            <input class="fi bl-amt-in" value="${escapeHtml(v.amount ?? '')}" placeholder="금액 미입력"
               onchange="setTaxField('${escAttr(v.id)}','amount',this.value)">
             ${curSelect(v.currency, `setTaxField('${escAttr(v.id)}','currency',this.value)`)}
             <button class="btn bs" onclick="toggleVoidTax('${escAttr(v.id)}')" title="${v.status === 'void' ? '되살리기' : '취소·수정 발행됨으로 표시(합계에서 제외)'}">${v.status === 'void' ? '되살리기' : '무효'}</button>
@@ -2623,15 +2623,15 @@ function dBilling(x){
       옛 건을 무효로 두고 새로 추가하세요 — 지우면 왜 두 장인지 이력이 사라져요.</div>
     <div class="fgr bl-tax">
       <div class="fg"><label class="fl">담당자</label>
-        <input class="fi" style="font-size:12px" value="${escAttr(x.tax_contact_name || '')}"
+        <input class="fi" style="font-size:12px" value="${escapeHtml(x.tax_contact_name || '')}"
           onchange="setExhField('${escAttr(x.id)}','tax_contact_name',this.value,'세금계산서 담당자')"></div>
       <div class="fg"><label class="fl">이메일</label>
-        <input class="fi" style="font-size:12px" value="${escAttr(x.tax_contact_email || '')}"
+        <input class="fi" style="font-size:12px" value="${escapeHtml(x.tax_contact_email || '')}"
           onchange="setExhField('${escAttr(x.id)}','tax_contact_email',this.value,'세금계산서 담당자')"></div>
     </div>
     <div class="fgr bl-tax">
       <div class="fg"><label class="fl">연락처</label>
-        <input class="fi" style="font-size:12px" value="${escAttr(x.tax_contact_phone || '')}"
+        <input class="fi" style="font-size:12px" value="${escapeHtml(x.tax_contact_phone || '')}"
           onchange="setExhField('${escAttr(x.id)}','tax_contact_phone',this.value,'세금계산서 담당자')"></div>
     </div>`);
   })()}
@@ -2643,14 +2643,14 @@ function dBilling(x){
           <select class="fi" style="font-size:10px;padding:3px 2px;min-width:0"
             title="결제 수단" onchange="setPayField('${escAttr(p.id)}','method',this.value)">
             <option value=""${p.method ? '' : ' selected'}>미기재</option>
-            ${payMethods().map(o => `<option value="${escAttr(o.code)}"${p.method === o.code ? ' selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}
+            ${payMethods().map(o => `<option value="${escapeHtml(o.code)}"${p.method === o.code ? ' selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}
           </select>
-          <input type="date" class="fi" style="font-size:11px;padding:3px 4px;min-width:0" value="${escAttr(p.paid_at || '')}"
+          <input type="date" class="fi" style="font-size:11px;padding:3px 4px;min-width:0" value="${escapeHtml(p.paid_at || '')}"
             onchange="setPayField('${escAttr(p.id)}','paid_at',this.value)">
-          <input class="fi" style="font-size:11px;padding:3px 6px;min-width:0" value="${escAttr(p.note || '')}"
+          <input class="fi" style="font-size:11px;padding:3px 6px;min-width:0" value="${escapeHtml(p.note || '')}"
             placeholder="${ins.length > 1 ? `${i + 1}차 · ` : ''}비고 (대납·승인번호 등)"
             onchange="setPayField('${escAttr(p.id)}','note',this.value)">
-          <input class="fi bl-amt-in" value="${escAttr(p.amount || '')}" placeholder="금액"
+          <input class="fi bl-amt-in" value="${escapeHtml(p.amount || '')}" placeholder="금액"
             onchange="setPayField('${escAttr(p.id)}','amount',this.value)">
           ${curSelect(p.currency, `setPayField('${escAttr(p.id)}','currency',this.value)`)}
           <button class="btn bs" onclick="delExhPayment('${escAttr(p.id)}')">✕</button>
@@ -2658,7 +2658,7 @@ function dBilling(x){
     </div>
     <div class="bl-row bl-pay-add">
       <select class="fi" id="py-m-${escAttr(x.id)}" style="flex:0 0 116px;font-size:11px;padding:6px" title="결제 수단">
-        ${payMethods().map(o => `<option value="${escAttr(o.code)}">${escapeHtml(o.label)}</option>`).join('')}
+        ${payMethods().map(o => `<option value="${escapeHtml(o.code)}">${escapeHtml(o.label)}</option>`).join('')}
       </select>
       <input type="date" class="fi" id="py-d-${escAttr(x.id)}" style="flex:1 1 120px;min-width:0;font-size:11.5px;padding:6px" value="${td()}">
       <input class="fi" id="py-n-${escAttr(x.id)}" placeholder="비고(승인번호 등)" style="flex:1 1 90px;min-width:0;font-size:11.5px;padding:6px">
@@ -2687,13 +2687,13 @@ function dBilling(x){
               color:#fff;display:flex;align-items:center;justify-content:center">${pend ? '' : '✓'}</span>
             ${pend ? '요청' : '완료'}
           </button>
-          <input type="date" class="fi" style="padding:3px 6px;font-size:11px" value="${escAttr(pend ? (p.requested_at || '') : (p.paid_at || ''))}"
+          <input type="date" class="fi" style="padding:3px 6px;font-size:11px" value="${escapeHtml(pend ? (p.requested_at || '') : (p.paid_at || ''))}"
             title="${pend ? '요청일' : '환불일'}"
             onchange="setPayField('${escAttr(p.id)}','${pend ? 'requested_at' : 'paid_at'}',this.value)">
           <input class="fi" style="min-width:0;font-size:11px;padding:3px 6px" placeholder="사유"
-            value="${escAttr(p.reason || p.note || '')}"
+            value="${escapeHtml(p.reason || p.note || '')}"
             onchange="setPayField('${escAttr(p.id)}','reason',this.value)">
-          <input class="fi bl-amt-in" value="${escAttr(p.amount || '')}" placeholder="금액" style="color:var(--re)"
+          <input class="fi bl-amt-in" value="${escapeHtml(p.amount || '')}" placeholder="금액" style="color:var(--re)"
             onchange="setPayField('${escAttr(p.id)}','amount',this.value)">
           ${curSelect(p.currency, `setPayField('${escAttr(p.id)}','currency',this.value)`)}
           <button class="btn bs" onclick="delExhPayment('${escAttr(p.id)}')">✕</button>
@@ -2853,7 +2853,7 @@ function graphicItemRow(i, opts = {}){
           isDesignItem(i) && i.note ? `<div style="font-size:10.5px;color:var(--i4);margin-top:2px">디자인 대상 — <b>${escapeHtml(i.note)}</b></div>` : ''}
       </span>
       <input type="date" class="fi" style="${TCELL};width:136px;flex:0 0 auto"
-        value="${escAttr(i.received_at || '')}"
+        value="${escapeHtml(i.received_at || '')}"
         onchange="setItemField('${escAttr(i.id)}','received_at',this.value)">
     </div>
     ${opts.done ? boothExcRow(i, { pad: 'margin-top:6px;padding-left:29px' }) : ''}
@@ -2864,7 +2864,7 @@ function graphicItemRow(i, opts = {}){
     <div style="display:flex;gap:9px;align-items:center;margin-top:5px;padding-left:29px">
       <span style="font-size:10.5px;color:var(--i5);flex:0 0 52px">마감</span>
       <input type="date" class="fi" style="${TCELL};width:136px;flex:0 0 auto"
-        value="${escAttr(i.due_at || '')}"
+        value="${escapeHtml(i.due_at || '')}"
         onchange="setItemField('${escAttr(i.id)}','due_at',this.value)">
       ${(() => { const d = graphicDueInfo(i);
         return on ? '' : `<span class="pill ${d.cls}" style="${TPILL}">${escapeHtml(d.text)}</span>`; })()}
@@ -2872,7 +2872,7 @@ function graphicItemRow(i, opts = {}){
     ${opts.done ? '' : `<div style="display:flex;gap:9px;align-items:center;margin-top:5px;padding-left:29px">
       <span style="font-size:10.5px;color:var(--i5);flex:0 0 52px">받은 것</span>
       <input class="fi" style="${TCELL};flex:1;min-width:0"
-        value="${escAttr(i.received_note || '')}" placeholder="예: 백월_최종.ai · CMYK · 재단선 포함"
+        value="${escapeHtml(i.received_note || '')}" placeholder="예: 백월_최종.ai · CMYK · 재단선 포함"
         onchange="setItemField('${escAttr(i.id)}','received_note',this.value)">
     </div>`}
   </div>`;
@@ -3000,7 +3000,7 @@ function boothExcRow(i, opts = {}){
   return `<div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;${opts.pad || ''}">
     ${exc ? `<span class="pill ${off ? 'p-red' : 'p-amber'}" style="${TPILL};min-width:48px" title="설정과 다르게 이 기업만 따로 둔 줄이에요 — 부스 타입을 다시 골라도 그대로 둡니다">${off ? '뺌' : '예외'}</span>` : ''}
     <span style="font-size:10.5px;color:var(--i5);flex:0 0 52px">수량</span>
-    <input class="fi" style="${TCELL};width:56px;flex:0 0 auto" value="${escAttr(i.qty ?? '')}"
+    <input class="fi" style="${TCELL};width:56px;flex:0 0 auto" value="${escapeHtml(i.qty ?? '')}"
       inputmode="numeric" ${off ? 'disabled' : ''}
       title="설정과 다르게 적으면 이 줄은 예외가 됩니다"
       onchange="setBoothItemQty('${escAttr(i.id)}',this.value)">
@@ -3009,7 +3009,7 @@ function boothExcRow(i, opts = {}){
       : `<button class="btn bs" onclick="excludeBoothItem('${escAttr(i.id)}')" title="이 기업에는 안 나갑니다 — 발주 수량에서 빠지고, 뺐다는 사실은 남습니다">이 기업은 뺌</button>`}
     ${exc && !off ? `<button class="btn bs" onclick="restoreBoothItem('${escAttr(i.id)}')" title="설정에 적힌 수량으로 되돌립니다">설정대로</button>` : ''}
     ${exc ? `<input class="fi" style="${TCELL};flex:1;min-width:120px"
-        placeholder="예외 사유 — 예: 자체 데스크를 가져옴" value="${escAttr(i.note || '')}"
+        placeholder="예외 사유 — 예: 자체 데스크를 가져옴" value="${escapeHtml(i.note || '')}"
         onchange="setItemField('${escAttr(i.id)}','note',this.value)">` : ''}
   </div>`;
 }
@@ -3181,11 +3181,11 @@ function dLogs(x){
       <select class="fi" id="lg-kind-${escAttr(x.id)}" style="width:84px;font-size:11.5px;padding:6px">
         <option value="inquiry">문의</option><option value="note">기록</option></select>
       <select class="fi" id="lg-ch-${escAttr(x.id)}" style="width:82px;font-size:11.5px;padding:6px">
-        ${channels().map(c => `<option value="${escAttr(c.code)}">${escapeHtml(c.label)}</option>`).join('')}</select>
+        ${channels().map(c => `<option value="${escapeHtml(c.code)}">${escapeHtml(c.label)}</option>`).join('')}</select>
       <select class="fi" id="lg-cat-${escAttr(x.id)}" style="width:82px;font-size:11.5px;padding:6px">
-        ${logCats().map(c => `<option value="${escAttr(c.code)}">${escapeHtml(c.label)}</option>`).join('')}</select>
+        ${logCats().map(c => `<option value="${escapeHtml(c.code)}">${escapeHtml(c.label)}</option>`).join('')}</select>
       <input class="fi" id="lg-who-${escAttr(x.id)}" placeholder="문의한 사람" list="lg-people-${escAttr(x.id)}" style="flex:1;min-width:100px;font-size:11.5px;padding:6px">
-      <datalist id="lg-people-${escAttr(x.id)}">${people.map(p => `<option value="${escAttr(p)}">`).join('')}</datalist>
+      <datalist id="lg-people-${escAttr(x.id)}">${people.map(p => `<option value="${escapeHtml(p)}">`).join('')}</datalist>
     </div>
     <input class="fi" id="lg-sub-${escAttr(x.id)}" placeholder="제목 / 한 줄 요약" style="font-size:12px;margin-bottom:5px">
     <textarea class="fi" id="lg-body-${escAttr(x.id)}" rows="3" placeholder="받은 메일 내용을 그대로 붙여넣어도 돼요" style="font-size:12px"></textarea>
@@ -3226,7 +3226,7 @@ function exhAdviceHtml(x){
   };
   return `<div style="margin-bottom:10px;padding:7px 10px;border:1px solid var(--i6);border-radius:8px;background:var(--W)">
     <div style="display:flex;gap:6px">
-      <input class="fi" id="exh-advice-q" style="flex:1;font-size:11.5px" value="${escAttr(a ? a.q : '')}"
+      <input class="fi" id="exh-advice-q" style="flex:1;font-size:11.5px" value="${escapeHtml(a ? a.q : '')}"
         placeholder="✨ 상황 물어보기 — 예: 인보이스 금액이 틀려서 다시 보내야 해"
         onkeydown="if(event.key==='Enter')askExhAdvice()" title="질문과 이 참가사의 진행 상태만 AI에게 보냅니다. 회사명·금액·메일 내용은 보내지 않아요">
       <button class="btn" style="font-size:10.5px" onclick="askExhAdvice()" ${a && a.loading ? 'disabled' : ''}>${a && a.loading ? '생각 중…' : '물어보기'}</button>
@@ -4075,7 +4075,7 @@ function dMail(x){
     <div class="mlbl">받는 사람</div>
     <div style="display:flex;flex-direction:column;gap:4px;margin:4px 0 10px">
       ${ppl.length ? ppl.map((p, i) => `<label style="display:flex;gap:6px;align-items:center;font-size:12px;cursor:pointer">
-        <input type="checkbox" class="exm-to" value="${escAttr(p.email)}"${(exhReply ? p.reply : (p.primary || i === 0)) ? ' checked' : ''}>
+        <input type="checkbox" class="exm-to" value="${escapeHtml(p.email)}"${(exhReply ? p.reply : (p.primary || i === 0)) ? ' checked' : ''}>
         <b>${escapeHtml(p.name || '')}</b> <span style="color:var(--i4)">${escapeHtml(p.email)}</span>
         ${p.primary ? '<span class="pill p-blue" style="font-size:9.5px">메인</span>' : ''}</label>`).join('')
       : `<div style="font-size:11.5px;color:var(--re)">메일 주소가 있는 담당자가 없어요 —
@@ -4103,7 +4103,7 @@ function dMail(x){
     ${aiDraftHtml('ex', { reply: !!exhReply })}
     <div data-vscope>
     <div class="mlbl">제목</div>
-    <input class="fi" id="exm-sub-${id}" value="${escAttr(evName ? `[${evName}] ` : '')}" style="font-size:12px;margin-bottom:8px">
+    <input class="fi" id="exm-sub-${id}" value="${escapeHtml(evName ? `[${evName}] ` : '')}" style="font-size:12px;margin-bottom:8px">
     <div class="mlbl">내용</div>
     <textarea class="fi" id="exm-body-${id}" rows="9" style="font-size:12px;resize:vertical">${escapeHtml(
       `${exhNames(x).ko || ''} 담당자님, 안녕하세요.\n\n\n\n감사합니다.`)}</textarea>
@@ -4167,7 +4167,7 @@ export async function fillExhMail(exhId, first){
       <span style="color:var(--i4)">양식</span>
       <select class="fi" id="exm-varsel-${escAttr(exhId)}" style="font-size:11.5px;flex:1" onchange="fillExhMail('${escAttr(exhId)}')">
         <option value="">기본 문구</option>
-        ${vs.map(v => `<option value="${escAttr(v.id)}"${vId === v.id ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}
+        ${vs.map(v => `<option value="${escapeHtml(v.id)}"${vId === v.id ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}
       </select></div>` : '';
   const src = lib || vs.find(v => v.id === vId) || st;
   if(sEl && bEl && st && !(first && bEl.dataset.touched)){
@@ -4219,7 +4219,14 @@ function renderExhMailFiles(){
 export function addExhMailFiles(inp){ exhMailFiles.push(...inp.files); inp.value = ''; renderExhMailFiles(); }
 export function dropExhMailFile(i){ exhMailFiles.splice(i, 1); renderExhMailFiles(); }
 
+/* 보내는 중 — 확인 창·SMTP를 기다리는 동안 «보내기»를 또 누르면 같은 메일이 두 번 나갔다 */
+let exhMailBusy = false;
 export async function sendExhMail(exhId){
+  if(exhMailBusy) return;
+  exhMailBusy = true;
+  try { await sendExhMailNow(exhId); } finally { exhMailBusy = false; }
+}
+async function sendExhMailNow(exhId){
   const x = getExhibitorById(exhId);
   if(!x) return;
   // 보내면 기록(exhibitor_logs)이 남는 쓰기다 — 다른 저장처럼 잠긴 행사면 묻기 전에 막는다

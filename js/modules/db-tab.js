@@ -131,7 +131,7 @@ const ctryPill = (c) => {
   const r = ctryCheck(c);
   if(!r) return '';
   return ` <span class="pill p-amber" style="font-size:9px;cursor:help"
-    title="${escAttr(countryCheckText(r))}">국가 확인</span>`;
+    title="${escapeHtml(countryCheckText(r))}">국가 확인</span>`;
 };
 
 /* 바뀐 칸만 골라낸다 — 연락처는 칸이 스물세 개라, 통째로 담으면 이름만 고쳐도
@@ -694,7 +694,7 @@ export function openMDBToCrmModal(){
       <div class="fgr">
         <div class="fg"><label class="fl">초청할 행사 *</label>
           <select class="fi" id="tocrm-ev" onchange="renderMDBToCrmList()">
-            ${EVENT_LIST.map(e => `<option value="${escAttr(e.key)}">${escapeHtml(e.short || e.key)}${
+            ${EVENT_LIST.map(e => `<option value="${escapeHtml(e.key)}">${escapeHtml(e.short || e.key)}${
               e.date ? ` (${escapeHtml(e.date)})` : ''}</option>`).join('')}
           </select></div>
         <div class="fg"><label class="fl">참여 유형</label>
@@ -872,7 +872,7 @@ export function openMDBBulkEditModal(){
         </label>
         <input class="fi" id="mdb-bulk-org" list="mdb-bulk-org-list" placeholder="예: 삼성전자" oninput="updateMDBBulkOrgHint()">
         <datalist id="mdb-bulk-org-list">
-          ${CO_DB.map(c => `<option value="${escAttr(c.nameKo||c.nameEn)}" label="${c.contacts.length}명 배정됨">`).join('')}
+          ${CO_DB.map(c => `<option value="${escapeHtml(c.nameKo||c.nameEn)}" label="${c.contacts.length}명 배정됨">`).join('')}
         </datalist>
         <div id="mdb-bulk-org-hint" style="font-size:11px;color:var(--i4);margin-top:4px;min-height:14px"></div>
         ${commonOrg ? `<button type="button" class="btn bs" style="margin-top:2px;font-size:11px" onclick="suggestMDBSplitName()">🔀 "${escapeHtml(commonOrg)}"에서 분리할 새 이름 제안</button>` : ''}
@@ -1275,7 +1275,7 @@ function renderMdbAiBar(msg){
     p.title_keywords?.length ? '직함: ' + escapeHtml(p.title_keywords.join('/')) : '',
     p.include_left ? '퇴사자 포함' : '',
   ].filter(Boolean);
-  el.innerHTML = `<span class="pill p-blue" style="cursor:default" title="${escAttr(mdbAi.q)}">✨ ${escapeHtml(p.explain || mdbAi.q)}</span>
+  el.innerHTML = `<span class="pill p-blue" style="cursor:default" title="${escapeHtml(mdbAi.q)}">✨ ${escapeHtml(p.explain || mdbAi.q)}</span>
     <span style="color:var(--i4)">${bits.join(' · ')}</span>
     ${p.unsupported ? `<span style="color:var(--am)">⚠️ 반영 못 한 조건: ${escapeHtml(p.unsupported)}</span>` : ''}
     <button class="btn bs" style="font-size:10.5px" onclick="clearMdbAi()">✕ 질문 지우기</button>`;
@@ -1488,7 +1488,7 @@ function mdbCard(c, p, { showOrg = true } = {}){
   const org = c.orgKo || c.orgEn || '';
   const title = [c.titleKo || c.titleEn, c.deptKo || c.deptEn].filter(Boolean).join(' · ');
 
-  return `<div class="mdbc${isSel ? ' sel' : ''}" data-cid="${escAttr(String(c.id))}" onclick="openContactDr(${c.id})"
+  return `<div class="mdbc${isSel ? ' sel' : ''}" data-cid="${escapeHtml(String(c.id))}" onclick="openContactDr(${c.id})"
     draggable="true" ondragstart="onMDBDragStart(event,${c.id})" ondragend="onMDBDragEnd()">
     <div class="mdbc-top">
       <div class="tdav${isSel ? ' sel' : ''}" style="${isSel ? '' : `background:${avB(gi)};color:${avF(gi)}`}"
@@ -1501,7 +1501,7 @@ function mdbCard(c, p, { showOrg = true } = {}){
           isCLevelContact(c) ? ' <span class="pill p-gold mdbc-tag">C-level</span>' : ''}${leftPill(c)}</div>
         ${title ? `<div class="mdbc-ttl">${escapeHtml(title)}</div>` : ''}
       </div>
-      <span class="std ${ST_MARK[c.status] || 'stn'}" title="${escAttr(ST_LABEL[c.status] || c.status || '')}"></span>
+      <span class="std ${ST_MARK[c.status] || 'stn'}" title="${escapeHtml(ST_LABEL[c.status] || c.status || '')}"></span>
     </div>
     <div class="mdbc-pills">
       <span class="pill ${CP[roleKey] || 'p-gray'}">${escapeHtml(CL[roleKey] || roleKey || '미분류')}</span>
@@ -2275,7 +2275,7 @@ export function contactEditForm(c){
       </div>
       <div class="fg"><label class="fl">카테고리</label>
         <select class="fi" id="ce-cat">
-          ${c.cat && !CAT_KEYS.includes(c.cat) ? `<option value="${escAttr(c.cat)}" selected>${escapeHtml(CL[c.cat] || c.cat)} (목록에서 내림)</option>` : ''}
+          ${c.cat && !CAT_KEYS.includes(c.cat) ? `<option value="${escapeHtml(c.cat)}" selected>${escapeHtml(CL[c.cat] || c.cat)} (목록에서 내림)</option>` : ''}
           ${CAT_KEYS.map(k=>`<option value="${k}"${c.cat===k?' selected':''}>${CL[k]}</option>`).join('')}
         </select>
       </div>
@@ -2622,7 +2622,7 @@ export function openLeaveModal(cid){
 
         <div style="margin-bottom:14px">
           <div class="mlbl">퇴사 확인일</div>
-          <input class="fi" id="lv-date" type="date" value="${escAttr(td())}" style="width:100%">
+          <input class="fi" id="lv-date" type="date" value="${escapeHtml(td())}" style="width:100%">
         </div>
 
         <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-bottom:10px;font-size:12.5px;color:var(--i2)">
@@ -2643,7 +2643,7 @@ export function openLeaveModal(cid){
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
             <div><div class="mlbl">새 직함</div>
-              <input class="fi" id="lv-title" value="${escAttr(c.titleKo||'')}" style="width:100%"></div>
+              <input class="fi" id="lv-title" value="${escapeHtml(c.titleKo||'')}" style="width:100%"></div>
             <div><div class="mlbl">새 이메일</div>
               <input class="fi" id="lv-email" style="width:100%"></div>
           </div>
@@ -2932,7 +2932,7 @@ export function contactSectorField(c){
         <label class="fl">섹터</label>
         <select class="fi" id="ce-sector">
           <option value="">미분류</option>
-          ${mains.map(s => `<option value="${escAttr(s.name)}"${
+          ${mains.map(s => `<option value="${escapeHtml(s.name)}"${
             (co.sectors || []).includes(s.name) ? ' selected' : ''}>${escapeHtml(s.name)}${
             domainOfSector(s).length ? ` — ${escapeHtml(domainOfSector(s).map(domainName).join('·'))}` : ' — 분야 없음'}</option>`).join('')}
         </select>
@@ -3111,7 +3111,7 @@ function openDomainSectorPicker(cos, secs, domainId, note){
       <div style="font-size:10.5px;color:var(--i4);margin-bottom:8px">업종을 알면 아래에서 고르세요</div>
       <div id="mdb-sector-picker-list">
         ${secs.map(s => `<button class="btn" style="width:100%;justify-content:flex-start;margin-bottom:5px;font-size:12px"
-          data-sector="${escAttr(s.name)}">${escapeHtml(s.name)}</button>`).join('')}
+          data-sector="${escapeHtml(s.name)}">${escapeHtml(s.name)}</button>`).join('')}
       </div>
       <button class="btn bs" style="width:100%;justify-content:center;margin-top:8px"
         onclick="document.getElementById('mdb-sector-picker').remove()">취소</button>

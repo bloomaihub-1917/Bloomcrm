@@ -1082,7 +1082,7 @@ export function buildExhEvList(){
      «안 함»과 이름이 비슷해 둘을 헷갈렸다. */
   const hiddenNote = off.length
     ? `<div style="font-size:10px;color:var(--i5);margin:10px 0 0;padding-left:2px"
-         title="${escAttr(off.map(e => e.short || e.name || e.key).join(', '))}">전시 안 하는 행사 ${off.length}개는 숨겼어요 — 설정 › 행사 관리에서 켜요</div>`
+         title="${escapeHtml(off.map(e => e.short || e.name || e.key).join(', '))}">전시 안 하는 행사 ${off.length}개는 숨겼어요 — 설정 › 행사 관리에서 켜요</div>`
     : '';
   el.innerHTML = ((
       group([...doing, ...empty], '', true)
@@ -1109,7 +1109,7 @@ function exhFilterChipsHtml(){
     invoicesFor(x.id).some(i => i.status !== 'void' && String(i.amount ?? '').trim() === '')).length;
   const f = (k, label, n, tip = '') => (n || k === 'all' || exhFilter === k)
     ? `<button class="btn bs${exhFilter === k ? ' bp' : ''}" style="font-size:11px;padding:3px 10px;gap:5px"
-        title="${escAttr(tip)}" onclick="setExhFilter('${k}')">${label}<span style="${exhFilter === k ? '' : 'color:var(--i4);'}font-weight:700">${n}</span></button>`
+        title="${escapeHtml(tip)}" onclick="setExhFilter('${k}')">${label}<span style="${exhFilter === k ? '' : 'color:var(--i4);'}font-weight:700">${n}</span></button>`
     : '';
   return `<div style="display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px 0">
     ${f('all', '전체', list.length, '참가 취소 기업은 빼고 셉니다')}${
@@ -1478,7 +1478,7 @@ export function hostOptions(x){
   const hasKids = exhibitorsForEvent(x.event_id).some(o => o.id !== x.id && o.host_key === x.company_key);
   if(hasKids && !cur) return `<option value="" selected>모기업</option>`;
   return `<option value=""${cur ? '' : ' selected'}>— 없음 —</option>`
-    + hostCandidates(x).map(o => `<option value="${escAttr(o.company_key)}"${cur === o.company_key ? ' selected' : ''}>${
+    + hostCandidates(x).map(o => `<option value="${escapeHtml(o.company_key)}"${cur === o.company_key ? ' selected' : ''}>${
         escapeHtml(exhNames(o).ko)}${o.booth_no ? ` (부스 ${escapeHtml(o.booth_no)})` : ''}</option>`).join('');
 }
 /* 모기업 바로 밑에 예하 기업을 붙여 세운다. 모기업이 목록에 없으면(걸러졌으면)
@@ -1738,7 +1738,7 @@ const applyCell = (x) => {
     .filter(o => o.id !== x.id && String(o.apply_order || '') === String(x.apply_order))
     .map(o => exhNames(o).ko);
   return `<td style="min-width:44px;text-align:right;font-size:11.5px;color:var(--i4)"${
-    same.length ? ` title="${escAttr(same.join(', '))}${wa(same[same.length - 1])} 같은 신청 건이에요 — 부스를 나눠 써서 번호를 함께 씁니다"` : ''
+    same.length ? ` title="${escapeHtml(same.join(', '))}${wa(same[same.length - 1])} 같은 신청 건이에요 — 부스를 나눠 써서 번호를 함께 씁니다"` : ''
   }>${escapeHtml(x.apply_order)}${same.length ? '<span style="color:var(--a);font-size:9px">*</span>' : ''}</td>`;
 };
 
@@ -1772,7 +1772,7 @@ export function boothTypeOptions(current, evKey){
   if(cur && cur !== NO_BOOTH_TYPE && !list.some(([c]) => c === cur)) list.push([cur, cur + ' (목록에 없음)']);
   return `<option value=""${cur ? '' : ' selected'}>— 미지정 —</option>`
     + `<option value="${NO_BOOTH_TYPE}"${cur === NO_BOOTH_TYPE ? ' selected' : ''}>${NO_BOOTH_LABEL}</option>`
-    + list.map(([c, l]) => `<option value="${escAttr(c)}"${cur === c ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('');
+    + list.map(([c, l]) => `<option value="${escapeHtml(c)}"${cur === c ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('');
 }
 /* ── 부스 번호 읽기 ──
    번호에 하이픈이 두 가지 뜻으로 쓰인다.
@@ -1874,7 +1874,7 @@ function renderBoothView(list){
     + (noBoothN ? `<span class="pill p-gray" title="부스 없이 참가하는 기업이에요 — 부스 수와 미배정·미확정에서 빠집니다">${NO_BOOTH_LABEL} ${noBoothN}</span>` : '')
     + (sharedN ? `<span class="pill p-blue" title="한 부스를 나눠 쓰는 기업이에요 — 부스 수에서 빠집니다">공동 부스 ${sharedN}</span>` : '')
     + (unconfirmed ? `<span class="pill p-amber">배정 미확정 ${unconfirmed}</span>` : '')
-    + (qtyOdd.length ? `<span class="pill p-red" title="${escAttr(qtyOdd.map(x => `${x.company_name} ${x.booth_no}(${parseBooth(x.booth_no).count}칸) ↔ 수량 ${x.booth_qty}`).join(', '))}">수량 불일치 ${qtyOdd.length}</span>` : '')
+    + (qtyOdd.length ? `<span class="pill p-red" title="${escapeHtml(qtyOdd.map(x => `${x.company_name} ${x.booth_no}(${parseBooth(x.booth_no).count}칸) ↔ 수량 ${x.booth_qty}`).join(', '))}">수량 불일치 ${qtyOdd.length}</span>` : '')
     + `<span class="pill p-blue">독립부스 ${selfN}</span>`
     + (() => {
       const self = all0.filter(x => x.booth_type === SELF_BUILD_TYPE);
@@ -1903,7 +1903,7 @@ function renderBoothView(list){
     return `<div class="subbar" style="padding:10px 16px 0"><div class="seg" style="flex-wrap:wrap">
       <button class="seg-b${boothTypeFil ? '' : ' on'}" onclick="setBoothTypeFil('')">전체 ${all0.length}</button>
       ${tabs.map(([t, n]) => `<button class="seg-b${boothTypeFil === t ? ' on' : ''}"
-        onclick="setBoothTypeFil('${escAttr(t)}')" title="${escAttr(t)}">${escapeHtml(label(t))} ${n}</button>`).join('')}
+        onclick="setBoothTypeFil('${escAttr(t)}')" title="${escapeHtml(t)}">${escapeHtml(label(t))} ${n}</button>`).join('')}
     </div></div>`;
   })();
 
@@ -1964,7 +1964,7 @@ function renderBoothView(list){
           const h = hostOf(x, all0);
           if(!h) return coCell(x, 'progress');
           return coCell(x, 'progress').replace('<td style="min-width:150px">',
-            `<td style="min-width:150px;padding-left:22px;position:relative" title="${escAttr(exhNames(h).ko)} 예하">
+            `<td style="min-width:150px;padding-left:22px;position:relative" title="${escapeHtml(exhNames(h).ko)} 예하">
               <span style="position:absolute;left:8px;color:var(--i5);font-size:11px">↳</span>`);
         })()}
         <td style="font-size:11.5px;color:var(--i3)">${x.booth_floor ? escapeHtml(x.booth_floor) + '층' : '<span style="color:var(--i6)">—</span>'}</td>
@@ -2561,7 +2561,7 @@ function renderEquipView(list){
     + (totUsd ? `<span class="pill p-gray">${fmtMoney(totUsd, 'USD')}</span>` : '')
     + (offN ? `<span class="pill p-amber" title="카탈로그에 없는 품목 — 그래픽·전기처럼 다른 분류일 수 있어요">카탈로그 외 ${offN}종</span>` : '')
     + catBlocks.map(b => `<span class="pill p-gray" style="font-size:9.5px"
-        title="${escAttr(b.gs.map(g => `${g.nameKo} ${g.qty}개`).join(', '))}">${escapeHtml(b.cat)} ${b.qty}개</span>`).join('');
+        title="${escapeHtml(b.gs.map(g => `${g.nameKo} ${g.qty}개`).join(', '))}">${escapeHtml(b.cat)} ${b.qty}개</span>`).join('');
 
   /* 어느 기업이 신청했는지 — 품목을 클릭하면 펼친다.
      발주하다 "이 의자 25개가 어디로 가는 거지"를 확인해야 할 때, 표 밖으로
@@ -2713,7 +2713,7 @@ function renderEquipView(list){
         <span style="font-size:11px;color:var(--i4)">${items.length}종</span>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:5px">
-        ${items.map(i => `<span class="pill p-gray" title="${escAttr(fmtMoney(i.amount, i.currency || 'KRW'))}">${escapeHtml(i.name || '')}${i.qty ? ' ×' + escapeHtml(i.qty) : ''}</span>`).join('')}
+        ${items.map(i => `<span class="pill p-gray" title="${escapeHtml(fmtMoney(i.amount, i.currency || 'KRW'))}">${escapeHtml(i.name || '')}${i.qty ? ' ×' + escapeHtml(i.qty) : ''}</span>`).join('')}
       </div>
       ${x.extra_equipment ? `<div style="font-size:11px;color:var(--i4);margin-top:5px">메모: ${escapeHtml(x.extra_equipment)}</div>` : ''}
     </div>`).join('');
@@ -2813,8 +2813,8 @@ function renderSelfBoothView(rows){
     + `<span class="pill ${nB === list.length ? 'p-green' : 'p-amber'}">시공사 ${nB}/${list.length}</span>`
     + `<span class="pill ${nG === list.length ? 'p-green' : 'p-amber'}">도면 수령 ${nG}/${list.length}</span>`
     + `<span class="pill ${nS === list.length ? 'p-green' : 'p-amber'}">확인 ${nS}/${list.length}</span>`
-    + `<span class="pill ${nW === list.length ? 'p-green' : 'p-amber'}" title="${escAttr(list.filter(x => !x.work_report_at).map(x => exhNames(x).ko).join(', ') || '모두 제출')}">작업신고서 ${nW}/${list.length}</span>`
-    + (nFix ? `<span class="pill p-red" title="${escAttr(list.filter(x => x.booth_design_result === 'fix').map(x => exhNames(x).ko).join(', '))}">수정 요청 ${nFix}</span>` : '')
+    + `<span class="pill ${nW === list.length ? 'p-green' : 'p-amber'}" title="${escapeHtml(list.filter(x => !x.work_report_at).map(x => exhNames(x).ko).join(', ') || '모두 제출')}">작업신고서 ${nW}/${list.length}</span>`
+    + (nFix ? `<span class="pill p-red" title="${escapeHtml(list.filter(x => x.booth_design_result === 'fix').map(x => exhNames(x).ko).join(', '))}">수정 요청 ${nFix}</span>` : '')
     + (nOk ? `<span class="pill p-green">적합 ${nOk}</span>` : '')
     + (due
       ? `<span class="pill ${due.days < 0 ? 'p-red' : due.days <= 7 ? 'p-amber' : 'p-gray'}">수령 마감 ${escapeHtml(due.date)}${
@@ -2833,7 +2833,7 @@ function renderSelfBoothView(rows){
   </div>`;
 
   const txt = (x, f, ph, label, w) => `<input class="fi" style="width:${w};padding:3px 6px;font-size:11.5px"
-    placeholder="${escAttr(ph)}" value="${escAttr(x[f] || '')}" onclick="event.stopPropagation()"
+    placeholder="${escapeHtml(ph)}" value="${escapeHtml(x[f] || '')}" onclick="event.stopPropagation()"
     onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')">`;
   /* 작업신고서는 냈는지만 본다 — 체크하면 오늘 날짜가 들어가고(언제 체크했는지는
      남는다), 풀면 비운다 */
@@ -2842,7 +2842,7 @@ function renderSelfBoothView(rows){
     onchange="setExhField('${escAttr(x.id)}','work_report_at',this.checked ? '${td()}' : '','작업신고서 제출')">
     ${x.work_report_at ? '<span style="color:var(--g)">받음</span>' : '<span style="color:var(--i5)">미제출</span>'}</label>`;
   const dt = (x, f, label) => `<input type="date" class="fi" style="width:124px;padding:3px 6px;font-size:11.5px"
-    value="${escAttr(x[f] || '')}" onclick="event.stopPropagation()"
+    value="${escapeHtml(x[f] || '')}" onclick="event.stopPropagation()"
     onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')">`;
 
   /* 확인 결과는 받아 보기 전에는 고를 수 없게 둔다 — 안 본 도면에 «적합»이
@@ -2905,7 +2905,7 @@ function renderSelfBoothView(rows){
         ${coCell(x, 'progress')}
         <td>${txt(x, 'builder', '업체명', '시공업체', '142px')}</td>
         <td style="text-align:center">${c.length
-          ? `<span class="pill p-green" title="${escAttr(c.join(' · '))}">있음</span>`
+          ? `<span class="pill p-green" title="${escapeHtml(c.join(' · '))}">있음</span>`
           : '<span class="pill p-gray" title="기업 상세 › 현장에서 담당자·연락처를 넣을 수 있어요">없음</span>'}</td>
         <td>${dt(x, 'booth_design_received_at', '도면 수령')}</td>
         <td>${dt(x, 'booth_design_checked_at', '도면 확인')}</td>
@@ -3040,11 +3040,11 @@ function renderGraphicItemView(list){
       </div>
       <div style="display:flex;gap:6px;align-items:center;margin-top:7px">
         <span style="font-size:10.5px;color:var(--i5)">마감</span>
-        <input type="date" class="fi" style="${TCELL};width:130px" value="${escAttr(r.i.due_at || '')}"
+        <input type="date" class="fi" style="${TCELL};width:130px" value="${escapeHtml(r.i.due_at || '')}"
           onchange="setItemField('${escAttr(r.ids.join(','))}','due_at',this.value)">
       </div>
       <input class="fi" style="width:100%;margin-top:5px;padding:4px 8px;font-size:11.5px"
-        value="${escAttr(r.i.received_note || '')}" placeholder="받은 것 — 예: 백월_최종.ai"
+        value="${escapeHtml(r.i.received_note || '')}" placeholder="받은 것 — 예: 백월_최종.ai"
         onchange="setItemField('${escAttr(r.ids.join(','))}','received_note',this.value)">
     </div>`).join('') || emptyView('해당하는 항목이 없어요'), actions);
 
@@ -3068,12 +3068,12 @@ function renderGraphicItemView(list){
         r.n > 1 ? `<span class="pill p-gray" style="font-size:9px;margin-left:4px"
           title="접수 회차가 갈려 ${r.n}줄로 들어왔어요 — 받는 입장에서는 한 장의 파일이라 묶었습니다">${r.n}줄</span>` : ''}</td>
       <td style="text-align:right;font-size:11.5px">${r.qty || ''}</td>
-      <td><input type="date" class="fi" style="${TCELL}" value="${escAttr(r.i.due_at || '')}"
+      <td><input type="date" class="fi" style="${TCELL}" value="${escapeHtml(r.i.due_at || '')}"
         onchange="setItemField('${escAttr(r.ids.join(','))}','due_at',this.value)"></td>
       <td style="text-align:center"><span class="pill ${r.d.cls}" style="${TPILL}">${escapeHtml(r.d.text)}</span></td>
-      <td><input type="date" class="fi" style="${TCELL}" value="${escAttr(r.i.received_at || '')}"
+      <td><input type="date" class="fi" style="${TCELL}" value="${escapeHtml(r.i.received_at || '')}"
         onchange="setItemField('${escAttr(r.ids.join(','))}','received_at',this.value)"></td>
-      <td><input class="fi" style="${TCELL}" value="${escAttr(r.i.received_note || '')}"
+      <td><input class="fi" style="${TCELL}" value="${escapeHtml(r.i.received_note || '')}"
         placeholder="예: 백월_최종.ai · CMYK" onchange="setItemField('${escAttr(r.ids.join(','))}','received_note',this.value)"></td>
       <td style="text-align:right;font-size:11.5px">${r.amt ? escapeHtml(fmtMoney(r.amt, r.i.currency || 'KRW')) : '-'}</td>
     </tr>`).join('') || '<tr><td colspan="10" style="text-align:center;color:var(--i4);padding:24px">해당하는 항목이 없어요</td></tr>'}
@@ -3175,7 +3175,7 @@ function renderGraphicKindView(list){
     title="${c.i.received_at ? '받음 표시를 지웁니다' : '오늘 받은 것으로 표시합니다'}"
     style="width:${sz}px;height:${sz}px;border-radius:5px;line-height:1;flex-shrink:0;cursor:pointer;font-size:11px;font-weight:800;color:#fff;border:1.5px solid ${
       c.i.received_at ? 'var(--g)' : 'var(--i6)'};background:${c.i.received_at ? 'var(--g)' : 'transparent'}">${c.i.received_at ? '✓' : ''}</button>`;
-  const dueIn = (c, w) => `<input type="date" class="fi" style="width:${w};padding:3px 6px;font-size:11px" value="${escAttr(c.i.due_at || '')}"
+  const dueIn = (c, w) => `<input type="date" class="fi" style="width:${w};padding:3px 6px;font-size:11px" value="${escapeHtml(c.i.due_at || '')}"
     onclick="event.stopPropagation()" onchange="setItemField('${escAttr(c.i.id)}','due_at',this.value)">`;
 
   const coSorted = (g) => g.cos.slice()
@@ -3316,7 +3316,7 @@ function graphicCoDetail(list){
       <div style="display:flex;flex-wrap:wrap;gap:5px">
         ${items.map(i => { const d = graphicDueInfo(i);
           return `<span class="pill ${i.received_at ? 'p-green' : d.cls}"
-            title="${escAttr(`${fmtMoney(i.amount, i.currency || 'KRW')}${i.due_at ? ` · 마감 ${i.due_at}` : ''}${
+            title="${escapeHtml(`${fmtMoney(i.amount, i.currency || 'KRW')}${i.due_at ? ` · 마감 ${i.due_at}` : ''}${
               i.received_at ? ` · ${i.received_at} 받음` : ''}${i.received_note ? ` · ${i.received_note}` : ''}`)}"
             >${i.received_at ? '✓ ' : ''}${escapeHtml(i.name || '(이름 없음)')}${i.qty ? ' ×' + escapeHtml(String(i.qty)) : ''}${
               !i.received_at && i.due_at ? ` · ${escapeHtml(d.text)}` : ''}</span>`; }).join('')}
@@ -3390,7 +3390,7 @@ function renderGraphicCoView(rows){
     if(!gi.length) return '<span style="color:var(--i6)">-</span>';
     const g = gGot(x);
     return `<span class="pill ${g.got === g.n ? 'p-green' : g.got ? 'p-amber' : 'p-gray'}"
-      title="${escAttr(gi.map(i => `${i.received_at ? '✓' : '·'} ${i.name || ''}${
+      title="${escapeHtml(gi.map(i => `${i.received_at ? '✓' : '·'} ${i.name || ''}${
         !i.received_at && i.due_at ? ` (마감 ${i.due_at})` : ''}${i.received_note ? ` (${i.received_note})` : ''}`).join(' / '))}"
       >${g.got}/${g.n}</span>${g.late ? ` <span class="pill p-red" title="받기로 한 날이 지났어요">지남 ${g.late}</span>` : ''}`;
   };
@@ -3433,7 +3433,7 @@ function renderGraphicCoView(rows){
       const g = graphicState(x);
       const isPrint = x.graphic_type === 'print';
       const dateCell = (f) => isPrint ? '<td style="color:var(--i6);text-align:center">·</td>'
-        : `<td><input type="date" class="fi" style="width:100px;padding:3px 5px;font-size:11px" value="${escAttr(x[f] || '')}"
+        : `<td><input type="date" class="fi" style="width:100px;padding:3px 5px;font-size:11px" value="${escapeHtml(x[f] || '')}"
             onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr({graphic_draft_at:'초안',graphic_revised_at:'수정안',graphic_final_at:'최종안'}[f])}')"></td>`;
       return `<tr>
         ${applyCell(x)}
@@ -3814,13 +3814,13 @@ function renderBaseView(list){
         const g = byKind(k); if(!g.length) return '';
         return `<button class="pill ${baseFil === k ? 'p-blue' : 'p-gray'}" style="border:0;cursor:pointer;font:inherit"
           onclick="setBaseFil('${escAttr(k)}')"
-          title="${escAttr(v.types.join(', '))} — 눌러서 이것만 보기">${v.label} ${g.length}</button>`;
+          title="${escapeHtml(v.types.join(', '))} — 눌러서 이것만 보기">${v.label} ${g.length}</button>`;
       }).join('')
     + (() => {
         const d = all.filter(hasDesignOrder);
         return d.length ? `<button class="pill ${baseFil === 'design' ? 'p-teal' : 'p-gray'}"
           style="border:0;cursor:pointer;font:inherit"
-          title="${escAttr(d.map(x => exhNames(x).ko).join(', ') + ' — 우리가 그려서 출력·시공합니다')}"
+          title="${escapeHtml(d.map(x => exhNames(x).ko).join(', ') + ' — 우리가 그려서 출력·시공합니다')}"
           onclick="setBaseFil('design')">디자인 의뢰 ${d.length}</button>` : '';
       })()
     + `<span class="pill ${gotN === rows.length ? 'p-green' : 'p-amber'}">수령 ${gotN}/${rows.length}</span>`
@@ -3830,7 +3830,7 @@ function renderBaseView(list){
           due.days < 0 ? ` · ${-due.days}일 지남` : due.days === 0 ? ' · 오늘' : ` · D-${due.days}`}</span>`
       : `<span class="pill p-gray" title="설정 › 행사 관리에서 «기본 시공» 마감을 넣으면 남은 날이 표시됩니다">수령 마감 미설정</span>`)
     + (() => { const no = rows.filter(x => baseKind(x) === 'fascia' && !fasciaName(x));
-        return no.length ? `<span class="pill p-red" title="${escAttr(no.map(x => exhNames(x).ko).join(', '))}">영문명 없음 ${no.length}</span>` : ''; })()
+        return no.length ? `<span class="pill p-red" title="${escapeHtml(no.map(x => exhNames(x).ko).join(', '))}">영문명 없음 ${no.length}</span>` : ''; })()
     + '<span style="font-size:10.5px;color:var(--i5);margin-left:2px">간판은 영문으로 나갑니다 · 추가 발주가 아니라 계약에 들어 있는 것들이에요 — 기업이 조용해도 우리가 만들어 세웁니다</span>';
 
   /* 받는 것이 무엇인지가 부스 타입마다 달라, 칸 하나에 두 가지를 담는다.
@@ -3838,8 +3838,8 @@ function renderBaseView(list){
   const recvCell = (x) => baseKind(x) === 'fascia'
     ? `<input class="fi" style="${TCELL}${x.fascia_name ? ';font-weight:600' : ''}${
         fasciaName(x) ? '' : ';border-color:var(--re)'}"
-        placeholder="${escAttr(bookName(x).en || '게재 영문명이 없어요')}" value="${escAttr(x.fascia_name || '')}"
-        title="${escAttr(x.fascia_name ? '간판만 따로 적은 이름이에요'
+        placeholder="${escapeHtml(bookName(x).en || '게재 영문명이 없어요')}" value="${escapeHtml(x.fascia_name || '')}"
+        title="${escapeHtml(x.fascia_name ? '간판만 따로 적은 이름이에요'
           : bookName(x).en ? '프로그램북 게재 영문명을 그대로 씁니다 — 간판만 다르면 여기에 적으세요'
           : '게재 영문명이 비어 있어요 — 프로그램북 탭에서 넣거나 여기에 직접 적으세요')}"
         onclick="event.stopPropagation()"
@@ -3849,8 +3849,8 @@ function renderBaseView(list){
        오는 «출력 완료»와의 앞뒤 관계가 똑같기 때문이다. */
     : `<input type="date" class="fi" style="${TCELL}${
         hasDesignOrder(x) ? ';border-color:var(--tl)' : ''}"
-        value="${escAttr(baseRecvAt(x))}" onclick="event.stopPropagation()"
-        title="${escAttr(hasDesignOrder(x)
+        value="${escapeHtml(baseRecvAt(x))}" onclick="event.stopPropagation()"
+        title="${escapeHtml(hasDesignOrder(x)
           ? '디자인을 의뢰한 곳이에요 — 기업에서 받는 날이 아니라 우리 디자인이 끝난 날을 적습니다'
           : baseRecvItems(x).length
             ? `그래픽 현황의 «받을 파일»과 같은 자리예요 — 여기서 고치면 그쪽도 함께 바뀝니다 (${
@@ -3861,14 +3861,14 @@ function renderBaseView(list){
   /* 확정·완료 날짜는 그래픽 항목 줄에 적힌다(항목이 아직 없는 기업만 기업 칸).
      읽는 자리와 쓰는 자리를 함께 옮겨야 고친 값이 되돌아오지 않는다. */
   const baseDate = (x, which) => `<input type="date" class="fi" style="${TCELL}"
-    value="${escAttr(which === 'done' ? baseDoneAt(x) : baseRecvAt(x))}" onclick="event.stopPropagation()"
-    title="${escAttr(baseItems(x).length
+    value="${escapeHtml(which === 'done' ? baseDoneAt(x) : baseRecvAt(x))}" onclick="event.stopPropagation()"
+    title="${escapeHtml(baseItems(x).length
       ? `그래픽의 «${baseItems(x).map(i => i.name || '').filter(Boolean).join(' · ')}»와 같은 칸이에요`
       : '')}"
     onchange="${which === 'done' ? 'setBaseDoneAt' : 'setBaseRecvAt'}('${escAttr(x.id)}',this.value)">`;
 
   const noteCell = (x) => `<input class="fi" style="${TCELL}"
-    placeholder="비고" value="${escAttr(x.base_note || '')}" onclick="event.stopPropagation()"
+    placeholder="비고" value="${escapeHtml(x.base_note || '')}" onclick="event.stopPropagation()"
     onchange="setExhField('${escAttr(x.id)}','base_note',this.value,'기본 시공 비고')">`;
 
   const mark = (x) => { const s = st(x);
@@ -4018,8 +4018,8 @@ function renderBookView(list){
     + (noLogo ? `<span class="pill p-red">로고 미확보 ${noLogo}</span>` : '')
     + (noIntro ? `<span class="pill p-red">회사소개 없음 ${noIntro}</span>` : '')
     + (lens.length ? `<span class="pill p-gray" title="띄어쓰기 포함">소개 ${Math.min(...lens)}~${Math.max(...lens)}자</span>` : '')
-    + (overN ? `<span class="pill p-red" title="${escAttr(overRows.map(o => `${exhNames(o.x).ko} ${o.o.chars}자`).join(', '))}">한도 초과 ${overN}</span>` : '')
-    + (dupOrders.size ? `<span class="pill p-amber" title="${escAttr([...dupOrders].map(o =>
+    + (overN ? `<span class="pill p-red" title="${escapeHtml(overRows.map(o => `${exhNames(o.x).ko} ${o.o.chars}자`).join(', '))}">한도 초과 ${overN}</span>` : '')
+    + (dupOrders.size ? `<span class="pill p-amber" title="${escapeHtml([...dupOrders].map(o =>
         `${o}번: ${rows.filter(r => String(r.book_order || '').trim() === o).map(r => exhNames(r).ko).join(' · ')}`).join(' / '))}">겹친 순번 ${dupOrders.size}</span>` : '')
     + `<span style="font-size:10.5px;color:var(--i5);margin-left:2px">한도 ${bookLimit().chars.toLocaleString()}자 · ${bookLimit().words}단어 (띄어쓰기 포함)</span>`;
 
@@ -4069,15 +4069,15 @@ function renderBookView(list){
   }).join(''), actions);
 
   const cell = (x, f, w) => `<td><input class="fi" style="width:${w};padding:3px 5px;font-size:11.5px"
-    value="${escAttr(x[f] || '')}" onclick="event.stopPropagation()"
+    value="${escapeHtml(x[f] || '')}" onclick="event.stopPropagation()"
     onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr((BOOK_FIELDS.find(b => b[0] === f) || ['', f])[1])}')"></td>`;
 
   /* 안 적은 칸에는 CRM 이름을 흐리게 미리 보여 준다 — 빈칸이면 도록에 이름이
      안 나가는 줄 알고, 같은 이름을 56번 옮겨 적게 된다. 다른 곳만 고치면 된다. */
   const nameCell = (x, f, shown, label) => `<td><input class="fi"
     style="width:164px;padding:3px 5px;font-size:11.5px${x[f] ? ';font-weight:600' : ''}"
-    value="${escAttr(x[f] || '')}" placeholder="${escAttr(shown || '')}"
-    title="${escAttr(x[f] ? '직접 적은 이름이에요' : 'CRM 이름을 그대로 씁니다 — 다르면 여기에 적으세요')}"
+    value="${escapeHtml(x[f] || '')}" placeholder="${escapeHtml(shown || '')}"
+    title="${escapeHtml(x[f] ? '직접 적은 이름이에요' : 'CRM 이름을 그대로 씁니다 — 다르면 여기에 적으세요')}"
     onclick="event.stopPropagation()"
     onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')"></td>`;
 
@@ -4113,7 +4113,7 @@ function renderBookView(list){
         <td><input class="fi" title="번호를 적으면 그 자리로 옮기고 나머지가 한 칸씩 밀려요"
           style="width:42px;padding:3px 5px;font-size:11.5px;text-align:center;font-weight:700${
             dup ? ';border-color:var(--am)' : ''}"
-          value="${escAttr(x.book_order || '')}" onclick="event.stopPropagation()"
+          value="${escapeHtml(x.book_order || '')}" onclick="event.stopPropagation()"
           onchange="moveBookOrder('${escAttr(x.id)}',this.value)"></td>
         <td style="text-align:center">${logoBtn(x)}</td>
         ${coCell(x, 'book')}
@@ -4125,7 +4125,7 @@ function renderBookView(list){
         ${cell(x, 'book_website', '134px')}
         <td style="text-align:center">${introCell(x)}</td>
         <td>${miss.length
-          ? `<span class="pill p-amber" title="${escAttr(miss.join(', '))}">${miss.length}개</span>`
+          ? `<span class="pill p-amber" title="${escapeHtml(miss.join(', '))}">${miss.length}개</span>`
           : '<span class="pill p-green">완료</span>'}</td>
       </tr>`;
     }).join('')}
@@ -4238,10 +4238,10 @@ export function openNewCatalogItem(kind){
   modalShell('new-eq-modal', isG ? '그래픽 품목 추가' : '품목 추가', `
     <div style="font-size:11.5px;color:var(--i4);margin-bottom:12px;line-height:1.6">
       <b>${escapeHtml(exhEvent)}</b> ${isG ? '그래픽' : '비품'} 품목표에 추가됩니다. 다른 행사에는 영향이 없어요.</div>
-    <input type="hidden" id="neq-kind" value="${escAttr(isG ? 'graphic' : 'equip')}">
+    <input type="hidden" id="neq-kind" value="${escapeHtml(isG ? 'graphic' : 'equip')}">
     <div class="fgr">
       <div class="fg"><label class="fl">분류</label>
-        <select class="fi" id="neq-cat">${eqCats(kind).map(c => `<option value="${escAttr(c.code)}">${escapeHtml(c.label)}</option>`).join('')}</select></div>
+        <select class="fi" id="neq-cat">${eqCats(kind).map(c => `<option value="${escapeHtml(c.code)}">${escapeHtml(c.label)}</option>`).join('')}</select></div>
       <div class="fg"><label class="fl">품목코드</label>
         <input class="fi" id="neq-code" placeholder="비우면 자동 (X-001…)"></div>
     </div>
@@ -4322,7 +4322,7 @@ export function openNewGraphicOrder(){
   modalShell('new-gr-modal', '그래픽 주문 추가', `
     <div class="fg"><label class="fl">기업</label>
       <select class="fi" id="ngr-co">${cos.map(x =>
-        `<option value="${escAttr(x.id)}">${escapeHtml(exhNames(x).ko)}${
+        `<option value="${escapeHtml(x.id)}">${escapeHtml(exhNames(x).ko)}${
           exhNames(x).en ? ` (${escapeHtml(exhNames(x).en)})` : ''}${x.booth_no ? ` · 부스 ${escapeHtml(x.booth_no)}` : ''}</option>`).join('')}</select></div>
     <div class="fgr">
       <div class="fg"><label class="fl">유형</label>
@@ -4410,7 +4410,7 @@ function stepPill(s, t){
     : t.n === t.of ? 'p-green' : 'p-gray';
   const tip = on ? (stepFil.mode === 'done' ? '완료한 곳만 보는 중 — 한 번 더 누르면 미완료만'
     : '미완료만 보는 중 — 한 번 더 누르면 전체') : '눌러서 완료한 곳만 보기';
-  return `<button class="pill ${cls}" title="${escAttr(tip)}"
+  return `<button class="pill ${cls}" title="${escapeHtml(tip)}"
     style="border:0;cursor:pointer;font:inherit" onclick="setStepFil('${escAttr(s.key)}')">${label} ${
     on ? (stepFil.mode === 'done' ? `${t.n}곳` : `${t.of - t.n}곳`) : `${t.n}/${t.of}`}${
     on ? `<span style="margin-left:3px">${stepFil.mode === 'done' ? '완료' : '미완료'} ✕</span>` : ''}</button>`;
@@ -4657,7 +4657,7 @@ function renderDashboard(all){
               // 아무 일이 없으면 셀 수만 있고 쓸 수는 없는 숫자가 된다
               const clickable = f[0] === 'booth_type';
               return `<span class="pill ${f[0] === 'grade' ? gradeCls(k) : clickable ? 'p-blue' : 'p-gray'}"${
-                clickable ? ` onclick="setBoothTypeFil('${escAttr(k)}')" style="cursor:pointer" title="${escAttr(k)} 부스 기업 보기"` : ''
+                clickable ? ` onclick="setBoothTypeFil('${escAttr(k)}')" style="cursor:pointer" title="${escapeHtml(k)} 부스 기업 보기"` : ''
               }>${escapeHtml(k)}${f[0] === 'booth_floor' ? '층' : ''} ${cnt[k]}</span>`;
             }).join('')}
           </div></div>`;
@@ -4754,7 +4754,7 @@ function renderDashboard(all){
           .map(c => escapeHtml(fmtMoney(m.cur[c], c))).join(' + ') || '-';
         // 타입이 안 정해진 곳은 눌러도 걸 필터가 없다 — 누르는 시늉만 하면 안 된다
         const on = k !== '(타입 미지정)';
-        return `<div${on ? ` onclick="setBoothTypeFil('${escAttr(k)}')" title="${escAttr(k)} 기업만 보기" style="cursor:pointer;` : ' style="'}${
+        return `<div${on ? ` onclick="setBoothTypeFil('${escAttr(k)}')" title="${escapeHtml(k)} 기업만 보기" style="cursor:pointer;` : ' style="'}${
           'display:flex;justify-content:space-between;gap:6px;font-size:11.5px;padding:2px 0"'}>
           <span style="color:var(--i3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(k)}
             <span style="color:var(--i5);font-size:10px">${m.n}곳</span></span>
@@ -4951,7 +4951,7 @@ function renderChecklistTable(list, all){
      51줄 중 20줄에 배지가 붙으면 배지가 아니라 배경이 된다. */
   const keys = prevOrgKeys();
   const backBadge = (x) => isReturning(x, keys)
-    ? `<span class="pill p-teal" style="font-size:9px" title="${escAttr(keys.prev)}에도 참가한 기업이에요">재참가</span>` : '';
+    ? `<span class="pill p-teal" style="font-size:9px" title="${escapeHtml(keys.prev)}에도 참가한 기업이에요">재참가</span>` : '';
   const cell = (x, s) => {
     const c = cellState(x, s);
     const map = {
@@ -5002,7 +5002,7 @@ function renderChecklistTable(list, all){
               <span style="font-weight:700;font-size:12px${off ? ';text-decoration:line-through' : ''}">${escapeHtml(exhNames(x).ko)}</span>${
                 exhNames(x).en ? `<span style="font-size:10.5px;color:var(--i4);margin-left:4px">${escapeHtml(exhNames(x).en)}</span>` : ''}
               ${off ? '<span class="pill p-gray">참가 취소</span>' : ''}
-              ${isBookOnly(x) ? `<span class="pill p-teal" title="${escAttr(bookOnlyTip(x))}">프로그램북만</span>` : ''}
+              ${isBookOnly(x) ? `<span class="pill p-teal" title="${escapeHtml(bookOnlyTip(x))}">프로그램북만</span>` : ''}
               ${backBadge(x)}
               ${x.grade && x.grade !== 'Exhibitor' ? `<span class="pill ${gradeCls(x.grade)}">${escapeHtml(x.grade)}</span>` : ''}
             </div>
@@ -5015,7 +5015,7 @@ function renderChecklistTable(list, all){
           const p = all[0];
           const label = p ? (p.name || p.email || '-') : '-';
           const tip = all.map(c => [c.role, c.name, c.title, c.email, c.phone].filter(Boolean).join(' · ')).join('\n');
-          return `<td style="font-size:11px;color:var(--i3);max-width:130px" title="${escAttr(tip)}">
+          return `<td style="font-size:11px;color:var(--i3);max-width:130px" title="${escapeHtml(tip)}">
             <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(label)}</div>
             ${p ? leftPill(p) : ''}
             ${all.length > 1 ? `<div style="font-size:9.5px;color:var(--i5)">외 ${all.length - 1}명</div>` : ''}</td>`;
@@ -5173,7 +5173,7 @@ export function renderExhAddHits(){
 
   box.innerHTML = `<div style="font-size:11px;color:var(--i4);margin-bottom:4px">기업DB에 비슷한 이름이 있어요 — 같은 곳이면 눌러서 연결하세요</div>
     <div style="display:flex;flex-direction:column;gap:4px;max-height:150px;overflow:auto">${
-      hits.map(({ org: o, score }) => `<button class="btn" data-org="${escAttr(o.id)}"
+      hits.map(({ org: o, score }) => `<button class="btn" data-org="${escapeHtml(o.id)}"
         style="display:flex;align-items:center;gap:8px;text-align:left;padding:5px 9px;font-size:12px">
         <span style="font-weight:600">${escapeHtml(o.name_ko || o.name_en || '')}</span>
         ${o.name_ko && o.name_en ? `<span style="color:var(--i4);font-size:11px">${escapeHtml(o.name_en)}</span>` : ''}
@@ -5312,7 +5312,7 @@ export function openExhImport(){
     <div class="mb">
       <div class="fg"><label class="fl">행사</label>
         <select class="fi" id="exh-imp-ev" onchange="renderExhImportList()">
-          ${exhEventOptions().map(e => `<option value="${escAttr(e.key)}"${e.key === evKey ? ' selected' : ''}>${escapeHtml(e.name || e.key)}</option>`).join('')}
+          ${exhEventOptions().map(e => `<option value="${escapeHtml(e.key)}"${e.key === evKey ? ' selected' : ''}>${escapeHtml(e.name || e.key)}</option>`).join('')}
         </select></div>
       <div class="fg"><label class="fl">대상 기업</label>
         <div id="exh-imp-list" style="max-height:300px;overflow-y:auto;border:1px solid var(--i7);border-radius:8px;padding:6px"></div></div>
@@ -5863,9 +5863,9 @@ export function openExhCfg(){
       판형이 바뀌면 여기서 고치면 되고, 이미 받아 둔 소개글은 새 한도로 다시 셉니다.</div>
     <div style="display:flex;gap:10px">
       <div class="fg" style="flex:1"><label class="fl">글자수 (띄어쓰기 포함)</label>
-        <input class="fi" type="number" id="cfg-book-chars" value="${escAttr(lim.chars)}" min="1"></div>
+        <input class="fi" type="number" id="cfg-book-chars" value="${escapeHtml(lim.chars)}" min="1"></div>
       <div class="fg" style="flex:1"><label class="fl">단어수</label>
-        <input class="fi" type="number" id="cfg-book-words" value="${escAttr(lim.words)}" min="1"></div>
+        <input class="fi" type="number" id="cfg-book-words" value="${escapeHtml(lim.words)}" min="1"></div>
     </div>
 
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">

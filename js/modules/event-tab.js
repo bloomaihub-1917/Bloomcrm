@@ -252,7 +252,7 @@ function domainField(ev){
   return `<div><div class="mlbl">분야 <span style="font-size:9px;color:var(--i4)">마스터DB에서 «이 분야 행사에 왔던 사람»을 찾을 때 씁니다</span></div>
     <div id="evdb-domain" style="display:flex;gap:10px;flex-wrap:wrap;padding:7px 0">
       ${DOMAINS.map(d => `<label style="display:flex;align-items:center;gap:5px;font-size:11.5px;cursor:pointer">
-        <input type="checkbox" class="evdb-dom" value="${escAttr(d.id)}"${on.includes(d.id) ? ' checked' : ''}>
+        <input type="checkbox" class="evdb-dom" value="${escapeHtml(d.id)}"${on.includes(d.id) ? ' checked' : ''}>
         ${escapeHtml(d.name)}</label>`).join('')
         || '<span style="font-size:11px;color:var(--i4)">설정 › 기업 분류에서 분야를 먼저 만들어주세요</span>'}
     </div></div>`;
@@ -296,9 +296,9 @@ function profileHtml(ev){
   const avg = orgs.length ? (rows.length - noOrg.length) / orgs.length : 0;
 
   const fld = (id, label, val, ph) => `<div><div class="mlbl">${label}</div>
-    <input class="fi" id="evdb-${id}" value="${escAttr(val || '')}" placeholder="${escAttr(ph || '')}" style="width:100%"></div>`;
+    <input class="fi" id="evdb-${id}" value="${escapeHtml(val || '')}" placeholder="${escapeHtml(ph || '')}" style="width:100%"></div>`;
   const area = (id, label, val, ph) => `<div style="margin-bottom:10px"><div class="mlbl">${label}</div>
-    <textarea class="fi" id="evdb-${id}" rows="3" placeholder="${escAttr(ph || '')}"
+    <textarea class="fi" id="evdb-${id}" rows="3" placeholder="${escapeHtml(ph || '')}"
       style="width:100%;resize:vertical;line-height:1.5">${escapeHtml(val || '')}</textarea></div>`;
 
   return `<div style="padding:14px 16px 40px;max-width:900px">
@@ -446,7 +446,7 @@ function roleChips(evKey, byOrg){
 /* 확정 표시 — 눌러서 그 자리에서 바꾼다. 한 명씩 고치는 일이 제일 잦다.
    확정된 날짜를 툴팁에 둔다 — 언제 정해졌는지가 나중에 꼭 문제가 된다. */
 const confirmBadge = (r) => r.confirmedAt
-  ? `<span class="pill p-green" style="cursor:pointer" title="${escAttr(r.confirmedAt)}에 확정 — 눌러서 해제"
+  ? `<span class="pill p-green" style="cursor:pointer" title="${escapeHtml(r.confirmedAt)}에 확정 — 눌러서 해제"
       onclick="event.stopPropagation();toggleEvDbConfirm(${r.cid})">✓ 확정</span>`
   : `<span class="pill p-gray" style="cursor:pointer" title="눌러서 참가 확정"
       onclick="event.stopPropagation();toggleEvDbConfirm(${r.cid})">타겟</span>`;
@@ -502,7 +502,7 @@ function peopleHtml(ev){
 
 const searchBoxHtml = (ph) => `<div class="srch" style="width:100%;max-width:340px">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-  <input type="text" id="evdb-q" placeholder="${escAttr(ph)}" value="${escAttr(evdbQuery)}"
+  <input type="text" id="evdb-q" placeholder="${escapeHtml(ph)}" value="${escapeHtml(evdbQuery)}"
     style="width:100%" oninput="setEvDbQuery(this.value)"></div>`;
 
 function peopleRowsHtml(){
@@ -574,7 +574,7 @@ function orgsRowsHtml(){
     const people = o.people.slice(0, 3).map(p => p.name).filter(Boolean);
     return `<label style="display:flex;align-items:center;gap:10px;background:var(--W);border:1px solid var(--i6);
         border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer">
-      <input type="checkbox" class="evdb-cb" data-k="${escAttr(o.key)}" ${evdbPicked.has(o.key) ? 'checked' : ''}
+      <input type="checkbox" class="evdb-cb" data-k="${escapeHtml(o.key)}" ${evdbPicked.has(o.key) ? 'checked' : ''}
         onchange="pickEvDbOrg('${escAttr(o.key)}',this.checked)">
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
@@ -719,7 +719,7 @@ export function openEvDbSend(){
 
       <div class="fg"><div class="fl">어느 행사의 타겟인가</div>
         <select class="fi" id="evdb-send-ev" style="width:100%">
-          ${EVENT_LIST.map(e => `<option value="${escAttr(e.key)}"${e.key === evdbEvent ? ' selected' : ''}>${escapeHtml(e.short || e.name || e.key)}</option>`).join('')}
+          ${EVENT_LIST.map(e => `<option value="${escapeHtml(e.key)}"${e.key === evdbEvent ? ' selected' : ''}>${escapeHtml(e.short || e.name || e.key)}</option>`).join('')}
         </select>
         <div style="font-size:10.5px;color:var(--i5);margin-top:5px">보통은 <b>다음에 열 행사</b>를 고릅니다 — 이 사람들을 부를 행사요.</div>
       </div>
@@ -728,7 +728,7 @@ export function openEvDbSend(){
         <div class="fgr">
           <div class="fg"><div class="fl">참여 유형</div>
             <select class="fi" id="evdb-send-role" style="width:100%">
-              ${PART_TYPES.map(p => `<option value="${escAttr(p.key)}"${p.key === '전시참가기업' ? ' selected' : ''}>${escapeHtml(p.label)}</option>`).join('')}
+              ${PART_TYPES.map(p => `<option value="${escapeHtml(p.key)}"${p.key === '전시참가기업' ? ' selected' : ''}>${escapeHtml(p.label)}</option>`).join('')}
             </select></div>
           <div class="fg"><div class="fl">우선순위</div>
             <select class="fi" id="evdb-send-pri" style="width:100%">

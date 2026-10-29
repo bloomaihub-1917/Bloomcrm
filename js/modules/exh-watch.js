@@ -463,7 +463,7 @@ function renderWatchBodyIfOpen(){
 }
 
 export function renderWatchView(evKey, part = 'exh'){
-  return `<div class="watch-body" data-ev="${escAttr(evKey)}" data-part="${escAttr(part)}">${
+  return `<div class="watch-body" data-ev="${escapeHtml(evKey)}" data-part="${escapeHtml(part)}">${
     watchBodyHtml(evKey, part)}</div>`;
 }
 
@@ -526,7 +526,7 @@ function folderBlock(f, canScan){
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${
           w.gone_at ? ';text-decoration:line-through;color:var(--i4)' : ''}"
-          title="${escAttr(w.rel_path)}">${escapeHtml(w.name)}</div>
+          title="${escapeHtml(w.rel_path)}">${escapeHtml(w.name)}</div>
         <div style="font-size:10px;color:var(--i5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${
           escapeHtml(fmtWhen(w.changed_at))}${
           w.size ? ' · ' + escapeHtml(fmtSize(w.size)) : ''}${

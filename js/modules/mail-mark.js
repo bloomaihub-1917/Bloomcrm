@@ -47,12 +47,12 @@ export function mailStateHtml(t, l){
   if(!isInbound(l)) return '';
   // 숫자와 같은 규칙(isUnread) — 처리한 메일은 읽은 시각이 없어도 «안 읽음»을 붙이지 않는다
   const read = !isUnread(l)
-    ? `<span class="pill p-gray" style="font-size:10px" title="${escAttr(l.read_at ? `${l.read_by || ''} ${l.read_at}` : '처리함')}">읽음</span>`
+    ? `<span class="pill p-gray" style="font-size:10px" title="${escapeHtml(l.read_at ? `${l.read_by || ''} ${l.read_at}` : '처리함')}">읽음</span>`
     : `<span class="pill p-red" style="font-size:10px">● 안 읽음</span>`;
   const done = l.status === 'done'
-    ? `<span class="pill p-green" style="font-size:10px" title="${escAttr(l.answered_at || '')}">처리함</span>`
+    ? `<span class="pill p-green" style="font-size:10px" title="${escapeHtml(l.answered_at || '')}">처리함</span>`
     : `<span class="pill p-amber" style="font-size:10px">처리 안 함</span>`;
-  return `<span data-mst="${escAttr(t)}|${escAttr(l.id)}" style="display:inline-flex;gap:3px">${read}${done}</span>`;
+  return `<span data-mst="${escapeHtml(t)}|${escAttr(l.id)}" style="display:inline-flex;gap:3px">${read}${done}</span>`;
 }
 /* 펼친 본문 아래 단추 */
 export function mailActionsHtml(t, l){

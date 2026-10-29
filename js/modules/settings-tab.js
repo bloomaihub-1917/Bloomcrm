@@ -280,7 +280,7 @@ export function renderSectorTree(){
     return `${badge}<select class="fi" style="font-size:10px;padding:1px 4px;width:auto;max-width:150px" title="이 행사 섹터가 대응하는 공통 섹터 (분야 집계는 공통 기준으로 통합)"
       onchange="assignSectorCanonical('${escAttr(m.id)}', this.value)">
       <option value=""${!cur?' selected':''}>공통 미연결</option>
-      ${commonMains.map(c => `<option value="${escAttr(c.id)}"${cur===c.id?' selected':''}>= ${escapeHtml(c.name)}</option>`).join('')}
+      ${commonMains.map(c => `<option value="${escapeHtml(c.id)}"${cur===c.id?' selected':''}>= ${escapeHtml(c.name)}</option>`).join('')}
     </select>`;
   };
 
@@ -1227,7 +1227,7 @@ export function renderEvMgr(){
         <div style="margin-top:4px">${EVENT_PARTS.filter(p => evParts(e.key)[p.key] !== 'none')
           .map(p => { const st = partStateOf(evParts(e.key)[p.key]);
             return `<span class="pill ${escAttr(st.cls)}" style="margin-right:3px"
-              title="${escAttr(st.label)}">${escapeHtml(p.label)}${st.key === 'done' ? ' ✓' : ''}</span>`; }).join('')
+              title="${escapeHtml(st.label)}">${escapeHtml(p.label)}${st.key === 'done' ? ' ✓' : ''}</span>`; }).join('')
           || '<span style="font-size:10.5px;color:var(--i5)">진행 파트 없음</span>'}</div>
         ${(() => {
           /* 마감일·한도는 상세를 열어야 보였다(설정값 탭에 따로 모아 둔 요약은 없앴다) —
@@ -1688,7 +1688,7 @@ export function renderCodeListPicker(){
   const defs = CL_DEFS.filter(d => d.group === clGroup);
   const cur = defs.some(d => d.key === kel.value) ? kel.value : defs[0]?.key;
   kel.innerHTML = defs.map(d =>
-    `<option value="${escAttr(d.key)}"${cur === d.key ? ' selected' : ''}>${escapeHtml(d.label)}</option>`).join('');
+    `<option value="${escapeHtml(d.key)}"${cur === d.key ? ' selected' : ''}>${escapeHtml(d.label)}</option>`).join('');
   renderCodeList();
 }
 
@@ -1741,13 +1741,13 @@ function clRowsHtml(rows, readonly){
       </div>
       ${readonly ? '' : `
       <label class="clf clf-grow"><span class="clf-l">이름</span>
-        <input class="fi" value="${escAttr(c.label || '')}" placeholder="이름" style="min-width:120px"
+        <input class="fi" value="${escapeHtml(c.label || '')}" placeholder="이름" style="min-width:120px"
           onchange="editCodeListRow('${escAttr(c.id)}','label',this.value)"></label>
       <label class="clf"><span class="clf-l">색상</span>
         <select class="fi" style="min-width:100px" onchange="editCodeListRow('${escAttr(c.id)}','cls',this.value)">
           ${CL_COLORS.map(([v, l]) => `<option value="${v}"${(c.cls || '') === v ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
       <label class="clf"><span class="clf-l">순서</span>
-        <input class="fi" type="number" value="${escAttr(c.sort_order || '')}" title="순서" style="width:70px"
+        <input class="fi" type="number" value="${escapeHtml(c.sort_order || '')}" title="순서" style="width:70px"
           onchange="editCodeListRow('${escAttr(c.id)}','sort_order',this.value)"></label>
       ${c.list_key === 'booth_type' ? `<span class="clf"><span class="clf-l"></span>
         <button class="btn" onclick="openBoothIncluded('${escAttr(c.id)}')"
@@ -1820,7 +1820,7 @@ function binclDatalist(){
     .sort((a, b) => String(a.code || '').localeCompare(String(b.code || ''), 'ko', { numeric: true }));
   if(!list.length) return '';
   return `<datalist id="bincl-cat">${list.map(c =>
-    `<option value="${escAttr(c.code)}">${escapeHtml(`${c.name_ko || c.name_en || ''}`)}</option>`).join('')}</datalist>`;
+    `<option value="${escapeHtml(c.code)}">${escapeHtml(`${c.name_ko || c.name_en || ''}`)}</option>`).join('')}</datalist>`;
 }
 
 export function renderBoothInclLines(){
@@ -1835,13 +1835,13 @@ export function renderBoothInclLines(){
             onchange="editBoothInclLine(${n},'cat',this.value)">${cats.map(([v, l]) =>
               `<option value="${v}"${(o.cat || 'equip') === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
           <input class="fi" style="flex:0 0 96px;font-size:11.5px;padding:6px" list="bincl-cat"
-            value="${escAttr(o.code || '')}" placeholder="품목코드"
+            value="${escapeHtml(o.code || '')}" placeholder="품목코드"
             onchange="editBoothInclLine(${n},'code',this.value)">
           <input class="fi" style="flex:1 1 160px;min-width:0;font-size:11.5px;padding:6px"
-            value="${escAttr(o.name || '')}" placeholder="품명"
+            value="${escapeHtml(o.name || '')}" placeholder="품명"
             onchange="editBoothInclLine(${n},'name',this.value)">
           <input class="fi" style="flex:0 0 62px;font-size:11.5px;padding:6px"
-            value="${escAttr(o.qty ?? '')}" placeholder="수량" inputmode="numeric"
+            value="${escapeHtml(o.qty ?? '')}" placeholder="수량" inputmode="numeric"
             onchange="editBoothInclLine(${n},'qty',this.value)">
           <button class="btn" style="flex:0 0 auto;padding:4px 9px;font-size:11px"
             onclick="delBoothInclLine(${n})">삭제</button>
@@ -2010,13 +2010,13 @@ export function renderAliasList(){
   if(!el) return;
   const rows = aliasRows();
   const catOpts = (sel) => CAT_KEYS.map(k =>
-    `<option value="${escAttr(k)}"${sel === k ? ' selected' : ''}>${escapeHtml(CL[k] || k)}</option>`).join('');
+    `<option value="${escapeHtml(k)}"${sel === k ? ' selected' : ''}>${escapeHtml(CL[k] || k)}</option>`).join('');
 
   el.innerHTML = (rows.length ? rows.map(c => {
     const off = c.active === 'no';
     return `<div class="clrow" style="padding:6px 0;border-bottom:1px solid var(--i7)${off ? ';opacity:.5' : ''}">
       <label class="clf clf-grow"><span class="clf-l">표기</span>
-        <input class="fi" value="${escAttr(c.code)}" placeholder="업로드에 적힌 표기" style="min-width:150px"
+        <input class="fi" value="${escapeHtml(c.code)}" placeholder="업로드에 적힌 표기" style="min-width:150px"
           onchange="editCodeListRow('${escAttr(c.id)}','code',this.value)"></label>
       <label class="clf"><span class="clf-l">→ 분류</span>
         <select class="fi" style="min-width:130px" onchange="editCodeListRow('${escAttr(c.id)}','label',this.value)">
@@ -2186,7 +2186,7 @@ export function renderEquipCatalog(){
             if(eqEvent && !keys.includes(eqEvent)) keys.unshift(eqEvent);
             return keys.map(k => {
               const n = EQUIP_CATALOG.filter(c => c.event_id === k).length;
-              return `<option value="${escAttr(k)}"${k === eqEvent ? ' selected' : ''}>행사 · ${escapeHtml(k)}${n ? ` (${n})` : ' — 아직 안 고름'}</option>`;
+              return `<option value="${escapeHtml(k)}"${k === eqEvent ? ' selected' : ''}>행사 · ${escapeHtml(k)}${n ? ` (${n})` : ' — 아직 안 고름'}</option>`;
             }).join('');
           })()}
         </select></div>`}
@@ -2198,10 +2198,10 @@ export function renderEquipCatalog(){
       <div style="min-width:130px"><div class="mlbl">분류</div>
         <select class="fi" style="width:100%" onchange="setEqCatFil(this.value)">
           <option value="">전체</option>
-          ${cats.map(c => `<option value="${escAttr(c)}"${c === eqCatFil ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+          ${cats.map(c => `<option value="${escapeHtml(c)}"${c === eqCatFil ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}
         </select></div>
       <div style="flex:1;min-width:150px"><div class="mlbl">검색</div>
-        <input class="fi" style="width:100%" value="${escAttr(eqQuery)}" placeholder="코드·품명·규격"
+        <input class="fi" style="width:100%" value="${escapeHtml(eqQuery)}" placeholder="코드·품명·규격"
           oninput="setEqQuery(this.value)"></div>
     </div>
     ${eqEvent ? `<div style="font-size:11px;color:var(--i4);margin-bottom:8px;line-height:1.6">
@@ -2222,7 +2222,7 @@ export function renderEquipCatalog(){
           <input class="fi" id="eq-new-en" style="width:100%" onkeydown="if(event.key==='Enter')addEquipItem()"></div>
         <div style="min-width:110px"><div class="mlbl">분류</div>
           <select class="fi" id="eq-new-cat" style="width:100%">
-            ${(cats.length ? cats : ['기타비품']).map(c => `<option value="${escAttr(c)}">${escapeHtml(c)}</option>`).join('')}
+            ${(cats.length ? cats : ['기타비품']).map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}
           </select></div>
         <div style="width:100px"><div class="mlbl">KRW</div>
           <input class="fi" id="eq-new-krw" style="width:100%" placeholder="0"></div>
@@ -2243,20 +2243,20 @@ function eqRowHtml(c){
       ${c.event_id
         ? (used ? `<span class="pill p-blue" title="이 품목을 신청한 내역">${used}건</span>`
                 : `<span class="pill p-gray" title="아무도 신청하지 않았어요">미사용</span>`)
-        : (used ? `<span class="pill p-blue" title="${escAttr(eqEventsUsing(c.id).map(x => x.event_id).join(', '))}">행사 ${used}</span>`
+        : (used ? `<span class="pill p-blue" title="${escapeHtml(eqEventsUsing(c.id).map(x => x.event_id).join(', '))}">행사 ${used}</span>`
                 : `<span class="pill p-gray" title="아직 고른 행사가 없어요">행사 0</span>`)}
     </div>
     <label class="clf clf-grow"><span class="clf-l">국문</span>
-      <input class="fi" value="${escAttr(c.name_ko || '')}" placeholder="품명(국문)" style="min-width:110px"
+      <input class="fi" value="${escapeHtml(c.name_ko || '')}" placeholder="품명(국문)" style="min-width:110px"
         onchange="editEquipItem('${escAttr(c.id)}','name_ko',this.value)"></label>
     <label class="clf clf-grow"><span class="clf-l">영문</span>
-      <input class="fi" value="${escAttr(c.name_en || '')}" placeholder="품명(영문)" style="min-width:110px"
+      <input class="fi" value="${escapeHtml(c.name_en || '')}" placeholder="품명(영문)" style="min-width:110px"
         onchange="editEquipItem('${escAttr(c.id)}','name_en',this.value)"></label>
     <label class="clf"><span class="clf-l">KRW</span>
-      <input class="fi" value="${escAttr(eqMoney(c.price_krw))}" placeholder="KRW" style="width:96px;text-align:right"
+      <input class="fi" value="${escapeHtml(eqMoney(c.price_krw))}" placeholder="KRW" style="width:96px;text-align:right"
         onchange="editEquipItem('${escAttr(c.id)}','price_krw',this.value)"></label>
     <label class="clf"><span class="clf-l">USD</span>
-      <input class="fi" value="${escAttr(eqMoney(c.price_usd))}" placeholder="USD" style="width:80px;text-align:right"
+      <input class="fi" value="${escapeHtml(eqMoney(c.price_usd))}" placeholder="USD" style="width:80px;text-align:right"
         onchange="editEquipItem('${escAttr(c.id)}','price_usd',this.value)"></label>
     <span class="clf"><span class="clf-l"></span>
       <button class="btn" onclick="removeEquipItem('${escAttr(c.id)}')"
@@ -2329,10 +2329,10 @@ function eqEventListHtml(){
       <span style="font-size:10.5px;color:var(--i4);white-space:nowrap">기본 ${eqMoney(m.price_krw) || '-'}원${
         m.price_usd ? ` · $${eqMoney(m.price_usd)}` : ''}</span>
       ${on ? `<label class="clf"><span class="clf-l">이 행사 KRW</span>
-          <input class="fi" value="${escAttr(eqMoney(e.price_krw))}" style="width:96px;text-align:right${diff ? ';border-color:var(--am)' : ''}"
+          <input class="fi" value="${escapeHtml(eqMoney(e.price_krw))}" style="width:96px;text-align:right${diff ? ';border-color:var(--am)' : ''}"
             onchange="editEquipItem('${escAttr(e.id)}','price_krw',this.value)"></label>
         <label class="clf"><span class="clf-l">USD</span>
-          <input class="fi" value="${escAttr(eqMoney(e.price_usd))}" style="width:80px;text-align:right${diff ? ';border-color:var(--am)' : ''}"
+          <input class="fi" value="${escapeHtml(eqMoney(e.price_usd))}" style="width:80px;text-align:right${diff ? ';border-color:var(--am)' : ''}"
             onchange="editEquipItem('${escAttr(e.id)}','price_usd',this.value)"></label>` : ''}
     </div>`;
   };
@@ -2668,7 +2668,7 @@ async function renderEvMailbox(evKey){
   if(r.ok === false) mailAccounts = null;   // 다음에 열 때 다시 불러온다
   const box = (r.accounts || []).find(a => a.event_id === evKey) || {};
   const inp = (id, label, val, ph, type = 'text') => `<div><div class="mlbl">${label}</div>
-    <input class="fi" id="evmb-${id}" type="${type}" value="${escAttr(val || '')}" placeholder="${escAttr(ph)}" autocomplete="off"></div>`;
+    <input class="fi" id="evmb-${id}" type="${type}" value="${escapeHtml(val || '')}" placeholder="${escapeHtml(ph)}" autocomplete="off"></div>`;
   el.innerHTML = `<div>
     <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">행사 공용 메일
       ${box.username ? '<span class="pill p-green" style="font-size:10px;margin-left:6px">연결됨</span>' : '<span class="pill p-gray" style="font-size:10px;margin-left:6px">없음 — 메일을 보낼 수 없음</span>'}</div>
@@ -2939,23 +2939,23 @@ function evBasicHtml(ev){
   return `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
       <div><div class="mlbl">행사명 (풀네임)</div>
-        <input class="fi" id="evd-name" value="${escAttr(ev.name || ev.key)}" style="width:100%"></div>
+        <input class="fi" id="evd-name" value="${escapeHtml(ev.name || ev.key)}" style="width:100%"></div>
       <div><div class="mlbl">약칭</div>
-        <input class="fi" id="evd-short" value="${escAttr(ev.short || '')}" style="width:100%"></div>
+        <input class="fi" id="evd-short" value="${escapeHtml(ev.short || '')}" style="width:100%"></div>
     </div>
     <div style="margin-bottom:8px"><div class="mlbl">영문 행사명 <span style="font-size:9.5px;color:var(--i4)">영문 메일·엑셀의 {행사}에 들어갑니다 — 비우면 행사명</span></div>
-      <input class="fi" id="evd-name-en" value="${escAttr(ev.name_en || '')}" placeholder="예: 2026 AIA East Asia Symposium" style="width:100%"></div>
+      <input class="fi" id="evd-name-en" value="${escapeHtml(ev.name_en || '')}" placeholder="예: 2026 AIA East Asia Symposium" style="width:100%"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
       <div><div class="mlbl">시작일</div>
-        <input class="fi" id="evd-date-start" type="date" value="${escAttr(ev.date_start || '')}" style="width:100%"></div>
+        <input class="fi" id="evd-date-start" type="date" value="${escapeHtml(ev.date_start || '')}" style="width:100%"></div>
       <div><div class="mlbl">종료일</div>
-        <input class="fi" id="evd-date-end" type="date" value="${escAttr(ev.date_end || '')}" style="width:100%"></div>
+        <input class="fi" id="evd-date-end" type="date" value="${escapeHtml(ev.date_end || '')}" style="width:100%"></div>
       <div><div class="mlbl">색상</div>
-        <input type="color" id="evd-color" value="${escAttr(ev.color || '#3B5BDB')}"
+        <input type="color" id="evd-color" value="${escapeHtml(ev.color || '#3B5BDB')}"
           style="width:100%;height:36px;border:1px solid var(--i6);border-radius:6px;cursor:pointer;padding:2px"></div>
     </div>
     <div style="margin-bottom:12px"><div class="mlbl">장소</div>
-      <input class="fi" id="evd-loc" value="${escAttr(ev.location || '')}" style="width:100%"></div>
+      <input class="fi" id="evd-loc" value="${escapeHtml(ev.location || '')}" style="width:100%"></div>
     <div style="display:flex;gap:8px;align-items:center">
       <button class="btn bp" onclick="saveEvBasic()" style="min-width:80px">저장</button>
       <span id="evd-basic-msg" style="font-size:11px;color:var(--g)"></span>
@@ -3184,8 +3184,8 @@ function evDueHtml(ev){
     <div style="font-size:11px;color:var(--i4);margin-bottom:8px;line-height:1.6">요청 메일을 보내면 공은 연사·기업에 있어요. 그래도 자료가 안 오면
       아래 날수가 지난 뒤 연사·전시 «처리 필요»에 «🔔 리마인더 보낼 때»로 올라옵니다. 사정이 있는 곳은 화면에서 «+3일 / +1주»로 미룹니다.</div>
     <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:18px;font-size:11.5px;color:var(--i3)">
-      <span>첫 요청 뒤 <input class="fi" type="number" min="1" max="60" id="evd-follow-first" value="${escAttr(fl.first)}" style="width:60px;padding:3px 6px">일</span>
-      <span>리마인더 뒤 <input class="fi" type="number" min="1" max="60" id="evd-follow-again" value="${escAttr(fl.again)}" style="width:60px;padding:3px 6px">일마다</span>
+      <span>첫 요청 뒤 <input class="fi" type="number" min="1" max="60" id="evd-follow-first" value="${escapeHtml(fl.first)}" style="width:60px;padding:3px 6px">일</span>
+      <span>리마인더 뒤 <input class="fi" type="number" min="1" max="60" id="evd-follow-again" value="${escapeHtml(fl.again)}" style="width:60px;padding:3px 6px">일마다</span>
     </div>
     <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">꼭 지켜야 하는 마감 <span style="font-weight:400;color:var(--i4)">(전시)</span></div>
     <div style="font-size:11px;color:var(--i4);margin-bottom:10px;line-height:1.6">대부분은 비워 두세요 — 비우면 ASAP이고 위 리마인더 기준으로 챙깁니다.
@@ -3197,9 +3197,9 @@ function evDueHtml(ev){
     <div style="font-size:11px;color:var(--i4);margin-bottom:10px">지면 기준이 행사마다 달라요. 비워 두면 기본값(${EV_BOOK_DEFAULT.chars.toLocaleString()}자 · ${EV_BOOK_DEFAULT.words}단어)을 씁니다.</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:320px;margin-bottom:14px">
       <div><div class="mlbl">글자수</div>
-        <input class="fi" type="number" id="evd-book-chars" value="${escAttr(book.chars || EV_BOOK_DEFAULT.chars)}" style="width:100%"></div>
+        <input class="fi" type="number" id="evd-book-chars" value="${escapeHtml(book.chars || EV_BOOK_DEFAULT.chars)}" style="width:100%"></div>
       <div><div class="mlbl">단어수</div>
-        <input class="fi" type="number" id="evd-book-words" value="${escAttr(book.words || EV_BOOK_DEFAULT.words)}" style="width:100%"></div>
+        <input class="fi" type="number" id="evd-book-words" value="${escapeHtml(book.words || EV_BOOK_DEFAULT.words)}" style="width:100%"></div>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
       <button class="btn bp" onclick="saveEvDue()" style="min-width:80px">저장</button>
@@ -3325,7 +3325,7 @@ function evConfHtml(ev){
             const changed = (n.key in over);
             return `<td style="text-align:center;padding:4px">
               <button onclick="cycleSpeakerNeed('${escAttr(r.code)}','${escAttr(n.key)}')"
-                title="${escAttr(`${r.label || r.code} · ${n.label} — ${NEED_LABEL[st]}${changed ? ' (이 행사만 바꿈)' : ''}`)}"
+                title="${escapeHtml(`${r.label || r.code} · ${n.label} — ${NEED_LABEL[st]}${changed ? ' (이 행사만 바꿈)' : ''}`)}"
                 style="width:30px;height:26px;border-radius:6px;cursor:pointer;font-size:13px;line-height:1;
                   border:1px solid ${changed ? 'var(--a)' : 'var(--i6)'};
                   background:${st === 'req' ? 'var(--gb)' : st === 'opt' ? 'var(--ab)' : 'var(--W)'};
@@ -3346,10 +3346,10 @@ function evConfHtml(ev){
     <div class="mlbl">${escapeHtml(label)}${hint ? `<span style="color:var(--i5);font-weight:400"> ${escapeHtml(hint)}</span>` : ''}</div>
     ${inner}</div>`;
 
-  const numIn = (id, v, ph) => `<input class="fi" type="number" id="${id}" value="${escAttr(v || '')}"
-    placeholder="${escAttr(ph)}" style="width:110px">`;
-  const txtIn = (id, v, ph) => `<input class="fi" id="${id}" value="${escAttr(v || '')}"
-    placeholder="${escAttr(ph)}" style="width:100%">`;
+  const numIn = (id, v, ph) => `<input class="fi" type="number" id="${id}" value="${escapeHtml(v || '')}"
+    placeholder="${escapeHtml(ph)}" style="width:110px">`;
+  const txtIn = (id, v, ph) => `<input class="fi" id="${id}" value="${escapeHtml(v || '')}"
+    placeholder="${escapeHtml(ph)}" style="width:100%">`;
 
   return `
     <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">역할별로 무엇을 받나</div>

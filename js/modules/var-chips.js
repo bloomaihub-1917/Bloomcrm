@@ -30,10 +30,10 @@ export function varChipsHtml(part, opts = {}){
   const groups = [];
   defs.forEach(d => { let g = groups.find(x => x.name === d.group); if(!g) groups.push(g = { name: d.group, items: [] }); g.items.push(d); });
   const val = !!opts.resolve;
-  return `<div class="vchips" data-part="${escAttr(part)}"${val ? ` data-resolve="${escAttr(opts.resolve)}"` : ''}${opts.ev ? ` data-ev="${escAttr(opts.ev)}"` : ''}>
+  return `<div class="vchips" data-part="${escapeHtml(part)}"${val ? ` data-resolve="${escapeHtml(opts.resolve)}"` : ''}${opts.ev ? ` data-ev="${escapeHtml(opts.ev)}"` : ''}>
     <div class="vchips-hd">${val ? '값 넣기' : '칸 넣기'} <span>— 끌어다 놓거나 누르면 커서 자리에 ${val ? '실제 값이 ' : ''}들어가요${opts.note ? ` · ${escapeHtml(opts.note)}` : ''}</span></div>
     ${groups.map(g => `<div class="vchips-row"><span class="vchips-g">${escapeHtml(g.name)}</span>${g.items.map(d =>
-      `<span class="vchip" draggable="true" data-k="${escAttr(d.key)}"${d.where ? ` data-where="${escAttr(d.where)}"` : ''} title="${escAttr(`{${d.key}} — ${d.desc}`)}">${escapeHtml(d.key)}</span>`).join('')}</div>`).join('')}
+      `<span class="vchip" draggable="true" data-k="${escapeHtml(d.key)}"${d.where ? ` data-where="${escapeHtml(d.where)}"` : ''} title="${escapeHtml(`{${d.key}} — ${d.desc}`)}">${escapeHtml(d.key)}</span>`).join('')}</div>`).join('')}
     <div class="vchips-info"></div>
     <div class="vchips-warn"></div>
   </div>`;

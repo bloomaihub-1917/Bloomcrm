@@ -62,7 +62,29 @@ const PILL = {
 };
 const liveSpeakers = (evKey) => speakersForEvent(evKey)
   .slice().sort((a, b) => nameOf(a).localeCompare(nameOf(b), 'ko'));
-const close = () => { document.getElementById('sp-bulkmail')?.remove(); bm = null; };
+/* 닫기 — 보내는 중이면 지우지 않고 «멈춤»만 세운다(반복문이 bm을 계속 읽는다) */
+const close = () => {
+  if(bm?.sending){
+    if(bm.stop) return;
+    if(!confirm('보내는 중이에요. 지금 보내는 통까지만 보내고 멈출까요?')) return;
+    bm.stop = true;
+    say('멈추는 중… 지금 통이 끝나면 창이 닫혀요.');
+    return;
+  }
+  document.getElementById('sp-bulkmail')?.remove(); bm = null;
+};
+/* 통 사이 쉬기 — 같은 계정에서 쉬지 않고 수십 통이면 메일 서버가 속도 제한·스팸으로 본다.
+   남은 시간은 시계로 잰다(뒤로 보낸 탭에서 1초 타이머가 1분씩 밀리지 않게) */
+const SEND_GAP = 10;
+async function pause(sec, label){
+  const end = Date.now() + sec * 1000;
+  while(bm && !bm.stop && Date.now() < end){
+    say(label(Math.ceil((end - Date.now()) / 1000)), true);
+    await new Promise(r => setTimeout(r, Math.min(1000, end - Date.now())));
+  }
+}
+let starting = false;   // «보내기»를 두 번 눌러 확인 창이 두 번 뜨는 것을 막는다
+addEventListener('beforeunload', (e) => { if(bm?.sending){ e.preventDefault(); e.returnValue = ''; } });
 /* 지금 고른 메일 — 보관함 양식이면 단계 모양으로 바꿔 돌려준다 */
 const curStep = () => {
   if(isLib(bm.step)){ const it = libItem(bm.step.slice(4)); return it ? { ...it, key: bm.step, label: it.name, lib: true } : null; }
@@ -70,6 +92,7 @@ const curStep = () => {
 };
 
 export async function openSpeakerBulkMail(evKey, stepKey){
+  if(bm?.sending){ alert('여러 연사에게 메일을 보내는 중이에요 — 다 보낸 뒤에 다시 열어 주세요.'); return; }
   const steps = flowSteps(evKey);
   if(!steps.length){ alert('이 행사에 켜진 연락 단계가 없어요.'); return; }
   /* 단계를 안 정했으면 보낼 사람이 가장 많은 단계부터 */
@@ -208,13 +231,13 @@ function render(){
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
       <div><div class="mlbl">무슨 메일인가</div><select class="fi" onchange="sbmSet('step',this.value)" ${bm.sending ? 'disabled' : ''}>
         ${steps.map(s => { const n = all.filter(sp => isTurn(stateOf(sp, s.key))).length;
-          return `<option value="${escAttr(s.key)}"${s.key === bm.step ? ' selected' : ''}>${escapeHtml(s.label)}${s.round ? ' ↻' : ''}${n ? ` — 보낼 차례 ${n}명` : ''}</option>`; }).join('')}
+          return `<option value="${escapeHtml(s.key)}"${s.key === bm.step ? ' selected' : ''}>${escapeHtml(s.label)}${s.round ? ' ↻' : ''}${n ? ` — 보낼 차례 ${n}명` : ''}</option>`; }).join('')}
         ${libs.length ? `<optgroup label="양식 보관함">${libs.map(it => `<option value="lib:${escAttr(it.id)}"${'lib:' + it.id === bm.step ? ' selected' : ''}>${escapeHtml(it.name)}</option>`).join('')}</optgroup>` : ''}</select>
         ${vs.length ? `<div style="display:flex;gap:6px;align-items:center;margin-top:5px;font-size:11px"><span style="color:var(--i4)">양식</span>
           <select class="fi" style="font-size:11.5px;flex:1" onchange="sbmSet('variant',this.value)" ${bm.sending ? 'disabled' : ''}>
             <option value=""${!bm.variant ? ' selected' : ''}>자동 — 역할에 맞는 변형, 없으면 기본 문구</option>
             <option value="base"${bm.variant === 'base' ? ' selected' : ''}>모두 기본 문구</option>
-            ${vs.map(v => `<option value="${escAttr(v.id)}"${bm.variant === v.id ? ' selected' : ''}>모두 «${escapeHtml(v.label)}»</option>`).join('')}
+            ${vs.map(v => `<option value="${escapeHtml(v.id)}"${bm.variant === v.id ? ' selected' : ''}>모두 «${escapeHtml(v.label)}»</option>`).join('')}
           </select></div>` : ''}</div>
       <div><div class="mlbl">목록</div><select class="fi" onchange="sbmSet('show',this.value)">
         <option value="due"${bm.show === 'due' ? ' selected' : ''}>보낼 차례인 연사만 (${nDue}명)</option>
@@ -240,7 +263,7 @@ function render(){
             <b style="flex:0 0 auto">${escapeHtml(nameOf(sp))}</b>
             <span class="pill p-gray" style="font-size:9.5px">${isEn(sp) ? 'EN' : 'KO'}</span>${PILL[s] || ''}${bm.failed.has(sp.id) ? '<span class="pill p-red" style="font-size:9.5px;background:var(--rb);color:var(--re)">실패</span>' : ''}
             <span style="color:var(--i4);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-              title="${escAttr([...to.to, ...to.cc.map(x => `(cc) ${x}`)].join(', '))}">${can ? escapeHtml(to.to.join(', ')) : '수신 없음 — 연사 화면 «연락 상대»에서 정하세요'}</span>
+              title="${escapeHtml([...to.to, ...to.cc.map(x => `(cc) ${x}`)].join(', '))}">${can ? escapeHtml(to.to.join(', ')) : '수신 없음 — 연사 화면 «연락 상대»에서 정하세요'}</span>
           </label>`; }).join('')
             : '<div style="padding:14px;font-size:11.5px;color:var(--i4)">이 단계가 보낼 차례인 연사가 없어요. 위 «목록»을 «모든 연사»로 바꾸면 다 보입니다.</div>'}
         </div>
@@ -249,11 +272,11 @@ function render(){
         ${aiDraftHtml('spbulk')}
         <details${bm.tpl ? ' open' : ''}><summary style="cursor:pointer;font-size:11.5px;font-weight:700;margin-bottom:4px">이번 발송 문구 고치기${bm.tpl ? ' <span style="color:var(--am);font-weight:400">(고침)</span>' : ''}</summary>
           <div class="mlbl">국문</div>
-          <input class="fi" style="font-size:11.5px;margin-bottom:4px" value="${escAttr(tpl.subject_ko)}" oninput="sbmTpl('subject_ko',this.value)">
-          <textarea class="fi" rows="6" style="font-size:11.5px;width:100%" oninput="sbmTpl('body_ko',this.value)">${escapeHtml(tpl.body_ko)}</textarea>
+          <input class="fi" style="font-size:11.5px;margin-bottom:4px" value="${escapeHtml(tpl.subject_ko)}" oninput="sbmTpl('subject_ko',this.value)" ${bm.sending ? 'disabled' : ''}>
+          <textarea class="fi" rows="6" style="font-size:11.5px;width:100%" oninput="sbmTpl('body_ko',this.value)" ${bm.sending ? 'disabled' : ''}>${escapeHtml(tpl.body_ko)}</textarea>
           <div class="mlbl" style="margin-top:6px">영문</div>
-          <input class="fi" style="font-size:11.5px;margin-bottom:4px" value="${escAttr(tpl.subject_en)}" oninput="sbmTpl('subject_en',this.value)">
-          <textarea class="fi" rows="6" style="font-size:11.5px;width:100%" oninput="sbmTpl('body_en',this.value)">${escapeHtml(tpl.body_en)}</textarea>
+          <input class="fi" style="font-size:11.5px;margin-bottom:4px" value="${escapeHtml(tpl.subject_en)}" oninput="sbmTpl('subject_en',this.value)" ${bm.sending ? 'disabled' : ''}>
+          <textarea class="fi" rows="6" style="font-size:11.5px;width:100%" oninput="sbmTpl('body_en',this.value)" ${bm.sending ? 'disabled' : ''}>${escapeHtml(tpl.body_en)}</textarea>
           ${varChipsHtml('conf', { ev: bm.evKey })}
           <div style="font-size:10.5px;color:var(--i4);margin-top:4px">칸은 연사마다 채워집니다. 여기서 고친 문구는 이번 발송에만 쓰고, 기본 문구는
             <a href="#" onclick="openFlowEditor('${escAttr(bm.evKey)}','${escAttr(bm.step)}');return false">단계 편집</a>에서 고칩니다.</div>
@@ -322,7 +345,7 @@ export function sbmAll(mode){
 }
 /* 문구는 다시 그리지 않고 담아만 둔다 — 그리면 입력 중인 칸이 초기화된다. 미리보기만 고친다 */
 export function sbmTpl(k, v){
-  if(!bm) return;
+  if(!bm || bm.sending) return;
   if(!bm.tpl) bm.tpl = baseTpl();
   bm.tpl[k] = v;
   refreshPrev();
@@ -347,7 +370,11 @@ export async function sendSpTestMail(){
 }
 
 export async function sendSpBulkMail(){
-  if(!bm || bm.sending) return;
+  if(!bm || bm.sending || starting) return;
+  starting = true;
+  try { await sendSpBulk(); } finally { starting = false; }
+}
+async function sendSpBulk(){
   if(evPartDone(bm.evKey, 'conf')){ say('진행 완료된 컨퍼런스예요 — 열람만 됩니다.'); return; }
   const list = liveSpeakers(bm.evKey).filter(sp => bm.ids.has(sp.id) && mailTargets(sp.id).to.length);
   if(!list.length){ say('받을 연사를 골라주세요.'); return; }
@@ -358,6 +385,7 @@ export async function sendSpBulkMail(){
   const notTurn = st.lib ? 0 : list.filter(sp => !isTurn(stateOf(sp, bm.step))).length;
   // 밖으로 나가는 일 — 한 번 묻는다
   if(!confirm(`${list.length}명에게 «${st.label}» 메일을 보낼까요?\n\n발신 ${from.text}\n연사마다 한 통씩 따로 나갑니다(받는 사람은 각 연사의 «연락 상대» 수신·참조).${
+    list.length > 1 ? `\n통마다 ${SEND_GAP}초씩 쉬어요 — 약 ${Math.ceil((list.length - 1) * SEND_GAP / 60)}분 걸려요. 다 보낼 때까지 이 창을 닫지 마세요.` : ''}${
     notTurn ? `\n\n이 중 ${notTurn}명은 보낼 차례가 아니에요(이미 받았거나 해당 없음).` : ''}`)) return;
 
   bm.sending = true;
@@ -365,20 +393,24 @@ export async function sendSpBulkMail(){
   const fileIds = mailFilesOf(bm.evKey).filter(f => f.step === bm.step).map(f => f.id);
   const fileNote = fileIds.length ? `\n\n[첨부] ${mailFilesOf(bm.evKey).filter(f => fileIds.includes(f.id)).map(f => f.filename).join(', ')}` : '';
   let ok = 0;
-  const fails = [];
+  const fails = [], unlogged = [];
   bm.failed = new Set();
+  const kind = st.lib ? 'note' : bm.step;
   for(const [i, sp] of list.entries()){
+    if(i) await pause(SEND_GAP, (s) => `${i}/${list.length} 보냄 — ${s}초 쉬었다가 다음 통 (${nameOf(sp)})`);
+    if(bm.stop) break;
     say(`보내는 중… ${i + 1}/${list.length} ${nameOf(sp)}`, true);
     const t = mailTargets(sp.id);
     const m = mailFor(sp);
     if(!m){ fails.push(`${nameOf(sp)}: 이 단계가 없어요`); bm.failed.add(sp.id); continue; }
-    const kind = st.lib ? 'note' : bm.step;
     const res = await sendMail({ to: t.to, cc: t.cc, subject: m.subject, text: m.body, speaker_id: sp.id,
       category: m.category, kind, file_ids: fileIds });
     if(!res.ok){ fails.push(`${nameOf(sp)}: ${res.error || '실패'}`); bm.failed.add(sp.id); continue; }
     ok++;
-    if(res.logId) SPEAKER_LOGS.push({
-      id: res.logId, speaker_id: sp.id, kind, ts: nowStamp(), direction: 'out', channel: '이메일',
+    /* 나갔는데 기록을 못 남겼어도 화면에는 «보냄»으로 넣는다 — 다시 «보낼 차례»로 골라져 두 번 나가지 않게 */
+    if(!res.logId) unlogged.push(nameOf(sp));
+    SPEAKER_LOGS.push({
+      id: res.logId || `nolog-${Date.now()}-${i}`, speaker_id: sp.id, kind, ts: nowStamp(), direction: 'out', channel: '이메일',
       counterpart: [t.to.join(', '), t.cc.length ? `(cc) ${t.cc.join(', ')}` : ''].filter(Boolean).join(' '),
       category: m.category, subject: m.subject, answered_at: '', answer: '', status: 'done', body: m.body + fileNote,
       author_email: currentUser?.email || '', author_name: currentUser?.name || '',
@@ -388,15 +420,24 @@ export async function sendSpBulkMail(){
       : m.category === '자료 독촉' ? { reminded_at: td() } : null;
     if(patch){ const r = await saveSpeaker({ id: sp.id, ...patch, updated_at: td() }); if(r && r.ok !== false) Object.assign(sp, patch); }
   }
-  trackAction('add', '연사 일괄 메일', bm.evKey, `«${st.label}»${st.round ? ` (${st.round.label})` : ''} ${ok}명 보냄${fails.length ? ` · 실패 ${fails.length}명` : ''}`);
+  const stopped = bm.stop;
+  trackAction('add', '연사 일괄 메일', bm.evKey, `«${st.label}»${st.round ? ` (${st.round.label})` : ''} ${ok}명 보냄${fails.length ? ` · 실패 ${fails.length}명` : ''}${stopped ? ' · 중간에 멈춤' : ''}`);
   bm.sending = false;
+  const unloggedNote = unlogged.length ? ` · ${unlogged.length}명은 보냈지만 기록을 못 남겼어요(${unlogged.slice(0, 3).join(', ')}) — 메일 가져오기를 하면 채워져요` : '';
+  if(stopped){
+    bm.stop = false;
+    close();
+    alert(`멈췄어요 — ${list.length}명 중 ${ok}명에게 보냈어요.${fails.length ? ` 실패 ${fails.length}명` : ''}${unloggedNote}`);
+    window.renderConf?.(); window.renderSpeakerDr?.();
+    return;
+  }
   /* 묶음 대상에게 다 다시 보냈으면 묶음을 닫는다 */
   const rp = roundProgress(curStep());
   let closed = false;
   if(rp && rp.done >= rp.total){ await closeSpRound(true); closed = true; }
   pickDue();   // 보낸 사람은 «보냄»으로 넘어가 빠진다
   render();
-  say(`${ok}명에게 보냈어요${closed ? ' · 다시 보내기 묶음을 다 보내 닫았어요' : ''}${fails.length ? ` — 실패 ${fails.length}명: ${fails.slice(0, 5).join(' / ')}${fails.length > 5 ? ' …' : ''}` : ''}`, !fails.length);
+  say(`${ok}명에게 보냈어요${closed ? ' · 다시 보내기 묶음을 다 보내 닫았어요' : ''}${fails.length ? ` — 실패 ${fails.length}명: ${fails.slice(0, 5).join(' / ')}${fails.length > 5 ? ' …' : ''}` : ''}${unloggedNote}`, !fails.length && !unlogged.length);
   window.renderConf?.(); window.renderSpeakerDr?.();
 }
 

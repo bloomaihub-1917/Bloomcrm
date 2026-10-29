@@ -62,7 +62,7 @@ export async function openMailOriginal(t, id, remote){
         ${r.attachments.map(a => `<span class="pill p-gray" style="margin:2px 3px 0 0">📎 ${escapeHtml(a.filename)}</span>`).join('')}</div>` : ''}
     </div>
     <iframe sandbox="allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer"
-      style="flex:1;min-height:55vh;border:0;width:100%;background:#fff" srcdoc="${escAttr(doc)}"></iframe>`);
+      style="flex:1;min-height:55vh;border:0;width:100%;background:#fff" srcdoc="${escapeHtml(doc)}"></iframe>`);
 }
 
 /* ── 주인 없는 메일 ── */
@@ -110,7 +110,7 @@ function renderUnassigned(err){
           <div style="font-size:11.5px;white-space:pre-wrap;line-height:1.5;margin-top:4px;max-height:200px;overflow:auto;color:var(--i2)">${escapeHtml(String(u.body || '').slice(0, 3000))}</div></details>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:7px">
           ${(u.suggestions || []).map(s => `<button class="btn bp" style="font-size:10.5px" onclick="linkUn('${escAttr(u.id)}','${s.t}','${escAttr(s.id)}')"
-            title="${escAttr(s.why)}">→ ${escapeHtml(s.name || '')}에 연결 <span style="font-weight:400">(${escapeHtml(s.why)})</span></button>`).join('')}
+            title="${escapeHtml(s.why)}">→ ${escapeHtml(s.name || '')}에 연결 <span style="font-weight:400">(${escapeHtml(s.why)})</span></button>`).join('')}
           <select class="fi" id="un-pick-${escAttr(u.id)}" style="font-size:11.5px;width:auto;max-width:240px">${opts}</select>
           <button class="btn" style="font-size:10.5px" onclick="linkUnPicked('${escAttr(u.id)}')">연결</button>
           ${u.contact_addr ? `<label style="font-size:11px;display:flex;gap:4px;align-items:center"><input type="checkbox" id="un-add-${escAttr(u.id)}" checked>${
