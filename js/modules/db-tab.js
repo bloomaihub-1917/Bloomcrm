@@ -113,12 +113,12 @@ export async function patchContact(c, patch, label){
     }
   }
 
-  const r = await postToSheet({
-    sheet: 'contacts', action: 'upsert',
-    row: [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
-      c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
-      c.beat, c.products, c.tags || '', c.org_id || ''],
-  }, label || '연락처 수정');
+  /* 바꾼 칸만 보낸다 — 전에는 23칸을 통째로 올려, 그 사이 남이 고친 메일·퇴사 표시를
+     내 화면의 옛 값으로 되돌렸다 */
+  const data = { id: c.id };
+  Object.keys(patch).forEach(k => { if(CONTACT_COLS.has(k)) data[k] = c[k] ?? ''; });
+  if(c.org_id !== prevOrgId) data.org_id = c.org_id || '';
+  const r = await postToSheet({ sheet: 'contacts', action: 'upsert', data }, label || '연락처 수정');
   if(!r.ok){
     Object.assign(c, backup);
     c.org_id = prevOrgId;
@@ -138,6 +138,16 @@ const ctryPill = (c) => {
 
 /* 바뀐 칸만 골라낸다 — 연락처는 칸이 스물세 개라, 통째로 담으면 이름만 고쳐도
    기록 한 줄이 스물세 칸짜리가 된다. */
+/* 연락처 표의 칸(서버 data.js contacts.columns) — 바꾼 칸만 골라 보낼 때 쓴다 */
+const CONTACT_COLS = new Set(['nameKo', 'nameEn', 'orgKo', 'orgEn', 'titleKo', 'titleEn', 'deptKo', 'deptEn',
+  'country', 'cat', 'lang', 'source', 'date', 'status', 'email1', 'email2', 'phone1', 'phone2',
+  'beat', 'products', 'tags', 'org_id', 'left_at', 'moved_to_id', 'memo1', 'memo2', 'memo3', 'prefix']);
+const contactPatch = (c, before) => {
+  const data = { id: c.id };
+  // before에 담긴 칸만 견준다 — 스냅샷이 일부(퇴사 칸 둘)면 나머지는 안 보낸다
+  Object.keys(before).forEach(k => { if(CONTACT_COLS.has(k) && String(before[k] ?? '') !== String(c[k] ?? '')) data[k] = c[k] ?? ''; });
+  return data;
+};
 const pickChanged = (before, after) => Object.keys(after).reduce((o, k) => {
   if(typeof after[k] !== 'object' && String(before[k] ?? '') !== String(after[k] ?? '')) o[k] = after[k] ?? '';
   return o;
@@ -2424,10 +2434,9 @@ export async function saveContactEdit(){
   const r = await postToSheet({
     sheet:  'contacts',
     action: 'upsert',
-    /* org_id를 빼면 안 된다 — 위치 배열은 안 보낸 열을 비우기 때문에,
-       연락처를 고칠 때마다 기업 연결이 조용히 끊겼다. 분야는 기업의 섹터를
-       타고 오므로 연결이 끊기면 그 사람은 미분류로 떨어진다. */
-    row: contactRow(c),
+    /* 바꾼 칸만 보낸다(org_id 포함) — 통째로 올리면 편집 창을 연 사이 남이 고친 칸을
+       내 옛 값으로 되돌린다 */
+    data: contactPatch(c, prev),
   }, '연락처 수정');
   if(!r.ok){
     Object.assign(c, prev);
@@ -2768,7 +2777,7 @@ export async function confirmLeave(cid){
     }
   }
 
-  const r = await postToSheet({ sheet:'contacts', action:'upsert', row: contactRow(c) },
+  const r = await postToSheet({ sheet:'contacts', action:'upsert', data: contactPatch(c, prev) },
     '퇴사 처리', { silent: true });
   if(!r.ok){
     Object.assign(c, prev);
@@ -2803,7 +2812,7 @@ export async function undoContactLeft(cid){
   c.left_at = ''; c.moved_to_id = '';
   try { renderMDB(); renderContactDr(); } catch(e){}
 
-  const r = await postToSheet({ sheet:'contacts', action:'upsert', row: contactRow(c) }, '퇴사 표시 해제');
+  const r = await postToSheet({ sheet:'contacts', action:'upsert', data: contactPatch(c, prev) }, '퇴사 표시 해제');
   if(!r.ok){
     Object.assign(c, prev);
     try { renderMDB(); renderContactDr(); } catch(e){}
