@@ -488,12 +488,16 @@ const MDB_SORT_KEYS = {
 function applyMDBSort(pairs){
   const keyFn = MDB_SORT_KEYS[_mdbSortCol];
   if(!keyFn) return pairs;
-  return [...pairs].sort((a,b) => {
-    const va = keyFn(a), vb = keyFn(b);
-    if(va < vb) return -_mdbSortDir;
-    if(va > vb) return _mdbSortDir;
-    return 0;
-  });
+  /* 값을 먼저 한 번씩 뽑는다 — 비교마다 뽑으면 «행사» 정렬이 비교 횟수만큼 참가 표 전체를 훑었다 */
+  let evCount = null;
+  if(_mdbSortCol === 'events'){
+    const m = new Map();
+    participations.forEach(x => { const k = String(x.contactId); if(!m.has(k)) m.set(k, new Set()); if(x.eventId) m.get(k).add(x.eventId); });
+    evCount = (c) => (m.get(String(c.id)) || new Set()).size;
+  }
+  const keyed = pairs.map(x => ({ x, k: evCount && !x.p ? evCount(x.c) : keyFn(x) }));
+  keyed.sort((a, b) => a.k < b.k ? -_mdbSortDir : a.k > b.k ? _mdbSortDir : 0);
+  return keyed.map(y => y.x);
 }
 
 /* ══════════════════════════════════════════
@@ -1452,6 +1456,10 @@ export function updateMDBBadges(pairs){
 
   const cats=['all','speaker','vip','attendee','exhibitor'];
   const ids =['ct-all','ct-sp','ct-vip','ct-at','ct-ex'];
+  // 사람 → 참가 역할이 닿는 카테고리들. 사람마다 참가 표 전체를 훑으면 연락처×참가만큼 돌았다
+  const catsOf = new Map();
+  participations.forEach(pp => { const k = pp.contactId; const ct = ROLE_TO_CAT[pp.role]; if(!ct) return; if(!catsOf.has(k)) catsOf.set(k, new Set()); catsOf.get(k).add(ct); });
+  const byId = new Map(basePairs.map(({c}) => [c.id, c]));
   cats.forEach((cat,i)=>{
     const el=document.getElementById(ids[i]);if(!el)return;
     if(cat==='all'){ el.textContent=[...new Set(basePairs.map(({c})=>c.id))].length; return; }
@@ -1460,7 +1468,7 @@ export function updateMDBBadges(pairs){
     } else {
       el.textContent=basePairs.filter(({c})=>{
         if(c.cat===cat) return true;
-        return participations.some(pp=>pp.contactId===c.id&&ROLE_TO_CAT[pp.role]===cat);
+        return !!catsOf.get(c.id)?.has(cat);
       }).length;
     }
   });
@@ -1469,12 +1477,12 @@ export function updateMDBBadges(pairs){
   TAGS.forEach(t => {
     const el = document.getElementById('ct-tag-'+t.key);
     if(!el) return;
-    el.textContent = [...new Set(basePairs.map(({c})=>c.id))].filter(id => matchesTagFilter(getContactById(id), t.key)).length;
+    el.textContent = [...byId.values()].filter(c => matchesTagFilter(c, t.key)).length;
   });
   ['verified','pending','new'].forEach((s,i)=>{
     const el=document.getElementById(['ct-vf','ct-pe','ct-nw'][i]);
     if(el) el.textContent=[...new Set(basePairs.map(({c})=>c.id))].filter(id=>{
-      const c=getContactById(id);return c&&c.status===s;
+      const c=byId.get(id);return c&&c.status===s;
     }).length;
   });
 }
@@ -1647,8 +1655,12 @@ export function renderMDBFlat(pairs){
   if(!body) return;
 
   setMDBRowOrder(pairs.map(({ c }) => c.id));
+  /* 줄마다 참가 표 전체를 훑으면(contactEvents·isConfirmedFor) 연락처×참가만큼 돌아 화면이 멈췄다.
+     사람별 참가를 한 번 묶어 두고 쓴다 */
+  const pByC = new Map();
+  participations.forEach(x => { const k = String(x.contactId); if(!pByC.has(k)) pByC.set(k, []); pByC.get(k).push(x); });
+  const partsOfC = (c) => pByC.get(String(c.id)) || [];
   body.innerHTML = pairs.map(({c,p})=>{
-    const gi = contacts.indexOf(c);
     const roleKey = p ? p.role : c.cat;
 
     const nameKo = escapeHtml(c.nameKo), nameEn = escapeHtml(c.nameEn);
@@ -1662,8 +1674,9 @@ export function renderMDBFlat(pairs){
       evCell = evPill(p.eventId, !!p.confirmedAt)
         + (p.note?`<div style="font-size:10px;color:var(--i3);margin-top:3px">${escapeHtml(p.note)}</div>`:'');
     } else {
-      const evs = contactEvents(c);
-      const shown = evs.slice(0,2).map(ev => evPill(ev, isConfirmedFor(c.id, ev))).join('');
+      const mine = partsOfC(c);
+      const evs = [...new Set(mine.map(x => x.eventId).filter(Boolean))];
+      const shown = evs.slice(0,2).map(ev => evPill(ev, mine.some(x => x.eventId === ev && !!x.confirmedAt))).join('');
       const more = evs.length>2?`<span class="pill p-gray">+${evs.length-2}</span>`:'';
       evCell = `<div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center">${shown}${more}</div>`;
     }

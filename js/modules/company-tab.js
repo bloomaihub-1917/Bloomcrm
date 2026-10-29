@@ -160,13 +160,29 @@ export function buildCoDB(){
   CO_DB.splice(0, CO_DB.length);
   if(!ORGS.length) return;
 
+  /* 칸 하나 고칠 때마다 불린다 — 기업×참가×연락처를 겹쳐 돌면 데이터가 늘수록 화면이 멈췄다.
+     한 번씩만 훑어 색인을 만든다: 이름 → 기업(같은 이름은 한 번만 찾는다), 연락처 → 참가, 행사 키 → 행사 */
+  const nameHit = new Map();
+  const orgByName = (nm) => {
+    const k = String(nm || '');
+    if(!nameHit.has(k)) nameHit.set(k, k ? findOrgByName(k, normalizeCompanyKey) : null);
+    return nameHit.get(k);
+  };
+  const partsByContact = new Map(), partIdx = new Map();
+  participations.forEach((p, i) => {
+    partIdx.set(p, i);
+    if(!partsByContact.has(p.contactId)) partsByContact.set(p.contactId, []);
+    partsByContact.get(p.contactId).push(p);
+  });
+  const evByKey = new Map(EVENT_LIST.map(e => [e.key, e]));
+
   /* 연락처를 기업별로 모은다. org_id가 우선, 없으면 이름으로 폴백. */
   const byOrg = new Map();
   ORGS.forEach(o => byOrg.set(o.id, []));
   contacts.forEach(c => {
     let oid = c.org_id;
     if(!oid || !byOrg.has(oid)){
-      const o = findOrgByName(c.orgKo || c.orgEn, normalizeCompanyKey);
+      const o = orgByName(c.orgKo || c.orgEn);
       oid = o ? o.id : null;
     }
     if(oid && byOrg.has(oid)) byOrg.get(oid).push(c);
@@ -177,7 +193,7 @@ export function buildCoDB(){
   EXHIBITORS.forEach(x => {
     let oid = x.org_id;
     if(!oid || !byOrg.has(oid)){
-      const o = findOrgByName(x.company_name, normalizeCompanyKey);
+      const o = orgByName(x.company_name);
       oid = o ? o.id : null;
     }
     if(!oid) return;
@@ -194,7 +210,7 @@ export function buildCoDB(){
     let oid = x.builder_org_id;
     if(!oid || !byOrg.has(oid)){
       if(!nm || /^직접\s*설치$/.test(nm)) return;
-      const o = findOrgByName(nm, normalizeCompanyKey);
+      const o = orgByName(nm);
       oid = o ? o.id : null;
     }
     if(!oid) return;
@@ -204,13 +220,14 @@ export function buildCoDB(){
 
   ORGS.forEach(o => {
     const coContacts = byOrg.get(o.id) || [];
-    const cIds = new Set(coContacts.map(c => c.id));
-    const parts = participations.filter(p => cIds.has(p.contactId));
+    const cById = new Map(coContacts.map(c => [c.id, c]));
+    // 원래 순서(참가 표 순)를 지킨다 — 행사 이력 줄 순서가 바뀌지 않게
+    const parts = [...cById.keys()].flatMap(id => partsByContact.get(id) || []).sort((a, b) => partIdx.get(a) - partIdx.get(b));
 
     // ── 행사별 참가 집계 ──
     const evMap = {};
     parts.forEach(p => {
-      const ev = EVENT_LIST.find(e => e.key === p.eventId)
+      const ev = evByKey.get(p.eventId)
         || { key: p.eventId, short: p.eventId, name: p.eventId, color:'#9C9890', date:'' };
       if(!evMap[p.eventId]) evMap[p.eventId] = {
         key: p.eventId,
@@ -222,7 +239,7 @@ export function buildCoDB(){
       };
       const role = p.role || '참가자';
       if(!evMap[p.eventId].roles.includes(role)) evMap[p.eventId].roles.push(role);
-      const c = contacts.find(x => x.id === p.contactId);
+      const c = cById.get(p.contactId);
       const nm = c ? (c.nameKo || c.nameEn || '') : '';
       if(nm && !evMap[p.eventId].people.includes(nm)) evMap[p.eventId].people.push(nm);
     });
