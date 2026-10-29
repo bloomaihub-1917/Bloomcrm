@@ -4,5 +4,7 @@
 const { Pool } = require('@neondatabase/serverless');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+// Neon이 쉬면서 놀던 연결을 끊으면 풀이 'error'를 낸다 — 받는 곳이 없으면 프로세스가 죽는다
+pool.on('error', (e) => console.error('[pool] 놀던 연결 오류:', e.message));
 
 module.exports = pool;

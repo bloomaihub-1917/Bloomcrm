@@ -55,8 +55,9 @@ app.get('/s/:token', rateLimit({ windowMs: 60 * 1000, max: 60 }), async (req, re
 // 돌려주는 일이 없도록 명시적으로 캐시를 금지한다.
 app.use((req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 
-// 토큰 하나로 무제한 접근 가능하던 기존 문제 보완 — IP당 분당 요청 수 제한
-app.use('/api', rateLimit({ windowMs: 60 * 1000, max: 120 }));
+// 토큰 하나로 무제한 접근 가능하던 기존 문제 보완 — IP당 분당 요청 수 제한.
+// 로그인 한 번에 표 30개를 읽고 사무실은 IP 하나를 같이 쓴다 — 120이면 4~5명이 함께 새로고침할 때 막혔다
+app.use('/api', rateLimit({ windowMs: 60 * 1000, max: 600 }));
 
 /* 배포가 실제로 갈렸는지, 로고 파일이 함수와 함께 갔는지 한 번에 본다.
    화면에 로고가 안 뜰 때 코드가 문제인지 배포가 문제인지 여기서 갈린다 —

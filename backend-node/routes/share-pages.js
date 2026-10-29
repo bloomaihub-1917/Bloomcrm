@@ -143,7 +143,7 @@ ${days.map((x) => `<div class="day-wrap"><div class="day"><span class="ko">${esc
 ${(x.sessions || []).map(sess).join('\n')}</div>`).join('\n')}
   </main>
   <p class="empty" id="empty"><span class="ko">맞는 항목이 없어요.</span><span class="en">No matching sessions.</span></p>
-  <footer><span class="ko">마지막 갱신</span><span class="en">Last updated</span> ${esc(row.updated_at || '')}${row.homepage ? ` · <a href="${esc(row.homepage)}" target="_blank" rel="noopener">Website</a>` : ''}</footer>
+  <footer><span class="ko">마지막 갱신</span><span class="en">Last updated</span> ${esc(row.updated_at || '')}${/^https?:\/\//i.test(String(row.homepage || '').trim()) ? ` · <a href="${esc(String(row.homepage).trim())}" target="_blank" rel="noopener">Website</a>` : ''}</footer>
 </div>
 <script>
 (function(){

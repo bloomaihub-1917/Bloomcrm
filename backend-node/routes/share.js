@@ -42,6 +42,8 @@ router.get('/:eventId', async (req, res) => {
     const rows = (await pool.query('SELECT * FROM public_shares WHERE event_id = $1', [eventId])).rows;
     const out = {};
     KINDS.forEach((k) => { out[k] = shape(eventId, k, rows.find((r) => r.kind === k)); });
+    // 시험 계정은 가린 값을 본다 — 공개 링크 열쇠를 주면 그 페이지에서 실명·호텔·항공편이 그대로 보인다
+    if (req.user && req.user.isTest) KINDS.forEach((k) => { if (k !== 'program') out[k].path = ''; });
     res.json({ ok: true, shares: out });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });

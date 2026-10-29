@@ -419,12 +419,18 @@ router.get('/', async (req, res) => {
   }
 });
 
+const REPLACE_ALL_OK = new Set(['sectors']);
 router.post('/', async (req, res) => {
   // 시험 계정은 가린 값을 보고 있다 — 저장하면 «애크**»가 진짜 값을 덮는다
   if (req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 읽기만 할 수 있어요' });
   const { sheet, action, row, rows, data, dataRows, expect } = req.body || {};
   if (sheet !== 'participations' && !TABLES[sheet]) {
     return res.status(400).json({ ok: false, error: 'unknown sheet' });
+  }
+  /* «통째로 지우고 다시 넣기»는 업종 순서 저장만 쓴다. 다른 표에 열어 두면 화면 버그 하나로
+     연락처·참가 기록이 비워질 수 있다 */
+  if (action === 'replaceAll' && !REPLACE_ALL_OK.has(sheet)) {
+    return res.status(400).json({ ok: false, error: `${sheet}는 통째로 바꿀 수 없어요` });
   }
 
   let savedId = null;
