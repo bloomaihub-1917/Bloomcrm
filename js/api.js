@@ -1143,9 +1143,19 @@ export function loadSpeakerPhotos(evKey){
   if(!API_BASE_URL || !currentUser){ speakerPhotoCache[evKey] = {}; return Promise.resolve(speakerPhotoCache[evKey]); }
   return speakerPhotoLoading[evKey] || (speakerPhotoLoading[evKey] = (async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/photos?event_id=${encodeURIComponent(evKey)}`, { headers: await authHeaders() });
-      const j = await res.json().catch(() => ({}));
-      if(j.ok) speakerPhotoCache[evKey] = Object.fromEntries((j.photos || []).map(p => [p.speaker_id, p]));
+      // 서버가 나눠 보낸다(한 응답 4.5MB 한도) — next가 없을 때까지 이어 받는다
+      const got = {};
+      let after = '', ok = false;
+      for(let page = 0; page < 50; page++){
+        const res = await fetch(`${API_BASE_URL}/api/photos?event_id=${encodeURIComponent(evKey)}&after=${encodeURIComponent(after)}`, { headers: await authHeaders() });
+        const j = await res.json().catch(() => ({}));
+        if(!j.ok){ ok = false; break; }
+        ok = true;
+        (j.photos || []).forEach(p => { got[p.speaker_id] = p; });
+        if(!j.next) break;
+        after = j.next;
+      }
+      if(ok) speakerPhotoCache[evKey] = got;
     } catch(e){ console.warn('[CRM] 연사 사진 실패:', e.message); }
     delete speakerPhotoLoading[evKey];
     return speakerPhotoCache[evKey] || {};

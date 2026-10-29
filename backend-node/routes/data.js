@@ -401,6 +401,9 @@ function participationFromRow(row) {
   };
 }
 
+const LOG_BODY_TABLES = new Set(['exhibitor_logs', 'speaker_logs']);
+const LOG_BODY_MAX = 6000;
+const LOG_BODY_CUT = '\n\n… (본문이 길어 앞부분만 보여요 — 전체는 메일함 «원문 보기»에서)';
 router.get('/', async (req, res) => {
   const { sheet } = req.query;
   // 시험 계정은 기업명·이름을 가리고 연락처는 통째로 지운 값을 받는다(test-mask.js)
@@ -411,6 +414,22 @@ router.get('/', async (req, res) => {
     if (sheet === 'participations') return send(await readParticipations());
     const def = TABLES[sheet];
     if (!def) return res.status(400).json({ ok: false, error: 'unknown sheet' });
+    /* 메일 기록은 로그인 때 통째로 내려간다. 받은 메일 본문은 인용이 쌓여 수십 KB가 되기도 해서
+       표 하나가 Vercel 응답 한도(4.5MB)를 넘으면 그 표가 통째로 안 뜬다. 앞부분만 보내고 끝에 표시한다.
+       DB에는 다 남아 있고, 화면은 기록 본문을 다시 저장하지 않는다(고칠 때는 바꾼 칸만 보낸다) */
+    if (LOG_BODY_TABLES.has(sheet)) try {
+      const { rows } = await pool.query(
+        `SELECT (to_jsonb(t) - 'body') || jsonb_build_object('body',
+           CASE WHEN length(t.body) > ${LOG_BODY_MAX}
+             -- 끝의 «[첨부] …» 줄은 살린다 — 화면이 무엇을 붙여 보냈나를 이 줄로 읽는다
+             THEN left(t.body, ${LOG_BODY_MAX}) || $1 || COALESCE(E'\\n\\n' || substring(t.body from E'(\\\\[첨부\\\\][^\\n]*)\\\\s*$'), '')
+             ELSE t.body END) AS r
+         FROM ${def.table} t ORDER BY t.${q(def.pk)}`, [LOG_BODY_CUT]);
+      return send(rows.map((x) => x.r));
+    } catch (e) {
+      // 줄이는 쿼리가 틀어져도 기록이 통째로 안 뜨면 안 된다 — 예전처럼 다 읽는다
+      console.error(`[data] ${sheet} 본문 줄여 읽기 실패 — 통째로 읽음:`, e.message);
+    }
     const { rows } = await pool.query(`SELECT * FROM ${def.table} ORDER BY ${q(def.pk)}`);
     send(rows);
   } catch (e) {

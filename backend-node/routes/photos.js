@@ -34,6 +34,7 @@ const ensure = () => ready || (ready = pool.query(`
   .catch((e) => { ready = null; throw e; }));
 
 const b64size = (s) => Math.floor(String(s || '').length * 3 / 4);
+const PAGE_BYTES = 3 * 1024 * 1024;   // 한 응답에 담는 사진 글자 수(base64) — 4.5MB 한도 아래
 
 router.get('/', async (req, res) => {
   if (req.user && req.user.isTest) return res.json({ ok: true, photos: [] });
@@ -41,10 +42,22 @@ router.get('/', async (req, res) => {
   if (!ev) return res.status(400).json({ ok: false, error: '행사가 필요해요' });
   try {
     await ensure();
-    const r = await pool.query(
+    /* 나눠 보낸다 — 행사 사진을 한 응답에 다 담으면 연사가 30~40명을 넘는 순간 Vercel 응답 한도(4.5MB)를
+       넘어 사진이 하나도 안 떴다. 크기만 먼저 보고 PAGE_BYTES까지 담아, 남았으면 next(이어 받을 자리)를 준다 */
+    const after = String(req.query.after || '');
+    const meta = (await pool.query(
+      `SELECT speaker_id, length(data) AS n FROM speaker_photos
+        WHERE event_id = $1 AND speaker_id > $2 ORDER BY speaker_id`, [ev, after])).rows;
+    const ids = [];
+    let bytes = 0;
+    for (const m of meta) {
+      if (ids.length && bytes + Number(m.n || 0) > PAGE_BYTES) break;
+      ids.push(m.speaker_id); bytes += Number(m.n || 0);
+    }
+    const r = ids.length ? await pool.query(
       `SELECT speaker_id, file, content_type, data, updated_at
-         FROM speaker_photos WHERE event_id = $1`, [ev]);
-    res.json({ ok: true, photos: r.rows });
+         FROM speaker_photos WHERE event_id = $1 AND speaker_id = ANY($2::text[])`, [ev, ids]) : { rows: [] };
+    res.json({ ok: true, photos: r.rows, next: meta.length > ids.length ? ids[ids.length - 1] : null });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
