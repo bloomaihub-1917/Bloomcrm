@@ -2043,10 +2043,16 @@ export async function handleConfFile(e){
   /* 무엇이 새로 만들어지고 무엇이 이미 있는지 먼저 보여준다 — 올리고 나서
      알려 주면 되돌릴 수 없다. */
   const sessKey = (t) => String(t || '').trim().toLowerCase();
-  const contactIdByMail = (m) => {
+  /* 메일로 마스터DB 사람 찾기 — 비서실·공용 주소처럼 여럿이 쓰는 메일이면 이름까지 맞는 사람만.
+     전에는 그 주소의 첫 사람에게 연사가 이어졌다 */
+  const contactIdByMail = (m, name) => {
     const e = String(m || '').trim().toLowerCase();
-    const c = e && contacts.find(k => [k.email1, k.email2].some(x => x && String(x).trim().toLowerCase() === e));
-    return c ? String(c.id) : '';
+    if(!e) return '';
+    const hits = contacts.filter(k => [k.email1, k.email2].some(x => x && String(x).trim().toLowerCase() === e));
+    if(hits.length <= 1) return hits[0] ? String(hits[0].id) : '';
+    const n = sessKey(name);
+    const same = hits.filter(k => n && [k.nameKo, k.nameEn].some(x => x && sessKey(x) === n));
+    return same.length === 1 ? String(same[0].id) : '';
   };
   /* 식사·휴식은 이름으로 찾지 않는다 — «오찬»은 날마다 있다. 이름으로 찾으면
      둘째 날 오찬이 첫째 날 것을 덮는다. 종류·일자·시작으로 찾는다. */
@@ -2090,6 +2096,21 @@ export async function handleConfFile(e){
 ` : '')
     + `이미 있는 것은 비어 있지 않은 칸만 덮어씁니다. 지우지 않습니다.`;
   if(!confirm(msg)) return;
+
+  /* 연사는 이름으로 찾는다(배정 표도 이름으로 가리킨다). 이름이 같고 소속이 다르면 동명이인일 수 있다 —
+     그대로 두면 둘째 사람이 첫 사람의 소속·직함·사례비를 덮어쓴다 */
+  const orgKey = (x) => sessKey(x.org_ko || x.org_en);
+  const seen = new Map();
+  const homonyms = [];
+  rowsP.forEach(r => {
+    const k = sessKey(r.name_snapshot);
+    if(!k || !orgKey(r)) return;
+    const prev = seen.get(k) || haveSp.get(k);
+    if(prev && orgKey(prev) && orgKey(prev) !== orgKey(r)) homonyms.push(`${r.name_snapshot} — ${prev.org_ko || prev.org_en} / ${r.org_ko || r.org_en}`);
+    if(!seen.has(k)) seen.set(k, r);
+  });
+  if(homonyms.length && !confirm(`이름은 같은데 소속이 다른 연사가 ${homonyms.length}명 있어요:\n\n${homonyms.slice(0, 10).join('\n')}\n\n`
+    + `같은 사람(소속이 바뀜)이면 확인을 누르세요 — 새 소속으로 덮어씁니다.\n다른 사람이면 취소하고, 파일에서 이름 뒤에 구분을 붙여(예: 김지훈(서울대)) 다시 올려 주세요.`)) return;
 
   const msgEl = document.getElementById('conf-import-msg');
   const say = (t, ok) => { if(msgEl){ msgEl.style.color = ok === false ? 'var(--re)' : 'var(--i4)'; msgEl.textContent = t; } };
@@ -2149,7 +2170,7 @@ export async function handleConfFile(e){
     } else {
       /* 마스터DB에 같은 메일의 사람이 있으면 그 사람으로 잇는다 — 안 이으면 마스터DB에서
          그 사람의 연사 이력·주고받은 메일이 안 보이고, 다음 행사 섭외 때도 못 찾는다 */
-      const row = { event_id: ev.key, contact_id: contactIdByMail(r.email), status: '섭외중', lang_pref: '', note: '', ...patch };
+      const row = { event_id: ev.key, contact_id: contactIdByMail(r.email, r.name_snapshot), status: '섭외중', lang_pref: '', note: '', ...patch };
       const res = await gSaveSpeaker(row);
       if(!res || res.ok === false){ fail('연사'); return; }
       sp = { ...row, id: res.id || `SP-tmp-${Date.now()}-${nP}` };
@@ -2160,7 +2181,7 @@ export async function handleConfFile(e){
     /* 메일을 적었으면 연락 상대(수신)로 만들어 둔다 — 연사에게 무엇을
        보내려면 수신이 있어야 하고, 없으면 메일 칸이 열리지 않는다. */
     if(r.email && !contactsOfSpeaker(sp.id).some(x => x.email === r.email)){
-      const c = { speaker_id: sp.id, contact_id: contactIdByMail(r.email), name: sp.name_snapshot,
+      const c = { speaker_id: sp.id, contact_id: contactIdByMail(r.email, sp.name_snapshot), name: sp.name_snapshot,
         email: r.email, phone: r.phone || '', kind: '연사 본인',
         send: contactsOfSpeaker(sp.id).some(x => x.send === 'to') ? 'cc' : 'to', note: '' };
       const res = await saveSpeakerContact(c);

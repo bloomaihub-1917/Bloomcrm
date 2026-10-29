@@ -838,16 +838,27 @@ function applyColumnMap(colMap){
     })();
 
     const email1Val = colMap.email1 ? String(r[colMap.email1]||'').trim().toLowerCase() : '';
-    const existByEmail = email1Val ? emailMap[email1Val] : null;
-
     const nkTrim = nameKo.trim(), neTrim = nameEn.trim();
-    const suspectByName = !existByEmail && (
+    /* 메일이 같아도 이름이 다르면 같은 사람으로 치지 않는다 — info@·비서실 같은 공용 주소를
+       여럿이 쓰면 두 번째 사람이 «중복»으로 빠지고 그 사람의 행사가 첫 사람에게 붙었다.
+       한쪽에 이름이 없으면 메일만으로 같은 사람으로 본다 */
+    const sameName = (c) => {
+      const ck = String(c.nameKo || '').trim(), ce = String(c.nameEn || '').trim().toLowerCase();
+      if(!(ck || ce) || !(nkTrim || neTrim)) return true;
+      return !!((ck && nkTrim && ck === nkTrim) || (ce && neTrim && ce === neTrim.toLowerCase()));
+    };
+    const mailHit = email1Val ? emailMap[email1Val] : null;
+    const existByEmail = mailHit && sameName(mailHit) ? mailHit : null;
+    // 메일은 같은데 이름이 다른 기존 연락처 — «의심»으로 돌려 사람이 고르게 한다
+    const mailOther = mailHit && !existByEmail && mailHit.id != null ? mailHit : null;
+
+    const suspectByName = !existByEmail && !mailOther && (
       (nkTrim && nameMap[nkTrim] && nameMap[nkTrim].length > 0) ||
       (neTrim && nameMap[neTrim] && nameMap[neTrim].length > 0)
     );
-    const suspectMatch = suspectByName
+    const suspectMatch = mailOther || (suspectByName
       ? (nameMap[nkTrim]||nameMap[neTrim]||[])[0]
-      : null;
+      : null);
 
     const isDup = !!existByEmail;
     const isSuspect = !isDup && !!suspectMatch;
@@ -1340,9 +1351,10 @@ export async function runValidationStep(newRows, dupRows){
       // 중복 판정(email1·email2 둘 다 본다)과 같은 기준으로 찾는다 — email1만 보면 기존 사람의
       // email2로 들어온 줄이 «중복»으로 걸러지고도 행사가 안 붙었다
       || (email && contacts.find(c => [c.email1, c.email2].some(e => e && String(e).toLowerCase() === email)))
-      || contacts.find(c =>
-          (c.nameKo||c.name||'') === (r.nameKo||'') &&
-          (c.orgKo||c.org||'')   === (r.orgKo||''));
+      // 빈 칸끼리는 같다고 보지 않는다 — 영문 이름·해외 소속 줄이 국문 칸이 빈 아무 연락처에나 붙었다
+      || (r.nameKo && contacts.find(c =>
+          (c.nameKo||c.name||'') === r.nameKo &&
+          (c.orgKo||c.org||'')   === (r.orgKo||'')));
     if(!existing) return;
 
     // 같은 사람인데 이메일이 다르면(=추가 이메일) — 기존 email2가 비어있을 때만 채워 넣는다

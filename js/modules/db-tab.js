@@ -49,6 +49,8 @@ import {
   SPEAKER_CONTACTS,
   getSpeakerById,
   speakersOfContact,
+  nextContactId,
+  CONTACT_ATTEMPTS,
 } from '../state.js';
 import { CP, CL, RP, CAT_KEYS, ROLE_TO_CAT, COUNTRIES, avB, avF } from '../constants.js';
 import { td, ab, phoneMatch, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseSectorScope, parseTags, joinTags, isMobile, cleanEmail, personName, personFullName, leftPill, slugifySectorName } from '../utils.js';
@@ -961,7 +963,8 @@ export async function applyMDBBulkEdit(){
     const c = getContactById(id);
     if(!c) return;
     backup.push({ c, orgKo: c.orgKo, orgEn: c.orgEn, cat: c.cat, status: c.status, country: c.country, tags: c.tags, org_id: c.org_id });
-    if(org){ c.orgKo = org; if(!c.orgEn) c.orgEn = org; }
+    // 소속을 바꾸면 영문 소속도 새 회사로 — 전에는 영문이 옛 회사로 남아 영문 메일 {기업}에 남의 이름이 들어갔다
+    if(org){ c.orgKo = org; c.orgEn = /[가-힣]/.test(org) ? '' : org; }
     if(cat) c.cat = cat;
     if(status) c.status = status;
     if(countrySel) c.country = country;
@@ -977,7 +980,8 @@ export async function applyMDBBulkEdit(){
     try {
       await ensureOrgsForNames([org]);
       const oid = orgIdForName(org);
-      changed.forEach(c => { c.org_id = oid || c.org_id || ''; });
+      const o = oid ? getOrgById(oid) : null;
+      changed.forEach(c => { c.org_id = oid || c.org_id || ''; if(o && o.name_en) c.orgEn = o.name_en; });
     } catch(e){ console.warn('[db-tab] 기업 재연결 실패:', e); }
   }
 
@@ -1031,6 +1035,8 @@ export async function bulkDeleteMDBContacts(){
       const sp = getSpeakerById(r.speaker_id);
       where.push(`연사 연락 상대(${(sp && (sp.name_snapshot || sp.name_en)) || r.speaker_id})`);
     });
+    const att = CONTACT_ATTEMPTS.filter(a => String(a.contact_id || '') === k).length;
+    if(att) where.push(`컨택 DM·TM 기록 ${att}건`);
     if(where.length) blocked.push(`· ${personName(getContactById(id)) || id} — ${where.join(', ')}`);
   });
   if(blocked.length){
@@ -1054,19 +1060,36 @@ export async function bulkDeleteMDBContacts(){
   buildCoDB();
   renderMDB();
 
-  // Apps Script 과부하 방지를 위해 동시 요청이 아니라 순차로 삭제
-  for(const id of ids){
-    await postToSheet({ sheet:'contacts', action:'delete', row:[id] }, '연락처 삭제');
-  }
+  /* 참여 기록을 먼저 지우고 사람을 지운다 — 거꾸로면 참여 삭제가 실패했을 때 없는 사람을
+     가리키는 줄이 남아 행사 명단에 빈 이름이 뜬다. 실패한 것은 화면에 되돌린다 */
+  const failedParts = [];
   for(const p of removedParts){
-    await postToSheet({ sheet:'participations', action:'delete', row:[p.id] }, '행사 참여 삭제');
+    const r = await postToSheet({ sheet:'participations', action:'delete', row:[p.id] }, '행사 참여 삭제');
+    if(!r || r.ok === false) failedParts.push(p);
+  }
+  const stuck = new Set(failedParts.map(p => p.contactId));   // 참여가 남은 사람은 지우지 않는다
+  const failedIds = [...stuck];
+  for(const id of ids){
+    if(stuck.has(id)) continue;
+    const r = await postToSheet({ sheet:'contacts', action:'delete', row:[id] }, '연락처 삭제');
+    if(!r || r.ok === false) failedIds.push(id);
+  }
+  if(failedIds.length || failedParts.length){
+    const back = new Set(failedIds);
+    goneContacts.filter(c => back.has(c.id)).forEach(c => contacts.push(c));
+    participations.push(...failedParts);   // 지워진 참여 기록은 서버에서도 지워졌다 — 못 지운 것만 되돌린다
+    buildCoDB(); renderMDB();
+    alert(`${failedIds.length}명은 지우지 못해 되돌렸어요. 네트워크 확인 후 다시 시도해주세요.`);
   }
   /* 지운 연락처와 딸린 참여 기록을 통째로 담는다 — «되돌릴 수 없습니다»라고
      물어 놓고 정말 아무것도 안 남기면, 잘못 지운 날 할 수 있는 게 없다. */
-  trackAction('edit', '연락처 일괄 삭제', `${ids.length}명`, `연락처 ${ids.length}명 삭제`,
-    removedMeta('contacts', ids.join(','), goneContacts,
+  const doneIds = ids.filter(id => !failedIds.includes(id));
+  const doneParts = removedParts.filter(p => !failedParts.includes(p));
+  if(!doneIds.length && !doneParts.length) return;
+  trackAction('edit', '연락처 일괄 삭제', `${doneIds.length}명`, `연락처 ${doneIds.length}명 삭제`,
+    removedMeta('contacts', doneIds.join(','), goneContacts.filter(c => doneIds.includes(c.id)),
       /* 참여 기록은 제 표 이름을 달고 간다 — 없으면 되돌릴 때 연락처 표로 들어간다 */
-      { also: removedParts.map(p => ({ table: 'participations', before: p })) }));
+      { also: doneParts.map(p => ({ table: 'participations', before: p })) }));
 }
 
 /* ── View toggle (원본 1767~1772행) ── */
@@ -2513,7 +2536,7 @@ export async function saveNewContact(){
   const btn = document.getElementById('ac-save-btn');
   if(btn){ btn.disabled=true; btn.textContent='저장 중…'; }
 
-  const newId = Date.now() + Math.floor(Math.random()*10000);
+  const newId = nextContactId();   // 규칙 하나로(CLAUDE.md) — 무작위는 남의 연락처와 겹쳐 덮을 수 있었다
   const today = td();
 
   const c = {
@@ -2695,7 +2718,7 @@ export async function confirmLeave(cid){
       return;
     }
     newC = {
-      id: Date.now() + Math.floor(Math.random()*10000),
+      id: nextContactId(),
       nameKo: c.nameKo, nameEn: c.nameEn,
       orgKo, orgEn,
       titleKo: get('lv-title'), titleEn: '',

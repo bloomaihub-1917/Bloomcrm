@@ -109,7 +109,7 @@ const COLOR = { blue: '파랑', amber: '주황', green: '초록', red: '빨강',
 const YESNO = { yes: '예', no: '아니요', true: '예', false: '아니요' };
 
 /* &amp; · -&gt; 처럼 글자로 남은 기호를 되돌린다 */
-const unent = (t) => String(t ?? '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+export const unent = (t) => String(t ?? '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
   .replace(/&quot;/g, '"').replace(/&#39;/g, "'");
 
 /* 받침에 맞지 않는 조사 — «확정로», «대한민국로», «통화을(를)», «굿윈를».

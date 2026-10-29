@@ -12,6 +12,7 @@
    않아 저장할 때 필드명이 어긋날 여지를 없앴다.
 ═══════════════════════════════════════════════════════════════ */
 
+import { unent } from './audit-describe.js';
 import {
   EXHIBITORS, EXH_ITEMS, EXH_INVOICES, EXH_TAX, EXH_PAYMENTS, EXH_LOGS, EXH_CFG,
   exhEvent, setExhEvent,
@@ -199,9 +200,11 @@ export function currencyOf(exhId){
   const hit = (src.length ? src : liveInvoices(exhId)).find(r => r.currency);
   return (hit && hit.currency) || 'KRW';
 }
-const sumIn = (rows, cur) => rows
+/* 센트에서 끊는다 — USD 1,234.10 + 2,000.20이 3234.2999…가 되어 3,234.30을 받으면 «초과 입금»으로 떴다 */
+const cents = (v) => Math.round(v * 100) / 100;
+const sumIn = (rows, cur) => cents(rows
   .filter(r => (r.currency || 'KRW') === cur)
-  .reduce((s, r) => s + num(r.amount), 0);
+  .reduce((s, r) => s + num(r.amount), 0));
 
 /* 한 기업에 통화가 섞였는지 — 섞이면 한쪽이 합계에서 빠지므로 화면에 알린다 */
 export function mixedCurrency(exhId){
@@ -287,12 +290,12 @@ export function invoiceGap(exhId){
      영영 사라지지 않는다(포트리아가 그랬다). 요청만 해 둔 환불은 아직 돌려준
      돈이 아니라서 세지 않는다. */
   const refunded = sumIn(paymentsFor(exhId).filter(hasAmount).filter(isDoneRefund), cur);
-  const net = invoiced - refunded;
+  const net = cents(invoiced - refunded);
   /* 엑스렌탈이 직접 발행한 몫은 우리가 낼 장에서 뺀다 — 안 빼면 그 기업은
      정산이 다 맞은 뒤에도 «추가 발행 필요»가 영영 남는다. */
   const external = exrentalBilled(exhId);
-  const mine = billed - external;
-  return net === mine ? null
+  const mine = cents(billed - external);
+  return Math.abs(net - mine) < 0.005 ? null
     : { invoiced, refunded, net, billed, external, mine, diff: mine - net, cur };
 }
 /* ── 분류별 청구액 (부스 / 비품 / 그래픽 / 기타) ──
@@ -330,10 +333,10 @@ export const isPendingRefund = (p) => p.kind === 'refund' && p.status === 'reque
 
 export function paidAmount(exhId){
   const cur = currencyOf(exhId);
-  return paymentsFor(exhId)
+  return cents(paymentsFor(exhId)
     .filter(p => (p.currency || 'KRW') === cur)
     .filter(p => p.kind !== 'refund' || isDoneRefund(p))
-    .reduce((s, p) => s + (p.kind === 'refund' ? -num(p.amount) : num(p.amount)), 0);
+    .reduce((s, p) => s + (p.kind === 'refund' ? -num(p.amount) : num(p.amount)), 0));
 }
 
 /* 순입금 한 숫자만 보면 4,214가 처음부터 4,214 들어온 것처럼 보인다. 실제로는
@@ -462,7 +465,7 @@ export function payDueDate(x){
 export function settleState(x){
   const billed = billedAmount(x.id), paid = paidAmount(x.id);
   const cur = currencyOf(x.id);
-  const balance = billed - paid;
+  const balance = cents(billed - paid);
   const due = payDueDate(x);
   /* 기한이 지났어도 발행한 인보이스만큼 받았다면 밀린 게 아니다 — 남은 돈은
      인보이스를 낸 뒤 늘어난 항목(현장 추가 등)이라 아직 청구하지 않은 것이다.
@@ -4815,7 +4818,7 @@ function renderDashboard(all){
       ${recent.map(l => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--i8)">
         <span style="width:22px;height:22px;border-radius:50%;background:${escAttr(l.color || '#9C9890')};color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${escapeHtml((l.name || '?').slice(0,2))}</span>
         <span style="font-size:11px;color:var(--i3);flex:0 0 auto">${escapeHtml(l.name || '')}</span>
-        <span style="font-size:11.5px;color:var(--i2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${(l.detail || '').replace(/<[^>]+>/g, '')}</span>
+        <span style="font-size:11.5px;color:var(--i2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(unent((l.detail || '').replace(/<[^>]+>/g, '')))}</span>
         <span style="font-size:10px;color:var(--i5);flex:0 0 auto">${escapeHtml(String(l.ts || '').slice(5,10))}</span>
       </div>`).join('')}
       <div style="font-size:10.5px;color:var(--i5);margin-top:7px">전체 이력은 <b>로그</b> 탭에서 볼 수 있어요</div>

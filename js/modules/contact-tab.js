@@ -478,7 +478,7 @@ export function openPersonForm(mid, k){
 const contactRow23 = (c) => [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
   c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
   c.beat, c.products, c.tags || '', c.org_id || ''];
-/* 새 연락처 id — 16자리 이하(CLAUDE.md): ${Date.now()}${순번 3자리} */
+/* 새 연락처 id — 16자리 이하(CLAUDE.md). max(지금 ms × 1000, 기존 최대 + 1) */
 const newContactId = () => nextContactId();   // 무작위 3자리는 겹칠 수 있었다 — state.js 규칙 하나로
 
 export async function savePersonForm(mid, k){
@@ -501,7 +501,8 @@ export async function savePersonForm(mid, k){
       country: co?.country || '', cat: 'attendee', lang: ko ? 'KO' : 'EN',
       source: `${evLabel(r?.event_id)} 컨택(${r?.name || ''})`, date: td(), status: 'new',
       email1: email, email2: '', phone1: v('phone1'), phone2: v('phone2'),
-      beat: '', products: '', tags: '', org_id: m.org_id,
+      // 기업DB에 없어 이름으로만 잡은 명단 줄(«name:…»)은 기업 id가 아니다 — 연락처에 넣지 않는다
+      beat: '', products: '', tags: '', org_id: String(m.org_id || '').startsWith('name:') ? '' : m.org_id,
       left_at: '', moved_to_id: '', memo1: '', memo2: '', memo3: '', prefix: '',
     };
     if(!Number.isSafeInteger(c.id)){ alert('연락처 번호를 만들지 못했어요. 다시 눌러 주세요.'); return; }
@@ -854,14 +855,28 @@ export async function toggleRoundClosed(id){
    items: [{ name(기업명), sends: [{ ts, emails: [] }] }] — 받은 주소마다 DM «보냄» 기록 한 줄 */
 export async function importSentToRound(evKey, name, items){
   const norm = (s) => String(s || '').trim().toLowerCase();
+  // 주소 → 그 주소를 쓰는 사람들. info@·대행사 주소처럼 여럿이 쓰는 주소는 사람을 하나로 못 정한다
   const byMail = new Map();
-  contacts.forEach(c => [c.email1, c.email2].forEach(e => { if(e && !byMail.has(norm(e))) byMail.set(norm(e), c); }));
-  const nkey = (s) => String(s || '').toLowerCase().replace(/\(.*?\)|㈜|주식회사|co\.?,?|ltd\.?|inc\.?|corp\.?|[^a-z0-9가-힣]/g, '');
-  // 기업DB에서 그 기업 찾기 — 받은 주소의 담당자가 속한 기업이 먼저, 없으면 이름으로
+  contacts.forEach(c => [c.email1, c.email2].forEach(e => { if(!e) return; const k = norm(e); if(!byMail.has(k)) byMail.set(k, []); if(!byMail.get(k).includes(c)) byMail.get(k).push(c); }));
+  // 법인 꼬리말은 낱말일 때만 뗀다 — 전에는 Coway가 way, Incheon이 heon이 됐다
+  const nkey = (s) => String(s || '').toLowerCase().replace(/\(.*?\)|㈜|주식회사|\b(?:co|ltd|inc|corp)\b\.?,?|[^a-z0-9가-힣]/g, '');
+  const cos = coList();
+  /* 기업DB에서 그 기업 찾기 — 참가기업에 걸린 기업 id가 먼저, 다음은 이름,
+     마지막으로 받은 주소가 «한 기업에만» 있을 때 그 기업 */
   const orgOf = (it) => {
+    if(it.org_id){ const co = cos.find(c => c.key === it.org_id); if(co) return co; }
+    const byName = cos.find(co => [co.nameKo, co.nameEn].some(n => n && nkey(n) && nkey(n) === nkey(it.name)));
+    if(byName) return byName;
     const mails = new Set(it.sends.flatMap(s => s.emails).map(norm));
-    return coList().find(co => co.contacts.some(p => mails.has(norm(p.email)) || mails.has(norm(contactOf(p.id)?.email1))))
-      || coList().find(co => [co.nameKo, co.nameEn].some(n => n && nkey(n) === nkey(it.name))) || null;
+    const hits = cos.filter(co => co.contacts.some(p => mails.has(norm(p.email)) || mails.has(norm(contactOf(p.id)?.email1))));
+    return hits.length === 1 ? hits[0] : null;
+  };
+  // 주소의 사람 — 여럿이면 이 기업 사람만, 그래도 여럿이면 비운다(엉뚱한 사람에게 기록이 붙지 않게)
+  const personOf = (e, orgId) => {
+    const ps = byMail.get(norm(e)) || [];
+    if(ps.length <= 1) return ps[0] || null;
+    const mine = ps.filter(p => p.org_id && p.org_id === orgId);
+    return mine.length === 1 ? mine[0] : null;
   };
   let r = CONTACT_ROUNDS.find(x => x.event_id === evKey && x.name === name);
   if(!r){
@@ -890,7 +905,7 @@ export async function importSentToRound(evKey, name, items){
     it.sends.forEach(s => s.emails.forEach(e => {
       const at = String(s.ts || now).slice(0, 16);
       if([...CONTACT_ATTEMPTS, ...atts].some(a => a.member_id === m.id && norm(a.phone) === norm(e) && String(a.at).slice(0, 10) === at.slice(0, 10))) return;
-      const p = byMail.get(norm(e));
+      const p = personOf(e, orgId);
       atts.push({ id: genId('CA-', atts.length), round_id: r.id, member_id: m.id, org_id: orgId,
         contact_id: p ? String(p.id) : '', contact_name: p ? (p.nameKo || p.nameEn || '') : '', phone: e,
         channel: 'DM', at, by_email: currentUser?.email || '', by_name: currentUser?.name || '', reaction: 'sent', note: '' });

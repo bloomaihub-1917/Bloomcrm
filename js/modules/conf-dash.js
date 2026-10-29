@@ -10,6 +10,7 @@
    취소된 연사는 세지 않는다. 프로그램에서 빠진 사람의 자료가 안 왔다고
    처리 필요에 올리면 정작 할 일이 묻힌다.
 ══════════════════════════════════════════════════════════════ */
+import { unent } from './audit-describe.js';
 import { speakersForEvent, sessionsForEvent, assignmentsOfSession, assignmentsFor,
   rolesOfSpeaker, logsOfSpeaker, auditLog } from '../state.js';
 import { SPEAKER_ROLES } from '../constants.js';
@@ -221,7 +222,7 @@ export function confDashHtml(ev){
       ${recent.length ? recent.map(l => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--i8)">
         <span style="font-size:11px;color:var(--i3);flex:0 0 auto">${escapeHtml(l.name || '')}</span>
         <span style="font-size:11.5px;color:var(--i2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${
-          escapeHtml((l.detail || '').replace(/<[^>]+>/g, ''))}</span>
+          escapeHtml(unent((l.detail || '').replace(/<[^>]+>/g, '')))}</span>
         <span style="font-size:10px;color:var(--i5);flex:0 0 auto">${escapeHtml(String(l.ts || '').slice(5, 10))}</span>
       </div>`).join('') : '<div style="font-size:11.5px;color:var(--i5)">아직 변경 이력이 없어요</div>'}
     </div>`;

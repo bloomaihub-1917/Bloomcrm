@@ -593,8 +593,9 @@ export async function issueExhInvoice(exhId){
     const msgs = [];
     for(const cur of curs){
       try {
-        const sum = billable.filter(i => (i.currency || 'KRW') === cur)
-          .reduce((s, i) => s + num(i.amount), 0);
+        // 센트에서 끊는다 — 안 끊으면 "3234.2999999999997"이 인보이스 금액으로 저장됐다
+        const sum = Math.round(billable.filter(i => (i.currency || 'KRW') === cur)
+          .reduce((s, i) => s + num(i.amount), 0) * 100) / 100;
         /* 제목은 무엇이 담겼는지 — 정산 탭 목록에서 이 줄이 무슨 청구인지 알아야 한다 */
         const cats = GROUPS.filter(g => billable.some(i =>
           (i.currency || 'KRW') === cur && (CATS.includes(i.category) ? i.category : 'etc') === g.cat));
@@ -608,7 +609,8 @@ export async function issueExhInvoice(exhId){
         const doc = invoiceDoc({ ...row, id: '', exhibitor_id: exhId, sent_at: '', due_date: '' });
         const { fit, blob } = await buildInvoiceFile(doc);
         const inv = await createInvoiceRow(exhId, row);
-        if(!inv) return;                    // 저장 실패 — createInvoiceRow가 이미 알렸다
+        // 저장 실패 — createInvoiceRow가 이미 알렸다. 다른 통화 인보이스는 계속 발행한다
+        if(!inv){ msgs.push(`${cur} 인보이스를 저장하지 못했어요.`); continue; }
         const res = await putInvoiceFile(doc, blob);
         /* 발송일은 파일이 실제로 폴더에 저장되거나 내려받아진 뒤에 찍는다 */
         await setInvField(inv.id, 'sent_at', doc.date);

@@ -406,7 +406,8 @@ export async function bmToContact(){
   const st = curStep();
   if(!st) return;
   const toOf = (l) => (String(l.counterpart || '').split('(cc)')[0].match(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g) || []);
-  const items = eventExhibitors().map(x => ({ name: exhNames(x).ko,
+  // 참가기업에 걸린 기업DB id를 함께 넘긴다 — 주소·이름으로 짐작하는 것보다 정확하다
+  const items = eventExhibitors().map(x => ({ name: exhNames(x).ko, org_id: x.org_id || '',
     sends: sentLogs(x).map(l => ({ ts: l.ts, emails: toOf(l) })).filter(s => s.emails.length) })).filter(it => it.sends.length);
   if(!items.length){ say('이 메일을 보낸 기록이 없어요.'); return; }
   const name = `${st.label} — 회신 확인`;

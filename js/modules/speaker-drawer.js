@@ -24,6 +24,7 @@ import {
   contactsOfSpeaker, logsOfSpeaker,
   confCfg, speakerNeed, speakerNeedList,
   isDomesticSpeaker, autoDomestic, bankDocs, paysFee,
+  nextContactId,
 } from '../state.js';
 import { SPEAKER_ROLES, NEED_MARK, NEED_LABEL, SP_CONSENTS } from '../constants.js';
 import './flow-editor.js';
@@ -958,8 +959,7 @@ ${
 그래도 새로 만들까요? (같은 사람이면 취소하고 위에서 검색해 연결하세요)`)) return;
 
   const c = {
-    // 13자리 + 4자리 난수 합 — 16자리 안이라 화면이 숫자로 바꿔도 안전하다(CLAUDE.md)
-    id: Date.now() + Math.floor(Math.random() * 10000),
+    id: nextContactId(),   // 규칙 하나로(CLAUDE.md) — 16자리 이하, 남과 안 겹친다
     nameKo, nameEn,
     orgKo: sp.org_ko || '', orgEn: sp.org_en || '',
     titleKo: sp.title_ko || '', titleEn: sp.title_en || '',

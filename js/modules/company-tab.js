@@ -57,10 +57,13 @@ import {
   ORG_KINDS,
   EXHIBITORS,
   exhibitorsForEvent,
+  ROUND_MEMBERS,
+  CONTACT_ATTEMPTS,
 } from '../state.js';
 import { RP, avB, avF } from '../constants.js';
 import { escapeHtml, escAttr, levenshteinDist, phoneMatch, parseSectorScope, sectorKey, countryName, isMobile, td, leftPill, safeUrl, parseLinks, slugifySectorName } from '../utils.js';
-import { postToSheet, batchCreateExhibitors, upsertSectorRow, saveExhibitor, aiCompanyPairs, aiOrgQueryPlan, aiOrgPdfSummary } from '../api.js';
+import { postToSheet, batchCreateExhibitors, upsertSectorRow, saveExhibitor, aiCompanyPairs, aiOrgQueryPlan, aiOrgPdfSummary,
+  saveRoundMember, deleteRoundMembers, saveAttempt } from '../api.js';
 import { parseSectors, joinSectors, mainSectors, sectorNamesInDomain, domainName, domainOfSector, findSectorByName, UNASSIGNED_DOMAIN } from './settings-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
 import { trackAction, changed, removed as removedMeta } from './audit-tab.js';
@@ -512,6 +515,33 @@ export async function mergeCompanies(loserKey, winnerKey){
       const r = await saveExhibitor(patch);
       if(r && r.ok !== false){ Object.assign(x, patch); exhMoved.push(x.id); }
       else fails.push(`전시 참가 ${x.company_name || x.id}`);
+    }
+
+    /* 컨택 차수 명단·DM·TM 기록도 org_id로 묶인다 — 안 옮기면 진 쪽 기업을 지운 뒤 명단 줄이
+       없는 기업을 가리켜 담당자가 안 보이고, 이긴 쪽에서는 연락 이력이 안 보인다.
+       같은 차수에 두 기업이 다 있으면 진 쪽 줄의 기록을 이긴 쪽 줄로 옮기고 진 쪽 줄을 지운다 */
+    for(const m of ROUND_MEMBERS.filter(m => m.org_id === loser.key)){
+      const keep = ROUND_MEMBERS.find(w => w.round_id === m.round_id && w.org_id === winner.key);
+      const memberId = keep ? keep.id : m.id;
+      for(const a of CONTACT_ATTEMPTS.filter(a => a.member_id === m.id || (a.round_id === m.round_id && a.org_id === loser.key))){
+        const patch = { id: a.id, member_id: memberId, org_id: winner.key };
+        const r = await saveAttempt(patch);
+        if(r && r.ok !== false) Object.assign(a, patch); else fails.push(`컨택 기록 ${a.id}`);
+      }
+      if(keep){
+        if(fails.length) continue;   // 기록을 다 못 옮겼으면 진 쪽 줄을 남긴다
+        const r = await deleteRoundMembers([m.id]);
+        if(r && r.ok !== false){ const i = ROUND_MEMBERS.indexOf(m); if(i >= 0) ROUND_MEMBERS.splice(i, 1); }
+        else fails.push('컨택 명단 정리');
+      } else {
+        const r = await saveRoundMember({ id: m.id, org_id: winner.key });
+        if(r && r.ok !== false) m.org_id = winner.key; else fails.push('컨택 명단');
+      }
+    }
+    // 차수 명단 밖 기록(옛 엑셀 가져오기 등)
+    for(const a of CONTACT_ATTEMPTS.filter(a => a.org_id === loser.key)){
+      const r = await saveAttempt({ id: a.id, org_id: winner.key });
+      if(r && r.ok !== false) a.org_id = winner.key; else fails.push(`컨택 기록 ${a.id}`);
     }
 
     /* 진 쪽 이름은 이긴 쪽의 옛 이름(aliases)으로 남긴다 — 다음 업로드에 옛 표기가
