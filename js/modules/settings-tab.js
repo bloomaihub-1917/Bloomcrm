@@ -73,7 +73,7 @@ import {
   saveExhCfgToSheet,
   saveConfSession,
   loadMailFiles, mailFilesOf, uploadMailFile, deleteMailFile, fileToBase64,
-  loadMailAccounts, saveMailAccount, deleteMailAccount, testMailAccount, eventMailFrom, syncSentMail, syncInboxMail, reloadSpeakerData,
+  loadMailAccounts, saveMailAccount, loadMailFooter, saveMailFooter, deleteMailAccount, testMailAccount, eventMailFrom, syncSentMail, syncInboxMail, reloadSpeakerData,
 } from '../api.js';
 import { trackAction, changed, removed } from './audit-tab.js';
 
@@ -2706,12 +2706,103 @@ async function renderEvMailbox(evKey){
           title="행사 메일 보낸메일함·받은메일함을 읽어, 이 행사 연사·참가사와 주고받은 메일을 그 사람 기록에 남기고 초청 메일은 «보냄»으로 체크합니다">메일함에서 주고받은 기록 가져오기</button>` : ''}
       <span id="evmb-msg" style="font-size:11px;color:var(--g)"></span>
     </div>
+    ${box.username ? `<div id="evmb-footer" style="margin-top:16px"></div>` : ''}
     <div id="evd-inbox" style="margin-top:16px"></div>
     ${evParts(evKey).exh !== 'none' ? exhMailEditorHtml(evKey) : ''}
   </div>`;
   renderEvInbox(evKey);
+  if(box.username) renderEvMailFooter(evKey);
   if(evParts(evKey).exh !== 'none') fillExhMailFiles(evKey);
 }
+
+/* ── 메일 푸터 — 이 행사 메일함으로 나가는 모든 메일(전시·연사·컨택·CRM) 맨 끝에 서버가 붙인다.
+   글은 **굵게** *기울임*, www. 주소는 링크. 이미지는 글 아래. 저장은 비밀번호와 따로 ── */
+let evFooter = null;   // { evKey, text, img(미리보기 data URL), imgNew(새 이미지 | null=빼기 | undefined=그대로), imgType }
+async function renderEvMailFooter(evKey){
+  const el = document.getElementById('evmb-footer');
+  if(!el) return;
+  if(!evFooter || evFooter.evKey !== evKey){
+    el.innerHTML = '<div style="font-size:11px;color:var(--i4)">메일 푸터 불러오는 중…</div>';
+    const r = await loadMailFooter(evKey);
+    if(document.getElementById('evmb-footer') !== el) return;
+    // 예전 «여러 기업에 메일»에만 저장했던 푸터가 있으면 처음 한 번 채워 둔다(저장을 눌러야 옮겨진다)
+    const old = String((EXH_CFG[evKey] || {}).mailFooter || '');
+    evFooter = { evKey, text: (r && r.footer_text) || '', img: (r && r.footer_img) || '', fromOld: !(r && r.footer_text) && !!old };
+    if(evFooter.fromOld) evFooter.text = old;
+  }
+  const f = evFooter;
+  el.innerHTML = `<div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">메일 푸터
+      ${f.text || f.img ? '<span class="pill p-green" style="font-size:10px;margin-left:6px">모든 메일에 붙음</span>' : '<span class="pill p-gray" style="font-size:10px;margin-left:6px">없음</span>'}</div>
+    <div style="font-size:11px;color:var(--i4);margin-bottom:8px">이 행사 메일로 나가는 모든 메일(전시·연사·컨택·CRM) 맨 끝, 본문·사진 아래에 붙어요.
+      **굵게** *기울임* · www. 주소는 링크. 양식 문구에 서명을 따로 넣었다면 겹치니 빼주세요.
+      ${f.fromOld ? '<br><b style="color:var(--am)">«여러 기업에 메일»에 저장해 두었던 푸터를 불러왔어요 — 저장을 눌러야 여기로 옮겨져요.</b>' : ''}</div>
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px">
+      <div>
+        <textarea class="fi" id="evmb-ftext" rows="9" style="width:100%;font-size:11.5px" oninput="evFooterInput(this.value)"
+          placeholder="***행사 사무국***&#10;주소&#10;**E-mail:** ...">${escapeHtml(f.text)}</textarea>
+        <div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap;font-size:11px">
+          <label class="btn" style="font-size:10.5px;cursor:pointer">🖼 ${f.img ? '푸터 이미지 바꾸기' : '푸터 이미지 넣기'}
+            <input type="file" accept="image/png,image/jpeg,image/gif" style="display:none" onchange="evFooterImg(this)"></label>
+          ${f.img ? '<button class="btn" style="font-size:10.5px" onclick="evFooterImg(null)">이미지 빼기</button>' : ''}
+          <span style="color:var(--i4)">가로 1240px로 맞춰요 · 1MB 이하</span>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+          <button class="btn bp" onclick="saveEvFooter('${escAttr(evKey)}')">푸터 저장</button>
+          <span id="evmb-fmsg" style="font-size:11px;color:var(--g)"></span></div>
+      </div>
+      <div><div class="mlbl">미리보기</div>
+        <div id="evmb-fprev" style="background:#fff;border:1px solid var(--i6);border-radius:6px;padding:10px;max-height:320px;overflow:auto">${evFooterPrev()}</div></div>
+    </div>`;
+}
+function evFooterPrev(){
+  const f = evFooter;
+  if(!f || (!f.text.trim() && !f.img)) return '<span style="font-size:11px;color:var(--i4)">푸터가 없어요.</span>';
+  const line = (l) => escapeHtml(l)
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<i>$1</i>')
+    .replace(/\b((?:https?:\/\/|www\.)[^\s<]+)/g, (u) => `<a href="${u.startsWith('www.') ? 'https://' + u : u}" target="_blank" style="color:#1a0dab">${u}</a>`);
+  return `<div style="font-family:Arial,sans-serif;font-size:12px;line-height:1.45;color:#222">${f.text.trim().split('\n').map(line).join('<br>')}${
+    f.img ? `<img src="${f.img}" style="display:block;max-width:100%;margin-top:10px">` : ''}</div>`;
+}
+window.evFooterInput = (v) => { if(!evFooter) return; evFooter.text = v; const p = document.getElementById('evmb-fprev'); if(p) p.innerHTML = evFooterPrev(); };
+window.evFooterImg = (input) => {
+  if(!evFooter) return;
+  if(!input){ evFooter.img = ''; evFooter.imgNew = null; renderEvMailFooter(evFooter.evKey); return; }
+  const file = input.files && input.files[0];
+  input.value = '';
+  if(!file) return;
+  const url = URL.createObjectURL(file), im = new Image();
+  im.onload = () => {
+    // 가로 1240px로 맞춘다(작으면 그대로). PNG는 투명 배경일 수 있어 PNG로 두되 1MB를 넘으면 JPEG로
+    const w = Math.min(1240, im.naturalWidth), h = Math.round(im.naturalHeight * w / im.naturalWidth);
+    const c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d');
+    const png = file.type === 'image/png';
+    if(!png){ g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); }
+    g.drawImage(im, 0, 0, w, h);
+    URL.revokeObjectURL(url);
+    let data = c.toDataURL(png ? 'image/png' : 'image/jpeg', .88);
+    if(png && data.length * .75 > 1024 * 1024){ g.globalCompositeOperation = 'destination-over'; g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); data = c.toDataURL('image/jpeg', .88); }
+    if(data.length * .75 > 1024 * 1024){ alert('이미지가 1MB를 넘어요. 더 작은 이미지를 골라주세요.'); return; }
+    evFooter.img = data; evFooter.imgNew = data; evFooter.imgType = data.slice(5, data.indexOf(';'));
+    renderEvMailFooter(evFooter.evKey);
+  };
+  im.onerror = () => { URL.revokeObjectURL(url); alert('이미지를 읽지 못했어요.'); };
+  im.src = url;
+};
+window.saveEvFooter = async (evKey) => {
+  if(!evFooter || evFooter.evKey !== evKey) return;
+  const msg = document.getElementById('evmb-fmsg');
+  if(msg){ msg.style.color = 'var(--i4)'; msg.textContent = '저장 중…'; }
+  const rec = { footer_text: evFooter.text.trim() };
+  if(evFooter.imgNew === null) rec.footer_img = null;
+  else if(evFooter.imgNew){ rec.footer_img = evFooter.imgNew; rec.footer_img_type = evFooter.imgType; }
+  const r = await saveMailFooter(evKey, rec);
+  if(!r || r.ok === false){ if(msg){ msg.style.color = 'var(--re)'; msg.textContent = (r && r.error) || '저장하지 못했어요.'; } return; }
+  evFooter.imgNew = undefined; evFooter.fromOld = false;
+  renderEvMailFooter(evKey);
+  const m2 = document.getElementById('evmb-fmsg');
+  if(m2){ m2.style.color = 'var(--g)'; m2.textContent = '저장했어요 — 이제 이 행사 메일 끝에 붙어요.'; }
+};
 
 /* ── 전시 메일 양식 ──
    고치는 곳은 편집 창 하나(exh-mail-editor.js) — 참가사 메일 탭·«여러 기업에 메일»에서도

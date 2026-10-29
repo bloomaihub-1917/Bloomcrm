@@ -1025,6 +1025,9 @@ export async function mailAccountOf(evKey, force){
   return ((mailAcctCache || {}).accounts || []).find(a => a.event_id === evKey) || null;
 }
 export const saveMailAccount   = (evKey, rec) => mailApi(`/accounts/${encodeURIComponent(evKey)}`, 'PUT', rec);
+/* 행사 메일 푸터 — 이 메일함으로 나가는 모든 메일 끝에 서버가 붙인다(routes/mail.js withFooter) */
+export const loadMailFooter    = (evKey) => mailApi(`/accounts/${encodeURIComponent(evKey)}/footer`);
+export const saveMailFooter    = (evKey, rec) => mailApi(`/accounts/${encodeURIComponent(evKey)}/footer`, 'PUT', rec);
 export const deleteMailAccount = (evKey) => mailApi(`/accounts/${encodeURIComponent(evKey)}`, 'DELETE');
 export const testMailAccount   = (evKey) => mailApi(`/accounts/${encodeURIComponent(evKey)}/test`, 'POST', {});
 /* 보낸메일함을 읽어 연사 발송 기록으로 — apply 없이 부르면 미리보기만 */

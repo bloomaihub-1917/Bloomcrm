@@ -107,6 +107,10 @@ const ensureBox = () => boxReady || (boxReady = pool.query(`
   // 마지막으로 메일함을 가져온 시각·누가(자동이면 «자동») — 대시보드 숫자가 언제 기준인지 보이게
   .then(() => pool.query('ALTER TABLE event_mailboxes ADD COLUMN IF NOT EXISTS last_sync_at TEXT'))
   .then(() => pool.query('ALTER TABLE event_mailboxes ADD COLUMN IF NOT EXISTS last_sync_by TEXT'))
+  // 행사 메일 푸터 — 이 메일함으로 나가는 모든 메일 맨 끝에 붙는 글·이미지(sendFooter)
+  .then(() => pool.query('ALTER TABLE event_mailboxes ADD COLUMN IF NOT EXISTS footer_text TEXT'))
+  .then(() => pool.query('ALTER TABLE event_mailboxes ADD COLUMN IF NOT EXISTS footer_img TEXT'))
+  .then(() => pool.query('ALTER TABLE event_mailboxes ADD COLUMN IF NOT EXISTS footer_img_type TEXT'))
   .catch((e) => { boxReady = null; throw e; }));
 const markSynced = (eventId, who) => pool.query(
   'UPDATE event_mailboxes SET last_sync_at = $1, last_sync_by = $2 WHERE event_id = $3',
@@ -153,7 +157,39 @@ const boxPublic = (b) => ({
   has_password: !!b.pass_enc, updated_at: b.updated_at, author_email: b.author_email,
   last_sync_at: b.last_sync_at || '', last_sync_by: b.last_sync_by || '',
   host_domains: b.host_domains || '',
+  footer_text: b.footer_text || '', has_footer_img: !!b.footer_img,
 });
+
+/* ── 행사 메일 푸터 ──
+   설정 › 행사 관리 › 메일에 한 번 적어 두면 이 메일함으로 나가는 모든 메일(전시·연사·컨택·CRM)
+   맨 끝에 붙는다. 글은 **굵게** · *기울임* · www.·http 주소는 링크. 이미지는 글 아래에 인라인(cid)으로.
+   화면마다 푸터를 따로 두면 메일마다 모양이 달라져 여기 한 곳에서 붙인다. */
+const FOOTER_IMG_MAX = 1024 * 1024;
+const escH = (s) => String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const footerPlain = (t) => String(t || '').replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1').trim();
+function footerHtml(t, cid) {
+  const line = (l) => escH(l)
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<i>$1</i>')
+    .replace(/\b((?:https?:\/\/|www\.)[^\s<]+)/g, (u) => `<a href="${u.startsWith('www.') ? 'https://' + u : u}" style="color:#1a0dab">${u}</a>`);
+  const txt = String(t || '').trim();
+  return `<div style="margin-top:24px;font-family:Arial,sans-serif;font-size:12px;line-height:1.45;color:#222">${
+    txt ? txt.split('\n').map(line).join('<br>') : ''}${
+    cid ? `<img src="cid:${cid}" alt="" style="display:block;max-width:100%;width:640px;height:auto;margin-top:${txt ? 10 : 0}px">` : ''}</div>`;
+}
+/* 메일(text·html·attachments)에 푸터를 붙인다. html이 없으면 글을 html로 바꿔 함께 보낸다 */
+function withFooter(box, mail) {
+  const t = String((box && box.footer_text) || '').trim();
+  const img = box && box.footer_img;
+  if (!t && !img) return mail;
+  const cid = img ? `footer.${Date.now().toString(36)}@bloom` : null;
+  const text = mail.text + (t ? `\n\n${footerPlain(t)}` : '');
+  const base = mail.html || `<div style="font-family:'Malgun Gothic',Arial,sans-serif;font-size:14px;line-height:1.6;color:#222">${escH(mail.text).replace(/\n/g, '<br>')}</div>`;
+  const html = base + footerHtml(t, cid);
+  const attachments = [...(mail.attachments || []),
+    ...(img ? [{ filename: 'footer.' + (/png/.test(box.footer_img_type || '') ? 'png' : 'jpg'), content: img, encoding: 'base64',
+      contentType: box.footer_img_type || 'image/jpeg', cid, contentDisposition: 'inline' }] : [])];
+  return { ...mail, text, html, attachments: attachments.length ? attachments : undefined };
+}
 
 /* 보낸메일함에 사본 넣기
    SMTP는 메일을 내보내기만 하고 보낸메일함에 남기지 않는다. 메일 프로그램(Outlook 등)이
@@ -255,6 +291,37 @@ router.put('/accounts/:eventId', async (req, res) => {
       await pool.query('UPDATE event_mailboxes SET host_domains = $1 WHERE event_id = $2', [domainList(req.body.host_domains).join(','), eventId]);
     }
     res.json({ ok: true, account: boxPublic(await boxOf(eventId)) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+/* 푸터만 저장 — 비밀번호 칸과 따로 둔다(푸터만 고칠 때 비밀번호를 다시 묻지 않게).
+   body: { footer_text, footer_img?: base64 | null(빼기), footer_img_type? } — footer_img를 안 보내면 그대로 */
+router.put('/accounts/:eventId/footer', async (req, res) => {
+  if (req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 고칠 수 없어요' });
+  const eventId = String(req.params.eventId);
+  const b = req.body || {};
+  try {
+    const prev = await boxOf(eventId);
+    if (!prev) return res.status(400).json({ ok: false, error: '행사 공용 메일을 먼저 저장해주세요' });
+    const sets = ['footer_text = $2'], vals = [eventId, String(b.footer_text || '').trim().slice(0, 4000)];
+    if (b.footer_img === null) sets.push('footer_img = NULL', 'footer_img_type = NULL');
+    else if (b.footer_img) {
+      const data = String(b.footer_img).replace(/^data:[^,]*,/, '');
+      if (Buffer.byteLength(data, 'base64') > FOOTER_IMG_MAX) return res.status(413).json({ ok: false, error: '푸터 이미지는 1MB 이하로 넣어주세요' });
+      const type = /^image\/(png|jpeg|gif)$/.test(b.footer_img_type || '') ? b.footer_img_type : 'image/jpeg';
+      vals.push(data, type);
+      sets.push(`footer_img = $${vals.length - 1}`, `footer_img_type = $${vals.length}`);
+    }
+    await pool.query(`UPDATE event_mailboxes SET ${sets.join(', ')} WHERE event_id = $1`, vals);
+    res.json({ ok: true, account: boxPublic(await boxOf(eventId)) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+/* 푸터 미리보기 — 화면이 글·이미지를 그려 본다(목록에는 이미지를 안 실어 가볍게) */
+router.get('/accounts/:eventId/footer', async (req, res) => {
+  try {
+    const b = await boxOf(String(req.params.eventId));
+    res.json({ ok: true, footer_text: (b && b.footer_text) || '',
+      footer_img: b && b.footer_img ? `data:${b.footer_img_type || 'image/jpeg'};base64,${b.footer_img}` : '' });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
@@ -369,7 +436,7 @@ router.post('/send', async (req, res) => {
     // 컨택 DM — 차수 명단 한 줄(round_members)과 받는 사람
     round_member_id, contact_id, contact_name,
     // CRM 협의 — crm_targets 한 줄. 기록은 그 줄의 log(JSON)에 붙는다
-    crm_target_id, memo } = req.body || {};
+    crm_target_id, memo, no_footer } = req.body || {};
 
   /* 어느 행사 사람인지는 서버가 상대 기록에서 찾는다 — 화면이 보낸 event_id만
      믿으면 다른 행사 주소로 나가는 실수를 막을 수 없다 */
@@ -428,7 +495,7 @@ router.post('/send', async (req, res) => {
   try {
     /* 한 번 만든 메일을 보내고 그대로 보낸메일함에도 넣는다 — 따로 만들면
        보낸 것과 남은 것이 달라질 수 있다 */
-    const mail = {
+    const mail = withFooter(no_footer ? null : sender.box, {
       from: sender.fromName ? `"${sender.fromName}" <${sender.from}>` : sender.from,
       to: toList.join(', '),
       cc: list(cc).join(', ') || undefined,
@@ -438,7 +505,7 @@ router.post('/send', async (req, res) => {
       text: String(text || ''),
       html: html || undefined,
       attachments: attachments.length ? attachments : undefined,
-    };
+    });
     const raw = await new MailComposer(mail).compile().build();
     const info = await t.sendMail({
       envelope: { from: sender.from, to: [...toList, ...list(cc)] },
