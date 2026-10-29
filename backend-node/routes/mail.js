@@ -1437,8 +1437,31 @@ router.post('/unassigned/:id/ignore', async (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
-router.post('/accounts/:eventId/sync-sent', syncSentHandler);
-router.post('/accounts/:eventId/sync-inbox', syncInboxHandler);
+/* 가져오기는 한 행사·한 메일함에 한 번에 하나만 — 중복 확인을 메모리에서 «날짜|제목»으로 해서,
+   15분 자동 가져오기와 사람의 «지금 가져오기»(또는 두 사람)가 겹치면 같은 메일이 두 줄 들어갔다.
+   잠금은 줄 하나(행사·종류)라 Neon을 무겁게 하지 않는다. 90초 지나면 저절로 풀린다(함수는 60초에 끊긴다) */
+let lockReady = null;
+const ensureLock = () => lockReady || (lockReady = pool.query(
+  'CREATE TABLE IF NOT EXISTS mail_sync_locks (key TEXT PRIMARY KEY, until BIGINT)').catch((e) => { lockReady = null; throw e; }));
+const withSyncLock = (kind, handler) => async (req, res) => {
+  if (!(req.body && req.body.apply)) return handler(req, res);   // 미리보기는 기록을 안 바꾼다
+  const key = `${kind}:${req.params.eventId}`;
+  const until = Date.now() + 90000;
+  try {
+    await ensureLock();
+    const got = await pool.query(
+      `INSERT INTO mail_sync_locks (key, until) VALUES ($1, $2)
+       ON CONFLICT (key) DO UPDATE SET until = EXCLUDED.until WHERE mail_sync_locks.until < $3 RETURNING key`,
+      [key, until, Date.now()]);
+    if (!got.rowCount) return res.status(409).json({ ok: false, busy: true, error: '지금 다른 쪽에서 가져오는 중이에요 — 잠시 뒤 다시 눌러 주세요' });
+  } catch (e) { console.error('[mail] 가져오기 잠금 실패 — 잠금 없이 진행:', e.message); return handler(req, res); }
+  try { return await handler(req, res); }
+  finally { await pool.query('DELETE FROM mail_sync_locks WHERE key = $1 AND until = $2', [key, until]).catch(() => {}); }
+};
+const syncSentLocked = withSyncLock('sent', syncSentHandler);
+const syncInboxLocked = withSyncLock('inbox', syncInboxHandler);
+router.post('/accounts/:eventId/sync-sent', syncSentLocked);
+router.post('/accounts/:eventId/sync-inbox', syncInboxLocked);
 
 /* ── 자동 가져오기 ──
    GitHub 예약 작업이 15분마다 부른다(.github/workflows/mail-sync.yml). 로그인한 사람이
@@ -1473,8 +1496,8 @@ cron.post('/mail-sync', async (req, res) => {
   // part=sent|inbox면 하나만 — 큰 메일함은 둘을 한 번(60초)에 못 끝낸다
   const part = String(req.query.part || '');
   const skip = { ok: true, added: 0, stamped: 0, replied: 0 };
-  const sent = part === 'inbox' ? skip : await runHandler(syncSentHandler, eventId);
-  const inbox = part === 'sent' ? skip : await runHandler(syncInboxHandler, eventId);
+  const sent = part === 'inbox' ? skip : await runHandler(syncSentLocked, eventId);
+  const inbox = part === 'sent' ? skip : await runHandler(syncInboxLocked, eventId);
   res.json({
     ok: !!(sent.ok && inbox.ok),
     sent: sent.ok ? { added: sent.added, stamped: sent.stamped } : { error: sent.error },
