@@ -137,11 +137,16 @@ const unseal = (sealed) => {
   return Buffer.concat([d.update(enc), d.final()]).toString('utf8');
 };
 
-const boxOf = async (eventId) => {
+/* 메일함 한 줄 — 푸터 이미지(최대 1MB)는 보낼 때·푸터 화면에서만 읽는다(img: true).
+   자동 가져오기가 15분마다 행사마다 읽는데, 매번 이미지를 실어 오면 Neon 전송량이 한 달 수 GB가 된다 */
+const BOX_SELECT = `SELECT (to_jsonb(m) - 'footer_img') || jsonb_build_object('has_footer_img', COALESCE(m.footer_img, '') <> '') AS b
+  FROM event_mailboxes m`;
+const boxOf = async (eventId, { img = false } = {}) => {
   if (!eventId) return null;
   await ensureBox();
-  const r = await pool.query('SELECT * FROM event_mailboxes WHERE event_id = $1', [String(eventId)]);
-  return r.rows[0] || null;
+  const r = await pool.query(img ? 'SELECT * FROM event_mailboxes WHERE event_id = $1' : `${BOX_SELECT} WHERE m.event_id = $1`, [String(eventId)]);
+  const row = r.rows[0];
+  return row ? (img ? { ...row, has_footer_img: !!row.footer_img } : row.b) : null;
 };
 const boxTransport = (b) => {
   const port = Number(b.port) || prov(b).port;
@@ -157,7 +162,7 @@ const boxPublic = (b) => ({
   has_password: !!b.pass_enc, updated_at: b.updated_at, author_email: b.author_email,
   last_sync_at: b.last_sync_at || '', last_sync_by: b.last_sync_by || '',
   host_domains: b.host_domains || '',
-  footer_text: b.footer_text || '', has_footer_img: !!b.footer_img,
+  footer_text: b.footer_text || '', has_footer_img: !!b.has_footer_img,
 });
 
 /* ── 행사 메일 푸터 ──
@@ -204,6 +209,8 @@ const imapClient = (b) => new ImapFlow({
   host: prov(b).imap, port: prov(b).imapPort, secure: true,
   auth: { user: b.username, pass: unseal(b.pass_enc), loginMethod: 'LOGIN' },
   disableCompression: true, disableAutoEnable: true, logger: false,
+  // 기본 90초를 기다리면 Vercel 함수(60초)가 먼저 끊긴다
+  connectionTimeout: 15000, greetingTimeout: 10000,
 });
 const SENT_NAMES = /^(sent|sent messages|sent items|보낸\s*메일함|보낸\s*편지함)$/i;
 async function saveToSent(b, raw) {
@@ -232,7 +239,7 @@ async function partDone(eventId, part) {
 
 /* 보낼 계정 고르기 — 행사 공용 메일(메일플러그)만 쓴다 */
 const senderFor = async (eventId) => {
-  const b = await boxOf(eventId).catch(() => null);
+  const b = await boxOf(eventId, { img: true }).catch(() => null);   // 푸터 이미지를 붙여야 한다
   if (b && b.username && b.pass_enc) {
     const from = b.from_addr || b.username;
     return { t: boxTransport(b), box: b, from, fromName: b.from_name || '', via: `행사 메일 ${from}` };
@@ -244,8 +251,8 @@ const senderFor = async (eventId) => {
 router.get('/accounts', async (req, res) => {
   try {
     await ensureBox();
-    const r = await pool.query('SELECT * FROM event_mailboxes ORDER BY event_id');
-    res.json({ ok: true, keyReady: !!secretKey(), accounts: r.rows.map(boxPublic) });
+    const r = await pool.query(`${BOX_SELECT} ORDER BY m.event_id`);
+    res.json({ ok: true, keyReady: !!secretKey(), accounts: r.rows.map((x) => boxPublic(x.b)) });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
@@ -319,7 +326,7 @@ router.put('/accounts/:eventId/footer', async (req, res) => {
 /* 푸터 미리보기 — 화면이 글·이미지를 그려 본다(목록에는 이미지를 안 실어 가볍게) */
 router.get('/accounts/:eventId/footer', async (req, res) => {
   try {
-    const b = await boxOf(String(req.params.eventId));
+    const b = await boxOf(String(req.params.eventId), { img: true });
     res.json({ ok: true, footer_text: (b && b.footer_text) || '',
       footer_img: b && b.footer_img ? `data:${b.footer_img_type || 'image/jpeg'};base64,${b.footer_img}` : '' });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
@@ -511,11 +518,6 @@ router.post('/send', async (req, res) => {
       envelope: { from: sender.from, to: [...toList, ...list(cc)] },
       raw,
     });
-    let sentSaved = null, sentError = null;
-    if (sender.box && prov(sender.box).saveSent) {
-      try { sentSaved = await saveToSent(sender.box, raw); }
-      catch (e) { sentError = e.message; console.error('[mail] 보낸메일함 저장 실패:', e.message); }
-    }
 
     /* 보낸 사실을 기록에 남긴다. 이게 실패해도 메일은 이미 나갔으므로 성공으로
        돌려주되, 기록이 빠졌다는 걸 알려준다 — 조용히 넘어가면 독촉 이력이
@@ -585,6 +587,16 @@ router.post('/send', async (req, res) => {
             req.user?.email || '', req.user?.name || '']);
         logged = true;
       } catch (e) { logError = e.message; logId = null; }
+    }
+
+    /* 보낸메일함 사본은 기록을 남긴 «뒤»에 넣는다. 전에는 앞이라 IMAP이 늦어 함수가 시간 초과로
+       끊기면, 메일은 나갔는데 기록이 없고 화면은 «실패»라 다시 보내 같은 메일이 두 번 갔다 */
+    let sentSaved = null, sentError = null;
+    if (sender.box && prov(sender.box).saveSent) {
+      try {
+        sentSaved = await Promise.race([saveToSent(sender.box, raw),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('보낸메일함 응답이 늦어 건너뛰었어요')), 20000))]);
+      } catch (e) { sentError = e.message; console.error('[mail] 보낸메일함 저장 실패:', e.message); }
     }
 
     // logId를 돌려준다 — 화면이 임시 id로 들고 있으면 나중에 그 기록을 지울 수 없다
