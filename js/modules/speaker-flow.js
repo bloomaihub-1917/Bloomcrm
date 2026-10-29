@@ -443,6 +443,8 @@ export function fillTemplate(text, sp, step){
       : (currentUser?.name || '담당자'),
     가져온자료: reuseSummary(sp, en),
     변경내용: /\{변경내용\}/.test(String(text || '')) ? changeLines(sp, en).join('\n') : '',
+    /* 계좌 — 받아 둔 값 그대로. 붙여 넣다 섞인 전각 공백은 걷어낸다 */
+    ...bankVars(sp),
   };
   /* 마감일이 없으면 «까지»·«by»가 붙은 문장이 어색해진다 — 문장째 바꾼다 */
   let t = String(text || '');
@@ -455,14 +457,30 @@ export function fillTemplate(text, sp, step){
     .replace(varPattern('conf'), (_, k) => vars[k] ?? '')
     .replace(/^\s*드림\s*$/gm, '')          // 담당자 이름이 없으면 «드림»만 남는다
     // 값이 비어 남은 항목 줄 — «- 가이드라인: », «- », «Submission form: »
-    .replace(/^- [^\n:：]{1,24}[:：] ?$/gm, '')
-    .replace(/^- ?$/gm, '')
+    .replace(/^- [^\n:：]{1,24}[:：] ?(?:\n|$)/gm, '')   // 줄바꿈째 — 목록 가운데 빈 줄이 남지 않게
+    .replace(/^- ?(?:\n|$)/gm, '')
     .replace(/^(Deadline|Submission form|Speaker guidelines): ?$/gm, '')
     .replace(/\n{3,}/g, '\n\n')
     // 내용이 다 빠진 제목 줄(■ 안내 자료, Your session: 따위)을 걷어낸다
     .replace(/^(■[^\n]*|Your session:|Your updated session:|What has changed:|For your reference:|Requested materials:|For your confirmation:|Additional materials needed:)\n(?=\n|$)/gm, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+function bankVars(sp){
+  const v = (k) => String(sp[k] || '').replace(/　/g, ' ').trim();
+  const join = (...a) => a.filter(Boolean).join(', ');
+  return {
+    예금주: v('bank_holder'),
+    은행: v('bank_name'),
+    계좌번호: v('bank_account'),
+    SWIFT: v('bank_swift'),
+    IBAN: v('bank_iban'),
+    은행코드: v('bank_code'),
+    지점: v('bank_branch'),
+    은행주소: join(v('bank_address'), v('bank_country')),
+    예금주주소: join(v('bank_holder_address'), v('bank_holder_postal')),
+  };
 }
 
 /* 양식 변형(mail-templates.js) — 역할 조건이 맞는 첫 변형이 저절로 골라진다.
