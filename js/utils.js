@@ -337,6 +337,8 @@ export function escAttr(s){
   return String(s === null || s === undefined ? '' : s)
     .replace(/\\/g, '\\\\')
     .replace(/'/g, "\\'")
+    // 줄바꿈은 JS 문자열을 끊는다 — 엑셀 Alt+Enter로 줄바꿈이 든 기업명이면 눌러도 반응이 없었다
+    .replace(/\r/g, '\\r').replace(/\n/g, '\\n').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029')
     .replace(/&/g, '&amp;')
     .replace(/"/g, '&quot;')
     .replace(/</g, '&lt;')

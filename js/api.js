@@ -50,6 +50,7 @@ import {
   WATCH_FOLDERS, WATCH_FILES,
   CODE_LISTS, applyCodeLists,
   loadExhCfg,
+  EXH_CFG,
   auditLog,
   COMPANY_SECTORS,
   DOMAINS,
@@ -411,6 +412,7 @@ export async function loadFromSheets(hooks = {}){
 
       // ── settings 시트 → 행사별 전시 설정 (마감일·프로그램북 한도) ──
       loadExhCfg(settingsData);
+      noteExhCfgBase(EXH_CFG);
 
       // ── settings 시트 → CATMAPS (업로드 카테고리 값별 매핑, key='catmap_<행사key>') ──
       for(const k in CATMAPS) delete CATMAPS[k];
@@ -786,13 +788,39 @@ export async function saveDomains(){
 
 /* 행사별 전시 설정 저장 — settings 시트 key='exh_cfg_<행사키>' JSON.
    마감일·프로그램북 한도를 행사당 한 줄로 담는다. */
+/* 행사 설정은 JSON 한 줄이라 통째로 올린다. 그 사이 남이 다른 칸(마감일·진행 파트 등)을 고쳤으면
+   내 화면의 옛 값이 그것을 지웠다. 그래서 «로그인 때 읽은 값»(exhCfgBase)과 견줘 내가 바꾼
+   칸만 서버의 지금 값에 얹는다. 같은 칸을 둘 다 고쳤으면 나중 것이 이긴다.
+   합친 결과는 넘겨받은 cfg에 그대로 채운다 — 부르는 쪽이 그 객체를 EXH_CFG에 넣는다 */
+const exhCfgBase = {};   // 행사 → 마지막으로 서버와 맞춘 설정(JSON 문자열)
+export function noteExhCfgBase(cfgs){ for(const k in exhCfgBase) delete exhCfgBase[k]; for(const k in cfgs) exhCfgBase[k] = JSON.stringify(cfgs[k]); }
 export async function saveExhCfgToSheet(evKey, cfg){
+  cfg = cfg || {};
+  if(API_BASE_URL && currentUser){
+    const rows = await safeFetch(API_BASE_URL + '/api/data?sheet=settings', 'settings', 1, await authHeaders());
+    if(Array.isArray(rows)){
+      const row = rows.find(x => x.key === 'exh_cfg_' + evKey);
+      let server = {};
+      try { server = row && row.value ? JSON.parse(row.value) : {}; } catch(e){ server = {}; }
+      const baseStr = exhCfgBase[evKey] ?? '{}';
+      if(JSON.stringify(server) !== baseStr){
+        const base = JSON.parse(baseStr);
+        const merged = { ...server };
+        new Set([...Object.keys(base), ...Object.keys(cfg)]).forEach(k => {
+          if(JSON.stringify(cfg[k]) === JSON.stringify(base[k])) return;   // 내가 안 바꾼 칸 — 서버 값
+          if(cfg[k] === undefined) delete merged[k]; else merged[k] = cfg[k];
+        });
+        for(const k of Object.keys(cfg)) delete cfg[k];
+        Object.assign(cfg, merged);
+      }
+    }
+  }
   const r = await postToSheet({
     sheet:  'settings',
     action: 'upsert',
-    row:    ['exh_cfg_' + evKey, JSON.stringify(cfg || {})],
+    row:    ['exh_cfg_' + evKey, JSON.stringify(cfg)],
   }, '행사 설정 저장');
-  if(r.ok) console.log('[CRM] 행사 설정 저장:', evKey);
+  if(r.ok){ exhCfgBase[evKey] = JSON.stringify(cfg); console.log('[CRM] 행사 설정 저장:', evKey); }
   return r;
 }
 
