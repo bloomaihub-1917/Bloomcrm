@@ -413,6 +413,7 @@ export async function loadFromSheets(hooks = {}){
       // ── settings 시트 → 행사별 전시 설정 (마감일·프로그램북 한도) ──
       loadExhCfg(settingsData);
       noteExhCfgBase(EXH_CFG);
+      noteMailLibraryBase();
 
       // ── settings 시트 → CATMAPS (업로드 카테고리 값별 매핑, key='catmap_<행사key>') ──
       for(const k in CATMAPS) delete CATMAPS[k];
@@ -825,12 +826,39 @@ export async function saveExhCfgToSheet(evKey, cfg){
 }
 
 /* 메일 양식 보관함 — settings 시트 key='mail_library' JSON(state.js MAIL_LIBRARY) */
+/* 보관함도 JSON 한 줄이라 통째로 올린다 — 두 사람이 비슷한 때 양식을 하나씩 넣으면 한쪽이 사라졌다.
+   행사 설정과 같은 방식: 로그인 때 읽은 목록(libBase)과 견줘 내가 넣고·고치고·뺀 양식만
+   서버의 지금 목록에 얹는다(양식 id 기준). 합친 결과로 MAIL_LIBRARY를 바꾼다 */
+let libBase = null;   // id → JSON 문자열
+export function noteMailLibraryBase(){ libBase = new Map(MAIL_LIBRARY.map(it => [it.id, JSON.stringify(it)])); }
 export async function saveMailLibrary(){
-  return postToSheet({
+  if(libBase && API_BASE_URL && currentUser){
+    const rows = await safeFetch(API_BASE_URL + '/api/data?sheet=settings', 'settings', 1, await authHeaders());
+    if(Array.isArray(rows)){
+      let server = [];
+      try { const row = rows.find(x => x.key === 'mail_library'); server = row && row.value ? JSON.parse(row.value) : []; } catch(e){ server = []; }
+      if(Array.isArray(server)){
+        const mine = new Map(MAIL_LIBRARY.map(it => [it.id, it]));
+        const out = server.filter(it => {
+          if(!mine.has(it.id)) return !libBase.has(it.id);          // 내가 뺀 것은 빼고, 남이 새로 넣은 것은 둔다
+          return true;
+        }).map(it => {
+          const m = mine.get(it.id);
+          return m && JSON.stringify(m) !== libBase.get(it.id) ? m : it;   // 내가 고친 것만 내 것으로
+        });
+        const have = new Set(out.map(it => it.id));
+        MAIL_LIBRARY.forEach(it => { if(!have.has(it.id) && !libBase.has(it.id)) out.push(it); });   // 내가 새로 넣은 것
+        MAIL_LIBRARY.splice(0, MAIL_LIBRARY.length, ...out);
+      }
+    }
+  }
+  const r = await postToSheet({
     sheet:  'settings',
     action: 'upsert',
     row:    ['mail_library', JSON.stringify(MAIL_LIBRARY)],
   }, '메일 양식 보관함 저장');
+  if(r && r.ok !== false) noteMailLibraryBase();
+  return r;
 }
 
 export async function saveTags(){
