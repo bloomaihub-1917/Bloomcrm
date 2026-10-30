@@ -106,11 +106,15 @@ export function buildTestFixtures(){
     '성명': PEOPLE[oi][0], type: '셀러', note: '', matched: '', confirmed_at: k < 4 ? day(-10 + k) : '' }));
   BUYER_SRC.forEach(([en, org, title, country], i) => {
     const id = 3001 + i;
+    const oid = `O-B${String(i + 1).padStart(3, '0')}`;
+    orgs.push({ ...orgs[0], id: oid, name_ko: '', name_en: org, kind: '잠재고객사', country,
+      website: `www.${org.toLowerCase().replace(/[^a-z]/g, '')}.example.com`, products: '',
+      phone: '', email: '', address: '', intro: `${org}는 테스트용으로 지어낸 해외 바이어입니다.` });
     contacts.push({
       id, nameKo: '', nameEn: en, orgKo: '', orgEn: org, titleKo: '', titleEn: title,
       deptKo: '', deptEn: '', country, cat: 'attendee', lang: 'EN', source: '테스트 데이터', date: day(-20),
       status: 'new', email1: `buyer${id}@example.com`, email2: '', phone1: `+1-000-000-${id}`, phone2: '',
-      beat: '', products: '', tags: '', org_id: '',
+      beat: '', products: '', tags: '', org_id: oid,
     });
     participations.push({ id: `P-T${id}`, ev_id: EV, cid: id, '성명': en, type: '바이어', note: '', matched: '',
       confirmed_at: i < 3 ? day(-8 + i) : '' });

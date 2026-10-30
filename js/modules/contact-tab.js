@@ -1106,22 +1106,28 @@ export async function fillAddOne(key){
 /* ══════════════════════════════════════════
    전역 노출 — 인라인 onclick에서 부른다
 ══════════════════════════════════════════ */
-/* ── 기업DB에서 보내기 — 기업DB에서 걸러 본 기업들을 고른 차수의 명단에 넣는다 ── */
+/* ── 다른 화면에서 보내기 — 기업DB·파트너링에서 고른 기업들을 고른 차수의 명단에 넣는다.
+   from: 어느 화면에서 어떻게 골랐나(창 안내 글), ev: 그 행사의 차수를 맨 위에 두고 먼저 고른다,
+   note: 못 넣는 곳 안내(기업DB에 없는 기업 등) ── */
 let sendCos = null;   // { keys:[], label }
-export function openSendToRound(keys, label){
+export function openSendToRound(keys, label, { from = '기업DB에서 걸러 본', ev = '', note = '' } = {}){
   const rounds = CONTACT_ROUNDS.filter(r => r.status !== 'closed')
-    .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+    .sort((a, b) => (ev ? (b.event_id === ev) - (a.event_id === ev) : 0)
+      || String(b.created_at || '').localeCompare(String(a.created_at || '')));
   if(!rounds.length){ alert('먼저 컨택 탭에서 차수를 만들어주세요.'); return; }
+  const cur = roundById(curRoundId);
+  const sel = cur && cur.status !== 'closed' && (!ev || cur.event_id === ev) ? cur.id : rounds[0].id;
   sendCos = { keys: [...new Set(keys)], label: label || '기업DB' };
   overlay('round-send', `
     <div style="display:flex;align-items:center;margin-bottom:4px">
       <div style="font-size:15px;font-weight:700">컨택 명단에 넣기</div>
       <button class="btn bs" style="margin-left:auto" onclick="document.getElementById('round-send').remove()">닫기</button>
     </div>
-    <div style="font-size:11.5px;color:var(--i4);margin-bottom:12px">기업DB에서 걸러 본 ${sendCos.keys.length}곳 · ${escapeHtml(sendCos.label)}</div>
+    <div style="font-size:11.5px;color:var(--i4);margin-bottom:${note ? 4 : 12}px">${escapeHtml(from)} ${sendCos.keys.length}곳 · ${escapeHtml(sendCos.label)}</div>
+    ${note ? `<div style="font-size:11px;color:var(--am);margin-bottom:12px">${escapeHtml(note)}</div>` : ''}
     <div style="font-size:12px;font-weight:600;margin-bottom:6px">어느 차수에</div>
     <select id="rs-round" onchange="sendRoundInfo()" style="width:100%;font-size:12.5px;padding:6px 8px;border:1px solid var(--i6);border-radius:var(--rs);margin-bottom:4px">
-      ${rounds.map(r => `<option value="${escapeHtml(r.id)}"${r.id === curRoundId ? ' selected' : ''}>${escapeHtml(evLabel(r.event_id))} · ${escapeHtml(r.name)}</option>`).join('')}
+      ${rounds.map(r => `<option value="${escapeHtml(r.id)}"${r.id === sel ? ' selected' : ''}>${escapeHtml(evLabel(r.event_id))} · ${escapeHtml(r.name)}</option>`).join('')}
     </select>
     <div id="rs-info" style="font-size:11px;color:var(--i3);margin-bottom:8px"></div>
     ${fld('rs-src', '명단 이름 — 보고를 이 이름별로 나눠요', sendCos.label)}
