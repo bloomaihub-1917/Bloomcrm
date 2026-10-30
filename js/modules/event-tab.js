@@ -520,6 +520,8 @@ function peopleHtml(ev){
       <span id="evdb-picked-n" style="font-size:11px;color:var(--i4)">${picked ? picked + '명 선택' : ''}</span>
       <button class="btn" style="font-size:11px" onclick="confirmEvDbPeople(true)">참가 확정</button>
       <button class="btn" style="font-size:11px" onclick="confirmEvDbPeople(false)">확정 해제</button>
+      <button class="btn" style="font-size:11px" onclick="reloadEvDbPending(this)"
+        title="등록 링크·엑셀로 들어온 신청을 서버에서 다시 받아 와요">⟳ 등록자 다시 불러오기</button>
       <button class="btn" style="font-size:11px" onclick="openRegisterLinks('${escAttr(ev.key)}')"
         title="바깥 신청 링크·엑셀 명단 — 받은 신청은 확정할 때 마스터DB로 옮겨요">🔗 등록 링크</button>
       <button class="btn" style="font-size:11px" onclick="openEvDbMailList()">메일 대상 모으기</button>
@@ -977,6 +979,22 @@ async function saveConfirm(rows, on){
         before: { confirmed_at: before }, after: { confirmed_at: p.confirmedAt || '' } })) });
   return true;
 }
+
+/* 신청 대기 다시 받아 오기 — 처음 한 번만 받아 오니, 그 뒤에 들어온 신청은 이걸로 */
+export async function reloadEvDbPending(btn){
+  if(btn){ btn.disabled = true; btn.textContent = '불러오는 중…'; }
+  const before = pendingFor(evdbEvent).length;
+  const ok = await fetchPending(evdbEvent, true);
+  const after = pendingFor(evdbEvent).length;
+  invalidateEvRows();
+  renderEvDb();
+  const b = [...document.querySelectorAll('#evdb-body button')].find(x => x.textContent.includes('등록자 다시 불러오기'));
+  if(b){
+    b.textContent = ok === null ? '⟳ 못 불러왔어요' : `⟳ 신청 대기 ${after}명${after > before ? ` (+${after - before})` : ''}`;
+    setTimeout(() => { if(b.isConnected) b.textContent = '⟳ 등록자 다시 불러오기'; }, 2500);
+  }
+}
+window.reloadEvDbPending = reloadEvDbPending;
 
 export async function toggleEvDbConfirm(cid){
   const r = evPeople(evdbEvent).find(x => x.cid === cid);

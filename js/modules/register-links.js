@@ -44,7 +44,9 @@ export function fetchPending(evKey, force){
   if(!force && (pending.has(evKey) || loading.has(evKey))) return loading.get(evKey) || Promise.resolve(pendingFor(evKey));
   const job = loadRegisterLinks(evKey).then(r => {
     loading.delete(evKey);
-    if(r.ok){ pending.set(evKey, r.submissions || []); changed(evKey); if(evKey === openEv){ links = r.links || []; subs = pendingFor(evKey); } }
+    if(!r.ok) return null;   // 못 받아 왔으면 null — 부른 쪽이 알린다
+    pending.set(evKey, r.submissions || []); changed(evKey);
+    if(evKey === openEv){ links = r.links || []; subs = pendingFor(evKey); }
     return pendingFor(evKey);
   });
   loading.set(evKey, job);
