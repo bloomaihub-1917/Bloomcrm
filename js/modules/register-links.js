@@ -23,8 +23,6 @@ const COLS = [
   { k: 'title',   ko: '직함',           en: 'Job title' },
   { k: 'email',   ko: '이메일*',        en: 'Email' },
   { k: 'phone',   ko: '전화',           en: 'Phone' },
-  { k: 'country', ko: '국가',           en: 'Country' },
-  { k: 'memo',    ko: '관심 분야·요청 사항', en: 'Interests / requests' },
 ];
 const norm = (s) => String(s || '').replace(/[\s*()·/]/g, '').toLowerCase();
 
@@ -127,9 +125,9 @@ function subRow(s){
   return `<tr>
     <td style="padding:6px 4px"><span class="pill p-blue" style="font-size:10px">${escapeHtml(s.role)}</span></td>
     <td style="padding:6px 4px"><b>${escapeHtml(d.name)}</b>${d.title ? `<div style="color:var(--i4)">${escapeHtml(d.title)}</div>` : ''}</td>
-    <td style="padding:6px 4px">${escapeHtml(d.org)}${d.country ? `<div style="color:var(--i4)">${escapeHtml(d.country)}</div>` : ''}</td>
+    <td style="padding:6px 4px">${escapeHtml(d.org)}</td>
     <td style="padding:6px 4px">${escapeHtml(d.email)}${d.phone ? `<div style="color:var(--i4)">${escapeHtml(d.phone)}</div>` : ''}</td>
-    <td style="padding:6px 4px;color:var(--i4)">${s.via === 'excel' ? '📄 엑셀' : '🔗 링크'}<div>${escapeHtml(s.created_at)}</div>${d.memo ? `<div title="${escapeHtml(d.memo)}">💬 메모</div>` : ''}</td>
+    <td style="padding:6px 4px;color:var(--i4)">${s.via === 'excel' ? '📄 엑셀' : '🔗 링크'}<div>${escapeHtml(s.created_at)}</div></td>
     <td style="padding:6px 4px;white-space:nowrap;text-align:right">
       <button class="btn bp" style="font-size:10.5px" onclick="decideRegister('${escAttr(s.id)}','accept',this)">확정</button>
       <button class="btn" style="font-size:10.5px;color:var(--re)" onclick="decideRegister('${escAttr(s.id)}','drop',this)">버리기</button></td>
@@ -228,14 +226,15 @@ export function downloadRegisterTemplate(){
   const role = document.getElementById('reg-new-role')?.value || '';
   const ws = XLSX.utils.aoa_to_sheet([
     COLS.map(c => c.ko),
-    ['홍길동', '블룸바이오', '팀장', 'gildong@example.com', '010-1234-5678', '대한민국', '(예시 줄 — 지우고 쓰세요)'],
+    ['(예시) 홍길동', '블룸바이오', '팀장', 'gildong@example.com', '010-1234-5678'],
   ]);
-  ws['!cols'] = COLS.map(c => ({ wch: c.k === 'memo' ? 36 : c.k === 'email' ? 28 : 16 }));
+  ws['!cols'] = COLS.map(c => ({ wch: c.k === 'email' ? 28 : 16 }));
   const guide = XLSX.utils.aoa_to_sheet([
     ['작성 안내'], [''],
     ['• 한 줄에 한 사람씩 적어 주세요. 머리줄(첫 줄)은 지우거나 바꾸지 마세요.'],
     ['• *표 칸(이름·소속·이메일)은 꼭 채워 주세요. 빠진 줄은 올라가지 않아요.'],
-    ['• 영문 머리줄(Name, Organization, Job title, Email, Phone, Country, Interests / requests)도 받아요.'],
+    ['• 영문 머리줄(Name, Organization, Job title, Email, Phone)도 받아요.'],
+    ['• 첫째 줄의 (예시) 줄은 지우고 쓰세요. 남겨 두어도 올릴 때 빠져요.'],
     [`• 참가 유형: ${role || '(올릴 때 고른 유형)'}`],
   ]);
   guide['!cols'] = [{ wch: 90 }];
@@ -267,7 +266,7 @@ export async function uploadRegisterExcel(e){
       const o = { line: i + 2 };
       COLS.forEach(c => { o[c.k] = c.k in at ? String(r[at[c.k]] ?? '').trim() : ''; });
       return o;
-    }).filter(o => COLS.some(c => o[c.k]) && !/예시 줄/.test(o.memo));
+    }).filter(o => COLS.some(c => o[c.k]) && !/^\(예시\)/.test(o.name));
   } catch(err){ showMsg('엑셀을 읽지 못했어요: ' + err.message, true); return; }
   if(!rows.length){ showMsg('올릴 줄이 없어요.', true); return; }
   if(!confirm(`${rows.length}줄을 «${role}»로 신청 대기에 올릴까요? (마스터DB에는 확정할 때 들어가요)`)) return;

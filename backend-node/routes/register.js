@@ -52,8 +52,6 @@ const FIELDS = [
   { k: 'title',   ko: '직함',        en: 'Job title',    need: false, max: 80 },
   { k: 'email',   ko: '이메일',      en: 'Email',        need: true,  max: 120, type: 'email' },
   { k: 'phone',   ko: '전화',        en: 'Phone',        need: false, max: 40,  type: 'tel' },
-  { k: 'country', ko: '국가',        en: 'Country',      need: false, max: 60 },
-  { k: 'memo',    ko: '관심 분야·요청 사항', en: 'Interests / requests', need: false, max: 1000, area: true },
 ];
 const EMAIL = /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]{2,}$/;
 const cleanRow = (b) => { const v = {}; FIELDS.forEach((f) => { v[f.k] = clip(b && b[f.k], f.max); }); return v; };
@@ -264,17 +262,34 @@ const PAGE_CSS = `
   button { margin-top:20px; width:100%; padding:12px; font:inherit; font-weight:700; color:#fff; background:var(--accent); border:0; border-radius:10px; cursor:pointer; }
   .err { background:#fee2e2; color:var(--no); padding:10px 12px; border-radius:9px; font-size:13px; margin-bottom:14px; }
   .lang { float:right; font-size:12px; } .lang a { color:var(--accent); text-decoration:none; margin-left:8px; } .lang a.on { color:var(--ink); font-weight:700; }
-  .hp { position:absolute; left:-9999px; }`;
+  .hp { position:absolute; left:-9999px; }
+  .done { text-align:center; padding:32px 24px; }
+  .done .tick { width:52px; height:52px; margin:0 auto 14px; border-radius:50%; background:#dcfce7; color:#15803d;
+    font-size:26px; font-weight:700; line-height:52px; }
+  .done h1 { font-size:20px; margin-bottom:10px; }
+  .done p { color:#374151; margin:0 0 8px; font-size:14px; } .done .lead { color:var(--ink); font-weight:600; }
+  .done .sum { text-align:left; margin:20px 0 16px; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .done .sum-h { font-size:12px; font-weight:700; color:var(--dim); background:var(--bg); padding:8px 14px; border-bottom:1px solid var(--line); }
+  .done table { width:100%; border-collapse:collapse; font-size:13.5px; }
+  .done th { width:34%; text-align:left; font-weight:500; color:var(--dim); padding:7px 14px; vertical-align:top; }
+  .done td { padding:7px 14px; word-break:break-all; }
+  .done .close { color:var(--dim); font-size:13px; margin-top:4px; }`;
 
 const L = {
   ko: { sub: '참가 신청서', consent: '행사 운영(안내·연락)을 위해 위 정보를 수집·이용하는 데 동의합니다. 행사 종료 후 주최 측 DB에 보관되며, 요청하시면 삭제합니다.',
     send: '제출하기', need: '필수 항목을 채워 주세요', badMail: '이메일 주소를 확인해 주세요', noConsent: '개인정보 수집·이용에 동의해 주세요',
-    done: '신청이 접수됐어요', doneMsg: '담당자가 확인한 뒤 연락드릴게요. 이 창은 닫으셔도 됩니다.', fail: '접수하지 못했어요. 잠시 뒤 다시 시도해 주세요.',
-    gone: '링크가 바뀌었거나 신청이 마감됐어요. 사무국에 문의해 주세요.' },
+    done: '참가 신청이 접수되었습니다', fail: '일시적인 오류로 신청을 접수하지 못했습니다. 잠시 후 다시 시도해 주시기 바랍니다.',
+    doneLead: (ev) => `${ev} 참가 신청이 정상적으로 접수되었습니다.`,
+    doneNext: '사무국에서 신청 내용을 확인한 후, 기재하신 이메일로 참가 확정 및 행사 안내를 보내드릴 예정입니다.',
+    doneSum: '접수 내용', doneAt: '접수 일시', doneClose: '신청해 주셔서 감사합니다. 이 창은 닫으셔도 됩니다.',
+    gone: '유효하지 않은 링크이거나 신청이 마감되었습니다. 행사 사무국으로 문의해 주시기 바랍니다.' },
   en: { sub: 'Registration', consent: 'I agree that the information above may be collected and used to run this event (notices and contact). It is kept in the organizer\'s database and deleted on request.',
     send: 'Submit', need: 'Please fill in the required fields', badMail: 'Please check your email address', noConsent: 'Please agree to the data collection notice',
-    done: 'Thank you — you are registered', doneMsg: 'Our team will review and get back to you. You may close this window.', fail: 'We could not save your registration. Please try again shortly.',
-    gone: 'This link has changed or registration is closed. Please contact the event secretariat.' },
+    done: 'Registration received', fail: 'We were unable to process your registration due to a temporary error. Please try again shortly.',
+    doneLead: (ev) => `Your registration for ${ev} has been successfully received.`,
+    doneNext: 'Our secretariat will review your submission and send confirmation and event details to the email address you provided.',
+    doneSum: 'Submission summary', doneAt: 'Received', doneClose: 'Thank you for registering. You may now close this window.',
+    gone: 'This link is no longer valid or registration has closed. Please contact the event secretariat.' },
 };
 const langOf = (q) => (q === 'en' ? 'en' : 'ko');
 const period = (a, b) => [a, b].filter(Boolean).filter((x, i, arr) => arr.indexOf(x) === i).join(' ~ ');
@@ -306,6 +321,20 @@ function formPage(row, lang, vals = {}, error = '') {
     </form></div>`, lang);
 }
 
+/* 접수 완료 — 무엇이 어디로 접수됐는지 보여 준다(나중에 «제대로 냈나» 묻는 일이 줄도록) */
+function donePage(row, v, lang) {
+  const t = L[lang];
+  const sum = FIELDS.filter((f) => v[f.k]).map((f) => `<tr><th>${esc(f[lang])}</th><td>${esc(v[f.k])}</td></tr>`).join('');
+  return shell(t.done, `<div class="card done">
+    <div class="tick" aria-hidden="true">✓</div>
+    <h1>${esc(t.done)}</h1>
+    <p class="lead">${esc(t.doneLead(row.event_name || ''))}</p>
+    <p>${esc(t.doneNext)}</p>
+    ${sum ? `<div class="sum"><div class="sum-h">${esc(t.doneSum)}</div><table>${sum}
+      <tr><th>${esc(t.doneAt)}</th><td>${esc(kstStamp(Date.now()))} (KST)</td></tr></table></div>` : ''}
+    <p class="close">${esc(t.doneClose)}</p></div>`, lang);
+}
+
 const msgPage = (title, msg, lang) => shell(title, `<div class="card"><h1>${esc(title)}</h1><p style="color:#374151">${esc(msg)}</p></div>`, lang);
 
 const publicRouter = express.Router();
@@ -332,7 +361,7 @@ publicRouter.post('/:token', async (req, res, next) => {
     if (!row) return res.status(404).type('html').send(msgPage('—', t.gone, lang));
     const b = req.body || {};
     /* 숨은 칸을 채웠으면 사람이 아니다 — 받은 척만 한다 */
-    if (clip(b.website)) return res.type('html').send(msgPage(t.done, t.doneMsg, lang));
+    if (clip(b.website)) return res.type('html').send(donePage(row, {}, lang));
     const v = cleanRow(b);
     const back = (msg) => res.status(400).type('html').send(formPage(row, lang, v, msg));
     if (FIELDS.some((f) => f.need && !v[f.k])) return back(t.need);
@@ -343,7 +372,7 @@ publicRouter.post('/:token', async (req, res, next) => {
       await pool.query('UPDATE register_links SET submits = COALESCE(submits,0) + 1, last_at = $2 WHERE token = $1',
         [row.token, kstStamp(Date.now())]);
     } catch (e) { console.error('[register] 제출 실패:', e.message); return res.status(500).type('html').send(formPage(row, lang, v, t.fail)); }
-    res.type('html').send(msgPage(t.done, t.doneMsg, lang));
+    res.type('html').send(donePage(row, v, lang));
   } catch (e) { next(e); }
 });
 
