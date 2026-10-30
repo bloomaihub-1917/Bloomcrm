@@ -12,6 +12,7 @@ const publicRoutes = require('./routes/public');
 const aiRoutes = require('./routes/ai');
 const photoRoutes = require('./routes/photos');
 const shareRoutes = require('./routes/share');
+const registerRoutes = require('./routes/register');
 const { supplyPage } = require('./routes/share-pages');
 
 /* 로컬(server.js)과 Vercel 서버리스(api/index.js)가 이 app을 그대로
@@ -50,6 +51,9 @@ app.get('/s/:token', rateLimit({ windowMs: 60 * 1000, max: 60 }), async (req, re
   } catch (e) { next(e); }
 });
 
+/* 바깥 등록 링크 — 신청서(/r/<열쇠>). 아무나 제출할 수 있으니 따로 흐름을 막는다(routes/register.js) */
+app.use('/r', rateLimit({ windowMs: 60 * 1000, max: 20 }), registerRoutes.publicRouter);
+
 // CORS 헤더는 요청 Origin에 따라 매번 달라지므로, CDN/브라우저 등 어떤 계층도
 // 이 응답을 캐시해 다른 origin에 잘못된 Access-Control-Allow-Origin을
 // 돌려주는 일이 없도록 명시적으로 캐시를 금지한다.
@@ -87,6 +91,7 @@ app.use('/api/ai', requireAuth, aiRoutes);
 app.use('/api/photos', requireAuth, photoRoutes);
 // 연사 프로그램·수급 현황 바깥 공유 — 켜고 끄기·스냅숏 올리기(routes/share.js)
 app.use('/api/share', requireAuth, shareRoutes);
+app.use('/api/register', requireAuth, registerRoutes);
 // 메일 자동 가져오기 — 로그인 대신 비밀 키(CRON_SECRET)로. GitHub 예약 작업이 부른다
 app.use('/api/cron', mailRoutes.cron);
 

@@ -1084,6 +1084,21 @@ export const loadShares    = (evKey) => shareApi(`/${encodeURIComponent(evKey)}`
 export const setShare      = (evKey, kind, body) => shareApi(`/${encodeURIComponent(evKey)}/${kind}`, 'PUT', body);
 export const pushShareData = (evKey, kind, data) => shareApi(`/${encodeURIComponent(evKey)}/${kind}/data`, 'POST', { data });
 export const shareUrl      = (path) => (API_BASE_URL || '') + path;
+
+/* ── 바깥 등록 링크 (routes/register.js) ── */
+async function registerApi(path, method = 'GET', body){
+  if(!API_BASE_URL || !currentUser) return { ok: false, offline: true, error: '테스트 모드에서는 등록 링크를 쓸 수 없어요' };
+  try {
+    const headers = { ...await authHeaders(), ...(body ? { 'Content-Type': 'application/json' } : {}) };
+    const res = await fetch(API_BASE_URL + '/api/register' + path, { method, headers, body: body ? JSON.stringify(body) : undefined });
+    const j = await res.json().catch(() => ({}));
+    if(!res.ok && j.ok !== false) return { ok: false, error: `실패 (${res.status})` };
+    return j;
+  } catch(e){ return { ok: false, error: e.message }; }
+}
+export const loadRegisterLinks = (evKey) => registerApi(`/${encodeURIComponent(evKey)}`);
+export const createRegisterLink = (evKey, body) => registerApi(`/${encodeURIComponent(evKey)}`, 'POST', body);
+export const setRegisterLink   = (token, body) => registerApi(`/link/${encodeURIComponent(token)}`, 'PUT', body);
 /* 이 행사 메일이 어느 주소로 나가는지 — 보내기 전에 눈으로 확인하게 보여 준다.
    계정을 저장·삭제하면 새로 고칠 수 있게 force를 둔다. */
 let mailAcctCache = null;
