@@ -244,9 +244,14 @@ export async function postToSheet(payload, label, { silent = false } = {}){
        populateUploadEvDropdown, buildCoDB, buildCoCAT, buildAuditUserList,
        renderCoList, renderAudit })
 ══════════════════════════════════════════ */
+/* 테스트 로그인(test/test/test) 전용 — 표 이름 → 행 배열. 있으면 loadFromSheets가
+   서버 대신 이것을 읽는다. 쓰기는 API_BASE_URL이 비어 있어 어차피 나가지 않는다. */
+let TEST_FIXTURES = null;
+export function setTestFixtures(fx){ TEST_FIXTURES = fx; }
+
 export async function loadFromSheets(hooks = {}){
   // 백엔드 API는 유일한 데이터 소스 — 미연동 시 빈 화면 유지
-  if(!API_BASE_URL || !currentUser){
+  if(!TEST_FIXTURES && (!API_BASE_URL || !currentUser)){
     setSheetsConnected(false);
     showSheetsWarning(true);
     try { hooks.buildMDBEvList?.(); hooks.renderMDB?.(); } catch(e){}
@@ -254,7 +259,11 @@ export async function loadFromSheets(hooks = {}){
   }
   showSheetsWarning(false); // 시도 시작 시 일단 숨김
   const base = API_BASE_URL + '/api/data?sheet=';
-  const headers = await authHeaders(); // 9개 요청이 같은 토큰을 쓰도록 한 번만 계산
+  // 테스트 로그인은 서버 대신 가짜 표(testdata.js)를 같은 길로 읽는다
+  const headers = TEST_FIXTURES ? null : await authHeaders(); // 표마다 같은 토큰을 쓰도록 한 번만 계산
+  const get = (sheet) => TEST_FIXTURES
+    ? Promise.resolve(TEST_FIXTURES[sheet] ?? [])
+    : safeFetch(base + sheet, sheet, 1, headers);
 
   try {
     const [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, partTypesData,
@@ -264,35 +273,35 @@ export async function loadFromSheets(hooks = {}){
            confSessData, speakerData, sessSpData, spConData, spLogData,
            watchFolderData, watchFileData,
            roundData, roundMemberData, attemptData] = await Promise.all([
-      safeFetch(base + 'contacts',       'contacts',       1, headers),
-      safeFetch(base + 'participations', 'participations', 1, headers),
-      safeFetch(base + 'crm_targets',    'crm_targets',    1, headers),
-      safeFetch(base + 'activity_log',   'activity_log',   1, headers),
-      safeFetch(base + 'events',         'events',         1, headers),
-      safeFetch(base + 'settings',       'settings',       1, headers),
-      safeFetch(base + 'sectors',        'sectors',        1, headers),
-      safeFetch(base + 'part_types',     'part_types',     1, headers),
-      safeFetch(base + 'orgs',           'orgs',           1, headers),
-      safeFetch(base + 'exhibitors',         'exhibitors',         1, headers),
-      safeFetch(base + 'exhibitor_contacts', 'exhibitor_contacts', 1, headers),
-      safeFetch(base + 'exhibitor_items',    'exhibitor_items',    1, headers),
-      safeFetch(base + 'exhibitor_invoices', 'exhibitor_invoices', 1, headers),
-      safeFetch(base + 'exhibitor_tax_invoices', 'exhibitor_tax_invoices', 1, headers),
-      safeFetch(base + 'exhibitor_payments', 'exhibitor_payments', 1, headers),
-      safeFetch(base + 'exhibitor_logs',     'exhibitor_logs',     1, headers),
-      safeFetch(base + 'exhibitor_apps',     'exhibitor_apps',     1, headers),
-      safeFetch(base + 'equip_catalog',      'equip_catalog',      1, headers),
-      safeFetch(base + 'code_lists',         'code_lists',         1, headers),
-      safeFetch(base + 'conf_sessions',      'conf_sessions',      1, headers),
-      safeFetch(base + 'speakers',           'speakers',           1, headers),
-      safeFetch(base + 'session_speakers',   'session_speakers',   1, headers),
-      safeFetch(base + 'speaker_contacts',   'speaker_contacts',   1, headers),
-      safeFetch(base + 'speaker_logs',       'speaker_logs',       1, headers),
-      safeFetch(base + 'watch_folders',      'watch_folders',      1, headers),
-      safeFetch(base + 'watch_files',        'watch_files',        1, headers),
-      safeFetch(base + 'contact_rounds',     'contact_rounds',     1, headers),
-      safeFetch(base + 'round_members',      'round_members',      1, headers),
-      safeFetch(base + 'contact_attempts',   'contact_attempts',   1, headers),
+      get('contacts'),
+      get('participations'),
+      get('crm_targets'),
+      get('activity_log'),
+      get('events'),
+      get('settings'),
+      get('sectors'),
+      get('part_types'),
+      get('orgs'),
+      get('exhibitors'),
+      get('exhibitor_contacts'),
+      get('exhibitor_items'),
+      get('exhibitor_invoices'),
+      get('exhibitor_tax_invoices'),
+      get('exhibitor_payments'),
+      get('exhibitor_logs'),
+      get('exhibitor_apps'),
+      get('equip_catalog'),
+      get('code_lists'),
+      get('conf_sessions'),
+      get('speakers'),
+      get('session_speakers'),
+      get('speaker_contacts'),
+      get('speaker_logs'),
+      get('watch_folders'),
+      get('watch_files'),
+      get('contact_rounds'),
+      get('round_members'),
+      get('contact_attempts'),
     ]);
 
     // ── 실패 감지 (신규) ──

@@ -6,8 +6,8 @@
 import { API_BASE_URL, setApiBaseUrl, ALLOWED_DOMAIN, currentUser, setCurrentUser, setAuthToken, userColor } from './state.js';
 import { auth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from './firebase.js';
 import { userInitials } from './utils.js';
-import { loadFromSheets, loadSectors } from './api.js';
-import { loadTestData } from './testdata.js';
+import { loadFromSheets, loadSectors, setTestFixtures } from './api.js';
+import { buildTestFixtures } from './testdata.js';
 import { trackAction, buildAuditUserList, renderAudit } from './modules/audit-tab.js';
 import { buildMDBEvList, renderMDB } from './modules/db-tab.js';
 import { renderCoList, buildCoCAT, buildCoDB } from './modules/company-tab.js';
@@ -58,7 +58,7 @@ export function doLogin(){
   if(!pw){ showLoginErr('비밀번호를 입력해주세요'); pwEl.focus(); return; }
 
   /* 로컬 테스트 로그인: 이름/이메일/비밀번호를 전부 "test"로 입력하면
-     Firebase/백엔드에 전혀 연결하지 않고 Data/ 폴더의 더미 엑셀로 화면을
+     Firebase/백엔드에 전혀 연결하지 않고 testdata.js의 가짜 표로 화면을
      채운다. 실수로 운영 데이터에 쓰지 않도록 API_BASE_URL 자체를 비워서
      이후 어떤 저장 동작도 걸리지 않게 막는다. */
   if(name.toLowerCase()==='test' && local==='test' && pw==='test'){
@@ -201,6 +201,13 @@ export function initAfterLogin(testMode){
   if(ums) ums.textContent = '로그인: ' + new Date(currentUser.loginAt).toLocaleString('ko-KR');
 
   setTimeout(()=>{
+    /* 테스트 로그인은 가짜 표가 이미 손에 있다 — 빈 화면을 먼저 그리지 않고
+       loadFromSheets가 훅으로 한 번에 그리게 한다(녹화 때 깜빡이지 않게) */
+    if(testMode){
+      showTestModeBanner();
+      loadFromSheets(sheetsHooks);
+      return;
+    }
     try { buildMDBEvList(); } catch(e){ console.warn('buildMDBEvList:', e); }
     try { renderMDB(); }      catch(e){ console.warn('renderMDB:', e); }
     // buildCoDB가 여기서 안 돌면 기업DB 탭을 한 번도 안 열어본 상태에서는
@@ -209,19 +216,15 @@ export function initAfterLogin(testMode){
     // 그 둘이 최신 CO_DB를 참조하게 한다.
     try { buildCoDB(); }       catch(e){ console.warn('buildCoDB:', e); }
     try { renderCoList(); }   catch(e){ console.warn('renderCoList:', e); }
-    if(!testMode){ try { loadSectors(); } catch(e){ console.warn('loadSectors:', e); } }
+    try { loadSectors(); } catch(e){ console.warn('loadSectors:', e); }
     try { buildCoCAT(); }              catch(e){ console.warn('buildCoCAT:', e); }
     try { buildEvFil(); }              catch(e){ console.warn('buildEvFil:', e); }
     try { populateUploadEvDropdown(); } catch(e){ console.warn('populateUploadEvDropdown:', e); }
     try { updBadges(); }      catch(e){ console.warn('updBadges:', e); }
     try { buildAuditUserList(); } catch(e){ console.warn('buildAuditUserList:', e); }
 
-    if(testMode){
-      showTestModeBanner();
-    } else {
-      // 백엔드에서 최신 데이터 로드 (백그라운드)
-      loadFromSheets(sheetsHooks);
-    }
+    // 백엔드에서 최신 데이터 로드 (백그라운드)
+    loadFromSheets(sheetsHooks);
   }, 350);
 }
 
@@ -233,7 +236,7 @@ async function startTestSession(){
     loginAt: new Date().toISOString(), color: userColor('test'),
   };
   setCurrentUser(session);
-  await loadTestData();
+  setTestFixtures(buildTestFixtures());
   initAfterLogin(true);
 }
 

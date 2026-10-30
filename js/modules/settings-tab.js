@@ -1572,7 +1572,7 @@ export function switchAV(v, btn){
   if(btn) btn.classList.add('on');
   const tt = {arch:'시스템 아키텍처', sheet:'구글시트 연동 구조', flow:'업무 플로우'};
   const ttlEl = document.getElementById('arch-ttl');
-  if(ttlEl) ttlEl.innerHTML = `${tt[v]} <span class="tb-s">Contact CRM 데이터 흐름</span>`;
+  if(ttlEl) ttlEl.innerHTML = `${tt[v]} <span class="tb-s">Bloom CRM 데이터 흐름</span>`;
 }
 
 /* 설정(arch) 탭이 활성화될 때 router.js가 호출하는 초기화 훅
