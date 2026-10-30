@@ -32,6 +32,7 @@ import { normalizeCompanyKey } from './company-tab.js';
 import { domainOfSector, domainName, findSectorByName } from './settings-tab.js';
 /* changed는 이 파일의 지역 변수 이름과 겹친다 — 별칭으로 들여온다 */
 import { trackAction, changed as changeMeta, sanitizeForCsv } from './audit-tab.js';
+import { pendingFor, fetchPending, onPendingChange, acceptPending } from './register-links.js';
 
 /* ── 모듈 상태 ──
    고른 행사와 보고 있는 화면. 다른 탭이 알 필요가 없어 state.js로 올리지 않는다. */
@@ -96,14 +97,32 @@ function evPeople(evKey){
     if(p.role) m.roles.add(p.role);
   });
 
+  /* 등록 링크·엑셀로 받은 신청 대기 — 마스터DB에는 아직 없지만 이 행사의 타겟으로 보인다.
+     «참가 확정»을 누르면 그때 마스터DB로 옮긴다(register-links.js acceptPending) */
+  pendingFor(evKey).forEach(s => {
+    const d = s.data || {};
+    const org = String(d.org || '').trim();
+    map.set(`s${s.id}`, {
+      cid: s.id, pendingId: s.id, roles: new Set(s.role ? [s.role] : []), recs: 0,
+      name: d.name || '', nameEn: '', title: d.title || '',
+      org, orgEn: '', orgKey: normalizeCompanyKey(org),
+      country: d.country || '', email: d.email || '', sector: '',
+      phone: d.phone || '', dept: '', partIds: [], confirmedAt: '',
+      via: s.via, submittedAt: s.created_at,
+    });
+  });
+
   const people = [...map.values()];
-  _cache = { key: evKey, people, recs, noOrg: people.filter(r => !r.orgKey) };
+  _cache = { key: evKey, people, recs, noOrg: people.filter(r => !r.orgKey && !r.pendingId) };
   return people;
 }
 /* 참여 기록 줄 수 — 사람 수와 다르면 화면에 그 사실을 적는다 */
 const evRecCount = (evKey) => { evPeople(evKey); return _cache.recs; };
 /* 소속이 비어 기업으로 묶지 못한 사람 — 세는 데서 빠지므로 어디 갔는지 밝힌다 */
 const evNoOrg = (evKey) => { evPeople(evKey); return _cache.noOrg; };
+
+/* 신청 대기가 바뀌면(받아 옴·확정·버림) 그 행사를 보고 있을 때 다시 그린다 */
+onPendingChange((evKey) => { if(evKey === evdbEvent){ invalidateEvRows(); renderEvDb(); } });
 
 /* 참여 기록이 바뀌면(업로드·수정) 다음 렌더에서 다시 센다 */
 export function invalidateEvRows(){ _cache = { key: null, people: [], recs: 0, noOrg: [] }; }
@@ -114,7 +133,7 @@ export function invalidateEvRows(){ _cache = { key: null, people: [], recs: 0, n
 function evOrgs(evKey){
   const map = new Map();
   evPeople(evKey).forEach(r => {
-    if(!r.orgKey) return;   // 소속이 비면 어느 기업인지 알 수 없다 — evNoOrg가 따로 챙긴다
+    if(!r.orgKey || r.pendingId) return;   // 신청 대기는 아직 마스터DB 사람이 아니다 — 확정한 뒤에 센다   // 소속이 비면 어느 기업인지 알 수 없다 — evNoOrg가 따로 챙긴다
     if(!map.has(r.orgKey)) map.set(r.orgKey, {
       key: r.orgKey, name: r.org, nameEn: r.orgEn,
       country: r.country, sector: r.sector, people: [], roles: new Set(),
@@ -232,6 +251,8 @@ export function renderEvDb(){
       <div style="font-size:12px;color:var(--i4)">설정 › 행사 관리에서 행사를 먼저 만들어주세요</div></div>`;
     return;
   }
+  /* 신청 대기를 처음 한 번 받아 온다 — 오면 onPendingChange가 다시 그린다 */
+  fetchPending(ev.key);
 
   const seg = `<div class="tbar" style="padding:10px 16px 0">
     <div class="seg" style="flex-wrap:wrap">
@@ -447,9 +468,14 @@ function roleChips(evKey, byOrg){
    확정된 날짜를 툴팁에 둔다 — 언제 정해졌는지가 나중에 꼭 문제가 된다. */
 const confirmBadge = (r) => r.confirmedAt
   ? `<span class="pill p-green" style="cursor:pointer" title="${escapeHtml(r.confirmedAt)}에 확정 — 눌러서 해제"
-      onclick="event.stopPropagation();toggleEvDbConfirm(${r.cid})">✓ 확정</span>`
-  : `<span class="pill p-gray" style="cursor:pointer" title="눌러서 참가 확정"
-      onclick="event.stopPropagation();toggleEvDbConfirm(${r.cid})">타겟</span>`;
+      onclick="event.stopPropagation();toggleEvDbConfirm(${cidArg(r)})">✓ 확정</span>`
+  : `<span class="pill p-gray" style="cursor:pointer" title="${r.pendingId
+      ? `${r.via === 'excel' ? '엑셀로 올린' : '등록 링크로 받은'} 신청(${escapeHtml(r.submittedAt || '')}) — 마스터DB에는 아직 없어요. 눌러서 참가 확정하면 옮겨요`
+      : '눌러서 참가 확정'}"
+      onclick="event.stopPropagation();toggleEvDbConfirm(${cidArg(r)})">타겟</span>${r.pendingId
+      ? `<div style="font-size:9.5px;color:var(--i4);margin-top:2px">${r.via === 'excel' ? '📄 엑셀' : '🔗 신청'}</div>` : ''}`;
+/* 신청 대기 줄의 cid는 글자('R-…')다 — onclick에 그대로 박으면 깨지니 따옴표째 넘긴다 */
+const cidArg = (r) => escAttr(JSON.stringify(r.cid));
 
 /* 한 사람이 여러 역할일 수 있다 — 하나만 보여주면 나머지를 못 본다 */
 const roleBadges = (r) => [...r.roles]
@@ -515,7 +541,7 @@ function peopleRowsHtml(){
   if(isMobile()) return l.map(r => `<div style="background:var(--W);border:1px solid var(--i6);border-radius:8px;padding:10px 12px;margin-bottom:6px">
     <div style="display:flex;align-items:center;gap:7px">
       <input type="checkbox" ${evdbPickedPeople.has(r.cid) ? 'checked' : ''}
-        onchange="pickEvDbPerson(${r.cid},this.checked)">
+        onchange="pickEvDbPerson(${cidArg(r)},this.checked)">
       <span style="font-size:13px;font-weight:600;color:var(--i1)">${escapeHtml(r.name)}</span>
       ${confirmBadge(r)}
       ${roleBadges(r)}
@@ -531,7 +557,7 @@ function peopleRowsHtml(){
     </tr></thead><tbody>
     ${l.map(r => `<tr>
       <td style="text-align:center"><input type="checkbox" ${evdbPickedPeople.has(r.cid) ? 'checked' : ''}
-        onchange="pickEvDbPerson(${r.cid},this.checked)"></td>
+        onchange="pickEvDbPerson(${cidArg(r)},this.checked)"></td>
       <td>${confirmBadge(r)}</td>
       <td><span style="font-weight:600">${escapeHtml(r.name)}</span>${r.nameEn ? `<div style="font-size:10.5px;color:var(--i4)">${escapeHtml(r.nameEn)}</div>` : ''}</td>
       <td>${escapeHtml(r.org)}${r.orgEn && r.orgEn !== r.org ? `<div style="font-size:10.5px;color:var(--i4)">${escapeHtml(r.orgEn)}</div>` : ''}</td>
@@ -898,6 +924,21 @@ export function toggleEvDbPeopleAll(){
 /* 참여 기록에 확정 날짜를 적는다. 한 사람이 두 역할이면 줄도 둘이라
    둘 다 같이 움직여야 «연사로는 확정, 바이어로는 미정» 같은 게 안 생긴다. */
 async function saveConfirm(rows, on){
+  /* 신청 대기 — 확정이면 그때 마스터DB로 옮긴다. 해제할 것은 없다(아직 타겟이다) */
+  const pend = rows.filter(r => r.pendingId);
+  rows = rows.filter(r => !r.pendingId);
+  if(pend.length && on){
+    let fail = 0;
+    for(const r of pend){
+      const res = await acceptPending(evdbEvent, r.pendingId);
+      if(!res.ok) fail++;
+      else trackAction('create', '등록 신청 확정', r.name, `${evdbEvent} · ${r.name} (${r.org}) 참가 확정 → 마스터DB`);
+    }
+    invalidateEvRows();
+    renderEvDb();
+    if(fail){ alert(`${fail}명은 마스터DB로 옮기지 못했어요. 이미 처리됐거나 네트워크 문제일 수 있어요.`); fetchPending(evdbEvent, true); }
+    if(!rows.length) return !fail;
+  }
   const when = on ? td() : '';
   const touched = [];
   rows.forEach(r => {

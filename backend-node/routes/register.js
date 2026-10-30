@@ -209,7 +209,10 @@ async function accept(id, by) {
       `${v.name} (${v.org}) — ${sub.role}${created ? ' · 새 연락처' : ' · 기존 연락처에 붙임'}`,
       JSON.stringify({ kind: 'contact', id: cid, table: 'participations', row: partId })]);
     await client.query('COMMIT');
-    return { contactId: cid, created };
+    /* 화면이 다시 읽지 않고 제 목록에 바로 넣을 수 있게 넣은 그대로 돌려준다 */
+    return { contactId: cid, created, partId, existingPart: !!dup, confirmedAt: (dup && dup.confirmed_at) || today,
+      role: sub.role, note, matched: sub.via === 'excel' ? '📄 엑셀 명단' : '🔗 등록 링크', data: v,
+      source: `${sub.via === 'excel' ? '엑셀 명단' : '등록 링크'} · ${ev.name || sub.event_id}` };
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});
     throw e;

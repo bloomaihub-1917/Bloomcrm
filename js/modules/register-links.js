@@ -9,7 +9,7 @@
    붙여 빈 칸만 채운다) 이 행사 참가 확정으로 넣는다. «버리기»는 마스터DB에 남지 않는다.
    서버는 routes/register.js.
 ══════════════════════════════════════════════════════════════ */
-import { PART_TYPES } from '../state.js';
+import { PART_TYPES, contacts, participations } from '../state.js';
 import {
   loadRegisterLinks, createRegisterLink, setRegisterLink, importRegisterRows, decideRegisterSub, shareUrl,
 } from '../api.js';
@@ -31,6 +31,48 @@ const norm = (s) => String(s || '').replace(/[\s*()·/]/g, '').toLowerCase();
 let openEv = '';
 let links = [];
 let subs = [];
+
+/* ── 신청 대기 — 행사 참여자 목록(event-tab.js)도 같은 것을 «타겟» 줄로 보여 준다.
+   마스터DB에는 없는 사람이라 목록이 따로 받아 둔다. 확정은 어느 쪽에서 눌러도 acceptPending 하나로 */
+const pending = new Map();   // evKey → 신청 줄 배열
+const listeners = new Set();
+export const pendingFor = (evKey) => pending.get(evKey) || [];
+export const onPendingChange = (fn) => listeners.add(fn);
+const changed = (evKey) => listeners.forEach(fn => { try { fn(evKey); } catch(e){ console.warn(e); } });
+const loading = new Map();
+export function fetchPending(evKey, force){
+  if(!force && (pending.has(evKey) || loading.has(evKey))) return loading.get(evKey) || Promise.resolve(pendingFor(evKey));
+  const job = loadRegisterLinks(evKey).then(r => {
+    loading.delete(evKey);
+    if(r.ok){ pending.set(evKey, r.submissions || []); changed(evKey); if(evKey === openEv){ links = r.links || []; subs = pendingFor(evKey); } }
+    return pendingFor(evKey);
+  });
+  loading.set(evKey, job);
+  return job;
+}
+
+/* 확정 → 서버가 연락처·참가 확정을 만들고, 그 결과를 이 화면의 contacts·participations에 그대로 넣는다 */
+export async function acceptPending(evKey, id){
+  const r = await decideRegisterSub(id, 'accept');
+  if(!r.ok) return r;
+  const cid = +r.contactId, d = r.data || {};
+  const ko = /[가-힣]/.test(d.name || ''), orgKo = /[가-힣]/.test(d.org || ''), tKo = /[가-힣]/.test(d.title || '');
+  if(!contacts.some(c => c.id === cid)) contacts.push({
+    id: cid, nameKo: ko ? d.name : '', nameEn: ko ? '' : d.name, orgKo: orgKo ? d.org : '', orgEn: orgKo ? '' : d.org,
+    titleKo: tKo ? d.title : '', titleEn: tKo ? '' : d.title, deptKo: '', deptEn: '',
+    country: d.country || '', cat: 'attendee', lang: ko ? 'ko' : 'en', source: r.source || '',
+    date: (r.confirmedAt || '').slice(0, 10), status: 'new', email1: d.email || '', email2: '',
+    phone1: d.phone || '', phone2: '', beat: '', products: '', tags: '',
+  });
+  const old = r.existingPart && participations.find(p => p.id === r.partId);
+  if(old) old.confirmedAt = old.confirmedAt || r.confirmedAt;
+  else participations.push({ id: r.partId, eventId: evKey, event: evKey, contactId: cid, contact: '',
+    role: r.role, note: r.note || '', matched: r.matched || '', confirmedAt: r.confirmedAt });
+  pending.set(evKey, pendingFor(evKey).filter(x => x.id !== id));
+  if(evKey === openEv) subs = pendingFor(evKey);
+  changed(evKey);
+  return r;
+}
 
 export async function openRegisterLinks(evKey){
   openEv = evKey;
@@ -56,6 +98,8 @@ async function reload(){
   if(!r.ok){ if(bd) bd.innerHTML = `<span style="color:var(--re)">${escapeHtml(r.error || '불러오지 못했어요')}</span>`; return; }
   links = r.links || [];
   subs = r.submissions || [];
+  pending.set(openEv, subs);
+  changed(openEv);
   render();
 }
 
@@ -96,8 +140,8 @@ function render(){
   bd.style.color = '';
   const opts = PART_TYPES.map(t => `<option value="${escapeHtml(t.key)}">${escapeHtml(t.label || t.key)}</option>`).join('');
   bd.innerHTML = `<div style="font-size:11.5px;color:var(--i4);line-height:1.55;margin-bottom:12px">
-      링크로 받은 신청과 엑셀로 올린 명단은 <b>마스터DB에 바로 들어가지 않아요</b>. 아래 «신청 대기»에 모였다가
-      «확정»을 누르면 그때 연락처로 옮기고 이 행사에 참가 확정으로 넣어요. 같은 이메일이 이미 있으면 그 사람에 붙여요.</div>
+      링크로 받은 신청과 엑셀로 올린 명단은 <b>마스터DB에 바로 들어가지 않아요</b>. 참여자 목록에는 «타겟»으로 보이고,
+      여기 «확정»이나 참여자 목록의 «참가 확정»을 누르면 그때 마스터DB로 옮겨 참가 확정으로 넣어요. 같은 이메일이 이미 있으면 그 사람에 붙여요.</div>
 
     <div style="font-size:13px;font-weight:700;color:var(--i1);margin:4px 0 8px;display:flex;align-items:center;gap:8px">
       신청 대기 ${subs.length}건
@@ -150,13 +194,13 @@ let accepted = 0;
 export async function decideRegister(id, act, btn){
   if(act === 'drop' && !confirm('이 신청을 버릴까요? 마스터DB에 남지 않아요.')) return;
   if(btn) btn.disabled = true;
-  const r = await decideRegisterSub(id, act);
-  if(!r.ok){ alert(r.error || '처리하지 못했어요'); if(btn) btn.disabled = false; await reload(); return; }
   const s = subs.find(x => x.id === id);
-  subs = subs.filter(x => x.id !== id);
+  const r = act === 'accept' ? await acceptPending(openEv, id) : await decideRegisterSub(id, act);
+  if(!r.ok){ alert(r.error || '처리하지 못했어요'); if(btn) btn.disabled = false; await reload(); return; }
+  if(act === 'drop'){ subs = subs.filter(x => x.id !== id); pending.set(openEv, subs); changed(openEv); }
   if(act === 'accept') accepted++;
   render();
-  if(accepted) showMsg(`${accepted}명을 마스터DB로 옮겼어요 — 행사 명단에는 화면을 새로고침하면 보여요.`);
+  if(accepted) showMsg(`${accepted}명을 참가 확정해 마스터DB로 옮겼어요.`);
   trackAction(act === 'accept' ? 'create' : 'delete', '등록 신청', openEv,
     `${s?.data?.name || ''} (${s?.data?.org || ''}) ${act === 'accept' ? '확정 → 마스터DB' : '버림'}`);
 }
@@ -165,11 +209,11 @@ export async function acceptAllRegister(btn){
   if(btn) btn.disabled = true;
   let fail = 0;
   for(const s of subs.slice()){
-    const r = await decideRegisterSub(s.id, 'accept');
+    const r = await acceptPending(openEv, s.id);
     if(r.ok) accepted++; else fail++;
   }
   await reload();
-  showMsg(`${accepted}명을 마스터DB로 옮겼어요${fail ? ` · ${fail}건은 못 옮겼어요` : ''} — 행사 명단에는 화면을 새로고침하면 보여요.`, !!fail);
+  showMsg(`${accepted}명을 참가 확정해 마스터DB로 옮겼어요${fail ? ` · ${fail}건은 못 옮겼어요` : ''}.`, !!fail);
   trackAction('create', '등록 신청', openEv, `모두 확정 → 마스터DB${fail ? ` (실패 ${fail})` : ''}`);
 }
 function showMsg(text, warn){
