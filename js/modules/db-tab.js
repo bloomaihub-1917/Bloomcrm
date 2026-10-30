@@ -668,8 +668,13 @@ export function renderMDBSelectionBar(){
         수만큼 만들면 같은 회사가 여러 줄로 갈린다. 사람은 ①에 남아 있고, CRM은
         기업명으로 그 사람들을 되찾아 보여준다.
 
-   이미 그 행사에 있는 것은 건너뛴다. 초청을 두 번 적으면 참가자 수가 부풀고,
-   타겟이 두 줄이면 진행 단계가 갈려 어느 쪽이 최신인지 알 수 없다.
+   이미 그 행사에 «같은 참여 유형»으로 있는 것은 건너뛴다. 초청을 두 번 적으면
+   참가자 수가 부풀고, 타겟이 두 줄이면 진행 단계가 갈려 어느 쪽이 최신인지 알 수 없다.
+   유형이 다르면 넣는다 — 전시 참가사가 파트너링에는 셀러로 오는 일이 흔하다
+   (행사 화면은 사람 단위로 접으므로 참가자 수는 부풀지 않는다).
+
+   «참가 확정으로 넣기»를 켜면 오늘 날짜로 확정해 넣는다 — 이미 참가가 정해진
+   명단(파트너링 셀러·바이어 등)을 옮길 때 행사 화면에서 다시 확정할 일을 던다.
 ══════════════════════════════════════════ */
 
 const nameKeyOf = (v) => String(v || '').toLowerCase()
@@ -686,8 +691,9 @@ function mdbSelectedPeople(){
       || String(a.nameKo || a.nameEn || '').localeCompare(String(b.nameKo || b.nameEn || ''), 'ko'));
 }
 
-const invitedAlready = (cid, ev) =>
-  participations.some(p => String(p.contactId) === String(cid) && String(p.eventId || p.event || '') === ev);
+const invitedAlready = (cid, ev, role) =>
+  participations.some(p => String(p.contactId) === String(cid) && String(p.eventId || p.event || '') === ev
+    && String(p.role || '') === String(role || ''));
 
 const crmHasOrg = (name, ev) => !!name && targets.some(t =>
   String(t.event || '') === ev && nameKeyOf(t.name) === nameKeyOf(name));
@@ -704,8 +710,8 @@ export function openMDBToCrmModal(){
   pop.addEventListener('click', (e) => { if(e.target === pop && downOnBg) closeMDBToCrmModal(); });
 
   pop.innerHTML = `<div class="modal" style="max-width:580px">
-    <div class="mh"><div class="mt2">행사에 초청</div>
-      <div class="mc">고른 ${mdbSelected.size}명을 행사 참가자로 올리고, 소속 기업을 CRM 타겟으로 함께 잡아요</div></div>
+    <div class="mh"><div style="flex:1;min-width:0"><div class="mt2">행사에 초청</div>
+      <div style="font-size:11px;color:var(--i4);margin-top:2px">고른 ${mdbSelected.size}명을 행사 참가자로 올리고, 소속 기업을 CRM 타겟으로 함께 잡아요</div></div></div>
     <div class="mb">
       <div class="fgr">
         <div class="fg"><label class="fl">초청할 행사 *</label>
@@ -714,8 +720,14 @@ export function openMDBToCrmModal(){
               e.date ? ` (${escapeHtml(e.date)})` : ''}</option>`).join('')}
           </select></div>
         <div class="fg"><label class="fl">참여 유형</label>
-          <select class="fi parttype-select" id="tocrm-role"></select></div>
+          <select class="fi parttype-select" id="tocrm-role" onchange="renderMDBToCrmList()"></select></div>
       </div>
+      <label style="display:flex;align-items:flex-start;gap:7px;cursor:pointer;padding:2px 0 6px">
+        <input type="checkbox" id="tocrm-conf" onchange="renderMDBToCrmList()" style="margin-top:2px">
+        <span><span style="font-size:12px;font-weight:600">참가 확정으로 넣기</span>
+          <span style="display:block;font-size:10.5px;color:var(--i5);margin-top:2px">
+            이미 오기로 정해진 사람이면 켜세요 — 오늘 날짜로 확정돼 파트너링·행사 참여자 화면에 바로 나와요.</span></span>
+      </label>
       <label style="display:flex;align-items:flex-start;gap:7px;cursor:pointer;padding:2px 0 8px">
         <input type="checkbox" id="tocrm-mk" checked onchange="renderMDBToCrmList()" style="margin-top:2px">
         <span><span style="font-size:12px;font-weight:600">소속 기업을 CRM 타겟으로도 올리기</span>
@@ -750,7 +762,9 @@ export function renderMDBToCrmList(){
   const el = document.getElementById('tocrm-list');
   if(!el) return;
   const ev = document.getElementById('tocrm-ev')?.value || '';
+  const role = document.getElementById('tocrm-role')?.value || '';
   const mkCrm = !!document.getElementById('tocrm-mk')?.checked;
+  const conf = !!document.getElementById('tocrm-conf')?.checked;
   const people = mdbSelectedPeople();
   el._people = people;
 
@@ -758,19 +772,19 @@ export function renderMDBToCrmList(){
   if(opts) opts.style.display = mkCrm ? '' : 'none';
 
   el.innerHTML = people.map((c, i) => {
-    const dup = invitedAlready(c.id, ev);
+    const dup = invitedAlready(c.id, ev, role);
     const org = String(c.orgKo || c.orgEn || '').trim();
     return `<label style="display:flex;align-items:center;gap:9px;padding:6px 7px;border-radius:6px;cursor:${dup ? 'default' : 'pointer'};opacity:${dup ? .45 : 1}">
       <input type="checkbox" class="tocrm-cb" data-i="${i}" ${dup ? 'disabled' : 'checked'}>
       <span style="font-weight:600;font-size:12px;min-width:74px">${escapeHtml(c.nameKo || c.nameEn || '(이름 없음)')}</span>
       <span style="font-size:11px;color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${
         org ? escapeHtml(org) : '<span style="color:var(--i5)">소속 없음</span>'}</span>
-      ${dup ? '<span class="pill p-gray">이미 초청</span>' : ''}
+      ${dup ? `<span class="pill p-gray">이미 ${escapeHtml(role || '초청')}</span>` : ''}
     </label>`;
   }).join('');
 
   // 이번에 새로 생길 CRM 타겟이 몇 곳인지 미리 알려 준다
-  const picked = people.filter(c => !invitedAlready(c.id, ev));
+  const picked = people.filter(c => !invitedAlready(c.id, ev, role));
   const newOrgs = [...new Set(picked.map(c => String(c.orgKo || c.orgEn || '').trim())
     .filter(Boolean).filter(nm => !crmHasOrg(nm, ev)).map(nameKeyOf))].length;
   const dupN = people.length - picked.length;
@@ -778,7 +792,8 @@ export function renderMDBToCrmList(){
 
   const msg = document.getElementById('tocrm-msg');
   if(msg) msg.innerHTML = [
-    dupN ? `이미 이 행사에 있는 <b>${dupN}명</b>은 건너뜁니다` : '',
+    dupN ? `이미 이 행사에 ${escapeHtml(role)}(으)로 있는 <b>${dupN}명</b>은 건너뜁니다` : '',
+    conf ? `<b>${picked.length}명</b>을 참가 확정으로 넣어요` : '',
     mkCrm ? (newOrgs ? `CRM 타겟 <b>${newOrgs}곳</b>이 새로 생깁니다` : 'CRM 타겟은 모두 이미 있어요')
           : 'CRM 타겟은 만들지 않습니다',
     noOrg ? `소속이 안 적힌 <b>${noOrg}명</b>은 초청만 되고 타겟에는 안 잡혀요` : '',
@@ -800,17 +815,19 @@ export async function confirmMDBToCrm(){
   const role = document.getElementById('tocrm-role')?.value || '';
   const note = document.getElementById('tocrm-note')?.value || '';
   const mkCrm = !!document.getElementById('tocrm-mk')?.checked;
+  const confirmedAt = document.getElementById('tocrm-conf')?.checked ? td() : '';
 
-  /* ① 초청 — 사람마다 한 줄 */
+  /* ① 초청 — 사람마다 한 줄. 확정이면 맨 뒤 칸(confirmed_at)에 오늘 날짜 */
   const parts = picked.map((c, i) => ({
     id: `P-${Date.now()}-${i}`, eventId: ev, event: ev,
     contactId: c.id, contact: '', role, note,
-    matched: '✅ 마스터DB에서 초청',
+    matched: '✅ 마스터DB에서 초청', confirmedAt,
   }));
   parts.forEach(p => participations.push(p));
   const pRes = await Promise.all(parts.map(p => postToSheet({
     sheet: 'participations',
-    row: [p.id, p.eventId, '', p.contactId, '', '', '', p.role, p.note, p.matched],
+    row: [p.id, p.eventId, '', p.contactId, '', '', '', p.role, p.note, p.matched,
+      ...(p.confirmedAt ? [p.confirmedAt] : [])],
   }, '행사 초청')));
   const pBad = parts.filter((_, i) => !pRes[i].ok);
   pBad.forEach(p => { const k = participations.indexOf(p); if(k >= 0) participations.splice(k, 1); });
@@ -853,13 +870,14 @@ export async function confirmMDBToCrm(){
   clearMDBSelection();
   buildCoDB();
   buildMDBEvList(); renderMDB();
+  window.invalidateEvRows?.();   // 행사 화면의 참여자 집계를 다시 세게
   /* crm-tab을 위에서 import하면 순환 참조가 된다 — 필요할 때만 불러온다 */
   const crm = await import('./crm-tab.js');
   crm.buildEvFil(); crm.renderCrm(); crm.updBadges();
 
   const okT = made.length - tBad.length;
   if(okParts.length) trackAction('add', '행사 초청', `${okParts.length}명`,
-    `마스터DB에서 <b>${escapeHtml(String(okParts.length))}명</b>을 <b>${escapeHtml(ev)}</b>에 초청${
+    `마스터DB에서 <b>${escapeHtml(String(okParts.length))}명</b>을 <b>${escapeHtml(ev)}</b>에 ${escapeHtml(role)}(으)로 ${confirmedAt ? '참가 확정' : '초청'}${
       okT ? ` · CRM 타겟 ${okT}곳 추가` : ''}`);
   const fail = pBad.length + tBad.length;
   if(fail) alert(`${fail}건은 저장에 실패해 되돌렸어요. 네트워크 확인 후 다시 시도해주세요.`);

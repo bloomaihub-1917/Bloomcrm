@@ -17,7 +17,7 @@
      읽기만 하면 됩니다 — 라이브 바인딩이라 항상 최신값입니다.)
 ═══════════════════════════════════════════════════════════════ */
 
-import { EVENT_LIST_SEED, CL, CP, RP, CAT_KEYS, EVENT_PARTS, PART_STATES,
+import { EVENT_LIST_SEED, PART_TYPES_SEED, CL, CP, RP, CAT_KEYS, EVENT_PARTS, PART_STATES,
   SPEAKER_ROLES, SPEAKER_NEEDS, COUNTRIES } from './constants.js';
 
 /* ── 백엔드 API 베이스 URL (Node/Express, backend-node/) ──
@@ -741,17 +741,9 @@ export function setCompanySectors(arr){
 /* ══════════════════════════════════════════
    PART_TYPES — 행사 참가 유형 목록 (원본 6337~6347행)
 ══════════════════════════════════════════ */
-export const PART_TYPES = [
-  {key:'VIP',         label:'VIP',         cls:'p-gold'},
-  {key:'연사',         label:'연사',         cls:'p-blue'},
-  {key:'BD',          label:'BD',           cls:'p-teal'},
-  {key:'바이어',        label:'바이어',        cls:'p-teal'},
-  {key:'전시참가기업',   label:'전시참가기업',   cls:'p-purple'},
-  {key:'스폰서',        label:'스폰서',        cls:'p-green'},
-  {key:'비즈니스파트너링',label:'비즈니스파트너링',cls:'p-amber'},
-  {key:'주최사',        label:'주최사',        cls:'p-indigo'},
-  {key:'참가자',        label:'참가자',        cls:'p-gray'},
-];
+/* 기본 목록은 constants.js의 PART_TYPES_SEED 한 곳 — 전에는 여기 따로 베껴 두어서
+   시드에 «셀러»를 더해도 화면 선택지에는 안 나왔다. 서버 목록을 읽으면 내용이 교체된다 */
+export const PART_TYPES = PART_TYPES_SEED.map(t => ({ ...t }));
 
 /* 참가 유형 색은 설정(PART_TYPES.cls)이 정본이다 — DB·기업DB·CRM 화면은 RP[유형]으로
    색을 찾으니, 설정에서 고른 색을 RP에 얹는다. 안 그러면 새로 만든 유형은 늘 회색이었다 */
