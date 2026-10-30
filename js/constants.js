@@ -10,7 +10,7 @@
    그랬다). 옛 표기(전시기업/주최)도 남겨 과거 데이터를 함께 받는다. */
 export const RP = {스폰서:'p-green',시공사:'p-teal',전시참가기업:'p-purple',연사:'p-blue',투자자:'p-amber',
   바이어:'p-teal',BD:'p-teal',기자:'p-red','기자/미디어':'p-red',참가자:'p-gray',VIP:'p-gold',
-  주최사:'p-indigo',비즈니스파트너링:'p-amber',
+  주최사:'p-indigo',비즈니스파트너링:'p-amber',셀러:'p-purple',
   전시기업:'p-purple',주최:'p-indigo'};
 export const CP = {speaker:'p-blue',sponsor:'p-green',investor:'p-amber',buyer:'p-teal',bd:'p-teal',exhibitor:'p-purple',press:'p-red',attendee:'p-gray',vip:'p-gold',organizer:'p-indigo'};
 export const CL = {speaker:'연사',sponsor:'스폰서',investor:'투자자',buyer:'바이어',bd:'BD',exhibitor:'전시참가기업',press:'기자',attendee:'일반참가자',vip:'VIP',organizer:'주최'};
@@ -43,7 +43,7 @@ export const avF = i => FG[i % 6];
 export const ROLE_TO_CAT = {
   'VIP':'vip', '연사':'speaker', 'BD':'attendee', '바이어':'attendee',
   '전시참가기업':'exhibitor', '스폰서':'attendee', '주최사':'attendee', '참가자':'attendee',
-  '비즈니스파트너링':'attendee',
+  '비즈니스파트너링':'attendee', '셀러':'attendee',
 };
 
 /* ── EVENT_LIST 초기 시드 데이터 ──
@@ -69,6 +69,7 @@ export const PART_TYPES_SEED = [
   {key:'연사',         label:'연사',         cls:'p-blue'},
   {key:'BD',          label:'BD',           cls:'p-teal'},
   {key:'바이어',        label:'바이어',        cls:'p-teal'},
+  {key:'셀러',          label:'셀러',          cls:'p-purple'},
   {key:'전시참가기업',   label:'전시참가기업',   cls:'p-purple'},
   {key:'스폰서',        label:'스폰서',        cls:'p-green'},
   {key:'비즈니스파트너링',label:'비즈니스파트너링',cls:'p-amber'},
@@ -126,9 +127,20 @@ export const COUNTRIES = [
 export const EVENT_PARTS = [
   { key:'exh',        label:'전시',     dflt:'doing', partTypes:['전시참가기업'] },
   { key:'conf',       label:'컨퍼런스',  dflt:'none',  partTypes:['연사','참가자'] },
-  { key:'partnering', label:'파트너링',  dflt:'none',  partTypes:['비즈니스파트너링','바이어','BD'] },
+  { key:'partnering', label:'파트너링',  dflt:'none',  partTypes:['비즈니스파트너링','셀러','바이어','BD'] },
   { key:'sponsor',    label:'후원',     dflt:'none',  partTypes:['스폰서'] },
 ];
+
+/* ── 파트너링의 두 편 — 셀러와 바이어 ──
+   참가 역할(participations.role)로 가른다. 섭외는 컨택 탭의 차수(«셀러 컨택»,
+   «바이어 컨택»)에서 하고, 파트너링 탭은 참가가 확정된 사람만 이 기준으로 나눠 보여준다.
+   roles는 PART_TYPES_SEED의 key와 같아야 한다. 옛 표기 «비즈니스파트너링»은 어느
+   편인지 알 수 없어 여기 넣지 않는다 — 파트너링 탭이 «구분 없음»으로 따로 센다. */
+export const PARTNERING_SIDES = [
+  { key:'seller', label:'셀러',  roles:['셀러'],  cls:'p-purple' },
+  { key:'buyer',  label:'바이어', roles:['바이어'], cls:'p-teal' },
+];
+export const PARTNERING_UNSIDED = '비즈니스파트너링';
 
 /* ── 파트의 진행 상태 ──
    전에는 켜고 끄는 둘뿐이었다. 그런데 끝난 행사를 "안 함"으로 돌리면 없던 일이

@@ -67,6 +67,13 @@ const SPEAKER_SRC = [
   ['Lucas Moreau', 'Lucas Moreau', 'Atelier Exemple', 'Principal', '확정', 2, AIA, 'CS-A2', '프랑스'],
   ['신우진', 'Woojin Shin',   '가상공간연구소',    '소장',       '섭외중', 1, AIA, 'CS-A2', '대한민국'],
 ];
+/* 파트너링 바이어 — [이름, 기업, 직함, 국가] */
+const BUYER_SRC = [
+  ['Olivia Grant',   'Westbridge Pharma',  'Head of Sourcing',     '미국'],
+  ['Takumi Mori',    'Sakura Life Science', 'Purchasing Manager',  '일본'],
+  ['Lena Hoffmann',  'Rheinmed GmbH',      'Business Development', '독일'],
+  ['Arjun Mehta',    'Lotus Healthcare',   'Procurement Lead',     '인도'],
+];
 const WAITING = 4;   // 류하은 — 9일 전에 초청하고 아직 답이 없다 «🔔 리마인더 보낼 때»
 
 export function buildTestFixtures(){
@@ -94,6 +101,20 @@ export function buildTestFixtures(){
     participations.push({ id: `P-T${id}`, ev_id: EV, cid: id, '성명': ko,
       type: oi < 8 ? '전시참가기업' : '비즈니스파트너링', note: '', matched: '' });
   });
+  /* 파트너링 — 전시 참가사 다섯 곳이 셀러로도 신청(넷 확정), 해외 바이어 넷(셋 확정) */
+  [0, 1, 2, 4, 6].forEach((oi, k) => participations.push({ id: `P-TS${1001 + oi}`, ev_id: EV, cid: 1001 + oi,
+    '성명': PEOPLE[oi][0], type: '셀러', note: '', matched: '', confirmed_at: k < 4 ? day(-10 + k) : '' }));
+  BUYER_SRC.forEach(([en, org, title, country], i) => {
+    const id = 3001 + i;
+    contacts.push({
+      id, nameKo: '', nameEn: en, orgKo: '', orgEn: org, titleKo: '', titleEn: title,
+      deptKo: '', deptEn: '', country, cat: 'attendee', lang: 'EN', source: '테스트 데이터', date: day(-20),
+      status: 'new', email1: `buyer${id}@example.com`, email2: '', phone1: `+1-000-000-${id}`, phone2: '',
+      beat: '', products: '', tags: '', org_id: '',
+    });
+    participations.push({ id: `P-T${id}`, ev_id: EV, cid: id, '성명': en, type: '바이어', note: '', matched: '',
+      confirmed_at: i < 3 ? day(-8 + i) : '' });
+  });
   SPEAKER_SRC.forEach(([ko, en, org, title, , , , , country], i) => {
     const id = 2001 + i;
     contacts.push({
@@ -114,7 +135,7 @@ export function buildTestFixtures(){
   const events = [
     mkEv(KIC,  '2026 KIC Conference',      '#16A34A',  24, '서울 예시컨벤션센터', '테스트용 — 연사 7명'),
     mkEv(AIA,  '2026 AIA EA SYMPOSIUM',    '#6D28D9',  38, '서울 예시아트홀',     '테스트용 — 연사 3명'),
-    mkEv(BK26, 'BIO KOREA 2026',           '#C97B0A',  31, '서울 예시전시장',     '테스트용 — 전시 8개사, 컨택 차수 2개'),
+    mkEv(BK26, 'BIO KOREA 2026',           '#C97B0A',  31, '서울 예시전시장',     '테스트용 — 전시 8개사, 컨택 차수 2개, 파트너링 셀러 5·바이어 4'),
     mkEv(BK25, 'BIO KOREA 2025',           '#3B5BDB', -330, '서울 예시전시장',    '테스트용 — 지난 전시 4개사'),
   ];
 

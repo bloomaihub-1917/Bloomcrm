@@ -80,5 +80,6 @@ window.addEventListener('resize', () => {
   resizeTimer = setTimeout(() => {
     try { window.renderMDB?.(); } catch(e){ console.warn('[resize] MDB 재렌더 실패', e); }
     try { window.renderExh?.();  } catch(e){ console.warn('[resize] 전시 재렌더 실패', e); }
+    try { window.renderPtn?.();  } catch(e){ console.warn('[resize] 파트너링 재렌더 실패', e); }
   }, 150);
 });

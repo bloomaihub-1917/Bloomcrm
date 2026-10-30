@@ -33,7 +33,8 @@ button{font-family:inherit;cursor:pointer}input,select,textarea{font-family:inhe
 .atabs{display:flex;flex-shrink:0;border-bottom:1px solid var(--i6);background:var(--i9)}
 .atab{flex:1;padding:8px 2px;border:none;background:none;font-size:9px;font-weight:700;
   color:var(--i4);cursor:pointer;border-bottom:2px solid transparent;
-  transition:all .12s;display:flex;flex-direction:column;align-items:center;gap:3px;letter-spacing:.02em;text-transform:uppercase}
+  transition:all .12s;display:flex;flex-direction:column;align-items:center;gap:3px;letter-spacing:.02em;text-transform:uppercase;
+  white-space:nowrap;min-width:0}
 .atab svg{width:13px;height:13px;flex-shrink:0}
 .atab.on{color:var(--a);border-bottom-color:var(--a);background:var(--W)}
 .atab:hover:not(.on){color:var(--i1);background:var(--i8)}
