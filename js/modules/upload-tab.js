@@ -348,7 +348,10 @@ const COLUMN_ALIASES = {
      '구분/참가구분/등록구분'과 업로드 화면의 «기본 카테고리»로 잡는다. */
   cat: ['분류','구분','참가구분','등록구분','참가유형','category','role'],
   beat:     ['대분류','분야','업종','업종대분류','산업분야','섹터','취재분야','출입처','beat','sector','industry'],
-  products: ['전시품목','품목','제품','출품작','products','exhibits','item'],
+  products: ['전시품목','품목','제품','제품명','취급품목','출품작','products','exhibits','item'],
+  /* 회사·제품 소개글 — 사람이 아니라 회사의 글이라 기업 DB의 «회사소개»로 간다.
+     참가 신청서(KOTRA 상담회 등)는 «제품소개(국문)»처럼 적어 온다. */
+  intro:    ['회사소개','기업소개','제품소개','제품설명','intro','company profile','description'],
   website:  ['웹페이지','홈페이지','웹사이트','website','homepage','url'],
   /* 행마다 출처가 다른 명단이 있다(이벤트넷에서 긁어온 줄과 직접 받은 줄이 섞인다).
      열이 없으면 업로드 화면의 «수집 출처» 한 값을 전체에 쓴다 — 예전 그대로다. */
@@ -575,8 +578,8 @@ const DB_FIELD_LABELS = {
   prefix: '경칭(Mr./Dr.)',
   country: '국가', email1: '이메일1', email2: '이메일2',
   phone1: '연락처1', phone2: '연락처2',
-  cat: '카테고리', beat: '분야(산업/업종)', products: '전시품목',
-  website: '웹사이트', note: '기업 메모', source: '수집 출처',
+  cat: '카테고리', beat: '분야(산업/업종)', products: '전시품목(기업 취급 품목)',
+  intro: '기업 회사소개', website: '웹사이트', note: '기업 메모', source: '수집 출처',
   memo1: '메모1', memo2: '메모2', memo3: '메모3',
 };
 
@@ -727,6 +730,15 @@ let _lastHeaders = null;
 let _lastRows = null;
 /* 담당자 이름이 없어 연락처는 못 만들지만 기업은 등록해야 하는 줄 */
 const _orgOnlyRows = [];
+
+/* 명단 한 줄에서 소속 기업에 붙일 값 — 기업 DB에서 비어 있는 칸만 채운다.
+   품목은 연락처(products)에도 그대로 남는다(마스터DB 검색이 그쪽을 본다). */
+const COMPANY_FILL = ['website', 'notes', 'products', 'intro'];
+const companyInfoOf = r => ({
+  key: (r.orgKo || r.orgEn || '').trim(),
+  website: r._companyWebsite || '', notes: r._companyNote || '',
+  products: r.products || '', intro: r._companyIntro || '',
+});
 
 /* colMap을 실제로 적용해 mappedContacts(파싱 결과)를 계산하고,
    AI 로그/"DB에 추가" 버튼을 갱신한다. 최초 자동 매칭 시와, 사용자가
@@ -916,6 +928,7 @@ function applyColumnMap(colMap){
       // website/note는 연락처가 아니라 "기업" 속성 — runValidationStep()에서 기업 마스터(orgs)로 반영하고 contact 저장 시엔 제거한다.
       _companyWebsite: colMap.website ? String(r[colMap.website]||'').trim() : '',
       _companyNote: colMap.note ? String(r[colMap.note]||'').trim() : '',
+      _companyIntro: colMap.intro ? String(r[colMap.intro]||'').trim() : '',
       // memo1~3은 연락처 자신의 자유 칸 — 기본 항목에 없는 열(회원번호, 이사회 여부 등)을 버리지 않고 여기 담는다.
       memo1: colMap.memo1 ? String(r[colMap.memo1]||'').trim() : '',
       memo2: colMap.memo2 ? String(r[colMap.memo2]||'').trim() : '',
@@ -950,7 +963,7 @@ function applyColumnMap(colMap){
      그래서 연락처는 만들지 않되 기업은 등록한다. */
   const orgOnly = result.filter(c => !c.nameKo && !c.nameEn && (c.orgKo || c.orgEn));
   _orgOnlyRows.splice(0, _orgOnlyRows.length,
-    ...orgOnly.map(c => ({ name: (c.orgKo || c.orgEn).trim(), beat: c.beat || '' })));
+    ...orgOnly.map(c => ({ name: (c.orgKo || c.orgEn).trim(), beat: c.beat || '', info: companyInfoOf(c) })));
 
   mappedContacts.splice(0, mappedContacts.length,
     ...result.filter(c => c.nameKo || c.nameEn));
@@ -1282,12 +1295,11 @@ export async function runValidationStep(newRows, dupRows){
 
   // 1) 화면(Master DB)에 즉시 반영 — 중복 id 방지
   const newParts = [];
-  const companyUpdates = []; // 업로드된 website/note를 기업(orgs) 단위로 반영할 목록
   const touchedCompanyKeys = new Set(); // 이번 업로드에 등장한 회사(원문 표기) — 기업 마스터에 최초 저장 대상 확인용
   const existingIds = new Set(contacts.map(c => c.id));
   const addedContacts = []; // 시트 저장 실패 시 롤백용
   newRows.forEach(r => {
-    const { _dup, _suspect, _suspectId, _suspectName, _suspectOrg, _suspectEmail, _companyWebsite, _companyNote, ...clean } = r;
+    const { _dup, _suspect, _suspectId, _suspectName, _suspectOrg, _suspectEmail, _companyWebsite, _companyNote, _companyIntro, ...clean } = r;
     if(existingIds.has(clean.id)){
       // 이제 genContactId()로 세션 내 충돌은 없지만, 만에 하나 걸리면 조용히 버리지 않고 알린다
       addAiLog('warn', 'id 충돌로 1건 스킵: ' + (clean.nameKo||clean.nameEn||clean.id));
@@ -1311,11 +1323,6 @@ export async function runValidationStep(newRows, dupRows){
 
     const coKey = (clean.orgKo || clean.orgEn || '').trim();
     if(coKey) touchedCompanyKeys.add(coKey);
-
-    // 업로드 파일의 website/note는 연락처가 아니라 소속 기업 속성 → 기업 마스터(orgs)로 반영
-    if(_companyWebsite || _companyNote){
-      if(coKey) companyUpdates.push({ key: coKey, website: _companyWebsite||'', notes: _companyNote||'' });
-    }
 
     // 행사 선택 시 participations 자동 생성 (정규화된 필드 형태: eventId/event/contactId/contact/role)
     if(selectedEv){
@@ -1446,20 +1453,37 @@ export async function runValidationStep(newRows, dupRows){
     companiesToSave.set(co.key, co);
   });
 
-  // 업로드 파일에 담겨있던 웹사이트/메모를 소속 기업(companies 시트)에 반영
-  companyUpdates.forEach(u => {
+  /* 업로드 파일의 웹사이트·메모·품목·회사소개는 소속 기업에 붙는다 — 비어 있는 칸만 채운다.
+     이미 DB에 있는 사람(dupRows)과 담당자 없이 회사만 적힌 줄도 회사 정보는 같이 들어온다.
+     고친 칸만 보낸다: 통째로 보내면 그 사이 남이 기업DB에서 고친 칸을 내 화면의 옛 값으로 되돌린다. */
+  const filledFields = new Map(); // co.key → 채운 칸
+  [...newRows, ...dupRows].map(companyInfoOf).concat(_orgOnlyRows.map(o => o.info)).forEach(u => {
+    if(!u || !u.key) return;
     const co = CO_DB.find(x => x.key === u.key || x.branches?.includes(u.key) || x.nameKo === u.key || x.nameEn === u.key);
     if(!co) return;
-    if(u.website && !co.website) co.website = u.website;
-    if(u.notes && !co.notes) co.notes = u.notes;
-    companiesToSave.set(co.key, co);
+    COMPANY_FILL.forEach(k => {
+      if(!u[k] || String(co[k] || '').trim()) return;
+      co[k] = u[k];
+      if(!filledFields.has(co.key)) filledFields.set(co.key, new Set());
+      filledFields.get(co.key).add(k);
+    });
+    if(filledFields.has(co.key) && !companiesToSave.has(co.key)) companiesToSave.set(co.key, co);
   });
 
   if(companiesToSave.size){
-    const newCount = companiesToSave.size;
-    batchUpsertCompanies([...companiesToSave.values()])
+    // 아직 DB에 없던 기업(위 touchedCompanyKeys)은 통째로, 칸을 채운 기업은 그 칸만
+    const isNew = new Set([...companiesToSave.keys()].filter(k => !getOrgById(k)));
+    const savedCount = isNew.size;
+    batchUpsertCompanies([...companiesToSave.values()],
+      c => isNew.has(c.key) ? undefined : [...filledFields.get(c.key)])
       .catch(e => console.warn('companies 일괄 저장 실패:', e));
-    addAiLog('ok', '기업 ' + newCount + '개를 기업DB에 저장했어요.');
+    if(savedCount > 0) addAiLog('ok', '기업 ' + savedCount + '개를 기업DB에 저장했어요.');
+    if(filledFields.size){
+      const n = k => [...filledFields.values()].filter(s => s.has(k)).length;
+      const parts = [['products', '취급 품목'], ['intro', '회사소개'], ['website', '웹사이트'], ['notes', '메모']]
+        .filter(([k]) => n(k)).map(([k, label]) => label + ' ' + n(k));
+      addAiLog('ok', '기업 ' + filledFields.size + '곳의 빈 칸을 명단 값으로 채웠어요 — ' + parts.join(' · '));
+    }
   }
 
   console.log('[upload-tab] 업로드 확정 — newParts.length:', newParts.length, '| API_BASE_URL:', !!API_BASE_URL, '| currentUser:', !!currentUser);

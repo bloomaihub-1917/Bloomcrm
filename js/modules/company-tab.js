@@ -1649,9 +1649,10 @@ export async function patchOrgFields(orgId, cols){
 
 /* 여러 기업을 한 번에 저장 — 업로드 직후처럼 수십~수백 개를 저장할 때
    기업마다 개별 POST를 보내면 요청이 몰려 일부가 실패한다. 한 번으로 묶는다. */
-export async function batchUpsertCompanies(companies){
+/* fieldsOf(c) — 그 기업에서 보낼 칸 목록. 없으면(undefined) 통째로 보낸다(새 기업). */
+export async function batchUpsertCompanies(companies, fieldsOf){
   if(!companies.length) return;
-  const rows = companies.map(c => { const p = orgPatch(c); applyOrgLocal(p); c.updatedAt = p.updated_at; return p; });
+  const rows = companies.map(c => { const p = orgPatch(c, fieldsOf && fieldsOf(c)); applyOrgLocal(p); c.updatedAt = p.updated_at; return p; });
   return postToSheet({ sheet: 'orgs', action: 'batchUpsert', dataRows: rows }, '기업 일괄 저장');
 }
 
