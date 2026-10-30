@@ -495,7 +495,7 @@ function peopleHtml(ev){
       <button class="btn" style="font-size:11px" onclick="confirmEvDbPeople(true)">참가 확정</button>
       <button class="btn" style="font-size:11px" onclick="confirmEvDbPeople(false)">확정 해제</button>
       <button class="btn" style="font-size:11px" onclick="openRegisterLinks('${escAttr(ev.key)}')"
-        title="바깥 사람이 직접 신청하는 링크 — 들어온 신청은 «타겟»에 쌓여요">🔗 등록 링크</button>
+        title="바깥 신청 링크·엑셀 명단 — 받은 신청은 확정할 때 마스터DB로 옮겨요">🔗 등록 링크</button>
       <button class="btn" style="font-size:11px" onclick="openEvDbMailList()">메일 대상 모으기</button>
       <button class="btn bp" style="font-size:11px" onclick="exportEvDbPeople()">명단 내보내기 (${shown.length})</button>
     </div>

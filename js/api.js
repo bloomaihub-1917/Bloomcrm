@@ -1099,6 +1099,8 @@ async function registerApi(path, method = 'GET', body){
 export const loadRegisterLinks = (evKey) => registerApi(`/${encodeURIComponent(evKey)}`);
 export const createRegisterLink = (evKey, body) => registerApi(`/${encodeURIComponent(evKey)}`, 'POST', body);
 export const setRegisterLink   = (token, body) => registerApi(`/link/${encodeURIComponent(token)}`, 'PUT', body);
+export const importRegisterRows = (evKey, body) => registerApi(`/${encodeURIComponent(evKey)}/import`, 'POST', body);
+export const decideRegisterSub = (id, act) => registerApi(`/sub/${encodeURIComponent(id)}/${act}`, 'POST', {});
 /* 이 행사 메일이 어느 주소로 나가는지 — 보내기 전에 눈으로 확인하게 보여 준다.
    계정을 저장·삭제하면 새로 고칠 수 있게 force를 둔다. */
 let mailAcctCache = null;
