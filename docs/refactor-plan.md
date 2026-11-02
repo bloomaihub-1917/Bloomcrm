@@ -16,7 +16,8 @@ master는 건드리지 않고 이 브랜치에서 진행하며, master가 앞서
 |---|---|
 | `node scripts/refactor/deps.js --check` | import한 파일·이름이 실제로 있는지, **쓰는데 선언·import가 없는 이름**(함수마다 따로 본다), 서로 import하는 쌍과 순환 덩어리, 큰 파일 |
 | `smoke.mjs` | 테스트 로그인 뒤 콘솔에서 `(await import('…/scripts/refactor/smoke.mjs')).run()` — 탭 10개와 설정 하위 탭 9개를 열어 에러를 모으고, `window-baseline.json`(전역 함수 785개)과 견줘 빠진 이름을 알린다 |
-| `fingerprint.mjs` | 계산 결과 지문 — 전시 참가기업마다 정산·진행 칸, 기업 뷰(CO_DB)를 해시로. master 화면과 이 브랜치 화면에서 각각 돌려 같은지 본다 |
+| `fingerprint.mjs` | 계산 결과 지문 — 전시 참가기업마다 정산·진행 칸, 기업 뷰(CO_DB), 연사마다 받을 것 칸·다음 연락을 해시로. master 화면과 이 브랜치 화면에서 각각 돌려 같은지 본다 |
+| `render-hash.mjs` | 화면 그림 지문 — 컨퍼런스 5개·전시 9개 보기와 마스터DB·기업·행사·CRM·파트너링·활동 로그 탭의 HTML을 해시로. **새로 로그인한 직후** master와 견준다(앞서 누른 거르개가 남아 있으면 다르게 나온다) |
 | `free-names.js` | 옮기기 전에 — 그 줄 범위가 바깥에서 빌려 쓰는 이름 |
 | `move.js` / `rewire.js` | 줄 범위를 새 파일로 옮기고 import를 다시 잇는다 / 옛 파일에서 가져가던 이름을 새 파일로 돌린다 |
 
@@ -66,8 +67,28 @@ master와 이 브랜치의 계산 지문이 같다(참가기업 12곳·기업 16
 - `exh-drawer`(4,300줄): 진행 / 정산 / 그래픽 / 문의·기록 / AI / 메일로.
 
 ### 파트 E. 컨퍼런스·연사 — `js/features/conference/`
-- `spCell`·`SP_COLS`·잠금 등 공용을 `conf-common.js`로 (`conf-tab ↔ speaker-flow/conf-dash/speaker-share` 해소).
-- `conf-tab`(2,900줄)·`speaker-drawer`(2,300줄)을 구획대로 쪼갠다.
+| 할 일 | 상태 |
+|---|---|
+| 진행 완료 잠금·동의 거절·숨긴 연사·식사/휴식 세션·가져온 이력 확인 대기·참가 역할 맞추기(`syncPartRole`) → `conf-common.js`. 잠금이 탭에서 고른 행사를 보던 것은 탭이 `onConfLockFallback`으로 알려 준다 | ✅ |
+| 연사 표의 칸(`SP_COLS`·`spCell`·`SP_SENT`·`nextActionTd`) → `speaker-cells.js` | ✅ |
+| 연사 창이 컨퍼런스 탭을 다시 그릴 때 `window.renderConf`로 — 창이 탭 화면 파일을 끌어오지 않게 | ✅ |
+| `conf-tab`(2,600줄)·`speaker-drawer`(2,300줄)을 구획대로 쪼갠다 | |
+
+남은 고리 하나: `speaker-cells ↔ speaker-flow`. 연락 칸은 다음 연락 단계를 보여 주고, 연락 단계는 칸으로 남은 자료를 센다 — 정말로 서로를 쓰는 한 덩어리다. 둘 다 함수가 불릴 때만 서로를 찾아서 읽는 순서 문제는 없다. `speaker-flow`를 `features/conference/`로 옮길 때 한 파일로 합칠지 정한다.
+
+결과(2026-11-03): 서로 import하는 쌍 6 → 4. 13개 파일 순환 덩어리가 풀려 가장 큰 고리가 4개 파일(메일 양식·설정)이 됐다.
+계산 지문(참가기업 12·기업 16·연사 10) `f2e06054438b53ee`, 화면 20개 HTML이 master와 같다.
+
+이번에 찾은 누락 넷 — `SP_SENT`(브라우저 연사 목록에서 터짐), `escAttr`(같은 곳), `nextActionTd`, 그리고 파트 D 때 옮긴 `applyOrgLocal`(기업 병합이 실패할 때만 지나는 길이라 브라우저로는 못 본다). 뒤의 둘은 `deps.js`를 넓혀서 찾았다:
+옮겨 받은 파일(core·domain·features)의 비공개 최상위 이름도 보고, 따옴표 안의 `${…}`는 지우지 않는다.
+
+### 지금 남은 고리 (2026-11-03, 파트 E 뒤)
+| 고리 | 풀 곳 |
+|---|---|
+| `mail-templates → settings-tab → flow-editor/exh-mail-editor → mail-templates` (4개) | 파트 F |
+| `company-tab ↔ db-tab` | 파트 C |
+| `exh-bulkmail ↔ exh-tab` | 파트 D 남은 것(진행 단계 꺼내기) |
+| `speaker-cells ↔ speaker-flow` | 파트 E 끝(합칠지 정하기) |
 
 ### 파트 F. 메일 공통 — `js/shared/mail/`
 `mail-templates`·`mail-vars`·`mail-preview`·`mail-pane`·`mail-mark`·`mail-original`·`var-chips`·`follow-up`·`flow-editor`·`ai-mail-draft`.

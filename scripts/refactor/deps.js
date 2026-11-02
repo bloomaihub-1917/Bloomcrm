@@ -83,10 +83,18 @@ console.log('1500줄 넘는 파일: ' + big.map(([f, n]) => `${f}(${n})`).join('
 const stripCode = (s) => s
   .replace(/^\s*(?:import|export)\s*\{[^}]*\}\s*from\s*'[^']*';?/gm, ' ')
   .replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
-  .replace(/'(?:\\.|[^'\\\n])*'/g, "''").replace(/"(?:\\.|[^"\\\n])*"/g, '""')
+  /* 따옴표 안에 ${…}가 든 것(onclick="f('${escAttr(x)}')")은 지우지 않는다 — 그 안의 함수 이름을 놓친다 */
+  .replace(/'(?:\\.|[^'\\\n$])*'/g, "''").replace(/"(?:\\.|[^"\\\n$])*"/g, '""')
   .replace(/`(?:\\.|\$\{(?:[^{}]|\{[^{}]*\})*\}|[^`\\])*`/g, (t) => ' ' + [...t.matchAll(/\$\{((?:[^{}]|\{[^{}]*\})*)\}/g)].map((m) => m[1]).join(' ; ') + ' ');
 const allExported = new Set();
 Object.values(exportsOf).forEach((e) => e.names.forEach((n) => allExported.add(n)));
+/* 내보내지 않은 최상위 이름도 본다 — 옮긴 덩어리의 비공개 상수(SP_SENT)를 옛 파일이
+   계속 쓰면, 그 이름은 어디서도 export되지 않아 위 목록만으로는 못 잡는다.
+   옮겨 받은 파일(core/·domain/·features/)만 본다 — 모든 파일로 넓히면 label·target 같은
+   흔한 지역 이름이 오탐으로 쏟아진다. (이렇게 해서 applyOrgLocal·nextActionTd 누락을 찾았다) */
+for (const f of files.filter((p) => /^(core|domain|features)\//.test(rel(p)))) {
+  for (const m of fs.readFileSync(f, 'utf8').matchAll(/^(?:async\s+)?(?:function\*?|const|let|var|class)\s+([A-Za-z_$][\w$]*)/gm)) allExported.add(m[1]);
+}
 /* 인라인 onclick 문자열이 부르는 window 함수는 import하지 않는 게 맞다 */
 const ONWINDOW = new Set(JSON.parse(fs.readFileSync(path.join(__dirname, 'window-baseline.json'), 'utf8')));
 const GLOBALS = new Set(Object.getOwnPropertyNames(globalThis).concat(['window', 'document', 'localStorage', 'sessionStorage', 'navigator', 'location', 'alert', 'confirm', 'prompt', 'fetch', 'XLSX', 'crypto']));

@@ -47,7 +47,12 @@ import { filterMail, mailFilBar, mailStateHtml, mailActionsHtml, mailToggleAttr,
 import { decorate as decorateMailPane } from './mail-pane.js';
 import { trackAction, changed, removed } from '../core/audit-log.js';
 import { patchContact } from './db-tab.js';
-import { confLocked, setConfLockEv, confLockNotice, renderConf, buildConfEvList, syncPartRole, spCell } from './conf-tab.js';
+import { syncPartRole } from '../features/conference/conf-common.js';
+/* 컨퍼런스 탭은 window로 다시 그린다 — 연사 창이 탭 화면 파일을 끌어오지 않게(417줄과 같은 방식) */
+const renderConf = () => window.renderConf?.();
+const buildConfEvList = () => window.buildConfEvList?.();
+import { spCell } from '../features/conference/speaker-cells.js';
+import { confLocked, setConfLockEv, confLockNotice } from '../features/conference/conf-common.js';
 import { followPill, snoozeFollow, addDays, resolveDue } from './follow-up.js';
 import { flowStatus, draftFor, missingItems, pendingItems, PART_LABEL, changeLines, stepVariants, autoVariant, fillTemplate } from './speaker-flow.js';
 import { libItems, libItem } from './mail-templates.js';

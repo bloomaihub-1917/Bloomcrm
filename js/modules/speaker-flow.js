@@ -17,7 +17,7 @@
 ══════════════════════════════════════════════════════════════ */
 import { EVENT_LIST, CONF_SESSIONS, SPEAKER_LOGS, confCfg, assignmentsFor, rolesOfSpeaker,
   logsOfSpeaker, speakerNeed, currentUser } from '../state.js';
-import { SP_COLS, spCell } from './conf-tab.js';
+import { SP_COLS, spCell } from '../features/conference/speaker-cells.js';
 import { SPEAKER_ROLES } from '../constants.js';
 import { reusePending, reuseSummary } from './contact-speaker.js';
 import { varTokens, varPattern, eventVarValues } from './mail-vars.js';

@@ -15,7 +15,8 @@ import {
 import { loadShares, setShare, pushShareData, shareUrl } from '../api.js';
 import { escapeHtml, escAttr } from '../utils.js';
 import { trackAction } from '../core/audit-log.js';
-import { spCell, SP_COLS, isBreak } from './conf-tab.js';
+import { spCell, SP_COLS } from '../features/conference/speaker-cells.js';
+import { isBreak } from '../features/conference/conf-common.js';
 
 const sessSort = (a, b) => `${a.date || ''} ${a.start_at || ''}`.localeCompare(`${b.date || ''} ${b.start_at || ''}`)
   || String(a.seq || '').localeCompare(String(b.seq || ''), undefined, { numeric: true });

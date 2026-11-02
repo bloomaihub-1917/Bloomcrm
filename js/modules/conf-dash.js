@@ -16,7 +16,7 @@ import { speakersForEvent, sessionsForEvent, assignmentsOfSession, assignmentsFo
 import { SPEAKER_ROLES } from '../constants.js';
 import { escapeHtml, escAttr, td } from '../utils.js';
 import { progressBar } from './exh-tab.js';
-import { SP_COLS, spCell } from './conf-tab.js';
+import { SP_COLS, spCell } from '../features/conference/speaker-cells.js';
 import { flowStatus, missingItems } from './speaker-flow.js';
 import { isStale, isUnread, mailCardHtml } from './mail-mark.js';
 

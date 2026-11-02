@@ -5,7 +5,14 @@
 export async function run(base){
   const st = await import(base + '/js/state.js');
   const tab = await import(base + '/js/modules/exh-tab.js');
-  const out = { exh: [], co: [] };
+  const conf = await import(base + '/js/modules/conf-tab.js');
+  const flow = await import(base + '/js/modules/speaker-flow.js');
+  const out = { exh: [], co: [], sp: [] };
+  for (const sp of st.SPEAKERS) {
+    const na = flow.nextActionLabel(sp);
+    out.sp.push([sp.id, conf.SP_COLS.map((c) => { const x = conf.spCell(sp, sp.event_id, c.key); return x.state + ':' + (x.text || ''); }).join('|'),
+      na.text, na.step || '', na.due || '', conf.consentRefused(sp).join(','), conf.isHiddenSp(sp)]);
+  }
   for (const x of st.EXHIBITORS) {
     const s = tab.settleState(x);
     out.exh.push([x.id, s.billed, s.paid, s.balance, s.cur, s.state, s.due, s.overdue,
@@ -16,5 +23,5 @@ export async function run(base){
   for (const c of st.CO_DB) out.co.push([c.key, c.nameKo, c.nameEn, c.abbr, (c.sectors || []).join('|'), (c.events || []).length, (c.contacts || []).length, JSON.stringify(c.trade || null)]);
   const text = JSON.stringify(out);
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return { exhibitors: out.exh.length, companies: out.co.length, hash: [...new Uint8Array(buf)].slice(0, 8).map((b) => b.toString(16).padStart(2, '0')).join('') };
+  return { exhibitors: out.exh.length, companies: out.co.length, speakers: out.sp.length, hash: [...new Uint8Array(buf)].slice(0, 8).map((b) => b.toString(16).padStart(2, '0')).join('') };
 }

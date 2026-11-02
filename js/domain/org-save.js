@@ -37,7 +37,7 @@ function orgPatch(c, fields){
 }
 
 /* 로컬 ORGS 레코드도 함께 맞춰둔다 — 다음 buildCoDB가 이걸 읽는다 */
-function applyOrgLocal(patch){
+export function applyOrgLocal(patch){
   const o = getOrgById(patch.id);
   if(o) Object.assign(o, patch);
 }

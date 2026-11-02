@@ -1373,7 +1373,7 @@ export function switchCoT(k){
 }
 
 /* 3개 함수를 ../domain/org-save.js로 옮겼다 — 이 파일에서도 쓰고, 옛 경로로 가져가는 곳도 있어 다시 내보낸다 */
-import { upsertCompanyRow, patchOrgFields, batchUpsertCompanies } from '../domain/org-save.js';
+import { upsertCompanyRow, patchOrgFields, batchUpsertCompanies, applyOrgLocal } from '../domain/org-save.js';
 export { upsertCompanyRow, patchOrgFields, batchUpsertCompanies } from '../domain/org-save.js';
 
 /* 4개 함수를 ../domain/orgs.js로 옮겼다 — 이 파일에서도 쓰고, 옛 경로로 가져가는 곳도 있어 다시 내보낸다 */

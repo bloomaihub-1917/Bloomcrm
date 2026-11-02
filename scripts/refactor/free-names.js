@@ -14,8 +14,9 @@ const inRange = (i) => i >= from - 1 && i <= to - 1;
 const strip = (s) => s
   .replace(/\/\*[\s\S]*?\*\//g, ' ')
   .replace(/\/\/[^\n]*/g, ' ')
-  .replace(/'(?:\\.|[^'\\\n])*'/g, "''")
-  .replace(/"(?:\\.|[^"\\\n])*"/g, '""');
+  /* 따옴표 안에 ${…}가 든 것(onclick="f('${escAttr(x)}')")은 지우지 않는다 — 그 안의 함수 이름을 놓친다 */
+  .replace(/'(?:\\.|[^'\\\n$])*'/g, "''")
+  .replace(/"(?:\\.|[^"\\\n$])*"/g, '""');
 
 /* 바깥 이름: 최상위 선언 + import 이름 (범위 밖) */
 const outside = new Map();   // name → 'import from X' | 'line N'

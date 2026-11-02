@@ -21,7 +21,8 @@ import {
   contactsOfSpeaker, getSpeakerById, CONF_SESSIONS, leadOf, coOf, roleLabel,
 } from '../state.js';
 import { SP_CONSENTS } from '../constants.js';
-import { spCell, consentRefused } from './conf-tab.js';
+import { spCell } from '../features/conference/speaker-cells.js';
+import { consentRefused } from '../features/conference/conf-common.js';
 import { loadExcelJs } from './exh-export.js';
 import { showSaveErrorToast } from '../api.js';
 import { trackAction } from '../core/audit-log.js';
