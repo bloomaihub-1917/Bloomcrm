@@ -21,7 +21,7 @@ import {
 import { loadExcelJs } from './exh-export.js';
 import { showSaveErrorToast } from '../api.js';
 import { escapeHtml, escAttr } from '../utils.js';
-import { trackAction } from './audit-tab.js';
+import { trackAction } from '../core/audit-log.js';
 
 /* 반응을 보고서의 네 칸으로 묶는다 — 엑셀 총괄표의 긍정·보류·부정·오류와 같다 */
 export const BUCKET = {

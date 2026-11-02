@@ -27,7 +27,7 @@
 import { auditLog, currentUser, participations } from '../state.js';
 import { postToSheet, loadFromSheets } from '../api.js';
 import { escapeHtml } from '../utils.js';
-import { trackAction } from './audit-tab.js';
+import { trackAction } from '../core/audit-log.js';
 import { describeAudit, fieldLabel, showVal } from './audit-describe.js';
 
 /* 사람이 읽는 표 이름 — 물음에 «exhibitor_items 줄을 되살릴까요»라고 쓰면

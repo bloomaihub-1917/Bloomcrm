@@ -68,7 +68,7 @@ import { libItems, libItem } from './mail-templates.js';
 import { varChipsHtml, registerVarResolver } from './var-chips.js';
 import { aiDraftHtml, registerAiDraft } from './ai-mail-draft.js';
 import './exh-mail-editor.js';
-import { trackAction, changed, removed } from './audit-tab.js';
+import { trackAction, changed, removed } from '../core/audit-log.js';
 import { ieyo } from '../country-signal.js';
 import { normalizeCompanyKey, createOrg, patchOrgFields } from './company-tab.js';
 import {

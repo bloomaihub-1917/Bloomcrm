@@ -24,7 +24,7 @@ import { flowSteps, flowStatus, draftFor, fillTemplate, roundTargets, resentAfte
 import { libItems, libItem } from './mail-templates.js';
 import { mailTargets } from './speaker-drawer.js';
 import { saveConf } from './settings-tab.js';
-import { trackAction } from './audit-tab.js';
+import { trackAction } from '../core/audit-log.js';
 import { varChipsHtml } from './var-chips.js';
 import { aiDraftHtml, registerAiDraft } from './ai-mail-draft.js';
 

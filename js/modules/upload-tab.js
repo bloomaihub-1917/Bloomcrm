@@ -62,7 +62,7 @@ import { td, normalizeCat, normalizeCountry, escapeHtml, escAttr, scopedSectorNa
 import { postToSheet, saveCatmap, aiStatus, aiMapColumns, aiCompanyPairs } from '../api.js';
 import { buildCoDB, buildCoCAT, batchUpsertCompanies, ensureOrgsForNames, orgIdForName, suggestSector, patchOrgFields } from './company-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
-import { trackAction } from './audit-tab.js';
+import { trackAction } from '../core/audit-log.js';
 
 /* switchApp만 router.js 소관이라 window 경유로 호출한다(router.js가 모든
    tab 모듈을 최상위에서 조립하는 진입점이라 여기서 역참조하면 순환이

@@ -14,7 +14,7 @@
 import { SPEAKER_LOGS, EXH_LOGS, SPEAKERS, EXHIBITORS, currentUser } from '../state.js';
 import { saveSpeakerLog, saveExhLog, saveSpeaker, syncSentMail, syncInboxMail, reloadSpeakerData, mailAccountOf } from '../api.js';
 import { nowStamp, td, escapeHtml, escAttr } from '../utils.js';
-import { trackAction } from './audit-tab.js';
+import { trackAction } from '../core/audit-log.js';
 import { unassignedCount } from './mail-original.js';
 
 export const isInbound = (l) => l && l.direction === 'in';

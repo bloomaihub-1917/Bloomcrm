@@ -48,7 +48,7 @@ const deleteExhPayment = guardWrite(_deleteExhPayment);
 const deleteExhLog = guardWrite(_deleteExhLog);
 const batchCreateExhibitors = guardWrite(_batchCreateExhibitors);
 const saveExhCfgToSheet = guardWrite(_saveExhCfgToSheet);
-import { trackAction, changed } from './audit-tab.js';
+import { trackAction, changed } from '../core/audit-log.js';
 import { isStale, isUnread, mailCardHtml } from './mail-mark.js';
 // 여러 기업에 메일 — 창을 띄우는 함수만 window에 둔다(목록 단추가 부른다)
 import { exhFollowOf } from './exh-bulkmail.js';

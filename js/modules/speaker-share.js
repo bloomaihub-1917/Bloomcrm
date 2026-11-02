@@ -14,7 +14,7 @@ import {
 } from '../state.js';
 import { loadShares, setShare, pushShareData, shareUrl } from '../api.js';
 import { escapeHtml, escAttr } from '../utils.js';
-import { trackAction } from './audit-tab.js';
+import { trackAction } from '../core/audit-log.js';
 import { spCell, SP_COLS, isBreak } from './conf-tab.js';
 
 const sessSort = (a, b) => `${a.date || ''} ${a.start_at || ''}`.localeCompare(`${b.date || ''} ${b.start_at || ''}`)

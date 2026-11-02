@@ -27,7 +27,7 @@ import { visibleList, exhNames, exhContacts, exhMailCtx, exhLocked, exhLockNotic
 import { exhMailSteps, exhIsEnglish, fillExhTemplate, exhMailFileStep, boothChange, exhStepVariants } from './exh-mail.js';
 import { libItems, libItem } from './mail-templates.js';
 import { followState } from './follow-up.js';
-import { trackAction } from './audit-tab.js';
+import { trackAction } from '../core/audit-log.js';
 import { varChipsHtml } from './var-chips.js';
 import { aiDraftHtml, registerAiDraft } from './ai-mail-draft.js';
 import './exh-mail-editor.js';

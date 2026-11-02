@@ -24,7 +24,7 @@ import { SP_CONSENTS } from '../constants.js';
 import { spCell, consentRefused } from './conf-tab.js';
 import { loadExcelJs } from './exh-export.js';
 import { showSaveErrorToast } from '../api.js';
-import { trackAction } from './audit-tab.js';
+import { trackAction } from '../core/audit-log.js';
 
 /* ── 서식 ── 양식의 것을 그대로: 맑은 고딕 12, 머리글 짙은 회색(#262626)에 흰 굵은 글씨 */
 const FONT   = { name: '맑은 고딕', size: 12 };

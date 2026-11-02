@@ -13,7 +13,7 @@
 import { EVENT_LIST, confCfg, evPartDone } from '../state.js';
 import { FLOW_STEPS, CUSTOM_PRESETS, flowSteps, isCustomStep } from './speaker-flow.js';
 import { saveConf } from './settings-tab.js';
-import { trackAction } from './audit-tab.js';
+import { trackAction } from '../core/audit-log.js';
 import { variantsHtml } from './mail-templates.js';
 import { loadMailFiles, mailFilesOf, uploadMailFile, deleteMailFile, fileToBase64 } from '../api.js';
 import { escapeHtml, escAttr } from '../utils.js';

@@ -21,7 +21,8 @@ import { EVENT_LIST, contacts, participations, evPartOn, hasLeft, PART_TYPES, sy
 import { PARTNERING_SIDES, PARTNERING_UNSIDED } from '../constants.js';
 import { td, escapeHtml, escAttr, countryName, isMobile } from '../utils.js';
 import { postToSheet, upsertPartTypeRow } from '../api.js';
-import { sanitizeForCsv, trackAction } from './audit-tab.js';
+import { trackAction } from '../core/audit-log.js';
+import { sanitizeForCsv } from './audit-tab.js';
 import { normalizeCompanyKey, buildCoDB } from './company-tab.js';
 import { coList, openSendToRound } from './contact-tab.js';
 

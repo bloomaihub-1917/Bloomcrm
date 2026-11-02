@@ -37,7 +37,7 @@ import {
 import { flowStatus, nextActionLabel } from './speaker-flow.js';
 import { RP, SC, LC, EC, STGS, avB, avF } from '../constants.js';
 import { ab, td, escapeHtml, escAttr, isMobile } from '../utils.js';
-import { trackAction, changed } from './audit-tab.js';
+import { trackAction, changed } from '../core/audit-log.js';
 import { postToSheet, sendMail, eventMailFrom, loadUnassigned, linkUnassignedCrm } from '../api.js';
 import { varChipsHtml, registerVarResolver } from './var-chips.js';
 import { eventVarValues } from './mail-vars.js';

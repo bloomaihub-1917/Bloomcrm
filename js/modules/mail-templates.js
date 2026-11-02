@@ -18,7 +18,7 @@ import { saveConf } from './settings-tab.js';
 import { SPEAKER_ROLES } from '../constants.js';
 import { FLOW_VARS, flowSteps } from './speaker-flow.js';
 import { EXH_MAIL_VARS, exhMailSteps } from './exh-mail.js';
-import { trackAction } from './audit-tab.js';
+import { trackAction } from '../core/audit-log.js';
 import { escapeHtml, escAttr, nowStamp } from '../utils.js';
 import { varChipsHtml } from './var-chips.js';
 import { previewHtml } from './mail-preview.js';

@@ -12,7 +12,7 @@
 import { EVENT_LIST, EXH_CFG, evPartDone } from '../state.js';
 import { EXH_MAIL_STEPS, EXH_CUSTOM_PRESETS, exhMailSteps, exhMailFileStep, isCustomExhStep } from './exh-mail.js';
 import { saveExhCfgToSheet, loadMailFiles, mailFilesOf, uploadMailFile, deleteMailFile, fileToBase64 } from '../api.js';
-import { trackAction } from './audit-tab.js';
+import { trackAction } from '../core/audit-log.js';
 import { variantsHtml } from './mail-templates.js';
 import { escapeHtml, escAttr } from '../utils.js';
 import { varChipsHtml } from './var-chips.js';

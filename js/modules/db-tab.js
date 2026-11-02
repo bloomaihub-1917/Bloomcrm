@@ -59,7 +59,8 @@ import { buildCoDB, ensureOrgsForNames, orgIdForName, applyCoSectors,
   coDomainOptionsHtml, coSectorOptionsHtml, currentCoSectorPick } from './company-tab.js';
 import { domainOfSector, domainName, findSectorByName, mainSectors, UNASSIGNED_DOMAIN } from './settings-tab.js';
 /* removed는 removeParticipation 안의 지역 변수와 이름이 겹친다 — 별칭으로 들여온다 */
-import { trackAction, changed, removed as removedMeta, sanitizeForCsv } from './audit-tab.js';
+import { trackAction, changed, removed as removedMeta } from '../core/audit-log.js';
+import { sanitizeForCsv } from './audit-tab.js';
 import { countryCheck, countryCheckText, continentOf, CONTINENT_ORDER } from '../country-signal.js';
 
 /* 이 사람의 국가가 자료와 어긋나는지 — 소속 기업 국가도 함께 넘겨야

@@ -61,7 +61,7 @@ import {
   postToSheet,
   loadSpeakerPhotos, speakerPhotosLoaded, speakerPhotoOf,
 } from '../api.js';
-import { trackAction, changed, removed, created } from './audit-tab.js';
+import { trackAction, changed, removed, created } from '../core/audit-log.js';
 import { IMPORT_SHEETS, IMPORT_GUIDE } from '../conf-import-spec.js';
 import { trackColorOf, pickTrackColorIndex } from '../track-colors.js';
 import { saveConf } from './settings-tab.js';

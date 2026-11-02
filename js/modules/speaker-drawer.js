@@ -45,7 +45,7 @@ import {
 } from '../api.js';
 import { filterMail, mailFilBar, mailStateHtml, mailActionsHtml, mailToggleAttr, isPending, setMailDone } from './mail-mark.js';
 import { decorate as decorateMailPane } from './mail-pane.js';
-import { trackAction, changed, removed } from './audit-tab.js';
+import { trackAction, changed, removed } from '../core/audit-log.js';
 import { patchContact } from './db-tab.js';
 import { confLocked, setConfLockEv, confLockNotice, renderConf, buildConfEvList, syncPartRole, spCell } from './conf-tab.js';
 import { followPill, snoozeFollow, addDays, resolveDue } from './follow-up.js';

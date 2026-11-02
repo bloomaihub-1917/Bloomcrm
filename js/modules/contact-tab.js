@@ -27,7 +27,7 @@ import {
   saveAttempt, deleteAttempt, addAttempts,
 } from '../api.js';
 import { escapeHtml, escAttr, td, nowStamp, sectorKey } from '../utils.js';
-import { trackAction } from './audit-tab.js';
+import { trackAction } from '../core/audit-log.js';
 import { postToSheet, reloadContactData } from '../api.js';
 import { buildCoDB } from './company-tab.js';
 

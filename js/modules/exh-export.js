@@ -44,7 +44,7 @@ import { activeExhibitors, exhNames, exhContact, isBillable, isBoothGiven,
   visibleList } from './exh-tab.js';
 import { openInquiriesFor } from '../state.js';
 import { showSaveErrorToast } from '../api.js';
-import { trackAction } from './audit-tab.js';
+import { trackAction } from '../core/audit-log.js';
 
 const EXCELJS_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
 

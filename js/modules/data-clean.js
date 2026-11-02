@@ -16,7 +16,7 @@ import { postToSheet, safeFetch, authHeaders, aiOrgEnrich } from '../api.js';
 import { countryHint } from '../country-signal.js';
 import { buildCoDB } from './company-tab.js';
 import { renderMDB } from './db-tab.js';
-import { trackAction } from './audit-tab.js';
+import { trackAction } from '../core/audit-log.js';
 
 const blank = (v) => { const t = String(v ?? '').trim(); return !t || t === '-'; };
 const splitSectors = (v) => String(v || '').split('|').map(s => s.trim()).filter(Boolean);

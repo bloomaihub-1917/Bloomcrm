@@ -31,7 +31,8 @@ import { saveTargetToSheet, buildEvFil, renderCrm, updBadges } from './crm-tab.j
 import { normalizeCompanyKey } from './company-tab.js';
 import { domainOfSector, domainName, findSectorByName } from './settings-tab.js';
 /* changed는 이 파일의 지역 변수 이름과 겹친다 — 별칭으로 들여온다 */
-import { trackAction, changed as changeMeta, sanitizeForCsv } from './audit-tab.js';
+import { trackAction, changed as changeMeta } from '../core/audit-log.js';
+import { sanitizeForCsv } from './audit-tab.js';
 import { pendingFor, fetchPending, onPendingChange, acceptPending } from './register-links.js';
 
 /* ── 모듈 상태 ──

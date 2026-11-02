@@ -15,7 +15,7 @@ import { CONTACT_ROUNDS, CONTACT_ATTEMPTS } from '../state.js';
 import { REACTIONS, roundById, membersOf, attemptsOf, memberName, evLabel, currentRoundId } from './contact-tab.js';
 import { BUCKET } from './contact-grid.js';
 import { escapeHtml, escAttr, td } from '../utils.js';
-import { trackAction } from './audit-tab.js';
+import { trackAction } from '../core/audit-log.js';
 
 const BUCKETS = ['긍정', '보류', '부정', '미연결'];
 const WD = ['일', '월', '화', '수', '목', '금', '토'];

@@ -52,7 +52,7 @@ import {
   supported, pickFolder, delHandle, readyFolder, folderLabel, subFolder, writeFile,
 } from './local-folder.js';
 import { showSaveErrorToast } from '../api.js';
-import { trackAction } from './audit-tab.js';
+import { trackAction } from '../core/audit-log.js';
 
 const EXCELJS_SRC = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
 const TEMPLATE_URL = 'Data/인보이스_양식.xlsx';

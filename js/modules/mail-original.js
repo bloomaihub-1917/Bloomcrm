@@ -13,7 +13,7 @@
 import { SPEAKERS, EXHIBITORS } from '../state.js';
 import { mailOriginal, loadUnassigned, linkUnassigned, ignoreUnassigned, reloadSpeakerData } from '../api.js';
 import { escapeHtml, escAttr } from '../utils.js';
-import { trackAction } from './audit-tab.js';
+import { trackAction } from '../core/audit-log.js';
 
 function overlay(id){
   let el = document.getElementById(id);

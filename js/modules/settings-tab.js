@@ -75,7 +75,7 @@ import {
   loadMailFiles, mailFilesOf, uploadMailFile, deleteMailFile, fileToBase64,
   loadMailAccounts, saveMailAccount, loadMailFooter, saveMailFooter, deleteMailAccount, testMailAccount, eventMailFrom, syncSentMail, syncInboxMail, reloadSpeakerData,
 } from '../api.js';
-import { trackAction, changed, removed } from './audit-tab.js';
+import { trackAction, changed, removed } from '../core/audit-log.js';
 
 import { TRACK_COLORS, trackColorOf, trackColorIndex, pickTrackColorIndex } from '../track-colors.js';
 import { flowSteps } from './speaker-flow.js';

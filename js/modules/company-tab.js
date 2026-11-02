@@ -66,7 +66,7 @@ import { postToSheet, batchCreateExhibitors, upsertSectorRow, saveExhibitor, aiC
   saveRoundMember, deleteRoundMembers, saveAttempt } from '../api.js';
 import { parseSectors, joinSectors, mainSectors, sectorNamesInDomain, domainName, domainOfSector, findSectorByName, UNASSIGNED_DOMAIN } from './settings-tab.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
-import { trackAction, changed, removed as removedMeta } from './audit-tab.js';
+import { trackAction, changed, removed as removedMeta } from '../core/audit-log.js';
 import { billedAmount, paidAmount, currencyOf, exhibitorTradeFor, fmtMoney,
   EXH_ROLES, reloadExhibitors } from './exh-tab.js';
 

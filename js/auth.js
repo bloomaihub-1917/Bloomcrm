@@ -8,7 +8,8 @@ import { auth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from '.
 import { userInitials } from './utils.js';
 import { loadFromSheets, loadSectors, setTestFixtures } from './api.js';
 import { buildTestFixtures } from './testdata.js';
-import { trackAction, buildAuditUserList, renderAudit } from './modules/audit-tab.js';
+import { trackAction } from './core/audit-log.js';
+import { buildAuditUserList, renderAudit } from './modules/audit-tab.js';
 import { buildMDBEvList, renderMDB } from './modules/db-tab.js';
 import { renderCoList, buildCoCAT, buildCoDB } from './modules/company-tab.js';
 import { buildEvFil, updBadges } from './modules/crm-tab.js';

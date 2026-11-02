@@ -14,7 +14,7 @@ import {
   loadRegisterLinks, createRegisterLink, setRegisterLink, importRegisterRows, decideRegisterSub, shareUrl,
 } from '../api.js';
 import { escapeHtml, escAttr } from '../utils.js';
-import { trackAction } from './audit-tab.js';
+import { trackAction } from '../core/audit-log.js';
 
 /* 양식의 열 — 서버 FIELDS와 같은 순서·이름. 머리줄 글자로 칸을 찾는다(국문·영문 둘 다 받는다) */
 const COLS = [

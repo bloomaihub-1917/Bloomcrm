@@ -21,7 +21,7 @@
 import { CONTACT_ATTEMPTS, ROUND_MEMBERS } from '../state.js';
 import { addRoundMembers, addAttempts, saveRoundMember } from '../api.js';
 import { escapeHtml, nowStamp } from '../utils.js';
-import { trackAction } from './audit-tab.js';
+import { trackAction } from '../core/audit-log.js';
 import { normalizeCompanyKey } from './company-tab.js';
 import { REACTIONS, roundById, membersOf, coList, coOf, fullContacts, renderRoundNav } from './contact-tab.js';
 
