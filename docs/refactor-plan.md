@@ -18,6 +18,8 @@ master는 건드리지 않고 이 브랜치에서 진행하며, master가 앞서
 | `smoke.mjs` | 테스트 로그인 뒤 콘솔에서 `(await import('…/scripts/refactor/smoke.mjs')).run()` — 탭 10개와 설정 하위 탭 9개를 열어 에러를 모으고, `window-baseline.json`(전역 함수 785개)과 견줘 빠진 이름을 알린다 |
 | `fingerprint.mjs` | 계산 결과 지문 — 전시 참가기업마다 정산·진행 칸, 기업 뷰(CO_DB), 연사마다 받을 것 칸·다음 연락을 해시로. master 화면과 이 브랜치 화면에서 각각 돌려 같은지 본다 |
 | `render-hash.mjs` | 화면 그림 지문 — 컨퍼런스 5개·전시 9개 보기와 마스터DB·기업·행사·CRM·파트너링·활동 로그 탭의 HTML을 해시로. **새로 로그인한 직후** master와 견준다(앞서 누른 거르개가 남아 있으면 다르게 나온다) |
+| `flow-hash.mjs` | 창 열기 지문 — 연락처 상세·고치기·참여 행사 추가·퇴사·직접 추가, 기업 상세·참여 이력 추가, 설정 › 기업 분류·비슷한 기업을 같은 순서로 열며 화면 전체(로그인 시각 뺌)를 해시로. **새로 로그인한 직후 맨 먼저** 돌린다 |
+| `sections.js` / `split-leaf.js` | 큰 파일의 구획끼리 무엇을 부르는지 / «뗄 수 있음» 구획을 한 방향으로 떼기 |
 | `free-names.js` | 옮기기 전에 — 그 줄 범위가 바깥에서 빌려 쓰는 이름 |
 | `move.js` / `rewire.js` | 줄 범위를 새 파일로 옮기고 import를 다시 잇는다 / 옛 파일에서 가져가던 이름을 새 파일로 돌린다 |
 
@@ -49,8 +51,23 @@ master는 건드리지 않고 이 브랜치에서 진행하며, master가 앞서
 옮기기는 `node scripts/refactor/move.js <파일> <시작줄> <끝줄> <새 파일> "<import>" "<제목>"`으로 한다 — 범위를 잘라 새 파일에 넣고, 옛 파일에 다시 내보내기를 남기고, 다른 파일의 import를 새 자리로 돌린다.
 
 ### 파트 C. 마스터DB·기업DB·행사DB·CRM·컨택
-`db-tab`(3,200줄)·`company-tab`(2,700줄)을 구획 제목대로 쪼갠다.
-폴더: `js/features/mdb`, `companies`, `events`, `crm`, `contacts`, `partnering`.
+| 할 일 | 상태 |
+|---|---|
+| `company-tab ↔ db-tab` 고리 — 기업 탭은 마스터DB를 `window.renderMDB`로 다시 그린다 | ✅ |
+| `db-tab`에서 연락처 상세 창(보기·고치기·참여 행사 추가·직접 추가·퇴사 처리, 850줄) → `features/mdb/contact-drawer.js` | ✅ |
+| `company-tab`에서 비슷한 기업 찾기·병합 → `features/companies/merge.js`, 참여 이력 직접 추가 → `features/companies/add-co-event.js` | ✅ |
+| 남은 구획(목록·거르개·검색·질문으로 찾기·카드 뷰 / 섹터 거르개·대시보드·상세·인라인 편집) | 남음 — 서로를 많이 불러 «한 방향» 조건이 안 된다. `state.js`에서 화면 거르개 상태를 떼는 파트 A 뒤에 다시 본다 |
+| 행사DB·CRM·컨택·파트너링 폴더로 옮기기 | |
+
+**떼어 내는 방식 — 한 방향.** 떼어 낸 파일은 탭 파일의 도우미를 import하지만, 탭 파일은 그 파일을 import하지 않는다.
+떼어 낸 파일이 스스로 `window`에 걸고 `app.js`가 읽는다. 화면의 onclick으로만 불리는 구획만 이렇게 뗄 수 있다.
+`node scripts/refactor/sections.js <파일>`로 «뗄 수 있음»을 보고, `node scripts/refactor/split-leaf.js <파일> <시작> <끝> <새 파일> "<제목>"`으로 뗀다
+(머리 import를 저절로 만들고, 탭 쪽 비공개 이름에 export를 붙이고, window 줄을 옮기고, app.js에 잇는다. 범위가 탭의 let 상태를 고치면 멈춘다).
+
+결과(2026-11-03): 서로 import하는 쌍 3 → 2. `db-tab` 3,220 → 2,350줄, `company-tab` 2,290 → 1,920줄.
+화면 20개·계산 지문·창 열기 13단계(`flow-hash.mjs`)가 master와 같다.
+
+`deps.js`에 하나 더: import한 이름에 값을 다시 넣는 곳(«Assignment to constant variable»)을 찾는다 — 모듈 상태(let)를 고치는 구획을 다른 파일로 떼면 생긴다.
 
 ### 파트 D. 전시 — `js/features/exhibition/`
 | 할 일 | 상태 |
@@ -96,10 +113,9 @@ master와 이 브랜치의 계산 지문이 같다(참가기업 12곳·기업 16
 `deps.js`를 손봤다: 템플릿 속 템플릿(`${url ? `<a target="_blank">` : ''}`)을 한 글자씩 훑어 푸는 스캐너로 바꾸고, 정규식 글자·기본값 매개변수를 이름으로 오인하지 않게 했다.
 이제 깨끗한 코드에서 경고 0, 지금까지 놓쳤던 셋(`num`·`SP_SENT`·`escAttr`)을 일부러 빼면 셋 다 잡는다.
 
-### 지금 남은 고리 (2026-11-03, 파트 F 뒤)
+### 지금 남은 고리 (2026-11-03, 파트 C 뒤)
 | 고리 | 풀 곳 |
 |---|---|
-| `company-tab ↔ db-tab` | 파트 C |
 | `exh-bulkmail ↔ exh-tab` | 파트 D 남은 것(진행 단계 꺼내기) |
 | `speaker-cells ↔ speaker-flow` | 파트 E 끝(합칠지 정하기) |
 

@@ -136,8 +136,9 @@ function declaredIn(src) {
   for (const m of src.matchAll(/(?:function\s*[\w$]*\s*\(|\(|,)\s*([^()]*?)\)\s*(?:=>|\{)/g)) m[1].split(/[,\s{}[\]=:.]+/).forEach((n) => n && known.add(n));
   for (const m of src.matchAll(/([A-Za-z_$][\w$]*)\s*=>/g)) known.add(m[1]);
   for (const m of src.matchAll(/catch\s*\(\s*(\w+)/g)) known.add(m[1]);
-  /* 기본값 있는 매개변수(say = () => {})·구조 분해 기본값 — 괄호가 겹쳐 위 규칙이 못 잡는다 */
-  for (const m of src.matchAll(/[(,{]\s*([A-Za-z_$][\w$]*)\s*=(?![=>])/g)) known.add(m[1]);
+  /* 기본값 있는 매개변수(f(evKey, say = () => {}))— 괄호가 겹쳐 위 규칙이 못 잡는다.
+     «{ x = 1; }»(블록 안 대입)까지 선언으로 치면 import한 값에 다시 넣는 것을 못 잡아서 «(»·«,» 뒤만 본다 */
+  for (const m of src.matchAll(/[(,]\s*([A-Za-z_$][\w$]*)\s*=(?![=>])/g)) known.add(m[1]);
   for (const m of src.matchAll(/for\s*\(\s*(?:const|let|var)\s+([\w$]+)/g)) known.add(m[1]);
   return known;
 }
@@ -160,7 +161,12 @@ for (const f of files) {
   const starts = [0];
   lines.forEach((l, i) => { if (i && /^(?:export\s+)?(?:async\s+)?(?:function|const|let|var|class)\b/.test(l)) starts.push(i); });
   starts.push(lines.length);
+  /* import한 이름 — 다른 모듈에서 빌린 값은 이 파일에서 다시 넣을 수 없다(«Assignment to constant variable»).
+     큰 탭 파일을 쪼갤 때 모듈 상태(let)를 고치는 구획이 다른 파일로 가면 바로 이렇게 된다 */
+  const imported = new Set();
+  for (const m of src.matchAll(/import\s*\{([^}]+)\}\s*from/g)) m[1].split(',').forEach((s) => { const n = s.trim().split(/\s+as\s+/).pop().trim(); if (n) imported.add(n); });
   const missing = new Set();
+  const reassigned = new Set();
   for (let k = 0; k < starts.length - 1; k++) {
     const chunk = lines.slice(starts[k], starts[k + 1]).join('\n');
     const local = declaredIn(chunk);
@@ -170,8 +176,13 @@ for (const f of files) {
       const n = m[2];
       if (allExported.has(n) && !top.has(n) && !local.has(n) && !GLOBALS.has(n) && !ONWINDOW.has(n)) missing.add(`${n} (${starts[k] + 1}줄 근처)`);
     }
+    for (const m of body.matchAll(/(^|[^.\w$])([A-Za-z_$][\w$]*)\s*(?:=(?![=>])|\+\+|--|[-+*/%|&]=|\?\?=)|(?:\+\+|--)\s*([A-Za-z_$][\w$]*)/g)) {
+      const n = m[2] || m[3];
+      if (imported.has(n) && !local.has(n)) reassigned.add(`${n} (${starts[k] + 1}줄 근처)`);
+    }
   }
   missing.forEach((n) => problems.push(`${rel(f)}: ${n}를 쓰는데 선언·import가 없다`));
+  reassigned.forEach((n) => problems.push(`${rel(f)}: import한 ${n}에 값을 다시 넣는다 — 그 값을 가진 파일의 set 함수로 바꿔야 한다`));
 }
 
 if (process.argv.includes('--check')) {

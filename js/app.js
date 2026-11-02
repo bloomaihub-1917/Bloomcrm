@@ -9,10 +9,13 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import './modules/db-tab.js';
+import './features/mdb/contact-drawer.js';   // 연락처 상세 창 — 스스로 window에 건다
 import './modules/upload-tab.js';
 import './modules/settings-tab.js';
 import './modules/data-clean.js';
 import './modules/company-tab.js';
+import './features/companies/merge.js';   // 비슷한 기업 찾기와 기업 병합 — 스스로 window에 건다
+import './features/companies/add-co-event.js';   // 기업 화면에서 행사 참여 이력 직접 추가 — 스스로 window에 건다
 import './modules/crm-tab.js';
 import './modules/audit-tab.js';
 import './modules/exh-tab.js';
