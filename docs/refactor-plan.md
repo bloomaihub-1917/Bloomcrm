@@ -14,8 +14,11 @@ master는 건드리지 않고 이 브랜치에서 진행하며, master가 앞서
 
 | 도구 | 하는 일 |
 |---|---|
-| `node scripts/refactor/deps.js --check` | import한 파일·이름이 실제로 있는지, 서로 import하는 쌍과 순환 덩어리, 큰 파일 |
-| `smoke.mjs` | 테스트 로그인 뒤 콘솔에서 `(await import('…/scripts/refactor/smoke.mjs')).run()` — 탭 10개를 다 열어 에러를 모으고, `window-baseline.json`(전역 함수 785개)과 견줘 빠진 이름을 알린다 |
+| `node scripts/refactor/deps.js --check` | import한 파일·이름이 실제로 있는지, **쓰는데 선언·import가 없는 이름**(함수마다 따로 본다), 서로 import하는 쌍과 순환 덩어리, 큰 파일 |
+| `smoke.mjs` | 테스트 로그인 뒤 콘솔에서 `(await import('…/scripts/refactor/smoke.mjs')).run()` — 탭 10개와 설정 하위 탭 9개를 열어 에러를 모으고, `window-baseline.json`(전역 함수 785개)과 견줘 빠진 이름을 알린다 |
+| `fingerprint.mjs` | 계산 결과 지문 — 전시 참가기업마다 정산·진행 칸, 기업 뷰(CO_DB)를 해시로. master 화면과 이 브랜치 화면에서 각각 돌려 같은지 본다 |
+| `free-names.js` | 옮기기 전에 — 그 줄 범위가 바깥에서 빌려 쓰는 이름 |
+| `move.js` / `rewire.js` | 줄 범위를 새 파일로 옮기고 import를 다시 잇는다 / 옛 파일에서 가져가던 이름을 새 파일로 돌린다 |
 
 시작 때(2026-11-03): 서로 import하는 쌍 10개, 19개 파일이 얽힌 순환 덩어리 1개.
 
@@ -34,7 +37,9 @@ master는 건드리지 않고 이 브랜치에서 진행하며, master가 앞서
 | 섹터 헬퍼 14개 → `domain/sectors.js` (설정 탭에서) | ✅ |
 | 기업 이름 다루기(`normalizeCompanyKey`·`stripLegalForm`·`abbrOf` …) → `domain/org-names.js` | ✅ |
 | 업종 추천·업로드 기업 등록·이름→id(`suggestSector`·`ensureOrgsForNames`·`orgIdForName`·`reloadOrgs`) → `domain/orgs.js` | ✅ |
-| 기업 저장(`upsertCompanyRow`·`patchOrgFields`·`batchUpsertCompanies`)·`createOrg`·`buildCoDB` | 남음 — `buildCoDB`가 전시 금액 계산(exh-tab)과 화면 다시 그리기를 불러서, 파트 D에서 금액 계산을 꺼낸 뒤 옮긴다 |
+| 기업 저장(`upsertCompanyRow`·`patchOrgFields`·`batchUpsertCompanies`) → `domain/org-save.js` | ✅ (파트 D 때) |
+| `buildCoDB` → `domain/co-db.js`. 끝난 뒤 정렬·대시보드 다시 그리기는 기업 탭이 `onCoDbBuilt`로 건다 | ✅ (파트 D 때) |
+| `createOrg` | 남음 — 저장 뒤 기업 목록을 다시 그려서 화면 쪽에 둔다 |
 | 차수 조회 15개(`roundById`·`membersOf`·`coList`·`peopleOf` …) → `domain/rounds.js` | ✅ |
 
 결과(2026-11-03): 서로 import하는 쌍 9 → 7. `company-tab ↔ settings-tab`, `db-tab ↔ settings-tab` 해소.
@@ -47,8 +52,17 @@ master는 건드리지 않고 이 브랜치에서 진행하며, master가 앞서
 폴더: `js/features/mdb`, `companies`, `events`, `crm`, `contacts`, `partnering`.
 
 ### 파트 D. 전시 — `js/features/exhibition/`
-- `exh-tab`(5,900줄): 집계 헬퍼를 `exh-calc.js`로 먼저 꺼낸다(`exh-bulkmail ↔ exh-tab` 고리 해소).
-  그 뒤 사이드바 / 목록 / 품목 현황 / 금액 / 프로그램북·도록 / 대시보드 / 추가·불러오기 / 저장·충돌 / 설정 모달로.
+| 할 일 | 상태 |
+|---|---|
+| 금액·정산·환불·세금계산서·그래픽 단계·행사별 설정·마감 45개 → `features/exhibition/exh-calc.js` | ✅ |
+| `EXH_ROLES`·`activeExhibitors`·`reloadExhibitors`도 같이 — 기업 탭이 전시 탭을 안 불러도 되게 | ✅ |
+| 진행 단계(`STEPS`·`cellState`·`progressOf`) 꺼내기 → `exh-bulkmail ↔ exh-tab` 해소 | 남음 — 목록 거르기 상태(`exhFilter`·`stepFil`)와 저장(`patchExh`)·다시 그리기(`renderExh`)가 섞여 있어, exh-tab을 쪼갤 때 화면 상태와 계산을 갈라서 옮긴다 |
+| `exh-tab`을 사이드바 / 목록 / 품목 현황 / 금액 / 프로그램북·도록 / 대시보드 / 추가·불러오기 / 저장·충돌 / 설정 모달로 | |
+
+결과(2026-11-03): 서로 import하는 쌍 7 → 6, `company-tab ↔ exh-tab` 해소. 19개 파일 순환 덩어리가 13개(전시·연사·메일·설정)와 2개(`company-tab ↔ db-tab`)로 갈라졌다.
+master와 이 브랜치의 계산 지문이 같다(참가기업 12곳·기업 16곳, `f54e38c4cc0eac84`).
+
+배운 것: 옮긴 덩어리의 **비공개** 도우미(`num`)를 옛 파일이 계속 쓰고 있었는데, 옛 파일의 다른 함수 안에 같은 이름 지역 변수가 있어 낱말 검사에 가려졌다. 브라우저 대시보드에서 «num is not defined»로 드러났고, 그 뒤 `deps.js` 검사를 함수 단위로 바꿨다.
 - `exh-drawer`(4,300줄): 진행 / 정산 / 그래픽 / 문의·기록 / AI / 메일로.
 
 ### 파트 E. 컨퍼런스·연사 — `js/features/conference/`

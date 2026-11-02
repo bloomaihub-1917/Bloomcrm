@@ -14,7 +14,7 @@ import { COUNTRIES } from '../constants.js';
 import { escapeHtml, escAttr } from '../utils.js';
 import { postToSheet, safeFetch, authHeaders, aiOrgEnrich } from '../api.js';
 import { countryHint } from '../country-signal.js';
-import { buildCoDB } from './company-tab.js';
+import { buildCoDB } from '../domain/co-db.js';
 import { renderMDB } from './db-tab.js';
 import { trackAction } from '../core/audit-log.js';
 

@@ -55,7 +55,8 @@ import {
 import { CP, CL, RP, CAT_KEYS, ROLE_TO_CAT, COUNTRIES, avB, avF } from '../constants.js';
 import { td, ab, phoneMatch, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseSectorScope, parseTags, joinTags, isMobile, cleanEmail, personName, personFullName, leftPill, slugifySectorName } from '../utils.js';
 import { postToSheet, upsertSectorRow, aiQueryPlan } from '../api.js';
-import { buildCoDB, applyCoSectors, coDomainOptionsHtml, coSectorOptionsHtml, currentCoSectorPick } from './company-tab.js';
+import { applyCoSectors, coDomainOptionsHtml, coSectorOptionsHtml, currentCoSectorPick } from './company-tab.js';
+import { buildCoDB } from '../domain/co-db.js';
 import { ensureOrgsForNames, orgIdForName } from '../domain/orgs.js';
 import { domainOfSector, domainName, findSectorByName, mainSectors, UNASSIGNED_DOMAIN } from '../domain/sectors.js';
 /* removed는 removeParticipation 안의 지역 변수와 이름이 겹친다 — 별칭으로 들여온다 */

@@ -31,7 +31,8 @@ import { initOverlayNav } from './overlay-nav.js';
 import { initTableSort } from './table-sort.js';
 import { initAuth, initAfterLogin, closeUserMenu } from './auth.js';
 import { isMobile } from './utils.js';
-import { buildCoDB, buildCoCAT } from './modules/company-tab.js';
+import { buildCoCAT } from './modules/company-tab.js';
+import { buildCoDB } from './domain/co-db.js';
 import { buildEvFil } from './modules/crm-tab.js';
 import { populateUploadEvDropdown } from './modules/upload-tab.js';
 

@@ -23,7 +23,7 @@ import { td, escapeHtml, escAttr, countryName, isMobile } from '../utils.js';
 import { postToSheet, upsertPartTypeRow } from '../api.js';
 import { trackAction } from '../core/audit-log.js';
 import { sanitizeForCsv } from './audit-tab.js';
-import { buildCoDB } from './company-tab.js';
+import { buildCoDB } from '../domain/co-db.js';
 import { normalizeCompanyKey } from '../domain/org-names.js';
 import { openSendToRound } from './contact-tab.js';
 import { coList } from '../domain/rounds.js';

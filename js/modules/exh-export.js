@@ -38,10 +38,9 @@ import {
   EQUIP_CATALOG, catalogItem, liveItemsFor, getExhibitorById,
   exhEvent, EVENT_LIST,
 } from '../state.js';
-import { activeExhibitors, exhNames, exhContact, isBillable, isBoothGiven,
-  boothViewRows, parseBooth, isSharedBooth, boothDesignState, SELF_BUILD_TYPE, hostOf, boothTypeText,
-  STEPS, cellState, progressOf, billedAmount, paidAmount, currencyOf, settleState, settleByCurrency,
-  visibleList } from './exh-tab.js';
+import { exhNames, exhContact, isBoothGiven, boothViewRows, parseBooth, isSharedBooth, boothDesignState, SELF_BUILD_TYPE, hostOf, boothTypeText, STEPS, cellState, progressOf, visibleList } from './exh-tab.js';
+import { activeExhibitors } from '../features/exhibition/exh-calc.js';
+import { isBillable, billedAmount, paidAmount, currencyOf, settleState, settleByCurrency } from '../features/exhibition/exh-calc.js';
 import { openInquiriesFor } from '../state.js';
 import { showSaveErrorToast } from '../api.js';
 import { trackAction } from '../core/audit-log.js';

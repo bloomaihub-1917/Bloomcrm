@@ -6,7 +6,8 @@
 import { setCurApp } from './state.js';
 import { isMobile } from './utils.js';
 import { buildEvFil, renderCrm, closeDr, switchCV } from './modules/crm-tab.js';
-import { buildCoDB, showCoDashboard } from './modules/company-tab.js';
+import { showCoDashboard } from './modules/company-tab.js';
+import { buildCoDB } from './domain/co-db.js';
 import { buildMDBEvList, renderMDB } from './modules/db-tab.js';
 import { buildAuditUserList, renderAudit } from './modules/audit-tab.js';
 import { switchArchTab } from './modules/settings-tab.js';

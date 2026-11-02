@@ -46,7 +46,8 @@ import {
   getExhibitorById, invoicesFor, liveItemsFor, catalogItem, findCatalogByName,
   EXH_INVOICES, EVENT_LIST, exhEvent,
 } from '../state.js';
-import { exhNames, isBillable, currencyOf, ourBillableItems } from './exh-tab.js';
+import { exhNames } from './exh-tab.js';
+import { isBillable, currencyOf, ourBillableItems } from '../features/exhibition/exh-calc.js';
 import { createInvoiceRow, setInvField } from './exh-drawer.js';
 import {
   supported, pickFolder, delHandle, readyFolder, folderLabel, subFolder, writeFile,

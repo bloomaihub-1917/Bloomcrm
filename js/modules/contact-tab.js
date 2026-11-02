@@ -29,7 +29,7 @@ import {
 import { escapeHtml, escAttr, td, nowStamp, sectorKey } from '../utils.js';
 import { trackAction } from '../core/audit-log.js';
 import { postToSheet, reloadContactData } from '../api.js';
-import { buildCoDB } from './company-tab.js';
+import { buildCoDB } from '../domain/co-db.js';
 
 /* ── 반응 — 채널마다 누를 수 있는 것이 다르다. next: 다음 연락까지 며칠(0=곧바로),
    close: 이 반응이면 끝낸다. 값은 여기 한 곳에만 둔다. ── */

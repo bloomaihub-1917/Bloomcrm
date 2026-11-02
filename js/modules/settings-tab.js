@@ -84,7 +84,8 @@ import { CL, CAT_KEYS, EVENT_PARTS, PART_STATES, partStateOf,
   SPEAKER_ROLES, SPEAKER_NEEDS, SPEAKER_NEEDS_ON_TALK,
   NEED_CYCLE, NEED_MARK, NEED_LABEL } from '../constants.js';
 import { slugifySectorName, escapeHtml, escAttr, countryName, scopedSectorName, parseSectorScope, sectorRowValues, sectorKey, parseDomains, joinDomains } from '../utils.js';
-import { buildCoDB, buildCoCAT, renderCoDashboard, setCoCat } from './company-tab.js';
+import { buildCoCAT, renderCoDashboard, setCoCat } from './company-tab.js';
+import { buildCoDB } from '../domain/co-db.js';
 import { renderMDB, buildMDBEvList, buildMDBTagList } from './db-tab.js';
 import { populateUploadEvDropdown } from './upload-tab.js';
 import { renderAiSettings } from './ai-settings.js';

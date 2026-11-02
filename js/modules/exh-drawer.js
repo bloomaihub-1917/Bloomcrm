@@ -70,20 +70,11 @@ import { aiDraftHtml, registerAiDraft } from './ai-mail-draft.js';
 import './exh-mail-editor.js';
 import { trackAction, changed, removed } from '../core/audit-log.js';
 import { ieyo } from '../country-signal.js';
-import { createOrg, patchOrgFields } from './company-tab.js';
+import { createOrg } from './company-tab.js';
+import { patchOrgFields } from '../domain/org-save.js';
 import { normalizeCompanyKey } from '../domain/org-names.js';
-import {
-  billedAmount, paidAmount, graphicState, graphicDueInfo, money, fmtMoney, currencyOf, mixedCurrency, taxNeed, daysSince, CANCELLED,
-  isPendingRefund, boothTypeOptions, boothTypes, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,
-  TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, introLen, bookMissing, introOver, boothDesignState,
-  isSharedBooth, isBookOnly, hostOptions, baseKind, BASE_KINDS, bookName, fasciaName,
-  BOOTH_ORIGIN, BOOTH_EXC, isBoothExc, itemCode,
-  baseRecvAt, baseDoneAt, baseDoneCheck, baseItems, baseRecvItems, TCELL, TPILL,
-  guardWrite, exhLocked, setExhLockEv, exhLockNotice, isBoothGiven, boothIncluded, applyBoothItems, boothItemsPending,
-  patchExh, refreshExhViews, exhContact, exhContacts, exhMailCtx, contactsForExhibitor, cleanEmail, progressBar, needsReissue,
-  settleState, liveInvoices, payDueDate, paidBreakdown, invoiceGap, refundDue, eventDeadlines,
-  STEPS, cellState,
-} from './exh-tab.js';
+import { graphicState, graphicDueInfo, boothTypeOptions, boothTypes, SELF_BUILD_TYPE, exhNames, modalShell, introLen, bookMissing, introOver, boothDesignState, isSharedBooth, isBookOnly, hostOptions, baseKind, BASE_KINDS, bookName, fasciaName, BOOTH_ORIGIN, BOOTH_EXC, isBoothExc, itemCode, baseRecvAt, baseDoneAt, baseDoneCheck, baseItems, baseRecvItems, guardWrite, exhLocked, setExhLockEv, exhLockNotice, isBoothGiven, boothIncluded, applyBoothItems, boothItemsPending, patchExh, refreshExhViews, exhContact, exhContacts, exhMailCtx, contactsForExhibitor, cleanEmail, progressBar, STEPS, cellState } from './exh-tab.js';
+import { billedAmount, paidAmount, money, fmtMoney, currencyOf, mixedCurrency, taxNeed, daysSince, CANCELLED, isPendingRefund, isBillable, TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, TCELL, TPILL, needsReissue, settleState, liveInvoices, payDueDate, paidBreakdown, invoiceGap, refundDue, eventDeadlines } from '../features/exhibition/exh-calc.js';
 
 let drId = null;
 let drTab = 'contact';
