@@ -19,9 +19,8 @@ import { trackAction } from '../core/audit-log.js';
 import { varPattern, eventVarValues } from './mail-vars.js';
 import { varChipsHtml } from './var-chips.js';
 import { libItems, libItem } from './mail-templates.js';
-import {
-  roundById, membersOf, attemptsOf, memberState, memberName, peopleOf, coOf, evLabel, renderRoundNav, pickedPersonId,
-} from './contact-tab.js';
+import { memberState, renderRoundNav, pickedPersonId } from './contact-tab.js';
+import { roundById, membersOf, attemptsOf, memberName, peopleOf, coOf, evLabel } from '../domain/rounds.js';
 
 const NEXT_DAYS = 3;
 const KO = /^(한국|대한민국|korea|republic of korea|south korea|kr)$/i;

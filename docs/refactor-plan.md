@@ -31,11 +31,16 @@ master는 건드리지 않고 이 브랜치에서 진행하며, master가 앞서
 ### 파트 B. 도메인 헬퍼 — `js/domain/`
 | 할 일 | 상태 |
 |---|---|
-| 섹터 헬퍼(`findSectorByName`·`domainOfSector`·`mainSectors` …) — 설정 탭에서 꺼내기 | |
-| 기업 조회·생성(`normalizeCompanyKey`·`orgIdForName`·`createOrg`·`buildCoDB`) — 기업 탭에서 꺼내기 | |
-| 차수 조회(`roundById`·`membersOf` …) — 컨택 탭에서 꺼내기 | |
+| 섹터 헬퍼 14개 → `domain/sectors.js` (설정 탭에서) | ✅ |
+| 기업 이름 다루기(`normalizeCompanyKey`·`stripLegalForm`·`abbrOf` …) → `domain/org-names.js` | ✅ |
+| 업종 추천·업로드 기업 등록·이름→id(`suggestSector`·`ensureOrgsForNames`·`orgIdForName`·`reloadOrgs`) → `domain/orgs.js` | ✅ |
+| 기업 저장(`upsertCompanyRow`·`patchOrgFields`·`batchUpsertCompanies`)·`createOrg`·`buildCoDB` | 남음 — `buildCoDB`가 전시 금액 계산(exh-tab)과 화면 다시 그리기를 불러서, 파트 D에서 금액 계산을 꺼낸 뒤 옮긴다 |
+| 차수 조회 15개(`roundById`·`membersOf`·`coList`·`peopleOf` …) → `domain/rounds.js` | ✅ |
 
-이것이 끝나면 `company-tab ↔ settings-tab/db-tab` 고리가 풀린다.
+결과(2026-11-03): 서로 import하는 쌍 9 → 7. `company-tab ↔ settings-tab`, `db-tab ↔ settings-tab` 해소.
+19개 파일 순환 덩어리는 아직 그대로 — `company-tab ↔ db-tab`(`buildCoDB`·`renderMDB`)과 `company-tab ↔ exh-tab`(금액 계산)이 남아 있다.
+
+옮기기는 `node scripts/refactor/move.js <파일> <시작줄> <끝줄> <새 파일> "<import>" "<제목>"`으로 한다 — 범위를 잘라 새 파일에 넣고, 옛 파일에 다시 내보내기를 남기고, 다른 파일의 import를 새 자리로 돌린다.
 
 ### 파트 C. 마스터DB·기업DB·행사DB·CRM·컨택
 `db-tab`(3,200줄)·`company-tab`(2,700줄)을 구획 제목대로 쪼갠다.

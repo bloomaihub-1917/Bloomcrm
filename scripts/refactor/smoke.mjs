@@ -27,6 +27,13 @@ export async function run({ baseline } = {}) {
       try { window.switchApp(t); opened.push(t); } catch (e) { errors.push(`[${t}] ${e.message}`); }
       await wait(250);
     }
+    /* 설정 탭은 하위 탭(행사·기업·사람·공통·비품·정리·AI·시스템·업로드)마다 그리는 코드가 다르다 */
+    window.switchApp('arch');
+    for (const b of document.querySelectorAll('[id^="arch-tab-"]')) {
+      const k = b.id.replace('arch-tab-', '');
+      try { window.switchArchTab(k); opened.push('arch:' + k); } catch (e) { errors.push(`[arch:${k}] ${e.message}`); }
+      await wait(150);
+    }
     window.switchApp('mdb');
     await wait(100);
   } finally {

@@ -55,7 +55,9 @@ import { exhFollowOf } from './exh-bulkmail.js';
 import { resolveDue, dueInputHtml, readDueInput, followCfg } from './follow-up.js';
 import { boothChange, exhMailSteps } from './exh-mail.js';
 import { renderWatchView, initWatchFolders } from './exh-watch.js';
-import { normalizeCompanyKey, createOrg, reloadOrgs, orgIdForName } from './company-tab.js';
+import { createOrg } from './company-tab.js';
+import { normalizeCompanyKey } from '../domain/org-names.js';
+import { reloadOrgs, orgIdForName } from '../domain/orgs.js';
 
 /* 전시 참가기업으로 취급할 참가 역할 — 데이터에 표기 흔들림이 있어 함께 본다 */
 export const EXH_ROLES = ['전시참가기업', '전시기업', '전시참가'];

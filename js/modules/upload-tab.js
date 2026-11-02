@@ -60,7 +60,8 @@ import {
 import { CL } from '../constants.js';
 import { td, normalizeCat, normalizeCountry, escapeHtml, escAttr, scopedSectorName, slugifySectorName, sectorRowValues, sectorKey } from '../utils.js';
 import { postToSheet, saveCatmap, aiStatus, aiMapColumns, aiCompanyPairs } from '../api.js';
-import { buildCoDB, buildCoCAT, batchUpsertCompanies, ensureOrgsForNames, orgIdForName, suggestSector, patchOrgFields } from './company-tab.js';
+import { buildCoDB, buildCoCAT, batchUpsertCompanies, patchOrgFields } from './company-tab.js';
+import { ensureOrgsForNames, orgIdForName, suggestSector } from '../domain/orgs.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
 import { trackAction } from '../core/audit-log.js';
 

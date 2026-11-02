@@ -22,7 +22,7 @@
 import { EXH_LOGS, EXHIBITORS, EXH_CFG, currentUser, logsFor } from '../state.js';
 import { sendMail, eventMailFrom, loadMailFiles, mailFilesOf, saveExhCfgToSheet } from '../api.js';
 import { escapeHtml, escAttr, nowStamp } from '../utils.js';
-import { normalizeCompanyKey } from './company-tab.js';
+import { normalizeCompanyKey } from '../domain/org-names.js';
 import { visibleList, exhNames, exhContacts, exhMailCtx, exhLocked, exhLockNotice, STEPS, cellState } from './exh-tab.js';
 import { exhMailSteps, exhIsEnglish, fillExhTemplate, exhMailFileStep, boothChange, exhStepVariants } from './exh-mail.js';
 import { libItems, libItem } from './mail-templates.js';

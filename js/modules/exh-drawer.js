@@ -70,7 +70,8 @@ import { aiDraftHtml, registerAiDraft } from './ai-mail-draft.js';
 import './exh-mail-editor.js';
 import { trackAction, changed, removed } from '../core/audit-log.js';
 import { ieyo } from '../country-signal.js';
-import { normalizeCompanyKey, createOrg, patchOrgFields } from './company-tab.js';
+import { createOrg, patchOrgFields } from './company-tab.js';
+import { normalizeCompanyKey } from '../domain/org-names.js';
 import {
   billedAmount, paidAmount, graphicState, graphicDueInfo, money, fmtMoney, currencyOf, mixedCurrency, taxNeed, daysSince, CANCELLED,
   isPendingRefund, boothTypeOptions, boothTypes, SELF_BUILD_TYPE, exhNames, isBillable, modalShell,

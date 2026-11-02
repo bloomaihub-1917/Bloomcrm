@@ -14,10 +14,8 @@
    열은 진하게 보이고, 위쪽 거르기(목표 달성·연락 전 …)도 그 차수를 기준으로 한다.
 ══════════════════════════════════════════════════════════════ */
 import { CONTACT_ROUNDS, CONTACT_ATTEMPTS } from '../state.js';
-import {
-  REACTIONS, roundById, membersOf, attemptsOf, memberState, memberName, peopleOf, coOf, fullContacts,
-  evLabel, currentRoundId,
-} from './contact-tab.js';
+import { REACTIONS, memberState, currentRoundId } from './contact-tab.js';
+import { roundById, membersOf, attemptsOf, memberName, peopleOf, coOf, fullContacts, evLabel } from '../domain/rounds.js';
 import { loadExcelJs } from './exh-export.js';
 import { showSaveErrorToast } from '../api.js';
 import { escapeHtml, escAttr } from '../utils.js';

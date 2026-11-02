@@ -12,7 +12,8 @@
    반응은 그날까지의 마지막 반응으로 본다. 지난 보고를 다시 만들 때 쓴다.
 ══════════════════════════════════════════════════════════════ */
 import { CONTACT_ROUNDS, CONTACT_ATTEMPTS } from '../state.js';
-import { REACTIONS, roundById, membersOf, attemptsOf, memberName, evLabel, currentRoundId } from './contact-tab.js';
+import { REACTIONS, currentRoundId } from './contact-tab.js';
+import { roundById, membersOf, attemptsOf, memberName, evLabel } from '../domain/rounds.js';
 import { BUCKET } from './contact-grid.js';
 import { escapeHtml, escAttr, td } from '../utils.js';
 import { trackAction } from '../core/audit-log.js';

@@ -23,8 +23,10 @@ import { td, escapeHtml, escAttr, countryName, isMobile } from '../utils.js';
 import { postToSheet, upsertPartTypeRow } from '../api.js';
 import { trackAction } from '../core/audit-log.js';
 import { sanitizeForCsv } from './audit-tab.js';
-import { normalizeCompanyKey, buildCoDB } from './company-tab.js';
-import { coList, openSendToRound } from './contact-tab.js';
+import { buildCoDB } from './company-tab.js';
+import { normalizeCompanyKey } from '../domain/org-names.js';
+import { openSendToRound } from './contact-tab.js';
+import { coList } from '../domain/rounds.js';
 
 /* ── 모듈 상태 — 다른 탭이 알 필요가 없어 state.js로 올리지 않는다 ── */
 let ptnEvent = '';

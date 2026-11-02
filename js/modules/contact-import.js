@@ -22,8 +22,9 @@ import { CONTACT_ATTEMPTS, ROUND_MEMBERS } from '../state.js';
 import { addRoundMembers, addAttempts, saveRoundMember } from '../api.js';
 import { escapeHtml, nowStamp } from '../utils.js';
 import { trackAction } from '../core/audit-log.js';
-import { normalizeCompanyKey } from './company-tab.js';
-import { REACTIONS, roundById, membersOf, coList, coOf, fullContacts, renderRoundNav } from './contact-tab.js';
+import { normalizeCompanyKey } from '../domain/org-names.js';
+import { REACTIONS, renderRoundNav } from './contact-tab.js';
+import { roundById, membersOf, coList, coOf, fullContacts } from '../domain/rounds.js';
 
 /* ── 머리글 알아보기 ── 띄어쓰기·줄바꿈을 지우고 견준다 */
 const norm = (v) => String(v ?? '').replace(/\s+/g, '').trim();
