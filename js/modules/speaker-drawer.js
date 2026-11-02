@@ -27,7 +27,7 @@ import {
   nextContactId,
 } from '../state.js';
 import { SPEAKER_ROLES, NEED_MARK, NEED_LABEL, SP_CONSENTS } from '../constants.js';
-import './flow-editor.js';
+import '../shared/mail/flow-editor.js';
 import { td, nowStamp, mailDirPill, escapeHtml, escAttr, countryOptions, countryName, splitQuotedMail, photoSrc } from '../utils.js';
 /* 보낸 기록 본문 — 이전 메일(인용)은 접어 둔다(utils.js splitQuotedMail) */
 const mailBodyHtml = (body) => {
@@ -43,8 +43,8 @@ import {
   aiSpeakerAdvice,
   loadSpeakerPhotos, speakerPhotosLoaded, speakerPhotoOf, saveSpeakerPhoto, deleteSpeakerPhoto, shrinkImage,
 } from '../api.js';
-import { filterMail, mailFilBar, mailStateHtml, mailActionsHtml, mailToggleAttr, isPending, setMailDone } from './mail-mark.js';
-import { decorate as decorateMailPane } from './mail-pane.js';
+import { filterMail, mailFilBar, mailStateHtml, mailActionsHtml, mailToggleAttr, isPending, setMailDone } from '../shared/mail/mail-mark.js';
+import { decorate as decorateMailPane } from '../shared/mail/mail-pane.js';
 import { trackAction, changed, removed } from '../core/audit-log.js';
 import { patchContact } from './db-tab.js';
 import { syncPartRole } from '../features/conference/conf-common.js';
@@ -53,12 +53,12 @@ const renderConf = () => window.renderConf?.();
 const buildConfEvList = () => window.buildConfEvList?.();
 import { spCell } from '../features/conference/speaker-cells.js';
 import { confLocked, setConfLockEv, confLockNotice } from '../features/conference/conf-common.js';
-import { followPill, snoozeFollow, addDays, resolveDue } from './follow-up.js';
+import { followPill, snoozeFollow, addDays, resolveDue } from '../shared/mail/follow-up.js';
 import { flowStatus, draftFor, missingItems, pendingItems, PART_LABEL, changeLines, stepVariants, autoVariant, fillTemplate } from './speaker-flow.js';
-import { libItems, libItem } from './mail-templates.js';
+import { libItems, libItem } from '../shared/mail/mail-templates.js';
 import { reuseCandidates, reusePending } from './contact-speaker.js';
-import { varChipsHtml, registerVarResolver } from './var-chips.js';
-import { aiDraftHtml, registerAiDraft } from './ai-mail-draft.js';
+import { varChipsHtml, registerVarResolver } from '../shared/mail/var-chips.js';
+import { aiDraftHtml, registerAiDraft } from '../shared/mail/ai-mail-draft.js';
 
 let spId = null;
 /* 메일 «값 넣기» 칩 — 드로어 메일은 글 그대로 나가므로 칸 대신 이 연사의 실제 값을 넣는다.

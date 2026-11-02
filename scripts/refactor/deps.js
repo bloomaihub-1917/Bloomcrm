@@ -80,19 +80,45 @@ console.log('1500줄 넘는 파일: ' + big.map(([f, n]) => `${f}(${n})`).join('
    계속 부르고 있으면, 브라우저에서 그 화면을 열 때에야 «X is not defined»로 터진다.
    정식 파서가 아니라 낱말을 훑는다: 어느 모듈이 export하는 이름인데, 이 파일에서 선언도
    import도 안 했고 속성(.x)·객체 키(x:)도 아닌 자리에 나오면 알린다. */
-const stripCode = (s) => s
+/* 템플릿(`…${식}…`)의 글자는 버리고 식만 남긴다. 템플릿 안의 식 안에 또 템플릿이 드는
+   일이 흔해서(${url ? `<a target="_blank">` : ''}) 정규식으로는 짝을 못 맞춘다 — 한 글자씩 훑는다. */
+function stripTemplates(s) {
+  let out = '';
+  const stack = [];          // 'tpl' | 숫자(식 안의 { 깊이)
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    const top = stack[stack.length - 1];
+    if (top === 'tpl') {
+      if (ch === '\\') { i++; continue; }
+      if (ch === '`') { stack.pop(); out += ' '; continue; }
+      if (ch === '$' && s[i + 1] === '{') { stack.push(0); i++; out += ' ; '; continue; }
+      if (ch === '\n') out += '\n';   // 줄 수는 지킨다(«N줄 근처» 안내)
+      continue;
+    }
+    if (ch === '`') { stack.push('tpl'); out += ' '; continue; }
+    if (typeof top === 'number') {
+      if (ch === '{') stack[stack.length - 1]++;
+      else if (ch === '}') { if (top === 0) { stack.pop(); out += ' ; '; continue; } stack[stack.length - 1]--; }
+    }
+    out += ch;
+  }
+  return out;
+}
+const stripCode = (s) => stripTemplates(s
   .replace(/^\s*(?:import|export)\s*\{[^}]*\}\s*from\s*'[^']*';?/gm, ' ')
-  .replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
-  /* 따옴표 안에 ${…}가 든 것(onclick="f('${escAttr(x)}')")은 지우지 않는다 — 그 안의 함수 이름을 놓친다 */
-  .replace(/'(?:\\.|[^'\\\n$])*'/g, "''").replace(/"(?:\\.|[^"\\\n$])*"/g, '""')
-  .replace(/`(?:\\.|\$\{(?:[^{}]|\{[^{}]*\})*\}|[^`\\])*`/g, (t) => ' ' + [...t.matchAll(/\$\{((?:[^{}]|\{[^{}]*\})*)\}/g)].map((m) => m[1]).join(' ; ') + ' ');
+  .replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 '))
+  /* 템플릿을 먼저 푼 뒤에 따옴표를 지워야 onclick="f('${escAttr(x)}','box')" 같은 글이
+     따옴표 짝을 엇갈리게 만들지 않는다 */
+  .replace(/'(?:\\.|[^'\\\n])*'/g, "''").replace(/"(?:\\.|[^"\\\n])*"/g, '""')
+  /* 정규식 글자(/…|me)\./i)도 지운다 — 안의 낱말은 이름이 아니다 */
+  .replace(/([(,=:!&|?;]\s*)\/(?![*/])(?:\\.|\[(?:\\.|[^\]\n])*\]|[^/\\\n[])+\/[dgimsuy]*/g, '$1 /r/ ');
 const allExported = new Set();
 Object.values(exportsOf).forEach((e) => e.names.forEach((n) => allExported.add(n)));
 /* 내보내지 않은 최상위 이름도 본다 — 옮긴 덩어리의 비공개 상수(SP_SENT)를 옛 파일이
    계속 쓰면, 그 이름은 어디서도 export되지 않아 위 목록만으로는 못 잡는다.
-   옮겨 받은 파일(core/·domain/·features/)만 본다 — 모든 파일로 넓히면 label·target 같은
+   옮겨 받은 파일(core/·domain/·features/·shared/)만 본다 — 모든 파일로 넓히면 label·target 같은
    흔한 지역 이름이 오탐으로 쏟아진다. (이렇게 해서 applyOrgLocal·nextActionTd 누락을 찾았다) */
-for (const f of files.filter((p) => /^(core|domain|features)\//.test(rel(p)))) {
+for (const f of files.filter((p) => /^(core|domain|features|shared)\//.test(rel(p)))) {
   for (const m of fs.readFileSync(f, 'utf8').matchAll(/^(?:async\s+)?(?:function\*?|const|let|var|class)\s+([A-Za-z_$][\w$]*)/gm)) allExported.add(m[1]);
 }
 /* 인라인 onclick 문자열이 부르는 window 함수는 import하지 않는 게 맞다 */
@@ -110,6 +136,8 @@ function declaredIn(src) {
   for (const m of src.matchAll(/(?:function\s*[\w$]*\s*\(|\(|,)\s*([^()]*?)\)\s*(?:=>|\{)/g)) m[1].split(/[,\s{}[\]=:.]+/).forEach((n) => n && known.add(n));
   for (const m of src.matchAll(/([A-Za-z_$][\w$]*)\s*=>/g)) known.add(m[1]);
   for (const m of src.matchAll(/catch\s*\(\s*(\w+)/g)) known.add(m[1]);
+  /* 기본값 있는 매개변수(say = () => {})·구조 분해 기본값 — 괄호가 겹쳐 위 규칙이 못 잡는다 */
+  for (const m of src.matchAll(/[(,{]\s*([A-Za-z_$][\w$]*)\s*=(?![=>])/g)) known.add(m[1]);
   for (const m of src.matchAll(/for\s*\(\s*(?:const|let|var)\s+([\w$]+)/g)) known.add(m[1]);
   return known;
 }

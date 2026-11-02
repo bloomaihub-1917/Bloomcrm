@@ -21,12 +21,12 @@ import { sendMail, eventMailFrom, loadMailFiles, mailFilesOf, saveSpeaker } from
 import { escapeHtml, escAttr, nowStamp, td } from '../utils.js';
 import { flowSteps, flowStatus, draftFor, fillTemplate, roundTargets, resentAfter,
   sessionItems, toldSchedule, stepVariants, autoVariant } from './speaker-flow.js';
-import { libItems, libItem } from './mail-templates.js';
+import { libItems, libItem } from '../shared/mail/mail-templates.js';
 import { mailTargets } from './speaker-drawer.js';
-import { saveConf } from './settings-tab.js';
+import { saveConf } from '../features/conference/conf-common.js';
 import { trackAction } from '../core/audit-log.js';
-import { varChipsHtml } from './var-chips.js';
-import { aiDraftHtml, registerAiDraft } from './ai-mail-draft.js';
+import { varChipsHtml } from '../shared/mail/var-chips.js';
+import { aiDraftHtml, registerAiDraft } from '../shared/mail/ai-mail-draft.js';
 
 let bm = null;   // { evKey, step, variant:''|'base'|id, ids:Set, show:'due'|'all', tpl, sending, pi, failed:Set }
 const isLib = (key) => String(key || '').startsWith('lib:');

@@ -51,8 +51,8 @@ import {
   CONF_SESSIONS, EXHIBITORS, SPEAKERS, SPEAKER_LOGS, EXH_LOGS,
   syncPartColors,
 } from '../state.js';
-import { isUnread, isPending, runMailSync } from './mail-mark.js';
-import { dueInputHtml, readDueInput, followCfg, FOLLOW_DEFAULT } from './follow-up.js';
+import { isUnread, isPending, runMailSync } from '../shared/mail/mail-mark.js';
+import { dueInputHtml, readDueInput, followCfg, FOLLOW_DEFAULT } from '../shared/mail/follow-up.js';
 import { exhMailSteps, exhMailFileStep } from './exh-mail.js';
 import './exh-mail-editor.js';
 
@@ -79,7 +79,7 @@ import { trackAction, changed, removed } from '../core/audit-log.js';
 
 import { TRACK_COLORS, trackColorOf, trackColorIndex, pickTrackColorIndex } from '../track-colors.js';
 import { flowSteps } from './speaker-flow.js';
-import { openFlowEditor } from './flow-editor.js';
+import { openFlowEditor } from '../shared/mail/flow-editor.js';
 import { CL, CAT_KEYS, EVENT_PARTS, PART_STATES, partStateOf,
   SPEAKER_ROLES, SPEAKER_NEEDS, SPEAKER_NEEDS_ON_TALK,
   NEED_CYCLE, NEED_MARK, NEED_LABEL } from '../constants.js';
@@ -2783,7 +2783,7 @@ export function renderEvInbox(evKey = inboxEv){
   const unread = rows.filter(r => isUnread(r.l)).length;
   // 주인 없는 메일 단추는 늦게 채운다(서버에서 센다)
   setTimeout(async () => {
-    const m = await import('./mail-original.js');
+    const m = await import('../shared/mail/mail-original.js');
     const n = await m.unassignedCount(evKey);
     const b = document.getElementById('evd-un-btn');
     if(b) b.innerHTML = n ? `<button class="btn" style="font-size:10.5px;color:var(--am);font-weight:700;margin-left:6px" onclick="openUnassigned('${escAttr(evKey)}')">주인 없는 메일 ${n}</button>` : '';
@@ -3181,22 +3181,10 @@ window.saveEvDue           = saveEvDue;
    그 줄에 얹혀 있고, 쓰는 곳들이 {...prev}로 저장하므로 서로 지우지 않는다.
 ══════════════════════════════════════════ */
 
-/* conf만 갈아 끼우고 나머지(parts·due·book)는 그대로 둔다 */
-/* 컨퍼런스 설정 저장. 엑셀 업로드가 트랙·장소를 등록할 때도 이 길을 쓴다 —
-   설정을 쓰는 자리가 둘이면 한쪽이 다른 키를 날린다. */
-export async function saveConf(evKey, conf){
-  const prev = EXH_CFG[evKey] ? JSON.parse(JSON.stringify(EXH_CFG[evKey])) : undefined;
-  const cfg = { ...(prev || {}), conf };
-  EXH_CFG[evKey] = cfg;
-  const r = await saveExhCfgToSheet(evKey, cfg);
-  if(r && r.ok === false){
-    if(prev) EXH_CFG[evKey] = prev; else delete EXH_CFG[evKey];
-    alert('저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
-    renderEvDetail();
-    return false;
-  }
-  return true;
-}
+/* 컨퍼런스 설정 저장(saveConf)은 features/conference/conf-common.js로 옮겼다 — 메일 양식·연락 단계 편집이
+   설정 탭 화면 파일을 끌어오지 않게. 아직 여기서 가져가는 곳이 있어 다시 내보낸다 */
+import { saveConf } from '../features/conference/conf-common.js';
+export { saveConf } from '../features/conference/conf-common.js';
 
 function evConfHtml(ev){
   const cfg = confCfg(ev.key);

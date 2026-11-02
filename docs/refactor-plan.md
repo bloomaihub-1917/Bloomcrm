@@ -82,17 +82,26 @@ master와 이 브랜치의 계산 지문이 같다(참가기업 12곳·기업 16
 이번에 찾은 누락 넷 — `SP_SENT`(브라우저 연사 목록에서 터짐), `escAttr`(같은 곳), `nextActionTd`, 그리고 파트 D 때 옮긴 `applyOrgLocal`(기업 병합이 실패할 때만 지나는 길이라 브라우저로는 못 본다). 뒤의 둘은 `deps.js`를 넓혀서 찾았다:
 옮겨 받은 파일(core·domain·features)의 비공개 최상위 이름도 보고, 따옴표 안의 `${…}`는 지우지 않는다.
 
-### 지금 남은 고리 (2026-11-03, 파트 E 뒤)
+### 파트 F. 메일 공통 — `js/shared/mail/`
+| 할 일 | 상태 |
+|---|---|
+| 컨퍼런스 설정 저장(`saveConf`)을 설정 탭에서 `conf-common.js`로 — 메일 양식·연락 단계 편집이 설정 탭 화면 파일을 끌어오던 것. 저장 실패 때 행사 상세 다시 그리기는 `window.renderEvDetail`로 | ✅ |
+| 메일 파일 10개를 `js/shared/mail/`로: `mail-templates`·`mail-vars`·`mail-preview`·`mail-pane`·`mail-mark`·`mail-original`·`var-chips`·`follow-up`·`flow-editor`·`ai-mail-draft` (`git mv`라 이력이 이어진다) | ✅ |
+
+결과(2026-11-03): 4개 파일 고리(메일 양식·설정) 해소. 서로 import하는 쌍 4 → 3, **가장 큰 고리가 2개 파일**.
+계산 지문 `f2e06054438b53ee`·화면 20개 HTML이 master와 같다. 메일 창(양식 보관함 3파트·일괄 메일 둘·전시 메일 양식·연락 단계 편집·두 상세 창의 메일 칸)이 에러 없이 열린다.
+
+파일 옮기기는 `node scripts/refactor/mvfile.js <새 폴더> <파일> …` — 정적·동적 `import()` 경로를 모두 고치고, 다 고친 뒤 모든 상대 경로가 실제 파일을 가리키는지 확인한다.
+
+`deps.js`를 손봤다: 템플릿 속 템플릿(`${url ? `<a target="_blank">` : ''}`)을 한 글자씩 훑어 푸는 스캐너로 바꾸고, 정규식 글자·기본값 매개변수를 이름으로 오인하지 않게 했다.
+이제 깨끗한 코드에서 경고 0, 지금까지 놓쳤던 셋(`num`·`SP_SENT`·`escAttr`)을 일부러 빼면 셋 다 잡는다.
+
+### 지금 남은 고리 (2026-11-03, 파트 F 뒤)
 | 고리 | 풀 곳 |
 |---|---|
-| `mail-templates → settings-tab → flow-editor/exh-mail-editor → mail-templates` (4개) | 파트 F |
 | `company-tab ↔ db-tab` | 파트 C |
 | `exh-bulkmail ↔ exh-tab` | 파트 D 남은 것(진행 단계 꺼내기) |
 | `speaker-cells ↔ speaker-flow` | 파트 E 끝(합칠지 정하기) |
-
-### 파트 F. 메일 공통 — `js/shared/mail/`
-`mail-templates`·`mail-vars`·`mail-preview`·`mail-pane`·`mail-mark`·`mail-original`·`var-chips`·`follow-up`·`flow-editor`·`ai-mail-draft`.
-`mail-templates → settings-tab` 의존을 끊는다(필요한 것은 파트 B 헬퍼로).
 
 ### 파트 G. 설정·업로드·활동 로그
 `settings-tab`(3,750줄)을 섹터 / 분야·태그·참가유형 / 행사 관리 / 코드 목록 / 기본 품목 / 카탈로그 / 행사 상세 / 컨퍼런스 설정으로.

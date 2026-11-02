@@ -12,14 +12,14 @@
      가져오기     다른 행사에서 다듬은 단계 문구·더한 단계·변형·행사 보관함 양식을 복사한다.
                   날짜(마감·대상 제한)와 첨부는 행사마다 달라 가져오지 않는다
 ══════════════════════════════════════════════════════════════ */
-import { EVENT_LIST, EXH_CFG, MAIL_LIBRARY, confCfg, currentUser, evPartDone, codeList } from '../state.js';
-import { saveMailLibrary, saveExhCfgToSheet } from '../api.js';
-import { saveConf } from './settings-tab.js';
-import { SPEAKER_ROLES } from '../constants.js';
-import { FLOW_VARS, flowSteps } from './speaker-flow.js';
-import { EXH_MAIL_VARS, exhMailSteps } from './exh-mail.js';
-import { trackAction } from '../core/audit-log.js';
-import { escapeHtml, escAttr, nowStamp } from '../utils.js';
+import { EVENT_LIST, EXH_CFG, MAIL_LIBRARY, confCfg, currentUser, evPartDone, codeList } from '../../state.js';
+import { saveMailLibrary, saveExhCfgToSheet } from '../../api.js';
+import { saveConf } from '../../features/conference/conf-common.js';
+import { SPEAKER_ROLES } from '../../constants.js';
+import { FLOW_VARS, flowSteps } from '../../modules/speaker-flow.js';
+import { EXH_MAIL_VARS, exhMailSteps } from '../../modules/exh-mail.js';
+import { trackAction } from '../../core/audit-log.js';
+import { escapeHtml, escAttr, nowStamp } from '../../utils.js';
 import { varChipsHtml } from './var-chips.js';
 import { previewHtml } from './mail-preview.js';
 import { varTokens } from './mail-vars.js';

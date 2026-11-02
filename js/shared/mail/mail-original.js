@@ -10,10 +10,10 @@
    자동 답장은 이미 서버에서 걸렀다. 사람이 보고 연사·참가사에 연결하거나 무시한다.
    연결할 때 «이 주소를 연락처로 추가»하면 다음부터는 자동으로 그 사람에게 붙는다.
 ══════════════════════════════════════════════════════════════ */
-import { SPEAKERS, EXHIBITORS } from '../state.js';
-import { mailOriginal, loadUnassigned, linkUnassigned, ignoreUnassigned, reloadSpeakerData } from '../api.js';
-import { escapeHtml, escAttr } from '../utils.js';
-import { trackAction } from '../core/audit-log.js';
+import { SPEAKERS, EXHIBITORS } from '../../state.js';
+import { mailOriginal, loadUnassigned, linkUnassigned, ignoreUnassigned, reloadSpeakerData } from '../../api.js';
+import { escapeHtml, escAttr } from '../../utils.js';
+import { trackAction } from '../../core/audit-log.js';
 
 function overlay(id){
   let el = document.getElementById(id);

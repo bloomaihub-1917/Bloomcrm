@@ -3,8 +3,8 @@
    (modules/conf-tab.js에서 옮겼다 — 탭 화면 파일에 기대지 않게)
 ═══════════════════════════════════════════════════════════════ */
 
-import { SESSION_SPEAKERS, evPartDone, assignmentsFor, getSpeakerById, participations } from '../../state.js';
-import { postToSheet } from '../../api.js';
+import { SESSION_SPEAKERS, evPartDone, assignmentsFor, getSpeakerById, participations, EXH_CFG } from '../../state.js';
+import { postToSheet, saveExhCfgToSheet } from '../../api.js';
 import { trackAction } from '../../core/audit-log.js';
 import { SP_CONSENTS } from '../../constants.js';
 import { reusePending } from '../../modules/contact-speaker.js';
@@ -101,4 +101,21 @@ export async function syncPartRole(spId){
   if(!r || !r.ok) return;
   p.role = want;
   trackAction('edit', '행사 참가 역할', sp.event_id, `${speakerName(spId)} — ${was} → ${want}`);
+}
+
+/* conf만 갈아 끼우고 나머지(parts·due·book)는 그대로 둔다 */
+/* 컨퍼런스 설정 저장. 엑셀 업로드가 트랙·장소를 등록할 때도 이 길을 쓴다 —
+   설정을 쓰는 자리가 둘이면 한쪽이 다른 키를 날린다. */
+export async function saveConf(evKey, conf){
+  const prev = EXH_CFG[evKey] ? JSON.parse(JSON.stringify(EXH_CFG[evKey])) : undefined;
+  const cfg = { ...(prev || {}), conf };
+  EXH_CFG[evKey] = cfg;
+  const r = await saveExhCfgToSheet(evKey, cfg);
+  if(r && r.ok === false){
+    if(prev) EXH_CFG[evKey] = prev; else delete EXH_CFG[evKey];
+    alert('저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
+    window.renderEvDetail?.();   // 설정 › 행사 상세가 열려 있으면 되돌린 값으로 다시 그린다
+    return false;
+  }
+  return true;
 }

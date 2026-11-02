@@ -18,7 +18,7 @@ import { escapeHtml, escAttr, td } from '../utils.js';
 import { progressBar } from './exh-tab.js';
 import { SP_COLS, spCell } from '../features/conference/speaker-cells.js';
 import { flowStatus, missingItems } from './speaker-flow.js';
-import { isStale, isUnread, mailCardHtml } from './mail-mark.js';
+import { isStale, isUnread, mailCardHtml } from '../shared/mail/mail-mark.js';
 
 const dayDiff = (a, b) => Math.round((new Date(a) - new Date(b)) / 86400000);
 const spName = (sp) => sp.name_snapshot || sp.name_en || '(이름 없음)';

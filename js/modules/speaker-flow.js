@@ -20,8 +20,8 @@ import { EVENT_LIST, CONF_SESSIONS, SPEAKER_LOGS, confCfg, assignmentsFor, roles
 import { SP_COLS, spCell } from '../features/conference/speaker-cells.js';
 import { SPEAKER_ROLES } from '../constants.js';
 import { reusePending, reuseSummary } from './contact-speaker.js';
-import { varTokens, varPattern, eventVarValues } from './mail-vars.js';
-import { followState, resolveDue } from './follow-up.js';
+import { varTokens, varPattern, eventVarValues } from '../shared/mail/mail-vars.js';
+import { followState, resolveDue } from '../shared/mail/follow-up.js';
 
 /* 문투 — 비즈니스 메일 기준(global-email-expert 스킬)을 따른다.
    ① 첫 세 문장 안에 목적을 밝힌다  ② 세부사항은 항목(■ / -)으로 나눈다

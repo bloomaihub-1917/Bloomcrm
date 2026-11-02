@@ -18,8 +18,8 @@
      값 칩은 지금 고른 사람·기업의 값. 쓴 칸이 비어 있으면 어떻게 나가는지까지 적는다
 ══════════════════════════════════════════════════════════════ */
 import { MAIL_VARS, unknownVars, eventVarValues } from './mail-vars.js';
-import { escapeHtml, escAttr } from '../utils.js';
-import { confCfg } from '../state.js';
+import { escapeHtml, escAttr } from '../../utils.js';
+import { confCfg } from '../../state.js';
 
 const resolvers = {};
 /* 값 칩이 쓸 함수 — fn(칸 이름) → 실제 값. 그 화면이 지금 고른 사람·언어로 구한다 */

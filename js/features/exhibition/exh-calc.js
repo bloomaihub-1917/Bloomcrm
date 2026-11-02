@@ -4,7 +4,7 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import { EXH_CFG, EXHIBITORS, API_BASE_URL, currentUser, exhibitorsForEvent, exhEvent, appsFor, getExhibitorById, invoicesFor, liveItemsFor, openInquiriesFor, paymentsFor, taxInvoicesFor } from '../../state.js';
-import { resolveDue } from '../../modules/follow-up.js';
+import { resolveDue } from '../../shared/mail/follow-up.js';
 
 /* ══════════════════════════════════════════
    집계 헬퍼 — 여러 화면이 같은 정의를 쓰도록 한곳에 모은다

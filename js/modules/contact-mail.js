@@ -16,9 +16,9 @@ import { CONTACT_ATTEMPTS, EVENT_LIST, currentUser } from '../state.js';
 import { sendMail, eventMailFrom, saveRound, saveAttempt, saveRoundMember } from '../api.js';
 import { escapeHtml, escAttr, nowStamp } from '../utils.js';
 import { trackAction } from '../core/audit-log.js';
-import { varPattern, eventVarValues } from './mail-vars.js';
-import { varChipsHtml } from './var-chips.js';
-import { libItems, libItem } from './mail-templates.js';
+import { varPattern, eventVarValues } from '../shared/mail/mail-vars.js';
+import { varChipsHtml } from '../shared/mail/var-chips.js';
+import { libItems, libItem } from '../shared/mail/mail-templates.js';
 import { memberState, renderRoundNav, pickedPersonId } from './contact-tab.js';
 import { roundById, membersOf, attemptsOf, memberName, peopleOf, coOf, evLabel } from '../domain/rounds.js';
 

@@ -62,7 +62,7 @@ import {
 import { trackAction, changed, removed, created } from '../core/audit-log.js';
 import { IMPORT_SHEETS, IMPORT_GUIDE } from '../conf-import-spec.js';
 import { trackColorOf, pickTrackColorIndex } from '../track-colors.js';
-import { saveConf } from './settings-tab.js';
+import { saveConf } from '../features/conference/conf-common.js';
 import './speaker-bulkmail.js';
 import { scheduleSharePublish } from './speaker-share.js';   // 프로그램·수급 현황 바깥 공유
 import { nextActionLabel, flowStatus as spFlowStatus } from './speaker-flow.js';

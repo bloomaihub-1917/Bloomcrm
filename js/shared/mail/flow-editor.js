@@ -10,13 +10,13 @@
      기본 단계  이름·설명·마감일·메일 양식 고치기, 끄고 켜기 (지울 수 없다 — 끝난 기준이 코드에 있다)
      더한 단계  더하기·고치기·지우기, 어느 단계 뒤에 둘지, 기준일
 ══════════════════════════════════════════════════════════════ */
-import { EVENT_LIST, confCfg, evPartDone } from '../state.js';
-import { FLOW_STEPS, CUSTOM_PRESETS, flowSteps, isCustomStep } from './speaker-flow.js';
-import { saveConf } from './settings-tab.js';
-import { trackAction } from '../core/audit-log.js';
+import { EVENT_LIST, confCfg, evPartDone } from '../../state.js';
+import { FLOW_STEPS, CUSTOM_PRESETS, flowSteps, isCustomStep } from '../../modules/speaker-flow.js';
+import { saveConf } from '../../features/conference/conf-common.js';
+import { trackAction } from '../../core/audit-log.js';
 import { variantsHtml } from './mail-templates.js';
-import { loadMailFiles, mailFilesOf, uploadMailFile, deleteMailFile, fileToBase64 } from '../api.js';
-import { escapeHtml, escAttr } from '../utils.js';
+import { loadMailFiles, mailFilesOf, uploadMailFile, deleteMailFile, fileToBase64 } from '../../api.js';
+import { escapeHtml, escAttr } from '../../utils.js';
 import { varChipsHtml } from './var-chips.js';
 import { previewHtml } from './mail-preview.js';
 import { dueInputHtml, readDueInput } from './follow-up.js';

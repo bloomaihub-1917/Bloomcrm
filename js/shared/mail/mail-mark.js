@@ -11,10 +11,10 @@
    규칙을 쓰도록 여기 한 곳에 둔다 — 화면마다 따로 두면 숫자가 갈린다.
    t는 'sp'(연사) 또는 'ex'(참가사).
 ══════════════════════════════════════════════════════════════ */
-import { SPEAKER_LOGS, EXH_LOGS, SPEAKERS, EXHIBITORS, currentUser } from '../state.js';
-import { saveSpeakerLog, saveExhLog, saveSpeaker, syncSentMail, syncInboxMail, reloadSpeakerData, mailAccountOf } from '../api.js';
-import { nowStamp, td, escapeHtml, escAttr } from '../utils.js';
-import { trackAction } from '../core/audit-log.js';
+import { SPEAKER_LOGS, EXH_LOGS, SPEAKERS, EXHIBITORS, currentUser } from '../../state.js';
+import { saveSpeakerLog, saveExhLog, saveSpeaker, syncSentMail, syncInboxMail, reloadSpeakerData, mailAccountOf } from '../../api.js';
+import { nowStamp, td, escapeHtml, escAttr } from '../../utils.js';
+import { trackAction } from '../../core/audit-log.js';
 import { unassignedCount } from './mail-original.js';
 
 export const isInbound = (l) => l && l.direction === 'in';

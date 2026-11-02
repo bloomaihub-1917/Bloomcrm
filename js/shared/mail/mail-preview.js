@@ -12,9 +12,9 @@
 
    speaker-flow·exh-mail·exh-tab은 이 파일을 쓰는 화면들과 서로 얽혀 있어 그릴 때 불러온다.
 ══════════════════════════════════════════════════════════════ */
-import { EXHIBITORS, speakersForEvent } from '../state.js';
+import { EXHIBITORS, speakersForEvent } from '../../state.js';
 import { eventVarValues, varPattern } from './mail-vars.js';
-import { escapeHtml, escAttr } from '../utils.js';
+import { escapeHtml, escAttr } from '../../utils.js';
 
 const spName = (sp) => sp.name_snapshot || sp.name_en || '(이름 없음)';
 
@@ -45,7 +45,7 @@ export function previewHtml(part, { ev = '', step = '' } = {}){
 
 /* ── 채우기 ── */
 async function fillers(){
-  const [sf, em, et] = await Promise.all([import('./speaker-flow.js'), import('./exh-mail.js'), import('./exh-tab.js')]);
+  const [sf, em, et] = await Promise.all([import('../../modules/speaker-flow.js'), import('../../modules/exh-mail.js'), import('../../modules/exh-tab.js')]);
   return { sf, em, et };
 }
 async function filler(vp){

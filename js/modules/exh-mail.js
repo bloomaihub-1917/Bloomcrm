@@ -11,8 +11,8 @@
 ══════════════════════════════════════════════════════════════ */
 import { EVENT_LIST, EXH_CFG, EXH_LOGS, getOrgById, currentUser, logsFor } from '../state.js';
 import { countryName } from '../utils.js';
-import { varTokens, varPattern, eventVarValues } from './mail-vars.js';
-import { resolveDue } from './follow-up.js';
+import { varTokens, varPattern, eventVarValues } from '../shared/mail/mail-vars.js';
+import { resolveDue } from '../shared/mail/follow-up.js';
 
 /* due: 설정 › 일정의 마감 키(exh-tab.js DUE_STEPS) */
 export const EXH_MAIL_STEPS = [

@@ -11,8 +11,8 @@
      펼치면 문단마다 «넣기»가 있어 손가락으로 글을 고르지 않아도 된다.
    - 드로어는 각 파일이 그리고, 여기서는 머리 단추·왼쪽 칸·고정 띠만 덧붙인다(decorate).
 ══════════════════════════════════════════════════════════════ */
-import { SPEAKER_LOGS, EXH_LOGS } from '../state.js';
-import { escapeHtml, escAttr, splitQuotedMail } from '../utils.js';
+import { SPEAKER_LOGS, EXH_LOGS } from '../../state.js';
+import { escapeHtml, escAttr, splitQuotedMail } from '../../utils.js';
 
 const DR = { sp: 'sp-dr', ex: 'exh-dr' };
 const BODY = { sp: 'sp-drbd', ex: 'exh-drbd' };

@@ -18,9 +18,9 @@
    «다시 볼 날»은 따로 칸을 만들지 않고 그 사람·기업의 기록(logs)에 kind 'follow' 메모로 남긴다
    — category=단계 키, answered_at=다시 볼 날. 왜 미뤘는지가 기록으로 같이 남는다.
 ══════════════════════════════════════════ */
-import { EVENT_LIST, EXH_CFG, SPEAKER_LOGS, EXH_LOGS, currentUser } from '../state.js';
-import { td, nowStamp } from '../utils.js';
-import { saveSpeakerLog, saveExhLog } from '../api.js';
+import { EVENT_LIST, EXH_CFG, SPEAKER_LOGS, EXH_LOGS, currentUser } from '../../state.js';
+import { td, nowStamp } from '../../utils.js';
+import { saveSpeakerLog, saveExhLog } from '../../api.js';
 
 export const FOLLOW_DEFAULT = { first: 3, again: 4 };
 export function followCfg(evKey){

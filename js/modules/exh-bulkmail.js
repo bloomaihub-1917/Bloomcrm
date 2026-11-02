@@ -25,11 +25,11 @@ import { escapeHtml, escAttr, nowStamp } from '../utils.js';
 import { normalizeCompanyKey } from '../domain/org-names.js';
 import { visibleList, exhNames, exhContacts, exhMailCtx, exhLocked, exhLockNotice, STEPS, cellState } from './exh-tab.js';
 import { exhMailSteps, exhIsEnglish, fillExhTemplate, exhMailFileStep, boothChange, exhStepVariants } from './exh-mail.js';
-import { libItems, libItem } from './mail-templates.js';
-import { followState } from './follow-up.js';
+import { libItems, libItem } from '../shared/mail/mail-templates.js';
+import { followState } from '../shared/mail/follow-up.js';
 import { trackAction } from '../core/audit-log.js';
-import { varChipsHtml } from './var-chips.js';
-import { aiDraftHtml, registerAiDraft } from './ai-mail-draft.js';
+import { varChipsHtml } from '../shared/mail/var-chips.js';
+import { aiDraftHtml, registerAiDraft } from '../shared/mail/ai-mail-draft.js';
 import './exh-mail-editor.js';
 
 let bm = null;   // { evKey, ids:Set, step, variant, lang, who, tpl, sending, pi, failed:Set, photos }

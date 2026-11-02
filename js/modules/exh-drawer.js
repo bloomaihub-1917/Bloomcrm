@@ -34,7 +34,7 @@ import {
   sendMail, eventMailFrom, fileToBase64, loadMailFiles, mailFilesOf, aiExhAdvice,
 } from '../api.js';
 import { exhMailState, exhFollowOf } from './exh-bulkmail.js';
-import { followPill, snoozeFollow, addDays } from './follow-up.js';
+import { followPill, snoozeFollow, addDays } from '../shared/mail/follow-up.js';
 
 /* 진행 완료된 행사는 열람만 — exh-tab의 가드를 그대로 쓴다.
    판단 기준이 두 군데면 한쪽만 고치는 날이 온다. */
@@ -61,12 +61,12 @@ function saveFailed(res, msg){
   if(res && res.locked) return;
   alert(msg || '저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
 }
-import { filterMail, mailFilBar, mailStateHtml, mailActionsHtml, mailToggleAttr, isPending, setMailDone } from './mail-mark.js';
-import { decorate as decorateMailPane } from './mail-pane.js';
+import { filterMail, mailFilBar, mailStateHtml, mailActionsHtml, mailToggleAttr, isPending, setMailDone } from '../shared/mail/mail-mark.js';
+import { decorate as decorateMailPane } from '../shared/mail/mail-pane.js';
 import { EXH_MAIL_STEPS, exhMailSteps, exhIsEnglish, fillExhTemplate, exhMailFileStep, exhStepVariants } from './exh-mail.js';
-import { libItems, libItem } from './mail-templates.js';
-import { varChipsHtml, registerVarResolver } from './var-chips.js';
-import { aiDraftHtml, registerAiDraft } from './ai-mail-draft.js';
+import { libItems, libItem } from '../shared/mail/mail-templates.js';
+import { varChipsHtml, registerVarResolver } from '../shared/mail/var-chips.js';
+import { aiDraftHtml, registerAiDraft } from '../shared/mail/ai-mail-draft.js';
 import './exh-mail-editor.js';
 import { trackAction, changed, removed } from '../core/audit-log.js';
 import { ieyo } from '../country-signal.js';
