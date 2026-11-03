@@ -111,37 +111,20 @@ const VIA = process.argv.includes('--via-window');
 const winAdded = [];
 {
   let text = lines.join('\n');
+  /* 공용 훑기(js-scan.js)로 코드 자리만 본다 — 문자열·주석·정규식·템플릿 글자 속 이름은 건드리지 않는다 */
+  const { codeOnly, identifiers } = require('./js-scan.js');
+  const code = codeOnly(text);
   const used = [];
-  const out = []; let i = 0; let mode = 'code'; const tpl = [];
-  const isId = (c) => /[\w$]/.test(c || '');
-  while (i < text.length) {
-    const c = text[i], d = text[i + 1];
-    if (mode === 'code') {
-      if (c === '/' && d === '*') { const e = text.indexOf('*/', i + 2); out.push(text.slice(i, e + 2)); i = e + 2; continue; }
-      if (c === '/' && d === '/') { const e = text.indexOf('\n', i); const end = e < 0 ? text.length : e; out.push(text.slice(i, end)); i = end; continue; }
-      if (c === "'" || c === '"') { let j = i + 1; while (j < text.length && text[j] !== c) { if (text[j] === '\\') j++; j++; } out.push(text.slice(i, j + 1)); i = j + 1; continue; }
-      if (c === '`') { mode = 'tpl'; out.push(c); i++; continue; }
-      if (c === '}' && tpl.length && tpl[tpl.length - 1] === 0) { tpl.pop(); mode = 'tpl'; out.push(c); i++; continue; }
-      if (c === '{' && tpl.length) tpl[tpl.length - 1]++;
-      if (c === '}' && tpl.length) tpl[tpl.length - 1]--;
-      if (!isId(text[i - 1]) && (text[i - 1] !== '.' || text.slice(i - 3, i) === '...')) {
-        const m = text.slice(i).match(/^[A-Za-z_$][\w$]*/);
-        if (m && moved.has(m[0])) {
-          const before = text.slice(Math.max(0, i - 12), i);
-          const isWinAssign = /window\.$/.test(before);
-          const isCall = /^\s*\(/.test(text.slice(i + m[0].length));
-          if (!isWinAssign) used.push({ name: m[0], isCall, line: text.slice(0, i).split('\n').length });
-          if (VIA && isCall && !isWinAssign) { out.push('window.' + m[0]); i += m[0].length; continue; }
-        }
-        if (m) { out.push(m[0]); i += m[0].length; continue; }
-      }
-      out.push(c); i++; continue;
-    }
-    if (c === '\\') { out.push(c, d); i += 2; continue; }
-    if (c === '`') { mode = 'code'; out.push(c); i++; continue; }
-    if (c === '$' && d === '{') { tpl.push(0); mode = 'code'; out.push('${'); i += 2; continue; }
-    out.push(c); i++;
+  const rewrites = [];
+  for (const { name, at } of identifiers(code)) {
+    if (!moved.has(name)) continue;
+    if (/window\.$/.test(code.slice(Math.max(0, at - 7), at))) continue;   // window.이름 = 이름; 의 왼쪽
+    const isCall = /^\s*\(/.test(code.slice(at + name.length));
+    used.push({ name, isCall, line: text.slice(0, at).split('\n').length });
+    if (VIA && isCall) rewrites.push(at);
   }
+  const out = text.split('');
+  for (const at of rewrites.reverse()) out.splice(at, 0, 'window.');
   if (used.length) {
     if (!VIA) { console.error('✗ 탭에 남은 코드가 옮길 함수를 부른다: ' + [...new Set(used.map((u) => `${u.name}(${u.line}줄)`))].join(', ') + ' — --via-window로 window를 거치게 하거나 범위를 바꾼다'); process.exit(1); }
     const notCall = used.filter((u) => !u.isCall);

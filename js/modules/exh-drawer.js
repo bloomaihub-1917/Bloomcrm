@@ -20,8 +20,10 @@ import {
   nextItemSort, EVENT_LIST, nextContactId,
 } from '../state.js';
 import { td, nowStamp, mailDirPill, escapeHtml, escAttr, countryOptions, leftPill, splitQuotedMail } from '../utils.js';
+/* 화면 상태는 ../features/exhibition/exh-drawer-ui.js의 exhDrUi 한곳에 둔다 — 이 탭의 구획을 다른 파일로 떼어도 같은 값을 보게 */
+import { exhDrUi } from '../features/exhibition/exh-drawer-ui.js';
 /* 보낸 기록 본문 — 이전 메일(인용)은 접어 둔다(utils.js splitQuotedMail) */
-const mailBodyHtml = (body) => {
+export const mailBodyHtml = (body) => {
   const m = splitQuotedMail(body);
   if(!m.head && !m.quoted) return escapeHtml(m.attach || '(본문 없음)');
   return `${escapeHtml(m.head || '(새로 쓴 내용 없음)')}${m.attach ? `\n\n${escapeHtml(m.attach)}` : ''}${m.quoted
@@ -44,16 +46,16 @@ const saveExhItem = guardWrite(_saveExhItem);
 const saveExhInvoice = guardWrite(_saveExhInvoice);
 const saveExhTax = guardWrite(_saveExhTax);
 const saveExhPayment = guardWrite(_saveExhPayment);
-const saveExhLog = guardWrite(_saveExhLog);
+export const saveExhLog = guardWrite(_saveExhLog);
 const saveExhApp = guardWrite(_saveExhApp);
-const deleteExhContact = guardWrite(_deleteExhContact);
-const deleteExhItem = guardWrite(_deleteExhItem);
-const deleteExhInvoice = guardWrite(_deleteExhInvoice);
-const deleteExhTax = guardWrite(_deleteExhTax);
-const deleteExhPayment = guardWrite(_deleteExhPayment);
-const deleteExhLog = guardWrite(_deleteExhLog);
-const deleteExhApp = guardWrite(_deleteExhApp);
-const deleteExhibitor = guardWrite(_deleteExhibitor);
+export const deleteExhContact = guardWrite(_deleteExhContact);
+export const deleteExhItem = guardWrite(_deleteExhItem);
+export const deleteExhInvoice = guardWrite(_deleteExhInvoice);
+export const deleteExhTax = guardWrite(_deleteExhTax);
+export const deleteExhPayment = guardWrite(_deleteExhPayment);
+export const deleteExhLog = guardWrite(_deleteExhLog);
+export const deleteExhApp = guardWrite(_deleteExhApp);
+export const deleteExhibitor = guardWrite(_deleteExhibitor);
 
 /* 저장이 안 됐을 때 왜 안 됐는지 갈라 말한다. 잠금은 고장이 아닌데
    "네트워크를 확인하세요"라고 하면 엉뚱한 데를 들여다보게 된다.
@@ -77,8 +79,6 @@ import { normalizeCompanyKey } from '../domain/org-names.js';
 import { graphicState, graphicDueInfo, boothTypeOptions, boothTypes, SELF_BUILD_TYPE, exhNames, modalShell, introLen, bookMissing, introOver, boothDesignState, isSharedBooth, isBookOnly, hostOptions, baseKind, BASE_KINDS, bookName, fasciaName, BOOTH_ORIGIN, BOOTH_EXC, isBoothExc, itemCode, baseRecvAt, baseDoneAt, baseDoneCheck, baseItems, baseRecvItems, guardWrite, exhLocked, setExhLockEv, exhLockNotice, isBoothGiven, boothIncluded, applyBoothItems, boothItemsPending, patchExh, refreshExhViews, exhContact, exhContacts, exhMailCtx, contactsForExhibitor, cleanEmail, progressBar, STEPS, cellState } from './exh-tab.js';
 import { billedAmount, paidAmount, money, fmtMoney, currencyOf, mixedCurrency, taxNeed, daysSince, CANCELLED, isPendingRefund, isBillable, TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, TCELL, TPILL, needsReissue, settleState, liveInvoices, payDueDate, paidBreakdown, invoiceGap, refundDue, eventDeadlines } from '../features/exhibition/exh-calc.js';
 
-let drId = null;
-let drTab = 'contact';
 
 /* ── 드로어 탭 ──
    전에는 진행 탭 하나에 담당자·매뉴얼·신청서·부스·도록·현장이 다 들어 있어
@@ -109,10 +109,10 @@ const tabKey = (v) => {
 
 export function openExhDr(id, tab){
   // 다른 기업으로 옮기면 PC에서 고른 메일 첨부를 비운다 — 다음 기업으로 나가지 않게
-  if(drId !== id){ exhMailFiles = []; exhSkipDefault = new Set(); exhReply = null; }
-  drId = id;
+  if(exhDrUi.drId !== id){ exhDrUi.exhMailFiles = []; exhDrUi.exhSkipDefault = new Set(); exhDrUi.exhReply = null; }
+  exhDrUi.drId = id;
   setExhLockEv(getExhibitorById(id)?.event_id);
-  if(tab !== undefined) drTab = tabKey(tab);
+  if(tab !== undefined) exhDrUi.drTab = tabKey(tab);
   document.getElementById('exh-dr')?.classList.add('on');
   document.getElementById('exh-bd')?.classList.add('on');
   renderExhDr();
@@ -120,15 +120,15 @@ export function openExhDr(id, tab){
 export function closeExhDr(){
   // 다른 기업으로 옮길 때까지 통화 선택을 끌고 가지 않는다(분류는 유지해도
   // 무리가 없지만 통화는 기업마다 다르다)
-  lastItemCur = null;
-  drId = null;
-  exhReply = null;
+  exhDrUi.lastItemCur = null;
+  exhDrUi.drId = null;
+  exhDrUi.exhReply = null;
   setExhLockEv(null);
-  exhMailFiles = [];
+  exhDrUi.exhMailFiles = [];
   document.getElementById('exh-dr')?.classList.remove('on');
   document.getElementById('exh-bd')?.classList.remove('on');
 }
-export function switchExhDT(v){ drTab = tabKey(v); renderExhDr(); }
+export function switchExhDT(v){ exhDrUi.drTab = tabKey(v); renderExhDr(); }
 
 /* ── 기업 정보 수정 — 기업DB로 넘긴다 ──
 
@@ -174,7 +174,7 @@ function exhFollowHtml(x){
   </div>`;
 }
 export async function exhSnooze(stepKey, days){
-  const x = getExhibitorById(drId);
+  const x = getExhibitorById(exhDrUi.drId);
   if(!x) return;
   const until = addDays(td().slice(0, 10), days);
   const why = prompt(`리마인더를 ${until}까지 미룹니다. 이유를 적어 두면 기록에 남아요 (비워도 돼요).`, '');
@@ -185,8 +185,8 @@ export async function exhSnooze(stepKey, days){
 window.exhSnooze = exhSnooze;
 
 export function renderExhDr(){
-  if(!drId) return;
-  const x = getExhibitorById(drId);
+  if(!exhDrUi.drId) return;
+  const x = getExhibitorById(exhDrUi.drId);
   if(!x){ closeExhDr(); return; }
 
   const openN = openInquiriesFor(x.id).length;
@@ -210,13 +210,13 @@ export function renderExhDr(){
   const appNeedsWork = !(x.app_received === 'yes' || x.app_received_at) || x.app_complete === 'no';
   const bookMiss = bookMissing(x);   // 도록에 낼 정보 중 아직 안 받은 칸
   // 아직 안 받은 그래픽 — 탭을 열어 보기 전에 받을 게 남았는지 알려 준다
-  const gLeft = graphicUnreceived(x.id);
+  const gLeft = window.graphicUnreceived(x.id);
   // 처리 안 한 받은 메일 — 메일 탭을 열기 전에 보이게
   const mailLeft = logsFor(x.id).filter(isPending).length;
 
   const tabsEl = document.getElementById('exh-drtabs');
   if(tabsEl) tabsEl.innerHTML = TABS.map((tb) =>
-    `<button class="drtab${drTab === tb.key ? ' on' : ''}" onclick="switchExhDT('${tb.key}')">${tb.label}${
+    `<button class="drtab${exhDrUi.drTab === tb.key ? ' on' : ''}" onclick="switchExhDT('${tb.key}')">${tb.label}${
       tb.key === 'logs' && openN ? ` <span class="pill p-amber">${openN}</span>` : ''}${
       tb.key === 'apply' && appNeedsWork ? ' <span class="pill p-amber">확인</span>' : ''}${
       tb.key === 'book' && bookMiss.length ? ` <span class="pill p-amber">${bookMiss.length}</span>` : ''}${
@@ -224,25 +224,27 @@ export function renderExhDr(){
       tb.key === 'box' && mailLeft ? ` <span class="pill p-amber" title="처리 안 한 받은 메일">${mailLeft}</span>` : ''}</button>`).join('');
 
   const b = document.getElementById('exh-drbd');
-  const VIEW = { contact: dContactTab, apply: dApply, progress: dProgress,
-    billing: dBilling, graphic: dGraphic, book: dBook, logs: dLogs, box: dMailBox, mail: dMail };
+  /* 하위 탭마다 그리는 함수 — 몇은 다른 파일(features/exhibition/exh-dr-*.js)에 있어 부를 때 찾는다 */
+  const VIEW = { contact: (x) => window.dContactTab(x), apply: (x) => dApply(x), progress: (x) => dProgress(x),
+    billing: (x) => dBilling(x), graphic: (x) => window.dGraphic(x), book: (x) => dBook(x), logs: (x) => window.dLogs(x),
+    box: (x) => window.dMailBox(x), mail: (x) => window.dMail(x) };
   if(b){
     // 끝난 행사는 드로어도 열람만 — 목록은 잠갔는데 드로어에서 고쳐지면 소용없다
     b.classList.toggle('ro', exhLocked());
-    b.innerHTML = exhFollowHtml(x) + exhAdviceHtml(x) + (VIEW[drTab] || dContactTab)(x);
-    if(drTab === 'mail'){ fillExhMailFrom(x); if(exhReply) fillExhReply(x); else fillExhMail(x.id, true); }
+    b.innerHTML = exhFollowHtml(x) + exhAdviceHtml(x) + (VIEW[exhDrUi.drTab] || VIEW.contact)(x);
+    if(exhDrUi.drTab === 'mail'){ window.fillExhMailFrom(x); if(exhDrUi.exhReply) window.fillExhReply(x); else window.fillExhMail(x.id, true); }
   }
   // 메일함 나란히·고정 띠(mail-pane.js)
   decorateMailPane('ex');
 }
-window.__exhDrId = () => drId;
-window.__exhBoxHtml = (id) => { const x = getExhibitorById(id); return x ? dMailBox(x) : ''; };
+window.__exhDrId = () => exhDrUi.drId;
+window.__exhBoxHtml = (id) => { const x = getExhibitorById(id); return x ? window.dMailBox(x) : ''; };
 
 /* ── 진행 단계 막대 ──
    세금계산서와 그래픽은 우리 손을 떠났다 돌아오기를 반복한다. 어느 칸까지 왔고
    지금 누구 차례인지 한눈에 보이게 하고, 다음 칸으로 넘기는 버튼을 바로 옆에 둔다.
    되돌리기도 함께 둔다 — 잘못 눌렀을 때 고칠 방법이 없으면 누르기를 망설이게 된다. */
-function stageBar(x, field, defs, who){
+export function stageBar(x, field, defs, who){
   const cur = stageOf(defs, x[field]);
   const i = defs.findIndex(d => d.key === cur.key);
   const days = stageAge(x, defs, field);
@@ -308,11 +310,11 @@ function taxStageBar(v){
 }
 
 /* ── 공통 조각 ── */
-const sct = (title, inner, extra = '') =>
+export const sct = (title, inner, extra = '') =>
   `<div class="sct" style="display:flex;align-items:center;gap:8px">${title}${extra}</div><div style="margin-bottom:18px">${inner}</div>`;
 
 /* 체크 + 날짜 한 줄 */
-function dateRow(x, field, label, hint){
+export function dateRow(x, field, label, hint){
   const on = !!x[field];
   return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--i8)">
     <button onclick="toggleExhDate('${escAttr(x.id)}','${field}','${escAttr(label)}')"
@@ -340,7 +342,7 @@ function flagRow(x, flag, dateField, label, hint){
   </div>`;
 }
 
-function textRow(x, field, label, placeholder = '', multi = false){
+export function textRow(x, field, label, placeholder = '', multi = false){
   const el = multi
     ? `<textarea class="fi" rows="2" style="font-size:12px" placeholder="${escapeHtml(placeholder)}"
         onchange="setExhField('${escAttr(x.id)}','${field}',this.value,'${escAttr(label)}')">${escapeHtml(x[field] || '')}</textarea>`
@@ -684,7 +686,7 @@ export function pickCatalogItem(exhId){
   const cat = document.getElementById(`it-cat-${exhId}`);
   // 품목표에 비품과 그래픽이 함께 있다 — 고른 품목의 종류대로 분류를 맞춰 둔다
   const kind = (hit.kind || 'equip') === 'graphic' ? 'graphic' : 'equip';
-  if(cat){ cat.value = kind; lastItemCat = kind; markItemCat(exhId, kind); }
+  if(cat){ cat.value = kind; exhDrUi.lastItemCat = kind; markItemCat(exhId, kind); }
   if(up && !up.value.trim()){
     up.value = (cur && cur.value === 'USD') ? (hit.price_usd || '') : (hit.price_krw || '');
   }
@@ -716,7 +718,7 @@ function foreignDomain(email, cands){
   return own.has(d) ? '' : [...own].join(', ');
 }
 
-function dContact(x){
+export function dContact(x){
   const list = exhContacts(x);
   const cands = contactsForExhibitor(x);
   const usedIds = new Set(list.map(c => c.row.contact_id).filter(Boolean).map(String));
@@ -1169,108 +1171,7 @@ export async function unassignExhContact(exhId, contactId){
 /* ══════════════════════════════════════════
    1) 진행 — 매뉴얼 / 신청서 / 부스 / 도록 / 현장
 ══════════════════════════════════════════ */
-/* ══════════════════════════════════════════
-   참가기업 지우기 — 딸린 것까지 함께
-
-   전시 참가기업 한 줄에는 일곱 갈래가 매달려 있다: 담당자·금액 항목·인보이스·
-   세금계산서·입금·문의 기록·신청서 접수. 기업 줄만 지우면 이것들이 없는 기업을
-   가리킨 채 DB에 남는다 — 화면에서는 안 보이니 아무도 모르고, 발행한 인보이스와
-   받은 돈까지 주인 없이 떠돈다. 연사에서 똑같은 일이 이미 한 번 났다.
-
-   ── 돈이 오간 곳은 지우지 않는다 ──
-   입금이나 환불이 한 줄이라도 있으면 막는다. 그건 회계에 이미 잡힌 숫자라,
-   지우면 우리 장부에서만 사라지고 통장에는 남는다. 참가를 접은 것뿐이라면
-   지울 일이 아니라 «취소» 상태로 두는 일이다 — 그래야 «왜 이 부스가 비었나»에
-   답할 수 있다.
-
-   ── 무엇이 함께 사라지는지 세어서 보여준다 ──
-   «정말 지울까요?»만 묻는 물음은 아무것도 알려주지 않는다. 인보이스 두 장과
-   입금 세 건이 딸려 있다는 걸 알고 누르는 것과 모르고 누르는 것은 다르다.
-══════════════════════════════════════════ */
-const EXH_CHILDREN = [
-  ['담당자',       EXH_CONTACTS, deleteExhContact,  'exhibitor_contacts'],
-  ['금액 항목',    EXH_ITEMS,    deleteExhItem,     'exhibitor_items'],
-  ['인보이스',     EXH_INVOICES, deleteExhInvoice,  'exhibitor_invoices'],
-  ['세금계산서',   EXH_TAX,      deleteExhTax,      'exhibitor_tax_invoices'],
-  ['입금·환불',    EXH_PAYMENTS, deleteExhPayment,  'exhibitor_payments'],
-  ['문의·기록',    EXH_LOGS,     deleteExhLog,      'exhibitor_logs'],
-  ['신청서 접수',  EXH_APPS,     deleteExhApp,      'exhibitor_apps'],
-];
-
-export async function removeExhibitor(id){
-  const x = getExhibitorById(id);
-  if(!x) return;
-
-  const kids = EXH_CHILDREN.map(([label, arr, del, table]) => ({
-    label, arr, del, table,
-    rows: arr.filter(r => r.exhibitor_id === id).map(r => ({ ...r })),
-  }));
-
-  /* 돈이 오간 흔적 — 금액이 적힌 입금·환불 줄이 있으면 지우지 않는다 */
-  const money = paymentsFor(id).filter(p => String(p.amount ?? '').trim() !== '');
-  if(money.length){
-    alert(`«${x.company_name}»은(는) 입금·환불 기록이 ${money.length}건 있어 지울 수 없어요.\n\n`
-      + `이미 회계에 잡힌 숫자라, 지우면 우리 장부에서만 사라집니다.\n`
-      + `참가를 접은 거라면 진행 탭에서 상태를 «취소»로 두세요 — 부스 번호와 기록이 남아`
-      + ` 나중에 «왜 이 자리가 비었나»에 답할 수 있어요.`);
-    return;
-  }
-
-  const lines = kids.filter(k => k.rows.length).map(k => `   · ${k.label} ${k.rows.length}건`);
-  if(!confirm(`«${x.company_name}» 참가기업을 지울까요?\n\n`
-    + (lines.length ? `함께 지워집니다:\n${lines.join('\n')}\n\n` : '딸린 기록은 없어요.\n\n')
-    + `되돌릴 수 없습니다. 참가를 접은 것뿐이라면 상태를 «취소»로 두세요.`)) return;
-
-  /* 딸린 것부터 지운다. 기업 줄을 먼저 지웠다가 중간에 실패하면, 남은 자식들이
-     가리킬 데 없는 채로 떠돈다 — 지금 고치고 있는 바로 그 상태가 된다. */
-  for(const k of kids){
-    for(const r of k.rows){
-      const res = await k.del(r.id);
-      if(res && res.ok === false){
-        alert(`${k.label}을(를) 지우다 멈췄어요. 네트워크 확인 후 다시 시도해주세요.\n`
-          + `여기까지 지운 것은 되돌아가지 않습니다 — 다시 누르면 남은 것부터 이어서 지웁니다.`);
-        refreshExhViews();
-        return;
-      }
-      const i = k.arr.findIndex(o => o.id === r.id);
-      if(i >= 0) k.arr.splice(i, 1);
-    }
-  }
-
-  const res = await deleteExhibitor(id);
-  if(res && res.ok === false){ alert('참가기업을 지우지 못했어요.'); refreshExhViews(); return; }
-  const i = EXHIBITORS.findIndex(o => o.id === id);
-  if(i >= 0) EXHIBITORS.splice(i, 1);
-
-  closeExhDr?.();
-  trackAction('delete', '참가기업 삭제', x.company_name || '',
-    `<b>${escapeHtml(x.company_name || '')}</b> 삭제`
-    + (lines.length ? ` — ${kids.filter(k => k.rows.length).map(k => `${k.label} ${k.rows.length}건`).join(' · ')} 함께` : ''),
-    removed('exhibitors', id, x,
-      { also: kids.flatMap(k => k.rows.map(r => ({ table: k.table, row: r.id, before: r }))) }));
-  refreshExhViews();
-}
-
-/* 지우는 자리는 눈에 잘 띄면 안 된다 — 담당자 탭 맨 아래, 접힌 채로 둔다 */
-function dangerZone(x){
-  return `<details style="margin-top:18px">
-    <summary style="font-size:11px;color:var(--i5);cursor:pointer">이 참가기업 지우기</summary>
-    <div style="margin-top:8px;padding:10px 12px;border:1px solid var(--re);border-radius:8px">
-      <div style="font-size:11.5px;color:var(--i3);line-height:1.6">
-        담당자·금액 항목·인보이스·세금계산서·입금·문의·접수가 <b>함께 지워집니다</b>.<br>
-        참가를 접은 것뿐이라면 진행 탭에서 상태를 <b>취소</b>로 두세요 —
-        부스 번호와 기록이 남아 나중에 «왜 이 자리가 비었나»에 답할 수 있어요.
-      </div>
-      <button class="btn bs" style="margin-top:8px;border-color:var(--re);color:var(--re)"
-        onclick="removeExhibitor('${escAttr(x.id)}')">참가기업 삭제</button>
-    </div></details>`;
-}
-
-/* ── 담당자 탭 ── */
-function dContactTab(x){
-  return `${sct('기업 담당자', dContact(x))}${dangerZone(x)}`;
-}
-
+/* «참가기업 지우기 — 딸린 것까지 함께»은 ../features/exhibition/exh-remove.js로 떼어 냈다 — 그 파일이 스스로 window에 건다 */
 /* ══════════════════════════════════════════
    신청서 접수 이력
 
@@ -1346,7 +1247,7 @@ export async function addExhApp(exhId, preset = {}){
     complete: '', missing: '', handled_at: '', handler: '', summary: '', note: '',
   };
   if(!await addRow(EXH_APPS, rec, saveExhApp)) return;
-  lastItemCat = null;   // 새 접수 건은 분류부터 다시 고른다 — 지난 분류가 남아 엉뚱한 칸에 들어가지 않게
+  exhDrUi.lastItemCat = null;   // 새 접수 건은 분류부터 다시 고른다 — 지난 분류가 남아 엉뚱한 칸에 들어가지 않게
   /* 최초 접수는 체크리스트가 보는 칸도 함께 채운다 — 두 곳이 갈라지지 않게. */
   const x = getExhibitorById(exhId);
   await syncAppReceived(exhId, true);
@@ -1592,7 +1493,7 @@ function appsSection(x){
      분류(부스/비품/그래픽/기타)가 나오고, 분류를 고르면 그 분류의 품목 줄이 열린다.
      품목은 늘 열린 접수 건에 들어가므로, 열린 건이 없으면 분류도 보이지 않는다. */
   const xid = escAttr(x.id);
-  const cur = open ? (lastItemCat || '') : '';
+  const cur = open ? (exhDrUi.lastItemCat || '') : '';
   const picker = !open ? '' : `
     <div style="font-size:11px;color:var(--a);margin:10px 0 6px">이 접수에 넣을 품목 — 분류를 고르세요</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap" id="it-cats-${xid}">
@@ -1610,7 +1511,7 @@ function appsSection(x){
         oninput="calcItemAmount('${xid}')">
       <input class="fi" id="it-amt-${xid}" placeholder="금액" style="flex:1 1 88px;min-width:0;font-size:11.5px;padding:6px;text-align:right">
       <select class="fi bl-cur" id="it-cur-${xid}" onchange="rememberItemCur(this.value)">
-        ${currencies().map(c => `<option value="${c}"${(lastItemCur || currencyOf(x.id)) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
+        ${currencies().map(c => `<option value="${c}"${(exhDrUi.lastItemCur || currencyOf(x.id)) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
       <button class="btn bp bs" style="flex:0 0 auto" onclick="addItemHere('${xid}')">추가</button>
     </div>`;
   const rows = list.map(a => {
@@ -1804,7 +1705,7 @@ function dApply(x){
     </div>`,
     appIssue ? '<span class="pill p-amber">정보 누락</span>' : '')}
 
-  ${sct('부스 기본 제공', boothGivenBlock(x), (() => {
+  ${sct('부스 기본 제공', window.boothGivenBlock(x), (() => {
     const rows = itemsFor(x.id).filter(isBoothGiven);
     const ex = rows.filter(isBoothExc).length;
     return rows.length
@@ -2014,15 +1915,13 @@ function dProgress(x){
    돌아왔을 때 잠금이 풀린 채로 남지 않게). */
 /* 외화 청구라 접어 둔 세금계산서 칸을 그래도 열어 둔 기업 — 한 곳만.
    드로어를 다시 그리면 유지되고, 다른 기업을 열면 저절로 닫힌다. */
-let taxOpenFor = '';
-export function openTaxAnyway(id){ taxOpenFor = id; refreshExhViews(); }
+export function openTaxAnyway(id){ exhDrUi.taxOpenFor = id; refreshExhViews(); }
 
-let editingItem = null;
 export function editItemRow(id){
-  editingItem = editingItem === id ? null : id;
+  exhDrUi.editingItem = exhDrUi.editingItem === id ? null : id;
   refreshExhViews();
 }
-export function closeItemEdit(){ editingItem = null; }
+export function closeItemEdit(){ exhDrUi.editingItem = null; }
 
 /* ══════════════════════════════════════════
    같은 품목을 한 줄로 묶어 보여주기
@@ -2038,9 +1937,8 @@ export function closeItemEdit(){ editingItem = null; }
 
    고칠 때는 회차별로 갈라야 하므로, 묶인 줄을 누르면 원래 줄들이 펼쳐진다.
 ══════════════════════════════════════════ */
-let openItemGroup = '';
 export function toggleItemGroup(key){
-  openItemGroup = openItemGroup === key ? '' : key;
+  exhDrUi.openItemGroup = exhDrUi.openItemGroup === key ? '' : key;
   refreshExhViews();
 }
 
@@ -2093,7 +1991,7 @@ const catLabel = (c) => codeLabel('item_cat', null, c) || '기타';
    또 고쳐야 한다.
 ══════════════════════════════════════════ */
 const DESIGN_CAT = '디자인';
-const isDesignItem = (i) => {
+export const isDesignItem = (i) => {
   /* 부스 기본 제공으로 깔린 줄은 빼고 본다 — 분류가 «디자인»인 품목 중에는
      계약에 들어 있는 출력분(G-131)이 섞여 있어서, 그것까지 의뢰로 보면
      블록·라이팅 부스마다 «무엇을 디자인했나» 칸이 따라붙는다. */
@@ -2141,9 +2039,7 @@ const currencies = () => codeList('currency', null,
    통화는 조금 다르다. 기본값(그 기업의 주 통화)이 대체로 맞아서, 사람이 직접
    바꿨을 때만 기억한다 — 안 그러면 한 번 USD를 쓴 뒤 다른 기업으로 옮겨도
    계속 USD가 따라붙는다. */
-let lastItemCat = null;
-let lastItemCur = null;
-export function rememberItemCat(v){ lastItemCat = v || null; }
+export function rememberItemCat(v){ exhDrUi.lastItemCat = v || null; }
 
 /* 분류를 바꾸면 고를 수 있는 목록도 바뀐다. 적어 둔 이름은 지우지 않는다 —
    분류만 잘못 골랐다가 되돌리는 일이 잦고, 그때마다 다시 치게 하면 안 된다. */
@@ -2154,7 +2050,7 @@ export function swapItemList(exhId, cat){
   if(document.getElementById(id)) el.setAttribute('list', id);
   else el.removeAttribute('list');       // 기타 — 카탈로그 밖이라 고를 목록이 없다
 }
-export function rememberItemCur(v){ lastItemCur = v || null; }
+export function rememberItemCur(v){ exhDrUi.lastItemCur = v || null; }
 /* 분류 단추 — 다시 그리지 않고 그 자리에서 바꾼다. 적어 둔 이름·수량이 날아가지 않게. */
 export function markItemCat(exhId, cat){
   document.querySelectorAll(`#it-cats-${CSS.escape(exhId)} [data-cat]`)
@@ -2422,7 +2318,7 @@ function dBilling(x){
              그래도 고쳐야 할 때가 있다. 기업이 엑스렌탈과 직접 주고받아 바뀌는
              경우다. 그건 신청서를 안 거치니 여기서 고치는 게 맞다. 대신 연필을
              한 번 눌러야 열리고, 고친 것은 기록에 남는다. */
-          const open = editingItem === i.id;
+          const open = exhDrUi.editingItem === i.id;
           return `
         <div class="bl-row bl-item" style="padding:6px 8px;background:var(--i9);border-radius:6px${
           open ? ';outline:2px solid var(--a);outline-offset:-2px' : ''}">
@@ -2461,7 +2357,7 @@ function dBilling(x){
           /* 펼침을 기억할 이름 — 품목명을 그대로 쓰면 따옴표가 든 이름에서
              깨진다. 분류와 순번이면 충분하다. */
           const gkey = `${k}#${gi}`;
-          const open = openItemGroup === gkey || gr.rows.some(i => editingItem === i.id);
+          const open = exhDrUi.openItemGroup === gkey || gr.rows.some(i => exhDrUi.editingItem === i.id);
           const head = gr.rows[0];
           const qty = gr.rows.reduce((a, i) => a + (Number(i.qty) || 0), 0);
           const amt = gr.rows.reduce((a, i) => a + itemAmount(i), 0);
@@ -2571,7 +2467,7 @@ function dBilling(x){
      드물게 원화 세금계산서를 따로 끊어야 하는 일이 있어서, 접어 두되 한 번
      눌러 열 수 있게 한다. */
   const need = taxNeed(x);
-  if(need.kind === 'na' && taxOpenFor !== x.id) return sct('세금계산서', `
+  if(need.kind === 'na' && exhDrUi.taxOpenFor !== x.id) return sct('세금계산서', `
     <div style="font-size:11.5px;color:var(--i4);padding:8px 2px;line-height:1.7">
       <b style="color:var(--i3)">해당 없음</b> — ${
         need.why === '카드 완납' ? '카드로 완납한 곳이라 카드사 매출로 잡혀요.'
@@ -2712,493 +2608,11 @@ function dBilling(x){
 /* ══════════════════════════════════════════
    3) 그래픽 — 출력 / 제작 분기
 ══════════════════════════════════════════ */
-/* ══════════════════════════════════════════
-   그래픽 피드백
-
-   그래픽은 네 단계를 오가며 사람이 세 번 바뀐다(기업 → 담당자 → 그래픽팀 →
-   담당자). "해상도가 부족하다", "재단선을 다시 받아야 한다" 같은 말이 그때마다
-   오가는데, 적어 둘 자리가 없어 메신저와 메일로 흩어졌다.
-
-   기록을 새 표에 담지 않고 기존 문의·기록(exhibitor_logs)을 쓴다. 작성자와
-   시각이 이미 붙고, 문의·기록 탭에서 다른 연락과 한 줄기로 보인다 — 그래픽
-   피드백만 따로 모아 두면 "이 기업과 무슨 얘기가 오갔나"를 두 군데서 봐야 한다.
-
-   어느 단계에서 남긴 말인지 subject에 적어 둔다. 나중에 읽을 때 "그래픽팀
-   확인 중에 나온 말"과 "회신 뒤에 나온 말"은 뜻이 다르다.
-══════════════════════════════════════════ */
-export const graphicFeedback = (exhId) =>
-  logsFor(exhId).filter(l => l.category === '그래픽' && l.kind === 'note');
-
-function graphicFeedbackBlock(x){
-  const rows = graphicFeedback(x.id);
-  const cur = stageOf(GRAPHIC_STAGES, x.graphic_stage);
-  const me = currentUser?.email || '';
-
-  return `<div style="font-size:11px;color:var(--i4);margin-bottom:7px">
-      지금 단계는 <b>${escapeHtml(cur.label)}</b>이고, 남기는 사람은
-      <b>${escapeHtml(currentUser?.name || currentUser?.email || '(로그인 정보 없음)')}</b>으로 적힙니다.
-      여기 적은 내용은 <b>문의·기록</b> 탭에도 함께 남아요.</div>
-
-    <textarea class="fi" id="gfb-${escAttr(x.id)}" rows="2" placeholder="예: 로고 해상도가 낮아 재전달 요청했습니다"
-      style="width:100%;resize:vertical;font-size:12px"></textarea>
-    <div style="display:flex;justify-content:flex-end;margin-top:6px">
-      <button class="btn bp bs" onclick="addGraphicFeedback('${escAttr(x.id)}')">피드백 남기기</button>
-    </div>
-
-    ${rows.length ? `<div style="margin-top:10px">${rows.map(l => `
-      <div style="padding:8px 0;border-top:1px solid var(--i8)">
-        <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap">
-          <span style="font-size:11.5px;font-weight:700">${escapeHtml(l.author_name || l.author_email || '알 수 없음')}</span>
-          ${l.subject ? `<span class="pill p-gray" style="font-size:9px">${escapeHtml(l.subject)}</span>` : ''}
-          <span style="font-size:10px;color:var(--i5)">${escapeHtml(l.ts || '')}</span>
-          ${l.author_email && l.author_email === me
-            ? `<button class="btn bs" style="margin-left:auto;font-size:10px;padding:1px 6px"
-                onclick="delGraphicFeedback('${escAttr(l.id)}')">삭제</button>` : ''}
-        </div>
-        <div style="font-size:12px;color:var(--i2);white-space:pre-wrap;margin-top:3px">${escapeHtml(l.body || '')}</div>
-      </div>`).join('')}</div>`
-      : '<div style="font-size:11.5px;color:var(--i5);margin-top:10px">아직 남긴 피드백이 없어요</div>'}`;
-}
-
-export async function addGraphicFeedback(exhId){
-  const ta = document.getElementById(`gfb-${exhId}`);
-  const body = ta?.value.trim() || '';
-  if(!body){ ta?.focus(); return; }
-  const x = getExhibitorById(exhId);
-  const cur = stageOf(GRAPHIC_STAGES, x?.graphic_stage);
-
-  const ok = await addRow(EXH_LOGS, {
-    id: localId('XL-'), exhibitor_id: exhId, kind: 'note', ts: td(),
-    direction: '', channel: '', counterpart: '', category: '그래픽',
-    // 어느 단계에서 남긴 말인지 — 나중에 읽을 때 뜻이 달라진다
-    subject: cur.label || '', body, answered_at: '', answer: '', status: 'done',
-    author_email: currentUser?.email || '', author_name: currentUser?.name || '',
-  }, saveExhLog);
-
-  // 저장에 실패하면 화면을 다시 그리면서 입력칸이 새로 만들어져 적은 글이
-  // 사라진다. 실패했을 때야말로 다시 눌러야 하므로 적은 내용을 돌려놓는다.
-  const el = document.getElementById(`gfb-${exhId}`);
-  if(!ok){ if(el){ el.value = body; el.focus(); } return; }
-
-  if(el) el.value = '';
-  trackAction('log', '그래픽 피드백', x?.company_name || '',
-    `<b>${escapeHtml(x?.company_name || '')}</b> 그래픽 피드백(${escapeHtml(cur.label || '')}): ${escapeHtml(body.slice(0, 40))}`,
-    { kind: 'exhibitor', id: x?.id, tab: 'graphic' });
-}
-
-/* 남의 글은 지우지 못한다 — 버튼 자체를 내 글에만 붙이지만, 눌리는 경로가
-   생기더라도 여기서 한 번 더 막는다 */
-export async function delGraphicFeedback(id){
-  const l = EXH_LOGS.find(r => r.id === id);
-  if(!l) return;
-  if(l.author_email && currentUser?.email && l.author_email !== currentUser.email){
-    alert('내가 남긴 피드백만 지울 수 있어요.'); return;
-  }
-  if(!confirm('이 피드백을 지울까요? 문의·기록 탭에서도 함께 사라집니다.')) return;
-  await removeRow(EXH_LOGS, id, deleteExhLog);
-}
-
-/* ══════════════════════════════════════════
-   그래픽 항목 — 무엇을 주문했고, 무엇을 받았나
-
-   둘은 따로 논다. 백월·행잉배너·부스 그래픽을 한 번에 주문해도 파일은 따로,
-   며칠 간격으로 온다. 전에는 "그래픽 항목 3건 · 합계 120만원" 한 줄뿐이라
-   무엇이 아직 안 왔는지 알 수 없었다 — 단계(graphic_stage)는 기업 단위라
-   "기업 전달"로 넘겨도 세 개 중 둘만 온 경우를 담지 못한다.
-
-   항목마다 받은 날과 받은 것 설명을 따로 남긴다. 금액 항목과 같은 줄을 쓰므로
-   정산 탭에서 추가한 그래픽이 그대로 여기 나온다 — 두 군데에 또 적지 않는다.
-══════════════════════════════════════════ */
-/* 정산에 들어간 그래픽 항목 — 취소(voided)된 줄은 받을 것이 아니다.
-   드로어 탭 배지와 그래픽 탭이 같은 목록을 봐야 숫자가 어긋나지 않는다. */
-function graphicItems(exhId){
-  return liveItemsFor(exhId).filter(i => (i.category || '') === 'graphic');
-}
-export function graphicUnreceived(exhId){
-  return graphicItems(exhId).filter(i => !i.received_at).length;
-}
-
-/* ── 우리가 하는 일은 «됐다/안 됐다»만 체크한다 ──
-
-   받는 것은 상대가 준 날이 근거로 남아야 한다(언제 왔길래 독촉을 했나, 마감을
-   지켰나). 그런데 우리가 만드는 것은 날짜를 적어 봐야 쓰는 데가 없고, 스무 줄을
-   날짜로 채우자니 손이 너무 간다. 체크만 남기고 날짜는 누른 날로 조용히 적어
-   둔다 — 나중에 «언제 만들었더라»가 필요하면 기록에 남아 있다. */
-const doneCheck = (i) => `<button onclick="toggleItemDone('${escAttr(i.id)}')"
-  class="pill ${i.done_at ? 'p-green' : i.received_at ? 'p-amber' : 'p-gray'}"
-  style="border:0;cursor:pointer;font:inherit;padding:0 10px;${TPILL}"
-  title="${i.done_at ? `${escAttr(i.done_at)}에 했어요 — 누르면 되돌립니다` : '누르면 «했음»으로 표시합니다'}">${
-  i.done_at ? '✓ 했음' : '안 했음'}</button>`;
-
-/* 한 항목 줄. 기본 제공 줄에는 «우리 작업» 체크가 하나 더 붙는다 — 그 줄이 곧
-   기본 시공이라, 받은 뒤에 우리가 만들어 세우는 단계까지 여기서 끝난다. */
-function graphicItemRow(i, opts = {}){
-  const on = !!i.received_at;
-  return `<div style="padding:9px 0;border-bottom:1px solid var(--i8)">
-    <div style="display:flex;align-items:center;gap:9px">
-      <button onclick="toggleItemReceived('${escAttr(i.id)}')"
-        title="${on ? '받음 표시를 지웁니다' : '오늘 받은 것으로 표시합니다'}"
-        style="width:20px;height:20px;border-radius:5px;border:1.5px solid ${on ? 'var(--g)' : 'var(--i6)'};background:${on ? 'var(--g)' : 'transparent'};color:#fff;font-size:12px;font-weight:800;cursor:pointer;flex-shrink:0;line-height:1">${on ? '✓' : ''}</button>
-      <span style="flex:1;min-width:0">
-        <span style="font-size:12.5px;font-weight:${on ? 600 : 500};color:${on ? 'var(--i1)' : 'var(--i3)'}">${escapeHtml(i.name || '(이름 없음)')}</span>
-        <span style="font-size:10.5px;color:var(--i4)">${i.qty ? ` · ${escapeHtml(String(i.qty))}개` : ''}${
-          i.amount ? ` · ${escapeHtml(fmtMoney(i.amount, i.currency))}` : ''}</span>${
-          isDesignItem(i) && i.note ? `<div style="font-size:10.5px;color:var(--i4);margin-top:2px">디자인 대상 — <b>${escapeHtml(i.note)}</b></div>` : ''}
-      </span>
-      <input type="date" class="fi" style="${TCELL};width:136px;flex:0 0 auto"
-        value="${escapeHtml(i.received_at || '')}"
-        onchange="setItemField('${escAttr(i.id)}','received_at',this.value)">
-    </div>
-    ${opts.done ? boothExcRow(i, { pad: 'margin-top:6px;padding-left:29px' }) : ''}
-    ${opts.done ? `<div style="display:flex;gap:9px;align-items:center;margin-top:5px;padding-left:29px">
-      <span style="font-size:10.5px;color:var(--i5);flex:0 0 52px">우리 작업</span>
-      ${doneCheck(i)}
-    </div>` : ''}
-    <div style="display:flex;gap:9px;align-items:center;margin-top:5px;padding-left:29px">
-      <span style="font-size:10.5px;color:var(--i5);flex:0 0 52px">마감</span>
-      <input type="date" class="fi" style="${TCELL};width:136px;flex:0 0 auto"
-        value="${escapeHtml(i.due_at || '')}"
-        onchange="setItemField('${escAttr(i.id)}','due_at',this.value)">
-      ${(() => { const d = graphicDueInfo(i);
-        return on ? '' : `<span class="pill ${d.cls}" style="${TPILL}">${escapeHtml(d.text)}</span>`; })()}
-    </div>
-    ${opts.done ? '' : `<div style="display:flex;gap:9px;align-items:center;margin-top:5px;padding-left:29px">
-      <span style="font-size:10.5px;color:var(--i5);flex:0 0 52px">받은 것</span>
-      <input class="fi" style="${TCELL};flex:1;min-width:0"
-        value="${escapeHtml(i.received_note || '')}" placeholder="예: 백월_최종.ai · CMYK · 재단선 포함"
-        onchange="setItemField('${escAttr(i.id)}','received_note',this.value)">
-    </div>`}
-  </div>`;
-}
-
-/* 받을 그래픽 — 계약에 딸려 오는 것과 기업이 따로 주문한 것을 갈라 둔다.
-
-   둘은 성격이 다르다. 기본 제공은 부스 타입이 정하는 것이라 기업이 아무 말을
-   안 해도 우리가 만들어 세워야 하고(빠뜨리면 개막날 부스에 상호가 없다),
-   추가 주문은 기업이 신청하고 돈을 더 내는 것이라 안 하면 그만이다. 한 줄에
-   섞여 있으면 «이 부스에 원래 들어가는 것»이 무엇인지 알 수 없다. */
-function graphicItemsBlock(x){
-  /* 뺀 줄(내려 둔 기본 제공)도 함께 본다 — 목록에서 사라지면 «원래 있었는데
-     뺐다»는 사실까지 사라져, 다음 사람이 빠뜨린 줄로 알고 다시 넣는다. */
-  const gi = [...graphicItems(x.id),
-    ...itemsFor(x.id).filter(i => (i.category || '') === 'graphic' && isVoided(i) && isBoothExc(i))];
-  if(!gi.length){
-    return `<div style="font-size:11.5px;color:var(--i5);margin-bottom:8px">등록된 그래픽 항목이 없어요</div>
-      <div style="font-size:11px;color:var(--i4);margin-bottom:8px">
-        부스 타입을 정하면 그 타입의 기본 제공 그래픽이 여기 깔리고,
-        정산 탭에서 <b>그래픽</b> 분류로 넣은 추가 주문도 여기 나옵니다.</div>
-      <button class="btn bs" onclick="switchExhDT('billing')">정산 탭으로 이동</button>`;
-  }
-
-  const base = gi.filter(isBoothGiven);
-  const extra = gi.filter(i => !isBoothGiven(i));
-  const total = gi.reduce((s, i) => s + Number(String(i.amount || '').replace(/[^0-9.-]/g, '') || 0), 0);
-  const got = gi.filter(i => i.received_at).length;
-  const late = gi.filter(i => !i.received_at && graphicDueInfo(i).late).length;
-
-  const group = (label, list, hint, opts) => !list.length ? '' : `
-    <div style="margin:${label === '기본 제공' ? '0' : '14px'} 0 2px;display:flex;align-items:baseline;gap:7px">
-      <span style="font-size:11.5px;font-weight:700;color:var(--i2)">${escapeHtml(label)}</span>
-      <span style="font-size:10.5px;color:var(--i5)">${escapeHtml(hint)}</span>
-    </div>
-    ${list.map(i => graphicItemRow(i, opts)).join('')}`;
-
-  return `<div style="font-size:11px;color:var(--i4);margin-bottom:8px">
-      기업에서 파일을 받으면 왼쪽 칸에 체크하고, 받은 파일이 무엇이었는지 적어 두세요.
-      <b>마감</b>은 이 파일을 언제까지 받기로 했나입니다 — 지난 것은 그래픽 현황에서 붉게 잡힙니다.</div>
-
-    ${group('기본 제공', base, `${x.booth_type || '부스 타입'}에 딸려 나갑니다 — 청구하지 않아요`, { done: true })}
-    ${group('추가 주문', extra, '기업이 따로 신청한 것 — 청구 대상이에요', {})}
-
-    <div style="display:flex;justify-content:space-between;align-items:baseline;padding:9px 2px 0;font-size:12px">
-      <span style="color:var(--i4)">${gi.length}건 · 받음 ${got}건${got < gi.length ? ` · <b style="color:var(--am)">미수령 ${gi.length - got}건</b>` : ''}${
-        late ? ` · <b style="color:var(--re)">마감 지남 ${late}건</b>` : ''}</span>
-      <span>합계 <b>${money(total)}</b>원</span>
-    </div>
-    <button class="btn bs" onclick="switchExhDT('billing')" style="margin-top:8px">정산 탭에서 항목 추가·수정</button>`;
-}
-
-/* ══════════════════════════════════════════
-   부스 기본 제공 — 이 기업만의 예외
-
-   설정(부스 타입 › 기본 제공 품목)은 좀처럼 바뀌지 않는다. 대신 현장에서
-   예외가 계속 나온다 — 인포데스크를 안 쓰겠다는 기업, 바스툴을 하나 더 받기로
-   한 기업, 벽면 그래픽을 자체로 만들어 오는 기업.
-
-   그 줄을 그냥 지우거나 고치면 다음에 부스 타입을 다시 고르는 순간 설정대로
-   덮인다. 그래서 손댄 줄은 «예외»로 표시해 두고(origin=booth-exc), 자동 반영이
-   건드리지 않게 한다. 왜 그랬는지는 줄마다 적는다 — 현장에서 «이 부스만 왜
-   데스크가 없지»를 되묻지 않도록.
-
-   안 쓰겠다는 것은 지우지 않고 내린다. 지우면 발주 수량에서는 빠지지만 «원래
-   있었는데 뺐다»는 사실도 함께 사라져서, 다음 사람이 빠뜨린 줄로 알고 다시
-   넣는다. 내려 두면 발주·대장에서는 빠지고 화면에는 취소선으로 남는다.
-══════════════════════════════════════════ */
-
-/* 설정에 적힌 그 품목의 수량 — 되돌릴 때 쓴다 */
-function boothWantOf(x, i){
-  const code = itemCode(i.name);
-  return boothIncluded(x.event_id, x.booth_type)
-    .find(o => String(o.code || itemCode(o.name)) === code) || null;
-}
-
-async function markExc(i){
-  if(isBoothExc(i)) return;
-  await setItemField(i.id, 'origin', BOOTH_EXC);
-}
-
-export async function setBoothItemQty(id, v){
-  const i = EXH_ITEMS.find(r => r.id === id);
-  if(!i || String(i.qty ?? '') === String(v ?? '')) return;
-  await markExc(i);
-  await setItemField(id, 'qty', v);
-  refreshExhViews();
-}
-
-/* 안 쓰겠다 — 내려 둔다(지우지 않는다) */
-export async function excludeBoothItem(id){
-  const i = EXH_ITEMS.find(r => r.id === id);
-  if(!i) return;
-  const why = prompt('이 기업만 빼는 이유를 적어 주세요 — 현장에서 «왜 없지»를 되묻지 않도록.\n예: 자체 데스크를 가져옴 / 기업 요청으로 미사용', i.note || '');
-  if(why === null) return;
-  await markExc(i);
-  if(String(why).trim() !== String(i.note || '')) await setItemField(id, 'note', why);
-  await setItemField(id, 'voided_at', td());
-  trackAction('edit', '기본 제공 예외', getExhibitorById(i.exhibitor_id)?.company_name || '',
-    `<b>${escapeHtml(i.name || '')}</b>를 이 기업에서 뺐어요 — ${escapeHtml(String(why).trim() || '사유 없음')}`,
-    { kind: 'exhibitor', id: i.exhibitor_id, tab: 'apply' });
-  refreshExhViews();
-}
-
-/* 설정대로 되돌리기 — 내린 것은 올리고, 고친 수량은 설정 값으로 */
-export async function restoreBoothItem(id){
-  const i = EXH_ITEMS.find(r => r.id === id);
-  if(!i) return;
-  const x = getExhibitorById(i.exhibitor_id);
-  const want = x ? boothWantOf(x, i) : null;
-  if(!confirm(`«${i.name || ''}»를 설정대로 되돌릴까요?`
-    + (want && String(want.qty ?? '') !== String(i.qty ?? '') ? `\n수량 ${i.qty || '-'} → ${want.qty ?? '-'}` : '')
-    + (isVoided(i) ? '\n뺐던 줄을 다시 살립니다.' : ''))) return;
-  if(isVoided(i)) await setItemField(id, 'voided_at', '');
-  if(want && String(want.qty ?? '') !== String(i.qty ?? '')) await setItemField(id, 'qty', String(want.qty ?? ''));
-  await setItemField(id, 'origin', BOOTH_ORIGIN);
-  refreshExhViews();
-}
-
-/* 예외 줄 하나. 그래픽 탭과 신청항목 탭이 같은 줄을 쓴다 — 두 군데가 다르게
-   보이면 어느 쪽이 맞는지 다시 확인하게 된다. */
-function boothExcRow(i, opts = {}){
-  const off = isVoided(i);
-  const exc = isBoothExc(i);
-  return `<div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;${opts.pad || ''}">
-    ${exc ? `<span class="pill ${off ? 'p-red' : 'p-amber'}" style="${TPILL};min-width:48px" title="설정과 다르게 이 기업만 따로 둔 줄이에요 — 부스 타입을 다시 골라도 그대로 둡니다">${off ? '뺌' : '예외'}</span>` : ''}
-    <span style="font-size:10.5px;color:var(--i5);flex:0 0 52px">수량</span>
-    <input class="fi" style="${TCELL};width:56px;flex:0 0 auto" value="${escapeHtml(i.qty ?? '')}"
-      inputmode="numeric" ${off ? 'disabled' : ''}
-      title="설정과 다르게 적으면 이 줄은 예외가 됩니다"
-      onchange="setBoothItemQty('${escAttr(i.id)}',this.value)">
-    ${off
-      ? `<button class="btn bs" onclick="restoreBoothItem('${escAttr(i.id)}')" title="다시 제공하는 것으로 되돌립니다">되살리기</button>`
-      : `<button class="btn bs" onclick="excludeBoothItem('${escAttr(i.id)}')" title="이 기업에는 안 나갑니다 — 발주 수량에서 빠지고, 뺐다는 사실은 남습니다">이 기업은 뺌</button>`}
-    ${exc && !off ? `<button class="btn bs" onclick="restoreBoothItem('${escAttr(i.id)}')" title="설정에 적힌 수량으로 되돌립니다">설정대로</button>` : ''}
-    ${exc ? `<input class="fi" style="${TCELL};flex:1;min-width:120px"
-        placeholder="예외 사유 — 예: 자체 데스크를 가져옴" value="${escapeHtml(i.note || '')}"
-        onchange="setItemField('${escAttr(i.id)}','note',this.value)">` : ''}
-  </div>`;
-}
-
-/* 신청항목 탭의 «부스 기본 제공» 구획 — 비품·그래픽을 한자리에서 본다.
-   내린 줄도 보여 준다. 무엇이 빠졌는지가 안 보이면 다음 사람이 다시 넣는다. */
-function boothGivenBlock(x){
-  const rows = itemsFor(x.id).filter(isBoothGiven);
-  if(!rows.length){
-    return `<div style="font-size:11.5px;color:var(--i5);padding:6px 2px">
-      이 부스 타입에 적어 둔 기본 제공 품목이 없어요 — 설정 › 행사 관리 › 부스에서 부스 타입에 적습니다.</div>`;
-  }
-  return `<div style="font-size:11px;color:var(--i4);margin-bottom:8px">
-      부스 타입(<b>${escapeHtml(x.booth_type || '미정')}</b>)에 딸려 나가는 것들이에요 — 청구하지 않습니다.
-      이 기업만 다르게 가야 하면 여기서 고치세요. 고친 줄은 <b>예외</b>로 표시되어, 부스 타입을 다시 골라도 그대로 둡니다.</div>
-    ${rows.map(i => {
-      const off = isVoided(i);
-      return `<div style="padding:8px 0;border-bottom:1px solid var(--i8)">
-        <div style="display:flex;align-items:baseline;gap:7px">
-          <span class="pill ${(i.category || '') === 'graphic' ? 'p-teal' : 'p-gray'}">${
-            (i.category || '') === 'graphic' ? '그래픽' : '비품'}</span>
-          <span style="font-size:12.5px;font-weight:600;${off ? 'color:var(--i5);text-decoration:line-through' : ''}">${escapeHtml(i.name || '')}</span>
-        </div>
-        ${boothExcRow(i, { pad: 'margin-top:6px' })}
-      </div>`;
-    }).join('')}`;
-}
-
-/* 우리 작업 체크 — 누르면 오늘 날짜가 들어가고, 다시 누르면 지운다.
-   화면에는 날짜를 보이지 않지만 값은 날짜로 남긴다 — «됐다»만 남기면 언제
-   했는지가 사라지고, 현장에서 «이거 어제 건 맞나»를 되짚을 수 없다. */
-export async function toggleItemDone(id){
-  const ids = String(id).split(',').filter(Boolean);
-  const i = EXH_ITEMS.find(r => r.id === ids[0]);
-  if(!i) return;
-  const v = i.done_at ? '' : td();
-  for(const one of ids) await setItemField(one, 'done_at', v);
-  refreshExhViews();
-}
-
-/* 받음 체크 — 누르면 오늘 날짜가 들어가고, 다시 누르면 지운다.
-   지울 때는 원래 날짜를 기록에 남긴다(잘못 눌러 지운 값을 되찾을 수 있게). */
-export async function toggleItemReceived(id){
-  /* 그래픽 화면은 같은 파일을 한 줄로 묶어 보여 준다. 그 줄을 누르면 묶인
-     항목이 다 같이 움직여야 한다 — 한 장만 받음으로 바뀌면 줄에 적힌 수량과
-     상태가 서로 어긋난다. 첫 줄의 상태를 기준으로 전부 같은 값으로 맞춘다. */
-  const ids = String(id).split(',').filter(Boolean);
-  const i = EXH_ITEMS.find(r => r.id === ids[0]);
-  if(!i) return;
-  const v = i.received_at ? '' : td();
-  for(const one of ids) await setItemField(one, 'received_at', v);
-}
-
-function dGraphic(x){
-  /* 정산에 그래픽 항목이 들어갔다는 건 이미 주문을 받았다는 뜻이다. 전에는
-     graphic_ordered_at을 따로 눌러 줘야 이 탭이 열려서, 정산에 항목을 넣어 놓고도
-     "그래픽 주문 없음"을 보게 됐다 — 받아야 할 파일이 있는데 그 목록이 잠겨 있었다.
-     항목이 있으면 주문일 없이도 연다(주문일은 언제 받았나를 적는 칸으로 남는다). */
-  const gItems = graphicItems(x.id);
-  const ordered = !!x.graphic_ordered_at || gItems.length > 0;
-  const g = graphicState(x);
-  const invs = invoicesFor(x.id);
-
-  if(!ordered){
-    return `<div style="text-align:center;padding:40px 20px">
-      <div style="font-size:28px;margin-bottom:8px">🎨</div>
-      <div style="font-size:13px;font-weight:600;margin-bottom:4px">그래픽 주문 없음</div>
-      <div style="font-size:11.5px;color:var(--i4);margin-bottom:16px">
-        정산 탭에서 <b>그래픽</b> 분류로 항목을 넣으면 여기가 자동으로 열려요.<br>
-        항목 없이 먼저 잡아 두려면 아래에서 주문일만 등록할 수도 있어요.</div>
-      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-        <button class="btn bp" onclick="switchExhDT('billing')">정산 탭에서 항목 넣기</button>
-        <button class="btn" onclick="toggleExhDate('${escAttr(x.id)}','graphic_ordered_at','그래픽 주문')">주문일만 등록</button>
-      </div>
-    </div>`;
-  }
-
-  return `
-  ${sct('받을 그래픽', graphicItemsBlock(x), (() => {
-    if(!gItems.length) return '';
-    const got = gItems.filter(i => i.received_at).length;
-    return `<span class="pill ${got === gItems.length ? 'p-green' : got ? 'p-amber' : 'p-amber'}">받음 ${got}/${gItems.length}</span>`;
-  })())}
-
-  ${sct('주문', dateRow(x, 'graphic_ordered_at', '그래픽 주문일') +
-    `<div style="padding:10px 0 0"><label class="fl">유형</label>
-      <div class="stbs" style="margin-top:4px">
-        ${[['print', '출력만'], ['design', '제작(디자인)']].map(([v, l]) =>
-          `<button class="stb${x.graphic_type === v ? ' on' : ''}" onclick="setExhField('${escAttr(x.id)}','graphic_type','${v}','그래픽 유형')">${l}</button>`).join('')}
-      </div></div>`,
-    g.state === 'done' ? '<span class="pill p-green">완료</span>' : g.state === 'warn' ? '<span class="pill p-amber">확인 필요</span>' : '')}
-
-  ${sct('확인 진행', stageBar(x, 'graphic_stage', GRAPHIC_STAGES, '그래픽팀'))}
-
-  ${x.graphic_type === 'print' ? sct('출력 — 규격 확인', `
-    <div class="stbs" style="margin-bottom:8px">
-      ${[['', '미확인'], ['yes', '규격 맞음'], ['no', '규격 안 맞음']].map(([v, l]) =>
-        `<button class="stb${(x.graphic_spec_ok || '') === v ? ' on' : ''}" onclick="setExhField('${escAttr(x.id)}','graphic_spec_ok','${v}','그래픽 규격 확인')">${l}</button>`).join('')}
-    </div>
-    ${x.graphic_spec_ok === 'no' ? textRow(x, 'graphic_spec_note', '어떤 점이 안 맞나요', '예: 해상도 부족, 재단선 없음', true) : ''}`)
-  : ''}
-
-  ${x.graphic_type === 'design' ? sct('제작 — 시안 확정', `
-    <div class="sgbar" style="margin-bottom:10px">
-      ${[['graphic_draft_at', '초안'], ['graphic_revised_at', '수정안'], ['graphic_final_at', '최종안']].map(([f, l]) =>
-        `<div class="sgc${x[f] ? ' done' : ''}">${l}</div>`).join('')}
-    </div>
-    ${dateRow(x, 'graphic_draft_at', '초안 전달')}
-    ${dateRow(x, 'graphic_revised_at', '수정안 전달')}
-    ${dateRow(x, 'graphic_final_at', '최종안 확정')}`)
-  : ''}
-
-  ${!x.graphic_type ? '<div style="font-size:11.5px;color:var(--am);padding:4px 2px">유형을 먼저 선택해주세요</div>' : ''}
-
-  ${sct('피드백', graphicFeedbackBlock(x),
-    (() => { const n = graphicFeedback(x.id).length; return n ? `<span class="pill p-gray">${n}</span>` : ''; })())}
-
-  `;
-}
-
-/* ══════════════════════════════════════════
-   4) 문의·기록
-══════════════════════════════════════════ */
-/* 문의 채널·분류도 설정에서 고친다(code_lists) */
-const channels = () => codeList('log_channel', null,
-  ['이메일', '전화', '카톡', '미팅', '현장'].map(c => ({ code: c, label: c })));
-const logCats = () => codeList('log_cat', null,
-  ['부스', '비품', '그래픽', '정산', '현장', '기타'].map(c => ({ code: c, label: c })));
-
-function dLogs(x){
-  const logs = logsFor(x.id);
-  const open = logs.filter(l => l.kind === 'inquiry' && !l.answered_at);
-  const rest = logs.filter(l => !(l.kind === 'inquiry' && !l.answered_at));
-  const cos = CO_DB.find(c => c.key === x.company_key);
-  const people = (cos?.contacts || []).map(c => c.name).filter(Boolean);
-
-  const item = (l) => {
-    const isInq = l.kind === 'inquiry';
-    const unanswered = isInq && !l.answered_at;
-    const d = daysSince(l.ts);
-    return `<div style="padding:10px 11px;border-radius:8px;margin-bottom:6px;background:${unanswered ? 'var(--ab)' : 'var(--i9)'};border-left:3px solid ${unanswered ? 'var(--am)' : isInq ? 'var(--g)' : 'var(--i6)'}">
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
-        <span class="pill ${isInq ? (unanswered ? 'p-amber' : 'p-green') : 'p-gray'}">${isInq ? (unanswered ? (l.status === 'hold' ? '확인 중' : '답변 대기') : '답변 완료') : '기록'}</span>
-        ${l.category ? `<span class="pill p-gray">${escapeHtml(l.category)}</span>` : ''}
-        ${l.channel ? `<span style="font-size:10.5px;color:var(--i4)">${escapeHtml(l.channel)}</span>` : ''}
-        ${l.counterpart ? `<span style="font-size:10.5px;color:var(--i4)">· ${escapeHtml(l.counterpart)}</span>` : ''}
-        <span style="font-size:10.5px;color:var(--i5);margin-left:auto">${escapeHtml(l.ts || '')}${unanswered && d > 0 ? ` · ${d}일 경과` : ''}</span>
-      </div>
-      ${l.subject ? `<div style="font-size:12.5px;font-weight:700;margin-bottom:3px">${escapeHtml(l.subject)}</div>` : ''}
-      ${l.body ? `<div style="font-size:12px;color:var(--i2);white-space:pre-wrap;line-height:1.5">${escapeHtml(l.body)}</div>` : ''}
-      ${l.answered_at ? `<div style="margin-top:7px;padding:7px 9px;background:var(--W);border-radius:6px">
-          <div style="font-size:10.5px;color:var(--g);font-weight:700;margin-bottom:2px">답변 · ${escapeHtml(l.answered_at)}</div>
-          <div style="font-size:12px;color:var(--i2);white-space:pre-wrap">${escapeHtml(l.answer || '')}</div></div>` : ''}
-      ${unanswered ? `<div style="margin-top:8px;display:flex;gap:5px;align-items:flex-start">
-          <textarea class="fi" id="ans-${escAttr(l.id)}" rows="2" placeholder="답변 내용을 적고 완료 처리하세요" style="flex:1;font-size:11.5px"></textarea>
-          <div style="display:flex;flex-direction:column;gap:4px">
-            <button class="btn bp bs" onclick="answerExhLog('${escAttr(l.id)}')">답변 완료</button>
-            <button class="btn bs" onclick="holdExhLog('${escAttr(l.id)}')">${l.status === 'hold' ? '대기로' : '확인 중'}</button>
-          </div></div>` : ''}
-      <div style="margin-top:5px;text-align:right">
-        <button class="btn bs" onclick="delExhLog('${escAttr(l.id)}')" style="font-size:10px;opacity:.6">삭제</button></div>
-    </div>`;
-  };
-
-  return `
-  <div class="uc" style="margin-bottom:14px">
-    <div class="uc-ttl">새 문의 / 기록</div>
-    <div style="display:flex;gap:5px;margin:8px 0 6px;flex-wrap:wrap">
-      <select class="fi" id="lg-kind-${escAttr(x.id)}" style="width:84px;font-size:11.5px;padding:6px">
-        <option value="inquiry">문의</option><option value="note">기록</option></select>
-      <select class="fi" id="lg-ch-${escAttr(x.id)}" style="width:82px;font-size:11.5px;padding:6px">
-        ${channels().map(c => `<option value="${escapeHtml(c.code)}">${escapeHtml(c.label)}</option>`).join('')}</select>
-      <select class="fi" id="lg-cat-${escAttr(x.id)}" style="width:82px;font-size:11.5px;padding:6px">
-        ${logCats().map(c => `<option value="${escapeHtml(c.code)}">${escapeHtml(c.label)}</option>`).join('')}</select>
-      <input class="fi" id="lg-who-${escAttr(x.id)}" placeholder="문의한 사람" list="lg-people-${escAttr(x.id)}" style="flex:1;min-width:100px;font-size:11.5px;padding:6px">
-      <datalist id="lg-people-${escAttr(x.id)}">${people.map(p => `<option value="${escapeHtml(p)}">`).join('')}</datalist>
-    </div>
-    <input class="fi" id="lg-sub-${escAttr(x.id)}" placeholder="제목 / 한 줄 요약" style="font-size:12px;margin-bottom:5px">
-    <textarea class="fi" id="lg-body-${escAttr(x.id)}" rows="3" placeholder="받은 메일 내용을 그대로 붙여넣어도 돼요" style="font-size:12px"></textarea>
-    <div style="text-align:right;margin-top:6px">
-      <button class="btn bp bs" onclick="addExhLog('${escAttr(x.id)}')">등록</button></div>
-  </div>
-
-  ${open.length ? `<div class="sct">답변 대기 <span class="pill p-amber">${open.length}</span></div>
-    <div style="margin-bottom:14px">${open.map(item).join('')}</div>` : ''}
-
-  <div class="sct">전체 이력</div>
-  ${rest.length ? rest.map(item).join('')
-    : '<div style="font-size:11.5px;color:var(--i5);padding:10px 2px">아직 기록이 없어요</div>'}
-  `;
-}
-
+/* «참가기업 상세 › 그래픽 피드백·그래픽 항목·부스 기본 제공 예외»은 ../features/exhibition/exh-dr-graphic.js로 떼어 냈다 — 그 파일이 스스로 window에 건다 */
 /* ══════════════════════════════════════════
    저장 액션 — 낙관적 반영 후 실패 시 롤백
 ══════════════════════════════════════════ */
-const localId = (p) => `${p}${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+export const localId = (p) => `${p}${Date.now()}_${Math.floor(Math.random() * 1000)}`;
 
 /* ══════════════════════════════════════════
    ✨ 상황 물어보기 — 연사 드로어와 같은 틀(speaker-drawer.js adviceHtml)
@@ -3208,11 +2622,10 @@ const localId = (p) => `${p}${Date.now()}_${Math.floor(Math.random() * 1000)}`;
    회사명·담당자·금액·메일 제목·본문은 보내지 않는다.
    드로어가 통째로 다시 그려지므로 질문·답은 여기 붙들어 둔다.
 ══════════════════════════════════════════ */
-let exhAdvice = null;   // { id, q, loading, err, ans, saved }
 const ADVICE_TAB = { app_received_at: 'apply', 'calc:invoice': 'billing', 'calc:tax': 'billing', 'calc:payment': 'billing',
   'calc:graphic': 'graphic', directory_received_at: 'book' };
 function exhAdviceHtml(x){
-  const a = exhAdvice && exhAdvice.id === x.id ? exhAdvice : null;
+  const a = exhDrUi.exhAdvice && exhDrUi.exhAdvice.id === x.id ? exhDrUi.exhAdvice : null;
   const btn = (t) => {
     const label = { mail: '✉ 메일 초안', tab: '→ 탭 열기', mailedit: '✎ 메일 단계 편집' }[t.action];
     return label ? ` <button class="btn" style="font-size:10px;padding:1px 7px" onclick="exhAdviceAct('${t.action}','${escAttr(t.arg)}')">${label}</button>` : '';
@@ -3237,10 +2650,10 @@ function exhAdviceHtml(x){
   </div>`;
 }
 export async function askExhAdvice(){
-  const x = getExhibitorById(drId);
+  const x = getExhibitorById(exhDrUi.drId);
   const q = String(document.getElementById('exh-advice-q')?.value || '').trim();
   if(!x || !q) return;
-  exhAdvice = { id: x.id, q, loading: true };
+  exhDrUi.exhAdvice = { id: x.id, q, loading: true };
   renderExhDr();
   const mailSteps = exhMailSteps(x.event_id);
   const mailLabel = (kind) => {
@@ -3269,21 +2682,21 @@ export async function askExhAdvice(){
       .slice().sort((p, q2) => String(q2.ts || '').localeCompare(String(p.ts || ''))).slice(0, 15)
       .map(l => ({ date: String(l.ts || '').slice(0, 10), dir: l.direction === 'in' ? '받음' : l.direction === 'out' ? '보냄' : '', kind: mailLabel(l.kind) })),
   });
-  if(!exhAdvice || exhAdvice.id !== x.id) return;
-  exhAdvice = r.ok ? { id: x.id, q, ans: { summary: r.summary, todo: r.todo || [], caution: r.caution || '' } }
+  if(!exhDrUi.exhAdvice || exhDrUi.exhAdvice.id !== x.id) return;
+  exhDrUi.exhAdvice = r.ok ? { id: x.id, q, ans: { summary: r.summary, todo: r.todo || [], caution: r.caution || '' } }
     : { id: x.id, q, err: '답을 받지 못했어요: ' + (r.error || '') };
   renderExhDr();
 }
 export function exhAdviceAct(action, arg){
-  const x = getExhibitorById(drId);
+  const x = getExhibitorById(exhDrUi.drId);
   if(!x) return;
-  if(action === 'mail'){ exhMailStep = arg; exhSkipDefault = new Set(); exhReply = null; drTab = 'mail'; renderExhDr(); }
+  if(action === 'mail'){ exhDrUi.exhMailStep = arg; exhDrUi.exhSkipDefault = new Set(); exhDrUi.exhReply = null; exhDrUi.drTab = 'mail'; renderExhDr(); }
   else if(action === 'tab') switchExhDT(arg);
   else if(action === 'mailedit') window.openExhMailEditor?.(x.event_id, arg || undefined);
 }
 export async function saveExhAdvice(){
-  const x = getExhibitorById(drId);
-  const a = exhAdvice;
+  const x = getExhibitorById(exhDrUi.drId);
+  const a = exhDrUi.exhAdvice;
   if(!x || !a || !a.ans || a.id !== x.id) return;
   const body = [a.ans.summary, ...a.ans.todo.map((t, i) => `${i + 1}. ${t.text}`), a.ans.caution ? `주의: ${a.ans.caution}` : '']
     .filter(Boolean).join('\n');
@@ -3294,16 +2707,16 @@ export async function saveExhAdvice(){
     author_email: currentUser?.email || '', author_name: currentUser?.name || '',
   }, saveExhLog);
   if(!ok) return;
-  exhAdvice = { ...a, saved: true };
+  exhDrUi.exhAdvice = { ...a, saved: true };
   renderExhDr();
 }
-export function clearExhAdvice(){ exhAdvice = null; renderExhDr(); }
+export function clearExhAdvice(){ exhDrUi.exhAdvice = null; renderExhDr(); }
 window.askExhAdvice = askExhAdvice;
 window.exhAdviceAct = exhAdviceAct;
 window.saveExhAdvice = saveExhAdvice;
 window.clearExhAdvice = clearExhAdvice;
 
-async function addRow(arr, rec, saveFn, label){
+export async function addRow(arr, rec, saveFn, label){
   arr.push(rec);
   refreshExhViews();
   const r = await saveFn(rec);
@@ -3341,7 +2754,7 @@ const ROW_LABEL = (r) => {
   if(r.paid_at || r.amount) return [r.paid_at && String(r.paid_at).slice(0, 10), r.amount && `${r.amount} ${r.currency || 'KRW'}`].filter(Boolean).join(' ');
   return '';
 };
-async function removeRow(arr, id, deleteFn, label = '줄', table = ''){
+export async function removeRow(arr, id, deleteFn, label = '줄', table = ''){
   const i = arr.findIndex(r => r.id === id);
   if(i < 0) return;
   const [removed] = arr.splice(i, 1);
@@ -3387,7 +2800,7 @@ export async function addExhItem(exhId){
 
   const category = val(`it-cat-${exhId}`) || 'etc';
   const currency = val(`it-cur-${exhId}`) || currencyOf(exhId);
-  lastItemCat = category;   // 다음 줄도 같은 분류일 가능성이 높다
+  exhDrUi.lastItemCat = category;   // 다음 줄도 같은 분류일 가능성이 높다
   if(catalogPickMissing(exhId)) return;
   const catalogId = needsCatalog(category)
     ? document.getElementById(`it-nm-${exhId}`)?.dataset.catalogId || '' : '';
@@ -3885,13 +3298,6 @@ export async function holdExhLog(id){
   if(!r.ok){ l.status = before; refreshExhViews(); saveFailed(r, '저장에 실패했어요.'); }
 }
 
-window.toggleItemDone       = toggleItemDone;
-window.setBoothItemQty      = setBoothItemQty;
-window.excludeBoothItem     = excludeBoothItem;
-window.restoreBoothItem     = restoreBoothItem;
-window.toggleItemReceived = toggleItemReceived;
-window.addGraphicFeedback = addGraphicFeedback;
-window.delGraphicFeedback = delGraphicFeedback;
 window.openExhDr = openExhDr;
 window.closeExhDr = closeExhDr;
 window.switchExhDT = switchExhDT;
@@ -3939,7 +3345,6 @@ window.toggleItemBillable = toggleItemBillable;
 window.pickCatalogItem = pickCatalogItem;
 window.rememberItemCat = rememberItemCat;
 window.setItemFieldDirect = setItemFieldDirect;
-window.removeExhibitor = removeExhibitor;
 window.addItemHere = addItemHere;
 window.editItemRow = editItemRow;
 window.toggleItemGroup = toggleItemGroup;
@@ -3975,301 +3380,4 @@ window.settleExh = settleExh;
 window.unsettleExh = unsettleExh;
 window.forfeitExh = forfeitExh;
 
-/* ══════════════════════════════════════════════════════════════
-   메일 — 이 기업 담당자에게 바로 보낸다
-
-   보내는 주소는 행사 설정 › 메일에 넣은 행사 공용 메일이다(없으면 보내지 않는다). 어느 주소로 나갈지는 서버가 이 기업의 행사를 보고 고른다 — 화면에서
-   고르게 하면 다른 행사 주소로 나가는 실수가 생긴다.
-   보낸 메일은 서버가 문의·기록(exhibitor_logs)에 남긴다.
-══════════════════════════════════════════════════════════════ */
-let exhMailFiles = [];
-/* ── 회신 중 ── 받은 메일의 «↩ 회신»에서 들어온다(mail-mark.js replyMail) */
-let exhReply = null;
-export function startExhReply(d){ exhReply = { ...d, filled: false, pick: new Set() }; drTab = 'mail'; renderExhDr(); }
-export function toggleExhReplyFile(exhId, id){
-  if(!exhReply) return;
-  exhReply.pick.has(id) ? exhReply.pick.delete(id) : exhReply.pick.add(id);
-  const x = getExhibitorById(exhId); if(x) renderExhDefFiles(x);
-}
-window.toggleExhReplyFile = toggleExhReplyFile;
-export function cancelExhReply(){ exhReply = null; renderExhDr(); }
-function fillExhReply(x){
-  const s = document.getElementById(`exm-sub-${x.id}`), b = document.getElementById(`exm-body-${x.id}`);
-  if(!s || !b || !exhReply) return;
-  if(!exhReply.filled){ exhReply.filled = true; exhReply.curSubject = exhReply.subject; exhReply.curBody = exhReply.body; }
-  s.value = exhReply.curSubject; b.value = exhReply.curBody;
-  s.oninput = () => { exhReply && (exhReply.curSubject = s.value); };
-  b.oninput = () => { exhReply && (exhReply.curBody = b.value); };
-  b.dataset.touched = '1';
-  b.focus(); b.setSelectionRange(0, 0);
-  loadMailFiles(x.event_id).then(() => renderExhDefFiles(x));
-}
-window.startExhReply = startExhReply;
-window.cancelExhReply = cancelExhReply;
-
-/* «✨ AI로 초안 쓰기» — 회사명·담당자·금액은 보내지 않고 상태만. 돌아온 틀에 이 기업의 값을 채운다 */
-let aiExhId = '';
-registerAiDraft('ex', () => {
-  const x = getExhibitorById(aiExhId);
-  if(!x) return null;
-  const stepKey = document.getElementById(`exm-step-${x.id}`)?.value || '';
-  const en = document.getElementById(`exm-lang-${x.id}`)?.value === 'en';
-  const lib = String(stepKey).startsWith('lib:') ? libItem(String(stepKey).slice(4)) : null;
-  const st = lib ? { label: lib.name, subject_ko: lib.subject_ko, body_ko: lib.body_ko, subject_en: lib.subject_en, body_en: lib.body_en }
-    : exhMailSteps(x.event_id).find(s => s.key === stepKey) || {};
-  const ctx = exhMailCtx(x);
-  const state = [
-    x.booth_no ? '부스 배정됨({부스} 사용 가능)' : '부스 아직 배정 전',
-    ctx.billed ? `인보이스 발행됨({청구액}) · ${settleState(x).state === 'settled' ? '완납' : '미납 있음({미납액})'}` : '인보이스 발행 전',
-    st.due ? '이 단계 마감일 있음({마감일})' : '',
-  ].filter(Boolean);
-  return { part: 'exh', ev: x.event_id, lang: en ? 'en' : 'ko', reply: !!exhReply, step: exhReply ? {} : st, stepLabel: st.label, state,
-    apply(tpl){
-      const sEl = document.getElementById(`exm-sub-${x.id}`), bEl = document.getElementById(`exm-body-${x.id}`);
-      const subj = fillExhTemplate(en ? tpl.subject_en : tpl.subject_ko, x, st, en, ctx);
-      const body = fillExhTemplate(en ? tpl.body_en : tpl.body_ko, x, st, en, ctx);
-      if(exhReply){
-        // 회신은 제목을 두고, 처음 회신 초안(인용된 원래 메일) 위에 새 글을 얹는다 — 다시 눌러도 겹치지 않게
-        exhReply.curBody = `${body}\n\n${String(exhReply.body || '').replace(/^\s+/, '')}`;
-        if(bEl){ bEl.value = exhReply.curBody; bEl.dataset.touched = '1'; }
-        return;
-      }
-      if(sEl && subj) sEl.value = subj;
-      if(bEl && body.trim()){ bEl.value = body; bEl.dataset.touched = '1'; }
-    } };
-});
-function dMail(x){
-  aiExhId = x.id;
-  /* 메일 «값 넣기» 칩 — 드로어 메일은 글 그대로 나가므로 이 기업의 실제 값을 넣는다.
-     언어·마감일은 지금 고른 «언어»·«무슨 메일인가»를 따른다 */
-  registerVarResolver('exh-drawer', (key) => {
-    const en = document.getElementById(`exm-lang-${x.id}`)?.value === 'en';
-    const stepKey = document.getElementById(`exm-step-${x.id}`)?.value || '';
-    const st = exhMailSteps(x.event_id).find(s => s.key === stepKey) || {};
-    return fillExhTemplate(`{${key}}`, x, st, en, exhMailCtx(x));
-  });
-  /* 회신 중이면 보낸 사람을 받는 사람 맨 위에(체크), 담당자는 아래에(해제)로 */
-  const ppl0 = exhContacts(x).filter(p => p.email);
-  const ppl = exhReply
-    ? [...exhReply.to.map(e => ({ email: e, name: '회신 대상', primary: false, reply: true })),
-       ...ppl0.filter(p => !exhReply.to.includes(String(p.email).trim()))]
-    : ppl0;
-  const ev = EVENT_LIST.find(e => e.key === x.event_id);
-  const evName = ev ? (ev.short || ev.name || ev.key) : '';
-  const id = escAttr(x.id);
-  const sent = logsFor(x.id).filter(l => (l.direction === 'out' || l.direction === 'in') && l.channel === '이메일')
-    .sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')));
-  return `
-  <div class="uc" style="margin-bottom:14px">
-    <div class="uc-ttl">메일 보내기</div>
-    ${exhReply ? `<div style="font-size:11.5px;color:var(--a);font-weight:700;margin-top:6px">↩ 회신 중 — 이 메일을 보낸 사람에게 답합니다
-      <a href="#" onclick="cancelExhReply();return false" style="font-weight:400;margin-left:6px">회신 취소</a></div>` : ''}
-    <div id="exm-from" style="font-size:11px;color:var(--i4);margin:6px 0 10px">보내는 주소 확인 중…</div>
-    <div class="mlbl">받는 사람</div>
-    <div style="display:flex;flex-direction:column;gap:4px;margin:4px 0 10px">
-      ${ppl.length ? ppl.map((p, i) => `<label style="display:flex;gap:6px;align-items:center;font-size:12px;cursor:pointer">
-        <input type="checkbox" class="exm-to" value="${escapeHtml(p.email)}"${(exhReply ? p.reply : (p.primary || i === 0)) ? ' checked' : ''}>
-        <b>${escapeHtml(p.name || '')}</b> <span style="color:var(--i4)">${escapeHtml(p.email)}</span>
-        ${p.primary ? '<span class="pill p-blue" style="font-size:9.5px">메인</span>' : ''}</label>`).join('')
-      : `<div style="font-size:11.5px;color:var(--re)">메일 주소가 있는 담당자가 없어요 —
-          <a href="#" onclick="switchExhDT('contact');return false" style="color:var(--a)">담당자 탭</a>에서 먼저 넣어주세요.</div>`}
-    </div>
-    <div style="display:grid;grid-template-columns:1fr auto;gap:6px;margin-bottom:8px">
-      <div><div class="mlbl">무슨 메일인가 <span style="font-size:9px;color:var(--i4)">고르면 그 단계 문구로 채워져요</span>
-        <a href="#" style="font-size:10px;margin-left:4px" title="이 행사의 전시 메일 단계를 더하고, 고치고, 끄거나 지웁니다"
-          onclick="openExhMailEditor('${escAttr(x.event_id)}',document.getElementById('exm-step-${id}').value);return false">✎ 단계 편집</a>
-        <a href="#" style="font-size:10px;margin-left:4px" title="단계와 상관없이 꺼내 쓰는 양식 — 이 행사만 또는 모든 행사 공통"
-          onclick="openMailTemplates('exh','${escAttr(x.event_id)}');return false">📚 양식 보관함</a></div>
-        <select class="fi" id="exm-step-${id}" onchange="fillExhMail('${id}')" style="font-size:12px">
-          <optgroup label="메일 단계">${exhMailSteps(x.event_id).map(st => `<option value="${st.key}"${st.key === exhMailStep ? ' selected' : ''}>${escapeHtml(st.label)}</option>`).join('')}</optgroup>
-          ${libItems('exh', x.event_id).length ? `<optgroup label="양식 보관함">${libItems('exh', x.event_id).map(it =>
-            `<option value="lib:${escAttr(it.id)}"${'lib:' + it.id === exhMailStep ? ' selected' : ''}>${escapeHtml(it.name)}</option>`).join('')}</optgroup>` : ''}
-        </select>
-        <div id="exm-var-${id}"></div></div>
-      <div><div class="mlbl">언어</div>
-        <select class="fi" id="exm-lang-${id}" onchange="fillExhMail('${id}')" style="font-size:12px">
-          <option value="ko"${exhIsEnglish(x) ? '' : ' selected'}>국문</option><option value="en"${exhIsEnglish(x) ? ' selected' : ''}>영문</option>
-        </select></div>
-    </div>
-    <div class="mlbl">참조 <span style="font-size:9px;color:var(--i4)">쉼표로 여러 개</span></div>
-    <input class="fi" id="exm-cc-${id}" style="font-size:12px;margin-bottom:8px">
-    ${aiDraftHtml('ex', { reply: !!exhReply })}
-    <div data-vscope>
-    <div class="mlbl">제목</div>
-    <input class="fi" id="exm-sub-${id}" value="${escapeHtml(evName ? `[${evName}] ` : '')}" style="font-size:12px;margin-bottom:8px">
-    <div class="mlbl">내용</div>
-    <textarea class="fi" id="exm-body-${id}" rows="9" style="font-size:12px;resize:vertical">${escapeHtml(
-      `${exhNames(x).ko || ''} 담당자님, 안녕하세요.\n\n\n\n감사합니다.`)}</textarea>
-    ${varChipsHtml('exh', { resolve: 'exh-drawer', note: '이 기업의 값' })}
-    </div>
-    <div id="exm-deffiles" style="font-size:11px;margin-top:6px"></div>
-    <div id="exm-files" style="font-size:11px;margin-top:4px"></div>
-    <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
-      <label class="btn bs" style="cursor:pointer">+ 첨부 (합쳐서 3MB)
-        <input type="file" multiple style="display:none" onchange="addExhMailFiles(this)"></label>
-      <button class="btn bp bs" onclick="sendExhMail('${id}')"${ppl.length ? '' : ' disabled'}>보내기</button>
-      <span id="exm-msg" style="font-size:11px;color:var(--i4)"></span>
-    </div>
-  </div>
-  ${sent.length ? `<div style="font-size:11px;color:var(--i4);margin-top:4px;cursor:pointer" onclick="switchExhDT('box')">주고받은 메일 ${sent.length}건은 «메일함» 탭에 있어요 ›</div>` : ''}`;
-}
-
-/* ── 메일함 — 이 기업 담당자와 주고받은 메일 ──
-   받은 메일은 읽음·처리를 체크한다(mail-mark.js) */
-function dMailBox(x){
-  const sent = logsFor(x.id).filter(l => (l.direction === 'out' || l.direction === 'in') && l.channel === '이메일')
-    .sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')));
-  return `<div style="display:flex;align-items:center;gap:8px">
-    <div class="sct" style="margin:0">주고받은 메일 ${sent.length || ''}</div>
-    <button class="btn bs" style="margin-left:auto" onclick="switchExhDT('mail')">✉ 메일 쓰기</button></div>
-  ${sent.some(l => l.direction === 'in') ? mailFilBar(sent) : ''}
-  ${filterMail(sent).length ? filterMail(sent).map(l => `<details style="border-top:1px solid var(--i7);padding:7px 0"${mailToggleAttr('ex', l)}>
-      <summary style="cursor:pointer;list-style:none">
-      <div style="display:flex;gap:7px;align-items:baseline">
-        ${mailDirPill(l)}${mailStateHtml('ex', l)}
-        <div style="font-size:12px;font-weight:${l.direction === 'in' && !l.read_at ? 800 : 600};flex:1;min-width:0">${escapeHtml(l.subject || '(제목 없음)')}</div>
-        <div style="font-size:10.5px;color:var(--i4)">${escapeHtml(l.ts || '')} ▾</div></div>
-      <div style="font-size:10.5px;color:var(--i4);margin-top:2px">${escapeHtml(l.counterpart || '')}</div></summary>
-      <div style="margin-top:6px;padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;
-        font-size:12px;color:var(--i2);white-space:pre-wrap;line-height:1.6">${mailBodyHtml(l.body)}</div>${mailActionsHtml('ex', l)}</details>`).join('')
-    : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">아직 주고받은 메일이 없어요</div>'}`;
-}
-
-/* ── 단계 문구 채우기 ──
-   단계·언어를 바꾸면 제목·본문을 그 단계 문구로 바꾼다. 처음 열 때(first)는 이미 적어 둔
-   글이 있으면 덮지 않는다 — 쓰다 만 메일이 탭을 오가다 사라지면 안 된다. */
-let exhMailStep = 'note';
-let exhSkipDefault = new Set();
-const exhDefFiles = (x) => mailFilesOf(x.event_id).filter(f => f.step === exhMailFileStep(exhMailStep));
-export async function fillExhMail(exhId, first){
-  const x = getExhibitorById(exhId);
-  if(!x) return;
-  const sEl = document.getElementById(`exm-sub-${exhId}`), bEl = document.getElementById(`exm-body-${exhId}`);
-  const stepKey = document.getElementById(`exm-step-${exhId}`)?.value || exhMailStep;
-  const en = document.getElementById(`exm-lang-${exhId}`)?.value === 'en';
-  if(stepKey !== exhMailStep) exhSkipDefault = new Set();
-  exhMailStep = stepKey;
-  /* 양식 보관함이면 그 양식을, 단계면 고른 변형(없으면 단계 문구)을 쓴다 */
-  const lib = String(stepKey).startsWith('lib:') ? libItem(String(stepKey).slice(4)) : null;
-  const st = lib ? { key: stepKey, label: lib.name, due: '' } : exhMailSteps(x.event_id).find(s => s.key === stepKey);
-  const vs = lib ? [] : exhStepVariants(x.event_id, stepKey);
-  const vEl = document.getElementById(`exm-var-${exhId}`);
-  const prevVar = document.getElementById(`exm-varsel-${exhId}`)?.value || '';
-  const vId = vs.some(v => v.id === prevVar) ? prevVar : '';
-  if(vEl) vEl.innerHTML = vs.length ? `<div style="display:flex;gap:6px;align-items:center;margin-top:5px;font-size:11px">
-      <span style="color:var(--i4)">양식</span>
-      <select class="fi" id="exm-varsel-${escAttr(exhId)}" style="font-size:11.5px;flex:1" onchange="fillExhMail('${escAttr(exhId)}')">
-        <option value="">기본 문구</option>
-        ${vs.map(v => `<option value="${escapeHtml(v.id)}"${vId === v.id ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}
-      </select></div>` : '';
-  const src = lib || vs.find(v => v.id === vId) || st;
-  if(sEl && bEl && st && !(first && bEl.dataset.touched)){
-    const ctx = exhMailCtx(x);
-    // 이미 요청한 단계를 다시 쓰면 리마인더다 — 제목 앞에 붙여 받는 쪽이 같은 요청임을 알게 한다
-    const again = exhFollowOf(x, st) ? (en ? '[Reminder] ' : '[리마인더] ') : '';
-    sEl.value = again + fillExhTemplate(src[en ? 'subject_en' : 'subject_ko'] || src.subject_ko || st.subject_ko, x, st, en, ctx);
-    bEl.value = fillExhTemplate(src[en ? 'body_en' : 'body_ko'] || src.body_ko || st.body_ko, x, st, en, ctx);
-    bEl.oninput = () => { bEl.dataset.touched = '1'; };
-  }
-  await loadMailFiles(x.event_id);
-  renderExhDefFiles(x);
-}
-function renderExhDefFiles(x){
-  const el = document.getElementById('exm-deffiles');
-  if(!el) return;
-  // 회신 중이면 이 행사에 올려 둔 파일 전부를 고를 수 있게(처음엔 꺼 둔다)
-  if(exhReply){
-    const all = mailFilesOf(x.event_id);
-    el.innerHTML = all.length ? `<span style="color:var(--i4)">행사 파일 붙이기</span> ${all.map(f => `<span class="pill ${exhReply.pick.has(f.id) ? 'p-blue' : 'p-gray'}" style="margin:2px 4px 0 0;cursor:pointer"
-      onclick="toggleExhReplyFile('${escAttr(x.id)}','${escAttr(f.id)}')">${exhReply.pick.has(f.id) ? '✓ ' : '+ '}📎 ${escapeHtml(f.filename)}</span>`).join('')}` : '';
-    return;
-  }
-  const files = exhDefFiles(x);
-  el.innerHTML = files.length ? `<span style="color:var(--i4)">단계 기본 첨부</span> ${files.map(f => `<span class="pill ${exhSkipDefault.has(f.id) ? 'p-gray' : 'p-blue'}" style="margin:2px 4px 0 0;${exhSkipDefault.has(f.id) ? 'text-decoration:line-through' : ''}">📎 ${escapeHtml(f.filename)}
-    <a href="#" onclick="toggleExhDefFile('${escAttr(x.id)}','${escAttr(f.id)}');return false" style="margin-left:4px;color:var(--i4)">${exhSkipDefault.has(f.id) ? '넣기' : '빼기'}</a></span>`).join('')}` : '';
-}
-export function toggleExhDefFile(exhId, fid){
-  if(exhSkipDefault.has(fid)) exhSkipDefault.delete(fid); else exhSkipDefault.add(fid);
-  const x = getExhibitorById(exhId);
-  if(x) renderExhDefFiles(x);
-}
-window.fillExhMail = fillExhMail;
-window.toggleExhDefFile = toggleExhDefFile;
-
-async function fillExhMailFrom(x){
-  const f = await eventMailFrom(x.event_id);
-  const el = document.getElementById('exm-from');
-  if(!el) return;
-  el.innerHTML = f.ok ? `발신 <b>${escapeHtml(f.text)}</b> — 행사 공용 메일`
-    : `<b style="color:var(--re)">${escapeHtml(f.text)}</b>`;
-  renderExhMailFiles();
-}
-function renderExhMailFiles(){
-  const el = document.getElementById('exm-files');
-  if(el) el.innerHTML = exhMailFiles.map((f, i) => `<span class="pill p-gray" style="margin:2px 4px 0 0">📎 ${escapeHtml(f.name)}
-    <a href="#" onclick="dropExhMailFile(${i});return false" style="margin-left:4px;color:var(--i4)">✕</a></span>`).join('');
-}
-export function addExhMailFiles(inp){ exhMailFiles.push(...inp.files); inp.value = ''; renderExhMailFiles(); }
-export function dropExhMailFile(i){ exhMailFiles.splice(i, 1); renderExhMailFiles(); }
-
-/* 보내는 중 — 확인 창·SMTP를 기다리는 동안 «보내기»를 또 누르면 같은 메일이 두 번 나갔다 */
-let exhMailBusy = false;
-export async function sendExhMail(exhId){
-  if(exhMailBusy) return;
-  exhMailBusy = true;
-  try { await sendExhMailNow(exhId); } finally { exhMailBusy = false; }
-}
-async function sendExhMailNow(exhId){
-  const x = getExhibitorById(exhId);
-  if(!x) return;
-  // 보내면 기록(exhibitor_logs)이 남는 쓰기다 — 다른 저장처럼 잠긴 행사면 묻기 전에 막는다
-  if(exhLocked()){ exhLockNotice(); return; }
-  const msg = document.getElementById('exm-msg');
-  const say = (t, ok) => { if(msg){ msg.style.color = ok ? 'var(--g)' : 'var(--re)'; msg.textContent = t; } };
-  const to = [...document.querySelectorAll('.exm-to:checked')].map(el => el.value);
-  const cc = (document.getElementById(`exm-cc-${exhId}`)?.value || '').split(/[,;]/).map(v => v.trim()).filter(Boolean);
-  const subject = (document.getElementById(`exm-sub-${exhId}`)?.value || '').trim();
-  const text = (document.getElementById(`exm-body-${exhId}`)?.value || '').trim();
-  if(!to.length){ say('받는 사람을 골라주세요.'); return; }
-  if(!subject && !text){ say('제목이나 내용 중 하나는 있어야 해요.'); return; }
-  if(exhMailFiles.reduce((n, f) => n + f.size, 0) > 3 * 1024 * 1024){ say('첨부가 합쳐서 3MB를 넘어요.'); return; }
-  // 밖으로 나가는 일은 한 번 묻는다 — 받는 사람을 눈으로 확인하게
-  const from = await eventMailFrom(x.event_id);
-  if(!from.ok){ say(from.text); return; }
-  if(!confirm(`이 내용으로 보낼까요?\n\n발신 ${from.text}\n수신 ${to.join(', ')}${cc.length ? `\n참조 ${cc.join(', ')}` : ''}\n제목 ${subject}`)) return;
-
-  say('보내는 중…', true);
-  const attachments = [];
-  for(const f of exhMailFiles) attachments.push({ filename: f.name, content_type: f.type, data: await fileToBase64(f) });
-  const reply = exhReply;
-  const stepKey = document.getElementById(`exm-step-${exhId}`)?.value || 'note';
-  const lib = String(stepKey).startsWith('lib:') ? libItem(String(stepKey).slice(4)) : null;
-  const st = lib ? { key: 'note', label: lib.name } : exhMailSteps(x.event_id).find(s => s.key === stepKey);
-  // 회신은 단계 메일이 아니다 — 단계 기본 첨부를 붙이지 않는다
-  const fileIds = reply ? [...reply.pick] : exhDefFiles(x).filter(f => !exhSkipDefault.has(f.id)).map(f => f.id);
-  const kind = reply ? 'reply' : stepKey === 'note' || lib ? 'note' : `exh-${stepKey}`;
-  const category = reply ? '회신' : st ? st.label : '메일';
-  const res = await sendMail({ to, cc, subject, text, exhibitor_id: x.id, category, kind, attachments, file_ids: fileIds });
-  if(!res.ok){ say(res.offline ? '테스트 모드에서는 보내지 않아요.' : (res.error || '보내지 못했어요.')); return; }
-  // 서버가 기록을 남긴다 — 화면에도 바로 끼워 방금 보낸 게 안 보여 또 보내는 일을 막는다
-  /* 서버가 남긴 기록 id를 쓴다 — 임시 id로 두면 이 줄을 지울 때 서버에서 안 지워진다 */
-  if(res.logId) EXH_LOGS.push({
-    id: res.logId, exhibitor_id: x.id, kind, ts: nowStamp(), direction: 'out', channel: '이메일',
-    counterpart: [to.join(', '), cc.length ? `(cc) ${cc.join(', ')}` : ''].filter(Boolean).join(' '),
-    category, subject, answered_at: '', answer: '', status: 'done',
-    body: text + ((attachments.length || fileIds.length) ? `\n\n[첨부] ${[...mailFilesOf(x.event_id).filter(f => fileIds.includes(f.id)).map(f => f.filename), ...attachments.map(a => a.filename)].join(', ')}` : ''),
-    author_email: currentUser?.email || '', author_name: currentUser?.name || '',
-  });
-  trackAction('add', '참가사 메일', x.event_id, `${exhNames(x).ko || x.id} — ${subject}`, { kind: 'exhibitor', id: x.id, tab: 'mail' });
-  exhMailFiles = []; exhSkipDefault = new Set();
-  // 회신이었으면 그 받은 메일을 처리함으로 닫는다
-  if(reply){ exhReply = null; await setMailDone('ex', reply.logId, true); }
-  renderExhDr();
-  const m = document.getElementById('exm-msg');
-  if(m){ m.style.color = res.logged === false ? 'var(--re)' : 'var(--g)';
-    m.textContent = res.logged === false ? `보냈어요 (${res.via || ''}) — 다만 기록 저장에 실패했어요.` : `보냈어요 · ${res.via || ''}`;
-    if(res.sentError) m.textContent += ` (보낸메일함에는 못 남겼어요: ${res.sentError})`; }
-}
-window.addExhMailFiles = addExhMailFiles;
-window.dropExhMailFile = dropExhMailFile;
-window.sendExhMail = sendExhMail;
+/* «참가기업 상세 › 메일 — 담당자에게 바로 보내기»은 ../features/exhibition/exh-dr-mail.js로 떼어 냈다 — 그 파일이 스스로 window에 건다 */

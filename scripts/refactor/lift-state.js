@@ -34,7 +34,7 @@ for (const n of names) {
   /* 같은 이름을 다시 선언하는 곳(지역 변수·매개변수)이 있으면 바꾸면 안 된다 */
   /* 선언(let/const/var/function 이름)과 함수 매개변수(function f(…이름…) / (…이름…) =>)만 본다.
      호출 인자(console.log('…', 이름, …))는 다시 선언이 아니다 */
-  const rest = src.replace(m[0], '');
+  const rest = require('./js-scan.js').codeOnly(src.replace(m[0], ''));   // 문자열·주석 속 «let x»는 선언이 아니다
   const hits = [...rest.matchAll(new RegExp(`\\b(?:let|const|var|function)\\s+${n}\\b|\\b${n}\\s*=>`, 'g'))];
   /* 매개변수 목록에서는 «이름 자리»만 본다 — f(evKey = inboxEv)의 기본값은 다시 선언이 아니다 */
   for (const pm of rest.matchAll(/(?:\bfunction\s*[\w$]*\s*\(([^)]*)\)|\(([^()]*)\)\s*=>)/g)) {
@@ -46,41 +46,22 @@ for (const n of names) {
   src = src.replace(m[0], '');
 }
 
-/* 이름 바꾸기 — 문자열·주석은 그대로 두고 코드만. 속성(.x)과 객체 키(x:)는 건드리지 않는다 */
-const out = [];
-let i = 0, mode = 'code';
-const isId = (c) => /[\w$]/.test(c || '');
-const nameRe = new RegExp(`^(?:${names.map((n) => n.replace(/\$/g, '\\$')).join('|')})(?![\\w$])`);
-let tplDepth = [];
-while (i < src.length) {
-  const c = src[i], d = src[i + 1];
-  if (mode === 'code') {
-    if (c === '/' && d === '*') { const e = src.indexOf('*/', i + 2); out.push(src.slice(i, e + 2)); i = e + 2; continue; }
-    if (c === '/' && d === '/') { const e = src.indexOf('\n', i); const end = e < 0 ? src.length : e; out.push(src.slice(i, end)); i = end; continue; }
-    if (c === "'" || c === '"') { let j = i + 1; while (j < src.length && src[j] !== c) { if (src[j] === '\\') j++; j++; } out.push(src.slice(i, j + 1)); i = j + 1; continue; }
-    if (c === '`') { mode = 'tpl'; out.push(c); i++; continue; }
-    if (c === '}' && tplDepth.length && tplDepth[tplDepth.length - 1] === 0) { tplDepth.pop(); mode = 'tpl'; out.push(c); i++; continue; }
-    if (c === '{' && tplDepth.length) tplDepth[tplDepth.length - 1]++;
-    if (c === '}' && tplDepth.length) tplDepth[tplDepth.length - 1]--;
-    if (!isId(src[i - 1]) && (src[i - 1] !== '.' || src.slice(i - 3, i) === '...')) {
-      const m = src.slice(i).match(nameRe);
-      if (m) {
-        const after = src.slice(i + m[0].length).match(/^\s*(:)?/);
-        const prevNonWs = src.slice(0, i).replace(/\s+$/, '').slice(-1);
-        /* 객체 키 «{ upV: …»는 그대로. 삼항 «a ? upV : b»는 바꾼다 */
-        const isKey = after && after[1] && (prevNonWs === '{' || prevNonWs === ',');
-        if (!isKey) { out.push(`${obj}.${keyOf(m[0])}`); i += m[0].length; continue; }
-      }
-    }
-    out.push(c); i++; continue;
-  }
-  /* 템플릿 글자 */
-  if (c === '\\') { out.push(c, d); i += 2; continue; }
-  if (c === '`') { mode = 'code'; out.push(c); i++; continue; }
-  if (c === '$' && d === '{') { tplDepth.push(0); mode = 'code'; out.push('${'); i += 2; continue; }
-  out.push(c); i++;
+/* 이름 바꾸기 — 공용 훑기(js-scan.js)로 코드 자리만 찾는다(문자열·주석·정규식·템플릿 글자는 건드리지 않는다).
+   속성(.x)은 빼고 펼침(...x)은 넣는다. 객체 키 «{ upV: …»는 그대로, 삼항 «a ? upV : b»는 바꾼다.
+   전에는 도구 안에서 따로 훑다가 정규식 글자 /["']/g의 따옴표를 문자열 시작으로 읽어, 전시 상세 창의
+   뒤쪽 3천 줄에서 이름을 못 바꾼 적이 있다 */
+{
+  const { codeOnly, identifiers } = require('./js-scan.js');
+  const code = codeOnly(src);
+  const want = new Set(names);
+  const edits = identifiers(code).filter(({ name, at }) => {
+    if (!want.has(name)) return false;
+    const after = code.slice(at + name.length).match(/^\s*(:)?/);
+    const prevNonWs = code.slice(0, at).replace(/\s+$/, '').slice(-1);
+    return !(after && after[1] && (prevNonWs === '{' || prevNonWs === ','));
+  });
+  for (const { name, at } of edits.reverse()) src = src.slice(0, at) + `${obj}.${keyOf(name)}` + src.slice(at + name.length);
 }
-src = out.join('');
 
 /* import 더하기 — 파일 머리의 import 묶음 끝에. «파일 안 마지막 import»에 붙이면 안 된다: 설정 탭에서는
    그것이 파일 한가운데 구획 안에 있던 다시 내보내기 줄이라, 그 구획을 떼어 낼 때 import가 함께 끌려 나갔다.

@@ -28,6 +28,10 @@ import './modules/crm-tab.js';
 import './modules/audit-tab.js';
 import './modules/exh-tab.js';
 import './modules/exh-drawer.js';
+import './features/exhibition/exh-remove.js';   // 참가기업 지우기 — 딸린 것까지 함께 — 스스로 window에 건다
+import './features/exhibition/exh-dr-graphic.js';   // 참가기업 상세 › 그래픽 피드백·그래픽 항목·부스 기본 제공 예외 — 스스로 window에 건다
+import './features/exhibition/exh-dr-logs.js';   // 참가기업 상세 › 문의·기록 — 스스로 window에 건다
+import './features/exhibition/exh-dr-mail.js';   // 참가기업 상세 › 메일 — 담당자에게 바로 보내기 — 스스로 window에 건다
 import './modules/exh-export.js';
 import './modules/speaker-export.js';
 import './modules/exh-invoice.js';

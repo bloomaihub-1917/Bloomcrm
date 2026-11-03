@@ -107,14 +107,11 @@ function stripTemplates(s) {
   }
   return out;
 }
-const stripCode = (s) => stripTemplates(s
-  .replace(/^\s*(?:import|export)\s*\{[^}]*\}\s*from\s*'[^']*';?/gm, ' ')
-  .replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 '))
-  /* 템플릿을 먼저 푼 뒤에 따옴표를 지워야 onclick="f('${escAttr(x)}','box')" 같은 글이
-     따옴표 짝을 엇갈리게 만들지 않는다 */
-  .replace(/'(?:\\.|[^'\\\n])*'/g, "''").replace(/"(?:\\.|[^"\\\n])*"/g, '""')
-  /* 정규식 글자(/…|me)\./i)도 지운다 — 안의 낱말은 이름이 아니다 */
-  .replace(/([(,=:!&|?;]\s*)\/(?![*/])(?:\\.|\[(?:\\.|[^\]\n])*\]|[^/\\\n[])+\/[dgimsuy]*/g, '$1 /r/ ');
+/* 코드만 남긴 사본 — 공용 훑기(js-scan.js). 문자열·주석·정규식·템플릿 글자를 지우고 ${식}은 남긴다.
+   (위 stripTemplates와 정규식들로 하던 것을 바꿨다 — 정규식 글자 /["']/g의 따옴표를 문자열로 읽는 등
+   도구마다 같은 함정에 빠져서 한곳으로 모았다.) import·export … from 줄은 먼저 지운다 */
+const { codeOnly } = require('./js-scan.js');
+const stripCode = (s) => codeOnly(s.replace(/^\s*(?:import|export)\s*\{[^}]*\}\s*from\s*'[^']*';?/gm, (m) => m.replace(/[^\n]/g, ' ')));
 const allExported = new Set();
 Object.values(exportsOf).forEach((e) => e.names.forEach((n) => allExported.add(n)));
 /* 내보내지 않은 최상위 이름도 본다 — 옮긴 덩어리의 비공개 상수(SP_SENT)를 옛 파일이
