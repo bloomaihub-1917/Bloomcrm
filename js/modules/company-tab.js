@@ -65,6 +65,8 @@ import { escapeHtml, escAttr, levenshteinDist, phoneMatch, parseSectorScope, sec
 import { postToSheet, batchCreateExhibitors, upsertSectorRow, saveExhibitor, aiCompanyPairs, aiOrgQueryPlan, aiOrgPdfSummary,
   saveRoundMember, deleteRoundMembers, saveAttempt } from '../api.js';
 import { parseSectors, joinSectors, mainSectors, sectorNamesInDomain, domainName, domainOfSector, findSectorByName, UNASSIGNED_DOMAIN } from '../domain/sectors.js';
+/* 화면 상태는 ../features/companies/co-ui.js의 coUi 한곳에 둔다 — 이 탭의 구획을 다른 파일로 떼어도 같은 값을 보게 */
+import { coUi } from '../features/companies/co-ui.js';
 /* 마스터DB는 window로 다시 그린다 — 기업 탭과 마스터DB 탭이 서로의 화면 파일을 끌어오지 않게 */
 export const renderMDB = () => window.renderMDB?.();
 export const buildMDBEvList = () => window.buildMDBEvList?.();
@@ -78,7 +80,7 @@ import { billedAmount, paidAmount, currencyOf, exhibitorTradeFor, fmtMoney } fro
    그쪽에서 import — CATEGORY_CODES는 섹터 트리와 무관한 기업DB 전용
    분류 코드라 settings-tab.js에는 없으므로 그대로 로컬 유지.
 ══════════════════════════════════════════ */
-const CATEGORY_CODES = [
+export const CATEGORY_CODES = [
   {code:'ASS',  label:'학회 / 협회'},
   {code:'GOV',  label:'정부 / 공공기관'},
   {code:'UNI',  label:'대학 / 연구소'},
@@ -138,17 +140,16 @@ export const CO_SORTS = [
   ['ko',   '국문명 순'],
   ['en',   '영문명 순'],
 ];
-let coSort = 'name';
 
 export function setCoSort(v){
-  coSort = v;
+  coUi.coSort = v;
   sortCoDb();
   renderCoList();
 }
 
 export function sortCoDb(){
-  const pick = (c) => coSort === 'ko' ? (c.nameKo || '')
-    : coSort === 'en' ? (c.nameEn || '')
+  const pick = (c) => coUi.coSort === 'ko' ? (c.nameKo || '')
+    : coUi.coSort === 'en' ? (c.nameEn || '')
     : (c.nameKo || c.nameEn || '');
   CO_DB.sort((a, b) => {
     const x = coSortName(pick(a)), y = coSortName(pick(b));
@@ -158,7 +159,7 @@ export function sortCoDb(){
 }
 
 /* 저장 시각은 ISO 원문으로 들어온다 — 사람이 읽는 자리엔 날짜만 보여준다 */
-const shortDate = (v) => String(v || '').slice(0, 10);
+export const shortDate = (v) => String(v || '').slice(0, 10);
 
 
 /* «비슷한 기업 찾기와 기업 병합»은 ../features/companies/merge.js로 떼어 냈다 — 그 파일이 스스로 window에 건다 */
@@ -461,7 +462,6 @@ export function setCoCountry(v){
    기업명·금액은 보내지 않는다 — 행사·역할·종류·업종·국가 이름과 질문만 간다.
    거르기는 여기서 제 데이터로 한다. 사이드바 거르개·검색어와 «그리고»로 겹친다.
 ══════════════════════════════════════════ */
-let coAi = null;   // { q, plan }
 function coAiMatches(c, plan){
   const evs = c.events || [];
   const has = (k) => evs.some(e => e.key === k);
@@ -495,7 +495,7 @@ function coAiMatches(c, plan){
 export async function askCoAi(){
   const q = String(document.getElementById('co-ai-q')?.value || '').trim();
   if(!q) return;
-  coAiMsg = '✨ 질문을 조건으로 바꾸는 중…';
+  coUi.coAiMsg = '✨ 질문을 조건으로 바꾸는 중…';
   renderCoList();
   const roles = new Set(['전시참가기업', '시공사', ...PART_TYPES.map(t => t.key)]);
   CO_DB.forEach(c => (c.events || []).forEach(e => (e.roles || []).forEach(r => roles.add(r))));
@@ -510,27 +510,26 @@ export async function askCoAi(){
     sectors: [...sectors],
     countries: [...countries],
   });
-  if(!r.ok){ coAiMsg = '<span style="color:var(--re)">찾지 못했어요: ' + escapeHtml(r.error || '') + '</span>'; renderCoList(); return; }
-  coAiMsg = '';
-  coAi = { q, plan: r.plan };
+  if(!r.ok){ coUi.coAiMsg = '<span style="color:var(--re)">찾지 못했어요: ' + escapeHtml(r.error || '') + '</span>'; renderCoList(); return; }
+  coUi.coAiMsg = '';
+  coUi.coAi = { q, plan: r.plan };
   // 기업을 열어 둔 채 물었으면 목록으로 돌아가 결과를 보여 준다
   if(document.getElementById('cdt')?.style.display !== 'none') showCoFilteredList();
   renderCoList();
 }
 export function clearCoAi(){
-  coAi = null; coAiMsg = '';
+  coUi.coAi = null; coUi.coAiMsg = '';
   const inp = document.getElementById('co-ai-q');
   if(inp) inp.value = '';
   renderCoList();
 }
-let coAiMsg = '';
 /* 질문 결과는 위쪽 «질문으로 찾기» 줄(#co-ai-msg)에 한 줄로 — Master DB와 같은 자리 */
 function renderCoAiMsg(n){
   const el = document.getElementById('co-ai-msg');
   if(!el) return;
-  if(coAiMsg){ el.innerHTML = `<span style="color:var(--i3)">${coAiMsg}</span>`; return; }
-  if(!coAi){ el.innerHTML = ''; return; }
-  const p = coAi.plan;
+  if(coUi.coAiMsg){ el.innerHTML = `<span style="color:var(--i3)">${coUi.coAiMsg}</span>`; return; }
+  if(!coUi.coAi){ el.innerHTML = ''; return; }
+  const p = coUi.coAi.plan;
   const evs = (k) => (p[k] || []).map(e => (EVENT_LIST.find(x => x.key === e) || {}).short || e).join(', ');
   const bits = [
     p.events_any?.length ? '참가: ' + evs('events_any') : '',
@@ -545,7 +544,7 @@ function renderCoAiMsg(n){
     p.unpaid ? '미납 있음' : '',
     p.overdue ? '기한 지난 미납' : '',
   ].filter(Boolean);
-  el.innerHTML = `<span class="pill p-blue" style="cursor:default" title="${escapeHtml(coAi.q)}">✨ ${escapeHtml(p.explain || coAi.q)}</span>
+  el.innerHTML = `<span class="pill p-blue" style="cursor:default" title="${escapeHtml(coUi.coAi.q)}">✨ ${escapeHtml(p.explain || coUi.coAi.q)}</span>
     <b>${n}곳</b>
     <span style="color:var(--i4)">${escapeHtml(bits.join(' · '))}</span>
     ${p.unsupported ? `<span style="color:var(--am)">⚠️ 반영 못 한 조건: ${escapeHtml(p.unsupported)}</span>` : ''}
@@ -582,7 +581,7 @@ function coSearchHit(c, q){
     || (bq && fields.some(v => v && bare(v).includes(bq)));
 }
 function coFilteredList({ skipCats = false, skipKind = false } = {}){
-  let list = CO_DB.filter(c => coSearchHit(c, _coDashQ));
+  let list = CO_DB.filter(c => coSearchHit(c, coUi.coDashQ));
   if(coDomainF){
     const names = coDomainNameSet();
     if(names) list = list.filter(c => coSecsOf(c).some(s => names.has(sectorKey(s))));
@@ -593,8 +592,8 @@ function coFilteredList({ skipCats = false, skipKind = false } = {}){
   }
   if(coCodeF) list = list.filter(c => c.catCode && c.catCode.startsWith(coCodeF + '-'));
   if(coCountryF) list = list.filter(c => companyCountryGroup(c) === coCountryF);
-  if(!skipKind && coKindF) list = list.filter(c => c.kind === coKindF);
-  if(coAi) list = list.filter(c => coAiMatches(c, coAi.plan));
+  if(!skipKind && coUi.coKindF) list = list.filter(c => c.kind === coUi.coKindF);
+  if(coUi.coAi) list = list.filter(c => coAiMatches(c, coUi.coAi.plan));
   return list;
 }
 
@@ -613,9 +612,8 @@ export function renderCoList(){
 
 /* 종류 필터 — 전시 참가기업만 볼지, 아직 영업 중인 잠재 고객사만 볼지 고른다.
    Master DB의 「전체·연사·스폰서…」 줄과 같은 자리·같은 모양이다 */
-let coKindF = '';
 export function setCoKind(k){
-  coKindF = (coKindF === k) ? '' : k;
+  coUi.coKindF = (coUi.coKindF === k) ? '' : k;
   if(document.getElementById('cdt')?.style.display !== 'none') showCoFilteredList();
   renderCoList();
 }
@@ -627,16 +625,16 @@ function renderCoKindBar(n){
   const cnt = {};
   const rest = coFilteredList({ skipKind: true });
   rest.forEach(c => { if(c.kind) cnt[c.kind] = (cnt[c.kind] || 0) + 1; });
-  const used = ORG_KINDS.filter(k => cnt[k.key] || coKindF === k.key);
+  const used = ORG_KINDS.filter(k => cnt[k.key] || coUi.coKindF === k.key);
   el.innerHTML = `
     <div class="seg">
-      <button class="seg-b${!coKindF ? ' on' : ''}" onclick="setCoKind('')">전체 ${rest.length}</button>
-      ${used.map(k => `<button class="seg-b${coKindF === k.key ? ' on' : ''}"
+      <button class="seg-b${!coUi.coKindF ? ' on' : ''}" onclick="setCoKind('')">전체 ${rest.length}</button>
+      ${used.map(k => `<button class="seg-b${coUi.coKindF === k.key ? ' on' : ''}"
         onclick="setCoKind('${escAttr(k.key)}')">${escapeHtml(k.label)} ${cnt[k.key] || 0}</button>`).join('')}
     </div>
     <select class="fi" style="font-size:11px;padding:3px 6px;width:auto" onchange="setCoSort(this.value)"
       title="이름 앞뒤의 (주)·주식회사는 빼고 줄 세웁니다">
-      ${CO_SORTS.map(([v, l]) => `<option value="${v}"${coSort === v ? ' selected' : ''}>${l}</option>`).join('')}
+      ${CO_SORTS.map(([v, l]) => `<option value="${v}"${coUi.coSort === v ? ' selected' : ''}>${l}</option>`).join('')}
     </select>
     ${coCountryF ? `<span class="pill p-gray" style="font-size:10px">${{domestic:'국내',overseas:'해외',unknown:'미확인'}[coCountryF]}</span>` : ''}
     <span class="db-ct">${n}개 기업</span>
@@ -752,7 +750,7 @@ export async function submitAddOrg(){
   if(btn){ btn.disabled = true; btn.textContent = '등록 중…'; }
 
   const sector = v('ao-sector');
-  const r = await createOrg({
+  const r = await window.createOrg({
     nameKo: v('ao-nameKo'), nameEn: v('ao-nameEn'), kind: v('ao-kind'),
     sectors: sector ? [sector] : [],
     country: v('ao-country'), website: v('ao-website'), bizNo: v('ao-bizNo'),
@@ -780,23 +778,22 @@ export function openCoSearch(){
 }
 
 /* 기업을 열었다가 돌아오면 보던 줄에 다시 서 있어야 한다 */
-let _coDashScroll = null;
 
 export function selectCo(key){
   const d0 = document.getElementById('co-dash');
-  if(d0 && d0.style.display !== 'none') _coDashScroll = d0.scrollTop;
+  if(d0 && d0.style.display !== 'none') coUi.coDashScroll = d0.scrollTop;
   setSelCo(key); setCoTab(0);
   // 모바일에서는 목록이 서랍 안이라, 고르고 나면 닫아야 상세가 보인다
   if(isMobile()) window.closeSb?.();
   const c=CO_DB.find(x=>x.key===key);if(!c)return;
   const dashEl = document.getElementById('co-dash'); if(dashEl) dashEl.style.display='none';
   const cdtEl  = document.getElementById('cdt');      if(cdtEl)  cdtEl.style.display='flex';
-  renderCoDetail(c);
+  window.renderCoDetail(c);
 }
 
 /* 상세의 뒤로가기 — 필터는 그대로 둔 채 목록으로 */
 export function backToCoList(){ showCoFilteredList(); }
-function coListLabel(){
+export function coListLabel(){
   const parts = [];
   if(coDomainF) parts.push(domainName(coDomainF));
   const cats = coCats().map(n => parseSectorScope(n).plainName);
@@ -806,7 +803,7 @@ function coListLabel(){
 
 // ── 기업DB 진입 시 기본 화면: 섹터별 대시보드 ──
 export function showCoDashboard(){
-  setSelCo(null); setCoCatF(null); setCoCodeF(null); setCoDomainF(null); setCoCountryF(null); _coDashQ = '';
+  setSelCo(null); setCoCatF(null); setCoCodeF(null); setCoDomainF(null); setCoCountryF(null); coUi.coDashQ = '';
   ['co-q','co-q-m'].forEach(id => { const e = document.getElementById(id); if(e) e.value = ''; });
   renderCoList(); buildCoCAT(); buildCoCodeF(); buildCoCountryF();
   const cdtEl = document.getElementById('cdt'); if(cdtEl) cdtEl.style.display='none';
@@ -943,10 +940,9 @@ function coSectorOrder(){
   return order;
 }
 
-let _coDashQ = '';
 /* 검색칸은 Master DB처럼 위쪽 바 하나 — 기업을 열어 둔 채 치면 목록으로 돌아간다 */
 export function setCoDashQ(v){
-  _coDashQ = v;
+  coUi.coDashQ = v;
   // 데스크톱·모바일 칸이 서로 다른 값을 들고 있지 않게 맞춘다
   ['co-q','co-q-m'].forEach(id => { const e = document.getElementById(id); if(e && e.value !== v) e.value = v; });
   if(document.getElementById('cdt')?.style.display !== 'none') showCoFilteredList();
@@ -1002,861 +998,15 @@ export function renderCoDashboard(list = coFilteredList()){
   el.innerHTML = `
     ${secChips ? `<div style="display:flex;gap:8px">${rowLbl('섹터')}
       <div style="display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:0">${secChips}</div></div>` : ''}
-    ${coCompanyTableHtml(list, _coDashQ || coAi ? '찾는 조건에 맞는 기업이 없어요' : '해당하는 기업이 없어요')}`;
-  if(_coDashScroll != null){ el.scrollTop = _coDashScroll; _coDashScroll = null; }
+    ${coCompanyTableHtml(list, coUi.coDashQ || coUi.coAi ? '찾는 조건에 맞는 기업이 없어요' : '해당하는 기업이 없어요')}`;
+  if(coUi.coDashScroll != null){ el.scrollTop = coUi.coDashScroll; coUi.coDashScroll = null; }
 }
 
-/* ══════════════════════════════════════════
-   renderCoDetail — 기업 상세 화면 (원본 3623~3683행)
-   editCoSector/editCoNotes/... 클릭 시 인라인 편집으로 전환되는 span들을 렌더링
-══════════════════════════════════════════ */
-export function renderCoDetail(c){
-  const i=CO_DB.findIndex(x=>x.key===c.key);
-  // 역할별로 어느 행사에서 쓰였는지 함께 추적 (같은 역할이 여러 행사에 걸쳐 있으면 툴팁으로 구분)
-  const roleEvMap={};
-  c.events.forEach(e=>e.roles.forEach(r=>{
-    if(!roleEvMap[r]) roleEvMap[r]=new Set();
-    roleEvMap[r].add(e.short||e.name);
-  }));
-  const roles=Object.keys(roleEvMap);
-  const yrs=c.events.map(e=>+e.year);
-  const cdhEl = document.getElementById('cdh');
-  if(cdhEl) cdhEl.innerHTML=`
-    <div style="margin-bottom:10px">
-      <button onclick="backToCoList()" style="background:none;border:none;cursor:pointer;color:var(--i3);font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:4px;padding:0">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-        ${escapeHtml(coListLabel())} 목록
-      </button>
-    </div>
-    <div class="cdt2">
-      <div class="cdl" style="background:${avB(i)};color:${avF(i)}">${escapeHtml(c.abbr)}</div>
-      <div style="flex:1;min-width:0">
-        ${(() => {
-          /* 이름 — 있는 쪽을 제목으로 삼는다. 전에는 국문이 없으면 '국문명 추가'라는
-             안내가 제목 자리에 앉고 영문 사명이 그 뒤에 붙어, 회사 이름이
-             "국문명 추가 SML Meditree"로 읽혔다. 없는 것은 아래 줄로 내린다. */
-          const ko = c.nameKo || '', en = c.nameEn || '';
-          const edKo = `editCoNameKo('${escAttr(c.key)}')`, edEn = `editCoNameEn('${escAttr(c.key)}')`;
-          /* 인라인 편집기가 #co-nameKo-<key> / #co-nameEn-<key> 를 찾아 그 자리를
-             입력칸으로 바꾼다 — 이름이 어느 줄에 있든 id는 따라다녀야 한다. */
-          const fid = (f) => `co-${f}-${escapeHtml(c.key)}`;
-          const title = (f, txt, on) => `<div class="cdn"><span id="${fid(f)}" style="cursor:pointer" onclick="${on}">${escapeHtml(txt)}</span></div>`;
-          const sub = (f, txt, on) => `<div style="font-size:12.5px;color:var(--i4);margin-bottom:2px"><span id="${fid(f)}" style="cursor:pointer" onclick="${on}">${escapeHtml(txt)}</span></div>`;
-          const add = (f, txt, on) => `<div style="font-size:11px;color:var(--i5);margin-bottom:2px">＋ <span id="${fid(f)}" style="cursor:pointer" onclick="${on}">${escapeHtml(txt)}</span></div>`;
-          if(ko && en) return title('nameKo', ko, edKo) + sub('nameEn', en, edEn);
-          if(ko)       return title('nameKo', ko, edKo) + add('nameEn', '영문명 추가', edEn);
-          if(en)       return title('nameEn', en, edEn) + add('nameKo', '국문명 추가', edKo);
-          return title('nameKo', '(이름 없음)', edKo) + add('nameEn', '영문명 추가', edEn);
-        })()}
-
-        <div class="cdmt">
-          ${(() => { const k = orgKindOf(c.kind); return k
-            ? `<span class="pill ${k.cls}" style="cursor:pointer" onclick="editCoKind('${escAttr(c.key)}')" title="클릭하여 기업 종류 변경">${escapeHtml(k.label)}</span>`
-            : `<span class="pill p-gray" style="cursor:pointer" onclick="editCoKind('${escAttr(c.key)}')">종류 지정</span>`; })()}
-          ${coDomainPill(c)}
-          <span class="pill ${c.sector ? 'p-blue' : 'p-gray'}" style="cursor:pointer" onclick="editCoSector('${escAttr(c.key)}')" title="클릭하여 섹터 변경">
-            <span id="co-sector-${escapeHtml(c.key)}">${escapeHtml(c.sectors && c.sectors.length ? c.sectors.join(' · ') : '미분류')}</span></span>
-          ${c.catCode ? `<span class="btag main" id="co-catcode-${escapeHtml(c.key)}">${escapeHtml(c.catCode)}</span>`
-            : `<span id="co-catcode-${escapeHtml(c.key)}"></span>`}
-          ${c.aliases.length
-            // 사명이 바뀐 회사는 옛 이름으로 찾는 사람이 있다 — 여기 남겨두면 헛걸음하지 않는다
-            ? `<span style="color:var(--i4)" title="예전 이름 — 이 이름으로도 검색됩니다">↩ ${escapeHtml(c.aliases.join(', '))}</span>`
-            : ''}
-        </div>
-
-        ${(() => {
-          /* 아래 줄은 "적어 둔 것"만 보여준다. 전에는 빈 칸까지 전부 늘어놓아
-             웹사이트·메모·국가·약어·출처·사업자번호 여섯 개의 '추가' 안내가
-             실제 값과 같은 무게로 섞였다 — 화면의 대부분이 아직 없는 정보였다.
-             비어 있는 것은 맨 끝 '＋ 정보 추가'에 접어 두고, 누르면 그 자리에서 편다. */
-          const F = [
-            ['website', '웹사이트', c.website, `editCoWebsite('${escAttr(c.key)}')`, true],
-            ['country', '국가',     c.country, `editCoCountry('${escAttr(c.key)}')`, false],
-            ['hq',      '본사',     c.hq,      '', false],
-            ['bizNo',   '사업자번호', c.bizNo,  `editCoBizNo('${escAttr(c.key)}')`, false],
-            ['abbr',    '약어',     c.abbr,    `editCoAbbr('${escAttr(c.key)}')`, false],
-            ['source',  '출처',     c.source,  `editCoSource('${escAttr(c.key)}')`, false],
-            ['phone',   '대표 전화', c.phone,   `editCoPhone('${escAttr(c.key)}')`, false],
-            ['email',   '대표 메일', c.email,   `editCoEmail('${escAttr(c.key)}')`, false],
-            ['products','취급 품목', c.products, `editCoProducts('${escAttr(c.key)}')`, false],
-            ['address', '주소',     c.address, `editCoAddress('${escAttr(c.key)}')`, false],
-            ['intro',   '회사소개', c.intro,   `editCoIntro('${escAttr(c.key)}')`, false],
-            ['notes',   '메모',     c.notes,   `editCoNotes('${escAttr(c.key)}')`, false],
-          ];
-          const has = F.filter(f => String(f[2] || '').trim());
-          const gap = F.filter(f => !String(f[2] || '').trim() && f[3]);
-
-          /* 한 칸에 주소가 여럿이면 각각 링크로 그린다 — 통째로 걸면
-             하나도 제대로 안 열린다. 괄호에 적힌 설명은 이름표로 옆에 둔다. */
-          const linksHtml = (val) => parseLinks(val).map(({ url, label }) => {
-            const href = safeUrl(url);
-            const a = href
-              ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(url)}</a>`
-              : escapeHtml(url);
-            return a + (label ? ` <span style="color:var(--i5);font-size:10px">${escapeHtml(label)}</span>` : '');
-          }).join('<span style="color:var(--i6)"> · </span>');
-
-          /* 값 칸은 white-space:pre-line이라(메모의 줄바꿈을 살리려고) 태그 사이
-             들여쓰기 줄바꿈까지 그대로 줄이 된다 — 여는 태그 바로 뒤에 붙여 쓴다 */
-          const row = ([id, label, val, on, isLink]) => `
-            <div style="display:flex;gap:8px;align-items:baseline;padding:2px 0;font-size:11.5px">
-              <span style="flex:0 0 62px;color:var(--i5)">${escapeHtml(label)}</span>
-              <span style="flex:1;min-width:0;color:var(--i2);white-space:pre-line;${on ? 'cursor:pointer' : ''}" ${on ? `onclick="${on}"` : ''}><span id="co-${id}-${escapeHtml(c.key)}">${
-                  isLink && val ? linksHtml(val)
-                    : val ? escapeHtml(val)
-                    /* 빈 줄은 누를 자리가 없으면 편집으로 들어갈 수 없다 — 옅은 안내를 둔다 */
-                    : `<span style="color:var(--i5)">입력</span>`}</span></span>
-            </div>`;
-
-          return `<div style="margin-top:7px">
-            ${has.map(row).join('')}
-            <div id="co-gaps-${escapeHtml(c.key)}" style="display:none">${gap.map(row).join('')}</div>
-            <div style="display:flex;align-items:center;gap:10px;margin-top:5px">
-              ${gap.length ? `<button id="co-gaps-btn-${escapeHtml(c.key)}" class="btn bs" style="font-size:10.5px;padding:2px 8px"
-                onclick="toggleCoGaps('${escAttr(c.key)}')">＋ 정보 추가 ${gap.length}</button>` : ''}
-              ${c.catCode ? '' : `<button class="btn bs" style="font-size:10.5px;padding:2px 8px"
-                onclick="showAssignCatCodeUI('${escAttr(c.key)}')">코드 부여</button>`}
-              <button class="btn bs" style="font-size:10.5px;padding:2px 8px" title="업체가 보낸 소개서·견적서 PDF를 읽어 회사소개를 채웁니다"
-                onclick="fillCoIntroFromPdf('${escAttr(c.key)}')">📄 소개서 PDF로 채우기</button>
-              <span id="co-pdf-msg-${escapeHtml(c.key)}" style="font-size:10.5px;color:var(--i4)"></span>
-              <span style="margin-left:auto;color:var(--i5);font-size:10.5px" title="${escapeHtml(c.updatedAt || '')}">${escapeHtml(shortDate(c.updatedAt) || '')}</span>
-            </div>
-          </div>`;
-        })()}
-      </div>
-    </div>
-    <div class="cost">
-      <div class="cosi"><div class="cosn">${c.events.length}</div><div class="cosl">총 참여 행사</div></div>
-      <div class="cosi"><div class="cosn">${c.contacts.length}</div><div class="cosl">등록 담당자</div></div>
-      <div class="cosi"><div class="cosn">${yrs.length?Math.min(...yrs):'-'}</div><div class="cosl">첫 참여</div></div>
-      ${(() => { const t = tradeTotals(c); return t.billed || t.balance
-        ? `<div class="cosi"><div class="cosn" style="font-size:15px">${tradeMoney(t, 'billed')}</div><div class="cosl">누적 청구</div></div>
-           <div class="cosi"><div class="cosn" style="font-size:15px;color:${t.balance > 0 ? 'var(--re)' : 'var(--ge)'}">${tradeMoney(t, 'balance')}</div><div class="cosl">미수금</div></div>`
-        : ''; })()}
-      <div class="cosi"><div class="cosn" style="display:flex;gap:3px;flex-wrap:wrap">${roles.map(r=>`<span class="pill ${RP[r]||'p-gray'}" title="${escapeHtml([...roleEvMap[r]].join(', '))}">${escapeHtml(r)}</span>`).join('')}</div><div class="cosl">유형</div></div>
-    </div>
-    <div class="cobr">${c.branches.map(b=>`<span class="btag${b===c.mainBranch?' main':''}">${escapeHtml(b)}</span>`).join('')}</div>`;
-  const tabs=['행사 참여 이력','거래','담당자','요약'];
-  const tabsEl = document.getElementById('cotabs');
-  if(tabsEl) tabsEl.innerHTML=tabs.map((t,k)=>`<div class="cotab${coTab===k?' on':''}" onclick="switchCoT(${k})">${t}</div>`).join('');
-  renderCoBody(c);
-}
-/* 비어 있는 항목 펼치기/접기 — 새로 들어온 회사는 대부분이 빈칸이라
-   기본은 접어 둔다. 채우려고 열었을 때만 보이면 된다. */
-export function toggleCoGaps(key){
-  const box = document.getElementById('co-gaps-' + key);
-  const btn = document.getElementById('co-gaps-btn-' + key);
-  if(!box) return;
-  const on = box.style.display === 'none';
-  box.style.display = on ? 'block' : 'none';
-  if(btn) btn.textContent = on ? '접기' : ('＋ 정보 추가 ' + box.children.length);
-}
-
-export function switchCoT(k){
-  setCoTab(k);
-  const c=CO_DB.find(x=>x.key===selCo);
-  document.querySelectorAll('.cotab').forEach((t,j)=>t.classList.toggle('on',j===k));
-  renderCoBody(c);
-}
-
-/* 3개 함수를 ../domain/org-save.js로 옮겼다 — 이 파일에서도 쓰고, 옛 경로로 가져가는 곳도 있어 다시 내보낸다 */
-import { upsertCompanyRow, patchOrgFields, batchUpsertCompanies, applyOrgLocal } from '../domain/org-save.js';
+/* «기업 상세 화면»은 ../features/companies/co-detail.js로 떼어 냈다 — 그 파일이 스스로 window에 건다 */
 export { upsertCompanyRow, patchOrgFields, batchUpsertCompanies } from '../domain/org-save.js';
-
-/* 4개 함수를 ../domain/orgs.js로 옮겼다 — 이 파일에서도 쓰고, 옛 경로로 가져가는 곳도 있어 다시 내보낸다 */
-import { suggestSector, ensureOrgsForNames, reloadOrgs, orgIdForName } from '../domain/orgs.js';
 export { suggestSector, ensureOrgsForNames, reloadOrgs, orgIdForName } from '../domain/orgs.js';
-
-/* ── 기업 신규 등록 ──
-   전에는 기업이 연락처에서 파생됐기 때문에, 담당자를 모르는 회사는 등록할 방법이
-   아예 없었다. 잠재 고객사나 시공 벤더를 먼저 적어두고 나중에 사람을 붙일 수 있게
-   한다. 이름이 같은 기업(옛 이름 포함)이 이미 있으면 새로 만들지 않고 알린다. */
-export async function createOrg({ nameKo, nameEn, kind, sectors, country, website, bizNo, notes, products, phone, email }){
-  const name = (nameKo || nameEn || '').trim();
-  if(!name) return { ok: false, error: '기업명을 입력해주세요.' };
-
-  const dup = findOrgByName(name, normalizeCompanyKey);
-  if(dup) return { ok: false, error: `이미 등록된 기업이에요 — ${orgName(dup)}`, org: dup };
-
-  const now = new Date().toISOString();
-  const rec = {
-    name_ko: nameKo || '', name_en: nameEn || '', abbr: abbrOf(name), aliases: '',
-    kind: kind || '잠재고객사', status: '활성',
-    sectors: joinSectors(sectors || []), country: country || '', hq: country || '',
-    website: website || '', biz_no: bizNo || '', cat_code: '', notes: notes || '',
-    products: products || '', phone: phone || '', email: email || '',
-    source: '수동 등록', created_at: now, updated_at: now,
-  };
-  const r = await postToSheet({ sheet: 'orgs', action: 'upsert', data: rec }, '기업 등록');
-  if(!r.ok) return { ok: false, error: '저장에 실패했어요.' };
-
-  ORGS.push({ id: r.id, ...rec });
-  buildCoDB(); buildCoCAT(); renderCoList();
-  trackAction('add', '기업 등록', name, `<b>${escapeHtml(name)}</b> 등록`);
-  return { ok: true, id: r.id };
-}
-
-// ── 카테고리 코드 부여 (PREFIX-NNN, 이미 있으면 재계산하지 않음) (원본 4269~4281행) ──
-function assignCategoryCode(company, prefix){
-  if(company.catCode) return;
-  let maxSeq = 0;
-  CO_DB.forEach(co => {
-    if(co.catCode && co.catCode.startsWith(prefix+'-')){
-      const seq = parseInt(co.catCode.slice(prefix.length+1), 10);
-      if(!isNaN(seq) && seq > maxSeq) maxSeq = seq;
-    }
-  });
-  company.catCode = `${prefix}-${String(maxSeq+1).padStart(3,'0')}`;
-  upsertCompanyRow(company);
-}
-
-/* ══════════════════════════════════════════
-   기업 필드 인라인 편집 — Twenty Record Table 벤치마킹
-   (원본은 editCoNotes/editCoWebsite/editCoCountry/editCoAbbr/editCoSource가
-   각각 화면 중앙 모달을 띄우고 별도 저장 버튼(saveCoNotes 등)을 눌러야 저장되는
-   방식이었음. 여기서는 클릭한 span 자리에서 바로 input/textarea로 바뀌어
-   Enter 또는 포커스 아웃 시 저장, Escape로 취소하는 인라인 편집으로 개선함.
-   저장 로직(upsertCompanyRow → GS_URL companies 시트 upsert)은 원본 그대로.
-══════════════════════════════════════════ */
-const CO_TEXT_FIELDS = {
-  notes:   { placeholder: '이 기업에 대한 메모를 남겨보세요', multiline: true,  empty: '메모 추가' },
-  /* 섹터가 «고르는 값»이라면 이쪽은 «적는 값» — 회사가 실제로 하는 일을
-     명단에 적힌 그대로 담는다(예: 렌탈,포토 / 음향, 통역시스템). */
-  products:{ placeholder: '예: LED, 렌탈,포토 — 쉼표로 여러 개',  multiline: false, empty: '취급 품목 추가' },
-  /* 담당자를 아직 못 찾은 회사의 대표번호 — 사람이 아니라 회사에 붙는다 */
-  phone:   { placeholder: '02-000-0000',                      multiline: false, empty: '대표 전화 추가' },
-  email:   { placeholder: 'info@example.com',                 multiline: false, empty: '대표 메일 추가' },
-  /* 프로그램북 원고에서 옮겨 온 값 — 행사가 아니라 회사에 붙는다 */
-  address: { placeholder: '예: 서울시 강남구 …',               multiline: true,  empty: '주소 추가' },
-  intro:   { placeholder: '회사소개',                          multiline: true,  empty: '회사소개 추가' },
-  website: { placeholder: 'https://example.com',              multiline: false, empty: '웹사이트 추가', isLink: true },
-  country: { placeholder: '예: 한국',                          multiline: false, empty: '국가 추가' },
-  abbr:    { placeholder: '예: SK',                            multiline: false, empty: '약어 추가' },
-  source:  { placeholder: '예: 홈페이지 조사',                  multiline: false, empty: '출처 추가' },
-  nameKo:  { placeholder: '회사명(국문)',                       multiline: false, empty: '국문명 추가' },
-  nameEn:  { placeholder: '회사명(영문)',                       multiline: false, empty: '영문명 추가' },
-  // 세금계산서를 끊을 때 필요한데 지금까지 적어둘 곳이 없어 메모에 섞여 있었다
-  bizNo:   { placeholder: '000-00-00000',                     multiline: false, empty: '사업자번호 추가' },
-};
-
-function renderCoFieldDisplay(key, field){
-  const c = CO_DB.find(x => x.key === key);
-  const cfg = CO_TEXT_FIELDS[field];
-  const span = document.getElementById(`co-${field}-${key}`);
-  if(!c || !cfg || !span) return;
-  const val = c[field] || '';
-  if(cfg.isLink && val){
-    span.innerHTML = parseLinks(val).map(({ url, label }) => {
-      const href = safeUrl(url);
-      const a = href
-        ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(url)}</a>`
-        : escapeHtml(url);
-      return a + (label ? ` <span style="color:var(--i5);font-size:10px">${escapeHtml(label)}</span>` : '');
-    }).join('<span style="color:var(--i6)"> · </span>');
-  } else {
-    span.textContent = val || cfg.empty;
-  }
-}
-
-async function saveCoTextField(key, field, rawValue){
-  const c = CO_DB.find(x => x.key === key);
-  if(!c) return;
-  const before = c[field] || '';
-  c[field] = rawValue.trim();
-
-  /* 사명이 바뀌면 옛 이름을 남긴다. 이름은 더 이상 식별자가 아니라 데이터가
-     끊기지는 않지만, 옛 이름으로 찾는 사람과 옛 이름으로 들어오는 업로드가
-     있다 — alias에 있어야 같은 회사로 이어진다. */
-  const fields = [field];
-  if((field === 'nameKo' || field === 'nameEn') && before && before !== c[field]){
-    if(!c.aliases.includes(before)){ c.aliases = [...c.aliases, before]; fields.push('aliases'); }
-  }
-  await upsertCompanyRow(c, fields);
-  /* 헤더는 "적어 둔 것"만 줄로 보여주고 빈 칸은 접어 둔다 — 값이 생기거나
-     지워지면 그 줄이 어느 쪽에 속하는지가 바뀌므로 통째로 다시 그린다.
-     한 칸만 갈아 끼우면 방금 채운 값이 접힌 쪽에 남아 안 보인다. */
-  renderCoDetail(c);
-  if(field === 'abbr' || field === 'nameKo' || field === 'nameEn') renderCoList();
-  if(field === 'nameKo' || field === 'nameEn'){
-    // 기업 이름만 바꾸고 끝나면 마스터DB는 연락처 원본 orgKo/orgEn을 그대로
-    // 보여주는 화면이라 반영이 안 된 것처럼 보인다 — mergeCompanies와 동일하게
-    // 소속 연락처 전원의 org 필드도 함께 갱신한다.
-    const orgField = field === 'nameKo' ? 'orgKo' : 'orgEn';
-    const changed = [];
-    (c.contacts||[]).forEach(cc => {
-      const contact = contacts.find(x => x.id === cc.id);
-      if(contact && contact[orgField] !== c[field]){
-        contact[orgField] = c[field];
-        changed.push(contact);
-      }
-    });
-    if(changed.length){
-      await postToSheet({
-        sheet: 'contacts', action: 'batchUpsert',
-        rows: changed.map(ct => [ct.id,ct.nameKo,ct.nameEn,ct.orgKo,ct.orgEn,ct.titleKo,ct.titleEn,ct.deptKo,ct.deptEn,
-          ct.country,ct.cat,ct.lang,ct.source,ct.date,ct.status,ct.email1,ct.email2,ct.phone1,ct.phone2,
-          ct.beat,ct.products,ct.tags||'',ct.org_id||'']),
-      }, '기업명 변경 - 연락처 반영');
-      try { renderMDB(); } catch(e){}
-    }
-  }
-}
-
-function startCoInlineEdit(key, field){
-  const c = CO_DB.find(x => x.key === key);
-  const cfg = CO_TEXT_FIELDS[field];
-  if(!c || !cfg) return;
-  const span = document.getElementById(`co-${field}-${key}`);
-  if(!span) return;
-  if(span.querySelector('input,textarea')) return; // 이미 편집 중이면 무시
-
-  const current = c[field] || '';
-  const tag = cfg.multiline ? 'textarea' : 'input';
-  const sizeStyle = cfg.multiline
-    ? 'width:220px;height:64px;resize:vertical;font-size:11px;padding:4px 6px;font-family:inherit'
-    : 'width:160px;font-size:11px;padding:2px 6px;font-family:inherit';
-  span.innerHTML = `<${tag} class="fi" id="co-inline-input-${field}-${escapeHtml(key)}" style="${sizeStyle}" placeholder="${escapeHtml(cfg.placeholder)}"></${tag}>`;
-  const input = document.getElementById(`co-inline-input-${field}-${key}`);
-  if(!input) return;
-  input.value = current;
-  input.addEventListener('click', e => e.stopPropagation());
-  input.focus();
-  if(input.select) input.select();
-
-  let settled = false;
-  const commit = () => {
-    if(settled) return; settled = true;
-    saveCoTextField(key, field, input.value);
-  };
-  const cancel = () => {
-    if(settled) return; settled = true;
-    renderCoFieldDisplay(key, field);
-  };
-  input.addEventListener('blur', commit);
-  input.addEventListener('keydown', (e) => {
-    e.stopPropagation();
-    if(e.key === 'Enter' && !cfg.multiline){ e.preventDefault(); input.blur(); }
-    if(e.key === 'Escape'){ e.preventDefault(); input.removeEventListener('blur', commit); cancel(); }
-  });
-}
-
-export function editCoNameKo(key){ startCoInlineEdit(key, 'nameKo'); }
-export function editCoNameEn(key){ startCoInlineEdit(key, 'nameEn'); }
-export function editCoNotes(key){ startCoInlineEdit(key, 'notes'); }
-export function editCoProducts(key){ startCoInlineEdit(key, 'products'); }
-export function editCoPhone(key){ startCoInlineEdit(key, 'phone'); }
-export function editCoEmail(key){ startCoInlineEdit(key, 'email'); }
-export function editCoWebsite(key){ startCoInlineEdit(key, 'website'); }
-export function editCoAddress(key){ startCoInlineEdit(key, 'address'); }
-export function editCoIntro(key){ startCoInlineEdit(key, 'intro'); }
-export function editCoCountry(key){ startCoInlineEdit(key, 'country'); }
-export function editCoAbbr(key){ startCoInlineEdit(key, 'abbr'); }
-export function editCoSource(key){ startCoInlineEdit(key, 'source'); }
-export function editCoBizNo(key){ startCoInlineEdit(key, 'bizNo'); }
-
-/* ── 소개서 PDF로 회사소개 채우기 ──
-   업체가 보낸 소개서·견적서는 대개 글자가 아니라 그림으로 된 PDF다. 그래서 글자를
-   뽑지 않고 쪽마다 JPEG로 바꿔 Claude에게 보여 준다(backend-node/routes/ai.js
-   /org-pdf-summary). PDF 원본을 그대로 보내면 서버 요청 한도(4.5MB)에 걸린다.
-   요약은 회사소개에 넣고(이미 있으면 덮을지 묻는다), 대표 연락처·품목은 빈 칸만 채운다. */
-const PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
-let pdfjsReady = null;
-function loadPdfjs(){
-  return pdfjsReady || (pdfjsReady = new Promise((ok, fail) => {
-    const s = document.createElement('script');
-    s.src = PDFJS + 'pdf.min.js';
-    s.onload = () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js'; ok(window.pdfjsLib); };
-    s.onerror = () => { pdfjsReady = null; fail(new Error('PDF 읽기 도구를 못 불러왔어요')); };
-    document.head.appendChild(s);
-  }));
-}
-async function pdfToJpegs(file, maxPages){
-  const lib = await loadPdfjs();
-  const doc = await lib.getDocument({ data: await file.arrayBuffer() }).promise;
-  const out = [];
-  for(let i = 1; i <= Math.min(doc.numPages, maxPages); i++){
-    const page = await doc.getPage(i);
-    const base = page.getViewport({ scale: 1 });
-    const vp = page.getViewport({ scale: Math.min(2, 1400 / Math.max(base.width, base.height)) }); // 긴 변 1400px — 작은 글씨(단가표)까지 읽힌다
-    const cv = document.createElement('canvas');
-    cv.width = vp.width; cv.height = vp.height;
-    await page.render({ canvasContext: cv.getContext('2d'), viewport: vp }).promise;
-    out.push(cv.toDataURL('image/jpeg', 0.7).split(',')[1]);
-  }
-  return out;
-}
-export function fillCoIntroFromPdf(key){
-  const c = CO_DB.find(x => x.key === key);
-  if(!c) return;
-  const inp = document.createElement('input');
-  inp.type = 'file'; inp.accept = 'application/pdf,.pdf'; inp.multiple = true;
-  inp.onchange = async () => {
-    const files = [...inp.files].slice(0, 5);
-    if(!files.length) return;
-    const msg = (t) => { const el = document.getElementById(`co-pdf-msg-${key}`); if(el) el.textContent = t; };
-    try {
-      msg('PDF 읽는 중…');
-      let left = 30;
-      const sent = [];
-      for(const f of files){
-        if(left <= 0) break;
-        const pages = await pdfToJpegs(f, left);
-        left -= pages.length;
-        sent.push({ name: f.name, pages });
-      }
-      msg('요약하는 중… (30초쯤)');
-      const r = await aiOrgPdfSummary({ name: c.nameKo || c.nameEn || '', files: sent });
-      if(!r.ok){ msg(''); alert('요약 실패 — ' + (r.error || '')); return; }
-      msg('');
-      if(!r.intro){ alert('문서에서 요약할 내용을 못 찾았어요.'); return; }
-      if(c.intro && c.intro.trim() && !confirm(`회사소개가 이미 있습니다. 새 요약으로 바꿀까요?\n\n── 새 요약 ──\n${r.intro}`)) return;
-      const fields = ['intro'];
-      c.intro = r.intro;
-      ['phone', 'email', 'website', 'address', 'products'].forEach(k => {
-        if(r[k] && !String(c[k] || '').trim()){ c[k] = r[k]; fields.push(k); }
-      });
-      await upsertCompanyRow(c, fields);
-      renderCoDetail(c);
-      msg(`✓ ${files.map(f => f.name).join(', ')} 요약 저장`);
-    } catch(e){ msg(''); alert('PDF를 읽지 못했어요 — ' + e.message); }
-  };
-  inp.click();
-}
-
-/* ── 기업 종류 ──
-   무엇을 관리하는 회사인지에 따라 화면에서 다르게 다룬다. 값이 셋뿐이라
-   팝오버 대신 그 자리에서 순환시킨다 — 누를 때마다 다음 종류로 넘어간다. */
-export async function editCoKind(key){
-  const c = CO_DB.find(x => x.key === key);
-  if(!c) return;
-  const i = ORG_KINDS.findIndex(k => k.key === c.kind);
-  const next = ORG_KINDS[(i + 1) % ORG_KINDS.length];
-  const before = c.kind;
-  c.kind = next.key;
-  renderCoDetail(c);
-  const r = await upsertCompanyRow(c, ['kind']);
-  if(!r || !r.ok){
-    c.kind = before;
-    renderCoDetail(c);
-    alert('기업 종류 저장에 실패했어요.');
-    return;
-  }
-  trackAction('edit', '기업 종류 변경', c.nameKo || c.nameEn,
-    `<b>${escapeHtml(c.nameKo || c.nameEn)}</b> 종류 ${escapeHtml(orgKindOf(before)?.label || '없음')} → ${escapeHtml(next.label)}`,
-    changed('orgs', c.key, { kind: before }, { kind: next.key },
-      { kind: 'company', id: c.key, field: 'kind' }));
-  renderCoList();
-}
-
-/* ── 기업 섹터 편집(복수 선택) — 클릭한 필드 바로 아래 앵커된 팝오버로 인라인 편집 ──
-   원본은 화면 중앙 고정 모달이었음. Twenty의 select 셀 편집(클릭한 셀 위치에
-   드롭다운이 뜨는 방식)을 벤치마킹해 앵커 팝오버 + 바깥 클릭 시 닫힘으로 개선.
-   저장 로직(saveCoSector 내부의 upsertCompanyRow/contacts upsert)은 원본 그대로. */
-function handleCoSectorOutsideClick(e){
-  const pop = document.getElementById('co-sector-popover');
-  if(pop && !pop.contains(e.target)) closeCoSectorPopover();
-}
-export function closeCoSectorPopover(){
-  const pop = document.getElementById('co-sector-popover');
-  if(pop) pop.remove();
-  document.removeEventListener('mousedown', handleCoSectorOutsideClick);
-}
-
-/* ══════════════════════════════════════════
-   분야와 섹터를 나란히
-
-   화면에는 섹터만 있었다. 그런데 «임상 IT·데이터»를 보고 그게 바이오 분야인지
-   아는 건 그 목록을 외운 사람뿐이다. 분야는 섹터에서 파생되니 계산할 수
-   있는데도 보여주지 않아서, 옆 사람에게 물어야 알 수 있었다.
-
-   섹터를 모르는 채로 분야만 정해야 할 때도 있다 — 건축 행사에서 만난 회사인데
-   설계인지 시공인지는 아직 모르는 식이다. 그럴 때 분야 배지를 눌러 분야만
-   고르면, 그 분야의 «업종 미정» 자리로 들어간다. 나중에 섹터를 알면 그때
-   옮기면 된다. */
-function coDomainsOf(c){
-  const out = new Set();
-  (c.sectors || []).forEach(name => {
-    const sec = findSectorByName(name);
-    if(sec) domainOfSector(sec).forEach(d => out.add(d));
-  });
-  return [...out];
-}
-
-function coDomainPill(c){
-  const doms = coDomainsOf(c);
-  const label = doms.length ? doms.map(d => domainName(d)).join(' · ') : '분야 미정';
-  return `<span class="pill ${doms.length ? 'p-teal' : 'p-gray'}" style="cursor:pointer"
-      onclick="editCoDomain('${escAttr(c.key)}')" title="클릭하여 분야 지정 — 섹터를 몰라도 분야만 정할 수 있어요">
-      <span id="co-domain-${escapeHtml(c.key)}">${escapeHtml(label)}</span></span>`;
-}
-
-export function closeCoDomainPopover(){
-  const el = document.getElementById('co-domain-pop');
-  if(el) el.remove();
-}
-
-export function editCoDomain(key){
-  const c = CO_DB.find(x => x.key === key);
-  if(!c) return;
-  closeCoDomainPopover();
-  const cur = coDomainsOf(c);
-
-  const wrap = document.createElement('div');
-  wrap.id = 'co-domain-pop';
-  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9999;'
-    + 'display:flex;align-items:center;justify-content:center;padding:16px';
-  wrap.onclick = (e) => { if(e.target === wrap) closeCoDomainPopover(); };
-  wrap.innerHTML = `<div style="background:var(--W);border-radius:12px;padding:20px;width:100%;max-width:400px;
-      max-height:80vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.2)" onclick="event.stopPropagation()">
-    <div style="font-size:14px;font-weight:700;margin-bottom:4px">분야 지정</div>
-    <div style="font-size:11.5px;color:var(--i3);line-height:1.6;margin-bottom:12px">
-      섹터를 아직 모르면 분야만 골라 두세요 — 그 분야의 «업종 미정» 자리로 들어가고,
-      나중에 섹터를 알면 옆의 섹터 배지에서 옮기면 됩니다.
-      ${cur.length ? `<br>지금: <b>${escapeHtml(cur.map(d => domainName(d)).join(' · '))}</b>` : ''}
-    </div>
-    ${DOMAINS.map(d => `<button class="btn" style="width:100%;justify-content:flex-start;margin-bottom:5px;font-size:12px"
-      data-dom="${escapeHtml(d.id)}">${escapeHtml(d.name)}${cur.includes(d.id) ? ' ✓' : ''}</button>`).join('')
-      || '<div style="font-size:11.5px;color:var(--i4)">설정 › 기업 분류에서 분야를 먼저 만들어주세요.</div>'}
-    <button class="btn bs" style="width:100%;justify-content:center;margin-top:8px"
-      onclick="closeCoDomainPopover()">취소</button>
-  </div>`;
-  document.body.appendChild(wrap);
-
-  wrap.querySelectorAll('[data-dom]').forEach(b => {
-    b.onclick = async () => {
-      closeCoDomainPopover();
-      await assignCoDomain(c, b.dataset.dom);
-    };
-  });
-}
-
-/* 분야만 정한다 — 그 분야에 이미 섹터가 붙어 있으면 아무것도 하지 않는다.
-   덮어쓰면 손으로 골라 둔 섹터가 «업종 미정»으로 후퇴한다. */
-async function assignCoDomain(c, domainId){
-  if(coDomainsOf(c).includes(domainId)) return;
-  const name = `${domainName(domainId)} 업종 미정`;
-  let sec = findSectorByName(name);
-  if(!sec){
-    sec = { id: slugifySectorName(name), name, parent: null, domain: domainId, canonical: '' };
-    COMPANY_SECTORS.push(sec);
-    const r = await upsertSectorRow(sec);
-    if(r && r.ok === false){
-      const i = COMPANY_SECTORS.indexOf(sec);
-      if(i >= 0) COMPANY_SECTORS.splice(i, 1);
-      alert(`«${name}» 섹터를 만들지 못했어요. 네트워크를 확인하고 다시 시도해주세요.`);
-      return;
-    }
-  }
-  applyCoSectors(c, [...(c.sectors || []), sec.name]);
-  renderCoDetail(c);
-  try { buildCoCAT(); } catch(e){}
-}
-
-export function editCoSector(key){
-  const c = CO_DB.find(x => x.key === key);
-  if(!c) return;
-  closeCoSectorPopover();
-
-  const anchorSpan = document.getElementById('co-sector-' + key);
-  const anchor = anchorSpan ? anchorSpan.parentElement : null;
-  const rect = anchor ? anchor.getBoundingClientRect() : { bottom: 80, left: 20 };
-
-  const currentSectors = c.sectors && c.sectors.length ? c.sectors : (c.sector ? [c.sector] : []);
-
-  const checkboxRow = (s) => {
-    const name   = typeof s==='string' ? s : s.name;
-    const parent = typeof s==='string' ? null : s.parent;
-    const checked = currentSectors.includes(name) ? 'checked' : '';
-    const indent  = parent ? 'margin-left:16px' : '';
-    const prefix  = parent ? '↳ ' : '';
-    const label   = parseSectorScope(name).plainName;
-    return `<label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;${indent}">
-      <input type="checkbox" value="${escapeHtml(name)}" ${checked} style="width:13px;height:13px;cursor:pointer">
-      <span style="font-size:12px">${prefix}${escapeHtml(label)}</span>
-    </label>`;
-  };
-
-  // 이 기업이 실제로 참가한 행사(및 공통)별로 섹터를 묶어서 보여준다 —
-  // 참가하지도 않은 다른 행사의 섹터 트리까지 뒤섞여 나오지 않게 함
-  const companyEventShorts = [...new Set((c.events||[]).map(e => e.short))];
-  const groups = [{ label: '공통', shorts: [null] }, ...companyEventShorts.map(short => ({ label: short, shorts: [short] }))];
-
-  const groupsHtml = groups.map(g => {
-    const items = COMPANY_SECTORS.filter(s => {
-      const scope = parseSectorScope(typeof s==='string'?s:s.name).eventShort;
-      return g.shorts.includes(scope);
-    });
-    if(!items.length) return '';
-    return `<div style="margin-bottom:8px">
-      <div style="font-size:10px;font-weight:700;color:var(--i4);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">${escapeHtml(g.label)}</div>
-      ${items.map(checkboxRow).join('')}
-    </div>`;
-  }).join('');
-
-  const pop = document.createElement('div');
-  pop.id = 'co-sector-popover';
-  pop.style.cssText = `position:fixed;top:${rect.bottom+4}px;left:${rect.left}px;background:var(--W);border:1px solid var(--i6);border-radius:8px;padding:10px 12px;width:260px;max-height:320px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.16);z-index:9999`;
-  pop.onclick = e => e.stopPropagation();
-  pop.innerHTML = `
-    <div style="font-size:11px;color:var(--i4);margin-bottom:8px">섹터 선택 (복수 가능) — 이 기업이 참가한 행사별로 묶여 있어요</div>
-    ${groupsHtml || '<div style="font-size:12px;color:var(--i4)">등록된 섹터 없음</div>'}
-    <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:10px">
-      <button class="btn bs" style="font-size:11px;padding:2px 8px" onclick="closeCoSectorPopover()">취소</button>
-      <button class="btn bp" style="font-size:11px;padding:2px 8px" onclick="saveCoSector('${escAttr(key)}')">저장</button>
-    </div>`;
-  document.body.appendChild(pop);
-  setTimeout(() => document.addEventListener('mousedown', handleCoSectorOutsideClick), 0);
-}
-
-/* 기업의 섹터 배열을 교체하고 연락처 beat/companies 시트에 반영 — 섹터 선택
-   팝오버 저장과 드래그&드롭 이동이 이 로직을 공유한다. */
-export function applyCoSectors(c, newSectors){
-  c.sectors = newSectors;
-  c.sector  = newSectors[0] || '';
-  const el = document.getElementById('co-sector-' + c.key);
-  if(el) el.textContent = newSectors.join(', ') || '미분류';
-  const beatVal = joinSectors(newSectors);
-  // ⚠ 수정: 기존엔 소속 연락처 전원에게 개별 POST를 병렬 발사해서
-  // (연락처 100명이면 100개 동시 요청) Apps Script 과부하로 일부만
-  // 성공하는 불일치가 있었다 — batchUpsert 한 번으로 묶는다.
-  const changedContacts = [];
-  c.contacts.forEach(ct => {
-    const contact = contacts.find(x => x.id === ct.id);
-    if(contact){
-      contact.beat = beatVal;
-      changedContacts.push(contact);
-    }
-  });
-  if(changedContacts.length){
-    postToSheet({
-      sheet: 'contacts',
-      action: 'batchUpsert',
-      rows: changedContacts.map(ct2 => [ct2.id,ct2.nameKo,ct2.nameEn,ct2.orgKo,ct2.orgEn,
-        ct2.titleKo,ct2.titleEn,ct2.deptKo,ct2.deptEn,
-        ct2.country,ct2.cat,ct2.lang,ct2.source,ct2.date,
-        ct2.status,ct2.email1,ct2.email2,ct2.phone1,ct2.phone2,
-        ct2.beat,ct2.products,ct2.tags||'',ct2.org_id||'']),
-    }, '기업 섹터 반영');
-  }
-  upsertCompanyRow(c);
-}
-
-export function saveCoSector(key){
-  const pop = document.getElementById('co-sector-popover');
-  const checkboxes = pop ? pop.querySelectorAll('input[type=checkbox]:checked') : [];
-  const newSectors = [...checkboxes].map(cb => cb.value);
-  const c = CO_DB.find(x => x.key === key);
-  if(c){
-    applyCoSectors(c, newSectors);
-    buildCoCAT();
-    renderCoList();
-  }
-  closeCoSectorPopover();
-}
-
-/* ══════════════════════════════════════════
-   기업 리스트 → 사이드바 섹터로 드래그&드롭 이동 (신규)
-   드래그한 기업의 섹터를 드롭한 섹터 하나로 통째로 교체한다("이동" 의미 —
-   기존에 여러 섹터가 있었어도 드롭한 섹터 하나로 대체됨).
-══════════════════════════════════════════ */
-let _draggedCoKey = null;
-export function onCoDragStart(e, key){
-  _draggedCoKey = key;
-  e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setData('text/plain', key); // Firefox 등에서 드래그 시작 요건 충족용
-}
-export function onCoDropToSector(e, sectorName){
-  e.preventDefault();
-  const key = _draggedCoKey;
-  _draggedCoKey = null;
-  if(!key || !sectorName) return;
-  const c = CO_DB.find(x => x.key === key);
-  if(!c) return;
-  const beforeSectors = (c.sectors || []).join(', ');
-  applyCoSectors(c, [sectorName]);
-  trackAction('edit', '기업 섹터 이동(드래그)', c.nameKo||c.nameEn,
-    `"${c.nameKo||c.nameEn}" 섹터를 드래그해서 "${parseSectorScope(sectorName).plainName}"(으)로 변경`,
-    changed('orgs', c.key, { sector: beforeSectors }, { sector: sectorName },
-      { kind: 'company', id: c.key, field: 'sectors' }));
-  buildCoCAT();
-  renderCoList();
-  if(selCo === key) renderCoDetail(c);
-  if(!selCo) renderCoDashboard();
-}
-
-/* ── 카테고리 코드 부여 (prefix 선택 UI) — 원본에서 이미 인라인 방식이었음 (원본 4444~4459행) ── */
-export function showAssignCatCodeUI(key){
-  const el = document.getElementById('co-catcode-' + key);
-  if(!el) return;
-  const opts = CATEGORY_CODES.map(cc => `<option value="${cc.code}">${cc.code} · ${escapeHtml(cc.label)}</option>`).join('');
-  el.innerHTML = `<select id="co-catcode-sel-${escapeHtml(key)}" class="fi" style="font-size:11px;padding:2px 6px" onchange="doAssignCatCode('${escAttr(key)}')">
-    <option value="">prefix 선택</option>${opts}
-  </select>`;
-}
-export function doAssignCatCode(key){
-  const c = CO_DB.find(x => x.key === key);
-  const sel = document.getElementById('co-catcode-sel-' + key);
-  if(!c || !sel || !sel.value) return;
-  assignCategoryCode(c, sel.value);
-  renderCoDetail(c);
-  renderCoList();
-}
-/* «기업 화면에서 행사 참여 이력 직접 추가»은 ../features/companies/add-co-event.js로 떼어 냈다 — 그 파일이 스스로 window에 건다 */
-
-/* ══════════════════════════════════════════
-   기업 상세 탭 바디 — 행사 참여 이력 / 담당자 / 요약 (원본 4554~4610행)
-══════════════════════════════════════════ */
-function renderCoBody(c){
-  const b=document.getElementById('cotb');
-  if(!b || !c) return;
-  if(coTab===0)b.innerHTML=renderTL(c);
-  else if(coTab===1)b.innerHTML=renderCoTrade(c);
-  else if(coTab===2)b.innerHTML=renderCoCon(c);
-  else b.innerHTML=renderCoSum(c);
-}
-/* ══════════════════════════════════════════
-   거래 — 전시에 쌓인 부스·청구·입금을 기업 관점에서 본다
-
-   같은 값이 전시 탭에도 있지만 거기서는 "이번 행사의 51개사"를 보는 화면이라,
-   "이 회사와 그동안 얼마나 거래했나"는 알 수 없었다. 판정과 금액은 전부
-   exhibitorTradeFor(→ settleState)에서 오므로 두 탭이 다른 숫자를 말하지 않는다.
-══════════════════════════════════════════ */
-
-/* 통화가 섞이면 합산이 거짓말이 된다 — 통화별로 따로 더하고 표시도 나눠 적는다 */
-export function tradeTotals(c){
-  const by = {};
-  (c.trade || []).filter(t => !t.cancelled).forEach(t => {
-    const k = t.cur || 'KRW';
-    if(!by[k]) by[k] = { billed: 0, paid: 0, balance: 0 };
-    by[k].billed  += t.billed;
-    by[k].paid    += t.paid;
-    by[k].balance += t.balance;
-  });
-  const curs = Object.keys(by);
-  const sum = (f) => curs.reduce((a, k) => a + by[k][f], 0);
-  return { by, curs, billed: sum('billed'), paid: sum('paid'), balance: sum('balance') };
-}
-
-/* 통화가 하나면 그대로, 섞였으면 통화별로 끊어 적는다.
-   합쳐서 한 숫자로 보여주면 원화와 달러를 더한 거짓말이 된다. */
-function tradeMoney(t, field){
-  if(!t.curs.length) return '-';
-  return t.curs.map(k => fmtMoney(t.by[k][field], k)).join(' + ');
-}
-
-const TRADE_LABEL = { settled:'완납 처리', paid:'입금 완료', partial:'부분 입금',
-  unpaid:'미입금', over:'초과 입금', none:'청구 없음' };
-const TRADE_CLS = { settled:'p-gray', paid:'p-green', partial:'p-amber',
-  unpaid:'p-red', over:'p-blue', none:'p-gray' };
-
-function renderCoTrade(c){
-  const list = (c.trade || []).slice().sort((a, b) => String(b.eventId).localeCompare(String(a.eventId)));
-  if(!list.length) return `<div class="empty">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-    <p>전시 참가·거래 이력 없음</p></div>`;
-
-  const t = tradeTotals(c);
-  const head = t.curs.length ? `<div class="cost" style="margin-bottom:14px">
-    <div class="cosi"><div class="cosn" style="font-size:15px">${tradeMoney(t, 'billed')}</div><div class="cosl">누적 청구</div></div>
-    <div class="cosi"><div class="cosn" style="font-size:15px">${tradeMoney(t, 'paid')}</div><div class="cosl">누적 입금</div></div>
-    <div class="cosi"><div class="cosn" style="font-size:15px;color:${t.balance > 0 ? 'var(--re)' : 'var(--ge)'}">${tradeMoney(t, 'balance')}</div><div class="cosl">미수금</div></div>
-  </div>` : '';
-
-  const rows = list.map(x => {
-    const ev = EVENT_LIST.find(e => e.key === x.eventId);
-    const col = ev ? ev.color : '#9C9890';
-    const pct = x.billed ? Math.min(100, Math.round(x.paid / x.billed * 100)) : 0;
-    return `<div class="tlc" style="border-left:3px solid ${col};${x.cancelled ? 'opacity:.55' : ''}">
-      <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:6px">
-        <span class="tlev">${escapeHtml(ev ? (ev.short || ev.key) : x.eventId)}</span>
-        ${x.cancelled ? '<span class="pill p-gray">참가 취소</span>' : ''}
-        ${x.booth ? `<span class="pill p-gray">부스 ${escapeHtml(x.booth)}</span>` : ''}
-        ${x.grade ? `<span class="pill p-gold">${escapeHtml(x.grade)}</span>` : ''}
-        ${x.openInquiries ? `<span class="pill p-amber">미답변 문의 ${x.openInquiries}</span>` : ''}
-        <button class="btn bs" style="margin-left:auto;font-size:10.5px"
-          onclick="event.stopPropagation();goToExhibitor('${escAttr(x.exhibitorId)}','${escAttr(x.eventId)}')">전시에서 열기</button>
-      </div>
-      ${x.billed ? `
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11.5px;color:var(--i3)">
-          <span class="pill ${TRADE_CLS[x.state] || 'p-gray'}">${escapeHtml(TRADE_LABEL[x.state] || x.state)}</span>
-          <span>청구 <b style="color:var(--i1)">${fmtMoney(x.billed, x.cur)}</b></span>
-          <span>입금 <b style="color:var(--i1)">${fmtMoney(x.paid, x.cur)}</b></span>
-          ${x.balance > 0 ? `<span>미수 <b style="color:var(--re)">${fmtMoney(x.balance, x.cur)}</b></span>` : ''}
-          ${x.overdue && x.balance > 0 ? `<span style="color:var(--re)">기한 지남 (${escapeHtml(x.due)})</span>`
-            : x.due ? `<span style="color:var(--i4)">기한 ${escapeHtml(x.due)}</span>` : ''}
-        </div>
-        <div class="br" style="margin-top:7px"><div class="brt"><div class="brf" style="width:${pct}%;background:${
-          x.state === 'unpaid' ? 'var(--re)' : x.state === 'partial' ? 'var(--am)' : 'var(--g)'}"></div></div></div>`
-        : '<div style="font-size:11.5px;color:var(--i4)">청구 내역 없음</div>'}
-    </div>`;
-  }).join('');
-
-  return head + rows;
-}
-
-/* 기업에서 전시 상세로 바로 넘어간다 — 두 화면을 오가며 다시 찾을 필요가 없다 */
-export function goToExhibitor(exhId, evKey){
-  try {
-    window.switchApp('exh', null);
-    window.setExhEvent?.(evKey);
-    window.renderExh?.();
-    setTimeout(() => window.openExhDr?.(exhId, 'billing'), 60);   // 정산 탭으로
-  } catch(e){ console.warn('[company-tab] 전시로 이동 실패:', e); }
-}
-
-function renderTL(c){
-  const addBtn = `<div style="display:flex;justify-content:flex-end;margin-bottom:10px">
-    <button class="btn bp" style="font-size:11px" onclick="openAddCoEventModal('${escAttr(c.key)}')">+ 참여 이력 추가</button>
-  </div>`;
-  if(!c.events.length)return addBtn + `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><p>행사 참여 이력 없음</p></div>`;
-  const byY={};c.events.forEach(e=>{if(!byY[e.year])byY[e.year]=[];byY[e.year].push(e)});
-  return addBtn + `<div class="tl">${Object.entries(byY).sort((a,b)=>b[0]-a[0]).map(([yr,evs])=>`
-    <div class="tlyr">${yr}</div>${evs.map(e=>`
-      <div class="tlit"><div class="tldt" style="background:${e.color}"></div>
-        <div class="tlc">
-          <div class="tltp"><div class="tlev">${escapeHtml(e.name)}</div><div class="tldt2">${escapeHtml(e.date)}</div></div>
-          <div class="tlloc">📍 ${escapeHtml(e.loc)}</div>
-          <div class="tlpl">${e.roles.map(r=>`<span class="pill ${RP[r]||'p-gray'}">${escapeHtml(r)}</span>`).join('')}</div>
-          ${e.people.map(p=>`<div class="tlpe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>${escapeHtml(p)}</div>`).join('')}
-          ${e.note?`<div class="tlno">${escapeHtml(e.note)}</div>`:''}
-        </div>
-      </div>`).join('')}`).join('')}</div>`;
-}
-function renderCoCon(c){
-  if(!c.contacts.length) return `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><p>담당자 없음</p></div>`;
-  return c.contacts.map(p => {
-    const nm = p.name || p.nameEn || '?';
-    const av = nm.slice(0,2);
-    const evTags = p.events.map(ev => {
-      const color = evColor(ev);
-      const short = evShort(ev);
-      return `<span class="pill" style="background:${color}18;color:${color};border:1px solid ${color}40;font-size:10px">${escapeHtml(short)}</span>`;
-    }).join('');
-    const catTag = p.cats.map(ct => `<span class="pill ${RP[ct]||'p-gray'}">${escapeHtml(ct)}</span>`).join('');
-    // openContactDr은 crm-tab.js(드로어)가 window에 등록하는 함수 — 이 모듈의 책임 범위 밖
-    return `<div class="conc" onclick="openContactDr(${p.id})" style="cursor:pointer">
-      <div class="conav">${escapeHtml(av)}</div>
-      <div style="flex:1;min-width:0">
-        <div class="connm">${escapeHtml(nm)}${p.nameEn && p.name ? `<span style="font-size:11px;color:var(--i4);font-weight:400;margin-left:6px">${escapeHtml(p.nameEn)}</span>` : ''}${leftPill(p)}</div>
-        <div class="conti">${escapeHtml(p.title||'')}</div>
-        <div class="conps" style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">${evTags}</div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0">${catTag}</div>
-    </div>`;
-  }).join('');
-}
-function renderCoSum(c){
-  const rc={};c.events.forEach(e=>e.roles.forEach(r=>{rc[r]=(rc[r]||0)+1}));
-  const mx=Math.max(1,...Object.values(rc));
-  const bc={'스폰서':'#16A34A','전시기업':'#6D28D9','연사':'#3B5BDB','BD':'#0F766E','참가자':'#9C9890','투자자':'#C97B0A'};
-  const yrs=c.events.map(e=>+e.year);
-  return`<div class="sg">
-    <div class="sc2"><div class="slbl">참여 유형 분포</div>${Object.entries(rc).map(([r,n])=>`<div class="br"><div class="brl">${escapeHtml(r)}</div><div class="brt"><div class="brf" style="width:${Math.round(n/mx*100)}%;background:${bc[r]||'#9C9890'}"></div></div><div class="brv">${n}회</div></div>`).join('')}</div>
-    <div class="sc2"><div class="slbl">관계 요약</div><div style="font-size:12px;color:var(--i2);line-height:2.1"><div>🗓 첫 참여 <strong>${yrs.length?Math.min(...yrs):'-'}년</strong></div><div>📅 최근 <strong>${yrs.length?Math.max(...yrs):'-'}년</strong></div><div>🎪 총 <strong>${c.events.length}회</strong></div><div>👤 담당자 <strong>${c.contacts.length}명</strong></div></div></div>
-  </div>
-  <div class="sc2"><div class="slbl" style="margin-bottom:7px">통합 기업명</div><div style="display:flex;gap:4px;flex-wrap:wrap">${c.branches.map(b=>`<span class="btag${b===c.mainBranch?' main':''}">${escapeHtml(b)}</span>`).join('')}</div></div>`;
-}
-
+/* «기업 필드 고치기·분야와 섹터·드래그»은 ../features/companies/co-edit.js로 떼어 냈다 — 그 파일이 스스로 window에 건다 */
+/* «기업 상세 하위 탭 — 참여 이력·담당자·요약·거래»은 ../features/companies/co-trade.js로 떼어 냈다 — 그 파일이 스스로 window에 건다 */
 /* ══════════════════════════════════════════
    initCompanyTab — router.js가 기업DB 탭으로 전환할 때 호출할 진입점
    (원본에는 별도 init 함수가 없었음 — 탭 모듈화에 맞춰 신규로 추가)
@@ -1880,43 +1030,15 @@ window.backToCoList = backToCoList;
 window.setCoCode = setCoCode;
 window.setCoCountry = setCoCountry;
 window.toggleCoMainCollapse = toggleCoMainCollapse;
-window.onCoDragStart = onCoDragStart;
-window.onCoDropToSector = onCoDropToSector;
 window.setCoDomain = setCoDomain;
 window.toggleCoDomain = toggleCoDomain;
 window.askCoAi = askCoAi;
 window.clearCoAi = clearCoAi;
 window.searchCoM = searchCoM;
 window.openCoSearch = openCoSearch;
-window.switchCoT = switchCoT;
-window.editCoSector = editCoSector;
-window.editCoNameKo = editCoNameKo;
-window.editCoNameEn = editCoNameEn;
-window.editCoNotes = editCoNotes;
-window.editCoProducts = editCoProducts;
-window.editCoDomain = editCoDomain;
-window.closeCoDomainPopover = closeCoDomainPopover;
-window.editCoPhone = editCoPhone;
-window.editCoAddress = editCoAddress;
-window.editCoIntro = editCoIntro;
-window.fillCoIntroFromPdf = fillCoIntroFromPdf;
-window.editCoEmail = editCoEmail;
-window.editCoWebsite = editCoWebsite;
-window.editCoCountry = editCoCountry;
-window.editCoAbbr = editCoAbbr;
-window.toggleCoGaps = toggleCoGaps;
 window.setCoSort = setCoSort;
-window.editCoSource = editCoSource;
-window.editCoBizNo = editCoBizNo;
 window.setCoKind = setCoKind;
 window.openAddOrgModal = openAddOrgModal;
 window.onAddOrgDomainChange = onAddOrgDomainChange;
 window.closeAddOrgModal = closeAddOrgModal;
 window.submitAddOrg = submitAddOrg;
-window.editCoKind = editCoKind;
-window.goToExhibitor = goToExhibitor;
-window.createOrg = createOrg;
-window.saveCoSector = saveCoSector;
-window.closeCoSectorPopover = closeCoSectorPopover;
-window.showAssignCatCodeUI = showAssignCatCodeUI;
-window.doAssignCatCode = doAssignCatCode;

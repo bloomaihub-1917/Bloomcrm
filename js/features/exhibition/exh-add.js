@@ -8,7 +8,7 @@
 import { trackAction } from '../../core/audit-log.js';
 import { normalizeCompanyKey } from '../../domain/org-names.js';
 import { orgIdForName, reloadOrgs } from '../../domain/orgs.js';
-import { createOrg } from '../../modules/company-tab.js';
+import { createOrg } from '../companies/co-detail.js';
 import { EVENT_LIST, ORGS, contacts, evPartDone, exhEvent, exhibitorsForEvent, findOrgByName, getOrgById, orgName, participations, setExhEvent } from '../../state.js';
 import { escapeHtml, levenshteinDist, td } from '../../utils.js';
 import { EXH_ROLES, activeExhibitors, reloadExhibitors } from './exh-calc.js';

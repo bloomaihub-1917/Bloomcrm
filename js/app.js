@@ -25,6 +25,9 @@ import './features/settings/event-detail.js';   // 설정 › 행사 관리 › 
 import './features/settings/conf-settings.js';   // 설정 › 행사 상세 › 컨퍼런스 설정 — 스스로 window에 건다
 import './modules/data-clean.js';
 import './modules/company-tab.js';
+import './features/companies/co-detail.js';   // 기업 상세 화면 — 스스로 window에 건다
+import './features/companies/co-edit.js';   // 기업 필드 고치기·분야와 섹터·드래그 — 스스로 window에 건다
+import './features/companies/co-trade.js';   // 기업 상세 하위 탭 — 참여 이력·담당자·요약·거래 — 스스로 window에 건다
 import './features/companies/merge.js';   // 비슷한 기업 찾기와 기업 병합 — 스스로 window에 건다
 import './features/companies/add-co-event.js';   // 기업 화면에서 행사 참여 이력 직접 추가 — 스스로 window에 건다
 import './modules/crm-tab.js';

@@ -12,7 +12,8 @@ import { normalizeCompanyKey } from '../../domain/org-names.js';
 import { CO_DB, EVENT_LIST, PART_TYPES, exhibitorsForEvent, participations, setSelCo } from '../../state.js';
 import { escAttr, escapeHtml, td } from '../../utils.js';
 import { EXH_ROLES, reloadExhibitors } from '../exhibition/exh-calc.js';
-import { buildCoCAT, buildMDBEvList, renderCoDetail, renderMDB } from '../../modules/company-tab.js';
+import { buildCoCAT, buildMDBEvList, renderMDB } from '../../modules/company-tab.js';
+import { renderCoDetail } from './co-detail.js';
 
 
 /* ══════════════════════════════════════════

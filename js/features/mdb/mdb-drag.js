@@ -10,7 +10,7 @@ import { CL } from '../../constants.js';
 import { changed, trackAction } from '../../core/audit-log.js';
 import { buildCoDB } from '../../domain/co-db.js';
 import { UNASSIGNED_DOMAIN, domainName, domainOfSector, findSectorByName, mainSectors } from '../../domain/sectors.js';
-import { applyCoSectors } from '../../modules/company-tab.js';
+import { applyCoSectors } from '../companies/co-edit.js';
 import { COMPANY_SECTORS, CO_DB, contacts, getContactById, mdbSelected } from '../../state.js';
 import { escapeHtml, parseSectorScope, slugifySectorName } from '../../utils.js';
 import { mdbUi } from './mdb-ui.js';

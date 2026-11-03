@@ -55,7 +55,7 @@ import { isStale, isUnread, mailCardHtml } from '../shared/mail/mail-mark.js';
 import { resolveDue, dueInputHtml, readDueInput, followCfg, followState } from '../shared/mail/follow-up.js';
 import { boothChange, exhMailSteps } from './exh-mail.js';
 import { renderWatchView, initWatchFolders } from './exh-watch.js';
-import { createOrg } from './company-tab.js';
+import { createOrg } from '../features/companies/co-detail.js';
 import { normalizeCompanyKey } from '../domain/org-names.js';
 import { reloadOrgs, orgIdForName } from '../domain/orgs.js';
 
