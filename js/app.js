@@ -15,6 +15,11 @@ import './features/upload/upload-read.js';   // 업로드 STEP 1 — 파일 읽�
 import './features/upload/upload-save.js';   // 업로드 STEP 4 — 의심 케이스 확인과 마스터DB 반영 — 스스로 window에 건다
 import './features/upload/upload-logs.js';   // 업로드 › 수집 로그·기업 병합 관리 하위 탭 — 스스로 window에 건다
 import './modules/settings-tab.js';
+import './features/settings/sector-add-main.js';   // 설정 › 새 메인 섹터 추가 — 스스로 window에 건다
+import './features/settings/sector-import.js';   // 설정 › 엑셀로 섹터 일괄 추가 — 스스로 window에 건다
+import './features/settings/equip-catalog.js';   // 설정 › 비품 목록 (equip_catalog) — 스스로 window에 건다
+import './features/settings/event-detail.js';   // 설정 › 행사 관리 › 행사 상세 — 스스로 window에 건다
+import './features/settings/conf-settings.js';   // 설정 › 행사 상세 › 컨퍼런스 설정 — 스스로 window에 건다
 import './modules/data-clean.js';
 import './modules/company-tab.js';
 import './features/companies/merge.js';   // 비슷한 기업 찾기와 기업 병합 — 스스로 window에 건다

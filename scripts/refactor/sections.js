@@ -7,7 +7,10 @@
    app.js가 그 파일을 읽으면 된다 — 원래 파일은 새 파일을 import하지 않는다(한 방향).
 
    보이는 것: 구획마다 줄 범위, 다른 구획이 부르는 이름(있으면 떼기 어렵다), 이 구획이 쓰는
-   모듈 상태(let)와 그것을 고치는지(고치면 상태 주인이 옮기거나 set 함수가 필요). */
+   모듈 상태(let)와 그것을 고치는지(고치면 상태 주인이 옮기거나 set 함수가 필요).
+
+   펼침 «...이름»도 이름으로 센다 — 점으로 시작해 속성으로 잘못 보고 EVENT_LIST import를 놓친 적이 있다
+   */
 const fs = require('fs');
 const file = process.argv[2];
 const src = fs.readFileSync(file, 'utf8');
@@ -44,7 +47,7 @@ secs.forEach((s, k) => {
     .replace(/Object\.assign\(window,\s*\{[\s\S]*?\}\);?/g, ' '));
   s.uses = new Map();   // 다른 구획 번호 → Set(이름)
   s.state = new Set(); s.writes = new Set();
-  for (const m of body.matchAll(/(^|[^.\w$])([A-Za-z_$][\w$]*)\b/g)) {
+  for (const m of body.matchAll(/(^|[^.\w$]|\.\.\.)([A-Za-z_$][\w$]*)\b/g)) {
     const n = m[2]; const o = owner.get(n);
     if (o === undefined || o === k) continue;
     if (!s.uses.has(o)) s.uses.set(o, new Set());

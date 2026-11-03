@@ -5,7 +5,10 @@
 
    정식 파서가 아니라 낱말을 훑는다: 범위 안의 낱말 중, 그 파일의 최상위 선언이나
    import 이름과 같고 범위 안에서 선언되지 않은 것을 보인다. 속성 이름(.foo)은 뺀다.
-   지역 변수와 이름이 같은 최상위 이름은 잘못 잡힐 수 있으니 결과는 눈으로 한 번 본다. */
+   지역 변수와 이름이 같은 최상위 이름은 잘못 잡힐 수 있으니 결과는 눈으로 한 번 본다.
+
+   펼침 «...이름»도 이름으로 센다 — 점으로 시작해 속성으로 잘못 보고 EVENT_LIST import를 놓친 적이 있다
+   */
 const fs = require('fs');
 const [file, from, to] = process.argv.slice(2);
 const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
@@ -43,7 +46,7 @@ lines.forEach((l, i) => {
 
 const body = strip(lines.slice(from - 1, to).join('\n'));
 const used = new Set();
-for (const m of body.matchAll(/(^|[^.\w$])([A-Za-z_$][\w$]*)/g)) used.add(m[2]);
+for (const m of body.matchAll(/(^|[^.\w$]|\.\.\.)([A-Za-z_$][\w$]*)/g)) used.add(m[2]);
 
 const need = [...used].filter((n) => outside.has(n) && !inside.has(n)).sort();
 const fromImports = need.filter((n) => outside.get(n).startsWith('import'));

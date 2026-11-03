@@ -90,9 +90,10 @@ import { renderMDB, buildMDBEvList, buildMDBTagList } from './db-tab.js';
 import { populateUploadEvDropdown } from '../features/upload/upload-event-select.js';
 import { renderAiSettings } from './ai-settings.js';
 import { contactFillCount, renderContactFill, enrichCounts, saveOrgFields } from './data-clean.js';
+/* 화면 상태는 settingsUi 한곳에 둔다 — 이 탭의 구획을 다른 파일로 떼어도 같은 값을 보게 */
+import { settingsUi } from '../features/settings/settings-ui.js';
 
 /* 드래그 중인 섹터 id (원본 3693행 전역 변수 → 모듈 스코프로 축소) */
-let _draggedSectorId = null;
 
 /* 14개 함수를 ../domain/sectors.js로 옮겼다 — 이 파일에서도 쓰고, 옛 경로로 가져가는 곳도 있어 다시 내보낸다 */
 import { sectorName, sectorId, findSectorByName, parseSectors, joinSectors, mainSectors, subSectors, UNASSIGNED_DOMAIN, domainName, domainOfSector, sectorNamesInDomain, computeSectorCompanyCounts, sectorCountFor, collectUnregisteredSectors } from '../domain/sectors.js';
@@ -108,7 +109,6 @@ export { sectorName, sectorId, findSectorByName, parseSectors, joinSectors, main
    (utils.js의 scopedSectorName/parseSectorScope 참고 — sectors 시트
    스키마는 그대로 id/name/parent 3컬럼), 이 화면의 드롭다운으로 선택한
    범위(_sectorScope)에 해당하는 것만 트리에 걸러서 보여준다. */
-let _sectorScope = ''; // '' = 공통, 그 외엔 EVENT_LIST[].short 값
 
 /* 접힌 메인 섹터 id 집합 — 화면 전용 상태(저장 안 함). 같은 섹터가 여러
    분야 그룹에 반복 렌더링돼도 접기 상태는 섹터 id 기준으로 공유된다. */
@@ -122,17 +122,17 @@ export function toggleMainSectorCollapse(id){
 export function populateSectorScopeSelect(){
   const sel = document.getElementById('sector-scope-select');
   if(!sel) return;
-  const cur = _sectorScope;
+  const cur = settingsUi.sectorScope;
   sel.innerHTML = '<option value="">공통 (모든 행사 공유)</option>' +
     EVENT_LIST.map(e => `<option value="${escapeHtml(e.short)}"${e.short===cur?' selected':''}>${escapeHtml(e.short)} 전용</option>`).join('');
   // 선택된 행사가 목록에서 사라졌으면 공통으로 되돌림
-  if(cur && !EVENT_LIST.some(e => e.short === cur)){ _sectorScope = ''; sel.value = ''; }
+  if(cur && !EVENT_LIST.some(e => e.short === cur)){ settingsUi.sectorScope = ''; sel.value = ''; }
 }
 
 export function onSectorScopeChange(v){
-  _sectorScope = v || '';
+  settingsUi.sectorScope = v || '';
   const titleEl = document.getElementById('sector-tree-title');
-  if(titleEl) titleEl.textContent = _sectorScope ? `섹터 트리 — ${_sectorScope} 전용` : '섹터 트리 — 공통';
+  if(titleEl) titleEl.textContent = settingsUi.sectorScope ? `섹터 트리 — ${settingsUi.sectorScope} 전용` : '섹터 트리 — 공통';
   renderSectorTree();
 }
 
@@ -144,7 +144,7 @@ export function filterCoBySector(name){
 
 /* 현재 선택된 범위(_sectorScope)에 속하는 메인 섹터만 골라낸다 */
 function mainSectorsInScope(){
-  return mainSectors().filter(m => (parseSectorScope(m.name).eventShort || '') === _sectorScope);
+  return mainSectors().filter(m => (parseSectorScope(m.name).eventShort || '') === settingsUi.sectorScope);
 }
 
 export function renderSectorTree(){
@@ -153,7 +153,7 @@ export function renderSectorTree(){
 
   const mains = mainSectorsInScope();
   if(!mains.length){
-    el.innerHTML = `<div style="font-size:12px;color:var(--i4)">${_sectorScope ? escapeHtml(_sectorScope)+' 전용으로 ' : ''}등록된 섹터가 없어요. 아래에서 새로 만들어보세요.</div>`;
+    el.innerHTML = `<div style="font-size:12px;color:var(--i4)">${settingsUi.sectorScope ? escapeHtml(settingsUi.sectorScope)+' 전용으로 ' : ''}등록된 섹터가 없어요. 아래에서 새로 만들어보세요.</div>`;
     return;
   }
 
@@ -206,7 +206,7 @@ export function renderSectorTree(){
         <span draggable="true" ondragstart="onSectorDragStart(event,'${m.id}')" onclick="filterCoBySector('${escAttr(m.name)}')"
           style="font-weight:700;font-size:13px;flex:1;cursor:pointer" title="클릭하면 기업DB에서 이 섹터로 필터링">${escapeHtml(parseSectorScope(m.name).plainName)}</span>
         ${countBadge(sectorCountFor(counts, m.name))}
-        ${_sectorScope ? canonicalSelect(m) : domainSelect(m)}
+        ${settingsUi.sectorScope ? canonicalSelect(m) : domainSelect(m)}
         <button class="btn bs" style="font-size:11px;padding:2px 8px" onclick="toggleSubAddInline('${escAttr(uid)}')">+ 서브</button>
         <button onclick="removeSectorById('${m.id}')"
           style="background:none;border:none;cursor:pointer;color:var(--i4);font-size:16px;line-height:1"
@@ -303,7 +303,7 @@ export async function addSubSectorTo(mainId, uid){
   if(!raw){ inp && inp.focus(); return; }
   // 서브섹터도 부모와 같은 행사 범위 접두어를 붙여야 기업 배정 시 다른 행사의
   // 동명 섹터와 구분된다(예: "BK2025 전시 · Biotech" vs "KIC2025 · Biotech")
-  const val = scopedSectorName(_sectorScope, raw);
+  const val = scopedSectorName(settingsUi.sectorScope, raw);
   if(COMPANY_SECTORS.some(s => sectorKey(typeof s==='string'?s:s.name) === sectorKey(val))){ alert('이미 있는 섹터예요.'); return; }
 
   const newId = slugifySectorName(val);
@@ -315,15 +315,15 @@ export async function addSubSectorTo(mainId, uid){
 }
 
 export function onSectorDragStart(e, id){
-  _draggedSectorId = id;
+  settingsUi.draggedSectorId = id;
   e.dataTransfer.effectAllowed = 'move';
   e.dataTransfer.setData('text/plain', id); // Firefox 등에서 드래그 시작 요건 충족용
 }
 
 export async function onSectorDropToMain(e, mainId){
   e.preventDefault();
-  const id = _draggedSectorId;
-  _draggedSectorId = null;
+  const id = settingsUi.draggedSectorId;
+  settingsUi.draggedSectorId = null;
   if(!id || id === mainId) return;
   const dragged = COMPANY_SECTORS.find(s => s.id === id);
   if(!dragged) return;
@@ -340,8 +340,8 @@ export async function onSectorDropToMain(e, mainId){
 
 export async function onSectorDropToRoot(e){
   e.preventDefault();
-  const id = _draggedSectorId;
-  _draggedSectorId = null;
+  const id = settingsUi.draggedSectorId;
+  settingsUi.draggedSectorId = null;
   if(!id) return;
   const dragged = COMPANY_SECTORS.find(s => s.id === id);
   if(!dragged || !dragged.parent) return; // 이미 메인 섹터
@@ -666,181 +666,7 @@ export async function convertMainsToGroup(){
   alert(`${targets.length}개 섹터를 "${groupName}" 하위로 편입했어요.`);
 }
 
-/* ══════════════════════════════════════════
-   새 메인 섹터 추가 (원본 4119~4135행)
-══════════════════════════════════════════ */
-export async function addMainSector(){
-  const inp = document.getElementById('sector-main-add-input');
-  const raw = inp ? inp.value.trim() : '';
-  if(!raw){ inp && inp.focus(); return; }
-
-  // 선택된 행사 범위(_sectorScope)가 있으면 그 행사 전용 섹터로 접두어를 붙인다
-  const val = scopedSectorName(_sectorScope, raw);
-  const exists = COMPANY_SECTORS.some(s => sectorKey(typeof s==='string'?s:s.name) === sectorKey(val));
-  if(exists){ alert('이미 있는 섹터예요.'); return; }
-
-  const newId = slugifySectorName(val);
-  const sector = { id: newId, name: val, parent: null, domain: '', canonical: '' };
-
-  COMPANY_SECTORS.push(sector);
-  if(inp) inp.value = '';
-  renderSectorList();
-  try { buildCoCAT(); populateUploadEvDropdown(); } catch(e){}
-  await upsertSectorRow(sector);
-}
-
-/* ══════════════════════════════════════════
-   엑셀로 섹터 일괄 추가 (신규 — 원본에는 없던 기능)
-   "메인섹터"/"서브섹터" 2컬럼 엑셀을 업로드하면, 지금 선택된 범위(_sectorScope)에
-   메인·서브 섹터를 한 번에 만든다. 미리보기 → 확정 2단계로 진행해서
-   실수로 잘못된 파일을 그대로 반영하지 않게 한다.
-══════════════════════════════════════════ */
-const SECTOR_COL_ALIASES = {
-  main: ['메인섹터','메인 섹터','대분류','메인','main','mainsector','main sector','maincategory','main category'],
-  sub:  ['서브섹터','서브 섹터','소분류','서브','sub','subsector','sub sector','subcategory','sub category'],
-};
-
-function guessSectorColumn(headers, aliases){
-  const norm = h => String(h).toLowerCase().replace(/[\s_\-\/().·,]/g,'');
-  for(const h of headers){
-    if(aliases.some(a => norm(h) === norm(a))) return h;
-  }
-  for(const h of headers){
-    if(aliases.some(a => norm(a).length >= 3 && norm(h).includes(norm(a)))) return h;
-  }
-  return null;
-}
-
-let _pendingSectorImport = null; // { groups: [{ main, subs:[...] }] }
-
-export function handleSectorFileSelect(e){
-  const file = e.target.files && e.target.files[0];
-  if(!file) return;
-  const nameEl = document.getElementById('sector-file-name');
-  if(nameEl) nameEl.textContent = file.name;
-
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    try {
-      const wb = XLSX.read(ev.target.result, { type:'array', cellText:true });
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, { defval:'', raw:false });
-      if(!rows.length){ renderSectorImportPreview(null, '빈 파일이거나 데이터를 읽을 수 없어요.'); return; }
-
-      const headers = Object.keys(rows[0]);
-      const mainCol = guessSectorColumn(headers, SECTOR_COL_ALIASES.main);
-      const subCol  = guessSectorColumn(headers, SECTOR_COL_ALIASES.sub);
-      if(!mainCol){
-        renderSectorImportPreview(null, `"메인섹터" 컬럼을 찾지 못했어요. 파일 헤더: ${headers.join(', ')}`);
-        return;
-      }
-
-      const groupsMap = new Map();
-      rows.forEach(r => {
-        const main = String(r[mainCol]||'').trim();
-        const sub  = subCol ? String(r[subCol]||'').trim() : '';
-        if(!main) return;
-        if(!groupsMap.has(main)) groupsMap.set(main, new Set());
-        if(sub) groupsMap.get(main).add(sub);
-      });
-      const groups = [...groupsMap.entries()].map(([main, subsSet]) => ({ main, subs: [...subsSet] }));
-      if(!groups.length){
-        renderSectorImportPreview(null, '유효한 메인섹터 값을 찾지 못했어요.');
-        return;
-      }
-
-      _pendingSectorImport = { groups };
-      renderSectorImportPreview(groups);
-    } catch(err){
-      console.warn('[settings-tab] 섹터 파일 파싱 실패:', err);
-      renderSectorImportPreview(null, '파일을 읽는 중 오류가 발생했어요: ' + err.message);
-    }
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-function renderSectorImportPreview(groups, errorMsg){
-  const el = document.getElementById('sector-import-preview');
-  if(!el) return;
-  if(errorMsg){
-    el.innerHTML = `<div style="font-size:12px;color:var(--re)">${escapeHtml(errorMsg)}</div>`;
-    return;
-  }
-  if(!groups){ el.innerHTML = ''; return; }
-
-  const totalSubs = groups.reduce((n,g) => n + g.subs.length, 0);
-  const scopeLabel = _sectorScope ? `"${_sectorScope}" 전용` : '"공통"';
-  el.innerHTML = `
-    <div style="font-size:12px;color:var(--i2);margin-bottom:8px">
-      메인 섹터 <b>${groups.length}개</b>, 서브 섹터 <b>${totalSubs}개</b>를 ${escapeHtml(scopeLabel)} 범위에 추가합니다.
-    </div>
-    <div style="max-height:180px;overflow-y:auto;border:1px solid var(--i6);border-radius:6px;padding:8px 10px;background:var(--W);margin-bottom:10px">
-      ${groups.map(g => `
-        <div style="margin-bottom:6px">
-          <div style="font-size:12px;font-weight:700;color:var(--i1)">${escapeHtml(g.main)}</div>
-          ${g.subs.length ? `<div style="font-size:11px;color:var(--i4);padding-left:12px">${g.subs.map(escapeHtml).join(', ')}</div>` : ''}
-        </div>`).join('')}
-    </div>
-    <div style="display:flex;gap:6px">
-      <button class="btn bp" style="font-size:11px" onclick="confirmSectorImport()">이대로 추가</button>
-      <button class="btn bs" style="font-size:11px" onclick="cancelSectorImport()">취소</button>
-    </div>`;
-}
-
-export function cancelSectorImport(){
-  _pendingSectorImport = null;
-  const el = document.getElementById('sector-import-preview');
-  if(el) el.innerHTML = '';
-  const inp = document.getElementById('sector-file-input');
-  if(inp) inp.value = '';
-  const nameEl = document.getElementById('sector-file-name');
-  if(nameEl) nameEl.textContent = '';
-}
-
-export async function confirmSectorImport(){
-  if(!_pendingSectorImport) return;
-  const { groups } = _pendingSectorImport;
-
-  let addedMain = 0, addedSub = 0, skippedMain = 0, skippedSub = 0;
-
-  for(const g of groups){
-    const mainName = scopedSectorName(_sectorScope, g.main);
-    let mainSector = COMPANY_SECTORS.find(s => sectorKey(s.name) === sectorKey(mainName) && !s.parent);
-    if(!mainSector){
-      mainSector = { id: slugifySectorName(mainName), name: mainName, parent: null, domain: '', canonical: '' };
-      COMPANY_SECTORS.push(mainSector);
-      addedMain++;
-      await upsertSectorRow(mainSector);
-    } else {
-      skippedMain++;
-    }
-
-    for(const subRaw of g.subs){
-      // 여러 메인 섹터에 같은 서브섹터명(예: "Others")이 반복될 수 있어서,
-      // 이미 다른 메인 아래 같은 이름이 있으면 메인명을 붙여 구분한다.
-      const collidesElsewhere = COMPANY_SECTORS.some(s =>
-        s.parent && s.parent !== mainSector.id && sectorKey(parseSectorScope(s.name).plainName) === sectorKey(subRaw)
-      );
-      const subPlain = collidesElsewhere ? `${subRaw} (${g.main})` : subRaw;
-      const subName = scopedSectorName(_sectorScope, subPlain);
-
-      const exists = COMPANY_SECTORS.some(s => s.parent === mainSector.id && sectorKey(s.name) === sectorKey(subName));
-      if(exists){ skippedSub++; continue; }
-
-      const subSector = { id: slugifySectorName(subName), name: subName, parent: mainSector.id, domain: '', canonical: '' };
-      COMPANY_SECTORS.push(subSector);
-      addedSub++;
-      await upsertSectorRow(subSector);
-    }
-  }
-
-  cancelSectorImport();
-  renderSectorList();
-  try { buildCoCAT(); populateUploadEvDropdown(); } catch(e){}
-
-  alert(`섹터 추가 완료 — 메인 ${addedMain}개(중복 ${skippedMain}개 건너뜀), 서브 ${addedSub}개(중복 ${skippedSub}개 건너뜀)`);
-}
-
+/* «설정 › 새 메인 섹터 추가»은 ../features/settings/sector-add-main.js로 떼어 냈다 — 그 파일이 스스로 window에 건다 */
 /* ══════════════════════════════════════════
    분야(도메인) 관리 (신규) — PART_TYPES 관리 UI 패턴
 ══════════════════════════════════════════ */
@@ -1055,7 +881,7 @@ export function renderPartTypeList(){
 
 /* 행사를 더하고·고치고·지운 뒤 — 마스터DB 행사 목록·업로드 드롭다운뿐 아니라 기업DB도 다시 만든다.
    기업DB(CO_DB)는 행사 약칭·이름을 복사해 들고 있어서, 안 그러면 새로고침 전까지 옛 이름이 보였다 */
-function refreshAfterEventChange(){
+export function refreshAfterEventChange(){
   try { buildMDBEvList(); populateUploadEvDropdown(); } catch(e){}
   try { buildCoDB(); if(document.getElementById('co-dash')) renderCoDashboard(); } catch(e){}
 }
@@ -1390,11 +1216,11 @@ export function switchArchTab(tab){
   });
   const sysnav = document.getElementById('sbp-arch-sysnav');
   if(sysnav) sysnav.style.display = tab==='sys' ? 'block' : 'none';
-  if(tab==='ev')     { closeEvDetail(); }   // 목록부터 — 상세는 카드를 눌러서 연다
+  if(tab==='ev')     { window.closeEvDetail(); }   // 목록부터 — 상세는 카드를 눌러서 연다
   if(tab==='org')    { renderSectorList(); mountCodeList('org'); }
   if(tab==='people') { renderPartTypeList(); renderTagList(); renderAliasList(); mountCodeList('people'); }
   if(tab==='common') { mountCodeList('common'); }
-  if(tab==='equip')  { mountEquipCatalog('eqcat-rows', ''); }
+  if(tab==='equip')  { window.mountEquipCatalog('eqcat-rows', ''); }
   if(tab==='clean')  { renderSectorList(); renderCleanCounts(); }
   if(tab==='ai')     { renderAiSettings(); }
   if(tab==='sys')    { renderSysInfo(); }
@@ -1466,9 +1292,8 @@ async function renderSysInfo(){
 }
 
 // archV는 이 탭에서만 쓰는 로컬 UI 상태라 state.js로 옮기지 않고 모듈 스코프에 둠
-let archV = 'arch';
 export function switchAV(v, btn){
-  archV = v;
+  settingsUi.archV = v;
   ['arch','sheet','flow'].forEach(id => {
     const el = document.getElementById('av-'+id);
     if(el) el.style.display = id===v ? 'block' : 'none';
@@ -1504,7 +1329,6 @@ window.mergeSectors          = mergeSectors;
 window.applySectorGrouping   = applySectorGrouping;
 window.toggleAllMainConv     = toggleAllMainConv;
 window.convertMainsToGroup   = convertMainsToGroup;
-window.addMainSector         = addMainSector;
 window.addPartType           = addPartType;
 window.removePartType        = removePartType;
 window.autoFillEvId          = autoFillEvId;
@@ -1516,9 +1340,6 @@ window.splitMixedOrgNames    = splitMixedOrgNames;
 window.switchArchTab         = switchArchTab;
 window.switchAV              = switchAV;
 window.onSectorScopeChange   = onSectorScopeChange;
-window.handleSectorFileSelect = handleSectorFileSelect;
-window.confirmSectorImport    = confirmSectorImport;
-window.cancelSectorImport     = cancelSectorImport;
 window.assignSectorDomain     = assignSectorDomain;
 window.assignSectorCanonical  = assignSectorCanonical;
 window.addDomain              = addDomain;
@@ -1564,14 +1385,14 @@ const CL_COLORS = [['', '— 없음 —'], ['p-blue', '파랑'], ['p-green', '�
   ['p-teal', '청록'], ['p-purple', '보라'], ['p-red', '빨강'], ['p-gray', '회색'],
   ['p-gold', '금색'], ['p-indigo', '남색']];
 
-const clDef = (k) => CL_DEFS.find(d => d.key === k)
+export const clDef = (k) => CL_DEFS.find(d => d.key === k)
   || (k === 'cat_alias' ? { key: k, label: '업로드 표기 매핑', perEvent: false } : CL_DEFS[0]);
 const clKey = () => document.getElementById('cl-key')?.value || CL_DEFS[0].key;
 const clScope = () => document.getElementById('cl-scope')?.value || '';
-const clSlug = (v) => String(v).replace(/[^A-Za-z0-9가-힣]/g, '').slice(0, 24);
+export const clSlug = (v) => String(v).replace(/[^A-Za-z0-9가-힣]/g, '').slice(0, 24);
 
 /* 지금 고른 목록·범위의 행 — 숨긴 것도 포함해 순서대로 */
-function clRowsOf(key, scope){
+export function clRowsOf(key, scope){
   return CODE_LISTS.filter(c => c.list_key === key && (c.event_id || '') === scope)
     .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0));
 }
@@ -1579,9 +1400,8 @@ function clRowsOf(key, scope){
 /* 선택 목록 칸은 하나다(cl-key·cl-scope·cl-rows). 탭마다 따로 그리면 id가
    겹치므로, 그 하나를 지금 탭의 자리(cl-slot-<탭>)로 옮겨 붙이고 그 탭의
    목록만 고르게 한다. */
-let clGroup = 'common';
 function mountCodeList(group){
-  clGroup = group;
+  settingsUi.clGroup = group;
   const box = document.getElementById('cl-box'), slot = document.getElementById('cl-slot-' + group);
   if(box && slot && box.parentElement !== slot) slot.appendChild(box);
   renderCodeListPicker();
@@ -1590,7 +1410,7 @@ function mountCodeList(group){
 export function renderCodeListPicker(){
   const kel = document.getElementById('cl-key');
   if(!kel) return;
-  const defs = CL_DEFS.filter(d => d.group === clGroup);
+  const defs = CL_DEFS.filter(d => d.group === settingsUi.clGroup);
   const cur = defs.some(d => d.key === kel.value) ? kel.value : defs[0]?.key;
   kel.innerHTML = defs.map(d =>
     `<option value="${escapeHtml(d.key)}"${cur === d.key ? ' selected' : ''}>${escapeHtml(d.label)}</option>`).join('');
@@ -1635,7 +1455,7 @@ export function renderCodeList(){
     </div>`;
 }
 
-function clRowsHtml(rows, readonly){
+export function clRowsHtml(rows, readonly){
   if(!rows.length) return '<div style="font-size:12px;color:var(--i4)">아직 항목이 없어요.</div>';
   return rows.map(c => {
     const off = c.active === 'no';
@@ -1667,7 +1487,7 @@ function clRowsHtml(rows, readonly){
 
 /* 한 행만 고치므로 객체형(upsertPartial) 경로를 쓴다 — 위치 배열로 보내면
    컬럼이 늘었을 때 안 보낸 칸이 비워진다 */
-const saveCodeRow = (row, label) =>
+export const saveCodeRow = (row, label) =>
   postToSheet({ sheet: 'code_lists', action: 'upsertPartial', data: row }, label);
 
 /* ══════════════════════════════════════════
@@ -1686,14 +1506,12 @@ export function parseIncluded(raw){
 }
 export const boothInclCount = (c) => parseIncluded(c.included).length;
 
-let bInclRow = null;      // 지금 고치고 있는 부스 타입 행
-let bInclLines = [];      // 편집 중인 목록 (저장을 눌러야 반영된다)
 
 export function openBoothIncluded(rowId){
   const c = CODE_LISTS.find(x => x.id === rowId);
   if(!c) return;
-  bInclRow = c;
-  bInclLines = parseIncluded(c.included);
+  settingsUi.bInclRow = c;
+  settingsUi.bInclLines = parseIncluded(c.included);
 
   closeBoothIncluded();
   const pop = document.createElement('div');
@@ -1718,7 +1536,7 @@ export function closeBoothIncluded(){ document.getElementById('bincl-modal')?.re
 /* 품목코드를 치면 품명이 따라오게 목록을 붙여 둔다 — 부스 타입은 행사별이라
    그 행사의 품목표만 본다(공통 목록이면 붙일 품목표가 없다). */
 function binclDatalist(){
-  const ev = bInclRow?.event_id || '';
+  const ev = settingsUi.bInclRow?.event_id || '';
   if(!ev) return '';
   const list = EQUIP_CATALOG
     .filter(c => String(c.event_id || '') === String(ev) && c.active !== 'no')
@@ -1734,7 +1552,7 @@ export function renderBoothInclLines(){
   const cats = [['equip', '비품'], ['graphic', '그래픽'], ['etc', '기타']];
   el.innerHTML = binclDatalist() + `
     <div style="display:flex;flex-direction:column;gap:6px">
-      ${bInclLines.length ? bInclLines.map((o, n) => `
+      ${settingsUi.bInclLines.length ? settingsUi.bInclLines.map((o, n) => `
         <div style="display:flex;gap:6px;align-items:center">
           <select class="fi" style="flex:0 0 78px;font-size:11.5px;padding:6px"
             onchange="editBoothInclLine(${n},'cat',this.value)">${cats.map(([v, l]) =>
@@ -1759,16 +1577,16 @@ export function renderBoothInclLines(){
       코드가 없는 것(전기 별도 시공 등)은 비워 두고 품명만 적으면 됩니다.</div>`;
 }
 
-export function addBoothInclLine(){ bInclLines.push({ cat: 'equip', code: '', name: '', qty: '1' }); renderBoothInclLines(); }
-export function delBoothInclLine(n){ bInclLines.splice(n, 1); renderBoothInclLines(); }
+export function addBoothInclLine(){ settingsUi.bInclLines.push({ cat: 'equip', code: '', name: '', qty: '1' }); renderBoothInclLines(); }
+export function delBoothInclLine(n){ settingsUi.bInclLines.splice(n, 1); renderBoothInclLines(); }
 export function editBoothInclLine(n, field, v){
-  if(!bInclLines[n]) return;
-  bInclLines[n][field] = String(v || '').trim();
+  if(!settingsUi.bInclLines[n]) return;
+  settingsUi.bInclLines[n][field] = String(v || '').trim();
   // 코드만 치고 품명을 비워 뒀으면 품목표에서 이름을 가져다 채운다
-  if(field === 'code' && !bInclLines[n].name){
-    const hit = EQUIP_CATALOG.find(c => String(c.event_id || '') === String(bInclRow?.event_id || '')
+  if(field === 'code' && !settingsUi.bInclLines[n].name){
+    const hit = EQUIP_CATALOG.find(c => String(c.event_id || '') === String(settingsUi.bInclRow?.event_id || '')
       && String(c.code || '').toUpperCase() === String(v || '').trim().toUpperCase());
-    if(hit) bInclLines[n].name = hit.name_ko || hit.name_en || '';
+    if(hit) settingsUi.bInclLines[n].name = hit.name_ko || hit.name_en || '';
     renderBoothInclLines();
   }
 }
@@ -1790,8 +1608,8 @@ export async function applyBoothItemsToEvent(evKey){
 }
 
 export async function saveBoothIncluded(){
-  if(!bInclRow) return;
-  const clean = bInclLines
+  if(!settingsUi.bInclRow) return;
+  const clean = settingsUi.bInclLines
     .map(o => ({ cat: o.cat || 'equip', code: String(o.code || '').trim(),
                  name: String(o.name || '').trim(), qty: String(o.qty ?? '').trim() }))
     .filter(o => o.code || o.name);
@@ -1799,17 +1617,17 @@ export async function saveBoothIncluded(){
   const btn = document.getElementById('bincl-save');
   if(btn){ btn.disabled = true; btn.textContent = '저장 중…'; }
 
-  const before = bInclRow.included || '';
-  bInclRow.included = JSON.stringify(clean);
-  const r = await saveCodeRow({ id: bInclRow.id, included: bInclRow.included }, '기본 제공 품목');
+  const before = settingsUi.bInclRow.included || '';
+  settingsUi.bInclRow.included = JSON.stringify(clean);
+  const r = await saveCodeRow({ id: settingsUi.bInclRow.id, included: settingsUi.bInclRow.included }, '기본 제공 품목');
   if(!r.ok){
-    bInclRow.included = before;                 // 저장 실패는 화면에도 남기지 않는다
+    settingsUi.bInclRow.included = before;                 // 저장 실패는 화면에도 남기지 않는다
     if(btn){ btn.disabled = false; btn.textContent = '저장'; }
     alert('저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
     return;
   }
-  trackAction('edit', '기본 제공 품목', bInclRow.label || bInclRow.code,
-    `<b>${escapeHtml(bInclRow.label || bInclRow.code)}</b>의 기본 제공 품목을 ${clean.length}건으로 정했어요`);
+  trackAction('edit', '기본 제공 품목', settingsUi.bInclRow.label || settingsUi.bInclRow.code,
+    `<b>${escapeHtml(settingsUi.bInclRow.label || settingsUi.bInclRow.code)}</b>의 기본 제공 품목을 ${clean.length}건으로 정했어요`);
   closeBoothIncluded();
   reRenderFor('booth_type');
 }
@@ -1842,7 +1660,7 @@ export async function addCodeListRow(){
 function reRenderFor(listKey){
   if(listKey === 'cat_alias') renderAliasList(); else renderCodeList();
   // 행사 상세의 부스 칸도 같은 표를 본다 — 열려 있으면 함께 다시 그린다
-  if(evDetailKey) renderEvDetail();
+  if(settingsUi.evDetailKey) window.renderEvDetail();
 }
 
 export async function editCodeListRow(id, field, value){
@@ -2001,7 +1819,7 @@ export function renderEvCfgList(){
 /* 전시 탭의 DUE_STEPS와 같은 이름표 — 그쪽을 import하면 순환 참조가 된다 */
 /* exh-tab.js의 DUE_STEPS와 같은 키·같은 순서여야 한다 — 여기 빠진 키는 설정에서
    저장할 때 지워졌다(부스 도면·기본 시공). 서로 import하면 순환이 생겨 따로 둔다. */
-const DUE_LABEL = {
+export const DUE_LABEL = {
   'manual_replied_at': '매뉴얼 회신', 'app_received_at': '신청서', 'booth_confirmed_at': '부스',
   'calc:design': '부스 도면', 'calc:payment': '입금', 'calc:graphic': '그래픽', 'calc:base': '기본 시공',
   'directory_received_at': '도록', 'movein_at': '반입',
@@ -2011,1637 +1829,4 @@ window.renderAliasList = renderAliasList;
 window.addAliasRow     = addAliasRow;
 window.renderEvCfgList = renderEvCfgList;
 
-/* ══════════════════════════════════════════
-   비품 카탈로그 관리 (equip_catalog)
-
-   렌탈사가 주는 품목표다. 행사가 바뀌면 품목도 단가도 바뀌는데, 전에는 전시 탭
-   비품 현황에서 "추가"만 할 수 있었다. 단가를 고치거나 안 쓰는 품목을 내리려면
-   개발자를 불러야 했다.
-
-   지우는 건 조심한다. 신청 내역(exhibitor_items.catalog_id)이 품목을 가리키고
-   있어서, 쓰고 있는 품목을 지우면 그 신청이 무엇이었는지 알 수 없게 된다.
-   그래서 쓰는 중이면 숨김(active='no')만 하고, 아무도 안 쓴 품목만 정말 지운다.
-
-   행사별로 나뉘므로 어느 행사의 품목표인지 먼저 고른다.
-══════════════════════════════════════════ */
-let eqKind = 'equip';    // 비품 / 그래픽 — 한 표에 함께 담겨 있다
-let eqEvent = '';        // 보고 있는 행사
-let eqCatFil = '';       // 분류 필터
-let eqQuery = '';        // 검색어
-/* 같은 편집기를 두 자리가 나눠 쓴다 — 설정값 탭(eqcat-rows)과 행사 상세.
-   행사 상세에서는 어느 행사인지가 이미 정해져 있어 행사 선택을 잠근다. */
-let eqTarget = 'eqcat-rows';
-let eqLockEv = '';
-export function mountEquipCatalog(targetId, lockEv){
-  eqTarget = targetId || 'eqcat-rows';
-  eqLockEv = lockEv || '';
-  if(eqLockEv && eqEvent !== eqLockEv){ eqEvent = eqLockEv; eqCatFil = ''; eqQuery = ''; }
-  renderEquipCatalog();
-}
-/* 행사 상세에서 비품 칸을 떠날 때 — 다음 렌더가 사라진 자리를 찾지 않도록
-   설정값 탭 자리로만 돌려놓고 그리지는 않는다 */
-function mountEquipCatalogIdle(){
-  if(eqTarget === 'eqcat-rows') return;
-  eqTarget = 'eqcat-rows';
-  eqLockEv = '';
-}
-
-const eqNum = (v) => String(v ?? '').replace(/[^0-9.]/g, '');
-const eqMoney = (v) => { const n = Number(eqNum(v)); return n ? n.toLocaleString() : ''; };
-
-/* 이 품목을 몇 곳이 신청했나 — 지워도 되는지 판단하는 근거 */
-const eqUsedBy = (id) => EXH_ITEMS.filter(i => i.catalog_id === id).length;
-/* 전체 품목을 쓰는 행사 — 지워도 되는지는 여기서 갈린다(행사 사본이 이 품목을 가리킨다) */
-const eqEventsUsing = (id) => EQUIP_CATALOG.filter(c => c.base_id === id && c.event_id);
-
-const eqRows = () => EQUIP_CATALOG
-  .filter(c => (c.event_id || '') === (eqEvent || ''))
-  .filter(c => (c.kind || 'equip') === eqKind)
-  .filter(c => !eqCatFil || (c.category || '') === eqCatFil)
-  .filter(c => {
-    if(!eqQuery) return true;
-    const q = eqQuery.toLowerCase();
-    return [c.code, c.name_ko, c.name_en, c.spec].some(v => String(v || '').toLowerCase().includes(q));
-  })
-  .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0)
-    || String(a.code || '').localeCompare(String(b.code || '')));
-
-export function renderEquipCatalog(){
-  const el = document.getElementById(eqTarget);
-  if(!el) return;
-
-  // 처음 열 때는 품목이 실제로 들어 있는 행사를 연다 — 빈 화면을 보여주면
-  // 품목표가 없는 줄 안다(설정값 탭의 선택 목록과 같은 이유)
-  const evs = [...new Set(EQUIP_CATALOG.map(c => c.event_id).filter(Boolean))];
-  /* eqEvent가 비어 있으면 전체 품목표다 */
-  if(eqLockEv) eqEvent = eqLockEv;
-
-  const all = EQUIP_CATALOG.filter(c => (c.event_id || '') === (eqEvent || '') && (c.kind || 'equip') === eqKind);
-  const masterAll = EQUIP_CATALOG.filter(c => !c.event_id && (c.kind || 'equip') === eqKind);
-  const cats = [...new Set((eqEvent ? masterAll : all).map(c => c.category || '').filter(Boolean))];
-
-  el.innerHTML = `
-    <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-bottom:10px">
-      ${eqLockEv ? '' : `<div style="min-width:200px"><div class="mlbl">보기</div>
-        <select class="fi" style="width:100%" onchange="setEqEvent(this.value)">
-          <option value=""${!eqEvent ? ' selected' : ''}>📦 전체 품목표 (${EQUIP_CATALOG.filter(c => !c.event_id).length})</option>
-          ${(() => {
-            /* 품목표가 아직 없는 행사도 고를 수 있어야 새로 만든다 — 품목 수를 붙여 구분한다 */
-            const keys = [...new Set([...EVENT_LIST.map(e => e.key), ...evs])].filter(Boolean);
-            if(eqEvent && !keys.includes(eqEvent)) keys.unshift(eqEvent);
-            return keys.map(k => {
-              const n = EQUIP_CATALOG.filter(c => c.event_id === k).length;
-              return `<option value="${escapeHtml(k)}"${k === eqEvent ? ' selected' : ''}>행사 · ${escapeHtml(k)}${n ? ` (${n})` : ' — 아직 안 고름'}</option>`;
-            }).join('');
-          })()}
-        </select></div>`}
-      <div style="min-width:120px"><div class="mlbl">종류</div>
-        <select class="fi" style="width:100%" onchange="setEqKind(this.value)">
-          <option value="equip"${eqKind === 'equip' ? ' selected' : ''}>비품</option>
-          <option value="graphic"${eqKind === 'graphic' ? ' selected' : ''}>그래픽</option>
-        </select></div>
-      <div style="min-width:130px"><div class="mlbl">분류</div>
-        <select class="fi" style="width:100%" onchange="setEqCatFil(this.value)">
-          <option value="">전체</option>
-          ${cats.map(c => `<option value="${escapeHtml(c)}"${c === eqCatFil ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}
-        </select></div>
-      <div style="flex:1;min-width:150px"><div class="mlbl">검색</div>
-        <input class="fi" style="width:100%" value="${escapeHtml(eqQuery)}" placeholder="코드·품명·규격"
-          oninput="setEqQuery(this.value)"></div>
-    </div>
-    ${eqEvent ? `<div style="font-size:11px;color:var(--i4);margin-bottom:8px;line-height:1.6">
-        전체 품목표에서 이 행사에 쓸 품목을 체크하고 이 행사 단가를 적으세요. 체크하면 기본 단가가 먼저 들어갑니다.
-        품명·규격은 <a href="javascript:void(0)" onclick="setEqEvent('')" style="color:var(--a)">전체 품목표</a>에서 고칩니다.</div>` : ''}
-    <div id="eqcat-count" style="font-size:11px;color:var(--i4);margin-bottom:8px">${eqCountHtml()}</div>
-
-    <div id="eqcat-list">${eqListHtml()}</div>
-
-    ${eqEvent ? '' : `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--i6)">
-      <div style="font-size:11.5px;font-weight:700;color:var(--i2);margin-bottom:8px">품목 추가</div>
-      <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
-        <div style="width:90px"><div class="mlbl">코드</div>
-          <input class="fi" id="eq-new-code" placeholder="비우면 자동" style="width:100%"></div>
-        <div style="flex:1;min-width:120px"><div class="mlbl">품명(국문)</div>
-          <input class="fi" id="eq-new-ko" style="width:100%" onkeydown="if(event.key==='Enter')addEquipItem()"></div>
-        <div style="flex:1;min-width:120px"><div class="mlbl">품명(영문)</div>
-          <input class="fi" id="eq-new-en" style="width:100%" onkeydown="if(event.key==='Enter')addEquipItem()"></div>
-        <div style="min-width:110px"><div class="mlbl">분류</div>
-          <select class="fi" id="eq-new-cat" style="width:100%">
-            ${(cats.length ? cats : ['기타비품']).map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('')}
-          </select></div>
-        <div style="width:100px"><div class="mlbl">KRW</div>
-          <input class="fi" id="eq-new-krw" style="width:100%" placeholder="0"></div>
-        <div style="width:90px"><div class="mlbl">USD</div>
-          <input class="fi" id="eq-new-usd" style="width:100%" placeholder="0"></div>
-        <button class="btn bp" onclick="addEquipItem()" style="min-width:60px;height:36px">추가</button>
-      </div>
-      <div id="eq-new-msg" style="font-size:11px;margin-top:6px"></div>
-    </div>`}`;
-}
-
-function eqRowHtml(c){
-  const off = c.active === 'no';
-  const used = c.event_id ? eqUsedBy(c.id) : eqEventsUsing(c.id).length;
-  return `<div class="clrow" style="padding:6px 0;border-bottom:1px solid var(--i7)${off ? ';opacity:.5' : ''}">
-    <div style="display:flex;gap:8px;align-items:center;min-width:0;flex:0 0 auto">
-      <code style="font-size:11px;color:var(--i4);min-width:64px">${escapeHtml(c.code || '')}</code>
-      ${c.event_id
-        ? (used ? `<span class="pill p-blue" title="이 품목을 신청한 내역">${used}건</span>`
-                : `<span class="pill p-gray" title="아무도 신청하지 않았어요">미사용</span>`)
-        : (used ? `<span class="pill p-blue" title="${escapeHtml(eqEventsUsing(c.id).map(x => x.event_id).join(', '))}">행사 ${used}</span>`
-                : `<span class="pill p-gray" title="아직 고른 행사가 없어요">행사 0</span>`)}
-    </div>
-    <label class="clf clf-grow"><span class="clf-l">국문</span>
-      <input class="fi" value="${escapeHtml(c.name_ko || '')}" placeholder="품명(국문)" style="min-width:110px"
-        onchange="editEquipItem('${escAttr(c.id)}','name_ko',this.value)"></label>
-    <label class="clf clf-grow"><span class="clf-l">영문</span>
-      <input class="fi" value="${escapeHtml(c.name_en || '')}" placeholder="품명(영문)" style="min-width:110px"
-        onchange="editEquipItem('${escAttr(c.id)}','name_en',this.value)"></label>
-    <label class="clf"><span class="clf-l">KRW</span>
-      <input class="fi" value="${escapeHtml(eqMoney(c.price_krw))}" placeholder="KRW" style="width:96px;text-align:right"
-        onchange="editEquipItem('${escAttr(c.id)}','price_krw',this.value)"></label>
-    <label class="clf"><span class="clf-l">USD</span>
-      <input class="fi" value="${escapeHtml(eqMoney(c.price_usd))}" placeholder="USD" style="width:80px;text-align:right"
-        onchange="editEquipItem('${escAttr(c.id)}','price_usd',this.value)"></label>
-    <span class="clf"><span class="clf-l"></span>
-      <button class="btn" onclick="removeEquipItem('${escAttr(c.id)}')"
-        style="height:32px;font-size:11px">${off ? '되살리기' : used ? '숨김' : '삭제'}</button></span>
-  </div>`;
-}
-
-export function setEqKind(v){ eqKind = v; eqCatFil = ''; eqQuery = ''; renderEquipCatalog(); }
-export function setEqEvent(v){ eqEvent = v; eqCatFil = ''; renderEquipCatalog(); }
-/* 행사 상세의 바로가기 — 그 행사를 고른 채로 비품 목록을 연다 */
-export function openEquipFor(evKey){
-  eqEvent = evKey; eqCatFil = ''; eqQuery = '';
-  switchArchTab('equip');
-}
-export function setEqCatFil(v){ eqCatFil = v; renderEquipCatalog(); }
-export function setEqQuery(v){
-  eqQuery = v;
-  // 검색은 글자를 칠 때마다 다시 그리는데, 통째로 다시 그리면 입력칸이 포커스를
-  // 잃는다. 목록만 갈아 끼우고 입력칸은 그대로 둔다.
-  const el = document.getElementById(eqTarget);
-  if(!el) return;
-  const box = el.querySelector('#eqcat-list');
-  const cnt = el.querySelector('#eqcat-count');
-  if(box){ box.innerHTML = eqListHtml(); if(cnt) cnt.innerHTML = eqCountHtml(); return; }
-  renderEquipCatalog();
-}
-/* 개수 안내 — 검색할 때 목록만 갈아 끼우면 이 줄이 옛 숫자로 남는다 */
-const eqCountHtml = () => {
-  if(eqEvent){
-    const mine = EQUIP_CATALOG.filter(c => c.event_id === eqEvent && (c.kind || 'equip') === eqKind && c.active !== 'no');
-    const total = EQUIP_CATALOG.filter(c => !c.event_id && (c.kind || 'equip') === eqKind && c.active !== 'no').length;
-    return `${escapeHtml(eqEvent)} — 전체 ${eqKind === 'graphic' ? '그래픽' : '비품'} ${total}개 중 <b>${mine.length}개</b> 사용`;
-  }
-  const all = EQUIP_CATALOG.filter(c => !c.event_id && (c.kind || 'equip') === eqKind);
-  const hidden = all.filter(c => c.active === 'no').length;
-  const shown = eqRows().length;
-  return `전체 품목표 ${eqKind === 'graphic' ? '그래픽' : '비품'} ${all.length}개${hidden ? ` (숨김 ${hidden}개 포함)` : ''}`
-    + (shown !== all.length ? ` · 지금 보이는 것 ${shown}개` : '');
-};
-
-const eqListHtml = () => {
-  if(eqEvent) return eqEventListHtml();
-  const rows = eqRows();
-  return rows.length ? rows.map(eqRowHtml).join('')
-    : '<div style="font-size:12px;color:var(--i4);padding:8px 0">해당하는 품목이 없어요.</div>'; };
-
-/* 행사 보기 — 전체 품목 한 줄마다 «이 행사에 쓰나»와 이 행사 단가 */
-function eqEventListHtml(){
-  const q = eqQuery.toLowerCase();
-  const masters = EQUIP_CATALOG
-    .filter(c => !c.event_id && (c.kind || 'equip') === eqKind)
-    .filter(c => !eqCatFil || (c.category || '') === eqCatFil)
-    .filter(c => !q || [c.code, c.name_ko, c.name_en, c.spec].some(v => String(v || '').toLowerCase().includes(q)))
-    .sort((a, b) => (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0)
-      || String(a.code || '').localeCompare(String(b.code || '')));
-  const mineOf = (m) => EQUIP_CATALOG.find(c => c.event_id === eqEvent && c.base_id === m.id);
-  const row = (m) => {
-    const e = mineOf(m);
-    const on = !!e && e.active !== 'no';
-    if(m.active === 'no' && !on) return '';   // 전체에서 내린 품목은 이미 쓰던 행사에서만 보인다
-    const used = e ? eqUsedBy(e.id) : 0;
-    const diff = on && (eqNum(e.price_krw) !== eqNum(m.price_krw) || eqNum(e.price_usd) !== eqNum(m.price_usd));
-    return `<div class="clrow" style="padding:6px 0;border-bottom:1px solid var(--i7)${on ? '' : ';opacity:.6'}">
-      <label style="display:flex;gap:8px;align-items:center;flex:1;min-width:200px;cursor:pointer">
-        <input type="checkbox" ${on ? 'checked' : ''} onchange="toggleEqUse('${escAttr(m.id)}',this.checked)">
-        <code style="font-size:11px;color:var(--i4);min-width:56px">${escapeHtml(m.code || '')}</code>
-        <span style="font-size:12px">${escapeHtml(m.name_ko || m.name_en || '')}</span>
-        ${used ? `<span class="pill p-blue" title="이 행사에서 이 품목을 신청한 내역">${used}건</span>` : ''}
-      </label>
-      <span style="font-size:10.5px;color:var(--i4);white-space:nowrap">기본 ${eqMoney(m.price_krw) || '-'}원${
-        m.price_usd ? ` · $${eqMoney(m.price_usd)}` : ''}</span>
-      ${on ? `<label class="clf"><span class="clf-l">이 행사 KRW</span>
-          <input class="fi" value="${escapeHtml(eqMoney(e.price_krw))}" style="width:96px;text-align:right${diff ? ';border-color:var(--am)' : ''}"
-            onchange="editEquipItem('${escAttr(e.id)}','price_krw',this.value)"></label>
-        <label class="clf"><span class="clf-l">USD</span>
-          <input class="fi" value="${escapeHtml(eqMoney(e.price_usd))}" style="width:80px;text-align:right${diff ? ';border-color:var(--am)' : ''}"
-            onchange="editEquipItem('${escAttr(e.id)}','price_usd',this.value)"></label>` : ''}
-    </div>`;
-  };
-  const list = masters.map(row).join('');
-  /* 전체 품목표에 없는 이 행사만의 품목 — 전시 화면에서 바로 만든 것 따위 */
-  const own = EQUIP_CATALOG.filter(c => c.event_id === eqEvent && !c.base_id && (c.kind || 'equip') === eqKind);
-  const ownHtml = own.length ? `
-    <div style="font-size:11.5px;font-weight:700;color:var(--i2);margin:14px 0 4px">이 행사에만 있는 품목 ${own.length}개</div>
-    <div style="font-size:11px;color:var(--i4);margin-bottom:6px">전체 품목표에 없는 품목입니다. 다른 행사에서도 쓸 거면 «전체에 올리기»를 누르세요.</div>
-    ${own.map(c => eqRowHtml(c) + `<div style="text-align:right;margin:2px 0 6px">
-      <button class="btn" style="font-size:10.5px" onclick="promoteEqItem('${escAttr(c.id)}')">전체에 올리기</button></div>`).join('')}` : '';
-  return (list || '<div style="font-size:12px;color:var(--i4);padding:8px 0">전체 품목표에 해당하는 품목이 없어요.</div>') + ownHtml;
-}
-
-/* 이 행사에 쓰기 / 빼기 */
-export async function toggleEqUse(masterId, on){
-  const m = EQUIP_CATALOG.find(c => c.id === masterId);
-  if(!m || !eqEvent) return;
-  const e = EQUIP_CATALOG.find(c => c.event_id === eqEvent && c.base_id === masterId);
-  const nm = `${m.code || ''} ${m.name_ko || m.name_en || ''}`.trim();
-  if(on){
-    if(e){   // 전에 뺐던 것 — 숨김만 푼다(이 행사 단가가 남아 있다)
-      e.active = '';
-      const r = await saveEquipCatalog(e);
-      if(!r.ok) e.active = 'no';
-    } else {
-      const rec = { ...m, id: `EC-${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-        event_id: eqEvent, base_id: m.id, active: '' };
-      EQUIP_CATALOG.push(rec);
-      const r = await saveEquipCatalog(rec);
-      if(!r.ok){ EQUIP_CATALOG.splice(EQUIP_CATALOG.indexOf(rec), 1); renderEquipCatalog(); return; }
-      if(r.id && r.id !== rec.id) rec.id = r.id;
-    }
-    trackAction('edit', '품목 사용', eqEvent, `<b>${escapeHtml(nm)}</b> — ${escapeHtml(eqEvent)}에서 씀`);
-  } else if(e){
-    /* 신청이 있으면 지우지 않고 숨긴다 — 옛 신청이 무엇을 가리키는지 남아야 한다 */
-    const used = eqUsedBy(e.id);
-    if(used){
-      if(!confirm(`"${nm}"은(는) 이 행사에서 ${used}건 신청돼 있어요.\n빼면 새로 고를 수 없지만 기존 신청과 금액은 그대로 남습니다. 뺄까요?`)){
-        renderEquipCatalog(); return;
-      }
-      e.active = 'no';
-      const r = await saveEquipCatalog(e);
-      if(!r.ok) e.active = '';
-    } else {
-      const i = EQUIP_CATALOG.indexOf(e);
-      EQUIP_CATALOG.splice(i, 1);
-      const r = await deleteEquipCatalog(e.id);
-      if(!r.ok) EQUIP_CATALOG.splice(i, 0, e);
-    }
-    trackAction('edit', '품목 빼기', eqEvent, `<b>${escapeHtml(nm)}</b> — ${escapeHtml(eqEvent)}에서 뺌`);
-  }
-  renderEquipCatalog();
-  window.renderExh?.();
-}
-
-/* 이 행사에만 있던 품목을 전체 품목표로 올린다 — 행사 사본은 그대로 두고 잇기만 한다 */
-export async function promoteEqItem(id){
-  const c = EQUIP_CATALOG.find(x => x.id === id);
-  if(!c) return;
-  const m = { ...c, id: `EC-${Date.now()}_${Math.floor(Math.random() * 1000)}`, event_id: '', base_id: '', active: '' };
-  EQUIP_CATALOG.push(m);
-  const r = await saveEquipCatalog(m);
-  if(!r.ok){ EQUIP_CATALOG.splice(EQUIP_CATALOG.indexOf(m), 1); return; }
-  if(r.id && r.id !== m.id) m.id = r.id;
-  c.base_id = m.id;
-  const r2 = await saveEquipCatalog(c);
-  if(!r2.ok) c.base_id = '';
-  trackAction('add', '품목 등록', '',
-    `<b>${escapeHtml(c.code || '')}</b> ${escapeHtml(c.name_ko || c.name_en || '')} — ${escapeHtml(eqEvent)}에서 전체 품목표로 올림`);
-  renderEquipCatalog();
-}
-
-/* 값 하나 고치기 — 금액은 쉼표를 떼고 숫자만 남긴다 */
-export async function editEquipItem(id, field, value){
-  const c = EQUIP_CATALOG.find(x => x.id === id);
-  if(!c) return;
-  const v = (field === 'price_krw' || field === 'price_usd') ? eqNum(value) : String(value ?? '').trim();
-  const prev = c[field] || '';
-  if(v === prev) return;
-
-  if(!v && field === 'name_ko' && !c.name_en){ alert('국문·영문 중 하나는 있어야 해요.'); renderEquipCatalog(); return; }
-  if(!v && field === 'name_en' && !c.name_ko){ alert('국문·영문 중 하나는 있어야 해요.'); renderEquipCatalog(); return; }
-
-  c[field] = v;
-  const r = await saveEquipCatalog(c);
-  if(!r.ok){ c[field] = prev; renderEquipCatalog(); return; }   // 실패하면 되돌린다
-
-  const LBL = { name_ko: '국문 품명', name_en: '영문 품명', price_krw: 'KRW 단가', price_usd: 'USD 단가' };
-  trackAction('edit', '품목 수정', eqEvent,
-    `<b>${escapeHtml(c.code || '')}</b> ${escapeHtml(c.name_ko || c.name_en || '')} — ${LBL[field] || field}: ${
-      escapeHtml(prev || '(빈값)')} → ${escapeHtml(v || '(빈값)')}`,
-    changed('equip_catalog', c.id, { [field]: prev ?? '' }, { [field]: v ?? '' }));
-  renderEquipCatalog();
-  window.renderExh?.();   // 전시 탭이 열려 있으면 단가가 바로 반영되게
-}
-
-/* 내리기 — 쓰는 중이면 숨기고, 아무도 안 쓴 품목만 정말 지운다 */
-export async function removeEquipItem(id){
-  const c = EQUIP_CATALOG.find(x => x.id === id);
-  if(!c) return;
-  const nm = `${c.code || ''} ${c.name_ko || c.name_en || ''}`.trim();
-  /* 전체 품목은 «쓰는 행사가 있나»로, 행사 품목은 «신청이 있나»로 지울지 정한다 */
-  const used = c.event_id ? eqUsedBy(c.id) : eqEventsUsing(c.id).length;
-
-  // 되살리기
-  if(c.active === 'no'){
-    c.active = '';
-    const r = await saveEquipCatalog(c);
-    if(!r.ok){ c.active = 'no'; renderEquipCatalog(); return; }
-    trackAction('edit', '품목 되살리기', eqEvent, `<b>${escapeHtml(nm)}</b> 다시 고를 수 있게 함`);
-    renderEquipCatalog(); return;
-  }
-
-  if(used){
-    if(!confirm(c.event_id
-      ? `"${nm}"을(를) 숨길까요?\n${used}곳이 이미 신청해 둔 품목이라 지우지 않고 숨깁니다.\n앞으로 새로 고를 수 없지만, 기존 신청 내역과 금액은 그대로 남습니다.`
-      : `"${nm}"을(를) 전체 품목표에서 숨길까요?\n${used}개 행사가 쓰고 있어 지우지 않고 숨깁니다.\n그 행사들의 품목표는 그대로이고, 다른 행사에서 새로 고를 수만 없게 됩니다.`)) return;
-    c.active = 'no';
-    const r = await saveEquipCatalog(c);
-    if(!r.ok){ c.active = ''; renderEquipCatalog(); return; }
-    trackAction('edit', '품목 숨김', eqEvent, `<b>${escapeHtml(nm)}</b> 숨김 (신청 ${used}건은 유지)`,
-      changed('equip_catalog', c.id, { active: '' }, { active: 'no' }));
-    renderEquipCatalog(); return;
-  }
-
-  if(!confirm(`"${nm}"을(를) 품목표에서 완전히 지울까요?\n아무도 신청하지 않은 품목이라 지워도 남는 기록이 없습니다.`)) return;
-  const i = EQUIP_CATALOG.indexOf(c);
-  EQUIP_CATALOG.splice(i, 1);
-  const r = await deleteEquipCatalog(c.id);
-  if(!r.ok){ EQUIP_CATALOG.splice(i, 0, c); renderEquipCatalog(); return; }
-  trackAction('delete', '품목 삭제', eqEvent, `<b>${escapeHtml(nm)}</b> 품목표에서 삭제 (신청 내역 없음)`,
-    removed('equip_catalog', c.id, c));
-  renderEquipCatalog();
-  window.renderExh?.();
-}
-
-export async function addEquipItem(){
-  const msg = document.getElementById('eq-new-msg');
-  const say = (t, ok) => { if(msg){ msg.style.color = ok ? 'var(--g)' : 'var(--re)'; msg.textContent = t; } };
-  const g = (id) => (document.getElementById(id)?.value || '').trim();
-  const ko = g('eq-new-ko'), en = g('eq-new-en');
-  if(!ko && !en){ say('품명을 국문이나 영문 중 하나는 입력해주세요.'); return; }
-
-  const mine = EQUIP_CATALOG.filter(c => (c.event_id || '') === (eqEvent || '') && (c.kind || 'equip') === eqKind);
-  // 같은 이름이 이미 있으면 새로 만들지 않는다 — 품목표를 둔 이유가 없어진다
-  const key = (v) => String(v || '').toLowerCase().replace(/\s+/g, '');
-  const dup = mine.find(c => (ko && key(c.name_ko) === key(ko)) || (en && key(c.name_en) === key(en)));
-  if(dup){ say(`이미 있는 품목이에요 — ${dup.code} ${dup.name_ko || dup.name_en}`); return; }
-
-  let code = g('eq-new-code').toUpperCase();
-  const used = new Set(mine.map(c => String(c.code || '').toUpperCase()));
-  if(code && used.has(code)){ say(`이미 쓰고 있는 코드예요 — ${code}`); return; }
-  if(!code){
-    let n = 1;
-    const pre = eqKind === 'graphic' ? 'XG' : 'X';
-    while(used.has(`${pre}-${String(n).padStart(3, '0')}`)) n++;
-    code = `${pre}-${String(n).padStart(3, '0')}`;
-  }
-
-  const rec = {
-    id: `EC-${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-    event_id: eqEvent || '', base_id: '', kind: eqKind,
-    category: g('eq-new-cat') || (eqKind === 'graphic' ? '기타그래픽' : '기타비품'), code,
-    name_ko: ko, name_en: en, spec: '',
-    price_krw: eqNum(g('eq-new-krw')), price_usd: eqNum(g('eq-new-usd')),
-    note: '', active: '', sort_order: String(900 + mine.length),
-  };
-  EQUIP_CATALOG.push(rec);
-  const r = await saveEquipCatalog(rec);
-  if(!r.ok){ EQUIP_CATALOG.pop(); say('저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.'); return; }
-  if(r.id && r.id !== rec.id) rec.id = r.id;
-
-  trackAction('add', '품목 등록', eqEvent,
-    `<b>${escapeHtml(code)}</b> ${escapeHtml(ko || en)} — ${escapeHtml(eqEvent || '전체')} 품목표에 추가`);
-  ['eq-new-code', 'eq-new-ko', 'eq-new-en', 'eq-new-krw', 'eq-new-usd']
-    .forEach(id => { const e = document.getElementById(id); if(e) e.value = ''; });
-  renderEquipCatalog();
-  say(`${code} ${ko || en} 추가했어요.`, true);
-  window.renderExh?.();
-}
-
-window.renderEquipCatalog = renderEquipCatalog;
-window.setEqKind    = setEqKind;
-window.openEquipFor = openEquipFor;
-window.toggleEqUse = toggleEqUse;
-window.promoteEqItem = promoteEqItem;
-window.setEqEvent   = setEqEvent;
-window.setEqCatFil  = setEqCatFil;
-window.setEqQuery   = setEqQuery;
-window.editEquipItem = editEquipItem;
-window.removeEquipItem = removeEquipItem;
-window.addEquipItem = addEquipItem;
-
-
-/* ══════════════════════════════════════════
-   행사 상세 설정 — 설정 › 행사 관리에서 행사 하나를 고르면 열린다
-
-   전에는 행사 하나를 두고 정할 것이 세 군데에 흩어져 있었다. 행사 자체는 이 탭,
-   부스 타입·스폰서 등급은 설정값 탭의 선택 목록, 비품 품목표는 그 아래, 마감일은
-   전시 탭. "이 행사 설정 어디서 하죠"에 답을 하나로 만들려고 한자리에 모은다.
-
-   목록과 상세는 같은 자리(arch-pane-ev)를 나눠 쓴다. 모달로 띄우지 않은 이유는
-   안에 표가 들어가기 때문이다 — 470px 카드에 품목표를 넣으면 못 읽는다.
-
-   저장 위치는 settings 시트의 exh_cfg_<행사키> 한 줄이다. 행사당 한 줄인 구조를
-   그대로 두는 편이, 파트를 넣자고 events 테이블에 열을 늘리는 것보다 되돌리기 쉽다.
-══════════════════════════════════════════ */
-let evDetailKey = '';        // 보고 있는 행사 (빈 문자열 = 목록 뷰)
-let evDetailSeg = 'basic';
-
-const EV_SEGS = [['basic','기본 정보'], ['parts','진행 파트'],
-  ['booth','부스'], ['equip','비품'], ['due','일정'], ['conf','컨퍼런스'], ['mail','메일']];
-
-/* 전시를 안 하는 행사에서는 부스·비품·일정이 뜻이 없다. 감추지 않고 잠그는 건
-   "왜 없지"로 끝나지 않게 하려는 것이다 — 켜는 자리를 같은 화면에서 알려준다. */
-const EV_SEG_NEEDS_EXH = ['booth', 'equip', 'due'];
-/* 세그먼트마다 어느 파트가 켜져 있어야 하는지 — 부스·비품·일정은 전시,
-   컨퍼런스는 컨퍼런스. 감추지 않고 잠그는 건 «왜 없지»로 끝나지 않게 하려는 것이다. */
-const EV_SEG_PART = { booth: 'exh', equip: 'exh', due: 'exh', conf: 'conf' };
-const evSegLocked = (seg, parts) => {
-  const need = EV_SEG_PART[seg];
-  return !!need && parts[need] === 'none';
-};
-/* 잠금 안내에서 어느 파트를 켜라고 할지 */
-const evSegPartLabel = (seg) => {
-  const k = EV_SEG_PART[seg];
-  return (EVENT_PARTS.find(p => p.key === k) || {}).label || '';
-};
-
-export function openEvDetail(key){
-  evDetailKey = key;
-  evDetailSeg = 'basic';
-  const list = document.getElementById('ev-mgr-list-view');
-  const det  = document.getElementById('ev-mgr-detail-view');
-  if(list) list.style.display = 'none';
-  if(det)  det.style.display  = 'block';
-  renderEvDetail();
-}
-
-export function closeEvDetail(){
-  evDetailKey = '';
-  // 비품 편집기를 설정값 탭 자리로 돌려놓는다 — 안 그러면 그쪽에서 열었을 때
-  // 사라진 자리에 그리려 하고 화면이 빈 채로 남는다
-  mountEquipCatalogIdle();
-  const list = document.getElementById('ev-mgr-list-view');
-  const det  = document.getElementById('ev-mgr-detail-view');
-  if(det){  det.style.display  = 'none'; det.innerHTML = ''; }
-  if(list) list.style.display = 'block';
-  renderEvMgr();
-}
-
-export function setEvDetailSeg(seg){ evDetailSeg = seg; renderEvDetail(); }
-
-export function renderEvDetail(){
-  const el = document.getElementById('ev-mgr-detail-view');
-  if(!el || !evDetailKey) return;
-  const ev = EVENT_LIST.find(e => e.key === evDetailKey);
-  if(!ev){ closeEvDetail(); return; }        // 다른 곳에서 지워졌다
-
-  const parts = evParts(ev.key);
-  const locked = evSegLocked(evDetailSeg, parts);
-  /* 진행 완료된 전시는 설정도 손대지 않는다 — 끝난 행사의 부스 타입이나 단가가
-     바뀌면 그때 무엇으로 청구했는지가 지금 값으로 덮인다. */
-  /* 진행 완료된 파트는 설정도 손대지 않는다 — 끝난 행사의 값이 바뀌면 그때
-     무엇으로 했는지가 지금 값으로 덮인다. 세그먼트가 보는 파트를 따라간다. */
-  const readonly = evPartDone(ev.key, EV_SEG_PART[evDetailSeg] || 'exh');
-
-  const seg = EV_SEGS.map(([k, l]) => {
-    const off = evSegLocked(k, parts);
-    return `<button class="seg-b${evDetailSeg === k ? ' on' : ''}" onclick="setEvDetailSeg('${k}')"
-      style="${off ? 'opacity:.45' : ''}" ${off ? 'title="전시 파트를 켜면 쓸 수 있어요"' : ''}>${l}${off ? ' 🔒' : ''}</button>`;
-  }).join('');
-
-  const body = locked
-    ? `<div style="font-size:12px;color:var(--i4);padding:24px 0">
-         이 행사는 <b>${escapeHtml(evSegPartLabel(evDetailSeg))}</b> 파트가 꺼져 있어 ${escapeHtml(EV_SEGS.find(x => x[0] === evDetailSeg)[1])} 설정을 쓰지 않아요.
-         <button class="btn" style="margin-left:8px;font-size:11px" onclick="setEvDetailSeg('parts')">진행 파트에서 켜기</button>
-       </div>`
-    : evDetailSeg === 'parts' ? evPartsHtml(ev, parts)
-    : evDetailSeg === 'booth' ? evBoothHtml(ev)
-    /* 품목표는 설정 › 비품 목록 한 곳에서 고친다 — 여기서는 몇 품목인지와 바로가기만 */
-    : evDetailSeg === 'equip' ? (() => {
-        const n = EQUIP_CATALOG.filter(c => c.event_id === ev.key && c.active !== 'no').length;
-        return `<div style="font-size:12px;color:var(--i3);padding:12px 0;line-height:1.7">
-          이 행사의 품목표: <b>${n ? `${n}품목` : '아직 없음'}</b><br>
-          <button class="btn bp" style="margin-top:8px;font-size:11px"
-            onclick="openEquipFor('${escAttr(ev.key)}')">🪑 비품 목록에서 열기</button></div>`;
-      })()
-    : evDetailSeg === 'due'   ? evDueHtml(ev)
-    : evDetailSeg === 'conf'  ? evConfHtml(ev)
-    : evDetailSeg === 'mail'  ? '<div id="evd-mailbox"></div>'
-    : evBasicHtml(ev);
-
-  el.innerHTML = `
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-      <button class="btn" style="font-size:11px;height:28px" onclick="closeEvDetail()">← 행사 목록</button>
-      <div style="width:12px;height:12px;border-radius:50%;background:${escAttr(ev.color || '#3B5BDB')};flex-shrink:0"></div>
-      <div style="font-size:14px;font-weight:700;color:var(--i1)">${escapeHtml(ev.name || ev.key)}</div>
-      <span style="font-size:11px;color:var(--i4);background:var(--i7);border-radius:3px;padding:1px 5px;font-family:monospace">${escapeHtml(ev.key)}</span>
-    </div>
-    <div class="seg" style="flex-wrap:wrap;margin-bottom:14px">${seg}</div>
-    ${readonly && EV_SEG_PART[evDetailSeg] ? `<div style="display:flex;align-items:center;gap:8px;
-        background:var(--i8);border:1px solid var(--i6);border-left:3px solid var(--g);border-radius:8px;
-        padding:9px 12px;margin-bottom:10px">
-      <span class="pill p-green">진행 완료</span>
-      <span style="font-size:11.5px;color:var(--i3)">끝난 파트라 열람만 됩니다. 고치려면 <b>진행 파트</b>에서 진행 중으로 되돌리세요.</span>
-    </div>` : ''}
-    <div class="${readonly && EV_SEG_PART[evDetailSeg] ? 'ro' : ''}"
-      style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:16px">${body}</div>`;
-
-  // 비품 편집기는 이제 비품 목록 탭에만 붙는다 — 다른 자리를 가리키고 있으면 돌려놓는다
-  mountEquipCatalogIdle();
-  if(evDetailSeg === 'conf' && !locked) fillFlowFiles(ev.key);
-  if(evDetailSeg === 'mail') renderEvMailbox(ev.key);
-}
-
-/* ── 행사 공용 메일 ── (설정 › 행사 관리 › 메일)
-   정본은 여기 한 곳이다. 연사·참가사 «메일 보내기»는 이 값을 서버가 읽어 쓴다.
-   이 행사 사람(연사·참가사)에게 «메일 보내기»를 누르면 여기 적은 주소로 나간다.
-   비워 두면 보내지 않는다. 비밀번호는 서버만 알고, 화면에는
-   «저장됨»만 보인다 — 다른 칸만 고칠 때는 비밀번호 칸을 비워 둔다. */
-let mailAccounts = null;
-async function renderEvMailbox(evKey){
-  const el = document.getElementById('evd-mailbox');
-  if(!el) return;
-  if(!mailAccounts){
-    el.innerHTML = '<div style="font-size:11px;color:var(--i4)">메일 계정 불러오는 중…</div>';
-    mailAccounts = await loadMailAccounts();
-    if(document.getElementById('evd-mailbox') !== el) return;
-  }
-  const r = mailAccounts;
-  if(r.ok === false) mailAccounts = null;   // 다음에 열 때 다시 불러온다
-  const box = (r.accounts || []).find(a => a.event_id === evKey) || {};
-  const inp = (id, label, val, ph, type = 'text') => `<div><div class="mlbl">${label}</div>
-    <input class="fi" id="evmb-${id}" type="${type}" value="${escapeHtml(val || '')}" placeholder="${escapeHtml(ph)}" autocomplete="off"></div>`;
-  el.innerHTML = `<div>
-    <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">행사 공용 메일
-      ${box.username ? '<span class="pill p-green" style="font-size:10px;margin-left:6px">연결됨</span>' : '<span class="pill p-gray" style="font-size:10px;margin-left:6px">없음 — 메일을 보낼 수 없음</span>'}</div>
-    <div style="font-size:11px;color:var(--i4);margin-bottom:12px">
-      이 행사의 연사·참가사에게 «메일 보내기»를 누르면 이 주소로 나가고, 답장도 이 메일함으로 옵니다.
-      <span id="evmb-help">${mailProv(box.provider).help}</span>
-      ${r.offline ? '<br><b style="color:var(--re)">테스트 모드에서는 설정할 수 없어요.</b>' : ''}
-      ${r.ok && !r.keyReady ? '<br><b style="color:var(--re)">서버에 MAIL_SECRET이 없어 비밀번호를 저장할 수 없어요 — Vercel 환경변수를 먼저 넣어주세요.</b>' : ''}
-      ${r.ok === false && !r.offline ? `<br><b style="color:var(--re)">${escapeHtml(r.error || '불러오지 못했어요')}</b>` : ''}
-    </div>
-    <div style="margin-bottom:10px"><div class="mlbl">메일 서비스</div>
-      <select class="fi" id="evmb-provider" style="width:220px" onchange="evmbProvider(this.value)">
-        <option value="mailplug"${(box.provider || 'mailplug') === 'mailplug' ? ' selected' : ''}>메일플러그 (회사 메일)</option>
-        <option value="gmail"${box.provider === 'gmail' ? ' selected' : ''}>Gmail</option>
-        <option value="naverworks"${box.provider === 'naverworks' ? ' selected' : ''}>네이버 웍스</option>
-      </select></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-      ${inp('user', '로그인 주소', box.username, mailProv(box.provider).user)}
-      ${inp('pass', box.has_password ? '앱 비밀번호 — 저장됨, 바꿀 때만 입력' : '앱 비밀번호 (메일 비밀번호 아님)', '', box.has_password ? '••••••••' : '발급한 앱 비밀번호 (메일 비밀번호 아님)', 'password')}
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
-      ${inp('from', '받는 사람에게 보일 주소', box.from_addr, '비우면 로그인 주소')}
-      ${inp('name', '보내는 이름', box.from_name, '예: KIC 2026 사무국')}
-    </div>
-    <div style="margin-bottom:10px">${inp('hostdom', '주최사 메일 도메인 (쉼표로 여러 개)', box.host_domains, '예: kpbma.or.kr')}
-      <div style="font-size:10.5px;color:var(--i4);margin-top:3px;line-height:1.5">주최사 주소는 연락처로 넣지 않아요. 직원이 전달(FW)한 주최사 메일은 원래 받는 사람(연사·참가사) 기록에 붙어요.</div></div>
-    <details style="margin-bottom:10px"><summary style="font-size:11px;color:var(--i4);cursor:pointer">서버 (보통 고칠 일 없음)</summary>
-      <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-top:8px">
-        ${inp('host', 'SMTP 서버', box.host, mailProv(box.provider).host)}
-        ${inp('port', '포트', box.port, '465')}
-      </div></details>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button class="btn bp" onclick="saveEvMailbox('${escAttr(evKey)}')" style="min-width:80px">저장</button>
-      ${box.username ? `<button class="btn" onclick="testEvMailbox('${escAttr(evKey)}')">연결 확인</button>
-        <button class="btn" onclick="removeEvMailbox('${escAttr(evKey)}')">연결 끊기</button>
-        <button class="btn" onclick="syncEvSentMail('${escAttr(evKey)}')"
-          title="행사 메일 보낸메일함·받은메일함을 읽어, 이 행사 연사·참가사와 주고받은 메일을 그 사람 기록에 남기고 초청 메일은 «보냄»으로 체크합니다">메일함에서 주고받은 기록 가져오기</button>` : ''}
-      <span id="evmb-msg" style="font-size:11px;color:var(--g)"></span>
-    </div>
-    ${box.username ? `<div id="evmb-footer" style="margin-top:16px"></div>` : ''}
-    <div id="evd-inbox" style="margin-top:16px"></div>
-    ${evParts(evKey).exh !== 'none' ? exhMailEditorHtml(evKey) : ''}
-  </div>`;
-  renderEvInbox(evKey);
-  if(box.username) renderEvMailFooter(evKey);
-  if(evParts(evKey).exh !== 'none') fillExhMailFiles(evKey);
-}
-
-/* ── 메일 푸터 — 이 행사 메일함으로 나가는 모든 메일(전시·연사·컨택·CRM) 맨 끝에 서버가 붙인다.
-   글은 **굵게** *기울임*, www. 주소는 링크. 이미지는 글 아래. 저장은 비밀번호와 따로 ── */
-let evFooter = null;   // { evKey, text, img(미리보기 data URL), imgNew(새 이미지 | null=빼기 | undefined=그대로), imgType }
-async function renderEvMailFooter(evKey){
-  const el = document.getElementById('evmb-footer');
-  if(!el) return;
-  if(!evFooter || evFooter.evKey !== evKey){
-    el.innerHTML = '<div style="font-size:11px;color:var(--i4)">메일 푸터 불러오는 중…</div>';
-    const r = await loadMailFooter(evKey);
-    if(document.getElementById('evmb-footer') !== el) return;
-    // 예전 «여러 기업에 메일»에만 저장했던 푸터가 있으면 처음 한 번 채워 둔다(저장을 눌러야 옮겨진다)
-    const old = String((EXH_CFG[evKey] || {}).mailFooter || '');
-    evFooter = { evKey, text: (r && r.footer_text) || '', img: (r && r.footer_img) || '', fromOld: !(r && r.footer_text) && !!old };
-    if(evFooter.fromOld) evFooter.text = old;
-  }
-  const f = evFooter;
-  el.innerHTML = `<div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">메일 푸터
-      ${f.text || f.img ? '<span class="pill p-green" style="font-size:10px;margin-left:6px">모든 메일에 붙음</span>' : '<span class="pill p-gray" style="font-size:10px;margin-left:6px">없음</span>'}</div>
-    <div style="font-size:11px;color:var(--i4);margin-bottom:8px">이 행사 메일로 나가는 모든 메일(전시·연사·컨택·CRM) 맨 끝, 본문·사진 아래에 붙어요.
-      **굵게** *기울임* · www. 주소는 링크. 양식 문구에 서명을 따로 넣었다면 겹치니 빼주세요.
-      ${f.fromOld ? '<br><b style="color:var(--am)">«여러 기업에 메일»에 저장해 두었던 푸터를 불러왔어요 — 저장을 눌러야 여기로 옮겨져요.</b>' : ''}</div>
-    <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px">
-      <div>
-        <textarea class="fi" id="evmb-ftext" rows="9" style="width:100%;font-size:11.5px" oninput="evFooterInput(this.value)"
-          placeholder="***행사 사무국***&#10;주소&#10;**E-mail:** ...">${escapeHtml(f.text)}</textarea>
-        <div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap;font-size:11px">
-          <label class="btn" style="font-size:10.5px;cursor:pointer">🖼 ${f.img ? '푸터 이미지 바꾸기' : '푸터 이미지 넣기'}
-            <input type="file" accept="image/png,image/jpeg,image/gif" style="display:none" onchange="evFooterImg(this)"></label>
-          ${f.img ? '<button class="btn" style="font-size:10.5px" onclick="evFooterImg(null)">이미지 빼기</button>' : ''}
-          <span style="color:var(--i4)">가로 1240px로 맞춰요 · 1MB 이하</span>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
-          <button class="btn bp" onclick="saveEvFooter('${escAttr(evKey)}')">푸터 저장</button>
-          <span id="evmb-fmsg" style="font-size:11px;color:var(--g)"></span></div>
-      </div>
-      <div><div class="mlbl">미리보기</div>
-        <div id="evmb-fprev" style="background:#fff;border:1px solid var(--i6);border-radius:6px;padding:10px;max-height:320px;overflow:auto">${evFooterPrev()}</div></div>
-    </div>`;
-}
-function evFooterPrev(){
-  const f = evFooter;
-  if(!f || (!f.text.trim() && !f.img)) return '<span style="font-size:11px;color:var(--i4)">푸터가 없어요.</span>';
-  const line = (l) => escapeHtml(l)
-    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<i>$1</i>')
-    .replace(/\b((?:https?:\/\/|www\.)[^\s<]+)/g, (u) => `<a href="${u.startsWith('www.') ? 'https://' + u : u}" target="_blank" style="color:#1a0dab">${u}</a>`);
-  return `<div style="font-family:Arial,sans-serif;font-size:12px;line-height:1.45;color:#222">${f.text.trim().split('\n').map(line).join('<br>')}${
-    f.img ? `<img src="${f.img}" style="display:block;max-width:100%;margin-top:10px">` : ''}</div>`;
-}
-window.evFooterInput = (v) => { if(!evFooter) return; evFooter.text = v; const p = document.getElementById('evmb-fprev'); if(p) p.innerHTML = evFooterPrev(); };
-window.evFooterImg = (input) => {
-  if(!evFooter) return;
-  if(!input){ evFooter.img = ''; evFooter.imgNew = null; renderEvMailFooter(evFooter.evKey); return; }
-  const file = input.files && input.files[0];
-  input.value = '';
-  if(!file) return;
-  const url = URL.createObjectURL(file), im = new Image();
-  im.onload = () => {
-    // 가로 1240px로 맞춘다(작으면 그대로). PNG는 투명 배경일 수 있어 PNG로 두되 1MB를 넘으면 JPEG로
-    const w = Math.min(1240, im.naturalWidth), h = Math.round(im.naturalHeight * w / im.naturalWidth);
-    const c = document.createElement('canvas'); c.width = w; c.height = h;
-    const g = c.getContext('2d');
-    const png = file.type === 'image/png';
-    if(!png){ g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); }
-    g.drawImage(im, 0, 0, w, h);
-    URL.revokeObjectURL(url);
-    let data = c.toDataURL(png ? 'image/png' : 'image/jpeg', .88);
-    if(png && data.length * .75 > 1024 * 1024){ g.globalCompositeOperation = 'destination-over'; g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); data = c.toDataURL('image/jpeg', .88); }
-    if(data.length * .75 > 1024 * 1024){ alert('이미지가 1MB를 넘어요. 더 작은 이미지를 골라주세요.'); return; }
-    evFooter.img = data; evFooter.imgNew = data; evFooter.imgType = data.slice(5, data.indexOf(';'));
-    renderEvMailFooter(evFooter.evKey);
-  };
-  im.onerror = () => { URL.revokeObjectURL(url); alert('이미지를 읽지 못했어요.'); };
-  im.src = url;
-};
-window.saveEvFooter = async (evKey) => {
-  if(!evFooter || evFooter.evKey !== evKey) return;
-  const msg = document.getElementById('evmb-fmsg');
-  if(msg){ msg.style.color = 'var(--i4)'; msg.textContent = '저장 중…'; }
-  const rec = { footer_text: evFooter.text.trim() };
-  if(evFooter.imgNew === null) rec.footer_img = null;
-  else if(evFooter.imgNew){ rec.footer_img = evFooter.imgNew; rec.footer_img_type = evFooter.imgType; }
-  const r = await saveMailFooter(evKey, rec);
-  if(!r || r.ok === false){ if(msg){ msg.style.color = 'var(--re)'; msg.textContent = (r && r.error) || '저장하지 못했어요.'; } return; }
-  evFooter.imgNew = undefined; evFooter.fromOld = false;
-  renderEvMailFooter(evKey);
-  const m2 = document.getElementById('evmb-fmsg');
-  if(m2){ m2.style.color = 'var(--g)'; m2.textContent = '저장했어요 — 이제 이 행사 메일 끝에 붙어요.'; }
-};
-
-/* ── 전시 메일 양식 ──
-   고치는 곳은 편집 창 하나(exh-mail-editor.js) — 참가사 메일 탭·«여러 기업에 메일»에서도
-   같은 창이 열린다. 여기서는 지금 단계만 보여 주고 창을 연다. */
-function exhMailEditorHtml(evKey){
-  const steps = exhMailSteps(evKey, { withOff: true });
-  return `<div style="margin-top:22px;padding-top:14px;border-top:1px solid var(--i6)">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-      <span style="font-size:12px;font-weight:700;color:var(--i2)">전시 메일 양식</span>
-      <button class="btn" style="font-size:10.5px;margin-left:auto" onclick="openExhMailEditor('${escAttr(evKey)}')">✎ 단계 편집</button>
-    </div>
-    <div style="font-size:11px;color:var(--i4);margin-bottom:6px;line-height:1.6">
-      단계 추가·고치기·끄기와 메일 문구·기본 첨부는 «단계 편집»에서 합니다. 참가사 메일 탭에서도 같은 창이 열리고, 고치면 바로 저장돼요.</div>
-    <div style="display:flex;flex-wrap:wrap;gap:4px">${steps.map((st, i) => `<span class="pill ${st.off ? 'p-gray' : st.custom ? 'p-amber' : 'p-blue'}"
-      style="font-size:10.5px;cursor:pointer;${st.off ? 'text-decoration:line-through' : ''}" onclick="openExhMailEditor('${escAttr(evKey)}','${escAttr(st.key)}')"
-      >${i + 1}. ${escapeHtml(st.label)}</span>`).join('')}</div>
-  </div>`;
-}
-export async function fillExhMailFiles(evKey){
-  await loadMailFiles(evKey);
-  exhMailSteps(evKey, { withOff: true }).forEach(st => {
-    const el = document.getElementById(`exmfiles-${st.key}`);
-    if(!el) return;
-    const files = mailFilesOf(evKey).filter(f => f.step === exhMailFileStep(st.key));
-    el.innerHTML = files.length ? files.map(f => `<div style="display:flex;gap:6px;align-items:center;padding:2px 0">
-        📎 <span style="color:var(--i2)">${escapeHtml(f.filename)}</span>
-        <span>${(Number(f.size || 0) / 1024).toFixed(0)}KB</span>
-        <button class="btn" style="font-size:10px;padding:1px 6px;margin-left:auto"
-          onclick="removeFlowFile('${escAttr(evKey)}','${escAttr(f.id)}')">삭제</button></div>`).join('') : '없음';
-  });
-}
-
-/* 메일 서비스별 안내·기본 서버 — 서버 쪽 PROVIDERS(routes/mail.js)와 맞춘다 */
-const MAIL_PROVIDERS = {
-  mailplug: { host: 'smtp.mailplug.co.kr', user: '예: kic@13100m.net',
-    help: '메일플러그 › 환경설정 › IMAP/SMTP 사용에서 앱 비밀번호를 발급해 넣어주세요.' },
-  gmail: { host: 'smtp.gmail.com', user: '예: kic.secretariat@gmail.com',
-    help: 'Gmail: 2단계 인증을 켠 뒤 Google 계정 › 보안 › 앱 비밀번호에서 발급해 넣어주세요. 회사 주소로 보내려면 Gmail 설정 › 계정 › «다른 주소에서 메일 보내기»에 그 주소를 먼저 등록하세요.' },
-  naverworks: { host: 'smtp.worksmobile.com', user: '예: kic@회사도메인',
-    help: '네이버 웍스: 관리자 화면 › 보안 › 서비스 권한 › 메일에서 IMAP/SMTP가 «사용»인지 확인한 뒤 웍스 로그인 비밀번호를 넣어주세요(2단계 인증을 쓰면 앱 비밀번호).' },
-};
-const mailProv = (v) => MAIL_PROVIDERS[v || 'mailplug'] || MAIL_PROVIDERS.mailplug;
-
-/* 서비스를 바꾸면 서버 칸·안내를 그 서비스 것으로 — 서버 칸은 비워 두면 서버가 기본값을 쓴다 */
-export function evmbProvider(v){
-  const host = document.getElementById('evmb-host');
-  const defaults = Object.values(MAIL_PROVIDERS).map(p => p.host);
-  if(host && (!host.value || defaults.includes(host.value.trim()))){
-    host.value = ''; host.placeholder = mailProv(v).host;
-  }
-  const user = document.getElementById('evmb-user');
-  if(user) user.placeholder = mailProv(v).user;
-  const help = document.getElementById('evmb-help');
-  if(help) help.textContent = mailProv(v).help;
-}
-window.evmbProvider = evmbProvider;
-
-/* 이 행사의 처리 안 한 받은 메일 — 사람마다 창을 열어 봐야 알면 놓친다.
-   한곳에 모아 두고, 누르면 그 사람 메일 탭이 열린다. 읽음·처리 규칙은 mail-mark.js */
-let inboxEv = '';
-export function renderEvInbox(evKey = inboxEv){
-  inboxEv = evKey;
-  const el = document.getElementById('evd-inbox');
-  if(!el) return;
-  const spIds = new Map(SPEAKERS.filter(x => x.event_id === evKey).map(x => [x.id, x.name_snapshot || x.name_en || x.id]));
-  const exIds = new Map(EXHIBITORS.filter(x => x.event_id === evKey).map(x => [x.id, x.company_name || x.id]));
-  const rows = [
-    ...SPEAKER_LOGS.filter(l => spIds.has(l.speaker_id) && isPending(l)).map(l => ({ l, t: 'sp', id: l.speaker_id, who: spIds.get(l.speaker_id) })),
-    ...EXH_LOGS.filter(l => exIds.has(l.exhibitor_id) && isPending(l)).map(l => ({ l, t: 'ex', id: l.exhibitor_id, who: exIds.get(l.exhibitor_id) })),
-  ].sort((a, b) => String(b.l.ts || '').localeCompare(String(a.l.ts || '')));
-  const unread = rows.filter(r => isUnread(r.l)).length;
-  // 주인 없는 메일 단추는 늦게 채운다(서버에서 센다)
-  setTimeout(async () => {
-    const m = await import('../shared/mail/mail-original.js');
-    const n = await m.unassignedCount(evKey);
-    const b = document.getElementById('evd-un-btn');
-    if(b) b.innerHTML = n ? `<button class="btn" style="font-size:10.5px;color:var(--am);font-weight:700;margin-left:6px" onclick="openUnassigned('${escAttr(evKey)}')">주인 없는 메일 ${n}</button>` : '';
-  }, 0);
-  el.innerHTML = `<span id="evd-un-btn" style="float:right"></span><div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:6px">처리 안 한 받은 메일 ${rows.length
-      ? `<span class="pill p-amber" style="font-size:10px">${rows.length}</span>${unread ? ` <span class="pill p-red" style="font-size:10px">안 읽음 ${unread}</span>` : ''}` : ''}</div>
-    ${rows.length ? rows.slice(0, 50).map(({ l, t, id, who }) => `<div style="display:flex;gap:7px;align-items:baseline;padding:6px 0;border-top:1px solid var(--i7);cursor:pointer"
-        onclick="${t === 'sp' ? `openSpeakerDr('${escAttr(id)}','box')` : `openExhDr('${escAttr(id)}','box')`}">
-        <span style="font-size:10.5px;color:var(--i4);white-space:nowrap">${escapeHtml(l.ts || '')}</span>
-        <span class="pill p-gray" style="font-size:10px">${t === 'sp' ? '연사' : '참가사'}</span>
-        <span style="font-size:11.5px;font-weight:${isUnread(l) ? 800 : 500}">${isUnread(l) ? '● ' : ''}${escapeHtml(who)}</span>
-        <span style="font-size:11.5px;color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(l.subject || '(제목 없음)')}</span>
-      </div>`).join('')
-      : '<div style="font-size:11px;color:var(--i4)">처리 안 한 받은 메일이 없어요. «메일함에서 주고받은 기록 가져오기»로 새 메일을 가져옵니다.</div>'}`;
-}
-window.renderEvInbox = renderEvInbox;
-const evmbSay = (t, ok) => { const m = document.getElementById('evmb-msg'); if(m){ m.style.color = ok ? 'var(--g)' : 'var(--re)'; m.textContent = t; } };
-
-export async function saveEvMailbox(evKey){
-  const g = (id) => (document.getElementById('evmb-' + id)?.value || '').trim();
-  const rec = { provider: g('provider') || 'mailplug', username: g('user'), password: g('pass'), from_addr: g('from'), from_name: g('name'), host: g('host'), port: g('port'), host_domains: g('hostdom') };
-  if(!rec.username){ evmbSay('로그인 주소를 적어주세요.'); return; }
-  evmbSay('저장 중…', true);
-  const r = await saveMailAccount(evKey, rec);
-  if(!r.ok){ evmbSay(r.error || '저장하지 못했어요.'); return; }
-  mailAccounts = mailAccounts || { ok: true, accounts: [] };
-  mailAccounts.accounts = [...(mailAccounts.accounts || []).filter(a => a.event_id !== evKey), r.account];
-  eventMailFrom(evKey, true);
-  trackAction('edit', '행사 메일 설정', evKey, `${rec.username}${rec.password ? ' (비밀번호 변경)' : ''}`);
-  await renderEvMailbox(evKey);
-  // 저장만 하고 끝내면 비밀번호가 틀린 걸 첫 발송 때 알게 된다 — 바로 확인한다
-  await testEvMailbox(evKey);
-}
-export async function testEvMailbox(evKey){
-  evmbSay('로그인 확인 중…', true);
-  const r = await testMailAccount(evKey);
-  evmbSay(r.ok ? r['연결'] : `${r.error || '실패'}${r['도움말'] ? ' — ' + r['도움말'] : ''}`, r.ok);
-}
-/* 메일함 → 기록 — 규칙과 순서는 mail-mark.js runMailSync(대시보드도 같은 걸 쓴다) */
-export const syncEvSentMail = (evKey) => runMailSync(evKey, evmbSay);
-
-export async function removeEvMailbox(evKey){
-  if(!confirm('이 행사의 메일 계정 연결을 끊을까요?\n끊으면 이 행사 사람들에게 메일을 보낼 수 없어요.')) return;
-  const r = await deleteMailAccount(evKey);
-  if(!r.ok){ evmbSay(r.error || '끊지 못했어요.'); return; }
-  mailAccounts = mailAccounts || { ok: true, accounts: [] };
-  mailAccounts.accounts = (mailAccounts.accounts || []).filter(a => a.event_id !== evKey);
-  eventMailFrom(evKey, true);
-  trackAction('delete', '행사 메일 설정', evKey, '연결 끊음');
-  renderEvMailbox(evKey);
-}
-
-/* ── 기본 정보 ──
-   행사는 지금까지 추가·삭제만 됐다. 오타 하나 고치려고 지웠다 다시 만들면
-   participations 연결이 끊기므로, 여기서 처음으로 고칠 수 있게 한다.
-   행사 ID(key)는 못 고친다 — 연결 키라서 바꾸면 참여 기록이 전부 떨어진다. */
-function evBasicHtml(ev){
-  return `
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-      <div><div class="mlbl">행사명 (풀네임)</div>
-        <input class="fi" id="evd-name" value="${escapeHtml(ev.name || ev.key)}" style="width:100%"></div>
-      <div><div class="mlbl">약칭</div>
-        <input class="fi" id="evd-short" value="${escapeHtml(ev.short || '')}" style="width:100%"></div>
-    </div>
-    <div style="margin-bottom:8px"><div class="mlbl">영문 행사명 <span style="font-size:9.5px;color:var(--i4)">영문 메일·엑셀의 {행사}에 들어갑니다 — 비우면 행사명</span></div>
-      <input class="fi" id="evd-name-en" value="${escapeHtml(ev.name_en || '')}" placeholder="예: 2026 AIA East Asia Symposium" style="width:100%"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
-      <div><div class="mlbl">시작일</div>
-        <input class="fi" id="evd-date-start" type="date" value="${escapeHtml(ev.date_start || '')}" style="width:100%"></div>
-      <div><div class="mlbl">종료일</div>
-        <input class="fi" id="evd-date-end" type="date" value="${escapeHtml(ev.date_end || '')}" style="width:100%"></div>
-      <div><div class="mlbl">색상</div>
-        <input type="color" id="evd-color" value="${escapeHtml(ev.color || '#3B5BDB')}"
-          style="width:100%;height:36px;border:1px solid var(--i6);border-radius:6px;cursor:pointer;padding:2px"></div>
-    </div>
-    <div style="margin-bottom:12px"><div class="mlbl">장소</div>
-      <input class="fi" id="evd-loc" value="${escapeHtml(ev.location || '')}" style="width:100%"></div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <button class="btn bp" onclick="saveEvBasic()" style="min-width:80px">저장</button>
-      <span id="evd-basic-msg" style="font-size:11px;color:var(--g)"></span>
-    </div>
-    <div style="font-size:10.5px;color:var(--i5);margin-top:10px">
-      행사 ID <code>${escapeHtml(ev.key)}</code>는 참여 기록·참가기업이 가리키는 키라 바꿀 수 없어요.
-    </div>`;
-}
-
-export async function saveEvBasic(){
-  const ev = EVENT_LIST.find(e => e.key === evDetailKey);
-  if(!ev) return;
-  const msg = document.getElementById('evd-basic-msg');
-  const say = (t, ok) => { if(msg){ msg.style.color = ok ? 'var(--g)' : 'var(--re)'; msg.textContent = t; } };
-  const g = (id) => (document.getElementById(id)?.value || '').trim();
-
-  const name = g('evd-name');
-  if(!name){ say('행사명은 비울 수 없어요.'); return; }
-
-  const prev = { ...ev };
-  const start = g('evd-date-start');
-  Object.assign(ev, {
-    name, short: g('evd-short') || name, name_en: g('evd-name-en'),
-    date_start: start, date: start,       // date는 하위 호환용 시작일
-    date_end: g('evd-date-end'), location: g('evd-loc'),
-    color: document.getElementById('evd-color')?.value || ev.color,
-  });
-
-  const r = await saveEventToSheet(ev);
-  if(r && r.ok === false){ Object.assign(ev, prev); say('저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.'); renderEvDetail(); return; }
-
-  const changed = ['name','short','name_en','date_start','date_end','location','color']
-    .filter(f => (prev[f] || '') !== (ev[f] || ''))
-    .map(f => `${f} ${prev[f] || '없음'} → ${ev[f] || '없음'}`);
-  if(changed.length) trackAction('edit', '행사 정보 수정', ev.key, changed.join(' / '));
-
-  refreshAfterEventChange();
-  say('저장했어요.', true);
-  renderEvDetail();
-  setTimeout(() => { const m = document.getElementById('evd-basic-msg'); if(m) m.textContent = ''; }, 2000);
-}
-
-/* ── 진행 파트 ──
-   행사마다 무엇을 하는지가 다르다. 켜 둔 파트만 화면에 나오게 하는 게 목적이고,
-   지금은 전시만 실제로 잠금이 붙는다 — 나머지는 운영 화면이 아직 없다. */
-function evPartsHtml(ev, parts){
-  const exhSummary = () => {
-    const bt = clRowsOf('booth_type', ev.key).length || clRowsOf('booth_type', '').length;
-    const eq = EQUIP_CATALOG.filter(c => c.event_id === ev.key).length;
-    return `부스 타입 ${bt}종 · 비품 품목 ${eq}건`;
-  };
-  return EVENT_PARTS.map(p => {
-    const st = parts[p.key];
-    const sub = (st !== 'none' && p.key === 'exh') ? exhSummary() : '';
-    return `<div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--i7);flex-wrap:wrap">
-      <div style="flex:1;min-width:150px">
-        <div style="font-size:13px;font-weight:600;color:var(--i1)">${escapeHtml(p.label)}</div>
-        <div style="font-size:11px;color:var(--i4);margin-top:2px">
-          ${sub ? escapeHtml(sub) : p.partTypes.map(t => `<span class="pill p-gray" style="margin-right:3px">${escapeHtml(t)}</span>`).join('')}
-        </div>
-      </div>
-      <div class="seg" style="flex-wrap:wrap">
-        ${PART_STATES.map(x => `<button class="seg-b${st === x.key ? ' on' : ''}"
-          onclick="setEvPart('${escAttr(p.key)}','${escAttr(x.key)}')">${escapeHtml(x.label)}</button>`).join('')}
-      </div>
-    </div>`;
-  }).join('')
-  + `<div style="font-size:10.5px;color:var(--i5);margin-top:12px;line-height:1.7">
-      <b>안 함</b> — 그 파트를 열지 않는 행사예요. 전시를 안 함으로 두면 전시 탭에서 이 행사가 열리지 않습니다.<br>
-      <b>진행 중</b> — 지금 챙기는 중. 고칠 수 있어요.<br>
-      <b>진행 완료</b> — 끝난 일이라 <b>열람만</b> 됩니다. 데이터는 그대로 두고 고치는 것만 막아요.
-      정산 입금이 늦게 들어오는 것처럼 손봐야 할 일이 생기면 다시 <b>진행 중</b>으로 되돌리면 됩니다.<br>
-      지금 화면에 반영되는 건 <b>전시</b>뿐이에요 — 컨퍼런스·파트너링·후원은 여기 적어 두면 운영 화면이 생길 때 그대로 이어집니다.
-    </div>`;
-}
-
-export async function setEvPart(part, state){
-  const ev = EVENT_LIST.find(e => e.key === evDetailKey);
-  if(!ev) return;
-  const now = evParts(ev.key);
-  const def = EVENT_PARTS.find(p => p.key === part);
-  if(!def || now[part] === state) return;
-
-  /* 무엇이 잠기는지 누르기 전에 말해 준다. 전시만 화면이 걸려 있어 전시만 묻는다.
-     되돌릴 수 있는 설정이지만, 눌러 보고 알게 하면 늦다. */
-  const ask = part !== 'exh' ? ''
-    : state === 'none' ? `${ev.name || ev.key}의 전시를 "안 함"으로 둘까요?\n전시 탭에서 이 행사가 열리지 않고, 부스·비품·일정 설정도 잠깁니다.\n(등록된 참가기업·품목 데이터는 그대로 남습니다)`
-    : state === 'done' ? `${ev.name || ev.key}의 전시를 "진행 완료"로 둘까요?\n전시 탭을 볼 수는 있지만 고칠 수 없게 됩니다.\n(다시 "진행 중"으로 되돌리면 언제든 고칠 수 있어요)`
-    : '';
-  if(ask && !confirm(ask)) return;
-
-  const ok = await saveEvParts(ev.key, { ...now, [part]: state });
-  if(!ok) return;
-  trackAction('edit', '진행 파트 변경', ev.key,
-    `${ev.name || ev.key} — ${def.label} ${partStateOf(now[part]).label} → ${partStateOf(state).label}`);
-  renderEvDetail();
-  renderEvMgr();
-  window.renderExh?.();
-  window.renderEvDb?.();
-}
-
-/* parts만 갈아 끼우고 나머지(due·book)는 그대로 둔다 — settings의 한 줄을
-   통째로 덮어쓰는 저장이라, 읽어 온 것을 펼쳐서 다시 넣지 않으면 마감일이 날아간다 */
-async function saveEvParts(evKey, parts){
-  const prev = EXH_CFG[evKey] ? JSON.parse(JSON.stringify(EXH_CFG[evKey])) : undefined;
-  const cfg = { ...(prev || {}), parts };
-  EXH_CFG[evKey] = cfg;
-  const r = await saveExhCfgToSheet(evKey, cfg);
-  if(r && r.ok === false){
-    if(prev) EXH_CFG[evKey] = prev; else delete EXH_CFG[evKey];
-    alert('저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
-    renderEvDetail();
-    return false;
-  }
-  return true;
-}
-
-/* ── 부스 ──
-   부스 타입과 스폰서 등급은 code_lists에 들어 있고, 행사 전용 목록이 있으면
-   그걸 쓰고 없으면 공통을 쓴다(state.js codeList). 그 규칙이 화면에서 안 보이면
-   "고쳤는데 안 바뀐다"가 되므로, 지금 보고 있는 게 공통인지 이 행사 것인지를
-   머리말에 배지로 붙인다. */
-/* 비품·그래픽 분류도 행사마다 다르다. 전에는 설정값 탭에서 «○○ 전용»을 골라야
-   고칠 수 있었다 — 한 행사의 값은 그 행사 상세에서 고친다. */
-const EV_BOOTH_LISTS = [['booth_type','부스 타입'], ['grade','스폰서 등급'],
-  ['equip_cat','비품 카탈로그 분류'], ['graphic_cat','그래픽 품목 분류']];
-
-function evBoothHtml(ev){
-  return EV_BOOTH_LISTS.map(([key, label]) => {
-    const mine = clRowsOf(key, ev.key);
-    const common = clRowsOf(key, '');
-    const inherited = !mine.length;
-    return `<div style="margin-bottom:22px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <div style="font-size:12px;font-weight:700;color:var(--i2)">${escapeHtml(label)}</div>
-        <span class="pill ${inherited ? 'p-gray' : 'p-blue'}">${inherited ? '공통' : '이 행사'}</span>
-      </div>
-      ${!inherited ? clRowsHtml(mine, false)
-        : common.length
-          ? `<div style="font-size:11px;color:var(--i4);margin-bottom:8px">이 행사 전용 목록이 없어 <b>공통 목록</b>을 씁니다. 아래에 항목을 추가하거나 공통을 복제하면, 그때부터 이 행사는 자기 목록만 씁니다.</div>
-             <div style="opacity:.55;pointer-events:none">${clRowsHtml(common, true)}</div>
-             <button class="btn" style="font-size:11px;margin-top:8px" onclick="cloneCommonCodeList('${escAttr(key)}')">공통 ${common.length}개를 이 행사로 복제</button>`
-          : `<div style="font-size:11px;color:var(--i4)">공통 목록에도 이 행사 전용으로도 아직 항목이 없어요. 아래에서 추가하면 이 행사 전용 목록이 만들어집니다.</div>`}
-      <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--i6)">
-        <div style="flex:1;min-width:140px"><div class="mlbl">저장값</div>
-          <input class="fi" id="evcl-code-${escAttr(key)}" placeholder="예: Block System D" style="width:100%"
-            onkeydown="if(event.key==='Enter')addEvCodeRow('${escAttr(key)}')"></div>
-        <div style="flex:1;min-width:140px"><div class="mlbl">화면에 보일 이름</div>
-          <input class="fi" id="evcl-label-${escAttr(key)}" placeholder="비우면 저장값 그대로" style="width:100%"
-            onkeydown="if(event.key==='Enter')addEvCodeRow('${escAttr(key)}')"></div>
-        <button class="btn bp" onclick="addEvCodeRow('${escAttr(key)}')" style="min-width:60px;height:36px">추가</button>
-      </div>
-      ${key === 'booth_type' ? `<div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <span style="font-size:11px;color:var(--i4);flex:1;min-width:160px">기본 제공 품목은 부스 타입을 <b>고칠 때</b> 들어갑니다 — 이미 부스가 정해진 기업에는 여기서 한 번에 넣으세요.</span>
-        <button class="btn bs" onclick="applyBoothItemsToEvent('${escAttr(ev.key)}')">참가기업 전체에 지금 반영</button>
-      </div>` : ''}
-    </div>`;
-  }).join('');
-}
-
-export async function addEvCodeRow(listKey){
-  const ev = EVENT_LIST.find(e => e.key === evDetailKey);
-  if(!ev) return;
-  const code = (document.getElementById(`evcl-code-${listKey}`)?.value || '').trim();
-  if(!code){ document.getElementById(`evcl-code-${listKey}`)?.focus(); return; }
-  if(clRowsOf(listKey, ev.key).some(c => c.code === code)){ alert('이미 있는 값이에요.'); return; }
-
-  const rows = clRowsOf(listKey, ev.key);
-  const row = {
-    id: `CD-${listKey}-${clSlug(ev.key)}-${clSlug(code)}-${Math.random().toString(36).slice(2, 6)}`,
-    list_key: listKey, event_id: ev.key, code,
-    label: (document.getElementById(`evcl-label-${listKey}`)?.value || '').trim() || code,
-    cls: '', note: '', active: '',
-    sort_order: String((Number(rows[rows.length - 1]?.sort_order) || rows.length * 10) + 10),
-  };
-  CODE_LISTS.push(row);
-  const r = await saveCodeRow(row, '선택 목록 추가');
-  if(!r.ok){ CODE_LISTS.pop(); renderEvDetail(); return; }
-  applyCodeLists();
-  trackAction('edit', '선택 목록 추가', row.label, `${clDef(listKey).label}(${ev.key})에 "${row.label}" 추가`);
-  renderEvDetail();
-}
-
-/* 공통을 통째로 이 행사 것으로 옮겨 적는다. 한 줄만 고치고 싶어도 행사 전용
-   목록이 생기는 순간 공통은 안 쓰이므로, 나머지도 같이 넘겨야 목록이 줄지 않는다. */
-export async function cloneCommonCodeList(listKey){
-  const ev = EVENT_LIST.find(e => e.key === evDetailKey);
-  if(!ev) return;
-  const common = clRowsOf(listKey, '');
-  if(!common.length) return;
-  if(clRowsOf(listKey, ev.key).length){ renderEvDetail(); return; }
-  if(!confirm(`공통 ${clDef(listKey).label} ${common.length}개를 ${ev.key} 전용으로 복제할까요?\n복제한 뒤에는 이 행사만 따로 고칠 수 있고, 공통을 고쳐도 이 행사에는 반영되지 않습니다.`)) return;
-
-  const made = [];
-  for(const c of common){
-    const row = { ...c, event_id: ev.key,
-      id: `CD-${listKey}-${clSlug(ev.key)}-${clSlug(c.code)}-${Math.random().toString(36).slice(2, 6)}` };
-    CODE_LISTS.push(row);
-    const r = await saveCodeRow(row, '선택 목록 복제');
-    if(!r.ok){
-      // 중간에 끊기면 반쪽짜리 목록이 남는다 — 넣은 것만 되돌리고 멈춘다
-      [...made, row].forEach(x => { const i = CODE_LISTS.indexOf(x); if(i >= 0) CODE_LISTS.splice(i, 1); });
-      alert('복제 도중 저장에 실패했어요. 아무것도 바뀌지 않았습니다.');
-      applyCodeLists(); renderEvDetail(); return;
-    }
-    made.push(row);
-  }
-  applyCodeLists();
-  trackAction('edit', '선택 목록 복제', ev.key, `${clDef(listKey).label} 공통 ${made.length}개를 ${ev.key} 전용으로 복제`);
-  renderEvDetail();
-}
-
-/* ── 일정 ──
-   전에는 전시 탭 대시보드의 "마감일 설정"에서만 고칠 수 있었다. 설정을 찾으러
-   여기 온 사람을 전시 탭으로 돌려보내지 않으려고 같은 값을 여기서도 고친다.
-   담기는 자리(EXH_CFG.due / .book)는 그대로라 전시 탭과 늘 같은 값을 본다. */
-const EV_DUE_STEPS = Object.entries(DUE_LABEL);
-const EV_BOOK_DEFAULT = { chars: 1300, words: 200 };
-
-function evDueHtml(ev){
-  const cfg = EXH_CFG[ev.key] || {};
-  const due = cfg.due || {}, book = cfg.book || {};
-  const fl = followCfg(ev.key);
-  return `
-    <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">리마인더 기준</div>
-    <div style="font-size:11px;color:var(--i4);margin-bottom:8px;line-height:1.6">요청 메일을 보내면 공은 연사·기업에 있어요. 그래도 자료가 안 오면
-      아래 날수가 지난 뒤 연사·전시 «처리 필요»에 «🔔 리마인더 보낼 때»로 올라옵니다. 사정이 있는 곳은 화면에서 «+3일 / +1주»로 미룹니다.</div>
-    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:18px;font-size:11.5px;color:var(--i3)">
-      <span>첫 요청 뒤 <input class="fi" type="number" min="1" max="60" id="evd-follow-first" value="${escapeHtml(fl.first)}" style="width:60px;padding:3px 6px">일</span>
-      <span>리마인더 뒤 <input class="fi" type="number" min="1" max="60" id="evd-follow-again" value="${escapeHtml(fl.again)}" style="width:60px;padding:3px 6px">일마다</span>
-    </div>
-    <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">꼭 지켜야 하는 마감 <span style="font-weight:400;color:var(--i4)">(전시)</span></div>
-    <div style="font-size:11px;color:var(--i4);margin-bottom:10px;line-height:1.6">대부분은 비워 두세요 — 비우면 ASAP이고 위 리마인더 기준으로 챙깁니다.
-      도록 인쇄·반입처럼 넘기면 안 되는 것만 «행사 N일 전»으로 적으면 행사 날짜가 바뀌어도 따라갑니다. 연사 단계 마감은 «연락 단계 편집»에서 같은 방식으로 적습니다.</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px 14px;margin-bottom:18px">
-      ${EV_DUE_STEPS.map(([k, l]) => `<div><div class="mlbl">${escapeHtml(l)}</div>${dueInputHtml(`evd-due-${k}`, due[k] || '', ev.key)}</div>`).join('')}
-    </div>
-    <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">프로그램북 한도</div>
-    <div style="font-size:11px;color:var(--i4);margin-bottom:10px">지면 기준이 행사마다 달라요. 비워 두면 기본값(${EV_BOOK_DEFAULT.chars.toLocaleString()}자 · ${EV_BOOK_DEFAULT.words}단어)을 씁니다.</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:320px;margin-bottom:14px">
-      <div><div class="mlbl">글자수</div>
-        <input class="fi" type="number" id="evd-book-chars" value="${escapeHtml(book.chars || EV_BOOK_DEFAULT.chars)}" style="width:100%"></div>
-      <div><div class="mlbl">단어수</div>
-        <input class="fi" type="number" id="evd-book-words" value="${escapeHtml(book.words || EV_BOOK_DEFAULT.words)}" style="width:100%"></div>
-    </div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <button class="btn bp" onclick="saveEvDue()" style="min-width:80px">저장</button>
-      <span id="evd-due-msg" style="font-size:11px;color:var(--g)"></span>
-    </div>`;
-}
-
-export async function saveEvDue(){
-  const ev = EVENT_LIST.find(e => e.key === evDetailKey);
-  if(!ev) return;
-  const msg = document.getElementById('evd-due-msg');
-  const say = (t, ok) => { if(msg){ msg.style.color = ok ? 'var(--g)' : 'var(--re)'; msg.textContent = t; } };
-
-  const chars = Number(document.getElementById('evd-book-chars')?.value);
-  const words = Number(document.getElementById('evd-book-words')?.value);
-  if(!(chars > 0) || !(words > 0)){ say('글자수·단어수 한도는 1 이상이어야 해요.'); return; }
-
-  /* 이 화면에 없는 마감(다른 화면에서 정한 것)은 그대로 둔다 */
-  const due = { ...((EXH_CFG[ev.key] || {}).due || {}) };
-  EV_DUE_STEPS.forEach(([k]) => { delete due[k]; });
-  EV_DUE_STEPS.forEach(([k]) => {
-    const v = readDueInput(`evd-due-${k}`);
-    if(v) due[k] = v;   // 빈 칸은 안 담는다 — 마감 없음과 빈 문자열을 구분할 필요가 없다
-  });
-
-  const prev = EXH_CFG[ev.key] ? JSON.parse(JSON.stringify(EXH_CFG[ev.key])) : undefined;
-  const ff = Number(document.getElementById('evd-follow-first')?.value), fa = Number(document.getElementById('evd-follow-again')?.value);
-  if(!(ff >= 1) || !(fa >= 1)){ say('리마인더 날수는 1 이상이어야 해요.'); return; }
-  const follow = { first: ff, again: fa };
-  const cfg = { ...(prev || {}), due, book: { chars, words }, follow };
-  EXH_CFG[ev.key] = cfg;
-  const r = await saveExhCfgToSheet(ev.key, cfg);
-  if(r && r.ok === false){
-    if(prev) EXH_CFG[ev.key] = prev; else delete EXH_CFG[ev.key];
-    say('저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.'); renderEvDetail(); return;
-  }
-
-  const changed = [];
-  EV_DUE_STEPS.forEach(([k, l]) => {
-    const a = ((prev || {}).due || {})[k] || '', b = due[k] || '';
-    if(a !== b) changed.push(`${l} ${a || '없음'} → ${b || '없음'}`);
-  });
-  const pf = (prev || {}).follow || FOLLOW_DEFAULT;
-  if(Number(pf.first) !== ff || Number(pf.again) !== fa) changed.push(`리마인더 기준 ${pf.first}일·${pf.again}일 → ${ff}일·${fa}일`);
-  const pb = (prev || {}).book || {};
-  if(pb.chars !== chars || pb.words !== words){
-    changed.push(`프로그램북 한도 ${pb.chars || EV_BOOK_DEFAULT.chars}자·${pb.words || EV_BOOK_DEFAULT.words}단어 → ${chars}자·${words}단어`);
-  }
-  if(changed.length) trackAction('edit', '행사 설정 변경', ev.key, changed.join(' / '));
-
-  say('저장했어요.', true);
-  renderEvCfgList();
-  window.renderExh?.();
-  setTimeout(() => { const m = document.getElementById('evd-due-msg'); if(m) m.textContent = ''; }, 2000);
-}
-
-window.openEvDetail        = openEvDetail;
-window.closeEvDetail       = closeEvDetail;
-window.setEvDetailSeg      = setEvDetailSeg;
-window.renderEvDetail      = renderEvDetail;
-window.saveEvBasic         = saveEvBasic;
-window.setEvPart           = setEvPart;
-window.addEvCodeRow        = addEvCodeRow;
-window.cloneCommonCodeList = cloneCommonCodeList;
-window.saveEvDue           = saveEvDue;
-
-/* ══════════════════════════════════════════
-   컨퍼런스 설정 — 행사 상세의 «컨퍼런스» 세그먼트
-
-   연사를 넣기 전에 정해 둬야 하는 것들이다. 역할 목록과 역할별 요구 항목이
-   없으면 그 뒤 화면이 «무엇을 받아야 하나»를 계산할 근거가 없다.
-
-   담는 곳은 exh_cfg_<행사키> JSON의 conf 한 자리다 — parts·due·book이 이미
-   그 줄에 얹혀 있고, 쓰는 곳들이 {...prev}로 저장하므로 서로 지우지 않는다.
-══════════════════════════════════════════ */
-
-/* 컨퍼런스 설정 저장(saveConf)은 features/conference/conf-common.js로 옮겼다 — 메일 양식·연락 단계 편집이
-   설정 탭 화면 파일을 끌어오지 않게. 아직 여기서 가져가는 곳이 있어 다시 내보낸다 */
-import { saveConf } from '../features/conference/conf-common.js';
-export { saveConf } from '../features/conference/conf-common.js';
-
-function evConfHtml(ev){
-  const cfg = confCfg(ev.key);
-  const days = confDays(ev.key);
-  const slots = cfg.slots || [];
-  const tracks = cfg.tracks || [];
-  const rooms = cfg.rooms || [];
-  const limits = cfg.limits || {};
-  const docs = cfg.docs || {};
-  const roles = codeList('speaker_role', ev.key, SPEAKER_ROLES.map(r => ({ code: r.key, label: r.label, cls: r.cls })));
-
-  /* ── 역할 × 받을 항목 격자 ──
-     설계 문서의 그 표를 그대로 화면에 둔다. 셀을 누르면 ● → ○ → — 로 돈다.
-     기본값은 코드(SPEAKER_ROLES)에 있고, 여기서 바꾼 것만 conf.roleNeeds에 담긴다.
-     그래서 코드의 기본값을 나중에 고치면 손대지 않은 행사에는 그것이 따라온다. */
-  const grid = `<div style="overflow-x:auto">
-    <table style="min-width:520px;font-size:12px">
-      <thead><tr>
-        <th style="text-align:left;min-width:160px">받을 것</th>
-        ${roles.map(r => `<th style="text-align:center;min-width:62px">${escapeHtml(r.label || r.code)}</th>`).join('')}
-      </tr></thead>
-      <tbody>
-        ${SPEAKER_NEEDS.map(n => `<tr>
-          <td style="font-size:11.5px">
-            ${escapeHtml(n.label)}
-            <div style="font-family:monospace;font-size:9.5px;color:var(--i5)">${escapeHtml(n.where)}${
-              SPEAKER_NEEDS_ON_TALK.includes(n.key) ? ' · 발제' : ''}</div>
-          </td>
-          ${roles.map(r => { const st = speakerNeed(ev.key, r.code, n.key);
-            const over = ((cfg.roleNeeds || {})[r.code] || {});
-            const changed = (n.key in over);
-            return `<td style="text-align:center;padding:4px">
-              <button onclick="cycleSpeakerNeed('${escAttr(r.code)}','${escAttr(n.key)}')"
-                title="${escapeHtml(`${r.label || r.code} · ${n.label} — ${NEED_LABEL[st]}${changed ? ' (이 행사만 바꿈)' : ''}`)}"
-                style="width:30px;height:26px;border-radius:6px;cursor:pointer;font-size:13px;line-height:1;
-                  border:1px solid ${changed ? 'var(--a)' : 'var(--i6)'};
-                  background:${st === 'req' ? 'var(--gb)' : st === 'opt' ? 'var(--ab)' : 'var(--W)'};
-                  color:${st === 'req' ? 'var(--g)' : st === 'opt' ? 'var(--am)' : 'var(--i5)'};
-                  font-weight:700">${NEED_MARK[st]}</button></td>`; }).join('')}
-        </tr>`).join('')}
-      </tbody></table></div>
-    <div style="font-size:10.5px;color:var(--i5);margin-top:8px;line-height:1.7">
-      <b>●</b> 받아야 함 — 안 오면 «받을 것 현황»과 독촉 목록에 뜹니다 ·
-      <b>○</b> 있으면 좋음 — 받으면 표시만 하고 독촉하지 않습니다 ·
-      <b>—</b> 묻지 않음 — 그 칸이 화면에서 사라집니다<br>
-      테두리가 파란 칸은 이 행사만 기본값과 다르게 정한 것이에요.
-      ${(cfg.roleNeeds && Object.keys(cfg.roleNeeds).length)
-        ? `<button class="btn" style="font-size:10.5px;margin-top:6px" onclick="resetSpeakerNeeds()">기본값으로 되돌리기</button>` : ''}
-    </div>`;
-
-  const row = (label, hint, inner) => `<div style="padding:11px 0;border-bottom:1px solid var(--i7)">
-    <div class="mlbl">${escapeHtml(label)}${hint ? `<span style="color:var(--i5);font-weight:400"> ${escapeHtml(hint)}</span>` : ''}</div>
-    ${inner}</div>`;
-
-  const numIn = (id, v, ph) => `<input class="fi" type="number" id="${id}" value="${escapeHtml(v || '')}"
-    placeholder="${escapeHtml(ph)}" style="width:110px">`;
-  const txtIn = (id, v, ph) => `<input class="fi" id="${id}" value="${escapeHtml(v || '')}"
-    placeholder="${escapeHtml(ph)}" style="width:100%">`;
-
-  return `
-    <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">역할별로 무엇을 받나</div>
-    <div style="font-size:11px;color:var(--i4);margin-bottom:10px">
-      이 격자가 «받을 것 현황»의 계산식이에요. 좌장에게 초록을 독촉하지 않는 것도 여기서 정해집니다.
-      역할 이름 자체는 <b>설정값 › 선택 목록 › 연사 역할</b>에서 고칩니다.
-    </div>
-    ${grid}
-
-    <div style="font-size:12px;font-weight:700;color:var(--i2);margin:22px 0 4px">발표 일자·시간</div>
-    ${row('발표 일자', `행사 기간에서 자동으로 만들어요 (${days.length}일)`, `
-      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">
-        ${days.length ? days.map(d => {
-          const extra = (cfg.days || []).includes(d);
-          return `<span class="pill ${extra ? 'p-blue' : 'p-gray'}" title="${extra ? '설정에서 더한 날' : '행사 기간'}">${escapeHtml(d)}${
-            extra ? ` <span onclick="removeConfDay('${escAttr(d)}')" style="cursor:pointer">✕</span>` : ''}</span>`;
-        }).join('') : '<span style="font-size:11.5px;color:var(--i5)">행사 기간이 비어 있어요 — 기본 정보에서 넣어주세요</span>'}
-      </div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <input type="date" class="fi" id="conf-day-add" style="width:150px">
-        <button class="btn" style="font-size:11px" onclick="addConfDay()">+ 날짜 더하기</button>
-        <span style="font-size:10.5px;color:var(--i5)">사전행사처럼 기간 밖의 날만 더하면 돼요</span>
-      </div>`)}
-
-    ${row('시간대', '세션을 짤 때 고르는 칸이에요', `
-      <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px">
-        ${slots.length ? slots.map((sl, i) => `<div style="display:flex;gap:6px;align-items:center;font-size:11.5px">
-          <span class="pill p-gray" style="min-width:104px;text-align:center">${escapeHtml(sl.start || '')}–${escapeHtml(sl.end || '')}</span>
-          <span style="flex:1;min-width:0;color:var(--i3)">${escapeHtml(sl.label || '')}</span>
-          <button class="btn" style="font-size:10.5px" onclick="removeConfSlot(${i})">삭제</button>
-        </div>`).join('') : '<div style="font-size:11.5px;color:var(--i5)">아직 없어요 — 세션 시간을 직접 적어도 되지만, 자주 쓰는 시간대를 넣어 두면 고르기만 하면 됩니다</div>'}
-      </div>
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-        <input type="time" class="fi" id="conf-slot-s" style="width:104px">
-        <span style="color:var(--i5)">–</span>
-        <input type="time" class="fi" id="conf-slot-e" style="width:104px">
-        <input class="fi" id="conf-slot-l" placeholder="이름 (예: 오전 세션)" style="flex:1;min-width:120px">
-        <button class="btn" style="font-size:11px" onclick="addConfSlot()">추가</button>
-      </div>`)}
-
-    ${row('장소', '적은 순서가 표의 열 순서', `
-      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">
-        ${rooms.length ? rooms.map((t, i) => `<span class="pill p-teal">${escapeHtml(t)}
-          ${i > 0 ? `<span onclick="moveConfRoom(${i},-1)" style="cursor:pointer" title="왼쪽으로">◀</span>` : ''}
-          ${i < rooms.length - 1 ? `<span onclick="moveConfRoom(${i},1)" style="cursor:pointer" title="오른쪽으로">▶</span>` : ''}
-          <span onclick="removeConfRoom(${i})" style="cursor:pointer">✕</span></span>`).join('')
-          : '<span style="font-size:11.5px;color:var(--i5)">비워 두면 세션에 적힌 장소를 이름순으로 세웁니다</span>'}
-      </div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <input class="fi" id="conf-room-add" placeholder="예: HALL C" style="width:180px"
-          onkeydown="if(event.key==='Enter')addConfRoom()">
-        <button class="btn" style="font-size:11px" onclick="addConfRoom()">추가</button>
-      </div>
-      <div style="font-size:10.5px;color:var(--i4);margin-top:5px;line-height:1.6">
-        메인 공간을 먼저 적으세요 — 프로그램표는 적은 순서대로 왼쪽부터 세웁니다.
-        이름순으로는 «어디가 메인인지»를 알 길이 없어요.</div>`)}
-
-    ${row('트랙', '동시에 여는 방', `
-      <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">
-        ${tracks.length ? tracks.map((t, i) => {
-          const c = trackColorOf(cfg, t);
-          return `<span class="pill" style="background:${c.bg};color:var(--i1);border:1px solid ${c.bd}">
-            <span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${c.bd};margin-right:4px"></span>${escapeHtml(t)}
-            <span onclick="cycleTrackColor('${escAttr(t)}')" style="cursor:pointer;margin-left:3px" title="색 바꾸기">🎨</span>
-            <span onclick="renameConfTrack(${i})" style="cursor:pointer;margin-left:3px" title="이름 바꾸기 — 이 트랙을 쓰는 세션도 함께 바뀝니다">✎</span>
-            <span onclick="removeConfTrack(${i})" style="cursor:pointer">✕</span></span>`;
-        }).join('')
-          : '<span style="font-size:11.5px;color:var(--i5)">트랙이 하나면 비워 두세요</span>'}
-      </div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <input class="fi" id="conf-track-add" placeholder="예: Track A" style="width:180px"
-          onkeydown="if(event.key==='Enter')addConfTrack()">
-        <button class="btn" style="font-size:11px" onclick="addConfTrack()">추가</button>
-      </div>`)}
-
-    <div style="font-size:12px;font-weight:700;color:var(--i2);margin:22px 0 4px">글자수 한도</div>
-    <div style="font-size:11px;color:var(--i4);margin-bottom:8px">
-      행사마다 달라요. 넘치면 화면이 얼마나 줄여야 하는지까지 알려줍니다 — 비우면 한도를 걸지 않아요.
-    </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;padding-bottom:11px;border-bottom:1px solid var(--i7)">
-      <div><div class="mlbl">Professional Profile</div>${numIn('conf-lim-prof', limits.bio_profile, '자')}</div>
-      <div><div class="mlbl">Professional experience</div>${numIn('conf-lim-pro', limits.bio_pro, '자')}</div>
-      <div><div class="mlbl">Working experience</div>${numIn('conf-lim-work', limits.bio_work, '자')}</div>
-      <div><div class="mlbl">Education</div>${numIn('conf-lim-edu', limits.bio_edu, '자')}</div>
-      <div><div class="mlbl">Awards</div>${numIn('conf-lim-awards', limits.bio_awards, '자')}</div>
-      <div><div class="mlbl">자격·면허</div>${numIn('conf-lim-cred', limits.bio_credentials, '자')}</div>
-      <div><div class="mlbl">강의·교육</div>${numIn('conf-lim-teach', limits.bio_teaching, '자')}</div>
-      <div><div class="mlbl">학회·공직</div>${numIn('conf-lim-affil', limits.bio_affil, '자')}</div>
-      <div><div class="mlbl">출판·전시</div>${numIn('conf-lim-pubs', limits.bio_pubs, '자')}</div>
-      <div><div class="mlbl">초록</div>${numIn('conf-lim-abs', limits.abstract, '자')}</div>
-    </div>
-
-    <div style="font-size:12px;font-weight:700;color:var(--i2);margin:22px 0 4px">양식·가이드라인</div>
-    <div style="font-size:11px;color:var(--i4);margin-bottom:8px">
-      매번 바뀌니 행사별로 둡니다. 연사의 언어 설정에 따라 국문본·영문본 중 무엇을 보낼지가 갈려요.
-      OneDrive 링크나 파일명을 적으세요.
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-bottom:11px;border-bottom:1px solid var(--i7)">
-      <div><div class="mlbl">가이드라인 (국문)</div>${txtIn('conf-guide-ko', docs.guide_ko, '링크 또는 파일명')}</div>
-      <div><div class="mlbl">가이드라인 (영문)</div>${txtIn('conf-guide-en', docs.guide_en, '링크 또는 파일명')}</div>
-      <div><div class="mlbl">제출 양식 (국문)</div>${txtIn('conf-form-ko', docs.form_ko, '링크 또는 파일명')}</div>
-      <div><div class="mlbl">제출 양식 (영문)</div>${txtIn('conf-form-en', docs.form_en, '링크 또는 파일명')}</div>
-    </div>
-
-    ${row('OneDrive 폴더', '사진·발표자료·동의서가 쌓이는 곳', txtIn('conf-folder', cfg.folder,
-      '예: C:/Users/…/OneDrive - STUDIO BLOOM/4.행사/2026년/…/연사'))}
-
-    ${flowEditorHtml(ev.key)}
-
-    <div style="display:flex;gap:8px;align-items:center;margin-top:14px">
-      <button class="btn bp" onclick="saveEvConf()" style="min-width:80px">저장</button>
-      <span id="conf-msg" style="font-size:11px;color:var(--g)"></span>
-      <span style="font-size:10.5px;color:var(--i5);margin-left:auto">
-        일자·시간대·트랙·역할 격자는 누르는 즉시 저장돼요</span>
-    </div>`;
-}
-
-/* ── 연사 연락 순서 ──
-   고치는 곳은 편집 창 하나(flow-editor.js) — 연사 화면에서도 같은 창이 열린다.
-   여기서는 지금 순서만 보여 주고 창을 연다. 고치면 그 자리에서 저장된다. */
-function flowEditorHtml(evKey){
-  const steps = flowSteps(evKey, { withOff: true });
-  return `
-    <div style="display:flex;align-items:center;gap:8px;margin:22px 0 6px">
-      <span style="font-size:12px;font-weight:700;color:var(--i2)">연사 연락 순서</span>
-      <button class="btn" style="font-size:10.5px;margin-left:auto" onclick="openFlowEditor('${escAttr(evKey)}')">✎ 단계 편집</button>
-    </div>
-    <div style="font-size:11px;color:var(--i4);margin-bottom:6px;line-height:1.6">
-      단계 추가·고치기·끄기와 메일 양식·기본 첨부는 «단계 편집»에서 합니다. 연사 화면에서도 같은 창이 열리고, 고치면 바로 저장돼요.</div>
-    <div style="display:flex;flex-wrap:wrap;gap:4px">${steps.map((st, i) => `<span class="pill ${st.off ? 'p-gray' : st.custom ? 'p-amber' : 'p-blue'}"
-      style="font-size:10.5px;cursor:pointer;${st.off ? 'text-decoration:line-through' : ''}" onclick="openFlowEditor('${escAttr(evKey)}','${escAttr(st.key)}')"
-      >${i + 1}. ${escapeHtml(st.label)}</span>`).join('')}</div>`;
-}
-
-/* 예전 «양식 고치기» 자리 — 이제 단계 편집 창을 그 단계가 펼쳐진 채로 연다 */
-export function openFlowSettings(evKey, stepKey){ openFlowEditor(evKey, stepKey); }
-
-/* 단계별 기본 첨부 — 목록은 서버에서 받아 각 단계 자리에 끼운다 */
-export async function fillFlowFiles(evKey){
-  await loadMailFiles(evKey);
-  flowSteps(evKey, { withOff: true }).forEach(st => {
-    const el = document.getElementById(`flowfiles-${st.key}`);
-    if(!el) return;
-    const files = mailFilesOf(evKey).filter(f => f.step === st.key);
-    el.innerHTML = files.length ? files.map(f => `<div style="display:flex;gap:6px;align-items:center;padding:2px 0">
-        📎 <span style="color:var(--i2)">${escapeHtml(f.filename)}</span>
-        <span>${(Number(f.size || 0) / 1024).toFixed(0)}KB</span>
-        <button class="btn" style="font-size:10px;padding:1px 6px;margin-left:auto"
-          onclick="removeFlowFile('${escAttr(evKey)}','${escAttr(f.id)}')">삭제</button></div>`).join('')
-      : '없음';
-  });
-}
-export async function uploadFlowFiles(evKey, step, input){
-  const files = [...(input.files || [])];
-  input.value = '';
-  for(const f of files){
-    if(f.size > 3 * 1024 * 1024){ alert(`${f.name}: 3MB가 넘어 올릴 수 없어요.`); continue; }
-    const data = await fileToBase64(f);
-    const r = await uploadMailFile({ event_id: evKey, step, filename: f.name, content_type: f.type, data });
-    if(!r.ok){ alert(`${f.name}: ${r.error || '올리지 못했어요'}`); continue; }
-    trackAction('add', '메일 기본 첨부', evKey, `${step} 단계에 «${f.name}» 올림`);
-  }
-  fillFlowFiles(evKey); fillExhMailFiles(evKey);
-}
-export async function removeFlowFile(evKey, id){
-  const f = mailFilesOf(evKey).find(x => x.id === id);
-  if(!f || !confirm(`«${f.filename}»을(를) 기본 첨부에서 지울까요?`)) return;
-  const r = await deleteMailFile(evKey, id);
-  if(!r.ok){ alert(r.error || '지우지 못했어요'); return; }
-  trackAction('delete', '메일 기본 첨부', evKey, `${f.step} 단계 «${f.filename}» 지움`);
-  fillFlowFiles(evKey); fillExhMailFiles(evKey);
-}
-
-/* ── 격자 셀 한 번 누르기 — ● → ○ → — ──
-   바꾼 값만 conf.roleNeeds에 담는다. 기본값과 같아지면 그 칸을 지워, 나중에
-   코드의 기본값을 고치면 손대지 않은 행사에는 그것이 따라온다. */
-export async function cycleSpeakerNeed(role, needKey){
-  const ev = EVENT_LIST.find(e => e.key === evDetailKey);
-  if(!ev) return;
-  const cfg = JSON.parse(JSON.stringify(confCfg(ev.key)));
-  const cur = speakerNeed(ev.key, role, needKey);
-  const next = NEED_CYCLE[(NEED_CYCLE.indexOf(cur) + 1) % NEED_CYCLE.length];
-
-  const def = SPEAKER_ROLES.find(r => r.key === role);
-  const dflt = def ? (def.needs[needKey] ?? '') : '';
-
-  cfg.roleNeeds = cfg.roleNeeds || {};
-  cfg.roleNeeds[role] = { ...(cfg.roleNeeds[role] || {}) };
-  if(next === dflt) delete cfg.roleNeeds[role][needKey];
-  else cfg.roleNeeds[role][needKey] = next;
-  if(!Object.keys(cfg.roleNeeds[role]).length) delete cfg.roleNeeds[role];
-  if(!Object.keys(cfg.roleNeeds).length) delete cfg.roleNeeds;
-
-  if(!await saveConf(ev.key, cfg)) return;
-  trackAction('edit', '연사 요구 항목 변경', ev.key,
-    `${ev.name || ev.key} — ${role} · ${SPEAKER_NEEDS.find(n => n.key === needKey)?.label || needKey}: ${NEED_LABEL[cur]} → ${NEED_LABEL[next]}`);
-  renderEvDetail();
-}
-
-export async function resetSpeakerNeeds(){
-  const ev = EVENT_LIST.find(e => e.key === evDetailKey);
-  if(!ev) return;
-  if(!confirm('역할별 받을 항목을 기본값으로 되돌릴까요?\n이 행사만 바꿔 둔 칸이 모두 사라집니다.')) return;
-  const cfg = JSON.parse(JSON.stringify(confCfg(ev.key)));
-  delete cfg.roleNeeds;
-  if(!await saveConf(ev.key, cfg)) return;
-  trackAction('edit', '연사 요구 항목 초기화', ev.key, `${ev.name || ev.key} — 기본값으로 되돌림`);
-  renderEvDetail();
-}
-
-/* ── 일자·시간대·트랙 — 누르는 즉시 저장 ──
-   목록에 한 줄 더하는 일은 «저장»을 따로 누르게 하면 잊는다. 아래 글자 칸들은
-   타이핑 중이라 즉시 저장하지 않고 저장 버튼으로 모아 보낸다. */
-async function pushConf(fn, label){
-  const ev = EVENT_LIST.find(e => e.key === evDetailKey);
-  if(!ev) return;
-  const cfg = JSON.parse(JSON.stringify(confCfg(ev.key)));
-  if(fn(cfg) === false) return;
-  if(!await saveConf(ev.key, cfg)) return;
-  trackAction('edit', '컨퍼런스 설정', ev.key, `${ev.name || ev.key} — ${label}`);
-  renderEvDetail();
-}
-
-export const addConfDay = () => {
-  const v = (document.getElementById('conf-day-add')?.value || '').trim();
-  if(!v){ alert('날짜를 고르세요.'); return; }
-  return pushConf(c => {
-    c.days = c.days || [];
-    if(c.days.includes(v)) return false;
-    c.days.push(v); c.days.sort();
-  }, `발표 일자 ${v} 더함`);
-};
-export const removeConfDay = (d) => pushConf(c => {
-  c.days = (c.days || []).filter(x => x !== d);
-}, `발표 일자 ${d} 뺌`);
-
-export const addConfSlot = () => {
-  const s = (document.getElementById('conf-slot-s')?.value || '').trim();
-  const e = (document.getElementById('conf-slot-e')?.value || '').trim();
-  const l = (document.getElementById('conf-slot-l')?.value || '').trim();
-  if(!s || !e){ alert('시작·종료 시각을 넣어주세요.'); return; }
-  if(e <= s){ alert('종료가 시작보다 빠르거나 같아요.'); return; }
-  return pushConf(c => {
-    c.slots = c.slots || [];
-    c.slots.push({ start: s, end: e, label: l });
-    c.slots.sort((a, b) => String(a.start).localeCompare(String(b.start)));
-  }, `시간대 ${s}–${e} 추가`);
-};
-export const removeConfSlot = (i) => pushConf(c => {
-  c.slots = (c.slots || []).filter((_, k) => k !== i);
-}, '시간대 삭제');
-
-export const addConfRoom = () => {
-  const v = (document.getElementById('conf-room-add')?.value || '').trim();
-  if(!v) return;
-  return pushConf(c => {
-    c.rooms = c.rooms || [];
-    if(c.rooms.includes(v)) return false;
-    c.rooms.push(v);
-  }, `장소 «${v}» 추가`);
-};
-export const removeConfRoom = (i) => pushConf(c => {
-  c.rooms = (c.rooms || []).filter((_, k) => k !== i);
-}, '장소 삭제');
-/* 순서가 곧 표의 열 순서라, 지웠다 다시 넣게 하면 순서를 바꿀 때마다
-   세션의 장소 이름과 어긋날 수 있다 — 자리만 맞바꾼다. */
-export const moveConfRoom = (i, dir) => pushConf(c => {
-  const list = c.rooms || [];
-  const j = i + dir;
-  if(j < 0 || j >= list.length) return false;
-  [list[i], list[j]] = [list[j], list[i]];
-  c.rooms = list;
-}, '장소 순서 변경');
-
-/* 트랙 색을 바꾼다 — 다음 색으로 한 칸 옮긴다. 색을 고르는 창을 띄우는
-   것보다, 눌러서 원하는 색이 나올 때까지 돌리는 게 빠르다. */
-export const cycleTrackColor = (track) => pushConf(c => {
-  const map = { ...(c.trackColors || {}) };
-  const cur = Number.isInteger(map[track]) ? map[track] : trackColorIndex(c, track);
-  map[track] = (cur + 1) % TRACK_COLORS.length;
-  c.trackColors = map;
-}, `트랙 «${track}» 색 변경`);
-
-export const addConfTrack = () => {
-  const v = (document.getElementById('conf-track-add')?.value || '').trim();
-  if(!v) return;
-  return pushConf(c => {
-    c.tracks = c.tracks || [];
-    if(c.tracks.includes(v)) return false;
-    c.tracks.push(v);
-    /* 색을 지금 정해 둔다. 목록 순서로 색을 정하면 트랙을 하나 더할 때마다
-       다른 트랙들의 색이 밀린다 — 트랙 하나에 색 하나를 붙여 둬야 한다. */
-    c.trackColors = { ...(c.trackColors || {}), [v]: pickTrackColorIndex(c) };
-  }, `트랙 «${v}» 추가`);
-};
-/* 트랙 이름 바꾸기 — 세션은 트랙을 이름 그대로 들고 있다(conf_sessions.track).
-   설정만 바꾸면 세션들은 옛 이름으로 남아 새 트랙이 따로 생긴 것처럼 보이고
-   색도 갈린다. 그래서 설정·색·세션을 한 번에 바꾼다. */
-export async function renameConfTrack(i){
-  const ev = EVENT_LIST.find(e => e.key === evDetailKey);
-  if(!ev) return;
-  const old = (confCfg(ev.key).tracks || [])[i];
-  if(old == null) return;
-  const v = (prompt(`«${old}»의 새 이름`, old) || '').trim();
-  if(!v || v === old) return;
-  if((confCfg(ev.key).tracks || []).includes(v)){ alert(`«${v}» 트랙이 이미 있어요.`); return; }
-
-  const mine = CONF_SESSIONS.filter(x => x.event_id === ev.key && x.track === old);
-  for(const x of mine){
-    const res = await saveConfSession({ id: x.id, track: v });
-    if(!res || res.ok === false){
-      if(!res?.locked) alert(`세션 «${x.title_ko || x.title_en || x.id}»에서 멈췄어요 — 앞의 세션들은 이미 바뀌었습니다. 다시 눌러 주세요.`);
-      return;
-    }
-    x.track = v;
-  }
-  await pushConf(c => {
-    c.tracks = (c.tracks || []).map(t => t === old ? v : t);
-    const map = { ...(c.trackColors || {}) };
-    if(old in map){ map[v] = map[old]; delete map[old]; }
-    c.trackColors = map;
-  }, `트랙 «${old}» → «${v}» (세션 ${mine.length}개)`);
-}
-/* 세션이 쓰고 있는 트랙을 지우면 세션들은 옛 이름을 그대로 들고 남는다 —
-   목록에서 사라진 줄 알았던 이름이 고르는 칸에 다시 나타난다. 이름을 바꾸려던
-   거라면 ✎가 세션까지 바꾼다는 걸 알려 준다. */
-export const removeConfTrack = (i) => {
-  const ev = EVENT_LIST.find(e => e.key === evDetailKey);
-  const t = ev ? (confCfg(ev.key).tracks || [])[i] : null;
-  const using = t ? CONF_SESSIONS.filter(x => x.event_id === ev.key && x.track === t) : [];
-  if(using.length && !confirm(`«${t}» 트랙을 쓰는 세션이 ${using.length}개 있어요:
-
-${
-      using.slice(0, 5).map(x => `· ${x.title_ko || x.title_en || x.id}`).join('\n')
-    }
-
-지워도 그 세션들은 «${t}»로 남아요. 이름을 바꾸려는 거라면 취소하고 ✎를 누르세요 — 세션도 함께 바뀝니다.
-
-그래도 지울까요?`)) return;
-  return pushConf(c => {
-    c.tracks = (c.tracks || []).filter((_, k) => k !== i);
-  }, '트랙 삭제');
-};
-
-/* ── 글자 칸 모아 저장 ── */
-export async function saveEvConf(){
-  const ev = EVENT_LIST.find(e => e.key === evDetailKey);
-  if(!ev) return;
-  const msg = document.getElementById('conf-msg');
-  const say = (t, ok) => { if(msg){ msg.style.color = ok ? 'var(--g)' : 'var(--re)'; msg.textContent = t; } };
-  const g = (id) => (document.getElementById(id)?.value || '').trim();
-  const num = (id) => { const n = Number(g(id)); return n > 0 ? String(n) : ''; };
-
-  const cfg = JSON.parse(JSON.stringify(confCfg(ev.key)));
-  const limits = {
-    bio_profile: num('conf-lim-prof'), bio_pro: num('conf-lim-pro'),
-    bio_work: num('conf-lim-work'), bio_edu: num('conf-lim-edu'),
-    bio_awards: num('conf-lim-awards'), bio_credentials: num('conf-lim-cred'),
-    bio_teaching: num('conf-lim-teach'), bio_affil: num('conf-lim-affil'),
-    bio_pubs: num('conf-lim-pubs'), abstract: num('conf-lim-abs'),
-  };
-  Object.keys(limits).forEach(k => { if(!limits[k]) delete limits[k]; });
-  if(Object.keys(limits).length) cfg.limits = limits; else delete cfg.limits;
-
-  const docs = { guide_ko: g('conf-guide-ko'), guide_en: g('conf-guide-en'),
-    form_ko: g('conf-form-ko'), form_en: g('conf-form-en') };
-  Object.keys(docs).forEach(k => { if(!docs[k]) delete docs[k]; });
-  if(Object.keys(docs).length) cfg.docs = docs; else delete cfg.docs;
-
-  const folder = g('conf-folder');
-  if(folder) cfg.folder = folder; else delete cfg.folder;
-
-  /* 연락 순서(cfg.flow·flow_custom)는 단계 편집 창이 따로 저장한다 — 여기선 건드리지 않는다 */
-
-  if(!await saveConf(ev.key, cfg)) return;
-  trackAction('edit', '컨퍼런스 설정', ev.key, `${ev.name || ev.key} — 글자수 한도·양식·폴더 저장`);
-  say('저장했어요.', true);
-  setTimeout(() => { const m = document.getElementById('conf-msg'); if(m) m.textContent = ''; }, 2000);
-}
-
-window.cycleSpeakerNeed  = cycleSpeakerNeed;
-window.uploadFlowFiles = uploadFlowFiles;
-window.openFlowSettings = openFlowSettings;
-window.removeFlowFile = removeFlowFile;
-window.resetSpeakerNeeds = resetSpeakerNeeds;
-window.addConfDay        = addConfDay;
-window.removeConfDay     = removeConfDay;
-window.addConfSlot       = addConfSlot;
-window.removeConfSlot    = removeConfSlot;
-window.addConfRoom       = addConfRoom;
-window.removeConfRoom    = removeConfRoom;
-window.moveConfRoom      = moveConfRoom;
-window.cycleTrackColor   = cycleTrackColor;
-window.addConfTrack      = addConfTrack;
-window.removeConfTrack   = removeConfTrack;
-window.renameConfTrack   = renameConfTrack;
-window.saveEvConf        = saveEvConf;
-
-window.saveEvMailbox   = saveEvMailbox;
-window.testEvMailbox   = testEvMailbox;
-window.removeEvMailbox = removeEvMailbox;
-window.syncEvSentMail  = syncEvSentMail;
+/* «설정 › 비품 목록 (equip_catalog)»은 ../features/settings/equip-catalog.js로 떼어 냈다 — 그 파일이 스스로 window에 건다 */

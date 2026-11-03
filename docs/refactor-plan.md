@@ -139,7 +139,17 @@ master와 이 브랜치의 계산 지문이 같다(참가기업 12곳·기업 16
 | 수집 로그·기업 병합 하위 탭 → `upload-logs.js`, 연결 행사 고르기 → `upload-event-select.js` | |
 | `upload-tab` 1,775 → 1,016줄 | 브라우저에서 엑셀을 만들어 실제로 올린 결과(만들어진 연락처 3명, 화면 8단계)가 master와 같다 |
 
-다음: 같은 방식으로 `settings-tab` → `exh-drawer` → `exh-tab` → `conf-tab`.
+**설정 탭** (✅): 화면 상태 18개 → `features/settings/settings-ui.js`의 `settingsUi`. 떼어 냄:
+`event-detail.js`(행사 상세, 757줄) · `conf-settings.js`(컨퍼런스 설정, 493줄) · `equip-catalog.js`(비품 목록, 434줄) · `sector-import.js`(엑셀로 섹터 추가) · `sector-add-main.js`.
+`settings-tab` 3,650 → 1,830줄. 탭에 남은 코드가 떼어 낸 함수를 부르는 몇 곳은 `window.이름(…)`으로 바꿨다(`split-leaf.js --via-window`).
+설정 하위 탭 8개·행사 상세(두 행사 × 세그먼트 7개)·비품 목록 26단계를 포함해 101곳이 master와 같다.
+
+다음: 같은 방식으로 `exh-drawer` → `exh-tab` → `conf-tab`.
+
+이번에 도구에서 고친 셋:
+- **펼침(`...EVENT_LIST`)을 속성으로 오인** — 점으로 시작해서 다섯 도구 모두 이름으로 세지 않았다. 그래서 `split-leaf`가 `EVENT_LIST`·`SPEAKER_LOGS`·`EXH_LOGS` import를 빠뜨렸고 `deps.js`도 못 잡았다(비품 목록이 브라우저에서 터져 알았다). 이제 `...이름`도 센다. 앞서 떼어 낸 파일들에는 같은 누락이 없음을 확인했다.
+- **`lift-state`가 import를 «파일 안 마지막 import» 뒤에 넣음** — 설정 탭에서는 그것이 컨퍼런스 설정 구획 안의 다시 내보내기 줄이라, 그 구획을 뗄 때 import가 함께 끌려 나갔다. 이제 머리 import 묶음 끝에 넣는다.
+- **`split-leaf`가 범위 안 import 줄을 그대로 옮김** — 경로가 틀리고, 머리 import와 겹치면 SyntaxError가 난다. 이제 범위 안 import는 빼고(머리 import가 대신), `export … from`은 경로를 고친다. `deps.js`는 같은 이름을 두 번 import하는 것도 잡는다.
 
 이번에 `sections.js`가 머리 구획(파일 첫 구획)이 부르는 것을 빼고 셌던 탓에, 실제로는 불리는 «문의·기록» 구획을 «뗄 수 있음»으로 잘못 알렸다. `deps.js`가 바로 잡아냈고(dLogs 없음) 되돌린 뒤 고쳤다.
 

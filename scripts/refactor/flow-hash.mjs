@@ -43,6 +43,26 @@ export async function runUpload() {
   return { out, errors };
 }
 
+/* 설정 — 하위 탭 전부, 행사 상세(앞 두 행사 × 화면에 보이는 모든 세그먼트), 비품 목록의 종류·범위·행사 바꾸기 */
+export async function runSettings(base) {
+  const st = await import(base + '/js/state.js');
+  const out = {}; const errors = [];
+  const step = async (name, fn, ms = 200) => { try { await fn(); await wait(ms); out[name] = await h(); } catch (e) { errors.push(`${name}: ${e.message}`); } };
+  const clicks = (re) => [...new Set([...document.querySelectorAll('[onclick]')].map((b) => b.getAttribute('onclick')).filter((oc) => re.test(oc)))];
+  window.switchApp('arch'); await wait(200);
+  for (const k of ['ev', 'org', 'people', 'common', 'equip', 'clean', 'ai', 'sys']) await step('arch-' + k, () => window.switchArchTab(k));
+  for (const ev of st.EVENT_LIST.slice(0, 2)) {
+    window.switchArchTab('ev'); await wait(150);
+    await step('ev-' + ev.key, () => window.openEvDetail(ev.key));
+    for (const oc of clicks(/^setEvDetailSeg\(/)) await step(`ev-${ev.key}-${oc}`, () => new Function(oc)());
+  }
+  window.closeEvDetail?.(); await wait(100);
+  await step('equip', () => window.switchArchTab('equip'));
+  for (const oc of clicks(/^(setEqKind|setEquipScope|setEqEvent|setEqCatFil)\(/).slice(0, 12)) await step('eq-' + oc, () => new Function(oc)());
+  await step('org-again', () => window.switchArchTab('org'));
+  return { out, errors };
+}
+
 /* 전시 — 목록·일괄 메일·참가기업 상세 창(앞 3곳의 모든 하위 탭)·대시보드 */
 export async function runExh(base) {
   const st = await import(base + '/js/state.js');

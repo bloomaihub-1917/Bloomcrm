@@ -4,7 +4,10 @@
    node scripts/refactor/deps.js --check    import한 이름이 그 파일에 실제로 있는지까지
 
    빌드가 없어서 import 경로나 이름이 틀려도 브라우저에서 그 탭을 열 때까지 모른다.
-   파일을 옮기거나 함수를 꺼낸 뒤 이걸 돌리면 그 자리에서 잡힌다. */
+   파일을 옮기거나 함수를 꺼낸 뒤 이걸 돌리면 그 자리에서 잡힌다.
+
+   펼침 «...이름»도 이름으로 센다 — 점으로 시작해 속성으로 잘못 보고 EVENT_LIST import를 놓친 적이 있다
+   */
 const fs = require('fs');
 const path = require('path');
 
@@ -164,7 +167,10 @@ for (const f of files) {
   /* import한 이름 — 다른 모듈에서 빌린 값은 이 파일에서 다시 넣을 수 없다(«Assignment to constant variable»).
      큰 탭 파일을 쪼갤 때 모듈 상태(let)를 고치는 구획이 다른 파일로 가면 바로 이렇게 된다 */
   const imported = new Set();
-  for (const m of src.matchAll(/import\s*\{([^}]+)\}\s*from/g)) m[1].split(',').forEach((s) => { const n = s.trim().split(/\s+as\s+/).pop().trim(); if (n) imported.add(n); });
+  const twice = new Set();
+  for (const m of src.matchAll(/import\s*\{([^}]+)\}\s*from/g)) m[1].split(',').forEach((s) => { const n = s.trim().split(/\s+as\s+/).pop().trim(); if (!n) return; if (imported.has(n)) twice.add(n); imported.add(n); });
+  /* 같은 이름을 두 번 import하면 파일을 읽을 때 SyntaxError — 그 파일 전체(와 그 파일을 읽는 앱)가 안 뜬다 */
+  twice.forEach((n) => problems.push(`${rel(f)}: ${n}를 두 번 import한다 — 파일을 읽을 때 SyntaxError가 난다`));
   const missing = new Set();
   const reassigned = new Set();
   for (let k = 0; k < starts.length - 1; k++) {
@@ -172,7 +178,7 @@ for (const f of files) {
     const local = declaredIn(chunk);
     const body = stripCode(chunk);
     /* 앞이 «.»(속성)이나 «<»·«/»(HTML 태그 <td>·</td>)면 이름이 아니다 */
-    for (const m of body.matchAll(/(^|[^.\w$<\/])([A-Za-z_$][\w$]*)(?=\s*[^\w$:]|$)/g)) {
+    for (const m of body.matchAll(/(^|[^.\w$<\/]|\.\.\.)([A-Za-z_$][\w$]*)(?=\s*[^\w$:]|$)/g)) {
       const n = m[2];
       if (allExported.has(n) && !top.has(n) && !local.has(n) && !GLOBALS.has(n) && !ONWINDOW.has(n)) missing.add(`${n} (${starts[k] + 1}줄 근처)`);
     }

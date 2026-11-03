@@ -10,7 +10,10 @@
    2) 범위를 새 파일로 옮긴다. 탭 파일은 새 파일을 import하지 않는다(그래야 고리가 안 생긴다).
    3) 옮긴 함수를 거는 window 줄(window.X = X; 와 window.Y = X; 같은 별칭)을 새 파일 끝으로 옮긴다.
    4) app.js가 탭 파일 바로 뒤에 새 파일을 읽게 한다 — 새 파일이 스스로 window에 건다.
-   다른 파일이 탭 파일에서 옮긴 이름을 import하고 있으면 새 파일을 보게 돌린다. */
+   다른 파일이 탭 파일에서 옮긴 이름을 import하고 있으면 새 파일을 보게 돌린다.
+
+   펼침 «...이름»도 이름으로 센다 — 점으로 시작해 속성으로 잘못 보고 EVENT_LIST import를 놓친 적이 있다
+   */
 const fs = require('fs');
 const path = require('path');
 const [src, fromS, toS, dest, title = '떼어 낸 구획'] = process.argv.slice(2);
@@ -45,7 +48,7 @@ lines.forEach((l, i) => {
 const lets = new Set(lines.filter((l, i) => !inRange(i) && /^(?:export\s+)?let\b/.test(l)).map((l) => l.match(decl)?.[1]).filter(Boolean));
 
 const body = strip(lines.slice(from - 1, to).join('\n'));
-const used = new Set([...body.matchAll(/(^|[^.\w$])([A-Za-z_$][\w$]*)/g)].map((m) => m[2]));
+const used = new Set([...body.matchAll(/(^|[^.\w$]|\.\.\.)([A-Za-z_$][\w$]*)/g)].map((m) => m[2]));
 
 /* 범위가 탭 파일의 let 상태를 고치면 떼면 안 된다 */
 const writes = [...body.matchAll(/(^|[^.\w$])([A-Za-z_$][\w$]*)\s*(?:=(?![=>])|\+\+|--|[-+*/%|&]=)/g)].map((m) => m[2]).filter((n) => lets.has(n) && !insideTop.has(n));
@@ -81,8 +84,13 @@ const head = [
   '',
 ];
 
-/* 옮기기 */
-const chunk = lines.slice(from - 1, to);
+/* 옮기기 — 범위 안의 import 줄은 뺀다(머리 import를 위에서 따로 만든다. 남기면 같은 이름을 두 번 import해
+   파일을 읽을 때 SyntaxError가 난다). «export … from» 줄은 경로를 새 자리에 맞춘다 */
+const chunk = [];
+for (const l of lines.slice(from - 1, to)) {
+  if (/^import\s*[{*'\w]/.test(l)) { chunk.push(`/* (옮기며 뺀 import — 머리 import가 대신한다) */`); continue; }
+  chunk.push(l.replace(/^(export\s*\{[^}]*\}\s*from\s*')(\.{1,2}\/[^']+)(')/, (w, a, spec, z) => a + rel(dest, path.resolve(path.dirname(src), spec)) + z));
+}
 const moved = new Set([...insideTop]);
 lines.splice(from - 1, to - from + 1,
   `/* «${title}»은 ${path.relative(path.dirname(src), dest).replace(/\\/g, '/')}로 떼어 냈다 — 그 파일이 스스로 window에 건다 */`);
@@ -94,7 +102,62 @@ lines = lines.filter((l) => {
   if (m && moved.has(m[2])) { winLines.push(l); return false; }
   return true;
 });
+
+/* --via-window: 탭에 남은 코드가 옮긴 함수를 직접 부르면 window.이름(…)으로 바꾸고, 새 파일이 그 이름을
+   window에 건다. 문자열·주석은 그대로(onclick 문자열은 원래 window로 부른다). 부르지 않고 값으로
+   쓰면(넘기기·비교) 바꿀 수 없어 멈춘다. 새 파일이 app.js에서 탭 뒤에 읽히므로, 부르는 때(화면을 그릴 때)
+   에는 이미 걸려 있다 — 탭 파일을 읽는 중에 바로 부르는 곳이 있으면 안 된다(그래서 줄 머리 호출은 멈춘다). */
+const VIA = process.argv.includes('--via-window');
+const winAdded = [];
+{
+  let text = lines.join('\n');
+  const used = [];
+  const out = []; let i = 0; let mode = 'code'; const tpl = [];
+  const isId = (c) => /[\w$]/.test(c || '');
+  while (i < text.length) {
+    const c = text[i], d = text[i + 1];
+    if (mode === 'code') {
+      if (c === '/' && d === '*') { const e = text.indexOf('*/', i + 2); out.push(text.slice(i, e + 2)); i = e + 2; continue; }
+      if (c === '/' && d === '/') { const e = text.indexOf('\n', i); const end = e < 0 ? text.length : e; out.push(text.slice(i, end)); i = end; continue; }
+      if (c === "'" || c === '"') { let j = i + 1; while (j < text.length && text[j] !== c) { if (text[j] === '\\') j++; j++; } out.push(text.slice(i, j + 1)); i = j + 1; continue; }
+      if (c === '`') { mode = 'tpl'; out.push(c); i++; continue; }
+      if (c === '}' && tpl.length && tpl[tpl.length - 1] === 0) { tpl.pop(); mode = 'tpl'; out.push(c); i++; continue; }
+      if (c === '{' && tpl.length) tpl[tpl.length - 1]++;
+      if (c === '}' && tpl.length) tpl[tpl.length - 1]--;
+      if (!isId(text[i - 1]) && (text[i - 1] !== '.' || text.slice(i - 3, i) === '...')) {
+        const m = text.slice(i).match(/^[A-Za-z_$][\w$]*/);
+        if (m && moved.has(m[0])) {
+          const before = text.slice(Math.max(0, i - 12), i);
+          const isWinAssign = /window\.$/.test(before);
+          const isCall = /^\s*\(/.test(text.slice(i + m[0].length));
+          if (!isWinAssign) used.push({ name: m[0], isCall, line: text.slice(0, i).split('\n').length });
+          if (VIA && isCall && !isWinAssign) { out.push('window.' + m[0]); i += m[0].length; continue; }
+        }
+        if (m) { out.push(m[0]); i += m[0].length; continue; }
+      }
+      out.push(c); i++; continue;
+    }
+    if (c === '\\') { out.push(c, d); i += 2; continue; }
+    if (c === '`') { mode = 'code'; out.push(c); i++; continue; }
+    if (c === '$' && d === '{') { tpl.push(0); mode = 'code'; out.push('${'); i += 2; continue; }
+    out.push(c); i++;
+  }
+  if (used.length) {
+    if (!VIA) { console.error('✗ 탭에 남은 코드가 옮길 함수를 부른다: ' + [...new Set(used.map((u) => `${u.name}(${u.line}줄)`))].join(', ') + ' — --via-window로 window를 거치게 하거나 범위를 바꾼다'); process.exit(1); }
+    const notCall = used.filter((u) => !u.isCall);
+    if (notCall.length) { console.error('✗ 부르지 않고 값으로 쓰는 곳이 있어 window로 바꿀 수 없다: ' + notCall.map((u) => `${u.name}(${u.line}줄)`).join(', ')); process.exit(1); }
+    /* 파일을 읽는 중(최상위)에 바로 부르는 곳 — 그때는 새 파일이 아직 안 읽혀 window에 없다 */
+    const topCalls = used.filter((u) => /^\s*[A-Za-z_$][\w$]*\s*\(/.test(lines[u.line - 1] || '') && /^\S/.test(lines[u.line - 1] || ''));
+    if (topCalls.length) { console.error('✗ 탭 파일 최상위에서 바로 부르는 곳: ' + topCalls.map((u) => `${u.name}(${u.line}줄)`).join(', ')); process.exit(1); }
+    text = out.join('');
+    lines = text.split('\n');
+    for (const n of new Set(used.map((u) => u.name))) {
+      if (!winLines.some((l) => new RegExp(`^window\\.${n}\\s*=`).test(l))) winAdded.push(`window.${n} = ${n};   // 탭(${path.basename(src)})이 window로 부른다`);
+    }
+  }
+}
 fs.writeFileSync(src, lines.join(NL));
+winLines.push(...winAdded);
 fs.mkdirSync(path.dirname(dest), { recursive: true });
 fs.writeFileSync(dest, [...head, ...chunk, '', ...(winLines.length ? ['/* 화면의 onclick이 부르는 것 */', ...winLines] : []), ''].join(NL));
 
