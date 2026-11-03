@@ -53,6 +53,20 @@ for (const f of files) {
       want.forEach((n) => { if (!has(rel(target), n)) problems.push(`${rel(f)}: ${m[2]}에 ${n} 없음`); });
     }
   }
+  /* 그때그때 읽는 import('…') — 화면을 그릴 때는 안 불리고 저장·메일 같은 동작에서만 불려, 브라우저 비교로는
+     못 잡는다. 구획을 다른 폴더로 옮기면서 경로를 안 고쳐 다섯 곳이 깨진 채 있었다(설정 탭을 쪼갤 때 발견).
+     파일이 있는지와, const { a, b } = await import(…)로 꺼내는 이름이 있는지를 본다 */
+  for (const m of src.matchAll(/(?:const\s*\{([^}]*)\}\s*=\s*)?await\s+import\(\s*'(\.{1,2}\/[^']+)'\s*\)|import\(\s*'(\.{1,2}\/[^']+)'\s*\)/g)) {
+    const spec = m[2] || m[3];
+    if (m[3] && m.index > 0 && /await\s+$/.test(src.slice(Math.max(0, m.index - 10), m.index))) continue;   // 위 갈래가 이미 셌다
+    const target = path.resolve(path.dirname(f), spec);
+    if (!fs.existsSync(target)) { problems.push(`${rel(f)}: 없는 파일 ${spec} (import(…))`); continue; }
+    if (m[1]) {
+      const ex = exportsOf[rel(target)];
+      m[1].split(',').map((s) => s.trim().split(/\s*:\s*/)[0].trim()).filter(Boolean)
+        .forEach((n) => { if (ex && !ex.names.has(n) && !ex.star.length) problems.push(`${rel(f)}: ${spec}에 ${n} 없음 (import(…))`); });
+    }
+  }
   graph[rel(f)] = [...deps];
 }
 
@@ -189,6 +203,13 @@ for (const f of files) {
 }
 
 if (process.argv.includes('--check')) {
+  /* 문법 — 손으로 줄을 옮기다 객체의 닫는 «};»를 두고 와서 설정 탭이 통째로 안 읽힌 적이 있다.
+     위의 이름 검사는 글자만 훑어서 이걸 못 잡는다 */
+  const { spawnSync } = require('child_process');
+  for (const f of files) {
+    const r = spawnSync(process.execPath, ['--input-type=module', '--check'], { input: fs.readFileSync(f) });
+    if (r.status) problems.push(`${rel(f)}: 문법 오류 — ${String(r.stderr).split('\n').find((l) => /Error/.test(l)) || ''}`);
+  }
   if (problems.length) { console.log(`\n✗ import 문제 ${problems.length}개`); problems.forEach((p) => console.log('  ' + p)); process.exit(1); }
   console.log('\n✓ import한 이름이 모두 있다');
 }

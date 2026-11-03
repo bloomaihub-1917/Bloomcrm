@@ -258,7 +258,7 @@ ${
     beat: '', products: '', tags: '', org_id: '',
   };
   contacts.push(c);
-  const { postToSheet } = await import('../api.js');
+  const { postToSheet } = await import('../../api.js');
   const r = await postToSheet({
     sheet: 'contacts',
     row: [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,

@@ -222,7 +222,7 @@ export async function confirmMDBToCrm(){
   }
   let tBad = [];
   if(made.length){
-    const { saveTargetToSheet } = await import('./crm-tab.js');
+    const { saveTargetToSheet } = await import('../../modules/crm-tab.js');
     made.forEach(t => targets.unshift(t));
     const tRes = await Promise.all(made.map(t => saveTargetToSheet(t, { log: true })));
     tBad = made.filter((_, i) => !tRes[i].ok);
@@ -235,7 +235,7 @@ export async function confirmMDBToCrm(){
   buildMDBEvList(); renderMDB();
   window.invalidateEvRows?.();   // 행사 화면의 참여자 집계를 다시 세게
   /* crm-tab을 위에서 import하면 순환 참조가 된다 — 필요할 때만 불러온다 */
-  const crm = await import('./crm-tab.js');
+  const crm = await import('../../modules/crm-tab.js');
   crm.buildEvFil(); crm.renderCrm(); crm.updBadges();
 
   const okT = made.length - tBad.length;

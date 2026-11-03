@@ -14,7 +14,10 @@ import { isPending, isUnread, runMailSync } from '../../shared/mail/mail-mark.js
 import { CODE_LISTS, EQUIP_CATALOG, EVENT_LIST, EXHIBITORS, EXH_CFG, EXH_LOGS, SPEAKERS, SPEAKER_LOGS, applyCodeLists, evPartDone, evParts } from '../../state.js';
 import { escAttr, escapeHtml } from '../../utils.js';
 import { settingsUi } from './settings-ui.js';
-import { DUE_LABEL, applyBoothItemsToEvent, clDef, clRowsHtml, clRowsOf, clSlug, refreshAfterEventChange, renderEvCfgList, renderEvMgr, saveCodeRow } from '../../modules/settings-tab.js';
+import { DUE_LABEL } from '../../modules/settings-tab.js';
+import { refreshAfterEventChange } from './taxonomy.js';
+import { renderEvMgr } from './event-admin.js';
+import { applyBoothItemsToEvent, clDef, clRowsHtml, clRowsOf, clSlug, renderEvCfgList, saveCodeRow } from './code-lists.js';
 import { mountEquipCatalogIdle, openEquipFor } from './equip-catalog.js';
 
 /* ══════════════════════════════════════════
@@ -362,7 +365,7 @@ export function renderEvInbox(evKey = settingsUi.inboxEv){
   const unread = rows.filter(r => isUnread(r.l)).length;
   // 주인 없는 메일 단추는 늦게 채운다(서버에서 센다)
   setTimeout(async () => {
-    const m = await import('../shared/mail/mail-original.js');
+    const m = await import('../../shared/mail/mail-original.js');
     const n = await m.unassignedCount(evKey);
     const b = document.getElementById('evd-un-btn');
     if(b) b.innerHTML = n ? `<button class="btn" style="font-size:10.5px;color:var(--am);font-weight:700;margin-left:6px" onclick="openUnassigned('${escAttr(evKey)}')">주인 없는 메일 ${n}</button>` : '';

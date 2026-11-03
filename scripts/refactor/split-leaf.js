@@ -93,7 +93,9 @@ for (const l of lines.slice(from - 1, to)) {
   /* «export … from» 다시 내보내기 줄은 탭 파일에 남긴다 — 옛 경로(탭 파일)로 가져가는 곳을 위한 줄이다.
      전에는 함께 옮겨, 컨퍼런스 탭에서 SP_COLS·spCell을 가져가던 fingerprint.mjs가 깨졌다 */
   if (/^export\s*(\{[^}]*\}|\*)\s*from\s*'/.test(l)) { keepExports.push(l); continue; }
-  chunk.push(l);
+  /* 그때그때 읽는 import('./x.js')도 새 자리에 맞춘다 — 전에는 그대로 옮겨, 다른 폴더로 간 구획에서
+     저장·메일 같은 동작을 누를 때만 «없는 파일»로 깨졌다 */
+  chunk.push(l.replace(/(import\(\s*')(\.{1,2}\/[^']+)(')/g, (w, a, spec, z) => a + rel(dest, path.resolve(path.dirname(src), spec)) + z));
 }
 const moved = new Set([...insideTop]);
 lines.splice(from - 1, to - from + 1,

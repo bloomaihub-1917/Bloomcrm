@@ -11,7 +11,7 @@ import { COMPANY_SECTORS } from '../../state.js';
 import { scopedSectorName, sectorKey, slugifySectorName } from '../../utils.js';
 import { populateUploadEvDropdown } from '../upload/upload-event-select.js';
 import { settingsUi } from './settings-ui.js';
-import { renderSectorList } from '../../modules/settings-tab.js';
+import { renderSectorList } from './taxonomy.js';
 
 /* ══════════════════════════════════════════
    새 메인 섹터 추가 (원본 4119~4135행)

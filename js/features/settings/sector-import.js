@@ -11,7 +11,7 @@ import { COMPANY_SECTORS } from '../../state.js';
 import { escapeHtml, parseSectorScope, scopedSectorName, sectorKey, slugifySectorName } from '../../utils.js';
 import { populateUploadEvDropdown } from '../upload/upload-event-select.js';
 import { settingsUi } from './settings-ui.js';
-import { renderSectorList } from '../../modules/settings-tab.js';
+import { renderSectorList } from './taxonomy.js';
 
 /* ══════════════════════════════════════════
    엑셀로 섹터 일괄 추가 (신규 — 원본에는 없던 기능)

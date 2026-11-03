@@ -177,7 +177,20 @@ master와 이 브랜치의 계산 지문이 같다(참가기업 12곳·기업 16
 101곳 + 기업 탭 76단계(정렬 4종, 기업 8곳의 상세·하위 탭 5개·섹터 고치기 창)가 master와 같다.
 첫 76단계 비교에서는 섹터 창 8곳이 달랐으나, 같은 순서를 세 번 다시 돌렸을 때 모두 같았다(다시 나오지 않음). 저장은 눌러 보지 않았다.
 
-다음: `settings-tab`, `state.js`·`api.js` 기능별로 나누기.
+**설정 탭** (✅): 화면 상태가 없어(앞서 `settingsUi`로 옮김) 바로 떼어 냈다 —
+`sector-tree.js`(섹터 트리·병합·묶기·편입) / `taxonomy.js`(분야·연락처 태그·참가 유형) / `event-admin.js`(행사 관리) / `code-lists.js`(선택 목록·부스 기본 제공·업로드 표기·행사별 설정 요약).
+`DUE_LABEL`(행사 관리가 값으로 씀)과 연락처 데이터 정리 도구(`BILINGUAL_FIELD_PAIRS`)는 탭에 남겼다. `settings-tab` 1,832 → 387줄. 101곳이 master와 같다.
+
+**이번에 찾은 숨은 고장 — 그때그때 읽는 `import('…')` 경로** (고침):
+`split-leaf.js`가 옮긴 구획 안의 `await import('../api.js')` 같은 경로를 새 폴더에 맞추지 않았다. 화면을 그릴 때는 안 불리고
+저장·메일 원문 보기 같은 동작에서만 불려, 브라우저 비교로는 못 잡았다. 깨져 있던 곳 6군데:
+`sp-dr-basic.js`(api), `exh-book.js`(비품 목록 저장), `mdb-bulk.js` 2곳(CRM 보내기), `code-lists.js` 2곳(부스 기본 제공 적용),
+`event-detail.js`(메일 원문 — 앞선 설정 탭 작업 때부터). master에는 없는, 이 브랜치에서 생긴 고장이다.
+도구 고침: `split-leaf.js`가 `import('…')` 경로도 새 자리에 맞춘다. `deps.js --check`가 `import('…')`의 파일과
+`const { a } = await import(…)`로 꺼내는 이름, 그리고 모든 파일의 문법(`node --check`)을 본다 — 손으로 줄을 옮기다 `};`를 두고 와
+설정 탭이 통째로 안 읽힌 것을 브라우저에서야 알았기 때문이다.
+
+다음: `state.js`·`api.js` 기능별로 나누기, 전시 상세 창(3,385줄) 한 번 더.
 
 **공용 낱말 훑기 `scripts/refactor/js-scan.js`** — `codeOnly(src)`가 원본과 길이가 같은 «코드만 남긴 사본»을 만든다
 (문자열·주석·정규식 글자·템플릿 글자를 지우고 `${식}`은 남긴다). `lift-state`·`split-leaf --via-window`·`deps.js`가 이것을 쓴다.
