@@ -11,7 +11,7 @@ import { buildCoDB } from './domain/co-db.js';
 import { buildMDBEvList, renderMDB } from './modules/db-tab.js';
 import { buildAuditUserList, renderAudit } from './modules/audit-tab.js';
 import { switchArchTab } from './modules/settings-tab.js';
-import { populateUploadEvDropdown } from './modules/upload-tab.js';
+import { populateUploadEvDropdown } from './features/upload/upload-event-select.js';
 import { buildExhEvList, renderExh } from './modules/exh-tab.js';
 import { initEvDbTab } from './modules/event-tab.js';
 import { buildConfEvList, renderConf } from './modules/conf-tab.js';

@@ -14,7 +14,7 @@ import { buildMDBEvList, renderMDB } from './modules/db-tab.js';
 import { renderCoList, buildCoCAT } from './modules/company-tab.js';
 import { buildCoDB } from './domain/co-db.js';
 import { buildEvFil, updBadges } from './modules/crm-tab.js';
-import { populateUploadEvDropdown } from './modules/upload-tab.js';
+import { populateUploadEvDropdown } from './features/upload/upload-event-select.js';
 
 /* api.js의 loadFromSheets(hooks)에 넘길 화면 갱신 훅 묶음 —
    원본에서 loadFromSheets() 종료 시 호출하던 함수들과 동일 */

@@ -7,10 +7,42 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const h = async () => {
   const html = document.body.innerHTML
     .replace(/<div class="user-menu-since" id="um-since">[^<]*<\/div>/, '')
-    .replace(/<span id="last-sync-time">[^<]*<\/span>/, '');   // «마지막 동기화» 시각 — 두 화면 사이에 분이 넘어가면 달라진다
+    .replace(/<span id="last-sync-time">[^<]*<\/span>/, '')    // «마지막 동기화» 시각 — 두 화면 사이에 분이 넘어가면 달라진다
+    /* 새로 만든 연락처 id는 지금 시각(ms×1000)으로 정해져(CLAUDE.md) 돌릴 때마다 다르다. 저장 시각도 같다 */
+    .replace(/\d{13,}/g, '#ID')
+    .replace(/\d{4}-\d{2}-\d{2}T[\d:.]+Z/g, '#TS');
   const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(html));
   return [...new Uint8Array(b)].slice(0, 6).map((x) => x.toString(16).padStart(2, '0')).join('');
 };
+/* 업로드 — 브라우저에서 엑셀을 만들어 실제로 올린다: 파일 읽기 → 머리글·컬럼 맞추기 → 검증·저장(테스트 모드라
+   서버로는 안 가고 화면 상태만 바뀐다) → 처음으로. 하위 탭(로그·병합)과 연결 행사 직접 입력도 연다.
+   두 화면에서 같은 파일을 쓰도록 내용은 고정이다 */
+export async function runUpload() {
+  const out = {}; const errors = [];
+  const step = async (name, fn, ms = 250) => { try { await fn(); await wait(ms); out[name] = await h(); } catch (e) { errors.push(`${name}: ${e.message}`); } };
+  window.switchApp('up'); await wait(250);
+  const XLSX = window.XLSX;
+  const rows = [
+    ['이름', '영문 이름', '소속', '직함', '이메일', '전화', '국가', '구분'],
+    ['김시험', 'Siheom Kim', '시험바이오', '팀장', 'kim.test@example.com', '010-0000-0001', '대한민국', '연사'],
+    ['Jane Probe', 'Jane Probe', 'Probe Labs Inc.', 'Director', 'jane.probe@example.com', '+1-555-0100', 'USA', 'VIP'],
+    ['박검증', '', '(주)검증메디칼', '연구원', 'park.check@example.com', '', '', '일반'],
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Sheet1');
+  const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+  const file = new File([buf], '시험_참가자명단.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  await step('evInputOn', () => window.toggleEvInput(true));
+  await step('evInputOff', () => window.toggleEvInput(false));
+  const sel = document.getElementById('up-ev');
+  if (sel && sel.options.length > 1) sel.value = sel.options[1].value;
+  await step('read', () => window.handleFileSelect({ target: { files: [file] } }), 1500);
+  await step('confirm', () => window.confirmImport(), 1200);
+  await step('reset', () => window.resetUpload());
+  for (const v of ['log', 'merge', 'upload']) await step('uv-' + v, () => window.switchUV(v, null));
+  return { out, errors };
+}
+
 /* 전시 — 목록·일괄 메일·참가기업 상세 창(앞 3곳의 모든 하위 탭)·대시보드 */
 export async function runExh(base) {
   const st = await import(base + '/js/state.js');

@@ -4,6 +4,8 @@
    날짜·시각처럼 매번 바뀌는 값이 없는 화면만 견주므로, 다르면 진짜로 다르게 그린 것이다. */
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const hash = async (s) => {
+  /* 새로 만든 연락처 id(지금 시각 기준)와 저장 시각은 돌릴 때마다 달라 빼고 센다 */
+  s = s.replace(/\d{13,}/g, '#ID').replace(/\d{4}-\d{2}-\d{2}T[\d:.]+Z/g, '#TS');
   const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
   return [...new Uint8Array(b)].slice(0, 6).map((x) => x.toString(16).padStart(2, '0')).join('');
 };

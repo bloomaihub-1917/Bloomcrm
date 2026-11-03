@@ -87,7 +87,7 @@ import { slugifySectorName, escapeHtml, escAttr, countryName, scopedSectorName, 
 import { buildCoCAT, renderCoDashboard, setCoCat } from './company-tab.js';
 import { buildCoDB } from '../domain/co-db.js';
 import { renderMDB, buildMDBEvList, buildMDBTagList } from './db-tab.js';
-import { populateUploadEvDropdown } from './upload-tab.js';
+import { populateUploadEvDropdown } from '../features/upload/upload-event-select.js';
 import { renderAiSettings } from './ai-settings.js';
 import { contactFillCount, renderContactFill, enrichCounts, saveOrgFields } from './data-clean.js';
 

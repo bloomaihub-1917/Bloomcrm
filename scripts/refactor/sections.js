@@ -36,7 +36,12 @@ secs.forEach((s, k) => {
 });
 
 secs.forEach((s, k) => {
-  const body = strip(lines.slice(s.start, s.end + 1).join('\n'));
+  /* «window.X = X;» 줄은 부르는 게 아니라 거는 것이다 — 세면 모든 구획이 «다른 구획이 부름»으로 보인다.
+     Object.assign(window, { … }) 묶음도 같은 까닭으로 뺀다 */
+  const body = strip(lines.slice(s.start, s.end + 1)
+    .filter((l) => !/^\s*window\.[A-Za-z_$][\w$]*\s*=\s*[A-Za-z_$][\w$]*\s*;\s*$/.test(l))
+    .join('\n')
+    .replace(/Object\.assign\(window,\s*\{[\s\S]*?\}\);?/g, ' '));
   s.uses = new Map();   // 다른 구획 번호 → Set(이름)
   s.state = new Set(); s.writes = new Set();
   for (const m of body.matchAll(/(^|[^.\w$])([A-Za-z_$][\w$]*)\b/g)) {
@@ -55,7 +60,9 @@ const usedBy = secs.map(() => new Map());
 secs.forEach((s, k) => s.uses.forEach((names, o) => usedBy[o].set(k, names)));
 
 secs.forEach((s, k) => {
-  const by = [...usedBy[k]].filter(([o]) => o !== 0);
+  /* 머리 구획(import·상태)도 코드가 들어 있으면 부르는 쪽이다 — 빼면 exh-drawer 머리가 부르는
+     dLogs를 놓치고 «뗄 수 있음»이라 잘못 알린다 */
+  const by = [...usedBy[k]];
   const leaf = k !== 0 && !by.length;
   console.log(`[${k}] ${s.start + 1}-${s.end + 1} (${s.end - s.start + 1}줄) ${s.title}${leaf ? '  ← 뗄 수 있음' : ''}`);
   if (by.length) console.log('     다른 구획이 부름: ' + by.map(([o, n]) => `[${o}] ${[...n].slice(0, 5).join(',')}${n.size > 5 ? '…' : ''}`).join(' / '));

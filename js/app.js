@@ -11,6 +11,9 @@
 import './modules/db-tab.js';
 import './features/mdb/contact-drawer.js';   // 연락처 상세 창 — 스스로 window에 건다
 import './modules/upload-tab.js';
+import './features/upload/upload-read.js';   // 업로드 STEP 1 — 파일 읽기와 파일명으로 카테고리 짐작 — 스스로 window에 건다
+import './features/upload/upload-save.js';   // 업로드 STEP 4 — 의심 케이스 확인과 마스터DB 반영 — 스스로 window에 건다
+import './features/upload/upload-logs.js';   // 업로드 › 수집 로그·기업 병합 관리 하위 탭 — 스스로 window에 건다
 import './modules/settings-tab.js';
 import './modules/data-clean.js';
 import './modules/company-tab.js';
@@ -37,7 +40,7 @@ import { isMobile } from './utils.js';
 import { buildCoCAT } from './modules/company-tab.js';
 import { buildCoDB } from './domain/co-db.js';
 import { buildEvFil } from './modules/crm-tab.js';
-import { populateUploadEvDropdown } from './modules/upload-tab.js';
+import { populateUploadEvDropdown } from './features/upload/upload-event-select.js';
 
 /* INIT — Firebase Auth의 onAuthStateChanged는 비동기라, 과거 동기
    checkSession() 분기 대신 콜백으로 로그인 여부에 따라 화면을 정한다
