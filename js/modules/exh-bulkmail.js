@@ -31,6 +31,7 @@ import { libItems, libItem } from '../shared/mail/mail-templates.js';
 import { followState } from '../shared/mail/follow-up.js';
 import { trackAction } from '../core/audit-log.js';
 import { makeResendRound } from '../shared/mail/resend-round.js';
+import { makePause, runBulkSend } from '../shared/mail/bulk-send.js';
 import { varChipsHtml } from '../shared/mail/var-chips.js';
 import { aiDraftHtml, registerAiDraft } from '../shared/mail/ai-mail-draft.js';
 import './exh-mail-editor.js';
@@ -158,15 +159,8 @@ const close = () => {
   }
   document.getElementById('exh-bulkmail')?.remove(); bm = null;
 };
-/* 통 사이 쉬기 — 1초씩 이어 붙이면 뒤로 보낸 탭에서 브라우저가 타이머를 1분 단위로 몰아
-   한 통에 수십 분이 걸렸다. 남은 시간은 시계로 재고, 멈춤을 누르면 바로 나온다 */
-async function pause(sec, label){
-  const end = Date.now() + sec * 1000;
-  while(bm && !bm.stop && Date.now() < end){
-    say(label(Math.ceil((end - Date.now()) / 1000)), true);
-    await new Promise(r => setTimeout(r, Math.min(1000, end - Date.now())));
-  }
-}
+/* 통 사이 쉬기 — 남은 시간을 시계로 재고 멈춤을 누르면 바로 나온다 */
+const pause = makePause(() => bm, (t, ok) => say(t, ok));   // 틀은 shared/mail/bulk-send.js
 let starting = false;   // «보내기»를 두 번 눌러 확인 창이 두 번 뜨는 것을 막는다
 addEventListener('beforeunload', (e) => { if(bm?.sending){ e.preventDefault(); e.returnValue = ''; } });
 const mailsOf = (x, who) => {
@@ -658,56 +652,44 @@ async function sendExhBulk(){
     bm.photos ? `\n\n📷 기업별 사진: ${list.length - noPhoto}곳에 붙어요.${noPhoto ? ` ${noPhoto}곳은 맞는 사진이 없어 사진 없이 나가요.` : ''}` : ''}\n\n발신 ${from.text}\n받는 사람: ${bm.who === 'all' ? '메일 있는 담당자 모두' : bm.who === 'rest' ? '이 메일을 아직 못 받은 담당자만 (이미 받은 주소는 빠짐)' : '메인 담당자'}${ccList().length ? `\n참조: ${ccList().join(', ')}` : ''}\n기업마다 한 통씩 따로 나갑니다.${
     list.length > 1 ? `\n\n스팸으로 잡히지 않게 통마다 ${SEND_GAP}초씩 쉬어요 — 약 ${Math.ceil((list.length - 1) * SEND_GAP / 60)}분 걸려요. 다 보낼 때까지 이 창을 닫지 마세요.` : ''}`)) return;
 
-  bm.sending = true;
-  render();
   const kind = bm.step === 'note' || st.lib ? 'note' : `exh-${bm.step}`;
-  let ok = 0;
-  const fails = [], unlogged = [];
-  bm.failed = new Set();
-  for(const [i, x] of list.entries()){
+  await runBulkSend({
+    bm, list, st, gap: SEND_GAP, pause, say, render, close,
     /* 통 사이에 쉰다 — 같은 모양 메일을 쉬지 않고 수십 통 보내면 받는 쪽이 대량 발송으로 보고
-       스팸함에 넣는다(특히 Gmail 같은 무료 메일 발신). 첫 통 앞에서는 쉬지 않는다 */
-    if(i) await pause(SEND_GAP, (s) => `${i}/${list.length} 보냄 — 스팸으로 잡히지 않게 ${s}초 쉬었다가 다음 통 (${exhNames(x).ko})`);
-    if(bm.stop) break;
-    say(`보내는 중… ${i + 1}/${list.length} ${exhNames(x).ko}`, true);
-    const to = mailsOf(x, bm.who);
-    const ph = await buildMail(x);
-    if(ph.error){ fails.push(`${exhNames(x).ko}: ${ph.error}`); bm.failed.add(x.id); continue; }
-    const { subject, body: text, html } = ph;
-    ph.list = ph.attachments;
-    const res = await sendMail({ to, cc: ccList(), subject, text, html, exhibitor_id: x.id, category: st.label, kind, file_ids: fileIds, attachments: ph.attachments });
-    if(!res.ok){ fails.push(`${exhNames(x).ko}: ${res.error || '실패'}`); bm.failed.add(x.id); continue; }
-    ok++;
-    const names = [...mailFilesOf(bm.evKey).filter(f => fileIds.includes(f.id)).map(f => f.filename), ...ph.list.map(a => a.filename)];
-    /* 나갔는데 기록을 못 남겼어도 화면에는 «보냄»으로 넣는다 — 안 그러면 «보낼 차례»로 다시 골라져
-       같은 곳에 두 번 나간다. 서버 기록은 보낸메일함 가져오기가 채운다 */
-    if(!res.logId) unlogged.push(exhNames(x).ko);
-    EXH_LOGS.push({
-      id: res.logId || `nolog-${Date.now()}-${i}`, exhibitor_id: x.id, kind, ts: nowStamp(), direction: 'out', channel: '이메일',
-      counterpart: to.join(', '), category: st.label, subject, answered_at: '', answer: '', status: 'done',
-      body: text + (names.length ? `\n\n[첨부] ${names.join(', ')}` : ''),
-      author_email: currentUser?.email || '', author_name: currentUser?.name || '',
-    });
-  }
-  const stopped = bm.stop;
-  trackAction('add', '참가사 일괄 메일', bm.evKey, `«${st.label}»${st.round ? ` (${st.round.label})` : ''} ${ok}곳 보냄${fails.length ? ` · 실패 ${fails.length}곳` : ''}${stopped ? ' · 중간에 멈춤' : ''}`);
-  bm.sending = false;
-  if(stopped){
-    bm.stop = false;
-    close();
-    alert(`멈췄어요 — ${list.length}곳 중 ${ok}곳에 보냈어요.${fails.length ? `\n실패 ${fails.length}곳: ${fails.slice(0, 5).join(' / ')}` : ''}${unlogged.length ? `\n\n${unlogged.length}곳은 보냈지만 기록을 못 남겼어요(${unlogged.slice(0, 5).join(', ')}). 메일 가져오기를 하면 채워져요.` : ''}`);
-    window.renderExh?.();
-    return;
-  }
-  /* 묶음 대상에게 다 다시 보냈으면 묶음을 닫는다 */
-  const rp = roundProgress(curStep());
-  let closed = false;
-  if(rp && rp.done >= rp.total){ await closeExhRound(true); closed = true; }
-  pickTurn();   // 보낸 곳은 «보냄»으로 넘어가 빠진다
-  render();
-  say(`${ok}곳에 보냈어요${closed ? ' · 다시 보내기 묶음을 다 보내 닫았어요' : ''}${fails.length ? ` — 실패 ${fails.length}곳: ${fails.slice(0, 5).join(' / ')}${fails.length > 5 ? ' …' : ''}` : ''}${
-    unlogged.length ? ` · ${unlogged.length}곳은 보냈지만 기록을 못 남겼어요(${unlogged.slice(0, 3).join(', ')}) — 메일 가져오기를 하면 채워져요` : ''}`, !fails.length && !unlogged.length);
-  window.renderExh?.();
+       스팸함에 넣는다(특히 Gmail 같은 무료 메일 발신) */
+    pauseText: (i, n, s, x) => `${i}/${n} 보냄 — 스팸으로 잡히지 않게 ${s}초 쉬었다가 다음 통 (${exhNames(x).ko})`,
+    name: (x) => exhNames(x).ko,
+    send: async (x) => {
+      const to = mailsOf(x, bm.who);
+      const ph = await buildMail(x);
+      if(ph.error) return { fail: ph.error };
+      const { subject, body: text, html } = ph;
+      const res = await sendMail({ to, cc: ccList(), subject, text, html, exhibitor_id: x.id, category: st.label, kind, file_ids: fileIds, attachments: ph.attachments });
+      return { res, ctx: { to, ph } };
+    },
+    sent: (x, res, i, { to, ph }) => {
+      const names = [...mailFilesOf(bm.evKey).filter(f => fileIds.includes(f.id)).map(f => f.filename), ...ph.attachments.map(a => a.filename)];
+      EXH_LOGS.push({
+        id: res.logId || `nolog-${Date.now()}-${i}`, exhibitor_id: x.id, kind, ts: nowStamp(), direction: 'out', channel: '이메일',
+        counterpart: to.join(', '), category: st.label, subject: ph.subject, answered_at: '', answer: '', status: 'done',
+        body: ph.body + (names.length ? `\n\n[첨부] ${names.join(', ')}` : ''),
+        author_email: currentUser?.email || '', author_name: currentUser?.name || '',
+      });
+    },
+    track: { label: '참가사 일괄 메일', unit: '곳' },
+    round: { progress: roundProgress, close: closeExhRound, curStep },
+    stopped: ({ ok, fails, unlogged }) => {
+      alert(`멈췄어요 — ${list.length}곳 중 ${ok}곳에 보냈어요.${fails.length ? `\n실패 ${fails.length}곳: ${fails.slice(0, 5).join(' / ')}` : ''}${unlogged.length ? `\n\n${unlogged.length}곳은 보냈지만 기록을 못 남겼어요(${unlogged.slice(0, 5).join(', ')}). 메일 가져오기를 하면 채워져요.` : ''}`);
+      window.renderExh?.();
+    },
+    done: ({ ok, fails, unlogged, closed }) => {
+      pickTurn();   // 보낸 곳은 «보냄»으로 넘어가 빠진다
+      render();
+      say(`${ok}곳에 보냈어요${closed ? ' · 다시 보내기 묶음을 다 보내 닫았어요' : ''}${fails.length ? ` — 실패 ${fails.length}곳: ${fails.slice(0, 5).join(' / ')}${fails.length > 5 ? ' …' : ''}` : ''}${
+        unlogged.length ? ` · ${unlogged.length}곳은 보냈지만 기록을 못 남겼어요(${unlogged.slice(0, 3).join(', ')}) — 메일 가져오기를 하면 채워져요` : ''}`, !fails.length && !unlogged.length);
+      window.renderExh?.();
+    },
+  });
 }
 
 /* 단계 편집 창에서 단계를 고치면 — 고른 단계가 없어졌으면 첫 단계로, 문구는 새 기본 문구로 */

@@ -27,6 +27,7 @@ import { mailTargets } from '../features/conference/sp-dr-mail.js';
 import { saveConf } from '../features/conference/conf-common.js';
 import { trackAction } from '../core/audit-log.js';
 import { makeResendRound } from '../shared/mail/resend-round.js';
+import { makePause, runBulkSend } from '../shared/mail/bulk-send.js';
 import { varChipsHtml } from '../shared/mail/var-chips.js';
 import { aiDraftHtml, registerAiDraft } from '../shared/mail/ai-mail-draft.js';
 
@@ -78,13 +79,7 @@ const close = () => {
 /* 통 사이 쉬기 — 같은 계정에서 쉬지 않고 수십 통이면 메일 서버가 속도 제한·스팸으로 본다.
    남은 시간은 시계로 잰다(뒤로 보낸 탭에서 1초 타이머가 1분씩 밀리지 않게) */
 const SEND_GAP = 10;
-async function pause(sec, label){
-  const end = Date.now() + sec * 1000;
-  while(bm && !bm.stop && Date.now() < end){
-    say(label(Math.ceil((end - Date.now()) / 1000)), true);
-    await new Promise(r => setTimeout(r, Math.min(1000, end - Date.now())));
-  }
-}
+const pause = makePause(() => bm, (t, ok) => say(t, ok));   // 틀은 shared/mail/bulk-send.js
 let starting = false;   // «보내기»를 두 번 눌러 확인 창이 두 번 뜨는 것을 막는다
 addEventListener('beforeunload', (e) => { if(bm?.sending){ e.preventDefault(); e.returnValue = ''; } });
 /* 지금 고른 메일 — 보관함 양식이면 단계 모양으로 바꿔 돌려준다 */
@@ -369,57 +364,47 @@ async function sendSpBulk(){
     list.length > 1 ? `\n통마다 ${SEND_GAP}초씩 쉬어요 — 약 ${Math.ceil((list.length - 1) * SEND_GAP / 60)}분 걸려요. 다 보낼 때까지 이 창을 닫지 마세요.` : ''}${
     notTurn ? `\n\n이 중 ${notTurn}명은 보낼 차례가 아니에요(이미 받았거나 해당 없음).` : ''}`)) return;
 
-  bm.sending = true;
-  render();
   const fileIds = mailFilesOf(bm.evKey).filter(f => f.step === bm.step).map(f => f.id);
   const fileNote = fileIds.length ? `\n\n[첨부] ${mailFilesOf(bm.evKey).filter(f => fileIds.includes(f.id)).map(f => f.filename).join(', ')}` : '';
-  let ok = 0;
-  const fails = [], unlogged = [];
-  bm.failed = new Set();
   const kind = st.lib ? 'note' : bm.step;
-  for(const [i, sp] of list.entries()){
-    if(i) await pause(SEND_GAP, (s) => `${i}/${list.length} 보냄 — ${s}초 쉬었다가 다음 통 (${nameOf(sp)})`);
-    if(bm.stop) break;
-    say(`보내는 중… ${i + 1}/${list.length} ${nameOf(sp)}`, true);
-    const t = mailTargets(sp.id);
-    const m = mailFor(sp);
-    if(!m){ fails.push(`${nameOf(sp)}: 이 단계가 없어요`); bm.failed.add(sp.id); continue; }
-    const res = await sendMail({ to: t.to, cc: t.cc, subject: m.subject, text: m.body, speaker_id: sp.id,
-      category: m.category, kind, file_ids: fileIds });
-    if(!res.ok){ fails.push(`${nameOf(sp)}: ${res.error || '실패'}`); bm.failed.add(sp.id); continue; }
-    ok++;
-    /* 나갔는데 기록을 못 남겼어도 화면에는 «보냄»으로 넣는다 — 다시 «보낼 차례»로 골라져 두 번 나가지 않게 */
-    if(!res.logId) unlogged.push(nameOf(sp));
-    SPEAKER_LOGS.push({
-      id: res.logId || `nolog-${Date.now()}-${i}`, speaker_id: sp.id, kind, ts: nowStamp(), direction: 'out', channel: '이메일',
-      counterpart: [t.to.join(', '), t.cc.length ? `(cc) ${t.cc.join(', ')}` : ''].filter(Boolean).join(' '),
-      category: m.category, subject: m.subject, answered_at: '', answer: '', status: 'done', body: m.body + fileNote,
-      author_email: currentUser?.email || '', author_name: currentUser?.name || '',
-    });
-    /* 연사 화면에서 한 통 보낼 때와 같이 — 초청은 «보냄», 자료 독촉은 «마지막 독촉» 날짜를 찍는다 */
-    const patch = st.lib ? null : bm.step === 'invite' && !sp.guide_sent_at ? { guide_sent_at: td() }
-      : m.category === '자료 독촉' ? { reminded_at: td() } : null;
-    if(patch){ const r = await saveSpeaker({ id: sp.id, ...patch, updated_at: td() }); if(r && r.ok !== false) Object.assign(sp, patch); }
-  }
-  const stopped = bm.stop;
-  trackAction('add', '연사 일괄 메일', bm.evKey, `«${st.label}»${st.round ? ` (${st.round.label})` : ''} ${ok}명 보냄${fails.length ? ` · 실패 ${fails.length}명` : ''}${stopped ? ' · 중간에 멈춤' : ''}`);
-  bm.sending = false;
-  const unloggedNote = unlogged.length ? ` · ${unlogged.length}명은 보냈지만 기록을 못 남겼어요(${unlogged.slice(0, 3).join(', ')}) — 메일 가져오기를 하면 채워져요` : '';
-  if(stopped){
-    bm.stop = false;
-    close();
-    alert(`멈췄어요 — ${list.length}명 중 ${ok}명에게 보냈어요.${fails.length ? ` 실패 ${fails.length}명` : ''}${unloggedNote}`);
-    window.renderConf?.(); window.renderSpeakerDr?.();
-    return;
-  }
-  /* 묶음 대상에게 다 다시 보냈으면 묶음을 닫는다 */
-  const rp = roundProgress(curStep());
-  let closed = false;
-  if(rp && rp.done >= rp.total){ await closeSpRound(true); closed = true; }
-  pickDue();   // 보낸 사람은 «보냄»으로 넘어가 빠진다
-  render();
-  say(`${ok}명에게 보냈어요${closed ? ' · 다시 보내기 묶음을 다 보내 닫았어요' : ''}${fails.length ? ` — 실패 ${fails.length}명: ${fails.slice(0, 5).join(' / ')}${fails.length > 5 ? ' …' : ''}` : ''}${unloggedNote}`, !fails.length && !unlogged.length);
-  window.renderConf?.(); window.renderSpeakerDr?.();
+  const unloggedNote = (unlogged) => unlogged.length ? ` · ${unlogged.length}명은 보냈지만 기록을 못 남겼어요(${unlogged.slice(0, 3).join(', ')}) — 메일 가져오기를 하면 채워져요` : '';
+  await runBulkSend({
+    bm, list, st, gap: SEND_GAP, pause, say, render, close,
+    pauseText: (i, n, s, sp) => `${i}/${n} 보냄 — ${s}초 쉬었다가 다음 통 (${nameOf(sp)})`,
+    name: (sp) => nameOf(sp),
+    send: async (sp) => {
+      const t = mailTargets(sp.id);
+      const m = mailFor(sp);
+      if(!m) return { fail: '이 단계가 없어요' };
+      const res = await sendMail({ to: t.to, cc: t.cc, subject: m.subject, text: m.body, speaker_id: sp.id,
+        category: m.category, kind, file_ids: fileIds });
+      return { res, ctx: { t, m } };
+    },
+    sent: async (sp, res, i, { t, m }) => {
+      SPEAKER_LOGS.push({
+        id: res.logId || `nolog-${Date.now()}-${i}`, speaker_id: sp.id, kind, ts: nowStamp(), direction: 'out', channel: '이메일',
+        counterpart: [t.to.join(', '), t.cc.length ? `(cc) ${t.cc.join(', ')}` : ''].filter(Boolean).join(' '),
+        category: m.category, subject: m.subject, answered_at: '', answer: '', status: 'done', body: m.body + fileNote,
+        author_email: currentUser?.email || '', author_name: currentUser?.name || '',
+      });
+      /* 연사 화면에서 한 통 보낼 때와 같이 — 초청은 «보냄», 자료 독촉은 «마지막 독촉» 날짜를 찍는다 */
+      const patch = st.lib ? null : bm.step === 'invite' && !sp.guide_sent_at ? { guide_sent_at: td() }
+        : m.category === '자료 독촉' ? { reminded_at: td() } : null;
+      if(patch){ const r = await saveSpeaker({ id: sp.id, ...patch, updated_at: td() }); if(r && r.ok !== false) Object.assign(sp, patch); }
+    },
+    track: { label: '연사 일괄 메일', unit: '명' },
+    round: { progress: roundProgress, close: closeSpRound, curStep },
+    stopped: ({ ok, fails, unlogged }) => {
+      alert(`멈췄어요 — ${list.length}명 중 ${ok}명에게 보냈어요.${fails.length ? ` 실패 ${fails.length}명` : ''}${unloggedNote(unlogged)}`);
+      window.renderConf?.(); window.renderSpeakerDr?.();
+    },
+    done: ({ ok, fails, unlogged, closed }) => {
+      pickDue();   // 보낸 사람은 «보냄»으로 넘어가 빠진다
+      render();
+      say(`${ok}명에게 보냈어요${closed ? ' · 다시 보내기 묶음을 다 보내 닫았어요' : ''}${fails.length ? ` — 실패 ${fails.length}명: ${fails.slice(0, 5).join(' / ')}${fails.length > 5 ? ' …' : ''}` : ''}${unloggedNote(unlogged)}`, !fails.length && !unlogged.length);
+      window.renderConf?.(); window.renderSpeakerDr?.();
+    },
+  });
 }
 
 /* 양식(변형·보관함)을 고치면 창을 다시 그린다 — 보내는 중이면 건드리지 않는다 */
