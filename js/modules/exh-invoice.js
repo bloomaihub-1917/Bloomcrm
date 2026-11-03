@@ -48,7 +48,7 @@ import {
 } from '../state.js';
 import { exhNames } from './exh-tab.js';
 import { isBillable, currencyOf, ourBillableItems } from '../features/exhibition/exh-calc.js';
-import { createInvoiceRow, setInvField } from './exh-drawer.js';
+import { createInvoiceRow, setInvField } from '../features/exhibition/exh-dr-actions.js';
 import {
   supported, pickFolder, delHandle, readyFolder, folderLabel, subFolder, writeFile,
 } from './local-folder.js';

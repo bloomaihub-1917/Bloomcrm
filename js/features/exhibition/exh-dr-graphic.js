@@ -11,7 +11,9 @@ import { graphicDueInfo } from './exh-item-views.js';
 import { EXH_ITEMS, EXH_LOGS, currentUser, getExhibitorById, invoicesFor, isVoided, itemsFor, liveItemsFor, logsFor } from '../../state.js';
 import { escAttr, escapeHtml, td } from '../../utils.js';
 import { GRAPHIC_STAGES, TCELL, TPILL, fmtMoney, money, stageOf } from './exh-calc.js';
-import { addRow, dateRow, deleteExhLog, isDesignItem, localId, removeRow, saveExhLog, sct, setItemField, stageBar, switchExhDT, textRow } from '../../modules/exh-drawer.js';
+import { dateRow, deleteExhLog, localId, saveExhLog, sct, stageBar, switchExhDT, textRow } from '../../modules/exh-drawer.js';
+import { isDesignItem } from './exh-dr-billing.js';
+import { addRow, removeRow, setItemField } from './exh-dr-actions.js';
 
 /* ══════════════════════════════════════════
    그래픽 피드백

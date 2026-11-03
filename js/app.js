@@ -42,6 +42,10 @@ import './features/exhibition/exh-item-views.js';   // 금액·비품·그래픽
 import './features/exhibition/exh-dashboard.js';   // 전시 대시보드 — 스스로 window에 건다
 import './features/exhibition/exh-add.js';   // 참가기업 직접 추가·불러오기 — 스스로 window에 건다
 import './modules/exh-drawer.js';
+import './features/exhibition/exh-dr-booth.js';   // 상세 창 독립부스 도면 검토·품목 고르기 — 스스로 window에 건다
+import './features/exhibition/exh-dr-progress.js';   // 상세 창 진행 — 신청서 접수 이력·도록·현장 — 스스로 window에 건다
+import './features/exhibition/exh-dr-billing.js';   // 상세 창 정산 — 금액 항목·인보이스·세금계산서·입금, 디자인 의뢰 — 스스로 window에 건다
+import './features/exhibition/exh-dr-actions.js';   // 상세 창 저장 동작 — 품목·인보이스·입금·세금계산서·정산·담당자, 상황 물어보기 — 스스로 window에 건다
 import './features/exhibition/exh-remove.js';   // 참가기업 지우기 — 딸린 것까지 함께 — 스스로 window에 건다
 import './features/exhibition/exh-dr-graphic.js';   // 참가기업 상세 › 그래픽 피드백·그래픽 항목·부스 기본 제공 예외 — 스스로 window에 건다
 import './features/exhibition/exh-dr-logs.js';   // 참가기업 상세 › 문의·기록 — 스스로 window에 건다

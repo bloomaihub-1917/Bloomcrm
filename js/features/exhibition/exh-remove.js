@@ -10,7 +10,8 @@ import { refreshExhViews } from '../../modules/exh-tab.js';
 import { EXHIBITORS, EXH_APPS, EXH_CONTACTS, EXH_INVOICES, EXH_ITEMS, EXH_LOGS, EXH_PAYMENTS, EXH_TAX, getExhibitorById, paymentsFor } from '../../state.js';
 import { escAttr, escapeHtml } from '../../utils.js';
 import { money } from './exh-calc.js';
-import { closeExhDr, dContact, deleteExhApp, deleteExhContact, deleteExhInvoice, deleteExhItem, deleteExhLog, deleteExhPayment, deleteExhTax, deleteExhibitor, sct } from '../../modules/exh-drawer.js';
+import { closeExhDr, deleteExhApp, deleteExhContact, deleteExhInvoice, deleteExhItem, deleteExhLog, deleteExhPayment, deleteExhTax, deleteExhibitor, sct } from '../../modules/exh-drawer.js';
+import { dContact } from './exh-dr-booth.js';
 
 /* ══════════════════════════════════════════
    참가기업 지우기 — 딸린 것까지 함께

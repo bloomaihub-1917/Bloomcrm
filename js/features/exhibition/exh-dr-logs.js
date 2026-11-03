@@ -8,7 +8,8 @@
 import { CO_DB, codeList, logsFor } from '../../state.js';
 import { escAttr, escapeHtml } from '../../utils.js';
 import { daysSince } from './exh-calc.js';
-import { addExhLog, answerExhLog, delExhLog, holdExhLog, sct } from '../../modules/exh-drawer.js';
+import { sct } from '../../modules/exh-drawer.js';
+import { addExhLog, answerExhLog, delExhLog, holdExhLog } from './exh-dr-actions.js';
 
 /* ══════════════════════════════════════════
    4) 문의·기록

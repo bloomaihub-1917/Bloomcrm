@@ -209,6 +209,22 @@ for (const f of files) {
 }
 
 if (process.argv.includes('--check')) {
+  /* window.이름(…) — 구획을 떼며 --via-window로 바꾼 호출은 그 이름을 어디선가 window에 걸어야 한다.
+     안 걸면 그 동작을 할 때만 «is not a function»으로 깨진다 */
+  {
+    const { codeOnly } = require('./js-scan.js');
+    const BUILTIN = new Set(['addEventListener', 'removeEventListener', 'getSelection', 'matchMedia', 'open', 'close', 'scrollTo', 'scrollBy',
+      'print', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'requestAnimationFrame', 'alert', 'confirm', 'prompt', 'fetch',
+      'postMessage', 'getComputedStyle', 'focus', 'dispatchEvent', 'showDirectoryPicker']);
+    const all = files.map((f) => [f, fs.readFileSync(f, 'utf8')]);
+    const registered = new Set();
+    for (const [, s] of all) for (const m of s.matchAll(/window\.([\w$]+)\s*=(?!=)|window\[['"]([\w$]+)['"]\]\s*=(?!=)/g)) registered.add(m[1] || m[2]);
+    for (const [f, s] of all) {
+      for (const m of codeOnly(s).matchAll(/\bwindow\.([\w$]+)\s*\(/g)) {
+        if (!registered.has(m[1]) && !BUILTIN.has(m[1])) problems.push(`${rel(f)}: window.${m[1]}(…)을 부르는데 window에 거는 곳이 없다`);
+      }
+    }
+  }
   /* 문법 — 손으로 줄을 옮기다 객체의 닫는 «};»를 두고 와서 설정 탭이 통째로 안 읽힌 적이 있다.
      위의 이름 검사는 글자만 훑어서 이걸 못 잡는다 */
   const { spawnSync } = require('child_process');
