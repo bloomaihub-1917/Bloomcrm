@@ -621,7 +621,7 @@ export const sessionsForEvent   = (evKey) => CONF_SESSIONS.filter(x => x.event_i
 /* ── 공동 발표 ──
    두 사람이 발표 시간 하나·자료 하나를 나눠 맡으면, 주 발표자의 배정 줄에만
    시간·발제·초록·자료를 적고 공동 연사의 줄은 lead_id로 그 줄을 가리킨다
-   (backend-node/db/add-co-speaker.js). 한쪽에만 적으니 프로그램에 두 번 뜨지 않고,
+   (backend-node/db/migrations/add-co-speaker.js). 한쪽에만 적으니 프로그램에 두 번 뜨지 않고,
    자료를 받으면 두 사람 모두 «받음»이 된다. */
 export const TALK_FIELDS = ['start_at', 'end_at', 'duration_min', 'lang', 'keywords', 'talk_format', 'discussion',
   'title_ko', 'title_en', 'abstract_ko', 'abstract_en', 'abstract_received_at',
@@ -699,7 +699,7 @@ export function bankDocs(sp){
 ══════════════════════════════════════════ */
 export const COMPANY_SECTORS = [
   /* 서버(sectors 표)에서 읽어 통째로 갈아 끼운다 — 아래는 아직 안 왔을 때 쓰는
-     기본값이라, db/seed-sectors.js가 심는 목록과 같아야 한다. 예전에는 여기에
+     기본값이라, db/seeds/seed-sectors.js가 심는 목록과 같아야 한다. 예전에는 여기에
      BIO KOREA 시절 트리(글로벌 제약사·VC·Embassy…)가 박혀 있었는데, 저장된 값과
      하나도 맞지 않아 섹터 필터가 아무것도 걸러내지 못했다.
 

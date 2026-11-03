@@ -18,8 +18,8 @@ assets/logos/<행사슬러그>/<도록순번>.<확장자>
 OneDrive 로고 폴더에서 한 번에 만든다 — 손으로 옮기지 않는다.
 
 ```
-node db/import-directory-logos.js --dry    # 무엇이 어디에 붙는지 먼저 본다
-node db/import-directory-logos.js
+node db/oneoff/import-directory-logos.js --dry    # 무엇이 어디에 붙는지 먼저 본다
+node db/oneoff/import-directory-logos.js
 ```
 
 파일 이름은 **DB의 도록 순번**이다. 로고 폴더의 번호가 아니다 — 두 번호는

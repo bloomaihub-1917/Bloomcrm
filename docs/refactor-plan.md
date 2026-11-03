@@ -206,7 +206,16 @@ master와 이 브랜치의 계산 지문이 같다(참가기업 12곳·기업 16
 창이 부르는 함수는 `window.이름(…)`을 거친다. 101곳(참가기업 3곳의 모든 하위 탭 포함)이 master와 같다. 저장 동작은 눌러 보지 않았다.
 도구: `deps.js --check`가 `window.이름(…)`으로 부르는데 어디서도 window에 걸지 않은 이름을 잡는다 — 그런 고장은 그 동작을 할 때만 드러난다.
 
-다음: 서버(`backend-node`) 정리.
+**서버 — routes/mail.js** (✅): 1,509 → 700줄. 경로(라우트)와 처리 함수는 그 파일에 두고, 쓰는 도우미를 `backend-node/lib/mail/`로 —
+`box.js`(첨부·행사 메일 계정·푸터·IMAP) / `sync-sent.js`(보낸메일함 → 발송 기록) / `sync-inbox.js`(받은메일함 → 기록·주인 없는 메일) / `screen.js`(스팸·대량 메일·경고) / `original-html.js`(원문을 안전한 HTML로).
+확인: `scripts/refactor/route-table.js`가 app.js를 읽어 경로 72개와 각 처리 함수 본문의 지문을 master와 견준다(같음, DB에는 닿지 않는다).
+또 master `mail.js`의 모든 줄이 새 파일들 어딘가에 그대로 있다(빠진 줄 0, 더한 줄은 머리 주석·require·exports뿐). 도구: `cjs-split.js`(CommonJS판 떼기).
+
+**서버 — db/ 정리** (✅): 스크립트 124개를 `migrations/`(add-* 38) · `seeds/`(seed-* 10) · `oneoff/`(76)로. `pool.js`·`contact-ids.js`·스키마·`fix-unsafe-contact-ids.js`는 그대로.
+`scripts/refactor/db-reorg.js`가 옮기고 require·`__dirname` 경로와 저장소 글의 «db/이름» 언급(코드 주석·문서)을 고쳤다. 상대 require 105개 모두 있는 파일을 가리킨다.
+운영 DB에 닿는 스크립트라 돌려 보지는 않았다. CLAUDE.md에 폴더 규칙을 적었다.
+
+다음: 파트 H(전시·연사의 겹치는 기능 합치기)는 동작을 바꾸는 일이라 따로 정한다.
 
 **공용 낱말 훑기 `scripts/refactor/js-scan.js`** — `codeOnly(src)`가 원본과 길이가 같은 «코드만 남긴 사본»을 만든다
 (문자열·주석·정규식 글자·템플릿 글자를 지우고 `${식}`은 남긴다). `lift-state`·`split-leaf --via-window`·`deps.js`가 이것을 쓴다.

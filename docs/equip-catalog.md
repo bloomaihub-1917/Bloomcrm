@@ -47,13 +47,13 @@ exhibitor_items.catalog_id → equip_catalog.id
 ### 1) 지난 행사에서 복제
 
 ```bash
-node db/clone-equip-catalog.js --from "2026 KIC" --to "2027 KIC"
+node db/oneoff/clone-equip-catalog.js --from "2026 KIC" --to "2027 KIC"
 ```
 
 단가가 일괄로 오르면 `--rate`를 준다 (5% 인상, 원 단위 반올림):
 
 ```bash
-node db/clone-equip-catalog.js --from "2026 KIC" --to "2027 KIC" --rate 1.05
+node db/oneoff/clone-equip-catalog.js --from "2026 KIC" --to "2027 KIC" --rate 1.05
 ```
 
 이미 만들어 둔 품목은 건너뛴다 — 새 행사에서 손본 단가를 되돌리지 않는다.
@@ -63,7 +63,7 @@ node db/clone-equip-catalog.js --from "2026 KIC" --to "2027 KIC" --rate 1.05
 렌탈사가 바뀌어 품목 자체가 달라지면 카탈로그 엑셀을 그대로 넣는다.
 
 ```bash
-node db/import-equip-catalog.js --event "2027 KIC" --file "경로/카탈로그.xlsx"
+node db/oneoff/import-equip-catalog.js --event "2027 KIC" --file "경로/카탈로그.xlsx"
 ```
 
 엑셀은 **[품목마스터]** 시트를 읽고, 열 이름이 아래와 같아야 한다.
@@ -80,7 +80,7 @@ node db/import-equip-catalog.js --event "2027 KIC" --file "경로/카탈로그.x
 엑셀·메일로 먼저 받아 이름만 적힌 신청이 있으면 코드로 이어준다.
 
 ```bash
-node db/link-equip-catalog.js --event "2027 KIC"
+node db/oneoff/link-equip-catalog.js --event "2027 KIC"
 ```
 
 이름 어디에 있든 품목 코드(`C-040`, `T-043`, `E-099`)를 찾아 맞춘다.

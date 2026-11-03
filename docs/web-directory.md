@@ -149,8 +149,8 @@ Informatics)이 이 방식으로 부스 44-46에 함께 선다. 대표 기업의
 OneDrive의 로고 폴더에서 한 번에 만든다.
 
 ```
-node db/import-directory-logos.js --dry    # 무엇이 어디에 붙는지 먼저 본다
-node db/import-directory-logos.js
+node db/oneoff/import-directory-logos.js --dry    # 무엇이 어디에 붙는지 먼저 본다
+node db/oneoff/import-directory-logos.js
 ```
 
 원본은 인쇄용이라 폭이 17,000px을 넘기도 하고 ai·eps·jpg·png가 뒤섞여 있다.

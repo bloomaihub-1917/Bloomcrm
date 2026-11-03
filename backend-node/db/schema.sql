@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS sectors (
 
 -- 행사. 아래 profile 계열 7개는 "어떤 행사였나"를 적어 두는 칸이다 —
 -- 이름과 기간만으로는 몇 해 지난 뒤 이 행사가 무엇이었는지 아무도 모른다.
--- 기존 DB에는 db/add-event-profile.js가 같은 컬럼을 붙인다.
+-- 기존 DB에는 db/migrations/add-event-profile.js가 같은 컬럼을 붙인다.
 CREATE TABLE IF NOT EXISTS events (
   id         TEXT PRIMARY KEY,
   name       TEXT NOT NULL,
@@ -571,7 +571,7 @@ ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS apply_order TEXT;
 
    원본 파일은 여기 담지 않는다. 신청서는 원드라이브에 모여 있고 폴더가 곧
    접수 기록이라(같은 기업 파일이 둘이면 두 번 받은 것) 파일명만 적어 두고
-   폴더를 훑어 채운다(db/import-apply-files.js).
+   폴더를 훑어 채운다(db/oneoff/import-apply-files.js).
 ══════════════════════════════════════════════════════════════ */
 CREATE TABLE IF NOT EXISTS exhibitor_apps (
   id           TEXT PRIMARY KEY,   -- XA-xxxxx
@@ -1077,14 +1077,14 @@ ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS reissue_ack TEXT;
 
 /* ── 기업의 주소·회사소개 ──
    프로그램북 원고(exhibitors.book_*)에만 있던 값인데 행사가 아니라 회사에
-   붙는다. 행사마다 다시 받지 않게 기업 DB에 정본을 둔다(db/add-org-profile.js). */
+   붙는다. 행사마다 다시 받지 않게 기업 DB에 정본을 둔다(db/migrations/add-org-profile.js). */
 ALTER TABLE orgs ADD COLUMN IF NOT EXISTS address TEXT;
 ALTER TABLE orgs ADD COLUMN IF NOT EXISTS intro   TEXT;
 
 /* ── 독립부스 시공사를 기업 DB에 잇는다 ──
    builder는 적힌 이름 그대로 두고, 기업 DB의 벤더시공사 행을 따로 가리킨다.
    그래야 «이 시공사가 어느 부스를 지었나»를 행사를 넘어 찾을 수 있다
-   (db/import-builders.js). */
+   (db/oneoff/import-builders.js). */
 ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS builder_org_id TEXT;
 
 -- 세션 종류. 비어 있으면 발표 세션이고, break·lunch·dinner는 커피 브레이크·

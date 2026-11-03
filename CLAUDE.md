@@ -18,3 +18,11 @@
 - 연락처 id를 가리키는 곳: `participations.contact_id`, `exhibitor_contacts.contact_id`,
   `speakers.contact_id`, `speaker_contacts.contact_id`, `contact_attempts.contact_id`,
   `activity_log.link`(JSON 안). id를 바꿀 때는 이 여섯 곳을 같이 고친다.
+
+## 서버 스크립트(`backend-node/db/`)는 하는 일에 따라 폴더에 둔다
+
+- `db/` 바로 아래: 여럿이 함께 쓰는 것만 — `pool.js`, `contact-ids.js`, `schema.sql`, `seed.sql`, `fix-unsafe-contact-ids.js`
+- `db/migrations/`: 표에 칸·표를 더하는 `add-*.js`
+- `db/seeds/`: 처음 값을 넣는 `seed-*.js`
+- `db/oneoff/`: 특정 행사·자료를 한 번 들여오거나 고치는 것. 짝으로 쓰는 `.py`도 같은 폴더에
+- 폴더 안에서는 `require('../pool')`, `require('../contact-ids')`로 부른다. 돌릴 때는 `backend-node`에서 `node db/oneoff/<이름>.js`

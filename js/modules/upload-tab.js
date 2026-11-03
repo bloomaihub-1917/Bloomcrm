@@ -255,7 +255,7 @@ const COLUMN_ALIASES = {
    (이벤트 부스 / 이벤트부스, 프리렌서, 동역). 원문을 그대로 흘려보내면
    기업DB 섹터에 «IT Soultion»이 그랬듯 아무도 다시 안 보는 분류가 쌓인다.
    그래서 여기서 한 번 표준 이름으로 접는다 — 표준 목록 자체는
-   backend-node/db/seed-evk-sectors.js가 심는다.
+   backend-node/db/seeds/seed-evk-sectors.js가 심는다.
 
    «동역»은 오타로 보인다. 원본 파일의 «카테고리 정리» 시트에서 그 열 아래에
    통역사·통역장비·통역운영이 달려 있어 통역으로 접었다. */

@@ -214,7 +214,7 @@ export function hideBank(){ spDrUi.bankRevealed = false; renderSpeakerDr(); }
 /* ── 연사 사진 ──
    원본은 OneDrive 연사 폴더에 있고, 여기에는 알아보는 용도로 줄인 사본을 둔다
    (backend-node/routes/photos.js). 폴더에 있는 것을 한꺼번에 넣을 때는
-   backend-node/db/import-speaker-photos.js를 쓴다. */
+   backend-node/db/oneoff/import-speaker-photos.js를 쓴다. */
 function photoBoxHtml(sp, evKey){
   const p = speakerPhotoOf(evKey, sp.id);
   const loading = !speakerPhotosLoaded(evKey);

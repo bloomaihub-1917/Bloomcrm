@@ -93,7 +93,7 @@ exhibitor_items += app_id        어느 접수 건으로 들어왔나
 ```
 
 ```bash
-node db/import-apply-files.js --dry
+node db/oneoff/import-apply-files.js --dry
 ```
 
 파일 53개에서 접수 54건을 만든다(공동 부스 파일 하나가 두 기업이라 하나 더).

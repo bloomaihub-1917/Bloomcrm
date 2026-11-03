@@ -32,7 +32,7 @@ const router = express.Router();
 
 /* ── 로고 ──────────────────────────────────────────────────────
    로고 원본은 OneDrive에 ai·eps·jpg가 뒤섞여 있고, 브라우저는 ai도 eps도
-   못 읽는다. db/import-directory-logos.js가 래스터만 골라 웹용으로 줄여
+   못 읽는다. db/oneoff/import-directory-logos.js가 래스터만 골라 웹용으로 줄여
    여기에 넣는다(파일명은 도록 순번 — 로고 폴더의 번호가 아니다. 두 번호는
    어긋나서, 그쪽 스크립트가 이름으로 짝지어 정한다).
 
@@ -249,7 +249,7 @@ const dropKorean = (v) => (/[가-힣㄰-㆏]/.test(String(v || '')) ? '' : Strin
    붙어 두 번호가 한 덩어리로 읽힌다. 원문의 줄을 그대로 살린다. */
 const nl2br = (v) => esc(v).replace(/\n/g, '<br>');
 
-/* '(General Inquiries)'는 도록 연락처에서 아예 떼기로 했다(db/import-program-book.js
+/* '(General Inquiries)'는 도록 연락처에서 아예 떼기로 했다(db/oneoff/import-program-book.js
    의 stripInquiryLabel). 남은 '(Direct Number)'는 둘째 번호를 가리는 구실을 하므로
    그대로 두는데, 번호 없이 딱지만 온 줄은 여기서 거른다.
 
