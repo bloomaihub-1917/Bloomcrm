@@ -63,6 +63,8 @@ import { domainOfSector, domainName, findSectorByName, mainSectors, UNASSIGNED_D
 import { trackAction, changed, removed as removedMeta } from '../core/audit-log.js';
 import { sanitizeForCsv } from './audit-tab.js';
 import { countryCheck, countryCheckText, continentOf, CONTINENT_ORDER } from '../country-signal.js';
+/* 화면 상태는 ../features/mdb/mdb-ui.js의 mdbUi 한곳에 둔다 — 이 탭의 구획을 다른 파일로 떼어도 같은 값을 보게 */
+import { mdbUi } from '../features/mdb/mdb-ui.js';
 
 /* 이 사람의 국가가 자료와 어긋나는지 — 소속 기업 국가도 함께 넘겨야
    «기업에서 따라온 값 같아요»까지 말해 줄 수 있다 */
@@ -131,7 +133,7 @@ export async function patchContact(c, patch, label){
   return r;
 }
 
-const ctryPill = (c) => {
+export const ctryPill = (c) => {
   const r = ctryCheck(c);
   if(!r) return '';
   return ` <span class="pill p-amber" style="font-size:9px;cursor:help"
@@ -184,12 +186,12 @@ export function isCLevelContact(c){
 
    전에는 이 목록이 speaker·vip·attendee 셋뿐이라, 사이드바에서 스폰서·투자자·
    바이어로 거르면 카테고리가 아니라 태그로 오인돼 아무것도 안 나왔다. */
-const MDB_CAT_VALUES = CAT_KEYS;
-function matchesTagFilter(c, tagKey){
+export const MDB_CAT_VALUES = CAT_KEYS;
+export function matchesTagFilter(c, tagKey){
   return tagKey === 'clevel' ? isCLevelContact(c) : hasTag(c, tagKey);
 }
 /* 선택된 연락처들의 tags에서 name을 추가/제거 */
-function setContactTag(c, name, add){
+export function setContactTag(c, name, add){
   const tags = parseTags(c.tags);
   const idx = tags.indexOf(name);
   if(add && idx < 0) tags.push(name);
@@ -366,9 +368,8 @@ export const regionOf = (c) => {
   return ctryOf(c) === HOME_COUNTRY ? 'home' : 'abroad';
 };
 
-let mdbRegion = null;          // null | 'home' | 'abroad' | 'unknown' | 'c:<나라이름>'
 export function setMDBRegion(v){
-  mdbRegion = mdbRegion === v ? null : v;
+  mdbUi.mdbRegion = mdbUi.mdbRegion === v ? null : v;
   buildMDBRegionList();
   renderMDB();
 }
@@ -398,7 +399,7 @@ export function buildMDBRegionList(){
   const base = domainScope(contacts);
   const n = (f) => base.filter(f).length;
   const chip = (key, label, cnt, dot, indent) =>
-    `<button class="ev-chip${mdbRegion === key ? ' on' : ''}" onclick="setMDBRegion(${key === null ? 'null' : `'${escAttr(key)}'`})"${
+    `<button class="ev-chip${mdbUi.mdbRegion === key ? ' on' : ''}" onclick="setMDBRegion(${key === null ? 'null' : `'${escAttr(key)}'`})"${
       indent ? ' style="padding-left:20px"' : ''}>
       <span class="ev-chip-dot" style="background:${dot}"></span>
       <span class="ev-chip-nm">${escapeHtml(label)}</span>
@@ -467,11 +468,9 @@ export function setMDBDomain(d){ setMdbDomainFilter(d); buildMDBDomainList(); re
    목록(flat) 뷰 컬럼 정렬 (신규) — 헤더 클릭 시 오름차순/내림차순 토글.
    화면 전용 상태(저장 안 함), 목록 뷰에서만 동작한다.
 ══════════════════════════════════════════ */
-let _mdbSortCol = null;
-let _mdbSortDir = 1; // 1 = 오름차순, -1 = 내림차순
 export function sortMDBBy(col){
-  if(_mdbSortCol === col) _mdbSortDir = -_mdbSortDir;
-  else { _mdbSortCol = col; _mdbSortDir = 1; }
+  if(mdbUi.mdbSortCol === col) mdbUi.mdbSortDir = -mdbUi.mdbSortDir;
+  else { mdbUi.mdbSortCol = col; mdbUi.mdbSortDir = 1; }
   renderMDB();
 }
 /* 컬럼별 정렬 비교값 추출 — 문자열은 소문자로, "행사"는 필터 상황에 따라
@@ -487,18 +486,18 @@ const MDB_SORT_KEYS = {
   date:    ({c}) => c.date||'',
   status:  ({c}) => c.status||'',
 };
-function applyMDBSort(pairs){
-  const keyFn = MDB_SORT_KEYS[_mdbSortCol];
+export function applyMDBSort(pairs){
+  const keyFn = MDB_SORT_KEYS[mdbUi.mdbSortCol];
   if(!keyFn) return pairs;
   /* 값을 먼저 한 번씩 뽑는다 — 비교마다 뽑으면 «행사» 정렬이 비교 횟수만큼 참가 표 전체를 훑었다 */
   let evCount = null;
-  if(_mdbSortCol === 'events'){
+  if(mdbUi.mdbSortCol === 'events'){
     const m = new Map();
     participations.forEach(x => { const k = String(x.contactId); if(!m.has(k)) m.set(k, new Set()); if(x.eventId) m.get(k).add(x.eventId); });
     evCount = (c) => (m.get(String(c.id)) || new Set()).size;
   }
   const keyed = pairs.map(x => ({ x, k: evCount && !x.p ? evCount(x.c) : keyFn(x) }));
-  keyed.sort((a, b) => a.k < b.k ? -_mdbSortDir : a.k > b.k ? _mdbSortDir : 0);
+  keyed.sort((a, b) => a.k < b.k ? -mdbUi.mdbSortDir : a.k > b.k ? mdbUi.mdbSortDir : 0);
   return keyed.map(y => y.x);
 }
 
@@ -536,24 +535,22 @@ export function buildMDBTagList(){
    «그 사이»는 지금 화면에 보이는 차례를 말한다. 정렬을 바꾸거나 걸러낸
    뒤에는 보이는 차례가 곧 사람이 생각하는 차례라, 원본 순서로 세면
    엉뚱한 사람들이 딸려 온다. 그래서 그릴 때 차례를 적어 둔다. */
-let _mdbRowOrder = [];   // 지금 그려진 줄의 id — 위에서 아래 순서
-let _mdbAnchorId = null; // Shift의 기준이 되는, 마지막으로 그냥 누른 줄
 
-export function setMDBRowOrder(ids){ _mdbRowOrder = ids; }
+export function setMDBRowOrder(ids){ mdbUi.mdbRowOrder = ids; }
 
 export function toggleMDBSelect(id, ev){
   const turningOn = !mdbSelected.has(id);
 
-  if(ev && ev.shiftKey && _mdbAnchorId != null && _mdbAnchorId !== id){
-    const a = _mdbRowOrder.indexOf(_mdbAnchorId);
-    const b = _mdbRowOrder.indexOf(id);
+  if(ev && ev.shiftKey && mdbUi.mdbAnchorId != null && mdbUi.mdbAnchorId !== id){
+    const a = mdbUi.mdbRowOrder.indexOf(mdbUi.mdbAnchorId);
+    const b = mdbUi.mdbRowOrder.indexOf(id);
     if(a >= 0 && b >= 0){
       /* 기준부터 지금 누른 줄까지를 «켠다». 누른 줄이 이미 켜져 있다고 해서
          그 사이를 끄지는 않는다 — 범위 안을 다시 눌렀을 때 앞쪽이 통째로
          풀리면, 무엇을 고르고 있었는지가 한 번에 날아간다. 풀 때는 한 줄씩
          누르거나 «선택 해제»를 쓴다. */
       const [from, to] = a < b ? [a, b] : [b, a];
-      for(let i = from; i <= to; i++) mdbSelected.add(_mdbRowOrder[i]);
+      for(let i = from; i <= to; i++) mdbSelected.add(mdbUi.mdbRowOrder[i]);
       renderMDB();
       return;   // 기준은 그대로 둔다 — 같은 자리에서 범위를 넓혔다 줄일 수 있다
     }
@@ -561,7 +558,7 @@ export function toggleMDBSelect(id, ev){
 
   if(turningOn) mdbSelected.add(id);
   else mdbSelected.delete(id);
-  _mdbAnchorId = id;
+  mdbUi.mdbAnchorId = id;
   renderMDB();
 }
 export function clearMDBSelection(){
@@ -571,7 +568,7 @@ export function clearMDBSelection(){
 /* 현재 필터링돼서 보이는 목록 전체를 선택/해제 — 화면에 없는(필터에 안 걸린)
    사람은 건드리지 않는다. */
 export function toggleMDBSelectAll(checked){
-  const pairs = getMDBPairs();
+  const pairs = window.getMDBPairs();
   if(checked) pairs.forEach(({c}) => mdbSelected.add(c.id));
   else pairs.forEach(({c}) => mdbSelected.delete(c.id));
   renderMDB();
@@ -591,13 +588,12 @@ export function toggleMDBSelectAll(checked){
    잡으면, 스크롤할 때마다 엉뚱한 사람이 골라진다.
 ══════════════════════════════════════════ */
 const LONG_PRESS_MS = 450;
-let lpTimer = null, lpSwallowClick = false;
 
 /* 인라인 핸들러가 ${c.id}를 따옴표 없이 넣으므로 id는 숫자다. dataset은 늘
    문자열이라 되돌려 놓지 않으면 Set 안에서 다른 값이 된다. */
 const cidOf = (v) => (/^-?\d+$/.test(v) ? Number(v) : v);
 const mdbCardOf = (t) => (t && t.closest ? t.closest('.mdbc[data-cid]') : null);
-const cancelLongPress = () => { if(lpTimer){ clearTimeout(lpTimer); lpTimer = null; } };
+const cancelLongPress = () => { if(mdbUi.lpTimer){ clearTimeout(mdbUi.lpTimer); mdbUi.lpTimer = null; } };
 
 function initMDBLongPress(){
   document.addEventListener('touchstart', (e) => {
@@ -605,9 +601,9 @@ function initMDBLongPress(){
     const card = mdbCardOf(e.target);
     if(!card) return;
     cancelLongPress();
-    lpTimer = setTimeout(() => {
-      lpTimer = null;
-      lpSwallowClick = true;        // 손을 뗄 때 따라오는 click은 삼킨다
+    mdbUi.lpTimer = setTimeout(() => {
+      mdbUi.lpTimer = null;
+      mdbUi.lpSwallowClick = true;        // 손을 뗄 때 따라오는 click은 삼킨다
       navigator.vibrate?.(15);
       toggleMDBSelect(cidOf(card.dataset.cid));
     }, LONG_PRESS_MS);
@@ -617,7 +613,7 @@ function initMDBLongPress(){
     document.addEventListener(ev, cancelLongPress, { passive: true }));
 
   document.addEventListener('click', (e) => {
-    if(lpSwallowClick){ lpSwallowClick = false; e.stopPropagation(); e.preventDefault(); return; }
+    if(mdbUi.lpSwallowClick){ mdbUi.lpSwallowClick = false; e.stopPropagation(); e.preventDefault(); return; }
     if(!isMobile() || !mdbSelected.size) return;
     const card = mdbCardOf(e.target);
     if(!card) return;
@@ -654,540 +650,7 @@ export function renderMDBSelectionBar(){
   `;
 }
 
-/* ══════════════════════════════════════════
-   마스터DB 선택 → 행사에 초청
-
-   «이 사람을 이 행사에 부른다»가 한 건이다. 그래서 고른 사람을 기업으로 합치지
-   않는다 — 한 회사에서 세 명을 부르면 초청도 세 건이다. 합쳐 버리면 누구를
-   불렀는지가 사라지고, 나중에 두 명만 왔을 때 나머지 한 명을 짚을 수 없다.
-
-   두 가지가 만들어진다.
-
-     ① 참가 이력(participations) — 사람마다 한 줄. 이게 초청 그 자체다.
-        마스터DB 행사별 보기, 기업DB 행사 이력, 전시 담당자 후보가 모두 여기를 본다.
-     ② CRM 타겟(crm_targets) — 소속 기업이 그 행사에 아직 없을 때만 한 줄.
-        CRM은 기업 단위로 진행 단계를 쫓는 화면이라(연락처 칸 자체가 없다) 사람
-        수만큼 만들면 같은 회사가 여러 줄로 갈린다. 사람은 ①에 남아 있고, CRM은
-        기업명으로 그 사람들을 되찾아 보여준다.
-
-   이미 그 행사에 «같은 참여 유형»으로 있는 것은 건너뛴다. 초청을 두 번 적으면
-   참가자 수가 부풀고, 타겟이 두 줄이면 진행 단계가 갈려 어느 쪽이 최신인지 알 수 없다.
-   유형이 다르면 넣는다 — 전시 참가사가 파트너링에는 셀러로 오는 일이 흔하다
-   (행사 화면은 사람 단위로 접으므로 참가자 수는 부풀지 않는다).
-
-   «참가 확정으로 넣기»를 켜면 오늘 날짜로 확정해 넣는다 — 이미 참가가 정해진
-   명단(파트너링 셀러·바이어 등)을 옮길 때 행사 화면에서 다시 확정할 일을 던다.
-══════════════════════════════════════════ */
-
-const nameKeyOf = (v) => String(v || '').toLowerCase()
-  /* 법인 표기는 따로 떨어진 낱말일 때만 뗀다 — 경계 없이 떼면 «Coway»가 «way»,
-     «Incheon»이 «heon»이 되어 엉뚱한 회사와 같은 키가 됐다. */
-  .replace(/\(주\)|주식회사|㈜|\b(?:inc|corp|co|ltd)\b\.?/gi, '')
-  .replace(/[^a-z0-9가-힣]/g, '');
-
-/* 고른 사람들을 그대로 들고 온다. 소속은 CRM 타겟을 만들 때만 쓴다 —
-   소속이 없어도 사람은 행사에 부를 수 있다. */
-function mdbSelectedPeople(){
-  return [...mdbSelected].map(id => getContactById(id)).filter(Boolean)
-    .sort((a, b) => String(a.orgKo || a.orgEn || '').localeCompare(String(b.orgKo || b.orgEn || ''), 'ko')
-      || String(a.nameKo || a.nameEn || '').localeCompare(String(b.nameKo || b.nameEn || ''), 'ko'));
-}
-
-const invitedAlready = (cid, ev, role) =>
-  participations.some(p => String(p.contactId) === String(cid) && String(p.eventId || p.event || '') === ev
-    && String(p.role || '') === String(role || ''));
-
-const crmHasOrg = (name, ev) => !!name && targets.some(t =>
-  String(t.event || '') === ev && nameKeyOf(t.name) === nameKeyOf(name));
-
-export function openMDBToCrmModal(){
-  if(!mdbSelected.size){ alert('먼저 초청할 사람을 선택해주세요.'); return; }
-  closeMDBToCrmModal();
-
-  const pop = document.createElement('div');
-  pop.id = 'mdb-tocrm-modal';
-  pop.className = 'mw on';
-  let downOnBg = false;
-  pop.addEventListener('mousedown', (e) => { downOnBg = (e.target === pop); });
-  pop.addEventListener('click', (e) => { if(e.target === pop && downOnBg) closeMDBToCrmModal(); });
-
-  pop.innerHTML = `<div class="modal" style="max-width:580px">
-    <div class="mh"><div style="flex:1;min-width:0"><div class="mt2">행사에 초청</div>
-      <div style="font-size:11px;color:var(--i4);margin-top:2px">고른 ${mdbSelected.size}명을 행사 참가자로 올리고, 소속 기업을 CRM 타겟으로 함께 잡아요</div></div></div>
-    <div class="mb">
-      <div class="fgr">
-        <div class="fg"><label class="fl">초청할 행사 *</label>
-          <select class="fi" id="tocrm-ev" onchange="renderMDBToCrmList()">
-            ${EVENT_LIST.map(e => `<option value="${escapeHtml(e.key)}">${escapeHtml(e.short || e.key)}${
-              e.date ? ` (${escapeHtml(e.date)})` : ''}</option>`).join('')}
-          </select></div>
-        <div class="fg"><label class="fl">참여 유형</label>
-          <select class="fi parttype-select" id="tocrm-role" onchange="renderMDBToCrmList()"></select></div>
-      </div>
-      <label style="display:flex;align-items:flex-start;gap:7px;cursor:pointer;padding:2px 0 6px">
-        <input type="checkbox" id="tocrm-conf" onchange="renderMDBToCrmList()" style="margin-top:2px">
-        <span><span style="font-size:12px;font-weight:600">참가 확정으로 넣기</span>
-          <span style="display:block;font-size:10.5px;color:var(--i5);margin-top:2px">
-            이미 오기로 정해진 사람이면 켜세요 — 오늘 날짜로 확정돼 파트너링·행사 참여자 화면에 바로 나와요.</span></span>
-      </label>
-      <label style="display:flex;align-items:flex-start;gap:7px;cursor:pointer;padding:2px 0 8px">
-        <input type="checkbox" id="tocrm-mk" checked onchange="renderMDBToCrmList()" style="margin-top:2px">
-        <span><span style="font-size:12px;font-weight:600">소속 기업을 CRM 타겟으로도 올리기</span>
-          <span style="display:block;font-size:10.5px;color:var(--i5);margin-top:2px">
-            CRM은 기업 단위로 진행 단계를 쫓아요. 이미 그 행사 타겟에 있는 기업은 건드리지 않습니다.</span></span>
-      </label>
-      <div class="fgr" id="tocrm-crmopts">
-        <div class="fg"><label class="fl">우선순위</label>
-          <select class="fi" id="tocrm-pri">
-            <option value="high">높음</option><option value="mid" selected>중간</option><option value="low">낮음</option>
-          </select></div>
-        <div class="fg"><label class="fl">담당자</label>
-          <input class="fi" id="tocrm-who" placeholder="담당자 이름"></div>
-      </div>
-      <div class="fg"><label class="fl">메모</label>
-        <input class="fi" id="tocrm-note" placeholder="왜 부르는지 — 참가 이력과 타겟 첫 기록에 남습니다"></div>
-      <div class="fg"><label class="fl">초청할 사람</label>
-        <div id="tocrm-list" style="max-height:230px;overflow-y:auto;border:1px solid var(--i7);border-radius:8px;padding:6px"></div></div>
-      <div id="tocrm-msg" style="font-size:11.5px;color:var(--i4);min-height:16px"></div>
-    </div>
-    <div class="mf2">
-      <button class="btn" onclick="closeMDBToCrmModal()">취소</button>
-      <button class="btn bp" id="tocrm-btn" onclick="confirmMDBToCrm()">초청</button>
-    </div></div>`;
-  document.body.appendChild(pop);
-  window.populateUploadEvDropdown?.();   // 참여 유형 채우기
-  renderMDBToCrmList();
-}
-export function closeMDBToCrmModal(){ document.getElementById('mdb-tocrm-modal')?.remove(); }
-
-export function renderMDBToCrmList(){
-  const el = document.getElementById('tocrm-list');
-  if(!el) return;
-  const ev = document.getElementById('tocrm-ev')?.value || '';
-  const role = document.getElementById('tocrm-role')?.value || '';
-  const mkCrm = !!document.getElementById('tocrm-mk')?.checked;
-  const conf = !!document.getElementById('tocrm-conf')?.checked;
-  const people = mdbSelectedPeople();
-  el._people = people;
-
-  const opts = document.getElementById('tocrm-crmopts');
-  if(opts) opts.style.display = mkCrm ? '' : 'none';
-
-  el.innerHTML = people.map((c, i) => {
-    const dup = invitedAlready(c.id, ev, role);
-    const org = String(c.orgKo || c.orgEn || '').trim();
-    return `<label style="display:flex;align-items:center;gap:9px;padding:6px 7px;border-radius:6px;cursor:${dup ? 'default' : 'pointer'};opacity:${dup ? .45 : 1}">
-      <input type="checkbox" class="tocrm-cb" data-i="${i}" ${dup ? 'disabled' : 'checked'}>
-      <span style="font-weight:600;font-size:12px;min-width:74px">${escapeHtml(c.nameKo || c.nameEn || '(이름 없음)')}</span>
-      <span style="font-size:11px;color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${
-        org ? escapeHtml(org) : '<span style="color:var(--i5)">소속 없음</span>'}</span>
-      ${dup ? `<span class="pill p-gray">이미 ${escapeHtml(role || '초청')}</span>` : ''}
-    </label>`;
-  }).join('');
-
-  // 이번에 새로 생길 CRM 타겟이 몇 곳인지 미리 알려 준다
-  const picked = people.filter(c => !invitedAlready(c.id, ev, role));
-  const newOrgs = [...new Set(picked.map(c => String(c.orgKo || c.orgEn || '').trim())
-    .filter(Boolean).filter(nm => !crmHasOrg(nm, ev)).map(nameKeyOf))].length;
-  const dupN = people.length - picked.length;
-  const noOrg = picked.filter(c => !String(c.orgKo || c.orgEn || '').trim()).length;
-
-  const msg = document.getElementById('tocrm-msg');
-  if(msg) msg.innerHTML = [
-    dupN ? `이미 이 행사에 ${escapeHtml(role)}(으)로 있는 <b>${dupN}명</b>은 건너뜁니다` : '',
-    conf ? `<b>${picked.length}명</b>을 참가 확정으로 넣어요` : '',
-    mkCrm ? (newOrgs ? `CRM 타겟 <b>${newOrgs}곳</b>이 새로 생깁니다` : 'CRM 타겟은 모두 이미 있어요')
-          : 'CRM 타겟은 만들지 않습니다',
-    noOrg ? `소속이 안 적힌 <b>${noOrg}명</b>은 초청만 되고 타겟에는 안 잡혀요` : '',
-  ].filter(Boolean).join(' · ');
-}
-
-export async function confirmMDBToCrm(){
-  const el = document.getElementById('tocrm-list');
-  const ev = document.getElementById('tocrm-ev')?.value || '';
-  const people = (el && el._people) || [];
-  const picked = [...document.querySelectorAll('.tocrm-cb')]
-    .filter(cb => cb.checked && !cb.disabled).map(cb => people[+cb.dataset.i]).filter(Boolean);
-  if(!ev){ alert('초청할 행사를 골라주세요.'); return; }
-  if(!picked.length){ alert('초청할 사람을 선택해주세요.'); return; }
-
-  const btn = document.getElementById('tocrm-btn');
-  if(btn){ btn.disabled = true; btn.textContent = '초청 중…'; }
-
-  const role = document.getElementById('tocrm-role')?.value || '';
-  const note = document.getElementById('tocrm-note')?.value || '';
-  const mkCrm = !!document.getElementById('tocrm-mk')?.checked;
-  const confirmedAt = document.getElementById('tocrm-conf')?.checked ? td() : '';
-
-  /* ① 초청 — 사람마다 한 줄. 확정이면 맨 뒤 칸(confirmed_at)에 오늘 날짜 */
-  const parts = picked.map((c, i) => ({
-    id: `P-${Date.now()}-${i}`, eventId: ev, event: ev,
-    contactId: c.id, contact: '', role, note,
-    matched: '✅ 마스터DB에서 초청', confirmedAt,
-  }));
-  parts.forEach(p => participations.push(p));
-  const pRes = await Promise.all(parts.map(p => postToSheet({
-    sheet: 'participations',
-    row: [p.id, p.eventId, '', p.contactId, '', '', '', p.role, p.note, p.matched,
-      ...(p.confirmedAt ? [p.confirmedAt] : [])],
-  }, '행사 초청')));
-  const pBad = parts.filter((_, i) => !pRes[i].ok);
-  pBad.forEach(p => { const k = participations.indexOf(p); if(k >= 0) participations.splice(k, 1); });
-  const okParts = parts.filter(p => !pBad.includes(p));
-
-  /* ② CRM 타겟 — 초청이 실제로 들어간 사람의 소속만, 그 행사에 없을 때만 */
-  const made = [];
-  if(mkCrm){
-    const okIds = new Set(okParts.map(p => String(p.contactId)));
-    const seen = new Set();
-    const pri = document.getElementById('tocrm-pri')?.value || 'mid';
-    const who = document.getElementById('tocrm-who')?.value || '';
-    picked.filter(c => okIds.has(String(c.id))).forEach((c, i) => {
-      const name = String(c.orgKo || c.orgEn || '').trim();
-      const key = nameKeyOf(name);
-      if(!key || seen.has(key) || crmHasOrg(name, ev)) return;
-      seen.add(key);
-      const co = CO_DB.find(o => o.key === key);
-      made.push({
-        id: Date.now() + i,
-        name, nameEn: String(c.orgEn || (co && co.nameEn) || '').trim(),
-        sector: (co && co.sector) || '', hq: (co && (co.hq || co.country)) || '',
-        event: ev, role, status: '미접촉', priority: pri, assignee: who,
-        lastActivity: td(), currentStage: 1,
-        branches: [name, c.orgEn].filter(Boolean), mainBranch: name,
-        log: note ? [{ type: '메모', text: note, date: td(), color: '#9C9890' }] : [],
-      });
-    });
-  }
-  let tBad = [];
-  if(made.length){
-    const { saveTargetToSheet } = await import('./crm-tab.js');
-    made.forEach(t => targets.unshift(t));
-    const tRes = await Promise.all(made.map(t => saveTargetToSheet(t, { log: true })));
-    tBad = made.filter((_, i) => !tRes[i].ok);
-    tBad.forEach(t => { const k = targets.indexOf(t); if(k >= 0) targets.splice(k, 1); });
-  }
-
-  closeMDBToCrmModal();
-  clearMDBSelection();
-  buildCoDB();
-  buildMDBEvList(); renderMDB();
-  window.invalidateEvRows?.();   // 행사 화면의 참여자 집계를 다시 세게
-  /* crm-tab을 위에서 import하면 순환 참조가 된다 — 필요할 때만 불러온다 */
-  const crm = await import('./crm-tab.js');
-  crm.buildEvFil(); crm.renderCrm(); crm.updBadges();
-
-  const okT = made.length - tBad.length;
-  if(okParts.length) trackAction('add', '행사 초청', `${okParts.length}명`,
-    `마스터DB에서 <b>${escapeHtml(String(okParts.length))}명</b>을 <b>${escapeHtml(ev)}</b>에 ${escapeHtml(role)}(으)로 ${confirmedAt ? '참가 확정' : '초청'}${
-      okT ? ` · CRM 타겟 ${okT}곳 추가` : ''}`);
-  const fail = pBad.length + tBad.length;
-  if(fail) alert(`${fail}건은 저장에 실패해 되돌렸어요. 네트워크 확인 후 다시 시도해주세요.`);
-}
-
-export function openMDBBulkEditModal(){
-  if(!mdbSelected.size) return;
-  closeMDBBulkEditModal();
-
-  // 선택된 연락처들이 지금 전부 같은 기업 소속이면 "분리" 제안 버튼을 보여준다
-  // (다른 기업들이 섞여 있으면 분리라는 개념 자체가 애매하므로 숨김)
-  const selContacts = [...mdbSelected].map(id => getContactById(id)).filter(Boolean);
-  const orgsInSel = new Set(selContacts.map(c => c.orgKo || c.orgEn || ''));
-  const commonOrg = orgsInSel.size === 1 ? [...orgsInSel][0] : '';
-
-  const pop = document.createElement('div');
-  pop.id = 'mdb-bulk-modal';
-  pop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.32);z-index:9999;display:flex;align-items:center;justify-content:center';
-  pop.onclick = () => closeMDBBulkEditModal();
-  pop.innerHTML = `
-    <div style="background:var(--W);border-radius:10px;padding:20px;width:340px;box-shadow:0 12px 40px rgba(0,0,0,.2)" onclick="event.stopPropagation()">
-      <div style="font-size:14px;font-weight:700;margin-bottom:12px">선택한 ${mdbSelected.size}명 일괄 변경</div>
-      <div class="fg">
-        <label class="fl">기업명(국문) — 비워두면 유지<br>
-          <span style="font-weight:400;color:var(--i4)">목록에서 기존 기업을 고르면 그 기업으로 <b>통합</b>, 새 이름을 입력하면 <b>분리</b>돼요</span>
-        </label>
-        <input class="fi" id="mdb-bulk-org" list="mdb-bulk-org-list" placeholder="예: 삼성전자" oninput="updateMDBBulkOrgHint()">
-        <datalist id="mdb-bulk-org-list">
-          ${CO_DB.map(c => `<option value="${escapeHtml(c.nameKo||c.nameEn)}" label="${c.contacts.length}명 배정됨">`).join('')}
-        </datalist>
-        <div id="mdb-bulk-org-hint" style="font-size:11px;color:var(--i4);margin-top:4px;min-height:14px"></div>
-        ${commonOrg ? `<button type="button" class="btn bs" style="margin-top:2px;font-size:11px" onclick="suggestMDBSplitName()">🔀 "${escapeHtml(commonOrg)}"에서 분리할 새 이름 제안</button>` : ''}
-      </div>
-      <div class="fg" style="margin-top:8px"><label class="fl">카테고리 — 유지하려면 선택 안 함</label>
-        <select class="fi" id="mdb-bulk-cat"><option value="">변경 안 함</option>
-          ${CAT_KEYS.map(k=>`<option value="${k}">${CL[k]}</option>`).join('')}
-        </select></div>
-      <div class="fg" style="margin-top:8px"><label class="fl">국가 — 유지하려면 선택 안 함<br>
-          <span style="font-weight:400;color:var(--i4)">«비우기»를 고르면 국가를 지웁니다 — 잘못 들어간 값을 되돌릴 때 씁니다</span>
-        </label>
-        <select class="fi" id="mdb-bulk-country">
-          <option value="">변경 안 함</option>
-          <option value="__blank__">— 비우기 —</option>
-          ${countryOptions('')}
-        </select></div>
-      <div class="fg" style="margin-top:8px"><label class="fl">상태 — 유지하려면 선택 안 함</label>
-        <select class="fi" id="mdb-bulk-status"><option value="">변경 안 함</option>
-          <option value="verified">검증됨</option><option value="pending">확인 중</option><option value="new">신규</option>
-        </select></div>
-      ${TAGS.map(t => `
-      <div class="fg" style="margin-top:8px"><label class="fl">${escapeHtml(t.label)} 태그 — 참가 역할·카테고리와 무관하게 계속 남는 꼬리표(다음 행사 메일링에 재사용)</label>
-        <select class="fi" id="mdb-bulk-tag-${escAttr(t.key)}"><option value="">유지</option><option value="add">${escapeHtml(t.label)}로 표시</option><option value="remove">${escapeHtml(t.label)} 표시 해제</option></select></div>`).join('')}
-      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
-        <button class="btn bs" onclick="closeMDBBulkEditModal()">취소</button>
-        <button class="btn bp" onclick="applyMDBBulkEdit()">적용</button>
-      </div>
-    </div>`;
-  document.body.appendChild(pop);
-}
-export function closeMDBBulkEditModal(){
-  const el = document.getElementById('mdb-bulk-modal');
-  if(el) el.remove();
-}
-/* "분리" 제안 — 지금 선택된 사람들이 다 같은 기업 소속일 때, 그 이름에
-   " (분리)" 접미사를 붙여 입력창에 채워준다. 사용자가 그대로 저장하거나
-   직접 다듬어서 적용하면, buildCoDB가 다음 재빌드 때 이 사람들을 원래
-   기업과 다른 별도의 CO_DB 항목으로 묶는다(기업 구분은 orgKo/orgEn 텍스트
-   기준으로만 이뤄지므로 별도의 저장 로직이 필요 없음). */
-/* 기업명 입력창에 값이 바뀔 때마다 그 이름과 정확히 일치하는 CO_DB 기업이
-   있는지 찾아 현재 배정 인원 수를 보여준다 — 통합 전에 "몇 명짜리 기업에
-   합쳐지는지" 미리 알 수 있게 하기 위함(사용자 요청). 일치하는 기업이 없으면
-   지금 입력 중인 이름이 새 기업(분리)이 된다는 걸 알려준다. */
-export function updateMDBBulkOrgHint(){
-  const hintEl = document.getElementById('mdb-bulk-org-hint');
-  if(!hintEl) return;
-  const val = ((document.getElementById('mdb-bulk-org')||{}).value||'').trim();
-  if(!val){ hintEl.textContent = ''; return; }
-  const match = CO_DB.find(c => (c.nameKo||'').trim() === val || (c.nameEn||'').trim() === val);
-  if(match){
-    hintEl.textContent = `→ "${match.nameKo||match.nameEn}"에 현재 ${match.contacts.length}명 배정돼있어요 — 선택한 사람들이 여기 합쳐져요`;
-    hintEl.style.color = 'var(--a)';
-  } else {
-    hintEl.textContent = '→ 일치하는 기존 기업이 없어요 — 새 기업으로 분리돼요';
-    hintEl.style.color = 'var(--i4)';
-  }
-}
-export function suggestMDBSplitName(){
-  const input = document.getElementById('mdb-bulk-org');
-  if(!input) return;
-  const selContacts = [...mdbSelected].map(id => getContactById(id)).filter(Boolean);
-  const orgsInSel = new Set(selContacts.map(c => c.orgKo || c.orgEn || ''));
-  if(orgsInSel.size !== 1) return;
-  const base = [...orgsInSel][0];
-  input.value = base ? `${base} (분리)` : '';
-  input.focus();
-  input.select();
-  updateMDBBulkOrgHint();
-}
-export async function applyMDBBulkEdit(){
-  const org    = ((document.getElementById('mdb-bulk-org')||{}).value||'').trim();
-  const cat    = (document.getElementById('mdb-bulk-cat')||{}).value||'';
-  const status = (document.getElementById('mdb-bulk-status')||{}).value||'';
-  /* 국가는 «안 바꿈»과 «비우기»를 구분해야 한다 — 빈 문자열 하나로는
-     «건드리지 마»와 «지워»가 같은 말이 된다. */
-  const countrySel = (document.getElementById('mdb-bulk-country')||{}).value||'';
-  const country = countrySel === '__blank__' ? '' : countrySel;
-  const tagOps = TAGS.map(t => ({ key: t.key, label: t.label, op: (document.getElementById('mdb-bulk-tag-'+t.key)||{}).value||'' }))
-    .filter(x => x.op);
-  if(!org && !cat && !status && !countrySel && !tagOps.length){ alert('변경할 값을 하나 이상 입력/선택하세요.'); return; }
-
-  const ids = [...mdbSelected];
-  const changed = [];
-  const backup = []; // 저장 실패 시 롤백용
-  ids.forEach(id => {
-    const c = getContactById(id);
-    if(!c) return;
-    backup.push({ c, orgKo: c.orgKo, orgEn: c.orgEn, cat: c.cat, status: c.status, country: c.country, tags: c.tags, org_id: c.org_id });
-    // 소속을 바꾸면 영문 소속도 새 회사로 — 전에는 영문이 옛 회사로 남아 영문 메일 {기업}에 남의 이름이 들어갔다
-    if(org){ c.orgKo = org; c.orgEn = /[가-힣]/.test(org) ? '' : org; }
-    if(cat) c.cat = cat;
-    if(status) c.status = status;
-    if(countrySel) c.country = country;
-    tagOps.forEach(t => setContactTag(c, t.key, t.op === 'add'));
-    changed.push(c);
-  });
-  closeMDBBulkEditModal();
-  if(!changed.length) return;
-
-  /* 소속을 바꿨으면 기업 연결도 새 소속을 따라가야 한다 — 안 그러면 화면에는
-     새 회사 이름이 뜨는데 기업DB에서는 옛 회사에 그대로 매달려 있게 된다. */
-  if(org){
-    try {
-      await ensureOrgsForNames([org]);
-      const oid = orgIdForName(org);
-      const o = oid ? getOrgById(oid) : null;
-      changed.forEach(c => { c.org_id = oid || c.org_id || ''; if(o && o.name_en) c.orgEn = o.name_en; });
-    } catch(e){ console.warn('[db-tab] 기업 재연결 실패:', e); }
-  }
-
-  const r = await postToSheet({
-    sheet: 'contacts', action: 'batchUpsert',
-    rows: changed.map(c => [c.id,c.nameKo,c.nameEn,c.orgKo,c.orgEn,c.titleKo,c.titleEn,c.deptKo,c.deptEn,
-      c.country,c.cat,c.lang,c.source,c.date,c.status,c.email1,c.email2,c.phone1,c.phone2,c.beat,c.products,c.tags||'',c.org_id||'']),
-  }, '연락처 일괄 변경');
-  if(!r.ok){
-    // 기업 병합(mergeCompanies)과 동일한 원칙 — 저장 실패 시 로컬 변경을 되돌려서
-    // 화면엔 바뀐 것처럼 보이는데 새로고침하면 원복되는 거짓 성공을 막는다.
-    backup.forEach(b => { b.c.orgKo = b.orgKo; b.c.orgEn = b.orgEn; b.c.cat = b.cat; b.c.status = b.status; b.c.country = b.country; b.c.tags = b.tags; b.c.org_id = b.org_id; });
-    buildCoDB();
-    mdbSelected.clear();
-    renderMDB();
-    alert('일괄 변경 저장에 실패해서 취소했어요. 네트워크 확인 후 다시 시도해주세요.');
-    return;
-  }
-
-  const parts = [org&&'기업명', cat&&'카테고리', status&&'상태',
-    countrySel && (country ? `국가→${country}` : '국가 비움'), ...tagOps.map(t=>`${t.label} ${t.op==='add'?'추가':'해제'}`)].filter(Boolean).join(', ');
-  /* 여러 명을 한꺼번에 바꾼 것 — 사람마다 이전값이 다르므로 줄마다 담는다 */
-  trackAction('edit', '연락처 일괄 변경', `${changed.length}명`, `연락처 ${changed.length}명 일괄 변경(${parts})`,
-    { table: 'contacts', op: 'update-many',
-      rows: backup.map(b => ({ row: b.c.id,
-        before: pickChanged(b.c, b), after: pickChanged(b, b.c) })) });
-  mdbSelected.clear();
-  buildCoDB();
-  renderMDB();
-}
-
-export async function bulkDeleteMDBContacts(){
-  const ids = [...mdbSelected];
-  if(!ids.length) return;
-
-  /* 전시 담당자·연사·연사 연락 상대로 걸린 사람은 지우지 않는다.
-     참여 기록과 달리 이 줄들은 같이 지우면 전시 체크리스트·연사 섭외 기록이
-     통째로 사라지고, 남겨 두면 없는 사람을 가리키는 줄이 된다(이름 칸이 비어
-     «누구였는지» 알 수 없다). 어느 쪽도 조용히 해선 안 되니 먼저 풀게 한다. */
-  const blocked = [];
-  ids.forEach(id => {
-    const k = String(id);
-    const where = [];
-    EXH_CONTACTS.filter(r => String(r.contact_id || '') === k).forEach(r => {
-      const x = EXHIBITORS.find(e => e.id === r.exhibitor_id);
-      where.push(`전시 담당자(${(x && (x.company_name || x.event_id)) || r.exhibitor_id})`);
-    });
-    SPEAKERS.filter(r => String(r.contact_id || '') === k).forEach(r =>
-      where.push(`연사(${r.event_id || r.id})`));
-    SPEAKER_CONTACTS.filter(r => String(r.contact_id || '') === k).forEach(r => {
-      const sp = getSpeakerById(r.speaker_id);
-      where.push(`연사 연락 상대(${(sp && (sp.name_snapshot || sp.name_en)) || r.speaker_id})`);
-    });
-    const att = CONTACT_ATTEMPTS.filter(a => String(a.contact_id || '') === k).length;
-    if(att) where.push(`컨택 DM·TM 기록 ${att}건`);
-    if(where.length) blocked.push(`· ${personName(getContactById(id)) || id} — ${where.join(', ')}`);
-  });
-  if(blocked.length){
-    alert(`아래 ${blocked.length}명이 다른 곳에 연결돼 있어 삭제를 멈췄어요(아무도 지우지 않았습니다).\n`
-      + `전시 담당자·연사 쪽에서 먼저 연결을 풀거나 다른 사람으로 바꾼 뒤 지워주세요.\n\n`
-      + blocked.slice(0, 15).join('\n') + (blocked.length > 15 ? `\n… 외 ${blocked.length - 15}명` : ''));
-    return;
-  }
-
-  if(!confirm(`선택한 ${ids.length}명의 연락처를 삭제할까요?\n관련 행사 참여 기록도 함께 삭제되며, 되돌릴 수 없습니다.`)) return;
-
-  const idSet = new Set(ids);
-  const removedParts = participations.filter(p => idSet.has(p.contactId)).map(p => ({ ...p }));
-  const goneContacts = contacts.filter(c => idSet.has(c.id)).map(c => ({ ...c }));
-
-  // 로컬 먼저 반영(화면 즉시 갱신), 시트 삭제는 그 뒤 순차 처리
-  for(let i = contacts.length-1; i >= 0; i--) if(idSet.has(contacts[i].id)) contacts.splice(i,1);
-  for(let i = participations.length-1; i >= 0; i--) if(idSet.has(participations[i].contactId)) participations.splice(i,1);
-
-  mdbSelected.clear();
-  buildCoDB();
-  renderMDB();
-
-  /* 참여 기록을 먼저 지우고 사람을 지운다 — 거꾸로면 참여 삭제가 실패했을 때 없는 사람을
-     가리키는 줄이 남아 행사 명단에 빈 이름이 뜬다. 실패한 것은 화면에 되돌린다 */
-  const failedParts = [];
-  for(const p of removedParts){
-    const r = await postToSheet({ sheet:'participations', action:'delete', row:[p.id] }, '행사 참여 삭제');
-    if(!r || r.ok === false) failedParts.push(p);
-  }
-  const stuck = new Set(failedParts.map(p => p.contactId));   // 참여가 남은 사람은 지우지 않는다
-  const failedIds = [...stuck];
-  for(const id of ids){
-    if(stuck.has(id)) continue;
-    const r = await postToSheet({ sheet:'contacts', action:'delete', row:[id] }, '연락처 삭제');
-    if(!r || r.ok === false) failedIds.push(id);
-  }
-  if(failedIds.length || failedParts.length){
-    const back = new Set(failedIds);
-    goneContacts.filter(c => back.has(c.id)).forEach(c => contacts.push(c));
-    participations.push(...failedParts);   // 지워진 참여 기록은 서버에서도 지워졌다 — 못 지운 것만 되돌린다
-    buildCoDB(); renderMDB();
-    alert(`${failedIds.length}명은 지우지 못해 되돌렸어요. 네트워크 확인 후 다시 시도해주세요.`);
-  }
-  /* 지운 연락처와 딸린 참여 기록을 통째로 담는다 — «되돌릴 수 없습니다»라고
-     물어 놓고 정말 아무것도 안 남기면, 잘못 지운 날 할 수 있는 게 없다. */
-  const doneIds = ids.filter(id => !failedIds.includes(id));
-  const doneParts = removedParts.filter(p => !failedParts.includes(p));
-  if(!doneIds.length && !doneParts.length) return;
-  trackAction('edit', '연락처 일괄 삭제', `${doneIds.length}명`, `연락처 ${doneIds.length}명 삭제`,
-    removedMeta('contacts', doneIds.join(','), goneContacts.filter(c => doneIds.includes(c.id)),
-      /* 참여 기록은 제 표 이름을 달고 간다 — 없으면 되돌릴 때 연락처 표로 들어간다 */
-      { also: doneParts.map(p => ({ table: 'participations', before: p })) }));
-}
-
-/* ── View toggle (원본 1767~1772행) ── */
-export function setDBView(v,btn){
-  setMdbView(v);
-  document.querySelectorAll('.dvt-btn').forEach(b=>b.classList.remove('on'));
-  (btn||document.getElementById('dvt-'+v)).classList.add('on');
-  renderMDB();
-}
-
-/* ── Core filter: returns array of {c, p|null} pairs (원본 1781~1826행) ── */
-export function getMDBPairs(){
-  const q = (document.getElementById('mdb-q')||{}).value||'';
-  let pairs = [];
-
-  if(mdbEvFilter){
-    // 특정 행사 — participations 기준
-    let evParts = participations.filter(p => p.eventId === mdbEvFilter);
-    if(mdbCat !== 'all' && !MDB_CAT_VALUES.includes(mdbCat)){
-      // 태그(BD/C-level/커스텀) — cat이 아니라 연락처의 영구 태그로 직접 검사(다른 카테고리와 비배타적)
-      evParts = evParts.filter(p => matchesTagFilter(getContactById(p.contactId), mdbCat));
-    } else if(mdbCat !== 'all'){
-      // "전체"와 동일하게: 연락처 자체의 cat 또는 참가 역할 둘 중 하나라도 맞으면 포함
-      evParts = evParts.filter(p => {
-        const c = getContactById(p.contactId);
-        if(c && c.cat === mdbCat) return true;
-        return ROLE_TO_CAT[p.role] === mdbCat;
-      });
-    }
-    if(mdbTypeFilter) evParts = evParts.filter(p => (p.role || '참가자') === mdbTypeFilter);
-    // 한 행사당 한 사람은 1번만 (카테고리 필터 이후에 중복 제거해야 다중 트랙 참가자가 안 빠짐)
-    const seenCids = new Set();
-    pairs = evParts
-      .filter(p => { if(seenCids.has(p.contactId)) return false; seenCids.add(p.contactId); return true; })
-      .map(p => ({ c: getContactById(p.contactId), p }))
-      .filter(x => x.c);
-  } else {
-    // 전체 — contacts 기준, id 중복 제거
-    const seenIds = new Set();
-    pairs = contacts
-      .filter(c => { if(seenIds.has(c.id)) return false; seenIds.add(c.id); return true; })
-      .map(c => ({ c, p: null }));
-    if(mdbCat !== 'all' && !MDB_CAT_VALUES.includes(mdbCat)){
-      // 태그(BD/C-level/커스텀) — cat이 아니라 연락처의 영구 태그로 직접 검사(다른 카테고리와 비배타적)
-      pairs = pairs.filter(({c}) => matchesTagFilter(c, mdbCat));
-    } else if(mdbCat !== 'all'){
-      pairs = pairs.filter(({c}) => {
-        if(c.cat === mdbCat) return true;
-        return participations.some(p => p.contactId === c.id && ROLE_TO_CAT[p.role] === mdbCat);
-      });
-    }
-  }
-
-  pairs = mdbFilterPairs(pairs);
-  if(q) pairs = pairs.filter(({ c }) => matchesQuery(c, q));
-  return pairs;
-}
-
-/* ── Main render dispatcher (원본 1829~1842행) ── */
-let mdbCtryOnly = false;
-export function toggleMdbCtry(){ mdbCtryOnly = !mdbCtryOnly; renderMDB(); }
-let mdbShowLeft = false;
-export function toggleMdbLeft(){ mdbShowLeft = !mdbShowLeft; renderMDB(); }
-
+/* «마스터DB 선택 → 초청·일괄 고치기·지우기»은 ../features/mdb/mdb-bulk.js로 떼어 냈다 — 그 파일이 스스로 window에 건다 */
 /* ══════════════════════════════════════════
    사이드바의 거르개들 — 한 군데서만 판단한다
 
@@ -1259,7 +722,7 @@ export const mdbQuery = () => String((document.getElementById('mdb-q')||{}).valu
    - 검색 중일 때 — 이름을 콕 집어 찾는 건 «숨겨둔 것까지 보여달라»는 뜻이다.
      여기서 빼면 «분명히 있었는데 검색이 안 되네» 하고 같은 사람을 또 등록하게
      된다. 찾는 걸 막는 건 감추는 것보다 나쁘다. */
-export const hidingLeft = () => !mdbShowLeft && !mdbEvFilter && !mdbQuery() && !(mdbAi && mdbAi.plan.include_left);
+export const hidingLeft = () => !mdbUi.mdbShowLeft && !mdbEvFilter && !mdbQuery() && !(mdbUi.mdbAi && mdbUi.mdbAi.plan.include_left);
 
 /* ══════════════════════════════════════════
    질문으로 찾기 — «작년 KIC 연사 중 올해 안 온 미국 사람»
@@ -1267,7 +730,6 @@ export const hidingLeft = () => !mdbShowLeft && !mdbEvFilter && !mdbQuery() && !
    연락처는 보내지 않는다 — 행사·역할·카테고리·태그·국가 이름과 질문만 간다.
    거르기는 여기서 제 데이터로 한다. 사이드바 거르개·검색어와 «그리고»로 겹친다.
 ══════════════════════════════════════════ */
-let mdbAi = null;   // { q, plan }
 function aiMatches(c, plan){
   const parts = participations.filter(p => p.contactId === c.id);
   const anyEv = plan.events_any || [], allEv = plan.events_all || [], noEv = plan.events_none || [], roles = plan.roles || [];
@@ -1303,11 +765,11 @@ export async function askMdbAi(){
     countries: [...new Set(contacts.map(c => String(c.country || '').trim()).filter(Boolean))],
   });
   if(!r.ok){ renderMdbAiBar('<span style="color:var(--re)">찾지 못했어요: ' + escapeHtml(r.error || '') + '</span>'); return; }
-  mdbAi = { q, plan: r.plan };
+  mdbUi.mdbAi = { q, plan: r.plan };
   renderMDB();
 }
 export function clearMdbAi(){
-  mdbAi = null;
+  mdbUi.mdbAi = null;
   const inp = document.getElementById('mdb-ai-q');
   if(inp) inp.value = '';
   renderMDB();
@@ -1316,8 +778,8 @@ function renderMdbAiBar(msg){
   const el = document.getElementById('mdb-ai-msg');
   if(!el) return;
   if(msg){ el.innerHTML = msg; return; }
-  if(!mdbAi){ el.innerHTML = ''; return; }
-  const p = mdbAi.plan;
+  if(!mdbUi.mdbAi){ el.innerHTML = ''; return; }
+  const p = mdbUi.mdbAi.plan;
   const evs = (k) => (p[k] || []).map(e => escapeHtml(evShort(e))).join(', ');
   const bits = [
     p.events_any?.length ? '참가: ' + evs('events_any') : '',
@@ -1332,7 +794,7 @@ function renderMdbAiBar(msg){
     p.title_keywords?.length ? '직함: ' + escapeHtml(p.title_keywords.join('/')) : '',
     p.include_left ? '퇴사자 포함' : '',
   ].filter(Boolean);
-  el.innerHTML = `<span class="pill p-blue" style="cursor:default" title="${escapeHtml(mdbAi.q)}">✨ ${escapeHtml(p.explain || mdbAi.q)}</span>
+  el.innerHTML = `<span class="pill p-blue" style="cursor:default" title="${escapeHtml(mdbUi.mdbAi.q)}">✨ ${escapeHtml(p.explain || mdbUi.mdbAi.q)}</span>
     <span style="color:var(--i4)">${bits.join(' · ')}</span>
     ${p.unsupported ? `<span style="color:var(--am)">⚠️ 반영 못 한 조건: ${escapeHtml(p.unsupported)}</span>` : ''}
     <button class="btn bs" style="font-size:10.5px" onclick="clearMdbAi()">✕ 질문 지우기</button>`;
@@ -1348,13 +810,13 @@ export function mdbFilterPairs(pairs){
       : participations.some(x => x.contactId === c.id && (x.role || '참가자') === mdbTypeFilter));
   }
   if(hidingLeft()) out = out.filter(({ c }) => !hasLeft(c));
-  if(mdbAi) out = out.filter(({ c }) => aiMatches(c, mdbAi.plan));
+  if(mdbUi.mdbAi) out = out.filter(({ c }) => aiMatches(c, mdbUi.mdbAi.plan));
   if(mdbStat) out = out.filter(({ c }) => c.status === mdbStat);
-  if(mdbCtryOnly) out = out.filter(({ c }) => !!ctryCheck(c));
-  if(mdbRegion) out = out.filter(({ c }) =>
-      mdbRegion.startsWith('k:') ? regionOf(c) === 'abroad' && continentOf(ctryOf(c)) === mdbRegion.slice(2)
-    : mdbRegion.startsWith('c:') ? ctryOf(c) === mdbRegion.slice(2)
-    : regionOf(c) === mdbRegion);
+  if(mdbUi.mdbCtryOnly) out = out.filter(({ c }) => !!ctryCheck(c));
+  if(mdbUi.mdbRegion) out = out.filter(({ c }) =>
+      mdbUi.mdbRegion.startsWith('k:') ? regionOf(c) === 'abroad' && continentOf(ctryOf(c)) === mdbUi.mdbRegion.slice(2)
+    : mdbUi.mdbRegion.startsWith('c:') ? ctryOf(c) === mdbUi.mdbRegion.slice(2)
+    : regionOf(c) === mdbUi.mdbRegion);
   if(mdbDomainFilter){
     const domainMap = buildContactDomainMap();
     out = out.filter(({ c }) => {
@@ -1376,7 +838,7 @@ export function searchMdbM(v){
 }
 
 export function renderMDB(){
-  const pairs = getMDBPairs();
+  const pairs = window.getMDBPairs();
   renderCtryChip();
   renderLeftChip();
   renderMdbAiBar();
@@ -1406,9 +868,9 @@ export function renderMDB(){
   setMDBRowOrder(pairs.map(({ c }) => c.id));
 
   const mob = isMobile();
-  if(mdbView==='group')  (mob ? renderMDBGroupedCards : renderMDBGrouped)(pairs);
-  else if(mdbView==='matrix') renderMDBMatrix();
-  else (mob ? renderMDBFlatCards : renderMDBFlat)(pairs);
+  if(mdbView==='group')  { if (mob) window.renderMDBGroupedCards(pairs); else window.renderMDBGrouped(pairs); }
+  else if(mdbView==='matrix') window.renderMDBMatrix();
+  else { if (mob) window.renderMDBFlatCards(pairs); else window.renderMDBFlat(pairs); }
 
   updateMDBBadges(pairs);
 }
@@ -1419,9 +881,9 @@ function renderCtryChip(){
   const el = document.getElementById('mdb-ctry-chip');
   if(!el) return;
   const n = contacts.filter(c => ctryCheck(c)).length;
-  if(!n && !mdbCtryOnly){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  if(!n && !mdbUi.mdbCtryOnly){ el.style.display = 'none'; el.innerHTML = ''; return; }
   el.style.display = '';
-  el.innerHTML = `<button class="pill ${mdbCtryOnly ? 'p-amber' : 'p-gray'}"
+  el.innerHTML = `<button class="pill ${mdbUi.mdbCtryOnly ? 'p-amber' : 'p-gray'}"
     style="border:0;cursor:pointer;font:inherit"
     title="전화 국가번호·이메일 국가 도메인이 적힌 국가와 다른 사람이에요. 눌러서 그 사람만 봅니다."
     onclick="toggleMdbCtry()">국가 확인 ${n}</button>`;
@@ -1447,7 +909,7 @@ function renderLeftChip(){
       >퇴사 포함</span>`;
     return;
   }
-  el.innerHTML = `<button class="pill ${mdbShowLeft ? 'p-amber' : 'p-gray'}"
+  el.innerHTML = `<button class="pill ${mdbUi.mdbShowLeft ? 'p-amber' : 'p-gray'}"
     style="border:0;cursor:pointer;font:inherit"
     title="회사를 떠난 담당자예요. 목록에서는 내려 두고, 행사 참여 이력은 그대로 남습니다. 눌러서 함께 봅니다."
     onclick="toggleMdbLeft()">퇴사 ${n}</button>`;
@@ -1507,512 +969,7 @@ export function updateMDBBadges(pairs){
   });
 }
 
-/* ══════════════════════════════════════════
-   모바일 카드 뷰
-
-   가로 10칸짜리 표는 폭 375px에 들어가지 않는다. 예전에는 CSS로 표를 세로로
-   펼치고 td:nth-child(n)으로 몇 칸을 감췄는데, 나중에 맨 앞에 체크박스 열이
-   생기면서 칸 번호가 한 칸씩 밀려 기업명이 감춰져 버렸다. 위치로 칸을 지목하는
-   방식은 열이 하나만 바뀌어도 이렇게 조용히 깨진다.
-
-   그래서 모바일에서는 표 대신 카드를 직접 그린다. 무엇을 보여줄지 코드에
-   이름으로 적혀 있어 열 순서가 바뀌어도 영향받지 않고, 좁은 화면에서 정말
-   필요한 정보(기업 · 이름 · 직함 · 역할 · 행사 · 연락처)만 골라 담을 수 있다.
-══════════════════════════════════════════ */
-const ST_MARK  = { verified:'stv', pending:'stp', new:'stn' };
-const ST_LABEL = { verified:'검증됨', pending:'확인 중', new:'신규' };
-
-/* 행사 배지 — 카드에서는 2개까지만 보여주고 나머지는 +N으로 접는다 */
-function mEvPills(c, p){
-  const one = (ev) => evPill(ev, isConfirmedFor(c.id, ev));
-  if(p) return one(p.eventId);
-  const evs = contactEvents(c);
-  return evs.slice(0, 2).map(one).join('')
-    + (evs.length > 2 ? `<span class="pill p-gray">+${evs.length - 2}</span>` : '');
-}
-
-/* 연락처 한 줄 — 탭하면 바로 메일/전화로 이어지게 한다 */
-function mContactLinks(c){
-  const bits = [];
-  const em = cleanEmail(c.email1);
-  if(em) bits.push(`<a href="mailto:${escAttr(em)}" onclick="event.stopPropagation()" class="mdbc-lnk">✉ ${escapeHtml(em)}</a>`);
-  if(c.phone1) bits.push(`<a href="tel:${escAttr(String(c.phone1).replace(/[^0-9+]/g, ''))}" onclick="event.stopPropagation()" class="mdbc-lnk">☎ ${escapeHtml(c.phone1)}</a>`);
-  return bits.length ? `<div class="mdbc-ct">${bits.join('')}</div>` : '';
-}
-
-/* 연락처 카드 한 장.
-   showOrg=false는 행사별 보기처럼 기업명이 이미 그룹 머리글에 있을 때 쓴다. */
-function mdbCard(c, p, { showOrg = true } = {}){
-  const gi = contacts.indexOf(c);
-  const roleKey = p ? p.role : c.cat;
-  const isSel = mdbSelected.has(c.id);
-  const org = c.orgKo || c.orgEn || '';
-  const title = [c.titleKo || c.titleEn, c.deptKo || c.deptEn].filter(Boolean).join(' · ');
-
-  return `<div class="mdbc${isSel ? ' sel' : ''}" data-cid="${escapeHtml(String(c.id))}" onclick="openContactDr(${c.id})"
-    draggable="true" ondragstart="onMDBDragStart(event,${c.id})" ondragend="onMDBDragEnd()">
-    <div class="mdbc-top">
-      <div class="tdav${isSel ? ' sel' : ''}" style="${isSel ? '' : `background:${avB(gi)};color:${avF(gi)}`}"
-        onclick="event.stopPropagation();toggleMDBSelect(${c.id})" title="탭해서 선택/해제">${isSel ? '✓' : ab(c.nameKo || c.nameEn || '')}</div>
-      <div class="mdbc-hd">
-        ${showOrg && org ? `<div class="mdbc-org">${escapeHtml(org)}</div>` : ''}
-        <div class="mdbc-nm"${(c.nameKo||c.nameEn) ? '' : ' style="color:var(--i5)"'}>${escapeHtml(personName(c))}${
-          c.nameKo && c.nameEn ? `<span class="mdbc-en">${escapeHtml(c.nameEn)}</span>` : ''}${
-          isBDContact(c) ? ' <span class="pill p-teal mdbc-tag">BD</span>' : ''}${
-          isCLevelContact(c) ? ' <span class="pill p-gold mdbc-tag">C-level</span>' : ''}${leftPill(c)}</div>
-        ${title ? `<div class="mdbc-ttl">${escapeHtml(title)}</div>` : ''}
-      </div>
-      <span class="std ${ST_MARK[c.status] || 'stn'}" title="${escapeHtml(ST_LABEL[c.status] || c.status || '')}"></span>
-    </div>
-    <div class="mdbc-pills">
-      <span class="pill ${CP[roleKey] || 'p-gray'}">${escapeHtml(CL[roleKey] || roleKey || '미분류')}</span>
-      ${contactCountryText(c) ? `<span class="pill p-gray">${escapeHtml(contactCountryText(c))}</span>` : ''}${ctryPill(c)}
-      ${mEvPills(c, p)}
-    </div>
-    ${mContactLinks(c)}
-  </div>`;
-}
-
-/* 목록 보기 — 모바일 */
-function renderMDBFlatCards(pairs){
-  const tw = document.getElementById('mdb-tw');
-  if(!tw) return;
-  pairs = applyMDBSort(pairs);
-  tw.innerHTML = pairs.length
-    ? `<div class="mdbc-list">${pairs.map(({ c, p }) => mdbCard(c, p)).join('')}</div>`
-    : `<div class="mdbc-empty">${contacts.length ? '검색 조건에 맞는 연락처가 없어요'
-        : '아직 등록된 연락처가 없어요 — 업로드 메뉴에서 파일을 추가해주세요'}</div>`;
-}
-
-/* 행사별 보기 — 모바일 */
-function renderMDBGroupedCards(pairs){
-  const tw = document.getElementById('mdb-tw');
-  if(!tw) return;
-  let html = '';
-
-  if(mdbEvFilter){
-    const byOrg = {};
-    pairs.forEach(({ c, p }) => { const k = c.orgKo || c.orgEn || '(기업 미상)'; (byOrg[k] || (byOrg[k] = [])).push({ c, p }); });
-    const col = evColor(mdbEvFilter);
-    Object.entries(byOrg).sort((a, b) => a[0].localeCompare(b[0], 'ko')).forEach(([org, ms]) => {
-      html += `<div class="mdbc-grp" style="border-left:3px solid ${col};background:${col}0A">
-        <span class="mdbc-grp-nm">${escapeHtml(org)}</span><span class="mdbc-grp-ct">${ms.length}명</span></div>`;
-      html += ms.map(({ c, p }) => mdbCard(c, p, { showOrg: false })).join('');
-    });
-  } else {
-    const q = (document.getElementById('mdb-q') || {}).value || '';
-    EVENT_LIST.filter(e => participations.some(p => p.eventId === e.key)).forEach(evObj => {
-      let evParts = participations.filter(p => p.eventId === evObj.key);
-      if(mdbCat !== 'all') evParts = evParts.filter(p => {
-        const c = getContactById(p.contactId);
-        return (c && c.cat === mdbCat) || ROLE_TO_CAT[p.role] === mdbCat;
-      });
-      let members = mdbFilterPairs(evParts.map(p => ({ c: getContactById(p.contactId), p })).filter(x => x.c));
-      if(q) members = members.filter(({ c }) => matchesQuery(c, q));
-      if(!members.length) return;
-      html += `<div class="mdbc-grp" style="border-left:3px solid ${evObj.color};background:${evObj.color}0A">
-        <span class="mdbc-grp-nm">${escapeHtml(evObj.key)}</span><span class="mdbc-grp-ct">${members.length}명</span>
-        <span class="mdbc-grp-dt">${escapeHtml(evObj.date || '')}</span></div>`;
-      html += members.map(({ c, p }) => mdbCard(c, p)).join('');
-    });
-  }
-
-  tw.innerHTML = html ? `<div class="mdbc-list">${html}</div>`
-    : '<div class="mdbc-empty">조건에 맞는 참가 이력이 없어요</div>';
-}
-
-/* ── 행사 칩 ──
-   행사에 «걸려 있다»와 «참가가 정해졌다»는 다른 일이다. 둘을 같은 모양으로
-   그리면, 뉴스레터만 받은 사람이 그 행사에 온 사람처럼 보인다 — 실제로
-   아직 열리지도 않은 행사가 109명이 참가한 것처럼 보인 적이 있다.
-
-   확정된 것만 색을 채우고, 타겟은 테두리만 남긴다. 한눈에 갈리되 목록에서
-   사라지지는 않게 — 타겟도 그 행사의 명단이긴 하다. */
-function evPill(ev, confirmed){
-  const col = evColor(ev);
-  const base = 'margin-bottom:2px;';
-  return confirmed
-    ? `<span class="ev-pill" style="${base}background:${col}18;color:${col}" title="참가 확정">
-        <span class="ev-pill-dot" style="background:${col}"></span>${escapeHtml(evShort(ev))}</span>`
-    : `<span class="ev-pill" style="${base}background:transparent;color:${col}99;border:1px dashed ${col}66"
-        title="타겟 — 아직 참가 확정 전">
-        <span class="ev-pill-dot" style="background:transparent;border:1px solid ${col}99"></span>${escapeHtml(evShort(ev))}</span>`;
-}
-
-/* ── FLAT VIEW (원본 1879~1958행) ── */
-export function renderMDBFlat(pairs){
-  pairs = applyMDBSort(pairs);
-  // matrix/행사별 뷰에서 테이블이 교체됐을 경우(또는 체크박스 헤더가 없는
-  // 다른 뷰의 헤더가 남아있는 경우) 목록 뷰용 헤더로 복원
-  const tw = document.getElementById('mdb-tw');
-  if(tw && !tw.querySelector('#mdb-select-all')){
-    tw.innerHTML = '<table><thead><tr>'
-      + '<th style="width:26px"><input type="checkbox" id="mdb-select-all" onclick="event.stopPropagation();toggleMDBSelectAll(this.checked)" title="현재 목록 전체 선택/해제"></th>'
-      + '<th onclick="sortMDBBy(\'name\')" style="cursor:pointer">이름<span class="mdb-sort-ind" data-sort="name"></span></th>'
-      + '<th onclick="sortMDBBy(\'org\')" style="cursor:pointer">기업<span class="mdb-sort-ind" data-sort="org"></span></th>'
-      + '<th onclick="sortMDBBy(\'country\')" style="cursor:pointer">국가<span class="mdb-sort-ind" data-sort="country"></span></th>'
-      + '<th onclick="sortMDBBy(\'title\')" style="cursor:pointer">직함/부서<span class="mdb-sort-ind" data-sort="title"></span></th>'
-      + '<th id="mdb-th-role" onclick="sortMDBBy(\'cat\')" style="cursor:pointer"><span class="mdb-th-label">카테고리</span><span class="mdb-sort-ind" data-sort="cat"></span></th>'
-      + '<th onclick="sortMDBBy(\'events\')" style="cursor:pointer">행사<span class="mdb-sort-ind" data-sort="events"></span></th>'
-      + '<th onclick="sortMDBBy(\'contact\')" style="cursor:pointer">연락처<span class="mdb-sort-ind" data-sort="contact"></span></th>'
-      + '<th onclick="sortMDBBy(\'date\')" style="cursor:pointer">수집일<span class="mdb-sort-ind" data-sort="date"></span></th>'
-      + '<th onclick="sortMDBBy(\'status\')" style="cursor:pointer">상태<span class="mdb-sort-ind" data-sort="status"></span></th>'
-      + '</tr></thead><tbody id="mdb-body"></tbody></table>';
-  }
-  // 이 컬럼은 상황에 따라 서로 다른 값을 보여준다 — 특정 행사로 필터링하지 않았을 때는
-  // 연락처의 카테고리(연사/VIP/일반참가자), 특정 행사로 필터링했을 때는 그 행사에서의
-  // 참가 역할(연사/BD/바이어 등 세부 유지)이다. 헤더 제목도 그에 맞게 매번 갱신해서
-  // "카테고리"라는 이름이 서로 다른 데이터를 가리키며 혼동되지 않게 한다.
-  const roleTh = document.getElementById('mdb-th-role');
-  const roleThLabel = roleTh ? roleTh.querySelector('.mdb-th-label') : null;
-  if(roleThLabel) roleThLabel.textContent = mdbEvFilter ? '참가 역할' : '카테고리';
-  else if(roleTh) roleTh.textContent = mdbEvFilter ? '참가 역할' : '카테고리';
-
-  const sm={verified:'stv',pending:'stp',new:'stn'};
-  const sl={verified:'검증됨',pending:'확인 중',new:'신규'};
-
-  const body = document.getElementById('mdb-body');
-  if(!body) return;
-
-  setMDBRowOrder(pairs.map(({ c }) => c.id));
-  /* 줄마다 참가 표 전체를 훑으면(contactEvents·isConfirmedFor) 연락처×참가만큼 돌아 화면이 멈췄다.
-     사람별 참가를 한 번 묶어 두고 쓴다 */
-  const pByC = new Map();
-  participations.forEach(x => { const k = String(x.contactId); if(!pByC.has(k)) pByC.set(k, []); pByC.get(k).push(x); });
-  const partsOfC = (c) => pByC.get(String(c.id)) || [];
-  body.innerHTML = pairs.map(({c,p})=>{
-    const roleKey = p ? p.role : c.cat;
-
-    const nameKo = escapeHtml(c.nameKo), nameEn = escapeHtml(c.nameEn);
-    const orgKo  = escapeHtml(c.orgKo),  orgEn  = escapeHtml(c.orgEn);
-    const orgTitle = escapeHtml(c.orgKo||c.orgEn||'');
-    const orgEnTitle = escapeHtml(c.orgKo?(c.orgEn||''):'');
-
-    // Events column
-    let evCell = '';
-    if(p){
-      evCell = evPill(p.eventId, !!p.confirmedAt)
-        + (p.note?`<div style="font-size:10px;color:var(--i3);margin-top:3px">${escapeHtml(p.note)}</div>`:'');
-    } else {
-      const mine = partsOfC(c);
-      const evs = [...new Set(mine.map(x => x.eventId).filter(Boolean))];
-      const shown = evs.slice(0,2).map(ev => evPill(ev, mine.some(x => x.eventId === ev && !!x.confirmedAt))).join('');
-      const more = evs.length>2?`<span class="pill p-gray">+${evs.length-2}</span>`:'';
-      evCell = `<div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center">${shown}${more}</div>`;
-    }
-
-    const contactCell = [c.email1, c.phone1].filter(Boolean).map(v=>`<div style="font-size:10px;color:var(--i3);white-space:nowrap">${escapeHtml(v)}</div>`).join('') || '<span style="color:var(--i6)">—</span>';
-
-    const isSel = mdbSelected.has(c.id);
-    return `<tr onclick="openContactDr(${c.id})" style="cursor:pointer" class="${isSel?'row-sel':''}"
-      draggable="true" ondragstart="onMDBDragStart(event,${c.id})" ondragend="onMDBDragEnd()">
-      <td onclick="event.stopPropagation()" style="text-align:center"><input type="checkbox" ${isSel?'checked':''} onclick="event.stopPropagation();toggleMDBSelect(${c.id}, event)" title="Shift를 누른 채 누르면 이전에 고른 줄까지 한꺼번에"></td>
-      <td><div class="tdco">
-        <div class="tdav${isSel?' sel':''}" onclick="event.stopPropagation();toggleMDBSelect(${c.id}, event)" title="클릭해서 선택/해제 · Shift를 누른 채 누르면 사이 전부">${isSel?'✓':ab(c.nameKo||c.nameEn||"")}</div>
-        <div><div class="tdnm"${(c.nameKo||c.nameEn) ? '' : ' style="color:var(--i5)" title="이름을 아직 모르는 줄 — 그 회사의 메인 컨택포인트예요"'}>${escapeHtml(personName(c))}${isBDContact(c)?' <span class="pill p-teal" style="font-size:9px;padding:1px 5px">BD</span>':''}${isCLevelContact(c)?' <span class="pill p-gold" style="font-size:9px;padding:1px 5px">C-level</span>':''}${leftPill(c)}</div><div class="tdsb">${c.nameKo && c.nameEn ? nameEn : ''}</div></div>
-      </div></td>
-      <td style="max-width:200px"><div class="tdnm" style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${orgTitle}">${c.orgKo?orgKo:orgEn}</div><div class="tdsb" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${orgEnTitle}">${c.orgKo?orgEn:''}</div></td>
-      <td style="color:var(--i2);font-size:12px;white-space:nowrap">${escapeHtml(contactCountryText(c))}</td>
-      <td style="color:var(--i3);font-size:12px;max-width:170px;white-space:normal;line-height:1.4">
-        <div>${escapeHtml(c.titleKo||'')}${c.titleKo&&c.titleEn?' · ':''}${escapeHtml(c.titleEn||'')}</div>
-        <div style="font-size:10px;color:var(--i4);margin-top:1px">${escapeHtml(c.deptKo||'')}${c.deptKo&&c.deptEn?' · ':''}${escapeHtml(c.deptEn||'')}</div>
-        ${c.beat?`<div style="font-size:10px;color:var(--te);margin-top:2px">🏭 ${escapeHtml(c.beat)}</div>`:''}
-        ${c.products?`<div style="font-size:10px;color:var(--pu);margin-top:2px">📦 ${escapeHtml(c.products)}</div>`:''}
-      </td>
-      <td><span class="pill ${CP[roleKey]||'p-gray'}">${escapeHtml(CL[roleKey]||roleKey)}</span></td>
-      <td style="max-width:200px">${evCell}</td>
-      <td>${contactCell}</td>
-      <td style="color:var(--i4);font-size:11px">${escapeHtml(c.date)}</td>
-      <td><span style="display:flex;align-items:center;gap:5px">
-        <span class="std ${sm[c.status]||'stn'}"></span>${escapeHtml(sl[c.status]||c.status)}
-      </span></td>
-    </tr>`;
-  }).join('') || emptyStateRow();
-
-  // 헤더 체크박스는 지금 보이는 목록이 전부 선택돼 있을 때만 체크 표시
-  const selectAllEl = document.getElementById('mdb-select-all');
-  if(selectAllEl){
-    selectAllEl.checked = pairs.length > 0 && pairs.every(({c}) => mdbSelected.has(c.id));
-  }
-
-  // 정렬 화살표 표시 — 현재 정렬 중인 컬럼에만 방향 표시
-  document.querySelectorAll('.mdb-sort-ind').forEach(el => {
-    el.textContent = el.dataset.sort === _mdbSortCol ? (_mdbSortDir === 1 ? ' ▲' : ' ▼') : '';
-  });
-}
-
-/* ── 빈 상태 안내 (원본 1944~1958행) ── */
-export function emptyStateRow(){
-  if(contacts.length === 0){
-    if(!sheetsConnected){
-      return '<tr><td colspan="10" style="padding:40px 20px;text-align:center">'
-        + '<div style="font-size:13px;color:var(--i3);margin-bottom:6px">📋 아직 등록된 연락처가 없어요</div>'
-        + '<div style="font-size:11px;color:var(--i4)">상단 \'업로드\' 메뉴에서 파일을 추가하거나, 구글시트 연동을 확인해주세요</div>'
-        + '</td></tr>';
-    }
-    return '<tr><td colspan="10" style="padding:40px 20px;text-align:center">'
-      + '<div style="font-size:13px;color:var(--i3);margin-bottom:6px">📋 아직 등록된 연락처가 없어요</div>'
-      + '<div style="font-size:11px;color:var(--i4)">상단 \'업로드\' 메뉴에서 파일을 추가해주세요</div>'
-      + '</td></tr>';
-  }
-  return '<tr><td colspan="10" style="padding:32px;text-align:center;color:var(--i4);font-size:13px">검색 조건에 맞는 연락처가 없어요</td></tr>';
-}
-
-/* ── GROUP VIEW: 행사별 → 기업별 소그룹 (원본 1961~2132행) ── */
-export function renderMDBGrouped(pairs){
-  // matrix 뷰에서 테이블이 교체됐거나, 목록 뷰의 체크박스 헤더가 남아있으면
-  // (컬럼 수가 안 맞아 행이 밀림) 행사별 그룹 보기용 헤더로 복원
-  const tw = document.getElementById('mdb-tw');
-  if(tw && (!tw.querySelector('#mdb-body') || tw.querySelector('#mdb-select-all'))){
-    tw.innerHTML = '<table><thead><tr>'
-      + '<th>이름</th><th>기업</th><th>국가</th><th>직함/부서</th>'
-      + '<th id="mdb-th-role">참가 역할</th><th>행사</th><th>연락처</th><th>수집일</th><th>상태</th>'
-      + '</tr></thead><tbody id="mdb-body"></tbody></table>';
-  }
-  // 행사별 그룹 보기는 모든 행이 특정 행사 참가 이력을 기준으로 묶이므로,
-  // 이 컬럼은 항상 "참가 역할"이다(연락처 자체의 카테고리와는 다른 값 — 위 renderMDBFlat 참고)
-  const roleTh = document.getElementById('mdb-th-role');
-  if(roleTh) roleTh.textContent = '참가 역할';
-
-  const sm={verified:'stv',pending:'stp',new:'stn'};
-  const sl={verified:'검증됨',pending:'확인 중',new:'신규'};
-
-  const body = document.getElementById('mdb-body');
-  if(!body) return;
-
-  let rows = '';
-
-  if(mdbEvFilter){
-    // Group by org within this event
-    const byOrg = {};
-    pairs.forEach(({c,p}) => { const k=c.orgKo||c.orgEn||''; (byOrg[k]||(byOrg[k]=[])).push({c,p}); });
-    const col = evColor(mdbEvFilter);
-
-    Object.entries(byOrg).sort((a,b)=>a[0].localeCompare(b[0],'ko')).forEach(([org,members])=>{
-      rows += `<tr style="pointer-events:none"><td colspan="9" style="padding:0">
-        <div class="grp-hd" style="background:${col}0A;border-left:3px solid ${col}">
-          <svg viewBox="0 0 24 24" fill="none" stroke="${col}" stroke-width="2" style="width:12px;height:12px;flex-shrink:0"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9,22 9,12 15,12 15,22"/></svg>
-          <div class="grp-hd-nm">${escapeHtml(org)}</div>
-          <div class="grp-hd-ct">${members.length}명</div>
-        </div>
-      </td></tr>`;
-      members.forEach(({c,p})=>{
-        const gi=contacts.indexOf(c);
-        rows += `<tr>
-          <td><div class="tdco">
-            <div class="tdav" style="background:${avB(gi)};color:${avF(gi)}">${ab(c.nameKo||c.nameEn||"")}</div>
-            <div><div class="tdnm">${escapeHtml(c.nameKo||c.nameEn)}${leftPill(c)}</div><div class="tdsb">${escapeHtml(c.nameEn)}</div></div>
-          </div></td>
-          <td style="color:var(--i3);font-size:12px">${escapeHtml(c.titleKo||c.titleEn||'-')}</td>
-          <td><span class="pill ${CP[p.role]||'p-gray'}">${escapeHtml(CL[p.role]||p.role)}</span></td>
-          <td colspan="2" style="color:var(--i3);font-size:11px;font-style:italic">${escapeHtml(p.note||'')}</td>
-          <td><span class="lt">${escapeHtml(c.lang)}</span></td>
-          <td style="color:var(--i3);font-size:11px">${escapeHtml(c.source)}</td>
-          <td style="color:var(--i4);font-size:11px">${escapeHtml(c.date)}</td>
-          <td><span style="display:flex;align-items:center;gap:5px">
-            <span class="std ${sm[c.status]||'stn'}"></span>${escapeHtml(sl[c.status]||c.status)}
-          </span></td>
-        </tr>`;
-      });
-    });
-  } else {
-    // Group by event, sub-group by org
-    const usedEvs = EVENT_LIST.filter(e=>participations.some(p=>p.eventId===e.key));
-    usedEvs.forEach(evObj=>{
-      // Filter participations matching current cat/stat/search
-      let evParts = participations.filter(p=>p.eventId===evObj.key);
-      if(mdbCat!=='all'){
-        evParts=evParts.filter(p=>{
-          const c=getContactById(p.contactId);
-          if(c&&c.cat===mdbCat) return true;
-          return ROLE_TO_CAT[p.role]===mdbCat;
-        });
-      }
-      let members = mdbFilterPairs(evParts.map(p=>({c:getContactById(p.contactId),p})).filter(x=>x.c));
-      const q=(document.getElementById('mdb-q')||{}).value||'';
-      if(q) members = members.filter(({c}) => matchesQuery(c, q));
-      if(!members.length) return;
-
-      // Event header
-      rows += `<tr style="pointer-events:none"><td colspan="9" style="padding:0">
-        <div class="grp-hd" style="border-left:3px solid ${evObj.color}">
-          <div class="grp-hd-dot" style="background:${evObj.color}"></div>
-          <div class="grp-hd-nm">${escapeHtml(evObj.key)}</div>
-          <div class="grp-hd-ct">${members.length}명</div>
-          <div class="grp-hd-date">${escapeHtml(evObj.date)}</div>
-        </div>
-      </td></tr>`;
-
-      // Sub-group by org
-      const byOrg={};
-      members.forEach(m=>{ const k=m.c.orgKo||m.c.orgEn||''; (byOrg[k]||(byOrg[k]=[])).push(m); });
-      Object.entries(byOrg).forEach(([org,ms])=>{
-        if(ms.length>1){
-          rows += `<tr style="pointer-events:none"><td colspan="9" style="padding:0">
-            <div style="display:flex;align-items:center;gap:7px;padding:4px 20px 2px;background:${evObj.color}06">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px;color:var(--i4);flex-shrink:0"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-              <span style="font-size:11px;font-weight:600;color:var(--i3)">${escapeHtml(org)}</span>
-              <span style="font-size:10px;color:var(--i4)">${ms.length}명</span>
-            </div>
-          </td></tr>`;
-        }
-        ms.forEach(({c,p})=>{
-          const gi=contacts.indexOf(c);
-          rows+=`<tr onclick="openContactDr(${c.id})" style="cursor:pointer">
-            <td><div class="tdco" style="padding-left:${ms.length>1?'8px':'0'}">
-              <div class="tdav" style="background:${avB(gi)};color:${avF(gi)}">${ab(c.nameKo||c.nameEn||"")}</div>
-              <div><div class="tdnm">${escapeHtml(c.nameKo||c.nameEn)}${leftPill(c)}</div><div class="tdsb">${escapeHtml(c.nameEn)}</div></div>
-            </div></td>
-            <td style="color:var(--i2);font-size:12px;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(c.orgKo||c.orgEn||'')}">${ms.length>1?'':escapeHtml(c.orgKo||c.orgEn||'')}</td>
-            <td style="color:var(--i2);font-size:11px;white-space:nowrap">${escapeHtml(contactCountryText(c))}</td>
-            <td style="color:var(--i3);font-size:12px;max-width:140px;white-space:normal;line-height:1.4">${escapeHtml(c.titleKo||'')}${c.deptKo?(' · '+escapeHtml(c.deptKo)):''}</td>
-            <td><span class="pill ${CP[p.role]||'p-gray'}">${escapeHtml(CL[p.role]||p.role)}</span></td>
-            <td style="color:var(--i3);font-size:11px;font-style:italic;max-width:160px;white-space:normal">${escapeHtml(p.note||'')}</td>
-            <td style="font-size:10px;color:var(--i3)">${escapeHtml(c.email1||c.phone1||'—')}</td>
-            <td style="color:var(--i4);font-size:11px">${escapeHtml(c.date)}</td>
-            <td><span style="display:flex;align-items:center;gap:5px">
-              <span class="std ${sm[c.status]||'stn'}"></span>${escapeHtml(sl[c.status]||c.status)}
-            </span></td>
-          </tr>`;
-        });
-      });
-    });
-
-    // 미배정: 참가 이력(participations)이 전혀 없는 연락처
-    const assignedIds = new Set(participations.map(p=>p.contactId));
-    let unassigned = contacts.filter(c => !assignedIds.has(c.id));
-    if(hidingLeft()) unassigned = unassigned.filter(c => !hasLeft(c));
-    if(mdbCat!=='all') unassigned = unassigned.filter(c=>c.cat===mdbCat);
-    if(mdbStat) unassigned = unassigned.filter(c=>c.status===mdbStat);
-    const qU=(document.getElementById('mdb-q')||{}).value||'';
-    if(qU) unassigned = unassigned.filter(c => matchesQuery(c, qU));
-
-    if(unassigned.length){
-      rows += `<tr style="pointer-events:none"><td colspan="9" style="padding:0">
-        <div class="grp-hd" style="border-left:3px solid var(--i5)">
-          <div class="grp-hd-dot" style="background:var(--i5)"></div>
-          <div class="grp-hd-nm">미배정</div>
-          <div class="grp-hd-ct">${unassigned.length}명</div>
-        </div>
-      </td></tr>`;
-
-      const byOrgU = {};
-      unassigned.forEach(c=>{ const k=c.orgKo||c.orgEn||''; (byOrgU[k]||(byOrgU[k]=[])).push(c); });
-      Object.entries(byOrgU).forEach(([org,cs])=>{
-        if(cs.length>1){
-          rows += `<tr style="pointer-events:none"><td colspan="9" style="padding:0">
-            <div style="display:flex;align-items:center;gap:7px;padding:4px 20px 2px;background:var(--i8)">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px;color:var(--i4);flex-shrink:0"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-              <span style="font-size:11px;font-weight:600;color:var(--i3)">${escapeHtml(org)}</span>
-              <span style="font-size:10px;color:var(--i4)">${cs.length}명</span>
-            </div>
-          </td></tr>`;
-        }
-        cs.forEach(c=>{
-          const gi=contacts.indexOf(c);
-          rows+=`<tr onclick="openContactDr(${c.id})" style="cursor:pointer">
-            <td><div class="tdco" style="padding-left:${cs.length>1?'8px':'0'}">
-              <div class="tdav" style="background:${avB(gi)};color:${avF(gi)}">${ab(c.nameKo||c.nameEn||"")}</div>
-              <div><div class="tdnm">${escapeHtml(c.nameKo||c.nameEn)}${leftPill(c)}</div><div class="tdsb">${escapeHtml(c.nameEn)}</div></div>
-            </div></td>
-            <td style="color:var(--i2);font-size:12px;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(c.orgKo||c.orgEn||'')}">${cs.length>1?'':escapeHtml(c.orgKo||c.orgEn||'')}</td>
-            <td style="color:var(--i2);font-size:11px;white-space:nowrap">${escapeHtml(contactCountryText(c))}</td>
-            <td style="color:var(--i3);font-size:12px;max-width:140px;white-space:normal;line-height:1.4">${escapeHtml(c.titleKo||'')}${c.deptKo?(' · '+escapeHtml(c.deptKo)):''}</td>
-            <td><span class="pill p-gray">미배정</span></td>
-            <td style="color:var(--i3);font-size:11px;font-style:italic;max-width:160px;white-space:normal"></td>
-            <td style="font-size:10px;color:var(--i3)">${escapeHtml(c.email1||c.phone1||'—')}</td>
-            <td style="color:var(--i4);font-size:11px">${escapeHtml(c.date)}</td>
-            <td><span style="display:flex;align-items:center;gap:5px">
-              <span class="std ${sm[c.status]||'stn'}"></span>${escapeHtml(sl[c.status]||c.status)}
-            </span></td>
-          </tr>`;
-        });
-      });
-    }
-
-    if(!rows) rows='<tr><td colspan="9" style="padding:32px;text-align:center;color:var(--i4);font-size:13px">일치하는 연락처가 없어요</td></tr>';
-  }
-  body.innerHTML=rows;
-}
-
-/* ── MATRIX VIEW (원본 2135~2186행) ── */
-export function renderMDBMatrix(){
-  const usedEvs = EVENT_LIST.filter(e=>participations.some(p=>p.eventId===e.key));
-
-  // Collect all orgs that have any participation
-  const orgMap={};
-  participations.forEach(p=>{
-    const c=getContactById(p.contactId);if(!c)return;
-    if(mdbCat!=='all'&&c.cat!==mdbCat&&ROLE_TO_CAT[p.role]!==mdbCat) return;
-    const k=c.orgKo||c.orgEn||'';
-    if(!orgMap[k]) orgMap[k]={};
-    if(!orgMap[k][p.eventId]) orgMap[k][p.eventId]=[];
-    orgMap[k][p.eventId].push({c,p});
-  });
-  const orgs=Object.keys(orgMap).sort((a,b)=>a.localeCompare(b,'ko'));
-
-  const tw=document.getElementById('mdb-tw');
-  if(!tw) return;
-
-  tw.innerHTML=`<div style="overflow:auto;height:100%;position:relative">
-    <table style="border-collapse:collapse;font-size:12px;min-width:max-content">
-      <thead><tr>
-        <th style="position:sticky;left:0;top:0;z-index:4;background:var(--i8);padding:9px 16px;text-align:left;font-size:10px;font-weight:700;color:var(--i3);border-bottom:2px solid var(--i6);border-right:2px solid var(--i6);min-width:140px;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap">기업</th>
-        ${usedEvs.map(e=>`
-          <th style="position:sticky;top:0;z-index:3;padding:9px 12px;text-align:center;font-size:10px;font-weight:700;color:${e.color};border-bottom:2px solid var(--i6);border-right:1px solid var(--i7);min-width:130px;white-space:nowrap;background:${e.color}12;letter-spacing:.02em">
-            <div>${escapeHtml(e.short)}</div>
-            <div style="font-size:9px;color:var(--i4);font-weight:400;margin-top:1px">${escapeHtml(e.date)}</div>
-          </th>`).join('')}
-      </tr></thead>
-      <tbody>
-        ${orgs.map((org,oi)=>`
-          <tr>
-            <td style="position:sticky;left:0;z-index:2;background:var(--W);padding:10px 16px;border-bottom:1px solid var(--i7);border-right:2px solid var(--i6);font-weight:600;color:var(--i1);font-size:12px;white-space:nowrap;vertical-align:top">
-              ${escapeHtml(org)}
-            </td>
-            ${usedEvs.map(e=>{
-              const cell=orgMap[org]&&orgMap[org][e.key]||[];
-              if(!cell.length) return `<td style="padding:10px 12px;border-bottom:1px solid var(--i7);border-right:1px solid var(--i7);text-align:center;color:var(--i6);font-size:16px">—</td>`;
-              return `<td style="padding:8px 10px;border-bottom:1px solid var(--i7);border-right:1px solid var(--i7);background:${e.color}07;vertical-align:top">
-                ${cell.map(({c,p})=>`
-                  <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;white-space:nowrap">
-                    <span class="pill ${CP[p.role]||'p-gray'}" style="font-size:9px;padding:1px 5px">${escapeHtml(CL[p.role]||p.role)}</span>
-                    <span style="font-size:11px;color:var(--i1);font-weight:500">${escapeHtml(c.nameKo||c.nameEn)}</span>
-                  </div>`).join('')}
-              </td>`;
-            }).join('')}
-          </tr>`).join('')}
-      </tbody>
-    </table>
-  </div>`;
-}
-
-/* ── 카테고리/상태 필터 버튼 + CSV 내보내기 (원본 2188~2205행) ── */
-export function filterCat(cat,btn){setMdbCat(cat);document.querySelectorAll('#sbp-mdb .s-q .nr').forEach(b=>b.classList.remove('on'));if(btn)btn.classList.add('on');segCat(cat,null);}
-export function filterStat(s,btn){setMdbStat(mdbStat===s?null:s);document.querySelectorAll('#sbp-mdb .s-s .nr').forEach(b=>b.classList.remove('on'));if(mdbStat)btn.classList.add('on');renderMDB()}
-export function segCat(cat,btn){setMdbCat(cat);document.querySelectorAll('.mdb-seg-b').forEach(b=>b.classList.remove('on'));if(btn)btn.classList.add('on');renderMDB();}
-export function exportCSV(){
-  const h=['경칭','이름','영문명','기업','영문기업','국가','직함(국)','직함(영)','부서(국)','부서(영)','카테고리','분야','전시품목','언어','이메일1','이메일2','연락처1','연락처2','출처','날짜','상태','태그','메모1','메모2','메모3'];
-  const rows=contacts.map(c=>[
-    c.prefix||'',
-    c.nameKo,c.nameEn,c.orgKo,c.orgEn,contactCountryText(c),
-    c.titleKo,c.titleEn,c.deptKo,c.deptEn,
-    CL[c.cat]||c.cat,
-    c.beat||'',
-    c.products||'',
-    c.lang,
-    c.email1,c.email2,c.phone1,c.phone2,
-    c.source,c.date,c.status,
-    c.tags||'',
-    c.memo1||'',c.memo2||'',c.memo3||''
-  ]);
-  const csv=[h,...rows].map(r=>r.map(v=>`"${sanitizeForCsv(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
-  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);a.download='master_db_export.csv';a.click();
-}
-
-/*/* 연락처 상세 창(보기·고치기·참여 행사 추가·직접 추가·퇴사 처리)은 features/mdb/contact-drawer.js로 옮겼다.
-   그 파일이 이 파일의 도우미를 쓰고, 이 파일은 그 파일을 import하지 않는다(화면의 onclick으로만 연다).
-   window에 거는 것도 그 파일이 한다 — app.js가 읽는다 */
+/* «마스터DB 목록·카드·묶음·표 보기»은 ../features/mdb/mdb-views.js로 떼어 냈다 — 그 파일이 스스로 window에 건다 */
 /* ══════════════════════════════════════════
    전역 노출 — 원본 HTML의 onclick/onchange="함수명(...)" 인라인 핸들러가
    찾을 수 있도록 window에 등록
@@ -2025,323 +982,12 @@ window.toggleMDBSelect = toggleMDBSelect;
 window.clearMDBSelection = clearMDBSelection;
 window.toggleMDBSelectAll = toggleMDBSelectAll;
 window.sortMDBBy = sortMDBBy;
-window.openMDBBulkEditModal = openMDBBulkEditModal;
-window.openMDBToCrmModal = openMDBToCrmModal;
-window.closeMDBToCrmModal = closeMDBToCrmModal;
-window.renderMDBToCrmList = renderMDBToCrmList;
-window.confirmMDBToCrm = confirmMDBToCrm;
-window.closeMDBBulkEditModal = closeMDBBulkEditModal;
-window.suggestMDBSplitName = suggestMDBSplitName;
-window.updateMDBBulkOrgHint = updateMDBBulkOrgHint;
-window.applyMDBBulkEdit = applyMDBBulkEdit;
-window.bulkDeleteMDBContacts = bulkDeleteMDBContacts;
-window.setDBView = setDBView;
-window.getMDBPairs = getMDBPairs;
 window.renderMDB = renderMDB;
 window.searchMdbM = searchMdbM;
 window.updateMDBBadges = updateMDBBadges;
-window.renderMDBFlat = renderMDBFlat;
-window.emptyStateRow = emptyStateRow;
-window.renderMDBGrouped = renderMDBGrouped;
-window.renderMDBMatrix = renderMDBMatrix;
-window.filterCat = filterCat;
-window.filterStat = filterStat;
-window.segCat = segCat;
-window.toggleMdbCtry = toggleMdbCtry;
-window.toggleMdbLeft = toggleMdbLeft;
 window.askMdbAi = askMdbAi;
 window.clearMdbAi = clearMdbAi;
 window.setMDBRegion = setMDBRegion;
 window.buildMDBRegionList = buildMDBRegionList;
-window.exportCSV = exportCSV;
 
-/* ══════════════════════════════════════════════════════════════
-   소속 기업 · 섹터 · 드래그&드롭
-
-   왜 필요했나
-   ----------
-   연락처가 «분야»를 갖는 길은 하나뿐이다.
-
-     연락처 → 소속 기업 → 그 기업의 섹터 → 섹터에 붙은 분야
-
-   그런데 연락처 편집 화면에는 기업 «이름»만 있었다. 이름을 적어도 기업DB의
-   기업과 묶이지 않으면(org_id) 사슬이 첫 칸에서 끊기고, 묶여도 그 기업에
-   섹터가 없으면 두 번째 칸에서 끊긴다. 그래서 «분야로 옮길 방법이 없다»는
-   말이 나온다 — 방법이 숨어 있는 게 아니라 실제로 길이 끊겨 있었다.
-
-   여기서 그 사슬을 한 화면에서 잇는다. 그리고 목록에서 끌어다 왼쪽
-   «분야»·«카테고리»에 떨어뜨리면 같은 일이 한 번에 된다.
-══════════════════════════════════════════════════════════════ */
-
-/* 이 연락처가 묶인 기업(기업DB의 줄). org_id가 먼저고, 없으면 이름으로 찾는다 */
-export function coOfContact(c){
-  if(!c) return null;
-  if(c.org_id){
-    const byId = CO_DB.find(x => String(x.org_id || x.id) === String(c.org_id));
-    if(byId) return byId;
-  }
-  return CO_DB.find(x => (x.contacts || []).some(p => String(p.id) === String(c.id))) || null;
-}
-
-/* 연락처가 지금 속한 분야 — 사슬을 그대로 따라간다 */
-export function domainsOfContact(c){
-  const co = coOfContact(c);
-  if(!co) return [];
-  const out = new Set();
-  ((co.sectors && co.sectors.length) ? co.sectors : [co.sector]).forEach(name => {
-    if(!name) return;
-    const sec = findSectorByName(name);
-    if(sec) domainOfSector(sec).forEach(d => out.add(d));
-  });
-  return [...out];
-}
-
-/* 편집 화면의 «소속 기업·섹터» 칸.
-   섹터는 연락처가 아니라 기업에 저장된다 — 같은 회사 사람 둘이 서로 다른
-   섹터를 가질 수는 없기 때문이다. 그래서 여기서 고치면 그 회사 전체가 바뀐다는
-   걸 화면에 적어 둔다. */
-export function contactSectorField(c){
-  const co = coOfContact(c);
-  const doms = domainsOfContact(c);
-  const mains = mainSectors().filter(s => !parseSectorScope(s.name).eventShort);
-
-  if(!co){
-    return `<div class="sec-t" style="margin:16px 0 8px">소속 기업 · 분야</div>
-      <div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;
-        font-size:11.5px;color:var(--i3);line-height:1.7;margin-bottom:12px">
-        아직 기업DB의 기업과 묶이지 않았어요. 분야는 <b>소속 기업의 섹터</b>에서 오기 때문에,
-        묶이기 전에는 어느 분야에도 들어가지 않아요.
-        <br>위 «기업 (국문)»에 이름을 적고 저장하면 기업DB에 만들어 묶어 드릴게요.
-      </div>`;
-  }
-
-  return `<div class="sec-t" style="margin:16px 0 8px">소속 기업 · 분야</div>
-    <div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;margin-bottom:12px">
-      <div style="font-size:12px;font-weight:600">${escapeHtml(co.nameKo || co.nameEn || co.key)}</div>
-      <div style="font-size:10.5px;color:var(--i4);margin-top:2px">
-        이 기업에 묶인 연락처 ${(co.contacts || []).length}명
-      </div>
-      <div class="fg" style="margin:9px 0 0">
-        <label class="fl">섹터</label>
-        <select class="fi" id="ce-sector">
-          <option value="">미분류</option>
-          ${mains.map(s => `<option value="${escapeHtml(s.name)}"${
-            (co.sectors || []).includes(s.name) ? ' selected' : ''}>${escapeHtml(s.name)}${
-            domainOfSector(s).length ? ` — ${escapeHtml(domainOfSector(s).map(domainName).join('·'))}` : ' — 분야 없음'}</option>`).join('')}
-        </select>
-        <div style="font-size:10px;color:var(--i4);margin-top:3px">
-          섹터는 기업에 저장돼요 — 여기서 바꾸면 이 기업에 묶인 ${(co.contacts || []).length}명 모두가 함께 옮겨집니다.</div>
-      </div>
-      <div style="font-size:10.5px;color:var(--i3);margin-top:8px">
-        지금 분야: <b>${doms.length ? escapeHtml(doms.map(domainName).join(' · ')) : '미분류'}</b>
-      </div>
-    </div>`;
-}
-
-/* 편집 저장에서 불린다 — 섹터가 바뀌었으면 기업 쪽에 반영한다 */
-export function saveContactSectorField(c){
-  const el = document.getElementById('ce-sector');
-  if(!el) return false;
-  const co = coOfContact(c);
-  if(!co) return false;
-  const next = el.value ? [el.value] : [];
-  const cur = (co.sectors || []).filter(Boolean);
-  if(next.join('|') === cur.join('|')) return false;
-  applyCoSectors(co, next);
-  trackAction('edit', '기업 섹터 변경', co.nameKo || co.nameEn,
-    `«${co.nameKo || co.nameEn}» 섹터를 ${cur.join(', ') || '미분류'} → ${next.join(', ') || '미분류'}`,
-    changed('orgs', co.key, { sector: cur.join(', ') }, { sector: next.join(', ') },
-      { kind: 'company', id: co.key }));
-  return true;
-}
-
-/* ══════════════════════════════════════════
-   드래그 → 분야 · 카테고리에 떨어뜨리기
-
-   카테고리는 연락처에 바로 붙는 값이라 그대로 바꾸면 된다.
-   분야는 아니다 — 기업의 섹터를 타고 오므로, 어느 섹터로 보낼지를 정해야
-   한다. 분야에 섹터가 하나뿐이면 묻지 않고 그것으로 보내고, 여럿이면
-   고르게 한다. 우리가 대신 고르면 엉뚱한 업종에 꽂힌 걸 아무도 모른다.
-══════════════════════════════════════════ */
-let _dragIds = [];
-
-export function onMDBDragStart(e, id){
-  /* 끌기 시작한 줄이 선택돼 있으면 선택한 전부를 옮긴다 — 하나씩 끌게 하면
-     스무 명을 옮길 때 스무 번 끌어야 한다. */
-  _dragIds = mdbSelected.has(id) ? [...mdbSelected] : [id];
-  e.dataTransfer.effectAllowed = 'move';
-  e.dataTransfer.setData('text/plain', String(id));
-  document.body.classList.add('mdb-dragging');
-}
-export function onMDBDragEnd(){
-  _dragIds = [];
-  document.body.classList.remove('mdb-dragging');
-  document.querySelectorAll('.drop-on').forEach(el => el.classList.remove('drop-on'));
-}
-export function onMDBDragOver(e, el){
-  if(!_dragIds.length) return;
-  e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
-  if(el) el.classList.add('drop-on');
-}
-export function onMDBDragLeave(el){ if(el) el.classList.remove('drop-on'); }
-
-/* 카테고리로 떨어뜨리기 */
-export async function onMDBDropToCat(e, cat, el){
-  e.preventDefault();
-  if(el) el.classList.remove('drop-on');
-  const ids = _dragIds; onMDBDragEnd();
-  if(!ids.length || !cat || cat === 'all') return;
-
-  const list = ids.map(getContactById).filter(Boolean);
-  const already = list.filter(c => c.cat === cat);
-  if(already.length === list.length){ return; }   // 이미 다 그 카테고리다 — 조용히 넘긴다
-
-  const backup = list.map(c => ({ c, cat: c.cat }));
-  list.forEach(c => { c.cat = cat; });
-  renderMDB();
-
-  const r = await postToSheet({
-    sheet: 'contacts', action: 'batchUpsert',
-    rows: list.map(c => [c.id,c.nameKo,c.nameEn,c.orgKo,c.orgEn,c.titleKo,c.titleEn,c.deptKo,c.deptEn,
-      c.country,c.cat,c.lang,c.source,c.date,c.status,c.email1,c.email2,c.phone1,c.phone2,
-      c.beat,c.products,c.tags||'',c.org_id||'']),
-  }, '카테고리 이동(드래그)');
-  if(!r.ok){
-    backup.forEach(b => { b.c.cat = b.cat; });
-    renderMDB();
-    alert('카테고리 변경 저장에 실패해서 되돌렸어요.');
-    return;
-  }
-  trackAction('edit', '카테고리 이동(드래그)', `${list.length}명`,
-    `연락처 ${list.length}명을 «${CL[cat] || cat}»으로 옮김`,
-    { table: 'contacts', op: 'update-many',
-      rows: backup.map(b => ({ row: b.c.id, before: { cat: b.cat }, after: { cat } })) });
-  mdbSelected.clear();
-  renderMDB();
-}
-
-/* 분야로 떨어뜨리기 */
-export function onMDBDropToDomain(e, domainId, el){
-  e.preventDefault();
-  if(el) el.classList.remove('drop-on');
-  const ids = _dragIds; onMDBDragEnd();
-  if(!ids.length || !domainId || domainId === UNASSIGNED_DOMAIN) return;
-
-  const list = ids.map(getContactById).filter(Boolean);
-  /* 기업에 묶이지 않은 사람은 옮길 수 없다 — 분야는 기업의 섹터에 붙는다.
-     조용히 빼면 «왜 몇 명만 옮겨졌지»가 되므로 누가 빠지는지 이름을 댄다. */
-  const withCo = [], without = [];
-  list.forEach(c => (coOfContact(c) ? withCo : without).push(c));
-  if(!withCo.length){
-    alert(`옮길 수 없어요 — 분야는 소속 기업의 섹터에서 오는데, `
-      + `${without.map(c => c.nameKo || c.nameEn).join(', ')}${without.length > 3 ? ' 등' : ''}`
-      + `은 기업DB의 기업과 묶여 있지 않아요.\n\n연락처를 열어 기업명을 적고 저장하면 묶입니다.`);
-    return;
-  }
-
-  const secs = mainSectors().filter(s => !parseSectorScope(s.name).eventShort
-    && domainOfSector(s).includes(domainId));
-  if(!secs.length){
-    alert(`«${domainName(domainId)}» 분야에 섹터가 하나도 없어요.\n`
-      + `설정 › 기업 분류에서 섹터를 만들고 분야에 «${domainName(domainId)}»을 체크해주세요.`);
-    return;
-  }
-
-  const cos = [...new Map(withCo.map(c => [coOfContact(c).key, coOfContact(c)])).values()];
-  const note = without.length
-    ? `\n\n기업과 안 묶인 ${without.length}명은 빠집니다: ${without.map(c => c.nameKo || c.nameEn).slice(0, 5).join(', ')}`
-    : '';
-
-  openDomainSectorPicker(cos, secs, domainId, note);
-}
-
-/* ── 분야만 옮기기 ──
-   분야는 저장되는 값이 아니라 기업의 섹터에서 파생된다. 그래서 «건축으로
-   옮겨»라고만 하려 해도 업종을 하나 골라야 했다 — 64곳을 한꺼번에 옮기는
-   자리에서 그걸 다 알 리가 없고, 모르면서 아무거나 고르면 틀린 분류가 64곳에
-   박힌다. 회사 이름만 보고 우리가 짐작해 넣는 건 더 나쁘다. 틀려도 아무도
-   모른 채 맞는 값처럼 보이기 때문이다.
-
-   그래서 그 분야의 «업종 미정» 자리로 보낸다. 분야별 보기에서는 바로
-   «건축»으로 잡히고, 기업DB 섹터 칸에는 아직 안 정했다는 말이 그대로 적혀
-   있어 나중에 그것만 뽑아 고칠 수 있다. */
-const catchAllName = (domainId) => domainName(domainId) + ' 업종 미정';
-
-async function ensureDomainCatchAll(domainId){
-  const name = catchAllName(domainId);
-  const have = findSectorByName(name);
-  if(have) return have.name;
-  const sector = { id: slugifySectorName(name), name, parent: null, domain: domainId, canonical: '' };
-  COMPANY_SECTORS.push(sector);
-  const r = await upsertSectorRow(sector);
-  if(r && r.ok === false){
-    // 저장에 실패하면 화면에만 있는 섹터가 남는다 — 되돌리고 알린다
-    const i = COMPANY_SECTORS.indexOf(sector);
-    if(i >= 0) COMPANY_SECTORS.splice(i, 1);
-    alert('«' + name + '» 섹터를 만들지 못했어요. 네트워크를 확인하고 다시 시도해주세요.');
-    return null;
-  }
-  return sector.name;
-}
-
-/* 분야 안에 섹터가 여럿일 때 고르게 한다 */
-function openDomainSectorPicker(cos, secs, domainId, note){
-  const old = document.getElementById('mdb-sector-picker');
-  if(old) old.remove();
-  const wrap = document.createElement('div');
-  wrap.id = 'mdb-sector-picker';
-  wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;'
-    + 'display:flex;align-items:center;justify-content:center;padding:16px';
-  wrap.onclick = (e) => { if(e.target === wrap) wrap.remove(); };
-  wrap.innerHTML = `<div style="background:var(--W);border-radius:12px;padding:20px;width:100%;max-width:420px;
-      max-height:80vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.2)">
-      <div style="font-size:14px;font-weight:700;margin-bottom:4px">«${escapeHtml(domainName(domainId))}» 어느 업종인가요</div>
-      <div style="font-size:11.5px;color:var(--i3);line-height:1.6;margin-bottom:12px">
-        기업 ${cos.length}곳을 옮깁니다. 그 기업에 묶인 연락처 전원이 함께 따라가요.${escapeHtml(note)}</div>
-      <button class="btn bp" style="width:100%;justify-content:flex-start;margin-bottom:10px;font-size:12px"
-        data-sector="__domain__">업종은 나중에 — «${escapeHtml(domainName(domainId))}»에만 넣기</button>
-      <div style="font-size:10.5px;color:var(--i4);margin-bottom:8px">업종을 알면 아래에서 고르세요</div>
-      <div id="mdb-sector-picker-list">
-        ${secs.map(s => `<button class="btn" style="width:100%;justify-content:flex-start;margin-bottom:5px;font-size:12px"
-          data-sector="${escapeHtml(s.name)}">${escapeHtml(s.name)}</button>`).join('')}
-      </div>
-      <button class="btn bs" style="width:100%;justify-content:center;margin-top:8px"
-        onclick="document.getElementById('mdb-sector-picker').remove()">취소</button>
-    </div>`;
-  document.body.appendChild(wrap);
-  wrap.querySelectorAll('[data-sector]').forEach(b => {
-    b.onclick = async () => {
-      wrap.remove();
-      const name = b.dataset.sector === '__domain__'
-        ? await ensureDomainCatchAll(domainId)
-        : b.dataset.sector;
-      if(name) moveCosToSector(cos, name, domainId);
-    };
-  });
-}
-
-async function moveCosToSector(cos, sectorName, domainId){
-  const wasSectors = cos.map(co => ({ key: co.key, sector: (co.sectors || []).join(', ') }));
-  cos.forEach(co => applyCoSectors(co, [sectorName]));
-  trackAction('edit', '분야 이동(드래그)', `${cos.length}곳`,
-    `기업 ${cos.length}곳을 «${sectorName}» 섹터로 옮겨 «${domainName(domainId)}» 분야에 넣음`,
-    { table: 'orgs', op: 'update-many',
-      rows: wasSectors.map(w => ({ row: w.key, before: { sector: w.sector }, after: { sector: sectorName } })) });
-  try { buildCoDB(); } catch(e){}
-  mdbSelected.clear();
-  renderMDB();
-}
-
-/* 안내문에 쓰는 평문 — alert는 HTML을 그리지 않으므로 이스케이프하면 안 된다 */
-const escapeHtmlPlain = (s) => String(s == null ? '' : s);
-
-/* ── 인라인 핸들러용 노출 ── */
-window.setMDBType        = setMDBType;
-window.buildMDBFilterBar = buildMDBFilterBar;
-window.onMDBDragStart    = onMDBDragStart;
-window.onMDBDragEnd      = onMDBDragEnd;
-window.onMDBDragOver     = onMDBDragOver;
-window.onMDBDragLeave    = onMDBDragLeave;
-window.onMDBDropToCat    = onMDBDropToCat;
-window.onMDBDropToDomain = onMDBDropToDomain;
+/* «소속 기업·섹터·드래그로 분류»은 ../features/mdb/mdb-drag.js로 떼어 냈다 — 그 파일이 스스로 window에 건다 */

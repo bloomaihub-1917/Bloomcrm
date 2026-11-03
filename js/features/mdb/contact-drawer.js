@@ -16,7 +16,8 @@ import { contactMailsHtml } from '../../modules/contact-mails.js';
 import { speakerMaterialsHtml } from '../../modules/contact-speaker.js';
 /* 마스터DB 탭(db-tab.js)의 도우미를 쓴다. 마스터DB 탭은 이 파일을 import하지 않는다 —
    화면의 onclick(window)으로만 이 창을 연다. 한 방향이라 고리가 생기지 않는다 */
-import { buildMDBEvList, renderMDB, contactCountryText, contactPatch, contactSectorField, ctryCheck, isBDContact, isCLevelContact, pickChanged, saveContactSectorField } from '../../modules/db-tab.js';
+import { buildMDBEvList, renderMDB, contactCountryText, contactPatch, ctryCheck, isBDContact, isCLevelContact, pickChanged } from '../../modules/db-tab.js';
+import { contactSectorField, saveContactSectorField } from './mdb-drag.js';
 
 /* ══════════════════════════════════════════
    연락처 상세 드로어 (원본 5614~6252행)

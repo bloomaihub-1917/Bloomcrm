@@ -166,7 +166,13 @@ master와 이 브랜치의 계산 지문이 같다(참가기업 12곳·기업 16
 `MAIL_KINDS`는 머리 구획(보낸 단계 이름)이 값으로 쓰므로 상세 창 파일에 남기고 메일 파일이 가져간다. `speaker-drawer` 2,278 → 878줄.
 101곳 + 연사 6명 × 하위 탭 8개(48곳)가 master와 같다. 메일 보내기·저장은 눌러 보지 않았다.
 
-다음: 남은 큰 파일(`db-tab`·`company-tab`·`settings-tab`), `state.js`·`api.js` 기능별로 나누기.
+**연락처 탭(마스터DB)** (✅): 화면 상태 11개 → `features/mdb/mdb-ui.js`의 `mdbUi`(`let lpTimer, lpSwallowClick` 한 줄 선언은 먼저 두 줄로). 떼어 냄:
+`mdb-bulk.js`(선택 → 초청·일괄 고치기·지우기, 보기 바꾸기) / `mdb-views.js`(목록·묶음·표·모바일 카드) / `mdb-drag.js`(소속 기업·드래그로 분류).
+`renderMDB`가 보기 함수를 값으로 고르던 `(mob ? a : b)(pairs)`는 같은 뜻의 if 호출로 바꿔 window를 거치게 했다. `db-tab` 2,348 → 992줄.
+101곳 + 연락처 탭 25단계(보기 3종, 정렬, 지역, 나라·퇴사 거르개, 고르기, 초청·일괄 고치기 창, 모바일 카드)가 master와 같다.
+일괄 지우기·저장은 눌러 보지 않았다. 화면 전체를 비교할 때는 로그인 시각(`#um-since`)과 동기화 시각(`#last-sync-time`)을 뺀다.
+
+다음: `company-tab`·`settings-tab`, `state.js`·`api.js` 기능별로 나누기.
 
 **공용 낱말 훑기 `scripts/refactor/js-scan.js`** — `codeOnly(src)`가 원본과 길이가 같은 «코드만 남긴 사본»을 만든다
 (문자열·주석·정규식 글자·템플릿 글자를 지우고 `${식}`은 남긴다). `lift-state`·`split-leaf --via-window`·`deps.js`가 이것을 쓴다.
