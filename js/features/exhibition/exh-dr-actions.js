@@ -6,6 +6,7 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import { aiExhAdvice } from '../../api/ai.js';
+import { adviceHtml } from '../../shared/advice-panel.js';
 import { changed, removed, trackAction } from '../../core/audit-log.js';
 import { patchOrgFields } from '../../domain/org-save.js';
 import { exhMailState } from '../../modules/exh-bulkmail.js';
@@ -31,29 +32,17 @@ import { editItemRow, openTaxAnyway, pickItemCat, rememberItemCat, rememberItemC
 const ADVICE_TAB = { app_received_at: 'apply', 'calc:invoice': 'billing', 'calc:tax': 'billing', 'calc:payment': 'billing',
   'calc:graphic': 'graphic', directory_received_at: 'book' };
 function exhAdviceHtml(x){
-  const a = exhDrUi.exhAdvice && exhDrUi.exhAdvice.id === x.id ? exhDrUi.exhAdvice : null;
-  const btn = (t) => {
-    const label = { mail: '✉ 메일 초안', tab: '→ 탭 열기', mailedit: '✎ 메일 단계 편집' }[t.action];
-    return label ? ` <button class="btn" style="font-size:10px;padding:1px 7px" onclick="exhAdviceAct('${t.action}','${escAttr(t.arg)}')">${label}</button>` : '';
-  };
-  return `<div style="margin-bottom:10px;padding:7px 10px;border:1px solid var(--i6);border-radius:8px;background:var(--W)">
-    <div style="display:flex;gap:6px">
-      <input class="fi" id="exh-advice-q" style="flex:1;font-size:11.5px" value="${escapeHtml(a ? a.q : '')}"
-        placeholder="✨ 상황 물어보기 — 예: 인보이스 금액이 틀려서 다시 보내야 해"
-        onkeydown="if(event.key==='Enter')askExhAdvice()" title="질문과 이 참가사의 진행 상태만 AI에게 보냅니다. 회사명·금액·메일 내용은 보내지 않아요">
-      <button class="btn" style="font-size:10.5px" onclick="askExhAdvice()" ${a && a.loading ? 'disabled' : ''}>${a && a.loading ? '생각 중…' : '물어보기'}</button>
-    </div>
-    ${a && a.err ? `<div style="font-size:11px;color:var(--re);margin-top:5px">${escapeHtml(a.err)}</div>` : ''}
-    ${a && a.ans ? `<div style="margin-top:7px;padding:8px 10px;background:var(--ad);border-radius:7px;font-size:11.5px;line-height:1.6">
-        <div style="font-weight:700;color:var(--i1)">✨ ${escapeHtml(a.ans.summary)}</div>
-        <ol style="margin:4px 0 0 18px;padding:0">${a.ans.todo.map(t => `<li style="margin:2px 0">${escapeHtml(t.text)}${btn(t)}</li>`).join('')}</ol>
-        ${a.ans.caution ? `<div style="color:var(--am);margin-top:4px">⚠️ ${escapeHtml(a.ans.caution)}</div>` : ''}
-        <div style="display:flex;gap:6px;margin-top:6px;align-items:center">
-          ${a.saved ? '<span style="font-size:10.5px;color:var(--g)">✓ 문의·기록에 남겼어요</span>'
-            : `<button class="btn" style="font-size:10px" onclick="saveExhAdvice()" title="질문과 답을 이 참가사의 문의·기록에 메모로 남깁니다">기록에 남기기</button>`}
-          <button class="btn" style="font-size:10px" onclick="clearExhAdvice()">닫기</button>
-        </div></div>` : ''}
-  </div>`;
+  return adviceHtml({   // 틀은 shared/advice-panel.js
+    a: exhDrUi.exhAdvice && exhDrUi.exhAdvice.id === x.id ? exhDrUi.exhAdvice : null,
+    wrapStyle: 'margin-bottom:10px;padding:7px 10px;border:1px solid var(--i6);border-radius:8px;background:var(--W)',
+    inputId: 'exh-advice-q',
+    placeholder: '✨ 상황 물어보기 — 예: 인보이스 금액이 틀려서 다시 보내야 해',
+    inputTitle: '질문과 이 참가사의 진행 상태만 AI에게 보냅니다. 회사명·금액·메일 내용은 보내지 않아요',
+    ask: 'askExhAdvice', act: 'exhAdviceAct', save: 'saveExhAdvice', clear: 'clearExhAdvice',
+    labels: { mail: '✉ 메일 초안', tab: '→ 탭 열기', mailedit: '✎ 메일 단계 편집' },
+    savedText: '✓ 문의·기록에 남겼어요',
+    saveTitle: '질문과 답을 이 참가사의 문의·기록에 메모로 남깁니다',
+  });
 }
 export async function askExhAdvice(){
   const x = getExhibitorById(exhDrUi.drId);

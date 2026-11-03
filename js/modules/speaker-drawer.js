@@ -42,6 +42,7 @@ import { saveSpeaker, saveSessionSpeaker, saveSpeakerContact, deleteSpeakerConta
 import { sendMail, eventMailFrom, loadMailFiles, mailFilesOf, fileToBase64 } from '../api/mail-send.js';
 import { loadSpeakerPhotos, speakerPhotosLoaded, speakerPhotoOf, saveSpeakerPhoto, deleteSpeakerPhoto, shrinkImage } from '../api/photos.js';
 import { aiSpeakerAdvice } from '../api/ai.js';
+import { adviceHtml as adviceFrame } from '../shared/advice-panel.js';
 import { filterMail, mailFilBar, mailStateHtml, mailActionsHtml, mailToggleAttr, isPending, setMailDone } from '../shared/mail/mail-mark.js';
 import { decorate as decorateMailPane } from '../shared/mail/mail-pane.js';
 import { trackAction, changed, removed } from '../core/audit-log.js';
@@ -507,29 +508,17 @@ function flowBoxHtml(sp){
    이름·메일 주소·메일 제목·본문은 보내지 않는다(제목에 이름이 들어간다).
    드로어는 칸 하나만 바뀌어도 통째로 다시 그려지므로 질문·답은 여기 붙들어 둔다. */
 function adviceHtml(sp){
-  const a = spDrUi.spAdvice && spDrUi.spAdvice.spId === sp.id ? spDrUi.spAdvice : null;
-  const btn = (t) => {
-    const label = { mail: '✉ 메일 초안', bulk: '📨 여러 연사에게', undo: '↶ 되돌리기', tab: '→ 탭 열기', editflow: '✎ 단계 편집' }[t.action];
-    return label ? ` <button class="btn" style="font-size:10px;padding:1px 7px" onclick="spAdviceAct('${t.action}','${escAttr(t.arg)}')">${label}</button>` : '';
-  };
-  return `<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--i6)">
-    <div style="display:flex;gap:6px">
-      <input class="fi" id="sp-advice-q" style="flex:1;font-size:11.5px" value="${escapeHtml(a ? a.q : '')}"
-        placeholder="✨ 상황 물어보기 — 예: 발표자료 파일이 깨져서 다시 받아야 해"
-        onkeydown="if(event.key==='Enter')askSpAdvice()" title="질문과 이 연사의 진행 상태만 AI에게 보냅니다. 이름·메일 내용은 보내지 않아요">
-      <button class="btn" style="font-size:10.5px" onclick="askSpAdvice()" ${a && a.loading ? 'disabled' : ''}>${a && a.loading ? '생각 중…' : '물어보기'}</button>
-    </div>
-    ${a && a.err ? `<div style="font-size:11px;color:var(--re);margin-top:5px">${escapeHtml(a.err)}</div>` : ''}
-    ${a && a.ans ? `<div style="margin-top:7px;padding:8px 10px;background:var(--ad);border-radius:7px;font-size:11.5px;line-height:1.6">
-        <div style="font-weight:700;color:var(--i1)">✨ ${escapeHtml(a.ans.summary)}</div>
-        <ol style="margin:4px 0 0 18px;padding:0">${a.ans.todo.map(t => `<li style="margin:2px 0">${escapeHtml(t.text)}${btn(t)}</li>`).join('')}</ol>
-        ${a.ans.caution ? `<div style="color:var(--am);margin-top:4px">⚠️ ${escapeHtml(a.ans.caution)}</div>` : ''}
-        <div style="display:flex;gap:6px;margin-top:6px;align-items:center">
-          ${a.saved ? '<span style="font-size:10.5px;color:var(--g)">✓ 연사 기록에 남겼어요</span>'
-            : `<button class="btn" style="font-size:10px" onclick="saveSpAdvice()" title="질문과 답을 이 연사의 메일함 기록에 메모로 남겨 다른 담당자도 보게 합니다">기록에 남기기</button>`}
-          <button class="btn" style="font-size:10px" onclick="clearSpAdvice()">닫기</button>
-        </div></div>` : ''}
-  </div>`;
+  return adviceFrame({   // 틀은 shared/advice-panel.js
+    a: spDrUi.spAdvice && spDrUi.spAdvice.spId === sp.id ? spDrUi.spAdvice : null,
+    wrapStyle: 'margin-top:8px;padding-top:8px;border-top:1px dashed var(--i6)',
+    inputId: 'sp-advice-q',
+    placeholder: '✨ 상황 물어보기 — 예: 발표자료 파일이 깨져서 다시 받아야 해',
+    inputTitle: '질문과 이 연사의 진행 상태만 AI에게 보냅니다. 이름·메일 내용은 보내지 않아요',
+    ask: 'askSpAdvice', act: 'spAdviceAct', save: 'saveSpAdvice', clear: 'clearSpAdvice',
+    labels: { mail: '✉ 메일 초안', bulk: '📨 여러 연사에게', undo: '↶ 되돌리기', tab: '→ 탭 열기', editflow: '✎ 단계 편집' },
+    savedText: '✓ 연사 기록에 남겼어요',
+    saveTitle: '질문과 답을 이 연사의 메일함 기록에 메모로 남겨 다른 담당자도 보게 합니다',
+  });
 }
 export async function askSpAdvice(){
   const sp = getSpeakerById(spDrUi.spId);

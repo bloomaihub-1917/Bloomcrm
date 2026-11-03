@@ -8,6 +8,7 @@
    - sendMail      → window.__mockSend(payload)가 돌려주는 값을 그대로 (테스트가 정한다)
    - eventMailFrom → 늘 «시험 발신 <test@bloom.test>»
    - SEND_GAP      → 0 (통 사이 20초씩 쉬지 않게)
+   - aiApi         → window.__mockAi가 있으면 그 값을 (상황 물어보기 답을 견주려고, 파트 H4)
    두 사본(master·이 브랜치)에 똑같이 바꾸므로 견주기에는 영향이 없다. 운영 서버로는 아무것도 가지 않는다. */
 const fs = require('fs');
 const path = require('path');
@@ -26,14 +27,15 @@ if (ref === 'WORKTREE') {
 }
 
 const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
-let hits = { sendMail: 0, eventMailFrom: 0, SEND_GAP: 0 };
+let hits = { sendMail: 0, eventMailFrom: 0, SEND_GAP: 0, aiApi: 0 };
 for (const f of walk(path.join(out, 'js')).filter((f) => f.endsWith('.js'))) {
   let s = fs.readFileSync(f, 'utf8');
   const before = s;
   s = s.replace(/export async function sendMail\(payload\)\{/, () => { hits.sendMail++; return 'export async function sendMail(payload){ return window.__mockSend(payload);'; });
   s = s.replace(/export async function eventMailFrom\(evKey, force\)\{/, () => { hits.eventMailFrom++; return "export async function eventMailFrom(evKey, force){ return { ok: true, addr: 'test@bloom.test', text: '시험 발신 <test@bloom.test>' };"; });
+  s = s.replace(/async function aiApi\(path, method = 'GET', body\)\{/, (m) => { hits.aiApi++; return m + ' if(window.__mockAi) return window.__mockAi(path, body);'; });
   s = s.replace(/const SEND_GAP = \d+;/, () => { hits.SEND_GAP++; return 'const SEND_GAP = 0;'; });
   if (s !== before) fs.writeFileSync(f, s);
 }
 console.log(ref, '→', out, hits);
-if (hits.sendMail !== 1 || hits.eventMailFrom !== 1 || hits.SEND_GAP !== 2) { console.error('✗ 바꿀 자리를 다 못 찾았다'); process.exit(1); }
+if (hits.sendMail !== 1 || hits.eventMailFrom !== 1 || hits.SEND_GAP !== 2 || hits.aiApi !== 1) { console.error('✗ 바꿀 자리를 다 못 찾았다'); process.exit(1); }
