@@ -50,9 +50,7 @@ const batchCreateExhibitors = guardWrite(_batchCreateExhibitors);
 const saveExhCfgToSheet = guardWrite(_saveExhCfgToSheet);
 import { trackAction, changed } from '../core/audit-log.js';
 import { isStale, isUnread, mailCardHtml } from '../shared/mail/mail-mark.js';
-// 여러 기업에 메일 — 창을 띄우는 함수만 window에 둔다(목록 단추가 부른다)
-import { exhFollowOf } from './exh-bulkmail.js';
-import { resolveDue, dueInputHtml, readDueInput, followCfg } from '../shared/mail/follow-up.js';
+import { resolveDue, dueInputHtml, readDueInput, followCfg, followState } from '../shared/mail/follow-up.js';
 import { boothChange, exhMailSteps } from './exh-mail.js';
 import { renderWatchView, initWatchFolders } from './exh-watch.js';
 import { createOrg } from './company-tab.js';
@@ -522,6 +520,22 @@ function withDue(c, x, step){
 }
 
 export function cellState(x, step){ return withDue(rawCellState(x, step), x, step); }
+
+/* 요청한 단계의 기다림·리마인더 — 기업에서 받아야 끝나는 단계를 요청했는데 아직 안 왔으면.
+   공은 기업에 있지만, 날이 차면 리마인더가 우리 일이다(follow-up.js). 끝났거나 아직 안 보냈으면 null */
+export function exhFollowOf(x, st){
+  if(!st || st.custom || st.lib || st.key === 'note' || st.key === 'booth_change') return null;
+  const step = st.due && STEPS.find(s => s.key === st.due);
+  if(!step) return null;
+  const c = cellState(x, step);
+  if(c.state === 'done' || c.state === 'na') return null;
+  const logs = logsFor(x.id);
+  const sends = logs.filter(l => l.kind === `exh-${st.key}` && l.direction !== 'in').map(l => l.ts);
+  if(!sends.length) return null;
+  const f = followState({ evKey: x.event_id, sends, due: ((EXH_CFG[x.event_id] || {}).due || {})[st.due], logs, stepKey: st.key });
+  return f.state === 'ask' ? null : f;
+}
+
 
 function rawCellState(x, step){
   // 프로그램북만 참가하는 곳은 도록 외에는 받을 것이 없다

@@ -5,10 +5,31 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 /* 로그인 시각(사용자 메뉴)은 매번 다르니 빼고 센다. 다른 점검(smoke 등)을 먼저 돌리면 거르개·하위 탭 상태가
    남아 달라지므로, 이 점검은 새로 로그인한 직후 맨 먼저 돌린다 */
 const h = async () => {
-  const html = document.body.innerHTML.replace(/<div class="user-menu-since" id="um-since">[^<]*<\/div>/, '');
+  const html = document.body.innerHTML
+    .replace(/<div class="user-menu-since" id="um-since">[^<]*<\/div>/, '')
+    .replace(/<span id="last-sync-time">[^<]*<\/span>/, '');   // «마지막 동기화» 시각 — 두 화면 사이에 분이 넘어가면 달라진다
   const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(html));
   return [...new Uint8Array(b)].slice(0, 6).map((x) => x.toString(16).padStart(2, '0')).join('');
 };
+/* 전시 — 목록·일괄 메일·참가기업 상세 창(앞 3곳의 모든 하위 탭)·대시보드 */
+export async function runExh(base) {
+  const st = await import(base + '/js/state.js');
+  const out = {}; const errors = [];
+  const step = async (name, fn) => { try { await fn(); await wait(200); out[name] = await h(); } catch (e) { errors.push(`${name}: ${e.message}`); } };
+  window.switchApp('exh'); await wait(200);
+  await step('list', () => window.setExhView('list'));
+  await step('bulk', () => window.openExhBulkMail());
+  await step('bulkClose', () => window.closeExhBulkMail());
+  for (const x of st.EXHIBITORS.slice(0, 3)) {
+    await step('dr' + x.id, () => window.openExhDr(x.id));
+    const tabs = [...new Set([...document.querySelectorAll('[onclick*="switchExhDT("]')].map((b) => b.getAttribute('onclick')))];
+    for (const [k, oc] of tabs.entries()) await step(`dr${x.id}t${k}`, () => new Function(oc)());
+    window.closeExhDr(); await wait(100);
+  }
+  await step('dash', () => window.setExhView('dash'));
+  return { out, errors };
+}
+
 export async function run(base) {
   const st = await import(base + '/js/state.js');
   const out = {}; const errors = [];

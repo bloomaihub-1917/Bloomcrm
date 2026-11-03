@@ -33,7 +33,8 @@ import {
   deleteExhibitor as _deleteExhibitor,
   sendMail, eventMailFrom, fileToBase64, loadMailFiles, mailFilesOf, aiExhAdvice,
 } from '../api.js';
-import { exhMailState, exhFollowOf } from './exh-bulkmail.js';
+import { exhMailState } from './exh-bulkmail.js';
+import { exhFollowOf } from './exh-tab.js';
 import { followPill, snoozeFollow, addDays } from '../shared/mail/follow-up.js';
 
 /* 진행 완료된 행사는 열람만 — exh-tab의 가드를 그대로 쓴다.

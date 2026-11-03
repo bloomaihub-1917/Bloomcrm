@@ -23,7 +23,8 @@ import { EXH_LOGS, EXHIBITORS, EXH_CFG, currentUser, logsFor } from '../state.js
 import { sendMail, eventMailFrom, loadMailFiles, mailFilesOf, saveExhCfgToSheet } from '../api.js';
 import { escapeHtml, escAttr, nowStamp } from '../utils.js';
 import { normalizeCompanyKey } from '../domain/org-names.js';
-import { visibleList, exhNames, exhContacts, exhMailCtx, exhLocked, exhLockNotice, STEPS, cellState } from './exh-tab.js';
+/* exhFollowOf(리마인더 차례)는 진행 단계(STEPS·cellState)로 정해져 전시 탭에 둔다 — 전시 탭이 이 파일을 import하지 않게 */
+import { visibleList, exhNames, exhContacts, exhMailCtx, exhLocked, exhLockNotice, STEPS, cellState, exhFollowOf } from './exh-tab.js';
 import { exhMailSteps, exhIsEnglish, fillExhTemplate, exhMailFileStep, boothChange, exhStepVariants } from './exh-mail.js';
 import { libItems, libItem } from '../shared/mail/mail-templates.js';
 import { followState } from '../shared/mail/follow-up.js';
@@ -200,20 +201,6 @@ function gotMails(x){
    더한 단계는 칸이 없으니 이 단계 메일을 보낸 기록만 본다. «기타 안내»는 차례가 없다(free). */
 const sentOf = (x, key, since) => logsFor(x.id).some(l => l.kind === `exh-${key}` && l.direction !== 'in'
   && (!since || String(l.ts || '') >= since));
-/* 요청한 단계의 기다림·리마인더 — 기업에서 받아야 끝나는 단계를 요청했는데 아직 안 왔으면.
-   공은 기업에 있지만, 날이 차면 리마인더가 우리 일이다(follow-up.js). 끝났거나 아직 안 보냈으면 null */
-export function exhFollowOf(x, st){
-  if(!st || st.custom || st.lib || st.key === 'note' || st.key === 'booth_change') return null;
-  const step = st.due && STEPS.find(s => s.key === st.due);
-  if(!step) return null;
-  const c = cellState(x, step);
-  if(c.state === 'done' || c.state === 'na') return null;
-  const logs = logsFor(x.id);
-  const sends = logs.filter(l => l.kind === `exh-${st.key}` && l.direction !== 'in').map(l => l.ts);
-  if(!sends.length) return null;
-  const f = followState({ evKey: x.event_id, sends, due: ((EXH_CFG[x.event_id] || {}).due || {})[st.due], logs, stepKey: st.key });
-  return f.state === 'ask' ? null : f;
-}
 
 function baseState(x, st){
   if(st.key === 'booth_change') return boothChange(x).changed ? 'due' : 'na';
