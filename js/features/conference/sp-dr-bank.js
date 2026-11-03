@@ -5,7 +5,8 @@
     window에 거는 것은 맨 아래, 이 파일을 읽는 것은 app.js.)
 ═══════════════════════════════════════════════════════════════ */
 
-import { deleteSpeakerPhoto, saveSpeakerLog, saveSpeakerPhoto, shrinkImage, speakerPhotoOf, speakerPhotosLoaded } from '../../api.js';
+import { saveSpeakerLog } from '../../api/conf-save.js';
+import { deleteSpeakerPhoto, saveSpeakerPhoto, shrinkImage, speakerPhotoOf, speakerPhotosLoaded } from '../../api/photos.js';
 import { NEED_MARK } from '../../constants.js';
 import { trackAction } from '../../core/audit-log.js';
 import { SPEAKER_LOGS, autoDomestic, currentUser, getSpeakerById, isDomesticSpeaker, rolesOfSpeaker } from '../../state.js';

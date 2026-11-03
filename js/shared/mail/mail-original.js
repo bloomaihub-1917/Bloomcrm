@@ -11,7 +11,8 @@
    연결할 때 «이 주소를 연락처로 추가»하면 다음부터는 자동으로 그 사람에게 붙는다.
 ══════════════════════════════════════════════════════════════ */
 import { SPEAKERS, EXHIBITORS } from '../../state.js';
-import { mailOriginal, loadUnassigned, linkUnassigned, ignoreUnassigned, reloadSpeakerData } from '../../api.js';
+import { reloadSpeakerData } from '../../api/conf-save.js';
+import { mailOriginal, loadUnassigned, linkUnassigned, ignoreUnassigned } from '../../api/mail-send.js';
 import { escapeHtml, escAttr } from '../../utils.js';
 import { trackAction } from '../../core/audit-log.js';
 

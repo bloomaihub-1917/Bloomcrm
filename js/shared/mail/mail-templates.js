@@ -13,7 +13,7 @@
                   날짜(마감·대상 제한)와 첨부는 행사마다 달라 가져오지 않는다
 ══════════════════════════════════════════════════════════════ */
 import { EVENT_LIST, EXH_CFG, MAIL_LIBRARY, confCfg, currentUser, evPartDone, codeList } from '../../state.js';
-import { saveMailLibrary, saveExhCfgToSheet } from '../../api.js';
+import { saveMailLibrary, saveExhCfgToSheet } from '../../api/settings-save.js';
 import { saveConf } from '../../features/conference/conf-common.js';
 import { SPEAKER_ROLES } from '../../constants.js';
 import { FLOW_VARS, flowSteps } from '../../modules/speaker-flow.js';

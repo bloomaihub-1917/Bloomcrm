@@ -62,8 +62,10 @@ import {
 } from '../state.js';
 import { RP, avB, avF } from '../constants.js';
 import { escapeHtml, escAttr, levenshteinDist, phoneMatch, parseSectorScope, sectorKey, countryName, isMobile, td, leftPill, safeUrl, parseLinks, slugifySectorName } from '../utils.js';
-import { postToSheet, batchCreateExhibitors, upsertSectorRow, saveExhibitor, aiCompanyPairs, aiOrgQueryPlan, aiOrgPdfSummary,
-  saveRoundMember, deleteRoundMembers, saveAttempt } from '../api.js';
+import { postToSheet } from '../api.js';
+import { upsertSectorRow } from '../api/settings-save.js';
+import { batchCreateExhibitors, saveExhibitor, saveRoundMember, deleteRoundMembers, saveAttempt } from '../api/exh-save.js';
+import { aiCompanyPairs, aiOrgQueryPlan, aiOrgPdfSummary } from '../api/ai.js';
 import { parseSectors, joinSectors, mainSectors, sectorNamesInDomain, domainName, domainOfSector, findSectorByName, UNASSIGNED_DOMAIN } from '../domain/sectors.js';
 /* 화면 상태는 ../features/companies/co-ui.js의 coUi 한곳에 둔다 — 이 탭의 구획을 다른 파일로 떼어도 같은 값을 보게 */
 import { coUi } from '../features/companies/co-ui.js';

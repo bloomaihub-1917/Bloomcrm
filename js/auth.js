@@ -6,7 +6,8 @@
 import { API_BASE_URL, setApiBaseUrl, ALLOWED_DOMAIN, currentUser, setCurrentUser, setAuthToken, userColor } from './state.js';
 import { auth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from './firebase.js';
 import { userInitials } from './utils.js';
-import { loadFromSheets, loadSectors, setTestFixtures } from './api.js';
+import { loadSectors } from './api/settings-save.js';
+import { loadFromSheets, setTestFixtures } from './api/load.js';
 import { buildTestFixtures } from './testdata.js';
 import { trackAction } from './core/audit-log.js';
 import { buildAuditUserList, renderAudit } from './modules/audit-tab.js';

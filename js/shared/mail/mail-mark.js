@@ -12,7 +12,9 @@
    t는 'sp'(연사) 또는 'ex'(참가사).
 ══════════════════════════════════════════════════════════════ */
 import { SPEAKER_LOGS, EXH_LOGS, SPEAKERS, EXHIBITORS, currentUser } from '../../state.js';
-import { saveSpeakerLog, saveExhLog, saveSpeaker, syncSentMail, syncInboxMail, reloadSpeakerData, mailAccountOf } from '../../api.js';
+import { saveSpeakerLog, saveSpeaker, reloadSpeakerData } from '../../api/conf-save.js';
+import { saveExhLog } from '../../api/exh-save.js';
+import { syncSentMail, syncInboxMail, mailAccountOf } from '../../api/mail-send.js';
 import { nowStamp, td, escapeHtml, escAttr } from '../../utils.js';
 import { trackAction } from '../../core/audit-log.js';
 import { unassignedCount } from './mail-original.js';

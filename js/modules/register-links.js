@@ -10,9 +10,7 @@
    서버는 routes/register.js.
 ══════════════════════════════════════════════════════════════ */
 import { PART_TYPES, contacts, participations } from '../state.js';
-import {
-  loadRegisterLinks, createRegisterLink, setRegisterLink, importRegisterRows, decideRegisterSub, shareUrl,
-} from '../api.js';
+import { loadRegisterLinks, createRegisterLink, setRegisterLink, importRegisterRows, decideRegisterSub, shareUrl } from '../api/share-register.js';
 import { escapeHtml, escAttr } from '../utils.js';
 import { trackAction } from '../core/audit-log.js';
 

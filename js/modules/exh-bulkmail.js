@@ -20,7 +20,8 @@
      사진은 첨부가 아니라 본문(html, cid)에 넣는다 — 문구의 {사진} 자리, 없으면 맨 끝
 ══════════════════════════════════════════════════════════════ */
 import { EXH_LOGS, EXHIBITORS, EXH_CFG, currentUser, logsFor } from '../state.js';
-import { sendMail, eventMailFrom, loadMailFiles, mailFilesOf, saveExhCfgToSheet } from '../api.js';
+import { saveExhCfgToSheet } from '../api/settings-save.js';
+import { sendMail, eventMailFrom, loadMailFiles, mailFilesOf } from '../api/mail-send.js';
 import { escapeHtml, escAttr, nowStamp } from '../utils.js';
 import { normalizeCompanyKey } from '../domain/org-names.js';
 /* exhFollowOf(리마인더 차례)는 진행 단계(STEPS·cellState)로 정해져 전시 탭에 둔다 — 전시 탭이 이 파일을 import하지 않게 */

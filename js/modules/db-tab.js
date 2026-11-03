@@ -54,7 +54,9 @@ import {
 } from '../state.js';
 import { CP, CL, RP, CAT_KEYS, ROLE_TO_CAT, COUNTRIES, avB, avF } from '../constants.js';
 import { td, ab, phoneMatch, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseSectorScope, parseTags, joinTags, isMobile, cleanEmail, personName, personFullName, leftPill, slugifySectorName } from '../utils.js';
-import { postToSheet, upsertSectorRow, aiQueryPlan } from '../api.js';
+import { postToSheet } from '../api.js';
+import { upsertSectorRow } from '../api/settings-save.js';
+import { aiQueryPlan } from '../api/ai.js';
 import { coDomainOptionsHtml, coSectorOptionsHtml, currentCoSectorPick } from './company-tab.js';
 import { applyCoSectors } from '../features/companies/co-edit.js';
 import { buildCoDB } from '../domain/co-db.js';

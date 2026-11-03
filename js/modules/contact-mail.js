@@ -13,7 +13,8 @@
    - 보낸 뒤 다음 연락일은 «보냄»과 같이 +3일
 ══════════════════════════════════════════════════════════════ */
 import { CONTACT_ATTEMPTS, EVENT_LIST, currentUser } from '../state.js';
-import { sendMail, eventMailFrom, saveRound, saveAttempt, saveRoundMember } from '../api.js';
+import { saveRound, saveAttempt, saveRoundMember } from '../api/exh-save.js';
+import { sendMail, eventMailFrom } from '../api/mail-send.js';
 import { escapeHtml, escAttr, nowStamp } from '../utils.js';
 import { trackAction } from '../core/audit-log.js';
 import { varPattern, eventVarValues } from '../shared/mail/mail-vars.js';

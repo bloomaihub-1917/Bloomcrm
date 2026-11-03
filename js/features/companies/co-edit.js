@@ -5,7 +5,9 @@
     window에 거는 것은 맨 아래, 이 파일을 읽는 것은 app.js.)
 ═══════════════════════════════════════════════════════════════ */
 
-import { aiOrgPdfSummary, postToSheet, upsertSectorRow } from '../../api.js';
+import { postToSheet } from '../../api.js';
+import { upsertSectorRow } from '../../api/settings-save.js';
+import { aiOrgPdfSummary } from '../../api/ai.js';
 import { changed, trackAction } from '../../core/audit-log.js';
 import { orgKindOf } from '../../domain/org-names.js';
 import { upsertCompanyRow } from '../../domain/org-save.js';

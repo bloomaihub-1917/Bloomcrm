@@ -27,12 +27,9 @@ import {
 } from '../state.js';
 import { td, escapeHtml, escAttr, isMobile, cleanEmail, countryName, leftPill, levenshteinDist, phoneMatch } from '../utils.js';
 export { cleanEmail };   // exh-drawer가 여기서 가져다 쓴다
-import {
-  postToSheet as _postToSheet,
-  saveExhibitor as _saveExhibitor, saveExhItem as _saveExhItem, saveExhInvoice as _saveExhInvoice, saveExhPayment as _saveExhPayment, saveExhLog as _saveExhLog,
-  deleteExhItem as _deleteExhItem, deleteExhInvoice as _deleteExhInvoice, deleteExhPayment as _deleteExhPayment, deleteExhLog as _deleteExhLog,
-  batchCreateExhibitors as _batchCreateExhibitors, saveExhCfgToSheet as _saveExhCfgToSheet,
-} from '../api.js';
+import { postToSheet as _postToSheet } from '../api.js';
+import { saveExhCfgToSheet as _saveExhCfgToSheet } from '../api/settings-save.js';
+import { saveExhibitor as _saveExhibitor, saveExhItem as _saveExhItem, saveExhInvoice as _saveExhInvoice, saveExhPayment as _saveExhPayment, saveExhLog as _saveExhLog, deleteExhItem as _deleteExhItem, deleteExhInvoice as _deleteExhInvoice, deleteExhPayment as _deleteExhPayment, deleteExhLog as _deleteExhLog, batchCreateExhibitors as _batchCreateExhibitors } from '../api/exh-save.js';
 /* 화면 상태는 ../features/exhibition/exh-ui.js의 exhUi 한곳에 둔다 — 이 탭의 구획을 다른 파일로 떼어도 같은 값을 보게 */
 import { exhUi } from '../features/exhibition/exh-ui.js';
 

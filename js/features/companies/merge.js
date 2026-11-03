@@ -5,7 +5,9 @@
     window에 거는 것은 맨 아래, 이 파일을 읽는 것은 app.js.)
 ═══════════════════════════════════════════════════════════════ */
 
-import { aiCompanyPairs, deleteRoundMembers, postToSheet, saveAttempt, saveExhibitor, saveRoundMember } from '../../api.js';
+import { postToSheet } from '../../api.js';
+import { deleteRoundMembers, saveAttempt, saveExhibitor, saveRoundMember } from '../../api/exh-save.js';
+import { aiCompanyPairs } from '../../api/ai.js';
 import { changed, removed as removedMeta, trackAction } from '../../core/audit-log.js';
 import { buildCoDB } from '../../domain/co-db.js';
 import { normalizeCompanyKey } from '../../domain/org-names.js';

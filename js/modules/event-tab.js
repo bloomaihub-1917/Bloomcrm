@@ -26,7 +26,8 @@ import {
 } from '../state.js';
 import { RP, EVENT_PARTS, partStateOf } from '../constants.js';
 import { td, escapeHtml, escAttr, countryName, isMobile } from '../utils.js';
-import { saveEventToSheet, batchCreateExhibitors, postToSheet } from '../api.js';
+import { saveEventToSheet, postToSheet } from '../api.js';
+import { batchCreateExhibitors } from '../api/exh-save.js';
 import { saveTargetToSheet, buildEvFil, renderCrm, updBadges } from './crm-tab.js';
 import { normalizeCompanyKey } from '../domain/org-names.js';
 import { domainOfSector, domainName, findSectorByName } from '../domain/sectors.js';

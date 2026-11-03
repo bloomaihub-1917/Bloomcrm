@@ -5,7 +5,7 @@
     window에 거는 것은 맨 아래, 이 파일을 읽는 것은 app.js.)
 ═══════════════════════════════════════════════════════════════ */
 
-import { eventMailFrom, fileToBase64, loadMailFiles, mailFilesOf, sendMail } from '../../api.js';
+import { eventMailFrom, fileToBase64, loadMailFiles, mailFilesOf, sendMail } from '../../api/mail-send.js';
 import { trackAction } from '../../core/audit-log.js';
 import { exhIsEnglish, exhMailFileStep, exhMailSteps, exhStepVariants, fillExhTemplate } from '../../modules/exh-mail.js';
 import { exhContacts, exhFollowOf, exhLockNotice, exhLocked, exhMailCtx, exhNames } from '../../modules/exh-tab.js';

@@ -8,7 +8,7 @@
    그리고 한 달 호출 한도(0 = 없음)와 이번 달 사용량을 보여 준다.
    저장은 서버 settings key='ai_config' — 모든 직원에게 같이 적용된다.
 ══════════════════════════════════════════════════════════════ */
-import { aiConfig, aiSaveConfig } from '../api.js';
+import { aiConfig, aiSaveConfig } from '../api/ai.js';
 import { escapeHtml } from '../utils.js';
 
 const MODEL_LABEL = { sonnet: 'Sonnet (기본)', haiku: 'Haiku (빠름·저렴)', opus: 'Opus (가장 정확·비쌈)' };

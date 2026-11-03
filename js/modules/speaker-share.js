@@ -12,7 +12,7 @@ import {
   sessionsForEvent, speakersForEvent, assignmentsOfSession, assignmentsFor,
   getSpeakerById, leadOf, coOf, roleLabel, speakerNeed, CONF_SESSIONS,
 } from '../state.js';
-import { loadShares, setShare, pushShareData, shareUrl } from '../api.js';
+import { loadShares, setShare, pushShareData, shareUrl } from '../api/share-register.js';
 import { escapeHtml, escAttr } from '../utils.js';
 import { trackAction } from '../core/audit-log.js';
 import { spCell, SP_COLS } from '../features/conference/speaker-cells.js';

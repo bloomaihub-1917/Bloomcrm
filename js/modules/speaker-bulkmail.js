@@ -17,7 +17,8 @@
    - 받는 사람: 연사 화면 «연락 상대»의 수신·참조 그대로 / 첨부: 그 단계의 기본 첨부
 ══════════════════════════════════════════════════════════════ */
 import { EVENT_LIST, SPEAKER_LOGS, currentUser, speakersForEvent, evPartDone, confCfg } from '../state.js';
-import { sendMail, eventMailFrom, loadMailFiles, mailFilesOf, saveSpeaker } from '../api.js';
+import { saveSpeaker } from '../api/conf-save.js';
+import { sendMail, eventMailFrom, loadMailFiles, mailFilesOf } from '../api/mail-send.js';
 import { escapeHtml, escAttr, nowStamp, td } from '../utils.js';
 import { flowSteps, flowStatus, draftFor, fillTemplate, roundTargets, resentAfter,
   sessionItems, toldSchedule, stepVariants, autoVariant } from './speaker-flow.js';

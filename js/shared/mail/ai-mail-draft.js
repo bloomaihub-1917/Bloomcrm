@@ -15,7 +15,7 @@
    AI가 쓴 틀은 «양식 보관함에 저장»으로 남길 수 있다 — 다음부터는 AI 없이 같은 틀을 쓴다.
 ══════════════════════════════════════════════════════════════ */
 import { EVENT_LIST } from '../../state.js';
-import { aiMailDraft } from '../../api.js';
+import { aiMailDraft } from '../../api/ai.js';
 import { escAttr } from '../../utils.js';
 import { MAIL_VARS, eventVarValues } from './mail-vars.js';
 import { addLibItem } from './mail-templates.js';

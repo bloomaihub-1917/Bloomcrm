@@ -5,7 +5,7 @@
     window에 거는 것은 맨 아래, 이 파일을 읽는 것은 app.js.)
 ═══════════════════════════════════════════════════════════════ */
 
-import { upsertSectorRow } from '../../api.js';
+import { upsertSectorRow } from '../../api/settings-save.js';
 import { buildCoCAT } from '../../modules/company-tab.js';
 import { COMPANY_SECTORS } from '../../state.js';
 import { scopedSectorName, sectorKey, slugifySectorName } from '../../utils.js';

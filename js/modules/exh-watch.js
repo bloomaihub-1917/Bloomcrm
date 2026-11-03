@@ -30,7 +30,7 @@
 
 import { WATCH_FOLDERS, WATCH_FILES, watchFoldersFor, currentUser, evPartDone } from '../state.js';
 import { escapeHtml, escAttr } from '../utils.js';
-import { saveWatchFolder, deleteWatchFolder, saveWatchFiles, deleteWatchFiles } from '../api.js';
+import { saveWatchFolder, deleteWatchFolder, saveWatchFiles, deleteWatchFiles } from '../api/exh-save.js';
 import { trackAction, changed, removed } from '../core/audit-log.js';
 import {
   supported, pickFolder, delHandle, readyFolder, readyFolderQuiet, folderLabel, scanFolder,

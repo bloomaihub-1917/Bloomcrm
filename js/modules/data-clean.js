@@ -12,7 +12,8 @@
 import { API_BASE_URL, currentUser, contacts, ORGS, COMPANY_SECTORS } from '../state.js';
 import { COUNTRIES } from '../constants.js';
 import { escapeHtml, escAttr } from '../utils.js';
-import { postToSheet, safeFetch, authHeaders, aiOrgEnrich } from '../api.js';
+import { postToSheet, safeFetch, authHeaders } from '../api.js';
+import { aiOrgEnrich } from '../api/ai.js';
 import { countryHint } from '../country-signal.js';
 import { buildCoDB } from '../domain/co-db.js';
 import { renderMDB } from './db-tab.js';

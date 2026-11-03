@@ -5,7 +5,8 @@
     window에 거는 것은 맨 아래, 이 파일을 읽는 것은 app.js.)
 ═══════════════════════════════════════════════════════════════ */
 
-import { deleteEventFromSheet, saveEventToSheet } from '../../api.js';
+import { saveEventToSheet } from '../../api.js';
+import { deleteEventFromSheet } from '../../api/settings-save.js';
 import { EVENT_PARTS, partStateOf } from '../../constants.js';
 import { removed, trackAction } from '../../core/audit-log.js';
 import { EVENT_LIST, EXH_CFG, evParts, participations } from '../../state.js';

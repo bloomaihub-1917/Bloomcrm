@@ -53,14 +53,9 @@ export const spFlagPills = (sp) => {
     + (sp.gala_rsvp === 'yes' ? '<span class="pill p-green" style="font-size:9px" title="갈라디너 참석">갈라 참석</span>'
       : sp.gala_rsvp === 'no' ? '<span class="pill p-gray" style="font-size:9px" title="갈라디너 불참">갈라 불참</span>' : '');
 };
-import {
-  saveConfSession, deleteConfSession,
-  saveSpeaker, deleteSpeaker,
-  saveSessionSpeaker, deleteSessionSpeaker,
-  saveSpeakerContact, deleteSpeakerContact, deleteSpeakerLog,
-  postToSheet,
-  loadSpeakerPhotos, speakerPhotosLoaded, speakerPhotoOf,
-} from '../api.js';
+import { postToSheet } from '../api.js';
+import { saveConfSession, deleteConfSession, saveSpeaker, deleteSpeaker, saveSessionSpeaker, deleteSessionSpeaker, saveSpeakerContact, deleteSpeakerContact, deleteSpeakerLog } from '../api/conf-save.js';
+import { loadSpeakerPhotos, speakerPhotosLoaded, speakerPhotoOf } from '../api/photos.js';
 import { trackAction, changed, removed, created } from '../core/audit-log.js';
 import { IMPORT_SHEETS, IMPORT_GUIDE } from '../conf-import-spec.js';
 import { trackColorOf, pickTrackColorIndex } from '../track-colors.js';

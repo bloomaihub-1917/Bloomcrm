@@ -5,7 +5,9 @@
     window에 거는 것은 맨 아래, 이 파일을 읽는 것은 app.js.)
 ═══════════════════════════════════════════════════════════════ */
 
-import { deleteMailAccount, eventMailFrom, loadMailAccounts, loadMailFiles, loadMailFooter, mailFilesOf, saveEventToSheet, saveExhCfgToSheet, saveMailAccount, saveMailFooter, testMailAccount } from '../../api.js';
+import { saveEventToSheet } from '../../api.js';
+import { saveExhCfgToSheet } from '../../api/settings-save.js';
+import { deleteMailAccount, eventMailFrom, loadMailAccounts, loadMailFiles, loadMailFooter, mailFilesOf, saveMailAccount, saveMailFooter, testMailAccount } from '../../api/mail-send.js';
 import { EVENT_PARTS, PART_STATES, partStateOf } from '../../constants.js';
 import { changed, trackAction } from '../../core/audit-log.js';
 import { exhMailFileStep, exhMailSteps } from '../../modules/exh-mail.js';

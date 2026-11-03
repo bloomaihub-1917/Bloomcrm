@@ -22,13 +22,11 @@ import {
   CONTACT_ROUNDS, ROUND_MEMBERS, CONTACT_ATTEMPTS,
   nextContactId,
 } from '../state.js';
-import {
-  saveRound, deleteRound, saveRoundMember, deleteRoundMembers, addRoundMembers,
-  saveAttempt, deleteAttempt, addAttempts,
-} from '../api.js';
+import { saveRound, deleteRound, saveRoundMember, deleteRoundMembers, addRoundMembers, saveAttempt, deleteAttempt, addAttempts } from '../api/exh-save.js';
 import { escapeHtml, escAttr, td, nowStamp, sectorKey } from '../utils.js';
 import { trackAction } from '../core/audit-log.js';
-import { postToSheet, reloadContactData } from '../api.js';
+import { postToSheet } from '../api.js';
+import { reloadContactData } from '../api/exh-save.js';
 import { buildCoDB } from '../domain/co-db.js';
 
 /* ── 반응 — 채널마다 누를 수 있는 것이 다르다. next: 다음 연락까지 며칠(0=곧바로),

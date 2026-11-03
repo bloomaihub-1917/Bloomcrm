@@ -13,7 +13,8 @@
 ══════════════════════════════════════════ */
 import { speakersOfContact, SPEAKER_LOGS, EXH_CONTACTS, EXHIBITORS, EXH_LOGS, CONTACT_ATTEMPTS, CONTACT_ROUNDS, evShort } from '../state.js';
 import { escapeHtml, escAttr, nowStamp } from '../utils.js';
-import { saveExhLog, saveSpeakerLog, saveAttempt } from '../api.js';
+import { saveSpeakerLog } from '../api/conf-save.js';
+import { saveExhLog, saveAttempt } from '../api/exh-save.js';
 import { REACTIONS } from './contact-tab.js';
 
 const isMail = (l) => l.direction === 'in' || l.direction === 'out';

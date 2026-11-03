@@ -4,7 +4,8 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import { SESSION_SPEAKERS, evPartDone, assignmentsFor, getSpeakerById, participations, EXH_CFG } from '../../state.js';
-import { postToSheet, saveExhCfgToSheet } from '../../api.js';
+import { postToSheet } from '../../api.js';
+import { saveExhCfgToSheet } from '../../api/settings-save.js';
 import { trackAction } from '../../core/audit-log.js';
 import { SP_CONSENTS } from '../../constants.js';
 import { reusePending } from '../../modules/contact-speaker.js';

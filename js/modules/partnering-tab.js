@@ -20,7 +20,8 @@
 import { EVENT_LIST, contacts, participations, evPartOn, hasLeft, PART_TYPES, syncPartColors, API_BASE_URL } from '../state.js';
 import { PARTNERING_SIDES, PARTNERING_UNSIDED } from '../constants.js';
 import { td, escapeHtml, escAttr, countryName, isMobile } from '../utils.js';
-import { postToSheet, upsertPartTypeRow } from '../api.js';
+import { postToSheet } from '../api.js';
+import { upsertPartTypeRow } from '../api/settings-save.js';
 import { trackAction } from '../core/audit-log.js';
 import { sanitizeForCsv } from './audit-tab.js';
 import { buildCoDB } from '../domain/co-db.js';

@@ -20,7 +20,8 @@
 ══════════════════════════════════════════ */
 import { EVENT_LIST, EXH_CFG, SPEAKER_LOGS, EXH_LOGS, currentUser } from '../../state.js';
 import { td, nowStamp } from '../../utils.js';
-import { saveSpeakerLog, saveExhLog } from '../../api.js';
+import { saveSpeakerLog } from '../../api/conf-save.js';
+import { saveExhLog } from '../../api/exh-save.js';
 
 export const FOLLOW_DEFAULT = { first: 3, again: 4 };
 export function followCfg(evKey){

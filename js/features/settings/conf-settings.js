@@ -5,7 +5,8 @@
     window에 거는 것은 맨 아래, 이 파일을 읽는 것은 app.js.)
 ═══════════════════════════════════════════════════════════════ */
 
-import { deleteMailFile, fileToBase64, loadMailFiles, mailFilesOf, saveConfSession, uploadMailFile } from '../../api.js';
+import { saveConfSession } from '../../api/conf-save.js';
+import { deleteMailFile, fileToBase64, loadMailFiles, mailFilesOf, uploadMailFile } from '../../api/mail-send.js';
 import { NEED_CYCLE, NEED_LABEL, NEED_MARK, SPEAKER_NEEDS, SPEAKER_NEEDS_ON_TALK, SPEAKER_ROLES } from '../../constants.js';
 import { changed, trackAction } from '../../core/audit-log.js';
 import { flowSteps } from '../../modules/speaker-flow.js';

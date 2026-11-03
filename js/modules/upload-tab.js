@@ -59,7 +59,9 @@ import {
 } from '../state.js';
 import { CL } from '../constants.js';
 import { td, normalizeCat, normalizeCountry, escapeHtml, escAttr, scopedSectorName, slugifySectorName, sectorRowValues, sectorKey } from '../utils.js';
-import { postToSheet, saveCatmap, aiStatus, aiMapColumns, aiCompanyPairs } from '../api.js';
+import { postToSheet } from '../api.js';
+import { saveCatmap } from '../api/settings-save.js';
+import { aiStatus, aiMapColumns, aiCompanyPairs } from '../api/ai.js';
 import { buildCoCAT } from './company-tab.js';
 import { buildCoDB } from '../domain/co-db.js';
 import { batchUpsertCompanies, patchOrgFields } from '../domain/org-save.js';

@@ -5,7 +5,8 @@
     window에 거는 것은 맨 아래, 이 파일을 읽는 것은 app.js.)
 ═══════════════════════════════════════════════════════════════ */
 
-import { postToSheet, saveCatmap } from '../../api.js';
+import { postToSheet } from '../../api.js';
+import { saveCatmap } from '../../api/settings-save.js';
 import { trackAction } from '../../core/audit-log.js';
 import { buildCoDB } from '../../domain/co-db.js';
 import { batchUpsertCompanies } from '../../domain/org-save.js';

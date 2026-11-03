@@ -5,7 +5,7 @@
     window에 거는 것은 맨 아래, 이 파일을 읽는 것은 app.js.)
 ═══════════════════════════════════════════════════════════════ */
 
-import { loadSpeakerPhotos, speakerPhotoOf, speakerPhotosLoaded } from '../../api.js';
+import { loadSpeakerPhotos, speakerPhotoOf, speakerPhotosLoaded } from '../../api/photos.js';
 import { SPEAKER_ROLES } from '../../constants.js';
 import { trackAction } from '../../core/audit-log.js';
 import { progressBar, shortCell } from '../../modules/exh-tab.js';

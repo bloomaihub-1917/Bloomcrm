@@ -25,7 +25,8 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import { auditLog, currentUser, participations } from '../state.js';
-import { postToSheet, loadFromSheets } from '../api.js';
+import { postToSheet } from '../api.js';
+import { loadFromSheets } from '../api/load.js';
 import { escapeHtml } from '../utils.js';
 import { trackAction } from '../core/audit-log.js';
 import { describeAudit, fieldLabel, showVal } from './audit-describe.js';

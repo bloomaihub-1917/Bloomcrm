@@ -38,7 +38,8 @@ import { flowStatus, nextActionLabel } from './speaker-flow.js';
 import { RP, SC, LC, EC, STGS, avB, avF } from '../constants.js';
 import { ab, td, escapeHtml, escAttr, isMobile } from '../utils.js';
 import { trackAction, changed } from '../core/audit-log.js';
-import { postToSheet, sendMail, eventMailFrom, loadUnassigned, linkUnassignedCrm } from '../api.js';
+import { postToSheet } from '../api.js';
+import { sendMail, eventMailFrom, loadUnassigned, linkUnassignedCrm } from '../api/mail-send.js';
 import { varChipsHtml, registerVarResolver } from '../shared/mail/var-chips.js';
 import { eventVarValues } from '../shared/mail/mail-vars.js';
 import '../shared/mail/mail-original.js';   // window.openMailOriginal — 받은 메일 원문 보기

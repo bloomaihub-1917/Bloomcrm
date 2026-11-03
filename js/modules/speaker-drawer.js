@@ -38,13 +38,10 @@ export const mailBodyHtml = (body) => {
   return `${escapeHtml(m.head || '(새로 쓴 내용 없음)')}${m.attach ? `\n\n${escapeHtml(m.attach)}` : ''}${m.quoted
     ? `<details style="margin-top:8px"><summary style="cursor:pointer;color:var(--i4);font-size:10.5px">▸ 이전 메일 보기 (${m.quoted.split('\n').length}줄)</summary><div style="margin-top:6px;padding-left:8px;border-left:2px solid var(--i6);color:var(--i3)">${escapeHtml(m.quoted)}</div></details>` : ''}`;
 };
-import {
-  saveSpeaker, saveSessionSpeaker,
-  saveSpeakerContact, deleteSpeakerContact,
-  saveSpeakerLog, sendMail, eventMailFrom, loadMailFiles, mailFilesOf, fileToBase64,
-  aiSpeakerAdvice,
-  loadSpeakerPhotos, speakerPhotosLoaded, speakerPhotoOf, saveSpeakerPhoto, deleteSpeakerPhoto, shrinkImage,
-} from '../api.js';
+import { saveSpeaker, saveSessionSpeaker, saveSpeakerContact, deleteSpeakerContact, saveSpeakerLog } from '../api/conf-save.js';
+import { sendMail, eventMailFrom, loadMailFiles, mailFilesOf, fileToBase64 } from '../api/mail-send.js';
+import { loadSpeakerPhotos, speakerPhotosLoaded, speakerPhotoOf, saveSpeakerPhoto, deleteSpeakerPhoto, shrinkImage } from '../api/photos.js';
+import { aiSpeakerAdvice } from '../api/ai.js';
 import { filterMail, mailFilBar, mailStateHtml, mailActionsHtml, mailToggleAttr, isPending, setMailDone } from '../shared/mail/mail-mark.js';
 import { decorate as decorateMailPane } from '../shared/mail/mail-pane.js';
 import { trackAction, changed, removed } from '../core/audit-log.js';

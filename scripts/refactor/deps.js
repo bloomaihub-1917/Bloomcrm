@@ -67,6 +67,12 @@ for (const f of files) {
         .forEach((n) => { if (ex && !ex.names.has(n) && !ex.star.length) problems.push(`${rel(f)}: ${spec}에 ${n} 없음 (import(…))`); });
     }
   }
+  /* (await import('…')).이름 — api.js를 나눌 때 saveEquipCatalog가 다른 파일로 갔는데 이 꼴은 위에서 못 봐 놓칠 뻔했다 */
+  for (const m of src.matchAll(/\(\s*await\s+import\(\s*'(\.{1,2}\/[^']+)'\s*\)\s*\)\s*\.\s*([\w$]+)/g)) {
+    const target = path.resolve(path.dirname(f), m[1]);
+    const ex = exportsOf[rel(target)];
+    if (ex && !ex.names.has(m[2]) && !ex.star.length) problems.push(`${rel(f)}: ${m[1]}에 ${m[2]} 없음 (import(…))`);
+  }
   graph[rel(f)] = [...deps];
 }
 

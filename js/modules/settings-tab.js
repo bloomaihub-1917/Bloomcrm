@@ -56,25 +56,11 @@ import { dueInputHtml, readDueInput, followCfg, FOLLOW_DEFAULT } from '../shared
 import { exhMailSteps, exhMailFileStep } from './exh-mail.js';
 import './exh-mail-editor.js';
 
-import {
-  upsertSectorRow,
-  deleteSectorRow,
-  upsertPartTypeRow,
-  deletePartTypeRow,
-  saveEventToSheet,
-  deleteEventFromSheet,
-  postToSheet,
-  safeFetch,
-  authHeaders,
-  saveDomains,
-  saveTags,
-  saveEquipCatalog,
-  deleteEquipCatalog,
-  saveExhCfgToSheet,
-  saveConfSession,
-  loadMailFiles, mailFilesOf, uploadMailFile, deleteMailFile, fileToBase64,
-  loadMailAccounts, saveMailAccount, loadMailFooter, saveMailFooter, deleteMailAccount, testMailAccount, eventMailFrom, syncSentMail, syncInboxMail, reloadSpeakerData,
-} from '../api.js';
+import { saveEventToSheet, postToSheet, safeFetch, authHeaders } from '../api.js';
+import { saveConfSession, reloadSpeakerData } from '../api/conf-save.js';
+import { upsertSectorRow, deleteSectorRow, upsertPartTypeRow, deletePartTypeRow, deleteEventFromSheet, saveDomains, saveTags, saveExhCfgToSheet } from '../api/settings-save.js';
+import { saveEquipCatalog, deleteEquipCatalog } from '../api/exh-save.js';
+import { loadMailFiles, mailFilesOf, uploadMailFile, deleteMailFile, fileToBase64, loadMailAccounts, saveMailAccount, loadMailFooter, saveMailFooter, deleteMailAccount, testMailAccount, eventMailFrom, syncSentMail, syncInboxMail } from '../api/mail-send.js';
 import { trackAction, changed, removed } from '../core/audit-log.js';
 
 import { TRACK_COLORS, trackColorOf, trackColorIndex, pickTrackColorIndex } from '../track-colors.js';

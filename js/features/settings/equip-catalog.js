@@ -5,7 +5,7 @@
     window에 거는 것은 맨 아래, 이 파일을 읽는 것은 app.js.)
 ═══════════════════════════════════════════════════════════════ */
 
-import { deleteEquipCatalog, saveEquipCatalog } from '../../api.js';
+import { deleteEquipCatalog, saveEquipCatalog } from '../../api/exh-save.js';
 import { changed, removed, trackAction } from '../../core/audit-log.js';
 import { EQUIP_CATALOG, EVENT_LIST, EXH_ITEMS } from '../../state.js';
 import { escAttr, escapeHtml } from '../../utils.js';

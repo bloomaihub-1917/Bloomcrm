@@ -5,7 +5,7 @@
     window에 거는 것은 맨 아래, 이 파일을 읽는 것은 app.js.)
 ═══════════════════════════════════════════════════════════════ */
 
-import { saveSpeakerContact } from '../../api.js';
+import { saveSpeakerContact } from '../../api/conf-save.js';
 import { IMPORT_GUIDE, IMPORT_SHEETS } from '../../conf-import-spec.js';
 import { SPEAKER_ROLES } from '../../constants.js';
 import { trackAction } from '../../core/audit-log.js';

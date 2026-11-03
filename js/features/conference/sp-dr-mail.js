@@ -5,7 +5,8 @@
     window에 거는 것은 맨 아래, 이 파일을 읽는 것은 app.js.)
 ═══════════════════════════════════════════════════════════════ */
 
-import { deleteSpeakerContact, eventMailFrom, fileToBase64, mailFilesOf, saveSpeakerContact, saveSpeakerLog, sendMail } from '../../api.js';
+import { deleteSpeakerContact, saveSpeakerContact, saveSpeakerLog } from '../../api/conf-save.js';
+import { eventMailFrom, fileToBase64, mailFilesOf, sendMail } from '../../api/mail-send.js';
 import { changed, removed, trackAction } from '../../core/audit-log.js';
 import { autoVariant, draftFor, fillTemplate, flowStatus, pendingItems, stepVariants } from '../../modules/speaker-flow.js';
 import { aiDraftHtml } from '../../shared/mail/ai-mail-draft.js';

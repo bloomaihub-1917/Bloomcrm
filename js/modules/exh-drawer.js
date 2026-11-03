@@ -29,12 +29,9 @@ export const mailBodyHtml = (body) => {
   return `${escapeHtml(m.head || '(새로 쓴 내용 없음)')}${m.attach ? `\n\n${escapeHtml(m.attach)}` : ''}${m.quoted
     ? `<details style="margin-top:8px"><summary style="cursor:pointer;color:var(--i4);font-size:10.5px">▸ 이전 메일 보기 (${m.quoted.split('\n').length}줄)</summary><div style="margin-top:6px;padding-left:8px;border-left:2px solid var(--i6);color:var(--i3)">${escapeHtml(m.quoted)}</div></details>` : ''}`;
 };
-import {
-  saveExhContact as _saveExhContact, saveExhItem as _saveExhItem, saveExhInvoice as _saveExhInvoice, saveExhTax as _saveExhTax, saveExhPayment as _saveExhPayment, saveExhLog as _saveExhLog, saveExhApp as _saveExhApp,
-  deleteExhContact as _deleteExhContact, deleteExhItem as _deleteExhItem, deleteExhInvoice as _deleteExhInvoice, deleteExhTax as _deleteExhTax, deleteExhPayment as _deleteExhPayment, deleteExhLog as _deleteExhLog, deleteExhApp as _deleteExhApp,
-  deleteExhibitor as _deleteExhibitor,
-  sendMail, eventMailFrom, fileToBase64, loadMailFiles, mailFilesOf, aiExhAdvice,
-} from '../api.js';
+import { saveExhContact as _saveExhContact, saveExhItem as _saveExhItem, saveExhInvoice as _saveExhInvoice, saveExhTax as _saveExhTax, saveExhPayment as _saveExhPayment, saveExhLog as _saveExhLog, saveExhApp as _saveExhApp, deleteExhContact as _deleteExhContact, deleteExhItem as _deleteExhItem, deleteExhInvoice as _deleteExhInvoice, deleteExhTax as _deleteExhTax, deleteExhPayment as _deleteExhPayment, deleteExhLog as _deleteExhLog, deleteExhApp as _deleteExhApp, deleteExhibitor as _deleteExhibitor } from '../api/exh-save.js';
+import { sendMail, eventMailFrom, fileToBase64, loadMailFiles, mailFilesOf } from '../api/mail-send.js';
+import { aiExhAdvice } from '../api/ai.js';
 import { exhMailState } from './exh-bulkmail.js';
 import { exhFollowOf } from './exh-tab.js';
 import { followPill, snoozeFollow, addDays } from '../shared/mail/follow-up.js';

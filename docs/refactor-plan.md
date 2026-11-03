@@ -190,7 +190,17 @@ master와 이 브랜치의 계산 지문이 같다(참가기업 12곳·기업 16
 `const { a } = await import(…)`로 꺼내는 이름, 그리고 모든 파일의 문법(`node --check`)을 본다 — 손으로 줄을 옮기다 `};`를 두고 와
 설정 탭이 통째로 안 읽힌 것을 브라우저에서야 알았기 때문이다.
 
-다음: `state.js`·`api.js` 기능별로 나누기, 전시 상세 창(3,385줄) 한 번 더.
+**api.js** (✅): 1,285 → 274줄. 남은 것은 모두가 쓰는 바탕(주소·인증 머리·`safeFetch`·`postToSheet`·참가 기록 이름 맞추기)뿐이고,
+나머지는 `js/api/` 아래 8개 — `load.js`(로그인 때 불러오기) / `conf-save.js` / `exh-save.js` / `settings-save.js` / `mail-send.js` / `share-register.js` / `photos.js` / `ai.js`.
+다시 내보내기 없이 쓰는 곳(약 110개 import)을 새 파일로 돌렸다. 불러오기가 고치던 `settingsReady`는 `setSettingsReady`로.
+«메일 보내기» 구획 안에 공유·등록 링크·사진·AI가 섞여 있어 한 번 더 나눴다. 101곳이 master와 같다.
+도중에: 범위가 한 줄 어긋나 함수의 닫는 `}`가 남은 것을 `deps.js` 문법 검사가 바로 잡았다.
+`(await import('../../api.js')).saveEquipCatalog` 꼴은 못 보던 것이라 `deps.js`에 더했다 — 비품 목록 저장이 깨질 뻔했다.
+
+**state.js는 나누지 않는다**: 768줄이고 이미 구획마다 한 가지(행사·연락처·기업·코드 목록·전시·연사…)라 읽기에 어렵지 않다.
+나누면 거의 모든 파일의 import를 바꾸게 되는데 얻는 것이 작다.
+
+다음: 전시 상세 창(3,385줄) 한 번 더, 서버(`backend-node`) 정리.
 
 **공용 낱말 훑기 `scripts/refactor/js-scan.js`** — `codeOnly(src)`가 원본과 길이가 같은 «코드만 남긴 사본»을 만든다
 (문자열·주석·정규식 글자·템플릿 글자를 지우고 `${식}`은 남긴다). `lift-state`·`split-leaf --via-window`·`deps.js`가 이것을 쓴다.

@@ -5,7 +5,8 @@
     window에 거는 것은 맨 아래, 이 파일을 읽는 것은 app.js.)
 ═══════════════════════════════════════════════════════════════ */
 
-import { deletePartTypeRow, postToSheet, saveDomains, saveTags, upsertPartTypeRow } from '../../api.js';
+import { postToSheet } from '../../api.js';
+import { deletePartTypeRow, saveDomains, saveTags, upsertPartTypeRow } from '../../api/settings-save.js';
 import { changed, removed, trackAction } from '../../core/audit-log.js';
 import { buildCoDB } from '../../domain/co-db.js';
 import { domainOfSector, mainSectors } from '../../domain/sectors.js';

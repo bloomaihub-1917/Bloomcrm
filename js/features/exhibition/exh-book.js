@@ -724,7 +724,7 @@ export async function submitNewCatalogItem(){
 
   EQUIP_CATALOG.push(rec);
   // 품목표도 이 행사의 기록이다 — api.js를 직접 부르면 진행 완료 잠금을 건너뛴다
-  const saveEquipCatalog = guardWrite((await import('../../api.js')).saveEquipCatalog);
+  const saveEquipCatalog = guardWrite((await import('../../api/exh-save.js')).saveEquipCatalog);
   const r = await saveEquipCatalog(rec);
   if(!r.ok){
     const i = EQUIP_CATALOG.indexOf(rec);

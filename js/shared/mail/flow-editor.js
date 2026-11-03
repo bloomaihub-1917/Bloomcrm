@@ -15,7 +15,7 @@ import { FLOW_STEPS, CUSTOM_PRESETS, flowSteps, isCustomStep } from '../../modul
 import { saveConf } from '../../features/conference/conf-common.js';
 import { trackAction } from '../../core/audit-log.js';
 import { variantsHtml } from './mail-templates.js';
-import { loadMailFiles, mailFilesOf, uploadMailFile, deleteMailFile, fileToBase64 } from '../../api.js';
+import { loadMailFiles, mailFilesOf, uploadMailFile, deleteMailFile, fileToBase64 } from '../../api/mail-send.js';
 import { escapeHtml, escAttr } from '../../utils.js';
 import { varChipsHtml } from './var-chips.js';
 import { previewHtml } from './mail-preview.js';

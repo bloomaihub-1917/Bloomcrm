@@ -19,7 +19,7 @@
    같은 파일을 두 번 가져와도 같은 기록(같은 곳·시각·반응·내용)은 한 번만 들어간다.
 ══════════════════════════════════════════════════════════════ */
 import { CONTACT_ATTEMPTS, ROUND_MEMBERS } from '../state.js';
-import { addRoundMembers, addAttempts, saveRoundMember } from '../api.js';
+import { addRoundMembers, addAttempts, saveRoundMember } from '../api/exh-save.js';
 import { escapeHtml, nowStamp } from '../utils.js';
 import { trackAction } from '../core/audit-log.js';
 import { normalizeCompanyKey } from '../domain/org-names.js';
