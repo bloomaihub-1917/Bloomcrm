@@ -32,11 +32,13 @@ import {
 import { SPEAKER_ROLES, NEED_MARK, SPEAKER_NEEDS, SP_CONSENTS } from '../constants.js';
 import { td, escapeHtml, escAttr, isMobile, leftPill, countryName, photoSrc } from '../utils.js';
 import { progressBar, shortCell } from './exh-tab.js';
+/* 화면 상태는 ../features/conference/conf-ui.js의 confUi 한곳에 둔다 — 이 탭의 구획을 다른 파일로 떼어도 같은 값을 보게 */
+import { confUi } from '../features/conference/conf-ui.js';
 
 /* 이 연사가 회사를 떠났는지 — 연사 행은 이름·소속을 «발표 당시»로 굳혀 두므로
    지금 연락이 닿는지는 마스터DB 연결(contact_id)을 타고 가야 알 수 있다.
    연사 쪽 값을 바꾸지는 않는다: 작년 프로그램북의 소속은 그대로여야 맞다. */
-const spLeftPill = (sp) => {
+export const spLeftPill = (sp) => {
   const c = sp && sp.contact_id
     ? contacts.find(x => String(x.id) === String(sp.contact_id)) : null;
   return c ? leftPill(c) : '';
@@ -44,7 +46,7 @@ const spLeftPill = (sp) => {
 
 
 /* 표에서 바로 봐야 하는 것: 공유를 거절한 항목과 갈라디너 참석 여부 */
-const spFlagPills = (sp) => {
+export const spFlagPills = (sp) => {
   const no = consentRefused(sp);
   return (no.length ? `<span class="pill p-red" style="font-size:9px"
       title="${escapeHtml(`동의하지 않음: ${no.join(', ')} — 자료집·배포에서 빼야 해요`)}">공유 ✕ ${escapeHtml(no.join('·'))}</span>` : '')
@@ -76,29 +78,14 @@ export { consentRefused, reuseState, setConfLockEv, onConfLockFallback, confLock
 
 
 /* ── 모듈 상태 ── */
-let confEvent = '';
-onConfLockFallback(() => confEvent);
-let confView = 'dash';         // 'dash' | 'pga' | 'program' | 'people'
-let confOpenSession = '';      // 배정 칸이 열려 있는 세션
-let confEditSession = '';      // 수정 칸이 열려 있는 세션
-let confNewSession = false;    // 세션 추가 칸이 열려 있나
-let confNeedFil = null;        // {key, mode:'done'|'todo'} — 받을 것 칩으로 거르기
-let confRoleFil = '';          // 역할로 거르기
-let confShowHidden = false;    // 숨긴 연사도 보이기
-let confSessFil = '';          // 세션으로 거르기
-let confPhase = '';           // 'prep' 준비 | 'settle' 정산 — 비우면 행사 끝난 날로 정한다
-let confSettleFil = '';       // 정산 거르기 'docs' 서류 남음 | 'unpaid' 미지급
-let confShowNoFee = false;     // 정산에서 접은 «연사료 없음» 줄 펼치기
-let confLayout = 'table';       // 준비 단계 보기 'table' 표 | 'cards' 사진 카드
-const confPhotoAsked = new Set();
-let confCardFil = '';          // 카드 거르기 'ok' 다 받음 | 'part' 일부 | 'todo' 하나도 못 받음
-let confVideoFil = '';         // 영상 게재 동의로 거르기 'yes' | 'no' | 'none'(미확인)
+onConfLockFallback(() => confUi.confEvent);
+export const confPhotoAsked = new Set();
 
-const gSaveSession   = guardConf(saveConfSession);
+export const gSaveSession   = guardConf(saveConfSession);
 const gDelSession    = guardConf(deleteConfSession);
-const gSaveSpeaker   = guardConf(saveSpeaker);
+export const gSaveSpeaker   = guardConf(saveSpeaker);
 const gDelSpeaker    = guardConf(deleteSpeaker);
-const gSaveAssign    = guardConf(saveSessionSpeaker);
+export const gSaveAssign    = guardConf(saveSessionSpeaker);
 const gDelAssign     = guardConf(deleteSessionSpeaker);
 const gDelSpeakerContact = guardConf(deleteSpeakerContact);
 const gDelSpeakerLog     = guardConf(deleteSpeakerLog);
@@ -119,12 +106,12 @@ export function buildConfEvList(){
   const off   = opts.filter(e => stateOf(e) === 'none');
 
   // 손댈 수 있는 행사부터 고른다 — 끝난 행사가 먼저 열리면 잠긴 화면부터 본다
-  if(!confEvent || !opts.some(e => e.key === confEvent)){
+  if(!confUi.confEvent || !opts.some(e => e.key === confUi.confEvent)){
     const first = doing[0] || done[0] || off[0];
-    if(first) confEvent = first.key;
+    if(first) confUi.confEvent = first.key;
   }
 
-  const row = (e, n) => `<button class="nr${confEvent === e.key ? ' on' : ''}" onclick="setConfEvent('${escAttr(e.key)}')">
+  const row = (e, n) => `<button class="nr${confUi.confEvent === e.key ? ' on' : ''}" onclick="setConfEvent('${escAttr(e.key)}')">
       <span class="ev-pill-dot" style="background:${escAttr(e.color || '#9C9890')}"></span>${escapeHtml(e.short || e.name || e.key)}
       ${n ? `<span class="nbg">${n}</span>` : ''}</button>`;
   const head = (t) => `<div style="font-size:10px;color:var(--i4);margin:10px 0 4px;padding-left:2px">${t}</div>`;
@@ -149,7 +136,7 @@ export function buildConfEvList(){
   if(mt){
     mt.style.minWidth = '0';   // 긴 행사명이 오른쪽 단추를 밀어내지 않게
     const live = [...doing, ...done];
-    const opt = (e) => `<option value="${escapeHtml(e.key)}"${confEvent === e.key ? ' selected' : ''}>${escapeHtml(e.short || e.name || e.key)}</option>`;
+    const opt = (e) => `<option value="${escapeHtml(e.key)}"${confUi.confEvent === e.key ? ' selected' : ''}>${escapeHtml(e.short || e.name || e.key)}</option>`;
     mt.innerHTML = live.length ? `<select onchange="setConfEvent(this.value)" aria-label="행사 고르기"
         style="max-width:100%;font:inherit;font-weight:700;color:inherit;background:transparent;border:0;
         padding:2px 18px 2px 0;appearance:none;-webkit-appearance:none;cursor:pointer;
@@ -162,45 +149,45 @@ export function buildConfEvList(){
 }
 
 export function setConfEvent(key){
-  confEvent = key;
-  confOpenSession = '';
-  confEditSession = '';
-  confNewSession = false;
-  confNeedFil = null;
-  confSettleFil = '';
-  confCardFil = '';
-  confVideoFil = '';
-  confRoleFil = '';
-  confSessFil = '';
-  clearConfQuery();
+  confUi.confEvent = key;
+  confUi.confOpenSession = '';
+  confUi.confEditSession = '';
+  confUi.confNewSession = false;
+  confUi.confNeedFil = null;
+  confUi.confSettleFil = '';
+  confUi.confCardFil = '';
+  confUi.confVideoFil = '';
+  confUi.confRoleFil = '';
+  confUi.confSessFil = '';
+  window.clearConfQuery();
   buildConfEvList();
   renderConf();
-  if(confView === 'watch') initWatchFolders(confEvent, 'conf');
+  if(confUi.confView === 'watch') initWatchFolders(confUi.confEvent, 'conf');
   if(isMobile()) window.closeSb?.();
 }
 
 export function setConfView(v){
-  confView = v;
+  confUi.confView = v;
   renderConf();
-  if(v === 'watch') initWatchFolders(confEvent, 'conf');
+  if(v === 'watch') initWatchFolders(confUi.confEvent, 'conf');
 }
 
 /* ── 도움 함수 ── */
 const roleDef = (role) => SPEAKER_ROLES.find(r => r.key === role);
-const roleCls = (role) => (roleDef(role) || {}).cls || 'p-gray';
+export const roleCls = (role) => (roleDef(role) || {}).cls || 'p-gray';
 const roleChip = (role) => `<span class="pill ${roleCls(role)}" style="font-size:10px">${escapeHtml(role || '역할 없음')}</span>`;
 
-const dayLabel = (d) => {
+export const dayLabel = (d) => {
   if(!d) return '날짜 미정';
   const dt = new Date(d + 'T00:00:00');
   const w = ['일', '월', '화', '수', '목', '금', '토'][dt.getDay()] || '';
   return `${d} (${w})`;
 };
-const timeLabel = (s, e) => (s || e) ? `${s || ''}${e ? '–' + e : ''}` : '';
+export const timeLabel = (s, e) => (s || e) ? `${s || ''}${e ? '–' + e : ''}` : '';
 
 /* 국가 딱지 — 국적과 거주지가 다를 때만 둘 다 보여준다. 같으면 한 번이면
    되고, 다를 때가 연사료·항공을 어느 쪽으로 할지 정해야 하는 경우다. */
-function countryChip(sp){
+export function countryChip(sp){
   const nat = sp.nationality, res = sp.residence_country;
   if(!nat && !res) return '';
   if(!nat || !res || nat === res){
@@ -218,7 +205,7 @@ function countryChip(sp){
 ══════════════════════════════════════════ */
 /* 일정 바뀐 연사 — 세션 시간·룸을 고치면 «알린 일정»과 달라진 연사가 생긴다.
    사람이 «누구에게 정정 메일을 보내야 하지»를 기억하지 않게 목록 위에 띄운다 */
-function schedAlertHtml(evKey, all){
+export function schedAlertHtml(evKey, all){
   const ch = all.filter(sp => (spFlowStatus(sp).steps.find(s => s.key === 'schedule') || {}).applies);
   if(!ch.length) return '';
   const names = ch.slice(0, 4).map(sp => sp.name_snapshot || sp.name_en || sp.id).join(', ') + (ch.length > 4 ? ` 외 ${ch.length - 4}명` : '');
@@ -235,7 +222,7 @@ export function renderConf(){
   const ttl = document.getElementById('conf-ttl');
   if(!body) return;
 
-  const ev = EVENT_LIST.find(e => e.key === confEvent);
+  const ev = EVENT_LIST.find(e => e.key === confUi.confEvent);
   if(ttl){
     ttl.innerHTML = `연사 <span class="tb-s">${ev ? escapeHtml(ev.short || ev.name || ev.key) : '행사를 고르세요'}</span>`;
   }
@@ -255,7 +242,7 @@ export function renderConf(){
 
   const segs = [['dash', '대시보드'], ['pga', 'Program at a Glance'], ['program', 'Program'], ['people', 'Speakers'], ['watch', '파일 감시']];
   const seg = `<div class="seg" style="margin:0 0 12px">
-    ${segs.map(([k, l]) => `<button class="seg-b${confView === k ? ' on' : ''}" onclick="setConfView('${k}')">${l}</button>`).join('')}
+    ${segs.map(([k, l]) => `<button class="seg-b${confUi.confView === k ? ' on' : ''}" onclick="setConfView('${k}')">${l}</button>`).join('')}
   </div>`;
 
   const banner = confLocked() ? `<div style="display:flex;align-items:center;gap:9px;margin:0 0 12px;
@@ -267,11 +254,11 @@ export function renderConf(){
      없다. 그 두 화면에서는 무엇을 쳐도 화면이 그대로여서 «검색이 안 된다»로
      보인다 — 검색어가 들어오면 연사 목록을 대신 보여준다. 보기 설정은 건드리지
      않아서, 검색어를 지우면 보던 화면으로 그대로 돌아온다(전시 탭과 같은 방식). */
-  const inner = (confView === 'people' || confQuery()) ? peopleHtml(ev)
-    : confView === 'dash' ? confDashHtml(ev)
-    : confView === 'pga' ? pgaHtml(ev)
-    : confView === 'watch' ? renderWatchView(ev.key, 'conf')
-    : programHtml(ev);
+  const inner = (confUi.confView === 'people' || window.confQuery()) ? window.peopleHtml(ev)
+    : confUi.confView === 'dash' ? confDashHtml(ev)
+    : confUi.confView === 'pga' ? window.pgaHtml(ev)
+    : confUi.confView === 'watch' ? renderWatchView(ev.key, 'conf')
+    : window.programHtml(ev);
   body.innerHTML = `<div style="padding:14px 16px 40px">${seg}${banner}`
     + (confLocked() ? `<div class="ro">${inner}</div>` : inner) + `</div>`;
 }
@@ -280,1772 +267,19 @@ const emptyBox = (msg) => `<div style="padding:40px 16px">
   <div style="max-width:560px;margin:0 auto;padding:20px;background:var(--i8);
     border:1px solid var(--i6);border-radius:10px;font-size:12.5px;color:var(--i5);line-height:1.7">${msg}</div></div>`;
 
-/* ══════════════════════════════════════════
-   프로그램 — 일자 → 세션 → 배정
-══════════════════════════════════════════ */
-/* 세션 종류 — 식사·휴식은 시간표에는 나가지만 연사를 배정하지 않는다.
-   회색으로 그려 발표 세션과 눈으로 갈라지게 한다. */
-/* 두 묶음으로만 가른다 — 세션(연사를 배정하고 집계에 넣는다)과 세션 아님.
-   세션 아닌 것은 식사·휴식 말고도 기념촬영·등록·이동처럼 끝없이 생긴다. 하나하나
-   종류를 만들면 매번 «이건 뭘로 고르지»가 되므로 «기타»로 받고 이름은 세션명에 적는다. */
-const SESSION_KINDS = [
-  { key: '',       label: '세션', pill: '세션' },
-  { key: 'break',  label: '커피 브레이크', pill: '휴식', ko: '커피 브레이크', en: 'Coffee Break' },
-  { key: 'lunch',  label: '런치',         pill: '식사', ko: '오찬',          en: 'Lunch' },
-  { key: 'dinner', label: '갈라 디너',     pill: '식사', ko: '갈라 디너',     en: 'Gala Dinner' },
-  { key: 'other',  label: '기타 (기념촬영·등록·이동 등)', pill: '세션 아님' },
-];
-export async function setSpeakerHidden(spId, on){
-  if(confLocked()){ confLockNotice(); return; }
-  const sp = getSpeakerById(spId);
-  if(!sp) return;
-  const backup = sp.hidden || '';
-  sp.hidden = on ? 'yes' : '';
-  renderConf();
-  window.renderSpeakerDr?.();
-  const res = await gSaveSpeaker({ id: spId, hidden: sp.hidden, updated_at: td() });
-  if(!res || res.ok === false){
-    sp.hidden = backup;
-    renderConf();
-    window.renderSpeakerDr?.();
-    if(!res?.locked) alert('저장에 실패했어요.');
-    return;
-  }
-  trackAction('edit', '연사 숨기기', confEvent, `${sp.name_snapshot || sp.name_en || spId} — ${on ? '숨김(받을 항목에서 뺌)' : '다시 보이기'}`);
-}
-export function toggleConfHidden(){ confShowHidden = !confShowHidden; renderConf(); }
-window.setSpeakerHidden = setSpeakerHidden;
-window.toggleConfHidden = toggleConfHidden;
-
-const kindOf = (k) => SESSION_KINDS.find(x => x.key === (k || '')) || SESSION_KINDS[0];
-const kindSelect = (id, cur, titleIds) => `<select class="fi" id="${id}"
-  onchange="fillSessionKind(this.value,'${titleIds[0]}','${titleIds[1]}')">
-  ${(() => {
-    const o = (k) => `<option value="${k.key}"${(cur || '') === k.key ? ' selected' : ''}>${escapeHtml(k.label)}</option>`;
-    return `<option value=""${!cur ? ' selected' : ''}>세션 — 연사 배정·집계에 넣음</option>
-      <optgroup label="세션 아님 — 회색, 배정·집계에서 뺌">${SESSION_KINDS.filter(k => k.key).map(o).join('')}</optgroup>`;
-  })()}
-</select>`;
-/* 종류를 고르면 세션명이 비어 있을 때만 채운다 — 적어 둔 이름(«환영 오찬»)을 덮지 않는다 */
-export function fillSessionKind(k, koId, enId){
-  const d = kindOf(k);
-  const ko = document.getElementById(koId), en = document.getElementById(enId);
-  const known = (v) => !v || SESSION_KINDS.some(x => x.ko === v || x.en === v);
-  if(ko && known(ko.value.trim())) ko.value = d.ko || '';
-  if(en && known(en.value.trim())) en.value = d.en || '';
-}
-
-function programHtml(ev){
-  const cfg = confCfg(ev.key);
-  const days = confDays(ev.key);
-  const sessions = sessionsForEvent(ev.key);
-
-  /* 설정에 없는 날짜에 세션이 있으면 그 날도 보여준다 — 설정을 고친 뒤에도
-     이미 만든 세션이 화면에서 사라지지 않게. */
-  const extra = [...new Set(sessions.map(s => s.date).filter(d => d && !days.includes(d)))];
-  const allDays = [...days, ...extra].sort();
-  const noDate = sessions.filter(s => !s.date);
-
-  const totalAssigned = sessions.reduce((n, s) => n + assignmentsOfSession(s.id).length, 0);
-
-  const head = `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px">
-    <div style="font-size:11.5px;color:var(--i5)">
-      세션 <b>${sessions.length}</b>건 · 배정 <b>${totalAssigned}</b>건 · 연사 <b>${speakersForEvent(ev.key).length}</b>명
-    </div>
-    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-      ${importBtns()}
-      <button class="btn" style="font-size:11px" onclick="toggleNewSession()">${confNewSession ? '닫기' : '+ 세션 만들기'}</button>
-    </div>
-  </div>`;
-
-  const form = confNewSession ? newSessionHtml(ev, allDays, cfg) : '';
-
-  if(!sessions.length){
-    return head + form + `<div style="padding:22px;background:var(--i8);border:1px solid var(--i6);
-      border-radius:10px;font-size:12px;color:var(--i5);line-height:1.7">
-      아직 세션이 없어요. 세션을 만들고 사람을 배정해 역할을 정하면,
-      역할에 따라 <b>무엇을 받아야 하는지</b>가 «연사» 화면에서 자동으로 잡혀요.
-      ${days.length ? '' : '<br>발표 일자가 없네요 — 설정 › 행사 관리 › 컨퍼런스에서 일자를 먼저 정하면 고르기 쉬워요.'}
-      <br><br>엑셀로 짜 둔 프로그램이 있으면 위의 <b>양식 받기</b>로 받아 채운 뒤 <b>엑셀 올리기</b>로 한 번에 넣으세요.
-    </div>`;
-  }
-
-  const dayBlock = (d, list) => `<div style="margin-bottom:18px">
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
-      <div style="font-size:12px;font-weight:600">${escapeHtml(dayLabel(d))}</div>
-      <div style="font-size:10.5px;color:var(--i4)">세션 ${list.length}</div>
-    </div>
-    ${list.length ? list.map(s => sessionCard(ev, s, allDays, cfg)).join('')
-      : `<div style="font-size:11px;color:var(--i4);padding:8px 2px">이 날은 세션이 없어요</div>`}
-  </div>`;
-
-  return head + form
-    + allDays.map(d => dayBlock(d, sessions.filter(s => s.date === d))).join('')
-    + (noDate.length ? dayBlock('', noDate) : '');
-}
-
-function newSessionHtml(ev, days, cfg){
-  const slots = cfg.slots || [];
-  const tracks = trackOptions(ev.key);
-  const roomList = roomOptions(ev.key);
-  return `<div style="margin-bottom:16px;padding:12px;background:var(--i8);border:1px solid var(--i6);border-radius:10px">
-    <div style="font-size:11px;font-weight:600;margin-bottom:8px">세션 만들기</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px">
-      <div><div class="fl">종류</div>${kindSelect('ns-kind', '', ['ns-ko', 'ns-en'])}</div>
-      <div><div class="fl">일자</div>
-        <select class="fi" id="ns-date">
-          <option value="">미정</option>
-          ${days.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('')}
-        </select></div>
-      <div><div class="fl">시간대</div>
-        <select class="fi" id="ns-slot" onchange="fillSessionSlot(this.value)">
-          <option value="">직접 입력</option>
-          ${slots.map((s, i) => `<option value="${i}">${escapeHtml(`${s.start}–${s.end}${s.label ? ' ' + s.label : ''}`)}</option>`).join('')}
-        </select></div>
-      <div><div class="fl">시작</div><input class="fi" id="ns-start" type="time"></div>
-      <div><div class="fl">종료</div><input class="fi" id="ns-end" type="time"></div>
-      <div><div class="fl">트랙</div>
-        ${tracks.length
-          ? `<select class="fi" id="ns-track"><option value="">없음</option>
-              ${tracks.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')}</select>`
-          : `<input class="fi" id="ns-track" placeholder="트랙">`}</div>
-      <div><div class="fl">장소</div>
-        ${roomList.length
-          ? `<select class="fi" id="ns-room"><option value="">없음</option>
-              ${roomList.map(r => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`).join('')}</select>`
-          : `<input class="fi" id="ns-room" placeholder="회의실">`}</div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
-      <div><div class="fl">세션명 (국문)</div><input class="fi" id="ns-ko" placeholder="세션명"></div>
-      <div><div class="fl">세션명 (영문)</div><input class="fi" id="ns-en" placeholder="Session title"></div>
-    </div>
-    <div style="margin-top:9px;display:flex;gap:7px;align-items:center">
-      <button class="btn bp" style="font-size:11px" onclick="addConfSession()">만들기</button>
-      <span style="font-size:10.5px;color:var(--i4)">시간대를 고르면 시작·종료가 채워져요</span>
-    </div>
-  </div>`;
-}
-
-function sessionCard(ev, s, days, cfg){
-  /* 순서는 seq 하나로 정한다(assignmentsOfSession이 seq로 세운다).
-     전에는 시간이 있으면 시간 순으로 세웠는데, 그러면 사람이 끌어다 옮겨도
-     시간이 도로 끌고 가 버린다 — 순서를 정하는 주인이 둘일 수는 없다.
-     시간이 순서와 어긋나면 아래에서 경고로 알린다. */
-  const asg = assignmentsOfSession(s.id);
-  const open = confOpenSession === s.id;
-  const editing = confEditSession === s.id;
-  const meta = [timeLabel(s.start_at, s.end_at), s.track, s.room].filter(Boolean).join(' · ');
-
-  /* 발표 시간이 세션 밖으로 나가면 알려 준다. 막지는 않는다 — 세션 시간을
-     아직 안 고쳤을 수도 있고, 막으면 둘 중 무엇을 먼저 고쳐야 하는지
-     사람이 판단할 수가 없다. */
-  const outOfSession = (a) => {
-    if(!a.start_at || !s.start_at || !s.end_at) return '';
-    if(a.start_at < s.start_at) return '세션 시작보다 이릅니다';
-    if((a.end_at || a.start_at) > s.end_at) return '세션 종료보다 늦습니다';
-    return '';
-  };
-
-  /* 공동 발표 고르기 — 같은 세션에서 발제를 받는 다른 줄 중 하나를 주 발표자로 */
-  const talkRows = asg.filter(x => speakerNeedList(ev.key, x.role).some(n => n.key === 'title'));
-  const coPick = (a) => {
-    if(talkRows.length < 2 || !talkRows.includes(a)) return '';
-    const mine = coOf(a);
-    if(mine.length) return `<span class="pill p-blue" style="font-size:9.5px" title="이 발표를 함께 하는 사람">공동 ${mine.length + 1}명</span>`;
-    const opts = talkRows.filter(x => x !== a && leadOf(x) === x);
-    if(!opts.length) return '';
-    return `<select class="fi" style="width:118px;font-size:10.5px;padding:3px 5px"
-      title="발표 시간 하나·자료 하나를 나눠 맡을 때 — 상대의 시간·발제·자료를 같이 씁니다"
-      onchange="setCoLead('${escAttr(a.id)}',this.value)">
-      <option value=""${!a.lead_id ? ' selected' : ''}>단독 발표</option>
-      ${opts.map(x => `<option value="${escapeHtml(x.id)}"${a.lead_id === x.id ? ' selected' : ''}>${escapeHtml(speakerName(x.speaker_id))}와 공동</option>`).join('')}
-    </select>`;
-  };
-
-  const asgRow = (a, idx) => {
-    const needsTalk = speakerNeedList(ev.key, a.role).some(n => n.key === 'title');
-    /* 공동 연사 줄은 시간·발제를 주 발표자 줄에서 읽는다 — 따로 적지 않는다 */
-    const lead = leadOf(a);
-    const isCo = lead !== a;
-    const warn = isCo ? '' : outOfSession(a);
-    /* 앞 사람이 끝나기 전에 시작하면 겹친다 — 같은 무대에 둘이 설 수는 없다.
-       공동 연사 줄은 앞사람과 같은 시간이므로 견주지 않고, 견줄 때도 건너뛴다 */
-    const prev = isCo ? null : asg.slice(0, idx).reverse().find(x => leadOf(x) === x) || null;
-    const overlap = prev && prev.end_at && a.start_at && a.start_at < prev.end_at;
-    /* 순서는 끌어서 정하고 시간은 따로 적으니 둘이 어긋날 수 있다.
-       어느 쪽이 맞는지는 우리가 모른다 — 어긋났다는 사실만 알린다. */
-    const outOfOrder = !overlap && prev && prev.start_at && a.start_at && a.start_at < prev.start_at;
-    return `<div class="asg-row" style="padding:6px 0;border-top:1px solid var(--i6)"
-      draggable="true" ondragstart="onAsgDragStart(event,'${escAttr(a.id)}')" ondragend="onAsgDragEnd()"
-      ondragover="onAsgDragOver(event,this)" ondragleave="onAsgDragLeave(this)"
-      ondrop="onAsgDrop(event,'${escAttr(a.id)}',this)">
-      <div style="display:flex;align-items:center;gap:8px">
-      <span style="cursor:grab;color:var(--i5);font-size:12px;line-height:1;user-select:none"
-        title="끌어서 순서를 바꿉니다">⠿</span>
-      <span class="pill ${roleCls(a.role)}" style="font-size:10px">${escapeHtml(roleLabel(a) || '역할 없음')}</span>
-      <div style="flex:1;min-width:0">
-        <div><span onclick="openSpeakerDr('${escAttr(a.speaker_id)}')" style="font-size:12px;cursor:pointer;color:var(--a)">${escapeHtml(speakerName(a.speaker_id))}</span>
-          ${!isCo && a.start_at ? `<span style="font-size:10.5px;color:var(--i3);margin-left:6px">${
-            escapeHtml(timeLabel(a.start_at, a.end_at))}</span>` : ''}</div>
-        ${isCo
-          ? `<div style="font-size:10.5px;color:var(--i4)">↳ ${escapeHtml(speakerName(lead.speaker_id))}와 같은 발표</div>`
-          : needsTalk
-          ? `<div style="font-size:10.5px;color:${a.title_ko || a.title_en ? 'var(--i5)' : 'var(--i4)'}">
-              ${escapeHtml(a.title_ko || a.title_en || '발제명 아직 없음')}</div>`
-          : ''}
-      </div>
-      ${coPick(a)}
-      <select class="fi" style="width:82px;font-size:10.5px;padding:3px 5px"
-        onchange="setAssignRole('${escAttr(a.id)}',this.value)">
-        ${SPEAKER_ROLES.map(r => `<option value="${escapeHtml(r.key)}"${a.role === r.key ? ' selected' : ''}>${escapeHtml(r.label)}</option>`).join('')}
-      </select>
-      <button class="btn" style="font-size:10.5px" onclick="removeAssign('${escAttr(a.id)}')">해제</button>
-      </div>
-      ${isCo ? '' : `<div style="display:flex;align-items:center;gap:6px;margin-top:4px;padding-left:2px;flex-wrap:wrap">
-        <span style="font-size:10px;color:var(--i4);flex:0 0 auto">발표</span>
-        <input class="fi" type="time" style="width:96px;font-size:10.5px;padding:2px 5px"
-          value="${escapeHtml(a.start_at || '')}" onchange="setTalkTime('${escAttr(a.id)}','start_at',this.value)">
-        <span style="font-size:10px;color:var(--i4)">–</span>
-        <input class="fi" type="time" style="width:96px;font-size:10.5px;padding:2px 5px"
-          value="${escapeHtml(a.end_at || '')}" onchange="setTalkTime('${escAttr(a.id)}','end_at',this.value)">
-        <input class="fi" type="text" style="width:58px;font-size:10.5px;padding:2px 5px"
-          placeholder="분" value="${escapeHtml(a.duration_min || '')}"
-          onchange="setTalkTime('${escAttr(a.id)}','duration_min',this.value)"
-          title="분만 적어 두면 «시간 자동 배분»이 이 길이로 이어 붙입니다">
-        ${warn ? `<span style="font-size:10px;color:var(--am)">⚠ ${escapeHtml(warn)}</span>` : ''}
-        ${overlap ? `<span style="font-size:10px;color:var(--re)">⚠ 앞 발표와 겹쳐요</span>` : ''}
-        ${outOfOrder ? `<span style="font-size:10px;color:var(--am)">⚠ 앞 사람보다 이른 시각이에요 — 순서나 시간 중 하나를 고쳐주세요</span>` : ''}
-      </div>`}
-    </div>`;
-  };
-
-  const brk = isBreak(s);
-  return `<div style="border:1px solid var(--i6);border-radius:9px;padding:10px 12px;margin-bottom:8px;
-    background:${brk ? 'var(--i8)' : 'var(--W)'}">
-    <div style="display:flex;align-items:flex-start;gap:9px">
-      <div style="flex:1;min-width:0">
-        <div style="font-size:12.5px;font-weight:600${brk ? ';color:var(--i4)' : ''}">${
-          brk ? `<span class="pill p-gray" style="font-size:9px;margin-right:5px">${escapeHtml(s.kind ? (kindOf(s.kind).pill || '세션 아님') : '세션 아님')}</span>` : ''}${
-          escapeHtml(s.title_ko || s.title_en || '(세션명 없음)')}</div>
-        ${s.title_ko && s.title_en ? `<div style="font-size:10.5px;color:var(--i4)">${escapeHtml(s.title_en)}</div>` : ''}
-        ${meta ? `<div style="font-size:10.5px;color:var(--i5);margin-top:2px">${escapeHtml(meta)}</div>` : ''}
-      </div>
-      <div style="display:flex;gap:5px;flex-shrink:0">
-        ${!brk && asg.length && s.start_at ? `<button class="btn" style="font-size:10.5px"
-          onclick="autoTalkTimes('${escAttr(s.id)}')" title="세션 시작부터 각 발표의 «분»만큼 이어 붙입니다">시간 배분</button>` : ''}
-        <button class="btn" style="font-size:10.5px" onclick="toggleEditSession('${escAttr(s.id)}')">${editing ? '닫기' : '수정'}</button>
-        ${brk && !asg.length ? '' : `<button class="btn" style="font-size:10.5px" onclick="toggleAssign('${escAttr(s.id)}')">${open ? '닫기' : `배정 ${asg.length}`}</button>`}
-        <button class="btn" style="font-size:10.5px" onclick="removeConfSession('${escAttr(s.id)}')">삭제</button>
-      </div>
-    </div>
-    ${editing ? editSessionHtml(s, days, cfg) : ''}
-    ${asg.length ? `<div style="margin-top:6px">${asg.map((a, i) => asgRow(a, i)).join('')}</div>` : ''}
-    ${open ? assignFormHtml(ev, s) : ''}
-  </div>`;
-}
-
-/* 세션 수정 칸 — 만들 때와 같은 칸을 같은 순서로 둔다. 같은 값을 두 가지
-   모양으로 적게 하면 어디를 고쳐야 하는지 매번 다시 찾게 된다.
-   칸 id에 세션 id를 붙인다 — 한 화면에 여러 세션의 칸이 동시에 열릴 수 있다. */
-/* 트랙·장소 후보 — 설정에 적은 것과 세션들이 실제로 쓰는 것을 합친다.
-
-   전에는 설정만 봤다. 그런데 엑셀로 올린 프로그램은 트랙이 세션에만 있고
-   설정에는 없어서, 고르는 목록이 비고 칸이 자유 입력으로 바뀌었다. 그러면
-   «임상개발 6»을 한 글자도 틀리지 않게 타이핑해야 하고, 틀리면 새 트랙이
-   되어 색이 따로 잡힌다 — 색이 안 붙는 세션이 생긴 경로가 이것이다. */
-function trackOptions(evKey, own){
-  const set = new Set(confCfg(evKey).tracks || []);
-  sessionsForEvent(evKey).forEach(x => { if(x.track) set.add(x.track); });
-  if(own) set.add(own);
-  return [...set];
-}
-function roomOptions(evKey, own){
-  const set = new Set(confCfg(evKey).rooms || []);
-  sessionsForEvent(evKey).forEach(x => { if(x.room) set.add(x.room); });
-  if(own) set.add(own);
-  return [...set];
-}
-
-function editSessionHtml(s, days, cfg){
-  const slots = cfg.slots || [];
-  const i = (k) => `es-${s.id}-${k}`;
-  /* 설정에서 지운 트랙·일자가 이 세션에는 남아 있을 수 있다 — 목록에 없다고
-     조용히 «없음»으로 바뀌면 저장하는 순간 값이 날아간다. */
-  const trackList = trackOptions(confEvent, s.track);
-  const roomList = roomOptions(confEvent, s.room);
-  const dayList = s.date && !days.includes(s.date) ? [...days, s.date].sort() : days;
-
-  return `<div style="margin-top:9px;padding:10px;background:var(--i8);border-radius:8px">
-    <div style="font-size:11px;font-weight:600;margin-bottom:7px">세션 고치기</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:7px">
-      <div><div class="fl">종류</div>${kindSelect(i('kind'), s.kind, [i('ko'), i('en')])}</div>
-      <div><div class="fl">일자</div>
-        <select class="fi" id="${i('date')}">
-          <option value=""${!s.date ? ' selected' : ''}>미정</option>
-          ${dayList.map(d => `<option value="${escapeHtml(d)}"${s.date === d ? ' selected' : ''}>${escapeHtml(d)}</option>`).join('')}
-        </select></div>
-      <div><div class="fl">시간대</div>
-        <select class="fi" id="${i('slot')}" onchange="fillEditSlot('${escAttr(s.id)}',this.value)">
-          <option value="">직접 입력</option>
-          ${slots.map((sl, k) => `<option value="${k}">${escapeHtml(`${sl.start}–${sl.end}${sl.label ? ' ' + sl.label : ''}`)}</option>`).join('')}
-        </select></div>
-      <div><div class="fl">시작</div><input class="fi" id="${i('start')}" type="time" value="${escapeHtml(s.start_at || '')}"></div>
-      <div><div class="fl">종료</div><input class="fi" id="${i('end')}" type="time" value="${escapeHtml(s.end_at || '')}"></div>
-      <div><div class="fl">트랙</div>
-        ${trackList.length
-          ? `<select class="fi" id="${i('track')}"><option value=""${!s.track ? ' selected' : ''}>없음</option>
-              ${trackList.map(t => `<option value="${escapeHtml(t)}"${s.track === t ? ' selected' : ''}>${escapeHtml(t)}</option>`).join('')}</select>`
-          : `<input class="fi" id="${i('track')}" value="${escapeHtml(s.track || '')}" placeholder="트랙">`}</div>
-      <div><div class="fl">장소</div>
-        ${roomList.length
-          ? `<select class="fi" id="${i('room')}"><option value=""${!s.room ? ' selected' : ''}>없음</option>
-              ${roomList.map(r => `<option value="${escapeHtml(r)}"${s.room === r ? ' selected' : ''}>${escapeHtml(r)}</option>`).join('')}</select>`
-          : `<input class="fi" id="${i('room')}" value="${escapeHtml(s.room || '')}" placeholder="회의실">`}</div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:7px">
-      <div><div class="fl">세션명 (국문)</div><input class="fi" id="${i('ko')}" value="${escapeHtml(s.title_ko || '')}"></div>
-      <div><div class="fl">세션명 (영문)</div><input class="fi" id="${i('en')}" value="${escapeHtml(s.title_en || '')}"></div>
-    </div>
-    <div style="margin-top:7px"><div class="fl">메모</div>
-      <textarea class="fi" id="${i('note')}" rows="2" style="resize:vertical">${escapeHtml(s.note || '')}</textarea></div>
-    <div style="margin-top:8px;display:flex;gap:7px;align-items:center">
-      <button class="btn bp" style="font-size:11px" onclick="saveSessionEdit('${escAttr(s.id)}')">저장</button>
-      <button class="btn" style="font-size:11px" onclick="toggleEditSession('${escAttr(s.id)}')">취소</button>
-      <span id="es-msg-${escAttr(s.id)}" style="font-size:10.5px;color:var(--i4)"></span>
-    </div>
-  </div>`;
-}
-
-/* 배정 칸 — 이미 있는 연사에서 고르거나, 이름을 적어 새로 만든다.
-   전시 참가기업 임원이 발표하는 일이 흔하니 이름 적기를 막지 않는다. */
-function assignFormHtml(ev, s){
-  /* 이미 이 세션에 들어간 사람도 후보에 남긴다 — 한 사람이 좌장이면서
-     발표도 하는 일이 있고, 그때 역할이 둘이어야 «받을 것»이 합쳐진다.
-     막아야 하는 건 같은 역할의 중복뿐이고 그건 배정할 때 걸러진다. */
-  const here = assignmentsOfSession(s.id);
-  const pool = speakersForEvent(ev.key)
-    .map(sp => ({ sp, roles: here.filter(a => a.speaker_id === sp.id).map(a => a.role) }))
-    .sort((a, b) => String(a.sp.name_snapshot || a.sp.name_en || '').localeCompare(String(b.sp.name_snapshot || b.sp.name_en || ''), 'ko'));
-  return `<div style="margin-top:9px;padding:10px;background:var(--i8);border-radius:8px">
-    <div style="font-size:11px;font-weight:600;margin-bottom:7px">사람 배정</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:7px">
-      <div><div class="fl">이 행사의 연사</div>
-        <select class="fi" id="as-pick">
-          <option value="">새로 적기</option>
-          ${pool.map(({ sp, roles }) => `<option value="${escapeHtml(sp.id)}">${escapeHtml(sp.name_snapshot || sp.name_en || sp.id)}${roles.length ? ` (이 세션 ${roles.join('·')})` : ''}</option>`).join('')}
-        </select></div>
-      <div><div class="fl">이름 (새로 적을 때)</div><input class="fi" id="as-name" placeholder="성명"></div>
-      <div><div class="fl">역할</div>
-        <select class="fi" id="as-role">
-          ${SPEAKER_ROLES.map(r => `<option value="${escapeHtml(r.key)}">${escapeHtml(r.label)}</option>`).join('')}
-        </select></div>
-      <div><div class="fl">자리</div>
-        <select class="fi" id="as-at">
-          <option value="">맨 뒤</option>
-          ${here.map((x, k) => `<option value="${k}">${k + 1}번째 — ${escapeHtml(speakerName(x.speaker_id))} 앞</option>`).join('')}
-        </select></div>
-    </div>
-    <div style="margin-top:8px;display:flex;gap:7px;align-items:center">
-      <button class="btn bp" style="font-size:11px" onclick="addAssign('${escAttr(s.id)}')">배정</button>
-      <span style="font-size:10.5px;color:var(--i4)">역할을 정하면 받을 것이 정해져요</span>
-    </div>
-  </div>`;
-}
-
-
-/* ══════════════════════════════════════════
-   PROGRAM AT A GLANCE — 프로그램표
-
-   프로그램북 앞에 늘 들어가는 한 장이다. 가로는 장소, 세로는 일자와 시간,
-   칸은 트랙 색으로 묶인 세션. 참가자는 이 한 장으로 «내가 갈 세션이 언제
-   어디서 열리는지»를 정한다.
-
-   우리가 따로 적어 넣는 게 아니라 세션 데이터에서 그대로 만든다 — 프로그램을
-   고치고 나서 이 표를 다시 그리는 일을 사람이 하면, 둘은 반드시 어긋난다.
-   실제로 프로그램북의 표와 현장 안내가 다른 사고는 거기서 난다.
-
-   장소가 없는 세션(개막식·기조연설처럼 전체가 모이는 것)은 한 줄을 통째로
-   쓴다. 첨부한 프로그램북도 개막식을 그렇게 뽑았다.
-══════════════════════════════════════════ */
-
-/* 트랙 색은 track-colors.js가 정한다 — 설정 화면과 프로그램표가 같은 값을
-   봐야 «설정에서 본 색»과 «표의 색»이 같다. */
-const trackColor = (evKey, track) => trackColorOf(confCfg(evKey), track);
-
-/* 올리기 단추 — 표 화면과 프로그램 화면이 같이 쓴다.
-   처음 열리는 화면에 없으면 탭을 옮겨야 보이고, 그러면 «어디서 올리지»가
-   된다. 실제로 그 말을 들었다. */
-function importBtns(){
-  return `<span id="conf-import-msg" style="font-size:10.5px;color:var(--i4)"></span>
-    <button class="btn" style="font-size:11px" onclick="downloadConfTemplate()"
-      title="세션·연사·배정 세 시트로 된 빈 양식을 받습니다">양식 받기</button>
-    <button class="btn" style="font-size:11px" onclick="pickConfFile()"
-      title="채운 양식을 올립니다 — 기존 것을 지우지 않고 더하거나 고칩니다">엑셀 올리기</button>
-    <input type="file" id="conf-xlsx-input" accept=".xlsx,.xls" style="display:none"
-      onchange="handleConfFile(event)">`;
-}
-
-/* 프로그램표의 연사 줄.
-
-   이름만 늘어놓으면 «누가 나오나»는 알아도 «무엇을 하나»는 모른다. 표를
-   보는 사람이 다음으로 묻는 것이 그거다 — 좌장이 누구고, 어느 발표가 몇
-   시고, 발제명이 무엇인지. 배정 순서대로 적고 역할과 시각을 함께 둔다.
-
-   발제명이 있으면 이름 아래 붙인다. 프로그램북의 세션 면이 정확히 이
-   모양이라, 여기서 보이는 그대로 옮겨 쓸 수 있어야 한다. */
-function pgaSpeakers(ss, opts){
-  const asg = assignmentsOfSession(ss.id);
-  if(!asg.length) return '';
-  const compact = opts && opts.compact;
-
-  /* 시각을 맨 앞 한 줄로 세운다. 프로그램표에서 눈이 먼저 찾는 건 «몇 시»고,
-     그게 줄 끝에 있으면 발표마다 다른 자리에 있어 훑을 수가 없다.
-     그 옆이 발제명 — 무엇을 하는지가 다음 질문이다.
-     사람은 그 아래 — 누가 하는지는 무엇을 하는지 다음에 온다. */
-  return `<div style="margin-top:5px;border-top:1px solid var(--i7);padding-top:4px">
-    ${asg.map(a => {
-      const sp = getSpeakerById(a.speaker_id);
-      const nm = speakerName(a.speaker_id);
-      const org = sp ? (sp.org_ko || sp.org_en || '') : '';
-      const jobTitle = sp ? (sp.title_ko || sp.title_en || '') : '';
-      /* 발제명은 국·영문을 함께 보여준다. 프로그램북이 둘 다 싣고, 우리가
-         고르면 어느 쪽이 빠졌는지 화면에서 알 수 없다 — 하나만 있으면
-         그것만 나온다. */
-      /* 공동연사 줄은 주 발표자 줄 아래 이름만 — 시각·발제명은 위 줄에 이미 있다 */
-      const isCo = leadOf(a) !== a;
-      const titleKo = isCo ? '' : (a.title_ko || '');
-      const titleEn = isCo ? '' : (a.title_en || '');
-      const title = titleKo || titleEn;
-      const when = !isCo && a.start_at ? timeLabel(a.start_at, a.end_at) : '';
-      const roleC = (SPEAKER_ROLES.find(r => r.key === a.role) || {}).cls || 'p-gray';
-
-      const person = `<span class="pill ${roleC}" style="font-size:8.5px;padding:1px 4px;vertical-align:1px">${
-          escapeHtml(roleLabel(a))}</span>
-        <span style="color:var(--i2)"> ${escapeHtml(nm)}</span>${
-        (sp && sp.name_snapshot && sp.name_en)
-          ? `<span style="color:var(--i4)"> ${escapeHtml(sp.name_en)}</span>` : ''}${
-        jobTitle ? `<span style="color:var(--i4)"> · ${escapeHtml(jobTitle)}</span>` : ''}${
-        org ? `<span style="color:var(--i4)"> · ${escapeHtml(org)}</span>` : ''}`;
-
-      return `<div style="display:flex;gap:7px;margin-top:4px">
-        <div style="flex:0 0 auto;min-width:62px;font-size:9.5px;color:var(--i3);
-          line-height:1.5;white-space:nowrap;font-variant-numeric:tabular-nums">${escapeHtml(when)}</div>
-        <div style="min-width:0;flex:1">
-          ${title && !compact
-            ? `<div style="font-size:11.5px;font-weight:600;color:var(--i1);line-height:1.4">${
-                 escapeHtml(titleKo || titleEn)}</div>
-               ${titleKo && titleEn
-                 ? `<div style="font-size:10px;color:var(--i3);line-height:1.4">${escapeHtml(titleEn)}</div>` : ''}
-               <div style="font-size:9.5px;line-height:1.4;margin-top:1px">${person}</div>`
-            : `<div style="font-size:9.5px;line-height:1.4">${person}</div>`}
-        </div>
-      </div>`;
-    }).join('')}
-  </div>`;
-}
-
-function pgaHtml(ev){
-  const sessions = sessionsForEvent(ev.key);
-  if(!sessions.length){
-    /* 올리기 단추를 함께 그린다 — 세션이 하나도 없을 때가 곧 엑셀로 한꺼번에
-       올리는 때다. 안내에 «위의 양식 받기»라고 적어 놓고 단추가 없으면
-       그게 제일 나쁘다. */
-    return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
-        <div style="font-size:12.5px;font-weight:700">Program at a Glance</div>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto">${importBtns()}</div>
-      </div>
-      <div style="padding:22px;background:var(--i8);border:1px solid var(--i6);border-radius:10px;
-      font-size:12px;color:var(--i5);line-height:1.7">
-      세션이 없어요. 위의 <b>양식 받기</b>로 엑셀 양식을 받아 채운 뒤 <b>엑셀 올리기</b>로
-      한 번에 넣거나, <b>Program</b> 탭에서 하나씩 만드세요.<br>
-      표는 세션의 <b>일자 · 시각 · 장소 · 트랙</b>으로 그려져요 — 장소를 안 적은 세션은
-      개막식처럼 한 줄을 통째로 씁니다.</div>`;
-  }
-
-  /* 가로축은 장소. 세션에 실제로 적힌 장소만 세운다 — 설정에 있는 방까지
-     세우면 쓰지도 않는 빈 칸이 표의 절반을 차지한다. */
-  /* 장소 순서는 설정에 적은 순서를 그대로 쓴다 — 어디가 메인 공간인지는
-     이름에서 나오지 않는다(코사이어티는 HALL C가 메인이고 B가 서브다).
-     설정에 없는 장소는 뒤에 붙이되 이름순으로 세운다. 숫자를 숫자로 읽어야
-     «10호»가 «9호» 뒤에 온다. */
-  const used = [...new Set(sessions.map(x => x.room).filter(Boolean))];
-  const order = confCfg(ev.key).rooms || [];
-  const rooms = [
-    ...order.filter(r => used.includes(r)),
-    ...used.filter(r => !order.includes(r))
-      .sort((a, b) => String(a).localeCompare(String(b), 'ko', { numeric: true })),
-  ];
-  const days = [...new Set(sessions.map(x => x.date || ''))].sort();
-  const noRoomOnly = !rooms.length;
-
-  /* 식사·휴식 칸 — 트랙 색 없이 회색 한 칸 */
-  const breakCell = (ss) => `<div onclick="openPgaSession('${escAttr(ss.id)}')"
-    title="${escapeHtml([ss.title_ko, ss.title_en, timeLabel(ss.start_at, ss.end_at), ss.room].filter(Boolean).join(' · '))}"
-    style="cursor:pointer;background:var(--i7);border:1px solid var(--i6);border-radius:4px;padding:7px;
-    text-align:center;margin-bottom:5px;color:var(--i4)">
-    <div style="font-size:11px;font-weight:600">${escapeHtml(ss.title_ko || ss.title_en || kindOf(ss.kind).pill || '')}</div>
-    ${ss.title_ko && ss.title_en ? `<div style="font-size:9.5px;margin-top:1px">${escapeHtml(ss.title_en)}</div>` : ''}
-  </div>`;
-
-  const cell = (ss) => {
-    if(isBreak(ss)) return breakCell(ss);
-    const c = trackColor(ev.key, ss.track);
-    return `<div onclick="openPgaSession('${escAttr(ss.id)}')" title="${escapeHtml(
-        [ss.title_ko, ss.title_en, timeLabel(ss.start_at, ss.end_at), ss.room].filter(Boolean).join(' · '))}"
-      style="cursor:pointer;border:1px solid ${c.bd}33;border-radius:4px;overflow:hidden;margin-bottom:5px">
-      ${ss.track ? `<div style="background:${c.bg};border-left:3px solid ${c.bd};padding:3px 6px;
-        font-size:10.5px;font-weight:700;color:var(--i1)">${escapeHtml(ss.track)}</div>` : ''}
-      <div style="padding:6px 7px 8px;background:var(--W);overflow-wrap:anywhere">
-        <div style="font-size:11px;line-height:1.45;color:var(--i1)">${escapeHtml(ss.title_ko || ss.title_en || '(세션명 없음)')}</div>
-        ${ss.title_ko && ss.title_en ? `<div style="font-size:9.5px;color:var(--i4);line-height:1.4;margin-top:2px">${escapeHtml(ss.title_en)}</div>` : ''}
-        ${pgaSpeakers(ss)}
-      </div>
-    </div>`;
-  };
-
-  /* 한 줄을 통째로 쓰는 세션 — 장소를 안 적은 것. 개막식·오찬처럼 전체가
-     한자리에 모이는 일들이다. */
-  const wideCell = (ss) => {
-    if(isBreak(ss)) return breakCell(ss);
-    const c = trackColor(ev.key, ss.track);
-    return `<div onclick="openPgaSession('${escAttr(ss.id)}')" title="${escapeHtml(ss.title_en || '')}"
-      style="cursor:pointer;background:${ss.track ? c.bg : 'var(--i8)'};border:1px solid ${ss.track ? c.bd + '55' : 'var(--i6)'};
-      border-radius:4px;padding:9px;text-align:center;margin-bottom:5px">
-      <div style="font-size:11.5px;font-weight:600">${escapeHtml(ss.title_ko || ss.title_en || '(세션명 없음)')}</div>
-      ${ss.title_en && ss.title_ko ? `<div style="font-size:9.5px;color:var(--i4);margin-top:2px">${escapeHtml(ss.title_en)}</div>` : ''}
-      ${(() => {
-        /* 연사 항목은 장소가 있는 세션과 똑같이(시각·역할 배지·소속) 그린다.
-           제목은 가운데지만 연사 줄은 왼쪽 정렬해야 시각 열이 맞는다. */
-        const sp = pgaSpeakers(ss);
-        return sp ? `<div style="text-align:left;margin-top:6px;padding-top:4px;
-          border-top:1px solid var(--i6)">${sp}</div>` : '';
-      })()}
-    </div>`;
-  };
-
-  const dayBlock = (d) => {
-    const mine = sessions.filter(x => (x.date || '') === d);
-    /* 세로는 시간대. 같은 시각에 시작하는 것이 한 줄이 된다 —
-       시각을 안 적은 세션은 맨 아래에 «시간 미정» 줄로 모은다. */
-    const slots = [...new Set(mine.map(x => x.start_at || ''))]
-      .sort((a, b) => (a ? 0 : 1) - (b ? 0 : 1) || a.localeCompare(b));
-
-    const rowFor = (slot) => {
-      const here = mine.filter(x => (x.start_at || '') === slot);
-      const wide = here.filter(x => !x.room);
-      const placed = here.filter(x => x.room);
-      const timeCol = `<td style="vertical-align:top;padding:7px 8px;font-size:10.5px;color:var(--i3);
-        white-space:nowrap;border-top:1px solid var(--i6)">${slot ? escapeHtml(timeLabel(slot,
-          // 그 시간대에서 가장 늦게 끝나는 것으로 폭을 적는다
-          here.map(x => x.end_at).filter(Boolean).sort().slice(-1)[0] || ''))
-          : '<span style="color:var(--i4)">시간 미정</span>'}</td>`;
-      const wideRow = wide.length
-        ? `<tr>${timeCol}<td colspan="${Math.max(1, rooms.length)}" style="padding:7px 8px;border-top:1px solid var(--i6)">
-            ${wide.map(wideCell).join('')}</td></tr>`
-        : '';
-      const placedRow = placed.length || !wide.length
-        ? `<tr>${wide.length ? `<td style="border-top:1px solid var(--i6)"></td>` : timeCol}
-            ${(rooms.length ? rooms : ['']).map(rm => `<td style="vertical-align:top;padding:7px 8px;
-              border-top:1px solid var(--i6);border-left:1px solid var(--i7)">
-              ${placed.filter(x => (x.room || '') === rm).map(cell).join('') || ''}</td>`).join('')}
-          </tr>`
-        : '';
-      return wideRow + placedRow;
-    };
-
-    return `<tr><td colspan="${rooms.length + 1}" style="padding:9px 8px 3px;background:var(--i8);
-        border-top:1px solid var(--i6);font-size:11.5px;font-weight:700">
-        ${escapeHtml(d ? dayLabel(d) : '날짜 미정')}
-        <span style="font-weight:400;color:var(--i4);margin-left:6px">세션 ${mine.length}</span></td></tr>`
-      + slots.map(rowFor).join('');
-  };
-
-  /* ── 모바일 ──
-     가로가 장소인 표는 좁은 화면에 들어가지 않는다. 옆으로 밀면 시간 열이
-     사라져 «몇 시 것인지»를 잃는다. 그래서 시간 순 목록으로 바꾼다 —
-     장소는 각 줄에 적어 둔다. 표가 하려던 일(언제·어디서·무엇을)은 남는다. */
-  if(isMobile()){
-    const line = (ss) => {
-      const c = trackColor(ev.key, ss.track);
-      const brk = isBreak(ss);
-      return `<div onclick="openPgaSession('${escAttr(ss.id)}')"
-        style="cursor:pointer;${brk ? 'color:var(--i4);' : ''}background:${brk ? 'var(--i7)' : 'var(--W)'};border:1px solid var(--i6);border-left:3px solid ${
-          ss.track ? c.bd : 'var(--i5)'};border-radius:8px;padding:9px 11px;margin-bottom:7px">
-        <div style="display:flex;gap:7px;align-items:baseline;flex-wrap:wrap">
-          <span style="font-size:11px;color:var(--i3);white-space:nowrap">${escapeHtml(timeLabel(ss.start_at, ss.end_at) || '시간 미정')}</span>
-          ${ss.room ? `<span class="pill p-gray" style="font-size:9px">${escapeHtml(ss.room)}</span>` : ''}
-          ${ss.track ? `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:${c.bg}">${escapeHtml(ss.track)}</span>` : ''}
-        </div>
-        <div style="font-size:12.5px;font-weight:600;margin-top:4px;line-height:1.45">${escapeHtml(ss.title_ko || ss.title_en || '(세션명 없음)')}</div>
-        ${ss.title_ko && ss.title_en ? `<div style="font-size:10px;color:var(--i4);line-height:1.4">${escapeHtml(ss.title_en)}</div>` : ''}
-        ${pgaSpeakers(ss)}
-      </div>`;
-    };
-    const byDay = (d) => {
-      const mine = sessions.filter(x => (x.date || '') === d)
-        .slice()
-        .sort((a, b) => String(a.start_at || '').localeCompare(String(b.start_at || ''))
-          || String(a.room || '').localeCompare(String(b.room || ''), 'ko', { numeric: true }));
-      return `<div style="font-size:12px;font-weight:700;margin:12px 0 6px">${escapeHtml(d ? dayLabel(d) : '날짜 미정')}
-          <span style="font-weight:400;color:var(--i4)">세션 ${mine.length}</span></div>
-        ${mine.map(line).join('')}`;
-    };
-    return `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
-        <div style="font-size:12.5px;font-weight:700">Program at a Glance</div>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto">${importBtns()}</div>
-      </div>
-      <div style="font-size:10px;color:var(--i4);margin-bottom:2px">좁은 화면에서는 시간 순 목록으로 보여드려요</div>
-      ${days.map(byDay).join('')}`;
-  }
-
-  /* 트랙 범례 — 색만 보고는 무슨 트랙인지 모른다 */
-  const usedTracks = [...new Set(sessions.map(x => x.track).filter(Boolean))];
-  /* 트랙이 빈 세션은 색이 안 붙는다. 개막식처럼 장소가 없는 것은 원래
-     그렇지만, 장소가 있는데 트랙만 빈 세션은 대개 빠뜨린 것이다 —
-     색을 찾기 전에 왜 없는지를 알 수 있게 세어 둔다. */
-  const noTrack = sessions.filter(x => x.room && !x.track && !isBreak(x));
-  const legend = usedTracks.length ? `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
-    ${usedTracks.map(t => {
-      const c = trackColor(ev.key, t);
-      return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--i3)">
-        <span style="width:11px;height:11px;border-radius:3px;background:${c.bg};border-left:3px solid ${c.bd}"></span>
-        ${escapeHtml(t)}</span>`;
-    }).join('')}
-    ${noTrack.length ? `<span style="font-size:10.5px;color:var(--am)"
-      title="${escapeHtml(noTrack.map(x => x.title_ko || x.title_en || x.id).join('\n'))}">
-      트랙 없는 세션 ${noTrack.length}개 — 색이 안 붙어요</span>` : ''}
-  </div>` : '';
-
-  const hint = noRoomOnly ? `<div style="font-size:10.5px;color:var(--i4);margin-bottom:8px;line-height:1.6">
-    장소를 적은 세션이 없어 한 칸으로 그렸어요 — 세션에 «장소»를 넣으면 방별로 나뉩니다.</div>` : '';
-
-  return `<div style="display:flex;align-items:center;gap:9px;margin-bottom:8px;flex-wrap:wrap">
-      <div style="font-size:12.5px;font-weight:700">Program at a Glance</div>
-      <div style="font-size:10.5px;color:var(--i4)">세션 ${sessions.length} · ${days.length}일${
-        rooms.length ? ` · ${rooms.length}개 장소` : ''}</div>
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto">
-        ${importBtns()}
-        <button class="btn" style="font-size:11px" onclick="copyPga()"
-          title="표를 그대로 복사해 프로그램북·메일에 붙여 넣습니다">표 복사</button>
-      </div>
-    </div>
-    ${legend}${hint}
-    <div class="tw" id="pga-table"><table style="width:100%;border-collapse:collapse;table-layout:fixed">
-      <colgroup>
-        <col style="width:82px">
-        ${(rooms.length ? rooms : ['전체']).map(() =>
-          `<col style="width:${(100 / Math.max(1, rooms.length || 1)).toFixed(4)}%">`).join('')}
-      </colgroup>
-      <thead><tr>
-        <th style="text-align:left;font-size:10px">시간</th>
-        ${(rooms.length ? rooms : ['전체']).map(rm => `<th style="text-align:center;font-size:10.5px;
-          border-left:1px solid var(--i7)">${escapeHtml(rm)}</th>`).join('')}
-      </tr></thead>
-      <tbody>${days.map(dayBlock).join('')}</tbody>
-    </table></div>
-    <div style="font-size:10px;color:var(--i4);margin-top:7px;line-height:1.6">
-      칸을 누르면 그 세션의 수정 칸이 열려요. 장소를 안 적은 세션은 개막식처럼 한 줄을 통째로 씁니다.
-    </div>`;
-}
-
-/* 표에서 세션을 누르면 프로그램으로 건너가 그 세션을 연다 —
-   여기서 바로 고치게 하면 같은 수정 칸이 두 군데 생긴다. */
-export function openPgaSession(sid){
-  confView = 'program';
-  confEditSession = sid;
-  renderConf();
-  setTimeout(() => {
-    document.getElementById(`es-${sid}-ko`)?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  }, 60);
-}
-
-/* 활동 로그에서 건너올 때 — 다른 행사의 세션일 수 있으니 행사부터 맞춘다.
-   setConfEvent이 열린 수정 칸을 닫으므로 반드시 먼저 부른다. */
-export function openAuditSession(sid, ev){
-  if(ev && ev !== confEvent) setConfEvent(ev);
-  openPgaSession(sid);
-}
-
-/* 표를 그대로 복사한다 — 프로그램북 원고와 메일이 이 표를 그대로 쓴다.
-   서식 있는 복사(text/html)와 글자 복사를 함께 담아, 붙여 넣는 곳이
-   무엇이든 형태가 남게 한다. */
-export async function copyPga(){
-  const el = document.getElementById('pga-table');
-  if(!el) return;
-  const html = el.innerHTML;
-  const text = [...el.querySelectorAll('tr')]
-    .map(tr => [...tr.children].map(td => td.innerText.replace(/\s*\n\s*/g, ' ').trim()).join('\t'))
-    .join('\n');
-  try {
-    if(navigator.clipboard && window.ClipboardItem){
-      await navigator.clipboard.write([new ClipboardItem({
-        'text/html': new Blob([html], { type: 'text/html' }),
-        'text/plain': new Blob([text], { type: 'text/plain' }),
-      })]);
-    } else {
-      await navigator.clipboard.writeText(text);
-    }
-    alert('표를 복사했어요. 문서나 메일에 붙여 넣으세요.');
-  } catch(e){
-    alert(`복사하지 못했어요 (${e.message}).\n표를 끌어서 직접 선택해 복사해주세요.`);
-  }
-}
-
-/* ══════════════════════════════════════════
-   연사 — 전시 진행관리와 같은 방식으로 본다
-
-   전시에서 51개 기업의 준비 상황을 한 표로 보는 이유가 여기도 그대로다.
-   연사가 스무 명이면 «누구에게 무엇이 안 왔나»를 사람마다 열어 볼 수 없다.
-   한 줄에 한 사람, 한 칸에 한 항목을 놓고, 칸의 색과 기호로 상태를 읽는다.
-
-   전시와 다른 점이 하나 있다. 전시는 모든 기업이 같은 단계를 밟지만 연사는
-   역할마다 받을 것이 다르다 — 좌장에게 초록은 «안 온 것»이 아니라 «묻지 않은
-   것»이다. 그래서 묻지 않는 칸은 빈칸(·)으로 두고 분모에서도 뺀다.
-   그러지 않으면 좌장은 영원히 진행률 70%에 머문다.
-══════════════════════════════════════════ */
-
-/* 2개 함수를 ../features/conference/speaker-cells.js로 옮겼다 — 이 파일에서도 쓰고, 옛 경로로 가져가는 곳도 있어 다시 내보낸다 */
-import { SP_COLS, spCell, SP_SENT, nextActionTd } from '../features/conference/speaker-cells.js';
+/* «프로그램 — 일자·세션·배정»은 ../features/conference/conf-program.js로 떼어 냈다 — 그 파일이 스스로 window에 건다 */
+/* «프로그램표(PROGRAM AT A GLANCE)»은 ../features/conference/conf-pga.js로 떼어 냈다 — 그 파일이 스스로 window에 건다 */
+/* «연사 보기 — 준비·정산·카드»은 ../features/conference/conf-people.js로 떼어 냈다 — 그 파일이 스스로 window에 건다 */
+/* 2개 함수를 ../features/conference/speaker-cells.js로 옮겼다 — 옛 경로(이 파일)로 가져가는 곳이 있어 다시 내보낸다 */
 export { SP_COLS, spCell, SP_SENT } from '../features/conference/speaker-cells.js';
-
-/* 진행률 — 묻는 것만 분모에 넣는다 */
-function spProgress(sp, evKey){
-  const cells = SP_COLS.map(c => spCell(sp, evKey, c.key)).filter(c => c.state !== 'na');
-  if(!cells.length) return { pct: 0, n: 0, of: 0 };
-  const n = cells.filter(c => c.state === 'done').length;
-  return { pct: Math.round(n / cells.length * 100), n, of: cells.length };
-}
-
-/* 칸 하나 — 전시 표와 같은 기호를 쓴다. 두 화면을 오가며 보는 사람이
-   기호를 두 번 배우지 않게. */
-/* 보낸 것 칸 — 날짜를 눌러 오늘로 찍고, 다시 누르면 지운다.
-   표에서 바로 체크할 수 있어야 스무 명을 훑으며 정리할 수 있다. */
-function spSentHtml(sp, col){
-  const v = sp[col.key] || '';
-  return `<td style="text-align:center;padding:5px 3px">
-    <button onclick="event.stopPropagation();toggleSpeakerDate('${escAttr(sp.id)}','${col.key}')"
-      title="${escapeHtml(`${col.tip || col.label}\n${v ? `보낸 날 ${v} — 누르면 지웁니다` : '누르면 오늘 날짜로 표시'}`)}"
-      style="border:0;cursor:pointer;font:inherit;min-width:44px;padding:3px 5px;border-radius:5px;
-      background:${v ? 'var(--ad)' : 'transparent'};color:${v ? 'var(--a)' : 'var(--i5)'};
-      font-size:${v ? '9.5' : '12'}px;font-weight:${v ? '600' : '800'};line-height:1.2">${
-      v ? escapeHtml(shortCell(v)) : '—'}</button></td>`;
-}
-
-function spCellHtml(c, colLabel, name, col){
-  /* 값을 보여주는 칸은 기호를 쓰지 않는다 — 기호와 값이 함께 있으면 눈이
-     기호를 먼저 읽고 값을 흘린다. */
-  if(col && col.show === 'text'){
-    if(c.state === 'na') return `<td title="${escapeHtml(`${name}의 역할은 ${colLabel}을(를) 받지 않아요`)}"></td>`;
-    /* 칸 폭은 표가 정하므로 td의 max-width만으로는 글이 옆 칸으로 넘친다.
-       안쪽 div에 폭을 박고 두 줄에서 자른다 — 전문은 title로 본다. */
-    return `<td style="font-size:11px;line-height:1.4;color:${c.text ? 'var(--i2)' : 'var(--i5)'}"
-      title="${escapeHtml(c.text || '')}"><div style="width:180px;white-space:normal;overflow:hidden;
-      display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere">${
-      c.text ? escapeHtml(c.text) : '—'}</div></td>`;
-  }
-  return spCellMark(c, colLabel, name);
-}
-
-function spCellMark(c, colLabel, name){
-  const map = {
-    done: { bg: 'var(--gb)', fg: 'var(--g)',  mark: '✓' },
-    part: { bg: 'var(--ab)', fg: 'var(--am)', mark: '◐' },
-    todo: { bg: 'transparent', fg: 'var(--i5)', mark: '—' },
-    na:   { bg: 'transparent', fg: 'var(--i6)', mark: '·' },
-  }[c.state];
-  /* 받지 않는 칸은 비워 둔다 — 점이라도 찍혀 있으면 확인할 거리처럼 보인다 */
-  if(c.state === 'na' && c.lapsed) return `<td style="text-align:center;font-size:9.5px;color:var(--i5)"
-    title="${escapeHtml(`행사가 끝나 ${colLabel}은(는) 더 받지 않아요${c.text ? ` (${c.text})` : ''}`)}">지남</td>`;
-  if(c.state === 'na') return `<td title="${escapeHtml(`${name}의 역할은 ${colLabel}을(를) 받지 않아요`)}"></td>`;
-  const tip = c.state === 'na'
-    ? `${name}의 역할은 ${colLabel}을(를) 받지 않아요`
-    : c.state === 'done' ? `${colLabel} 받음${c.text ? ` (${c.text})` : ''}`
-    : c.state === 'part' ? `${colLabel} 일부만 (${c.text})`
-    : `${colLabel} 아직${c.need === 'opt' ? ' — 있으면 좋음' : ''}`;
-  return `<td style="text-align:center;padding:5px 3px" title="${escapeHtml(tip)}">
-    <div style="display:inline-flex;flex-direction:column;align-items:center;gap:1px;min-width:40px;
-      padding:3px 4px;border-radius:5px;background:${map.bg}">
-      <span style="font-size:12px;font-weight:800;color:${map.fg};line-height:1">${map.mark}</span>
-      ${c.text ? `<span style="font-size:9px;color:${map.fg};line-height:1.1">${escapeHtml(shortCell(c.text))}</span>` : ''}
-    </div></td>`;
-}
-
-/* 항목별 집계 — «묻는 사람» 중 몇 명이 냈나 */
-function spTally(list, evKey, key){
-  const live = list.map(sp => spCell(sp, evKey, key)).filter(c => c.state !== 'na');
-  return { n: live.filter(c => c.state === 'done').length, of: live.length };
-}
-
-/* 표에서 바로 날짜를 찍는다. 연사 드로어를 열지 않고 스무 명을 훑으며
-   «보냈다»를 체크하는 일이 실제로 있다. 전시의 받음 체크와 같은 규칙으로
-   오늘 날짜를 찍고, 다시 누르면 지운다. */
-/* 한꺼번에 온 것을 한 번에 찍는다.
-
-   받는 쪽을 합치지 않은 대신 이 길을 둔다. 이력·사진·동의서가 한 메일에
-   같이 오는 일이 흔한데, 그때 칸을 하나씩 누르게 하면 네 번을 누르거나
-   귀찮아서 안 누른다 — 안 누른 칸은 «아직 안 왔다»로 남아 또 독촉하게 된다.
-
-   역할이 묻지 않는 항목과 이미 받은 것은 건드리지 않는다. 무엇이 찍히는지
-   먼저 보여주고, 실제로 안 온 것은 사람이 다시 지운다. */
-export async function receiveAll(spId){
-  if(confLocked()){ confLockNotice(); return; }
-  const sp = getSpeakerById(spId);
-  if(!sp) return;
-  const today = td();
-
-  /* 연사 줄에 붙는 것과 배정 줄에 붙는 것이 다르다 — 발제는 배정마다 따로다 */
-  const onSpeaker = [
-    ['bio_pro',  'profile_received_at', '이력'],
-    ['photo',    'photo_received_at',   '사진'],
-    ['cv',       'cv_received_at',      'CV'],
-    ['consent',  'consent_at',          '동의서'],
-    ['passport', 'passport_received_at', '여권'],
-  ].filter(([needKey, field]) => spCell(sp, sp.event_id, needKey).state === 'todo' && !sp[field]);
-
-  const onAssign = [];
-  assignmentsFor(sp.id).forEach(a => {
-    [['abstract', 'abstract_received_at', '초록'], ['slides', 'slides_received_at', '발표자료']]
-      .forEach(([needKey, field, label]) => {
-        if(speakerNeed(sp.event_id, a.role, needKey) && !a[field]) onAssign.push({ a, field, label });
-      });
-  });
-
-  if(!onSpeaker.length && !onAssign.length){
-    alert('아직 안 받은 항목이 없어요.');
-    return;
-  }
-  const names = [...onSpeaker.map(x => x[2]), ...onAssign.map(x => x.label)];
-  if(!confirm(`${sp.name_snapshot || spId} — 아래를 ${today}에 받은 것으로 표시할까요?\n\n`
-    + `· ${names.join('\n· ')}\n\n실제로 안 온 것은 그 칸을 다시 눌러 지우세요.`)) return;
-
-  for(const [, field] of onSpeaker){
-    const res = await gSaveSpeaker({ id: sp.id, [field]: today, updated_at: today });
-    if(!res || res.ok === false){ if(!res?.locked) alert('저장에 실패했어요.'); renderConf(); return; }
-    sp[field] = today;
-  }
-  for(const { a, field } of onAssign){
-    const res = await gSaveAssign({ id: a.id, [field]: today });
-    if(!res || res.ok === false){ if(!res?.locked) alert('저장에 실패했어요.'); renderConf(); return; }
-    a[field] = today;
-  }
-  trackAction('edit', '연사 받음 일괄', confEvent,
-    `${sp.name_snapshot || spId} — ${names.join(', ')} 받음`);
-  renderConf();
-}
-
-export async function toggleSpeakerDate(spId, field){
-  if(confLocked()){ confLockNotice(); return; }
-  const sp = getSpeakerById(spId);
-  if(!sp) return;
-  const next = sp[field] ? '' : td();
-  const backup = sp[field];
-  sp[field] = next;
-  renderConf();
-  const res = await gSaveSpeaker({ id: spId, [field]: next, updated_at: td() });
-  if(!res || res.ok === false){
-    sp[field] = backup;
-    renderConf();
-    if(!res?.locked) alert('저장에 실패했어요.');
-    return;
-  }
-  const label = (SP_SENT.find(c => c.key === field) || {}).label || field;
-  trackAction('edit', '연사 진행', confEvent,
-    `${sp.name_snapshot || spId} — ${label} ${next || '표시 지움'}`);
-}
-
-export function setConfNeedFil(key){
-  /* 전시의 단계 칩과 같은 순환 — 완료만 → 미완료만 → 전체 */
-  if(!confNeedFil || confNeedFil.key !== key) confNeedFil = { key, mode: 'done' };
-  else if(confNeedFil.mode === 'done') confNeedFil = { key, mode: 'todo' };
-  else confNeedFil = null;
-  renderConf();
-}
-/* 대시보드에서 누르면 Speakers 표로 가서 그 조건으로 거른다 — 센 숫자를 눌렀는데
-   아무 일이 없으면 셀 수만 있고 쓸 수는 없는 숫자가 된다 */
-export function openConfNeedTodo(key){ confNeedFil = { key, mode: 'todo' }; confView = 'people'; renderConf(); }
-export function openConfRole(role){ confRoleFil = role; confView = 'people'; renderConf(); }
-export function openConfSess(id){ confSessFil = id; confView = 'people'; renderConf(); }
-export function setConfSessFil(id){
-  confSessFil = confSessFil === id ? '' : id;
-  renderConf();
-}
-export function setConfRoleFil(role){
-  confRoleFil = confRoleFil === role ? '' : role;
-  renderConf();
-}
-export function setConfLayout(v){ confLayout = v; renderConf(); }
-export function setConfCardFil(v){ confCardFil = confCardFil === v ? '' : v; renderConf(); }
-export function setConfPhase(v){ confPhase = v; renderConf(); }
-export function setConfSettleFil(v){ confSettleFil = confSettleFil === v ? '' : v; renderConf(); }
-export function toggleConfNoFee(){ confShowNoFee = !confShowNoFee; renderConf(); }
-export function setConfVideoFil(v){
-  confVideoFil = confVideoFil === v ? '' : v;
-  renderConf();
-}
-
-/* ── 연사 찾기 ──
-   연사가 열일곱이면 눈으로 훑어도 되지만, 행사가 커지면 백 명이 넘고 칩으로
-   좁혀도 한 화면에 안 들어온다. «그 사람 이름이 뭐였더라»가 아니라 «그 사람
-   사진 받았던가»를 확인하려고 여는 화면이라, 이름을 쳐서 한 줄만 남기는
-   편이 빠르다. 소속과 세션명으로도 찾는다 — 이름이 기억 안 날 때 대신
-   떠오르는 것이 그 둘이다.
-
-   검색칸은 본문이 아니라 상단바에 둔다(전시 탭과 같은 자리). 본문은 글자
-   하나에 통째로 다시 그려지는데, 칸이 그 안에 있으면 매번 새로 만들어져
-   커서가 날아간다 — 밖에 두면 그 일이 아예 없다. */
-function confQuery(){
-  return ((document.getElementById('conf-q')?.value
-    || document.getElementById('conf-q-m')?.value || '')).trim();
-}
-function clearConfQuery(){
-  const d = document.getElementById('conf-q');   if(d) d.value = '';
-  const m = document.getElementById('conf-q-m'); if(m) m.value = '';
-}
-/* 모바일 칸에 친 것을 데스크톱 칸에도 옮겨 둔다 — 둘이 다른 값을 들고 있으면
-   어느 쪽을 믿어야 할지 알 수 없다 */
-export function searchConfM(v){
-  const d = document.getElementById('conf-q');
-  if(d) d.value = v;
-  renderConf();
-}
-export function clearConfSearch(){
-  clearConfQuery();
-  renderConf();
-}
-
-/* ── 단계 ──
-   행사 전에 챙기는 것(이력·사진·초록·발표자료)과 끝난 뒤 챙기는 것(연사료 서류·지급·
-   영상 게재)은 겹치지 않는다. 한 표에 다 늘어놓으면 끝난 행사에서 «—»만 가득하다.
-   행사 마지막 날이 지나면 정산이 먼저 열린다. */
-const confPhaseOf = (ev) => confPhase
-  || (String(ev.date_end || ev.date_start || ev.date || '9999') < td() ? 'settle' : 'prep');
-const feeNum = (sp) => Number(String(sp.fee_amount || '').replace(/[^\d.-]/g, '')) || 0;
-/* 연사료를 줄 사람 — 금액이 있고 역할이 연사료를 받는다 */
-const feeOn = (sp) => feeNum(sp) > 0 && paysFee(sp);
-/* 연사료 서류 중 아직 안 온 것 — 국내 신분증·통장사본·계좌번호, 해외 계좌·여권 */
-export function settleMissing(sp){
-  if(!feeOn(sp)) return [];
-  const docs = bankDocs(sp).filter(d => !d.got).map(d => d.label);
-  if(!isDomesticSpeaker(sp) && !sp.passport_received_at) docs.push('여권');
-  return docs;
-}
-
-function peopleHtml(ev){
-  const every = speakersForEvent(ev.key);
-  const hiddenN = every.filter(isHiddenSp).length;
-  /* 숨긴 연사는 목록·요약에서 뺀다 — «숨긴 연사 N명»을 눌러야 보인다 */
-  const all = confShowHidden ? every : every.filter(sp => !isHiddenSp(sp));
-  if(!every.length){
-    return `<div style="padding:22px;background:var(--i8);border:1px solid var(--i6);border-radius:10px;
-      font-size:12px;color:var(--i5);line-height:1.7">
-      아직 연사가 없어요. «프로그램»에서 세션을 만들고 사람을 배정하면 여기 쌓여요.</div>`;
-  }
-
-  let list = all.slice().sort((a, b) =>
-    String(a.name_snapshot || a.name_en || '').localeCompare(String(b.name_snapshot || b.name_en || ''), 'ko'));
-  if(confRoleFil) list = list.filter(sp => rolesOfSpeaker(sp.id).includes(confRoleFil));
-  /* '__none__'은 «배정 없음» — 세션에 안 들어간 사람이 남아 있는지 보려는
-     것이라 세션 하나를 고른 것과 성격이 같다. */
-  if(confSessFil === '__none__') list = list.filter(sp => !assignmentsFor(sp.id).length);
-  else if(confSessFil.startsWith('t:')){
-    /* 트랙 칩 — 그 트랙의 세션 아무 곳에나 들어가 있으면 남는다 */
-    const t = confSessFil.slice(2);
-    const ids = new Set(sessionsForEvent(ev.key).filter(x => (x.track || '') === t).map(x => x.id));
-    list = list.filter(sp => assignmentsFor(sp.id).some(a => ids.has(a.session_id)));
-  }
-  else if(confSessFil) list = list.filter(sp =>
-    assignmentsFor(sp.id).some(a => a.session_id === confSessFil));
-  // 칩이 보이는 단계에서만 건다 — 안 보이는 칩이 표를 몰래 좁히지 않게
-  const phase = confPhaseOf(ev);
-  if(phase === 'settle'){
-    if(confVideoFil) list = list.filter(sp => (sp.video_publish || 'none') === confVideoFil);
-    if(confSettleFil === 'docs') list = list.filter(sp => settleMissing(sp).length);
-    if(confSettleFil === 'unpaid') list = list.filter(sp => feeOn(sp) && !sp.fee_paid_at);
-  }
-  if(confNeedFil && phase === 'prep'){
-    list = list.filter(sp => {
-      const c = spCell(sp, ev.key, confNeedFil.key);
-      if(c.state === 'na') return false;
-      return confNeedFil.mode === 'done' ? c.state === 'done' : c.state !== 'done';
-    });
-  }
-  /* 찾는 말은 칩보다 나중에 건다 — 칩으로 좁힌 안에서 다시 찾는 것이 순서다.
-     띄어쓰기는 사람마다 달라서(«한양 대학교» / «한양대학교») 양쪽 다 지우고 견준다. */
-  const sq = confQuery().toLowerCase().replace(/\s+/g, '');
-  if(sq){
-    list = list.filter(sp => [
-      sp.name_snapshot, sp.name_en, sp.org_ko, sp.org_en, sp.title_ko, sp.title_en,
-      ...assignmentsFor(sp.id).map(a => {
-        const ss = CONF_SESSIONS.find(x => x.id === a.session_id);
-        return ss ? [ss.title_ko, ss.title_en, ss.track].filter(Boolean).join(' ') : '';
-      }),
-    ].filter(Boolean).join(' ').toLowerCase().replace(/\s+/g, '').includes(sq));
-  }
-
-  /* ── 위쪽 요약 — 전시의 카드 줄과 같은 자리 ── */
-  const byStatus = (v) => all.filter(sp => (sp.status || '섭외중') === v).length;
-  const noSession = all.filter(sp => !assignmentsFor(sp.id).length).length;
-  const avg = all.length
-    ? Math.round(all.reduce((n, sp) => n + spProgress(sp, ev.key).pct, 0) / all.length) : 0;
-  const feeLeft = all.filter(sp => sp.fee_amount && !sp.fee_paid_at && paysFee(sp)).length;
-
-  const card = (label, value, sub) => `<div style="min-width:96px">
-    <div style="font-size:10px;color:var(--i4);margin-bottom:2px">${escapeHtml(label)}</div>
-    <div style="font-size:18px;font-weight:800;line-height:1.1">${value}</div>
-    ${sub ? `<div style="font-size:10px;color:var(--i4);margin-top:2px">${sub}</div>` : ''}
-  </div>`;
-
-  /* 정산 요약 — 연사료 대상·서류·지급·영상 게재 */
-  const settleCards = () => {
-    const fee = all.filter(feeOn), paid = fee.filter(sp => sp.fee_paid_at).length;
-    const docs = fee.filter(sp => settleMissing(sp).length).length;
-    const sum = fee.reduce((n, sp) => n + feeNum(sp), 0);
-    const u = (t) => `<span style="font-size:11px;font-weight:600;color:var(--i4)">${t}</span>`;
-    const v = (k) => all.filter(sp => (sp.video_publish || 'none') === k).length;
-    return card('연사료 대상', `${fee.length}${u('명')}`, `총 ${sum.toLocaleString('ko-KR')}`)
-      + card('서류', `${fee.length - docs}${u(`/${fee.length} 받음`)}`, docs ? `<span style="color:var(--am)">${docs}명 남음</span>` : '다 받음')
-      + card('지급', `${paid}${u(`/${fee.length}`)}`, paid < fee.length ? `<span style="color:var(--am)">${fee.length - paid}명 미지급</span>` : '모두 지급')
-      + card('영상 게재', `${v('yes')}${u('명 동의')}`, `비동의 ${v('no')} · 미확인 ${v('none')}`);
-  };
-  const summary = `<div style="display:flex;flex-wrap:wrap;gap:${isMobile() ? '14px 22px' : '20px'};padding:12px 14px;margin-bottom:10px;
-      background:var(--i8);border:1px solid var(--i6);border-radius:10px">
-    ${phase === 'settle' ? settleCards() : `${card('연사', `${all.length}<span style="font-size:11px;font-weight:600;color:var(--i4)">명</span>`,
-      `확정 ${byStatus('확정')} · 섭외중 ${byStatus('섭외중')}`)}
-    ${card('평균 진행률', `${avg}<span style="font-size:11px;font-weight:600;color:var(--i4)">%</span>`,
-      '역할이 묻는 항목만 셈')}
-    ${card('세션', `${sessionsForEvent(ev.key).filter(s => !isBreak(s)).length}<span style="font-size:11px;font-weight:600;color:var(--i4)">개</span>`,
-      noSession ? `<span style="color:var(--am)">배정 없는 연사 ${noSession}</span>` : '모두 배정됨')}
-    ${(() => { const live = all.filter(x => x.status !== '취소'), y = live.filter(x => x.gala_rsvp === 'yes').length,
-        n = live.filter(x => x.gala_rsvp === 'no').length;
-      return card('갈라디너', `${y}<span style="font-size:11px;font-weight:600;color:var(--i4)">명 참석</span>`,
-        `불참 ${n} · 미확인 ${live.length - y - n}`); })()}
-    ${feeLeft ? card('연사료', `${feeLeft}<span style="font-size:11px;font-weight:600;color:var(--i4)">명</span>`, '아직 미지급') : ''}`}
-    <div style="margin-left:auto;align-self:center;display:flex;gap:6px">
-      <button class="btn bs" onclick="openSpeakerBulkMail('${escAttr(ev.key)}')"
-        title="연락 단계 메일(일정 변경 안내·자료 요청 등)을 여러 연사에게 한 번에 — 연사마다 한 통씩 따로 나갑니다">📨 여러 연사에게 메일</button>
-      <button class="btn bs" id="sp-export-btn" onclick="exportSpeakers('${escAttr(ev.key)}')"
-        title="프로그램표(Program At a Glance)·연사 전체 정보·약력과 초록을 엑셀 한 파일로 받습니다">엑셀 다운로드</button>
-      <button class="btn bs" onclick="openSpeakerShare('${escAttr(ev.key)}')"
-        title="프로그램(공개 주소)·수급 현황(비밀 링크)을 웹 페이지로 바깥에 보여 줍니다">🔗 외부 공유</button></div>
-  </div>${schedAlertHtml(ev.key, all)}`;
-
-  /* ── 세션 칩 ──
-     세션명은 길다. 여덟 개가 늘어서면 칩 줄이 그대로 목록이 되어, 고르는
-     자리가 아니라 읽는 자리가 된다 — 좁은 화면에서는 화면 절반을 먹는다.
-
-     그래서 트랙이 있으면 트랙으로 묶는다. «이 트랙 사람들»이 실제로 챙기는
-     단위이기도 하고, 색도 프로그램 표와 같은 색을 써서 두 화면이 이어진다.
-     트랙이 없는 세션만 제 이름으로 남는다 — 묶을 데가 없으니 숨기면 아예
-     고를 수 없게 된다. 세션 하나하나는 툴팁에 일자·시각과 함께 적어 둔다. */
-  /* 검색칸은 상단바에 있다. 여기서는 «지금 걸려 있다»는 것과 몇 명이 남았는지만
-     알린다 — 치고 나서 왜 줄이 줄었는지 화면 안에 이유가 있어야 한다. */
-  const q = confQuery();
-  const searchNote = q ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;
-      background:var(--i8);border:1px solid var(--i6);border-radius:8px;padding:7px 11px">
-    <span style="font-size:11.5px;color:var(--i3)">«<b>${escapeHtml(q)}</b>»로 찾은 연사 ${list.length}명${
-      confView !== 'people' ? ' — 검색어를 지우면 보던 화면으로 돌아갑니다' : ''}</span>
-    <button class="btn bs" style="font-size:10.5px;padding:2px 8px;margin-left:auto"
-      onclick="clearConfSearch()">검색 지우기</button>
-  </div>` : '';
-
-  /* ── 거르기 한 줄 ──
-     세션·역할은 칩 두 줄이 화면 위 3분의 1을 먹었다. 고르는 자리이니 드롭다운으로
-     줄이고, 단계에 따라 바뀌는 칩(정산의 서류·지급·영상 게재)만 칩으로 둔다.
-     식사·휴식은 시간표에만 있고 연사가 없다 — 세션 고르기에서 뺀다 */
-  const sessions = sessionsForEvent(ev.key).filter(s => !isBreak(s));
-  const noSess = all.filter(sp => !assignmentsFor(sp.id).length).length;
-  const headN = (ids) => all.filter(sp => assignmentsFor(sp.id).some(a => ids.has(a.session_id))).length;
-  const chipTracks = [...new Set(sessions.map(s => s.track).filter(Boolean))];
-  const looseSess = sessions.filter(s => !s.track);
-  const opt = (v, label, on) => `<option value="${escapeHtml(v)}"${on ? ' selected' : ''}>${escapeHtml(label)}</option>`;
-  const sessSel = (sessions.length || noSess) ? `<select class="fi" style="width:auto;max-width:240px;font-size:11.5px;padding:4px 7px"
-      onchange="setConfSessFil(this.value || '')" title="세션·트랙으로 거르기">
-    ${opt('', '전체 세션', !confSessFil)}
-    ${chipTracks.map(t => { const ss = sessions.filter(x => x.track === t);
-      return opt('t:' + t, `${t} · ${headN(new Set(ss.map(x => x.id)))}명`, confSessFil === 't:' + t); }).join('')}
-    ${looseSess.map(ss => opt(ss.id, `${ss.title_ko || ss.title_en || ss.id} · ${
-      all.filter(sp => assignmentsFor(sp.id).some(a => a.session_id === ss.id)).length}명`, confSessFil === ss.id)).join('')}
-    ${noSess ? opt('__none__', `배정 없음 · ${noSess}명`, confSessFil === '__none__') : ''}
-  </select>` : '';
-  const roleSel = `<select class="fi" style="width:auto;font-size:11.5px;padding:4px 7px"
-      onchange="setConfRoleFil(this.value || '')" title="역할로 거르기">
-    ${opt('', `전체 역할 · ${all.length}명`, !confRoleFil)}
-    ${SPEAKER_ROLES.map(r => { const n = all.filter(sp => rolesOfSpeaker(sp.id).includes(r.key)).length;
-      return n ? opt(r.key, `${r.label} · ${n}명`, confRoleFil === r.key) : ''; }).join('')}
-  </select>`;
-  const chip = (on, onclick, label, tip, tone) => `<button class="pill ${on ? 'p-blue' : tone || 'p-gray'}"
-    style="border:0;cursor:pointer;font:inherit;font-size:11px" title="${escapeHtml(tip || '')}" onclick="${onclick}">${label}${on ? ' ✕' : ''}</button>`;
-  const vn = (v) => all.filter(sp => (sp.video_publish || 'none') === v).length;
-  const settleChips = phase === 'settle' ? (() => {
-    const docsN = all.filter(sp => settleMissing(sp).length).length;
-    const unpaidN = all.filter(sp => feeOn(sp) && !sp.fee_paid_at).length;
-    return chip(confSettleFil === 'docs', "setConfSettleFil('docs')", `서류 남음 ${docsN}명`, '연사료 서류(신분증·통장·계좌·여권)가 아직 안 온 연사', docsN ? 'p-amber' : 'p-green')
-      + chip(confSettleFil === 'unpaid', "setConfSettleFil('unpaid')", `미지급 ${unpaidN}명`, '연사료를 아직 안 보낸 연사', unpaidN ? 'p-amber' : 'p-green')
-      + '<span style="width:1px;height:16px;background:var(--i6);margin:0 2px"></span>'
-      + [['yes', '동의'], ['no', '비동의'], ['none', '미확인']].map(([v, l]) =>
-        chip(confVideoFil === v, `setConfVideoFil('${v}')`, `영상 ${l} ${vn(v)}`, '발표 영상 게재 동의 — 연사 드로어 «발표 영상 게재»에서 고른 값',
-          v === 'no' && vn(v) ? 'p-red' : 'p-gray')).join('');
-  })() : '';
-  const filterBar = `<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px">
-    <div class="seg" style="margin:0">
-      <button class="seg-b${phase === 'prep' ? ' on' : ''}" onclick="setConfPhase('prep')" title="행사 전 — 자료 받기·연락">준비</button>
-      <button class="seg-b${phase === 'settle' ? ' on' : ''}" onclick="setConfPhase('settle')" title="행사 뒤 — 연사료 서류·지급·영상 게재">정산</button>
-    </div>
-    ${phase === 'prep' ? `<div class="seg" style="margin:0">
-      <button class="seg-b${confLayout !== 'cards' ? ' on' : ''}" onclick="setConfLayout('table')">표</button>
-      <button class="seg-b${confLayout === 'cards' ? ' on' : ''}" onclick="setConfLayout('cards')" title="사진과 받은 자료를 연사마다 카드로 — 발표 순서대로">카드</button>
-    </div>` : ''}
-    ${sessSel}${roleSel}
-    ${hiddenN ? chip(confShowHidden, 'toggleConfHidden()', `숨긴 연사 ${hiddenN}명`, '숨긴 연사는 받을 항목에서 빠져요 — 눌러서 보이기/감추기') : ''}
-    ${settleChips}
-  </div>`;
-
-  /* ── 받을 것 칩 — 전시의 단계 칩과 같은 방식으로 누르면 걸러진다 ── */
-  const stats = SP_COLS.map(c => ({ col: c, ...spTally(all, ev.key, c.key) })).filter(x => x.of);
-  /* 보낸 것도 세어 둔다 — «가이드라인 몇 명에게 보냈나»가 실제로 묻는 말이다 */
-  const sentStats = SP_SENT.map(c => ({ col: c, n: all.filter(sp => sp[c.key]).length, of: all.length }));
-  const needChips = `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
-    ${stats.map(({ col, n, of }) => {
-      const on = confNeedFil && confNeedFil.key === col.key;
-      const cls = on ? (confNeedFil.mode === 'done' ? 'p-blue' : 'p-amber')
-        : n === of ? 'p-green' : 'p-gray';
-      const tip = on ? (confNeedFil.mode === 'done' ? '받은 사람만 보는 중 — 한 번 더 누르면 안 받은 사람만'
-        : '안 받은 사람만 보는 중 — 한 번 더 누르면 전체') : '눌러서 받은 사람만 보기';
-      return `<button class="pill ${cls}" title="${escapeHtml(tip)}" style="border:0;cursor:pointer;font:inherit"
-        onclick="setConfNeedFil('${escAttr(col.key)}')">${escapeHtml(col.label)} ${
-        on ? (confNeedFil.mode === 'done' ? `${n}명` : `${of - n}명`) : `${n}/${of}`}${
-        on ? `<span style="margin-left:3px">${confNeedFil.mode === 'done' ? '받음' : '안 받음'} ✕</span>` : ''}</button>`;
-    }).join('')}
-    ${sentStats.filter(x => x.n).map(({ col, n, of }) =>
-      `<span class="pill p-blue" style="opacity:.85" title="${escapeHtml(`${col.label}을(를) 보낸 연사`)}">${
-        escapeHtml(col.label)} 보냄 ${n}/${of}</span>`).join('')}
-  </div>`;
-
-  if(!list.length){
-    return summary + searchNote + filterBar + (phase === 'prep' ? needChips : '')
-      + `<div style="padding:20px;background:var(--i8);border:1px solid var(--i6);border-radius:10px;
-        font-size:12px;color:var(--i5)">${q
-          ? `«${escapeHtml(q)}»로 찾은 연사가 없어요. 이름 대신 소속이나 세션명으로도 찾을 수 있어요.`
-          : '이 조건에 맞는 연사가 없어요.'}</div>`;
-  }
-
-  /* ── 카드 보기 ──
-     사진이 왔는지는 체크 표시로는 모른다 — 웹에서 긁은 400px짜리인지, 인쇄할 원본인지는
-     봐야 안다. 발표 순서대로 사진과 받은 자료를 한 장씩 놓는다(100.연사관리/연사자료현황.html을
-     CRM으로 옮긴 것). 사진은 연사 창에서 올린 것을 쓴다. */
-  if(phase === 'prep' && confLayout === 'cards'){
-    /* 한 번만 묻는다 — 실패하면 캐시가 안 차서, 그릴 때마다 다시 부르면 요청이 끝없이 돈다 */
-    if(!speakerPhotosLoaded(ev.key) && !confPhotoAsked.has(ev.key)){
-      confPhotoAsked.add(ev.key);
-      loadSpeakerPhotos(ev.key).then(() => renderConf());
-    }
-    const firstAt = (sp) => assignmentsFor(sp.id).map(a => {
-      const ss = CONF_SESSIONS.find(x => x.id === a.session_id) || {};
-      return `${ss.date || '9999'} ${a.start_at || ss.start_at || '99:99'}`;
-    }).sort()[0] || '9999 99:99';
-    const stOf = (sp) => { const pr = spProgress(sp, ev.key); return !pr.of ? 'na' : pr.n === pr.of ? 'ok' : pr.n ? 'part' : 'todo'; };
-    const BADGE = { ok: ['다 받음', 'var(--g)'], part: ['일부', 'var(--am)'], todo: ['미수령', 'var(--re)'], na: ['받을 것 없음', 'var(--i5)'] };
-    const cnt = (k) => list.filter(sp => stOf(sp) === k).length;
-    const shownCards = list.filter(sp => !confCardFil || stOf(sp) === confCardFil).sort((a, b) => firstAt(a).localeCompare(firstAt(b)));
-    const scard = (sp) => {
-      const p = speakerPhotoOf(ev.key, sp.id);
-      const st = stOf(sp), [bl, bc] = BADGE[st];
-      const at = firstAt(sp).slice(11);
-      const org = [sp.title_en || sp.title_ko, sp.org_en || sp.org_ko].filter(Boolean).join(' · ');
-      const items = SP_COLS.filter(c => c.key !== 'profile').map(c => ({ c, x: spCell(sp, ev.key, c.key) })).filter(o => o.x.state !== 'na');
-      return `<section onclick="openSpeakerDr('${escAttr(sp.id)}')" style="background:var(--W);border:1px solid var(--i6);
-          border-radius:10px;padding:12px;cursor:pointer;display:flex;flex-direction:column;gap:8px">
-        <div style="display:flex;gap:6px;align-items:baseline;flex-wrap:wrap">
-          ${at && at !== '99:99' ? `<span style="font-size:11px;color:var(--i4)">${escapeHtml(at)}</span>` : ''}
-          <b style="font-size:13px">${escapeHtml(sp.name_snapshot || sp.name_en || sp.id)}</b>
-          ${sp.name_snapshot && sp.name_en ? `<span style="font-size:11px;color:var(--i4)">${escapeHtml(sp.name_en)}</span>` : ''}
-          <span style="margin-left:auto;font-size:10.5px;color:#fff;background:${bc};border-radius:99px;padding:1px 8px">${bl}</span>
-        </div>
-        ${org ? `<div style="font-size:11px;color:var(--i4);margin-top:-5px">${escapeHtml(org)}</div>` : ''}
-        ${p ? `<img src="${photoSrc(p)}" alt="" loading="lazy"
-            style="width:100%;height:190px;object-fit:cover;object-position:50% 25%;border-radius:6px;background:var(--i8)">`
-          : `<div style="height:190px;display:grid;place-items:center;border:1px dashed var(--i6);border-radius:6px;
-            font-size:11px;color:var(--i4);background:var(--i8)">${speakerPhotosLoaded(ev.key) ? '사진 없음' : '불러오는 중'}</div>`}
-        <div style="display:flex;gap:4px;flex-wrap:wrap">${items.map(({ c, x }) => `<span title="${escapeHtml(
-          x.state === 'done' ? `${c.label} 받음${x.text ? ` (${x.text})` : ''}` : x.state === 'part' ? `${c.label} 일부 (${x.text})` : `${c.label} 아직`)}"
-          style="font-size:10.5px;border-radius:4px;padding:0 6px;border:1px solid ${
-          x.state === 'done' ? 'var(--g);color:var(--g)' : x.state === 'part' ? 'var(--am);color:var(--am)' : 'var(--i6);color:var(--i5)'}">${
-          x.state === 'part' ? '◐ ' : ''}${escapeHtml(c.label)}</span>`).join('')}</div>
-      </section>`;
-    };
-    const cchip = (k, label) => `<button class="pill ${confCardFil === k ? 'p-blue' : 'p-gray'}" style="border:0;cursor:pointer;font:inherit;font-size:11px"
-      onclick="setConfCardFil('${k}')">${label} ${cnt(k)}${confCardFil === k ? ' ✕' : ''}</button>`;
-    return summary + searchNote + filterBar
-      + `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
-          ${cchip('ok', '다 받음')}${cchip('part', '일부')}${cchip('todo', '미수령')}
-          <span style="font-size:10.5px;color:var(--i4)">— 역할이 받는 항목 기준 · 발표 순서대로 · 카드를 누르면 연사 창이 열립니다</span></div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(${isMobile() ? '100%' : '260px'},1fr));gap:12px">
-          ${shownCards.map(scard).join('')}</div>`;
-  }
-
-  /* ── 모바일 ──
-     칸을 열로 늘어놓는 표는 좁은 화면에서 성립하지 않는다. 열 열두 개를
-     담으려다 글자가 한 자씩 끊기고, 옆으로 밀려 나간 칸은 아예 못 본다.
-     그래서 사람마다 카드 하나로 바꾸고, «아직 안 받은 것»만 딱지로 보여준다 —
-     받은 것을 다 보여줄 자리는 없고, 실제로 찾는 것은 남은 쪽이다. */
-  if(isMobile()){
-    const card = (sp) => {
-      const pr = spProgress(sp, ev.key);
-      const roles = rolesOfSpeaker(sp.id);
-      const left = SP_COLS
-        .map(c => ({ c, st: spCell(sp, ev.key, c.key) }))
-        .filter(x => x.st.state !== 'na' && x.st.state !== 'done');
-      const sess = assignmentsFor(sp.id).map(a => {
-        const ss = CONF_SESSIONS.find(x => x.id === a.session_id);
-        return ss ? (ss.title_ko || ss.title_en || '') : '';
-      }).filter(Boolean);
-      return `<div onclick="openSpeakerDr('${escAttr(sp.id)}')"
-        style="background:var(--W);border:1px solid var(--i6);border-radius:10px;padding:11px 12px;
-        margin-bottom:8px;cursor:pointer">
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <span style="font-size:13px;font-weight:700">${escapeHtml(sp.name_snapshot || sp.name_en || sp.id)}</span>${spLeftPill(sp)}${spFlagPills(sp)}${isHiddenSp(sp) ? '<span class="pill p-gray" style="font-size:9px" title="받을 항목에서 빠진 연사예요">숨김</span>' : ''}
-          ${roles.map(r => `<span class="pill ${(SPEAKER_ROLES.find(x => x.key === r) || {}).cls || 'p-gray'}"
-            style="font-size:9px">${escapeHtml(r)}</span>`).join('')}
-          ${countryChip(sp)}
-          ${sp.lang_pref === 'en' ? '<span class="pill p-gray" style="font-size:9px">EN</span>' : ''}
-          ${sp.status && sp.status !== '확정' ? `<span class="pill p-amber" style="font-size:9px">${escapeHtml(sp.status)}</span>` : ''}
-        </div>
-        ${sp.org_ko || sp.org_en ? `<div style="font-size:11px;color:var(--i4);margin-top:2px">${escapeHtml(
-          [sp.org_ko || sp.org_en, sp.title_ko || sp.title_en].filter(Boolean).join(' · '))}</div>` : ''}
-        ${sess.length ? `<div style="font-size:11px;color:var(--i3);margin-top:4px;overflow:hidden;
-          text-overflow:ellipsis;white-space:nowrap">${escapeHtml(sess[0])}${
-          sess.length > 1 ? ` 외 ${sess.length - 1}` : ''}</div>`
-          : '<div style="font-size:11px;color:var(--am);margin-top:4px">배정 없음</div>'}
-        <div style="display:flex;align-items:center;gap:7px;margin-top:7px">
-          <div style="flex:1">${progressBar(pr.pct, pr.pct === 100 ? 'var(--g)' : 'var(--a)')}</div>
-          <span style="font-size:10.5px;color:var(--i4);white-space:nowrap">${pr.n}/${pr.of}</span>
-        </div>
-        ${(() => { const na = nextActionLabel(sp); return `<div style="font-size:11px;margin-top:6px;font-weight:600;color:${
-          na.skip ? 'var(--i4)' : na.done ? 'var(--g)' : 'var(--a)'}">${na.skip ? '— ' : na.done ? '✓ ' : '● '}${escapeHtml(na.text)}${
-          na.due ? ` <span style="font-weight:400;color:${na.due < td() ? 'var(--re)' : 'var(--i4)'}">~${escapeHtml(na.due)}</span>` : ''}</div>`; })()}
-        ${left.length
-          ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:7px">
-              ${left.map(({ c, st }) => `<span style="font-size:10px;font-weight:600;padding:3px 7px;
-                border-radius:5px;white-space:nowrap;background:${st.state === 'part' ? 'var(--ab)' : 'var(--i8)'};
-                color:${st.state === 'part' ? 'var(--am)' : 'var(--i5)'}">${
-                st.state === 'part' ? '◐ ' : ''}${escapeHtml(c.label)}${st.text ? ` ${escapeHtml(st.text)}` : ''}</span>`).join('')}
-            </div>`
-          : `<div style="font-size:10.5px;color:var(--g);margin-top:7px">받을 것을 다 받았어요</div>`}
-        ${(() => {
-          const sent = SP_SENT.filter(c => sp[c.key]);
-          return `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">
-            <button onclick="event.stopPropagation();removeConfSpeaker('${escAttr(sp.id)}')"
-              style="border:0;font:inherit;cursor:pointer;font-size:10px;padding:3px 7px;border-radius:5px;
-              background:var(--rb);color:var(--re);margin-left:auto">지우기</button>
-            <button onclick="event.stopPropagation();setSpeakerHidden('${escAttr(sp.id)}',${!isHiddenSp(sp)})"
-              title="${isHiddenSp(sp) ? '다시 목록에 보이고 받을 항목도 셉니다' : '목록에서 접고 받을 항목에서 뺍니다 — 지우지는 않아요'}"
-              style="border:0;font:inherit;cursor:pointer;font-size:10px;padding:3px 7px;border-radius:5px;
-              background:var(--i8);color:var(--i3)">${isHiddenSp(sp) ? '다시 보이기' : '숨기기'}</button>
-            <button onclick="event.stopPropagation();receiveAll('${escAttr(sp.id)}')"
-              style="border:0;font:inherit;cursor:pointer;font-size:10px;padding:3px 7px;border-radius:5px;
-              background:var(--gb);color:var(--g);font-weight:600">한꺼번에 받음</button>
-            ${SP_SENT.map(c => `<button onclick="event.stopPropagation();toggleSpeakerDate('${escAttr(sp.id)}','${c.key}')"
-              style="border:0;font:inherit;cursor:pointer;font-size:10px;padding:3px 7px;border-radius:5px;
-              background:${sp[c.key] ? 'var(--ad)' : 'var(--i8)'};color:${sp[c.key] ? 'var(--a)' : 'var(--i5)'}">${
-              escapeHtml(c.label)}${sp[c.key] ? ` ${escapeHtml(shortCell(sp[c.key]))}` : ''}</button>`).join('')}
-          </div>`;
-        })()}
-        ${sp.fee_amount && paysFee(sp) ? `<div style="font-size:10.5px;margin-top:6px;color:${sp.fee_paid_at ? 'var(--g)' : 'var(--am)'}">
-          연사료 ${escapeHtml(Number(String(sp.fee_amount).replace(/[^\d.-]/g, '') || 0).toLocaleString('ko-KR'))}
-          · ${sp.fee_paid_at ? '지급' : '미지급'}</div>` : ''}
-      </div>`;
-    };
-    return summary + searchNote + filterBar + (phase === 'prep' ? needChips : '')
-      + `<div style="font-size:10px;color:var(--i4);margin-bottom:7px">딱지는 아직 안 받은 것이에요 — 카드를 누르면 그 연사가 열립니다</div>`
-      + list.map(card).join('');
-  }
-
-  /* 이름·세션 칸 — 준비·정산 표가 같이 쓴다 */
-  const nameTd = (sp) => {
-    const name = sp.name_snapshot || sp.name_en || sp.id;
-    const roles = rolesOfSpeaker(sp.id);
-    return `<td><div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
-          <span style="font-weight:700;font-size:12px">${escapeHtml(name)}</span>
-          ${sp.name_snapshot && sp.name_en
-            ? `<span style="font-size:10.5px;color:var(--i4)">${escapeHtml(sp.name_en)}</span>` : ''}${spLeftPill(sp)}${spFlagPills(sp)}${isHiddenSp(sp) ? '<span class="pill p-gray" style="font-size:9px" title="받을 항목에서 빠진 연사예요">숨김</span>' : ''}
-          ${roles.map(r => `<span class="pill ${(SPEAKER_ROLES.find(x => x.key === r) || {}).cls || 'p-gray'}"
-            style="font-size:9px">${escapeHtml(r)}</span>`).join('')}
-          ${countryChip(sp)}
-          ${sp.lang_pref === 'en' ? '<span class="pill p-gray" style="font-size:9px" title="영문만 받는 해외 연사예요">EN</span>' : ''}
-          ${sp.status && sp.status !== '확정' ? `<span class="pill ${sp.status === '취소' ? 'p-gray' : 'p-amber'}" style="font-size:9px">${escapeHtml(sp.status)}</span>` : ''}
-        </div>
-        ${sp.org_ko || sp.org_en ? (() => {
-          const org = [sp.org_ko || sp.org_en, sp.title_ko || sp.title_en].filter(Boolean).join(' · ');
-          return `<div style="font-size:10px;color:var(--i4);max-width:260px;white-space:nowrap;overflow:hidden;
-            text-overflow:ellipsis" title="${escapeHtml(org)}">${escapeHtml(org)}</div>`;
-        })() : ''}</td>`;
-  };
-  const sessTd = (sp) => {
-    const sess = assignmentsFor(sp.id).map(a => {
-      const ss = CONF_SESSIONS.find(x => x.id === a.session_id);
-      return ss ? (ss.title_ko || ss.title_en || '') : '';
-    }).filter(Boolean);
-    return `<td style="max-width:170px">
-        ${sess.length ? `<div style="font-size:10.5px;color:var(--i3);white-space:nowrap;overflow:hidden;
-            text-overflow:ellipsis" title="${escapeHtml(sess.join(' / '))}">${escapeHtml(sess[0])}${
-            sess.length > 1 ? ` 외 ${sess.length - 1}` : ''}</div>`
-          : '<span style="font-size:10.5px;color:var(--am)">배정 없음</span>'}</td>`;
-  };
-
-  /* ── 정산 표 ──
-     연사료·서류·지급·영상 게재만. 줄 연사료가 없는 사람 — 연사료를 받지 않는 역할(VIP·축사)과
-     연사료 칸이 비었거나 0인 연사 — 은 챙길 서류·지급이 없으므로 맨 아래 한 줄로 접는다.
-     영상 게재 칩으로 거를 때는 접지 않는다(영상 동의는 연사료와 무관하게 받는다). */
-  if(phase === 'settle'){
-    const noFee = confVideoFil ? [] : list.filter(sp => !feeOn(sp));
-    const shown = list.filter(sp => !noFee.includes(sp));
-    const won = (sp) => feeNum(sp).toLocaleString('ko-KR');
-    const srow = (sp) => {
-      const on = feeOn(sp), miss = settleMissing(sp);
-      const dom = isDomesticSpeaker(sp);
-      const vp = sp.video_publish;
-      return `<tr style="cursor:pointer" onclick="openSpeakerDr('${escAttr(sp.id)}')">
-        ${nameTd(sp)}${sessTd(sp)}
-        <td style="text-align:right;font-size:11.5px;white-space:nowrap">${on ? won(sp)
-          : `<span style="font-size:10.5px;color:var(--i5)">${paysFee(sp) ? '없음' : '해당 없음'}</span>`}</td>
-        <td style="font-size:11px;white-space:nowrap">${on ? `<span style="font-size:9.5px;color:var(--i4);margin-right:5px">${dom ? '국내' : '해외'}</span>${
-          miss.length ? `<span style="color:var(--am);font-weight:600">${escapeHtml(miss.join('·'))} 아직</span>`
-            : '<span style="color:var(--g);font-weight:600">✓ 다 받음</span>'}` : ''}</td>
-        <td style="font-size:11px;white-space:nowrap">${on ? (sp.fee_paid_at
-          ? `<span style="color:var(--g)">✓ ${escapeHtml(shortCell(sp.fee_paid_at))}</span>`
-          : '<span style="color:var(--am)">미지급</span>') : ''}</td>
-        <td style="font-size:11px;white-space:nowrap">${vp === 'yes' ? '<span style="color:var(--g);font-weight:600">동의</span>'
-          : vp === 'no' ? '<span style="color:var(--re);font-weight:600">비동의</span>'
-          : '<span style="color:var(--i5)">미확인</span>'}${sp.video_publish_at
-          ? ` <span style="font-size:9.5px;color:var(--i4)">${escapeHtml(shortCell(sp.video_publish_at))}</span>` : ''}</td>
-      </tr>`;
-    };
-    return summary + searchNote + filterBar
-      + `<div class="tw"><table><thead><tr>
-          <th style="min-width:160px">연사</th>
-          <th style="min-width:120px">세션</th>
-          <th style="text-align:right;min-width:80px">연사료</th>
-          <th style="min-width:150px" title="국내: 신분증·통장사본·계좌번호 / 해외: 계좌·여권">서류</th>
-          <th style="min-width:70px">지급</th>
-          <th style="min-width:80px" title="행사 뒤 홈페이지·교육 자료 게재 동의">영상 게재</th>
-        </tr></thead><tbody>${shown.map(srow).join('')}
-        ${noFee.length ? `<tr onclick="toggleConfNoFee()" style="cursor:pointer;background:var(--i8)">
-          <td colspan="6" style="font-size:11px;color:var(--i4)">${confShowNoFee ? '▾' : '▸'} 연사료 없음 ${noFee.length}명 (VIP 등 포함) — ${
-            escapeHtml(noFee.map(sp => sp.name_snapshot || sp.name_en || '').join(', '))}</td></tr>
-          ${confShowNoFee ? noFee.map(srow).join('') : ''}` : ''}
-        </tbody></table></div>
-        <div style="font-size:10px;color:var(--i4);margin-top:7px;line-height:1.6">
-          줄을 누르면 연사 창이 열립니다 — 서류·지급일은 «계좌·여권»·«제공사항» 탭, 영상 게재는 «기본» 탭에서 고칩니다
-        </div>`;
-  }
-
-  /* 지금 보이는 연사 중 아무도 받지 않는 항목은 열째로 뺀다 — 숙박·항공을 아무에게도
-     제공하지 않는 행사에서 빈 열을 훑으며 체크할 이유가 없다 */
-  const cols = SP_COLS.filter(c => list.some(sp => spCell(sp, ev.key, c.key).state !== 'na'));
-
-  const row = (sp) => {
-    const name = sp.name_snapshot || sp.name_en || sp.id;
-    const pr = spProgress(sp, ev.key);
-    const to = contactsOfSpeaker(sp.id).filter(x => x.send === 'to' && x.email);
-
-    return `<tr style="cursor:pointer" onclick="openSpeakerDr('${escAttr(sp.id)}')">
-      ${nameTd(sp)}${sessTd(sp)}
-      <td style="min-width:70px">
-        ${progressBar(pr.pct, pr.pct === 100 ? 'var(--g)' : 'var(--a)')}
-        <div style="font-size:9.5px;color:var(--i4);margin-top:2px">${pr.n}/${pr.of}</div></td>
-      ${nextActionTd(sp)}
-      ${cols.map(c => spCellHtml(spCell(sp, ev.key, c.key), c.label, name, c)).join('')}
-      ${SP_SENT.map(c => spSentHtml(sp, c)).join('')}
-      <td style="text-align:center;padding:5px 3px">
-        <button class="btn" style="font-size:10px;padding:2px 7px"
-          onclick="event.stopPropagation();receiveAll('${escAttr(sp.id)}')"
-          title="이 연사에게서 아직 안 받은 것을 모두 오늘 받은 것으로 표시합니다">받음</button></td>
-      <td style="text-align:center;font-size:10.5px;color:${to.length ? 'var(--i4)' : 'var(--am)'}"
-        title="${escapeHtml(to.length ? to.map(x => x.email).join(', ') : '메일 수신자가 정해지지 않았어요')}">
-        ${to.length ? '✓' : '—'}</td>
-      <td style="text-align:right;font-size:11px;white-space:nowrap">
-        ${!paysFee(sp) && assignmentsFor(sp.id).length
-          ? '<span style="color:var(--i5);font-size:10px" title="맡은 역할이 연사료를 받지 않아요">해당 없음</span>'
-          : sp.fee_amount
-          ? `<span style="color:${sp.fee_paid_at ? 'var(--g)' : 'var(--i2)'}">${
-              escapeHtml(Number(String(sp.fee_amount).replace(/[^\d.-]/g, '') || 0).toLocaleString('ko-KR'))}</span>
-             <div style="font-size:9.5px;color:${sp.fee_paid_at ? 'var(--g)' : 'var(--am)'}">${
-              sp.fee_paid_at ? '지급' : '미지급'}</div>`
-          : '<span style="color:var(--i6)">—</span>'}</td>
-    </tr>`;
-  };
-
-  return summary + searchNote + filterBar + (phase === 'prep' ? needChips : '')
-    + `<div class="tw"><table><thead><tr>
-        <th style="min-width:140px">연사</th>
-        <th style="min-width:120px">세션</th>
-        <th style="min-width:70px">진행률</th>
-        <th style="min-width:110px" title="연락 단계에서 다음에 할 일 — 누르면 그 메일 초안이 열립니다">지금 할 일</th>
-        ${cols.map(c => `<th style="text-align:${c.show === 'text' ? 'left' : 'center'};font-size:10px;line-height:1.2${
-          c.wide ? ';min-width:120px' : ''}">${escapeHtml(c.label)}</th>`).join('')}
-        ${SP_SENT.map(c => `<th style="text-align:center;font-size:10px;line-height:1.2;color:var(--a)"
-          title="${escapeHtml(c.tip || '')}">${escapeHtml(c.label)}</th>`).join('')}
-        <th style="text-align:center;font-size:10px;line-height:1.2" title="한 메일에 같이 온 것을 한 번에 표시합니다">한꺼번에</th>
-        <th style="text-align:center;min-width:44px;font-size:10px">수신</th>
-        <th style="text-align:right;min-width:70px;font-size:10px">연사료</th>
-      </tr></thead><tbody>${list.map(row).join('')}</tbody></table></div>
-      <div style="font-size:10px;color:var(--i4);margin-top:7px;line-height:1.6">
-        ✓ 받음 · ◐ 일부 · — 아직 · 빈칸은 그 역할이 받지 않는 것(진행률에서 뺌) · 아무도 받지 않는 항목은 열째로 숨겨요
-      </div>`;
-}
-
-/* ══════════════════════════════════════════════════════════════
-   엑셀로 한 번에 올리기
-
-   프로그램은 보통 엑셀로 먼저 돈다 — 학술위원회가 세션을 짜고, 사무국이
-   연사를 채우고, 그 파일이 메일로 오간다. 그걸 화면에서 한 줄씩 다시
-   치게 하면 옮겨 적는 동안 오타가 생기고, 원본과 어긋난 순간부터 어느
-   쪽이 맞는지 아무도 모르게 된다.
-
-   지우지 않는다. 올려도 기존 세션·연사를 지우지 않고 더하거나 고칠 뿐이다 —
-   잘못 올렸을 때 되돌릴 것이 남아야 한다.
-══════════════════════════════════════════════════════════════ */
-
-/* 양식 내려받기 — 정의는 conf-import-spec.js 하나만 본다 */
-export function downloadConfTemplate(){
-  if(typeof XLSX === 'undefined'){ alert('엑셀 라이브러리를 불러오지 못했어요. 새로고침 후 다시 해주세요.'); return; }
-  const wb = XLSX.utils.book_new();
-  const guide = XLSX.utils.aoa_to_sheet(IMPORT_GUIDE);
-  guide['!cols'] = [{ wch: 14 }, { wch: 92 }];
-  XLSX.utils.book_append_sheet(wb, guide, '안내');
-  IMPORT_SHEETS.forEach(sh => {
-    const rows = [
-      sh.cols.map(c => c.label),
-      sh.cols.map(c => (c.hint ? `↳ ${c.hint}` : '')),
-      ...sh.sample,
-    ];
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols'] = sh.cols.map(c => ({ wch: Math.max(12, Math.min(34, c.label.length * 2 + 8)) }));
-    XLSX.utils.book_append_sheet(wb, ws, sh.name);
-  });
-  const ev = EVENT_LIST.find(e => e.key === confEvent);
-  XLSX.writeFile(wb, `${(ev?.short || ev?.key || '컨퍼런스')}_업로드_양식.xlsx`);
-}
-
-/* 머리글로 칸을 찾는다 — 열 순서가 바뀌어도 읽히게. 사람이 열을 옮기는 건
-   흔한 일이고, 그걸로 못 읽으면 «양식대로 넣었는데»가 된다. */
-function readSheet(wb, sh){
-  const ws = wb.Sheets[sh.name];
-  if(!ws) return [];
-  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false, defval: '' });
-  if(!rows.length) return [];
-  const head = rows[0].map(v => String(v || '').trim());
-  const idx = {};
-  sh.cols.forEach(c => { idx[c.key] = head.indexOf(c.label); });
-  return rows.slice(1)
-    /* 2행은 우리가 넣은 설명 줄이다. «↳»로 시작하면 건너뛴다 —
-       지우고 쓰는 사람도 있고 남겨 두는 사람도 있다. */
-    .filter(r => !String(r[0] || '').trim().startsWith('↳'))
-    .map(r => {
-      const o = {};
-      sh.cols.forEach(c => { o[c.key] = idx[c.key] >= 0 ? String(r[idx[c.key]] ?? '').trim() : ''; });
-      return o;
-    })
-    .filter(o => Object.values(o).some(v => v));
-}
-
-/* 엑셀이 시각을 0.4687500…으로 바꿔 놓는 일이 잦다. 되돌려 준다 —
-   여기서 안 받아 주면 «시간이 다 비어서 들어왔다»가 된다. */
-/* 엑셀의 종류 칸 — 사람마다 «오찬»«점심»«Lunch»로 적는다. 다 받아 준다.
-   모르는 말이면 null을 돌려 올리기 전에 알린다. */
-function normKind(v){
-  const s = String(v || '').trim().toLowerCase().replace(/\s+/g, '');
-  if(!s || s === '세션' || s === 'session') return '';
-  if(/브레이크|휴식|커피|break|coffee/.test(s)) return 'break';
-  if(/런치|오찬|점심|중식|lunch|luncheon/.test(s)) return 'lunch';
-  if(/디너|만찬|갈라|저녁|석식|dinner|gala/.test(s)) return 'dinner';
-  if(/기타|세션아님|아님|기념촬영|촬영|사진|등록|이동|other|photo|registration/.test(s)) return 'other';
-  return null;
-}
-
-function normTime(v){
-  const s = String(v || '').trim();
-  if(!s) return '';
-  const m = /^(\d{1,2}):(\d{2})/.exec(s);
-  if(m) return `${m[1].padStart(2, '0')}:${m[2]}`;
-  const n = Number(s);
-  if(Number.isFinite(n) && n > 0 && n < 1){
-    const mins = Math.round(n * 24 * 60);
-    return `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
-  }
-  return s;
-}
-function normDate(v){
-  const s = String(v || '').trim();
-  if(!s) return '';
-  const m = /^(\d{4})[-./](\d{1,2})[-./](\d{1,2})/.exec(s);
-  if(m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
-  /* 엑셀이 날짜 칸을 «11/19/26»(월/일/연 두 자리)로 내보내는 일이 있다.
-     그대로 두면 화면이 날짜로 못 읽어 요일이 비고 정렬도 어긋난다 */
-  const us = /^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/.exec(s);
-  if(us){
-    const y = us[3].length === 2 ? `20${us[3]}` : us[3];
-    return `${y}-${us[1].padStart(2, '0')}-${us[2].padStart(2, '0')}`;
-  }
-  /* 엑셀 일련번호(1900 기준) */
-  const n = Number(s);
-  if(Number.isFinite(n) && n > 20000 && n < 80000){
-    const d = new Date(Date.UTC(1899, 11, 30) + n * 86400000);
-    return d.toISOString().slice(0, 10);
-  }
-  return s;
-}
-
-export function pickConfFile(){
-  if(confLocked()){ confLockNotice(); return; }
-  document.getElementById('conf-xlsx-input')?.click();
-}
-
-export async function handleConfFile(e){
-  const file = e.target?.files?.[0];
-  if(e.target) e.target.value = '';   // 같은 파일을 다시 골라도 열리게
-  if(!file) return;
-  if(confLocked()){ confLockNotice(); return; }
-  const ev = EVENT_LIST.find(x => x.key === confEvent);
-  if(!ev) return;
-
-  let wb;
-  try {
-    const buf = await file.arrayBuffer();
-    wb = XLSX.read(buf, { type: 'array', cellText: true, cellDates: false });
-  } catch(err){ alert(`엑셀을 읽지 못했어요 (${err.message}).`); return; }
-
-  const spec = Object.fromEntries(IMPORT_SHEETS.map(sh => [sh.key, sh]));
-  const missing = IMPORT_SHEETS.filter(sh => !wb.Sheets[sh.name]).map(sh => sh.name);
-  if(missing.length === IMPORT_SHEETS.length){
-    alert(`«${IMPORT_SHEETS.map(s => s.name).join('», «')}» 시트를 찾지 못했어요.\n«양식 받기»로 받은 파일에 채워 올려주세요.`);
-    return;
-  }
-
-  const rowsS = readSheet(wb, spec.sessions);
-  const rowsP = readSheet(wb, spec.speakers);
-  const rowsA = readSheet(wb, spec.assignments);
-  if(!rowsS.length && !rowsP.length && !rowsA.length){ alert('채워진 줄이 없어요.'); return; }
-
-  /* 무엇이 새로 만들어지고 무엇이 이미 있는지 먼저 보여준다 — 올리고 나서
-     알려 주면 되돌릴 수 없다. */
-  const sessKey = (t) => String(t || '').trim().toLowerCase();
-  /* 메일로 마스터DB 사람 찾기 — 비서실·공용 주소처럼 여럿이 쓰는 메일이면 이름까지 맞는 사람만.
-     전에는 그 주소의 첫 사람에게 연사가 이어졌다 */
-  const contactIdByMail = (m, name) => {
-    const e = String(m || '').trim().toLowerCase();
-    if(!e) return '';
-    const hits = contacts.filter(k => [k.email1, k.email2].some(x => x && String(x).trim().toLowerCase() === e));
-    if(hits.length <= 1) return hits[0] ? String(hits[0].id) : '';
-    const n = sessKey(name);
-    const same = hits.filter(k => n && [k.nameKo, k.nameEn].some(x => x && sessKey(x) === n));
-    return same.length === 1 ? String(same[0].id) : '';
-  };
-  /* 식사·휴식은 이름으로 찾지 않는다 — «오찬»은 날마다 있다. 이름으로 찾으면
-     둘째 날 오찬이 첫째 날 것을 덮는다. 종류·일자·시작으로 찾는다. */
-  const haveSess = new Map(), haveBreak = new Map();
-  const breakKey = (r) => `${r.kind}|${normDate(r.date)}|${normTime(r.start_at)}`;
-  const keep = (x) => {
-    if(x.kind){ haveBreak.set(breakKey(x), x); return; }
-    if(x.title_ko) haveSess.set(sessKey(x.title_ko), x);
-    if(x.title_en) haveSess.set(sessKey(x.title_en), x);
-  };
-  sessionsForEvent(ev.key).forEach(keep);
-  const findSess = (r) => r.kind ? haveBreak.get(breakKey(r))
-    : haveSess.get(sessKey(r.title_ko)) || haveSess.get(sessKey(r.title_en));
-  const haveSp = new Map(speakersForEvent(ev.key).map(x => [sessKey(x.name_snapshot), x]));
-
-  /* 종류를 먼저 읽는다 — 세션명이 비어 있으면 종류 이름을 세션명으로 쓴다.
-     «런치»만 적은 줄도 받아야 한다(샘플이 그렇게 생겼다). */
-  const badKind = [];
-  rowsS.forEach(r => {
-    const k = normKind(r.kind);
-    if(k === null){ badKind.push(r.kind); r.kind = ''; return; }
-    /* 종류 칸이 비었으면 세션명으로 짐작한다 — «커피 브레이크»«만찬»을 종류 없이 올리는 일이 잦다 */
-    r.kind = k || [r.title_ko, r.title_en].map(normKind).find(Boolean) || '';
-    const d = kindOf(r.kind);
-    if(r.kind && !r.title_ko && !r.title_en){ r.title_ko = d.ko; r.title_en = d.en; }
-  });
-
-  const newSess = rowsS.filter(r => !findSess(r));
-  const newSp = rowsP.filter(r => !haveSp.has(sessKey(r.name_snapshot)));
-  /* 배정이 가리키는 세션·연사가 이 파일이나 화면에 있는지 미리 본다 */
-  const willSess = new Set([...haveSess.keys(), ...rowsS.flatMap(r => [sessKey(r.title_ko), sessKey(r.title_en)]).filter(Boolean)]);
-  const willSp = new Set([...haveSp.keys(), ...rowsP.map(r => sessKey(r.name_snapshot)).filter(Boolean)]);
-  const orphan = rowsA.filter(r => !willSess.has(sessKey(r._session)) || !willSp.has(sessKey(r._speaker)));
-
-  const msg = `«${ev.short || ev.key}»에 올립니다.\n\n`
-    + `세션 ${rowsS.length}줄 — 새로 ${newSess.length}, 이미 있는 것 ${rowsS.length - newSess.length}\n`
-    + `연사 ${rowsP.length}줄 — 새로 ${newSp.length}, 이미 있는 것 ${rowsP.length - newSp.length}\n`
-    + `배정 ${rowsA.length}줄${orphan.length ? ` — 이 중 ${orphan.length}줄은 세션이나 연사를 못 찾아 건너뜁니다` : ''}\n\n`
-    + (badKind.length ? `종류를 못 알아본 ${badKind.length}줄(${[...new Set(badKind)].join(', ')})은 발표 세션으로 넣습니다
-
-` : '')
-    + `이미 있는 것은 비어 있지 않은 칸만 덮어씁니다. 지우지 않습니다.`;
-  if(!confirm(msg)) return;
-
-  /* 연사는 이름으로 찾는다(배정 표도 이름으로 가리킨다). 이름이 같고 소속이 다르면 동명이인일 수 있다 —
-     그대로 두면 둘째 사람이 첫 사람의 소속·직함·사례비를 덮어쓴다 */
-  const orgKey = (x) => sessKey(x.org_ko || x.org_en);
-  const seen = new Map();
-  const homonyms = [];
-  rowsP.forEach(r => {
-    const k = sessKey(r.name_snapshot);
-    if(!k || !orgKey(r)) return;
-    const prev = seen.get(k) || haveSp.get(k);
-    if(prev && orgKey(prev) && orgKey(prev) !== orgKey(r)) homonyms.push(`${r.name_snapshot} — ${prev.org_ko || prev.org_en} / ${r.org_ko || r.org_en}`);
-    if(!seen.has(k)) seen.set(k, r);
-  });
-  if(homonyms.length && !confirm(`이름은 같은데 소속이 다른 연사가 ${homonyms.length}명 있어요:\n\n${homonyms.slice(0, 10).join('\n')}\n\n`
-    + `같은 사람(소속이 바뀜)이면 확인을 누르세요 — 새 소속으로 덮어씁니다.\n다른 사람이면 취소하고, 파일에서 이름 뒤에 구분을 붙여(예: 김지훈(서울대)) 다시 올려 주세요.`)) return;
-
-  const msgEl = document.getElementById('conf-import-msg');
-  const say = (t, ok) => { if(msgEl){ msgEl.style.color = ok === false ? 'var(--re)' : 'var(--i4)'; msgEl.textContent = t; } };
-  const fail = (what) => { say(`${what}에서 멈췄어요 — 여기까지는 저장됐습니다.`, false); };
-
-  let nS = 0, nP = 0, nA = 0;
-  say('올리는 중…');
-
-  /* ── 세션 ── */
-  for(const r of rowsS){
-    const exist = findSess(r);
-    const patch = {
-      date: normDate(r.date), start_at: normTime(r.start_at), end_at: normTime(r.end_at),
-      room: r.room, track: r.track, title_ko: r.title_ko, title_en: r.title_en, note: r.note,
-      kind: r.kind,
-    };
-    /* 빈 칸은 덮지 않는다 — 엑셀에서 한 열만 채워 올리는 일이 흔한데,
-       그때 나머지가 지워지면 화면에서 채워 둔 값이 통째로 날아간다. */
-    Object.keys(patch).forEach(k => { if(!patch[k]) delete patch[k]; });
-    if(exist){
-      const diff = Object.keys(patch).filter(k => String(exist[k] ?? '') !== patch[k]);
-      if(!diff.length) continue;
-      const res = await gSaveSession({ id: exist.id, ...patch });
-      if(!res || res.ok === false){ fail('세션'); return; }
-      Object.assign(exist, patch); nS++;
-    } else {
-      const row = { event_id: ev.key, seq: String(sessionsForEvent(ev.key).length + 1),
-        title_ko: '', title_en: '', date: '', start_at: '', end_at: '', room: '', track: '', note: '', ...patch };
-      const res = await gSaveSession(row);
-      if(!res || res.ok === false){ fail('세션'); return; }
-      const made = { ...row, id: res.id || `CS-tmp-${Date.now()}-${nS}` };
-      CONF_SESSIONS.push(made);
-      keep(made);
-      nS++;
-    }
-  }
-
-  /* ── 연사 ── */
-  for(const r of rowsP){
-    if(!r.name_snapshot) continue;
-    const exist = haveSp.get(sessKey(r.name_snapshot));
-    const patch = {
-      name_snapshot: r.name_snapshot, name_en: r.name_en, org_ko: r.org_ko, org_en: r.org_en,
-      title_ko: r.title_ko, title_en: r.title_en, lang_pref: r.lang_pref,
-      nationality: r.nationality, residence_country: r.residence_country,
-      status: r.status, fee_amount: r.fee_amount, fee_currency: r.fee_currency, note: r.note,
-    };
-    Object.keys(patch).forEach(k => { if(!patch[k]) delete patch[k]; });
-    let sp = exist;
-    if(sp){
-      const diff = Object.keys(patch).filter(k => String(sp[k] ?? '') !== patch[k]);
-      if(diff.length){
-        const res = await gSaveSpeaker({ id: sp.id, ...patch });
-        if(!res || res.ok === false){ fail('연사'); return; }
-        Object.assign(sp, patch); nP++;
-      }
-    } else {
-      /* 마스터DB에 같은 메일의 사람이 있으면 그 사람으로 잇는다 — 안 이으면 마스터DB에서
-         그 사람의 연사 이력·주고받은 메일이 안 보이고, 다음 행사 섭외 때도 못 찾는다 */
-      const row = { event_id: ev.key, contact_id: contactIdByMail(r.email, r.name_snapshot), status: '섭외중', lang_pref: '', note: '', ...patch };
-      const res = await gSaveSpeaker(row);
-      if(!res || res.ok === false){ fail('연사'); return; }
-      sp = { ...row, id: res.id || `SP-tmp-${Date.now()}-${nP}` };
-      SPEAKERS.push(sp);
-      haveSp.set(sessKey(sp.name_snapshot), sp);
-      nP++;
-    }
-    /* 메일을 적었으면 연락 상대(수신)로 만들어 둔다 — 연사에게 무엇을
-       보내려면 수신이 있어야 하고, 없으면 메일 칸이 열리지 않는다. */
-    if(r.email && !contactsOfSpeaker(sp.id).some(x => x.email === r.email)){
-      const c = { speaker_id: sp.id, contact_id: contactIdByMail(r.email, sp.name_snapshot), name: sp.name_snapshot,
-        email: r.email, phone: r.phone || '', kind: '연사 본인',
-        send: contactsOfSpeaker(sp.id).some(x => x.send === 'to') ? 'cc' : 'to', note: '' };
-      const res = await saveSpeakerContact(c);
-      if(res && res.ok !== false) SPEAKER_CONTACTS.push({ ...c, id: res.id || `SC-tmp-${Date.now()}` });
-    }
-  }
-
-  /* ── 배정 ── */
-  const seqBySession = {};
-  for(const r of rowsA){
-    const ss = haveSess.get(sessKey(r._session));
-    const sp = haveSp.get(sessKey(r._speaker));
-    if(!ss || !sp) continue;
-    const role = r.role || SPEAKER_ROLES[0].key;
-    const dup = assignmentsOfSession(ss.id).find(a => a.speaker_id === sp.id && a.role === role);
-    const patch = {
-      role, seq: r.seq || '', lang: r.lang,
-      start_at: normTime(r.start_at), end_at: normTime(r.end_at), duration_min: r.duration_min,
-      title_ko: r.title_ko, title_en: r.title_en, note: r.note,
-    };
-    Object.keys(patch).forEach(k => { if(!patch[k]) delete patch[k]; });
-    if(!patch.seq){
-      seqBySession[ss.id] = (seqBySession[ss.id] || assignmentsOfSession(ss.id).length) + 1;
-      patch.seq = String(seqBySession[ss.id]);
-    }
-    if(dup){
-      const diff = Object.keys(patch).filter(k => String(dup[k] ?? '') !== patch[k]);
-      if(!diff.length) continue;
-      const res = await gSaveAssign({ id: dup.id, ...patch });
-      if(!res || res.ok === false){ fail('배정'); return; }
-      Object.assign(dup, patch); nA++;
-    } else {
-      const row = { event_id: ev.key, session_id: ss.id, speaker_id: sp.id,
-        lang: '', duration_min: '', start_at: '', end_at: '',
-        title_ko: '', title_en: '', abstract_ko: '', abstract_en: '', abstract_received_at: '',
-        slides_file: '', slides_received_at: '', slides_version: '', note: '', ...patch };
-      const res = await gSaveAssign(row);
-      if(!res || res.ok === false){ fail('배정'); return; }
-      SESSION_SPEAKERS.push({ ...row, id: res.id || `SS-tmp-${Date.now()}-${nA}` });
-      nA++;
-    }
-  }
-
-  /* 엑셀에 있던 트랙·장소를 설정에 등록한다. 세션에만 있고 설정에 없으면
-     고를 목록이 비어 다음부터 손으로 타이핑하게 되고, 색도 트랙마다 정해
-     두지 못한다 — 올린 사람이 나중에 설정을 다시 채울 일은 없다. */
-  const cfg = JSON.parse(JSON.stringify(confCfg(ev.key)));
-  const before = JSON.stringify([cfg.tracks || [], cfg.rooms || [], cfg.trackColors || {}]);
-  cfg.tracks = cfg.tracks || []; cfg.rooms = cfg.rooms || [];
-  cfg.trackColors = { ...(cfg.trackColors || {}) };
-  sessionsForEvent(ev.key).forEach(x => {
-    if(x.track && !cfg.tracks.includes(x.track)) cfg.tracks.push(x.track);
-    /* 장소는 순서가 곧 표의 열 순서다. 어디가 메인인지는 우리가 모르니
-       뒤에 붙이고, 순서는 설정에서 사람이 정한다. */
-    if(x.room && !cfg.rooms.includes(x.room)) cfg.rooms.push(x.room);
-  });
-  cfg.tracks.forEach(t => {
-    if(!Number.isInteger(cfg.trackColors[t])) cfg.trackColors[t] = pickTrackColorIndex(cfg);
-  });
-  if(JSON.stringify([cfg.tracks, cfg.rooms, cfg.trackColors]) !== before){
-    await saveConf(ev.key, cfg);
-  }
-
-  trackAction('add', '컨퍼런스 업로드', ev.key,
-    `${ev.name || ev.key} — 세션 ${nS} · 연사 ${nP} · 배정 ${nA}`);
-  say(`올렸어요 — 세션 ${nS} · 연사 ${nP} · 배정 ${nA}${orphan.length ? ` (건너뛴 배정 ${orphan.length})` : ''}`);
-  buildConfEvList();
-  renderConf();
-}
-
+/* «연사·세션 엑셀로 올리기»은 ../features/conference/conf-upload.js로 떼어 냈다 — 그 파일이 스스로 window에 건다 */
 /* ══════════════════════════════════════════
    쓰기
 ══════════════════════════════════════════ */
 /* 시간대를 고르면 시작·종료 칸을 채운다 — 안내에 그렇게 적었으니 실제로
    채워져야 하고, 고른 뒤 한쪽만 손으로 고치는 일도 가능해야 한다. */
 export function fillSessionSlot(idx){
-  const ev = EVENT_LIST.find(e => e.key === confEvent);
+  const ev = EVENT_LIST.find(e => e.key === confUi.confEvent);
   const slot = (confCfg(ev?.key || '').slots || [])[Number(idx)];
   const s = document.getElementById('ns-start'), e = document.getElementById('ns-end');
   if(!slot || !s || !e) return;
@@ -2053,7 +287,7 @@ export function fillSessionSlot(idx){
   e.value = slot.end || '';
 }
 
-export function toggleNewSession(){ confNewSession = !confNewSession; renderConf(); }
+export function toggleNewSession(){ confUi.confNewSession = !confUi.confNewSession; renderConf(); }
 /* ── 발표 시간 ──
    세션 시간만으로는 연사에게 «몇 시에 올라가시면 됩니다»를 못 적는다.
    시간은 사람이 아니라 배정에 붙는다 — 한 사람이 두 세션에서 발표하면
@@ -2099,13 +333,13 @@ export async function setTalkTime(aid, field, value){
     if(!res?.locked) alert('발표 시간을 저장하지 못했어요.');
     return;
   }
-  trackAction('edit', '발표 시간', confEvent,
+  trackAction('edit', '발표 시간', confUi.confEvent,
     /* 시각만이 아니라 분만 고칠 때도 있다 — 그때 «감은희 —»로 끝나 무엇을 고쳤는지 몰랐다 */
     `${speakerName(a.speaker_id)} — ${[
       (patch.start_at !== undefined || patch.end_at !== undefined) && `${a.start_at || '시각 없음'}${a.end_at ? `–${a.end_at}` : ''}`,
       patch.duration_min !== undefined && (patch.duration_min ? `${patch.duration_min}분` : '분 지움'),
     ].filter(Boolean).join(' · ') || '발표 시간'}`,
-    changed('session_speakers', aid, backup, patch, { kind: 'session', id: a.session_id, ev: confEvent }));
+    changed('session_speakers', aid, backup, patch, { kind: 'session', id: a.session_id, ev: confUi.confEvent }));
 }
 
 /* 세션 시작부터 각 발표의 «분»만큼 이어 붙인다.
@@ -2147,9 +381,9 @@ export async function autoTalkTimes(sid){
       return;
     }
   }
-  trackAction('edit', '발표 시간 배분', confEvent,
+  trackAction('edit', '발표 시간 배분', confUi.confEvent,
     `${sess.title_ko || sess.title_en || sid} — ${plan.length}명`,
-    { kind: 'session', id: sid, ev: confEvent });
+    { kind: 'session', id: sid, ev: confUi.confEvent });
   renderConf();
 }
 
@@ -2157,20 +391,19 @@ export async function autoTalkTimes(sid){
    좌장을 나중에 넣으면 맨 뒤에 붙는다. 프로그램은 순서대로 읽는 물건이라
    좌장이 맨 아래 있으면 그대로는 못 쓴다. 지워서 다시 넣게 하면 발제 정보가
    함께 날아가므로, 끌어서 옮긴다. */
-let _dragAsgId = null;
 
 export function onAsgDragStart(e, aid){
-  _dragAsgId = aid;
+  confUi.dragAsgId = aid;
   e.dataTransfer.effectAllowed = 'move';
   e.dataTransfer.setData('text/plain', aid);
   e.stopPropagation();
 }
 export function onAsgDragEnd(){
-  _dragAsgId = null;
+  confUi.dragAsgId = null;
   document.querySelectorAll('.asg-row.drop-on').forEach(el => el.classList.remove('drop-on'));
 }
 export function onAsgDragOver(e, el){
-  if(!_dragAsgId) return;
+  if(!confUi.dragAsgId) return;
   e.preventDefault();
   e.dataTransfer.dropEffect = 'move';
   if(el) el.classList.add('drop-on');
@@ -2181,7 +414,7 @@ export async function onAsgDrop(e, overId, el){
   e.preventDefault();
   e.stopPropagation();
   if(el) el.classList.remove('drop-on');
-  const from = _dragAsgId;
+  const from = confUi.dragAsgId;
   onAsgDragEnd();
   if(!from || from === overId) return;
 
@@ -2235,7 +468,7 @@ async function reflowTalkTimes(list, label){
       return;
     }
   }
-  trackAction('edit', '발표 시간 배분', confEvent, `${label} — 시간 따라 옮김`);
+  trackAction('edit', '발표 시간 배분', confUi.confEvent, `${label} — 시간 따라 옮김`);
   renderConf();
 }
 
@@ -2260,17 +493,17 @@ async function applyAsgOrder(list, label){
       return;
     }
   }
-  trackAction('edit', '세션 배정 순서', confEvent, label);
+  trackAction('edit', '세션 배정 순서', confUi.confEvent, label);
 }
 
 export function toggleEditSession(sid){
-  confEditSession = confEditSession === sid ? '' : sid;
+  confUi.confEditSession = confUi.confEditSession === sid ? '' : sid;
   renderConf();
 }
 
 /* 수정 칸에서도 시간대를 고르면 시작·종료가 채워진다 */
 export function fillEditSlot(sid, idx){
-  const slot = (confCfg(confEvent).slots || [])[Number(idx)];
+  const slot = (confCfg(confUi.confEvent).slots || [])[Number(idx)];
   const st = document.getElementById(`es-${sid}-start`);
   const en = document.getElementById(`es-${sid}-end`);
   if(!slot || !st || !en) return;
@@ -2287,7 +520,7 @@ export async function saveSessionEdit(sid){
   const say = (t, ok) => { if(msg){ msg.style.color = ok ? 'var(--g)' : 'var(--re)'; msg.textContent = t; } };
 
   const si = g('slot');
-  const slots = confCfg(confEvent).slots || [];
+  const slots = confCfg(confUi.confEvent).slots || [];
   const slot = si !== '' ? slots[Number(si)] : null;
   const start = slot ? slot.start : g('start');
   const end = slot ? slot.end : g('end');
@@ -2303,7 +536,7 @@ export async function saveSessionEdit(sid){
   /* 바뀐 것이 없으면 보내지 않는다 — 저장할 때마다 같은 값을 밀어 넣으면
      기록이 «고침»으로 채워져 정작 무엇이 바뀌었는지 안 보인다. */
   const diff = Object.keys(patch).filter(k => String(s[k] ?? '') !== String(patch[k] ?? ''));
-  if(!diff.length){ confEditSession = ''; renderConf(); return; }
+  if(!diff.length){ confUi.confEditSession = ''; renderConf(); return; }
 
   const backup = {};
   diff.forEach(k => { backup[k] = s[k]; });
@@ -2320,20 +553,20 @@ export async function saveSessionEdit(sid){
     if(!res?.locked) alert('세션을 고치지 못했어요. 잠시 뒤 다시 해주세요.');
     return;
   }
-  trackAction('edit', '컨퍼런스 세션', confEvent, `${titleKo || titleEn} — ${diff.join(', ')} 고침`,
+  trackAction('edit', '컨퍼런스 세션', confUi.confEvent, `${titleKo || titleEn} — ${diff.join(', ')} 고침`,
     changed('conf_sessions', sid, backup, diff.reduce((o, k) => (o[k] = patch[k] ?? '', o), {}),
-      { kind: 'session', id: sid, ev: confEvent }));
-  confEditSession = '';
+      { kind: 'session', id: sid, ev: confUi.confEvent }));
+  confUi.confEditSession = '';
   renderConf();
 }
 
-export function toggleAssign(sid){ confOpenSession = confOpenSession === sid ? '' : sid; renderConf(); }
+export function toggleAssign(sid){ confUi.confOpenSession = confUi.confOpenSession === sid ? '' : sid; renderConf(); }
 
 const gv = (id) => (document.getElementById(id)?.value || '').trim();
 
 export async function addConfSession(){
   if(confLocked()){ confLockNotice(); return; }
-  const ev = EVENT_LIST.find(e => e.key === confEvent);
+  const ev = EVENT_LIST.find(e => e.key === confUi.confEvent);
   if(!ev) return;
 
   /* 시간대를 골랐으면 그 값을 쓴다 — 직접 적은 칸보다 설정 목록이 우선이다.
@@ -2360,7 +593,7 @@ export async function addConfSession(){
   CONF_SESSIONS.push({ ...row, id: res.id || row.id || `CS-tmp-${Date.now()}` });
   trackAction('add', '컨퍼런스 세션', ev.key, `${ev.name || ev.key} — ${titleKo || titleEn}`,
     { kind: 'session', id: res.id || row.id, ev: ev.key });
-  confNewSession = false;
+  confUi.confNewSession = false;
   renderConf();
 }
 
@@ -2389,9 +622,9 @@ export async function removeConfSession(sid){
   if(res && res.ok === false){ if(!res.locked) alert('세션을 지우지 못했어요.'); renderConf(); return; }
   const i = CONF_SESSIONS.findIndex(x => x.id === sid);
   if(i >= 0) CONF_SESSIONS.splice(i, 1);
-  if(confEditSession === sid) confEditSession = '';
+  if(confUi.confEditSession === sid) confUi.confEditSession = '';
   /* 세션을 지우면 배정도 함께 없어진다 — 둘 다 담아야 되살릴 수 있다 */
-  trackAction('delete', '컨퍼런스 세션', confEvent, s.title_ko || s.title_en || sid,
+  trackAction('delete', '컨퍼런스 세션', confUi.confEvent, s.title_ko || s.title_en || sid,
     removed('conf_sessions', sid, s, { kind: 'session', id: sid, also: goneAssigns }));
   for(const spId of new Set(goneAssigns.map(a => a.speaker_id))) await syncPartRole(spId);
   renderConf();
@@ -2399,7 +632,7 @@ export async function removeConfSession(sid){
 
 export async function addAssign(sid){
   if(confLocked()){ confLockNotice(); return; }
-  const ev = EVENT_LIST.find(e => e.key === confEvent);
+  const ev = EVENT_LIST.find(e => e.key === confUi.confEvent);
   if(!ev) return;
   const role = gv('as-role') || SPEAKER_ROLES[0].key;
   let spId = gv('as-pick');
@@ -2457,9 +690,9 @@ export async function setAssignRole(aid, role){
   const res = await gSaveAssign({ id: aid, role });
   if(!res || res.ok === false){ if(!res?.locked) alert('역할을 바꾸지 못했어요.'); renderConf(); return; }
   a.role = role;
-  trackAction('edit', '세션 배정', confEvent, `${speakerName(a.speaker_id)} — ${was} → ${role}`,
+  trackAction('edit', '세션 배정', confUi.confEvent, `${speakerName(a.speaker_id)} — ${was} → ${role}`,
     changed('session_speakers', aid, { role: was }, { role },
-      { kind: 'session', id: a.session_id, ev: confEvent }));
+      { kind: 'session', id: a.session_id, ev: confUi.confEvent }));
   await syncPartRole(a.speaker_id);
   renderConf();
 }
@@ -2478,9 +711,9 @@ export async function setCoLead(aid, leadId){
   const res = await gSaveAssign({ id: aid, lead_id: leadId || '' });
   if(!res || res.ok === false){ if(!res?.locked) alert('공동 발표를 저장하지 못했어요.'); renderConf(); return; }
   a.lead_id = leadId || '';
-  trackAction('edit', '공동 발표', confEvent,
+  trackAction('edit', '공동 발표', confUi.confEvent,
     lead ? `${speakerName(a.speaker_id)} — ${speakerName(lead.speaker_id)}와 공동 발표` : `${speakerName(a.speaker_id)} — 단독 발표로`,
-    changed('session_speakers', aid, { lead_id: was }, { lead_id: a.lead_id }, { kind: 'session', id: a.session_id, ev: confEvent }));
+    changed('session_speakers', aid, { lead_id: was }, { lead_id: a.lead_id }, { kind: 'session', id: a.session_id, ev: confUi.confEvent }));
   if(lead){
     const list = assignmentsOfSession(a.session_id).filter(x => x.id !== aid);
     const at = list.findIndex(x => x.id === lead.id) + 1 + coOf(lead).filter(x => x.id !== aid).length;
@@ -2509,7 +742,7 @@ export async function removeAssign(aid){
   if(res && res.ok === false){ if(!res.locked) alert('배정을 해제하지 못했어요.'); return; }
   const i = SESSION_SPEAKERS.findIndex(x => x.id === aid);
   if(i >= 0) SESSION_SPEAKERS.splice(i, 1);
-  trackAction('delete', '세션 배정', confEvent, `${speakerName(a.speaker_id)} — ${a.role}`,
+  trackAction('delete', '세션 배정', confUi.confEvent, `${speakerName(a.speaker_id)} — ${a.role}`,
     removed('session_speakers', aid, a, { kind: 'speaker', id: a.speaker_id }));
   // 발표 배정을 빼서 VIP만 남으면 마스터DB 참가 역할도 VIP로 — 따로 두면 «연사»로 남는다
   await syncPartRole(a.speaker_id);
@@ -2572,7 +805,7 @@ export async function removeConfSpeaker(spId){
   if(res && res.ok === false){ if(!res.locked) alert('연사를 지우지 못했어요.'); return; }
   const i = SPEAKERS.findIndex(x => x.id === spId);
   if(i >= 0) SPEAKERS.splice(i, 1);
-  trackAction('delete', '연사', confEvent, sp.name_snapshot || spId,
+  trackAction('delete', '연사', confUi.confEvent, sp.name_snapshot || spId,
     removed('speakers', spId, sp, { also: [...goneCons, ...goneLogs] }));
   renderConf();
   buildConfEvList();
@@ -2581,32 +814,9 @@ export async function removeConfSpeaker(spId){
 /* ── 인라인 핸들러용 노출 ── */
 window.setConfEvent      = setConfEvent;
 window.setConfView       = setConfView;
-window.setConfNeedFil    = setConfNeedFil;
-window.openConfNeedTodo  = openConfNeedTodo;
-window.openConfRole      = openConfRole;
-window.openConfSess      = openConfSess;
-window.setConfRoleFil    = setConfRoleFil;
-window.setConfVideoFil   = setConfVideoFil;
-window.setConfPhase      = setConfPhase;
-window.setConfLayout     = setConfLayout;
-window.setConfCardFil    = setConfCardFil;
-window.setConfSettleFil  = setConfSettleFil;
-window.toggleConfNoFee   = toggleConfNoFee;
-window.searchConfM       = searchConfM;
-window.clearConfSearch   = clearConfSearch;
-window.setConfSessFil    = setConfSessFil;
-window.toggleSpeakerDate = toggleSpeakerDate;
-window.receiveAll        = receiveAll;
-window.openPgaSession    = openPgaSession;
-window.openAuditSession  = openAuditSession;
-window.copyPga           = copyPga;
-window.downloadConfTemplate = downloadConfTemplate;
-window.pickConfFile         = pickConfFile;
-window.handleConfFile       = handleConfFile;
 window.buildConfEvList   = buildConfEvList;
 window.renderConf        = renderConf;
 window.fillSessionSlot   = fillSessionSlot;
-window.fillSessionKind   = fillSessionKind;
 window.toggleNewSession  = toggleNewSession;
 window.toggleAssign      = toggleAssign;
 window.toggleEditSession = toggleEditSession;

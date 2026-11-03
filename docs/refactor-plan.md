@@ -154,7 +154,14 @@ master와 이 브랜치의 계산 지문이 같다(참가기업 12곳·기업 16
 모두 탭이 부르는 함수라 `--via-window`로 옮겼다. `exh-tab` 5,495 → 2,129줄. 101곳이 master와 같다.
 활동 로그 보기만 업로드 줄의 «오후 01:13» 분이 달라 어긋났다 — `render-hash.mjs`가 «오전/오후 시:분»도 빼고 세게 했다.
 
-다음: `conf-tab`.
+**컨퍼런스 탭** (✅): 화면 상태 16개 → `features/conference/conf-ui.js`의 `confUi`. 떼어 냄:
+`conf-program.js`(일자·세션·배정) / `conf-pga.js`(프로그램표) / `conf-people.js`(연사 보기 — 준비·정산·카드) / `conf-upload.js`(엑셀 올리기).
+«쓰기» 구획(세션·배정 저장)은 여러 보기가 부르는 바탕이라 탭에 남겼다. `conf-tab` 2,629 → 836줄.
+101곳 + 컨퍼런스 보기 바꾸기 16단계(준비·정산, 표·카드, 거르개, 숨김, 연사료 없음)가 master와 같다.
+도구 고침: `split-leaf.js`가 범위 안의 다시 내보내기 줄(`export { SP_COLS … } from`)까지 새 파일로 옮겨,
+옛 경로로 가져가던 `fingerprint.mjs`가 깨졌다. 이제 그런 줄은 탭 파일에 남긴다.
+
+다음: `state.js`·`api.js` 기능별로 나누기, 또는 남은 큰 파일(`db-tab`·`speaker-drawer`·`company-tab`·`settings-tab`).
 
 **공용 낱말 훑기 `scripts/refactor/js-scan.js`** — `codeOnly(src)`가 원본과 길이가 같은 «코드만 남긴 사본»을 만든다
 (문자열·주석·정규식 글자·템플릿 글자를 지우고 `${식}`은 남긴다). `lift-state`·`split-leaf --via-window`·`deps.js`가 이것을 쓴다.

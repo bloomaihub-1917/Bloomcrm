@@ -87,13 +87,17 @@ const head = [
 /* 옮기기 — 범위 안의 import 줄은 뺀다(머리 import를 위에서 따로 만든다. 남기면 같은 이름을 두 번 import해
    파일을 읽을 때 SyntaxError가 난다). «export … from» 줄은 경로를 새 자리에 맞춘다 */
 const chunk = [];
+const keepExports = [];
 for (const l of lines.slice(from - 1, to)) {
   if (/^import\s*[{*'\w]/.test(l)) { chunk.push(`/* (옮기며 뺀 import — 머리 import가 대신한다) */`); continue; }
-  chunk.push(l.replace(/^(export\s*\{[^}]*\}\s*from\s*')(\.{1,2}\/[^']+)(')/, (w, a, spec, z) => a + rel(dest, path.resolve(path.dirname(src), spec)) + z));
+  /* «export … from» 다시 내보내기 줄은 탭 파일에 남긴다 — 옛 경로(탭 파일)로 가져가는 곳을 위한 줄이다.
+     전에는 함께 옮겨, 컨퍼런스 탭에서 SP_COLS·spCell을 가져가던 fingerprint.mjs가 깨졌다 */
+  if (/^export\s*(\{[^}]*\}|\*)\s*from\s*'/.test(l)) { keepExports.push(l); continue; }
+  chunk.push(l);
 }
 const moved = new Set([...insideTop]);
 lines.splice(from - 1, to - from + 1,
-  `/* «${title}»은 ${path.relative(path.dirname(src), dest).replace(/\\/g, '/')}로 떼어 냈다 — 그 파일이 스스로 window에 건다 */`);
+  `/* «${title}»은 ${path.relative(path.dirname(src), dest).replace(/\\/g, '/')}로 떼어 냈다 — 그 파일이 스스로 window에 건다 */`, ...keepExports);
 
 /* window 줄 옮기기 */
 const winLines = [];

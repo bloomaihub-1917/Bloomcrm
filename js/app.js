@@ -42,6 +42,10 @@ import './modules/exh-invoice.js';
 import './modules/event-tab.js';
 import './modules/register-links.js';
 import './modules/conf-tab.js';
+import './features/conference/conf-program.js';   // 프로그램 — 일자·세션·배정 — 스스로 window에 건다
+import './features/conference/conf-pga.js';   // 프로그램표(PROGRAM AT A GLANCE) — 스스로 window에 건다
+import './features/conference/conf-people.js';   // 연사 보기 — 준비·정산·카드 — 스스로 window에 건다
+import './features/conference/conf-upload.js';   // 연사·세션 엑셀로 올리기 — 스스로 window에 건다
 import './modules/speaker-drawer.js';
 
 import { initMobileNav, initDrawerSwipe, initSidebarLayout, initDrawerResize } from './router.js';
