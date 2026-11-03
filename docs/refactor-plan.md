@@ -161,7 +161,12 @@ master와 이 브랜치의 계산 지문이 같다(참가기업 12곳·기업 16
 도구 고침: `split-leaf.js`가 범위 안의 다시 내보내기 줄(`export { SP_COLS … } from`)까지 새 파일로 옮겨,
 옛 경로로 가져가던 `fingerprint.mjs`가 깨졌다. 이제 그런 줄은 탭 파일에 남긴다.
 
-다음: `state.js`·`api.js` 기능별로 나누기, 또는 남은 큰 파일(`db-tab`·`speaker-drawer`·`company-tab`·`settings-tab`).
+**연사 상세 창** (✅): 화면 상태 13개 → `features/conference/speaker-drawer-ui.js`의 `spDrUi`(`let bulkPick, bulkPickFor` 한 줄 선언은 먼저 두 줄로). 떼어 냄:
+`sp-dr-basic.js`(기본·이력·발제) / `sp-dr-mail.js`(연락 상대·메일·기록) / `sp-dr-bank.js`(계좌·여권). 제공사항은 작아 남겼다.
+`MAIL_KINDS`는 머리 구획(보낸 단계 이름)이 값으로 쓰므로 상세 창 파일에 남기고 메일 파일이 가져간다. `speaker-drawer` 2,278 → 878줄.
+101곳 + 연사 6명 × 하위 탭 8개(48곳)가 master와 같다. 메일 보내기·저장은 눌러 보지 않았다.
+
+다음: 남은 큰 파일(`db-tab`·`company-tab`·`settings-tab`), `state.js`·`api.js` 기능별로 나누기.
 
 **공용 낱말 훑기 `scripts/refactor/js-scan.js`** — `codeOnly(src)`가 원본과 길이가 같은 «코드만 남긴 사본»을 만든다
 (문자열·주석·정규식 글자·템플릿 글자를 지우고 `${식}`은 남긴다). `lift-state`·`split-leaf --via-window`·`deps.js`가 이것을 쓴다.

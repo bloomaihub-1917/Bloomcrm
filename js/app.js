@@ -47,6 +47,9 @@ import './features/conference/conf-pga.js';   // 프로그램표(PROGRAM AT A GL
 import './features/conference/conf-people.js';   // 연사 보기 — 준비·정산·카드 — 스스로 window에 건다
 import './features/conference/conf-upload.js';   // 연사·세션 엑셀로 올리기 — 스스로 window에 건다
 import './modules/speaker-drawer.js';
+import './features/conference/sp-dr-basic.js';   // 연사 기본·이력·발제 — 스스로 window에 건다
+import './features/conference/sp-dr-mail.js';   // 연사 연락 상대·메일·기록 — 스스로 window에 건다
+import './features/conference/sp-dr-bank.js';   // 연사 계좌·여권 — 스스로 window에 건다
 
 import { initMobileNav, initDrawerSwipe, initSidebarLayout, initDrawerResize } from './router.js';
 import { initBackButton } from './back-button.js';

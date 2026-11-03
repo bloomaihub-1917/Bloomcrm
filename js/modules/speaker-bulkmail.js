@@ -22,7 +22,7 @@ import { escapeHtml, escAttr, nowStamp, td } from '../utils.js';
 import { flowSteps, flowStatus, draftFor, fillTemplate, roundTargets, resentAfter,
   sessionItems, toldSchedule, stepVariants, autoVariant } from './speaker-flow.js';
 import { libItems, libItem } from '../shared/mail/mail-templates.js';
-import { mailTargets } from './speaker-drawer.js';
+import { mailTargets } from '../features/conference/sp-dr-mail.js';
 import { saveConf } from '../features/conference/conf-common.js';
 import { trackAction } from '../core/audit-log.js';
 import { varChipsHtml } from '../shared/mail/var-chips.js';
