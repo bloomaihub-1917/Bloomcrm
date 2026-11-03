@@ -30,6 +30,7 @@ import { exhMailSteps, exhIsEnglish, fillExhTemplate, exhMailFileStep, boothChan
 import { libItems, libItem } from '../shared/mail/mail-templates.js';
 import { followState } from '../shared/mail/follow-up.js';
 import { trackAction } from '../core/audit-log.js';
+import { makeResendRound } from '../shared/mail/resend-round.js';
 import { varChipsHtml } from '../shared/mail/var-chips.js';
 import { aiDraftHtml, registerAiDraft } from '../shared/mail/ai-mail-draft.js';
 import './exh-mail-editor.js';
@@ -405,45 +406,38 @@ export async function bmToContact(){
   const r = await importSentToRound(bm.evKey, name, items);
   say(r.ok ? `컨택 «${name}»에 ${r.members}곳 · 보낸 기록 ${r.attempts}건을 넣었어요${r.members || r.attempts ? '' : ' (이미 다 옮겨져 있어요)'}.` : '옮기지 못했어요. 네트워크 확인 후 다시 시도해주세요.', !!r.ok);
 }
-function roundProgress(st){
-  const r = st && st.round;
-  if(!r) return null;
-  const ids = new Set(r.targets || []);
-  const xs = eventExhibitors().filter(x => ids.has(x.id));
-  return { r, total: xs.length, done: xs.filter(x => sentOf(x, st.key, r.since)).length };
-}
-export async function startExhRound(){
-  if(!bm || bm.sending) return;
-  const st = curStep();
-  if(!st) return;
+/* 다시 보내기 묶음 — 틀은 shared/mail/resend-round.js(연사 일괄 메일과 같은 코드). 여기는 대상·말·다시 그리기만 */
+const round = makeResendRound({
+  ctx: () => ({ bm, st: bm && curStep() }),
+  members: (ids) => eventExhibitors().filter(x => ids.has(x.id)),
+  resent: (x, key, since) => sentOf(x, key, since),
   /* 이미 받았거나 끝낸 곳 — 아직 안 받은 곳은 평소대로 «보낼 차례»라 묶음에 넣지 않는다 */
-  const targets = eventExhibitors().filter(x => ['sent', 'late', 'done'].includes(baseState(x, st))).map(x => x.id);
-  if(!targets.length){ alert(`«${st.label}»을 이미 받은 곳이 없어요 — 다시 보낼 곳이 없습니다.`); return; }
-  const label = (prompt(`이미 «${st.label}»을 받은 ${targets.length}곳에 다시 보냅니다.\n이번 묶음의 이름 (예: 매뉴얼 개정판)`, `${st.label} 개정판`) || '').trim();
-  if(!label) return;
-  const ok = await pushRounds(list => {
-    list.push({ id: `R-${Date.now().toString(36)}`, step: st.key, label, since: nowStamp(), targets,
-      by: currentUser?.name || currentUser?.email || '' });
-  });
-  if(!ok) return;
-  trackAction('add', '참가사 다시 보내기', bm.evKey, `«${st.label}» 묶음 «${label}» ${targets.length}곳`);
-  pickTurn();
-  render();
-}
-export async function closeExhRound(silent){
-  if(!bm) return;
-  const st = curStep();
-  if(!st || !st.round) return;
-  if(!silent){
-    const p = roundProgress(st);
-    if(!confirm(`다시 보내기 묶음 «${st.round.label}»을 닫을까요?${p && p.done < p.total ? `\n\n아직 ${p.total - p.done}곳에 다시 안 보냈어요. 닫으면 그 기업들은 평소 상태로 돌아갑니다.` : ''}`)) return;
-  }
-  const ok = await pushRounds(list => { const r = list.find(x => x.id === st.round.id); if(!r) return false; r.closed_at = nowStamp(); });
-  if(!ok) return;
-  trackAction('edit', '참가사 다시 보내기', bm.evKey, `«${st.label}» 묶음 «${st.round.label}» 닫음`);
-  pickTurn();
-  render();
-}
+  targets: (st) => eventExhibitors().filter(x => ['sent', 'late', 'done'].includes(baseState(x, st))).map(x => x.id),
+  pushRounds: (fn) => pushRounds(fn),
+  track: '참가사 다시 보내기',
+  count: (n) => `${n}곳`,
+  text: {
+    none: (st) => `«${st.label}»을 이미 받은 곳이 없어요 — 다시 보낼 곳이 없습니다.`,
+    ask: (st, n) => `이미 «${st.label}»을 받은 ${n}곳에 다시 보냅니다.
+이번 묶음의 이름 (예: 매뉴얼 개정판)`,
+    leftover: (n) => `
+
+아직 ${n}곳에 다시 안 보냈어요. 닫으면 그 기업들은 평소 상태로 돌아갑니다.`,
+  },
+  afterStart: () => { pickTurn(); render(); },
+  afterClose: () => { pickTurn(); render(); },
+  bar: {
+    hidden: (st) => st.key === 'note' || st.key === 'booth_change',
+    unit: '곳',
+    help: '묶음을 열 때 이미 받았던 곳이 대상이에요(진행 칸이 끝난 곳 포함). 다 보내면 저절로 닫혀요.',
+    start: 'startExhRound', close: 'closeExhRound',
+    title: '이 메일을 이미 받았거나 끝낸 곳에 개정판을 다시 보냅니다 — 지금 이 순간이 기준이 됩니다',
+    button: '↻ 이미 받은 곳에 다시 보내기 (개정판)',
+  },
+});
+const roundProgress = (st) => round.progress(st);
+export const startExhRound = () => round.start();
+export const closeExhRound = (silent) => round.close(silent);
 
 function render(){
   if(!bm) return;
@@ -552,17 +546,7 @@ function render(){
   </div>`;
 }
 
-function roundBarHtml(st, rp){
-  if(!st || st.lib || st.key === 'note' || st.key === 'booth_change') return '';
-  if(rp) return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:-2px 0 10px;padding:7px 10px;border:1px solid var(--am);border-radius:8px;font-size:11px">
-      <b style="color:var(--am)">↻ 다시 보내기 «${escapeHtml(rp.r.label)}»</b>
-      <span style="color:var(--i3)">다시 보냄 ${rp.done}/${rp.total}곳</span>
-      <span style="color:var(--i4)">· ${escapeHtml(rp.r.since)} 시작${rp.r.by ? ` · ${escapeHtml(rp.r.by)}` : ''}</span>
-      <span style="color:var(--i4)">— 묶음을 열 때 이미 받았던 곳이 대상이에요(진행 칸이 끝난 곳 포함). 다 보내면 저절로 닫혀요.</span>
-      <button class="btn" style="font-size:10px;margin-left:auto" onclick="closeExhRound()">묶음 닫기</button></div>`;
-  return `<div style="margin:-2px 0 10px"><button class="btn" style="font-size:10.5px" onclick="startExhRound()"
-      title="이 메일을 이미 받았거나 끝낸 곳에 개정판을 다시 보냅니다 — 지금 이 순간이 기준이 됩니다">↻ 이미 받은 곳에 다시 보내기 (개정판)</button></div>`;
-}
+const roundBarHtml = (st, rp) => round.barHtml(st, rp);
 
 /* 기업마다 넘겨 보는 미리보기 */
 function prevHtml(picked){

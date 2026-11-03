@@ -26,6 +26,7 @@ import { libItems, libItem } from '../shared/mail/mail-templates.js';
 import { mailTargets } from '../features/conference/sp-dr-mail.js';
 import { saveConf } from '../features/conference/conf-common.js';
 import { trackAction } from '../core/audit-log.js';
+import { makeResendRound } from '../shared/mail/resend-round.js';
 import { varChipsHtml } from '../shared/mail/var-chips.js';
 import { aiDraftHtml, registerAiDraft } from '../shared/mail/ai-mail-draft.js';
 
@@ -155,48 +156,37 @@ async function pushRounds(fn){
   cfg.mailRounds = [...shut, ...open];
   return saveConf(bm.evKey, cfg);
 }
-function roundProgress(st){
-  const r = st && st.round;
-  if(!r) return null;
-  const ids = new Set(r.targets || []);
-  const sps = speakersForEvent(bm.evKey).filter(sp => ids.has(sp.id) && sp.status !== '취소');
-  return { r, total: sps.length, done: sps.filter(sp => resentAfter(sp, st.key, r.since)).length };
-}
-export async function startSpRound(){
-  if(!bm || bm.sending) return;
-  const st = curStep();
-  if(!st) return;
-  const targets = roundTargets(st.key, liveSpeakers(bm.evKey));
-  if(!targets.length){ alert(`«${st.label}»을 이미 받았거나 끝낸 연사가 없어요 — 다시 보낼 사람이 없습니다.`); return; }
-  const label = (prompt(`이미 «${st.label}»을 받은 연사 ${targets.length}명에게 다시 보냅니다.\n이번 묶음의 이름 (예: 가이드라인 개정판)`,
-    `${st.label} 개정판`) || '').trim();
-  if(!label) return;
-  const ok = await pushRounds(list => {
-    list.push({ id: `R-${Date.now().toString(36)}`, step: st.key, label, since: nowStamp(), targets,
-      by: currentUser?.name || currentUser?.email || '' });
-  });
-  if(!ok) return;
-  trackAction('add', '연사 다시 보내기', bm.evKey, `«${st.label}» 묶음 «${label}» ${targets.length}명`);
-  bm.tpl = null;
-  pickDue();
-  render();
-  window.renderConf?.(); window.renderSpeakerDr?.();
-}
-export async function closeSpRound(silent){
-  if(!bm) return;
-  const st = curStep();
-  if(!st || !st.round) return;
-  if(!silent){
-    const p = roundProgress(st);
-    if(!confirm(`다시 보내기 묶음 «${st.round.label}»을 닫을까요?${p && p.done < p.total ? `\n\n아직 ${p.total - p.done}명에게 다시 안 보냈어요. 닫으면 그 연사들은 평소 상태로 돌아갑니다.` : ''}`)) return;
-  }
-  const ok = await pushRounds(list => { const r = list.find(x => x.id === st.round.id); if(!r) return false; r.closed_at = nowStamp(); });
-  if(!ok) return;
-  trackAction('edit', '연사 다시 보내기', bm.evKey, `«${st.label}» 묶음 «${st.round.label}» 닫음`);
-  pickDue();
-  render();
-  window.renderConf?.(); window.renderSpeakerDr?.();
-}
+/* 틀은 shared/mail/resend-round.js(참가사 일괄 메일과 같은 코드). 여기는 대상·말·다시 그리기만 */
+const round = makeResendRound({
+  ctx: () => ({ bm, st: bm && curStep() }),
+  members: (ids) => speakersForEvent(bm.evKey).filter(sp => ids.has(sp.id) && sp.status !== '취소'),
+  resent: (sp, key, since) => resentAfter(sp, key, since),
+  targets: (st) => roundTargets(st.key, liveSpeakers(bm.evKey)),
+  pushRounds: (fn) => pushRounds(fn),
+  track: '연사 다시 보내기',
+  count: (n) => `${n}명`,
+  text: {
+    none: (st) => `«${st.label}»을 이미 받았거나 끝낸 연사가 없어요 — 다시 보낼 사람이 없습니다.`,
+    ask: (st, n) => `이미 «${st.label}»을 받은 연사 ${n}명에게 다시 보냅니다.
+이번 묶음의 이름 (예: 가이드라인 개정판)`,
+    leftover: (n) => `
+
+아직 ${n}명에게 다시 안 보냈어요. 닫으면 그 연사들은 평소 상태로 돌아갑니다.`,
+  },
+  afterStart: () => { bm.tpl = null; pickDue(); render(); window.renderConf?.(); window.renderSpeakerDr?.(); },
+  afterClose: () => { pickDue(); render(); window.renderConf?.(); window.renderSpeakerDr?.(); },
+  bar: {
+    hidden: (st) => st.key === 'schedule',
+    unit: '명',
+    help: '묶음을 열 때 이미 받았던 연사가 대상이에요. 다 보내면 저절로 닫혀요.',
+    start: 'startSpRound', close: 'closeSpRound',
+    title: '이 단계 메일을 이미 받았거나 끝낸 연사에게 개정판을 다시 보냅니다 — 지금 이 순간이 기준이 됩니다',
+    button: '↻ 이미 받은 연사에게 다시 보내기 (개정판)',
+  },
+});
+const roundProgress = (st) => round.progress(st);
+export const startSpRound = () => round.start();
+export const closeSpRound = (silent) => round.close(silent);
 
 function render(){
   if(!bm) return;
@@ -295,17 +285,7 @@ function render(){
   </div>`;
 }
 
-function roundBarHtml(st, rp){
-  if(!st || st.lib || st.key === 'schedule') return '';
-  if(rp) return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:-2px 0 10px;padding:7px 10px;border:1px solid var(--am);border-radius:8px;font-size:11px">
-      <b style="color:var(--am)">↻ 다시 보내기 «${escapeHtml(rp.r.label)}»</b>
-      <span style="color:var(--i3)">다시 보냄 ${rp.done}/${rp.total}명</span>
-      <span style="color:var(--i4)">· ${escapeHtml(rp.r.since)} 시작${rp.r.by ? ` · ${escapeHtml(rp.r.by)}` : ''}</span>
-      <span style="color:var(--i4)">— 묶음을 열 때 이미 받았던 연사가 대상이에요. 다 보내면 저절로 닫혀요.</span>
-      <button class="btn" style="font-size:10px;margin-left:auto" onclick="closeSpRound()">묶음 닫기</button></div>`;
-  return `<div style="margin:-2px 0 10px"><button class="btn" style="font-size:10.5px" onclick="startSpRound()"
-      title="이 단계 메일을 이미 받았거나 끝낸 연사에게 개정판을 다시 보냅니다 — 지금 이 순간이 기준이 됩니다">↻ 이미 받은 연사에게 다시 보내기 (개정판)</button></div>`;
-}
+const roundBarHtml = (st, rp) => round.barHtml(st, rp);
 
 /* 사람마다 넘겨 보는 미리보기 — 일정 변경처럼 사람마다 내용이 다른 메일을 하나씩 확인한다 */
 function prevHtml(picked){
