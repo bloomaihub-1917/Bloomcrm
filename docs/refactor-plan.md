@@ -149,7 +149,12 @@ master와 이 브랜치의 계산 지문이 같다(참가기업 12곳·기업 16
 하위 탭을 그리는 함수 표(`VIEW = { contact: dContactTab, … }`)는 값으로 쥐고 있어 window로 바꿀 수 없었다 — `(x) => dContactTab(x)`로 감싸 «부르기»로 바꿨다(동작 같음).
 `exh-drawer` 4,283 → 3,380줄. 참가기업 3곳의 상세 창 모든 하위 탭을 포함해 101곳이 master와 같다. «참가기업 지우기»는 실제로 눌러 보지 않았다.
 
-다음: 같은 방식으로 `exh-tab` → `conf-tab`.
+**전시 탭** (✅): 화면 상태 18개(목록 거르개·보기·잠금·선택 등) → `features/exhibition/exh-ui.js`의 `exhUi`. 떼어 냄:
+`exh-item-views.js`(금액·비품·그래픽 현황, 1,536줄) / `exh-book.js`(도록 순번·기본 제공·그래픽 발주) / `exh-dashboard.js`(대시보드) / `exh-add.js`(직접 추가·불러오기).
+모두 탭이 부르는 함수라 `--via-window`로 옮겼다. `exh-tab` 5,495 → 2,129줄. 101곳이 master와 같다.
+활동 로그 보기만 업로드 줄의 «오후 01:13» 분이 달라 어긋났다 — `render-hash.mjs`가 «오전/오후 시:분»도 빼고 세게 했다.
+
+다음: `conf-tab`.
 
 **공용 낱말 훑기 `scripts/refactor/js-scan.js`** — `codeOnly(src)`가 원본과 길이가 같은 «코드만 남긴 사본»을 만든다
 (문자열·주석·정규식 글자·템플릿 글자를 지우고 `${식}`은 남긴다). `lift-state`·`split-leaf --via-window`·`deps.js`가 이것을 쓴다.

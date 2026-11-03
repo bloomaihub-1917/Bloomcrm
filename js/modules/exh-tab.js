@@ -33,12 +33,14 @@ import {
   deleteExhItem as _deleteExhItem, deleteExhInvoice as _deleteExhInvoice, deleteExhPayment as _deleteExhPayment, deleteExhLog as _deleteExhLog,
   batchCreateExhibitors as _batchCreateExhibitors, saveExhCfgToSheet as _saveExhCfgToSheet,
 } from '../api.js';
+/* 화면 상태는 ../features/exhibition/exh-ui.js의 exhUi 한곳에 둔다 — 이 탭의 구획을 다른 파일로 떼어도 같은 값을 보게 */
+import { exhUi } from '../features/exhibition/exh-ui.js';
 
 /* 진행 완료된 행사에서는 저장을 아예 보내지 않는다. 감싸는 자리를 하나로
    둬야 새 저장 지점이 생겨도 가드에서 빠지지 않는다. */
 const postToSheet = guardWrite(_postToSheet);
-const saveExhibitor = guardWrite(_saveExhibitor);
-const saveExhItem = guardWrite(_saveExhItem);
+export const saveExhibitor = guardWrite(_saveExhibitor);
+export const saveExhItem = guardWrite(_saveExhItem);
 const saveExhInvoice = guardWrite(_saveExhInvoice);
 const saveExhPayment = guardWrite(_saveExhPayment);
 const saveExhLog = guardWrite(_saveExhLog);
@@ -46,7 +48,7 @@ const deleteExhItem = guardWrite(_deleteExhItem);
 const deleteExhInvoice = guardWrite(_deleteExhInvoice);
 const deleteExhPayment = guardWrite(_deleteExhPayment);
 const deleteExhLog = guardWrite(_deleteExhLog);
-const batchCreateExhibitors = guardWrite(_batchCreateExhibitors);
+export const batchCreateExhibitors = guardWrite(_batchCreateExhibitors);
 const saveExhCfgToSheet = guardWrite(_saveExhCfgToSheet);
 import { trackAction, changed } from '../core/audit-log.js';
 import { isStale, isUnread, mailCardHtml } from '../shared/mail/mail-mark.js';
@@ -64,7 +66,7 @@ export function cancelledExhibitors(evKey){
 /* 스폰서 등급별 배지색 — 'Exhibitor'(일반)는 배지를 달지 않는다 */
 /* 등급 색상도 행사마다 다를 수 있어 설정에서 읽는다(code_lists.grade).
    목록에 없는 등급은 회색으로 떨어진다. */
-const gradeCls = (g, evKey) => codeCls('grade', evKey || exhEvent, g);
+export const gradeCls = (g, evKey) => codeCls('grade', evKey || exhEvent, g);
 
 /* ── 기업 이름 ──
    exhibitors.company_name은 등록할 때 찍힌 국문 스냅샷이라 영문이 없다. 해외
@@ -82,7 +84,7 @@ export function exhNames(x){
 }
 
 /* 한 줄에 국문 + 영문을 나란히 (표 칸처럼 세로 공간이 좁을 때) */
-function nameCell(x, opts = {}){
+export function nameCell(x, opts = {}){
   const { ko, en } = exhNames(x);
   const off = opts.off ? ';text-decoration:line-through;opacity:.6' : '';
   return `<span style="font-size:${opts.size || 12.5}px;font-weight:700${off}">${escapeHtml(ko)}</span>${
@@ -112,7 +114,6 @@ export const STEPS = [
   { key: 'movein_at',            label: '현장' },
 ];
 
-let exhFilter = 'all';       // all | incomplete | ready | overdue | waiting | inquiry | billing | cancelled | refund
 
 /* 단계별 집계 알약을 누르면 그 단계만 걸러 본다. "신청서 47/51"에서 못 채운
    네 곳이 어디인지 보려면 지금은 51줄을 눈으로 훑어야 한다.
@@ -124,31 +125,25 @@ let exhFilter = 'all';       // all | incomplete | ready | overdue | waiting | i
    집계의 분모에서도 빠져 있어서, 여기서만 끼면 개수가 안 맞는다. */
 /* 대시보드 단계 줄에서 펼쳐 둔 경고 목록 — 한 번에 하나.
    숫자만 보여 주면 «3곳»이 어디인지 찾으러 기업리스트를 훑어야 한다. */
-let stepWarnOpen = '';
 export function toggleStepWarn(key){
-  stepWarnOpen = stepWarnOpen === key ? '' : key;
+  exhUi.stepWarnOpen = exhUi.stepWarnOpen === key ? '' : key;
   renderExh();
 }
 
-let stepFil = null;          // { key, mode: 'done' | 'todo' }
 
 export function setStepFil(key){
-  stepFil = !stepFil || stepFil.key !== key ? { key, mode: 'done' }
-    : stepFil.mode === 'done' ? { key, mode: 'todo' } : null;
+  exhUi.stepFil = !exhUi.stepFil || exhUi.stepFil.key !== key ? { key, mode: 'done' }
+    : exhUi.stepFil.mode === 'done' ? { key, mode: 'todo' } : null;
   renderExh();
 }
-let exhView = 'dash';        // dash | list | booth | equip | graphic | watch
 
 /* 그래픽 현황 안의 보기와 거르개. 그래픽은 기업 한 줄로 볼 일(단계 진행)과
    파일 한 줄로 볼 일(무엇이 안 왔나)이 갈린다 — 화면 하나에 둘 다 넣으면
    어느 쪽도 제대로 안 보여서 나눠 두고 전환한다. */
-let gView = 'base';          // base(기본 제공) | item(받을 파일) | kind(품목별) | co(기업별 진행) | self(독립부스)
-let gFil  = 'all';           // all | todo | late | none | got
-let payFil = 'all';          // all | paid | partial | unpaid | none — 금액 현황의 기업별 세부
 
-export function setGraphicView(v){ gView = v; renderExh(); }
-export function setGraphicFil(v){ gFil = gFil === v && v !== 'all' ? 'all' : v; renderExh(); }
-export function setPayFil(v){ payFil = payFil === v && v !== 'all' ? 'all' : v; renderExh(); }
+export function setGraphicView(v){ exhUi.gView = v; renderExh(); }
+export function setGraphicFil(v){ exhUi.gFil = exhUi.gFil === v && v !== 'all' ? 'all' : v; renderExh(); }
+export function setPayFil(v){ exhUi.payFil = exhUi.payFil === v && v !== 'all' ? 'all' : v; renderExh(); }
 
 /* 드로어는 exh-drawer.js가 소유한다. 이 파일이 그쪽을 import하면 순환 참조가
    되므로(드로어가 여기 집계 함수를 쓴다) window 경유로만 호출한다 —
@@ -160,7 +155,7 @@ export { EXH_ROLES, activeExhibitors, reloadExhibitors, CANCELLED, money, TCELL,
 
 /* 부스 바뀐 곳 — 부스 번호를 고치면 «알린 부스»(마지막으로 보낸 메일의 «부스 번호:» 줄)와
    달라진 기업이 생긴다. 누구에게 변경 안내를 보내야 하는지 사람이 기억하지 않게 목록 위에 띄운다 */
-function boothAlertHtml(all){
+export function boothAlertHtml(all){
   const ch = all.filter(x => boothChange(x).changed);
   if(!ch.length) return '';
   const names = ch.slice(0, 4).map(x => { const b = boothChange(x); return `${exhNames(x).ko} ${b.from}→${b.to}`; }).join(', ')
@@ -224,16 +219,14 @@ export const DUE_STEPS = [
 ══════════════════════════════════════════ */
 /* 참가기업 창은 감사 로그 등에서 다른 행사 기업으로도 열린다 — 창이 열려 있는
    동안은 «그 기업의 행사»로 잠금을 판단한다(인보이스 파일 폴더도 같은 이유). */
-let exhLockEv = null;
-export function setExhLockEv(v){ exhLockEv = v || null; }
-export const exhLocked = () => { const ev = exhLockEv || exhEvent; return !!ev && evPartDone(ev, 'exh'); };
+export function setExhLockEv(v){ exhUi.exhLockEv = v || null; }
+export const exhLocked = () => { const ev = exhUi.exhLockEv || exhEvent; return !!ev && evPartDone(ev, 'exh'); };
 
-let _lockToastAt = 0;
 /* 막혔다는 걸 알린다. 연달아 누르면 알림이 쌓이므로 잠깐 사이엔 한 번만. */
 export function exhLockNotice(){
   const now = Date.now();
-  if(now - _lockToastAt < 1500) return;
-  _lockToastAt = now;
+  if(now - exhUi.lockToastAt < 1500) return;
+  exhUi.lockToastAt = now;
   alert('진행 완료된 행사예요 — 열람만 됩니다.\n고치려면 설정 › 행사 관리 › 진행 파트에서 "진행 중"으로 되돌리세요.');
 }
 
@@ -247,7 +240,7 @@ export function guardWrite(fn){
 }
 
 /* 마감을 놓친 줄을 눌렀을 때 열 드로어 탭 — 바로 처리할 수 있는 자리로 보낸다 */
-const DUE_TAB = {
+export const DUE_TAB = {
   'manual_sent_at': 'progress',
   'manual_replied_at': 'progress', 'app_received_at': 'apply',
   'booth_confirmed_at': 'progress', 'calc:design': 'progress', 'calc:payment': 'billing',
@@ -294,8 +287,7 @@ export function boothDesignState(x){
      독립부스            해당 없음 (업체가 직접 짓는다)
 ══════════════════════════════════════════ */
 /* 어느 종류만 볼지 — 비어 있으면 전부 */
-let baseFil = '';
-export function setBaseFil(k){ baseFil = baseFil === k ? '' : k; renderExh(); }
+export function setBaseFil(k){ exhUi.baseFil = exhUi.baseFil === k ? '' : k; renderExh(); }
 
 /* ══════════════════════════════════════════
    부스 디자인 의뢰 (G-130)
@@ -323,7 +315,7 @@ export function hasDesignOrder(x){
     return /^G-130|부스\s*디자인\s*의뢰/.test(String(i.name || ''));
   });
 }
-const designPill = (x) => hasDesignOrder(x)
+export const designPill = (x) => hasDesignOrder(x)
   ? ` <span class="pill p-teal" style="font-size:9px"
       title="부스 디자인까지 의뢰한 곳이에요 — 디자인을 받는 게 아니라 우리가 그려서 출력·시공합니다">디자인 의뢰</span>` : '';
 
@@ -509,7 +501,7 @@ export function shortCell(v){
 /* 아직 못 끝낸 단계에 마감일이 걸려 있으면 그 사실을 칸에 얹는다.
    지난 건 눈에 띄게 경고로 올리고, 임박한 건 색을 바꾸지 않고 남은 날만 붙인다 —
    아직 늦지 않은 걸 빨갛게 칠하면 진짜 늦은 것과 구분이 안 된다. */
-const DUE_SOON_DAYS = 7;
+export const DUE_SOON_DAYS = 7;
 function withDue(c, x, step){
   if(c.state === 'done' || c.state === 'na') return c;
   const d = dueInfo(step.key, x.event_id);
@@ -537,7 +529,7 @@ export function exhFollowOf(x, st){
 }
 
 
-function rawCellState(x, step){
+export function rawCellState(x, step){
   // 프로그램북만 참가하는 곳은 도록 외에는 받을 것이 없다
   if(isBookOnly(x) && step.key !== 'directory_received_at') return { state: 'na' };
   if(step.key === 'calc:invoice'){
@@ -637,7 +629,7 @@ export function buildExhEvList(){
 
      EVENT_LIST에 없는 느슨한 행사(참여 기록에만 있는 것)는 설정이 없어
      기본값인 진행 중으로 잡힌다. */
-  const hasWork = (k) => exhibitorsForEvent(k).length || exhibitorCandidates(k).length;
+  const hasWork = (k) => exhibitorsForEvent(k).length || window.exhibitorCandidates(k).length;
   const stateOf = (e) => evPartState(e.key, 'exh');
 
   const doing = opts.filter(e => stateOf(e) === 'doing' && hasWork(e.key));
@@ -694,9 +686,9 @@ function exhFilterChipsHtml(){
   // 초과 입금·통화 혼재·금액 미입력처럼 사람이 봐야 하는 정산 건
   const attention = list.filter(x => settleState(x).state === 'over' ||
     invoicesFor(x.id).some(i => i.status !== 'void' && String(i.amount ?? '').trim() === '')).length;
-  const f = (k, label, n, tip = '') => (n || k === 'all' || exhFilter === k)
-    ? `<button class="btn bs${exhFilter === k ? ' bp' : ''}" style="font-size:11px;padding:3px 10px;gap:5px"
-        title="${escapeHtml(tip)}" onclick="setExhFilter('${k}')">${label}<span style="${exhFilter === k ? '' : 'color:var(--i4);'}font-weight:700">${n}</span></button>`
+  const f = (k, label, n, tip = '') => (n || k === 'all' || exhUi.exhFilter === k)
+    ? `<button class="btn bs${exhUi.exhFilter === k ? ' bp' : ''}" style="font-size:11px;padding:3px 10px;gap:5px"
+        title="${escapeHtml(tip)}" onclick="setExhFilter('${k}')">${label}<span style="${exhUi.exhFilter === k ? '' : 'color:var(--i4);'}font-weight:700">${n}</span></button>`
     : '';
   return `<div style="display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px 0">
     ${f('all', '전체', list.length, '참가 취소 기업은 빼고 셉니다')}${
@@ -725,14 +717,14 @@ export function setExhView(v){
   if(v === 'watch') initWatchFolders(exhEvent);
   // 부스 타입으로 걸러 둔 채 다른 보기로 갔다가 돌아오면, 왜 목록이 짧은지
   // 알 수 없다. 보기를 옮기거나 행사를 바꾸면 푼다.
-  if(v !== 'booth') boothTypeFil = '';
-  if(v !== 'money') payFil = 'all';
-  if(v !== 'list') stepFil = null;
-  exhView = v; renderExh();
+  if(v !== 'booth') exhUi.boothTypeFil = '';
+  if(v !== 'money') exhUi.payFil = 'all';
+  if(v !== 'list') exhUi.stepFil = null;
+  exhUi.exhView = v; renderExh();
 }
 export function setExhEvent2(key){
-  boothTypeFil = '';
-  payFil = 'all';
+  exhUi.boothTypeFil = '';
+  exhUi.payFil = 'all';
   setExhEvent(key);
   buildExhEvList();
   renderExh();
@@ -740,7 +732,7 @@ export function setExhEvent2(key){
      행사를 바꿀 때 다시 읽어야 한다(exh-invoice.js가 소유, window 경유). */
   window.initInvoiceFolder?.(key);
 }
-export function setExhFilter(k){ exhFilter = k; stepFil = null; buildExhFilters(); renderExh(); }
+export function setExhFilter(k){ exhUi.exhFilter = k; exhUi.stepFil = null; buildExhFilters(); renderExh(); }
 
 /* ══════════════════════════════════════════
    메인 — 미답변 문의 패널 + 기업리스트 표
@@ -787,22 +779,22 @@ function exhQuery(){
 
 export function visibleList(){
   const q = exhQuery();
-  let list = ['cancelled', 'refund'].includes(exhFilter) ? cancelledExhibitors(exhEvent) : activeExhibitors(exhEvent);
-  if(exhFilter === 'incomplete') list = list.filter(x => progressOf(x) < 100);
-  if(exhFilter === 'ready')      list = list.filter(x => progressOf(x) >= 100);
-  if(exhFilter === 'overdue')    list = list.filter(x => isOverdue(settleState(x)));
-  if(exhFilter === 'waiting')    list = list.filter(x => isWaiting(settleState(x)));
-  if(exhFilter === 'refund')     list = list.filter(refundDue);
-  if(exhFilter === 'billing')    list = list.filter(x => { const s = settleState(x);
+  let list = ['cancelled', 'refund'].includes(exhUi.exhFilter) ? cancelledExhibitors(exhEvent) : activeExhibitors(exhEvent);
+  if(exhUi.exhFilter === 'incomplete') list = list.filter(x => progressOf(x) < 100);
+  if(exhUi.exhFilter === 'ready')      list = list.filter(x => progressOf(x) >= 100);
+  if(exhUi.exhFilter === 'overdue')    list = list.filter(x => isOverdue(settleState(x)));
+  if(exhUi.exhFilter === 'waiting')    list = list.filter(x => isWaiting(settleState(x)));
+  if(exhUi.exhFilter === 'refund')     list = list.filter(refundDue);
+  if(exhUi.exhFilter === 'billing')    list = list.filter(x => { const s = settleState(x);
     return s.state === 'over' ||
       invoicesFor(x.id).some(i => i.status !== 'void' && String(i.amount ?? '').trim() === ''); });
-  if(exhFilter === 'inquiry')    list = list.filter(x => openInquiriesFor(x.id).length);
-  if(stepFil){
-    const step = STEPS.find(s => s.key === stepFil.key);
+  if(exhUi.exhFilter === 'inquiry')    list = list.filter(x => openInquiriesFor(x.id).length);
+  if(exhUi.stepFil){
+    const step = STEPS.find(s => s.key === exhUi.stepFil.key);
     if(step) list = list.filter(x => {
       const st = cellState(x, step).state;
       if(st === 'na') return false;                 // 해당 없는 곳은 양쪽 다 아니다
-      return stepFil.mode === 'done' ? st === 'done' : st !== 'done';
+      return exhUi.stepFil.mode === 'done' ? st === 'done' : st !== 'done';
     });
   }
   if(q) list = list.filter(x => matchExhName(x, q));
@@ -867,7 +859,7 @@ export function renderExh(){
     ['money','금액 현황'], ['book','프로그램북'], ['onsite','현장 처리'],['watch','파일 감시']];
   const seg = `<div class="tbar" style="padding:10px 16px 0">
     <div class="seg" style="flex-wrap:wrap">
-      ${VIEWS.map(([k, l]) => `<button class="seg-b${exhView === k ? ' on' : ''}" onclick="setExhView('${k}')">${l}</button>`).join('')}
+      ${VIEWS.map(([k, l]) => `<button class="seg-b${exhUi.exhView === k ? ' on' : ''}" onclick="setExhView('${k}')">${l}</button>`).join('')}
     </div></div>`;
 
   /* 검색은 목록을 거르는 일인데, 대시보드와 파일 감시에는 거를 목록이 없다.
@@ -876,25 +868,25 @@ export function renderExh(){
      기업리스트를 대신 보여준다 — 보기 설정은 건드리지 않아서, 검색어를 지우면
      보던 화면으로 그대로 돌아온다. */
   const q = exhQuery();
-  const searchOverride = !!q && (exhView === 'dash' || exhView === 'watch');
+  const searchOverride = !!q && (exhUi.exhView === 'dash' || exhUi.exhView === 'watch');
   const searchNote = searchOverride ? `<div style="display:flex;align-items:center;gap:8px;margin:12px 16px 0;
       background:var(--i8);border:1px solid var(--i6);border-radius:8px;padding:8px 12px">
     <span style="font-size:11.5px;color:var(--i3)">«<b>${escapeHtml(q)}</b>» 검색 결과 ${list.length}곳 —
-      검색어를 지우면 ${exhView === 'dash' ? '대시보드' : '파일 감시'}로 돌아갑니다</span></div>` : '';
+      검색어를 지우면 ${exhUi.exhView === 'dash' ? '대시보드' : '파일 감시'}로 돌아갑니다</span></div>` : '';
 
   const bodyHtml = searchOverride ? searchNote + renderInquiryPanel() + renderChecklist(list, all)
-    : exhView === 'dash'    ? renderDashboard(all)
-    : exhView === 'booth'   ? renderBoothView(list)
-    : exhView === 'equip'   ? renderEquipView(list)
-    : exhView === 'graphic' ? renderGraphicView(list)
-    : exhView === 'base'    ? renderGraphicView(list)   /* 옛 주소로 들어와도 그래픽으로 */
-    : exhView === 'money'   ? renderMoneyView(list)
-    : exhView === 'book'    ? renderBookView(list)
-    : exhView === 'onsite'  ? renderOnsiteView(list)
-    : exhView === 'watch'   ? `<div style="padding:14px 16px 40px">${renderWatchView(exhEvent)}</div>`
+    : exhUi.exhView === 'dash'    ? window.renderDashboard(all)
+    : exhUi.exhView === 'booth'   ? renderBoothView(list)
+    : exhUi.exhView === 'equip'   ? window.renderEquipView(list)
+    : exhUi.exhView === 'graphic' ? window.renderGraphicView(list)
+    : exhUi.exhView === 'base'    ? window.renderGraphicView(list)   /* 옛 주소로 들어와도 그래픽으로 */
+    : exhUi.exhView === 'money'   ? window.renderMoneyView(list)
+    : exhUi.exhView === 'book'    ? window.renderBookView(list)
+    : exhUi.exhView === 'onsite'  ? renderOnsiteView(list)
+    : exhUi.exhView === 'watch'   ? `<div style="padding:14px 16px 40px">${renderWatchView(exhEvent)}</div>`
     : renderInquiryPanel() + renderChecklist(list, all);
   // 거를 목록이 없는 화면(대시보드·파일 감시)에는 필터 칩도 두지 않는다
-  const chips = (searchOverride || !['dash', 'watch'].includes(exhView)) ? exhFilterChipsHtml() : '';
+  const chips = (searchOverride || !['dash', 'watch'].includes(exhUi.exhView)) ? exhFilterChipsHtml() : '';
   el.innerHTML = seg + chips + banner
     + (exhLocked() ? `<div class="ro">${bodyHtml}</div>` : bodyHtml);
 }
@@ -1085,7 +1077,7 @@ function groupByHost(rows){
 
 /* 누구의 부스에 얹혔는지까지 알려 준다 — "프로그램북만"이라는 말만으로는
    왜 이 회사가 부스도 없이 목록에 있는지 설명이 안 된다. */
-function bookOnlyTip(x){
+export function bookOnlyTip(x){
   const host = String(x.host_key || '').trim()
     ? exhibitorsForEvent(x.event_id).find(o => o.company_key === x.host_key) : null;
   return host
@@ -1132,7 +1124,7 @@ function exhSummary(all){
 
 /* 요약 카드. 숫자 하나를 크게 놓고 그 아래에 무엇을 나눈 값인지 적는다 —
    "23"만 있으면 기업 수인지 부스 수인지 알 수 없다. */
-function renderExhSummary(all){
+export function renderExhSummary(all){
   if(!all.length) return '';
   const s = exhSummary(all);
   const n = (v) => `<b style="font-size:17px;font-weight:800">${v}</b>`;
@@ -1181,8 +1173,8 @@ function renderChecklist(list, all){
   // 모바일에서는 표를 쓰지 않는다. layout.css가 모든 table을 마스터DB용 카드
   // 규칙(헤더 숨김 + 특정 열 강제 숨김)으로 바꿔버려 15열짜리 체크리스트는
   // 의미를 잃고 뭉개진다. 그래서 아예 전용 카드 목록으로 그린다.
-  if(isMobile()) return renderChecklistCards(list, all);
-  return renderChecklistTable(list, all);
+  if(isMobile()) return window.renderChecklistCards(list, all);
+  return window.renderChecklistTable(list, all);
 }
 
 /* ══════════════════════════════════════════
@@ -1200,7 +1192,7 @@ function renderChecklist(list, all){
 /* 알약 줄은 한 줄로 못 박는다 — 거르개를 누를 때마다 알약 개수가 달라지는데,
    줄바꿈을 허용하면 그때마다 아래 표가 한 줄만큼 위아래로 뛴다. 넘치면 가로로
    민다(모바일은 화면이 좁아 줄바꿈이 낫다). 높이도 한 값으로 잡아 둔다. */
-const viewShell = (pills, inner, actions = '') => `<div style="padding:0 16px 16px">
+export const viewShell = (pills, inner, actions = '') => `<div style="padding:0 16px 16px">
   <div style="display:flex;gap:6px;margin:12px 0;align-items:center;min-height:30px;${
     isMobile() ? 'flex-wrap:wrap' : 'flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden'}">
     ${pills}${actions ? `<span style="margin-left:auto;display:flex;gap:6px;flex:0 0 auto">${actions}</span>` : ''}
@@ -1216,7 +1208,7 @@ const pillsOf = (cnt, cls = 'p-gray') => Object.entries(cnt)
   .sort((a, b) => b[1] - a[1])
   .map(([k, n]) => `<span class="pill ${cls}">${escapeHtml(k)} ${n}</span>`).join('');
 
-const emptyView = (msg) => `<div class="empty" style="padding:40px 20px;text-align:center;color:var(--i4);font-size:13px">${escapeHtml(msg)}</div>`;
+export const emptyView = (msg) => `<div class="empty" style="padding:40px 20px;text-align:center;color:var(--i4);font-size:13px">${escapeHtml(msg)}</div>`;
 
 /* ── 현장 처리 ──
    행사 기간에 «했음»을 누른 항목은 전부 현장에서 한 일이다(2026-10-13 KIC부터
@@ -1271,7 +1263,7 @@ function renderOnsiteView(list){
    현장에서 받은 접수(경로 '현장')로 들어온 품목을 기업마다 모은다. 차수 배지에는
    «현장»으로 적히고, 여기서는 현장 정산·추가 청구할 곳을 한눈에 본다.
    현장 처리(행사 기간에 «했음»)와는 다르다. 무효로 돌린 품목은 뺀다. */
-function onsiteAddCard(all){
+export function onsiteAddCard(all){
   const groups = [];
   const sums = {};
   for(const x of all){
@@ -1319,7 +1311,7 @@ function wa(name){
    한 번호를 두 곳이 함께 쓰는 자리가 있다. 부스를 나눠 쓰는 서울대학교병원과
    분당서울대학교병원이 한 건으로 신청했기 때문인데, 행은 따로 두고 번호만 같다.
    실수로 보이지 않게 그 줄에 표시를 남긴다 — 없으면 다음 사람이 고치려 든다. */
-const applyCell = (x) => {
+export const applyCell = (x) => {
   if(!x.apply_order) return '<td style="min-width:44px;text-align:right;font-size:11.5px;color:var(--i6)">-</td>';
   const same = activeExhibitors(x.event_id)
     .filter(o => o.id !== x.id && String(o.apply_order || '') === String(x.apply_order))
@@ -1330,7 +1322,7 @@ const applyCell = (x) => {
 };
 
 /* 기업 이름 칸 — 어느 보기에서든 클릭하면 그 기업 드로어로 간다 */
-const coCell = (x, tab) => `<td style="min-width:150px">
+export const coCell = (x, tab) => `<td style="min-width:150px">
   <span onclick="openExhDr('${escAttr(x.id)}','${tab}')" style="cursor:pointer;font-size:12.5px;font-weight:600${
     x.status === CANCELLED ? ';text-decoration:line-through;opacity:.6' : ''}">${escapeHtml(exhNames(x).ko)}</span>${
     exhNames(x).en ? `<div style="font-size:10.5px;color:var(--i4);font-weight:400">${escapeHtml(exhNames(x).en)}</div>` : ''}</td>`;
@@ -1386,7 +1378,7 @@ export function parseBooth(no){
 }
 
 /* 앞 번호가 우선, 같으면 분할 번호 순. 번호 없는 기업은 맨 뒤로. */
-const boothSortKey = (x) => {
+export const boothSortKey = (x) => {
   const b = parseBooth(x.booth_no);
   return b.first === Infinity ? Infinity : b.first * 100 + b.sub;
 };
@@ -1402,24 +1394,22 @@ export const boothKeyOf = (booth) => {
    51줄을 눈으로 훑어야 했다. 배지를 눌러 그 타입만 남긴다. 대시보드 부스 카드의
    타입 배지도 같은 곳으로 보낸다 — 세어 둔 숫자를 눌렀는데 아무 일이 없으면
    셀 수만 있고 쓸 수는 없는 숫자가 된다. */
-let boothTypeFil = '';
 export function setBoothTypeFil(t){
-  boothTypeFil = (boothTypeFil === t) ? '' : t;   // 같은 걸 또 누르면 해제
-  exhView = 'booth';                              // 대시보드에서 눌러도 부스 현황으로 간다
+  exhUi.boothTypeFil = (exhUi.boothTypeFil === t) ? '' : t;   // 같은 걸 또 누르면 해제
+  exhUi.exhView = 'booth';                              // 대시보드에서 눌러도 부스 현황으로 간다
   renderExh();
 }
 
 /* 엑셀로 받을 때 화면에 보이던 줄을 그대로 쓴다 — 검색·타입 탭으로 거른 결과가
    파일에서 다시 51줄로 늘어나면 «보던 것»을 받은 게 아니다. */
-let boothShown = { rows: [], dupBooth: new Set(), typeFil: '' };
-export const boothViewRows = () => boothShown;
+export const boothViewRows = () => exhUi.boothShown;
 
 function renderBoothView(list){
-  if(!list.length){ boothShown = { rows: [], dupBooth: new Set(), typeFil: boothTypeFil }; return emptyView('표시할 기업이 없어요'); }
+  if(!list.length){ exhUi.boothShown = { rows: [], dupBooth: new Set(), typeFil: exhUi.boothTypeFil }; return emptyView('표시할 기업이 없어요'); }
   const all0 = groupByHost([...list].sort((a, b) => boothSortKey(a) - boothSortKey(b)));
   // 걸러도 배지의 숫자는 전체 기준을 유지한다 — 누를 때마다 숫자가 1로 바뀌면
   // 다른 타입이 몇 곳인지 알 수 없어 옮겨 다닐 수가 없다
-  const rows = boothTypeFil ? all0.filter(x => (x.booth_type || '') === boothTypeFil) : all0;
+  const rows = exhUi.boothTypeFil ? all0.filter(x => (x.booth_type || '') === exhUi.boothTypeFil) : all0;
   const noBooth = all0.filter(x => !isNoBooth(x) && !String(x.booth_no || '').trim()).length;
   const noBoothN = all0.filter(isNoBooth).length;
   const selfN = all0.filter(x => x.booth_type === SELF_BUILD_TYPE).length;
@@ -1449,13 +1439,13 @@ function renderBoothView(list){
     });
   }
   const typeCnt = countBy(all0, x => x.booth_type);
-  boothShown = { rows, dupBooth, typeFil: boothTypeFil };
+  exhUi.boothShown = { rows, dupBooth, typeFil: exhUi.boothTypeFil };
   /* 내보내기는 exh-export.js 소관 — 순환 참조를 피해 window 경유로 부른다 */
   const actions = rows.length
     ? `<button class="btn bs" id="booth-export-btn" onclick="exportBoothStatus()"
         title="지금 보이는 부스 현황 표를 엑셀로 받습니다">엑셀 다운로드</button>` : '';
 
-  const pills = `<span class="pill p-gray">기업 ${boothTypeFil ? `${rows.length}/${all0.length}` : all0.length}</span>`
+  const pills = `<span class="pill p-gray">기업 ${exhUi.boothTypeFil ? `${rows.length}/${all0.length}` : all0.length}</span>`
     + `<span class="pill p-gray">부스 ${totalBooths}칸</span>`
     + (noBooth ? `<span class="pill p-red">번호 미배정 ${noBooth}</span>` : '')
     + (noBoothN ? `<span class="pill p-gray" title="부스 없이 참가하는 기업이에요 — 부스 수와 미배정·미확정에서 빠집니다">${NO_BOOTH_LABEL} ${noBoothN}</span>` : '')
@@ -1488,14 +1478,14 @@ function renderBoothView(list){
       .sort((a, b) => rank(a[0]) - rank(b[0]) || a[0].localeCompare(b[0], 'ko'));
     const label = (code) => code === NO_BOOTH_TYPE ? NO_BOOTH_LABEL : boothTypes(exhEvent).find(t => t.code === code)?.label || code;
     return `<div class="subbar" style="padding:10px 16px 0"><div class="seg" style="flex-wrap:wrap">
-      <button class="seg-b${boothTypeFil ? '' : ' on'}" onclick="setBoothTypeFil('')">전체 ${all0.length}</button>
-      ${tabs.map(([t, n]) => `<button class="seg-b${boothTypeFil === t ? ' on' : ''}"
+      <button class="seg-b${exhUi.boothTypeFil ? '' : ' on'}" onclick="setBoothTypeFil('')">전체 ${all0.length}</button>
+      ${tabs.map(([t, n]) => `<button class="seg-b${exhUi.boothTypeFil === t ? ' on' : ''}"
         onclick="setBoothTypeFil('${escAttr(t)}')" title="${escapeHtml(t)}">${escapeHtml(label(t))} ${n}</button>`).join('')}
     </div></div>`;
   })();
 
   if(!rows.length) return typeSeg + viewShell(pills,
-    emptyView(`"${boothTypeText(boothTypeFil)}" 부스를 쓰는 기업이 없어요`), actions);
+    emptyView(`"${boothTypeText(exhUi.boothTypeFil)}" 부스를 쓰는 기업이 없어요`), actions);
 
   if(isMobile()) return typeSeg + viewShell(pills, rows.map(x => `
     <div onclick="openExhDr('${escAttr(x.id)}','progress')" style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
@@ -1589,1524 +1579,12 @@ function renderBoothView(list){
    주문서를 쓸 수 있는데, 지금은 51개 기업을 하나씩 열어 더해야 했다.
    품목별 합계를 먼저 보여주고, 아래에 어느 기업이 무엇을 신청했는지 붙인다. */
 /* 품목별 합계에서 펼쳐 둔 줄 — 클릭한 품목의 신청 기업 목록을 그 아래 보여준다 */
-let equipOpen = new Set();
 export function toggleEquipRow(key){
-  equipOpen.has(key) ? equipOpen.delete(key) : equipOpen.add(key);
+  exhUi.equipOpen.has(key) ? exhUi.equipOpen.delete(key) : exhUi.equipOpen.add(key);
   renderExh();
 }
 
-/* ══════════════════════════════════════════
-   금액 현황 — 기업별로 부스·비품·그래픽을 나눠 보고, 아래에서 합친다
-
-   대시보드는 행사 전체 합계만 보여준다. 그런데 실무에서 묻는 건 두 가지다.
-   "이번 행사 그래픽이 얼마인가"(합계)와 "이 회사는 부스가 얼마인가"(기업별).
-   앞엣것만 있으면 뒤엣것을 알려고 51개 기업을 하나씩 열어야 한다.
-
-   통화를 섞지 않는다. 기업마다 원화·달러가 갈려서 한 표에 더하면 뜻 없는 숫자가
-   된다. 통화별로 표를 따로 그리고, 각 표 맨 아래에 그 통화의 합계를 둔다.
-
-   여기 숫자는 금액 항목 기준이라 '무엇을 얼마어치 신청했나'다. 인보이스는 여러
-   분류를 한 장에 합쳐 발행해 분류별로 가를 수 없어서, 청구액과는 다를 수 있다.
-   그래서 청구·입금·잔액을 오른쪽에 함께 두어 어긋나면 눈에 띄게 한다.
-══════════════════════════════════════════ */
-const MONEY_CATS = [['booth', '부스'], ['equip', '비품'], ['graphic', '그래픽'], ['etc', '기타']];
-
-/* ══════════════════════════════════════════
-   분류별 받아야 할 돈 · 받은 돈 · 안 받은 돈
-
-   입금(exhibitor_payments)에는 분류가 없다. 돈은 "부스비 300만 입금"이 아니라
-   "○○사 400만 입금"으로 한 번에 들어오고, 인보이스도 기업 단위다. 그래서
-   부스비를 받았는지 비품비를 받았는지는 데이터로 갈라낼 수 없다.
-
-   기업 단위로 가른다. 완납한 기업이 낸 돈은 그 기업이 신청한 모든 분류를
-   덮은 것으로 보고, 미납 기업의 청구는 통째로 «안 받은 돈»에 넣는다.
-
-   부분 입금한 기업은 인보이스를 낸 순서대로 맞춘다. 최초 신청 항목이 첫
-   인보이스로 나가고, 추가 신청은 회차(exhibitor_apps) 순으로 뒤 인보이스가
-   된다. 낸 돈을 그 순서로 항목에 채워, 금액을 다 덮은 항목만 «받은 돈»에 넣고
-   못 덮은 항목은 통째로 «안 받은 돈»에 둔다. 비율로 쪼개면 «그래픽 84% 받음»
-   같은 실제로 없는 상태가 생긴다.
-   어느 항목에도 딱 맞지 않고 남는 입금(덜 낸 송금 수수료 등)은 분류에 넣지
-   않고 따로 센다 — 대시보드 미수금과의 차이가 바로 이 금액이다.
-
-   완납 판정은 통화별로 한다. 원화는 다 냈는데 달러가 남은 기업이 있어서,
-   기업 하나를 한 상태로 묶으면 어느 쪽이 남았는지가 사라진다. */
-/* total을 weights 비율대로 정수로 나눈다 — 합이 total과 정확히 같다(최대 나머지 방식) */
-function splitInt(total, weights){
-  const sum = weights.reduce((a, b) => a + b, 0);
-  if(!sum || !total) return weights.map(() => 0);
-  const raw = weights.map(w => total * w / sum);
-  const res = raw.map(Math.floor);
-  let left = total - res.reduce((a, b) => a + b, 0);
-  raw.map((r, i) => [r - res[i], i]).sort((x, y) => y[0] - x[0])
-    .forEach(([, i]) => { if(left > 0){ res[i]++; left--; } });
-  return res;
-}
-
-const moneyCat = (i) => ['booth', 'equip', 'graphic'].includes(i.category) ? i.category : 'etc';
-
-/* 인보이스가 나간 순서 — 최초 신청(회차 없음) 항목이 먼저, 추가 신청은 회차 순 */
-function issueOrderItems(exhId, cur){
-  const seq = new Map(appsFor(exhId).map((a, n) => [a.id, a.kind === '최초' ? 0 : n + 1]));
-  return billableItems(exhId).filter(i => (i.currency || 'KRW') === cur)
-    .map((i, n) => ({ i, n, o: i.app_id ? (seq.get(i.app_id) ?? 999) : 0 }))
-    .sort((a, b) => a.o - b.o || (Number(a.i.sort_order) || 0) - (Number(b.i.sort_order) || 0) || a.n - b.n)
-    .map(r => r.i);
-}
-
-export function catSettleByCurrency(list){
-  const out = {};
-  const partial = new Set();
-
-  (list || []).forEach(x => {
-    const st = settleByCurrency(x.id);
-    const by = moneyRowsFor(x);
-
-    Object.keys(by).forEach(cur => {
-      if(!out[cur]) out[cur] = {};
-      // 그 통화로 청구한 게 없으면 판단할 근거가 없다 — 미납으로 본다
-      const bal = st[cur] ? st[cur].balance : 0;
-      const paidUp = st[cur] ? bal <= 0 : false;
-      if(st[cur] && st[cur].paid > 0 && bal > 0) partial.add(x.id);
-
-      /* 받은 돈을 계좌이체와 카드로 갈라 둔다. 입금에 분류가 없듯 분류별
-         결제 수단도 없어서, 그 기업이 실제로 낸 수단 비율대로 나눈다 —
-         한 기업이 한 수단으로만 내는 경우가 대부분이라 그럴 때는 그대로 맞고,
-         섞어 낸 곳만 비율로 갈린다. 수단이 안 적힌 옛 건은 미확인으로 남긴다. */
-      const tot = st[cur] && st[cur].paid > 0 ? st[cur].paid : 0;
-      const mix = tot
-        ? { bank: st[cur].bank / tot, card: st[cur].card / tot, unknown: st[cur].etc / tot }
-        : { bank: 0, card: 0, unknown: 0 };
-
-      const cats = MONEY_CATS.map(([k]) => k).filter(k => by[cur][k]);
-      const gotBy = {};
-      if(paidUp) cats.forEach(k => { gotBy[k] = by[cur][k]; });
-      else {
-        let left = Math.max(0, tot);
-        issueOrderItems(x.id, cur).forEach(i => {
-          const v = num(i.amount), k = moneyCat(i);
-          if(v > 0 && left >= v){ gotBy[k] = (gotBy[k] || 0) + v; left -= v; }
-        });
-        if(left > 0) out[cur].__left = (out[cur].__left || 0) + left;
-      }
-      const gots = cats.map(k => gotBy[k] || 0);
-      const gotTotal = gots.reduce((a, b) => a + b, 0);
-      // 결제 수단은 항목에 안 달려 있어 기업이 낸 수단 비율대로 정수로 나눈다
-      const bankT = Math.round(gotTotal * mix.bank), unkT = Math.round(gotTotal * mix.unknown);
-      const banks = splitInt(bankT, gots);
-      const unks = splitInt(unkT, gots.map((g, i) => g - banks[i]));   // 카드 몫이 음수가 되지 않게
-
-      cats.forEach((k, i) => {
-        const v = by[cur][k];
-        if(!out[cur][k]) out[cur][k] = { billed: 0, paid: 0, unpaid: 0, bank: 0, card: 0, unknown: 0 };
-        out[cur][k].billed += v;
-        out[cur][k].paid += gots[i];
-        out[cur][k].unpaid += v - gots[i];
-        out[cur][k].bank += banks[i];
-        out[cur][k].unknown += unks[i];
-        out[cur][k].card += gots[i] - banks[i] - unks[i];
-      });
-    });
-  });
-  return { out, partial: [...partial] };
-}
-
-/* 기업 하나의 분류별 금액 — 통화별로 갈라 담는다 */
-function moneyRowsFor(x){
-  const by = {};
-  billableItems(x.id).forEach(i => {
-    const cur = i.currency || 'KRW';
-    const cat = ['booth', 'equip', 'graphic'].includes(i.category) ? i.category : 'etc';
-    if(!by[cur]) by[cur] = { booth: 0, equip: 0, graphic: 0, etc: 0, 합계: 0 };
-    const v = num(i.amount);
-    by[cur][cat] += v;
-    by[cur].합계 += v;
-  });
-  return by;
-}
-
-function renderMoneyView(list){
-  const rows = list.map(x => ({ x, by: moneyRowsFor(x) })).filter(r => Object.keys(r.by).length);
-  if(!rows.length) return emptyView('아직 등록된 금액 항목이 없어요');
-
-  const curs = [...new Set(rows.flatMap(r => Object.keys(r.by)))].sort();
-  const total = billedByCategory(list);
-
-  /* 금액 하나 — 통화를 왼쪽에 붙인다. 원·$ 기호만으로는 표를 훑을 때 눈에 안 띈다. */
-  const amt = (cur, v) => v
-    ? `<span style="font-size:9.5px;color:var(--i5);margin-right:3px">${escapeHtml(cur)}</span>${money(v)}`
-    : '<span style="color:var(--i6)">-</span>';
-
-  /* 한 칸에 두 통화가 같이 있을 수 있다(원화로 신청한 뒤 달러 항목이 하나 끼는 식).
-     한쪽을 숨기면 합이 안 맞으므로 줄을 나눠 둘 다 적는다. */
-  const cell = (m, k) => {
-    const has = curs.filter(c => m[c] && m[c][k]);
-    if(!has.length) return '<span style="color:var(--i6)">-</span>';
-    return has.map(c => amt(c, m[c][k])).join('<br>');
-  };
-
-  const pills = `<span class="pill p-gray">기업 ${rows.length}</span>`
-    + curs.map(c => `<span class="pill p-blue">${escapeHtml(c)} ${money(total[c]?.합계 || 0)}</span>`).join('')
-    + '<span style="font-size:10.5px;color:var(--i5);margin-left:2px">금액 항목 기준(신청 금액)이라 청구액과 다를 수 있어요 — 오른쪽에 함께 뒀어요</span>'
-    + (curs.length > 1
-      ? '<div style="font-size:10.5px;color:var(--i4);margin-top:4px">한 칸에 두 통화가 함께 적힌 곳은 결제 수단이 갈린 경우예요 — 인보이스는 원화로 받고 엑스렌탈은 해외 카드로 결제하면 이렇게 나옵니다. 더할 수 없으니 그대로 병기합니다.</div>'
-      : '');
-
-  // 아무도 안 쓴 분류는 열을 만들지 않는다
-  const used = MONEY_CATS.filter(([k]) => curs.some(c => total[c] && total[c][k]));
-
-  /* 청구·입금·잔액도 통화별로 다 더해 둔다. 신청 금액만 합계가 있으면
-     "그래서 얼마 받았고 얼마 남았나"를 표 밖에서 다시 세게 된다. */
-  const settleTotal = {};
-  rows.forEach(({ x }) => {
-    const st = settleByCurrency(x.id);
-    Object.keys(st).forEach(c => {
-      if(!settleTotal[c]) settleTotal[c] = { billed: 0, paid: 0, bank: 0, card: 0, etc: 0, balance: 0 };
-      ['billed', 'paid', 'bank', 'card', 'etc', 'balance'].forEach(k => { settleTotal[c][k] += st[c][k]; });
-    });
-  });
-
-  /* 입금을 통장에 찍히는 돈과 카드로 나간 돈으로 갈라 보여준다. 수단이 안 적힌
-     옛 건은 세 번째 칸으로 뺀다 — 둘 중 하나에 얹으면 통장과 맞출 때 어느 쪽
-     합계가 틀렸는지 알 수 없고, 아예 빼면 두 칸의 합이 잔액과 안 맞는다.
-     미확인이 하나도 없으면 그 칸은 만들지 않는다. */
-  const payCols = [['bank', '입금·계좌이체'], ['card', '입금·카드']]
-    .concat(Object.values(settleTotal).some(s => s.etc) ? [['etc', '입금·미확인']] : []);
-
-  /* ── 분류별 대시보드 ──
-     표는 기업이 주인공이라 "부스비 얼마 남았나"를 한눈에 볼 수 없다. 그걸 위에
-     따로 올린다. 표는 그 아래 그대로 두고 세부를 본다. */
-  const { out: catS, partial } = catSettleByCurrency(list);
-  const catCards = Object.keys(catS).sort().map(cur => {
-    const cats = MONEY_CATS.filter(([k]) => catS[cur][k]);
-    if(!cats.length) return '';
-    const sum = cats.reduce((a, [k]) => {
-      const c = catS[cur][k];
-      a.billed += c.billed; a.paid += c.paid; a.unpaid += c.unpaid;
-      a.bank += c.bank; a.card += c.card; a.unknown += c.unknown; return a;
-    }, { billed: 0, paid: 0, unpaid: 0, bank: 0, card: 0, unknown: 0 });
-
-    /* 받은 돈 아래에 수단을 적는다 — 통장과 맞출 때 계좌와 카드는 보는 곳이 달라서
-       한 숫자로 합쳐 두면 매번 다시 갈라야 한다. 0인 수단은 적지 않는다. */
-    const payMix = (c) => {
-      const on = [['bank', '계좌'], ['card', '카드'], ['unknown', '미확인']]
-        .filter(([k]) => Math.round(c[k]) > 0);
-      if(!on.length) return '';
-      // 수단이 하나뿐이면 금액은 위에 적힌 것과 같다 — 이름만 적는다
-      const txt = on.length === 1 ? `전액 ${on[0][1]}`
-        : on.map(([k, l]) => `${l} ${money(Math.round(c[k]))}`).join(' · ');
-      return `<span style="display:block;font-size:9.5px;color:var(--i5);margin-top:1px">${txt}</span>`;
-    };
-
-    const bar = (c) => {
-      const pct = c.billed ? Math.round(c.paid / c.billed * 100) : 0;
-      return `<div style="height:5px;background:var(--i7);border-radius:3px;overflow:hidden;margin-top:6px">
-        <div style="height:100%;width:${pct}%;background:${pct >= 100 ? 'var(--g)' : 'var(--a)'}"></div></div>`;
-    };
-    const line = (label, c, strong) => `<div style="padding:9px 12px;border-top:1px solid var(--i8)${
-        strong ? ';background:var(--i9)' : ''}">
-      <div style="display:flex;align-items:baseline;gap:8px">
-        <span style="font-size:11.5px;font-weight:${strong ? 700 : 600};color:var(--i2);flex:1">${escapeHtml(label)}</span>
-        <span style="font-size:10px;color:var(--i5)">${c.billed ? Math.round(c.paid / c.billed * 100) : 0}%</span>
-      </div>
-      <div style="display:flex;gap:10px;margin-top:3px;font-variant-numeric:tabular-nums">
-        <span style="flex:1;min-width:0"><span style="font-size:9.5px;color:var(--i5);display:block">받아야 할 돈</span>
-          <b style="font-size:12.5px">${money(c.billed)}</b></span>
-        <span style="flex:1;min-width:0"><span style="font-size:9.5px;color:var(--i5);display:block">받은 돈</span>
-          <b style="font-size:12.5px;color:var(--g)">${money(c.paid)}</b>
-          ${payMix(c)}</span>
-        <span style="flex:1;min-width:0"><span style="font-size:9.5px;color:var(--i5);display:block">안 받은 돈</span>
-          <b style="font-size:12.5px;color:${c.unpaid ? 'var(--re)' : 'var(--i5)'}">${money(c.unpaid)}</b></span>
-      </div>
-      ${bar(c)}
-    </div>`;
-
-    /* 통화마다 쓰는 분류 수가 달라(원화는 셋, 달러는 넷) 합계 줄이 서로 다른
-       높이에 앉는다. 카드를 세로 플렉스로 두고 합계를 아래로 밀어 두면, 카드가
-       같은 높이로 늘어나면서 합계끼리 같은 줄에서 맞는다 — 두 통화의 합계를
-       나란히 읽는 게 이 카드를 보는 이유다. */
-    return `<div style="flex:1 1 320px;min-width:0;background:var(--W);border:1px solid var(--i6);border-radius:10px;overflow:hidden;display:flex;flex-direction:column">
-      <div style="padding:9px 12px;font-family:inherit">
-        <span class="pill p-blue">${escapeHtml(cur)}</span>
-        <span style="font-size:10.5px;color:var(--i5);margin-left:5px">분류별 수금 현황</span>
-      </div>
-      ${cats.map(([k, l]) => line(l, catS[cur][k], false)).join('')}
-      <div style="margin-top:auto">${line('합계', sum, true)}
-        ${catS[cur].__left ? `<div style="padding:0 12px 9px;font-size:10px;color:var(--am);background:var(--i9)">
-          항목에 딱 맞지 않은 입금 ${escapeHtml(fmtMoney(catS[cur].__left, cur))} — 받은 돈에 넣지 않았어요</div>` : ''}</div>
-    </div>`;
-  }).join('');
-
-  const catDash = catCards ? `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">${catCards}</div>
-    <div style="font-size:10.5px;color:var(--i4);margin:-4px 0 14px;line-height:1.6">
-      입금에는 분류가 없어요 — 돈은 기업 단위로 한 번에 들어옵니다. 그래서
-      <b>완납한 기업</b>의 청구를 «받은 돈»으로, <b>남은 기업</b>의 잔액을 «안 받은 돈»으로 갈랐어요.
-      ${partial.length ? `<br><b style="color:var(--am)">일부만 낸 ${partial.length}곳</b>은 인보이스 낸 순서(최초 신청 → 추가 신청)대로 낸 돈을 맞춰, 금액이 다 맞은 항목만 «받은 돈»에 넣었어요.` : ''}
-    </div>` : '';
-
-  /* ── 완납·미납 고르기 ──
-     위 카드는 전체 그림이라 "누가 안 냈나"는 안 보인다. 아래 표를 그 기준으로
-     걸러 준다. 카드는 그대로 두는 게 맞다 — 걸러 놓고 보면 미납만 모은 카드의
-     «받은 돈»은 늘 0이라 볼 이유가 없고, 비교할 전체 숫자가 사라진다.
-
-     완납 판정은 통화별로 한다. 원화는 다 냈는데 달러가 남은 기업을 완납으로
-     묶으면 남은 돈이 화면에서 사라진다. 금액 자체는 통화를 넘어 더하지 않고
-     "낸 게 있나"만 본다. */
-  const payStateOf = (x) => {
-    const st = settleByCurrency(x.id);
-    const cs = Object.keys(st);
-    if(!cs.some(c => st[c].billed)) return 'none';
-    if(cs.every(c => st[c].balance <= 0)) return 'paid';
-    return cs.some(c => st[c].paid > 0) ? 'partial' : 'unpaid';
-  };
-  const marked = rows.map(r => ({ ...r, st: payStateOf(r.x) }));
-  const cnt = (k) => marked.filter(r => r.st === k).length;
-  /* 미납·일부만 냄을 기한으로 한 번 더 가른다 — 행사 후 납부로 합의한 곳은
-     안 낸 게 맞다. 기업별 입금 기한(없으면 행사 공통 기한)을 본다. */
-  const lateN = marked.filter(r => isOverdue(settleState(r.x))).length;
-  const waitN = marked.filter(r => isWaiting(settleState(r.x))).length;
-
-  const fpill = (k, l, n, cls) => n || k === 'all'
-    ? `<button class="pill ${payFil === k ? cls : 'p-gray'}"
-        style="border:0;cursor:pointer${payFil === k ? ';outline:2px solid var(--i5)' : ''}"
-        title="${payFil === k && k !== 'all' ? '다시 눌러 전체 보기' : ''}"
-        onclick="setPayFil('${k}')">${l} ${n}</button>`
-    : '';
-  const payFilBar = `<div style="display:flex;gap:5px;flex-wrap:wrap;margin:0 0 8px">
-    ${fpill('all', '전체', marked.length, 'p-blue')}
-    ${fpill('paid', '완납', cnt('paid'), 'p-green')}
-    ${fpill('partial', '일부만 냄', cnt('partial'), 'p-amber')}
-    ${fpill('unpaid', '미납', cnt('unpaid'), 'p-red')}
-    ${fpill('none', '청구 없음', cnt('none'), 'p-gray')}
-    ${lateN || waitN ? '<span style="width:1px;background:var(--i6);margin:0 3px"></span>' : ''}
-    ${fpill('late', '기한 지남', lateN, 'p-red')}
-    ${fpill('wait', '입금 예정', waitN, 'p-blue')}
-  </div>`;
-
-  const vrows = payFil === 'all' ? marked
-    : payFil === 'late' ? marked.filter(r => isOverdue(settleState(r.x)))
-    : payFil === 'wait' ? marked.filter(r => isWaiting(settleState(r.x)))
-    : marked.filter(r => r.st === payFil);
-
-  /* 표 아래 합계는 지금 걸러 놓은 기업만 더한다 — 위 카드가 전체를 보여주니
-     여기까지 전체를 더하면 «미납만 보고 있는데 받은 돈이 찍히는» 꼴이 된다. */
-  const vlist = vrows.map(r => r.x);
-  const vtotal = billedByCategory(vlist);
-  const vsettle = {};
-  vlist.forEach(x => {
-    const st = settleByCurrency(x.id);
-    Object.keys(st).forEach(c => {
-      if(!vsettle[c]) vsettle[c] = { billed: 0, paid: 0, bank: 0, card: 0, etc: 0, balance: 0 };
-      ['billed', 'paid', 'bank', 'card', 'etc', 'balance'].forEach(k => { vsettle[c][k] += st[c][k]; });
-    });
-  });
-
-  const noneMsg = emptyView('해당하는 기업이 없어요');
-
-  // 잔액 아래 한 줄 — 챙길 곳인지 기다릴 곳인지
-  const dueTag = (x) => {
-    const s = settleState(x);
-    if(!isOwing(s)) return '';
-    return isOverdue(s)
-      ? `<div style="font-size:9.5px;color:var(--re)">기한 ${daysSince(s.due)}일 지남</div>`
-      : `<div style="font-size:9.5px;color:var(--i4)">${s.due ? `입금 예정 ~${escapeHtml(s.due.slice(5).replace('-', '/'))}` : '기한 없음'}</div>`;
-  };
-
-  /* 참가 취소했는데 낸 돈이 남은 곳. 위 카드와 표는 취소 기업을 빼고 세므로
-     여기 따로 적지 않으면 돌려줄 돈이 화면에서 사라진다. */
-  const refunds = cancelledExhibitors(exhEvent).map(x => ({ x, pb: refundDue(x) })).filter(r => r.pb);
-  const refundBox = refunds.length ? `<div style="background:var(--W);border:1px solid var(--i6);border-left:3px solid var(--am);
-      border-radius:8px;padding:9px 12px;margin:-2px 0 14px">
-      <div style="font-size:11.5px;font-weight:700;color:var(--i2);margin-bottom:4px">환불 확인 필요 ${refunds.length}곳
-        <span style="font-weight:400;color:var(--i4);font-size:10.5px">— 참가 취소했지만 낸 돈이 남아 있어요. 위 집계에는 들어 있지 않습니다.</span></div>
-      ${refunds.map(({ x, pb }) => `<div onclick="openExhDr('${escAttr(x.id)}','billing')"
-          style="display:flex;gap:8px;font-size:11.5px;padding:3px 0;cursor:pointer">
-        <span style="flex:1;min-width:0">${escapeHtml(exhNames(x).ko)}</span>
-        ${pb.requested ? `<span style="color:var(--i4);font-size:10.5px">환불 요청 ${escapeHtml(fmtMoney(pb.requested, pb.cur))}</span>` : ''}
-        <b style="color:var(--am)">${escapeHtml(fmtMoney(pb.net, pb.cur))}</b></div>`).join('')}
-      <div style="font-size:10px;color:var(--i5);margin-top:3px">환불을 입금 기록에 «환불 완료»로 남기면 여기서 빠져요. 돌려주지 않기로 했다면 기업 정산에서 «위약금으로 남김»을 누르세요.</div>
-    </div>` : '';
-
-  if(isMobile()) return viewShell(pills, catDash + refundBox + payFilBar + (vrows.length ? '' : noneMsg) + vrows.map(({ x, by }) => {
-    const st = settleByCurrency(x.id);
-    const sc = Object.keys(st).sort();
-    const line = (key) => sc.filter(c => st[c][key]).map(c => amt(c, st[c][key])).join(' · ') || '-';
-    const owing = sc.some(c => st[c].balance > 0);
-    return `<div onclick="openExhDr('${escAttr(x.id)}','billing')"
-      style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-        <span class="pill p-gray">${escapeHtml(x.apply_order || '-')}</span>
-        <span style="font-size:13px;font-weight:700;flex:1;min-width:0">${escapeHtml(exhNames(x).ko)}</span>
-        <span class="pill ${x.booth_no ? 'p-blue' : 'p-gray'}">${escapeHtml(x.booth_no || '미배정')}</span>
-      </div>
-      ${used.map(([k, l]) => {
-        const has = curs.filter(c => by[c] && by[c][k]);
-        if(!has.length) return '';
-        return `<div style="display:flex;justify-content:space-between;font-size:11.5px;padding:2px 0">
-          <span style="color:var(--i4)">${l}</span><span>${has.map(c => amt(c, by[c][k])).join(' · ')}</span>
-        </div>`;
-      }).join('')}
-      <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:4px 0 0;border-top:1px solid var(--i8);margin-top:4px">
-        <span>신청 합계</span>
-        <span>${curs.filter(c => by[c]?.합계).map(c => amt(c, by[c].합계)).join(' · ')}</span>
-      </div>
-      <div style="font-size:11px;margin-top:3px;color:var(--i4)">청구 ${line('billed')}</div>
-      <div style="display:flex;justify-content:space-between;font-size:11px">
-        <span style="color:var(--i4)">입금 ${line('paid')}${
-          sc.some(c => st[c].bank || st[c].card || st[c].etc)
-            ? `<span style="color:var(--i5);font-size:10px"> (${
-                [['bank', '계좌'], ['card', '카드'], ['etc', '미확인']]
-                  .filter(([k]) => sc.some(c => st[c][k]))
-                  .map(([k, l]) => `${l} ${sc.filter(c => st[c][k]).map(c => amt(c, st[c][k])).join(' · ')}`)
-                  .join(' / ')})</span>`
-            : ''}</span>
-        <span style="color:${owing ? 'var(--am)' : 'var(--g)'}">${owing ? '잔액 ' + line('balance') : '완납'}</span>
-      </div>
-    </div>`;
-  }).join(''));
-
-  if(!vrows.length) return viewShell(pills, catDash + refundBox + `<div class="sct">기업별 세부</div>` + payFilBar + noneMsg);
-
-  return viewShell(pills, catDash + refundBox + `<div class="sct">기업별 세부</div>` + payFilBar + `<div class="tw"><table><thead><tr>
-      <th style="min-width:44px;text-align:right">신청순</th>
-      <th style="min-width:150px">기업</th>
-      <th style="min-width:56px">부스번호</th>
-      ${used.map(([, l]) => `<th style="min-width:104px;text-align:right">${l}</th>`).join('')}
-      <th style="min-width:110px;text-align:right">신청 합계</th>
-      <th style="min-width:110px;text-align:right">청구액</th>
-      ${payCols.map(([, l]) => `<th style="min-width:104px;text-align:right">${l}</th>`).join('')}
-      <th style="min-width:104px;text-align:right">잔액</th>
-    </tr></thead><tbody>
-      ${vrows.map(({ x, by }) => {
-        // 청구·입금도 통화별로 갈라 적는다 — 한 통화만 더하면 나머지가 사라진다
-        const st = settleByCurrency(x.id);
-        const sc = Object.keys(st).sort();
-        const col = (key) => sc.filter(c => st[c][key]).map(c => amt(c, st[c][key])).join('<br>') || '-';
-        const owing = sc.some(c => st[c].balance > 0);
-        return `<tr>
-          ${applyCell(x)}
-          ${coCell(x, 'billing')}
-          <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
-          ${used.map(([k]) => `<td style="text-align:right">${cell(by, k)}</td>`).join('')}
-          <td style="text-align:right;font-weight:700">${
-            curs.filter(c => by[c]?.합계).map(c => amt(c, by[c].합계)).join('<br>') || '-'}</td>
-          <td style="text-align:right">${col('billed')}</td>
-          ${payCols.map(([k]) => `<td style="text-align:right">${col(k)}</td>`).join('')}
-          <td style="text-align:right;color:${owing ? 'var(--am)' : 'var(--i3)'}">${col('balance')}${dueTag(x)}</td>
-        </tr>`;
-      }).join('')}
-    </tbody>
-    <tfoot>
-      ${curs.map(c => {
-        const m = vtotal[c];
-        if(!m || !m.합계) return '';
-        return `<tr style="border-top:2px solid var(--i5);font-weight:800">
-          <td colspan="3" style="font-size:12px">${escapeHtml(c)} 합계
-            <span style="font-weight:400;color:var(--i4);font-size:10.5px">${
-              vrows.filter(r => r.by[c]?.합계).length}곳</span></td>
-          ${used.map(([k]) => `<td style="text-align:right">${amt(c, m[k])}</td>`).join('')}
-          <td style="text-align:right">${amt(c, m.합계)}</td>
-          ${(() => { const s = vsettle[c] || { billed: 0, paid: 0, balance: 0 };
-            return `<td style="text-align:right">${amt(c, s.billed)}</td>
-              ${payCols.map(([k]) => `<td style="text-align:right;color:var(--g)">${amt(c, s[k])}</td>`).join('')}
-              <td style="text-align:right;color:${s.balance > 0 ? 'var(--am)' : 'var(--g)'}">${
-                s.balance ? amt(c, s.balance) : '<span style="font-weight:400">완납</span>'}</td>`; })()}
-        </tr>
-        <tr style="font-weight:400">
-          <td colspan="3" style="font-size:10.5px;color:var(--i4)">${escapeHtml(c)} 비중</td>
-          ${used.map(([k]) => `<td style="text-align:right;font-size:10.5px;color:var(--i4)">${
-            m.합계 ? Math.round(m[k] / m.합계 * 100) + '%' : '-'}</td>`).join('')}
-          <td colspan="${3 + payCols.length}"></td>
-        </tr>`;
-      }).join('')}
-    </tfoot>
-    </table></div>`);
-}
-
-
-/* 비품 현황 하위 탭 — 전체 / 기본 / 추가
-
-   발주는 전체를 보고 하고, 청구 확인은 추가만 보면 되고, 부스에 딸려 가는
-   것이 제대로 깔렸는지는 기본만 보면 된다. 한 표에 셋을 겹쳐 두면 볼 때마다
-   눈으로 걸러야 해서, 아예 갈라 둔다. */
-const EQUIP_SCOPES = [['all', '전체'], ['base', '기본'], ['extra', '추가']];
-let equipScope = 'all';
-export function setEquipScope(v){ equipScope = v; renderExh(); }
-
-function renderEquipView(list){
-  const inScope = (i) => equipScope === 'all' ? true
-    : equipScope === 'base' ? isBoothGiven(i) : !isBoothGiven(i);
-  const scopeSeg = `<div class="subbar" style="padding:10px 16px 0"><div class="seg">${EQUIP_SCOPES.map(([v, l]) =>
-    `<button class="seg-b${equipScope === v ? ' on' : ''}" onclick="setEquipScope('${v}')"
-      title="${v === 'all' ? '기본 + 추가 — 발주할 수량이에요'
-            : v === 'base' ? '부스 타입에 딸려 오는 기본 제공 — 청구하지 않아요'
-            : '기업이 따로 신청한 추가 비품 — 청구 대상이에요'}">${l}</button>`).join('')}</div></div>`;
-
-  const rows = list.map(x => ({ x, items: liveItemsFor(x.id)
-      .filter(i => (i.category || '') === 'equip').filter(inScope) }))
-    .filter(r => r.items.length);
-  if(!rows.length) return scopeSeg + emptyView(
-    equipScope === 'base' ? '부스 기본 제공으로 들어간 비품이 없어요'
-    : equipScope === 'extra' ? '기업이 따로 신청한 비품이 없어요' : '신청된 비품이 없어요');
-
-  /* 카탈로그에 이어진 품목은 그 id로 묶는다 — 기업마다 "접이식 체어",
-     "C-040 Folding Chair"처럼 다르게 적어 보내도 한 줄로 합쳐진다.
-     카탈로그 밖의 항목(그래픽 랩핑·전기 등)만 이름으로 묶는다. */
-  const byName = new Map();
-  rows.forEach(({ x, items }) => items.forEach(i => {
-    const cat = i.catalog_id ? catalogItem(i.catalog_id) : null;
-    const k = cat ? cat.id : String(i.name || '(이름 없음)').trim();
-    if(!byName.has(k)) byName.set(k, {
-      key: k,
-      code:   cat ? cat.code : '',
-      nameKo: cat ? (cat.name_ko || cat.name_en) : String(i.name || '(이름 없음)').trim(),
-      nameEn: cat ? (cat.name_ko ? cat.name_en : '') : '',
-      spec:   cat ? cat.spec : '',
-      /* 분류(의자·테이블·가전제품…)는 카탈로그가 들고 있다. 발주서를 쓸 때
-         의자 몇 개, 테이블 몇 개를 묶어 보게 되므로 화면에서도 갈라 준다.
-         카탈로그 밖 품목은 갈 데가 없어 따로 모은다 — 기타비품에 섞으면
-         진짜 기타비품과 구분이 안 돼 단가 확인을 빠뜨린다. */
-      cat:    cat ? (String(cat.category || '').trim() || '기타비품') : '카탈로그 외',
-      catOrd: cat ? (Number(cat.sort_order) || 9999) : 1e6,
-      offCatalog: !cat,
-      // 신청하다 직접 적어 올린 품목 — 정식 카탈로그와 구분해 두면 나중에
-      // 렌탈사 카탈로그를 다시 받을 때 무엇을 확인해야 할지 알 수 있다
-      direct: !!(cat && cat.note === '직접 추가'),
-      /* 부스에 딸려 오는 것과 기업이 따로 신청한 것을 갈라 센다 — 발주는 둘을
-         합쳐서 하지만, 청구와 확인은 «추가»만 보면 된다. 한 숫자만 있으면
-         그때마다 기업별로 다시 헤아리게 된다. */
-      qty: 0, qtyBase: 0, qtyExtra: 0, cos: [], krw: 0, usd: 0,
-    });
-    const g = byName.get(k);
-    const q = Number(String(i.qty || '').replace(/[^0-9.-]/g, '')) || 0;
-    const amt = Number(String(i.amount || '').replace(/[^0-9.-]/g, '')) || 0;
-    /* 공동 부스에서 비용만 나눠 낸 줄은 수량을 세지 않는다. 실물은 상대 기업이
-       주문하므로 여기서 또 세면 없는 의자를 발주하게 된다. 금액은 센다. */
-    const shareOnly = !!String(i.shared_ref || '').trim();
-    if(!shareOnly){
-      const n = q || 1;               // 수량을 안 적었으면 1개로 센다
-      g.qty += n;
-      if(isBoothGiven(i)) g.qtyBase += n; else g.qtyExtra += n;
-    }
-    else g.shared = true;
-    g.cos.push({ id: x.id, name: x.company_name, booth: x.booth_no, qty: shareOnly ? 0 : (q || 1),
-      amt, cur: i.currency || 'KRW', raw: i.name, shareOnly, base: isBoothGiven(i) });
-    // 통화별로 나눠 담는다 — 합치면 원화와 달러를 더한 숫자가 된다.
-    // 청구에서 뺀 항목은 수량은 세되 금액은 더하지 않는다 — 발주는 해야 하지만
-    // 우리 청구액은 아니다.
-    if(isBillable(i)){ if((i.currency || 'KRW') === 'USD') g.usd += amt; else g.krw += amt; }
-    else g.excluded = true;
-  }));
-  /* 분류의 앞뒤도, 분류 안의 앞뒤도 카탈로그가 정한 순서를 따른다. 화면이 따로
-     순서를 정해 두면 설정에서 카탈로그를 다시 세워도 여기만 옛 순서로 남는다.
-
-     수량 많은 순이 아니라 품목 순이다 — 발주서와 렌탈사 카탈로그가 코드 순으로
-     적혀 있어서, 화면이 다른 순서면 한 줄씩 눈으로 찾아 맞춰야 한다. */
-  const catOrder = new Map();
-  [...byName.values()].forEach(g => {
-    const cur = catOrder.get(g.cat);
-    if(cur === undefined || g.catOrd < cur) catOrder.set(g.cat, g.catOrd);
-  });
-  // 한 기업이 기본·추가로 두 줄을 가질 수 있다 — 줄이 아니라 기업을 센다
-  byName.forEach(g => { g.coN = new Set(g.cos.map(c => c.id)).size; });
-
-  const groups = [...byName.values()].sort((a, b) =>
-    (catOrder.get(a.cat) - catOrder.get(b.cat))
-    || (a.catOrd - b.catOrd)
-    || String(a.code || '힣').localeCompare(String(b.code || '힣'), 'ko', { numeric: true })
-    || String(a.nameKo || '').localeCompare(String(b.nameKo || ''), 'ko'));
-
-  /* 분류별 소계 — 발주서에 «의자 소계 60개»처럼 들어간다 */
-  const catBlocks = [...new Set(groups.map(g => g.cat))].map(c => {
-    const gs = groups.filter(g => g.cat === c);
-    return { cat: c, gs, kinds: gs.length,
-      qty: gs.reduce((a, g) => a + g.qty, 0),
-      qtyBase: gs.reduce((a, g) => a + g.qtyBase, 0),
-      qtyExtra: gs.reduce((a, g) => a + g.qtyExtra, 0),
-      krw: gs.reduce((a, g) => a + g.krw, 0),
-      usd: gs.reduce((a, g) => a + g.usd, 0) };
-  });
-
-  // 갈라 본 탭에서는 기본·추가 열이 되풀이라 뺀다 — 수량 한 칸이면 충분하다
-  const split = equipScope === 'all';
-  const offN = groups.filter(g => g.offCatalog).length;
-  const totKrw = groups.reduce((a, g) => a + g.krw, 0);
-  const totUsd = groups.reduce((a, g) => a + g.usd, 0);
-  const totQty   = groups.reduce((a, g) => a + g.qty, 0);
-  const totBase  = groups.reduce((a, g) => a + g.qtyBase, 0);
-  const totExtra = groups.reduce((a, g) => a + g.qtyExtra, 0);
-  const pills = `<span class="pill p-gray">신청 기업 ${rows.length}</span>`
-    + `<span class="pill p-blue">품목 ${groups.length}종</span>`
-    + (equipScope === 'all'
-        ? `<span class="pill p-gray" title="기본 제공과 추가 신청을 합친 발주 수량이에요">전체 ${totQty}개</span>`
-          + `<span class="pill p-teal" title="부스 타입에 딸려 오는 기본 제공 품목 — 우리가 청구하지 않아요">기본 ${totBase}개 · 청구 안함</span>`
-          + `<span class="pill p-blue" title="기업이 따로 신청한 비품 — 청구 대상이에요">추가비품 ${totExtra}개 · 별도 신청</span>`
-        : equipScope === 'base'
-          ? `<span class="pill p-teal">기본 ${totQty}개 · 청구 안함</span>`
-          : `<span class="pill p-blue">추가비품 ${totQty}개 · 별도 신청</span>`)
-    + (totKrw ? `<span class="pill p-gray">${fmtMoney(totKrw, 'KRW')}</span>` : '')
-    + (totUsd ? `<span class="pill p-gray">${fmtMoney(totUsd, 'USD')}</span>` : '')
-    + (offN ? `<span class="pill p-amber" title="카탈로그에 없는 품목 — 그래픽·전기처럼 다른 분류일 수 있어요">카탈로그 외 ${offN}종</span>` : '')
-    + catBlocks.map(b => `<span class="pill p-gray" style="font-size:9.5px"
-        title="${escapeHtml(b.gs.map(g => `${g.nameKo} ${g.qty}개`).join(', '))}">${escapeHtml(b.cat)} ${b.qty}개</span>`).join('');
-
-  /* 어느 기업이 신청했는지 — 품목을 클릭하면 펼친다.
-     발주하다 "이 의자 25개가 어디로 가는 거지"를 확인해야 할 때, 표 밖으로
-     나가지 않고 그 자리에서 본다. */
-  /* 부스 번호 순으로 세운다. 수량 많은 순이었는데, 이 목록을 여는 이유는
-     «이 의자를 어느 부스로 몇 개 보내나»이고 현장에서 도는 순서가 부스 순서다.
-     4개·3개·3개·3개…로 늘어놓으면 같은 수량끼리 순서가 뒤죽박죽이라 방금 본
-     부스를 다시 찾게 된다. 그래픽 현황도 같은 순서를 쓴다.
-
-     부스가 아직 없는 곳은 맨 뒤로 — 번호가 없다고 앞에 세우면 매번 걸린다. */
-  /* 한 기업이 같은 품목을 기본과 추가로 나눠 가지면 줄이 둘로 갈렸다 —
-     «시믹코리아 2개 / 시믹코리아 기본 2개»가 나란히 서서, 실제로 몇 개가
-     그 부스로 가는지 눈으로 더해야 했다. 여기서 알고 싶은 건 «이 부스에 몇 개»
-     하나뿐이니 기업으로 묶어 한 줄로 낸다. 기본이 섞였으면 몇 개가 기본인지만
-     작게 덧붙인다 — 금액이 수량에 비해 적은 이유가 그것이다. */
-  const coMerged = (g) => {
-    const by = new Map();
-    g.cos.forEach(c => {
-      const m = by.get(c.id) || { ...c, qty: 0, amt: 0, base: 0, shareOnly: false };
-      m.qty += c.qty; m.amt += c.amt;
-      if(c.base) m.base += c.qty;
-      if(c.shareOnly) m.shareOnly = true;
-      by.set(c.id, m);
-    });
-    return [...by.values()];
-  };
-
-  const coList = (g) => coMerged(g)
-    .sort((a, b) => boothKeyOf(a.booth) - boothKeyOf(b.booth)
-      || String(a.name || '').localeCompare(String(b.name || ''), 'ko'))
-    .map(c => `
-    <div onclick="event.stopPropagation();openExhDr('${escAttr(c.id)}','billing')"
-      style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:11.5px">
-      <span class="pill p-gray" style="min-width:52px;text-align:center">${c.booth ? '부스 ' + escapeHtml(c.booth) : '미배정'}</span>
-      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${
-        isMobile() ? ';font-size:12.5px;font-weight:600' : ''}">${escapeHtml(c.name)}</span>
-      ${c.base ? `<span style="font-size:10px;color:var(--i4)" title="부스에 딸려 오는 기본 제공분이에요">기본 ${c.base}</span>` : ''}
-      <span style="color:var(--i3)">${c.shareOnly ? '<span class="pill p-blue" style="font-size:9px">비용 분담</span>' : c.qty + '개'}</span>
-      ${isMobile() ? ''   /* 좁은 화면에서는 금액이 기업명 자리를 먹는다 — 합계는 위 품목 줄에 있다 */
-        : `<span style="min-width:88px;text-align:right;font-weight:600">${c.amt ? fmtMoney(c.amt, c.cur) : '-'}</span>`}
-    </div>`).join('');
-
-  const summaryBody = isMobile()
-    /* 좁은 화면에서는 표를 쓰지 않는다 — 헤더가 숨겨지면서 25 / 7곳 / 187,000원이
-       각각 무슨 숫자인지 알 수 없게 된다. 값마다 이름을 붙여 카드로 그린다. */
-    ? catBlocks.map(b => `
-      <div style="display:flex;align-items:baseline;gap:6px;padding:10px 0 4px;border-bottom:2px solid var(--i7);margin-top:6px">
-        <span style="font-size:12px;font-weight:800;color:var(--i2)">${escapeHtml(b.cat)}</span>
-        <span style="font-size:10.5px;color:var(--i4)">${b.kinds}종 · ${b.qty}개${
-          split && (b.qtyBase || b.qtyExtra) ? ` (기본 ${b.qtyBase} · 추가 ${b.qtyExtra})` : ''}${
-          b.krw ? ' · ' + escapeHtml(fmtMoney(b.krw, 'KRW')) : ''}${
-          b.usd ? ' · ' + escapeHtml(fmtMoney(b.usd, 'USD')) : ''}</span>
-      </div>` + b.gs.map(g => {
-      const open = equipOpen.has(g.key);
-      return `<div style="padding:8px 0;border-bottom:1px solid var(--i8)">
-        <div onclick="toggleEquipRow('${escAttr(g.key)}')" style="cursor:pointer">
-          <div style="display:flex;align-items:baseline;gap:7px">
-            ${g.code ? `<span class="pill ${g.direct ? 'p-teal' : 'p-blue'}" style="font-size:9px">${escapeHtml(g.code)}</span>` : ''}
-            <span style="font-size:12.5px;font-weight:600;flex:1;min-width:0">${escapeHtml(g.nameKo)}</span>
-            <span style="font-size:15px;font-weight:800">${g.qty}<span style="font-size:10px;font-weight:400;color:var(--i4)">개</span></span>
-          </div>
-          ${g.nameEn ? `<div style="font-size:10.5px;color:var(--i4)">${escapeHtml(g.nameEn)}</div>` : ''}
-          <div style="font-size:10.5px;color:var(--i4);margin-top:2px">
-            ${split && g.qtyBase ? `기본 ${g.qtyBase} · ` : ''}${split && g.qtyExtra ? `추가 ${g.qtyExtra} · ` : ''}${
-            g.spec ? escapeHtml(g.spec) + ' · ' : ''}${g.coN}개사 신청
-            ${g.krw ? ' · ' + escapeHtml(fmtMoney(g.krw, 'KRW')) : ''}${g.usd ? ' · ' + escapeHtml(fmtMoney(g.usd, 'USD')) : ''}
-            <span style="color:var(--a)"> ${open ? '▲ 접기' : '▼ 신청 기업'}</span>
-          </div>
-        </div>
-        ${open ? `<div style="margin-top:5px;padding-left:6px;border-left:2px solid var(--i6)">${coList(g)}</div>` : ''}
-      </div>`;
-    }).join('')).join('')
-
-    : `<div class="tw" style="overflow:visible"><table><thead><tr>
-        <th style="min-width:74px">분류</th>
-        <th style="min-width:66px">품목코드</th>
-        <th style="min-width:150px">품명(국문)</th>
-        <th style="min-width:150px">품명(영문)</th>
-        <th style="min-width:110px">규격</th>
-        <th style="min-width:56px;text-align:right" title="${split ? '기본 + 추가 — 발주 수량이에요' : '이 탭에 해당하는 수량이에요'}">${split ? '전체' : '수량'}</th>
-        ${split ? `<th style="min-width:52px;text-align:right" title="부스 타입에 딸려 오는 기본 제공 — 청구하지 않아요">기본</th>
-        <th style="min-width:52px;text-align:right" title="기업이 따로 신청한 추가 비품 — 청구 대상이에요">추가</th>` : ''}
-        <th style="min-width:62px;text-align:right">기업</th>
-        <th style="min-width:104px;text-align:right">KRW</th>
-        <th style="min-width:88px;text-align:right">USD</th>
-      </tr></thead><tbody>
-        ${groups.map((g, gi) => {
-          const open = equipOpen.has(g.key);
-          /* 같은 분류가 이어지면 이름을 한 번만 쓴다 — 스물네 줄에 «의자»가 여덟 번
-             찍히면 글자가 많아 오히려 덩어리가 안 보인다. 머리글 줄을 따로 세우지
-             않은 건, 그러면 표 머리를 눌러 정렬하는 길이 막히기 때문이다. */
-          const first = groups.findIndex(z => z.cat === g.cat) === gi;
-          return `<tr onclick="toggleEquipRow('${escAttr(g.key)}')" style="cursor:pointer${open ? ';background:var(--ad)' : ''}${
-            first && gi ? ';border-top:2px solid var(--i6)' : ''}"
-            title="클릭하면 신청한 기업을 볼 수 있어요">
-            <td style="font-size:11px;font-weight:${first ? '800' : '400'};color:var(${first ? '--i2' : '--i6'})">${
-              escapeHtml(g.cat)}</td>
-            <td style="font-size:11.5px;font-weight:700;color:var(--i2)">
-              <span style="color:var(--a)">${open ? '▾' : '▸'}</span> ${escapeHtml(g.code || '—')}</td>
-            <td style="font-size:12.5px;font-weight:600">${escapeHtml(g.nameKo)}
-              ${g.excluded ? '<span class="pill p-amber" style="font-size:9px;margin-left:4px" title="우리가 청구하지 않는 항목이라 금액 합계에서 빠져 있어요">청구 제외</span>' : ''}
-              ${g.offCatalog ? '<span class="pill p-amber" style="font-size:9px;margin-left:4px" title="카탈로그에 없는 품목 — 직접 입력됐어요">카탈로그 외</span>' : ''}
-              ${g.direct ? '<span class="pill p-teal" style="font-size:9px;margin-left:4px" title="신청하면서 직접 적어 품목마스터에 올린 품목이에요 — 단가·규격을 확인해주세요">직접 추가</span>' : ''}</td>
-            <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(g.nameEn || '-')}</td>
-            <td style="font-size:11px;color:var(--i4)">${escapeHtml(g.spec || '-')}</td>
-            <td style="text-align:right;font-weight:700">${g.qty}</td>
-            ${split ? `<td style="text-align:right;color:var(--i4)">${g.qtyBase || '<span style="color:var(--i6)">-</span>'}</td>
-            <td style="text-align:right;font-weight:600">${g.qtyExtra || '<span style="color:var(--i6)">-</span>'}</td>` : ''}
-            <td style="text-align:right;color:var(--i4)">${g.coN}곳</td>
-            <td style="text-align:right">${g.krw ? escapeHtml(fmtMoney(g.krw, 'KRW')) : '<span style="color:var(--i6)">-</span>'}</td>
-            <td style="text-align:right">${g.usd ? escapeHtml(fmtMoney(g.usd, 'USD')) : '<span style="color:var(--i6)">-</span>'}</td>
-          </tr>
-          ${open ? `<tr data-detail><td colspan="${split ? 11 : 9}" style="padding:8px 12px 12px;background:var(--i9)">
-            <div style="font-size:10.5px;color:var(--i4);margin-bottom:4px">신청 기업 ${g.coN}곳 — 클릭하면 그 기업 정산 탭으로 갑니다</div>
-            ${coList(g)}</td></tr>` : ''}`;
-        }).join('')}
-      </tbody>
-      <tfoot>
-      ${catBlocks.length > 1 ? catBlocks.map(b => `<tr style="font-weight:600;color:var(--i3);background:var(--i9)">
-        <td colspan="5" style="font-size:11px">${escapeHtml(b.cat)} 소계 <span style="font-weight:400;color:var(--i4)">${b.kinds}종</span></td>
-        <td style="text-align:right">${b.qty}</td>
-        ${split ? `<td style="text-align:right;font-weight:400;color:var(--i4)">${b.qtyBase || '-'}</td>
-        <td style="text-align:right">${b.qtyExtra || '-'}</td>` : ''}
-        <td></td>
-        <td style="text-align:right">${b.krw ? escapeHtml(fmtMoney(b.krw, 'KRW')) : '-'}</td>
-        <td style="text-align:right">${b.usd ? escapeHtml(fmtMoney(b.usd, 'USD')) : '-'}</td>
-      </tr>`).join('') : ''}
-      <tr style="border-top:2px solid var(--i5);font-weight:800">
-        <td colspan="5" style="font-size:12px">합계 ${groups.length}종</td>
-        <td style="text-align:right">${totQty}</td>
-        ${split ? `<td style="text-align:right;font-weight:600;color:var(--i3)">${totBase || '-'}</td>
-        <td style="text-align:right">${totExtra || '-'}</td>` : ''}
-        <td></td>
-        <td style="text-align:right">${totKrw ? escapeHtml(fmtMoney(totKrw, 'KRW')) : '-'}</td>
-        <td style="text-align:right">${totUsd ? escapeHtml(fmtMoney(totUsd, 'USD')) : '-'}</td>
-      </tr></tfoot></table></div>`;
-
-  const summary = `<div class="uc" style="margin-bottom:14px">
-    <div class="uc-ttl">품목별 합계 <span style="font-weight:400;color:var(--i4);font-size:10px">— 발주서에 쓰는 숫자예요. 품목을 클릭하면 신청 기업이 보입니다</span></div>
-    ${summaryBody}</div>`;
-
-  const detail = rows.map(({ x, items }) => `
-    <div style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px">
-      <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px">
-        ${x.booth_no ? `<span class="pill p-blue">부스 ${escapeHtml(x.booth_no)}</span>` : ''}
-        <span onclick="openExhDr('${escAttr(x.id)}','billing')" style="cursor:pointer;flex:1;min-width:0">
-          <span style="font-size:13px;font-weight:700">${escapeHtml(exhNames(x).ko)}</span>${
-          exhNames(x).en ? `<span style="font-size:11px;color:var(--i4);margin-left:5px">${escapeHtml(exhNames(x).en)}</span>` : ''}</span>
-        <span style="font-size:11px;color:var(--i4)">${items.length}종</span>
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:5px">
-        ${items.map(i => `<span class="pill p-gray" title="${escapeHtml(fmtMoney(i.amount, i.currency || 'KRW'))}">${escapeHtml(i.name || '')}${i.qty ? ' ×' + escapeHtml(i.qty) : ''}</span>`).join('')}
-      </div>
-      ${x.extra_equipment ? `<div style="font-size:11px;color:var(--i4);margin-top:5px">메모: ${escapeHtml(x.extra_equipment)}</div>` : ''}
-    </div>`).join('');
-
-  /* 내보내기는 exh-export.js가 소유한다 — 이 파일이 그쪽을 import하면 순환
-     참조가 되므로(내보내기가 여기 집계 함수를 쓴다) window 경유로 부른다.
-     드로어를 다루는 방식과 같다. */
-  const actions = `<button class="btn bs" id="exh-export-btn" onclick="exportEquipLedger()"
-      title="쓰던 「비품 신청 종합관리대장」 형식(품목표 + 기업×코드 교차표)으로 받습니다">엑셀 내보내기</button>`
-    + `<button class="btn bs" id="exh-rental-export-btn" onclick="exportRentalOrder()"
-      title="금액 없이, 신청이 들어온 부스만 부스 번호순으로 받습니다 — 렌탈 업체에 보내는 용도">렌탈업체용 다운로드</button>`
-    + `<button class="btn bs" onclick="printBoothEquipSheets()"
-      title="기업마다 A4 한 장, 영문으로 신청 비품(X배너 포함)·금액을 뽑습니다 — 현장에서 각 부스에 넣어 두는 용도. 미납액이 남은 기업은 합계에 * 표시">부스 비치용 출력</button>`
-    + `<button class="btn bp bs" onclick="openNewCatalogItem()">+ 품목 추가</button>`;
-
-  /* 부스 기본 품목이 아직 안 깔린 기업 — 발주 수량이 그만큼 모자란 채로 보인다.
-     여기가 그 숫자를 보는 자리라, 모자란 걸 여기서 바로 채울 수 있어야 한다. */
-  const pend = activeExhibitors(exhEvent).filter(x => boothItemsPending(x.id));
-  const pendNote = pend.length ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;
-      background:var(--ad);border:1px solid var(--a);border-radius:8px;padding:8px 11px;margin-bottom:12px">
-    <span style="font-size:11.5px;color:var(--i2);flex:1;min-width:180px">
-      부스 기본 제공 품목이 아직 안 들어간 기업이 <b>${pend.length}곳</b> 있어요 — 그만큼 발주 수량이 모자랍니다.</span>
-    <button class="btn bp bs" style="flex:0 0 auto" onclick="applyBoothItemsToEvent('${escAttr(exhEvent || '')}')">${pend.length}곳에 한 번에 넣기</button>
-  </div>` : '';
-
-  return scopeSeg + viewShell(pills, pendNote + summary + `<div class="sct">기업별 신청 내역</div>` + detail, actions);
-}
-
-/* ── 그래픽 현황 ──
-   제작(디자인)은 초안 → 수정안 → 최종안으로 왔다 갔다 하고, 출력은 규격이
-   맞는지만 보면 된다. 두 흐름이 섞여 있어 한 표에서 지금 누가 어느 단계에
-   걸려 있는지 봐야 다음 연락처를 정할 수 있다. */
-function renderGraphicView(list){
-  const rows = list.filter(x => x.graphic_ordered_at || x.graphic_type
-    || liveItemsFor(x.id).some(i => (i.category || '') === 'graphic'));
-  /* 독립부스는 우리에게 그래픽을 «주문»하지 않는다 — 자기들이 만들어 와서
-     우리는 받아 보기만 한다. 그래서 주문 목록(rows)이 아니라 부스 타입으로 잡는다.
-     주문이 하나도 없어도 이 보기는 열려야 한다. */
-  const selfRows = list.filter(x => (x.booth_type || '') === SELF_BUILD_TYPE);
-  const baseAny = list.some(x => baseKind(x));
-  if(!rows.length && !selfRows.length && !baseAny) return emptyView('그래픽을 주문한 기업이 없어요');
-
-  /* 보기 전환 — 기업별은 "이 회사가 어느 단계인가", 항목별은 "무엇이 아직 안 왔나".
-     그래픽은 한 기업이 백월·행잉배너·데스크 랩핑을 함께 주문하므로 기업 한 줄로는
-     무엇을 받았는지 체크할 자리가 없다. 그래서 받을 파일 목록을 기본으로 둔다. */
-  /* «기본 제공»이 맨 앞이다 — 계약에 들어 있어 기업이 조용해도 우리가 만들어
-     세워야 하는 것이라, 안 하면 그만인 추가 주문보다 먼저 본다. 전에는 「기본
-     시공」이라는 제 탭을 갖고 있었는데, 거기서 하던 일이 결국 그래픽 파일을
-     받아 만드는 일이라 같은 화면으로 들어왔다. */
-  const baseN = list.filter(x => baseKind(x)).length;
-  const seg = `<div class="subbar" style="padding:10px 16px 0"><div class="seg">
-    ${[['base', `기본 제공${baseN ? ` ${baseN}` : ''}`], ['item', '받을 파일'], ['kind', '품목별'], ['co', '기업별 진행'],
-       ['self', `독립부스${selfRows.length ? ` ${selfRows.length}` : ''}`]].map(([k, l]) =>
-      `<button class="seg-b${gView === k ? ' on' : ''}" onclick="setGraphicView('${k}')">${l}</button>`).join('')}
-  </div></div>`;
-
-  if(gView === 'base') return seg + renderBaseView(list);
-  if(gView === 'self') return seg + renderSelfBoothView(selfRows);
-  if(!rows.length) return seg + emptyView('그래픽을 주문한 기업이 없어요');
-  return seg + (gView === 'co' ? renderGraphicCoView(rows)
-    : gView === 'kind' ? renderGraphicKindView(rows)
-    : renderGraphicItemView(rows));
-}
-
-/* ── 독립부스 ──
-   자체 시공은 부스를 업체가 직접 짓는다. 우리가 만들 것은 없지만 그냥 두면
-   안 된다 — 높이 제한을 넘기거나 통로를 침범하거나 옆 부스를 가리는 도면이
-   개막 직전에 발견되면 그때는 고칠 시간이 없다.
-
-   그래서 세 가지를 받는다. 누가 짓는지(시공사), 무엇을 짓는지(도면·그래픽),
-   그리고 우리가 봤는지(확인). 셋이 한 줄에 있어야 "받았는데 아직 안 봤다"가
-   보인다 — 받은 것만 세면 그게 완료로 착각된다. */
-function renderSelfBoothView(rows){
-  if(!rows.length) return emptyView('독립부스(Self-Construction)로 신청한 기업이 없어요');
-
-  const bk = (x) => { const k = boothSortKey(x); return k === Infinity ? 1e9 : k; };
-  const list = [...rows].sort((a, b) => bk(a) - bk(b));
-
-  const hasBuilder = (x) => !!String(x.builder || '').trim();
-  const got  = (x) => !!x.booth_design_received_at;
-  const seen = (x) => !!x.booth_design_checked_at;
-  const nB = list.filter(hasBuilder).length;
-  const nG = list.filter(got).length;
-  const nS = list.filter(seen).length;
-  const nOk  = list.filter(x => x.booth_design_result === 'ok').length;
-  const nFix = list.filter(x => x.booth_design_result === 'fix').length;
-  const nW = list.filter(x => x.work_report_at).length;   // 시공사가 호텔에 낸 작업신고서
-  const due = dueInfo('calc:design', exhEvent);
-
-  /* 숫자만 보면 12/18이 얼마나 남은 건지 안 들어온다 */
-  const bar = (v, of, color) => `<div style="display:flex;align-items:center;gap:6px;min-width:120px">
-    <div style="flex:1;height:5px;border-radius:3px;background:var(--i7);overflow:hidden">
-      <div style="width:${of ? Math.round(v / of * 100) : 0}%;height:100%;background:${v === of ? 'var(--g)' : color}"></div></div>
-    <span style="font-size:11px;font-weight:700;color:${v === of ? 'var(--g)' : 'var(--i3)'}">${v}/${of}</span></div>`;
-
-  const pills = `<span class="pill p-gray">독립부스 ${list.length}곳</span>`
-    + `<span class="pill ${nB === list.length ? 'p-green' : 'p-amber'}">시공사 ${nB}/${list.length}</span>`
-    + `<span class="pill ${nG === list.length ? 'p-green' : 'p-amber'}">도면 수령 ${nG}/${list.length}</span>`
-    + `<span class="pill ${nS === list.length ? 'p-green' : 'p-amber'}">확인 ${nS}/${list.length}</span>`
-    + `<span class="pill ${nW === list.length ? 'p-green' : 'p-amber'}" title="${escapeHtml(list.filter(x => !x.work_report_at).map(x => exhNames(x).ko).join(', ') || '모두 제출')}">작업신고서 ${nW}/${list.length}</span>`
-    + (nFix ? `<span class="pill p-red" title="${escapeHtml(list.filter(x => x.booth_design_result === 'fix').map(x => exhNames(x).ko).join(', '))}">수정 요청 ${nFix}</span>` : '')
-    + (nOk ? `<span class="pill p-green">적합 ${nOk}</span>` : '')
-    + (due
-      ? `<span class="pill ${due.days < 0 ? 'p-red' : due.days <= 7 ? 'p-amber' : 'p-gray'}">수령 마감 ${escapeHtml(due.date)}${
-          due.days < 0 ? ` · ${-due.days}일 지남` : due.days === 0 ? ' · 오늘' : ` · D-${due.days}`}</span>`
-      : '');
-
-  const board = `<div class="uc" style="margin:12px 0 10px;padding:11px 14px">
-    <div style="display:flex;flex-wrap:wrap;gap:14px 26px">
-      ${[['시공사 정보', nB, 'var(--a)'], ['도면·그래픽 수령', nG, 'var(--am)'],
-         ['우리 확인', nS, 'var(--am)'], ['적합 판정', nOk, 'var(--g)'], ['호텔 작업신고서', nW, 'var(--a)']].map(([l, v, c]) =>
-        `<div style="min-width:150px">
-          <div style="font-size:10px;color:var(--i5);font-weight:600">${l}</div>
-          <div style="margin-top:4px">${bar(v, list.length, c)}</div></div>`).join('')}
-    </div>
-    ${nG > nS ? `<div style="font-size:11px;color:var(--am);margin-top:8px">받아 놓고 아직 안 본 도면이 <b>${nG - nS}건</b> 있어요 — 확인해야 적합·수정을 판정할 수 있습니다</div>` : ''}
-  </div>`;
-
-  const txt = (x, f, ph, label, w) => `<input class="fi" style="width:${w};padding:3px 6px;font-size:11.5px"
-    placeholder="${escapeHtml(ph)}" value="${escapeHtml(x[f] || '')}" onclick="event.stopPropagation()"
-    onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')">`;
-  /* 작업신고서는 냈는지만 본다 — 체크하면 오늘 날짜가 들어가고(언제 체크했는지는
-     남는다), 풀면 비운다 */
-  const wr = (x) => `<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:11.5px"
-    onclick="event.stopPropagation()"><input type="checkbox"${x.work_report_at ? ' checked' : ''}
-    onchange="setExhField('${escAttr(x.id)}','work_report_at',this.checked ? '${td()}' : '','작업신고서 제출')">
-    ${x.work_report_at ? '<span style="color:var(--g)">받음</span>' : '<span style="color:var(--i5)">미제출</span>'}</label>`;
-  const dt = (x, f, label) => `<input type="date" class="fi" style="width:124px;padding:3px 6px;font-size:11.5px"
-    value="${escapeHtml(x[f] || '')}" onclick="event.stopPropagation()"
-    onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')">`;
-
-  /* 확인 결과는 받아 보기 전에는 고를 수 없게 둔다 — 안 본 도면에 «적합»이
-     찍히면 그 부스는 아무도 다시 안 본다. */
-  const resultCell = (x) => !got(x)
-    ? '<span style="font-size:11px;color:var(--i6)">도면 수령 후</span>'
-    : `<select class="fi" style="width:104px;padding:3px 5px;font-size:11.5px" onclick="event.stopPropagation()"
-        onchange="setExhField('${escAttr(x.id)}','booth_design_result',this.value,'도면 확인 결과')">
-        ${[['', '미판정'], ['ok', '적합'], ['fix', '수정 요청']].map(([v, l]) =>
-          `<option value="${v}"${(x.booth_design_result || '') === v ? ' selected' : ''}>${l}</option>`).join('')}
-      </select>`;
-
-  const stateCell = (x) => { const s = boothDesignState(x);
-    const c = s.state === 'done' ? 'p-green' : s.state === 'warn' ? 'p-red'
-      : s.state === 'none' ? 'p-gray' : 'p-amber';
-    return `<span class="pill ${c}">${escapeHtml(s.text)}</span>`; };
-
-  /* 연락처는 칸을 다 벌리면 표가 안 읽힌다 — 있는지만 보이고 자세한 건 툴팁에 */
-  const contactOf = (x) => [x.builder_contact, x.builder_tel, x.builder_mobile, x.builder_email]
-    .map(v => String(v || '').trim()).filter(Boolean);
-
-  if(isMobile()) return viewShell(pills, board + list.map(x => `
-    <div style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px">
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px">
-        <span class="pill p-gray">${x.booth_no ? '부스 ' + escapeHtml(x.booth_no) : '미배정'}</span>
-        <span onclick="openExhDr('${escAttr(x.id)}','progress')"
-          style="font-size:13px;font-weight:700;flex:1;min-width:0;cursor:pointer">${escapeHtml(exhNames(x).ko)}</span>
-        ${stateCell(x)}
-      </div>
-      <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
-        <span style="font-size:11px;color:var(--i4);min-width:56px">시공사</span>${txt(x, 'builder', '업체명', '시공업체', '100%')}</div>
-      <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
-        <span style="font-size:11px;color:var(--i4);min-width:56px">수령</span>${dt(x, 'booth_design_received_at', '도면 수령')}</div>
-      <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
-        <span style="font-size:11px;color:var(--i4);min-width:56px">확인</span>${dt(x, 'booth_design_checked_at', '도면 확인')}</div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <span style="font-size:11px;color:var(--i4);min-width:56px">결과</span>${resultCell(x)}</div>
-      <div style="display:flex;gap:6px;align-items:center;margin-top:4px">
-        <span style="font-size:11px;color:var(--i4);min-width:56px">작업신고</span>${wr(x)}</div>
-    </div>`).join(''));
-
-  return viewShell(pills, board + `<div class="tw"><table><thead><tr>
-      <th style="min-width:44px;text-align:right">신청순</th>
-      <th style="min-width:56px">부스</th>
-      <th style="min-width:150px">기업</th>
-      <th style="min-width:150px">시공사</th>
-      <th style="min-width:70px;text-align:center">연락처</th>
-      <th style="min-width:130px">도면·그래픽 수령</th>
-      <th style="min-width:130px">우리 확인</th>
-      <th style="min-width:110px">결과</th>
-      <th style="min-width:90px" title="시공사가 호텔에 작업신고서를 냈는지">작업신고서</th>
-      <th style="min-width:90px;text-align:center">상태</th>
-      <th style="min-width:150px">비고</th>
-    </tr></thead><tbody>
-    ${list.map(x => {
-      const c = contactOf(x);
-      return `<tr>
-        ${applyCell(x)}
-        <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
-        ${coCell(x, 'progress')}
-        <td>${txt(x, 'builder', '업체명', '시공업체', '142px')}</td>
-        <td style="text-align:center">${c.length
-          ? `<span class="pill p-green" title="${escapeHtml(c.join(' · '))}">있음</span>`
-          : '<span class="pill p-gray" title="기업 상세 › 현장에서 담당자·연락처를 넣을 수 있어요">없음</span>'}</td>
-        <td>${dt(x, 'booth_design_received_at', '도면 수령')}</td>
-        <td>${dt(x, 'booth_design_checked_at', '도면 확인')}</td>
-        <td>${resultCell(x)}</td>
-        <td>${wr(x)}</td>
-        <td style="text-align:center">${stateCell(x)}</td>
-        <td>${txt(x, 'booth_design_note', '수정 요청 내용 등', '도면 비고', '100%')}</td>
-      </tr>`;
-    }).join('')}
-    </tbody></table></div>`);
-}
-
-/* ── 받을 파일 계획 ──
-   기업 단위 단계(graphic_stage)는 "기업 전달"까지밖에 못 담는다 — 셋 중 둘만 온
-   경우가 그 칸에 안 들어간다. 받아야 할 파일 하나를 한 줄로 놓고, 언제까지 받기로
-   했는지(due_at)를 함께 잡는다. 마감이 없으면 미수령 목록은 길어지기만 하고
-   누구부터 재촉할지 정할 근거가 없다. */
-export function graphicItemsOf(exhId){
-  return liveItemsFor(exhId).filter(i => (i.category || '') === 'graphic');
-}
-
-/* 마감 읽기. 받은 항목은 마감이 지났어도 늦은 게 아니다 — 이미 끝난 일이다.
-   rank는 정렬용이다(급한 것이 위로). */
-export function graphicDueInfo(i){
-  if(i.received_at) return { cls: 'p-green', text: '받음', rank: 4 };
-  const d = String(i.due_at || '').trim();
-  /* 마감을 파일마다 넣지 않는다(대부분 ASAP) — 그래픽 자료를 요청한 지 며칠인지로 본다(follow-up.js) */
-  if(!d){
-    const x = getExhibitorById(i.exhibitor_id);
-    const st = x && exhMailSteps(x.event_id).find(s => s.key === 'graphic');
-    const f = st && exhFollowOf(x, st);
-    if(f && f.state === 'nudge') return { cls: 'p-amber', text: `리마인더 · 요청 ${f.since}일째`, rank: 1, soon: true };
-    if(f) return { cls: 'p-blue', text: `요청 ${f.since}일째`, rank: 2 };
-    return { cls: 'p-gray', text: '요청 전', rank: 3 };
-  }
-  const over = daysSince(d);
-  if(over > 0)   return { cls: 'p-red', text: `${over}일 지남`, rank: 0, late: true };
-  if(over === 0) return { cls: 'p-red', text: '오늘 마감',      rank: 0, late: true };
-  return -over <= DUE_SOON_DAYS
-    ? { cls: 'p-amber', text: `D-${-over}`, rank: 1, soon: true }
-    : { cls: 'p-gray',  text: `D-${-over}`, rank: 2 };
-}
-
-function graphicPlanRows(list){
-  const out = [];
-  list.forEach(x => graphicItemsOf(x.id).forEach(i => out.push({ x, i, d: graphicDueInfo(i) })));
-  /* 급한 것부터. 같은 급함 안에서는 마감이 빠른 순, 그다음 기업 이름 순 —
-     한 기업 파일이 흩어지지 않아야 연락 한 번에 함께 물어볼 수 있다. */
-  out.sort((a, b) => a.d.rank - b.d.rank
-    || String(a.i.due_at || '9999').localeCompare(String(b.i.due_at || '9999'))
-    || exhNames(a.x).ko.localeCompare(exhNames(b.x).ko, 'ko'));
-  return out;
-}
-
-/* ── 같은 파일은 한 줄로 ──
-   신청은 회차별로 갈라 받아야 «몇 차에 무엇이 늘었나»가 남는다. 그런데 파일을
-   받을 때 필요한 건 «이 기업에서 이 파일 몇 장»이지 회차가 아니다. 회차가 갈린
-   탓에 같은 파일이 두 줄로 앉아 있으면 받았는지 세다가 한 장을 빠뜨린다.
-
-   그래서 화면에서만 묶는다. 기업·품목·마감·받은 날·받은 것 메모가 모두 같을
-   때만 합친다 — 하나라도 다르면 그 줄에 무엇을 적어야 할지 알 수 없으니 따로
-   둔다. 합친 줄에 마감이나 받은 날을 적으면 묶인 항목 모두에 같이 들어간다. */
-function mergeSamePlanRows(rows){
-  const out = [];
-  const by = new Map();
-  rows.forEach(r => {
-    const i = r.i;
-    const k = [r.x.id, i.catalog_id || `n:${String(i.name || '').trim()}`,
-      i.due_at || '', i.received_at || '', i.received_note || '',
-      i.currency || 'KRW', String(i.unit_price || '')].join('');
-    const q = Number(String(i.qty || '').replace(/[^0-9.-]/g, '')) || 0;
-    const a = Number(String(i.amount || '').replace(/[^0-9.-]/g, '')) || 0;
-    if(!by.has(k)){
-      const m = { ...r, ids: [i.id], qty: q, amt: a, n: 1 };
-      by.set(k, m); out.push(m);
-      return;
-    }
-    const m = by.get(k);
-    m.ids.push(i.id); m.qty += q; m.amt += a; m.n++;
-  });
-  return out;
-}
-
-function renderGraphicItemView(list){
-  const all = mergeSamePlanRows(graphicPlanRows(list));
-  if(!all.length) return emptyView('정산 탭에서 그래픽 분류로 항목을 넣으면 여기에 받을 파일로 잡혀요');
-
-  const got  = all.filter(r => r.i.received_at);
-  const todo = all.filter(r => !r.i.received_at);
-  const late = todo.filter(r => r.d.late);
-  const soon = todo.filter(r => r.d.soon);
-  const none = todo.filter(r => !String(r.i.due_at || '').trim());
-
-  const shown = gFil === 'todo' ? todo
-    : gFil === 'late' ? todo.filter(r => r.d.late || r.d.soon)
-    : gFil === 'none' ? none
-    : gFil === 'got'  ? got : all;
-
-  const fpill = (k, l, n, cls) => `<button class="pill ${gFil === k ? cls : 'p-gray'}"
-    style="border:0;cursor:pointer${gFil === k ? ';outline:2px solid var(--i5)' : ''}"
-    onclick="setGraphicFil('${k}')">${l} ${n}</button>`;
-  const pills = fpill('all', '전체', all.length, 'p-blue')
-    + fpill('todo', '미수령', todo.length, 'p-amber')
-    + fpill('late', '지남·리마인더', late.length + soon.length, 'p-red')
-    + fpill('none', '마감 없음', none.length, 'p-gray')
-    + fpill('got', '받음', got.length, 'p-green');
-
-  /* 마감 일괄 잡기 — 계획은 보통 "이 기업들 다 며칟날까지"로 세운다. 지금 걸러 놓은
-     미수령 항목에만 넣는다(이미 받은 것은 건드리지 않는다). */
-  const actions = `<input type="date" id="g-bulk-due" class="fi" style="width:140px;padding:4px 7px;font-size:11.5px">
-    <button class="btn bs" onclick="applyGraphicDue()"
-      title="지금 보고 있는 미수령 항목의 마감일을 한꺼번에 정합니다">마감 일괄 지정</button>
-    <button class="btn bp bs" onclick="openNewGraphicOrder()">+ 그래픽 주문 추가</button>`;
-
-  const chk = (r) => `<button onclick="event.stopPropagation();toggleItemReceived('${escAttr(r.ids.join(','))}')"
-    title="${r.i.received_at ? '받음 표시를 지웁니다' : '오늘 받은 것으로 표시합니다'}${
-      r.n > 1 ? ` — 묶인 ${r.n}줄 모두` : ''}"
-    style="width:20px;height:20px;border-radius:5px;line-height:1;flex-shrink:0;cursor:pointer;font-size:12px;font-weight:800;color:#fff;border:1.5px solid ${
-      r.i.received_at ? 'var(--g)' : 'var(--i6)'};background:${r.i.received_at ? 'var(--g)' : 'transparent'}">${r.i.received_at ? '✓' : ''}</button>`;
-
-  if(isMobile()) return viewShell(pills, shown.map(r => `
-    <div style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px">
-      <div style="display:flex;align-items:center;gap:8px">
-        ${chk(r)}
-        <span style="flex:1;min-width:0" onclick="openExhDr('${escAttr(r.x.id)}','graphic')">
-          <div style="font-size:12.5px;font-weight:600">${escapeHtml(r.i.name || '(이름 없음)')}${
-            r.qty > 1 ? `<span style="font-weight:400;color:var(--i4)"> · ${r.qty}장</span>` : ''}</div>
-          <div style="font-size:11px;color:var(--i4)">${escapeHtml(exhNames(r.x).ko)}${
-            r.x.booth_no ? ` · 부스 ${escapeHtml(r.x.booth_no)}` : ''}</div>
-        </span>
-        <span class="pill ${r.d.cls}">${escapeHtml(r.d.text)}</span>
-      </div>
-      <div style="display:flex;gap:6px;align-items:center;margin-top:7px">
-        <span style="font-size:10.5px;color:var(--i5)">마감</span>
-        <input type="date" class="fi" style="${TCELL};width:130px" value="${escapeHtml(r.i.due_at || '')}"
-          onchange="setItemField('${escAttr(r.ids.join(','))}','due_at',this.value)">
-      </div>
-      <input class="fi" style="width:100%;margin-top:5px;padding:4px 8px;font-size:11.5px"
-        value="${escapeHtml(r.i.received_note || '')}" placeholder="받은 것 — 예: 백월_최종.ai"
-        onchange="setItemField('${escAttr(r.ids.join(','))}','received_note',this.value)">
-    </div>`).join('') || emptyView('해당하는 항목이 없어요'), actions);
-
-  return viewShell(pills, `<div class="tw"><table><thead><tr>
-      <th style="min-width:30px"></th>
-      <th style="min-width:150px">기업</th>
-      <th style="min-width:56px">부스</th>
-      <th style="min-width:180px">받을 파일</th>
-      <th style="min-width:44px;text-align:right">수량</th>
-      <th style="width:126px;min-width:126px">마감</th>
-      <th style="width:96px;min-width:96px;text-align:center">상태</th>
-      <th style="width:126px;min-width:126px">받은 날</th>
-      <th style="min-width:200px">받은 것</th>
-      <th style="min-width:96px;text-align:right">금액</th>
-    </tr></thead><tbody>
-    ${shown.map(r => `<tr${r.i.received_at ? ' style="opacity:.72"' : ''}>
-      <td>${chk(r)}</td>
-      ${coCell(r.x, 'graphic')}
-      <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(r.x.booth_no || '—')}</td>
-      <td style="font-size:12px">${escapeHtml(r.i.name || '(이름 없음)')}${
-        r.n > 1 ? `<span class="pill p-gray" style="font-size:9px;margin-left:4px"
-          title="접수 회차가 갈려 ${r.n}줄로 들어왔어요 — 받는 입장에서는 한 장의 파일이라 묶었습니다">${r.n}줄</span>` : ''}</td>
-      <td style="text-align:right;font-size:11.5px">${r.qty || ''}</td>
-      <td><input type="date" class="fi" style="${TCELL}" value="${escapeHtml(r.i.due_at || '')}"
-        onchange="setItemField('${escAttr(r.ids.join(','))}','due_at',this.value)"></td>
-      <td style="text-align:center"><span class="pill ${r.d.cls}" style="${TPILL}">${escapeHtml(r.d.text)}</span></td>
-      <td><input type="date" class="fi" style="${TCELL}" value="${escapeHtml(r.i.received_at || '')}"
-        onchange="setItemField('${escAttr(r.ids.join(','))}','received_at',this.value)"></td>
-      <td><input class="fi" style="${TCELL}" value="${escapeHtml(r.i.received_note || '')}"
-        placeholder="예: 백월_최종.ai · CMYK" onchange="setItemField('${escAttr(r.ids.join(','))}','received_note',this.value)"></td>
-      <td style="text-align:right;font-size:11.5px">${r.amt ? escapeHtml(fmtMoney(r.amt, r.i.currency || 'KRW')) : '-'}</td>
-    </tr>`).join('') || '<tr><td colspan="10" style="text-align:center;color:var(--i4);padding:24px">해당하는 항목이 없어요</td></tr>'}
-    </tbody></table></div>`, actions);
-}
-
-/* 지금 걸러 놓은 미수령 항목에 마감을 한 번에 넣는다. 이미 받은 항목은 빼고,
-   이미 마감이 잡힌 항목이 몇 건 덮이는지 먼저 알려 준다 — 계획을 다시 잡는 일도
-   있지만, 실수로 남의 마감을 밀어 버리면 되돌릴 방법이 없다. */
-export async function applyGraphicDue(){
-  const v = (document.getElementById('g-bulk-due')?.value || '').trim();
-  if(!v){ alert('마감일을 먼저 고르세요.'); return; }
-  const base = graphicPlanRows(visibleList()).filter(r => !r.i.received_at);
-  const target = gFil === 'none' ? base.filter(r => !String(r.i.due_at || '').trim())
-    : gFil === 'late' ? base.filter(r => r.d.late || r.d.soon)
-    : gFil === 'got'  ? [] : base;
-  if(!target.length){ alert('마감을 넣을 미수령 항목이 없어요.'); return; }
-  const over = target.filter(r => String(r.i.due_at || '').trim() && r.i.due_at !== v).length;
-  if(!confirm(`미수령 ${target.length}건의 마감을 ${v}로 정합니다.`
-    + (over ? `\n이미 마감이 잡힌 ${over}건도 이 날짜로 바뀝니다.` : ''))) return;
-  for(const r of target) await window.setItemField?.(r.i.id, 'due_at', v);
-}
-
-/* ── 품목별 ──
-   비품은 "의자 몇 개"를 알아야 발주서를 쓴다. 그래픽도 같다 — 출력소에 넘길 때는
-   기업이 아니라 "백월 12장, 데스크 랩핑 9장"으로 넘어간다. 여기에 하나가 더 붙는데,
-   그래픽은 물량이 아니라 파일이 걸림돌이라 품목마다 몇 장이 아직 안 왔는지를 함께
-   본다 — 백월만 다 모이면 그것부터 먼저 걸 수 있다.
-
-   묶는 규칙은 비품과 같다: 카탈로그에 이어진 항목은 그 id로, 나머지는 이름으로.
-   기업마다 "Wall graphic print", "백월 출력"처럼 다르게 적어 보내도 한 줄이 된다. */
-function graphicKindGroups(list){
-  const by = new Map();
-  list.forEach(x => graphicItemsOf(x.id).forEach(i => {
-    const cat = i.catalog_id ? catalogItem(i.catalog_id) : null;
-    const k = cat ? cat.id : String(i.name || '(이름 없음)').trim();
-    if(!by.has(k)) by.set(k, {
-      key: k,
-      code:   cat ? cat.code : '',
-      nameKo: cat ? (cat.name_ko || cat.name_en) : String(i.name || '(이름 없음)').trim(),
-      nameEn: cat ? (cat.name_ko ? cat.name_en : '') : '',
-      spec:   cat ? cat.spec : '',
-      offCatalog: !cat,
-      qty: 0, cos: [], krw: 0, usd: 0, got: 0, late: 0,
-    });
-    const g = by.get(k);
-    const q = Number(String(i.qty || '').replace(/[^0-9.-]/g, '')) || 0;
-    const amt = Number(String(i.amount || '').replace(/[^0-9.-]/g, '')) || 0;
-    const d = graphicDueInfo(i);
-    g.qty += q || 1;                       // 수량을 안 적었으면 1장으로 센다
-    if(i.received_at) g.got++;
-    if(d.late) g.late++;
-    g.cos.push({ x, i, d, qty: q || 1, amt, cur: i.currency || 'KRW' });
-    if(isBillable(i)){ if((i.currency || 'KRW') === 'USD') g.usd += amt; else g.krw += amt; }
-    else g.excluded = true;
-  }));
-  /* 안 온 파일이 많은 품목이 위로. 발주를 막고 있는 게 무엇인지가 먼저다 —
-     같으면 물량이 큰 순서(그래야 발주서 순서와 얼추 맞는다). */
-  return [...by.values()].sort((a, b) =>
-    (b.cos.length - b.got) - (a.cos.length - a.got) || b.qty - a.qty);
-}
-
-function renderGraphicKindView(list){
-  const groups = graphicKindGroups(list);
-  if(!groups.length) return emptyView('정산 탭에서 그래픽 분류로 항목을 넣으면 여기에 품목으로 잡혀요');
-
-  const totQty  = groups.reduce((a, g) => a + g.qty, 0);
-  const totN    = groups.reduce((a, g) => a + g.cos.length, 0);
-  const totGot  = groups.reduce((a, g) => a + g.got, 0);
-  const totLate = groups.reduce((a, g) => a + g.late, 0);
-  const totKrw  = groups.reduce((a, g) => a + g.krw, 0);
-  const totUsd  = groups.reduce((a, g) => a + g.usd, 0);
-
-  const pills = `<span class="pill p-blue">품목 ${groups.length}종</span>`
-    + `<span class="pill p-gray">총 ${totQty}장</span>`
-    + `<span class="pill ${totGot === totN ? 'p-green' : 'p-amber'}" title="주문한 그래픽 항목 중 파일을 받은 것">파일 받음 ${totGot}/${totN}</span>`
-    + (totLate ? `<span class="pill p-red">마감 지남 ${totLate}</span>` : '')
-    + (totKrw ? `<span class="pill p-gray">${fmtMoney(totKrw, 'KRW')}</span>` : '')
-    + (totUsd ? `<span class="pill p-gray">${fmtMoney(totUsd, 'USD')}</span>` : '');
-
-  /* 한 품목씩 펼쳐 보는 것과, 전부 펼쳐 놓고 훑는 것은 쓰임이 다르다 —
-     발주 전에 "누가 무엇을 몇 장" 한 번에 확인할 때는 접힌 표가 오히려 불편하다. */
-  const allOpen = groups.every(g => equipOpen.has(g.key));
-  const actions = `<button class="btn bs" onclick="toggleGraphicKindAll()">${allOpen ? '모두 접기' : '모두 펼치기'}</button>`
-    + `<button class="btn bs" onclick="openNewCatalogItem('graphic')"
-        title="출력소 품목표에 새 그래픽 품목을 추가합니다">+ 품목 추가</button>`
-    + `<button class="btn bp bs" onclick="openNewGraphicOrder()">+ 그래픽 주문 추가</button>`;
-
-  /* 펼치면 그 품목을 주문한 기업이 나온다. 여기서도 바로 체크하고 마감을 넣는다 —
-     "백월 다 모였나"를 보다가 한 곳만 안 왔으면 그 자리에서 처리해야지,
-     받을 파일 보기로 되돌아가 다시 찾게 하면 안 된다. */
-  /* 부스 번호순으로 세운다. 이 목록을 들고 하는 일이 현장을 도는 것이라
-     — 53번 벽면, 50번 인포데스크 — 부스 순서대로 있어야 한 바퀴에 끝난다.
-     마감이 급한 순으로 세우면 같은 품목을 붙이러 전시장을 왔다 갔다 하게 된다.
-     boothSortKey는 번호가 없으면 Infinity라, 빼면 NaN이 되어 정렬이 무너진다. */
-  const boothOf = (x) => { const k = boothSortKey(x); return k === Infinity ? 1e9 : k; };
-  /* 받음 표시 단추 — 좁은 화면에서는 손가락이 닿아야 해서 조금 키운다 */
-  const gotBtn = (c, sz) => `<button onclick="event.stopPropagation();toggleItemReceived('${escAttr(c.i.id)}')"
-    title="${c.i.received_at ? '받음 표시를 지웁니다' : '오늘 받은 것으로 표시합니다'}"
-    style="width:${sz}px;height:${sz}px;border-radius:5px;line-height:1;flex-shrink:0;cursor:pointer;font-size:11px;font-weight:800;color:#fff;border:1.5px solid ${
-      c.i.received_at ? 'var(--g)' : 'var(--i6)'};background:${c.i.received_at ? 'var(--g)' : 'transparent'}">${c.i.received_at ? '✓' : ''}</button>`;
-  const dueIn = (c, w) => `<input type="date" class="fi" style="width:${w};padding:3px 6px;font-size:11px" value="${escapeHtml(c.i.due_at || '')}"
-    onclick="event.stopPropagation()" onchange="setItemField('${escAttr(c.i.id)}','due_at',this.value)">`;
-
-  const coSorted = (g) => g.cos.slice()
-    .sort((a, b) => boothOf(a.x) - boothOf(b.x)
-      || String(exhNames(a.x).ko).localeCompare(String(exhNames(b.x).ko), 'ko'));
-
-  /* 좁은 화면에서는 한 줄에 다 못 넣는다. 다 넣으려 하면 폭이 고정된 칸들
-     (날짜·마감·금액)이 자리를 차지하고, 하나뿐인 늘어나는 칸인 기업명이 0으로
-     찌그러져 아예 사라진다 — 정작 «부스 9가 어느 회사인지»가 이 목록을 보는
-     이유인데 그것만 없어진다.
-
-     그래서 두 줄로 나눈다. 첫 줄에 누가·몇 장인지, 둘째 줄에 언제까지인지.
-     금액은 뺀다 — 좁은 화면에서 이 목록을 볼 때 돈을 보지는 않는다(합계는
-     위 품목 줄에 이미 있다). */
-  const coList = (g) => coSorted(g).map(c => isMobile() ? `
-    <div style="padding:6px 0;border-bottom:1px solid var(--i8)">
-      <div style="display:flex;align-items:center;gap:8px">
-        ${gotBtn(c, 22)}
-        <span class="pill p-gray" style="flex-shrink:0">${c.x.booth_no ? '부스 ' + escapeHtml(c.x.booth_no) : '미배정'}</span>
-        <span onclick="event.stopPropagation();openExhDr('${escAttr(c.x.id)}','graphic')"
-          style="flex:1;min-width:0;font-size:12.5px;font-weight:600;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(exhNames(c.x).ko)}</span>
-        <span style="color:var(--i4);font-size:11.5px;flex-shrink:0">${c.qty}장</span>
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;margin:5px 0 0 30px">
-        ${dueIn(c, '128px')}
-        <span class="pill ${c.d.cls}">${escapeHtml(c.d.text)}</span>
-      </div>
-    </div>` : `
-    <div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:11.5px">
-      ${gotBtn(c, 18)}
-      <span class="pill p-gray" style="min-width:52px;text-align:center">${c.x.booth_no ? '부스 ' + escapeHtml(c.x.booth_no) : '미배정'}</span>
-      <span onclick="event.stopPropagation();openExhDr('${escAttr(c.x.id)}','graphic')"
-        style="flex:1;min-width:0;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(exhNames(c.x).ko)}</span>
-      <span style="color:var(--i4)">${c.qty}장</span>
-      ${dueIn(c, '124px')}
-      <span class="pill ${c.d.cls}" style="min-width:64px;text-align:center">${escapeHtml(c.d.text)}</span>
-      <span style="min-width:88px;text-align:right;font-weight:600">${c.amt ? escapeHtml(fmtMoney(c.amt, c.cur)) : '-'}</span>
-    </div>`).join('');
-
-  /* 받음 진행 막대 — 숫자만 보면 8/12가 얼마나 남은 건지 한눈에 안 들어온다 */
-  const bar = (g) => {
-    const pct = g.cos.length ? Math.round(g.got / g.cos.length * 100) : 0;
-    return `<div style="display:flex;align-items:center;gap:6px">
-      <div style="flex:1;min-width:44px;height:5px;border-radius:3px;background:var(--i7);overflow:hidden">
-        <div style="width:${pct}%;height:100%;background:${g.got === g.cos.length ? 'var(--g)' : 'var(--am)'}"></div></div>
-      <span style="font-size:11px;font-weight:700;color:${g.got === g.cos.length ? 'var(--g)' : 'var(--i3)'}">${g.got}/${g.cos.length}</span>
-    </div>`;
-  };
-
-  if(isMobile()) return viewShell(pills, groups.map(g => {
-    const open = equipOpen.has(g.key);
-    return `<div style="padding:8px 0;border-bottom:1px solid var(--i8)">
-      <div onclick="toggleEquipRow('${escAttr(g.key)}')" style="cursor:pointer">
-        <div style="display:flex;align-items:baseline;gap:7px">
-          ${g.code ? `<span class="pill p-blue" style="font-size:9px">${escapeHtml(g.code)}</span>` : ''}
-          <span style="font-size:12.5px;font-weight:600;flex:1;min-width:0">${escapeHtml(g.nameKo)}</span>
-          <span style="font-size:15px;font-weight:800">${g.qty}<span style="font-size:10px;font-weight:400;color:var(--i4)">장</span></span>
-        </div>
-        <div style="margin-top:5px">${bar(g)}</div>
-        <div style="font-size:10.5px;color:var(--i4);margin-top:3px">
-          ${g.cos.length}개사${g.late ? ` · <b style="color:var(--re)">마감 지남 ${g.late}</b>` : ''}
-          ${g.krw ? ' · ' + escapeHtml(fmtMoney(g.krw, 'KRW')) : ''}${g.usd ? ' · ' + escapeHtml(fmtMoney(g.usd, 'USD')) : ''}
-          <span style="color:var(--a)"> ${open ? '▲ 접기' : '▼ 주문 기업'}</span>
-        </div>
-      </div>
-      ${open ? `<div style="margin-top:5px;padding-left:6px;border-left:2px solid var(--i6)">${coList(g)}</div>` : ''}
-    </div>`;
-  }).join('') + `<div class="sct">기업별 주문 내역</div>` + graphicCoDetail(list), actions);
-
-  return viewShell(pills, `<div class="uc"><div class="uc-ttl">품목별 합계
-      <span style="font-weight:400;color:var(--i4);font-size:10px">— 출력소에 넘기는 숫자예요. 품목을 클릭하면 주문 기업이 보이고, 거기서 바로 체크할 수 있습니다</span></div>
-    <div class="tw" style="overflow:visible"><table><thead><tr>
-      <th style="min-width:66px">품목코드</th>
-      <th style="min-width:170px">품명(국문)</th>
-      <th style="min-width:150px">품명(영문)</th>
-      <th style="min-width:110px">규격</th>
-      <th style="min-width:56px;text-align:right">수량</th>
-      <th style="min-width:62px;text-align:right">기업</th>
-      <th style="min-width:130px">파일 받음</th>
-      <th style="min-width:78px;text-align:right">마감 지남</th>
-      <th style="min-width:104px;text-align:right">KRW</th>
-      <th style="min-width:88px;text-align:right">USD</th>
-    </tr></thead><tbody>
-      ${groups.map(g => {
-        const open = equipOpen.has(g.key);
-        return `<tr onclick="toggleEquipRow('${escAttr(g.key)}')" style="cursor:pointer${open ? ';background:var(--ad)' : ''}"
-          title="클릭하면 주문한 기업을 볼 수 있어요">
-          <td style="font-size:11.5px;font-weight:700;color:var(--i2)">
-            <span style="color:var(--a)">${open ? '▾' : '▸'}</span> ${escapeHtml(g.code || '—')}</td>
-          <td style="font-size:12.5px;font-weight:600">${escapeHtml(g.nameKo)}
-            ${g.excluded ? '<span class="pill p-amber" style="font-size:9px;margin-left:4px" title="우리가 청구하지 않는 항목이라 금액 합계에서 빠져 있어요">청구 제외</span>' : ''}
-            ${g.offCatalog ? '<span class="pill p-amber" style="font-size:9px;margin-left:4px" title="품목표에 없는 항목 — 이름으로 묶었어요">품목표 외</span>' : ''}</td>
-          <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(g.nameEn || '-')}</td>
-          <td style="font-size:11px;color:var(--i4)">${escapeHtml(g.spec || '-')}</td>
-          <td style="text-align:right;font-weight:700">${g.qty}</td>
-          <td style="text-align:right;color:var(--i4)">${g.cos.length}곳</td>
-          <td>${bar(g)}</td>
-          <td style="text-align:right">${g.late ? `<span class="pill p-red">${g.late}</span>` : '<span style="color:var(--i6)">-</span>'}</td>
-          <td style="text-align:right">${g.krw ? escapeHtml(fmtMoney(g.krw, 'KRW')) : '<span style="color:var(--i6)">-</span>'}</td>
-          <td style="text-align:right">${g.usd ? escapeHtml(fmtMoney(g.usd, 'USD')) : '<span style="color:var(--i6)">-</span>'}</td>
-        </tr>
-        ${open ? `<tr data-detail><td colspan="10" style="padding:8px 12px 12px;background:var(--i9)">
-          <div style="font-size:10.5px;color:var(--i4);margin-bottom:4px">주문 기업 ${g.cos.length}곳 — 왼쪽 칸을 누르면 파일 받음으로 표시됩니다</div>
-          ${coList(g)}</td></tr>` : ''}`;
-      }).join('')}
-    </tbody>
-    <tfoot><tr style="border-top:2px solid var(--i5);font-weight:800">
-      <td colspan="4" style="font-size:12px">합계 ${groups.length}종</td>
-      <td style="text-align:right">${totQty}</td>
-      <td style="text-align:right;font-weight:400;color:var(--i4)">${totN}건</td>
-      <td style="font-size:12px">${totGot}/${totN}</td>
-      <td style="text-align:right">${totLate || '-'}</td>
-      <td style="text-align:right">${totKrw ? escapeHtml(fmtMoney(totKrw, 'KRW')) : '-'}</td>
-      <td style="text-align:right">${totUsd ? escapeHtml(fmtMoney(totUsd, 'USD')) : '-'}</td>
-    </tr></tfoot></table></div></div>`
-    + `<div class="sct">기업별 주문 내역</div>` + graphicCoDetail(list), actions);
-}
-
-/* 품목별 합계가 "무엇을 몇 장"이라면, 이건 "이 회사에 무엇을 받아야 하나"다.
-   비품 현황도 합계 아래 같은 자리에 기업별 신청 내역을 둔다 — 발주서를 쓰다가
-   한 기업 것만 확인하고 싶을 때 표를 접었다 폈다 하지 않게. 여기서는 받은 것에
-   ✓를 붙여, 펼치지 않고도 어느 회사가 무엇을 아직 안 보냈는지 알아볼 수 있다. */
-function graphicCoDetail(list){
-  const rows = list.map(x => ({ x, items: graphicItemsOf(x.id) })).filter(r => r.items.length);
-  if(!rows.length) return '';
-  return rows.map(({ x, items }) => {
-    const got = items.filter(i => i.received_at).length;
-    const late = items.filter(i => !i.received_at && graphicDueInfo(i).late).length;
-    return `<div style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px">
-      <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px">
-        ${x.booth_no ? `<span class="pill p-blue">부스 ${escapeHtml(x.booth_no)}</span>` : ''}
-        <span onclick="openExhDr('${escAttr(x.id)}','graphic')" style="cursor:pointer;flex:1;min-width:0">
-          <span style="font-size:13px;font-weight:700">${escapeHtml(exhNames(x).ko)}</span>${
-          exhNames(x).en ? `<span style="font-size:11px;color:var(--i4);margin-left:5px">${escapeHtml(exhNames(x).en)}</span>` : ''}</span>
-        <span class="pill ${got === items.length ? 'p-green' : got ? 'p-amber' : 'p-gray'}">받음 ${got}/${items.length}</span>
-        ${late ? `<span class="pill p-red">마감 지남 ${late}</span>` : ''}
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:5px">
-        ${items.map(i => { const d = graphicDueInfo(i);
-          return `<span class="pill ${i.received_at ? 'p-green' : d.cls}"
-            title="${escapeHtml(`${fmtMoney(i.amount, i.currency || 'KRW')}${i.due_at ? ` · 마감 ${i.due_at}` : ''}${
-              i.received_at ? ` · ${i.received_at} 받음` : ''}${i.received_note ? ` · ${i.received_note}` : ''}`)}"
-            >${i.received_at ? '✓ ' : ''}${escapeHtml(i.name || '(이름 없음)')}${i.qty ? ' ×' + escapeHtml(String(i.qty)) : ''}${
-              !i.received_at && i.due_at ? ` · ${escapeHtml(d.text)}` : ''}</span>`; }).join('')}
-      </div>
-    </div>`;
-  }).join('');
-}
-
-/* 모두 펼치기 / 모두 접기. 지금 화면에 있는 품목만 다룬다 — 다른 행사에서 펼쳐 둔
-   줄까지 건드리면 행사를 옮겼을 때 왜 펼쳐져 있는지 알 수 없다. */
-export function toggleGraphicKindAll(){
-  const keys = graphicKindGroups(visibleList()).map(g => g.key);
-  const allOpen = keys.every(k => equipOpen.has(k));
-  keys.forEach(k => allOpen ? equipOpen.delete(k) : equipOpen.add(k));
-  renderExh();
-}
-
-/* ── 기업별 진행 ──
-   제작(디자인)은 초안 → 수정안 → 최종안으로 왔다 갔다 하고, 출력은 규격이
-   맞는지만 보면 된다. 두 흐름이 섞여 있어 한 표에서 지금 누가 어느 단계에
-   걸려 있는지 봐야 다음 연락처를 정할 수 있다. */
-function renderGraphicCoView(rows){
-  const design = rows.filter(x => x.graphic_type === 'design');
-  const print  = rows.filter(x => x.graphic_type === 'print');
-  const doneN  = rows.filter(x => graphicState(x).state === 'done').length;
-  const warnN  = rows.filter(x => graphicState(x).state === 'warn').length;
-
-  /* 무엇을 받았나 — 항목마다 따로 온다. 기업 단위 단계(graphic_stage)만으로는
-     세 개 중 둘만 온 경우를 담지 못해, 항목 기준으로 따로 센다. */
-  const gGot = (x) => {
-    const gi = graphicItemsOf(x.id);
-    return { n: gi.length, got: gi.filter(i => i.received_at).length,
-      late: gi.filter(i => !i.received_at && graphicDueInfo(i).late).length };
-  };
-
-  const pills = `<span class="pill p-gray">주문 ${rows.length}</span>`
-    + `<span class="pill p-blue">제작 ${design.length}</span>`
-    + `<span class="pill p-gray">출력 ${print.length}</span>`
-    + `<span class="pill p-green">완료 ${doneN}</span>`
-    + (warnN ? `<span class="pill p-red">규격 확인 ${warnN}</span>` : '')
-    + (() => {
-      const t = rows.reduce((a, x) => { const g = gGot(x); a.n += g.n; a.got += g.got; a.late += g.late; return a; },
-        { n: 0, got: 0, late: 0 });
-      if(!t.n) return '';
-      return `<span class="pill ${t.got === t.n ? 'p-green' : 'p-amber'}" title="주문한 그래픽 항목 중 파일을 받은 것">파일 받음 ${t.got}/${t.n}</span>`
-        + (t.late ? `<span class="pill p-red" title="받기로 한 날이 지난 파일">마감 지남 ${t.late}</span>` : '');
-    })();
-
-  const stageLabel = (x) => {
-    if(x.graphic_type === 'print') return x.graphic_spec_ok === 'yes' ? '규격 확인됨'
-      : x.graphic_spec_ok === 'no' ? '규격 불일치' : '규격 미확인';
-    if(x.graphic_final_at) return '최종안 확정';
-    if(x.graphic_revised_at) return '수정안';
-    if(x.graphic_draft_at) return '초안';
-    return '진행 전';
-  };
-  const gAmt = (x) => {
-    const by = {};
-    graphicItemsOf(x.id).forEach(i => {
-      const c = i.currency || 'KRW';
-      by[c] = (by[c] || 0) + (Number(String(i.amount || '').replace(/[^0-9.-]/g, '')) || 0);
-    });
-    const ks = Object.keys(by).filter(k => by[k]);
-    return ks.length ? ks.map(k => fmtMoney(by[k], k)).join(' + ') : '-';
-  };
-
-  /* 받은 파일 칸 — 개수만이 아니라 무엇이 안 왔고 마감이 언제인지 함께 띄운다.
-     기업 한 줄이라 여기서 체크는 못 한다. 체크는 받을 파일 보기에서 한다. */
-  const gotCell = (x) => {
-    const gi = graphicItemsOf(x.id);
-    if(!gi.length) return '<span style="color:var(--i6)">-</span>';
-    const g = gGot(x);
-    return `<span class="pill ${g.got === g.n ? 'p-green' : g.got ? 'p-amber' : 'p-gray'}"
-      title="${escapeHtml(gi.map(i => `${i.received_at ? '✓' : '·'} ${i.name || ''}${
-        !i.received_at && i.due_at ? ` (마감 ${i.due_at})` : ''}${i.received_note ? ` (${i.received_note})` : ''}`).join(' / '))}"
-      >${g.got}/${g.n}</span>${g.late ? ` <span class="pill p-red" title="받기로 한 날이 지났어요">지남 ${g.late}</span>` : ''}`;
-  };
-
-  const gActions = `<button class="btn bp bs" onclick="openNewGraphicOrder()">+ 그래픽 주문 추가</button>`;
-
-  if(isMobile()) return viewShell(pills, rows.map(x => {
-    const g = graphicState(x);
-    return `<div onclick="openExhDr('${escAttr(x.id)}','graphic')" style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
-        <span class="pill p-gray">${escapeHtml(x.apply_order || '-')}</span>
-        <span style="flex:1;min-width:0">
-          <span style="font-size:13px;font-weight:700">${escapeHtml(exhNames(x).ko)}</span>${
-          exhNames(x).en ? `<span style="font-size:11px;color:var(--i4);margin-left:5px">${escapeHtml(exhNames(x).en)}</span>` : ''}</span>
-        <span class="pill ${x.graphic_type === 'design' ? 'p-blue' : 'p-gray'}">${x.graphic_type === 'design' ? '제작' : x.graphic_type === 'print' ? '출력' : '유형 미정'}</span>
-        <span class="pill ${g.state === 'done' ? 'p-green' : g.state === 'warn' ? 'p-red' : 'p-amber'}">${escapeHtml(stageLabel(x))}</span>
-      </div>
-      <div style="font-size:11px;color:var(--i4)">주문 ${escapeHtml(x.graphic_ordered_at || '-')} · 금액 ${escapeHtml(gAmt(x))}</div>
-      ${(() => { const gt = gGot(x); if(!gt.n) return '';
-        return `<div style="font-size:11px;margin-top:3px;color:${gt.got === gt.n ? 'var(--g)' : 'var(--am)'}">
-          파일 ${gt.got}/${gt.n} 받음${gt.got < gt.n ? ` · 미수령 ${gt.n - gt.got}건` : ''}${
-            gt.late ? ` · 마감 지남 ${gt.late}건` : ''}</div>`; })()}
-    </div>`;
-  }).join(''), gActions);
-
-  return viewShell(pills, `<div class="tw"><table><thead><tr>
-      <th style="min-width:44px;text-align:right">신청순</th>
-      <th style="min-width:150px">기업</th>
-      <th style="min-width:56px">부스</th>
-      <th style="min-width:80px">유형</th>
-      <th style="min-width:96px">시안</th>
-      <th style="min-width:150px">확인 진행</th>
-      <th style="min-width:110px">받은 파일</th>
-      <th style="min-width:104px">초안</th>
-      <th style="min-width:104px">수정안</th>
-      <th style="min-width:104px">최종안</th>
-      <th style="min-width:100px;text-align:right">금액</th>
-    </tr></thead><tbody>
-    ${rows.map(x => {
-      const g = graphicState(x);
-      const isPrint = x.graphic_type === 'print';
-      const dateCell = (f) => isPrint ? '<td style="color:var(--i6);text-align:center">·</td>'
-        : `<td><input type="date" class="fi" style="width:100px;padding:3px 5px;font-size:11px" value="${escapeHtml(x[f] || '')}"
-            onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr({graphic_draft_at:'초안',graphic_revised_at:'수정안',graphic_final_at:'최종안'}[f])}')"></td>`;
-      return `<tr>
-        ${applyCell(x)}
-        ${coCell(x, 'graphic')}
-        <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
-        <td><select class="fi" style="width:74px;padding:3px 4px;font-size:11px"
-          onchange="setExhField('${escAttr(x.id)}','graphic_type',this.value,'그래픽 유형')">
-          <option value=""${!x.graphic_type ? ' selected' : ''}>미정</option>
-          <option value="design"${x.graphic_type === 'design' ? ' selected' : ''}>제작</option>
-          <option value="print"${x.graphic_type === 'print' ? ' selected' : ''}>출력</option>
-        </select></td>
-        <td><span class="pill ${g.state === 'done' ? 'p-green' : g.state === 'warn' ? 'p-red' : 'p-amber'}">${escapeHtml(stageLabel(x))}</span></td>
-        <td>${stageCell(x, 'graphic_stage', GRAPHIC_STAGES)}</td>
-        <td>${gotCell(x)}</td>
-        ${dateCell('graphic_draft_at')}
-        ${dateCell('graphic_revised_at')}
-        ${dateCell('graphic_final_at')}
-        <td style="text-align:right;font-size:11.5px;font-weight:600">${escapeHtml(gAmt(x))}</td>
-      </tr>`;
-    }).join('')}
-    </tbody></table></div>`, gActions);
-}
-
-/* ══════════════════════════════════════════
-   그 페이지에서 바로 새로 만들기
-
-   품목이나 그래픽 주문을 넣으려고 기업 드로어를 찾아 열고 정산 탭까지 들어가야
-   했다. 품목표를 손보는 일과 주문을 받아 적는 일은 그 화면을 보고 있을 때 생기니,
-   그 자리에서 끝낼 수 있어야 한다.
-══════════════════════════════════════════ */
-/* 표 안에서 단계를 한 칸씩 넘긴다. 어느 쪽 차례인지 색으로 구분한다 —
-   우리 차례는 눈에 띄어야 하고, 남에게 넘겨 둔 건은 조용해야 한다. */
-export function stageCell(x, field, defs){
-  const st = stageOf(defs, x[field]);
-  const days = stageAge(x, defs, field);
-  const cls = st.who === 'us' ? 'p-red' : st.who === 'team' ? 'p-amber' : st.key ? 'p-green' : 'p-gray';
-  return `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
-    <span class="pill ${cls}">${escapeHtml(st.label)}${days ? ` ${days}일` : ''}</span>
-    ${st.next ? `<button class="btn bs" style="font-size:10px;padding:2px 7px"
-      onclick="event.stopPropagation();advanceStage('${escAttr(x.id)}','${field}')"
-      title="다음 단계로 넘깁니다">${escapeHtml(st.action)} →</button>` : ''}
-    ${st.key ? `<button class="btn bs" style="font-size:10px;padding:2px 5px;color:var(--i4)"
-      onclick="event.stopPropagation();rewindStage('${escAttr(x.id)}','${field}')" title="이전 단계로 되돌립니다">↩</button>` : ''}
-  </div>`;
-}
-
-/* 세금계산서는 1:N 전환 후 exh-drawer.js의 advanceTaxStage/rewindTaxStage가
-   따로 다룬다(exhibitors 한 행이 아니라 exhibitor_tax_invoices의 줄 단위라
-   이 아래의 범용 advanceStage/rewindStage — exhibitors 전용 — 틀에 맞지 않는다). */
-const STAGE_DEFS = { graphic_stage: GRAPHIC_STAGES };
-const STAGE_NAME = { graphic_stage: '그래픽' };
-
-/* 다음 단계로. 넘어간 날짜를 함께 찍어 두면 어디서 며칠 묶여 있었는지 남는다. */
-export async function advanceStage(id, field){
-  const x = getExhibitorById(id);
-  const defs = STAGE_DEFS[field];
-  if(!x || !defs) return;
-  const st = stageOf(defs, x[field]);
-  if(!st.next) return;
-  const nx = stageOf(defs, st.next);
-  const patch = { [field]: nx.key };
-  if(nx.at && !String(x[nx.at] || '').trim()) patch[nx.at] = td();
-  // 저장이 안 됐으면(잠금·충돌·실패) 넘긴 적 없는 단계를 기록에 남기지 않는다
-  if(!(await patchExh(id, patch, null))?.ok) return;
-  trackAction('status', `${STAGE_NAME[field]} 단계`, x.company_name || '',
-    `<b>${escapeHtml(x.company_name || '')}</b> ${escapeHtml(STAGE_NAME[field])} ${escapeHtml(st.label)} → ${escapeHtml(nx.label)}`,
-    { kind: 'exhibitor', id: x.id, tab: 'progress', field });
-}
-
-/* 잘못 넘겼을 때 되돌린다.
-   날짜는 지우지 않는다. 처음엔 지웠는데, 그러면 실수로 한 번 누른 것만으로
-   실제로 있었던 발행일이 사라지고 되돌릴 방법이 없었다 — 그렇게 한 건을 잃었다.
-   날짜는 그 일이 있었다는 기록이므로 남기고, 틀렸으면 날짜 칸에서 직접 고친다. */
-export async function rewindStage(id, field){
-  const x = getExhibitorById(id);
-  const defs = STAGE_DEFS[field];
-  if(!x || !defs) return;
-  const i = defs.findIndex(s => s.key === (x[field] || ''));
-  if(i <= 0) return;
-  const cur = defs[i], prev = defs[i - 1];
-  if(!(await patchExh(id, { [field]: prev.key }, null))?.ok) return;
-  trackAction('status', `${STAGE_NAME[field]} 단계`, x.company_name || '',
-    `<b>${escapeHtml(x.company_name || '')}</b> ${escapeHtml(STAGE_NAME[field])} ${escapeHtml(cur.label)} → ${escapeHtml(prev.label)} (되돌림)`,
-    { kind: 'exhibitor', id: x.id, tab: 'progress', field });
-}
-
+/* «금액·비품·그래픽 현황 보기»은 ../features/exhibition/exh-item-views.js로 떼어 냈다 — 그 파일이 스스로 window에 건다 */
 /* ══════════════════════════════════════════
    프로그램북 현황
 
@@ -3137,7 +1615,7 @@ export function introOver(v, evKey){
   return { chars: c, words: w, over, isOver: over.length > 0, lim };
 }
 
-const BOOK_FIELDS = [
+export const BOOK_FIELDS = [
   ['book_address', '주소'],
   ['book_phone',   '연락처'],
   ['book_website', '웹사이트'],
@@ -3169,1815 +1647,7 @@ export function bookMissing(x){
   return miss;
 }
 
-/* ══════════════════════════════════════════
-   도록 순번 — 번호 하나에 자리 하나
-
-   순번을 그냥 적게 두면 두 기업이 같은 번호를 갖거나(지금 1번이 둘이다),
-   중간이 비거나(18번이 없다), 인쇄소에 넘길 때 순서가 안 정해진다. 순번은
-   값이 아니라 줄 세우기라, 하나를 옮기면 나머지가 밀려야 한다.
-
-   그래서 목록 전체를 1..N으로 다시 매긴다. 지금 보이는 줄만이 아니라 이 행사
-   참가기업 전부가 대상이다 — 검색으로 걸러 둔 채 3번으로 옮겼는데 화면 밖
-   3번이 그대로면, 인쇄 직전에야 겹친 걸 알게 된다.
-══════════════════════════════════════════ */
-
-/* 지금 저장된 값이 만드는 줄 세우기. 번호가 없는 곳은 뒤로 보내되 부스 순으로
-   둔다 — 새로 들어온 곳이 목록 맨 앞에 끼어들면 매번 다시 세워야 한다. */
-export function bookSeq(evKey){
-  return [...activeExhibitors(evKey)].sort((a, b) => {
-    const ao = Number(String(a.book_order || '').replace(/[^0-9]/g, '')) || 0;
-    const bo = Number(String(b.book_order || '').replace(/[^0-9]/g, '')) || 0;
-    if(ao !== bo) return (ao || 1e9) - (bo || 1e9);
-    return boothSortKey(a) - boothSortKey(b);
-  });
-}
-
-/* 한 줄을 원하는 자리로 옮기고 전부 다시 매긴다.
-   실제로 번호가 달라지는 줄만 저장한다 — 56줄을 통째로 보내면 바뀌지도 않은
-   줄에 수정 기록이 남아 로그에서 진짜 변경을 찾을 수 없다. */
-export async function moveBookOrder(id, toPos){
-  const x = getExhibitorById(id);
-  if(!x) return;
-  /* 옮기기 전에 서버 값을 다시 읽는다. 순번은 한 줄만 바꾸는 게 아니라 목록
-     전체를 다시 매기는 일이라, 화면에 뜬 값이 낡아 있으면 그 낡은 줄 세우기가
-     서버에 통째로 덮어써진다. 실제로 그렇게 52곳이 한 번에 뒤집힌 적이 있다.
-     (다른 칸은 자기 칸만 보내니 이 문제가 없다 — 여기서만 다시 읽는다.) */
-  await reloadExhibitors();
-  const seq = bookSeq(x.event_id);
-  const from = seq.findIndex(o => o.id === id);
-  if(from < 0) return;
-
-  let to = Math.round(Number(String(toPos).replace(/[^0-9]/g, '')));
-  if(!to || isNaN(to)) { renderExh(); return; }          // 숫자가 아니면 되돌린다
-  to = Math.min(Math.max(1, to), seq.length) - 1;
-  if(to === from) { renderExh(); return; }
-
-  seq.splice(to, 0, ...seq.splice(from, 1));
-  const changes = seq
-    .map((o, i) => ({ o, no: String(i + 1) }))
-    .filter(c => String(c.o.book_order || '') !== c.no);
-  if(!changes.length) { renderExh(); return; }
-
-  await saveBookOrders(changes, `${exhNames(x).ko} → ${to + 1}번`);
-}
-
-/* 한꺼번에 저장한다. patchExh를 줄마다 부르면 저장할 때마다 화면을 다시 그리고
-   수정 기록이 마흔 줄 남는다. 여기서는 화면을 한 번만 그리고 기록도 한 줄이다.
-   하나라도 실패하면 전부 되돌린다 — 절반만 밀린 순번은 안 민 것보다 나쁘다. */
-async function saveBookOrders(changes, what){
-  /* 끌기·«번호 정리»도 저장이다 — 예전엔 api.js를 직접 불러 진행 완료 잠금을
-     건너뛰었다. 화면을 먼저 바꾸기 전에 막아야 «바뀐 척»이 남지 않는다. */
-  if(exhLocked()){ exhLockNotice(); renderExh(); return; }
-  const backup = changes.map(c => ({ o: c.o, was: c.o.book_order || '' }));
-  changes.forEach(c => { c.o.book_order = c.no; });
-  refreshExhViews();
-
-  // 모듈 위의 가드된 saveExhibitor — 내가 본 이전 번호(expect)를 함께 보내 남의 변경을 덮지 않는다
-  const res = await Promise.all(changes.map((c, i) =>
-    saveExhibitor({ id: c.o.id, book_order: c.no, updated_at: td() }, { book_order: backup[i].was })));
-
-  if(res.some(r => !r.ok)){
-    backup.forEach(b => { b.o.book_order = b.was; });
-    refreshExhViews();
-    if(res.some(r => r.locked)) return;   // 가드가 이미 알렸다
-    alert(res.some(r => r.conflict)
-      ? '그 사이 다른 사람이 도록 순서를 바꿨어요. 새로고침한 뒤 다시 옮겨 주세요.'
-      : '순서 저장에 실패했어요. 원래 순서로 되돌렸습니다.');
-    return;
-  }
-  /* 순번은 한 곳을 옮기면 수십 곳이 함께 밀린다 — 줄마다 이전 번호를 담아야
-     되돌릴 수 있다. 예전에 스크립트와 화면이 서로 덮어써 43곳이 밀린 적이 있다. */
-  trackAction('edit', '도록 순서 변경', what,
-    `<b>${escapeHtml(what)}</b> — ${changes.length}곳의 순번이 밀렸어요`,
-    { table: 'exhibitors', op: 'update-many',
-      rows: backup.map((b, i) => ({ row: b.o.id, before: { book_order: b.was },
-        after: { book_order: changes[i].no } })) });
-}
-
-/* 겹친 번호와 빈 번호만 없앤다. 지금 보이는 앞뒤는 그대로 두고 번호만 1..N으로
-   다시 붙인다 — «순서 자동 매기기»는 부스 순으로 줄을 새로 세우지만, 이건
-   사람이 잡아 둔 순서를 건드리지 않는다. */
-export async function renumberBook(){
-  await reloadExhibitors();          // 위와 같은 이유 — 낡은 줄 세우기로 덮어쓰지 않게
-  const seq = bookSeq(exhEvent);
-  const changes = seq.map((o, i) => ({ o, no: String(i + 1) }))
-    .filter(c => String(c.o.book_order || '') !== c.no);
-  if(!changes.length){ alert('번호가 이미 1번부터 빠짐없이 붙어 있어요.'); return; }
-  if(!confirm(`${changes.length}곳의 번호가 바뀝니다. 앞뒤 순서는 그대로 두고 번호만 1~${seq.length}번으로 다시 붙일까요?`)) return;
-  await saveBookOrders(changes, `번호 정리 1~${seq.length}번`);
-}
-
-/* 끌어 옮기기. 줄 전체를 draggable로 두면 기업명을 긁어 복사하려다 끌려가고,
-   놓는 순간 드로어가 열린다. 손잡이를 누르고 있는 동안에만 켠다. */
-let bookDragId = '';
-export function bookDragOn(el){ const tr = el.closest('tr'); if(tr) tr.draggable = true; }
-export function bookDragStart(e, id){ bookDragId = id; e.dataTransfer.effectAllowed = 'move'; }
-export function bookDragEnd(el){ const tr = el.closest('tr'); if(tr) tr.draggable = false; bookDragId = ''; }
-export function bookDragOver(e, el){
-  if(!bookDragId) return;
-  e.preventDefault();
-  el.style.boxShadow = 'inset 0 2px 0 var(--a)';
-}
-export function bookDragLeave(el){ el.style.boxShadow = ''; }
-export async function bookDrop(e, id){
-  e.preventDefault();
-  const tr = e.currentTarget; if(tr) tr.style.boxShadow = '';
-  if(!bookDragId || bookDragId === id) return;
-  const seq = bookSeq(exhEvent);
-  const target = seq.findIndex(o => o.id === id);
-  const from = seq.findIndex(o => o.id === bookDragId);
-  if(target < 0 || from < 0) return;
-  // 아래로 끌면 놓은 줄의 자리를 차지하고, 위로 끌면 그 앞에 선다
-  await moveBookOrder(bookDragId, target + 1);
-  bookDragId = '';
-}
-
-/* ── 기본 시공 ──
-   추가 발주 화면과 나눠 둔 까닭은 성격이 달라서다. 저기는 기업이 신청한 것이라
-   안 오면 안 하면 되지만, 여기는 계약에 들어 있어 기업이 조용해도 우리가 만들어
-   세워야 한다. 같은 표에 섞으면 "주문 없음"과 "우리가 빠뜨림"이 같아 보인다.
-
-   부스 순으로 세운다 — 간판을 달고 벽면을 붙이는 일이 전시장을 한 바퀴 도는
-   일이라, 그 순서대로 있어야 한 번에 끝난다. */
-/* ── 기본 시공 일괄 처리 ──
-   간판은 기업이 이름만 주면 우리가 만든다. 그래서 스무 곳 서른 곳을 같은 날
-   한꺼번에 뽑아 놓고, 표로 돌아와 날짜를 하나하나 찍게 된다. 그 반복을 없앤다.
-
-   고른 것은 행사가 바뀌면 비운다 — 다른 행사 목록에서 남은 선택이 보이지 않는
-   채로 살아 있으면, 일괄 처리가 엉뚱한 곳에 걸린다. */
-let baseSel = new Set();
-let baseSelEvent = '';
-
-const baseSelSync = () => {
-  if(baseSelEvent !== exhEvent){ baseSel = new Set(); baseSelEvent = exhEvent; }
-};
-
-export function toggleBaseSel(id){
-  baseSelSync();
-  baseSel.has(id) ? baseSel.delete(id) : baseSel.add(id);
-  renderExh();
-}
-
-/* 지금 화면에 보이는 것만 다룬다 — 필터를 걸어 놓고 «모두»를 누르면 걸러낸
-   것까지 잡히면 안 된다. 하나라도 안 골라져 있으면 전체 선택, 다 골라져 있으면 해제. */
-export function toggleBaseSelAll(){
-  baseSelSync();
-  const ids = visibleList().filter(x => baseKind(x)).map(x => x.id);
-  const allOn = ids.length > 0 && ids.every(i => baseSel.has(i));
-  ids.forEach(i => allOn ? baseSel.delete(i) : baseSel.add(i));
-  renderExh();
-}
-
-/* 고른 곳의 «우리 작업» 날짜를 한 번에 찍는다. 날짜를 비워 두면 오늘이다 —
-   대개 만든 날 바로 표시하므로 그게 기본값이다.
-   이미 찍혀 있는 곳이 몇 곳 덮이는지 먼저 알려 준다. 되돌릴 방법이 없다. */
-export async function applyBaseDone(){
-  baseSelSync();
-  const rows = visibleList().filter(x => baseKind(x) && baseSel.has(x.id));
-  if(!rows.length){ alert('제작 완료로 표시할 곳을 먼저 고르세요.'); return; }
-
-  const v = (document.getElementById('base-bulk-date')?.value || '').trim() || td();
-  const over = rows.filter(x => baseDoneAt(x) && baseDoneAt(x) !== v);
-  const noName = rows.filter(x => baseKind(x) === 'fascia' && !fasciaName(x));
-
-  /* 간판은 우리가 도록 영문명으로 일괄 제작한다 — «간판명 확정»과 «간판 제작»이
-     한 동작이라, 제작 완료를 찍는데 확정일이 비어 있으면 화면에는 계속 «미수령»로
-     남는다. 지어내는 날짜가 아니라 같은 날의 같은 일이므로 함께 찍는다.
-     출력·시공 쪽은 다르다 — 거기 수령일은 기업에서 파일이 실제로 온 날이라
-     우리가 만든 날로 대신할 수 없다. */
-  const alsoRecv = rows.filter(x => baseKind(x) === 'fascia' && !baseRecvAt(x));
-
-  if(!confirm(`${rows.length}곳을 «제작 완료 ${v}»로 표시합니다.`
-    + (alsoRecv.length ? `\n간판 ${alsoRecv.length}곳은 «간판명 확정»도 같은 날짜로 함께 찍습니다.` : '')
-    + (over.length ? `\n이미 날짜가 적힌 ${over.length}곳도 이 날짜로 바뀝니다.` : '')
-    + (noName.length ? `\n\n⚠ 간판에 넣을 영문명이 없는 곳이 ${noName.length}곳 있어요 — 이름 없이 완료로 표시됩니다.\n   ${noName.slice(0, 5).map(x => exhNames(x).ko).join(', ')}${noName.length > 5 ? ' 외' : ''}` : ''))) return;
-
-  for(const x of rows){
-    /* 날짜는 항목 줄에 들어간다(항목이 없는 기업만 기업 칸에) — 읽는 자리와
-       쓰는 자리가 갈리면 일괄로 찍어도 화면이 안 바뀐다. */
-    await setBaseDoneAt(x.id, v);
-    if(alsoRecv.includes(x)) await setBaseRecvAt(x.id, v);
-  }
-  baseSel.clear();
-  renderExh();
-}
-
-/* 잘못 찍었을 때 되돌리는 길도 같이 둔다 — 일괄로 넣을 수 있으면 일괄로 빼는
-   길도 있어야 한다. 없으면 스무 곳을 하나씩 지우게 된다. */
-export async function clearBaseDone(){
-  baseSelSync();
-  const rows = visibleList().filter(x => baseKind(x) && baseSel.has(x.id) && baseDoneAt(x));
-  if(!rows.length){ alert('제작 완료가 적힌 곳을 골라 주세요.'); return; }
-  if(!confirm(`${rows.length}곳의 «제작 완료» 날짜를 지웁니다.`)) return;
-  for(const x of rows) await setBaseDoneAt(x.id, '');
-  baseSel.clear();
-  renderExh();
-}
-
-function renderBaseView(list){
-  const all = list.filter(x => baseKind(x));
-  if(!all.length) return emptyView('기본 시공 대상이 없어요 — 기본부스·블록부스·라이팅부스가 있어야 합니다');
-  /* 받는 것도 하는 일도 종류마다 다르다. 간판명은 상호를 받아 간판을 만들고,
-     출력·시공은 디자인 파일을 받아 출력한다 — 같은 날 같은 사람이 하는 일이
-     아니라, 한쪽만 보고 싶을 때가 대부분이다. */
-  const rows = !baseFil ? all
-    : baseFil === 'design' ? all.filter(hasDesignOrder)
-    : all.filter(x => baseKind(x) === baseFil);
-
-  const bk = (x) => { const k = boothSortKey(x); return k === Infinity ? 1e9 : k; };
-  rows.sort((a, b) => bk(a) - bk(b));
-
-  const due = dueInfo('calc:base', exhEvent);
-  const byKind = (k) => all.filter(x => baseKind(x) === k);
-  const st = (x) => baseState(x);
-  const gotN  = rows.filter(x => st(x).state !== 'todo').length;
-  const doneN = rows.filter(x => st(x).state === 'done').length;
-
-  /* 알약을 눌러 그 종류만 본다. 같은 알약을 다시 누르면 전체로 — 다른 목록과
-     같은 손짓이라 따로 배울 게 없다. */
-  const pills = `<button class="pill ${baseFil ? 'p-gray' : 'p-blue'}" style="border:0;cursor:pointer;font:inherit"
-      onclick="setBaseFil('')" title="전부 보기">대상 ${all.length}곳</button>`
-    + Object.entries(BASE_KINDS).map(([k, v]) => {
-        const g = byKind(k); if(!g.length) return '';
-        return `<button class="pill ${baseFil === k ? 'p-blue' : 'p-gray'}" style="border:0;cursor:pointer;font:inherit"
-          onclick="setBaseFil('${escAttr(k)}')"
-          title="${escapeHtml(v.types.join(', '))} — 눌러서 이것만 보기">${v.label} ${g.length}</button>`;
-      }).join('')
-    + (() => {
-        const d = all.filter(hasDesignOrder);
-        return d.length ? `<button class="pill ${baseFil === 'design' ? 'p-teal' : 'p-gray'}"
-          style="border:0;cursor:pointer;font:inherit"
-          title="${escapeHtml(d.map(x => exhNames(x).ko).join(', ') + ' — 우리가 그려서 출력·시공합니다')}"
-          onclick="setBaseFil('design')">디자인 의뢰 ${d.length}</button>` : '';
-      })()
-    + `<span class="pill ${gotN === rows.length ? 'p-green' : 'p-amber'}">수령 ${gotN}/${rows.length}</span>`
-    + `<span class="pill ${doneN === rows.length ? 'p-green' : 'p-gray'}">작업 완료 ${doneN}/${rows.length}</span>`
-    + (due
-      ? `<span class="pill ${due.days < 0 ? 'p-red' : due.days <= 7 ? 'p-amber' : 'p-gray'}">수령 마감 ${escapeHtml(due.date)}${
-          due.days < 0 ? ` · ${-due.days}일 지남` : due.days === 0 ? ' · 오늘' : ` · D-${due.days}`}</span>`
-      : `<span class="pill p-gray" title="설정 › 행사 관리에서 «기본 시공» 마감을 넣으면 남은 날이 표시됩니다">수령 마감 미설정</span>`)
-    + (() => { const no = rows.filter(x => baseKind(x) === 'fascia' && !fasciaName(x));
-        return no.length ? `<span class="pill p-red" title="${escapeHtml(no.map(x => exhNames(x).ko).join(', '))}">영문명 없음 ${no.length}</span>` : ''; })()
-    + '<span style="font-size:10.5px;color:var(--i5);margin-left:2px">간판은 영문으로 나갑니다 · 추가 발주가 아니라 계약에 들어 있는 것들이에요 — 기업이 조용해도 우리가 만들어 세웁니다</span>';
-
-  /* 받는 것이 무엇인지가 부스 타입마다 달라, 칸 하나에 두 가지를 담는다.
-     기본부스는 간판에 넣을 상호를 적는 것 자체가 «받음»이다. */
-  const recvCell = (x) => baseKind(x) === 'fascia'
-    ? `<input class="fi" style="${TCELL}${x.fascia_name ? ';font-weight:600' : ''}${
-        fasciaName(x) ? '' : ';border-color:var(--re)'}"
-        placeholder="${escapeHtml(bookName(x).en || '게재 영문명이 없어요')}" value="${escapeHtml(x.fascia_name || '')}"
-        title="${escapeHtml(x.fascia_name ? '간판만 따로 적은 이름이에요'
-          : bookName(x).en ? '프로그램북 게재 영문명을 그대로 씁니다 — 간판만 다르면 여기에 적으세요'
-          : '게재 영문명이 비어 있어요 — 프로그램북 탭에서 넣거나 여기에 직접 적으세요')}"
-        onclick="event.stopPropagation()"
-        onchange="setExhField('${escAttr(x.id)}','fascia_name',this.value,'간판명')">`
-    /* 디자인을 의뢰한 곳은 받을 것이 없다 — 우리가 그린다. 같은 칸을 «우리
-       디자인 완료»로 읽게 이름표를 바꿔 단다. 칸을 따로 만들지 않는 건, 뒤에
-       오는 «출력 완료»와의 앞뒤 관계가 똑같기 때문이다. */
-    : `<input type="date" class="fi" style="${TCELL}${
-        hasDesignOrder(x) ? ';border-color:var(--tl)' : ''}"
-        value="${escapeHtml(baseRecvAt(x))}" onclick="event.stopPropagation()"
-        title="${escapeHtml(hasDesignOrder(x)
-          ? '디자인을 의뢰한 곳이에요 — 기업에서 받는 날이 아니라 우리 디자인이 끝난 날을 적습니다'
-          : baseRecvItems(x).length
-            ? `그래픽 현황의 «받을 파일»과 같은 자리예요 — 여기서 고치면 그쪽도 함께 바뀝니다 (${
-                baseRecvItems(x).map(i => i.name || '').filter(Boolean).join(' · ')})`
-            : '기업에서 디자인 파일을 받은 날')}"
-        onchange="setBaseRecvAt('${escAttr(x.id)}',this.value)">`;
-
-  /* 확정·완료 날짜는 그래픽 항목 줄에 적힌다(항목이 아직 없는 기업만 기업 칸).
-     읽는 자리와 쓰는 자리를 함께 옮겨야 고친 값이 되돌아오지 않는다. */
-  const baseDate = (x, which) => `<input type="date" class="fi" style="${TCELL}"
-    value="${escapeHtml(which === 'done' ? baseDoneAt(x) : baseRecvAt(x))}" onclick="event.stopPropagation()"
-    title="${escapeHtml(baseItems(x).length
-      ? `그래픽의 «${baseItems(x).map(i => i.name || '').filter(Boolean).join(' · ')}»와 같은 칸이에요`
-      : '')}"
-    onchange="${which === 'done' ? 'setBaseDoneAt' : 'setBaseRecvAt'}('${escAttr(x.id)}',this.value)">`;
-
-  const noteCell = (x) => `<input class="fi" style="${TCELL}"
-    placeholder="비고" value="${escapeHtml(x.base_note || '')}" onclick="event.stopPropagation()"
-    onchange="setExhField('${escAttr(x.id)}','base_note',this.value,'기본 시공 비고')">`;
-
-  const mark = (x) => { const s = st(x);
-    const c = s.state === 'done' ? 'p-green' : s.state === 'part' ? 'p-amber' : 'p-red';
-    return `<span class="pill ${c}" style="${TPILL}">${escapeHtml(s.text || '')}</span>`; };
-
-  baseSelSync();
-  const selN = rows.filter(x => baseSel.has(x.id)).length;
-  const allOn = rows.length > 0 && rows.every(x => baseSel.has(x.id));
-
-  const selBox = (x) => `<input type="checkbox" ${baseSel.has(x.id) ? 'checked' : ''}
-    onclick="event.stopPropagation();toggleBaseSel('${escAttr(x.id)}')"
-    title="일괄 처리에 넣습니다" style="cursor:pointer">`;
-
-  /* 날짜를 비워 두면 오늘로 찍는다 — 값을 미리 넣어 두면 «오늘»이 아니라
-     «화면을 연 날»이 되어, 창을 켜 둔 채 다음 날 누르면 어제로 들어간다. */
-  const actions = `<input type="date" id="base-bulk-date" class="fi"
-      style="width:136px;padding:4px 7px;font-size:11.5px" title="비우면 오늘 날짜로 찍습니다">
-    <button class="btn bp bs" onclick="applyBaseDone()"
-      title="고른 곳의 «우리 작업» 날짜를 한 번에 찍습니다">${selN ? `${selN}곳 ` : ''}제작 완료</button>
-    ${selN ? `<button class="btn bs" onclick="clearBaseDone()" title="고른 곳의 «우리 작업» 날짜를 지웁니다">완료 해제</button>` : ''}
-    <button class="btn bs" onclick="toggleBaseSelAll()">${allOn ? '모두 해제' : '모두 선택'}</button>`;
-
-  if(isMobile()) return viewShell(pills, rows.map(x => {
-    const k = baseKind(x);
-    return `<div style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px">
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px">
-        ${selBox(x)}
-        <span class="pill p-gray">${x.booth_no ? '부스 ' + escapeHtml(x.booth_no) : '미배정'}</span>
-        <span onclick="openExhDr('${escAttr(x.id)}','progress')"
-          style="font-size:13px;font-weight:700;flex:1;min-width:0;cursor:pointer">${escapeHtml(exhNames(x).ko)}</span>
-        ${mark(x)}
-      </div>
-      <div style="font-size:11px;color:var(--i4);margin-bottom:4px">${escapeHtml(x.booth_type || '')} · ${escapeHtml(BASE_KINDS[k].label)}${designPill(x)}</div>
-      <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
-        <span style="font-size:11px;color:var(--i4);min-width:64px">${escapeHtml(BASE_KINDS[k].recv)}</span>${recvCell(x)}</div>
-      ${k === 'fascia' ? `<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
-        <span style="font-size:11px;color:var(--i4);min-width:64px">확정</span>${baseDate(x, 'recv')}</div>` : ''}
-      <div style="display:flex;gap:6px;align-items:center">
-        <span style="font-size:11px;color:var(--i4);min-width:64px">${escapeHtml(BASE_KINDS[k].done)}</span>${baseDoneCheck(x)}</div>
-    </div>`;
-  }).join(''), actions);
-
-  return viewShell(pills, `<div class="tw"><table><thead><tr>
-      <th style="min-width:26px"><input type="checkbox" ${allOn ? 'checked' : ''}
-        onclick="event.stopPropagation();toggleBaseSelAll()" title="지금 보이는 곳을 모두 선택/해제"
-        style="cursor:pointer"></th>
-      <th style="min-width:44px;text-align:right">신청순</th>
-      <th style="min-width:56px">부스</th>
-      <th style="min-width:150px">기업</th>
-      <th style="min-width:120px">부스 타입</th>
-      <th style="min-width:96px">해야 할 일</th>
-      <th style="width:200px;min-width:200px">받을 것</th>
-      <th style="width:132px;min-width:132px">확정</th>
-      <th style="width:96px;min-width:96px;text-align:center">우리 작업</th>
-      <th style="width:96px;min-width:96px;text-align:center">상태</th>
-      <th style="min-width:150px">비고</th>
-    </tr></thead><tbody>
-    ${rows.map(x => {
-      const k = baseKind(x);
-      return `<tr${baseSel.has(x.id) ? ' style="background:var(--ad)"' : ''}>
-        <td style="text-align:center">${selBox(x)}</td>
-        ${applyCell(x)}
-        <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
-        ${coCell(x, 'progress')}
-        <td style="font-size:11px;color:var(--i4)">${escapeHtml(x.booth_type || '')}${
-          x.booth_qty && x.booth_qty !== '1' ? ` <span style="color:var(--i5)">×${escapeHtml(x.booth_qty)}</span>` : ''}</td>
-        <td><span class="pill ${BASE_KINDS[k].cls}" style="${TPILL}">${escapeHtml(BASE_KINDS[k].label)}</span>${designPill(x)}</td>
-        <td>${recvCell(x)}</td>
-        <td>${k === 'fascia'
-          ? baseDate(x, 'recv')
-          : '<span style="display:inline-block;width:100%;text-align:center;font-size:11px;color:var(--i6)">·</span>'}</td>
-        <td style="text-align:center">${baseDoneCheck(x, TPILL)}</td>
-        <td style="text-align:center">${mark(x)}</td>
-        <td>${noteCell(x)}</td>
-      </tr>`;
-    }).join('')}
-    </tbody></table></div>`, actions);
-}
-
-/* ── 웹디렉토리 주소 ──────────────────────────────────────────
-   프로그램북에 실린 정보를 그대로 보여주는 공개 페이지(backend의 /d/<슬러그>).
-   인쇄물에는 이 주소나 QR만 싣는다 — 지면과 달리 인쇄 뒤에도 고칠 수 있다.
-
-   슬러그를 저장해 두지 않고 행사 이름에서 만든다(백엔드 routes/public.js가
-   같은 규칙으로 되돌려 찾는다). 규칙이 두 곳에 있는 건 감수한다 — 슬러그
-   칸을 만들면 행사를 새로 열 때마다 사람이 채워야 하고, 비면 주소가 죽는다. */
-const dirSlug = (v) => String(v || '').toLowerCase().trim()
-  .replace(/[^a-z0-9가-힣]+/g, '-')
-  .replace(/^-+|-+$/g, '');
-
-export const webDirectoryUrl = (evKey) => {
-  const slug = dirSlug(evKey || exhEvent);
-  return slug && API_BASE_URL ? `${API_BASE_URL}/d/${slug}` : '';
-};
-
-function openWebDirectory(){
-  const url = webDirectoryUrl();
-  if(!url){ alert('행사를 먼저 고르세요.'); return; }
-  window.open(url, '_blank', 'noopener');
-}
-
-async function copyWebDirectoryUrl(){
-  const url = webDirectoryUrl();
-  if(!url){ alert('행사를 먼저 고르세요.'); return; }
-  /* 클립보드 API는 https나 localhost에서만 동작한다. 막히면 주소를 띄워
-     직접 복사할 수 있게 한다 — 조용히 실패하면 붙여넣기 때 빈 값이 된다. */
-  try {
-    await navigator.clipboard.writeText(url);
-    alert(`주소를 복사했어요.\n\n${url}`);
-  } catch (e) {
-    prompt('아래 주소를 복사하세요 (Ctrl+C)', url);
-  }
-}
-
-function renderBookView(list){
-  if(!list.length) return emptyView('표시할 기업이 없어요');
-
-  /* 순서를 적어 뒀으면 그 순서로, 없으면 부스 번호순으로 세운다 — 도록은 보통
-     부스 배치 순으로 싣기 때문에 그게 기본값으로 쓸 만하다. */
-  const rows = [...list].sort((a, b) => {
-    const ao = Number(String(a.book_order || '').replace(/[^0-9]/g, '')) || 0;
-    const bo = Number(String(b.book_order || '').replace(/[^0-9]/g, '')) || 0;
-    // 순번이 같은 자리가 실제로 있다 — 한 부스를 나눠 쓰는 두 기관이 도록에는
-    // 각각 실리면서 번호는 하나로 받아 온다(39-1 서울대·39-2 분당서울대).
-    // 그대로 두면 둘의 앞뒤가 그때그때 달라져 교정 볼 때마다 순서가 바뀐다.
-    if(ao !== bo) return (ao || 1e9) - (bo || 1e9);
-    return boothSortKey(a) - boothSortKey(b);
-  });
-
-  /* 번호가 겹치는 순번 — 실수인지 일부러인지 화면에서 알 수 있어야 한다 */
-  const dupOrders = (() => {
-    const c = {};
-    rows.forEach(x => { const o = String(x.book_order || '').trim(); if(o) c[o] = (c[o] || 0) + 1; });
-    return new Set(Object.keys(c).filter(k => c[k] > 1));
-  })();
-
-  const done = rows.filter(x => !bookMissing(x).length).length;
-  const noLogo = rows.filter(x => x.book_logo !== 'yes').length;
-  const noIntro = rows.filter(x => !introLen(x.book_intro)).length;
-  const lens = rows.map(x => introLen(x.book_intro)).filter(Boolean);
-  const overRows = rows.map(x => ({ x, o: introOver(x.book_intro) })).filter(r => r.o.isOver);
-  const overN = overRows.length;
-
-  const pills = `<span class="pill p-gray">기업 ${rows.length}</span>`
-    + `<span class="pill ${done === rows.length ? 'p-green' : 'p-amber'}">완성 ${done}/${rows.length}</span>`
-    + (noLogo ? `<span class="pill p-red">로고 미확보 ${noLogo}</span>` : '')
-    + (noIntro ? `<span class="pill p-red">회사소개 없음 ${noIntro}</span>` : '')
-    + (lens.length ? `<span class="pill p-gray" title="띄어쓰기 포함">소개 ${Math.min(...lens)}~${Math.max(...lens)}자</span>` : '')
-    + (overN ? `<span class="pill p-red" title="${escapeHtml(overRows.map(o => `${exhNames(o.x).ko} ${o.o.chars}자`).join(', '))}">한도 초과 ${overN}</span>` : '')
-    + (dupOrders.size ? `<span class="pill p-amber" title="${escapeHtml([...dupOrders].map(o =>
-        `${o}번: ${rows.filter(r => String(r.book_order || '').trim() === o).map(r => exhNames(r).ko).join(' · ')}`).join(' / '))}">겹친 순번 ${dupOrders.size}</span>` : '')
-    + `<span style="font-size:10.5px;color:var(--i5);margin-left:2px">한도 ${bookLimit().chars.toLocaleString()}자 · ${bookLimit().words}단어 (띄어쓰기 포함)</span>`;
-
-  const actions = `<button class="btn bs" onclick="fillBookOrder()" title="지금 부스 번호순으로 1번부터 다시 매깁니다">순서 자동 매기기</button>`
-    + `<button class="btn bs" onclick="renumberBook()" title="겹치거나 빈 번호를 지금 순서 그대로 1번부터 다시 매깁니다">번호 정리</button>`
-    + `<button class="btn bs" onclick="openWebDirectory()" title="여기 있는 정보로 만든 공개 페이지를 새 창에서 엽니다 — 로그인 없이 누구나 열립니다">웹디렉토리 열기</button>`
-    + `<button class="btn bs" onclick="copyWebDirectoryUrl()" title="프로그램북에 싣거나 QR로 만들 주소를 복사합니다">주소 복사</button>`;
-
-  const logoBtn = (x) => `<button
-    onclick="event.stopPropagation();cycleBookLogo('${escAttr(x.id)}')"
-    title="${x.book_logo === 'yes' ? '로고 받음' : x.book_logo === 'no' ? '로고 없음 — 요청 필요' : '아직 확인 안 함'}"
-    style="border:none;background:none;padding:0;cursor:pointer;font-size:14px;line-height:1">
-    ${x.book_logo === 'yes' ? '<span style="color:var(--g)">✓</span>'
-      : x.book_logo === 'no' ? '<span style="color:var(--re)">✕</span>'
-      : '<span style="color:var(--i6)">—</span>'}</button>`;
-
-  const introCell = (x) => {
-    const o = introOver(x.book_intro);
-    if(!o.chars) return `<span class="pill p-red" style="cursor:pointer"
-      onclick="event.stopPropagation();openBookIntro('${escAttr(x.id)}')">없음</span>`;
-    return `<span class="pill ${o.isOver ? 'p-red' : 'p-green'}" style="cursor:pointer"
-      onclick="event.stopPropagation();openBookIntro('${escAttr(x.id)}')"
-      title="${o.chars}자 / ${o.words}단어 · 한도 ${o.lim.chars}자 · ${o.lim.words}단어${
-        o.isOver ? ` — ${o.over.join(', ')} 초과` : ''}">${o.chars}자${
-        o.isOver ? ` <b>+${o.over[0]}</b>` : ''}</span>`;
-  };
-
-  if(isMobile()) return viewShell(pills, rows.map(x => {
-    const miss = bookMissing(x);
-    return `<div onclick="openExhDr('${escAttr(x.id)}','book')" style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
-        <span class="pill ${dupOrders.has(String(x.book_order || '').trim()) ? 'p-amber' : 'p-gray'}"${
-          dupOrders.has(String(x.book_order || '').trim()) ? ' title="같은 순번을 쓰는 기업이 또 있어요 — 한 부스를 나눠 쓰는 경우입니다"' : ''
-        }>${escapeHtml(x.book_order || '-')}${dupOrders.has(String(x.book_order || '').trim()) ? ' ⚠' : ''}</span>
-        <span style="font-size:13px;font-weight:700;flex:1;min-width:0">${escapeHtml(bookName(x).ko)}</span>
-        ${x.booth_no ? `<span class="pill p-blue">부스 ${escapeHtml(x.booth_no)}</span>` : ''}
-      </div>
-      ${bookName(x).en ? `<div style="font-size:11px;color:var(--i4);margin-bottom:3px">${escapeHtml(bookName(x).en)}</div>` : ''}
-      ${(() => { const o = introOver(x.book_intro);
-        return `<div style="font-size:11px;color:${o.isOver ? 'var(--re)' : 'var(--i4)'}">회사소개 ${o.chars}자 · ${o.words}단어${
-          o.isOver ? ` (${o.over.join(', ')} 초과)` : ''} · 로고 ${
-          x.book_logo === 'yes' ? '있음' : x.book_logo === 'no' ? '없음' : '미확인'}</div>`; })()}
-      ${miss.length
-        ? `<div style="font-size:11px;color:var(--re);margin-top:3px">빠짐: ${escapeHtml(miss.join(', '))}</div>`
-        : '<div style="font-size:11px;color:var(--g);margin-top:3px">모두 채워졌어요</div>'}
-    </div>`;
-  }).join(''), actions);
-
-  const cell = (x, f, w) => `<td><input class="fi" style="width:${w};padding:3px 5px;font-size:11.5px"
-    value="${escapeHtml(x[f] || '')}" onclick="event.stopPropagation()"
-    onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr((BOOK_FIELDS.find(b => b[0] === f) || ['', f])[1])}')"></td>`;
-
-  /* 안 적은 칸에는 CRM 이름을 흐리게 미리 보여 준다 — 빈칸이면 도록에 이름이
-     안 나가는 줄 알고, 같은 이름을 56번 옮겨 적게 된다. 다른 곳만 고치면 된다. */
-  const nameCell = (x, f, shown, label) => `<td><input class="fi"
-    style="width:164px;padding:3px 5px;font-size:11.5px${x[f] ? ';font-weight:600' : ''}"
-    value="${escapeHtml(x[f] || '')}" placeholder="${escapeHtml(shown || '')}"
-    title="${escapeHtml(x[f] ? '직접 적은 이름이에요' : 'CRM 이름을 그대로 씁니다 — 다르면 여기에 적으세요')}"
-    onclick="event.stopPropagation()"
-    onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')"></td>`;
-
-  /* 걸러 놓은 채로 끌어 옮기면, 화면 밖 줄과의 앞뒤를 사람이 알 수 없다.
-     번호를 적는 건 "전체에서 몇 번째"라는 뜻이라 걸러도 뜻이 분명하지만,
-     끌어 옮기기는 보이는 줄끼리의 앞뒤라서 그렇지 않다. */
-  const full = rows.length === activeExhibitors(exhEvent).length;
-
-  return viewShell(pills, `<div class="tw"><table><thead><tr>
-      ${full ? '<th style="width:22px" title="끌어서 순서를 바꿀 수 있어요"></th>' : ''}
-      <th style="min-width:48px">순서</th>
-      <th style="min-width:44px;text-align:center">로고</th>
-      <th style="min-width:140px">기업 (CRM)</th>
-      <th style="min-width:170px" title="도록과 간판에 실제로 나가는 이름이에요">게재 국문명</th>
-      <th style="min-width:170px">게재 영문명</th>
-      <th style="min-width:56px">부스</th>
-      <th style="min-width:170px">주소</th>
-      <th style="min-width:110px">연락처</th>
-      <th style="min-width:140px">웹사이트</th>
-      <th style="min-width:70px;text-align:center">회사소개</th>
-      <th style="min-width:80px">빠진 항목</th>
-    </tr></thead><tbody>
-    ${rows.map(x => {
-      const miss = bookMissing(x);
-      const dup = dupOrders.has(String(x.book_order || '').trim());
-      return `<tr onclick="openExhDr('${escAttr(x.id)}','book')" style="cursor:pointer"
-        ${full ? `ondragstart="bookDragStart(event,'${escAttr(x.id)}')" ondragend="bookDragEnd(this)"
-          ondragover="bookDragOver(event,this)" ondragleave="bookDragLeave(this)"
-          ondrop="bookDrop(event,'${escAttr(x.id)}')"` : ''}>
-        ${full ? `<td style="padding:0 2px;text-align:center" onclick="event.stopPropagation()">
-          <span onmousedown="bookDragOn(this)" title="끌어서 옮기기"
-            style="cursor:grab;color:var(--i6);font-size:13px;line-height:1;user-select:none">⠿</span></td>` : ''}
-        <td><input class="fi" title="번호를 적으면 그 자리로 옮기고 나머지가 한 칸씩 밀려요"
-          style="width:42px;padding:3px 5px;font-size:11.5px;text-align:center;font-weight:700${
-            dup ? ';border-color:var(--am)' : ''}"
-          value="${escapeHtml(x.book_order || '')}" onclick="event.stopPropagation()"
-          onchange="moveBookOrder('${escAttr(x.id)}',this.value)"></td>
-        <td style="text-align:center">${logoBtn(x)}</td>
-        ${coCell(x, 'book')}
-        ${nameCell(x, 'book_name_ko', bookName(x).ko, '게재 국문명')}
-        ${nameCell(x, 'book_name_en', bookName(x).en, '게재 영문명')}
-        <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
-        ${cell(x, 'book_address', '164px')}
-        ${cell(x, 'book_phone', '104px')}
-        ${cell(x, 'book_website', '134px')}
-        <td style="text-align:center">${introCell(x)}</td>
-        <td>${miss.length
-          ? `<span class="pill p-amber" title="${escapeHtml(miss.join(', '))}">${miss.length}개</span>`
-          : '<span class="pill p-green">완료</span>'}</td>
-      </tr>`;
-    }).join('')}
-    </tbody></table></div>`, actions);
-}
-
-/* 로고는 받음 / 없음 / 미확인 셋뿐이라 눌러서 돌린다 */
-export async function cycleBookLogo(id){
-  const x = getExhibitorById(id);
-  if(!x) return;
-  const next = { '': 'yes', yes: 'no', no: '' }[x.book_logo || ''];
-  await patchExh(id, { book_logo: next }, null);
-}
-
-/* 지금 목록을 부스 번호순으로 1번부터 다시 매긴다 */
-export async function fillBookOrder(){
-  // 잠긴 행사면 «다시 매길까요?»를 묻기 전에 막는다 — 물어 놓고 줄마다 막히면 헷갈린다
-  if(exhLocked()){ exhLockNotice(); return; }
-  await reloadExhibitors();          // 위와 같은 이유 — 낡은 줄 세우기로 덮어쓰지 않게
-  const rows = [...visibleList()].sort((a, b) => boothSortKey(a) - boothSortKey(b));
-  if(!rows.length) return;
-  if(!confirm(`${rows.length}개 기업의 도록 순서를 부스 번호순으로 다시 매길까요? 이미 적어둔 순서는 덮어씁니다.`)) return;
-  for(let i = 0; i < rows.length; i++){
-    if(String(rows[i].book_order || '') === String(i + 1)) continue;
-    await patchExh(rows[i].id, { book_order: String(i + 1) }, null);
-  }
-  renderExh();
-}
-
-/* 회사소개는 길어서 표 칸에 안 들어간다 — 눌러서 따로 연다.
-   고치는 동안 글자수가 바로 따라 움직여야 몇 자를 줄여야 하는지 보인다. */
-export function openBookIntro(id){
-  const x = getExhibitorById(id);
-  if(!x) return;
-  modalShell('book-intro-modal', `회사소개 — ${exhNames(x).ko}`, `
-    <textarea class="fi" id="bi-text" rows="12" style="font-size:12.5px;line-height:1.7"
-      oninput="updateIntroCount()"
-      placeholder="도록에 실을 회사소개를 붙여넣으세요">${escapeHtml(x.book_intro || '')}</textarea>
-    <div id="bi-meter" style="font-size:11.5px;margin:8px 0 12px"></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button class="btn bs" onclick="closeBookIntro()">취소</button>
-      <button class="btn bp" onclick="saveBookIntro('${escAttr(id)}')">저장</button>
-    </div>`);
-  updateIntroCount();
-  document.getElementById('bi-text')?.focus();
-}
-
-/* 고치는 동안 남은 글자수가 따라 움직여야 몇 자를 줄여야 하는지 보인다 */
-export function updateIntroCount(){
-  const ta = document.getElementById('bi-text');
-  const el = document.getElementById('bi-meter');
-  if(!ta || !el) return;
-  const o = introOver(ta.value);
-  const bad = o.isOver;
-  el.innerHTML = `<span style="color:${bad ? 'var(--re)' : 'var(--i4)'}">
-      띄어쓰기 포함 <b style="font-size:13px">${o.chars}</b>자 · <b style="font-size:13px">${o.words}</b>단어</span>
-    <span style="color:var(--i5)"> / 한도 ${o.lim.chars.toLocaleString()}자 · ${o.lim.words}단어</span>
-    ${bad ? `<div style="color:var(--re);font-weight:700;margin-top:3px">${o.over.join(', ')} 초과 — 줄여야 실립니다</div>`
-      : `<div style="color:var(--g);margin-top:3px">지면에 들어갑니다 (${o.lim.chars - o.chars}자 여유)</div>`}`;
-}
-
-export async function saveBookIntro(id){
-  const el = document.getElementById('bi-text');
-  if(!el) return;
-  await patchExh(id, { book_intro: el.value.trim() }, null);
-  closeBookIntro();
-  renderExh();
-}
-export const closeBookIntro = () => document.getElementById('book-intro-modal')?.remove();
-
-export const modalShell = (id, title, body) => {
-  if(document.getElementById(id)) return;
-  const el = document.createElement('div');
-  el.id = id;
-  /* 오버레이는 .mw(position:fixed + z-index), 안쪽 패널은 .modal이다.
-     전에 두 클래스를 뒤바꿔 써서 모달이 크기 0으로 깔려 화면에 보이지 않았다 —
-     함수는 정상이라 프로그램으로 부르면 동작했지만 사람은 누를 수가 없었다. */
-  el.className = 'mw on';
-  /* 배경을 눌러 닫되, 누르기 시작한 곳이 패널 안이면 닫지 않는다.
-     글자를 드래그로 선택하다 패널 밖에서 손을 떼면 click의 target이 배경이 되는데,
-     그것까지 닫아 버리면 복사하려다 입력하던 내용을 통째로 잃는다. */
-  let downOnBg = false;
-  el.addEventListener('mousedown', (e) => { downOnBg = (e.target === el); });
-  el.addEventListener('click', (e) => { if(e.target === el && downOnBg) el.remove(); });
-  el.innerHTML = `<div class="modal" style="max-width:440px">
-    <div class="mh"><div class="mt2">${escapeHtml(title)}</div>
-      <button class="mc" onclick="document.getElementById('${id}')?.remove()">✕</button></div>
-    <div class="mb">${body}</div></div>`;
-  document.body.appendChild(el);
-};
-const mval = (id) => (document.getElementById(id) || {}).value?.trim() || '';
-
-/* ── 품목 추가 (행사 품목마스터) ── */
-/* 분류는 행사마다 다르다 — 렌탈사와 출력소가 바뀌면 품목도 분류도 따라 바뀐다.
-   비품과 그래픽은 목록을 나눠 둔다. 한 목록에 담아 뒀더니 그래픽 품목을 넣을 때
-   '의자·테이블'밖에 안 떠서, 사람이 목록 밖의 값을 손으로 적어 넣었다 —
-   그렇게 족자봉·폼보드가 의자와 같은 칸에 섞였다. */
-const eqCats = (kind) => kind === 'graphic'
-  ? codeList('graphic_cat', exhEvent,
-      ['벽면 랩핑', '인포데스크 랩핑', '족자봉', '기타그래픽'].map(c => ({ code: c, label: c })))
-  : codeList('equip_cat', exhEvent,
-      ['의자', '테이블', '진열대', '가전제품', '기타비품'].map(c => ({ code: c, label: c })));
-
-/* kind는 부른 화면이 정한다 — 비품 현황에서 열면 비품, 그래픽 현황에서 열면
-   그래픽. 전에는 어디서 열든 비품으로 저장돼서, 그래픽 품목표에 넣은 줄이
-   비품 목록에 나타났다. */
-export function openNewCatalogItem(kind){
-  if(!exhEvent){ alert('행사를 먼저 선택해주세요.'); return; }
-  const isG = kind === 'graphic';
-  modalShell('new-eq-modal', isG ? '그래픽 품목 추가' : '품목 추가', `
-    <div style="font-size:11.5px;color:var(--i4);margin-bottom:12px;line-height:1.6">
-      <b>${escapeHtml(exhEvent)}</b> ${isG ? '그래픽' : '비품'} 품목표에 추가됩니다. 다른 행사에는 영향이 없어요.</div>
-    <input type="hidden" id="neq-kind" value="${escapeHtml(isG ? 'graphic' : 'equip')}">
-    <div class="fgr">
-      <div class="fg"><label class="fl">분류</label>
-        <select class="fi" id="neq-cat">${eqCats(kind).map(c => `<option value="${escapeHtml(c.code)}">${escapeHtml(c.label)}</option>`).join('')}</select></div>
-      <div class="fg"><label class="fl">품목코드</label>
-        <input class="fi" id="neq-code" placeholder="비우면 자동 (X-001…)"></div>
-    </div>
-    <div class="fg"><label class="fl">품명 (국문)</label><input class="fi" id="neq-ko" placeholder="${isG ? '예: 벽면 랩핑 (PVC)' : '예: 접이식 체어'}"></div>
-    <div class="fg"><label class="fl">품명 (영문)</label><input class="fi" id="neq-en" placeholder="${isG ? '예: Wall Wrapping' : '예: Folding Chair'}"></div>
-    <div class="fg"><label class="fl">규격</label><input class="fi" id="neq-spec" placeholder="${isG ? '예: 970*2390mm/패널' : '예: 500*420*750mmH'}"></div>
-    <div class="fgr">
-      <div class="fg"><label class="fl">단가 (KRW)</label><input class="fi" id="neq-krw" placeholder="11000"></div>
-      <div class="fg"><label class="fl">단가 (USD)</label><input class="fi" id="neq-usd" placeholder="11"></div>
-    </div>
-    <div id="neq-msg" style="font-size:11.5px;min-height:16px;margin-bottom:8px"></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button class="btn bs" onclick="document.getElementById('new-eq-modal')?.remove()">취소</button>
-      <button class="btn bp" id="neq-save" onclick="submitNewCatalogItem()">추가</button>
-    </div>`);
-  document.getElementById('neq-ko')?.focus();
-}
-
-export async function submitNewCatalogItem(){
-  const msg = document.getElementById('neq-msg');
-  const btn = document.getElementById('neq-save');
-  const ko = mval('neq-ko'), en = mval('neq-en');
-  const fail = (t) => { if(msg){ msg.style.color = 'var(--re)'; msg.textContent = t; }
-    if(btn){ btn.disabled = false; btn.textContent = '추가'; } };
-
-  if(!ko && !en) return fail('품명을 국문이나 영문 중 하나는 입력해주세요.');
-  if(btn){ btn.disabled = true; btn.textContent = '추가 중…'; }
-
-  // 같은 이름이 이미 있으면 새로 만들지 않는다 — 카탈로그를 둔 이유가 없어진다
-  const dup = findCatalogByName(exhEvent, ko || en);
-  if(dup) return fail(`이미 있는 품목이에요 — ${dup.code} ${dup.name_ko || dup.name_en}`);
-
-  const kind = mval('neq-kind') === 'graphic' ? 'graphic' : 'equip';
-  let code = mval('neq-code').toUpperCase();
-  const used = new Set(catalogFor(exhEvent).map(c => String(c.code || '').toUpperCase()));
-  if(code && used.has(code)) return fail(`이미 쓰고 있는 코드예요 — ${code}`);
-  if(!code){
-    let n = 1;
-    const pre = kind === 'graphic' ? 'XG' : 'X';   // 설정 › 품목표와 같은 규칙
-    while(used.has(`${pre}-${String(n).padStart(3, '0')}`)) n++;
-    code = `${pre}-${String(n).padStart(3, '0')}`;
-  }
-
-  const num = (v) => String(v || '').replace(/[^0-9.]/g, '');
-  const rec = {
-    id: `EC-${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-    event_id: exhEvent, kind,
-    category: mval('neq-cat') || (kind === 'graphic' ? '기타그래픽' : '기타비품'), code,
-    name_ko: ko, name_en: en, spec: mval('neq-spec'),
-    price_krw: num(mval('neq-krw')), price_usd: num(mval('neq-usd')),
-    note: '', active: '', sort_order: String(900 + catalogFor(exhEvent).length),
-  };
-
-  EQUIP_CATALOG.push(rec);
-  // 품목표도 이 행사의 기록이다 — api.js를 직접 부르면 진행 완료 잠금을 건너뛴다
-  const saveEquipCatalog = guardWrite((await import('../api.js')).saveEquipCatalog);
-  const r = await saveEquipCatalog(rec);
-  if(!r.ok){
-    const i = EQUIP_CATALOG.indexOf(rec);
-    if(i >= 0) EQUIP_CATALOG.splice(i, 1);
-    return fail(r.locked ? '진행 완료된 행사라 추가할 수 없어요.' : '저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
-  }
-  if(r.id && r.id !== rec.id) rec.id = r.id;
-
-  trackAction('add', '품목 등록', exhEvent,
-    `<b>${escapeHtml(code)}</b> ${escapeHtml(ko || en)} — ${escapeHtml(exhEvent)} 품목표에 추가`);
-  document.getElementById('new-eq-modal')?.remove();
-  renderExh();
-}
-
-/* ── 그래픽 주문 추가 ── */
-export function openNewGraphicOrder(){
-  if(!exhEvent){ alert('행사를 먼저 선택해주세요.'); return; }
-  const cos = activeExhibitors(exhEvent)
-    .slice().sort((a, b) => String(a.company_name).localeCompare(String(b.company_name), 'ko'));
-  if(!cos.length){ alert('등록된 참가기업이 없어요.'); return; }
-
-  modalShell('new-gr-modal', '그래픽 주문 추가', `
-    <div class="fg"><label class="fl">기업</label>
-      <select class="fi" id="ngr-co">${cos.map(x =>
-        `<option value="${escapeHtml(x.id)}">${escapeHtml(exhNames(x).ko)}${
-          exhNames(x).en ? ` (${escapeHtml(exhNames(x).en)})` : ''}${x.booth_no ? ` · 부스 ${escapeHtml(x.booth_no)}` : ''}</option>`).join('')}</select></div>
-    <div class="fgr">
-      <div class="fg"><label class="fl">유형</label>
-        <select class="fi" id="ngr-type">
-          <option value="">미정</option>
-          <option value="design">제작 (초안→수정안→최종안)</option>
-          <option value="print">출력 (규격 확인만)</option>
-        </select></div>
-      <div class="fg"><label class="fl">주문일</label>
-        <input type="date" class="fi" id="ngr-date" value="${td()}"></div>
-    </div>
-    <div class="fg"><label class="fl">항목명</label>
-      <input class="fi" id="ngr-name" placeholder="예: 인포메이션 데스크 랩핑 (PET)"></div>
-    <div class="fgr">
-      <div class="fg"><label class="fl">금액</label><input class="fi" id="ngr-amt" placeholder="비우면 나중에"></div>
-      <div class="fg"><label class="fl">통화</label>
-        <select class="fi" id="ngr-cur"><option value="KRW">KRW</option><option value="USD">USD</option></select></div>
-    </div>
-    <div id="ngr-msg" style="font-size:11.5px;min-height:16px;margin-bottom:8px"></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button class="btn bs" onclick="document.getElementById('new-gr-modal')?.remove()">취소</button>
-      <button class="btn bp" id="ngr-save" onclick="submitNewGraphicOrder()">추가</button>
-    </div>`);
-  document.getElementById('ngr-name')?.focus();
-}
-
-export async function submitNewGraphicOrder(){
-  const msg = document.getElementById('ngr-msg');
-  const btn = document.getElementById('ngr-save');
-  const fail = (t) => { if(msg){ msg.style.color = 'var(--re)'; msg.textContent = t; }
-    if(btn){ btn.disabled = false; btn.textContent = '추가'; } };
-
-  const x = getExhibitorById(mval('ngr-co'));
-  if(!x) return fail('기업을 골라주세요.');
-  const name = mval('ngr-name');
-  if(!name) return fail('항목명을 입력해주세요.');
-  if(btn){ btn.disabled = true; btn.textContent = '추가 중…'; }
-
-  const amount = mval('ngr-amt').replace(/[^0-9.]/g, '');
-  const rec = {
-    id: `XI-${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-    exhibitor_id: x.id, category: 'graphic', name,
-    qty: '', unit_price: '', amount, currency: mval('ngr-cur') || 'KRW',
-    note: '', sort_order: nextItemSort(x.id), catalog_id: '',
-  };
-
-  EXH_ITEMS.push(rec);
-  // 모듈 위의 가드된 saveExhItem을 쓴다 — 예전엔 api.js를 직접 불러 잠금을 건너뛰었다
-  const r = await saveExhItem(rec);
-  if(!r.ok){
-    const i = EXH_ITEMS.indexOf(rec);
-    if(i >= 0) EXH_ITEMS.splice(i, 1);
-    return fail(r.locked ? '진행 완료된 행사라 추가할 수 없어요.' : '저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
-  }
-  if(r.id && r.id !== rec.id) rec.id = r.id;
-
-  /* 주문일·유형은 참가기업 쪽에 있다. 여기서 함께 넣어 두지 않으면 항목만 생기고
-     그래픽 현황에는 '주문 안 함'으로 남아 화면과 데이터가 어긋난다.
-     이미 적혀 있으면 덮지 않는다 — 나중 주문이 처음 주문일을 지우면 안 된다. */
-  const patch = {};
-  if(!String(x.graphic_ordered_at || '').trim()) patch.graphic_ordered_at = mval('ngr-date') || td();
-  const type = mval('ngr-type');
-  if(type && !String(x.graphic_type || '').trim()) patch.graphic_type = type;
-  if(Object.keys(patch).length) await patchExh(x.id, patch, null);
-
-  trackAction('add', '그래픽 주문 추가', x.company_name || '',
-    `<b>${escapeHtml(x.company_name || '')}</b> ${escapeHtml(name)}${amount ? ` ${escapeHtml(fmtMoney(amount, rec.currency))}` : ''}`,
-    { kind: 'exhibitor', id: x.id, tab: 'graphic' });
-  document.getElementById('new-gr-modal')?.remove();
-  renderExh();
-}
-
-/* ══════════════════════════════════════════
-   대시보드 — 기업 하나하나가 아니라 행사 전체를 본다.
-   "어디까지 왔나 / 돈은 얼마나 들어왔나 / 오늘 뭘 처리해야 하나" 세 가지에 답한다.
-══════════════════════════════════════════ */
-/* 단계 완료 수 — 해당 없는 기업(na)은 분모에서 뺀다.
-   부스 도면은 독립부스에만, 그래픽은 주문한 곳에만 해당한다. 전체를 분모로
-   두면 51곳 중 18곳짜리 단계가 영영 "0/51"로 남아 늘 밀린 것처럼 보인다. */
-/* 집계 알약 하나 — 지금 걸려 있는 쪽을 색과 꼬리표로 알린다 */
-function stepPill(s, t){
-  const on = stepFil && stepFil.key === s.key;
-  const label = escapeHtml(s.label.replace(/<br>/g, ''));
-  const cls = on ? (stepFil.mode === 'done' ? 'p-blue' : 'p-amber')
-    : t.n === t.of ? 'p-green' : 'p-gray';
-  const tip = on ? (stepFil.mode === 'done' ? '완료한 곳만 보는 중 — 한 번 더 누르면 미완료만'
-    : '미완료만 보는 중 — 한 번 더 누르면 전체') : '눌러서 완료한 곳만 보기';
-  return `<button class="pill ${cls}" title="${escapeHtml(tip)}"
-    style="border:0;cursor:pointer;font:inherit" onclick="setStepFil('${escAttr(s.key)}')">${label} ${
-    on ? (stepFil.mode === 'done' ? `${t.n}곳` : `${t.of - t.n}곳`) : `${t.n}/${t.of}`}${
-    on ? `<span style="margin-left:3px">${stepFil.mode === 'done' ? '완료' : '미완료'} ✕</span>` : ''}</button>`;
-}
-
-export function stepTally(all, step){
-  const live = all.filter(x => cellState(x, step).state !== 'na');
-  return { n: live.filter(x => cellState(x, step).state === 'done').length, of: live.length };
-}
-
-function renderDashboard(all){
-  if(!all.length) return '';
-  const n = all.length;
-
-  // 정산은 통화별로 따로 집계한다 — 섞어서 더하면 안 되는 값이다
-  const cash = {};
-  const byState = {};
-  const overdue = [], attention = [];
-  all.forEach(x => {
-    const s = settleState(x);
-    byState[s.state] = (byState[s.state] || 0) + 1;
-    if(s.billed){
-      const m = cash[s.cur] || (cash[s.cur] = { billed:0, paid:0, due:0, n:0 });
-      m.billed += s.billed; m.paid += s.paid; m.n++;
-      // «완납 처리»한 곳은 더 받을 돈이 없다 — settleState·정산 탭과 같은 기준
-      m.due += s.state === 'settled' ? 0 : s.balance;
-    }
-    if(s.overdue && s.balance > 0) overdue.push({ x, s });
-    const noAmt = invoicesFor(x.id).some(i => i.status !== 'void' && String(i.amount ?? '').trim() === '');
-    /* 통화가 섞인 건 처리 필요에 넣지 않는다. 인보이스는 원화로 받고 엑스렌탈은
-       해외 카드로 결제하는 경우가 있어 정상이다 — 매번 처리하라고 띄우면 정작
-       할 일이 묻힌다. 섞여 있다는 사실은 정산 탭과 체크리스트에 그대로 보인다. */
-    if(s.state === 'over' || noAmt){
-      attention.push({ x, why: s.state === 'over' ? ('초과 입금 ' + fmtMoney(-s.balance, s.cur))
-        : '인보이스 금액 미입력' });
-    }
-    /* 못 받은 돈 중에는 세금계산서가 없어서 못 받는 것이 섞여 있다. 선발행이
-       곧 청구라 «아직 안 한 일»이 아니라 이쪽이 막고 있는 일이다. 완납 뒤
-       사후 발행은 여기 올리지 않는다 — 돈은 이미 들어왔고, 단계별 진행에
-       숫자로 남는다. */
-    const tn = taxNeed(x);
-    if(tn.kind === 'pre')   attention.push({ x, why: '세금계산서 ' + tn.why + ' — 발행해야 입금됩니다' });
-    if(tn.kind === 'check') attention.push({ x, why: '입금 결제 수단이 안 적혀 세금계산서 발행 여부를 못 정해요' });
-  });
-  overdue.sort((a, b) => daysSince(b.s.due) - daysSince(a.s.due));
-
-  /* 마감이 걸린 단계 중 아직 못 끝낸 것. 지난 것만 "처리 필요"에 올린다 —
-     아직 남은 건 재촉할 일이 아니라 단계별 진행에서 날짜로만 보여준다. */
-  /* 요청해 두고 못 받은 단계 — 기다린 만큼 기다렸으면 리마인더가 우리 일이다(follow-up.js).
-     요청한 단계는 마감 지남(dueMiss)으로 따로 세지 않는다 — 리마인더 하나로 본다 */
-  const remind = [], asked = new Set();
-  const mSteps = exhMailSteps(exhEvent);
-  all.forEach(x => mSteps.forEach(s => {
-    const f = exhFollowOf(x, s);
-    if(!f) return;
-    asked.add(`${x.id}|${s.due}`);
-    if(f.state === 'nudge') remind.push({ x, s, f });
-  }));
-  remind.sort((a, b) => b.f.since - a.f.since);
-
-  const dueMiss = [];
-  DUE_STEPS.forEach(([key, label]) => {
-    const d = dueInfo(key, exhEvent);
-    if(!d || d.days >= 0) return;
-    const st = STEPS.find(s => s.key === key);
-    if(!st) return;
-    all.forEach(x => {
-      const c = rawCellState(x, st);
-      if(c.state === 'done' || c.state === 'na') return;
-      if(asked.has(`${x.id}|${key}`)) return;
-      dueMiss.push({ x, label, days: -d.days, date: d.date, tab: DUE_TAB[key] || 'progress' });
-    });
-  });
-  dueMiss.sort((a, b) => b.days - a.days);
-
-  const openInq = [];
-  all.forEach(x => openInquiriesFor(x.id).forEach(l => openInq.push({ x, l })));
-  openInq.sort((a, b) => String(a.l.ts || '').localeCompare(String(b.l.ts || '')));
-
-  /* 세금계산서·그래픽에서 지금 우리가 움직여야 하는 건. 남에게 넘겨 둔 건
-     (재무팀·그래픽팀 확인 중)은 여기 넣지 않는다 — 재촉은 해도 처리는
-     우리 손을 떠나 있어서, 섞어 두면 정작 내가 할 일이 묻힌다. */
-  const myTurn = [];
-  all.forEach(x => {
-    [['graphic_stage', GRAPHIC_STAGES, '그래픽']]
-      .forEach(([f, defs, label]) => {
-        const st = stageOf(defs, x[f]);
-        if(st.who !== 'us') return;
-        myTurn.push({ x, label, st, days: stageAge(x, defs, f) });
-      });
-    // 세금계산서는 여러 장일 수 있어 exhibitor_tax_invoices 각 줄을 본다
-    taxInvoicesFor(x.id).filter(t => t.status !== 'void').forEach(t => {
-      const st = stageOf(TAX_STAGES, t.stage);
-      if(st.who !== 'us') return;
-      myTurn.push({ x, label: '세금계산서', st, days: st.at && t[st.at] ? daysSince(t[st.at]) : null });
-    });
-  });
-  myTurn.sort((a, b) => (b.days || 0) - (a.days || 0));
-
-  /* 남에게 넘겨 둔 건 — 오래 머물면 재촉해야 하니 따로 센다 */
-  const waiting = [];
-  all.forEach(x => {
-    [['graphic_stage', GRAPHIC_STAGES, '그래픽']]
-      .forEach(([f, defs, label]) => {
-        const st = stageOf(defs, x[f]);
-        if(st.who !== 'team') return;
-        waiting.push({ x, label, st, days: stageAge(x, defs, f) });
-      });
-    taxInvoicesFor(x.id).filter(t => t.status !== 'void').forEach(t => {
-      const st = stageOf(TAX_STAGES, t.stage);
-      if(st.who !== 'team') return;
-      waiting.push({ x, label: '세금계산서', st, days: st.at && t[st.at] ? daysSince(t[st.at]) : null });
-    });
-  });
-  waiting.sort((a, b) => (b.days || 0) - (a.days || 0));
-
-  const avg = Math.round(all.reduce((s, x) => s + progressOf(x), 0) / n);
-  /* 처리 안 한 받은 메일 — 담당자가 보낸 메일을 아무도 안 챙기면 놓친다(규칙은 mail-mark.js) */
-  const inbox = [];
-  // 처리 필요에는 3일 넘게 처리 안 한 받은 메일만 — 나머지는 «메일함» 카드
-  all.forEach(x => logsFor(x.id).filter(isStale).forEach(l => inbox.push({ x, l })));
-  inbox.sort((a, b) => String(a.l.ts || '').localeCompare(String(b.l.ts || '')));
-  const todo = remind.length + openInq.length + overdue.length + attention.length + myTurn.length + dueMiss.length + inbox.length;
-  const curs = Object.keys(cash).filter(c => cash[c].n);   // 상단 KPI(미수금)가 쓰는 값
-  /* 미수금은 통화마다 따로 본다 — 원화와 달러를 더한 값으로 색을 정하면
-     달러가 남았는데 원화 초과 입금에 묻혀 «다 받음»으로 보일 수 있다. */
-  const dueAny = curs.some(c => cash[c].due > 0);
-
-  const card = (label, value, sub, color) => `<div class="cosi" style="flex:1 1 128px">
-    <div class="cosn" style="color:${color || 'var(--i1)'}">${value}</div>
-    <div class="cosl">${label}</div>
-    ${sub ? `<div style="font-size:9.5px;color:var(--i5);margin-top:2px">${sub}</div>` : ''}</div>`;
-
-  /* ── 돈이 어디까지 왔나 — 전체 → 청구 → 입금 ──
-
-     전체는 신청된 금액 항목을 다 더한 것이고, 청구는 세금계산서를 발행한 금액,
-     입금은 실제로 들어온 돈(환불 차감)이다. 세 숫자를 같은 자에 얹어 놓으면
-     어디서 막혀 있는지가 길이로 보인다.
-
-     세금계산서를 아직 몇 곳만 발행해서 청구가 입금보다 작을 수 있다. 그건 오류가
-     아니라 사실이라 숨기지 않는다 — 대신 몇 곳 발행했는지를 옆에 적어, 작은
-     숫자를 보고 계산이 틀렸다고 오해하지 않게 한다. */
-  const money3 = (() => {
-    const out = {};
-    const put = (cur, key, v) => {
-      if(!out[cur]) out[cur] = { 전체: 0, 청구: 0, 입금: 0, n: 0, taxN: 0 };
-      out[cur][key] += v;
-    };
-    all.forEach(x => {
-      billableItems(x.id).forEach(i => put(i.currency || 'KRW', '전체', num(i.amount)));
-      const s = settleState(x);
-      // 세금계산서는 이제 줄마다 통화를 갖는다(1:N 전환) — 각 줄 통화를 그대로 쓴다
-      let taxTotal = 0;
-      taxInvoicesFor(x.id).filter(t => t.status !== 'void').forEach(t => {
-        const amt = num(t.amount);
-        if(!amt) return;
-        put(t.currency || 'KRW', '청구', amt);
-        out[t.currency || 'KRW'].taxN++;
-        taxTotal += amt;
-      });
-      if(s.paid) put(s.cur || 'KRW', '입금', s.paid);
-      if(s.billed || taxTotal) out[s.cur || 'KRW'].n++;
-    });
-    return out;
-  })();
-
-  const cashRow = (c) => {
-    const m = money3[c];
-    if(!m || !m.전체 && !m.청구 && !m.입금) return '';
-    const base = Math.max(m.전체, m.청구, m.입금) || 1;   // 가장 긴 것을 100%로 삼는다
-    const bar = (label, v, color, sub) => `
-      <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:11px;margin-bottom:2px">
-        <span style="color:var(--i4)">${label}${sub ? `<span style="color:var(--i5)"> ${sub}</span>` : ''}</span>
-        <span style="font-weight:700;color:${color}">${escapeHtml(fmtMoney(v, c))}</span>
-      </div>
-      <div class="br" style="margin:0 0 7px">
-        <div class="brt"><div class="brf" style="width:${Math.round(v / base * 100)}%;background:${color}"></div></div>
-      </div>`;
-
-    const rest = m.전체 - m.입금;
-    return `<div style="margin-bottom:12px">
-      <div style="font-size:10.5px;color:var(--i4);margin-bottom:4px">${escapeHtml(c)} · ${m.n}곳</div>
-      ${bar('전체 금액', m.전체, 'var(--i5)')}
-      ${bar('청구한 금액', m.청구, 'var(--a)', `세금계산서 ${m.taxN}곳`)}
-      ${bar('입금 완료', m.입금, 'var(--g)')}
-      <div style="font-size:10.5px;color:${rest > 0 ? 'var(--am)' : 'var(--g)'}">
-        ${rest > 0 ? '남은 금액 ' + escapeHtml(fmtMoney(rest, c)) : '전액 입금'}</div>
-    </div>`;
-  };
-
-  /* of는 그 단계에 해당하는 기업 수다. 부스 도면은 독립부스에만, 그래픽은
-     주문한 곳에만 해당해서 전체(n)를 분모로 두면 영영 100%가 안 된다. */
-  const stepRow = (label, done, warn, due, of = n, step = null, warnRows = []) => {
-    const pct = of ? Math.round(done / of * 100) : 0;
-    // 마감이 지났는데 다 못 끝냈으면 빨갛게, 남았으면 날짜만 조용히 붙인다
-    const late = due && due.days < 0 && done < of;
-    const open = step && stepWarnOpen === step.key;
-    /* 경고 숫자를 눌러 펼친 목록. 어느 기업인지, 왜 걸렸는지까지 적는다 —
-       기업 이름만 있으면 열어 보기 전엔 무엇을 해야 할지 모른다. */
-    const list = open && warnRows.length ? `<div style="margin:-2px 0 8px 83px">
-      ${warnRows.map(({ x, text }) => `<div onclick="openExhDr('${escAttr(x.id)}','${
-          escAttr(DUE_TAB[step.key] || 'progress')}')"
-        style="display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:6px;cursor:pointer;background:var(--i9);margin-bottom:3px">
-        <span style="font-size:11.5px;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${
-          escapeHtml(exhNames(x).ko)}</span>
-        ${x.booth_no ? `<span class="pill p-gray" style="flex:0 0 auto">${escapeHtml(x.booth_no)}</span>` : ''}
-        ${text ? `<span style="font-size:10.5px;color:var(--am);flex:0 0 auto">${escapeHtml(text)}</span>` : ''}
-      </div>`).join('')}
-    </div>` : '';
-    return `<div style="display:flex;align-items:center;gap:9px;margin-bottom:7px">
-      <span style="font-size:11.5px;color:var(--i3);flex:0 0 74px">${escapeHtml(label)}</span>
-      <div style="flex:1;min-width:0">${progressBar(pct, pct === 100 ? 'var(--g)' : late ? 'var(--re)' : 'var(--a)')}</div>
-      <span style="font-size:11px;color:var(--i4);flex:0 0 48px;text-align:right">${done}/${of}</span>
-      <span style="flex:0 0 66px;text-align:right;font-size:10px;color:${late ? 'var(--re)' : 'var(--i5)'}">${
-        due ? escapeHtml(due.date.slice(5)) + (late ? ` ${-due.days}일↑` : '') : ''}</span>
-      ${warn ? `<span class="pill p-amber" style="flex:0 0 auto;cursor:pointer${
-          open ? ';outline:2px solid var(--i5)' : ''}"
-          onclick="toggleStepWarn('${escAttr(step ? step.key : '')}')"
-          title="${open ? '접기' : `걸려 있는 ${warn}곳을 봅니다`}">${warn}</span>`
-        : '<span style="flex:0 0 24px"></span>'}
-    </div>${list}`;
-  };
-
-  const STATE_PILLS = [['완납','paid','p-green'],['완납 처리','settled','p-green'],['부분 입금','partial','p-amber'],
-    ['미납','unpaid','p-gray'],['초과 입금','over','p-red'],['청구 전','none','p-gray']];
-
-  /* ── 카드 조각 ──
-     아래 격자에 순서대로 놓기 위해 각 카드를 먼저 만들어 둔다. 순서는
-     한눈에 보는 것(요약 → 부스 → 단계 → 정산) 다음에 해야 할 일(처리 필요)과
-     방금 무슨 일이 있었나(최근 변경)로 간다. */
-
-  const cardBooth = `<div class="uc">
-      <div class="uc-ttl">부스 현황</div>
-      ${[['booth_floor','층'],['booth_type','타입'],['grade','등급']].map(f => {
-        const cnt = {};
-        all.forEach(x => { const v = String(x[f[0]] || '').trim(); if(v) cnt[v] = (cnt[v] || 0) + 1; });
-        const ks = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]);
-        if(!ks.length) return '';
-        return `<div style="margin-bottom:8px">
-          <div style="font-size:10.5px;color:var(--i4);margin-bottom:3px">${f[1]}</div>
-          <div style="display:flex;flex-wrap:wrap;gap:5px">
-            ${ks.map(k => {
-              // 타입은 눌러서 그 부스 기업 목록으로 간다 — 센 숫자를 눌렀는데
-              // 아무 일이 없으면 셀 수만 있고 쓸 수는 없는 숫자가 된다
-              const clickable = f[0] === 'booth_type';
-              return `<span class="pill ${f[0] === 'grade' ? gradeCls(k) : clickable ? 'p-blue' : 'p-gray'}"${
-                clickable ? ` onclick="setBoothTypeFil('${escAttr(k)}')" style="cursor:pointer" title="${escapeHtml(k)} 부스 기업 보기"` : ''
-              }>${escapeHtml(k)}${f[0] === 'booth_floor' ? '층' : ''} ${cnt[k]}</span>`;
-            }).join('')}
-          </div></div>`;
-      }).join('') || '<div style="font-size:11.5px;color:var(--i5)">아직 부스 정보가 없어요</div>'}
-    </div>`;
-
-  const cardSteps = `<div class="uc">
-      <div class="uc-ttl">단계별 진행
-        <button class="btn" onclick="openExhCfg()" style="float:right;height:24px;font-size:10.5px;padding:0 8px">마감일 설정</button></div>
-      ${STEPS.map(st => {
-        const live = all.filter(x => rawCellState(x, st).state !== 'na');
-        if(!live.length) return '';
-        const done = live.filter(x => rawCellState(x, st).state === 'done').length;
-        const warnRows = live.map(x => ({ x, c: rawCellState(x, st) }))
-          .filter(r => r.c.state === 'warn')
-          .map(r => ({ x: r.x, text: r.c.text || '' }));
-        return stepRow(st.label.replace(/<br>/g, ''), done, warnRows.length,
-          dueInfo(st.key, exhEvent), live.length, st, warnRows);
-      }).join('')}
-      ${Object.keys(eventDeadlines(exhEvent)).length ? '' :
-        `<div style="font-size:10.5px;color:var(--i5);margin-top:6px">마감일을 정해 두면 늦은 기업이 처리 필요에 모입니다</div>`}
-    </div>`;
-
-  /* 분류별로 얼마어치 신청됐나 — 발주가 분류 단위로 갈린다 */
-  const byCat = billedByCategory(all);
-  const CAT_ROWS = [['booth', '부스'], ['equip', '비품'], ['graphic', '그래픽'], ['etc', '기타']];
-  /* 분류를 세로로, 통화를 가로로 놓는다. 통화별로 표를 따로 그리면 "부스가
-     원화로 얼마, 달러로 얼마"를 두 군데서 찾아 맞춰야 한다. 한 줄에서 읽힌다. */
-  const catBlock = (() => {
-    // 통화 순서를 고정한다 — 원화가 먼저 왔다 나중에 왔다 하면 열이 흔들린다
-    const cs = ['KRW', 'USD', ...Object.keys(byCat)]
-      .filter((c, i, a) => a.indexOf(c) === i && byCat[c] && byCat[c].합계);
-    if(!cs.length) return '';
-    const rows = CAT_ROWS.filter(([k]) => cs.some(c => byCat[c][k]));
-    const cell = (v, c) => v
-      ? escapeHtml(fmtMoney(v, c))
-      : '<span style="color:var(--i6)">-</span>';
-    const line = (label, get, strong) => `
-      <div style="display:grid;grid-template-columns:44px repeat(${cs.length}, 1fr);gap:6px;
-        font-size:11.5px;padding:3px 0${strong ? ';font-weight:800;border-top:1px solid var(--i7);margin-top:2px' : ''}">
-        <span style="color:var(--i3)">${label}</span>
-        ${cs.map(c => `<span style="text-align:right">${get(c)}</span>`).join('')}
-      </div>`;
-
-    return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i8)">
-      <div style="display:grid;grid-template-columns:44px repeat(${cs.length}, 1fr);gap:6px;
-        font-size:10px;color:var(--i5);padding-bottom:2px">
-        <span>내역</span>${cs.map(c => `<span style="text-align:right">${escapeHtml(c)}</span>`).join('')}
-      </div>
-      ${rows.map(([k, l]) => line(l, (c) => cell(byCat[c][k], c))).join('')}
-      ${line('합계', (c) => cell(byCat[c].합계, c), true)}
-    </div>`;
-  })();
-
-  /* 부스 타입별 부스 금액 — 시공은 타입 단위로 발주한다. "Block System A가
-     몇 곳"까지는 부스 현황에서 보이는데 그게 얼마인지는 어디에도 없었다.
-     부스 분류 항목만 센다. 비품·그래픽까지 더하면 타입과 무관한 돈이 섞인다. */
-  const boothByType = (() => {
-    const t = {};
-    all.forEach(x => {
-      const k = String(x.booth_type || '').trim() || '(타입 미지정)';
-      billableItems(x.id).filter(i => i.category === 'booth').forEach(i => {
-        const cur = i.currency || 'KRW';
-        if(!t[k]) t[k] = { n: 0, cur: {} };
-        t[k].cur[cur] = (t[k].cur[cur] || 0) + num(i.amount);
-      });
-      if(t[k]) t[k].n = (t[k].n || 0);
-    });
-    // 기업 수는 금액이 있든 없든 그 타입을 쓰는 곳 전부로 센다
-    all.forEach(x => {
-      const k = String(x.booth_type || '').trim() || '(타입 미지정)';
-      if(t[k]) t[k].n++;
-    });
-    return t;
-  })();
-
-  const typeBlock = (() => {
-    /* 금액 큰 순이 아니라 부스 타입 순으로 늘어놓는다. 순서는 설정값의 부스 타입
-       목록을 따른다 — 화면마다 순서가 다르면 같은 표를 다시 읽게 되고, 순서를
-       바꾸고 싶을 때 코드를 고치지 않아도 된다.
-       목록에 없는 타입(옛 데이터)은 뒤에 이름순으로 붙인다. */
-    const order = boothTypes(exhEvent).map(t => t.code);
-    const rank = (k) => { const i = order.indexOf(k); return i < 0 ? 999 : i; };
-    const ks = Object.keys(boothByType).sort((a, b) =>
-      rank(a) - rank(b) || a.localeCompare(b, 'ko'));
-    if(!ks.length) return '';
-    return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i8)">
-      <div style="font-size:10.5px;color:var(--i4);margin-bottom:4px">부스 타입별 부스 금액</div>
-      ${ks.map(k => {
-        const m = boothByType[k];
-        // 통화 순서를 고정한다 — 줄마다 원화가 먼저 왔다 나중에 왔다 하면 읽기 어렵다
-        const amt = ['KRW', 'USD', ...Object.keys(m.cur)]
-          .filter((c, i, a) => a.indexOf(c) === i && m.cur[c])
-          .map(c => escapeHtml(fmtMoney(m.cur[c], c))).join(' + ') || '-';
-        // 타입이 안 정해진 곳은 눌러도 걸 필터가 없다 — 누르는 시늉만 하면 안 된다
-        const on = k !== '(타입 미지정)';
-        return `<div${on ? ` onclick="setBoothTypeFil('${escAttr(k)}')" title="${escapeHtml(k)} 기업만 보기" style="cursor:pointer;` : ' style="'}${
-          'display:flex;justify-content:space-between;gap:6px;font-size:11.5px;padding:2px 0"'}>
-          <span style="color:var(--i3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(k)}
-            <span style="color:var(--i5);font-size:10px">${m.n}곳</span></span>
-          <span style="flex:0 0 auto">${amt}</span>
-        </div>`;
-      }).join('')}
-    </div>`;
-  })();
-
-  const cardCash = `<div class="uc">
-      <div class="uc-ttl">정산 현황</div>
-      ${(() => { const ks = Object.keys(money3).filter(c => money3[c].전체 || money3[c].입금);
-        return ks.length ? ks.sort().map(cashRow).join('')
-          : '<div style="font-size:11.5px;color:var(--i5)">아직 금액 내역이 없어요</div>'; })()}
-      ${catBlock}
-      ${typeBlock}
-      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">
-        ${STATE_PILLS.filter(p => byState[p[1]]).map(p => `<span class="pill ${p[2]}">${p[0]} ${byState[p[1]]}</span>`).join('')}
-      </div>
-    </div>`;
-
-  const cardTodo = todo ? `<div class="uc" style="border-left:3px solid var(--am)">
-      <div class="uc-ttl">처리 필요 <span class="pill p-amber">${todo}건</span></div>
-      ${remind.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 6px">${[...new Set(remind.map(o => o.s.key))].map(k => {
-          const r = remind.filter(o => o.s.key === k);
-          return `<button class="btn" style="font-size:10.5px" onclick="openExhBulkMail('${escAttr(k)}')"
-            title="리마인더 보낼 때가 된 기업을 골라 둔 채로 엽니다">📨 ${escapeHtml(r[0].s.label)} 리마인더 ${r.length}곳 한 번에</button>`; }).join('')}</div>` : ''}
-      ${remind.slice(0, 8).map(o => `<div onclick="openExhDr('${escAttr(o.x.id)}','mail');exhAdviceAct('mail','${escAttr(o.s.key)}')"
-        style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:6px;cursor:pointer;background:var(--i9);margin-bottom:4px" title="리마인더 초안 열기">
-        <span style="flex:0 0 128px;font-weight:700;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(exhNames(o.x).ko)}</span>
-        <span class="pill p-amber" style="flex:0 0 auto">🔔 ${escapeHtml(o.s.label)}</span>
-        <span style="font-size:11.5px;color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(o.f.text.replace(/^리마인더 보낼 때 · /, ''))}</span>
-      </div>`).join('')}
-      ${myTurn.slice(0, 5).map(o => attnRow(o.x, o.label, o.st.action, o.days, o.label === '그래픽' ? 'graphic' : 'billing')).join('')}
-      ${inbox.slice(0, 5).map(o => attnRow(o.x, isUnread(o.l) ? '● 안 읽은 메일 3일+' : '받은 메일 3일+', o.l.subject || '', daysSince(o.l.ts), 'box')).join('')}
-      ${openInq.slice(0, 5).map(o => attnRow(o.x, '미답변 문의', o.l.subject || o.l.body || '', daysSince(o.l.ts), 'logs')).join('')}
-      ${overdue.slice(0, 5).map(o => attnRow(o.x, '입금 기한', fmtMoney(o.s.balance, o.s.cur) + ' 미납', daysSince(o.s.due), 'billing')).join('')}
-      ${dueMiss.slice(0, 8).map(o => attnRow(o.x, o.label + ' 마감', `${o.date} 마감 · 아직 안 됨`, o.days, o.tab)).join('')}
-      ${attention.slice(0, 5).map(o => attnRow(o.x, '정산 확인', o.why, null, 'billing')).join('')}
-      ${todo > 20 ? `<div style="font-size:11px;color:var(--i4);padding:6px 2px">외 ${todo - 20}건 — 왼쪽 필터에서 전체를 볼 수 있어요</div>` : ''}
-      ${waiting.length ? `<div style="font-size:10.5px;color:var(--i4);margin-top:8px;padding-top:7px;border-top:1px solid var(--i8)">
-        넘겨 둔 일 ${waiting.length}건 — ${waiting.slice(0, 3).map(w =>
-          `${escapeHtml(exhNames(w.x).ko)} ${escapeHtml(w.label)}${w.days ? ` ${w.days}일째` : ''}`).join(' · ')}
-        ${waiting.length > 3 ? ` 외 ${waiting.length - 3}건` : ''}</div>` : ''}
-    </div>` : `<div class="uc" style="border-left:3px solid var(--g)">
-      <div class="uc-ttl">처리 필요</div>
-      <div style="font-size:12px;color:var(--g)">지금 처리할 게 없어요</div></div>`;
-
-  const cardRecent = (() => {
-    // 누가 무엇을 고쳤는지 — 계정 기준으로 최근 변경을 보여준다
-    const names = new Set(all.map(x => x.company_name).filter(Boolean));
-    const recent = auditLog.filter(l => names.has(l.target))
-      .sort((a, b) => new Date(b.ts) - new Date(a.ts)).slice(0, 8);
-    if(!recent.length) return `<div class="uc"><div class="uc-ttl">최근 변경</div>
-      <div style="font-size:11.5px;color:var(--i5)">아직 변경 이력이 없어요</div></div>`;
-    return `<div class="uc">
-      <div class="uc-ttl">최근 변경</div>
-      ${recent.map(l => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--i8)">
-        <span style="width:22px;height:22px;border-radius:50%;background:${escAttr(l.color || '#9C9890')};color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${escapeHtml((l.name || '?').slice(0,2))}</span>
-        <span style="font-size:11px;color:var(--i3);flex:0 0 auto">${escapeHtml(l.name || '')}</span>
-        <span style="font-size:11.5px;color:var(--i2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(unent((l.detail || '').replace(/<[^>]+>/g, '')))}</span>
-        <span style="font-size:10px;color:var(--i5);flex:0 0 auto">${escapeHtml(String(l.ts || '').slice(5,10))}</span>
-      </div>`).join('')}
-      <div style="font-size:10.5px;color:var(--i5);margin-top:7px">전체 이력은 <b>로그</b> 탭에서 볼 수 있어요</div>
-    </div>`;
-  })();
-
-  /* ── 배치 ──
-     세로로만 쌓으면 넓은 화면에서 오른쪽이 통째로 비고, 부스·단계·정산처럼
-     짧은 요약 카드를 보려고 스크롤을 계속 내려야 한다. 12칸 격자에 올려
-     중요도와 내용 길이에 따라 폭을 다르게 준다(exh-dash-* 클래스는
-     components.css에서 폭에 따라 3분할 → 2분할 → 1단으로 접힌다).
-
-     화면 폭이 아니라 이 영역 자신의 폭을 봐야 한다 — 사이드바를 접거나
-     너비를 조절하면 화면 크기는 그대로인데 이 안쪽만 넓어지기 때문이다. */
-  return `<div class="exh-dash">
-
-    <div class="cost exh-dash-kpi" style="margin:0">
-      ${card('참가기업', n + '곳', cancelledExhibitors(exhEvent).length ? ('취소 ' + cancelledExhibitors(exhEvent).length) : '')}
-      ${card('평균 진행률', avg + '%')}
-      ${card('미수금', curs.length ? curs.map(c => fmtMoney(cash[c].due, c)).join(' · ') : '-',
-        '', dueAny ? 'var(--am)' : 'var(--g)')}
-      ${card('처리 필요', todo + '건',
-        '문의 ' + openInq.length + ' · 기한 ' + overdue.length + ' · 정산 ' + attention.length
-        + (myTurn.length ? ' · 내 차례 ' + myTurn.length : '')
-        + (dueMiss.length ? ' · 마감 지남 ' + dueMiss.length : ''),
-        todo ? 'var(--re)' : 'var(--g)')}
-    </div>
-
-    <div class="exh-dash-third">${cardBooth}</div>
-    <div class="exh-dash-third">${cardSteps}</div>
-    <div class="exh-dash-third">${cardCash}</div>
-    ${(() => { const c = onsiteAddCard(all); return c ? `<div class="exh-dash-wide">${c}</div>` : ''; })()}
-    <div class="exh-dash-wide">${mailCardHtml(exhEvent, 'exh')}</div>
-    <div class="exh-dash-wide">${cardTodo}</div>
-    <div class="exh-dash-side">${cardRecent}</div>
-  </div>`;
-}
-
-/* 처리 필요 목록의 한 줄 — 눌러서 바로 그 기업의 해당 탭으로 간다 */
-function attnRow(x, kind, text, days, tab){
-  return `<div onclick="openExhDr('${escAttr(x.id)}','${tab}')"
-    style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:6px;cursor:pointer;background:var(--i9);margin-bottom:4px">
-    <span style="flex:0 0 128px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-      <span style="font-weight:700;font-size:11.5px">${escapeHtml(exhNames(x).ko)}</span>${
-      exhNames(x).en ? `<span style="font-size:10px;color:var(--i4);margin-left:4px">${escapeHtml(exhNames(x).en)}</span>` : ''}</span>
-    <span class="pill p-gray" style="flex:0 0 auto">${escapeHtml(kind)}</span>
-    <span style="font-size:11.5px;color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(text)}</span>
-    ${days !== null && days > 0 ? `<span class="pill ${days >= 3 ? 'p-amber' : 'p-gray'}" style="flex:0 0 auto">${days}일</span>` : ''}
-  </div>`;
-}
-
-/* 모바일 — 기업당 카드 하나. 진행률과 "지금 뭐가 걸려있나"가 먼저 보이게 한다. */
-function renderChecklistCards(list, all){
-  const keys = prevOrgKeys();
-  const backBadge = (x) => isReturning(x, keys)
-    ? '<span class="pill p-teal" style="font-size:9px">재참가</span>' : '';
-  const stat = (x, s) => {
-    const c = cellState(x, s);
-    if(c.state === 'na') return '';
-    const label = s.label.replace(/<br>/g, '');
-    const map = {
-      done: 'background:var(--gb);color:var(--g)',
-      part: 'background:var(--ab);color:var(--am)',
-      warn: 'background:var(--rb);color:var(--re)',
-      todo: 'background:var(--i8);color:var(--i5)',
-    }[c.state];
-    const mark = { done: '✓', part: '◐', warn: '!', todo: '' }[c.state];
-    return `<span style="${map};font-size:10px;font-weight:600;padding:3px 7px;border-radius:5px;white-space:nowrap">${
-      mark ? mark + ' ' : ''}${escapeHtml(label)}</span>`;
-  };
-
-  return `<div style="padding:10px 12px 16px">
-    ${renderExhSummary(all)}
-    <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">
-      ${STEPS.map(s => { const t = stepTally(all, s); return t.of ? stepPill(s, t) : ''; }).join('')}
-    </div>
-    ${list.length ? `<div style="margin-bottom:10px">
-      <button class="btn bs" id="exh-list-export-btn" onclick="exportChecklist()"
-        title="지금 보이는 ${list.length}곳의 진행현황을 엑셀로 받습니다">엑셀 다운로드</button>
-      <button class="btn bs" onclick="openExhBulkMail()" title="지금 보이는 기업 중 골라 같은 안내를 기업마다 한 통씩 보냅니다">✉ 여러 기업에 메일</button></div>` : ''}
-    ${boothAlertHtml(all)}
-    ${list.map(x => {
-      const p = progressOf(x);
-      const openN = openInquiriesFor(x.id).length;
-      const billed = billedAmount(x.id), paid = paidAmount(x.id);
-      const cur = currencyOf(x.id);
-      const pc = exhContacts(x)[0];
-      const off = x.status === CANCELLED;
-      return `<div onclick="openExhDr('${escAttr(x.id)}')"
-        style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:12px 13px;margin-bottom:8px;cursor:pointer${off ? ';opacity:.55' : ''}">
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <span class="pill p-gray">${escapeHtml(x.apply_order || '-')}</span>
-          <span style="font-size:14px;font-weight:700${off ? ';text-decoration:line-through' : ''}">${escapeHtml(exhNames(x).ko)}</span>${
-            isBookOnly(x) ? '<span class="pill p-teal">프로그램북만</span>' : ''}${
-            exhNames(x).en ? `<span style="font-size:11px;color:var(--i4);font-weight:400">${escapeHtml(exhNames(x).en)}</span>` : ''}
-          ${off ? '<span class="pill p-gray">참가 취소</span>' : ''}
-          ${backBadge(x)}
-          ${x.grade && x.grade !== 'Exhibitor' ? `<span class="pill ${gradeCls(x.grade)}">${escapeHtml(x.grade)}</span>` : ''}
-          ${openN ? `<span class="pill p-amber" style="margin-left:auto"
-            onclick="event.stopPropagation();openExhDr('${escAttr(x.id)}','logs')">문의 ${openN}</span>` : ''}
-        </div>
-        <div style="font-size:11.5px;color:var(--i4);margin-top:3px">
-          ${x.booth_no ? `부스 ${escapeHtml(x.booth_no)}${x.booth_floor ? `·${escapeHtml(x.booth_floor)}층` : ''}${x.booth_type ? ` · ${escapeHtml(x.booth_type)}` : ''}` : '부스 미배정'}
-          ${pc && (pc.name || pc.email) ? ` · ${escapeHtml(pc.name || pc.email)}${leftPill(pc)}` : ''}
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;margin:9px 0 8px">
-          <div style="flex:1">${progressBar(p, p === 100 ? 'var(--g)' : 'var(--a)')}</div>
-          <span style="font-size:11px;font-weight:700;color:var(--i3);min-width:32px;text-align:right">${p}%</span>
-        </div>
-        ${(() => {
-          if(!billed) return '';
-          // 통화가 둘이면 줄을 나눠 둘 다, 하나면 그대로 한 줄
-          const st = settleByCurrency(x.id);
-          const sc = Object.keys(st).filter(c => st[c].billed || st[c].paid).sort();
-          if(sc.length < 2) return `<div style="font-size:11.5px;margin-bottom:7px">
-            입금 <b style="color:${paid >= billed ? 'var(--g)' : 'var(--am)'}">${fmtMoney(paid, cur)}</b>
-            <span style="color:var(--i5)"> / ${fmtMoney(billed, cur)}</span></div>`;
-          return `<div style="font-size:11.5px;margin-bottom:7px">
-            ${sc.map(c => `<div>입금 <b style="color:${st[c].balance <= 0 ? 'var(--g)' : 'var(--am)'}">${fmtMoney(st[c].paid, c)}</b>
-              <span style="color:var(--i5)"> / ${fmtMoney(st[c].billed, c)}</span></div>`).join('')}
-            <div style="font-size:10px;color:var(--i5)">결제 수단이 달라 통화가 갈렸어요</div>
-          </div>`;
-        })()}
-        <div style="display:flex;flex-wrap:wrap;gap:4px">${STEPS.map(s => stat(x, s)).join('')}</div>
-      </div>`;
-    }).join('')}
-    ${!list.length ? '<div class="empty" style="padding:30px;text-align:center;font-size:12px;color:var(--i4)">조건에 맞는 기업이 없어요</div>' : ''}
-  </div>`;
-}
-
-function renderChecklistTable(list, all){
-  /* 지난 행사에도 왔던 곳에만 배지를 단다. 신규에는 달지 않는다 —
-     51줄 중 20줄에 배지가 붙으면 배지가 아니라 배경이 된다. */
-  const keys = prevOrgKeys();
-  const backBadge = (x) => isReturning(x, keys)
-    ? `<span class="pill p-teal" style="font-size:9px" title="${escapeHtml(keys.prev)}에도 참가한 기업이에요">재참가</span>` : '';
-  const cell = (x, s) => {
-    const c = cellState(x, s);
-    const map = {
-      done: { bg: 'var(--gb)', fg: 'var(--g)',  mark: '✓' },
-      part: { bg: 'var(--ab)', fg: 'var(--am)', mark: '◐' },
-      warn: { bg: 'var(--rb)', fg: 'var(--re)', mark: '!' },
-      todo: { bg: 'transparent', fg: 'var(--i5)', mark: '—' },
-      na:   { bg: 'transparent', fg: 'var(--i6)', mark: '·' },
-    }[c.state];
-    const tip = c.text ? escAttr(String(c.text)) : '';
-    return `<td style="text-align:center;padding:5px 3px" title="${tip}">
-      <div style="display:inline-flex;flex-direction:column;align-items:center;gap:1px;min-width:44px;padding:3px 4px;border-radius:5px;background:${map.bg}">
-        <span style="font-size:12px;font-weight:800;color:${map.fg};line-height:1">${map.mark}</span>
-        ${c.text ? `<span style="font-size:9px;color:${map.fg};line-height:1.1">${escapeHtml(shortCell(c.text))}</span>` : ''}
-      </div></td>`;
-  };
-
-  const stats = STEPS.map(s => ({ step: s, ...stepTally(all, s) })).filter(s => s.of);
-
-  /* 내보내기는 exh-export.js 소관 — 순환 참조를 피해 window 경유로 부른다.
-     부스 현황과 같은 자리·같은 이름으로 둔다(화면마다 다른 곳에 있으면 찾는다). */
-  return `<div style="padding:0 16px 16px">
-    ${renderExhSummary(all)}
-    <div style="display:flex;gap:6px;margin:12px 0;align-items:center;flex-wrap:wrap">
-      ${stats.map(s => stepPill(s.step, s)).join('')}
-      ${list.length ? `<span style="margin-left:auto;flex:0 0 auto">
-        <button class="btn bs" id="exh-list-export-btn" onclick="exportChecklist()"
-          title="지금 보이는 ${list.length}곳의 진행현황을 엑셀로 받습니다">엑셀 다운로드</button>
-        <button class="btn bs" onclick="openExhBulkMail()" title="지금 보이는 기업 중 골라 같은 안내를 기업마다 한 통씩 보냅니다">✉ 여러 기업에 메일</button></span>` : ''}
-    </div>
-    <div class="tw"><table><thead><tr>
-      <th style="min-width:44px;text-align:right">신청순</th>
-      <th style="min-width:150px">기업</th>
-      <th style="min-width:88px">기업 담당자</th>
-      <th style="min-width:70px">진행률</th>
-      ${STEPS.map(s => `<th style="text-align:center;font-size:10px;line-height:1.2">${s.label}</th>`).join('')}
-      <th style="text-align:center;min-width:50px">문의</th>
-      <th style="text-align:right;min-width:110px">입금/청구</th>
-    </tr></thead><tbody>
-    ${list.map(x => {
-      const p = progressOf(x);
-      const openN = openInquiriesFor(x.id).length;
-      const billed = billedAmount(x.id), paid = paidAmount(x.id);
-      const off = x.status === CANCELLED;
-      return `<tr style="cursor:pointer${off ? ';opacity:.5' : ''}" onclick="openExhDr('${escAttr(x.id)}')">
-        ${applyCell(x)}
-        <td><div style="display:flex;align-items:center;gap:5px">
-              <span style="font-weight:700;font-size:12px${off ? ';text-decoration:line-through' : ''}">${escapeHtml(exhNames(x).ko)}</span>${
-                exhNames(x).en ? `<span style="font-size:10.5px;color:var(--i4);margin-left:4px">${escapeHtml(exhNames(x).en)}</span>` : ''}
-              ${off ? '<span class="pill p-gray">참가 취소</span>' : ''}
-              ${isBookOnly(x) ? `<span class="pill p-teal" title="${escapeHtml(bookOnlyTip(x))}">프로그램북만</span>` : ''}
-              ${backBadge(x)}
-              ${x.grade && x.grade !== 'Exhibitor' ? `<span class="pill ${gradeCls(x.grade)}">${escapeHtml(x.grade)}</span>` : ''}
-            </div>
-            ${x.booth_no ? `<div style="font-size:10px;color:var(--i4)">부스 ${escapeHtml(x.booth_no)}${
-              x.booth_floor ? ` · ${escapeHtml(x.booth_floor)}층` : ''}${
-              x.booth_type ? ` · ${escapeHtml(x.booth_type)}` : ''}${
-              x.booth_qty && x.booth_qty !== '1' ? ` ×${escapeHtml(x.booth_qty)}` : ''}</div>` : ''}</td>
-        ${(() => {
-          const all = exhContacts(x);
-          const p = all[0];
-          const label = p ? (p.name || p.email || '-') : '-';
-          const tip = all.map(c => [c.role, c.name, c.title, c.email, c.phone].filter(Boolean).join(' · ')).join('\n');
-          return `<td style="font-size:11px;color:var(--i3);max-width:130px" title="${escapeHtml(tip)}">
-            <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(label)}</div>
-            ${p ? leftPill(p) : ''}
-            ${all.length > 1 ? `<div style="font-size:9.5px;color:var(--i5)">외 ${all.length - 1}명</div>` : ''}</td>`;
-        })()}
-        <td>${progressBar(p, p === 100 ? 'var(--g)' : 'var(--a)', '52px')}
-            <span style="font-size:10px;color:var(--i4)">${p}%</span></td>
-        ${STEPS.map(s => cell(x, s)).join('')}
-        <td style="text-align:center" onclick="event.stopPropagation();openExhDr('${escAttr(x.id)}','logs')">
-          ${openN ? `<span class="pill p-amber">${openN}</span>` : '<span style="color:var(--i6)">·</span>'}</td>
-        ${(() => {
-          const s = settleState(x);
-          if(!s.billed) return '<td style="text-align:right;font-size:11px;color:var(--i6)">-</td>';
-          const col = (s.state==='paid'||s.state==='settled') ? 'var(--g)'
-            : (s.state==='over' ? 'var(--re)' : 'var(--i2)');
-          /* 통화가 둘이면 둘 다 적는다. 하나면 통화 표시 없이 그대로 둔다 —
-             대부분이 원화라, 다 붙이면 읽을 게 늘기만 한다. */
-          const st = settleByCurrency(x.id);
-          const sc = Object.keys(st).filter(c => st[c].billed || st[c].paid).sort();
-          const two = sc.length > 1;
-          return `<td style="text-align:right;font-size:11px">
-            ${two ? sc.map(c => `<div><span style="font-size:9px;color:var(--i5);margin-right:2px">${escapeHtml(c)}</span>
-                <span style="font-weight:700;color:${st[c].balance <= 0 ? 'var(--g)' : 'var(--i2)'}">${money(st[c].paid)}</span>
-                <span style="color:var(--i5)"> / ${money(st[c].billed)}</span></div>`).join('')
-            : `<span style="font-weight:700;color:${col}">${s.cur==='USD'?'$':''}${money(s.paid)}</span>
-            <span style="color:var(--i5)"> / ${money(s.billed)}</span>`}
-            ${s.state==='over' ? `<div style="font-size:9.5px;color:var(--re)">초과 ${fmtMoney(-s.balance, s.cur)}</div>` : ''}
-            ${s.state==='settled' ? '<div style="font-size:9.5px;color:var(--g)">완납 처리</div>' : ''}
-            ${s.overdue && s.balance>0 ? `<div style="font-size:9.5px;color:var(--am)">기한 ${daysSince(s.due)}일 지남</div>` : ''}
-            ${two ? '<div title="인보이스는 원화로 받고 엑스렌탈은 해외 카드로 결제해 통화가 갈릴 수 있어요 — 정상입니다" style="font-size:9px;color:var(--i5)">결제 수단이 달라요</div>' : ''}
-          </td>`;
-        })()}
-      </tr>`;
-    }).join('')}
-    </tbody></table></div>
-    ${!list.length ? '<div class="empty" style="padding:30px;text-align:center;font-size:12px;color:var(--i4)">조건에 맞는 기업이 없어요</div>' : ''}
-  </div>`;
-}
-
-/* ══════════════════════════════════════════
-   참가기업 직접 추가
-
-   불러오기는 기업DB에 이미 있는 기업만 데려온다. 행사 도중 새로 신청하는
-   기업은 기업DB에도 없어서, 지금까지는 기업DB에서 먼저 만들고 연락처에
-   전시참가기업 역할을 붙인 뒤 돌아와 불러와야 했다. 세 화면을 거치는 동안
-   기업명 표기가 갈리기도 했다.
-
-   그래서 한 자리에서 둘 다 만든다. 기업DB에 같은 이름이 이미 있으면 새로
-   만들지 않고 그 기업에 잇는다 — 여기서 또 만들면 기업DB에 같은 회사가
-   두 줄 생기고, 지난 행사 이력이 갈린다.
-══════════════════════════════════════════ */
-/* 기업DB 후보 찾기 — 이름을 치는 동안 이미 있는 기업을 보여준다.
-
-   정확히 같은 이름만 봐서는 부족했다. 표기가 조금만 달라도(오타, 띄어쓰기,
-   국문/영문 교차) 새 기업이 하나 더 생기고, 지난 행사 이력이 두 줄로 갈렸다.
-   그래서 (a) 부분일치와 (b) 레벤슈타인 근사값까지 후보로 올린다. 자동으로
-   붙이지는 않는다 — 비슷한 이름의 다른 회사도 실제로 있기 때문에, 고르는 건
-   사람이 한다. */
-export function findOrgCandidates(raw, limit = 6){
-  const t = String(raw || '').trim();
-  if(t.length < 2) return [];
-  const k = normalizeCompanyKey(t);
-  if(!k) return [];
-  const out = [];
-  for(const o of ORGS){
-    const names = [o.name_ko, o.name_en, ...String(o.aliases || '').split('\n')]
-      .map(n => String(n || '').trim()).filter(Boolean);
-    let best = 0;
-    for(const n of names){
-      const nk = normalizeCompanyKey(n);
-      if(!nk) continue;
-      if(nk === k){ best = 1; break; }
-      if(nk.includes(k) || k.includes(nk)){ best = Math.max(best, 0.9); continue; }
-      const maxLen = Math.max(nk.length, k.length);
-      if(maxLen < 3) continue;
-      const sim = 1 - levenshteinDist(nk, k) / maxLen;
-      if(sim >= 0.7) best = Math.max(best, sim);
-    }
-    if(best > 0) out.push({ org: o, score: best });
-  }
-  return out.sort((a, b) => b.score - a.score).slice(0, limit);
-}
-
-export function openExhAdd(){
-  closeExhAdd();
-  if(exhLocked()){
-    alert('진행 완료된 행사예요.\n설정 › 행사 관리 › 진행 파트에서 "진행 중"으로 되돌리세요.');
-    return;
-  }
-  const pop = document.createElement('div');
-  pop.id = 'exh-add-modal';
-  pop.className = 'mw on';
-  let downOnBg = false;
-  pop.addEventListener('mousedown', (e) => { downOnBg = (e.target === pop); });
-  pop.addEventListener('click', (e) => { if(e.target === pop && downOnBg) closeExhAdd(); });
-
-  // 신청순은 다음 번호를 미리 넣어 둔다 — 새로 신청한 곳이니 대개 맨 뒤다.
-  // 고칠 수 있게 열어 두는 건, 늦게 입력했지만 신청은 먼저 받은 경우가 있어서다.
-  const next = Math.max(0, ...activeExhibitors(exhEvent)
-    .map(x => Number(x.apply_order) || 0)) + 1;
-
-  pop.innerHTML = `<div class="modal" style="max-width:480px">
-    <div class="mh"><div class="mt2">참가기업 추가</div>
-      <div class="mc">기업DB에 없는 기업도 여기서 바로 등록해요 — 기업DB에도 함께 만들어집니다</div></div>
-    <div class="mb">
-      <div class="fg"><label class="fl">기업명 (국문) *</label>
-        <input class="fi" id="exh-add-ko" placeholder="예) 주식회사 블룸" autocomplete="off"></div>
-      <div class="fg"><label class="fl">기업명 (영문)</label>
-        <input class="fi" id="exh-add-en" placeholder="예) Bloom Co., Ltd." autocomplete="off"></div>
-      <div class="fg"><label class="fl">국가</label>
-        <input class="fi" id="exh-add-country" placeholder="비우면 국내로 봅니다" autocomplete="off"></div>
-      <div class="fg"><label class="fl">신청순</label>
-        <input class="fi" id="exh-add-order" value="${next}" inputmode="numeric"></div>
-      <div id="exh-add-hits" style="margin:-4px 0 8px"></div>
-      <div id="exh-add-msg" style="font-size:11.5px;color:var(--i4);min-height:16px"></div>
-    </div>
-    <div class="mf2">
-      <button class="btn" onclick="closeExhAdd()">취소</button>
-      <button class="btn bp" onclick="confirmExhAdd()" id="exh-add-btn">추가</button>
-    </div></div>`;
-  document.body.appendChild(pop);
-  ['exh-add-ko', 'exh-add-en'].forEach((id) => {
-    document.getElementById(id)?.addEventListener('input', renderExhAddHits);
-  });
-  document.getElementById('exh-add-ko')?.focus();
-}
-
-/* 고른 기업을 붙들어 둔다 — 이름을 더 고쳐도 연결은 유지된다.
-   비어 있으면 "이름으로 찾기"로 돌아간다. */
-let exhAddPickedOrg = '';
-
-export function renderExhAddHits(){
-  const box = document.getElementById('exh-add-hits');
-  if(!box) return;
-  const v = (id) => String(document.getElementById(id)?.value || '').trim();
-
-  if(exhAddPickedOrg){
-    const o = getOrgById(exhAddPickedOrg);
-    if(o){
-      box.innerHTML = `<div style="display:flex;align-items:center;gap:8px;background:var(--bl-w,#eff6ff);border:1px solid var(--bl,#3b82f6);border-radius:8px;padding:7px 10px">
-        <span style="font-size:12px;color:var(--i3)">기업DB의 <b>${escapeHtml(orgName(o))}</b>에 연결합니다</span>
-        <button class="btn" style="margin-left:auto;padding:2px 8px;font-size:11px" id="exh-add-unpick">해제</button></div>`;
-      document.getElementById('exh-add-unpick')?.addEventListener('click', () => {
-        exhAddPickedOrg = ''; renderExhAddHits();
-      });
-      return;
-    }
-    exhAddPickedOrg = '';
-  }
-
-  const seen = new Set();
-  const hits = [...findOrgCandidates(v('exh-add-ko')), ...findOrgCandidates(v('exh-add-en'))]
-    .filter(h => !seen.has(h.org.id) && seen.add(h.org.id))
-    .sort((a, b) => b.score - a.score).slice(0, 6);
-  if(!hits.length){ box.innerHTML = ''; return; }
-
-  box.innerHTML = `<div style="font-size:11px;color:var(--i4);margin-bottom:4px">기업DB에 비슷한 이름이 있어요 — 같은 곳이면 눌러서 연결하세요</div>
-    <div style="display:flex;flex-direction:column;gap:4px;max-height:150px;overflow:auto">${
-      hits.map(({ org: o, score }) => `<button class="btn" data-org="${escapeHtml(o.id)}"
-        style="display:flex;align-items:center;gap:8px;text-align:left;padding:5px 9px;font-size:12px">
-        <span style="font-weight:600">${escapeHtml(o.name_ko || o.name_en || '')}</span>
-        ${o.name_ko && o.name_en ? `<span style="color:var(--i4);font-size:11px">${escapeHtml(o.name_en)}</span>` : ''}
-        <span style="margin-left:auto;color:var(--i4);font-size:11px">${score >= 1 ? '같은 이름' : `${Math.round(score*100)}%`}</span>
-      </button>`).join('')}</div>`;
-  box.querySelectorAll('[data-org]').forEach((b) => {
-    b.addEventListener('click', () => {
-      const o = getOrgById(b.dataset.org);
-      if(!o) return;
-      exhAddPickedOrg = o.id;
-      const ko = document.getElementById('exh-add-ko'), en = document.getElementById('exh-add-en');
-      if(ko && o.name_ko) ko.value = o.name_ko;
-      if(en && o.name_en) en.value = o.name_en;
-      renderExhAddHits();
-    });
-  });
-}
-
-export function closeExhAdd(){ exhAddPickedOrg = ''; document.getElementById('exh-add-modal')?.remove(); }
-
-export async function confirmExhAdd(){
-  const v = (id) => String(document.getElementById(id)?.value || '').trim();
-  const msg = document.getElementById('exh-add-msg');
-  const say = (t, bad) => { if(msg){ msg.textContent = t; msg.style.color = bad ? 'var(--re)' : 'var(--i4)'; } };
-
-  const nameKo = v('exh-add-ko'), nameEn = v('exh-add-en');
-  const name = nameKo || nameEn;
-  if(!name) return say('기업명을 입력해주세요.', true);
-
-  const key = normalizeCompanyKey(name);
-  const dupExh = exhibitorsForEvent(exhEvent).find(x => x.company_key === key);
-  if(dupExh) return say(`이미 이 행사에 등록된 기업이에요 — ${exhNames(dupExh).ko}`, true);
-
-  const btn = document.getElementById('exh-add-btn');
-  if(btn){ btn.disabled = true; btn.textContent = '추가 중…'; }
-  const fail = (t) => { if(btn){ btn.disabled = false; btn.textContent = '추가'; } say(t, true); };
-
-  /* ① 기업DB — 같은 이름이 있으면 그 기업을 쓴다.
-     createOrg는 중복이면 ok:false와 함께 그 기업(org)을 돌려준다. */
-  let orgId = '';
-  /* 고른 기업이 있으면 그걸 쓴다. 없으면 국문·영문 둘 다로 찾는다 —
-     영문명으로만 등록된 기업에 국문명을 치면(반대도 마찬가지) 한쪽만 보던
-     때는 못 찾고 같은 회사를 하나 더 만들었다. */
-  const existing = (exhAddPickedOrg && getOrgById(exhAddPickedOrg))
-    || findOrgByName(nameKo, normalizeCompanyKey)
-    || findOrgByName(nameEn, normalizeCompanyKey);
-
-  /* 이름이 똑같지는 않지만 비슷한 기업이 있으면 한 번 묻는다. 오타 하나로
-     기업DB가 갈리면 지난 행사 이력이 두 줄로 흩어진다. */
-  if(!existing){
-    const near = [...findOrgCandidates(nameKo), ...findOrgCandidates(nameEn)]
-      .filter(h => h.score < 1).slice(0, 3);
-    if(near.length){
-      const names = near.map(h => `· ${orgName(h.org)}`).join('\n');
-      const go = confirm(`기업DB에 비슷한 이름이 있어요:\n${names}\n\n같은 곳이면 취소하고 위 목록에서 골라 연결하세요.\n정말 새 기업으로 만들까요?`);
-      if(!go) return say('기업DB의 후보 중에서 골라주세요.');
-    }
-  }
-
-  if(existing){
-    orgId = existing.id;
-    say(`기업DB에 이미 있는 «${orgName(existing)}»에 이어 붙였어요.`);
-  } else {
-    const r = await createOrg({
-      nameKo, nameEn, kind: '전시참가기업',
-      country: v('exh-add-country'),
-      notes: `${exhEvent} 전시 참가기업으로 등록`,
-    });
-    if(!r.ok && !r.org) return fail(r.error || '기업DB 등록에 실패했어요.');
-    orgId = r.ok ? r.id : r.org.id;
-  }
-
-  /* ② 전시 참가기업 — 이름은 기업DB에 넣은 그대로 쓴다. 여기서 다르게 적으면
-     같은 회사가 화면마다 다른 이름으로 보인다. */
-  const rec = {
-    event_id: exhEvent, org_id: String(orgId || ''),
-    company_key: key, company_name: nameKo || nameEn,
-    status: '준비중', apply_order: v('exh-add-order'), updated_at: td(),
-  };
-  const res = await batchCreateExhibitors([rec]);
-  if(!res.ok) return fail('전시 등록에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
-
-  await reloadExhibitors();
-  await reloadOrgs();
-  closeExhAdd();
-  buildExhEvList();
-  renderExh();
-  trackAction('add', '전시 참가기업 추가', name,
-    `<b>${escapeHtml(name)}</b>를 ${escapeHtml(exhEvent)} 참가기업으로 추가${
-      existing ? ' (기업DB의 기존 기업에 연결)' : ' — 기업DB에도 새로 등록'}`);
-}
-
-/* ══════════════════════════════════════════
-   참가기업 불러오기 — 트래킹 대상 확보
-
-   participations에서 이 행사의 "전시참가기업" 역할을 뽑아 기업 단위로 묶는다.
-   (CO_DB[].events는 eventId를 안 들고 있어 행사별로 되짚을 수 없다.)
-══════════════════════════════════════════ */
-export function exhibitorCandidates(evKey){
-  const map = new Map();
-  participations
-    .filter(p => p.eventId === evKey && EXH_ROLES.includes(String(p.role || '').trim()))
-    .forEach(p => {
-      const c = contacts.find(x => String(x.id) === String(p.contactId));
-      if(!c) return;
-      const raw = c.orgKo || c.orgEn || '';
-      if(!raw) return;
-      /* 기업DB 연결 — 연락처에 붙은 org_id가 먼저, 없으면 이름(표기 차이 무시)으로 찾는다.
-         CO_DB.key는 org id라 이름 키로는 늘 못 찾았고, org_id 없이 들어가 기업DB·지난 참가와 끊겼다 */
-      const orgId = String(c.org_id || '') || orgIdForName(raw);
-      const org = orgId ? getOrgById(orgId) : null;
-      const key = orgId ? 'org:' + orgId : normalizeCompanyKey(raw);
-      if(!map.has(key)){
-        map.set(key, { company_key: normalizeCompanyKey((org && (org.name_ko || org.name_en)) || raw), org_id: orgId,
-          company_name: (org && (org.name_ko || org.name_en)) || raw, people: [] });
-      }
-      const nm = c.nameKo || c.nameEn || '';
-      if(nm && !map.get(key).people.includes(nm)) map.get(key).people.push(nm);
-    });
-  return [...map.values()].sort((a, b) => a.company_name.localeCompare(b.company_name, 'ko'));
-}
-
-export function openExhImport(){
-  closeExhImport();
-  const evKey = exhEvent || (EVENT_LIST[0] && EVENT_LIST[0].key) || '';
-  const pop = document.createElement('div');
-  pop.id = 'exh-import-modal';
-  pop.className = 'mw on';
-  /* 위 modalShell과 같은 이유 — 드래그 선택이 배경에서 끝나도 닫지 않는다 */
-  let popDownOnBg = false;
-  pop.addEventListener('mousedown', (e) => { popDownOnBg = (e.target === pop); });
-  pop.addEventListener('click', (e) => { if(e.target === pop && popDownOnBg) closeExhImport(); });
-  pop.innerHTML = `<div class="modal" style="max-width:560px">
-    <div class="mh"><div class="mt2">참가기업 불러오기</div>
-      <div class="mc">기업DB에 "전시참가기업"으로 기록된 기업을 골라 진행관리에 등록해요</div></div>
-    <div class="mb">
-      <div class="fg"><label class="fl">행사</label>
-        <select class="fi" id="exh-imp-ev" onchange="renderExhImportList()">
-          ${exhEventOptions().map(e => `<option value="${escapeHtml(e.key)}"${e.key === evKey ? ' selected' : ''}>${escapeHtml(e.name || e.key)}</option>`).join('')}
-        </select></div>
-      <div class="fg"><label class="fl">대상 기업</label>
-        <div id="exh-imp-list" style="max-height:300px;overflow-y:auto;border:1px solid var(--i7);border-radius:8px;padding:6px"></div></div>
-    </div>
-    <div class="mf2">
-      <button class="btn" onclick="closeExhImport()">취소</button>
-      <button class="btn bp" onclick="confirmExhImport()" id="exh-imp-btn">등록</button>
-    </div></div>`;
-  document.body.appendChild(pop);
-  renderExhImportList();
-}
-export function closeExhImport(){ document.getElementById('exh-import-modal')?.remove(); }
-
-export function renderExhImportList(){
-  const el = document.getElementById('exh-imp-list');
-  if(!el) return;
-  const evKey = document.getElementById('exh-imp-ev').value;
-  const cands = exhibitorCandidates(evKey);
-  const already = new Set(exhibitorsForEvent(evKey).map(x => x.company_key));
-  const alreadyOrg = new Set(exhibitorsForEvent(evKey).map(x => String(x.org_id || '')).filter(Boolean));
-
-  if(!cands.length){
-    el.innerHTML = `<div style="font-size:12px;color:var(--i4);padding:14px;text-align:center">
-      이 행사에 "전시참가기업" 역할로 기록된 기업이 없어요.<br>
-      업로드 시 참가 역할을 전시참가기업으로 지정했는지 확인해주세요.</div>`;
-    return;
-  }
-  el.innerHTML = cands.map((c, i) => {
-    const dup = already.has(c.company_key) || (!!c.org_id && alreadyOrg.has(String(c.org_id)));
-    return `<label style="display:flex;align-items:center;gap:9px;padding:6px 7px;border-radius:6px;cursor:${dup ? 'default' : 'pointer'};opacity:${dup ? .45 : 1}">
-      <input type="checkbox" class="exh-imp-cb" data-i="${i}" ${dup ? 'disabled' : 'checked'}>
-      <span style="font-weight:600;font-size:12px;flex:1">${escapeHtml(c.company_name)}</span>
-      ${c.people.length ? `<span style="font-size:10px;color:var(--i4)">${escapeHtml(c.people.slice(0,2).join(', '))}${c.people.length > 2 ? ` 외 ${c.people.length - 2}` : ''}</span>` : ''}
-      ${dup ? '<span class="pill p-gray">등록됨</span>' : ''}
-    </label>`;
-  }).join('');
-  el._cands = cands;
-}
-
-export async function confirmExhImport(){
-  const el = document.getElementById('exh-imp-list');
-  const evKey = document.getElementById('exh-imp-ev').value;
-  const cands = el._cands || [];
-  const picked = [...document.querySelectorAll('.exh-imp-cb')]
-    .filter(cb => cb.checked && !cb.disabled)
-    .map(cb => cands[+cb.dataset.i]).filter(Boolean);
-
-  if(!picked.length){ alert('등록할 기업을 선택해주세요.'); return; }
-  // 여기서는 고른 행사가 지금 보고 있는 행사와 다를 수 있어 따로 본다
-  if(evPartDone(evKey, 'exh')){
-    alert('진행 완료된 행사에는 참가기업을 넣을 수 없어요.\n설정 › 행사 관리 › 진행 파트에서 "진행 중"으로 되돌리세요.');
-    return;
-  }
-  const btn = document.getElementById('exh-imp-btn');
-  if(btn){ btn.disabled = true; btn.textContent = '등록 중…'; }
-
-  const rows = picked.map(c => ({
-    event_id: evKey, org_id: String(c.org_id || ''), company_key: c.company_key, company_name: c.company_name,
-    status: '준비중', updated_at: td(),
-  }));
-
-  const r = await batchCreateExhibitors(rows);
-  if(!r.ok){
-    if(btn){ btn.disabled = false; btn.textContent = '등록'; }
-    alert('등록에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
-    return;
-  }
-  // 서버가 id를 만들어 주므로, 로컬 반영은 저장 직후 재조회로 맞춘다
-  await reloadExhibitors();
-  setExhEvent(evKey);
-  closeExhImport();
-  buildExhEvList();
-  renderExh();
-  trackAction('add', '전시 참가기업 등록', `${picked.length}개사`,
-    `<b>${escapeHtml(picked.length + '개사')}</b>를 전시 진행관리에 등록했어요`);
-}
-
-
+/* «도록 순번·기본 제공·그래픽 발주»은 ../features/exhibition/exh-book.js로 떼어 냈다 — 그 파일이 스스로 window에 건다 */
 /* ══════════════════════════════════════════
    저장 — 단건 필드 수정
    서버가 "넘어온 키만" 갱신하므로 바뀐 필드만 보낸다(나머지는 보존됨).
@@ -5357,54 +2027,18 @@ window.toggleBaseDone = toggleBaseDone;
 window.setGraphicView = setGraphicView;
 window.setGraphicFil = setGraphicFil;
 window.setPayFil = setPayFil;
-window.toggleGraphicKindAll = toggleGraphicKindAll;
-window.applyGraphicDue = applyGraphicDue;
 window.searchExhM = searchExhM;
 window.setBoothTypeFil = setBoothTypeFil;
 window.setStepFil = setStepFil;
 window.toggleStepWarn = toggleStepWarn;
-window.moveBookOrder = moveBookOrder;
-window.renumberBook = renumberBook;
-window.bookDragOn = bookDragOn;
-window.bookDragStart = bookDragStart;
-window.bookDragEnd = bookDragEnd;
-window.bookDragOver = bookDragOver;
-window.bookDragLeave = bookDragLeave;
-window.bookDrop = bookDrop;
-window.openExhAdd = openExhAdd;
-window.closeExhAdd = closeExhAdd;
-window.confirmExhAdd = confirmExhAdd;
 window.toggleEquipRow = toggleEquipRow;
-window.advanceStage = advanceStage;
-window.cycleBookLogo = cycleBookLogo;
-window.fillBookOrder = fillBookOrder;
-window.openWebDirectory = openWebDirectory;
-window.copyWebDirectoryUrl = copyWebDirectoryUrl;
-window.openBookIntro = openBookIntro;
-window.saveBookIntro = saveBookIntro;
-window.updateIntroCount = updateIntroCount;
-window.closeBookIntro = closeBookIntro;
-window.rewindStage = rewindStage;
-window.openNewCatalogItem = openNewCatalogItem;
 // 뒤로가기로 닫을 수 있게 닫기 함수도 이름으로 내어 둔다(overlay-nav.js 참고)
 window.closeNewCatalogItem = () => document.getElementById('new-eq-modal')?.remove();
 window.closeNewGraphicOrder = () => document.getElementById('new-gr-modal')?.remove();
-window.submitNewCatalogItem = submitNewCatalogItem;
-window.openNewGraphicOrder = openNewGraphicOrder;
-window.submitNewGraphicOrder = submitNewGraphicOrder;
 window.renderExh = renderExh;
-window.openExhImport = openExhImport;
-window.closeExhImport = closeExhImport;
-window.renderExhImportList = renderExhImportList;
-window.confirmExhImport = confirmExhImport;
 window.toggleExhDate = toggleExhDate;
 window.setExhField = setExhField;
 window.applyBoothItems = applyBoothItems;
-window.setEquipScope = setEquipScope;
-window.toggleBaseSel    = toggleBaseSel;
-window.toggleBaseSelAll = toggleBaseSelAll;
-window.applyBaseDone    = applyBaseDone;
-window.clearBaseDone    = clearBaseDone;
 window.toggleExhFlag = toggleExhFlag;
 window.toggleSharedBooth = toggleSharedBooth;
 window.setExhDateWithFlag = setExhDateWithFlag;
@@ -5424,7 +2058,7 @@ export function openExhCfg(){
   const lim = bookLimit(exhEvent);
   const ev = exhEventOptions().find(e => e.key === exhEvent);
 
-  modalShell('exh-cfg-modal', `${ev ? (ev.short || ev.name) : exhEvent} 설정`, `
+  window.modalShell('exh-cfg-modal', `${ev ? (ev.short || ev.name) : exhEvent} 설정`, `
     <div style="font-size:11.5px;color:var(--i4);margin-bottom:10px">
       대부분은 비워 두세요 — 마감이 없으면 ASAP로 보고, 요청한 뒤 ${followCfg(exhEvent).first}일이 지나면
       <b>처리 필요</b>에 «리마인더 보낼 때»로 올라옵니다(기준은 설정 › 행사 관리 › 일정).

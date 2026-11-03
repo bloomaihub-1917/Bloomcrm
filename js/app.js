@@ -27,6 +27,10 @@ import './features/companies/add-co-event.js';   // 기업 화면에서 행사 �
 import './modules/crm-tab.js';
 import './modules/audit-tab.js';
 import './modules/exh-tab.js';
+import './features/exhibition/exh-book.js';   // 도록 순번·기본 제공·그래픽 발주 — 스스로 window에 건다
+import './features/exhibition/exh-item-views.js';   // 금액·비품·그래픽 현황 보기 — 스스로 window에 건다
+import './features/exhibition/exh-dashboard.js';   // 전시 대시보드 — 스스로 window에 건다
+import './features/exhibition/exh-add.js';   // 참가기업 직접 추가·불러오기 — 스스로 window에 건다
 import './modules/exh-drawer.js';
 import './features/exhibition/exh-remove.js';   // 참가기업 지우기 — 딸린 것까지 함께 — 스스로 window에 건다
 import './features/exhibition/exh-dr-graphic.js';   // 참가기업 상세 › 그래픽 피드백·그래픽 항목·부스 기본 제공 예외 — 스스로 window에 건다

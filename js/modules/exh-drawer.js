@@ -76,7 +76,9 @@ import { ieyo } from '../country-signal.js';
 import { createOrg } from './company-tab.js';
 import { patchOrgFields } from '../domain/org-save.js';
 import { normalizeCompanyKey } from '../domain/org-names.js';
-import { graphicState, graphicDueInfo, boothTypeOptions, boothTypes, SELF_BUILD_TYPE, exhNames, modalShell, introLen, bookMissing, introOver, boothDesignState, isSharedBooth, isBookOnly, hostOptions, baseKind, BASE_KINDS, bookName, fasciaName, BOOTH_ORIGIN, BOOTH_EXC, isBoothExc, itemCode, baseRecvAt, baseDoneAt, baseDoneCheck, baseItems, baseRecvItems, guardWrite, exhLocked, setExhLockEv, exhLockNotice, isBoothGiven, boothIncluded, applyBoothItems, boothItemsPending, patchExh, refreshExhViews, exhContact, exhContacts, exhMailCtx, contactsForExhibitor, cleanEmail, progressBar, STEPS, cellState } from './exh-tab.js';
+import { graphicState, boothTypeOptions, boothTypes, SELF_BUILD_TYPE, exhNames, introLen, bookMissing, introOver, boothDesignState, isSharedBooth, isBookOnly, hostOptions, baseKind, BASE_KINDS, bookName, fasciaName, BOOTH_ORIGIN, BOOTH_EXC, isBoothExc, itemCode, baseRecvAt, baseDoneAt, baseDoneCheck, baseItems, baseRecvItems, guardWrite, exhLocked, setExhLockEv, exhLockNotice, isBoothGiven, boothIncluded, applyBoothItems, boothItemsPending, patchExh, refreshExhViews, exhContact, exhContacts, exhMailCtx, contactsForExhibitor, cleanEmail, progressBar, STEPS, cellState } from './exh-tab.js';
+import { modalShell } from '../features/exhibition/exh-book.js';
+import { graphicDueInfo } from '../features/exhibition/exh-item-views.js';
 import { billedAmount, paidAmount, money, fmtMoney, currencyOf, mixedCurrency, taxNeed, daysSince, CANCELLED, isPendingRefund, isBillable, TAX_STAGES, GRAPHIC_STAGES, stageOf, stageAge, TCELL, TPILL, needsReissue, settleState, liveInvoices, payDueDate, paidBreakdown, invoiceGap, refundDue, eventDeadlines } from '../features/exhibition/exh-calc.js';
 
 

@@ -5,7 +5,8 @@
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const hash = async (s) => {
   /* 새로 만든 연락처 id(지금 시각 기준)와 저장 시각은 돌릴 때마다 달라 빼고 센다 */
-  s = s.replace(/\d{13,}/g, '#ID').replace(/\d{4}-\d{2}-\d{2}T[\d:.]+Z/g, '#TS');
+  s = s.replace(/\d{13,}/g, '#ID').replace(/\d{4}-\d{2}-\d{2}T[\d:.]+Z/g, '#TS')
+    .replace(/오[전후] \d{1,2}:\d{2}/g, '#HM');   // 활동 로그 시각 — 비교 중 업로드한 줄의 분이 두 화면 사이에 넘어간다
   const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
   return [...new Uint8Array(b)].slice(0, 6).map((x) => x.toString(16).padStart(2, '0')).join('');
 };
