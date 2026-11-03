@@ -7,6 +7,7 @@ import { SESSION_SPEAKERS, evPartDone, assignmentsFor, getSpeakerById, participa
 import { postToSheet } from '../../api.js';
 import { saveExhCfgToSheet } from '../../api/settings-save.js';
 import { trackAction } from '../../core/audit-log.js';
+import { makePartLock } from '../../core/part-lock.js';
 import { SP_CONSENTS } from '../../constants.js';
 import { reusePending } from '../../modules/contact-speaker.js';
 
@@ -27,29 +28,16 @@ export const reuseState = (sp, key, need) => reusePending(sp).some(g => g.key ==
 /* 연사 창은 컨퍼런스 탭 밖(연락처·감사 로그·CRM)에서도 열린다. 그때는 탭에서
    고른 행사가 아니라 «그 연사의 행사»로 잠금을 판단해야 한다 — 안 그러면 끝난
    행사의 연사가 고쳐지고, 반대로 진행 중인 연사가 막힌다. 창이 열려 있는 동안만 쓴다. */
-let confLockEv = null;
-export function setConfLockEv(v){ confLockEv = v || null; }
-/* 창이 없을 때는 컨퍼런스 탭에서 고른 행사로 판단한다 — 탭이 onConfLockFallback으로 알려 준다 */
-let tabEvent = () => '';
-export function onConfLockFallback(fn){ tabEvent = fn; }
-export const confLocked = () => { const ev = confLockEv || tabEvent(); return !!ev && evPartDone(ev, 'conf'); };
-
-let _lockToastAt = 0;
-export function confLockNotice(){
-  const now = Date.now();
-  if(now - _lockToastAt < 1500) return;
-  _lockToastAt = now;
-  alert('진행 완료된 컨퍼런스예요 — 열람만 됩니다.\n고치려면 설정 › 행사 관리 › 진행 파트에서 "진행 중"으로 되돌리세요.');
-}
-
-/* 쓰기 함수를 감싼다. 이 탭과 앞으로 붙일 연사 드로어가 같은 행사를 다루므로
-   판단 기준이 한 군데여야 빠지는 길이 없다. */
-export function guardConf(fn){
-  return async (...args) => {
-    if(confLocked()){ confLockNotice(); return { ok: false, locked: true }; }
-    return fn(...args);
-  };
-}
+/* 틀은 core/part-lock.js — 전시 잠금과 같은 코드다.
+   창이 없을 때는 컨퍼런스 탭에서 고른 행사로 판단한다 — 탭이 onConfLockFallback으로 알려 준다.
+   모두 함수 선언으로 둔다 — 컨퍼런스 탭 머리가 파일을 다 읽기 전에 guardConf(…)를 부른다. 잠금 틀은 처음 부를 때 만든다. */
+function confLock(){ return confLock.v || (confLock.v = makePartLock({ part: 'conf', label: '컨퍼런스' })); }
+export function setConfLockEv(v){ confLock().setLockEv(v); }
+export function onConfLockFallback(fn){ confLock().onFallback(fn); }
+export function confLocked(){ return confLock().locked(); }
+export function confLockNotice(){ confLock().notice(); }
+/* 쓰기 함수를 감싼다. 이 탭과 연사 드로어가 같은 행사를 다루므로 판단 기준이 한 군데여야 빠지는 길이 없다. */
+export function guardConf(fn){ return confLock().guard(fn); }
 
 /* 종류를 안 고르고 만든 «커피 브레이크»«만찬»도 식사·휴식으로 본다 — 엑셀에서
    종류 칸을 비우는 일이 잦다. 다만 연사가 배정된 세션은 제목이 어떻든 발표 세션이다. */

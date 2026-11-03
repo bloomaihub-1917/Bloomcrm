@@ -32,6 +32,7 @@ import { saveExhCfgToSheet as _saveExhCfgToSheet } from '../api/settings-save.js
 import { saveExhibitor as _saveExhibitor, saveExhItem as _saveExhItem, saveExhInvoice as _saveExhInvoice, saveExhPayment as _saveExhPayment, saveExhLog as _saveExhLog, deleteExhItem as _deleteExhItem, deleteExhInvoice as _deleteExhInvoice, deleteExhPayment as _deleteExhPayment, deleteExhLog as _deleteExhLog, batchCreateExhibitors as _batchCreateExhibitors } from '../api/exh-save.js';
 /* 화면 상태는 ../features/exhibition/exh-ui.js의 exhUi 한곳에 둔다 — 이 탭의 구획을 다른 파일로 떼어도 같은 값을 보게 */
 import { exhUi } from '../features/exhibition/exh-ui.js';
+import { makePartLock } from '../core/part-lock.js';
 
 /* 진행 완료된 행사에서는 저장을 아예 보내지 않는다. 감싸는 자리를 하나로
    둬야 새 저장 지점이 생겨도 가드에서 빠지지 않는다. */
@@ -216,25 +217,15 @@ export const DUE_STEPS = [
 ══════════════════════════════════════════ */
 /* 참가기업 창은 감사 로그 등에서 다른 행사 기업으로도 열린다 — 창이 열려 있는
    동안은 «그 기업의 행사»로 잠금을 판단한다(인보이스 파일 폴더도 같은 이유). */
-export function setExhLockEv(v){ exhUi.exhLockEv = v || null; }
-export const exhLocked = () => { const ev = exhUi.exhLockEv || exhEvent; return !!ev && evPartDone(ev, 'exh'); };
-
-/* 막혔다는 걸 알린다. 연달아 누르면 알림이 쌓이므로 잠깐 사이엔 한 번만. */
-export function exhLockNotice(){
-  const now = Date.now();
-  if(now - exhUi.lockToastAt < 1500) return;
-  exhUi.lockToastAt = now;
-  alert('진행 완료된 행사예요 — 열람만 됩니다.\n고치려면 설정 › 행사 관리 › 진행 파트에서 "진행 중"으로 되돌리세요.');
-}
-
-/* 저장 함수를 감싸 잠긴 행사면 아예 보내지 않는다. api.js 쓰기 함수를 이
-   모듈과 드로어가 나눠 쓰므로, 감싸는 자리를 하나로 둬야 빠지는 길이 없다. */
-export function guardWrite(fn){
-  return async (...args) => {
-    if(exhLocked()){ exhLockNotice(); return { ok: false, locked: true }; }
-    return fn(...args);
-  };
-}
+/* 틀은 core/part-lock.js — 컨퍼런스 잠금과 같은 코드다.
+   모두 함수 선언으로 둔다 — 이 파일 머리(saveExhibitor = guardWrite(…))와 다른 파일 머리가 이 함수들을
+   파일을 다 읽기 전에 부른다. const로 두면 그때 아직 없어서 깨진다. 잠금 틀은 처음 부를 때 만든다. */
+function exhLock(){ return exhLock.v || (exhLock.v = makePartLock({ part: 'exh', label: '행사', fallback: () => exhEvent })); }
+export function setExhLockEv(v){ exhLock().setLockEv(v); }
+export function exhLocked(){ return exhLock().locked(); }
+export function exhLockNotice(){ exhLock().notice(); }
+/* api.js 쓰기 함수를 이 모듈과 드로어가 나눠 쓰므로, 감싸는 자리를 하나로 둬야 빠지는 길이 없다 */
+export function guardWrite(fn){ return exhLock().guard(fn); }
 
 /* 마감을 놓친 줄을 눌렀을 때 열 드로어 탭 — 바로 처리할 수 있는 자리로 보낸다 */
 export const DUE_TAB = {

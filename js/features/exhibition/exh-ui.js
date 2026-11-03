@@ -14,8 +14,6 @@ export const exhUi = {
   gView: 'base',   // base(기본 제공) | item(받을 파일) | kind(품목별) | co(기업별 진행) | self(독립부스)
   gFil: 'all',   // all | todo | late | none | got
   payFil: 'all',   // all | paid | partial | unpaid | none — 금액 현황의 기업별 세부
-  exhLockEv: null,
-  lockToastAt: 0,
   baseFil: '',
   boothTypeFil: '',
   boothShown: { rows: [], dupBooth: new Set(), typeFil: '' },
