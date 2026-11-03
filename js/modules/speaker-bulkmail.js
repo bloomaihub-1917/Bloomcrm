@@ -19,7 +19,7 @@
 import { EVENT_LIST, SPEAKER_LOGS, currentUser, speakersForEvent, evPartDone, confCfg } from '../state.js';
 import { sendMail, eventMailFrom, loadMailFiles, mailFilesOf, saveSpeaker } from '../api.js';
 import { escapeHtml, escAttr, nowStamp, td } from '../utils.js';
-import { flowSteps, flowStatus, draftFor, fillTemplate, roundTargets, resentAfter,
+import { flowSteps, flowStatus, draftFor, fillTemplate, roundTargets, resentAfter, sameMinuteLogs,
   sessionItems, toldSchedule, stepVariants, autoVariant } from './speaker-flow.js';
 import { libItems, libItem } from './mail-templates.js';
 import { mailTargets } from './speaker-drawer.js';
@@ -159,7 +159,7 @@ function roundProgress(st){
   if(!r) return null;
   const ids = new Set(r.targets || []);
   const sps = speakersForEvent(bm.evKey).filter(sp => ids.has(sp.id) && sp.status !== '취소');
-  return { r, total: sps.length, done: sps.filter(sp => resentAfter(sp, st.key, r.since)).length };
+  return { r, total: sps.length, done: sps.filter(sp => resentAfter(sp, st.key, r.since, r.before)).length };
 }
 export async function startSpRound(){
   if(!bm || bm.sending) return;
@@ -170,8 +170,10 @@ export async function startSpRound(){
   const label = (prompt(`이미 «${st.label}»을 받은 연사 ${targets.length}명에게 다시 보냅니다.\n이번 묶음의 이름 (예: 가이드라인 개정판)`,
     `${st.label} 개정판`) || '').trim();
   if(!label) return;
+  const since = nowStamp();
+  const before = sameMinuteLogs(targets, st.key, since);
   const ok = await pushRounds(list => {
-    list.push({ id: `R-${Date.now().toString(36)}`, step: st.key, label, since: nowStamp(), targets,
+    list.push({ id: `R-${Date.now().toString(36)}`, step: st.key, label, since, before, targets,
       by: currentUser?.name || currentUser?.email || '' });
   });
   if(!ok) return;

@@ -310,8 +310,17 @@ export function noFlow(sp){
 /* 다시 보내기 묶음(round, conf.mailRounds) — 묶음을 열 때 이미 이 단계를 받았거나 끝낸
    연사(targets)에게만 다시 걸고, 묶음을 연 뒤 이 단계 메일을 보내면 끝. 아직 이 단계까지
    오지 않은 연사는 평소대로 간다 — 안 그러면 확정 전 연사에게 «참가 확정 안내»가 나간다 */
-export const resentAfter = (sp, key, since) => logsOfSpeaker(sp.id)
-  .some(l => l.kind === key && l.direction !== 'in' && String(l.ts || '') >= since);
+/* 묶음을 연 뒤 보냈나 — 기록 시각은 분까지라, 묶음을 연 바로 그 분에 그 전에 보낸 메일도 «뒤»로 보였다.
+   묶음을 열 때 그 분에 이미 있던 기록 id(before)를 적어 두고 뺀다. before가 없는 옛 묶음은 전처럼 본다 */
+export const resentAfter = (sp, key, since, before) => logsOfSpeaker(sp.id)
+  .some(l => {
+    if(l.kind !== key || l.direction === 'in') return false;
+    const t = String(l.ts || '').slice(0, 16);
+    return t > since || (t === since && !(before || []).includes(l.id));
+  });
+/* 묶음을 여는 그 분에 대상들이 이미 가진 이 단계 기록 id */
+export const sameMinuteLogs = (ids, key, since) => ids.flatMap(id => logsOfSpeaker(id)
+  .filter(l => l.kind === key && String(l.ts || '').slice(0, 16) === since).map(l => l.id));
 /* 받는 단계(초록·발표자료)는 묶음을 연 뒤 새로 «받음»을 찍어도 끝이다 — 메일 기록만 보면
    다시 받은 자료를 체크해도 «지금 할 일»에 계속 남았다. 받은 날은 배정 줄(공동 발표면 주 발표자 줄)에 있다 */
 const RECV_FIELD = { slides: 'slides_received_at', abstract: 'abstract_received_at' };
@@ -319,7 +328,7 @@ const receivedAfter = (sp, key, since) => !!RECV_FIELD[key] && assignmentsFor(sp
   .some(a => a[RECV_FIELD[key]] && String(a[RECV_FIELD[key]]) >= String(since || '').slice(0, 10));
 function withRound(sp, s, applies){
   if(applies && s.round && (s.round.targets || []).includes(sp.id))
-    return { ...s, applies, isDone: resentAfter(sp, s.key, s.round.since) || receivedAfter(sp, s.key, s.round.since), resend: true };
+    return { ...s, applies, isDone: resentAfter(sp, s.key, s.round.since, s.round.before) || receivedAfter(sp, s.key, s.round.since), resend: true };
   return { ...s, applies, isDone: applies && isDone(sp, s) };
 }
 /* 묶음을 열 때 다시 받을 연사 — 이 단계가 해당되고, 이미 끝냈거나 이 단계 메일을 받은 연사 */
