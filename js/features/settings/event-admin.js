@@ -6,7 +6,7 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import { saveEventToSheet } from '../../api.js';
-import { deleteEventFromSheet } from '../../api/settings-save.js';
+import { deleteEventFromSheet, saveExhCfgToSheet } from '../../api/settings-save.js';
 import { EVENT_PARTS, partStateOf } from '../../constants.js';
 import { removed, trackAction } from '../../core/audit-log.js';
 import { EVENT_LIST, EXH_CFG, evParts, participations } from '../../state.js';
@@ -123,6 +123,9 @@ export function addEventToList(){
   // 구글시트 저장 + 감사 로그
   const newEv = EVENT_LIST[EVENT_LIST.length - 1];
   saveEventToSheet(newEv);
+  /* 새로 만드는 행사는 새 연락 흐름(연사·전시 메일 단계, 2026-11-04)을 쓴다 — 그 전 행사는 설정에 이 값이 없어 옛 흐름 그대로 */
+  EXH_CFG[newEv.key] = { ...(EXH_CFG[newEv.key] || {}), flowV: 2 };
+  saveExhCfgToSheet(newEv.key, EXH_CFG[newEv.key]);
   trackAction('edit', '행사 추가', newEv.key, `행사 "${newEv.name||newEv.key}" 추가`);
 }
 

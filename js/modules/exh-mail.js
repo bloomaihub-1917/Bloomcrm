@@ -9,7 +9,7 @@
    마감일은 따로 적지 않는다 — 설정 › 행사 › 일정의 마감(due)을 그대로 읽는다.
    한 사실을 두 곳에 적으면 갈라진다.
 ══════════════════════════════════════════════════════════════ */
-import { EVENT_LIST, EXH_CFG, EXH_LOGS, getOrgById, currentUser, logsFor } from '../state.js';
+import { EVENT_LIST, EXH_CFG, EXH_LOGS, getOrgById, currentUser, logsFor, isFlowV2 } from '../state.js';
 import { countryName } from '../utils.js';
 import { varTokens, varPattern, eventVarValues } from '../shared/mail/mail-vars.js';
 import { resolveDue } from '../shared/mail/follow-up.js';
@@ -73,6 +73,41 @@ export const EXH_MAIL_STEPS = [
     body_en: 'Dear {담당자},\n\n\nBest regards,\n{보내는사람}\n{행사} Secretariat',
   },
 ];
+/* 새 흐름 (2026-11-04 뒤에 만든 행사 — isFlowV2) — 연사와 같은 모양: 한 단계에 메일 하나, 끝난 기준 하나.
+     매뉴얼+신청서 → 부스 배정(바뀌면 변경 안내) → 인보이스·입금 → 그래픽 자료 받기 → 도록 정보 받기
+     → 최종 안내(반입·설치·현장) → 감사 메일
+   매뉴얼과 신청서 요청을 한 통으로 합쳤다 — 보내면 신청서가 오기를 기다리고, 안 오면 리마인더.
+   key는 옛 흐름과 같게 둔다(manual·movein) — 첨부(exh-<단계>)·기록 종류가 그대로 이어진다.
+   부스 도면·세금계산서·기본 시공은 우리가 하는 일이라 메일 단계에 넣지 않는다(진행표 칸으로만) */
+const byKey = (k) => EXH_MAIL_STEPS.find(s => s.key === k);
+export const EXH_MAIL_STEPS_V2 = [
+  {
+    key: 'manual', label: '참가 매뉴얼·신청서 안내', due: 'app_received_at',
+    subject_ko: '[{행사}] 참가 매뉴얼 및 신청서 제출 안내 — {기업}', subject_en: '[{행사}] Exhibitor Manual & Application Form — {기업}',
+    body_ko: '{담당자}님께\n\n안녕하십니까. {행사} 사무국입니다.\n{행사}에 참가해 주셔서 진심으로 감사드립니다. 참가 준비에 필요한 매뉴얼과 신청서를 함께 보내드립니다.\n\n■ 첨부 자료\n- 참가 매뉴얼 (일정·규정·현장 안내)\n- 참가 신청서 (비품·전기·그래픽 등)\n\n■ 신청서 제출 기한\n- {마감일}\n\n신청서를 받는 대로 부스 배정과 인보이스를 차례로 안내드리겠습니다.\n궁금하신 점은 언제든 사무국으로 문의해 주십시오.\n\n감사합니다.\n{행사} 사무국 {보내는사람} 드림',
+    body_en: 'Dear {담당자},\n\nThank you for participating in {행사}. Please find attached the exhibitor manual and the application form.\n\nAttached:\n- Exhibitor manual (schedule, rules and on-site information)\n- Application form (furniture, electricity, graphics, etc.)\n\nPlease submit the application form by {마감일}. Upon receipt, we will guide you through booth allocation and invoicing.\n\nPlease do not hesitate to contact us with any questions.\n\nBest regards,\n{보내는사람}\n{행사} Secretariat',
+  },
+  byKey('booth'),
+  byKey('booth_change'),
+  byKey('payment'),
+  { ...byKey('graphic'), label: '그래픽 자료 받기' },
+  { ...byKey('directory'), label: '도록 정보 받기' },
+  {
+    key: 'movein', label: '최종 안내 (반입·설치·현장)', due: 'movein_at',
+    subject_ko: '[{행사}] 참가사 최종 안내 — {기업}', subject_en: '[{행사}] Final Information for Exhibitors — {기업}',
+    body_ko: '{담당자}님께\n\n안녕하십니까. {행사} 사무국입니다.\n{행사} 개막을 앞두고 반입·설치와 현장 운영에 필요한 내용을 최종으로 안내드립니다.\n\n■ 부스 번호: {부스}\n■ 반입·설치: {마감일}\n■ 장소: {장소}\n■ 출입증 수령: \n■ 주차·하역: \n■ 철수: \n\n세부 동선과 주의사항은 첨부를 확인해 주십시오. 현장에서 궁금하신 점은 사무국으로 연락 주십시오.\n\n감사합니다.\n{행사} 사무국 {보내는사람} 드림',
+    body_en: 'Dear {담당자},\n\nAs {행사} approaches, please find below the final information for move-in and on-site operation.\n\nBooth No.: {부스}\nMove-in: {마감일}\nVenue: {장소}\nBadge collection: \nParking & unloading: \nMove-out: \n\nDetails and on-site rules are attached. Please contact the Secretariat on site if you have any questions.\n\nBest regards,\n{보내는사람}\n{행사} Secretariat',
+  },
+  {
+    key: 'thanks', label: '감사 메일', due: '',
+    subject_ko: '[{행사}] 참가에 감사드립니다 — {기업}', subject_en: '[{행사}] Thank You for Exhibiting — {기업}',
+    body_ko: '{담당자}님께\n\n안녕하십니까. {행사} 사무국입니다.\n바쁘신 가운데 {행사}에 참가해 주셔서 진심으로 감사드립니다.\n{기업}의 참여 덕분에 뜻깊은 행사가 될 수 있었습니다.\n\n다음 행사에서도 다시 뵙기를 희망합니다.\n\n감사합니다.\n{행사} 사무국 {보내는사람} 드림',
+    body_en: 'Dear {담당자},\n\nOn behalf of the {행사} Secretariat, thank you very much for exhibiting with us.\nYour participation made the event truly meaningful.\n\nWe hope to welcome you again at our next event.\n\nBest regards,\n{보내는사람}\n{행사} Secretariat',
+  },
+  byKey('note'),
+];
+/* 코드 기본 단계 — 새 흐름 행사는 V2 */
+export const exhBaseSteps = (evKey) => isFlowV2(evKey) ? EXH_MAIL_STEPS_V2 : EXH_MAIL_STEPS;
 /* 칸 목록의 정본은 mail-vars.js */
 export const EXH_MAIL_VARS = varTokens('exh');
 
@@ -141,7 +176,7 @@ export function exhMailSteps(evKey, { withOff = false } = {}){
   const over = cfg.exhMail || {};
   /* 다시 보내기는 발송 묶음(exhMailRounds) — 예전 «기준일»(since)은 읽지 않는다 */
   const roundOf = (key) => (cfg.exhMailRounds || []).find(r => r.step === key && !r.closed_at) || null;
-  const out = EXH_MAIL_STEPS.map(s => ({ ...s, ...(over[s.key] || {}), key: s.key, due: s.due, since: undefined, round: roundOf(s.key) }));
+  const out = exhBaseSteps(evKey).map(s => ({ ...s, ...(over[s.key] || {}), key: s.key, due: s.due, since: undefined, round: roundOf(s.key) }));
   (cfg.exhMailCustom || []).forEach(c => {
     const st = { ...c, custom: true, due: '', since: undefined, round: roundOf(c.key) };
     if(c.after === ''){ out.unshift(st); return; }

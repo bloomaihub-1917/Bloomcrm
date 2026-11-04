@@ -579,6 +579,9 @@ export const SPEAKER_CONTACTS = [];
 export const SPEAKER_LOGS    = [];
 
 export function confCfg(evKey){ return (EXH_CFG[evKey] || {}).conf || {}; }
+/* 새 연락 흐름(연사·전시 메일 단계, 2026-11-04)을 쓰는 행사 — 그 뒤에 만든 행사는 설정에 flowV: 2가 찍힌다
+   (event-admin.js). 그 전 행사는 진행한 기록이 옛 단계에 맞춰져 있어 옛 흐름 그대로 둔다 */
+export const isFlowV2 = (evKey) => (+(EXH_CFG[evKey] || {}).flowV || 0) >= 2;
 
 /* 발표 일자 — 행사 기간에서 만들고, 설정에서 더한 날을 합친다.
    기간을 이미 알고 있으니 손으로 다시 적게 하지 않는다. 사전행사처럼

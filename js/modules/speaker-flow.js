@@ -15,7 +15,7 @@
      needs       역할이 요구하는 자료를 다 받았으면 끝 (숙박·항공은 따로 본다)
      log         그 단계 메일을 보낸 기록(speaker_logs.kind = 단계 key)이 있으면 끝
 ══════════════════════════════════════════════════════════════ */
-import { EVENT_LIST, CONF_SESSIONS, SPEAKER_LOGS, confCfg, assignmentsFor, rolesOfSpeaker,
+import { EVENT_LIST, isFlowV2, CONF_SESSIONS, SPEAKER_LOGS, confCfg, assignmentsFor, rolesOfSpeaker,
   logsOfSpeaker, speakerNeed, currentUser } from '../state.js';
 import { SP_COLS, spCell } from '../features/conference/speaker-cells.js';
 import { SPEAKER_ROLES } from '../constants.js';
@@ -114,6 +114,81 @@ export const FLOW_STEPS = [
   },
 ];
 
+/* 옛 흐름 — 2026-11-04 전에 만든 행사(설정에 flowV가 없는 행사)는 이 순서 그대로 간다 */
+export const FLOW_STEPS_V1 = [
+  {
+    key: 'invite', label: '초청·가이드 발송', done: 'field:guide_sent_at',
+    desc: '초청 메일에 가이드라인과 제출 양식을 함께 보냅니다. 보내면 «보냄» 날짜가 찍힙니다.',
+    subject_ko: '[{행사}] 연사 초청의 건 — {호칭}', subject_en: '[{행사}] Invitation to Speak',
+    body_ko: '{호칭}께\n\n안녕하십니까. {행사} 사무국 {담당자}입니다.\n{행사}에 {호칭}을 연사로 모시고자 정중히 초청의 말씀을 드립니다.\n\n■ 배정 세션\n{세션}\n\n■ 안내 자료\n- 가이드라인: {가이드}\n- 제출 양식: {양식}\n\n참석 가능 여부를 {마감일}까지 회신해 주시면, 이후 일정과 준비 사항을 상세히 안내드리겠습니다.\n바쁘신 가운데 검토해 주셔서 감사합니다.\n\n{담당자} 드림\n{행사} 사무국',
+    body_en: 'Dear {호칭},\n\nOn behalf of the {행사} Secretariat, it is my pleasure to invite you to speak at {행사}.\n\nYour session:\n{세션}\n\nFor your reference:\n- Speaker guidelines: {가이드}\n- Submission form: {양식}\n\nWe would be grateful if you could confirm your availability by {마감일}. Upon your confirmation, we will share the detailed schedule and next steps.\n\nThank you for your kind consideration.\n\nSincerely,\n{담당자}\n{행사} Secretariat',
+  },
+  {
+    /* 일정표가 바뀌면 «알린 일정»(그 연사에게 마지막으로 보낸 메일의 세션 줄)과 지금 일정이
+       다른 연사에게만 선다. 바뀐 일정을 담은 메일(이 단계든 확정 안내든)을 보내면 끝 —
+       날짜를 적거나 끄고 켤 일이 없다. 안 바뀐 연사에게는 이 단계가 아예 안 보인다 */
+    key: 'schedule', label: '일정 변경 안내', done: 'sched',
+    desc: '알린 일정과 지금 일정이 달라졌어요. 바뀐 점과 새 일정을 담아 다시 알립니다. 보내면 끝납니다.',
+    subject_ko: '[{행사}] 발표 일정 변경 안내 — {호칭}', subject_en: '[{행사}] Change to Your Session Schedule',
+    body_ko: '{호칭}께\n\n안녕하십니까. {행사} 사무국 {담당자}입니다.\n{행사} 프로그램 일정이 조정되어, 앞서 안내드린 {호칭}의 발표 일정이 아래와 같이 변경되었음을 알려드립니다.\n\n■ 변경 내용\n{변경내용}\n\n■ 변경된 발표 일정\n{세션}\n\n혼란을 드려 대단히 죄송합니다. 변경된 일정에 참석이 어려우시면 {마감일}까지 회신해 주십시오. 일정을 다시 조율하겠습니다.\n\n{담당자} 드림\n{행사} 사무국',
+    body_en: 'Dear {호칭},\n\nPlease note that the programme for {행사} has been adjusted, and your session schedule has changed as follows.\n\nWhat has changed:\n{변경내용}\n\nYour updated session:\n{세션}\n\nWe apologise for any inconvenience. Should the new schedule not suit you, please let us know by {마감일} and we will be happy to work out an alternative.\n\nSincerely,\n{담당자}\n{행사} Secretariat',
+  },
+  {
+    key: 'reply', label: '참석 회신 받기', done: 'field:invite_replied_at',
+    desc: '참석 여부 회신을 받으면 «초청 회신» 날짜를 적습니다. 답이 없으면 회신 요청 메일을 보냅니다.',
+    subject_ko: '[{행사}] 연사 초청 회신 요청 — {호칭}', subject_en: '[{행사}] Kind Follow-up on Our Speaker Invitation',
+    body_ko: '{호칭}께\n\n안녕하십니까. {행사} 사무국 {담당자}입니다.\n앞서 드린 {행사} 연사 초청과 관련하여, 참석 가능 여부를 여쭙고자 다시 연락드립니다.\n\n■ 배정 세션\n{세션}\n\n프로그램 확정 일정상 {마감일}까지 회신을 주시면 큰 도움이 되겠습니다.\n일정 조율이 필요하시거나 궁금하신 점이 있으시면 편하게 말씀해 주십시오.\n\n{담당자} 드림\n{행사} 사무국',
+    body_en: 'Dear {호칭},\n\nI hope this message finds you well. I am writing to kindly follow up on our invitation to speak at {행사}.\n\nYour session:\n{세션}\n\nAs we are finalising the programme, we would greatly appreciate your reply by {마감일}. Should you need any adjustment to the schedule, please do not hesitate to let us know.\n\nSincerely,\n{담당자}\n{행사} Secretariat',
+  },
+  {
+    key: 'collect', label: '자료 받기', done: 'needs',
+    desc: '역할이 요구하는 자료를 모두 받습니다. 요청 메일을 이미 보냈으면 «독촉»으로 바뀝니다.',
+    subject_ko: '[{행사}] 연사 자료 제출 요청 — {호칭}', subject_en: '[{행사}] Request for Speaker Materials',
+    body_ko: '{호칭}께\n\n안녕하십니까. {행사} 사무국 {담당자}입니다.\n프로그램북 제작과 현장 준비를 위해 아래 자료를 요청드리고자 연락드립니다.\n\n■ 제출 요청 자료\n{남은자료}\n\n■ 제출 기한\n- {마감일}\n\n■ 제출 양식\n- {양식}\n\n바쁘신 중에 번거로우시겠지만 기한 내 회신 부탁드립니다. 작성 중 궁금하신 점은 언제든 문의해 주십시오.\n\n{담당자} 드림\n{행사} 사무국',
+    body_en: 'Dear {호칭},\n\nTo prepare the programme book and on-site arrangements for {행사}, may I kindly ask you to send us the following materials.\n\nRequested materials:\n{남은자료}\n\nDeadline: {마감일}\nSubmission form: {양식}\n\nPlease feel free to contact me if you have any questions.\n\nSincerely,\n{담당자}\n{행사} Secretariat',
+    /* 지난 행사에서 가져온 자료가 있으면 새로 달라고 하지 않고 확인을 부탁한다 */
+    reuse_subject_ko: '[{행사}] 연사 자료 확인 요청 — {호칭}', reuse_subject_en: '[{행사}] Kindly Confirm Your Speaker Profile',
+    reuse_body_ko: '{호칭}께\n\n안녕하십니까. {행사} 사무국 {담당자}입니다.\n지난 행사 때 보내주신 자료로 이번 프로그램북과 현장 안내를 준비하고자 합니다. 번거로우시지 않도록 새로 작성을 요청드리는 대신, 아래 내용이 지금도 맞는지 확인을 부탁드립니다.\n\n■ 확인 부탁드릴 자료\n{가져온자료}\n\n■ 추가로 필요한 자료\n{남은자료}\n\n바뀐 내용이 있으시면 수정본을, 그대로이시면 «변동 없음»으로 {마감일}까지 회신해 주십시오.\n\n{담당자} 드림\n{행사} 사무국',
+    reuse_body_en: 'Dear {호칭},\n\nFor {행사}, we would like to use the materials you kindly provided for a previous event. Rather than asking you to fill in the form again, may we ask you to confirm that the details below are still current?\n\nFor your confirmation:\n{가져온자료}\n\nAdditional materials needed:\n{남은자료}\n\nIf anything has changed, please send us the updated version; otherwise a simple "no changes" reply by {마감일} would be much appreciated.\n\nSincerely,\n{담당자}\n{행사} Secretariat',
+    remind_subject_ko: '[{행사}] 연사 자료 제출 재요청 — {호칭}', remind_subject_en: '[{행사}] Gentle Reminder: Speaker Materials',
+    remind_body_ko: '{호칭}께\n\n안녕하십니까. {행사} 사무국 {담당자}입니다.\n앞서 요청드린 연사 자료 중 아직 받지 못한 항목이 있어 다시 한번 안내드립니다.\n\n■ 미제출 자료\n{남은자료}\n\n■ 제출 기한\n- {마감일}\n\n프로그램북 인쇄 일정이 있어 기한 내 제출을 정중히 부탁드립니다. 이미 보내주셨다면 이 메일은 넘기셔도 됩니다.\n\n{담당자} 드림\n{행사} 사무국',
+    remind_body_en: 'Dear {호칭},\n\nThis is a gentle reminder regarding the speaker materials for {행사}. We have not yet received the following items:\n\n{남은자료}\n\nDeadline: {마감일}\n\nAs the programme book goes to print shortly, we would greatly appreciate your submission by the deadline. If you have already sent them, please disregard this message.\n\nSincerely,\n{담당자}\n{행사} Secretariat',
+  },
+  {
+    key: 'confirm', label: '참가 확정', done: 'field:confirmed_at',
+    desc: '자료를 다 받고 일정이 정해지면 «참가 확정» 날짜를 적고 확정 안내를 보냅니다.',
+    subject_ko: '[{행사}] 연사 참가 확정 안내 — {호칭}', subject_en: '[{행사}] Confirmation of Your Participation',
+    body_ko: '{호칭}께\n\n안녕하십니까. {행사} 사무국 {담당자}입니다.\n{호칭}의 {행사} 연사 참가가 확정되었음을 알려드립니다. 보내주신 자료에도 깊이 감사드립니다.\n\n■ 발표 일정\n{세션}\n\n현장 동선과 리허설 등 세부 안내는 행사 전 별도로 드리겠습니다.\n함께해 주셔서 감사합니다.\n\n{담당자} 드림\n{행사} 사무국',
+    body_en: 'Dear {호칭},\n\nI am delighted to confirm your participation as a speaker at {행사}. Thank you very much for the materials you have provided.\n\nYour session:\n{세션}\n\nWe will send you on-site information, including the rehearsal schedule, closer to the event.\n\nWe look forward to welcoming you.\n\nSincerely,\n{담당자}\n{행사} Secretariat',
+  },
+  {
+    key: 'travel', label: '숙박·항공 안내', done: 'log', need: 'travel',
+    desc: '숙박·항공을 제공하는 연사에게 예약 안내를 보냅니다. 보내면 이 단계가 끝납니다.',
+    subject_ko: '[{행사}] 숙박·항공 예약 안내 — {호칭}', subject_en: '[{행사}] Accommodation & Flight Arrangements',
+    body_ko: '{호칭}께\n\n안녕하십니까. {행사} 사무국 {담당자}입니다.\n{호칭}의 참석을 위한 숙박과 항공 예약을 진행하고자 연락드립니다.\n\n■ 회신 요청 사항\n- 희망 입국·출국 일정 (출발 도시 포함)\n- 여권 사본 (영문 성명 확인용)\n- 기타 요청 사항 (좌석, 식이 제한 등)\n\n{마감일}까지 회신해 주시면 예약 후 확정 내역을 안내드리겠습니다.\n\n{담당자} 드림\n{행사} 사무국',
+    body_en: 'Dear {호칭},\n\nWe would like to arrange your accommodation and flights for {행사}. Could you kindly provide the following:\n\n- Preferred arrival and departure dates (including departure city)\n- A copy of your passport (to match the name on your ticket)\n- Any special requests (seating, dietary requirements, etc.)\n\nWe would appreciate your reply by {마감일}, after which we will send you the booking confirmation.\n\nSincerely,\n{담당자}\n{행사} Secretariat',
+  },
+  {
+    /* 발표자료는 가장 늦게 온다(현장에서 받기도 한다). 자료 받기·참가 확정을 막지 않게
+       따로 뒤에 둔다. 받으면 끝 — 발제 탭에서 발표자료를 받음으로 표시하면 된다 */
+    key: 'slides', label: '발표자료 받기', done: 'cell:slides', need: 'slides',
+    desc: '발표자료는 보통 가장 늦게 오고 현장에서 받기도 합니다. 행사 전에 한 번 요청하고, 받으면 발제 탭에서 받음으로 표시하세요.',
+    subject_ko: '[{행사}] 발표자료 제출 요청 — {호칭}', subject_en: '[{행사}] Request for Your Presentation File',
+    body_ko: '{호칭}께\n\n안녕하십니까. {행사} 사무국 {담당자}입니다.\n원활한 현장 진행을 위해 발표자료를 미리 받아 두고자 연락드립니다.\n\n■ 발표 일정\n{세션}\n\n■ 제출 기한\n- {마감일}\n\n최종본이 늦어지실 경우 초안을 먼저 보내주시고, 현장에서 최종본으로 교체하셔도 괜찮습니다. 영상·음원이 포함된 경우 파일을 함께 보내주시면 미리 재생을 확인해 두겠습니다.\n\n{담당자} 드림\n{행사} 사무국',
+    body_en: 'Dear {호칭},\n\nTo ensure a smooth presentation on the day, may we kindly ask you to send us your presentation file in advance.\n\nYour session:\n{세션}\n\nDeadline: {마감일}\n\nIf your final version is not ready yet, a draft is perfectly fine — you may replace it with the final version on site. If your slides include video or audio, please send those files as well so that we can test playback beforehand.\n\nSincerely,\n{담당자}\n{행사} Secretariat',
+  },
+  {
+    key: 'thanks', label: '감사 메일', done: 'log',
+    desc: '행사가 끝나면 감사 인사를 보냅니다.',
+    subject_ko: '[{행사}] 참여에 깊이 감사드립니다 — {호칭}', subject_en: '[{행사}] Thank You for Your Contribution',
+    body_ko: '{호칭}께\n\n안녕하십니까. {행사} 사무국 {담당자}입니다.\n바쁘신 가운데 {행사}에 연사로 함께해 주셔서 진심으로 감사드립니다.\n{호칭}의 발표 덕분에 참석자 모두에게 뜻깊은 자리가 되었습니다.\n\n앞으로도 좋은 인연으로 다시 뵙기를 희망합니다.\n감사합니다.\n\n{담당자} 드림\n{행사} 사무국',
+    body_en: 'Dear {호칭},\n\nOn behalf of the {행사} Secretariat, I would like to express our sincere gratitude for your participation as a speaker.\nYour presentation made the event truly meaningful for all attendees.\n\nWe hope to have the opportunity to work with you again.\n\nWith warm regards,\n{담당자}\n{행사} Secretariat',
+  },
+];
+
+/* 행사마다 어느 흐름을 쓰나 — isFlowV2(state.js) */
+export const baseSteps = (evKey) => isFlowV2(evKey) ? FLOW_STEPS : FLOW_STEPS_V1;
+
 /* 영문 메일에 한국어 표기가 섞이지 않게 — 역할과 자료 이름의 영문 */
 const ROLE_EN = { 연사: 'Speaker', 패널: 'Panelist', 좌장: 'Moderator', 사회: 'MC', VIP: 'Guest of Honour' };
 const ITEM_EN = { profile: 'Affiliation & job title', bio_pro: 'Biography', cv: 'CV', photo: 'Portrait photo (high resolution)',
@@ -158,7 +233,7 @@ export function flowSteps(evKey, { withOff = false } = {}){
   const rounds = cfg.mailRounds || [];
   const roundOf = (key) => rounds.find(r => r.step === key && !r.closed_at) || null;
   /* 기본 단계의 since(예전 «다시 보내기 기준일»)는 읽지 않는다 — 다시 보내기는 이제 발송 묶음(round)이다 */
-  const out = FLOW_STEPS.map(s => ({ ...s, ...(over[s.key] || {}), key: s.key, done: s.done, need: s.need,
+  const out = baseSteps(evKey).map(s => ({ ...s, ...(over[s.key] || {}), key: s.key, done: s.done, need: s.need,
     since: undefined, round: roundOf(s.key) }));
   (cfg.flow_custom || []).forEach(c => {
     const st = { ...c, custom: true, done: c.since ? 'since' : 'log', need: undefined, round: roundOf(c.key) };
@@ -182,11 +257,12 @@ const needOf = (sp, key) => {
 /* 아직 못 받은 자료 — 숙박·항공은 자기 단계가 따로 있어 뺀다 */
 /* 숙박·항공과 발표자료는 자기 단계가 따로 있다 — «자료 받기»를 막지 않게 뺀다 */
 /* 계좌는 자료 받기 메일로 함께 요청하지만(withBank) 그 단계를 막지 않는다 — 못 받으면 «계좌정보 받기» */
-const OWN_STEP = ['travel', 'slides', 'bank'];
+const ownStep = (evKey) => isFlowV2(evKey) ? ['travel', 'slides', 'bank'] : ['travel', 'slides'];
 /* «필수»만 센다 — 설정 범례대로 «있으면 좋음»은 받으면 표시만 하고 독촉하지 않는다.
    그걸 세면 해외 연사는 여권, 패널은 초록 때문에 «자료 받기»가 끝나지 않았다. */
 export function missingItems(sp, withBank = false){
-  return SP_COLS.filter(c => !OWN_STEP.includes(c.key) || (withBank && c.key === 'bank'))
+  const own = ownStep(sp.event_id);
+  return SP_COLS.filter(c => !own.includes(c.key) || (withBank && c.key === 'bank'))
     .map(c => ({ c, st: spCell(sp, sp.event_id, c.key) }))
     .filter(x => x.st.need === 'req' && (x.st.state === 'todo' || x.st.state === 'part'));
 }
@@ -213,7 +289,7 @@ export function pendingItems(sp){
     if(c.key === 'travel') return;                       // 숙박·항공은 우리가 할 일로
     const st = spCell(sp, sp.event_id, c.key);
     if(!(st.state === 'todo' || st.state === 'part')) return;
-    const own = c.key === 'slides' || c.key === 'bank';
+    const own = c.key === 'slides' || (c.key === 'bank' && isFlowV2(sp.event_id));
     out.push({ key: c.key, label: c.label, more: st.state === 'part' && st.text ? st.text : '',
       tab: TAB_OF[c.key] || 'basic', when: st.need === 'req' ? (own ? 'later' : 'now') : 'nice',
       due: own ? dueOf(c.key) : dueOf('collect') });
@@ -362,7 +438,8 @@ export function roundTargets(stepKey, speakers){
    skip이면 연락 단계 자체가 없다(주최사 전달) — 집계에서 빼야 한다. */
 /* 연사에게서 받아야 끝나는 단계와, 그 요청으로 치는 메일 종류 */
 /* 초청 메일에 제출 양식이 함께 가니, 초청을 보낸 뒤로는 자료를 기다린다 */
-const WAIT_KINDS = { collect: ['invite', 'collect'], slides: ['slides'], bank: ['bank'], video: ['video'] };
+const WAIT_KINDS_V2 = { collect: ['invite', 'collect'], slides: ['slides'], bank: ['bank'], video: ['video'] };
+const WAIT_KINDS_V1 = { reply: ['invite', 'reply'], collect: ['collect'], slides: ['slides'] };
 
 export function flowStatus(sp){
   /* 취소한 연사에게는 더 연락하지 않는다 — 할 일·독촉 목록에서 빠진다 */
@@ -390,10 +467,13 @@ export function flowStatus(sp){
   /* 연사에게서 받아야 끝나는 단계 — 요청을 보냈으면 공은 연사에게 있다. 그래도 안 오면
      리마인더를 보내는 것이 우리 일이다(follow-up.js). 보낸 날: 그 단계 메일 기록 + 손으로 찍은 날 */
   let follow = null;
+  const v2 = isFlowV2(sp.event_id);
+  const WAIT_KINDS = v2 ? WAIT_KINDS_V2 : WAIT_KINDS_V1;
   if(current && !current.resend && WAIT_KINDS[current.key]){
     const logs = logsOfSpeaker(sp.id);
     const sends = logs.filter(l => l.direction === 'out' && WAIT_KINDS[current.key].includes(l.kind)).map(l => l.ts);
-    if(current.key === 'collect' && sp.guide_sent_at) sends.push(sp.guide_sent_at);
+    /* 초청(보냄 날짜)을 요청으로 치는 단계 — 새 흐름은 자료 받기, 옛 흐름은 참석 회신 */
+    if(current.key === (v2 ? 'collect' : 'reply') && sp.guide_sent_at) sends.push(sp.guide_sent_at);
     if(current.key === 'collect' && sp.reminded_at) sends.push(sp.reminded_at);
     follow = followState({ evKey: sp.event_id, sends, due: current.due, logs, stepKey: current.key });
     if(follow.state === 'ask') follow = null;

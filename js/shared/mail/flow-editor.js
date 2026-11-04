@@ -11,7 +11,7 @@
      더한 단계  더하기·고치기·지우기, 어느 단계 뒤에 둘지, 기준일
 ══════════════════════════════════════════════════════════════ */
 import { EVENT_LIST, confCfg, evPartDone } from '../../state.js';
-import { FLOW_STEPS, CUSTOM_PRESETS, flowSteps, isCustomStep } from '../../modules/speaker-flow.js';
+import { baseSteps, CUSTOM_PRESETS, flowSteps, isCustomStep } from '../../modules/speaker-flow.js';
 import { saveConf } from '../../features/conference/conf-common.js';
 import { trackAction } from '../../core/audit-log.js';
 import { variantsHtml } from './mail-templates.js';
@@ -131,7 +131,7 @@ function rowHtml(st, i, ro){
 
 function formHtml(st, isNew){
   const custom = isNew || st.custom;
-  const def = custom ? null : FLOW_STEPS.find(x => x.key === st.key);
+  const def = custom ? null : baseSteps(edEv).find(x => x.key === st.key);
   const id = (f) => `fe-${f}`;
   const fld = (f, l) => {
     if(!custom && def[f] === undefined && !['label', 'desc', 'due'].includes(f)) return '';
@@ -230,7 +230,7 @@ export async function saveFlowStep(key){
     return;
   }
   /* 기본 단계 — 코드 기본값과 다른 칸만 담는다(기본 문구를 고치면 손대지 않은 행사에 따라오게) */
-  const def = FLOW_STEPS.find(x => x.key === key);
+  const def = baseSteps(edEv).find(x => x.key === key);
   if(!def) return;
   const ok = await pushFlow(cfg => {
     const flow = cfg.flow = cfg.flow || {};
@@ -242,7 +242,7 @@ export async function saveFlowStep(key){
 }
 
 export async function resetFlowStep(key){
-  const def = FLOW_STEPS.find(x => x.key === key);
+  const def = baseSteps(edEv).find(x => x.key === key);
   if(!def || !confirm(`«${def.label}»을 기본 문구로 되돌릴까요?\n이 행사에서 고친 이름·설명·마감일·메일 문구가 지워집니다.`)) return;
   const ok = await pushFlow(cfg => {
     const flow = cfg.flow || {};

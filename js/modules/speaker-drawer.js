@@ -25,6 +25,7 @@ import {
   confCfg, speakerNeed, speakerNeedList,
   isDomesticSpeaker, autoDomestic, bankDocs, paysFee,
   nextContactId,
+  isFlowV2,
 } from '../state.js';
 import { SPEAKER_ROLES, NEED_MARK, NEED_LABEL, SP_CONSENTS } from '../constants.js';
 import '../shared/mail/flow-editor.js';
@@ -477,7 +478,7 @@ function flowBoxHtml(sp){
       <button class="btn" style="font-size:var(--fs-10);padding:1px 7px" title="이 행사의 연락 단계를 더하고, 고치고, 끄거나 지웁니다"
         onclick="openFlowEditor('${escAttr(sp.event_id)}')">✎ 단계 편집</button>
     </div>
-    <div style="display:flex;flex-wrap:wrap;gap:4px">${f.steps.filter(s => s.done !== 'sched' || s.applies).map(chip).join('')}</div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px">${f.steps.filter(s => s.applies || (s.done !== 'sched' && !isFlowV2(sp.event_id))).map(chip).join('')}</div>
     ${cur ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i7)">
         <div style="font-size:var(--fs-12);font-weight:700;color:${waiting ? 'var(--i4)' : 'var(--a)'}">${waiting ? '기다리는 중' : '지금 할 일'} · ${escapeHtml(cur.resend ? `${cur.label} (다시 보내기 · ${cur.round.label || ''})` : stepTitle)}${
           f.follow ? ` ${followPill(f.follow)}${snoozeBtns}` : ''}${

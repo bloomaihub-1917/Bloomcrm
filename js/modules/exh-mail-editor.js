@@ -10,7 +10,7 @@
      더한 단계  더하기·고치기·지우기, 놓을 자리, 마감일(날짜를 바로 적는다)
 ══════════════════════════════════════════════════════════════ */
 import { EVENT_LIST, EXH_CFG, evPartDone } from '../state.js';
-import { EXH_MAIL_STEPS, EXH_CUSTOM_PRESETS, exhMailSteps, exhMailFileStep, isCustomExhStep } from './exh-mail.js';
+import { exhBaseSteps, EXH_CUSTOM_PRESETS, exhMailSteps, exhMailFileStep, isCustomExhStep } from './exh-mail.js';
 import { saveExhCfgToSheet } from '../api/settings-save.js';
 import { loadMailFiles, mailFilesOf, uploadMailFile, deleteMailFile, fileToBase64 } from '../api/mail-send.js';
 import { trackAction } from '../core/audit-log.js';
@@ -213,7 +213,7 @@ export async function saveExhMailStep(key){
     return;
   }
   /* 기본 단계 — 기본 문구와 다른 칸만 담는다 */
-  const def = EXH_MAIL_STEPS.find(x => x.key === key);
+  const def = exhBaseSteps(edEv).find(x => x.key === key);
   if(!def) return;
   const ok = await pushCfg(cfg => {
     const over = cfg.exhMail = cfg.exhMail || {};
@@ -225,7 +225,7 @@ export async function saveExhMailStep(key){
 }
 
 export async function resetExhMailStep(key){
-  const def = EXH_MAIL_STEPS.find(x => x.key === key);
+  const def = exhBaseSteps(edEv).find(x => x.key === key);
   if(!def || !confirm(`«${def.label}»을 기본 문구로 되돌릴까요?\n이 행사에서 고친 이름·메일 문구가 지워집니다.`)) return;
   const ok = await pushCfg(cfg => {
     const over = cfg.exhMail || {};

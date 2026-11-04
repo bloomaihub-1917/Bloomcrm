@@ -63,7 +63,7 @@ export function saveFailed(res, msg){
 }
 import { filterMail, mailFilBar, mailStateHtml, mailActionsHtml, mailToggleAttr, isPending, setMailDone } from '../shared/mail/mail-mark.js';
 import { decorate as decorateMailPane } from '../shared/mail/mail-pane.js';
-import { EXH_MAIL_STEPS, exhMailSteps, exhIsEnglish, fillExhTemplate, exhMailFileStep, exhStepVariants } from './exh-mail.js';
+import { exhMailSteps, exhIsEnglish, fillExhTemplate, exhMailFileStep, exhStepVariants } from './exh-mail.js';
 import { libItems, libItem } from '../shared/mail/mail-templates.js';
 import { varChipsHtml, registerVarResolver } from '../shared/mail/var-chips.js';
 import { aiDraftHtml, registerAiDraft } from '../shared/mail/ai-mail-draft.js';
