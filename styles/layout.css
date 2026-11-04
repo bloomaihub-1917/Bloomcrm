@@ -252,7 +252,7 @@ button{font-family:inherit;cursor:pointer}input,select,textarea{font-family:inhe
   .mdbc-empty { padding: 44px 24px; text-align: center; font-size: var(--fs-13); color: var(--i4); line-height: 1.6; }
 
   /* DB toolbar: scroll horizontally */
-  .db-bar { padding: 8px 14px; overflow-x: auto; gap: 6px; }
+  .db-bar { padding: 8px var(--pad-x); overflow-x: auto; gap: 6px; }
   .db-bar::-webkit-scrollbar { display: none; }
   .seg { flex-shrink: 0; }
   .seg-b { padding: 6px 12px; font-size: var(--fs-12); white-space: nowrap; }

@@ -259,7 +259,7 @@ export function renderToday(){
           <a href="javascript:void(0)" onclick="syncContactNow()" style="color:var(--a);margin-left:4px">지금 받기</a></span>
       </div>
     </div>
-    <div style="padding:10px 16px 40px;display:flex;flex-direction:column;gap:7px">
+    <div class="sec-rows" style="display:flex;flex-direction:column;gap:7px">
       ${!all.length
         ? `<div class="empty" style="height:auto;padding:40px 10px"><p style="font-size:var(--fs-12)">이 차수에 아직 명단이 없어요</p>
              <button class="btn bp bs" onclick="openFillRound()">명단 채우기</button></div>`

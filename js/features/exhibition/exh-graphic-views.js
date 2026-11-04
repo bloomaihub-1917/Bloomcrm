@@ -36,7 +36,7 @@ function renderGraphicView(list){
      시공」이라는 제 탭을 갖고 있었는데, 거기서 하던 일이 결국 그래픽 파일을
      받아 만드는 일이라 같은 화면으로 들어왔다. */
   const baseN = list.filter(x => baseKind(x)).length;
-  const seg = `<div class="subbar" style="padding:10px 16px 0"><div class="seg">
+  const seg = `<div class="subbar sec"><div class="seg">
     ${[['base', `기본 제공${baseN ? ` ${baseN}` : ''}`], ['item', '받을 파일'], ['kind', '품목별'], ['co', '기업별 진행'],
        ['self', `독립부스${selfRows.length ? ` ${selfRows.length}` : ''}`]].map(([k, l]) =>
       `<button class="seg-b${exhUi.gView === k ? ' on' : ''}" onclick="setGraphicView('${k}')">${l}</button>`).join('')}

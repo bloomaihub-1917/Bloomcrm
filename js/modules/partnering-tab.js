@@ -245,15 +245,15 @@ export function renderPtn(){
         label}${k in counts ? ` ${counts[k]}` : ''}</button>`).join('')}
     </div>${VIEWS.filter(([k]) => k === 'add').map(([k, label]) => `<button class="btn bs${ptnView === k ? ' bp' : ''}" style="margin-left:auto;white-space:nowrap;flex-shrink:0" onclick="setPtnView('${k}')">+ ${label}</button>`).join('')}</div>`;
   body.innerHTML = `${tabs}${partTypeNoticeHtml()}
-    <div style="padding:12px 16px 0;display:flex;gap:10px;flex-wrap:wrap">
+    <div class="sec" style="display:flex;gap:10px;flex-wrap:wrap">
       ${PARTNERING_SIDES.map(card).join('')}
     </div>
-    ${noneN && ptnView === 'list' ? `<div style="padding:8px 16px 0;font-size:var(--fs-11);color:var(--am)">
+    ${noneN && ptnView === 'list' ? `<div class="sec" style="font-size:var(--fs-11);color:var(--am)">
       «${escapeHtml(PARTNERING_UNSIDED)}»로만 적혀 셀러·바이어를 모르는 참가자가 ${noneN}명 있어요 —
       «셀러·바이어 지정»에서 정해 주세요.</div>` : ''}
-    <div style="padding:10px 16px 0;font-size:var(--fs-11);color:var(--i4)">${viewHint(counts)}</div>
-    <div style="padding:10px 16px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">${actionsHtml()}</div>
-    <div id="ptn-rows" style="padding:8px 16px 40px">${rowsHtml()}</div>`;
+    <div class="sec" style="font-size:var(--fs-11);color:var(--i4)">${viewHint(counts)}</div>
+    <div class="sec sec-bar">${actionsHtml()}</div>
+    <div id="ptn-rows" class="sec-rows">${rowsHtml()}</div>`;
 }
 
 /* 화면마다 한 줄 설명 — 무엇을 하는 곳인지 */

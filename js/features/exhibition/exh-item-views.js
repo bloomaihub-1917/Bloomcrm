@@ -454,7 +454,7 @@ export function setEquipScope(v){ exhUi.equipScope = v; renderExh(); }
 function renderEquipView(list){
   const inScope = (i) => exhUi.equipScope === 'all' ? true
     : exhUi.equipScope === 'base' ? isBoothGiven(i) : !isBoothGiven(i);
-  const scopeSeg = `<div class="subbar" style="padding:10px 16px 0"><div class="seg">${EQUIP_SCOPES.map(([v, l]) =>
+  const scopeSeg = `<div class="subbar sec"><div class="seg">${EQUIP_SCOPES.map(([v, l]) =>
     `<button class="seg-b${exhUi.equipScope === v ? ' on' : ''}" onclick="setEquipScope('${v}')"
       title="${v === 'all' ? '기본 + 추가 — 발주할 수량이에요'
             : v === 'base' ? '부스 타입에 딸려 오는 기본 제공 — 청구하지 않아요'

@@ -135,7 +135,7 @@ export function renderReport(){
   const statHead = `<th style="${th}">전체</th><th style="${th}">연락한 곳</th><th style="${th}">진행률</th>${BUCKETS.map(b => `<th style="${th}">${b}</th>`).join('')}<th style="${th}">${escapeHtml(goal)}</th>`;
   const maxN = Math.max(1, ...trend.map(t => t.n));
 
-  el.innerHTML = `<div style="padding:12px 16px 40px">
+  el.innerHTML = `<div class="sec-rows">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
       <div style="font-size:15px;font-weight:700">${escapeHtml(r.name)}</div>
       <span class="pill p-gray">${escapeHtml(evLabel(r.event_id))}</span>

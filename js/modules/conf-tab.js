@@ -245,7 +245,7 @@ export function renderConf(){
     : confUi.confView === 'pga' ? window.pgaHtml(ev)
     : confUi.confView === 'watch' ? renderWatchView(ev.key, 'conf')
     : window.programHtml(ev);
-  body.innerHTML = seg + `<div style="padding:14px 16px 40px">${banner}`
+  body.innerHTML = seg + `<div class="sec-rows">${banner}`
     + (confLocked() ? `<div class="ro">${inner}</div>` : inner) + `</div>`;
 }
 

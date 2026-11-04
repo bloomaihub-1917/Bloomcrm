@@ -475,7 +475,7 @@ tr.row-sel{background:var(--ad)}
 
 /* Mobile audit */
 @media(max-width:768px){
-  .audit-filters{padding:8px 14px;gap:7px}
+  .audit-filters{padding:8px var(--pad-x);gap:7px}
   .audit-item{padding:11px 14px}
   .login-card{margin:16px;max-width:none}
 }
@@ -722,3 +722,17 @@ tr.row-sel{background:var(--ad)}
 .fg:has(.bk-al.warn) .fi{border-color:var(--am);box-shadow:0 0 0 2px var(--ab)}
 /* 연락처 추가 창 — 모바일에서는 이메일·전화번호 한 줄, 국가는 그 아래 */
 @media(max-width:768px){.ac-contact-row{grid-template-columns:1fr 1fr!important}.ac-contact-row>:last-child{grid-column:1/-1}}
+
+/* ── 탭 본문 단락 — 위에서 아래로 쌓이는 단락(요약 카드·보기 칸·필터 줄·명단)은 이 클래스만 쓴다.
+   전에는 단락마다 padding:12px/10px/8px/6px 16px를 따로 적어 간격이 들쭉날쭉했다(행사 DB 참가자 탭).
+   세로 간격은 --gap-sec 하나, 좌우는 --pad-x 하나 — 바꿀 때는 tokens.css 값만 바꾼다 */
+.sec{padding:var(--gap-sec) var(--pad-x) 0}
+.sec-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sec-rows{padding:var(--gap-sec) var(--pad-x) 40px}
+/* 요약 숫자 카드 — 한 줄의 카드는 가장 큰 카드 높이로 늘어난다. 내용을 위에 붙이면 아래만 비므로 세로 가운데 */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:var(--gap-sec)}
+.stat-card{background:var(--W);border:1px solid var(--i6);border-radius:var(--r);padding:12px 14px;
+  display:flex;flex-direction:column;justify-content:center;gap:2px}
+.stat-card .n{font-size:var(--fs-20);font-weight:700;color:var(--i1);line-height:1.2}
+.stat-card .l{font-size:var(--fs-11);color:var(--i4)}
+.stat-card .s{font-size:var(--fs-10_5);color:var(--i5)}

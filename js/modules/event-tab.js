@@ -347,7 +347,7 @@ function profileHtml(ev){
     <textarea class="fi" id="evdb-${id}" rows="3" placeholder="${escapeHtml(ph || '')}"
       style="width:100%;resize:vertical;line-height:1.5">${escapeHtml(val || '')}</textarea></div>`;
 
-  return `<div style="padding:14px 16px 40px;max-width:900px">
+  return `<div class="sec-rows" style="max-width:900px">
 
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
       ${stat(rows.length.toLocaleString(), '참여자 (사람)',
@@ -536,9 +536,9 @@ function statChips(evKey){
 function peopleHtml(ev){
   const shown = filteredRows();
   const picked = evdbPickedPeople.size;
-  return `<div style="padding:10px 16px 0">${statChips(ev.key)}</div>
-    <div style="padding:10px 16px 0">${roleChips(ev.key)}</div>
-    <div style="padding:10px 16px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+  return `<div class="sec">${statChips(ev.key)}</div>
+    <div class="sec">${roleChips(ev.key)}</div>
+    <div class="sec sec-bar">
       ${searchBoxHtml('이름·기업·직함 검색…')}
       <button class="btn" style="font-size:var(--fs-11)" onclick="toggleEvDbPeopleAll()">전체 선택/해제</button>
       <div style="flex:1"></div>
@@ -554,7 +554,7 @@ function peopleHtml(ev){
       <button class="btn" style="font-size:var(--fs-11)" onclick="openEvDbMailList()">메일 대상 모으기</button>
       <button class="btn bp" style="font-size:var(--fs-11)" onclick="exportEvDbPeople()">명단 내보내기 (${shown.length})</button>
     </div>
-    <div id="evdb-rows" style="padding:10px 16px 40px">${peopleRowsHtml()}</div>`;
+    <div id="evdb-rows" class="sec-rows">${peopleRowsHtml()}</div>`;
 }
 
 const searchBoxHtml = (ph) => `<div class="srch" style="width:100%;max-width:340px">
@@ -606,15 +606,13 @@ function peopleRowsHtml(){
 ══════════════════════════════════════════ */
 const yes = (v) => v === 'yes' || v === true;
 const ok = (on) => on ? '<span style="color:var(--g);font-weight:700">✓</span>' : '<span style="color:var(--i5)">—</span>';
-const cardsHtml = (items) => `<div style="padding:12px 16px 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">
-  ${items.map(([n, label, sub]) => `<div style="background:var(--W);border:1px solid var(--i6);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;justify-content:center;gap:2px">
-    <div style="font-size:var(--fs-20);font-weight:700;color:var(--i1);line-height:1.2">${n}</div>
-    <div style="font-size:var(--fs-11);color:var(--i4)">${label}</div>
-    ${sub ? `<div style="font-size:var(--fs-10_5);color:var(--i5)">${sub}</div>` : ''}</div>`).join('')}</div>`;
+const cardsHtml = (items) => `<div class="sec stat-grid">
+  ${items.map(([n, label, sub]) => `<div class="stat-card"><div class="n">${n}</div><div class="l">${label}</div>${
+    sub ? `<div class="s">${sub}</div>` : ''}</div>`).join('')}</div>`;
 const emptyPart = (msg) => `<div style="font-size:var(--fs-12);color:var(--i4);padding:24px 16px">${msg}</div>`;
 const matchQ = (vals) => { const q = evdbQuery.trim().toLowerCase(); return !q || vals.some(v => String(v || '').toLowerCase().includes(q)); };
 /* 명단 머리 — 검색과 «누르면 상세» 안내 */
-const partBarHtml = (ph, n, unit) => `<div style="padding:10px 16px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+const partBarHtml = (ph, n, unit) => `<div class="sec sec-bar">
   ${searchBoxHtml(ph)}<div style="flex:1"></div>
   <span style="font-size:var(--fs-11);color:var(--i4)">${n}${unit} · 줄을 누르면 상세 정보가 열려요</span></div>`;
 /* 이름 — 마스터DB에 있는 사람이면 눌러서 연락처 창을 연다(신청 대기는 아직 연락처가 없다) */
@@ -636,7 +634,7 @@ function peopleSummaryHtml(ev){
     [conf, '참가 확정', `타겟 ${all.length - conf}명`],
     [orgs, '참여 기업'],
     [countries, '국가'],
-  ]) + `<div style="padding:10px 16px 0"><div class="seg">
+  ]) + `<div class="sec"><div class="seg">
     <button class="seg-b${evdbView !== 'orgs' ? ' on' : ''}" onclick="setEvDbView('people')">사람별</button>
     <button class="seg-b${evdbView === 'orgs' ? ' on' : ''}" onclick="setEvDbView('orgs')">기업별</button></div></div>`;
 }
@@ -655,7 +653,7 @@ function exhPartHtml(ev){
     [booth, '부스 확정', `${live.length - booth}곳 남음`],
     [live.filter(x => yes(x.settled)).length, '정산 완료'],
   ]) + partBarHtml('기업명·부스 번호 검색…', live.length, '곳')
-    + `<div id="evdb-rows" style="padding:10px 16px 40px">${exhPartRowsHtml()}</div>`;
+    + `<div id="evdb-rows" class="sec-rows">${exhPartRowsHtml()}</div>`;
 }
 function exhPartRowsHtml(){
   const people = evPeople(evdbEvent);
@@ -692,7 +690,7 @@ function spPartHtml(ev){
     [l.filter(sp => sp.photo_received_at || sp.photo_file).length, '사진 받음'],
     [l.filter(sp => sp.consent_at).length, '동의서 받음'],
   ]) + partBarHtml('이름·소속 검색…', l.length, '명')
-    + `<div id="evdb-rows" style="padding:10px 16px 40px">${spPartRowsHtml()}</div>`;
+    + `<div id="evdb-rows" class="sec-rows">${spPartRowsHtml()}</div>`;
 }
 function spPartRowsHtml(){
   const l = evSpeakers(evdbEvent).filter(sp => matchQ([sp.name_snapshot, sp.name_en, sp.org_ko, sp.org_en, sp.title_ko]));
@@ -723,7 +721,7 @@ function ptnPartHtml(ev){
     [l.filter(r => r.confirmedAt).length, '참가 확정', `전체 ${l.length}명`],
     ...(none.length ? [[none.length, '셀러·바이어 미지정', '파트너링 탭에서 정해요']] : []),
   ]) + partBarHtml('이름·기업·국가 검색…', l.length, '명')
-    + `<div id="evdb-rows" style="padding:10px 16px 40px">${ptnPartRowsHtml()}</div>`;
+    + `<div id="evdb-rows" class="sec-rows">${ptnPartRowsHtml()}</div>`;
 }
 function ptnPartRowsHtml(){
   const l = evPtnPeople(evdbEvent).filter(r => matchQ([r.name, r.nameEn, r.org, r.orgEn, r.email, countryName(r.country)]));
@@ -744,14 +742,14 @@ function ptnPartRowsHtml(){
 /* ── 기업 ──
    이 화면이 이 탭을 만든 이유다. 행사에서 만난 기업을 골라 타겟으로 보낸다. */
 function orgsHtml(ev){
-  return `<div style="padding:10px 16px 0">${roleChips(ev.key, true)}</div>
-    <div style="padding:10px 16px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+  return `<div class="sec">${roleChips(ev.key, true)}</div>
+    <div class="sec sec-bar">
       ${searchBoxHtml('기업명 검색…')}
       <button class="btn" style="font-size:var(--fs-11)" onclick="toggleEvDbAll()">전체 선택/해제</button>
       <div style="flex:1"></div>
       <button class="btn bp" id="evdb-send-btn" onclick="openEvDbSend()">타겟으로 보내기</button>
     </div>
-    <div id="evdb-rows" style="padding:10px 16px 40px">${orgsRowsHtml()}</div>`;
+    <div id="evdb-rows" class="sec-rows">${orgsRowsHtml()}</div>`;
 }
 
 function filteredOrgs(){
@@ -1359,7 +1357,7 @@ function targetHtml(ev){
   const chip = (v, label, n) => `<button class="seg-b${evdbTgtFil === v ? ' on' : ''}"
     onclick="setEvDbTgtFil('${v}')">${label} ${n}개사</button>`;
 
-  return `<div style="padding:12px 16px 0;max-width:1000px">
+  return `<div class="sec" style="max-width:1000px">
       <div style="font-size:var(--fs-11_5);color:var(--i3);line-height:1.6;margin-bottom:10px">
         <b>${escapeHtml(domNames)}</b> 분야의 기업 ${pool.length}개사를 훑어요 —
         이 행사(${escapeHtml(ev.short || ev.key)})의 타겟으로 잡을 곳을 고르세요.
@@ -1370,7 +1368,7 @@ function targetHtml(ev){
         ${chip('on', '이미 타겟', already.length)}
       </div>
     </div>
-    <div style="padding:10px 16px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <div class="sec sec-bar">
       ${searchBoxHtml('기업명·섹터 검색…')}
       <button class="btn" style="font-size:var(--fs-11)" onclick="toggleEvDbTgtAll()">전체 선택/해제</button>
       <div style="flex:1"></div>
@@ -1378,7 +1376,7 @@ function targetHtml(ev){
         ${evdbTgtFil === 'on' ? 'disabled style="opacity:.5"' : ''}>CRM 타겟으로 잡기${
         evdbPickedTgt.size ? ` (${evdbPickedTgt.size})` : ''}</button>
     </div>
-    <div style="padding:6px 16px 40px">${targetRowsHtml(list)}</div>`;
+    <div class="sec-rows">${targetRowsHtml(list)}</div>`;
 }
 
 function targetRowsHtml(list){
