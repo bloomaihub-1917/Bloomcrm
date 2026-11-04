@@ -22,9 +22,9 @@
 
 import {
   EVENT_LIST, contacts, participations, targets, DOMAINS,
-  EXHIBITORS, exhibitorsForEvent, PART_TYPES, evParts, evPartDone, getOrgById, CO_DB,
+  EXHIBITORS, exhibitorsForEvent, PART_TYPES, evParts, evPartDone, getOrgById, CO_DB, speakersForEvent,
 } from '../state.js';
-import { RP, EVENT_PARTS, partStateOf } from '../constants.js';
+import { RP, EVENT_PARTS, partStateOf, PARTNERING_SIDES, PARTNERING_UNSIDED } from '../constants.js';
 import { td, escapeHtml, escAttr, countryName, isMobile } from '../utils.js';
 import { saveEventToSheet, postToSheet } from '../api.js';
 import { batchCreateExhibitors } from '../api/exh-save.js';
@@ -50,7 +50,11 @@ const evdbPickedPeople = new Set();   // 고른 사람의 cid
 let evdbTgtFil = 'new';         // 'new'(아직 타겟 아님) | 'on'(이미 타겟)
 const evdbPickedTgt = new Set();      // 고른 기업의 org id
 
-const VIEWS = [['profile', '개요'], ['people', '참여자'], ['orgs', '기업'], ['target', '협의 대상']];
+/* 탭 — 행사 정보(개요) 뒤에 파트별로 연다: 참가자(사람 전체·기업별), 전시기업, 연사, 파트너링.
+   파트 탭은 위에 숫자 요약, 아래에 명단 — 줄을 누르면 그 사람·기업의 상세 창이 이 자리에서 열린다.
+   'orgs'(기업별)는 참가자 탭 안의 보기라 탭 줄에는 없다. */
+const VIEWS = [['profile', '개요'], ['people', '참가자'], ['exh', '전시기업'], ['sp', '연사'], ['ptn', '파트너링'], ['target', '협의 대상']];
+const tabOf = (v) => v === 'orgs' ? 'people' : v;
 
 /* ══════════════════════════════════════════
    집계 — participations를 행사 기준으로 다시 세운다
@@ -228,7 +232,11 @@ export function setEvDbQuery(v){
   evdbQuery = v;
   const box = document.getElementById('evdb-rows');
   if(!box){ renderEvDb(); return; }
-  box.innerHTML = evdbView === 'orgs' ? orgsRowsHtml() : peopleRowsHtml();
+  box.innerHTML = evdbView === 'orgs' ? orgsRowsHtml()
+    : evdbView === 'exh' ? exhPartRowsHtml()
+    : evdbView === 'sp' ? spPartRowsHtml()
+    : evdbView === 'ptn' ? ptnPartRowsHtml()
+    : peopleRowsHtml();
 }
 
 /* ══════════════════════════════════════════
@@ -258,14 +266,17 @@ export function renderEvDb(){
 
   const seg = `<div class="db-bar vtabs">
     <div class="seg">
-      ${VIEWS.map(([k, l]) => `<button class="seg-b${evdbView === k ? ' on' : ''}"
+      ${VIEWS.map(([k, l]) => `<button class="seg-b${tabOf(evdbView) === k ? ' on' : ''}"
         onclick="setEvDbView('${k}')">${l}</button>`).join('')}
     </div></div>`;
 
   el.innerHTML = seg + (evdbView === 'profile' ? profileHtml(ev)
-    : evdbView === 'orgs' ? orgsHtml(ev)
+    : evdbView === 'orgs' ? peopleSummaryHtml(ev) + orgsHtml(ev)
     : evdbView === 'target' ? targetHtml(ev)
-    : peopleHtml(ev));
+    : evdbView === 'exh' ? exhPartHtml(ev)
+    : evdbView === 'sp' ? spPartHtml(ev)
+    : evdbView === 'ptn' ? ptnPartHtml(ev)
+    : peopleSummaryHtml(ev) + peopleHtml(ev));
 }
 
 /* 행사의 분야 — 여러 개 걸칠 수 있다(바이오 행사인데 건축 자재사가 오는 식).
@@ -546,7 +557,7 @@ function peopleRowsHtml(){
     <div style="display:flex;align-items:center;gap:7px">
       <input type="checkbox" ${evdbPickedPeople.has(r.cid) ? 'checked' : ''}
         onchange="pickEvDbPerson(${cidArg(r)},this.checked)">
-      <span style="font-size:var(--fs-13);font-weight:600;color:var(--i1)">${escapeHtml(r.name)}</span>
+      <span style="font-size:var(--fs-13)">${personNameHtml(r)}</span>
       ${confirmBadge(r)}
       ${roleBadges(r)}
     </div>
@@ -563,7 +574,7 @@ function peopleRowsHtml(){
       <td style="text-align:center"><input type="checkbox" ${evdbPickedPeople.has(r.cid) ? 'checked' : ''}
         onchange="pickEvDbPerson(${cidArg(r)},this.checked)"></td>
       <td>${confirmBadge(r)}</td>
-      <td><span style="font-weight:600">${escapeHtml(r.name)}</span>${r.nameEn ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(r.nameEn)}</div>` : ''}</td>
+      <td>${personNameHtml(r)}${r.nameEn ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(r.nameEn)}</div>` : ''}</td>
       <td>${escapeHtml(r.org)}${r.orgEn && r.orgEn !== r.org ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(r.orgEn)}</div>` : ''}</td>
       <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(r.title)}</td>
       <td>${roleBadges(r)}</td>
@@ -571,6 +582,149 @@ function peopleRowsHtml(){
       <td style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(r.email)}</td>
     </tr>`).join('')}
     </tbody></table></div>`;
+}
+
+/* ══════════════════════════════════════════
+   파트별 탭 — 참가자·전시기업·연사·파트너링
+   위에 숫자 요약(카드), 아래에 명단. 줄을 누르면 그 사람·기업의 상세 창이
+   이 자리에서 열린다(마스터DB 연락처 창·전시 참가기업 창·연사 창).
+   데이터는 새로 만들지 않는다 — 각 탭이 쓰는 것을 행사로 걸러 보여 줄 뿐이다.
+══════════════════════════════════════════ */
+const yes = (v) => v === 'yes' || v === true;
+const ok = (on) => on ? '<span style="color:var(--g);font-weight:700">✓</span>' : '<span style="color:var(--i5)">—</span>';
+const cardsHtml = (items) => `<div style="padding:12px 16px 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">
+  ${items.map(([n, label, sub]) => `<div style="background:var(--W);border:1px solid var(--i6);border-radius:var(--r);padding:10px 14px">
+    <div style="font-size:var(--fs-20);font-weight:700;color:var(--i1)">${n}</div>
+    <div style="font-size:var(--fs-11);color:var(--i4)">${label}</div>
+    ${sub ? `<div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:2px">${sub}</div>` : ''}</div>`).join('')}</div>`;
+const emptyPart = (msg) => `<div style="font-size:var(--fs-12);color:var(--i4);padding:24px 16px">${msg}</div>`;
+const matchQ = (vals) => { const q = evdbQuery.trim().toLowerCase(); return !q || vals.some(v => String(v || '').toLowerCase().includes(q)); };
+/* 명단 머리 — 검색과 «누르면 상세» 안내 */
+const partBarHtml = (ph, n, unit) => `<div style="padding:12px 16px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+  ${searchBoxHtml(ph)}<div style="flex:1"></div>
+  <span style="font-size:var(--fs-11);color:var(--i4)">${n}${unit} · 줄을 누르면 상세 정보가 열려요</span></div>`;
+/* 이름 — 마스터DB에 있는 사람이면 눌러서 연락처 창을 연다(신청 대기는 아직 연락처가 없다) */
+function personNameHtml(r){
+  if(r.pendingId || r.cid == null) return `<span style="font-weight:600">${escapeHtml(r.name)}</span>`;
+  return `<a href="javascript:void(0)" style="font-weight:600;color:var(--i1)" title="연락처 상세 보기"
+    onclick="event.stopPropagation();openContactDr(${escAttr(JSON.stringify(r.cid))})">${escapeHtml(r.name)}</a>`;
+}
+
+/* ── 참가자 — 사람 전체. 위 요약 + 사람별/기업별 ── */
+function peopleSummaryHtml(ev){
+  const all = evPeople(ev.key);
+  const conf = all.filter(r => r.confirmedAt).length;
+  const orgs = evOrgs(ev.key).length;
+  const countries = new Set(all.map(r => r.country).filter(Boolean)).size;
+  const pend = all.filter(r => r.pendingId).length;
+  return cardsHtml([
+    [all.length, '참가자 (사람)', pend ? `신청 대기 ${pend}명 포함` : ''],
+    [conf, '참가 확정', `타겟 ${all.length - conf}명`],
+    [orgs, '참여 기업'],
+    [countries, '국가'],
+  ]) + `<div style="padding:12px 16px 0"><div class="seg">
+    <button class="seg-b${evdbView !== 'orgs' ? ' on' : ''}" onclick="setEvDbView('people')">사람별</button>
+    <button class="seg-b${evdbView === 'orgs' ? ' on' : ''}" onclick="setEvDbView('orgs')">기업별</button></div></div>`;
+}
+
+/* ── 전시기업 — 이 행사의 참가기업(전시 탭과 같은 데이터) ── */
+const exhName = (x) => { const o = x.org_id ? getOrgById(x.org_id) : null; return (o && o.name_ko) || x.company_name || (o && o.name_en) || ''; };
+const exhNameEn = (x) => { const o = x.org_id ? getOrgById(x.org_id) : null; return (o && o.name_en) || x.book_name_en || ''; };
+function exhPartHtml(ev){
+  const xs = exhibitorsForEvent(ev.key);
+  if(!xs.length) return emptyPart('이 행사에는 등록된 참가기업이 없어요. 전시 탭에서 참가기업을 불러오면 여기에 정리돼요.');
+  const live = xs.filter(x => x.status !== '취소');
+  const booth = live.filter(x => yes(x.booth_confirmed) || x.booth_confirmed_at).length;
+  return cardsHtml([
+    [live.length, '참가기업', xs.length > live.length ? `취소 ${xs.length - live.length}곳 제외` : ''],
+    [live.filter(x => yes(x.app_received)).length, '신청서 받음'],
+    [booth, '부스 확정', `${live.length - booth}곳 남음`],
+    [live.filter(x => yes(x.settled)).length, '정산 완료'],
+  ]) + partBarHtml('기업명·부스 번호 검색…', live.length, '곳')
+    + `<div id="evdb-rows" style="padding:8px 16px 40px">${exhPartRowsHtml()}</div>`;
+}
+function exhPartRowsHtml(){
+  const people = evPeople(evdbEvent);
+  const l = exhibitorsForEvent(evdbEvent).filter(x => matchQ([exhName(x), exhNameEn(x), x.booth_no]));
+  if(!l.length) return emptyPart('해당하는 참가기업이 없어요.');
+  return `<div style="overflow-x:auto"><table style="width:100%">
+    <thead><tr><th>기업명</th><th>부스</th><th>상태</th><th>담당자</th><th style="text-align:center">신청서</th><th style="text-align:center">부스 확정</th><th style="text-align:center">정산</th></tr></thead><tbody>
+    ${l.map(x => {
+      /* company_key는 영문명에서 만든 것이 많고(greencellbio) 사람의 orgKey는 국문명에서 온다(그린셀바이오) —
+         참가기업 쪽 키 셋 중 하나와 사람의 국문·영문 키 중 하나가 맞으면 같은 기업으로 본다 */
+      const keys = new Set([x.company_key, normalizeCompanyKey(exhName(x)), normalizeCompanyKey(exhNameEn(x))].filter(Boolean));
+      const ps = people.filter(r => !r.pendingId && (keys.has(r.orgKey) || keys.has(normalizeCompanyKey(r.orgEn))));
+      return `<tr style="cursor:pointer" onclick="openExhDr('${escAttr(x.id)}')" title="참가기업 상세 보기">
+        <td><span style="font-weight:600">${escapeHtml(exhName(x))}</span>${exhNameEn(x) ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(exhNameEn(x))}</div>` : ''}</td>
+        <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(x.booth_no || '')}${x.booth_type ? ` <span style="color:var(--i4)">${escapeHtml(x.booth_type)}${x.booth_qty ? ' ×' + escapeHtml(x.booth_qty) : ''}</span>` : ''}</td>
+        <td>${x.status ? `<span class="pill ${x.status === '취소' ? 'p-red' : 'p-gray'}">${escapeHtml(x.status)}</span>` : ''}</td>
+        <td style="font-size:var(--fs-11);color:var(--i3)">${ps.length ? escapeHtml(ps.slice(0, 2).map(p => p.name).join(', ')) + (ps.length > 2 ? ` 외 ${ps.length - 2}명` : '') : '<span style="color:var(--i5)">미등록</span>'}</td>
+        <td style="text-align:center">${ok(yes(x.app_received))}</td>
+        <td style="text-align:center">${ok(yes(x.booth_confirmed) || !!x.booth_confirmed_at)}</td>
+        <td style="text-align:center">${ok(yes(x.settled))}</td></tr>`;
+    }).join('')}</tbody></table></div>`;
+}
+
+/* ── 연사 — 이 행사의 연사(연사 탭과 같은 데이터). 숨긴 연사는 뺀다 ── */
+const evSpeakers = (evKey) => speakersForEvent(evKey).filter(sp => sp.hidden !== 'yes');
+const spConfirmed = (sp) => sp.status === '확정' || !!sp.confirmed_at;
+function spPartHtml(ev){
+  const l = evSpeakers(ev.key);
+  if(!l.length) return emptyPart('이 행사에는 등록된 연사가 없어요. 연사 탭에서 연사를 넣으면 여기에 정리돼요.');
+  const conf = l.filter(spConfirmed).length;
+  return cardsHtml([
+    [l.length, '연사', `확정 ${conf}명`],
+    [l.filter(sp => sp.profile_received_at).length, '프로필 받음'],
+    [l.filter(sp => sp.photo_received_at || sp.photo_file).length, '사진 받음'],
+    [l.filter(sp => sp.consent_at).length, '동의서 받음'],
+  ]) + partBarHtml('이름·소속 검색…', l.length, '명')
+    + `<div id="evdb-rows" style="padding:8px 16px 40px">${spPartRowsHtml()}</div>`;
+}
+function spPartRowsHtml(){
+  const l = evSpeakers(evdbEvent).filter(sp => matchQ([sp.name_snapshot, sp.name_en, sp.org_ko, sp.org_en, sp.title_ko]));
+  if(!l.length) return emptyPart('해당하는 연사가 없어요.');
+  return `<div style="overflow-x:auto"><table style="width:100%">
+    <thead><tr><th>성명</th><th>소속</th><th>직함</th><th>상태</th><th style="text-align:center">프로필</th><th style="text-align:center">사진</th><th style="text-align:center">동의</th></tr></thead><tbody>
+    ${l.map(sp => `<tr style="cursor:pointer" onclick="openSpeakerDr('${escAttr(sp.id)}')" title="연사 상세 보기">
+      <td><span style="font-weight:600">${escapeHtml(sp.name_snapshot || sp.name_en || '')}</span>${sp.name_en && sp.name_snapshot ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(sp.name_en)}</div>` : ''}</td>
+      <td>${escapeHtml(sp.org_ko || sp.org_en || '')}</td>
+      <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(sp.title_ko || sp.title_en || '')}</td>
+      <td>${sp.status ? `<span class="pill ${spConfirmed(sp) ? 'p-green' : 'p-gray'}">${escapeHtml(sp.status)}</span>` : ''}</td>
+      <td style="text-align:center">${ok(!!sp.profile_received_at)}</td>
+      <td style="text-align:center">${ok(!!(sp.photo_received_at || sp.photo_file))}</td>
+      <td style="text-align:center">${ok(!!sp.consent_at)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+/* ── 파트너링 — 셀러·바이어로 참여한 사람(파트너링 탭과 같은 기준: 역할) ── */
+const PTN_ROLES = [...PARTNERING_SIDES.flatMap(s => s.roles), PARTNERING_UNSIDED];
+const ptnSide = (r) => PARTNERING_SIDES.find(s => s.roles.some(x => r.roles.has(x)));
+const evPtnPeople = (evKey) => evPeople(evKey).filter(r => PTN_ROLES.some(x => r.roles.has(x)));
+function ptnPartHtml(ev){
+  const l = evPtnPeople(ev.key);
+  if(!l.length) return emptyPart('이 행사에는 셀러·바이어로 참여한 사람이 없어요.');
+  const orgN = (rs) => new Set(rs.map(r => r.orgKey).filter(Boolean)).size;
+  const none = l.filter(r => !ptnSide(r));
+  return cardsHtml([
+    ...PARTNERING_SIDES.map(s => { const rs = l.filter(r => ptnSide(r) === s); return [`${orgN(rs)}<span style="font-size:var(--fs-12);font-weight:600;color:var(--i3)">개사</span>`, s.label, `${rs.length}명`]; }),
+    [l.filter(r => r.confirmedAt).length, '참가 확정', `전체 ${l.length}명`],
+    ...(none.length ? [[none.length, '셀러·바이어 미지정', '파트너링 탭에서 정해요']] : []),
+  ]) + partBarHtml('이름·기업·국가 검색…', l.length, '명')
+    + `<div id="evdb-rows" style="padding:8px 16px 40px">${ptnPartRowsHtml()}</div>`;
+}
+function ptnPartRowsHtml(){
+  const l = evPtnPeople(evdbEvent).filter(r => matchQ([r.name, r.nameEn, r.org, r.orgEn, r.email, countryName(r.country)]));
+  if(!l.length) return emptyPart('해당하는 참가자가 없어요.');
+  return `<div style="overflow-x:auto"><table style="width:100%">
+    <thead><tr><th>구분</th><th>성명</th><th>기업·기관</th><th>직함</th><th>국가</th><th>연락처</th><th>참가</th></tr></thead><tbody>
+    ${l.map(r => { const s = ptnSide(r); const click = !r.pendingId && r.cid != null;
+      return `<tr${click ? ` style="cursor:pointer" onclick="openContactDr(${escAttr(JSON.stringify(r.cid))})" title="연락처 상세 보기"` : ''}>
+      <td>${s ? `<span class="pill ${escAttr(s.cls)}">${escapeHtml(s.label)}</span>` : '<span class="pill p-gray">미지정</span>'}</td>
+      <td><span style="font-weight:600">${escapeHtml(r.name)}</span>${r.nameEn ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(r.nameEn)}</div>` : ''}</td>
+      <td>${escapeHtml(r.org)}</td>
+      <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(r.title)}</td>
+      <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(countryName(r.country) || '')}</td>
+      <td style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(r.email)}</td>
+      <td>${r.confirmedAt ? '<span class="pill p-green">✓ 확정</span>' : '<span class="pill p-gray">타겟</span>'}</td></tr>`; }).join('')}</tbody></table></div>`;
 }
 
 /* ── 기업 ──
