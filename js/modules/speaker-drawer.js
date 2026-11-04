@@ -510,7 +510,7 @@ function flowBoxHtml(sp){
 function adviceHtml(sp){
   return adviceFrame({   // 틀은 shared/advice-panel.js
     a: spDrUi.spAdvice && spDrUi.spAdvice.spId === sp.id ? spDrUi.spAdvice : null,
-    wrapStyle: 'margin-top:8px;padding-top:8px;border-top:1px dashed var(--i6)',
+    wrapStyle: 'margin-top:8px;padding:7px 10px;border:1px solid var(--i6);border-radius:8px;background:var(--W)',   // 참가사 상세 창과 같은 테두리 상자
     inputId: 'sp-advice-q',
     placeholder: '✨ 상황 물어보기 — 예: 발표자료 파일이 깨져서 다시 받아야 해',
     inputTitle: '질문과 이 연사의 진행 상태만 AI에게 보냅니다. 이름·메일 내용은 보내지 않아요',

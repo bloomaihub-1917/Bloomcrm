@@ -195,8 +195,17 @@ function gotMails(x){
      resend  다시 보내기 묶음의 대상인데 묶음을 연 뒤 아직 다시 안 보냈다 → 보낼 차례
      na      해당 없음(부스 변경 안내인데 부스가 그대로인 곳)
    더한 단계는 칸이 없으니 이 단계 메일을 보낸 기록만 본다. «기타 안내»는 차례가 없다(free). */
-const sentOf = (x, key, since) => logsFor(x.id).some(l => l.kind === `exh-${key}` && l.direction !== 'in'
-  && (!since || String(l.ts || '') >= since));
+/* 묶음을 연 뒤 보냈나 — 기록 시각은 분까지라, 묶음을 연 바로 그 분에 그 전에 보낸 메일도 «뒤»로 보였다.
+   묶음을 열 때 그 분에 이미 있던 기록 id(before)를 적어 두고 뺀다. before가 없는 옛 묶음은 전처럼 본다 */
+const afterRound = (l, since, before) => {
+  const t = String(l.ts || '').slice(0, 16);
+  return t > since || (t === since && !(before || []).includes(l.id));
+};
+const sentOf = (x, key, since, before) => logsFor(x.id).some(l => l.kind === `exh-${key}` && l.direction !== 'in'
+  && (!since || afterRound(l, since, before)));
+/* 묶음을 여는 그 분에 대상들이 이미 가진 이 단계 기록 id */
+const sameMinuteLogs = (ids, key, since) => ids.flatMap(id => logsFor(id)
+  .filter(l => l.kind === `exh-${key}` && String(l.ts || '').slice(0, 16) === since).map(l => l.id));
 
 function baseState(x, st){
   if(st.key === 'booth_change') return boothChange(x).changed ? 'due' : 'na';
@@ -213,7 +222,7 @@ function baseState(x, st){
 }
 export function exhMailState(x, st){
   if(!st || st.key === 'note' || st.lib) return 'free';
-  if(st.round && (st.round.targets || []).includes(x.id)) return sentOf(x, st.key, st.round.since) ? 'sent' : 'resend';
+  if(st.round && (st.round.targets || []).includes(x.id)) return sentOf(x, st.key, st.round.since, st.round.before) ? 'sent' : 'resend';
   return baseState(x, st);
 }
 const isTurn = (s) => s === 'due' || s === 'late' || s === 'resend';
@@ -404,7 +413,8 @@ export async function bmToContact(){
 const round = makeResendRound({
   ctx: () => ({ bm, st: bm && curStep() }),
   members: (ids) => eventExhibitors().filter(x => ids.has(x.id)),
-  resent: (x, key, since) => sentOf(x, key, since),
+  resent: (x, key, since, before) => sentOf(x, key, since, before),
+  before: (ids, key, since) => sameMinuteLogs(ids, key, since),
   /* 이미 받았거나 끝낸 곳 — 아직 안 받은 곳은 평소대로 «보낼 차례»라 묶음에 넣지 않는다 */
   targets: (st) => eventExhibitors().filter(x => ['sent', 'late', 'done'].includes(baseState(x, st))).map(x => x.id),
   pushRounds: (fn) => pushRounds(fn),

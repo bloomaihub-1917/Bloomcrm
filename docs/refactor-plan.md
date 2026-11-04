@@ -292,6 +292,10 @@ master에 동작 수정 세 커밋이 따로 들어가 있어서, 견주기는 �
 그래픽 하위 보기 5개(base·item·kind·co·self)와 행사 설정 창은 따로 열어 에러 없음을 봤다.
 도구 메모: split-leaf는 `window.X = X;   // 주석`처럼 뒤에 주석이 붙은 줄을 window 줄로 못 알아본다 — 잠깐 주석을 떼고 돌렸다.
 
+**master 동작 수정 세 개 옮겨 넣기** (✅ 2026-11-04): master의 53eb105(다시 보내기 묶음이 연 그 분의 기존 기록을 «다시 보냄»으로 세던 것)·3337691(연사 일괄 메일 빈 제목 막기)·186c16c(연사 상황 물어보기 칸을 테두리 상자로)를
+이 브랜치 자리에 넣었다 — 묶음은 `shared/mail/resend-round.js`가 열 때 `o.before(ids, key, since)`로 그 분의 기록 id를 받아 적고 `o.resent(…, before)`로 넘긴다. 상자 모양은 `advice-panel` wrapStyle.
+master 사본과 견줌: 보내기 28·상황 물어보기 24·기존 105개 값 모두 같음. 그 뒤 master를 `-s ours`로 합친 기록을 남겼다(내용은 이미 들어 있어 이 브랜치 파일을 그대로 둔다 — 나중에 master로 합칠 때 다시 부딪히지 않게).
+
 ### 파트 I. 서버 — `backend-node/`
 - `routes/mail.js`(1,500줄) → 계정 / 발송 / 보낸 메일 / 받은 메일 / 주인 없는 메일 / 분류.
 - `db/` → `lib/`(pool, contact-ids) · `migrations/`(add-*) · `oneoff/`. 옮길 때 CLAUDE.md의 스크립트 경로도 고친다.

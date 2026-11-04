@@ -20,7 +20,7 @@ import { EVENT_LIST, SPEAKER_LOGS, currentUser, speakersForEvent, evPartDone, co
 import { saveSpeaker } from '../api/conf-save.js';
 import { sendMail, eventMailFrom, loadMailFiles, mailFilesOf } from '../api/mail-send.js';
 import { escapeHtml, escAttr, nowStamp, td } from '../utils.js';
-import { flowSteps, flowStatus, draftFor, fillTemplate, roundTargets, resentAfter,
+import { flowSteps, flowStatus, draftFor, fillTemplate, roundTargets, resentAfter, sameMinuteLogs,
   sessionItems, toldSchedule, stepVariants, autoVariant } from './speaker-flow.js';
 import { libItems, libItem } from '../shared/mail/mail-templates.js';
 import { mailTargets } from '../features/conference/sp-dr-mail.js';
@@ -155,7 +155,8 @@ async function pushRounds(fn){
 const round = makeResendRound({
   ctx: () => ({ bm, st: bm && curStep() }),
   members: (ids) => speakersForEvent(bm.evKey).filter(sp => ids.has(sp.id) && sp.status !== '취소'),
-  resent: (sp, key, since) => resentAfter(sp, key, since),
+  resent: (sp, key, since, before) => resentAfter(sp, key, since, before),
+  before: (ids, key, since) => sameMinuteLogs(ids, key, since),
   targets: (st) => roundTargets(st.key, liveSpeakers(bm.evKey)),
   pushRounds: (fn) => pushRounds(fn),
   track: '연사 다시 보내기',
@@ -356,6 +357,12 @@ async function sendSpBulk(){
   if(!list.length){ say('받을 연사를 골라주세요.'); return; }
   const st = curStep();
   if(!st) return;
+  /* 문구에 한쪽 말만 있으면 그쪽 연사에게 제목 없는 메일이 나간다 — 참가사 일괄 메일처럼 보내기 전에 막는다.
+     초안·보관함 양식·고친 문구 어느 길이든 연사마다 실제로 나갈 제목을 보고 센다 */
+  for(const [en, lang] of [[true, '영문'], [false, '국문']]){
+    const n = list.filter(sp => isEn(sp) === en && (() => { const m = mailFor(sp); return m && !String(m.subject || '').trim(); })()).length;
+    if(n){ say(`${lang}으로 갈 연사 ${n}명의 ${lang} 제목이 비었어요 — ${lang} 문구를 채우거나 그 연사를 빼 주세요.`); return; }
+  }
   const from = await eventMailFrom(bm.evKey);
   if(!from.ok){ say(from.text); return; }
   const notTurn = st.lib ? 0 : list.filter(sp => !isTurn(stateOf(sp, bm.step))).length;

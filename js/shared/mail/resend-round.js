@@ -16,7 +16,8 @@ import { trackAction } from '../../core/audit-log.js';
 /* o — 각자 넘기는 것
    ctx()               { bm, st } — 지금 창 상태와 고른 단계
    members(ids)        묶음 대상 id 중 지금 셀 대상
-   resent(m, key, since) 묶음을 연 뒤 다시 보냈나
+   resent(m, key, since, before) 묶음을 연 뒤 다시 보냈나 — before는 묶음을 연 그 분에 이미 있던 기록 id
+   before(ids, key, since) 묶음을 여는 그 분에 대상들이 이미 가진 이 단계 기록 id(기록 시각이 분까지라 따로 적어 둔다)
    targets(st)         묶음을 열 때의 대상 id들(이미 받았거나 끝낸 곳)
    pushRounds(fn)      묶음 목록을 고쳐 저장 — 실패하면 false
    track               활동 로그 이름 ('참가사 다시 보내기' 등)
@@ -30,7 +31,7 @@ export function makeResendRound(o) {
     if (!r) return null;
     const ids = new Set(r.targets || []);
     const xs = o.members(ids);
-    return { r, total: xs.length, done: xs.filter(x => o.resent(x, st.key, r.since)).length };
+    return { r, total: xs.length, done: xs.filter(x => o.resent(x, st.key, r.since, r.before)).length };
   }
   async function start() {
     const { bm, st } = o.ctx();
@@ -40,8 +41,10 @@ export function makeResendRound(o) {
     if (!targets.length) { alert(o.text.none(st)); return; }
     const label = (prompt(o.text.ask(st, targets.length), `${st.label} 개정판`) || '').trim();
     if (!label) return;
+    const since = nowStamp();
+    const before = o.before(targets, st.key, since);
     const ok = await o.pushRounds(list => {
-      list.push({ id: `R-${Date.now().toString(36)}`, step: st.key, label, since: nowStamp(), targets,
+      list.push({ id: `R-${Date.now().toString(36)}`, step: st.key, label, since, before, targets,
         by: currentUser?.name || currentUser?.email || '' });
     });
     if (!ok) return;
