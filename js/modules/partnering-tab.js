@@ -309,6 +309,8 @@ function targetRows(){
 const sideBadge = (r) => { const s = sideDef(r.side); return `<span class="pill ${escAttr(s.cls)}">${escapeHtml(s.label)}</span>`; };
 const roleBadges = (r) => (r.roles || []).map(v => `<span class="pill p-gray" style="margin-right:3px">${escapeHtml(v)}</span>`).join('')
   || '<span style="font-size:var(--fs-10_5);color:var(--i5)">이 행사 기록 없음</span>';
+/* 줄을 누르면 그 사람의 연락처 창(마스터DB)이 이 자리에서 열린다 — 체크칸은 고르기만 */
+const openArg = (r) => r.cid != null ? escAttr(JSON.stringify(r.cid)) : '';
 const pickBox = (r) => `<input type="checkbox" ${ptnPicked.has(r.key) ? 'checked' : ''} onchange="pickPtn('${escAttr(r.key)}',this.checked)">`;
 
 function emptyHtml(){
@@ -341,7 +343,9 @@ function rowsHtml(){
   if(isMobile()) return l.map(r => `<label style="display:block;background:var(--W);border:1px solid var(--i6);border-radius:var(--r);padding:10px 12px;margin-bottom:6px">
     <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">${pickBox(r)}${lead(r)}
       <span style="font-size:var(--fs-13);font-weight:600;color:var(--i1)">${escapeHtml(r.org || '소속 없음')}</span></div>
-    <div style="font-size:var(--fs-11_5);color:var(--i2);margin-top:4px">${escapeHtml(r.name)}${r.title ? ' · ' + escapeHtml(r.title) : ''}</div>
+    <div style="font-size:var(--fs-11_5);color:var(--i2);margin-top:4px">${r.cid != null
+      ? `<a href="javascript:void(0)" style="font-weight:600;color:var(--a)" onclick="event.preventDefault();event.stopPropagation();openContactDr(${openArg(r)})">${escapeHtml(r.name)}</a>`
+      : escapeHtml(r.name)}${r.title ? ' · ' + escapeHtml(r.title) : ''}</div>
     <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:2px">${escapeHtml(countryName(r.country) || '')}${r.email ? ' · ' + escapeHtml(r.email) : ''}</div>
   </label>`).join('') + tail;
 
@@ -351,8 +355,8 @@ function rowsHtml(){
       <th>기업·기관</th><th>국가</th><th>성명</th><th>직함</th><th>이메일</th>
       ${ptnView === 'list' ? '<th>연락처</th><th style="width:90px">확정일</th>' : ''}
     </tr></thead><tbody>
-    ${l.map(r => `<tr>
-      <td style="text-align:center">${pickBox(r)}</td>
+    ${l.map(r => `<tr${r.cid != null ? ` style="cursor:pointer" title="참가자 정보 보기" onclick="openContactDr(${openArg(r)})"` : ''}>
+      <td style="text-align:center" onclick="event.stopPropagation()">${pickBox(r)}</td>
       <td>${lead(r)}</td>
       <td><span style="font-weight:600">${escapeHtml(r.org)}</span>${r.orgEn && r.orgEn !== r.org ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(r.orgEn)}</div>` : ''}</td>
       <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(countryName(r.country) || '')}</td>
