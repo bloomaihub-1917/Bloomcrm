@@ -219,7 +219,7 @@ export function renderConf(){
 
   const ev = EVENT_LIST.find(e => e.key === confUi.confEvent);
   if(ttl){
-    ttl.innerHTML = `연사 <span class="tb-s">${ev ? escapeHtml(ev.short || ev.name || ev.key) : '행사를 고르세요'}</span>`;
+    ttl.innerHTML = `연사 <span class="tb-s">${ev ? escapeHtml(ev.short || ev.name || ev.key) + ' · 연사와 프로그램' : '행사를 고르세요'}</span>`;
   }
 
   if(!ev){
@@ -236,9 +236,9 @@ export function renderConf(){
   scheduleSharePublish(ev.key);
 
   const segs = [['dash', '대시보드'], ['pga', 'Program at a Glance'], ['program', 'Program'], ['people', 'Speakers'], ['watch', '파일 감시']];
-  const seg = `<div class="seg" style="margin:0 0 12px">
+  const seg = `<div class="tbar vtabs"><div class="seg">
     ${segs.map(([k, l]) => `<button class="seg-b${confUi.confView === k ? ' on' : ''}" onclick="setConfView('${k}')">${l}</button>`).join('')}
-  </div>`;
+  </div></div>`;
 
   const banner = confLocked() ? `<div style="display:flex;align-items:center;gap:9px;margin:0 0 12px;
       padding:9px 12px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--r);font-size:var(--fs-11_5);color:var(--i5)">
@@ -254,7 +254,7 @@ export function renderConf(){
     : confUi.confView === 'pga' ? window.pgaHtml(ev)
     : confUi.confView === 'watch' ? renderWatchView(ev.key, 'conf')
     : window.programHtml(ev);
-  body.innerHTML = `<div style="padding:14px 16px 40px">${seg}${banner}`
+  body.innerHTML = seg + `<div style="padding:14px 16px 40px">${banner}`
     + (confLocked() ? `<div class="ro">${inner}</div>` : inner) + `</div>`;
 }
 

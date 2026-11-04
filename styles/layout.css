@@ -92,7 +92,7 @@ button{font-family:inherit;cursor:pointer}input,select,textarea{font-family:inhe
 .co-rn{font-size:var(--fs-11);font-weight:600;color:var(--i1)}.co-rm{font-size:var(--fs-10);color:var(--i4);margin-top:1px}
 .co-ct{margin-left:auto;font-size:var(--fs-10);color:var(--i4);white-space:nowrap}
 .sb-ft{padding:9px 14px;border-top:1px solid var(--i6);background:var(--W);font-size:var(--fs-10);color:var(--i4);line-height:1.6;flex-shrink:0}
-.tb{height:50px;background:var(--W);border-bottom:1px solid var(--i6);display:flex;align-items:center;gap:10px;padding:0 20px;flex-shrink:0}
+.tb{height:50px;background:var(--W);border-bottom:1px solid var(--i6);display:flex;align-items:center;gap:10px;padding:0 var(--pad-x);flex-shrink:0}
 .tb-t{font-size:var(--fs-14);font-weight:700;color:var(--i1);letter-spacing:-.01em;flex:1}
 .tb-s{font-size:var(--fs-11);color:var(--i4);font-weight:400;margin-left:5px}
 .page{display:none;flex:1;overflow:hidden;flex-direction:column}.page.on{display:flex}
