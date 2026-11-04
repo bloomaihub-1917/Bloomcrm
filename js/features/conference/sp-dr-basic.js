@@ -238,6 +238,27 @@ export async function createSpeakerContact(){
 
   /* 같은 이름이 이미 있으면 한 번 묻는다 — 검색을 건너뛰고 누르는 일이 있다 */
   const same = contacts.filter(c => (nameKo && c.nameKo === nameKo) || (nameEn && c.nameEn === nameEn));
+
+  /* 이름에 소속까지 같으면 같은 사람이다 — 새로 만들지 않고 그 사람을 고르게 한다.
+     행사마다 «새로 등록»을 눌러 같은 사람이 둘 생겼다(노연홍, 11-04 Jump AI·GPBFair). */
+  const normOrg = s => String(s || '').toLowerCase().replace(/\(주\)|㈜|\(재\)|주식회사|재단법인|\s|[().,]/g, '');
+  const spOrgs = [sp.org_ko, sp.org_en].map(normOrg).filter(Boolean);
+  const sameOrg = same.filter(c => {
+    const orgs = [c.orgKo, c.orgEn].map(normOrg).filter(Boolean);
+    return !spOrgs.length || !orgs.length || orgs.some(o => spOrgs.includes(o));
+  });
+  if(sameOrg.length){
+    const box = document.getElementById('sp-con-hits');
+    if(box) box.innerHTML = `<div style="font-size:var(--fs-11);color:var(--no,#b91c1c);padding:5px 2px">
+        마스터DB에 이미 있는 사람이에요 — 새로 만들지 않고 아래에서 골라 연결해 주세요</div>`
+      + sameOrg.slice(0, 8).map(c => `<div class="drw" onclick="linkSpeakerContact('${escAttr(c.id)}')">
+        <div><div class="drn">${escapeHtml(c.nameKo || c.nameEn || c.id)} <span class="btn" style="font-size:var(--fs-10);padding:1px 6px">이 사람으로 연결</span></div>
+        <div class="drm">${escapeHtml([c.orgKo || c.orgEn, c.titleKo || c.titleEn, c.email1].filter(Boolean).join(' · '))}</div></div>
+      </div>`).join('');
+    else alert(`마스터DB에 이미 있는 사람이에요: ${sameOrg[0].nameKo || sameOrg[0].nameEn} — ${sameOrg[0].orgKo || sameOrg[0].orgEn || '소속 없음'}\n검색해서 연결해 주세요.`);
+    return;
+  }
+
   if(same.length && !confirm(`마스터DB에 같은 이름이 ${same.length}명 있어요:
 
 ${
