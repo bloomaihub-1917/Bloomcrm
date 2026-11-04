@@ -13,6 +13,7 @@ import { SPEAKER_LOGS, autoDomestic, currentUser, getSpeakerById, isDomesticSpea
 import { countryOptions, escapeHtml, photoSrc, td } from '../../utils.js';
 import { confLockNotice, confLocked } from './conf-common.js';
 import { spDrUi } from './speaker-drawer-ui.js';
+import { checkBank } from './bank-check.js';
 import { applySpReuse, area, asField, asStamp, closeSpeakerDr, confirmSpReuse, fg, gotRow, needState, openFlowDraft, openSpeakerDr, patchSpeaker, renderSpeakerDr, spField, spSnooze, spStamp, spTravelShow, switchSpeakerDT, toggleSpFlow, txt } from '../../modules/speaker-drawer.js';
 import { createSpeakerContact, linkSpeakerContact, pullSpeakerProfile, pushSpeakerProfile, removeSpeakerFromDr, searchSpeakerContact, spContactField, unlinkSpeakerContact } from './sp-dr-basic.js';
 import { addSpMailFiles, addSpeakerContact, fillSpeakerMail, removeSpMailFile, removeSpeakerContact, scField, sendSpeakerMail, toggleSpDefaultFile, toggleSpWithCo } from './sp-dr-mail.js';
@@ -56,6 +57,16 @@ function bankModeRow(sp){
   </div>`;
 }
 
+/* 계좌 점검 — 칸마다 그 칸에 걸린 문구만 바로 아래에 단다(bank-check.js).
+   한데 모아 보여 주면 어느 칸을 고칠지 다시 찾아야 한다 */
+const LV = { err: ['✕', 'var(--re)'], warn: ['!', 'var(--am)'], info: ['i', 'var(--i4)'] };
+let checks = [];
+function al(field, hint){
+  const lines = checks.filter(x => x.f === field).map(x => `<div style="display:flex;gap:5px;margin-top:2px;line-height:1.5;color:${
+    x.lv === 'info' ? 'var(--i3)' : LV[x.lv][1]}"><b style="color:${LV[x.lv][1]};min-width:10px">${LV[x.lv][0]}</b><span>${escapeHtml(x.msg)}</span></div>`).join('');
+  return (hint || '') + lines;
+}
+
 function domesticBankHtml(sp, nBank){
   return `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
@@ -76,10 +87,10 @@ function domesticBankHtml(sp, nBank){
         `spField('bankbook_received_at',this.value,'통장사본 받은 날')`, nBank || 'opt')}
       ${fg('통장사본 파일명', txt(sp.bankbook_file, `spField('bankbook_file',this.value,'통장사본 파일')`, '원드라이브 파일명'))}
       <div class="fgr">
-        ${fg('은행', txt(sp.bank_name, `spField('bank_name',this.value,'은행')`, '예: 국민은행'))}
-        ${fg('예금주', txt(sp.bank_holder, `spField('bank_holder',this.value,'예금주')`, '통장사본에 적힌 그대로'))}
+        ${fg('은행', txt(sp.bank_name, `spField('bank_name',this.value,'은행')`, '예: 국민은행'), al('bank_name'))}
+        ${fg('예금주', txt(sp.bank_holder, `spField('bank_holder',this.value,'예금주')`, '통장사본에 적힌 그대로'), al('bank_holder'))}
       </div>
-      ${fg('계좌번호', txt(sp.bank_account, `spField('bank_account',this.value,'계좌번호')`))}
+      ${fg('계좌번호', txt(sp.bank_account, `spField('bank_account',this.value,'계좌번호')`), al('bank_account'))}
       <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:-4px">
         스캔본은 원드라이브에 두고 여기엔 파일명만 적습니다.</div>
     </div>`;
@@ -107,6 +118,7 @@ function bankHtml(sp, evKey){
     </div>`;
   }
 
+  checks = checkBank(sp, { domestic: isDomestic(sp) });
   if(isDomestic(sp)) return domesticBankHtml(sp, nBank);
 
   return `
@@ -135,35 +147,33 @@ function bankHtml(sp, evKey){
         ${fg('소속 (Institution)', txt(sp.org_en, `spField('org_en',this.value,'소속 영문')`), '기본 정보의 소속 영문과 같은 칸입니다')}
       </div>
       <div style="font-size:var(--fs-11);font-weight:700;color:var(--i3);margin:4px 0 6px">받는 사람 (Account Holder)</div>
-      ${fg('예금주 (Name)', txt(sp.bank_holder, `spField('bank_holder',this.value,'예금주')`, '통장에 찍힌 영문 이름 그대로'))}
+      ${fg('예금주 (Name)', txt(sp.bank_holder, `spField('bank_holder',this.value,'예금주')`, '통장에 찍힌 영문 이름 그대로'), al('bank_holder'))}
       <div class="fgr">
-        ${fg('주소 (Address)', txt(sp.bank_holder_address, `spField('bank_holder_address',this.value,'예금주 주소')`))}
-        ${fg('우편번호 (Postal Code)', txt(sp.bank_holder_postal, `spField('bank_holder_postal',this.value,'예금주 우편번호')`))}
+        ${fg('주소 (Address)', txt(sp.bank_holder_address, `spField('bank_holder_address',this.value,'예금주 주소')`), al('bank_holder_address'))}
+        ${fg('우편번호 (Postal Code)', txt(sp.bank_holder_postal, `spField('bank_holder_postal',this.value,'예금주 우편번호')`), al('bank_holder_postal'))}
       </div>
       <div style="font-size:var(--fs-11);font-weight:700;color:var(--i3);margin:4px 0 6px">은행 (Bank Info)</div>
       <div class="fgr">
-        ${fg('은행 (Bank Name)', txt(sp.bank_name, `spField('bank_name',this.value,'은행')`))}
+        ${fg('은행 (Bank Name)', txt(sp.bank_name, `spField('bank_name',this.value,'은행')`), al('bank_name'))}
         ${fg('지점 (Branch Name)', txt(sp.bank_branch, `spField('bank_branch',this.value,'지점')`))}
       </div>
       <div class="fgr">
-        ${fg('은행 주소 (Bank Address)', txt(sp.bank_address, `spField('bank_address',this.value,'은행 주소')`), '도시와 국가는 꼭 들어가야 합니다')}
-        ${fg('은행 국가', txt(sp.bank_country, `spField('bank_country',this.value,'은행 국가')`))}
+        ${fg('은행 주소 (Bank Address)', txt(sp.bank_address, `spField('bank_address',this.value,'은행 주소')`), al('bank_address', '도시와 국가는 꼭 들어가야 합니다'))}
+        ${fg('은행 국가', txt(sp.bank_country, `spField('bank_country',this.value,'은행 국가')`), al('bank_country'))}
       </div>
       <div class="fgr">
-        ${fg('SWIFT / BIC', txt(sp.bank_swift, `spField('bank_swift',this.value,'SWIFT')`, '8~11자'),
-          sp.bank_swift && !/^[A-Za-z0-9]{8}([A-Za-z0-9]{3})?$/.test(sp.bank_swift.trim())
-            ? '<span style="color:var(--am)">8자나 11자가 아니에요 — 다시 확인해 주세요</span>' : '')}
-        ${fg('계좌번호 (Account No.)', txt(sp.bank_account, `spField('bank_account',this.value,'계좌번호')`))}
+        ${fg('SWIFT / BIC', txt(sp.bank_swift, `spField('bank_swift',this.value,'SWIFT')`, '8~11자'), al('bank_swift'))}
+        ${fg('계좌번호 (Account No.)', txt(sp.bank_account, `spField('bank_account',this.value,'계좌번호')`), al('bank_account'))}
       </div>
       <div class="fgr">
         ${fg('ABA / IBAN 구분', `<select class="fi" onchange="spField('bank_iban_kind',this.value,'ABA·IBAN 구분')">
           ${[['', '(없음)'], ['ABA', 'ABA (미국)'], ['IBAN', 'IBAN']].map(([v, l]) =>
             `<option value="${v}"${(sp.bank_iban_kind || '') === v ? ' selected' : ''}>${l}</option>`).join('')}
-        </select>`)}
-        ${fg('ABA / IBAN 번호', txt(sp.bank_iban, `spField('bank_iban',this.value,'ABA·IBAN')`))}
+        </select>`, al('bank_iban_kind'))}
+        ${fg('ABA / IBAN 번호', txt(sp.bank_iban, `spField('bank_iban',this.value,'ABA·IBAN')`), al('bank_iban'))}
       </div>
       ${fg('은행 코드 (Bank Codes)', txt(sp.bank_code, `spField('bank_code',this.value,'은행 코드')`, '예: Sort Code 123456'),
-        '영국 Sort Code(6자리) · 호주 BSB(6자리) · 캐나다 CC(0+기관번호+지점번호)는 꼭 받습니다')}
+        al('bank_code', '영국 Sort Code(6자리) · 호주 BSB(6자리) · 캐나다 CC(0+기관번호+지점번호)는 꼭 받습니다'))}
       ${fg('비고 (Other Remarks)', area(sp.bank_note, `spField('bank_note',this.value,'계좌 비고')`, '', 2))}
       <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:-4px">
         연사료는 USD로 보냅니다 — USD를 받을 수 있는 계좌인지 확인하세요.</div>

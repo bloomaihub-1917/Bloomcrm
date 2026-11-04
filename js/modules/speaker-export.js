@@ -72,7 +72,7 @@ const titleOf = (sp) => sp.title_en || sp.title_ko || '';
 const talkOf  = (a) => a.title_en || a.title_ko || '';
 
 /* 연사 본인 연락처 — 연사 줄의 «연사 본인»이 먼저, 없으면 마스터DB */
-function selfContact(sp){
+export function selfContact(sp){
   const own = contactsOfSpeaker(sp.id).find(x => /본인/.test(x.kind || '') && (x.email || x.phone));
   const m = sp.contact_id ? contacts.find(c => String(c.id) === String(sp.contact_id)) : null;
   return { email: own?.email || m?.email1 || '', phone: own?.phone || m?.phone1 || '' };
