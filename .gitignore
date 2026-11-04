@@ -18,3 +18,9 @@ backend-node/node_modules/
 backend-node/.env
 # 지우기 전에 남긴 줄들 — 실명·이메일이 그대로 들어 있다
 backend-node/db/backups/
+
+# 내 컴퓨터에만 두는 참고·시안 자료 (용량이 크거나 화면 캡처라 저장소에 넣지 않음)
+businesspress-html5-teamplate-*/
+docs/storyboard/
+docs/mockup/
+redesign_2.html

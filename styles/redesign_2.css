@@ -1,0 +1,81 @@
+/* ══════════════════════════════════════════
+   REDESIGN 2 — Business Press 템플릿 참고
+   redesign_2.html에서만 읽는다. index.html(기존 디자인)은 그대로.
+   기존 layout/components.css 뒤에 덮어써서 기능·마크업은 같은 것을 쓴다.
+   - 주황 포인트(#FFA00B) + 짙은 남색(#2b323f) + 회색 본문(#606060)
+   - Poppins(영문·숫자) + Noto Sans KR(한글)
+   - 대문자 소제목, 주황 밑줄 막대, 알약 모양 주 버튼
+══════════════════════════════════════════ */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap');
+
+:root{
+  --i0:#1A1F28;--i1:#2B323F;--i2:#464646;--i3:#606060;
+  --i4:#858585;--i5:#C9CDD3;--i6:#E5E5E5;--i7:#EFF1F3;
+  --i8:#F7F7F9;--i9:#FBFBFC;--W:#FFFFFF;
+  /* 주황은 흰 글씨와 대비가 낮아 채움용(--a)은 조금 짙게, 글씨용(--ak)은 더 짙게 */
+  --a:#F39400;--ad:#FFF4E0;--ak:#B86E00;
+  --bp-orange:#FFA00B;--bp-navy:#2B323F;--bp-navy2:#232934;
+  --r:4px;--rs:3px;--rl:6px;--rx:10px;
+  --sh:0 2px 6px rgba(43,50,63,.06);--shl:0 12px 30px rgba(43,50,63,.14),0 2px 6px rgba(43,50,63,.06);
+}
+
+body{font-family:'Poppins','Noto Sans KR',-apple-system,"Segoe UI",sans-serif;color:var(--i2);letter-spacing:-.005em}
+
+/* ── 사이드바: 템플릿 헤더/푸터처럼 짙은 남색 ── */
+.sb{background:var(--bp-navy);border-right:none}
+.sb-hd{background:var(--bp-navy2);padding:16px 16px 15px;border-bottom:3px solid var(--bp-orange)}
+.sb-ico{background:var(--bp-orange);border-radius:50%}
+.sb-nm{font-weight:700;text-transform:uppercase;letter-spacing:.04em;font-size:13px}
+.sb-sb{color:rgba(255,255,255,.45)}
+.sb-resize:hover,.sb-resize.dragging{background:var(--bp-orange)}
+
+.atabs{background:var(--bp-navy2);border-bottom:1px solid rgba(255,255,255,.08)}
+.atab{color:rgba(255,255,255,.5);letter-spacing:.08em}
+.atab.on{color:var(--bp-orange);border-bottom-color:var(--bp-orange);background:var(--bp-navy)}
+.atab:hover:not(.on){color:#fff;background:rgba(255,255,255,.04)}
+
+.sbs{border-bottom-color:rgba(255,255,255,.07)}
+.s-v,.s-e,.s-s,.s-q,.s-c,.s-ef{background:transparent}
+.s-e,.s-c,.s-ef{background:rgba(255,255,255,.025)}
+.sbs-bar{background:var(--bp-orange)!important}
+.ev-chip{color:rgba(255,255,255,.72)}
+.ev-chip:hover{background:rgba(255,255,255,.06);color:#fff}
+.ev-chip.on,.ev-chip.on .ev-chip-ct{background:rgba(255,160,11,.14);color:var(--bp-orange)}
+.sb-ft{background:var(--bp-navy2)}
+.sbs-lbl,.sbs-h{color:rgba(255,255,255,.45);text-transform:uppercase;letter-spacing:.08em}
+.nr{color:rgba(255,255,255,.72);border-radius:0;border-left:3px solid transparent}
+.nr:hover{background:rgba(255,255,255,.06);color:#fff}
+.nr.on{background:rgba(255,160,11,.12);color:var(--bp-orange);border-left-color:var(--bp-orange)}
+.nbg{background:rgba(255,255,255,.1);color:rgba(255,255,255,.7)}
+.nr.on .nbg{background:var(--bp-orange);color:#fff}
+.sb .evc,.sb .co-rw{color:rgba(255,255,255,.75)}
+.sb .evc:hover,.sb .co-rw:hover{background:rgba(255,255,255,.06)}
+.sb-srch input{background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.12);color:#fff}
+.sb-srch input::placeholder{color:rgba(255,255,255,.4)}
+.sb-ft{border-top-color:rgba(255,255,255,.08);color:rgba(255,255,255,.6)}
+
+/* ── 상단 바: 대문자 제목 + 주황 밑줄 막대 ── */
+.tb{height:58px;border-bottom:1px solid var(--i6);box-shadow:var(--sh)}
+.tb-t{color:var(--bp-navy);font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;position:relative;padding-bottom:4px}
+.tb-t::after{content:"";position:absolute;left:0;bottom:-4px;width:34px;height:3px;background:var(--bp-orange)}
+.tb-s{text-transform:none;letter-spacing:0}
+
+/* ── 버튼: 각진 보조, 알약 모양 주 버튼 ── */
+.btn{border-radius:var(--r);font-weight:500}
+.btn:hover{border-color:var(--bp-orange);color:var(--ak)}
+.bp{background:var(--bp-orange);border-color:var(--bp-orange);color:#fff;border-radius:50px;letter-spacing:.02em;font-weight:600}
+.bp:hover{background:var(--ak);border-color:var(--ak);color:#fff}
+.pill.p-blue{background:var(--ad);color:var(--ak)}
+
+/* ── 로그인: 템플릿 히어로처럼 짙은 바탕 + 주황 포인트 ── */
+.login-screen{background:linear-gradient(135deg,var(--bp-navy2) 0%,var(--bp-navy) 60%,#3a4352 100%)}
+.login-card{border-radius:var(--rl);border-top:4px solid var(--bp-orange)}
+.login-head{background:var(--bp-navy)}
+.login-logo{background:var(--bp-orange);border-radius:50%}
+.login-title{text-transform:uppercase;letter-spacing:.06em}
+.login-btn{background:var(--bp-orange);border-radius:50px;text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+.login-btn:hover{background:var(--a)}
+.login-inp:focus,.login-domain:focus-within{border-color:var(--bp-orange)}
+
+/* 표 머리글: 템플릿의 대문자 라벨 느낌 */
+th{text-transform:uppercase;letter-spacing:.05em;color:var(--bp-navy)}
