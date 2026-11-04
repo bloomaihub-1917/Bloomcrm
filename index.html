@@ -287,6 +287,7 @@
   <button class="mob-menu-btn" onclick="toggleSb()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
   <div class="mob-title">Master DB</div>
   <button class="mob-action-btn" onclick="document.getElementById('mdb-q-m').focus()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg></button>
+  <button class="mob-action-btn primary" onclick="openAddContactModal()" title="연락처 추가" aria-label="연락처 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
 </div>
   <!-- 모바일 검색 — 전시 탭과 같은 이유로 따로 둔다(.tb가 모바일에서 숨겨진다).
        헤더의 돋보기는 여기로 focus를 건다. -->
@@ -880,6 +881,7 @@
 <div class="mob-header" id="mob-h-conf">
   <button class="mob-menu-btn" onclick="toggleSb()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
   <div class="mob-title" id="mob-conf-ttl">연사</div>
+  <button class="mob-action-btn primary" onclick="addConfSpeaker()" title="연사 추가" aria-label="연사 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
 </div>
   <!-- 모바일 검색 — .tb(상단바)가 모바일에서 통째로 숨겨져 데스크톱 검색창을
        쓸 수 없다. 본문(#conf-body) 밖이라 글자를 칠 때마다 다시 그려도
@@ -904,6 +906,7 @@
 <div class="mob-header" id="mob-h-evdb">
   <button class="mob-menu-btn" onclick="toggleSb()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
   <div class="mob-title" id="mob-evdb-ttl">행사 DB</div>
+  <button class="mob-action-btn primary" onclick="addEvDbPerson()" title="참가자 추가" aria-label="참가자 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
 </div>
   <div class="tb">
     <div class="tb-t" id="evdb-ttl">행사 DB <span class="tb-s">참여자와 기업</span></div>
@@ -919,6 +922,7 @@
   <button class="mob-menu-btn" onclick="toggleSb()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
   <div class="mob-title">파트너링</div>
   <button class="mob-action-btn" onclick="exportPtn()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+  <button class="mob-action-btn primary" onclick="addPtnPerson()" title="참가자 추가" aria-label="참가자 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button>
 </div>
   <div class="mob-srch">
     <div class="srch" style="width:100%">
