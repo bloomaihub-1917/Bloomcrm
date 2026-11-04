@@ -243,7 +243,7 @@ export function renderPtn(){
   const tabs = `<div class="db-bar vtabs"><div class="seg">
       ${VIEWS.filter(([k]) => k !== 'add').map(([k, label]) => `<button class="seg-b${ptnView === k ? ' on' : ''}" onclick="setPtnView('${k}')">${
         label}${k in counts ? ` ${counts[k]}` : ''}</button>`).join('')}
-    </div>${VIEWS.filter(([k]) => k === 'add').map(([k, label]) => `<button class="btn bs${ptnView === k ? ' bp' : ''}" style="margin-left:auto" onclick="setPtnView('${k}')">+ ${label}</button>`).join('')}</div>`;
+    </div>${VIEWS.filter(([k]) => k === 'add').map(([k, label]) => `<button class="btn bs${ptnView === k ? ' bp' : ''}" style="margin-left:auto;white-space:nowrap;flex-shrink:0" onclick="setPtnView('${k}')">+ ${label}</button>`).join('')}</div>`;
   body.innerHTML = `${tabs}${partTypeNoticeHtml()}
     <div style="padding:12px 16px 0;display:flex;gap:10px;flex-wrap:wrap">
       ${PARTNERING_SIDES.map(card).join('')}
