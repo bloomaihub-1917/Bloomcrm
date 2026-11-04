@@ -513,7 +513,8 @@ function adviceHtml(sp){
     const label = { mail: '✉ 메일 초안', bulk: '📨 여러 연사에게', undo: '↶ 되돌리기', tab: '→ 탭 열기', editflow: '✎ 단계 편집' }[t.action];
     return label ? ` <button class="btn" style="font-size:10px;padding:1px 7px" onclick="spAdviceAct('${t.action}','${escAttr(t.arg)}')">${label}</button>` : '';
   };
-  return `<div style="margin-top:8px;padding-top:8px;border-top:1px dashed var(--i6)">
+  // 겉모양은 참가사 상세 창의 상황 물어보기와 같은 테두리 상자
+  return `<div style="margin-top:8px;padding:7px 10px;border:1px solid var(--i6);border-radius:8px;background:var(--W)">
     <div style="display:flex;gap:6px">
       <input class="fi" id="sp-advice-q" style="flex:1;font-size:11.5px" value="${escapeHtml(a ? a.q : '')}"
         placeholder="✨ 상황 물어보기 — 예: 발표자료 파일이 깨져서 다시 받아야 해"
