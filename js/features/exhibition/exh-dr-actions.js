@@ -34,7 +34,7 @@ const ADVICE_TAB = { app_received_at: 'apply', 'calc:invoice': 'billing', 'calc:
 function exhAdviceHtml(x){
   return adviceHtml({   // 틀은 shared/advice-panel.js
     a: exhDrUi.exhAdvice && exhDrUi.exhAdvice.id === x.id ? exhDrUi.exhAdvice : null,
-    wrapStyle: 'margin-bottom:10px;padding:7px 10px;border:1px solid var(--i6);border-radius:8px;background:var(--W)',
+    wrapStyle: 'margin-bottom:10px;padding:7px 10px;border:1px solid var(--i6);border-radius:var(--r);background:var(--W)',
     inputId: 'exh-advice-q',
     placeholder: '✨ 상황 물어보기 — 예: 인보이스 금액이 틀려서 다시 보내야 해',
     inputTitle: '질문과 이 참가사의 진행 상태만 AI에게 보냅니다. 회사명·금액·메일 내용은 보내지 않아요',
@@ -169,7 +169,7 @@ export async function removeRow(arr, id, deleteFn, label = '줄', table = ''){
      줄 전체가 없어진 거라, 되살리려면 모든 칸이 있어야 한다. */
   trackAction('delete', label + ' 삭제', x?.company_name || '',
     `<b>${escapeHtml(x?.company_name || '')}</b> — ${escapeHtml(label)} <b>${escapeHtml(ROW_LABEL(removed))}</b> 지움`
-    + (what ? ` <span style="color:#9C9890">(${escapeHtml(what)})</span>` : ''),
+    + (what ? ` <span style="color:var(--i4)">(${escapeHtml(what)})</span>` : ''),
     { kind: 'exhibitor', id: removed.exhibitor_id, tab: 'billing', table, row: id,
       op: 'delete', before: removed });
 }
@@ -322,7 +322,7 @@ export async function setItemFieldDirect(id, field, value){
   trackAction('update', '정산 직접 수정', x?.company_name || '',
     `<b>${escapeHtml(x?.company_name || '')}</b> — ${escapeHtml(i.name || '')}의 ${escapeHtml(lbl)}을(를) `
     + `<b>${escapeHtml(was || '(빈값)')}</b> → <b>${escapeHtml(String(value ?? '') || '(빈값)')}</b>로 고쳤어요 `
-    + `<span style="color:#9C9890">(신청서를 거치지 않은 변경)</span>`,
+    + `<span style="color:var(--i4)">(신청서를 거치지 않은 변경)</span>`,
     changed('exhibitor_items', id, { [field]: was }, { [field]: value ?? '' },
       { kind: 'exhibitor', id: i.exhibitor_id, tab: 'billing', field }));
   refreshExhViews();

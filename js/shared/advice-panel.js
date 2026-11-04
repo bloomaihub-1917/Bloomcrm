@@ -21,24 +21,24 @@ export function adviceHtml(o){
   const a = o.a;
   const btn = (t) => {
     const label = o.labels[t.action];
-    return label ? ` <button class="btn" style="font-size:10px;padding:1px 7px" onclick="${o.act}('${t.action}','${escAttr(t.arg)}')">${label}</button>` : '';
+    return label ? ` <button class="btn" style="font-size:var(--fs-10);padding:1px 7px" onclick="${o.act}('${t.action}','${escAttr(t.arg)}')">${label}</button>` : '';
   };
   return `<div style="${o.wrapStyle}">
     <div style="display:flex;gap:6px">
-      <input class="fi" id="${o.inputId}" style="flex:1;font-size:11.5px" value="${escapeHtml(a ? a.q : '')}"
+      <input class="fi" id="${o.inputId}" style="flex:1;font-size:var(--fs-11_5)" value="${escapeHtml(a ? a.q : '')}"
         placeholder="${o.placeholder}"
         onkeydown="if(event.key==='Enter')${o.ask}()" title="${o.inputTitle}">
-      <button class="btn" style="font-size:10.5px" onclick="${o.ask}()" ${a && a.loading ? 'disabled' : ''}>${a && a.loading ? '생각 중…' : '물어보기'}</button>
+      <button class="btn" style="font-size:var(--fs-10_5)" onclick="${o.ask}()" ${a && a.loading ? 'disabled' : ''}>${a && a.loading ? '생각 중…' : '물어보기'}</button>
     </div>
-    ${a && a.err ? `<div style="font-size:11px;color:var(--re);margin-top:5px">${escapeHtml(a.err)}</div>` : ''}
-    ${a && a.ans ? `<div style="margin-top:7px;padding:8px 10px;background:var(--ad);border-radius:7px;font-size:11.5px;line-height:1.6">
+    ${a && a.err ? `<div style="font-size:var(--fs-11);color:var(--re);margin-top:5px">${escapeHtml(a.err)}</div>` : ''}
+    ${a && a.ans ? `<div style="margin-top:7px;padding:8px 10px;background:var(--ad);border-radius:var(--rd-7);font-size:var(--fs-11_5);line-height:1.6">
         <div style="font-weight:700;color:var(--i1)">✨ ${escapeHtml(a.ans.summary)}</div>
         <ol style="margin:4px 0 0 18px;padding:0">${a.ans.todo.map(t => `<li style="margin:2px 0">${escapeHtml(t.text)}${btn(t)}</li>`).join('')}</ol>
         ${a.ans.caution ? `<div style="color:var(--am);margin-top:4px">⚠️ ${escapeHtml(a.ans.caution)}</div>` : ''}
         <div style="display:flex;gap:6px;margin-top:6px;align-items:center">
-          ${a.saved ? `<span style="font-size:10.5px;color:var(--g)">${o.savedText}</span>`
-            : `<button class="btn" style="font-size:10px" onclick="${o.save}()" title="${o.saveTitle}">기록에 남기기</button>`}
-          <button class="btn" style="font-size:10px" onclick="${o.clear}()">닫기</button>
+          ${a.saved ? `<span style="font-size:var(--fs-10_5);color:var(--g)">${o.savedText}</span>`
+            : `<button class="btn" style="font-size:var(--fs-10)" onclick="${o.save}()" title="${o.saveTitle}">기록에 남기기</button>`}
+          <button class="btn" style="font-size:var(--fs-10)" onclick="${o.clear}()">닫기</button>
         </div></div>` : ''}
   </div>`;
 }

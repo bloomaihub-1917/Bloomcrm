@@ -74,7 +74,7 @@ export function openMDBToCrmModal(){
 
   pop.innerHTML = `<div class="modal" style="max-width:580px">
     <div class="mh"><div style="flex:1;min-width:0"><div class="mt2">행사에 초청</div>
-      <div style="font-size:11px;color:var(--i4);margin-top:2px">고른 ${mdbSelected.size}명을 행사 참가자로 올리고, 소속 기업을 CRM 타겟으로 함께 잡아요</div></div></div>
+      <div style="font-size:var(--fs-11);color:var(--i4);margin-top:2px">고른 ${mdbSelected.size}명을 행사 참가자로 올리고, 소속 기업을 CRM 타겟으로 함께 잡아요</div></div></div>
     <div class="mb">
       <div class="fgr">
         <div class="fg"><label class="fl">초청할 행사 *</label>
@@ -87,14 +87,14 @@ export function openMDBToCrmModal(){
       </div>
       <label style="display:flex;align-items:flex-start;gap:7px;cursor:pointer;padding:2px 0 6px">
         <input type="checkbox" id="tocrm-conf" onchange="renderMDBToCrmList()" style="margin-top:2px">
-        <span><span style="font-size:12px;font-weight:600">참가 확정으로 넣기</span>
-          <span style="display:block;font-size:10.5px;color:var(--i5);margin-top:2px">
+        <span><span style="font-size:var(--fs-12);font-weight:600">참가 확정으로 넣기</span>
+          <span style="display:block;font-size:var(--fs-10_5);color:var(--i5);margin-top:2px">
             이미 오기로 정해진 사람이면 켜세요 — 오늘 날짜로 확정돼 파트너링·행사 참여자 화면에 바로 나와요.</span></span>
       </label>
       <label style="display:flex;align-items:flex-start;gap:7px;cursor:pointer;padding:2px 0 8px">
         <input type="checkbox" id="tocrm-mk" checked onchange="renderMDBToCrmList()" style="margin-top:2px">
-        <span><span style="font-size:12px;font-weight:600">소속 기업을 CRM 타겟으로도 올리기</span>
-          <span style="display:block;font-size:10.5px;color:var(--i5);margin-top:2px">
+        <span><span style="font-size:var(--fs-12);font-weight:600">소속 기업을 CRM 타겟으로도 올리기</span>
+          <span style="display:block;font-size:var(--fs-10_5);color:var(--i5);margin-top:2px">
             CRM은 기업 단위로 진행 단계를 쫓아요. 이미 그 행사 타겟에 있는 기업은 건드리지 않습니다.</span></span>
       </label>
       <div class="fgr" id="tocrm-crmopts">
@@ -108,8 +108,8 @@ export function openMDBToCrmModal(){
       <div class="fg"><label class="fl">메모</label>
         <input class="fi" id="tocrm-note" placeholder="왜 부르는지 — 참가 이력과 타겟 첫 기록에 남습니다"></div>
       <div class="fg"><label class="fl">초청할 사람</label>
-        <div id="tocrm-list" style="max-height:230px;overflow-y:auto;border:1px solid var(--i7);border-radius:8px;padding:6px"></div></div>
-      <div id="tocrm-msg" style="font-size:11.5px;color:var(--i4);min-height:16px"></div>
+        <div id="tocrm-list" style="max-height:230px;overflow-y:auto;border:1px solid var(--i7);border-radius:var(--r);padding:6px"></div></div>
+      <div id="tocrm-msg" style="font-size:var(--fs-11_5);color:var(--i4);min-height:16px"></div>
     </div>
     <div class="mf2">
       <button class="btn" onclick="closeMDBToCrmModal()">취소</button>
@@ -137,10 +137,10 @@ export function renderMDBToCrmList(){
   el.innerHTML = people.map((c, i) => {
     const dup = invitedAlready(c.id, ev, role);
     const org = String(c.orgKo || c.orgEn || '').trim();
-    return `<label style="display:flex;align-items:center;gap:9px;padding:6px 7px;border-radius:6px;cursor:${dup ? 'default' : 'pointer'};opacity:${dup ? .45 : 1}">
+    return `<label style="display:flex;align-items:center;gap:9px;padding:6px 7px;border-radius:var(--rd-6);cursor:${dup ? 'default' : 'pointer'};opacity:${dup ? .45 : 1}">
       <input type="checkbox" class="tocrm-cb" data-i="${i}" ${dup ? 'disabled' : 'checked'}>
-      <span style="font-weight:600;font-size:12px;min-width:74px">${escapeHtml(c.nameKo || c.nameEn || '(이름 없음)')}</span>
-      <span style="font-size:11px;color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${
+      <span style="font-weight:600;font-size:var(--fs-12);min-width:74px">${escapeHtml(c.nameKo || c.nameEn || '(이름 없음)')}</span>
+      <span style="font-size:var(--fs-11);color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${
         org ? escapeHtml(org) : '<span style="color:var(--i5)">소속 없음</span>'}</span>
       ${dup ? `<span class="pill p-gray">이미 ${escapeHtml(role || '초청')}</span>` : ''}
     </label>`;
@@ -261,8 +261,8 @@ export function openMDBBulkEditModal(){
   pop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.32);z-index:9999;display:flex;align-items:center;justify-content:center';
   pop.onclick = () => closeMDBBulkEditModal();
   pop.innerHTML = `
-    <div style="background:var(--W);border-radius:10px;padding:20px;width:340px;box-shadow:0 12px 40px rgba(0,0,0,.2)" onclick="event.stopPropagation()">
-      <div style="font-size:14px;font-weight:700;margin-bottom:12px">선택한 ${mdbSelected.size}명 일괄 변경</div>
+    <div style="background:var(--W);border-radius:var(--rd-10);padding:20px;width:340px;box-shadow:0 12px 40px rgba(0,0,0,.2)" onclick="event.stopPropagation()">
+      <div style="font-size:var(--fs-14);font-weight:700;margin-bottom:12px">선택한 ${mdbSelected.size}명 일괄 변경</div>
       <div class="fg">
         <label class="fl">기업명(국문) — 비워두면 유지<br>
           <span style="font-weight:400;color:var(--i4)">목록에서 기존 기업을 고르면 그 기업으로 <b>통합</b>, 새 이름을 입력하면 <b>분리</b>돼요</span>
@@ -271,8 +271,8 @@ export function openMDBBulkEditModal(){
         <datalist id="mdb-bulk-org-list">
           ${CO_DB.map(c => `<option value="${escapeHtml(c.nameKo||c.nameEn)}" label="${c.contacts.length}명 배정됨">`).join('')}
         </datalist>
-        <div id="mdb-bulk-org-hint" style="font-size:11px;color:var(--i4);margin-top:4px;min-height:14px"></div>
-        ${commonOrg ? `<button type="button" class="btn bs" style="margin-top:2px;font-size:11px" onclick="suggestMDBSplitName()">🔀 "${escapeHtml(commonOrg)}"에서 분리할 새 이름 제안</button>` : ''}
+        <div id="mdb-bulk-org-hint" style="font-size:var(--fs-11);color:var(--i4);margin-top:4px;min-height:14px"></div>
+        ${commonOrg ? `<button type="button" class="btn bs" style="margin-top:2px;font-size:var(--fs-11)" onclick="suggestMDBSplitName()">🔀 "${escapeHtml(commonOrg)}"에서 분리할 새 이름 제안</button>` : ''}
       </div>
       <div class="fg" style="margin-top:8px"><label class="fl">카테고리 — 유지하려면 선택 안 함</label>
         <select class="fi" id="mdb-bulk-cat"><option value="">변경 안 함</option>

@@ -171,8 +171,8 @@ export function showSaveErrorToast(msg){
     el = document.createElement('div');
     el.id = 'save-error-toast';
     el.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);'
-      + 'background:#DC2626;color:#fff;padding:10px 18px;border-radius:8px;'
-      + 'font-size:13px;font-weight:600;z-index:99999;box-shadow:0 4px 16px rgba(0,0,0,.25);'
+      + 'background:var(--re);color:var(--on);padding:10px 18px;border-radius:var(--r);'
+      + 'font-size:var(--fs-13);font-weight:600;z-index:99999;box-shadow:0 4px 16px rgba(0,0,0,.25);'
       + 'max-width:90vw;text-align:center';
     document.body.appendChild(el);
   }

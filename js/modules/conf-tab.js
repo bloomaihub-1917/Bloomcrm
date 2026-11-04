@@ -48,10 +48,10 @@ export const spLeftPill = (sp) => {
 /* 표에서 바로 봐야 하는 것: 공유를 거절한 항목과 갈라디너 참석 여부 */
 export const spFlagPills = (sp) => {
   const no = consentRefused(sp);
-  return (no.length ? `<span class="pill p-red" style="font-size:9px"
+  return (no.length ? `<span class="pill p-red" style="font-size:var(--fs-9)"
       title="${escapeHtml(`동의하지 않음: ${no.join(', ')} — 자료집·배포에서 빼야 해요`)}">공유 ✕ ${escapeHtml(no.join('·'))}</span>` : '')
-    + (sp.gala_rsvp === 'yes' ? '<span class="pill p-green" style="font-size:9px" title="갈라디너 참석">갈라 참석</span>'
-      : sp.gala_rsvp === 'no' ? '<span class="pill p-gray" style="font-size:9px" title="갈라디너 불참">갈라 불참</span>' : '');
+    + (sp.gala_rsvp === 'yes' ? '<span class="pill p-green" style="font-size:var(--fs-9)" title="갈라디너 참석">갈라 참석</span>'
+      : sp.gala_rsvp === 'no' ? '<span class="pill p-gray" style="font-size:var(--fs-9)" title="갈라디너 불참">갈라 불참</span>' : '');
 };
 import { postToSheet } from '../api.js';
 import { saveConfSession, deleteConfSession, saveSpeaker, deleteSpeaker, saveSessionSpeaker, deleteSessionSpeaker, saveSpeakerContact, deleteSpeakerContact, deleteSpeakerLog } from '../api/conf-save.js';
@@ -109,7 +109,7 @@ export function buildConfEvList(){
   const row = (e, n) => `<button class="nr${confUi.confEvent === e.key ? ' on' : ''}" onclick="setConfEvent('${escAttr(e.key)}')">
       <span class="ev-pill-dot" style="background:${escAttr(e.color || '#9C9890')}"></span>${escapeHtml(e.short || e.name || e.key)}
       ${n ? `<span class="nbg">${n}</span>` : ''}</button>`;
-  const head = (t) => `<div style="font-size:10px;color:var(--i4);margin:10px 0 4px;padding-left:2px">${t}</div>`;
+  const head = (t) => `<div style="font-size:var(--fs-10);color:var(--i4);margin:10px 0 4px;padding-left:2px">${t}</div>`;
   const group = (arr, title, count) => arr.length
     ? (title ? head(title) : '') + arr.map(e => row(e, count ? speakersForEvent(e.key).length : 0)).join('')
     : '';
@@ -117,13 +117,13 @@ export function buildConfEvList(){
   /* 설정에서 컨퍼런스를 «안 함»으로 둔 행사는 목록에서 뺀다 — 몇 개가 빠졌는지와
      켜는 곳만 한 줄로 남긴다 */
   const hiddenNote = off.length
-    ? `<div style="font-size:10px;color:var(--i5);margin:10px 0 0;padding-left:2px"
+    ? `<div style="font-size:var(--fs-10);color:var(--i5);margin:10px 0 0;padding-left:2px"
          title="${escapeHtml(off.map(e => e.short || e.name || e.key).join(', '))}">컨퍼런스 안 하는 행사 ${off.length}개는 숨겼어요 — 설정 › 행사 관리에서 켜요</div>`
     : '';
   el.innerHTML = ((
       group(doing, '', true)
     + group(done, '진행 완료', true)
-  ) || '<div style="font-size:11px;color:var(--i4);padding:6px 2px">진행 중인 컨퍼런스가 없어요</div>') + hiddenNote;
+  ) || '<div style="font-size:var(--fs-11);color:var(--i4);padding:6px 2px">진행 중인 컨퍼런스가 없어요</div>') + hiddenNote;
 
   /* 휴대폰 머리줄 — «연사»라는 탭 이름만으로는 어느 행사를 보고 있는지 모른다.
      사이드바를 열지 않고도 바꿀 수 있게 행사 이름 자체를 고르는 칸으로 둔다. */
@@ -170,7 +170,7 @@ export function setConfView(v){
 /* ── 도움 함수 ── */
 const roleDef = (role) => SPEAKER_ROLES.find(r => r.key === role);
 export const roleCls = (role) => (roleDef(role) || {}).cls || 'p-gray';
-const roleChip = (role) => `<span class="pill ${roleCls(role)}" style="font-size:10px">${escapeHtml(role || '역할 없음')}</span>`;
+const roleChip = (role) => `<span class="pill ${roleCls(role)}" style="font-size:var(--fs-10)">${escapeHtml(role || '역할 없음')}</span>`;
 
 export const dayLabel = (d) => {
   if(!d) return '날짜 미정';
@@ -186,10 +186,10 @@ export function countryChip(sp){
   const nat = sp.nationality, res = sp.residence_country;
   if(!nat && !res) return '';
   if(!nat || !res || nat === res){
-    return `<span class="pill p-gray" style="font-size:9px">${escapeHtml(countryName(nat || res))}</span>`;
+    return `<span class="pill p-gray" style="font-size:var(--fs-9)">${escapeHtml(countryName(nat || res))}</span>`;
   }
   const basis = sp.pay_basis === 'nationality' ? 'nationality' : 'residence';
-  const mark = (which, v) => `<span class="pill ${which === basis ? 'p-teal' : 'p-gray'}" style="font-size:9px"
+  const mark = (which, v) => `<span class="pill ${which === basis ? 'p-teal' : 'p-gray'}" style="font-size:var(--fs-9)"
     title="${escapeHtml(`${which === 'residence' ? '거주지' : '국적'}${which === basis ? ' — 지급 기준' : ''}`)}">${escapeHtml(countryName(v))}</span>`;
   return `${mark('residence', res)}${mark('nationality', nat)}`;
 }
@@ -205,7 +205,7 @@ export function schedAlertHtml(evKey, all){
   if(!ch.length) return '';
   const names = ch.slice(0, 4).map(sp => sp.name_snapshot || sp.name_en || sp.id).join(', ') + (ch.length > 4 ? ` 외 ${ch.length - 4}명` : '');
   return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:9px 12px;margin:-4px 0 10px;
-      border:1px solid var(--am);border-radius:10px;background:var(--W);font-size:11.5px">
+      border:1px solid var(--am);border-radius:var(--rd-10);background:var(--W);font-size:var(--fs-11_5)">
     <b style="color:var(--am)">일정 바뀐 연사 ${ch.length}명</b>
     <span style="color:var(--i3)">${escapeHtml(names)} — 알린 일정과 지금 일정이 달라요</span>
     <button class="btn bp bs" style="margin-left:auto" onclick="openSpeakerBulkMail('${escAttr(evKey)}','schedule')">✉ 일정 변경 안내 보내기</button>
@@ -219,7 +219,7 @@ export function renderConf(){
 
   const ev = EVENT_LIST.find(e => e.key === confUi.confEvent);
   if(ttl){
-    ttl.innerHTML = `연사 <span class="tb-s">${ev ? escapeHtml(ev.short || ev.name || ev.key) : '행사를 고르세요'}</span>`;
+    ttl.innerHTML = `연사 <span class="tb-s">${ev ? escapeHtml(ev.short || ev.name || ev.key) + ' · 연사와 프로그램' : '행사를 고르세요'}</span>`;
   }
 
   if(!ev){
@@ -236,12 +236,12 @@ export function renderConf(){
   scheduleSharePublish(ev.key);
 
   const segs = [['dash', '대시보드'], ['pga', 'Program at a Glance'], ['program', 'Program'], ['people', 'Speakers'], ['watch', '파일 감시']];
-  const seg = `<div class="seg" style="margin:0 0 12px">
+  const seg = `<div class="db-bar vtabs"><div class="seg">
     ${segs.map(([k, l]) => `<button class="seg-b${confUi.confView === k ? ' on' : ''}" onclick="setConfView('${k}')">${l}</button>`).join('')}
-  </div>`;
+  </div></div>`;
 
   const banner = confLocked() ? `<div style="display:flex;align-items:center;gap:9px;margin:0 0 12px;
-      padding:9px 12px;background:var(--i8);border:1px solid var(--i6);border-radius:8px;font-size:11.5px;color:var(--i5)">
+      padding:9px 12px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--r);font-size:var(--fs-11_5);color:var(--i5)">
       🔒 끝난 컨퍼런스라 열람만 됩니다. 고치려면 <b>설정 › 행사 관리 › 진행 파트</b>에서 진행 중으로 되돌리세요.
     </div>` : '';
 
@@ -254,13 +254,13 @@ export function renderConf(){
     : confUi.confView === 'pga' ? window.pgaHtml(ev)
     : confUi.confView === 'watch' ? renderWatchView(ev.key, 'conf')
     : window.programHtml(ev);
-  body.innerHTML = `<div style="padding:14px 16px 40px">${seg}${banner}`
+  body.innerHTML = seg + `<div style="padding:14px 16px 40px">${banner}`
     + (confLocked() ? `<div class="ro">${inner}</div>` : inner) + `</div>`;
 }
 
 const emptyBox = (msg) => `<div style="padding:40px 16px">
   <div style="max-width:560px;margin:0 auto;padding:20px;background:var(--i8);
-    border:1px solid var(--i6);border-radius:10px;font-size:12.5px;color:var(--i5);line-height:1.7">${msg}</div></div>`;
+    border:1px solid var(--i6);border-radius:var(--rd-10);font-size:var(--fs-12_5);color:var(--i5);line-height:1.7">${msg}</div></div>`;
 
 /* «프로그램 — 일자·세션·배정»은 ../features/conference/conf-program.js로 떼어 냈다 — 그 파일이 스스로 window에 건다 */
 /* «프로그램표(PROGRAM AT A GLANCE)»은 ../features/conference/conf-pga.js로 떼어 냈다 — 그 파일이 스스로 window에 건다 */

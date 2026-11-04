@@ -31,27 +31,27 @@ function dLogs(x){
     const isInq = l.kind === 'inquiry';
     const unanswered = isInq && !l.answered_at;
     const d = daysSince(l.ts);
-    return `<div style="padding:10px 11px;border-radius:8px;margin-bottom:6px;background:${unanswered ? 'var(--ab)' : 'var(--i9)'};border-left:3px solid ${unanswered ? 'var(--am)' : isInq ? 'var(--g)' : 'var(--i6)'}">
+    return `<div style="padding:10px 11px;border-radius:var(--r);margin-bottom:6px;background:${unanswered ? 'var(--ab)' : 'var(--i9)'};border-left:3px solid ${unanswered ? 'var(--am)' : isInq ? 'var(--g)' : 'var(--i6)'}">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
         <span class="pill ${isInq ? (unanswered ? 'p-amber' : 'p-green') : 'p-gray'}">${isInq ? (unanswered ? (l.status === 'hold' ? '확인 중' : '답변 대기') : '답변 완료') : '기록'}</span>
         ${l.category ? `<span class="pill p-gray">${escapeHtml(l.category)}</span>` : ''}
-        ${l.channel ? `<span style="font-size:10.5px;color:var(--i4)">${escapeHtml(l.channel)}</span>` : ''}
-        ${l.counterpart ? `<span style="font-size:10.5px;color:var(--i4)">· ${escapeHtml(l.counterpart)}</span>` : ''}
-        <span style="font-size:10.5px;color:var(--i5);margin-left:auto">${escapeHtml(l.ts || '')}${unanswered && d > 0 ? ` · ${d}일 경과` : ''}</span>
+        ${l.channel ? `<span style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(l.channel)}</span>` : ''}
+        ${l.counterpart ? `<span style="font-size:var(--fs-10_5);color:var(--i4)">· ${escapeHtml(l.counterpart)}</span>` : ''}
+        <span style="font-size:var(--fs-10_5);color:var(--i5);margin-left:auto">${escapeHtml(l.ts || '')}${unanswered && d > 0 ? ` · ${d}일 경과` : ''}</span>
       </div>
-      ${l.subject ? `<div style="font-size:12.5px;font-weight:700;margin-bottom:3px">${escapeHtml(l.subject)}</div>` : ''}
-      ${l.body ? `<div style="font-size:12px;color:var(--i2);white-space:pre-wrap;line-height:1.5">${escapeHtml(l.body)}</div>` : ''}
-      ${l.answered_at ? `<div style="margin-top:7px;padding:7px 9px;background:var(--W);border-radius:6px">
-          <div style="font-size:10.5px;color:var(--g);font-weight:700;margin-bottom:2px">답변 · ${escapeHtml(l.answered_at)}</div>
-          <div style="font-size:12px;color:var(--i2);white-space:pre-wrap">${escapeHtml(l.answer || '')}</div></div>` : ''}
+      ${l.subject ? `<div style="font-size:var(--fs-12_5);font-weight:700;margin-bottom:3px">${escapeHtml(l.subject)}</div>` : ''}
+      ${l.body ? `<div style="font-size:var(--fs-12);color:var(--i2);white-space:pre-wrap;line-height:1.5">${escapeHtml(l.body)}</div>` : ''}
+      ${l.answered_at ? `<div style="margin-top:7px;padding:7px 9px;background:var(--W);border-radius:var(--rd-6)">
+          <div style="font-size:var(--fs-10_5);color:var(--g);font-weight:700;margin-bottom:2px">답변 · ${escapeHtml(l.answered_at)}</div>
+          <div style="font-size:var(--fs-12);color:var(--i2);white-space:pre-wrap">${escapeHtml(l.answer || '')}</div></div>` : ''}
       ${unanswered ? `<div style="margin-top:8px;display:flex;gap:5px;align-items:flex-start">
-          <textarea class="fi" id="ans-${escAttr(l.id)}" rows="2" placeholder="답변 내용을 적고 완료 처리하세요" style="flex:1;font-size:11.5px"></textarea>
+          <textarea class="fi" id="ans-${escAttr(l.id)}" rows="2" placeholder="답변 내용을 적고 완료 처리하세요" style="flex:1;font-size:var(--fs-11_5)"></textarea>
           <div style="display:flex;flex-direction:column;gap:4px">
             <button class="btn bp bs" onclick="answerExhLog('${escAttr(l.id)}')">답변 완료</button>
             <button class="btn bs" onclick="holdExhLog('${escAttr(l.id)}')">${l.status === 'hold' ? '대기로' : '확인 중'}</button>
           </div></div>` : ''}
       <div style="margin-top:5px;text-align:right">
-        <button class="btn bs" onclick="delExhLog('${escAttr(l.id)}')" style="font-size:10px;opacity:.6">삭제</button></div>
+        <button class="btn bs" onclick="delExhLog('${escAttr(l.id)}')" style="font-size:var(--fs-10);opacity:.6">삭제</button></div>
     </div>`;
   };
 
@@ -59,17 +59,17 @@ function dLogs(x){
   <div class="uc" style="margin-bottom:14px">
     <div class="uc-ttl">새 문의 / 기록</div>
     <div style="display:flex;gap:5px;margin:8px 0 6px;flex-wrap:wrap">
-      <select class="fi" id="lg-kind-${escAttr(x.id)}" style="width:84px;font-size:11.5px;padding:6px">
+      <select class="fi" id="lg-kind-${escAttr(x.id)}" style="width:84px;font-size:var(--fs-11_5);padding:6px">
         <option value="inquiry">문의</option><option value="note">기록</option></select>
-      <select class="fi" id="lg-ch-${escAttr(x.id)}" style="width:82px;font-size:11.5px;padding:6px">
+      <select class="fi" id="lg-ch-${escAttr(x.id)}" style="width:82px;font-size:var(--fs-11_5);padding:6px">
         ${channels().map(c => `<option value="${escapeHtml(c.code)}">${escapeHtml(c.label)}</option>`).join('')}</select>
-      <select class="fi" id="lg-cat-${escAttr(x.id)}" style="width:82px;font-size:11.5px;padding:6px">
+      <select class="fi" id="lg-cat-${escAttr(x.id)}" style="width:82px;font-size:var(--fs-11_5);padding:6px">
         ${logCats().map(c => `<option value="${escapeHtml(c.code)}">${escapeHtml(c.label)}</option>`).join('')}</select>
-      <input class="fi" id="lg-who-${escAttr(x.id)}" placeholder="문의한 사람" list="lg-people-${escAttr(x.id)}" style="flex:1;min-width:100px;font-size:11.5px;padding:6px">
+      <input class="fi" id="lg-who-${escAttr(x.id)}" placeholder="문의한 사람" list="lg-people-${escAttr(x.id)}" style="flex:1;min-width:100px;font-size:var(--fs-11_5);padding:6px">
       <datalist id="lg-people-${escAttr(x.id)}">${people.map(p => `<option value="${escapeHtml(p)}">`).join('')}</datalist>
     </div>
-    <input class="fi" id="lg-sub-${escAttr(x.id)}" placeholder="제목 / 한 줄 요약" style="font-size:12px;margin-bottom:5px">
-    <textarea class="fi" id="lg-body-${escAttr(x.id)}" rows="3" placeholder="받은 메일 내용을 그대로 붙여넣어도 돼요" style="font-size:12px"></textarea>
+    <input class="fi" id="lg-sub-${escAttr(x.id)}" placeholder="제목 / 한 줄 요약" style="font-size:var(--fs-12);margin-bottom:5px">
+    <textarea class="fi" id="lg-body-${escAttr(x.id)}" rows="3" placeholder="받은 메일 내용을 그대로 붙여넣어도 돼요" style="font-size:var(--fs-12)"></textarea>
     <div style="text-align:right;margin-top:6px">
       <button class="btn bp bs" onclick="addExhLog('${escAttr(x.id)}')">등록</button></div>
   </div>
@@ -79,7 +79,7 @@ function dLogs(x){
 
   <div class="sct">전체 이력</div>
   ${rest.length ? rest.map(item).join('')
-    : '<div style="font-size:11.5px;color:var(--i5);padding:10px 2px">아직 기록이 없어요</div>'}
+    : '<div style="font-size:var(--fs-11_5);color:var(--i5);padding:10px 2px">아직 기록이 없어요</div>'}
   `;
 }
 

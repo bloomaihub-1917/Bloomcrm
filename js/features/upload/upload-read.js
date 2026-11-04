@@ -85,7 +85,7 @@ export function runUploadStep(file){
   uploadUi.coNew = []; uploadUi.coPairs = [];
   const prevEl = document.getElementById('parser-prev');
   if(prevEl) prevEl.innerHTML =
-    '<tr><td colspan="4" style="padding:18px;text-align:center;color:var(--i4);font-size:11px">파일을 분석하고 있어요…</td></tr>';
+    '<tr><td colspan="4" style="padding:18px;text-align:center;color:var(--i4);font-size:var(--fs-11)">파일을 분석하고 있어요…</td></tr>';
 
   addAiLog('info', '1단계: 파일 업로드 — ' + escapeHtml(file.name) + ' 읽는 중 (' + (file.size/1024/1024).toFixed(2) + 'MB)…');
 

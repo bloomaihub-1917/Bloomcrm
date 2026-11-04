@@ -19,10 +19,10 @@ let draft = null;   // 화면에서 고치는 중인 설정
 export async function renderAiSettings(){
   const el = document.getElementById('ai-settings');
   if(!el) return;
-  el.innerHTML = '<div style="font-size:12px;color:var(--i4)">불러오는 중…</div>';
+  el.innerHTML = '<div style="font-size:var(--fs-12);color:var(--i4)">불러오는 중…</div>';
   const r = await aiConfig();
   if(!r.ok){
-    el.innerHTML = `<div style="font-size:12px;color:var(--re)">${escapeHtml(r.error || '불러오지 못했어요')}</div>`;
+    el.innerHTML = `<div style="font-size:var(--fs-12);color:var(--re)">${escapeHtml(r.error || '불러오지 못했어요')}</div>`;
     return;
   }
   meta = r;
@@ -36,7 +36,7 @@ function draw(){
   const use = Object.fromEntries((meta.usage || []).map(u => [u.feature, u]));
   const tot = (meta.usage || []).reduce((a, u) => ({ calls: a.calls + u.calls, inp: a.inp + u.input_tokens, out: a.out + u.output_tokens }), { calls: 0, inp: 0, out: 0 });
   const n = (v) => (v || 0).toLocaleString();
-  const card = 'background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:14px;margin-bottom:14px';
+  const card = 'background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-10);padding:14px;margin-bottom:14px';
 
   const keyBox = meta.enabled
     ? '<b style="color:var(--g)">연결됨</b> <span style="color:var(--i4)">— 서버에 ANTHROPIC_API_KEY가 있어요</span>'
@@ -50,26 +50,26 @@ function draw(){
     return `<tr style="border-top:1px solid var(--i7);${c.on ? '' : 'opacity:.55'}">
       <td style="padding:8px 6px"><label style="display:flex;align-items:center;gap:6px;cursor:pointer">
         <input type="checkbox" ${c.on ? 'checked' : ''} onchange="aiSetSet('${f.key}','on',this.checked)">
-        <span><b style="font-size:12px;color:var(--i1)">${escapeHtml(f.label)}</b><br><span style="font-size:10.5px;color:var(--i4)">${escapeHtml(f.where || '')}</span></span>
+        <span><b style="font-size:var(--fs-12);color:var(--i1)">${escapeHtml(f.label)}</b><br><span style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(f.where || '')}</span></span>
       </label></td>
-      <td style="padding:8px 6px"><select class="fi" style="font-size:12px;padding:4px 6px" ${c.on ? '' : 'disabled'} onchange="aiSetSet('${f.key}','model',this.value)">${models}</select></td>
-      <td style="padding:8px 6px"><select class="fi" style="font-size:12px;padding:4px 6px" ${c.on && c.model !== 'haiku' ? '' : 'disabled'} title="${c.model === 'haiku' ? 'Haiku는 생각 깊이를 고를 수 없어요' : ''}" onchange="aiSetSet('${f.key}','effort',this.value)">${efforts}</select></td>
-      <td style="padding:8px 6px;text-align:right;font-size:12px;color:var(--i2);white-space:nowrap">${u ? `${n(u.calls)}회${u.fails ? ` <span style="color:var(--re)">(실패 ${n(u.fails)})</span>` : ''}` : '<span style="color:var(--i5)">-</span>'}</td>
+      <td style="padding:8px 6px"><select class="fi" style="font-size:var(--fs-12);padding:4px 6px" ${c.on ? '' : 'disabled'} onchange="aiSetSet('${f.key}','model',this.value)">${models}</select></td>
+      <td style="padding:8px 6px"><select class="fi" style="font-size:var(--fs-12);padding:4px 6px" ${c.on && c.model !== 'haiku' ? '' : 'disabled'} title="${c.model === 'haiku' ? 'Haiku는 생각 깊이를 고를 수 없어요' : ''}" onchange="aiSetSet('${f.key}','effort',this.value)">${efforts}</select></td>
+      <td style="padding:8px 6px;text-align:right;font-size:var(--fs-12);color:var(--i2);white-space:nowrap">${u ? `${n(u.calls)}회${u.fails ? ` <span style="color:var(--re)">(실패 ${n(u.fails)})</span>` : ''}` : '<span style="color:var(--i5)">-</span>'}</td>
     </tr>`;
   }).join('');
 
   const cap = draft.monthlyCap || 0;
   el.innerHTML = `
     <div style="${card}">
-      <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:8px">연결 상태</div>
-      <div style="font-size:12px">${keyBox}</div>
+      <div style="font-size:var(--fs-12);font-weight:700;color:var(--i2);margin-bottom:8px">연결 상태</div>
+      <div style="font-size:var(--fs-12)">${keyBox}</div>
     </div>
 
     <div style="${card}">
-      <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">기능별 설정</div>
-      <div style="font-size:11px;color:var(--i4);margin-bottom:8px">단순한 분류(열 맞추기·검색·국가/업종)는 Haiku로 바꾸면 빠르고 비용이 적어요. 상담·메일 초안은 Sonnet을 권해요.</div>
+      <div style="font-size:var(--fs-12);font-weight:700;color:var(--i2);margin-bottom:4px">기능별 설정</div>
+      <div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:8px">단순한 분류(열 맞추기·검색·국가/업종)는 Haiku로 바꾸면 빠르고 비용이 적어요. 상담·메일 초안은 Sonnet을 권해요.</div>
       <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:560px">
-        <thead><tr style="font-size:11px;color:var(--i4);text-align:left">
+        <thead><tr style="font-size:var(--fs-11);color:var(--i4);text-align:left">
           <th style="padding:4px 6px;font-weight:600">기능</th><th style="padding:4px 6px;font-weight:600">모델</th>
           <th style="padding:4px 6px;font-weight:600">생각 깊이</th><th style="padding:4px 6px;font-weight:600;text-align:right">이번 달</th>
         </tr></thead>
@@ -78,23 +78,23 @@ function draw(){
     </div>
 
     <div style="${card}">
-      <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:8px">한 달 사용 (${escapeHtml(meta.month || '')})</div>
-      <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12px;margin-bottom:12px">
+      <div style="font-size:var(--fs-12);font-weight:700;color:var(--i2);margin-bottom:8px">한 달 사용 (${escapeHtml(meta.month || '')})</div>
+      <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:var(--fs-12);margin-bottom:12px">
         <span>호출 <b>${n(tot.calls)}</b>회</span>
         <span>보낸 토큰 <b>${n(tot.inp)}</b></span>
         <span>받은 토큰 <b>${n(tot.out)}</b></span>
       </div>
-      <label style="display:flex;align-items:center;gap:8px;font-size:12px;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:8px;font-size:var(--fs-12);flex-wrap:wrap">
         한 달 호출 한도
         <input class="fi" type="number" min="0" step="50" value="${cap}" style="width:110px" oninput="aiSetCap(this.value)">
-        <span style="color:var(--i4);font-size:11px">회 — 0이면 한도 없음. 넘으면 그 달은 AI 단추가 멈춰요</span>
+        <span style="color:var(--i4);font-size:var(--fs-11)">회 — 0이면 한도 없음. 넘으면 그 달은 AI 단추가 멈춰요</span>
       </label>
     </div>
 
     <div style="display:flex;gap:8px;align-items:center">
       <button class="btn bp" onclick="aiSaveSettings()" style="min-width:80px">저장</button>
       <button class="btn" onclick="aiResetSettings()">기본값으로</button>
-      <span id="ai-set-msg" style="font-size:11px;color:var(--g)"></span>
+      <span id="ai-set-msg" style="font-size:var(--fs-11);color:var(--g)"></span>
     </div>`;
 }
 

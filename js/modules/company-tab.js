@@ -271,13 +271,13 @@ export function buildCoCAT(){
          기업을 끌어다 놓을 자리가 없어 영영 0개사로 남는다 */
       const visibleMains = mainsHere;
       if(!visibleMains.length) return;
-      if(short) rows.push(`<div style="font-size:10px;font-weight:700;color:var(--i4);text-transform:uppercase;letter-spacing:.04em;margin:6px 0 2px 14px">${escapeHtml(short)}</div>`);
+      if(short) rows.push(`<div style="font-size:var(--fs-10);font-weight:700;color:var(--i4);text-transform:uppercase;letter-spacing:.04em;margin:6px 0 2px 14px">${escapeHtml(short)}</div>`);
       visibleMains.forEach(m => {
         const subs = subsByParent[m.id] || [];
         const hasSubs = subs.length > 0;
         const collapsed = _collapsedCoMains.has(m.id);
         const arrow = hasSubs
-          ? `<span onclick="event.stopPropagation();toggleCoMainCollapse('${escAttr(m.id)}')" style="width:22px;height:22px;margin:-4px 0;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;color:var(--i4);border-radius:4px" onmouseover="this.style.background='rgba(0,0,0,.08)'" onmouseout="this.style.background='none'" title="서브섹터 접기/펼치기">${collapsed?'▸':'▾'}</span>`
+          ? `<span onclick="event.stopPropagation();toggleCoMainCollapse('${escAttr(m.id)}')" style="width:22px;height:22px;margin:-4px 0;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:var(--fs-13);color:var(--i4);border-radius:var(--rd-4)" onmouseover="this.style.background='rgba(0,0,0,.08)'" onmouseout="this.style.background='none'" title="서브섹터 접기/펼치기">${collapsed?'▸':'▾'}</span>`
           : `<span style="width:22px;flex-shrink:0"></span>`;
         // 메인 행의 숫자는 "메인 자신에게 직접 태그된 기업"만이 아니라, 그
         // 서브섹터들까지 합친 고유 기업 수여야 한다 — 전체 대시보드 카드의
@@ -286,7 +286,7 @@ export function buildCoCAT(){
         const mainCount = hasSubs ? uniqueCompanyCountFor(m, subs) : (sectorCounts[m.name]||0);
         rows.push(coCatButton(m.name, mainCount, 'padding-left:18px', null, arrow));
         if(hasSubs && !collapsed){
-          subs.forEach(s => rows.push(coCatButton(s.name, sectorCounts[s.name]||0, 'padding-left:30px;font-size:11px')));
+          subs.forEach(s => rows.push(coCatButton(s.name, sectorCounts[s.name]||0, 'padding-left:30px;font-size:var(--fs-11)')));
         }
       });
     });
@@ -297,7 +297,7 @@ export function buildCoCAT(){
   const domainRow = (id, label, count, expanded) => `
     <div class="nr${coDomainF===id?' on':''}" style="display:flex;align-items:center;gap:4px;cursor:pointer">
       <span onclick="event.stopPropagation();toggleCoDomain('${escAttr(id)}')"
-        style="width:16px;text-align:center;flex-shrink:0;font-size:10px;color:var(--i4)" title="펼치기/접기">${expanded?'▾':'▸'}</span>
+        style="width:16px;text-align:center;flex-shrink:0;font-size:var(--fs-10);color:var(--i4)" title="펼치기/접기">${expanded?'▾':'▸'}</span>
       <span onclick="setCoDomain('${escAttr(id)}')" style="flex:1;display:flex;align-items:center;gap:6px;font-weight:700" title="이 분야 전체 기업으로 필터링">
         🗂 ${escapeHtml(label)}<span class="nbg">${count}</span>
       </span>
@@ -550,7 +550,7 @@ function renderCoAiMsg(n){
     <b>${n}곳</b>
     <span style="color:var(--i4)">${escapeHtml(bits.join(' · '))}</span>
     ${p.unsupported ? `<span style="color:var(--am)">⚠️ 반영 못 한 조건: ${escapeHtml(p.unsupported)}</span>` : ''}
-    <button class="btn bs" style="font-size:10px" onclick="clearCoAi()">✕ 질문 지우기</button>`;
+    <button class="btn bs" style="font-size:var(--fs-10)" onclick="clearCoAi()">✕ 질문 지우기</button>`;
 }
 
 /* 기업 DB의 거르기는 여기 한 곳 — 본문 표와 사이드바 목록이 같은 목록을 보여야 한다.
@@ -634,13 +634,13 @@ function renderCoKindBar(n){
       ${used.map(k => `<button class="seg-b${coUi.coKindF === k.key ? ' on' : ''}"
         onclick="setCoKind('${escAttr(k.key)}')">${escapeHtml(k.label)} ${cnt[k.key] || 0}</button>`).join('')}
     </div>
-    <select class="fi" style="font-size:11px;padding:3px 6px;width:auto" onchange="setCoSort(this.value)"
+    <select class="fi" style="font-size:var(--fs-11);padding:3px 6px;width:auto" onchange="setCoSort(this.value)"
       title="이름 앞뒤의 (주)·주식회사는 빼고 줄 세웁니다">
       ${CO_SORTS.map(([v, l]) => `<option value="${v}"${coUi.coSort === v ? ' selected' : ''}>${l}</option>`).join('')}
     </select>
-    ${coCountryF ? `<span class="pill p-gray" style="font-size:10px">${{domestic:'국내',overseas:'해외',unknown:'미확인'}[coCountryF]}</span>` : ''}
+    ${coCountryF ? `<span class="pill p-gray" style="font-size:var(--fs-10)">${{domestic:'국내',overseas:'해외',unknown:'미확인'}[coCountryF]}</span>` : ''}
     <span class="db-ct">${n}개 기업</span>
-    ${n ? `<button class="btn bs" style="font-size:11px;padding:3px 8px" onclick="coSendToRound()"
+    ${n ? `<button class="btn bs" style="font-size:var(--fs-11);padding:3px 8px" onclick="coSendToRound()"
       title="지금 걸러 본 기업들을 컨택 차수의 명단에 넣습니다">컨택 명단에 넣기</button>` : ''}`;
 }
 /* 지금 걸러 본 목록을 컨택 명단으로 — 고르는 창은 컨택 탭(contact-tab.js)이 그린다 */
@@ -715,7 +715,7 @@ export function openAddOrgModal(){
   el.innerHTML = `<div class="modal" style="max-width:420px">
     <div class="mh"><div class="mt2">기업 추가</div><button class="mc" onclick="closeAddOrgModal()">✕</button></div>
     <div class="mb">
-      <div style="font-size:11.5px;color:var(--i4);margin-bottom:12px;line-height:1.6">
+      <div style="font-size:var(--fs-11_5);color:var(--i4);margin-bottom:12px;line-height:1.6">
         담당자를 아직 몰라도 기업을 먼저 등록할 수 있어요. 나중에 연락처를 넣으면 자동으로 이어집니다.</div>
       <div class="fg"><label class="fl">기업명 (국문)</label><input class="fi" id="ao-nameKo" placeholder="예: 스튜디오블룸"></div>
       <div class="fg"><label class="fl">기업명 (영문)</label><input class="fi" id="ao-nameEn" placeholder="예: Studio Bloom"></div>
@@ -733,7 +733,7 @@ export function openAddOrgModal(){
       <div class="fg"><label class="fl">대표 메일</label><input class="fi" id="ao-email" placeholder="info@example.com"></div>
       <div class="fg"><label class="fl">취급 품목</label><input class="fi" id="ao-products" placeholder="예: LED, 렌탈,포토"></div>
       <div class="fg"><label class="fl">메모</label><textarea class="fi" id="ao-notes" rows="2"></textarea></div>
-      <div id="ao-msg" style="font-size:11.5px;min-height:16px;margin-bottom:8px"></div>
+      <div id="ao-msg" style="font-size:var(--fs-11_5);min-height:16px;margin-bottom:8px"></div>
       <div style="display:flex;gap:8px;justify-content:flex-end">
         <button class="btn bs" onclick="closeAddOrgModal()">취소</button>
         <button class="btn bp" id="ao-save" onclick="submitAddOrg()">등록</button>
@@ -853,7 +853,7 @@ const coTableCols = () => CO_TABLE_COLS.filter(c => !(isMobile() && c.mobile ===
 function coKindPill(kind){
   const k = ORG_KINDS.find(x => x.key === kind);
   if(!k) return dash;
-  return `<span class="pill ${escAttr(k.cls)}" style="font-size:10px">${escapeHtml(k.label)}</span>`;
+  return `<span class="pill ${escAttr(k.cls)}" style="font-size:var(--fs-10)">${escapeHtml(k.label)}</span>`;
 }
 
 function coTableCell(key, c, i){
@@ -892,16 +892,16 @@ function coTableRow(cols, c, i){
   return `<tr onclick="selectCo('${escAttr(c.key)}')"
       draggable="true" ondragstart="onCoDragStart(event,'${escAttr(c.key)}')"
       title="드래그해서 왼쪽 섹터로 옮길 수 있어요">
-    ${cols.map(col => `<td style="font-size:11px${col.align === 'right' ? ';text-align:right' : ''}">${coTableCell(col.key, c, i)}</td>`).join('')}
+    ${cols.map(col => `<td style="font-size:var(--fs-11)${col.align === 'right' ? ';text-align:right' : ''}">${coTableCell(col.key, c, i)}</td>`).join('')}
   </tr>`;
 }
 
 /* 칸이 화면보다 넓어지면 찌그러뜨리는 대신 옆으로 밀리게 둔다 — 글자가
    겹쳐서 못 읽는 것보다 낫다. */
 export function coCompanyTableHtml(list, emptyText){
-  if(!list.length) return `<div style="font-size:12px;color:var(--i4);padding:14px 2px">${escapeHtml(emptyText || '해당하는 기업이 없어요')}</div>`;
+  if(!list.length) return `<div style="font-size:var(--fs-12);color:var(--i4);padding:14px 2px">${escapeHtml(emptyText || '해당하는 기업이 없어요')}</div>`;
   const cols = coTableCols();
-  return `<div style="overflow-x:auto;border:1px solid var(--i6);border-radius:8px;margin-top:12px;background:var(--W)">
+  return `<div style="overflow-x:auto;border:1px solid var(--i6);border-radius:var(--r);margin-top:12px;background:var(--W)">
     <table>
       <thead><tr>${cols.map(col =>
         `<th${col.align === 'right' ? ' style="text-align:right"' : ''}>${col.label}</th>`).join('')}</tr></thead>
@@ -952,7 +952,7 @@ export function setCoDashQ(v){
 }
 
 function coChip(on, label, n, onclick, title){
-  return `<button class="btn bs${on ? ' bp' : ''}" style="font-size:11px;padding:3px 10px;gap:5px" onclick="${onclick}"${title ? ` title="${escapeHtml(title)}"` : ''}>
+  return `<button class="btn bs${on ? ' bp' : ''}" style="font-size:var(--fs-11);padding:3px 10px;gap:5px" onclick="${onclick}"${title ? ` title="${escapeHtml(title)}"` : ''}>
     ${escapeHtml(label)}<span style="${on ? '' : 'color:var(--i4);'}font-weight:700">${n}</span></button>`;
 }
 
@@ -992,7 +992,7 @@ export function renderCoDashboard(list = coFilteredList()){
     return;
   }
 
-  const rowLbl = t => `<div style="flex:0 0 34px;font-size:11px;font-weight:700;color:var(--i4);padding-top:5px">${t}</div>`;
+  const rowLbl = t => `<div style="flex:0 0 34px;font-size:var(--fs-11);font-weight:700;color:var(--i4);padding-top:5px">${t}</div>`;
   // 섹터 칩 숫자는 섹터만 빼고 나머지 거르기(검색·코드·국내외·종류·질문)를 다 거친 것
   const secChips = coSectorChipsHtml(coFilteredList({ skipCats: true }));
   /* 제목·검색·「기업 추가」는 위쪽 바(.tb), 종류·정렬·숫자는 그 아래 줄

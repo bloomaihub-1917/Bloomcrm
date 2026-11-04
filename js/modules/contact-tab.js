@@ -143,7 +143,7 @@ export function renderRoundNav(){
   const evKeys = [...byEv.keys()].sort((a, b) =>
     String(evOf(b)?.date || '').localeCompare(String(evOf(a)?.date || '')));
   el.innerHTML = evKeys.map(k => `
-      <div style="font-size:10.5px;color:var(--i4);padding:6px 8px 2px;font-weight:600">${escapeHtml(evLabel(k))}</div>
+      <div style="font-size:var(--fs-10_5);color:var(--i4);padding:6px 8px 2px;font-weight:600">${escapeHtml(evLabel(k))}</div>
       ${byEv.get(k).sort((a, b) => (a.status === 'closed') - (b.status === 'closed')).map(r => {
         const ms = membersOf(r.id);
         const n = ms.filter(m => ['todo', 'again'].includes(memberState(m))).length;
@@ -184,8 +184,8 @@ export function renderToday(){
   if(addLbl && crmV === 'today') addLbl.textContent = r ? '명단 채우기' : '차수 만들기';
   if(!r){
     el.innerHTML = `<div class="empty" style="height:auto;padding:60px 20px;text-align:center">
-      <div style="font-size:14px;font-weight:600;color:var(--i2)">첫 차수를 만드세요</div>
-      <p style="font-size:12px;max-width:360px;line-height:1.6">«1차 TM · 등록 안내», «2차 TM · 주선신청 안내»처럼
+      <div style="font-size:var(--fs-14);font-weight:600;color:var(--i2)">첫 차수를 만드세요</div>
+      <p style="font-size:var(--fs-12);max-width:360px;line-height:1.6">«1차 TM · 등록 안내», «2차 TM · 주선신청 안내»처럼
         차수마다 명단을 채우고, 전화·메일 한 번 한 번을 반응 단추로 남깁니다.</p>
       <button class="btn bp" onclick="openRoundEditor()">차수 만들기</button></div>`;
     return;
@@ -221,18 +221,18 @@ export function renderToday(){
   const mine = todayAtts.filter(a => a.by_email === currentUser?.email).length;
   const tile = (k, label, n, color) => `<button onclick="setContactFil('${k}')"
       style="text-align:left;border:1px solid ${stFil === k ? 'var(--a)' : 'var(--i6)'};background:${stFil === k ? 'var(--ad)' : 'var(--W)'};border-radius:var(--r);padding:7px 10px;cursor:pointer">
-      <div style="font-size:10.5px;color:var(--i4)">${label}</div>
-      <div style="font-size:17px;font-weight:700;color:${color || 'var(--i1)'}">${n}</div></button>`;
+      <div style="font-size:var(--fs-10_5);color:var(--i4)">${label}</div>
+      <div style="font-size:var(--fs-17);font-weight:700;color:${color || 'var(--i1)'}">${n}</div></button>`;
   const period = [r.date_from, r.date_to].filter(Boolean).join(' – ');
   const dday = r.date_to ? Math.round((new Date(r.date_to) - new Date(t)) / 86400000) : null;
 
   el.innerHTML = `
     <div style="padding:12px 16px;border-bottom:1px solid var(--i7);background:var(--W)">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <div style="font-size:15px;font-weight:700">${escapeHtml(r.name)}</div>
+        <div style="font-size:var(--fs-15);font-weight:700">${escapeHtml(r.name)}</div>
         <span class="pill p-gray">${escapeHtml(evLabel(r.event_id))}</span>
         ${r.goal ? `<span class="pill p-green">목표 ${escapeHtml(r.goal)}</span>` : ''}
-        ${period ? `<span style="font-size:11px;color:var(--i4)">${escapeHtml(period)}${dday !== null ? ` · ${dday >= 0 ? `D-${dday}` : '기간 지남'}` : ''}</span>` : ''}
+        ${period ? `<span style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(period)}${dday !== null ? ` · ${dday >= 0 ? `D-${dday}` : '기간 지남'}` : ''}</span>` : ''}
         ${r.status === 'closed' ? '<span class="pill p-gray">닫은 차수</span>' : ''}
         <span style="margin-left:auto;display:flex;gap:5px">
           <button class="btn bs" onclick="openRoundEditor('${escAttr(r.id)}')">차수 고치기</button>
@@ -240,17 +240,17 @@ export function renderToday(){
           <button class="btn bs bp" onclick="openFillRound()">명단 채우기</button>
         </span>
       </div>
-      ${r.purpose ? `<div class="ct-purpose" style="font-size:11.5px;color:var(--i3);margin-top:4px">${escapeHtml(r.purpose)}</div>` : ''}
+      ${r.purpose ? `<div class="ct-purpose" style="font-size:var(--fs-11_5);color:var(--i3);margin-top:4px">${escapeHtml(r.purpose)}</div>` : ''}
       <div class="ct-tiles" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:6px;margin-top:10px">
         ${tile('now', `지금 할 곳`, cnt.todo + cnt.again, 'var(--a)')}
         ${tile('todo', STATES.todo.label(verb), cnt.todo)}
         ${tile('again', STATES.again.label(verb), cnt.again, 'var(--am)')}
         ${tile('wait', '기다림', cnt.wait)}
         ${tile('done', '끝남', cnt.done)}
-        ${tile('all', `목표 달성`, `${goalN}<span style="font-size:11px;color:var(--i4);font-weight:500"> / ${all.length}</span>`, 'var(--g)')}
+        ${tile('all', `목표 달성`, `${goalN}<span style="font-size:var(--fs-11);color:var(--i4);font-weight:500"> / ${all.length}</span>`, 'var(--g)')}
       </div>
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--i4)">
-        ${sources.length > 1 ? `<select onchange="setContactSrc(this.value)" style="font-size:11px;padding:3px 4px;border:1px solid ${srcFil ? 'var(--a)' : 'var(--i6)'};border-radius:5px;color:${srcFil ? 'var(--a)' : 'var(--i2)'}">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:var(--fs-11);color:var(--i4)">
+        ${sources.length > 1 ? `<select onchange="setContactSrc(this.value)" style="font-size:var(--fs-11);padding:3px 4px;border:1px solid ${srcFil ? 'var(--a)' : 'var(--i6)'};border-radius:var(--rs);color:${srcFil ? 'var(--a)' : 'var(--i2)'}">
           <option value="">명단 전체</option>${sources.map(x => `<option${x === srcFil ? ' selected' : ''}>${escapeHtml(x)}</option>`).join('')}</select>` : ''}
         ${missN ? `<label style="display:flex;align-items:center;gap:3px;cursor:pointer;color:${missFil ? 'var(--am)' : 'var(--i3)'}"><input type="checkbox" ${missFil ? 'checked' : ''} onchange="setContactMiss(this.checked)" style="margin:0">미연결 ${limit}번 이상 이어진 곳 ${missN}</label>` : ''}
         ${missFil && list.length ? `<button class="btn bs" onclick="openRoundMail('${escAttr(r.id)}',null,[${list.map(x => `'${escAttr(x.m.id)}'`).join(',')}])" title="전화가 안 닿는 곳 — 메일로 넘긴다">✉ 이 ${list.length}곳에 메일</button>` : ''}
@@ -261,10 +261,10 @@ export function renderToday(){
     </div>
     <div style="padding:10px 16px 40px;display:flex;flex-direction:column;gap:7px">
       ${!all.length
-        ? `<div class="empty" style="height:auto;padding:40px 10px"><p style="font-size:12px">이 차수에 아직 명단이 없어요</p>
+        ? `<div class="empty" style="height:auto;padding:40px 10px"><p style="font-size:var(--fs-12)">이 차수에 아직 명단이 없어요</p>
              <button class="btn bp bs" onclick="openFillRound()">명단 채우기</button></div>`
         : !list.length
-          ? `<div class="empty" style="height:auto;padding:30px 10px"><p style="font-size:12px">${q ? '찾는 곳이 없어요' : stFil === 'now' ? `지금 ${verb} 곳이 없어요 — 기다림·끝남을 눌러 보세요` : '해당하는 곳이 없어요'}</p></div>`
+          ? `<div class="empty" style="height:auto;padding:30px 10px"><p style="font-size:var(--fs-12)">${q ? '찾는 곳이 없어요' : stFil === 'now' ? `지금 ${verb} 곳이 없어요 — 기다림·끝남을 눌러 보세요` : '해당하는 곳이 없어요'}</p></div>`
           : list.slice(0, showLimit).map(x => card(r, x)).join('')
             + (list.length > showLimit ? `<button class="btn" style="align-self:center" onclick="contactShowMore()">${list.length - showLimit}곳 더 보기</button>` : '')}
     </div>`;
@@ -299,7 +299,7 @@ function card(r, { m, atts, st }){
   const person = (p) => {
     const id = String(p.id);
     const nums = [p.phone1, p.phone2].filter(Boolean);
-    return `<label style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 6px;font-size:11.5px;padding:2px 0;cursor:pointer">
+    return `<label style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 6px;font-size:var(--fs-11_5);padding:2px 0;cursor:pointer">
       <input type="radio" name="cp-${escAttr(m.id)}" ${id === pick ? 'checked' : ''} onchange="pickContactPerson('${escAttr(m.id)}','${escAttr(id)}')" style="margin:0">
       <span style="font-weight:600;white-space:nowrap">${escapeHtml(p.nameKo || p.nameEn || '')}</span>
       <span style="color:var(--i4)">${escapeHtml([p.deptKo, p.titleKo].filter(Boolean).join(' '))}</span>
@@ -313,51 +313,51 @@ function card(r, { m, atts, st }){
 
   return `<div id="rm-${escAttr(m.id)}" style="border:1px solid ${calling && !calling.me ? 'var(--am)' : calling ? 'var(--a)' : 'var(--i6)'};border-radius:var(--r);background:var(--W);padding:9px 12px">
     <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
-      <a href="javascript:void(0)" onclick="openContactCo('${escAttr(m.org_id)}')" style="font-size:13px;font-weight:700;color:var(--i1)">${escapeHtml(memberName(m))}</a>
-      ${co?.country ? `<span style="font-size:10.5px;color:var(--i4)">${escapeHtml(co.country)}</span>` : ''}
+      <a href="javascript:void(0)" onclick="openContactCo('${escAttr(m.org_id)}')" style="font-size:var(--fs-13);font-weight:700;color:var(--i1)">${escapeHtml(memberName(m))}</a>
+      ${co?.country ? `<span style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(co.country)}</span>` : ''}
       ${m.source ? `<span class="pill p-gray">${escapeHtml(m.source)}</span>` : ''}
       <span style="margin-left:auto;display:flex;gap:4px;align-items:center">
-        ${atts.length ? `<span style="font-size:10.5px;color:var(--i4)">${atts.length}번째${miss ? ` · 미연결 ${miss}번 이어짐` : ''}</span>` : ''}
+        ${atts.length ? `<span style="font-size:var(--fs-10_5);color:var(--i4)">${atts.length}번째${miss ? ` · 미연결 ${miss}번 이어짐` : ''}</span>` : ''}
         <span class="pill ${m.goal_at ? 'p-green' : s.cls}">${m.goal_at ? `목표 달성 ${escapeHtml(m.goal_at.slice(5))}` : m.closed_at ? `끝냄${m.closed_reason ? ` · ${escapeHtml(m.closed_reason)}` : ''}` : escapeHtml(s.label(verb))}${
           st === 'wait' ? ` · ${escapeHtml(waitUntil(m, atts))}부터` : ''}</span>
       </span>
     </div>
-    ${calling && !calling.me ? `<div style="font-size:11.5px;color:var(--am);background:var(--ab);border-radius:4px;padding:3px 7px;margin-top:5px;font-weight:600">📞 ${escapeHtml(calling.by)} 님이 거는 중 · ${calling.mins ? `${calling.mins}분 전부터` : '방금'}</div>` : ''}
-    ${recentOther ? `<div style="font-size:11px;color:var(--a);margin-top:4px">${escapeHtml(recentOther.by_name || '')} 님이 ${escapeHtml(String(recentOther.at).slice(11, 16))}에 기록했어요</div>` : ''}
-    ${m.caution ? `<div style="font-size:11px;color:var(--re);margin-top:4px">⚠ ${escapeHtml(m.caution)}</div>` : ''}
-    ${m.hold_until && m.hold_until > t ? `<div style="font-size:11px;color:var(--am);margin-top:2px">${escapeHtml(m.hold_until)} 전에는 연락하지 않기</div>` : ''}
-    ${m.call_hours || overseas ? `<div style="font-size:11px;color:var(--i3);margin-top:2px">통화 가능 시간 ${escapeHtml(m.call_hours || '— 적어 두면 여기 보여요')}</div>` : ''}
-    ${last ? `<div style="font-size:11.5px;color:var(--i3);margin-top:5px">
+    ${calling && !calling.me ? `<div style="font-size:var(--fs-11_5);color:var(--am);background:var(--ab);border-radius:var(--rd-4);padding:3px 7px;margin-top:5px;font-weight:600">📞 ${escapeHtml(calling.by)} 님이 거는 중 · ${calling.mins ? `${calling.mins}분 전부터` : '방금'}</div>` : ''}
+    ${recentOther ? `<div style="font-size:var(--fs-11);color:var(--a);margin-top:4px">${escapeHtml(recentOther.by_name || '')} 님이 ${escapeHtml(String(recentOther.at).slice(11, 16))}에 기록했어요</div>` : ''}
+    ${m.caution ? `<div style="font-size:var(--fs-11);color:var(--re);margin-top:4px">⚠ ${escapeHtml(m.caution)}</div>` : ''}
+    ${m.hold_until && m.hold_until > t ? `<div style="font-size:var(--fs-11);color:var(--am);margin-top:2px">${escapeHtml(m.hold_until)} 전에는 연락하지 않기</div>` : ''}
+    ${m.call_hours || overseas ? `<div style="font-size:var(--fs-11);color:var(--i3);margin-top:2px">통화 가능 시간 ${escapeHtml(m.call_hours || '— 적어 두면 여기 보여요')}</div>` : ''}
+    ${last ? `<div style="font-size:var(--fs-11_5);color:var(--i3);margin-top:5px">
         <b style="color:var(--i2)">${escapeHtml(String(last.at || '').slice(5))}</b> ${escapeHtml(last.by_name || '')}
         · ${escapeHtml(last.channel || '')} <span class="pill ${REACTIONS[last.reaction]?.cls || 'p-gray'}">${escapeHtml(REACTIONS[last.reaction]?.label || last.reaction || '')}</span>
         ${last.contact_name ? `· ${escapeHtml(last.contact_name)}` : ''} ${last.note ? `· ${escapeHtml(last.note)}` : ''}
         <a href="javascript:void(0)" onclick="toggleContactHist('${escAttr(m.id)}')" style="color:var(--a);margin-left:4px">${histOpen.has(m.id) ? '기록 접기' : `기록 ${atts.length}건`}</a>
       </div>` : ''}
     ${histOpen.has(m.id) ? hist(m, atts) : ''}
-    ${last && !m.closed_at && !m.goal_at && last.reaction === 'wrongnum' ? `<div style="font-size:11px;color:var(--re);margin-top:4px">번호가 틀렸어요 — 담당자 옆 ✎로 번호를 고치거나 «+ 담당자 추가»로 새 사람을 넣으세요</div>` : ''}
-    ${last && !m.closed_at && !m.goal_at && last.reaction === 'bounce' ? `<div style="font-size:11px;color:var(--re);margin-top:4px">메일이 반송됐어요 — 담당자 옆 ✎로 메일 주소를 고치세요</div>` : ''}
-    ${miss >= limit && st !== 'done' ? `<div style="font-size:11px;color:var(--am);margin-top:4px">미연결이 ${miss}번 이어졌어요 — 채널을 DM으로 바꿔 보내거나, 끝내기를 고려하세요</div>` : ''}
+    ${last && !m.closed_at && !m.goal_at && last.reaction === 'wrongnum' ? `<div style="font-size:var(--fs-11);color:var(--re);margin-top:4px">번호가 틀렸어요 — 담당자 옆 ✎로 번호를 고치거나 «+ 담당자 추가»로 새 사람을 넣으세요</div>` : ''}
+    ${last && !m.closed_at && !m.goal_at && last.reaction === 'bounce' ? `<div style="font-size:var(--fs-11);color:var(--re);margin-top:4px">메일이 반송됐어요 — 담당자 옆 ✎로 메일 주소를 고치세요</div>` : ''}
+    ${miss >= limit && st !== 'done' ? `<div style="font-size:var(--fs-11);color:var(--am);margin-top:4px">미연결이 ${miss}번 이어졌어요 — 채널을 DM으로 바꿔 보내거나, 끝내기를 고려하세요</div>` : ''}
     <div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--i7)">
-      ${people.length > 1 ? `<div style="font-size:10.5px;color:var(--i4);margin-bottom:2px">${ch === 'TM' ? '누구와 통화했나요' : '누구에게 보냈나요'} — 반응 단추를 누르면 고른 사람으로 기록돼요</div>` : ''}
+      ${people.length > 1 ? `<div style="font-size:var(--fs-10_5);color:var(--i4);margin-bottom:2px">${ch === 'TM' ? '누구와 통화했나요' : '누구에게 보냈나요'} — 반응 단추를 누르면 고른 사람으로 기록돼요</div>` : ''}
       ${people.length && !people.some(p => /@/.test(String(p.email1 || '') + String(p.email2 || ''))) && /@/.test(String(co?.email || ''))
-        ? `<div style="font-size:10.5px;color:var(--i4);margin-bottom:2px">담당자 메일이 없어 메일은 대표 메일(${escapeHtml(co.email)})로 가요</div>` : ''}
+        ? `<div style="font-size:var(--fs-10_5);color:var(--i4);margin-bottom:2px">담당자 메일이 없어 메일은 대표 메일(${escapeHtml(co.email)})로 가요</div>` : ''}
       ${people.length ? people.map(person).join('')
-        : `<div style="font-size:11.5px;color:var(--i4)">기업DB에 담당자가 없어요${co?.phone ? ` · 대표번호 <a href="tel:${escapeHtml(String(co.phone).replace(/[^\d+]/g, ''))}" style="color:var(--a)">${escapeHtml(co.phone)}</a>` : ''}${co?.email ? ` · 대표 메일 <span style="color:var(--i2)">${escapeHtml(co.email)}</span>` : ''}</div>`}
+        : `<div style="font-size:var(--fs-11_5);color:var(--i4)">기업DB에 담당자가 없어요${co?.phone ? ` · 대표번호 <a href="tel:${escapeHtml(String(co.phone).replace(/[^\d+]/g, ''))}" style="color:var(--a)">${escapeHtml(co.phone)}</a>` : ''}${co?.email ? ` · 대표 메일 <span style="color:var(--i2)">${escapeHtml(co.email)}</span>` : ''}</div>`}
       ${personForm[m.id] === 'new' ? personFormHtml(m, null)
         : String(m.org_id).startsWith('name:') ? ''
-        : `<a href="javascript:void(0)" onclick="openPersonForm('${escAttr(m.id)}','new')" style="font-size:11px;color:var(--a);display:inline-block;margin-top:3px">+ 담당자 추가</a>`}
+        : `<a href="javascript:void(0)" onclick="openPersonForm('${escAttr(m.id)}','new')" style="font-size:var(--fs-11);color:var(--a);display:inline-block;margin-top:3px">+ 담당자 추가</a>`}
     </div>
     ${m.closed_at || m.goal_at ? '' : `<div class="ct-acts" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:6px">
-      <select onchange="pickContactChannel('${escAttr(m.id)}',this.value)" style="font-size:11px;padding:3px 4px;border:1px solid var(--i6);border-radius:5px">
+      <select onchange="pickContactChannel('${escAttr(m.id)}',this.value)" style="font-size:var(--fs-11);padding:3px 4px;border:1px solid var(--i6);border-radius:var(--rs)">
         ${CHANNELS.map(c => `<option${c === ch ? ' selected' : ''}>${c}</option>`).join('')}</select>
       ${CH_REACTIONS[ch].map(k => `<button class="btn bs ct-r${k === 'negative' ? ' ct-neg' : ''}" onclick="recordContact('${escAttr(m.id)}','${k}')">${REACTIONS[k].label}</button>`).join('')}
-      <input type="text" id="ca-memo-${escAttr(m.id)}" value="${escapeHtml(memoDraft[m.id] || '')}" oninput="contactMemo('${escAttr(m.id)}',this.value)" placeholder="메모 — 반응 단추를 누르면 함께 남아요" style="flex:1;min-width:140px;font-size:11.5px;padding:4px 8px;border:1px solid var(--i6);border-radius:5px">
+      <input type="text" id="ca-memo-${escAttr(m.id)}" value="${escapeHtml(memoDraft[m.id] || '')}" oninput="contactMemo('${escAttr(m.id)}',this.value)" placeholder="메모 — 반응 단추를 누르면 함께 남아요" style="flex:1;min-width:140px;font-size:var(--fs-11_5);padding:4px 8px;border:1px solid var(--i6);border-radius:var(--rs)">
       ${ch === 'TM' ? `<button class="btn bs ct-call" onclick="markCalling('${escAttr(m.id)}')" title="다른 사람이 같은 곳에 걸지 않게 «거는 중»으로 보여 줘요 — 반응을 남기면 풀려요"
         style="${calling && calling.me ? 'background:var(--ad);border-color:var(--a);color:var(--a)' : ''}">${calling && calling.me ? '📞 거는 중 · 풀기' : '📞 거는 중'}</button>` : ''}
       ${people.some(p => /@/.test(String(p.email1 || '') + String(p.email2 || ''))) || /@/.test(String(co?.email || '')) ? `<button class="btn bs" onclick="openRoundMail('${escAttr(r.id)}','${escAttr(m.id)}')" title="이 기업에만 메일 한 통 — 보낸 것은 DM 기록으로 남아요">✉ 이 기업에 메일</button>` : ''}
     </div>`}
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;font-size:11px;color:var(--i4)">
-      ${m.closed_at || m.goal_at ? '' : `<span>다음 연락 <input type="date" value="${escapeHtml(m.next_at || '')}" onchange="setContactNext('${escAttr(m.id)}',this.value)" style="font-size:11px;border:1px solid var(--i6);border-radius:4px;padding:1px 3px"></span>`}
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;font-size:var(--fs-11);color:var(--i4)">
+      ${m.closed_at || m.goal_at ? '' : `<span>다음 연락 <input type="date" value="${escapeHtml(m.next_at || '')}" onchange="setContactNext('${escAttr(m.id)}',this.value)" style="font-size:var(--fs-11);border:1px solid var(--i6);border-radius:var(--rd-4);padding:1px 3px"></span>`}
       <a href="javascript:void(0)" onclick="toggleContactGoal('${escAttr(m.id)}')" style="color:${m.goal_at ? 'var(--i4)' : 'var(--g)'}">${m.goal_at ? '목표 달성 취소' : `✓ ${escapeHtml(r.goal || '목표')} 달성`}</a>
       ${m.goal_at ? '' : m.closed_at
         ? `<a href="javascript:void(0)" onclick="reopenContactMember('${escAttr(m.id)}')" style="color:var(--a)">다시 열기</a>`
@@ -375,7 +375,7 @@ function hist(m, atts){
   const line = (a, showRound) => {
     const rr = showRound ? roundById(a.round_id) : null;
     const mineLast = a === atts[0] && a.by_email === currentUser?.email;
-    return `<div style="display:flex;gap:6px;font-size:11px;padding:3px 0;border-bottom:1px solid var(--i8)">
+    return `<div style="display:flex;gap:6px;font-size:var(--fs-11);padding:3px 0;border-bottom:1px solid var(--i8)">
       <span style="color:var(--i4);white-space:nowrap">${escapeHtml(a.at || '')}</span>
       <span style="white-space:nowrap">${escapeHtml(a.by_name || '')}</span>
       <span style="white-space:nowrap">${escapeHtml(a.channel || '')}</span>
@@ -384,9 +384,9 @@ function hist(m, atts){
       ${mineLast ? `<a href="javascript:void(0)" onclick="undoContactAttempt('${escAttr(a.id)}')" style="color:var(--i4);white-space:nowrap">되돌리기</a>` : ''}
     </div>`;
   };
-  return `<div style="margin-top:5px;padding:6px 8px;background:var(--i9);border-radius:5px">
+  return `<div style="margin-top:5px;padding:6px 8px;background:var(--i9);border-radius:var(--rs)">
     ${atts.map(a => line(a, false)).join('')}
-    ${others.length ? `<div style="font-size:10.5px;color:var(--i4);margin-top:6px">다른 차수 기록</div>${others.slice(0, 20).map(a => line(a, true)).join('')}` : ''}
+    ${others.length ? `<div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:6px">다른 차수 기록</div>${others.slice(0, 20).map(a => line(a, true)).join('')}` : ''}
   </div>`;
 }
 
@@ -396,10 +396,10 @@ function hist(m, atts){
 ══════════════════════════════════════════ */
 function personFormHtml(m, p){
   const k = p ? String(p.id) : 'new';
-  const f = (key, label, val, ph = '', w = 120) => `<label style="display:flex;flex-direction:column;gap:2px;font-size:10.5px;color:var(--i4);flex:1;min-width:${w}px">${label}
-    <input id="pf-${key}-${escAttr(m.id)}" value="${escapeHtml(val || '')}" placeholder="${escapeHtml(ph)}" style="font-size:11.5px;padding:4px 6px;border:1px solid var(--i6);border-radius:4px"></label>`;
-  return `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;margin:4px 0 6px;padding:8px;background:var(--i9);border-radius:5px">
-    ${p ? `<div style="width:100%;font-size:11px;font-weight:600">${escapeHtml(p.nameKo || p.nameEn || '')} 고치기</div>`
+  const f = (key, label, val, ph = '', w = 120) => `<label style="display:flex;flex-direction:column;gap:2px;font-size:var(--fs-10_5);color:var(--i4);flex:1;min-width:${w}px">${label}
+    <input id="pf-${key}-${escAttr(m.id)}" value="${escapeHtml(val || '')}" placeholder="${escapeHtml(ph)}" style="font-size:var(--fs-11_5);padding:4px 6px;border:1px solid var(--i6);border-radius:var(--rd-4)"></label>`;
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;margin:4px 0 6px;padding:8px;background:var(--i9);border-radius:var(--rs)">
+    ${p ? `<div style="width:100%;font-size:var(--fs-11);font-weight:600">${escapeHtml(p.nameKo || p.nameEn || '')} 고치기</div>`
         : f('name', '이름', '', '홍길동 / John Kim', 110)}
     ${f('dept', '부서', p?.deptKo, '사업개발팀', 100)}${f('title', '직위', p?.titleKo, '팀장', 80)}
     ${f('phone1', '전화', p?.phone1, '010-0000-0000')}${f('phone2', '다른 번호', p?.phone2, '02-000-0000')}
@@ -473,9 +473,9 @@ export async function savePersonForm(mid, k){
 }
 
 function editForm(m){
-  const f = (k, label, type = 'text', ph = '') => `<label style="display:flex;flex-direction:column;gap:2px;font-size:10.5px;color:var(--i4);flex:1;min-width:140px">${label}
-    <input type="${type}" id="rmf-${k}-${escAttr(m.id)}" value="${escapeHtml(m[k] || '')}" placeholder="${escapeHtml(ph)}" style="font-size:11.5px;padding:4px 6px;border:1px solid var(--i6);border-radius:4px"></label>`;
-  return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;padding:8px;background:var(--i9);border-radius:5px;align-items:flex-end">
+  const f = (k, label, type = 'text', ph = '') => `<label style="display:flex;flex-direction:column;gap:2px;font-size:var(--fs-10_5);color:var(--i4);flex:1;min-width:140px">${label}
+    <input type="${type}" id="rmf-${k}-${escAttr(m.id)}" value="${escapeHtml(m[k] || '')}" placeholder="${escapeHtml(ph)}" style="font-size:var(--fs-11_5);padding:4px 6px;border:1px solid var(--i6);border-radius:var(--rd-4)"></label>`;
+  return `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;padding:8px;background:var(--i9);border-radius:var(--rs);align-items:flex-end">
     ${f('caution', '주의사항', 'text', '성명 노출 원치 않음')}
     ${f('hold_until', '이날 전에는 연락 안 함', 'date')}
     ${f('call_hours', '통화 가능 시간', 'text', '오후 1시~4시')}
@@ -632,7 +632,7 @@ function contactToast(html, undo){
   document.getElementById('contact-toast')?.remove();
   const el = document.createElement('div');
   el.id = 'contact-toast';
-  el.style.cssText = 'position:fixed;left:50%;bottom:84px;transform:translateX(-50%);z-index:1100;background:var(--i1);color:#fff;border-radius:8px;padding:9px 14px;font-size:12px;display:flex;gap:12px;align-items:center;box-shadow:var(--shl);max-width:calc(100vw - 32px)';
+  el.style.cssText = 'position:fixed;left:50%;bottom:84px;transform:translateX(-50%);z-index:1100;background:var(--i1);color:var(--on);border-radius:var(--r);padding:9px 14px;font-size:var(--fs-12);display:flex;gap:12px;align-items:center;box-shadow:var(--shl);max-width:calc(100vw - 32px)';
   el.innerHTML = `<span>${html}</span>${undo ? `<a href="javascript:void(0)" onclick="${undo}" style="color:#9DB4FF;font-weight:700;white-space:nowrap">되돌리기</a>` : ''}`;
   document.body.appendChild(el);
   setTimeout(() => { if(el.isConnected) el.remove(); }, 6000);
@@ -715,8 +715,8 @@ function overlay(id, html){
   return ov;
 }
 const fld = (id, label, val = '', { type = 'text', ph = '' } = {}) =>
-  `<label style="display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--i3);margin-bottom:9px">${label}
-    <input type="${type}" id="${id}" value="${escapeHtml(val)}" placeholder="${escapeHtml(ph)}" style="font-size:12.5px;padding:6px 8px;border:1px solid var(--i6);border-radius:var(--rs)"></label>`;
+  `<label style="display:flex;flex-direction:column;gap:3px;font-size:var(--fs-11);color:var(--i3);margin-bottom:9px">${label}
+    <input type="${type}" id="${id}" value="${escapeHtml(val)}" placeholder="${escapeHtml(ph)}" style="font-size:var(--fs-12_5);padding:6px 8px;border:1px solid var(--i6);border-radius:var(--rs)"></label>`;
 
 export function openRoundEditor(id){
   const r = id ? roundById(id) : null;
@@ -725,15 +725,15 @@ export function openRoundEditor(id){
   const nAtt = r ? CONTACT_ATTEMPTS.filter(a => a.round_id === r.id).length : 0;
   overlay('round-ed', `
     <div style="display:flex;align-items:center;margin-bottom:12px">
-      <div style="font-size:15px;font-weight:700">${r ? '차수 고치기' : '차수 만들기'}</div>
+      <div style="font-size:var(--fs-15);font-weight:700">${r ? '차수 고치기' : '차수 만들기'}</div>
       <button class="btn bs" style="margin-left:auto" onclick="document.getElementById('round-ed').remove()">닫기</button>
     </div>
-    <label style="display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--i3);margin-bottom:9px">행사
-      <select id="re-ev" style="font-size:12.5px;padding:6px 8px;border:1px solid var(--i6);border-radius:var(--rs)">
+    <label style="display:flex;flex-direction:column;gap:3px;font-size:var(--fs-11);color:var(--i3);margin-bottom:9px">행사
+      <select id="re-ev" style="font-size:var(--fs-12_5);padding:6px 8px;border:1px solid var(--i6);border-radius:var(--rs)">
         ${evs.map(e => `<option value="${escapeHtml(e.key)}"${e.key === evSel ? ' selected' : ''}>${escapeHtml(e.short || e.name || e.key)}${e.date ? ` (${escapeHtml(e.date)})` : ''}</option>`).join('')}
       </select></label>
     ${fld('re-name', '차수 이름', r?.name || '', { ph: '2차 TM · 주선신청 안내' })}
-    <label style="display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--i3);margin-bottom:9px">기본 채널 — 기록마다 바꿀 수 있어요
+    <label style="display:flex;flex-direction:column;gap:3px;font-size:var(--fs-11);color:var(--i3);margin-bottom:9px">기본 채널 — 기록마다 바꿀 수 있어요
       <div class="seg" id="re-ch" style="align-self:flex-start">${CHANNELS.map(c =>
         `<button type="button" class="seg-b${(r?.channel || 'TM') === c ? ' on' : ''}" data-ch="${c}" onclick="this.parentNode.querySelectorAll('.seg-b').forEach(b=>b.classList.remove('on'));this.classList.add('on')">${c === 'TM' ? 'TM (전화)' : c === 'DM' ? 'DM (메일)' : '문자'}</button>`).join('')}</div></label>
     ${fld('re-purpose', '무엇을 안내하나', r?.purpose || '', { ph: '주선신청 방법 안내, 바이어 리스트 전달' })}
@@ -744,7 +744,7 @@ export function openRoundEditor(id){
     <div style="display:flex;gap:6px;align-items:center;margin-top:6px">
       ${r ? (nAtt
         ? `<button class="btn bs" onclick="toggleRoundClosed('${escAttr(r.id)}')">${r.status === 'closed' ? '차수 다시 열기' : '차수 닫기'}</button>
-           <span style="font-size:10.5px;color:var(--i4)">기록 ${nAtt}건이 있어 지울 수 없어요</span>`
+           <span style="font-size:var(--fs-10_5);color:var(--i4)">기록 ${nAtt}건이 있어 지울 수 없어요</span>`
         : `<button class="btn bs" style="color:var(--re)" onclick="removeRound('${escAttr(r.id)}')">차수 지우기</button>`) : ''}
       <button class="btn bp" style="margin-left:auto" onclick="saveRoundEditor(${r ? `'${escAttr(r.id)}'` : ''})">${r ? '저장' : '만들기'}</button>
     </div>`);
@@ -936,47 +936,47 @@ function renderFill(){
   const memoSrc = document.getElementById('rf-src')?.value;
   overlay('round-fill', `
     <div style="display:flex;align-items:center;margin-bottom:4px">
-      <div style="font-size:15px;font-weight:700">명단 채우기</div>
+      <div style="font-size:var(--fs-15);font-weight:700">명단 채우기</div>
       <button class="btn bs" style="margin-left:auto" onclick="document.getElementById('round-fill').remove()">닫기</button>
     </div>
-    <div style="font-size:11.5px;color:var(--i4);margin-bottom:12px">${escapeHtml(r.name)} · 지금 ${have.size}곳</div>
+    <div style="font-size:var(--fs-11_5);color:var(--i4);margin-bottom:12px">${escapeHtml(r.name)} · 지금 ${have.size}곳</div>
     <div class="seg" style="margin-bottom:8px">
       <button class="seg-b${!isSec ? ' on' : ''}" onclick="fillMode('ev')">행사 참가 기록에서</button>
       <button class="seg-b${isSec ? ' on' : ''}" onclick="fillMode('sec')">분야로</button>
     </div>
     ${isSec ? `
-    <select onchange="fillPickSec(this.value)" style="width:100%;font-size:12.5px;padding:6px 8px;border:1px solid var(--i6);border-radius:var(--rs);margin-bottom:8px">
+    <select onchange="fillPickSec(this.value)" style="width:100%;font-size:var(--fs-12_5);padding:6px 8px;border:1px solid var(--i6);border-radius:var(--rs);margin-bottom:8px">
       <option value="">분야를 고르세요</option>
       ${secs.map(x => `<option value="${escapeHtml(x.name)}"${x.name === fill.sec ? ' selected' : ''}>${escapeHtml(x.name)} (${x.n})</option>`).join('')}
     </select>` : `
-    <select onchange="fillPickEv(this.value)" style="width:100%;font-size:12.5px;padding:6px 8px;border:1px solid var(--i6);border-radius:var(--rs);margin-bottom:6px">
+    <select onchange="fillPickEv(this.value)" style="width:100%;font-size:var(--fs-12_5);padding:6px 8px;border:1px solid var(--i6);border-radius:var(--rs);margin-bottom:6px">
       ${evs.map(e => `<option value="${escapeHtml(e.key)}"${e.key === fill.ev ? ' selected' : ''}>${escapeHtml(e.short || e.name || e.key)}${e.date ? ` (${escapeHtml(e.date)})` : ''}</option>`).join('')}
     </select>
     <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">
       ${roles.length ? roles.map(ro => `<button class="btn bs" onclick="fillToggleRole('${escAttr(ro)}')"
         style="${fill.roles.has(ro) ? 'background:var(--ad);border-color:var(--a);color:var(--a)' : ''}">${escapeHtml(ro)}</button>`).join('')
-        : '<span style="font-size:11px;color:var(--i4)">이 행사에 참가 기록이 있는 기업이 없어요</span>'}
-      ${roles.length ? `<span style="font-size:10.5px;color:var(--i4);align-self:center">${fill.roles.size ? '고른 유형만' : '유형을 안 고르면 전부'}</span>` : ''}
+        : '<span style="font-size:var(--fs-11);color:var(--i4)">이 행사에 참가 기록이 있는 기업이 없어요</span>'}
+      ${roles.length ? `<span style="font-size:var(--fs-10_5);color:var(--i4);align-self:center">${fill.roles.size ? '고른 유형만' : '유형을 안 고르면 전부'}</span>` : ''}
     </div>`}
     ${cands.length ? `
-      <div style="font-size:11px;color:var(--i3);margin-bottom:4px">${cands.length}곳 · 이미 명단에 ${cands.length - fresh.length}곳 · 넣을 곳 <span id="rf-n">${fill.picked.size}</span>곳
+      <div style="font-size:var(--fs-11);color:var(--i3);margin-bottom:4px">${cands.length}곳 · 이미 명단에 ${cands.length - fresh.length}곳 · 넣을 곳 <span id="rf-n">${fill.picked.size}</span>곳
         <a href="javascript:void(0)" onclick="fillAll(true)" style="color:var(--a);margin-left:6px">모두</a>
         <a href="javascript:void(0)" onclick="fillAll(false)" style="color:var(--a);margin-left:4px">모두 해제</a></div>
       <div style="max-height:240px;overflow:auto;border:1px solid var(--i7);border-radius:var(--rs);padding:4px 8px;margin-bottom:8px">
         ${cands.map(c => {
           const inR = have.has(c.key);
-          return `<label style="display:flex;gap:6px;align-items:center;font-size:12px;padding:2px 0;${inR ? 'color:var(--i4)' : ''}">
+          return `<label style="display:flex;gap:6px;align-items:center;font-size:var(--fs-12);padding:2px 0;${inR ? 'color:var(--i4)' : ''}">
             <input type="checkbox" ${inR ? 'disabled' : fill.picked.has(c.key) ? 'checked' : ''} onchange="fillToggle('${escAttr(c.key)}',this.checked)">
-            ${escapeHtml(coName(c))} <span style="font-size:10.5px;color:var(--i4)">${inR ? '이미 명단에' : `담당자 ${c.contacts.filter(p => !hasLeft(p)).length}명`}</span></label>`;
+            ${escapeHtml(coName(c))} <span style="font-size:var(--fs-10_5);color:var(--i4)">${inR ? '이미 명단에' : `담당자 ${c.contacts.filter(p => !hasLeft(p)).length}명`}</span></label>`;
         }).join('')}
       </div>
       ${fld('rf-src', '명단 이름 — 보고를 이 이름별로 나눠요', memoSrc ?? defSource)}
       <button class="btn bp" id="rf-go" onclick="fillCommit()">${fill.picked.size}곳 넣기</button>` : ''}
-    <div style="font-size:12px;font-weight:600;margin:16px 0 6px;padding-top:12px;border-top:1px solid var(--i7)">옛 엑셀 TM 기록에서</div>
-    <div style="font-size:11.5px;color:var(--i3);margin-bottom:6px">«TM일자/TM내용» 칸이나 «TM_1차~4차·긍정/보류/부정» 칸이 있는 엑셀 — 명단과 기록을 함께 넣어요.</div>
+    <div style="font-size:var(--fs-12);font-weight:600;margin:16px 0 6px;padding-top:12px;border-top:1px solid var(--i7)">옛 엑셀 TM 기록에서</div>
+    <div style="font-size:var(--fs-11_5);color:var(--i3);margin-bottom:6px">«TM일자/TM내용» 칸이나 «TM_1차~4차·긍정/보류/부정» 칸이 있는 엑셀 — 명단과 기록을 함께 넣어요.</div>
     <button class="btn bs" onclick="document.getElementById('round-fill').remove();openRoundImport('${escAttr(r.id)}')">엑셀 기록 가져오기</button>
-    <div style="font-size:12px;font-weight:600;margin:16px 0 6px;padding-top:12px;border-top:1px solid var(--i7)">한 곳씩 찾아 넣기</div>
-    <input type="text" id="rf-q" placeholder="기업명 검색" oninput="fillSearch(this.value)" style="width:100%;font-size:12.5px;padding:6px 8px;border:1px solid var(--i6);border-radius:var(--rs)">
+    <div style="font-size:var(--fs-12);font-weight:600;margin:16px 0 6px;padding-top:12px;border-top:1px solid var(--i7)">한 곳씩 찾아 넣기</div>
+    <input type="text" id="rf-q" placeholder="기업명 검색" oninput="fillSearch(this.value)" style="width:100%;font-size:var(--fs-12_5);padding:6px 8px;border:1px solid var(--i6);border-radius:var(--rs)">
     <div id="rf-res" style="margin-top:4px"></div>`);
 }
 export function fillMode(m){
@@ -1031,11 +1031,11 @@ export function fillSearch(v){
   if(!q){ el.innerHTML = ''; return; }
   const have = new Set(membersOf(curRoundId).map(m => m.org_id));
   const res = coList().filter(c => [c.nameKo, c.nameEn, ...(c.aliases || [])].some(n => String(n || '').toLowerCase().includes(q))).slice(0, 20);
-  el.innerHTML = res.length ? res.map(c => `<div style="display:flex;align-items:center;gap:6px;font-size:12px;padding:4px 2px;border-bottom:1px solid var(--i8)">
-      <span style="flex:1">${escapeHtml(coName(c))} <span style="font-size:10.5px;color:var(--i4)">${escapeHtml(c.country || '')}</span></span>
-      ${have.has(c.key) ? '<span style="font-size:10.5px;color:var(--i4)">이미 명단에</span>'
+  el.innerHTML = res.length ? res.map(c => `<div style="display:flex;align-items:center;gap:6px;font-size:var(--fs-12);padding:4px 2px;border-bottom:1px solid var(--i8)">
+      <span style="flex:1">${escapeHtml(coName(c))} <span style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(c.country || '')}</span></span>
+      ${have.has(c.key) ? '<span style="font-size:var(--fs-10_5);color:var(--i4)">이미 명단에</span>'
         : `<button class="btn bs" onclick="fillAddOne('${escAttr(c.key)}')">넣기</button>`}</div>`).join('')
-    : '<div style="font-size:11px;color:var(--i4);padding:4px 2px">기업DB에서 못 찾았어요</div>';
+    : '<div style="font-size:var(--fs-11);color:var(--i4);padding:4px 2px">기업DB에서 못 찾았어요</div>';
 }
 export async function fillAddOne(key){
   const c = coOf(key);
@@ -1059,16 +1059,16 @@ export function openSendToRound(keys, label, { from = '기업DB에서 걸러 본
   sendCos = { keys: [...new Set(keys)], label: label || '기업DB' };
   overlay('round-send', `
     <div style="display:flex;align-items:center;margin-bottom:4px">
-      <div style="font-size:15px;font-weight:700">컨택 명단에 넣기</div>
+      <div style="font-size:var(--fs-15);font-weight:700">컨택 명단에 넣기</div>
       <button class="btn bs" style="margin-left:auto" onclick="document.getElementById('round-send').remove()">닫기</button>
     </div>
-    <div style="font-size:11.5px;color:var(--i4);margin-bottom:${note ? 4 : 12}px">${escapeHtml(from)} ${sendCos.keys.length}곳 · ${escapeHtml(sendCos.label)}</div>
-    ${note ? `<div style="font-size:11px;color:var(--am);margin-bottom:12px">${escapeHtml(note)}</div>` : ''}
-    <div style="font-size:12px;font-weight:600;margin-bottom:6px">어느 차수에</div>
-    <select id="rs-round" onchange="sendRoundInfo()" style="width:100%;font-size:12.5px;padding:6px 8px;border:1px solid var(--i6);border-radius:var(--rs);margin-bottom:4px">
+    <div style="font-size:var(--fs-11_5);color:var(--i4);margin-bottom:${note ? 4 : 12}px">${escapeHtml(from)} ${sendCos.keys.length}곳 · ${escapeHtml(sendCos.label)}</div>
+    ${note ? `<div style="font-size:var(--fs-11);color:var(--am);margin-bottom:12px">${escapeHtml(note)}</div>` : ''}
+    <div style="font-size:var(--fs-12);font-weight:600;margin-bottom:6px">어느 차수에</div>
+    <select id="rs-round" onchange="sendRoundInfo()" style="width:100%;font-size:var(--fs-12_5);padding:6px 8px;border:1px solid var(--i6);border-radius:var(--rs);margin-bottom:4px">
       ${rounds.map(r => `<option value="${escapeHtml(r.id)}"${r.id === sel ? ' selected' : ''}>${escapeHtml(evLabel(r.event_id))} · ${escapeHtml(r.name)}</option>`).join('')}
     </select>
-    <div id="rs-info" style="font-size:11px;color:var(--i3);margin-bottom:8px"></div>
+    <div id="rs-info" style="font-size:var(--fs-11);color:var(--i3);margin-bottom:8px"></div>
     ${fld('rs-src', '명단 이름 — 보고를 이 이름별로 나눠요', sendCos.label)}
     <button class="btn bp" id="rs-go" onclick="sendCommit()">넣기</button>`);
   sendRoundInfo();

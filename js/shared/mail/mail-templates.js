@@ -82,30 +82,30 @@ export function variantsHtml(part, ev, step, ro){
   const rLabel = (k) => (roles.find(r => r.key === k) || {}).label || k;
   const editing = vEd && vEd.part === part && vEd.ev === ev && vEd.step === step ? vEd : null;
   const row = (v) => editing && editing.id === v.id ? formHtml(part, ev, step, v, roles)
-    : `<div style="display:flex;gap:6px;align-items:center;padding:4px 0;border-top:1px solid var(--i7);font-size:11.5px">
+    : `<div style="display:flex;gap:6px;align-items:center;padding:4px 0;border-top:1px solid var(--i7);font-size:var(--fs-11_5)">
         <b>${escapeHtml(v.label || '(이름 없음)')}</b>
-        ${(v.roles || []).length ? (v.roles || []).map(r => `<span class="pill p-blue" style="font-size:9.5px">${escapeHtml(rLabel(r))}</span>`).join('')
-          : `<span style="font-size:10px;color:var(--i4)">${part === 'conf' ? '조건 없음 — 보낼 때 직접 고름' : '보낼 때 고름'}</span>`}
+        ${(v.roles || []).length ? (v.roles || []).map(r => `<span class="pill p-blue" style="font-size:var(--fs-9_5)">${escapeHtml(rLabel(r))}</span>`).join('')
+          : `<span style="font-size:var(--fs-10);color:var(--i4)">${part === 'conf' ? '조건 없음 — 보낼 때 직접 고름' : '보낼 때 고름'}</span>`}
         ${ro ? '' : `<span style="margin-left:auto;display:flex;gap:4px">
-          <button class="btn" style="font-size:10px" onclick="tplVarEdit('${part}','${escAttr(ev)}','${escAttr(step)}','${escAttr(v.id)}')">고치기</button>
-          <button class="btn" style="font-size:10px;color:var(--re)" onclick="tplVarDelete('${part}','${escAttr(ev)}','${escAttr(step)}','${escAttr(v.id)}')">지우기</button></span>`}
+          <button class="btn" style="font-size:var(--fs-10)" onclick="tplVarEdit('${part}','${escAttr(ev)}','${escAttr(step)}','${escAttr(v.id)}')">고치기</button>
+          <button class="btn" style="font-size:var(--fs-10);color:var(--re)" onclick="tplVarDelete('${part}','${escAttr(ev)}','${escAttr(step)}','${escAttr(v.id)}')">지우기</button></span>`}
       </div>`;
   return `<div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--i7)">
     <div class="mlbl">양식 변형 <span style="font-weight:400;color:var(--i4)">— 이 단계의 다른 문구. ${part === 'conf'
       ? '역할을 고르면 그 역할 연사에게 저절로 이 문구가 나가요(위에서부터 먼저 맞는 것)' : '보낼 때 메일 탭·«여러 기업에 메일»에서 고릅니다'}</span></div>
-    ${vs.map(row).join('') || '<div style="font-size:11px;color:var(--i4)">없음 — 위 문구 하나로 보냅니다</div>'}
+    ${vs.map(row).join('') || '<div style="font-size:var(--fs-11);color:var(--i4)">없음 — 위 문구 하나로 보냅니다</div>'}
     ${editing && editing.id === 'new' ? formHtml(part, ev, step, editing.draft, roles) : ''}
-    ${ro || editing ? '' : `<button class="btn" style="font-size:10.5px;margin-top:5px" onclick="tplVarEdit('${part}','${escAttr(ev)}','${escAttr(step)}','new')">+ 변형 추가</button>`}
+    ${ro || editing ? '' : `<button class="btn" style="font-size:var(--fs-10_5);margin-top:5px" onclick="tplVarEdit('${part}','${escAttr(ev)}','${escAttr(step)}','new')">+ 변형 추가</button>`}
   </div>`;
 }
 function formHtml(part, ev, step, v, roles){
   const inp = (f, l) => `<div${f === 'label' ? ' style="grid-column:1/-1"' : ''}><div class="mlbl">${l}</div><input class="fi" id="tv-${f}" value="${escapeHtml(v[f] || '')}" style="width:100%"></div>`;
-  const area = (f, l) => `<div style="grid-column:1/-1"><div class="mlbl">${l}</div><textarea class="fi" id="tv-${f}" rows="6" style="width:100%;resize:vertical;font-size:11.5px">${escapeHtml(v[f] || '')}</textarea></div>`;
-  return `<div data-vscope style="border:1px solid var(--a);border-radius:7px;padding:8px 10px;margin-top:6px;background:var(--W)">
+  const area = (f, l) => `<div style="grid-column:1/-1"><div class="mlbl">${l}</div><textarea class="fi" id="tv-${f}" rows="6" style="width:100%;resize:vertical;font-size:var(--fs-11_5)">${escapeHtml(v[f] || '')}</textarea></div>`;
+  return `<div data-vscope style="border:1px solid var(--a);border-radius:var(--rd-7);padding:8px 10px;margin-top:6px;background:var(--W)">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       ${inp('label', '변형 이름 (예: 패널용, 해외 기조연사용)')}
       ${part === 'conf' ? `<div style="grid-column:1/-1"><div class="mlbl">이 역할 연사에게 저절로 <span style="font-weight:400;color:var(--i4)">— 안 고르면 보낼 때 직접 고릅니다</span></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">${roles.map(r => `<label style="font-size:11.5px;display:flex;gap:4px;align-items:center">
+        <div style="display:flex;gap:8px;flex-wrap:wrap">${roles.map(r => `<label style="font-size:var(--fs-11_5);display:flex;gap:4px;align-items:center">
           <input type="checkbox" class="tv-role" value="${escapeHtml(r.key)}" ${(v.roles || []).includes(r.key) ? 'checked' : ''}> ${escapeHtml(r.label)}</label>`).join('')}</div></div>` : ''}
       ${full(inp('subject_ko', '제목 (국문)'))}${area('body_ko', '본문 (국문)')}
       ${full(inp('subject_en', '제목 (영문)'))}${area('body_en', '본문 (영문)')}
@@ -113,8 +113,8 @@ function formHtml(part, ev, step, v, roles){
     ${varChipsHtml(part, { ev })}
     ${previewHtml(part, { ev, step })}
     <div style="display:flex;gap:6px;margin-top:8px">
-      <button class="btn bp" style="font-size:11px" onclick="tplVarSave()">${v.id ? '저장' : '추가'}</button>
-      <button class="btn" style="font-size:11px" onclick="tplVarCancel()">취소</button>
+      <button class="btn bp" style="font-size:var(--fs-11)" onclick="tplVarSave()">${v.id ? '저장' : '추가'}</button>
+      <button class="btn" style="font-size:var(--fs-11)" onclick="tplVarCancel()">취소</button>
     </div>
   </div>`;
 }
@@ -200,13 +200,13 @@ function renderMgr(){
   const ov = document.getElementById('tpl-mgr');
   if(!ov || !mg) return;
   const P = PART[mg.part];
-  const tab = (k, l) => `<button class="btn${mg.tab === k ? ' bp' : ''}" style="font-size:11px" onclick="tplTab('${k}')">${l}</button>`;
-  ov.innerHTML = `<div style="background:var(--W);border-radius:10px;width:min(760px,100%);padding:16px 18px;box-shadow:0 10px 30px rgba(0,0,0,.2)">
+  const tab = (k, l) => `<button class="btn${mg.tab === k ? ' bp' : ''}" style="font-size:var(--fs-11)" onclick="tplTab('${k}')">${l}</button>`;
+  ov.innerHTML = `<div style="background:var(--W);border-radius:var(--rd-10);width:min(760px,100%);padding:16px 18px;box-shadow:0 10px 30px rgba(0,0,0,.2)">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-      <b style="font-size:14px">${P.name} 메일 양식</b>
-      <span style="font-size:11.5px;color:var(--i4)">${escapeHtml(evName(mg.ev))}</span>
+      <b style="font-size:var(--fs-14)">${P.name} 메일 양식</b>
+      <span style="font-size:var(--fs-11_5);color:var(--i4)">${escapeHtml(evName(mg.ev))}</span>
       <span style="display:flex;gap:4px;margin-left:12px">${tab('lib', '📚 양식 보관함')}${P.steps ? tab('import', '⇩ 지난 행사에서 가져오기') : ''}</span>
-      <button class="btn" style="margin-left:auto;font-size:11px" onclick="closeMailTemplates()">닫기</button>
+      <button class="btn" style="margin-left:auto;font-size:var(--fs-11)" onclick="closeMailTemplates()">닫기</button>
     </div>
     ${mg.tab === 'lib' || !P.steps ? libHtml() : importHtml()}
   </div>`;
@@ -218,26 +218,26 @@ function libHtml(){
   const items = libItems(mg.part, mg.ev);
   const edit = mg.edit;
   const cur = edit === 'new' ? { name: '', scope: mg.ev, subject_ko: '', body_ko: '', subject_en: '', body_en: '' } : edit ? libItem(edit) : null;
-  return `<div style="font-size:11px;color:var(--i4);line-height:1.6;margin-bottom:8px">
+  return `<div style="font-size:var(--fs-11);color:var(--i4);line-height:1.6;margin-bottom:8px">
       단계와 상관없이 꺼내 쓰는 양식이에요. ${mg.part === 'contact' ? '컨택 차수 «메일 보내기» 창의 «양식 보관함에서 불러오기»에 보입니다.'
         : `${P.name} 메일 탭의 «무슨 메일인가»와 «여러 ${P.name === '연사' ? '연사' : '기업'}에게 메일»에서 «양식 보관함» 묶음으로 보입니다.`}
       «모든 행사 공통»으로 두면 다른 행사에서도 보여요.</div>
-    ${items.map(it => edit === it.id ? libForm(it) : `<div style="display:flex;gap:6px;align-items:center;padding:6px 8px;border:1px solid var(--i6);border-radius:7px;margin-bottom:5px;font-size:12px">
+    ${items.map(it => edit === it.id ? libForm(it) : `<div style="display:flex;gap:6px;align-items:center;padding:6px 8px;border:1px solid var(--i6);border-radius:var(--rd-7);margin-bottom:5px;font-size:var(--fs-12)">
         <b>${escapeHtml(it.name || '(이름 없음)')}</b>
-        <span class="pill ${it.scope === 'all' ? 'p-blue' : 'p-gray'}" style="font-size:9.5px">${it.scope === 'all' ? '모든 행사 공통' : '이 행사만'}</span>
-        <span style="font-size:10.5px;color:var(--i4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1">${escapeHtml(it.subject_ko || it.subject_en || '')}</span>
-        <button class="btn" style="font-size:10px" onclick="tplLibEdit('${escAttr(it.id)}')">고치기</button>
-        <button class="btn" style="font-size:10px" onclick="tplLibCopy('${escAttr(it.id)}')">복제</button>
-        <button class="btn" style="font-size:10px;color:var(--re)" onclick="tplLibDelete('${escAttr(it.id)}')">지우기</button>
-      </div>`).join('') || '<div style="font-size:11.5px;color:var(--i4);margin-bottom:6px">아직 양식이 없어요.</div>'}
+        <span class="pill ${it.scope === 'all' ? 'p-blue' : 'p-gray'}" style="font-size:var(--fs-9_5)">${it.scope === 'all' ? '모든 행사 공통' : '이 행사만'}</span>
+        <span style="font-size:var(--fs-10_5);color:var(--i4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1">${escapeHtml(it.subject_ko || it.subject_en || '')}</span>
+        <button class="btn" style="font-size:var(--fs-10)" onclick="tplLibEdit('${escAttr(it.id)}')">고치기</button>
+        <button class="btn" style="font-size:var(--fs-10)" onclick="tplLibCopy('${escAttr(it.id)}')">복제</button>
+        <button class="btn" style="font-size:var(--fs-10);color:var(--re)" onclick="tplLibDelete('${escAttr(it.id)}')">지우기</button>
+      </div>`).join('') || '<div style="font-size:var(--fs-11_5);color:var(--i4);margin-bottom:6px">아직 양식이 없어요.</div>'}
     ${edit === 'new' ? libForm(cur) : ''}
-    ${edit ? '' : `<button class="btn bp" style="font-size:11px;margin-top:6px" onclick="tplLibEdit('new')">+ 양식 추가</button>`}`;
+    ${edit ? '' : `<button class="btn bp" style="font-size:var(--fs-11);margin-top:6px" onclick="tplLibEdit('new')">+ 양식 추가</button>`}`;
 }
 function libForm(it){
   const P = PART[mg.part];
   const inp = (f, l) => `<div><div class="mlbl">${l}</div><input class="fi" id="tl-${f}" value="${escapeHtml(it[f] || '')}" style="width:100%"></div>`;
-  const area = (f, l) => `<div style="grid-column:1/-1"><div class="mlbl">${l}</div><textarea class="fi" id="tl-${f}" rows="7" style="width:100%;resize:vertical;font-size:11.5px">${escapeHtml(it[f] || '')}</textarea></div>`;
-  return `<div data-vscope style="border:1px solid var(--a);border-radius:8px;padding:9px 11px;margin-bottom:6px">
+  const area = (f, l) => `<div style="grid-column:1/-1"><div class="mlbl">${l}</div><textarea class="fi" id="tl-${f}" rows="7" style="width:100%;resize:vertical;font-size:var(--fs-11_5)">${escapeHtml(it[f] || '')}</textarea></div>`;
+  return `<div data-vscope style="border:1px solid var(--a);border-radius:var(--r);padding:9px 11px;margin-bottom:6px">
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       ${inp('name', '양식 이름')}
       <div><div class="mlbl">어디서 보일까</div><select class="fi" id="tl-scope" style="width:100%">
@@ -249,8 +249,8 @@ function libForm(it){
     ${varChipsHtml(mg.part, { ev: mg.ev })}
     ${previewHtml(mg.part, { ev: mg.ev })}
     <div style="display:flex;gap:6px;margin-top:8px">
-      <button class="btn bp" style="font-size:11px" onclick="tplLibSave()">${it.id ? '저장' : '추가'}</button>
-      <button class="btn" style="font-size:11px" onclick="tplLibEdit(null)">취소</button></div>
+      <button class="btn bp" style="font-size:var(--fs-11)" onclick="tplLibSave()">${it.id ? '저장' : '추가'}</button>
+      <button class="btn" style="font-size:var(--fs-11)" onclick="tplLibEdit(null)">취소</button></div>
   </div>`;
 }
 export function tplLibEdit(id){ if(!mg) return; mg.edit = id; renderMgr(); document.getElementById('tl-name')?.focus(); }
@@ -303,9 +303,9 @@ function sourceSummary(part, src){
 function importHtml(){
   const srcs = EVENT_LIST.filter(e => e.key !== mg.ev).map(e => ({ e, s: sourceSummary(mg.part, e.key) })).filter(x => x.s.any);
   const sel = srcs.find(x => x.e.key === mg.src);
-  const box = (k, l, n) => `<label style="display:flex;gap:6px;align-items:center;font-size:12px;opacity:${n ? 1 : .45}">
+  const box = (k, l, n) => `<label style="display:flex;gap:6px;align-items:center;font-size:var(--fs-12);opacity:${n ? 1 : .45}">
     <input type="checkbox" class="ti-opt" value="${k}" ${n ? 'checked' : 'disabled'}> ${l} <span style="color:var(--i4)">${n}개</span></label>`;
-  return `<div style="font-size:11px;color:var(--i4);line-height:1.6;margin-bottom:8px">
+  return `<div style="font-size:var(--fs-11);color:var(--i4);line-height:1.6;margin-bottom:8px">
       다른 행사에서 다듬어 둔 문구를 이번 행사로 복사해요. 같은 단계의 문구는 가져온 것으로 바뀌고, 같은 이름의 더한 단계·변형은 건너뜁니다.
       <b>마감일·대상 제한 날짜와 기본 첨부는 행사마다 달라 가져오지 않아요.</b></div>
     ${srcs.length ? `<div class="mlbl">어느 행사에서</div>
@@ -313,14 +313,14 @@ function importHtml(){
         <option value="">— 고르세요 —</option>
         ${srcs.map(x => `<option value="${escapeHtml(x.e.key)}"${x.e.key === mg.src ? ' selected' : ''}>${escapeHtml(x.e.short || x.e.name || x.e.key)}${x.e.date ? ` (${escapeHtml(x.e.date)})` : ''} — 양식 ${x.s.any}개</option>`).join('')}
       </select>
-      ${sel ? `<div style="display:flex;flex-direction:column;gap:5px;padding:9px 11px;border:1px solid var(--i6);border-radius:8px">
+      ${sel ? `<div style="display:flex;flex-direction:column;gap:5px;padding:9px 11px;border:1px solid var(--i6);border-radius:var(--r)">
           ${box('over', '단계 문구 (고친 것)', sel.s.over)}
           ${box('custom', '더한 단계', sel.s.custom)}
           ${box('vars', '양식 변형', sel.s.vars)}
           ${box('lib', '«이 행사만» 보관함 양식', sel.s.lib)}
         </div>
-        <button class="btn bp" style="font-size:11px;margin-top:10px" onclick="tplImportRun()">이번 행사로 가져오기</button>` : ''}`
-    : `<div style="font-size:11.5px;color:var(--i4)">가져올 양식이 있는 다른 행사가 없어요. «모든 행사 공통» 보관함 양식은 따로 가져오지 않아도 보입니다.</div>`}`;
+        <button class="btn bp" style="font-size:var(--fs-11);margin-top:10px" onclick="tplImportRun()">이번 행사로 가져오기</button>` : ''}`
+    : `<div style="font-size:var(--fs-11_5);color:var(--i4)">가져올 양식이 있는 다른 행사가 없어요. «모든 행사 공통» 보관함 양식은 따로 가져오지 않아도 보입니다.</div>`}`;
 }
 export function tplImportSrc(v){ if(!mg) return; mg.src = v; renderMgr(); }
 export async function tplImportRun(){

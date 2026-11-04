@@ -36,8 +36,8 @@ export function confDashHtml(ev){
   const live = all.filter(sp => sp.status !== '취소');
   const cancelled = all.length - live.length;
   if(!live.length){
-    return `<div style="padding:22px;background:var(--i8);border:1px solid var(--i6);border-radius:10px;
-      font-size:12px;color:var(--i5);line-height:1.7">
+    return `<div style="padding:22px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-10);
+      font-size:var(--fs-12);color:var(--i5);line-height:1.7">
       아직 연사가 없어요. «Program»에서 세션을 만들고 사람을 배정하면 여기에 진행이 모여요.</div>`;
   }
   const today = td();
@@ -112,16 +112,16 @@ export function confDashHtml(ev){
   const card = (label, value, sub, color) => `<div class="cosi" style="flex:1 1 128px">
     <div class="cosn" style="color:${color || 'var(--i1)'}">${value}</div>
     <div class="cosl">${label}</div>
-    ${sub ? `<div style="font-size:9.5px;color:var(--i5);margin-top:2px">${sub}</div>` : ''}</div>`;
+    ${sub ? `<div style="font-size:var(--fs-9_5);color:var(--i5);margin-top:2px">${sub}</div>` : ''}</div>`;
 
   const barRow = (label, done, of, { onclick = '', tip = '', right = '', late = false } = {}) => {
     const pct = of ? Math.round(done / of * 100) : 0;
     return `<div style="display:flex;align-items:center;gap:9px;margin-bottom:7px${onclick ? ';cursor:pointer' : ''}"${
         onclick ? ` onclick="${onclick}" title="${escapeHtml(tip)}"` : ''}>
-      <span style="font-size:11.5px;color:var(--i3);flex:0 0 92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(label)}</span>
+      <span style="font-size:var(--fs-11_5);color:var(--i3);flex:0 0 92px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(label)}</span>
       <div style="flex:1;min-width:0">${progressBar(pct, pct === 100 ? 'var(--g)' : late ? 'var(--re)' : 'var(--a)')}</div>
-      <span style="font-size:11px;color:var(--i4);flex:0 0 44px;text-align:right">${done}/${of}</span>
-      <span style="flex:0 0 72px;text-align:right;font-size:10px;color:${late ? 'var(--re)' : 'var(--i5)'}">${right}</span>
+      <span style="font-size:var(--fs-11);color:var(--i4);flex:0 0 44px;text-align:right">${done}/${of}</span>
+      <span style="flex:0 0 72px;text-align:right;font-size:var(--fs-10);color:${late ? 'var(--re)' : 'var(--i5)'}">${right}</span>
     </div>`;
   };
 
@@ -134,7 +134,7 @@ export function confDashHtml(ev){
         right: (x.here ? `지금 ${x.here}명` : '') + (x.s.due ? ` ${escapeHtml(x.s.due.slice(5))}` : ''),
       });
     }).join('')}
-    <div style="font-size:10.5px;color:var(--i5);margin-top:6px">단계 이름·마감일은 설정 › 행사 관리 › 컨퍼런스에서 정합니다</div>
+    <div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:6px">단계 이름·마감일은 설정 › 행사 관리 › 컨퍼런스에서 정합니다</div>
   </div>`;
 
   const cardNeeds = `<div class="uc">
@@ -144,7 +144,7 @@ export function confDashHtml(ev){
       tip: `${x.c.label}을 아직 안 낸 연사 보기`,
       right: x.part ? `일부 ${x.part}` : '',
     })).join('')}
-    <div style="font-size:10.5px;color:var(--i5);margin-top:6px">줄을 누르면 아직 안 낸 연사만 보여요</div>
+    <div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:6px">줄을 누르면 아직 안 낸 연사만 보여요</div>
   </div>`;
 
   const cardPeople = (() => {
@@ -156,63 +156,63 @@ export function confDashHtml(ev){
       .concat(Object.keys(byRole).filter(k => !SPEAKER_ROLES.some(r => r.key === k)));
     return `<div class="uc">
       <div class="uc-ttl">연사 구성</div>
-      <div style="font-size:10.5px;color:var(--i4);margin-bottom:3px">역할</div>
+      <div style="font-size:var(--fs-10_5);color:var(--i4);margin-bottom:3px">역할</div>
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px">
         ${roles.map(r => `<span class="pill ${(SPEAKER_ROLES.find(x => x.key === r) || {}).cls || 'p-gray'}"
           style="cursor:pointer" onclick="openConfRole('${escAttr(r)}')">${escapeHtml(r)} ${byRole[r]}</span>`).join('')
-          || '<span style="font-size:11.5px;color:var(--i5)">배정된 역할이 없어요</span>'}
+          || '<span style="font-size:var(--fs-11_5);color:var(--i5)">배정된 역할이 없어요</span>'}
       </div>
-      <div style="font-size:10.5px;color:var(--i4);margin-bottom:3px">섭외 상태</div>
+      <div style="font-size:var(--fs-10_5);color:var(--i4);margin-bottom:3px">섭외 상태</div>
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px">
         ${['확정', '섭외중', '보류', '취소'].filter(s => byStatus[s]).map(s =>
           `<span class="pill ${s === '확정' ? 'p-green' : s === '취소' ? 'p-gray' : 'p-amber'}">${s} ${byStatus[s]}</span>`).join('')}
       </div>
-      <div style="font-size:10.5px;color:var(--i4);margin-bottom:3px">세션</div>
-      <div style="font-size:11.5px;color:var(--i3)">발표 세션 ${sessions.length}개${
+      <div style="font-size:var(--fs-10_5);color:var(--i4);margin-bottom:3px">세션</div>
+      <div style="font-size:var(--fs-11_5);color:var(--i3)">발표 세션 ${sessions.length}개${
         emptySess.length ? ` · <span style="color:var(--am)">연사 없는 세션 ${emptySess.length}</span>` : ''}</div>
     </div>`;
   })();
 
   const attnRow = (o) => `<div onclick="openSpeakerDr('${escAttr(o.sp.id)}');openFlowDraft('${escAttr(o.step)}')"
-    style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:6px;cursor:pointer;background:var(--i9);margin-bottom:4px"
+    style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:var(--rd-6);cursor:pointer;background:var(--i9);margin-bottom:4px"
     title="이 단계 메일 초안 열기">
-    <span style="flex:0 0 128px;font-weight:700;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(spName(o.sp))}</span>
+    <span style="flex:0 0 128px;font-weight:700;font-size:var(--fs-11_5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(spName(o.sp))}</span>
     <span class="pill p-gray" style="flex:0 0 auto">${escapeHtml(o.label)}</span>
-    <span style="font-size:11.5px;color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(o.text)}</span>
+    <span style="font-size:var(--fs-11_5);color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(o.text)}</span>
     ${o.days > 0 ? `<span class="pill ${o.days >= 3 ? 'p-amber' : 'p-gray'}" style="flex:0 0 auto">${o.days}일</span>` : ''}
   </div>`;
 
   const cardTodo = todo ? `<div class="uc" style="border-left:3px solid var(--am)">
       <div class="uc-ttl">처리 필요 <span class="pill p-amber">${todo}건</span></div>
       ${inbox.slice(0, 8).map(({ sp, l }) => `<div onclick="openSpeakerDr('${escAttr(sp.id)}','box')"
-        style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:6px;cursor:pointer;background:var(--i9);margin-bottom:4px"
+        style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:var(--rd-6);cursor:pointer;background:var(--i9);margin-bottom:4px"
         title="메일함 탭 열기">
-        <span style="flex:0 0 128px;font-weight:700;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(spName(sp))}</span>
+        <span style="flex:0 0 128px;font-weight:700;font-size:var(--fs-11_5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(spName(sp))}</span>
         <span class="pill ${isUnread(l) ? 'p-red' : 'p-gray'}" style="flex:0 0 auto">${isUnread(l) ? '● 안 읽은 메일 3일+' : '받은 메일 3일+'}</span>
-        <span style="font-size:11.5px;color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(l.subject || '(제목 없음)')}</span>
+        <span style="font-size:var(--fs-11_5);color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(l.subject || '(제목 없음)')}</span>
         ${dayDiff(today, String(l.ts || '').slice(0, 10)) > 0 ? `<span class="pill ${dayDiff(today, String(l.ts).slice(0, 10)) >= 3 ? 'p-amber' : 'p-gray'}" style="flex:0 0 auto">${dayDiff(today, String(l.ts).slice(0, 10))}일</span>` : ''}
       </div>`).join('')}
-      ${inbox.length > 8 ? `<div style="font-size:11px;color:var(--i4);padding:2px 2px 6px">받은 메일 외 ${inbox.length - 8}건 — 설정 › 행사 관리 › 메일에서 모아 볼 수 있어요</div>` : ''}
+      ${inbox.length > 8 ? `<div style="font-size:var(--fs-11);color:var(--i4);padding:2px 2px 6px">받은 메일 외 ${inbox.length - 8}건 — 설정 › 행사 관리 › 메일에서 모아 볼 수 있어요</div>` : ''}
       ${nudge.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 6px">${[...new Set(nudge.map(o => o.step))].map(k => {
           const n = nudge.filter(o => o.step === k).length, lb = nudge.find(o => o.step === k).label.replace('🔔 ', '');
-          return `<button class="btn" style="font-size:10.5px" onclick="openSpeakerBulkMail('${escAttr(ev.key)}','${escAttr(k)}')"
+          return `<button class="btn" style="font-size:var(--fs-10_5)" onclick="openSpeakerBulkMail('${escAttr(ev.key)}','${escAttr(k)}')"
             title="리마인더 보낼 때가 된 연사를 골라 둔 채로 엽니다">📨 ${escapeHtml(lb)} 리마인더 ${n}명 한 번에</button>`; }).join('')}</div>` : ''}
       ${nudge.slice(0, 10).map(attnRow).join('')}
       ${dueMiss.slice(0, 10).map(attnRow).join('')}
       ${silent.slice(0, 6).map(o => attnRow({ ...o, label: '답 없음 · ' + o.label })).join('')}
       ${emptySess.slice(0, 5).map(s => `<div onclick="openPgaSession('${escAttr(s.id)}')"
-        style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:6px;cursor:pointer;background:var(--i9);margin-bottom:4px">
-        <span style="flex:0 0 128px;font-weight:700;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${
+        style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:var(--rd-6);cursor:pointer;background:var(--i9);margin-bottom:4px">
+        <span style="flex:0 0 128px;font-weight:700;font-size:var(--fs-11_5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${
           escapeHtml(s.title_ko || s.title_en || '(세션)')}</span>
         <span class="pill p-gray">연사 없음</span>
-        <span style="font-size:11.5px;color:var(--i3)">${escapeHtml([s.date, s.start_at].filter(Boolean).join(' '))}</span></div>`).join('')}
-      ${unassigned.length ? `<div onclick="openConfSess('__none__')" style="font-size:11px;color:var(--am);padding:6px 2px;cursor:pointer">
+        <span style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml([s.date, s.start_at].filter(Boolean).join(' '))}</span></div>`).join('')}
+      ${unassigned.length ? `<div onclick="openConfSess('__none__')" style="font-size:var(--fs-11);color:var(--am);padding:6px 2px;cursor:pointer">
         세션에 배정 안 된 연사 ${unassigned.length}명 — ${unassigned.slice(0, 4).map(sp => escapeHtml(spName(sp))).join(', ')}${
           unassigned.length > 4 ? ' …' : ''}</div>` : ''}
-      ${nudge.length > 10 || dueMiss.length > 10 || silent.length > 6 ? `<div style="font-size:11px;color:var(--i4);padding:6px 2px">나머지는 Speakers 표의 «지금 할 일»에서 볼 수 있어요</div>` : ''}
+      ${nudge.length > 10 || dueMiss.length > 10 || silent.length > 6 ? `<div style="font-size:var(--fs-11);color:var(--i4);padding:6px 2px">나머지는 Speakers 표의 «지금 할 일»에서 볼 수 있어요</div>` : ''}
     </div>` : `<div class="uc" style="border-left:3px solid var(--g)">
       <div class="uc-ttl">처리 필요</div>
-      <div style="font-size:12px;color:var(--g)">지금 처리할 게 없어요</div></div>`;
+      <div style="font-size:var(--fs-12);color:var(--g)">지금 처리할 게 없어요</div></div>`;
 
   const cardRecent = (() => {
     const recent = auditLog.filter(l => l.target === ev.key)
@@ -220,11 +220,11 @@ export function confDashHtml(ev){
     return `<div class="uc">
       <div class="uc-ttl">최근 변경</div>
       ${recent.length ? recent.map(l => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--i8)">
-        <span style="font-size:11px;color:var(--i3);flex:0 0 auto">${escapeHtml(l.name || '')}</span>
-        <span style="font-size:11.5px;color:var(--i2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${
+        <span style="font-size:var(--fs-11);color:var(--i3);flex:0 0 auto">${escapeHtml(l.name || '')}</span>
+        <span style="font-size:var(--fs-11_5);color:var(--i2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${
           escapeHtml(unent((l.detail || '').replace(/<[^>]+>/g, '')))}</span>
-        <span style="font-size:10px;color:var(--i5);flex:0 0 auto">${escapeHtml(String(l.ts || '').slice(5, 10))}</span>
-      </div>`).join('') : '<div style="font-size:11.5px;color:var(--i5)">아직 변경 이력이 없어요</div>'}
+        <span style="font-size:var(--fs-10);color:var(--i5);flex:0 0 auto">${escapeHtml(String(l.ts || '').slice(5, 10))}</span>
+      </div>`).join('') : '<div style="font-size:var(--fs-11_5);color:var(--i5)">아직 변경 이력이 없어요</div>'}
     </div>`;
   })();
 

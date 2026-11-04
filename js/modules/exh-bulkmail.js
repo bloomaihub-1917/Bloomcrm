@@ -129,23 +129,23 @@ export function bmPhotoClear(){ if(!bm || bm.sending) return; bm.photos = null; 
 
 function photoBlockHtml(){
   const p = bm.photos;
-  if(!p) return `<div style="margin-top:8px;font-size:11px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-      <label class="btn" style="font-size:10.5px;cursor:pointer">📷 기업별 사진 폴더 고르기
+  if(!p) return `<div style="margin-top:8px;font-size:var(--fs-11);display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <label class="btn" style="font-size:var(--fs-10_5);cursor:pointer">📷 기업별 사진 폴더 고르기
         <input type="file" webkitdirectory multiple style="display:none" onchange="bmPhotoPick(this)"></label>
       <span style="color:var(--i4)">폴더 안 하위 폴더 이름(기업명 또는 부스 번호)으로 기업을 찾아 그 기업 메일에만 붙여요</span></div>`;
   const xs = eventExhibitors().slice().sort((a, b) => exhNames(a).ko.localeCompare(exhNames(b).ko, 'ko'));
   const ok = p.folders.filter(f => f.exId), miss = p.folders.filter(f => !f.exId);
   const opts = (cur) => `<option value="">— 기업 고르기 —</option>${xs.map(x => `<option value="${escapeHtml(x.id)}"${x.id === cur ? ' selected' : ''}>${escapeHtml(exhNames(x).ko)}${x.booth_no ? ` (${escapeHtml(x.booth_no)})` : ''}</option>`).join('')}`;
-  return `<div style="margin-top:8px;padding:7px 9px;border:1px solid var(--i6);border-radius:7px;font-size:11px">
+  return `<div style="margin-top:8px;padding:7px 9px;border:1px solid var(--i6);border-radius:var(--rd-7);font-size:var(--fs-11)">
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
       <b>📷 기업별 사진</b><span style="color:var(--i4)">${escapeHtml(p.root || '고른 폴더')} · 짝 맞음 ${ok.length}곳${miss.length ? ` · <span style="color:var(--am)">못 맞춘 폴더 ${miss.length}개</span>` : ''}</span>
       <span style="margin-left:auto;display:flex;gap:4px">
-        <button class="btn" style="font-size:10px" onclick="bmAll('photo')" title="사진이 짝 맞은 기업만 고릅니다">사진 있는 곳만</button>
-        <button class="btn" style="font-size:10px" onclick="bmPhotoClear()">빼기</button></span></div>
+        <button class="btn" style="font-size:var(--fs-10)" onclick="bmAll('photo')" title="사진이 짝 맞은 기업만 고릅니다">사진 있는 곳만</button>
+        <button class="btn" style="font-size:var(--fs-10)" onclick="bmPhotoClear()">빼기</button></span></div>
     <details${miss.length ? ' open' : ''} style="margin-top:4px"><summary style="cursor:pointer;color:var(--i3)">폴더별 짝 보기·고치기</summary>
       <div style="max-height:180px;overflow:auto;margin-top:4px">${p.folders.map((f, i) => `<div style="display:flex;gap:6px;align-items:center;padding:2px 0">
         <span style="flex:0 0 40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(f.name)}">📁 ${escapeHtml(f.name)} <span style="color:var(--i4)">${f.files.length}장</span></span>
-        <select class="fi" style="font-size:10.5px;flex:1;${f.exId ? '' : 'border-color:var(--am)'}" onchange="bmPhotoAssign(${i},this.value)" ${bm.sending ? 'disabled' : ''}>${opts(f.exId)}</select></div>`).join('')}</div></details>
+        <select class="fi" style="font-size:var(--fs-10_5);flex:1;${f.exId ? '' : 'border-color:var(--am)'}" onchange="bmPhotoAssign(${i},this.value)" ${bm.sending ? 'disabled' : ''}>${opts(f.exId)}</select></div>`).join('')}</div></details>
   </div>`;
 }
 
@@ -227,12 +227,12 @@ export function exhMailState(x, st){
 }
 const isTurn = (s) => s === 'due' || s === 'late' || s === 'resend';
 const STATE_PILL = {
-  due:    '<span class="pill p-amber" style="font-size:9.5px">보낼 차례</span>',
-  resend: '<span class="pill p-amber" style="font-size:9.5px">다시 보낼 차례</span>',
-  late:   '<span class="pill p-amber" style="font-size:9.5px">🔔 리마인더 보낼 때</span>',
-  sent:   '<span class="pill p-blue" style="font-size:9.5px">⏳ 요청함·기다림</span>',
-  done:   '<span class="pill p-green" style="font-size:9.5px">끝남</span>',
-  na:     '<span class="pill p-gray" style="font-size:9.5px">해당 없음</span>',
+  due:    '<span class="pill p-amber" style="font-size:var(--fs-9_5)">보낼 차례</span>',
+  resend: '<span class="pill p-amber" style="font-size:var(--fs-9_5)">다시 보낼 차례</span>',
+  late:   '<span class="pill p-amber" style="font-size:var(--fs-9_5)">🔔 리마인더 보낼 때</span>',
+  sent:   '<span class="pill p-blue" style="font-size:var(--fs-9_5)">⏳ 요청함·기다림</span>',
+  done:   '<span class="pill p-green" style="font-size:var(--fs-9_5)">끝남</span>',
+  na:     '<span class="pill p-gray" style="font-size:var(--fs-9_5)">해당 없음</span>',
   free: '',
 };
 /* 지금 고른 메일 — 보관함 양식이면 단계 모양으로 바꿔 돌려준다(차례가 없어 «기타 안내»처럼 다룬다) */
@@ -350,11 +350,11 @@ export function bmBannerPick(input, lang){
 export function bmBannerClear(){ if(!bm || bm.sending) return; bm.banner = null; render(); }
 function bannerBlockHtml(){
   const b = bm.banner || {};
-  const pick = (lang, l) => `<label class="btn" style="font-size:10.5px;cursor:pointer">${b[lang] ? `✓ ${l}: ${escapeHtml(b[lang].name)}` : `${l} 고르기`}
+  const pick = (lang, l) => `<label class="btn" style="font-size:var(--fs-10_5);cursor:pointer">${b[lang] ? `✓ ${l}: ${escapeHtml(b[lang].name)}` : `${l} 고르기`}
       <input type="file" accept="image/*" style="display:none" onchange="bmBannerPick(this,'${lang}')"></label>`;
-  return `<div style="margin-top:8px;font-size:11px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+  return `<div style="margin-top:8px;font-size:var(--fs-11);display:flex;gap:6px;align-items:center;flex-wrap:wrap">
     <b>🖼 맨 위 공통 이미지</b>${pick('ko', '국문용')}${pick('en', '영문용')}
-    ${bm.banner ? '<button class="btn" style="font-size:10px" onclick="bmBannerClear()">빼기</button>' : ''}
+    ${bm.banner ? '<button class="btn" style="font-size:var(--fs-10)" onclick="bmBannerClear()">빼기</button>' : ''}
     <span style="color:var(--i4)">감사장처럼 모두에게 같은 이미지 — 본문 맨 위에 들어가요. 영문용이 없으면 국문용을 써요</span></div>`;
 }
 const thumbCache = new WeakMap();
@@ -463,80 +463,80 @@ function render(){
     el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
     document.body.appendChild(el);
   }
-  el.innerHTML = `<div style="background:var(--W);border-radius:12px;width:min(1240px,100%);max-height:94vh;overflow:auto;padding:16px 18px">
+  el.innerHTML = `<div style="background:var(--W);border-radius:var(--rd-12);width:min(1240px,100%);max-height:94vh;overflow:auto;padding:16px 18px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-      <div style="font-size:14px;font-weight:700">여러 기업에 메일</div>
-      <span style="font-size:11px;color:var(--i4)">기업마다 한 통씩 따로 보내고 그 기업 기록에 남깁니다</span>
+      <div style="font-size:var(--fs-14);font-weight:700">여러 기업에 메일</div>
+      <span style="font-size:var(--fs-11);color:var(--i4)">기업마다 한 통씩 따로 보내고 그 기업 기록에 남깁니다</span>
       <button class="drcls" style="margin-left:auto" onclick="closeExhBulkMail()">✕</button>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
       <div><div class="mlbl">무슨 메일인가</div><select class="fi" onchange="bmSet('step',this.value)" ${bm.sending ? 'disabled' : ''}>${steps.map(s => { const n = s.key === 'note' ? 0 : list.filter(x => isTurn(exhMailState(x, s))).length;
           return opt(s.key, bm.step, escapeHtml(s.label) + (s.round ? ' ↻' : '') + (n ? ` — 보낼 차례 ${n}곳` : '')); }).join('')}
         ${libs.length ? `<optgroup label="양식 보관함">${libs.map(it => opt(`lib:${escAttr(it.id)}`, bm.step, escapeHtml(it.name))).join('')}</optgroup>` : ''}</select>
-        ${vs.length ? `<div style="display:flex;gap:6px;align-items:center;margin-top:5px;font-size:11px"><span style="color:var(--i4)">양식</span>
-          <select class="fi" style="font-size:11.5px;flex:1" onchange="bmSet('variant',this.value)">
+        ${vs.length ? `<div style="display:flex;gap:6px;align-items:center;margin-top:5px;font-size:var(--fs-11)"><span style="color:var(--i4)">양식</span>
+          <select class="fi" style="font-size:var(--fs-11_5);flex:1" onchange="bmSet('variant',this.value)">
             ${opt('', bm.variant, '기본 문구')}${vs.map(v => opt(escAttr(v.id), bm.variant, escapeHtml(v.label))).join('')}</select></div>` : ''}</div>
       <div><div class="mlbl">언어</div><select class="fi" onchange="bmSet('lang',this.value)">${opt('auto', bm.lang, '기업별 자동 (해외는 영문)')}${opt('ko', bm.lang, '모두 국문')}${opt('en', bm.lang, '모두 영문')}</select></div>
       <div><div class="mlbl">받는 사람</div><select class="fi" onchange="bmSet('who',this.value)">${opt('primary', bm.who, '메인 담당자만')}${opt('all', bm.who, '메일 있는 담당자 모두')}${opt('rest', bm.who, '아직 못 받은 담당자만')}</select></div>
     </div>
     ${roundBarHtml(st, rp)}
-    ${sentN ? `<div style="margin:-4px 0 10px;font-size:10.5px"><button class="btn" style="font-size:10.5px" onclick="bmToContact()"
+    ${sentN ? `<div style="margin:-4px 0 10px;font-size:var(--fs-10_5)"><button class="btn" style="font-size:var(--fs-10_5)" onclick="bmToContact()"
       title="이 메일을 받은 기업·담당자를 컨택 차수(DM «보냄»)로 옮겨, 컨택에서 회신·후속을 체크합니다">📋 보낸 ${sentN}곳 컨택으로 옮기기</button>
       <span style="color:var(--i4)">컨택 › «${escapeHtml(st.label)} — 회신 확인» 차수에서 회신·후속을 체크해요 · 다시 눌러도 겹치지 않아요</span></div>` : ''}
-    ${st && st.key === 'booth_change' ? `<div style="font-size:10.5px;color:var(--i4);margin:-4px 0 8px">알린 부스(그 기업에 마지막으로 보낸 메일의 «부스 번호:» 줄)와 지금 부스가 다른 곳만 잡혀요. 보내면 새 번호가 «알린 부스»가 됩니다.</div>` : ''}
+    ${st && st.key === 'booth_change' ? `<div style="font-size:var(--fs-10_5);color:var(--i4);margin:-4px 0 8px">알린 부스(그 기업에 마지막으로 보낸 메일의 «부스 번호:» 줄)와 지금 부스가 다른 곳만 잡혀요. 보내면 새 번호가 «알린 부스»가 됩니다.</div>` : ''}
     <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:16px">
       <div>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap">
           <div class="mlbl" style="margin:0">받는 기업 <b style="color:var(--i1)">${picked.length}</b>/${list.length}${
             picked.length ? ` <span style="font-weight:400;color:var(--i4)">(국문 ${picked.filter(x => !enOf(x)).length} · 영문 ${picked.filter(enOf).length})</span>` : ''}</div>
           <span style="margin-left:auto;display:flex;gap:4px">
-            ${failedN ? `<button class="btn" style="font-size:10px;color:var(--re)" onclick="bmAll('failed')">실패한 ${failedN}곳만</button>` : ''}
-            ${st && st.key !== 'note' ? `<button class="btn" style="font-size:10px" onclick="bmAll('turn')" title="보이는 기업 중 이 메일이 보낼 차례인 곳만 고릅니다">보낼 차례만</button>` : ''}
-            <button class="btn" style="font-size:10px" onclick="bmAll(true)" title="보이는 기업을 모두 고릅니다">전체</button>
-            <button class="btn" style="font-size:10px" onclick="bmAll(false)">해제</button></span>
+            ${failedN ? `<button class="btn" style="font-size:var(--fs-10);color:var(--re)" onclick="bmAll('failed')">실패한 ${failedN}곳만</button>` : ''}
+            ${st && st.key !== 'note' ? `<button class="btn" style="font-size:var(--fs-10)" onclick="bmAll('turn')" title="보이는 기업 중 이 메일이 보낼 차례인 곳만 고릅니다">보낼 차례만</button>` : ''}
+            <button class="btn" style="font-size:var(--fs-10)" onclick="bmAll(true)" title="보이는 기업을 모두 고릅니다">전체</button>
+            <button class="btn" style="font-size:var(--fs-10)" onclick="bmAll(false)">해제</button></span>
         </div>
-        <div style="display:flex;gap:4px;margin-bottom:6px;font-size:11px">
+        <div style="display:flex;gap:4px;margin-bottom:6px;font-size:var(--fs-11)">
           ${[['', '전체', list.length], ['ko', '🇰🇷 국문으로 갈 곳', list.filter(x => !enOf(x)).length], ['en', '🌐 영문으로 갈 곳', list.filter(enOf).length]].map(([v, l, n]) =>
-            `<button class="btn" style="font-size:10.5px;padding:3px 10px;${(bm.langF || '') === v ? 'background:var(--i1);color:var(--W);border-color:var(--i1)' : ''}" onclick="bmLangF('${v}')">${l} ${n}</button>`).join('')}
+            `<button class="btn" style="font-size:var(--fs-10_5);padding:3px 10px;${(bm.langF || '') === v ? 'background:var(--i1);color:var(--W);border-color:var(--i1)' : ''}" onclick="bmLangF('${v}')">${l} ${n}</button>`).join('')}
         </div>
-        <div style="border:1px solid var(--i6);border-radius:8px;max-height:calc(94vh - 230px);min-height:300px;overflow:auto">
+        <div style="border:1px solid var(--i6);border-radius:var(--r);max-height:calc(94vh - 230px);min-height:300px;overflow:auto">
           ${shownList().map(x => { const ms = mailsOf(x, bm.who); const bc = st && st.key === 'booth_change' ? boothChange(x) : null;
             const np = photosOf(x.id).length, en = enOf(x);
             return `<label style="display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:2px 8px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--i8);cursor:${ms.length ? 'pointer' : 'default'};opacity:${ms.length ? 1 : .45}">
             <input type="checkbox" style="grid-row:span 2" ${bm.ids.has(x.id) ? 'checked' : ''} ${ms.length && !bm.sending ? '' : 'disabled'} onchange="bmPick('${escAttr(x.id)}',this.checked)">
             <div style="display:flex;gap:6px;align-items:center;min-width:0">
-              <span style="font-size:9.5px;font-weight:700;padding:0 5px;border-radius:4px;flex:0 0 auto;${en ? 'background:#e8f0fe;color:#1a56c4' : 'background:var(--i8);color:var(--i3)'}">${en ? 'EN' : 'KO'}</span>
-              <b style="font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(exhNames(x).ko)}</b>${
-              bc && bc.changed ? `<span style="font-size:10px;color:var(--am);flex:0 0 auto">${escapeHtml(bc.from)} → ${escapeHtml(bc.to)}</span>` : ''}</div>
+              <span style="font-size:var(--fs-9_5);font-weight:700;padding:0 5px;border-radius:var(--rd-4);flex:0 0 auto;${en ? 'background:#e8f0fe;color:#1a56c4' : 'background:var(--i8);color:var(--i3)'}">${en ? 'EN' : 'KO'}</span>
+              <b style="font-size:var(--fs-12);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(exhNames(x).ko)}</b>${
+              bc && bc.changed ? `<span style="font-size:var(--fs-10);color:var(--am);flex:0 0 auto">${escapeHtml(bc.from)} → ${escapeHtml(bc.to)}</span>` : ''}</div>
             <div style="display:flex;gap:4px;align-items:center;justify-content:flex-end">${STATE_PILL[exhMailState(x, st)] || ''}${
-              bm.photos ? (np ? `<span style="font-size:10px;color:var(--i3)">📷 ${np}</span>` : '<span style="font-size:10px;color:var(--am)">사진 없음</span>') : ''}${
-              bm.failed.has(x.id) ? '<span class="pill p-red" style="font-size:9.5px;background:var(--rb);color:var(--re)">실패</span>' : ''}</div>
-            <div style="grid-column:2 / 4;font-size:10.5px;color:var(--i4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ms.length ? escapeHtml(ms.join(', ')) : '메일 있는 담당자 없음'}</div>
-          </label>`; }).join('') || '<div style="padding:14px;font-size:11px;color:var(--i4)">이 필터에 맞는 기업이 없어요.</div>'}
+              bm.photos ? (np ? `<span style="font-size:var(--fs-10);color:var(--i3)">📷 ${np}</span>` : '<span style="font-size:var(--fs-10);color:var(--am)">사진 없음</span>') : ''}${
+              bm.failed.has(x.id) ? '<span class="pill p-red" style="font-size:var(--fs-9_5);background:var(--rb);color:var(--re)">실패</span>' : ''}</div>
+            <div style="grid-column:2 / 4;font-size:var(--fs-10_5);color:var(--i4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ms.length ? escapeHtml(ms.join(', ')) : '메일 있는 담당자 없음'}</div>
+          </label>`; }).join('') || '<div style="padding:14px;font-size:var(--fs-11);color:var(--i4)">이 필터에 맞는 기업이 없어요.</div>'}
         </div>
       </div>
       <div>
         ${aiDraftHtml('exbulk')}
-        <details${bm.lang !== 'en' ? ' open' : ''}><summary style="cursor:pointer;font-size:11.5px;font-weight:700;margin-bottom:4px">국문 문구</summary>
-          <input class="fi" style="font-size:11.5px;margin-bottom:4px" value="${escapeHtml(bm.tpl.subject_ko)}" oninput="bmTpl('subject_ko',this.value)" ${bm.sending ? 'disabled' : ''}>
-          <textarea class="fi" rows="7" style="font-size:11.5px;width:100%" oninput="bmTpl('body_ko',this.value)" ${bm.sending ? 'disabled' : ''}>${escapeHtml(bm.tpl.body_ko)}</textarea></details>
-        <details${bm.lang === 'en' ? ' open' : ''} style="margin-top:6px"><summary style="cursor:pointer;font-size:11.5px;font-weight:700;margin-bottom:4px">영문 문구</summary>
-          <input class="fi" style="font-size:11.5px;margin-bottom:4px" value="${escapeHtml(bm.tpl.subject_en)}" oninput="bmTpl('subject_en',this.value)" ${bm.sending ? 'disabled' : ''}>
-          <textarea class="fi" rows="7" style="font-size:11.5px;width:100%" oninput="bmTpl('body_en',this.value)" ${bm.sending ? 'disabled' : ''}>${escapeHtml(bm.tpl.body_en)}</textarea></details>
+        <details${bm.lang !== 'en' ? ' open' : ''}><summary style="cursor:pointer;font-size:var(--fs-11_5);font-weight:700;margin-bottom:4px">국문 문구</summary>
+          <input class="fi" style="font-size:var(--fs-11_5);margin-bottom:4px" value="${escapeHtml(bm.tpl.subject_ko)}" oninput="bmTpl('subject_ko',this.value)" ${bm.sending ? 'disabled' : ''}>
+          <textarea class="fi" rows="7" style="font-size:var(--fs-11_5);width:100%" oninput="bmTpl('body_ko',this.value)" ${bm.sending ? 'disabled' : ''}>${escapeHtml(bm.tpl.body_ko)}</textarea></details>
+        <details${bm.lang === 'en' ? ' open' : ''} style="margin-top:6px"><summary style="cursor:pointer;font-size:var(--fs-11_5);font-weight:700;margin-bottom:4px">영문 문구</summary>
+          <input class="fi" style="font-size:var(--fs-11_5);margin-bottom:4px" value="${escapeHtml(bm.tpl.subject_en)}" oninput="bmTpl('subject_en',this.value)" ${bm.sending ? 'disabled' : ''}>
+          <textarea class="fi" rows="7" style="font-size:var(--fs-11_5);width:100%" oninput="bmTpl('body_en',this.value)" ${bm.sending ? 'disabled' : ''}>${escapeHtml(bm.tpl.body_en)}</textarea></details>
         ${varChipsHtml('exh', { ev: bm.evKey })}
-        <div style="font-size:10.5px;color:var(--i4);margin-top:4px">칸은 기업마다 채워집니다. 여기서 고친 문구는 이번 발송에만 쓰고, 기본 문구와 단계는
+        <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:4px">칸은 기업마다 채워집니다. 여기서 고친 문구는 이번 발송에만 쓰고, 기본 문구와 단계는
           <a href="#" onclick="openExhMailEditor('${escAttr(bm.evKey)}','${escAttr(bm.step)}');return false">✎ 단계 편집</a>에서 고칩니다.</div>
-        ${files.length ? `<div style="font-size:11px;margin-top:6px">기본 첨부 ${files.map(f => `<span class="pill p-blue" style="margin:2px 3px 0 0">📎 ${escapeHtml(f.filename)}</span>`).join('')}</div>` : ''}
+        ${files.length ? `<div style="font-size:var(--fs-11);margin-top:6px">기본 첨부 ${files.map(f => `<span class="pill p-blue" style="margin:2px 3px 0 0">📎 ${escapeHtml(f.filename)}</span>`).join('')}</div>` : ''}
         ${bannerBlockHtml()}
         ${photoBlockHtml()}
-        <div style="margin-top:8px;font-size:10.5px;color:var(--i4)">📌 맨 아래 푸터(사무국 주소·연락처·이미지)는 설정 › 행사 관리 › 메일의 «메일 푸터»가 모든 메일에 붙여요 — 미리보기엔 안 보여요.</div>
+        <div style="margin-top:8px;font-size:var(--fs-10_5);color:var(--i4)">📌 맨 아래 푸터(사무국 주소·연락처·이미지)는 설정 › 행사 관리 › 메일의 «메일 푸터»가 모든 메일에 붙여요 — 미리보기엔 안 보여요.</div>
         <div id="bm-prev">${prevHtml(picked)}</div>
       </div>
     </div>
-    <div style="display:flex;gap:6px;align-items:center;margin-top:10px;font-size:11px;flex-wrap:wrap">
+    <div style="display:flex;gap:6px;align-items:center;margin-top:10px;font-size:var(--fs-11);flex-wrap:wrap">
       <b>참조(CC)</b>
       <input id="bm-cc" value="${escapeHtml(ccText())}" placeholder="예: info-kic@konect.or.kr (여러 개는 쉼표)" onchange="bmCcSave(this.value)"
-        style="flex:1;min-width:220px;font-size:11px" ${bm.sending ? 'disabled' : ''}>
+        style="flex:1;min-width:220px;font-size:var(--fs-11)" ${bm.sending ? 'disabled' : ''}>
       <span style="color:var(--i4)">기업마다 가는 메일에 모두 참조로 들어가요 · 이 행사에 저장 · 시험 발송엔 안 붙어요</span>
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap">
@@ -545,7 +545,7 @@ function render(){
         title="미리보기 중인 기업의 메일을 내 주소(또는 적은 주소)로 한 통 보냅니다 — 기록에 남지 않아요">나에게 먼저 1통</button>
       <button class="btn" onclick="sendExhTestMail(true)" ${picked.length > 1 && !bm.sending ? '' : 'disabled'}
         title="고른 기업 메일을 모두 내 주소(또는 적은 주소)로 보냅니다 — 제목 앞에 [시험·기업명], 기록에 남지 않아요">고른 ${picked.length}곳 모두 나에게</button>
-      <span id="bm-msg" style="font-size:11px;color:var(--i4)"></span>
+      <span id="bm-msg" style="font-size:var(--fs-11);color:var(--i4)"></span>
     </div>
   </div>`;
 }
@@ -554,22 +554,22 @@ const roundBarHtml = (st, rp) => round.barHtml(st, rp);
 
 /* 기업마다 넘겨 보는 미리보기 */
 function prevHtml(picked){
-  if(!picked.length) return '<div style="margin-top:10px;font-size:11px;color:var(--i4)">기업을 고르면 미리보기가 보여요.</div>';
+  if(!picked.length) return '<div style="margin-top:10px;font-size:var(--fs-11);color:var(--i4)">기업을 고르면 미리보기가 보여요.</div>';
   const i = ((bm.pi % picked.length) + picked.length) % picked.length;
   const x = picked[i], m = mailFor(x);
-  return `<div style="margin-top:10px;padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;font-size:11.5px;line-height:1.55">
-    <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;font-size:10.5px;color:var(--i4)">
-      <button class="btn" style="font-size:10px;padding:1px 7px" onclick="bmPrev(-1)">◀</button>
+  return `<div style="margin-top:10px;padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-7);font-size:var(--fs-11_5);line-height:1.55">
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;font-size:var(--fs-10_5);color:var(--i4)">
+      <button class="btn" style="font-size:var(--fs-10);padding:1px 7px" onclick="bmPrev(-1)">◀</button>
       <span>${i + 1}/${picked.length}</span>
-      <button class="btn" style="font-size:10px;padding:1px 7px" onclick="bmPrev(1)">▶</button>
+      <button class="btn" style="font-size:var(--fs-10);padding:1px 7px" onclick="bmPrev(1)">▶</button>
       <b style="color:var(--i2)">${escapeHtml(exhNames(x).ko)}</b>${m.en ? ' (영문)' : ''}
       <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">→ ${escapeHtml(mailsOf(x, bm.who).join(', '))}</span>
     </div>
     ${photosOf(x.id).length || bannerOf(m.en)
-      ? `<div style="max-height:420px;overflow:auto;background:#fff;padding:6px;border-radius:5px"><b>${escapeHtml(m.subject)}</b><br><br>${
+      ? `<div style="max-height:420px;overflow:auto;background:#fff;padding:6px;border-radius:var(--rs)"><b>${escapeHtml(m.subject)}</b><br><br>${
           bodyHtml(m.raw, photosOf(x.id).map(thumbOf), bannerOf(m.en) && thumbOf(bannerOf(m.en)), m.alt).replace(/width:640px/g, 'width:320px')}</div>`
       : `<div style="white-space:pre-wrap;max-height:240px;overflow:auto"><b>${escapeHtml(m.subject)}</b>\n\n${escapeHtml(m.body)}</div>`}
-    ${bm.photos ? `<div style="margin-top:6px;font-size:10.5px;${photosOf(x.id).length ? '' : 'color:var(--am)'}">${photosOf(x.id).length
+    ${bm.photos ? `<div style="margin-top:6px;font-size:var(--fs-10_5);${photosOf(x.id).length ? '' : 'color:var(--am)'}">${photosOf(x.id).length
       ? `📷 본문에 ${photosOf(x.id).length}장 — ${photosOf(x.id).map(f => escapeHtml(f.name)).join(', ')}${/\{사진\}/.test(bm.tpl[m.en ? 'body_en' : 'body_ko']) ? '' : ' · 문구에 {사진}을 넣으면 그 자리에, 없으면 맨 끝에 들어가요'}`
       : '📷 이 기업에 맞는 사진 폴더가 없어요'}</div>` : ''}
   </div>`;

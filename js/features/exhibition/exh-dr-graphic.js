@@ -37,13 +37,13 @@ function graphicFeedbackBlock(x){
   const cur = stageOf(GRAPHIC_STAGES, x.graphic_stage);
   const me = currentUser?.email || '';
 
-  return `<div style="font-size:11px;color:var(--i4);margin-bottom:7px">
+  return `<div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:7px">
       지금 단계는 <b>${escapeHtml(cur.label)}</b>이고, 남기는 사람은
       <b>${escapeHtml(currentUser?.name || currentUser?.email || '(로그인 정보 없음)')}</b>으로 적힙니다.
       여기 적은 내용은 <b>문의·기록</b> 탭에도 함께 남아요.</div>
 
     <textarea class="fi" id="gfb-${escAttr(x.id)}" rows="2" placeholder="예: 로고 해상도가 낮아 재전달 요청했습니다"
-      style="width:100%;resize:vertical;font-size:12px"></textarea>
+      style="width:100%;resize:vertical;font-size:var(--fs-12)"></textarea>
     <div style="display:flex;justify-content:flex-end;margin-top:6px">
       <button class="btn bp bs" onclick="addGraphicFeedback('${escAttr(x.id)}')">피드백 남기기</button>
     </div>
@@ -51,16 +51,16 @@ function graphicFeedbackBlock(x){
     ${rows.length ? `<div style="margin-top:10px">${rows.map(l => `
       <div style="padding:8px 0;border-top:1px solid var(--i8)">
         <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap">
-          <span style="font-size:11.5px;font-weight:700">${escapeHtml(l.author_name || l.author_email || '알 수 없음')}</span>
-          ${l.subject ? `<span class="pill p-gray" style="font-size:9px">${escapeHtml(l.subject)}</span>` : ''}
-          <span style="font-size:10px;color:var(--i5)">${escapeHtml(l.ts || '')}</span>
+          <span style="font-size:var(--fs-11_5);font-weight:700">${escapeHtml(l.author_name || l.author_email || '알 수 없음')}</span>
+          ${l.subject ? `<span class="pill p-gray" style="font-size:var(--fs-9)">${escapeHtml(l.subject)}</span>` : ''}
+          <span style="font-size:var(--fs-10);color:var(--i5)">${escapeHtml(l.ts || '')}</span>
           ${l.author_email && l.author_email === me
-            ? `<button class="btn bs" style="margin-left:auto;font-size:10px;padding:1px 6px"
+            ? `<button class="btn bs" style="margin-left:auto;font-size:var(--fs-10);padding:1px 6px"
                 onclick="delGraphicFeedback('${escAttr(l.id)}')">삭제</button>` : ''}
         </div>
-        <div style="font-size:12px;color:var(--i2);white-space:pre-wrap;margin-top:3px">${escapeHtml(l.body || '')}</div>
+        <div style="font-size:var(--fs-12);color:var(--i2);white-space:pre-wrap;margin-top:3px">${escapeHtml(l.body || '')}</div>
       </div>`).join('')}</div>`
-      : '<div style="font-size:11.5px;color:var(--i5);margin-top:10px">아직 남긴 피드백이 없어요</div>'}`;
+      : '<div style="font-size:var(--fs-11_5);color:var(--i5);margin-top:10px">아직 남긴 피드백이 없어요</div>'}`;
 }
 
 export async function addGraphicFeedback(exhId){
@@ -141,12 +141,12 @@ function graphicItemRow(i, opts = {}){
     <div style="display:flex;align-items:center;gap:9px">
       <button onclick="toggleItemReceived('${escAttr(i.id)}')"
         title="${on ? '받음 표시를 지웁니다' : '오늘 받은 것으로 표시합니다'}"
-        style="width:20px;height:20px;border-radius:5px;border:1.5px solid ${on ? 'var(--g)' : 'var(--i6)'};background:${on ? 'var(--g)' : 'transparent'};color:#fff;font-size:12px;font-weight:800;cursor:pointer;flex-shrink:0;line-height:1">${on ? '✓' : ''}</button>
+        style="width:20px;height:20px;border-radius:var(--rs);border:1.5px solid ${on ? 'var(--g)' : 'var(--i6)'};background:${on ? 'var(--g)' : 'transparent'};color:var(--on);font-size:var(--fs-12);font-weight:800;cursor:pointer;flex-shrink:0;line-height:1">${on ? '✓' : ''}</button>
       <span style="flex:1;min-width:0">
-        <span style="font-size:12.5px;font-weight:${on ? 600 : 500};color:${on ? 'var(--i1)' : 'var(--i3)'}">${escapeHtml(i.name || '(이름 없음)')}</span>
-        <span style="font-size:10.5px;color:var(--i4)">${i.qty ? ` · ${escapeHtml(String(i.qty))}개` : ''}${
+        <span style="font-size:var(--fs-12_5);font-weight:${on ? 600 : 500};color:${on ? 'var(--i1)' : 'var(--i3)'}">${escapeHtml(i.name || '(이름 없음)')}</span>
+        <span style="font-size:var(--fs-10_5);color:var(--i4)">${i.qty ? ` · ${escapeHtml(String(i.qty))}개` : ''}${
           i.amount ? ` · ${escapeHtml(fmtMoney(i.amount, i.currency))}` : ''}</span>${
-          isDesignItem(i) && i.note ? `<div style="font-size:10.5px;color:var(--i4);margin-top:2px">디자인 대상 — <b>${escapeHtml(i.note)}</b></div>` : ''}
+          isDesignItem(i) && i.note ? `<div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:2px">디자인 대상 — <b>${escapeHtml(i.note)}</b></div>` : ''}
       </span>
       <input type="date" class="fi" style="${TCELL};width:136px;flex:0 0 auto"
         value="${escapeHtml(i.received_at || '')}"
@@ -154,11 +154,11 @@ function graphicItemRow(i, opts = {}){
     </div>
     ${opts.done ? boothExcRow(i, { pad: 'margin-top:6px;padding-left:29px' }) : ''}
     ${opts.done ? `<div style="display:flex;gap:9px;align-items:center;margin-top:5px;padding-left:29px">
-      <span style="font-size:10.5px;color:var(--i5);flex:0 0 52px">우리 작업</span>
+      <span style="font-size:var(--fs-10_5);color:var(--i5);flex:0 0 52px">우리 작업</span>
       ${doneCheck(i)}
     </div>` : ''}
     <div style="display:flex;gap:9px;align-items:center;margin-top:5px;padding-left:29px">
-      <span style="font-size:10.5px;color:var(--i5);flex:0 0 52px">마감</span>
+      <span style="font-size:var(--fs-10_5);color:var(--i5);flex:0 0 52px">마감</span>
       <input type="date" class="fi" style="${TCELL};width:136px;flex:0 0 auto"
         value="${escapeHtml(i.due_at || '')}"
         onchange="setItemField('${escAttr(i.id)}','due_at',this.value)">
@@ -166,7 +166,7 @@ function graphicItemRow(i, opts = {}){
         return on ? '' : `<span class="pill ${d.cls}" style="${TPILL}">${escapeHtml(d.text)}</span>`; })()}
     </div>
     ${opts.done ? '' : `<div style="display:flex;gap:9px;align-items:center;margin-top:5px;padding-left:29px">
-      <span style="font-size:10.5px;color:var(--i5);flex:0 0 52px">받은 것</span>
+      <span style="font-size:var(--fs-10_5);color:var(--i5);flex:0 0 52px">받은 것</span>
       <input class="fi" style="${TCELL};flex:1;min-width:0"
         value="${escapeHtml(i.received_note || '')}" placeholder="예: 백월_최종.ai · CMYK · 재단선 포함"
         onchange="setItemField('${escAttr(i.id)}','received_note',this.value)">
@@ -186,8 +186,8 @@ function graphicItemsBlock(x){
   const gi = [...graphicItems(x.id),
     ...itemsFor(x.id).filter(i => (i.category || '') === 'graphic' && isVoided(i) && isBoothExc(i))];
   if(!gi.length){
-    return `<div style="font-size:11.5px;color:var(--i5);margin-bottom:8px">등록된 그래픽 항목이 없어요</div>
-      <div style="font-size:11px;color:var(--i4);margin-bottom:8px">
+    return `<div style="font-size:var(--fs-11_5);color:var(--i5);margin-bottom:8px">등록된 그래픽 항목이 없어요</div>
+      <div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:8px">
         부스 타입을 정하면 그 타입의 기본 제공 그래픽이 여기 깔리고,
         정산 탭에서 <b>그래픽</b> 분류로 넣은 추가 주문도 여기 나옵니다.</div>
       <button class="btn bs" onclick="switchExhDT('billing')">정산 탭으로 이동</button>`;
@@ -201,19 +201,19 @@ function graphicItemsBlock(x){
 
   const group = (label, list, hint, opts) => !list.length ? '' : `
     <div style="margin:${label === '기본 제공' ? '0' : '14px'} 0 2px;display:flex;align-items:baseline;gap:7px">
-      <span style="font-size:11.5px;font-weight:700;color:var(--i2)">${escapeHtml(label)}</span>
-      <span style="font-size:10.5px;color:var(--i5)">${escapeHtml(hint)}</span>
+      <span style="font-size:var(--fs-11_5);font-weight:700;color:var(--i2)">${escapeHtml(label)}</span>
+      <span style="font-size:var(--fs-10_5);color:var(--i5)">${escapeHtml(hint)}</span>
     </div>
     ${list.map(i => graphicItemRow(i, opts)).join('')}`;
 
-  return `<div style="font-size:11px;color:var(--i4);margin-bottom:8px">
+  return `<div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:8px">
       기업에서 파일을 받으면 왼쪽 칸에 체크하고, 받은 파일이 무엇이었는지 적어 두세요.
       <b>마감</b>은 이 파일을 언제까지 받기로 했나입니다 — 지난 것은 그래픽 현황에서 붉게 잡힙니다.</div>
 
     ${group('기본 제공', base, `${x.booth_type || '부스 타입'}에 딸려 나갑니다 — 청구하지 않아요`, { done: true })}
     ${group('추가 주문', extra, '기업이 따로 신청한 것 — 청구 대상이에요', {})}
 
-    <div style="display:flex;justify-content:space-between;align-items:baseline;padding:9px 2px 0;font-size:12px">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;padding:9px 2px 0;font-size:var(--fs-12)">
       <span style="color:var(--i4)">${gi.length}건 · 받음 ${got}건${got < gi.length ? ` · <b style="color:var(--am)">미수령 ${gi.length - got}건</b>` : ''}${
         late ? ` · <b style="color:var(--re)">마감 지남 ${late}건</b>` : ''}</span>
       <span>합계 <b>${money(total)}</b>원</span>
@@ -295,7 +295,7 @@ function boothExcRow(i, opts = {}){
   const exc = isBoothExc(i);
   return `<div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;${opts.pad || ''}">
     ${exc ? `<span class="pill ${off ? 'p-red' : 'p-amber'}" style="${TPILL};min-width:48px" title="설정과 다르게 이 기업만 따로 둔 줄이에요 — 부스 타입을 다시 골라도 그대로 둡니다">${off ? '뺌' : '예외'}</span>` : ''}
-    <span style="font-size:10.5px;color:var(--i5);flex:0 0 52px">수량</span>
+    <span style="font-size:var(--fs-10_5);color:var(--i5);flex:0 0 52px">수량</span>
     <input class="fi" style="${TCELL};width:56px;flex:0 0 auto" value="${escapeHtml(i.qty ?? '')}"
       inputmode="numeric" ${off ? 'disabled' : ''}
       title="설정과 다르게 적으면 이 줄은 예외가 됩니다"
@@ -315,10 +315,10 @@ function boothExcRow(i, opts = {}){
 function boothGivenBlock(x){
   const rows = itemsFor(x.id).filter(isBoothGiven);
   if(!rows.length){
-    return `<div style="font-size:11.5px;color:var(--i5);padding:6px 2px">
+    return `<div style="font-size:var(--fs-11_5);color:var(--i5);padding:6px 2px">
       이 부스 타입에 적어 둔 기본 제공 품목이 없어요 — 설정 › 행사 관리 › 부스에서 부스 타입에 적습니다.</div>`;
   }
-  return `<div style="font-size:11px;color:var(--i4);margin-bottom:8px">
+  return `<div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:8px">
       부스 타입(<b>${escapeHtml(x.booth_type || '미정')}</b>)에 딸려 나가는 것들이에요 — 청구하지 않습니다.
       이 기업만 다르게 가야 하면 여기서 고치세요. 고친 줄은 <b>예외</b>로 표시되어, 부스 타입을 다시 골라도 그대로 둡니다.</div>
     ${rows.map(i => {
@@ -327,7 +327,7 @@ function boothGivenBlock(x){
         <div style="display:flex;align-items:baseline;gap:7px">
           <span class="pill ${(i.category || '') === 'graphic' ? 'p-teal' : 'p-gray'}">${
             (i.category || '') === 'graphic' ? '그래픽' : '비품'}</span>
-          <span style="font-size:12.5px;font-weight:600;${off ? 'color:var(--i5);text-decoration:line-through' : ''}">${escapeHtml(i.name || '')}</span>
+          <span style="font-size:var(--fs-12_5);font-weight:600;${off ? 'color:var(--i5);text-decoration:line-through' : ''}">${escapeHtml(i.name || '')}</span>
         </div>
         ${boothExcRow(i, { pad: 'margin-top:6px' })}
       </div>`;
@@ -372,8 +372,8 @@ function dGraphic(x){
   if(!ordered){
     return `<div style="text-align:center;padding:40px 20px">
       <div style="font-size:28px;margin-bottom:8px">🎨</div>
-      <div style="font-size:13px;font-weight:600;margin-bottom:4px">그래픽 주문 없음</div>
-      <div style="font-size:11.5px;color:var(--i4);margin-bottom:16px">
+      <div style="font-size:var(--fs-13);font-weight:600;margin-bottom:4px">그래픽 주문 없음</div>
+      <div style="font-size:var(--fs-11_5);color:var(--i4);margin-bottom:16px">
         정산 탭에서 <b>그래픽</b> 분류로 항목을 넣으면 여기가 자동으로 열려요.<br>
         항목 없이 먼저 잡아 두려면 아래에서 주문일만 등록할 수도 있어요.</div>
       <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
@@ -418,7 +418,7 @@ function dGraphic(x){
     ${dateRow(x, 'graphic_final_at', '최종안 확정')}`)
   : ''}
 
-  ${!x.graphic_type ? '<div style="font-size:11.5px;color:var(--am);padding:4px 2px">유형을 먼저 선택해주세요</div>' : ''}
+  ${!x.graphic_type ? '<div style="font-size:var(--fs-11_5);color:var(--am);padding:4px 2px">유형을 먼저 선택해주세요</div>' : ''}
 
   ${sct('피드백', graphicFeedbackBlock(x),
     (() => { const n = graphicFeedback(x.id).length; return n ? `<span class="pill p-gray">${n}</span>` : ''; })())}

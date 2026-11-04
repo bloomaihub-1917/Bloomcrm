@@ -72,8 +72,8 @@ export function openAddEvModal(cid){
   const html = `
     <div id="add-ev-modal" onclick="if(event.target===this)closeAddEvModal()"
       style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center">
-      <div style="background:var(--W);border-radius:12px;padding:22px;width:340px;box-shadow:0 8px 32px rgba(0,0,0,.18)">
-        <div style="font-size:14px;font-weight:700;color:var(--i1);margin-bottom:16px">참여 행사 추가</div>
+      <div style="background:var(--W);border-radius:var(--rd-12);padding:22px;width:340px;box-shadow:0 8px 32px rgba(0,0,0,.18)">
+        <div style="font-size:var(--fs-14);font-weight:700;color:var(--i1);margin-bottom:16px">참여 행사 추가</div>
 
         <div style="margin-bottom:12px">
           <div class="mlbl">행사 선택</div>
@@ -213,9 +213,9 @@ export function contactViewPanel(c){
     ${hasLeft(c) ? (() => {
       const to = movedTo(c);
       return `<div style="display:flex;gap:8px;align-items:flex-start;padding:10px 12px;margin-bottom:14px;
-        border-radius:8px;background:var(--i7);border:1px solid var(--i6)">
-        <span style="font-size:13px;line-height:1.5">🚪</span>
-        <div style="font-size:12px;color:var(--i2);line-height:1.6">
+        border-radius:var(--r);background:var(--i7);border:1px solid var(--i6)">
+        <span style="font-size:var(--fs-13);line-height:1.5">🚪</span>
+        <div style="font-size:var(--fs-12);color:var(--i2);line-height:1.6">
           <b>${escapeHtml(c.left_at)}</b>에 퇴사를 확인했어요. 목록에서는 내려가 있고,
           아래 참여 행사 기록은 그대로 남습니다.
           ${to
@@ -238,12 +238,12 @@ export function contactViewPanel(c){
           /* 괄호만 보면 그게 거주지인지 알 수 없다 — 상세에서는 풀어 쓴다 */
           const sp = speakersOfContact(c.id).find(x => x.residence_country
             && countryName(x.residence_country) !== countryName(x.nationality || c.country));
-          return sp ? `<div style="font-size:10px;color:var(--i4);margin-top:2px">국적 ${
+          return sp ? `<div style="font-size:var(--fs-10);color:var(--i4);margin-top:2px">국적 ${
             escapeHtml(countryName(sp.nationality || c.country))} · 거주지 ${
             escapeHtml(countryName(sp.residence_country))}</div>` : '';
         })()}${
         (() => { const r = ctryCheck(c); return r
-          ? `<div style="font-size:10.5px;color:var(--am);font-weight:400;margin-top:3px;line-height:1.5">${
+          ? `<div style="font-size:var(--fs-10_5);color:var(--am);font-weight:400;margin-top:3px;line-height:1.5">${
               escapeHtml(countryCheckText(r))}</div>` : ''; })()}</div></div>
       <div class="ic"><div class="il">카테고리</div><div class="iv"><span class="pill ${CP[c.cat]||'p-gray'}">${CL[c.cat]||c.cat}</span></div></div>
       <div class="ic"><div class="il">태그</div><div class="iv">
@@ -293,7 +293,7 @@ export function contactViewPanel(c){
 
     <div class="sct" style="margin-top:14px;display:flex;align-items:center;justify-content:space-between">
       <span>참여 행사</span>
-      <button class="btn bs" style="font-size:11px;padding:3px 8px" onclick="openAddEvModal(${c.id})">
+      <button class="btn bs" style="font-size:var(--fs-11);padding:3px 8px" onclick="openAddEvModal(${c.id})">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> 추가
       </button>
     </div>
@@ -310,18 +310,18 @@ export function contactViewPanel(c){
           <span class="ev-pill" style="background:${evColor(ev)}18;color:${evColor(ev)};flex:1;min-width:0">
             <span class="ev-pill-dot" style="background:${evColor(ev)}"></span>
             <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(evShort(ev))}</span>
-            ${role ? `<span class="pill ${roleClass}" style="font-size:10px;padding:1px 6px;flex-shrink:0">${escapeHtml(roleLabel)}</span>` : ''}
+            ${role ? `<span class="pill ${roleClass}" style="font-size:var(--fs-10);padding:1px 6px;flex-shrink:0">${escapeHtml(roleLabel)}</span>` : ''}
           </span>
           <button onclick="removeParticipation(${c.id},'${escAttr(partId)}','${escAttr(ev)}')"
-            style="background:none;border:none;cursor:pointer;color:var(--i4);padding:2px 5px;font-size:16px;line-height:1;flex-shrink:0"
+            style="background:none;border:none;cursor:pointer;color:var(--i4);padding:2px 5px;font-size:var(--fs-16);line-height:1;flex-shrink:0"
             title="삭제">×</button>
         </div>`;
-      }).join('') : '<div style="font-size:12px;color:var(--i4)">참여 행사 없음</div>'}
+      }).join('') : '<div style="font-size:var(--fs-12);color:var(--i4)">참여 행사 없음</div>'}
     </div>
 
     <div class="sct">수집 정보</div>
     <div class="ig">
-      <div class="ic"><div class="il">수집 출처</div><div class="iv" style="font-size:12px">${escapeHtml(c.source)||'-'}</div></div>
+      <div class="ic"><div class="il">수집 출처</div><div class="iv" style="font-size:var(--fs-12)">${escapeHtml(c.source)||'-'}</div></div>
       <div class="ic"><div class="il">수집일</div><div class="iv">${escapeHtml(c.date)||'-'}</div></div>
       <div class="ic"><div class="il">언어</div><div class="iv"><span class="lt">${escapeHtml(c.lang)||'-'}</span></div></div>
       <div class="ic"><div class="il">상태</div><div class="iv">${({verified:'검증됨',pending:'확인 중',new:'신규'})[c.status]||escapeHtml(c.status)}</div></div>
@@ -371,7 +371,7 @@ export function contactEditForm(c){
       <div class="fg" style="margin-bottom:12px">
         <label class="fl">업종 메모 (자유 입력)</label>
         <input class="fi" id="ce-beat" value="${escapeHtml(c.beat||'')}" placeholder="예: Pharma, Biotech, Digital Health 등">
-        <div style="font-size:10px;color:var(--i4);margin-top:3px">
+        <div style="font-size:var(--fs-10);color:var(--i4);margin-top:3px">
           적어 두는 메모일 뿐, 왼쪽 «분야별 보기»와는 다릅니다 — 그건 아래
           소속 기업의 섹터에서 정해져요.</div>
       </div>
@@ -504,8 +504,8 @@ export function openAddContactModal(){
   const html = `
     <div id="add-contact-modal" onclick="if(event.target===this)closeAddContactModal()"
       style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px">
-      <div style="background:var(--W);border-radius:14px;padding:24px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.2)">
-        <div style="font-size:15px;font-weight:700;color:var(--i1);margin-bottom:18px">연락처 추가</div>
+      <div style="background:var(--W);border-radius:var(--rd-14);padding:24px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.2)">
+        <div style="font-size:var(--fs-15);font-weight:700;color:var(--i1);margin-bottom:18px">연락처 추가</div>
 
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
           <div><div class="mlbl">이름 (한글)</div>
@@ -563,7 +563,7 @@ export function openAddContactModal(){
           <button class="btn bs" onclick="closeAddContactModal()">취소</button>
           <button class="btn bp" id="ac-save-btn" onclick="saveNewContact()">저장</button>
         </div>
-        <div id="ac-msg" style="font-size:11px;text-align:right;margin-top:8px;height:14px"></div>
+        <div id="ac-msg" style="font-size:var(--fs-11);text-align:right;margin-top:8px;height:14px"></div>
       </div>
     </div>`;
   document.body.insertAdjacentHTML('beforeend', html);
@@ -675,19 +675,19 @@ export function openLeaveModal(cid){
   const html = `
     <div id="leave-modal" onclick="if(event.target===this)closeLeaveModal()"
       style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px">
-      <div style="background:var(--W);border-radius:14px;padding:24px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.2)">
-        <div style="font-size:15px;font-weight:700;color:var(--i1);margin-bottom:6px">퇴사 처리</div>
-        <div style="font-size:12px;color:var(--i3);margin-bottom:16px;line-height:1.6">
+      <div style="background:var(--W);border-radius:var(--rd-14);padding:24px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.2)">
+        <div style="font-size:var(--fs-15);font-weight:700;color:var(--i1);margin-bottom:6px">퇴사 처리</div>
+        <div style="font-size:var(--fs-12);color:var(--i3);margin-bottom:16px;line-height:1.6">
           <b>${escapeHtml(c.nameKo || c.nameEn || '')}</b>${
             (c.orgKo || c.orgEn) ? ` · ${escapeHtml(c.orgKo || c.orgEn)}` : ''}<br>
           연락처를 지우지 않습니다. ${evN ? `참여한 행사 ${evN}건은 그대로 남고, ` : ''}목록에서만 내려가요.
         </div>
 
         ${primaryOf.length ? `
-        <div style="display:flex;gap:8px;padding:10px 12px;margin-bottom:14px;border-radius:8px;
+        <div style="display:flex;gap:8px;padding:10px 12px;margin-bottom:14px;border-radius:var(--r);
           background:var(--i7);border:1px solid var(--am)">
           <span>⚠</span>
-          <div style="font-size:11.5px;color:var(--i2);line-height:1.6">
+          <div style="font-size:var(--fs-11_5);color:var(--i2);line-height:1.6">
             이 사람은 전시 ${primaryOf.length}건의 <b>대표 담당자</b>예요. 퇴사 처리한 뒤
             전시 탭에서 대표 담당을 다른 사람에게 넘겨주세요 — 안 넘기면 그 기업은
             대표 연락처가 빈 채로 남습니다.
@@ -699,13 +699,13 @@ export function openLeaveModal(cid){
           <input class="fi" id="lv-date" type="date" value="${escapeHtml(td())}" style="width:100%">
         </div>
 
-        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-bottom:10px;font-size:12.5px;color:var(--i2)">
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;margin-bottom:10px;font-size:var(--fs-12_5);color:var(--i2)">
           <input type="checkbox" id="lv-moved" onchange="toggleLeaveMoved()">
           옮겨간 곳을 알아요
         </label>
 
-        <div id="lv-moved-box" style="display:none;padding:12px;border-radius:8px;background:var(--i7);margin-bottom:14px">
-          <div style="font-size:11px;color:var(--i3);line-height:1.6;margin-bottom:10px">
+        <div id="lv-moved-box" style="display:none;padding:12px;border-radius:var(--r);background:var(--i7);margin-bottom:14px">
+          <div style="font-size:var(--fs-11);color:var(--i3);line-height:1.6;margin-bottom:10px">
             새 소속으로 연락처를 하나 만들고, 이 사람과 이어 둡니다. 예전 소속으로
             참가했던 행사 기록은 지금 이 행에 그대로 남아요.
           </div>
@@ -727,7 +727,7 @@ export function openLeaveModal(cid){
           <button class="btn bs" onclick="closeLeaveModal()">취소</button>
           <button class="btn bp" id="lv-save-btn" onclick="confirmLeave(${c.id})">퇴사 처리</button>
         </div>
-        <div id="lv-msg" style="font-size:11px;text-align:right;margin-top:8px;height:14px"></div>
+        <div id="lv-msg" style="font-size:var(--fs-11);text-align:right;margin-top:8px;height:14px"></div>
       </div>
     </div>`;
   document.body.insertAdjacentHTML('beforeend', html);

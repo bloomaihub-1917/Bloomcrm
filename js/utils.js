@@ -25,7 +25,7 @@ export function nowStamp(){
 /* 메일 기록 한 줄 머리 — 보냄/받음과 일자·시각 */
 export function mailDirPill(l){
   const inn = l.direction === 'in';
-  return `<span class="pill ${inn ? 'p-blue' : 'p-gray'}" style="font-size:10px">${inn ? '↘ 받음' : '↗ 보냄'}</span>`;
+  return `<span class="pill ${inn ? 'p-blue' : 'p-gray'}" style="font-size:var(--fs-10)">${inn ? '↘ 받음' : '↗ 보냄'}</span>`;
 }
 
 export function td(){
@@ -362,7 +362,7 @@ export function leftPill(c){
   const to = movedTo(c);
   const whereName = to ? (to.orgKo || to.orgEn || '') : '';
   const tip = `${c.left_at} 퇴사 확인${whereName ? ` · 지금은 ${whereName}` : ''}`;
-  return ` <span class="pill p-gray" style="font-size:9px;padding:1px 5px" title="${escAttr(tip)}"
+  return ` <span class="pill p-gray" style="font-size:var(--fs-9);padding:1px 5px" title="${escAttr(tip)}"
     >퇴사${whereName ? ' → ' + escapeHtml(whereName) : ''}</span>`;
 }
 

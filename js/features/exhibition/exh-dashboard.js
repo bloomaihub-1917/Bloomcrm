@@ -162,7 +162,7 @@ function renderDashboard(all){
   const card = (label, value, sub, color) => `<div class="cosi" style="flex:1 1 128px">
     <div class="cosn" style="color:${color || 'var(--i1)'}">${value}</div>
     <div class="cosl">${label}</div>
-    ${sub ? `<div style="font-size:9.5px;color:var(--i5);margin-top:2px">${sub}</div>` : ''}</div>`;
+    ${sub ? `<div style="font-size:var(--fs-9_5);color:var(--i5);margin-top:2px">${sub}</div>` : ''}</div>`;
 
   /* ── 돈이 어디까지 왔나 — 전체 → 청구 → 입금 ──
 
@@ -202,7 +202,7 @@ function renderDashboard(all){
     if(!m || !m.전체 && !m.청구 && !m.입금) return '';
     const base = Math.max(m.전체, m.청구, m.입금) || 1;   // 가장 긴 것을 100%로 삼는다
     const bar = (label, v, color, sub) => `
-      <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:11px;margin-bottom:2px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;font-size:var(--fs-11);margin-bottom:2px">
         <span style="color:var(--i4)">${label}${sub ? `<span style="color:var(--i5)"> ${sub}</span>` : ''}</span>
         <span style="font-weight:700;color:${color}">${escapeHtml(fmtMoney(v, c))}</span>
       </div>
@@ -212,11 +212,11 @@ function renderDashboard(all){
 
     const rest = m.전체 - m.입금;
     return `<div style="margin-bottom:12px">
-      <div style="font-size:10.5px;color:var(--i4);margin-bottom:4px">${escapeHtml(c)} · ${m.n}곳</div>
+      <div style="font-size:var(--fs-10_5);color:var(--i4);margin-bottom:4px">${escapeHtml(c)} · ${m.n}곳</div>
       ${bar('전체 금액', m.전체, 'var(--i5)')}
       ${bar('청구한 금액', m.청구, 'var(--a)', `세금계산서 ${m.taxN}곳`)}
       ${bar('입금 완료', m.입금, 'var(--g)')}
-      <div style="font-size:10.5px;color:${rest > 0 ? 'var(--am)' : 'var(--g)'}">
+      <div style="font-size:var(--fs-10_5);color:${rest > 0 ? 'var(--am)' : 'var(--g)'}">
         ${rest > 0 ? '남은 금액 ' + escapeHtml(fmtMoney(rest, c)) : '전액 입금'}</div>
     </div>`;
   };
@@ -233,18 +233,18 @@ function renderDashboard(all){
     const list = open && warnRows.length ? `<div style="margin:-2px 0 8px 83px">
       ${warnRows.map(({ x, text }) => `<div onclick="openExhDr('${escAttr(x.id)}','${
           escAttr(DUE_TAB[step.key] || 'progress')}')"
-        style="display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:6px;cursor:pointer;background:var(--i9);margin-bottom:3px">
-        <span style="font-size:11.5px;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${
+        style="display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:var(--rd-6);cursor:pointer;background:var(--i9);margin-bottom:3px">
+        <span style="font-size:var(--fs-11_5);font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${
           escapeHtml(exhNames(x).ko)}</span>
         ${x.booth_no ? `<span class="pill p-gray" style="flex:0 0 auto">${escapeHtml(x.booth_no)}</span>` : ''}
-        ${text ? `<span style="font-size:10.5px;color:var(--am);flex:0 0 auto">${escapeHtml(text)}</span>` : ''}
+        ${text ? `<span style="font-size:var(--fs-10_5);color:var(--am);flex:0 0 auto">${escapeHtml(text)}</span>` : ''}
       </div>`).join('')}
     </div>` : '';
     return `<div style="display:flex;align-items:center;gap:9px;margin-bottom:7px">
-      <span style="font-size:11.5px;color:var(--i3);flex:0 0 74px">${escapeHtml(label)}</span>
+      <span style="font-size:var(--fs-11_5);color:var(--i3);flex:0 0 74px">${escapeHtml(label)}</span>
       <div style="flex:1;min-width:0">${progressBar(pct, pct === 100 ? 'var(--g)' : late ? 'var(--re)' : 'var(--a)')}</div>
-      <span style="font-size:11px;color:var(--i4);flex:0 0 48px;text-align:right">${done}/${of}</span>
-      <span style="flex:0 0 66px;text-align:right;font-size:10px;color:${late ? 'var(--re)' : 'var(--i5)'}">${
+      <span style="font-size:var(--fs-11);color:var(--i4);flex:0 0 48px;text-align:right">${done}/${of}</span>
+      <span style="flex:0 0 66px;text-align:right;font-size:var(--fs-10);color:${late ? 'var(--re)' : 'var(--i5)'}">${
         due ? escapeHtml(due.date.slice(5)) + (late ? ` ${-due.days}일↑` : '') : ''}</span>
       ${warn ? `<span class="pill p-amber" style="flex:0 0 auto;cursor:pointer${
           open ? ';outline:2px solid var(--i5)' : ''}"
@@ -270,7 +270,7 @@ function renderDashboard(all){
         const ks = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]);
         if(!ks.length) return '';
         return `<div style="margin-bottom:8px">
-          <div style="font-size:10.5px;color:var(--i4);margin-bottom:3px">${f[1]}</div>
+          <div style="font-size:var(--fs-10_5);color:var(--i4);margin-bottom:3px">${f[1]}</div>
           <div style="display:flex;flex-wrap:wrap;gap:5px">
             ${ks.map(k => {
               // 타입은 눌러서 그 부스 기업 목록으로 간다 — 센 숫자를 눌렀는데
@@ -281,12 +281,12 @@ function renderDashboard(all){
               }>${escapeHtml(k)}${f[0] === 'booth_floor' ? '층' : ''} ${cnt[k]}</span>`;
             }).join('')}
           </div></div>`;
-      }).join('') || '<div style="font-size:11.5px;color:var(--i5)">아직 부스 정보가 없어요</div>'}
+      }).join('') || '<div style="font-size:var(--fs-11_5);color:var(--i5)">아직 부스 정보가 없어요</div>'}
     </div>`;
 
   const cardSteps = `<div class="uc">
       <div class="uc-ttl">단계별 진행
-        <button class="btn" onclick="openExhCfg()" style="float:right;height:24px;font-size:10.5px;padding:0 8px">마감일 설정</button></div>
+        <button class="btn" onclick="openExhCfg()" style="float:right;height:24px;font-size:var(--fs-10_5);padding:0 8px">마감일 설정</button></div>
       ${STEPS.map(st => {
         const live = all.filter(x => rawCellState(x, st).state !== 'na');
         if(!live.length) return '';
@@ -298,7 +298,7 @@ function renderDashboard(all){
           dueInfo(st.key, exhEvent), live.length, st, warnRows);
       }).join('')}
       ${Object.keys(eventDeadlines(exhEvent)).length ? '' :
-        `<div style="font-size:10.5px;color:var(--i5);margin-top:6px">마감일을 정해 두면 늦은 기업이 처리 필요에 모입니다</div>`}
+        `<div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:6px">마감일을 정해 두면 늦은 기업이 처리 필요에 모입니다</div>`}
     </div>`;
 
   /* 분류별로 얼마어치 신청됐나 — 발주가 분류 단위로 갈린다 */
@@ -317,14 +317,14 @@ function renderDashboard(all){
       : '<span style="color:var(--i6)">-</span>';
     const line = (label, get, strong) => `
       <div style="display:grid;grid-template-columns:44px repeat(${cs.length}, 1fr);gap:6px;
-        font-size:11.5px;padding:3px 0${strong ? ';font-weight:800;border-top:1px solid var(--i7);margin-top:2px' : ''}">
+        font-size:var(--fs-11_5);padding:3px 0${strong ? ';font-weight:800;border-top:1px solid var(--i7);margin-top:2px' : ''}">
         <span style="color:var(--i3)">${label}</span>
         ${cs.map(c => `<span style="text-align:right">${get(c)}</span>`).join('')}
       </div>`;
 
     return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i8)">
       <div style="display:grid;grid-template-columns:44px repeat(${cs.length}, 1fr);gap:6px;
-        font-size:10px;color:var(--i5);padding-bottom:2px">
+        font-size:var(--fs-10);color:var(--i5);padding-bottom:2px">
         <span>내역</span>${cs.map(c => `<span style="text-align:right">${escapeHtml(c)}</span>`).join('')}
       </div>
       ${rows.map(([k, l]) => line(l, (c) => cell(byCat[c][k], c))).join('')}
@@ -365,7 +365,7 @@ function renderDashboard(all){
       rank(a) - rank(b) || a.localeCompare(b, 'ko'));
     if(!ks.length) return '';
     return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i8)">
-      <div style="font-size:10.5px;color:var(--i4);margin-bottom:4px">부스 타입별 부스 금액</div>
+      <div style="font-size:var(--fs-10_5);color:var(--i4);margin-bottom:4px">부스 타입별 부스 금액</div>
       ${ks.map(k => {
         const m = boothByType[k];
         // 통화 순서를 고정한다 — 줄마다 원화가 먼저 왔다 나중에 왔다 하면 읽기 어렵다
@@ -375,9 +375,9 @@ function renderDashboard(all){
         // 타입이 안 정해진 곳은 눌러도 걸 필터가 없다 — 누르는 시늉만 하면 안 된다
         const on = k !== '(타입 미지정)';
         return `<div${on ? ` onclick="setBoothTypeFil('${escAttr(k)}')" title="${escapeHtml(k)} 기업만 보기" style="cursor:pointer;` : ' style="'}${
-          'display:flex;justify-content:space-between;gap:6px;font-size:11.5px;padding:2px 0"'}>
+          'display:flex;justify-content:space-between;gap:6px;font-size:var(--fs-11_5);padding:2px 0"'}>
           <span style="color:var(--i3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(k)}
-            <span style="color:var(--i5);font-size:10px">${m.n}곳</span></span>
+            <span style="color:var(--i5);font-size:var(--fs-10)">${m.n}곳</span></span>
           <span style="flex:0 0 auto">${amt}</span>
         </div>`;
       }).join('')}
@@ -388,7 +388,7 @@ function renderDashboard(all){
       <div class="uc-ttl">정산 현황</div>
       ${(() => { const ks = Object.keys(money3).filter(c => money3[c].전체 || money3[c].입금);
         return ks.length ? ks.sort().map(cashRow).join('')
-          : '<div style="font-size:11.5px;color:var(--i5)">아직 금액 내역이 없어요</div>'; })()}
+          : '<div style="font-size:var(--fs-11_5);color:var(--i5)">아직 금액 내역이 없어요</div>'; })()}
       ${catBlock}
       ${typeBlock}
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">
@@ -400,13 +400,13 @@ function renderDashboard(all){
       <div class="uc-ttl">처리 필요 <span class="pill p-amber">${todo}건</span></div>
       ${remind.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin:2px 0 6px">${[...new Set(remind.map(o => o.s.key))].map(k => {
           const r = remind.filter(o => o.s.key === k);
-          return `<button class="btn" style="font-size:10.5px" onclick="openExhBulkMail('${escAttr(k)}')"
+          return `<button class="btn" style="font-size:var(--fs-10_5)" onclick="openExhBulkMail('${escAttr(k)}')"
             title="리마인더 보낼 때가 된 기업을 골라 둔 채로 엽니다">📨 ${escapeHtml(r[0].s.label)} 리마인더 ${r.length}곳 한 번에</button>`; }).join('')}</div>` : ''}
       ${remind.slice(0, 8).map(o => `<div onclick="openExhDr('${escAttr(o.x.id)}','mail');exhAdviceAct('mail','${escAttr(o.s.key)}')"
-        style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:6px;cursor:pointer;background:var(--i9);margin-bottom:4px" title="리마인더 초안 열기">
-        <span style="flex:0 0 128px;font-weight:700;font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(exhNames(o.x).ko)}</span>
+        style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:var(--rd-6);cursor:pointer;background:var(--i9);margin-bottom:4px" title="리마인더 초안 열기">
+        <span style="flex:0 0 128px;font-weight:700;font-size:var(--fs-11_5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(exhNames(o.x).ko)}</span>
         <span class="pill p-amber" style="flex:0 0 auto">🔔 ${escapeHtml(o.s.label)}</span>
-        <span style="font-size:11.5px;color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(o.f.text.replace(/^리마인더 보낼 때 · /, ''))}</span>
+        <span style="font-size:var(--fs-11_5);color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(o.f.text.replace(/^리마인더 보낼 때 · /, ''))}</span>
       </div>`).join('')}
       ${myTurn.slice(0, 5).map(o => attnRow(o.x, o.label, o.st.action, o.days, o.label === '그래픽' ? 'graphic' : 'billing')).join('')}
       ${inbox.slice(0, 5).map(o => attnRow(o.x, isUnread(o.l) ? '● 안 읽은 메일 3일+' : '받은 메일 3일+', o.l.subject || '', daysSince(o.l.ts), 'box')).join('')}
@@ -414,14 +414,14 @@ function renderDashboard(all){
       ${overdue.slice(0, 5).map(o => attnRow(o.x, '입금 기한', fmtMoney(o.s.balance, o.s.cur) + ' 미납', daysSince(o.s.due), 'billing')).join('')}
       ${dueMiss.slice(0, 8).map(o => attnRow(o.x, o.label + ' 마감', `${o.date} 마감 · 아직 안 됨`, o.days, o.tab)).join('')}
       ${attention.slice(0, 5).map(o => attnRow(o.x, '정산 확인', o.why, null, 'billing')).join('')}
-      ${todo > 20 ? `<div style="font-size:11px;color:var(--i4);padding:6px 2px">외 ${todo - 20}건 — 왼쪽 필터에서 전체를 볼 수 있어요</div>` : ''}
-      ${waiting.length ? `<div style="font-size:10.5px;color:var(--i4);margin-top:8px;padding-top:7px;border-top:1px solid var(--i8)">
+      ${todo > 20 ? `<div style="font-size:var(--fs-11);color:var(--i4);padding:6px 2px">외 ${todo - 20}건 — 왼쪽 필터에서 전체를 볼 수 있어요</div>` : ''}
+      ${waiting.length ? `<div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:8px;padding-top:7px;border-top:1px solid var(--i8)">
         넘겨 둔 일 ${waiting.length}건 — ${waiting.slice(0, 3).map(w =>
           `${escapeHtml(exhNames(w.x).ko)} ${escapeHtml(w.label)}${w.days ? ` ${w.days}일째` : ''}`).join(' · ')}
         ${waiting.length > 3 ? ` 외 ${waiting.length - 3}건` : ''}</div>` : ''}
     </div>` : `<div class="uc" style="border-left:3px solid var(--g)">
       <div class="uc-ttl">처리 필요</div>
-      <div style="font-size:12px;color:var(--g)">지금 처리할 게 없어요</div></div>`;
+      <div style="font-size:var(--fs-12);color:var(--g)">지금 처리할 게 없어요</div></div>`;
 
   const cardRecent = (() => {
     // 누가 무엇을 고쳤는지 — 계정 기준으로 최근 변경을 보여준다
@@ -429,16 +429,16 @@ function renderDashboard(all){
     const recent = auditLog.filter(l => names.has(l.target))
       .sort((a, b) => new Date(b.ts) - new Date(a.ts)).slice(0, 8);
     if(!recent.length) return `<div class="uc"><div class="uc-ttl">최근 변경</div>
-      <div style="font-size:11.5px;color:var(--i5)">아직 변경 이력이 없어요</div></div>`;
+      <div style="font-size:var(--fs-11_5);color:var(--i5)">아직 변경 이력이 없어요</div></div>`;
     return `<div class="uc">
       <div class="uc-ttl">최근 변경</div>
       ${recent.map(l => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--i8)">
-        <span style="width:22px;height:22px;border-radius:50%;background:${escAttr(l.color || '#9C9890')};color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${escapeHtml((l.name || '?').slice(0,2))}</span>
-        <span style="font-size:11px;color:var(--i3);flex:0 0 auto">${escapeHtml(l.name || '')}</span>
-        <span style="font-size:11.5px;color:var(--i2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(unent((l.detail || '').replace(/<[^>]+>/g, '')))}</span>
-        <span style="font-size:10px;color:var(--i5);flex:0 0 auto">${escapeHtml(String(l.ts || '').slice(5,10))}</span>
+        <span style="width:22px;height:22px;border-radius:50%;background:${escAttr(l.color || '#9C9890')};color:var(--on);font-size:var(--fs-9);font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${escapeHtml((l.name || '?').slice(0,2))}</span>
+        <span style="font-size:var(--fs-11);color:var(--i3);flex:0 0 auto">${escapeHtml(l.name || '')}</span>
+        <span style="font-size:var(--fs-11_5);color:var(--i2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(unent((l.detail || '').replace(/<[^>]+>/g, '')))}</span>
+        <span style="font-size:var(--fs-10);color:var(--i5);flex:0 0 auto">${escapeHtml(String(l.ts || '').slice(5,10))}</span>
       </div>`).join('')}
-      <div style="font-size:10.5px;color:var(--i5);margin-top:7px">전체 이력은 <b>로그</b> 탭에서 볼 수 있어요</div>
+      <div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:7px">전체 이력은 <b>로그</b> 탭에서 볼 수 있어요</div>
     </div>`;
   })();
 
@@ -477,12 +477,12 @@ function renderDashboard(all){
 /* 처리 필요 목록의 한 줄 — 눌러서 바로 그 기업의 해당 탭으로 간다 */
 function attnRow(x, kind, text, days, tab){
   return `<div onclick="openExhDr('${escAttr(x.id)}','${tab}')"
-    style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:6px;cursor:pointer;background:var(--i9);margin-bottom:4px">
+    style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:var(--rd-6);cursor:pointer;background:var(--i9);margin-bottom:4px">
     <span style="flex:0 0 128px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
-      <span style="font-weight:700;font-size:11.5px">${escapeHtml(exhNames(x).ko)}</span>${
-      exhNames(x).en ? `<span style="font-size:10px;color:var(--i4);margin-left:4px">${escapeHtml(exhNames(x).en)}</span>` : ''}</span>
+      <span style="font-weight:700;font-size:var(--fs-11_5)">${escapeHtml(exhNames(x).ko)}</span>${
+      exhNames(x).en ? `<span style="font-size:var(--fs-10);color:var(--i4);margin-left:4px">${escapeHtml(exhNames(x).en)}</span>` : ''}</span>
     <span class="pill p-gray" style="flex:0 0 auto">${escapeHtml(kind)}</span>
-    <span style="font-size:11.5px;color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(text)}</span>
+    <span style="font-size:var(--fs-11_5);color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(text)}</span>
     ${days !== null && days > 0 ? `<span class="pill ${days >= 3 ? 'p-amber' : 'p-gray'}" style="flex:0 0 auto">${days}일</span>` : ''}
   </div>`;
 }
@@ -491,7 +491,7 @@ function attnRow(x, kind, text, days, tab){
 function renderChecklistCards(list, all){
   const keys = prevOrgKeys();
   const backBadge = (x) => isReturning(x, keys)
-    ? '<span class="pill p-teal" style="font-size:9px">재참가</span>' : '';
+    ? '<span class="pill p-teal" style="font-size:var(--fs-9)">재참가</span>' : '';
   const stat = (x, s) => {
     const c = cellState(x, s);
     if(c.state === 'na') return '';
@@ -503,7 +503,7 @@ function renderChecklistCards(list, all){
       todo: 'background:var(--i8);color:var(--i5)',
     }[c.state];
     const mark = { done: '✓', part: '◐', warn: '!', todo: '' }[c.state];
-    return `<span style="${map};font-size:10px;font-weight:600;padding:3px 7px;border-radius:5px;white-space:nowrap">${
+    return `<span style="${map};font-size:var(--fs-10);font-weight:600;padding:3px 7px;border-radius:var(--rs);white-space:nowrap">${
       mark ? mark + ' ' : ''}${escapeHtml(label)}</span>`;
   };
 
@@ -525,44 +525,44 @@ function renderChecklistCards(list, all){
       const pc = exhContacts(x)[0];
       const off = x.status === CANCELLED;
       return `<div onclick="openExhDr('${escAttr(x.id)}')"
-        style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:12px 13px;margin-bottom:8px;cursor:pointer${off ? ';opacity:.55' : ''}">
+        style="background:var(--W);border:1px solid var(--i7);border-radius:var(--rd-10);padding:12px 13px;margin-bottom:8px;cursor:pointer${off ? ';opacity:.55' : ''}">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <span class="pill p-gray">${escapeHtml(x.apply_order || '-')}</span>
-          <span style="font-size:14px;font-weight:700${off ? ';text-decoration:line-through' : ''}">${escapeHtml(exhNames(x).ko)}</span>${
+          <span style="font-size:var(--fs-14);font-weight:700${off ? ';text-decoration:line-through' : ''}">${escapeHtml(exhNames(x).ko)}</span>${
             isBookOnly(x) ? '<span class="pill p-teal">프로그램북만</span>' : ''}${
-            exhNames(x).en ? `<span style="font-size:11px;color:var(--i4);font-weight:400">${escapeHtml(exhNames(x).en)}</span>` : ''}
+            exhNames(x).en ? `<span style="font-size:var(--fs-11);color:var(--i4);font-weight:400">${escapeHtml(exhNames(x).en)}</span>` : ''}
           ${off ? '<span class="pill p-gray">참가 취소</span>' : ''}
           ${backBadge(x)}
           ${x.grade && x.grade !== 'Exhibitor' ? `<span class="pill ${gradeCls(x.grade)}">${escapeHtml(x.grade)}</span>` : ''}
           ${openN ? `<span class="pill p-amber" style="margin-left:auto"
             onclick="event.stopPropagation();openExhDr('${escAttr(x.id)}','logs')">문의 ${openN}</span>` : ''}
         </div>
-        <div style="font-size:11.5px;color:var(--i4);margin-top:3px">
+        <div style="font-size:var(--fs-11_5);color:var(--i4);margin-top:3px">
           ${x.booth_no ? `부스 ${escapeHtml(x.booth_no)}${x.booth_floor ? `·${escapeHtml(x.booth_floor)}층` : ''}${x.booth_type ? ` · ${escapeHtml(x.booth_type)}` : ''}` : '부스 미배정'}
           ${pc && (pc.name || pc.email) ? ` · ${escapeHtml(pc.name || pc.email)}${leftPill(pc)}` : ''}
         </div>
         <div style="display:flex;align-items:center;gap:8px;margin:9px 0 8px">
           <div style="flex:1">${progressBar(p, p === 100 ? 'var(--g)' : 'var(--a)')}</div>
-          <span style="font-size:11px;font-weight:700;color:var(--i3);min-width:32px;text-align:right">${p}%</span>
+          <span style="font-size:var(--fs-11);font-weight:700;color:var(--i3);min-width:32px;text-align:right">${p}%</span>
         </div>
         ${(() => {
           if(!billed) return '';
           // 통화가 둘이면 줄을 나눠 둘 다, 하나면 그대로 한 줄
           const st = settleByCurrency(x.id);
           const sc = Object.keys(st).filter(c => st[c].billed || st[c].paid).sort();
-          if(sc.length < 2) return `<div style="font-size:11.5px;margin-bottom:7px">
+          if(sc.length < 2) return `<div style="font-size:var(--fs-11_5);margin-bottom:7px">
             입금 <b style="color:${paid >= billed ? 'var(--g)' : 'var(--am)'}">${fmtMoney(paid, cur)}</b>
             <span style="color:var(--i5)"> / ${fmtMoney(billed, cur)}</span></div>`;
-          return `<div style="font-size:11.5px;margin-bottom:7px">
+          return `<div style="font-size:var(--fs-11_5);margin-bottom:7px">
             ${sc.map(c => `<div>입금 <b style="color:${st[c].balance <= 0 ? 'var(--g)' : 'var(--am)'}">${fmtMoney(st[c].paid, c)}</b>
               <span style="color:var(--i5)"> / ${fmtMoney(st[c].billed, c)}</span></div>`).join('')}
-            <div style="font-size:10px;color:var(--i5)">결제 수단이 달라 통화가 갈렸어요</div>
+            <div style="font-size:var(--fs-10);color:var(--i5)">결제 수단이 달라 통화가 갈렸어요</div>
           </div>`;
         })()}
         <div style="display:flex;flex-wrap:wrap;gap:4px">${STEPS.map(s => stat(x, s)).join('')}</div>
       </div>`;
     }).join('')}
-    ${!list.length ? '<div class="empty" style="padding:30px;text-align:center;font-size:12px;color:var(--i4)">조건에 맞는 기업이 없어요</div>' : ''}
+    ${!list.length ? '<div class="empty" style="padding:30px;text-align:center;font-size:var(--fs-12);color:var(--i4)">조건에 맞는 기업이 없어요</div>' : ''}
   </div>`;
 }
 
@@ -571,7 +571,7 @@ function renderChecklistTable(list, all){
      51줄 중 20줄에 배지가 붙으면 배지가 아니라 배경이 된다. */
   const keys = prevOrgKeys();
   const backBadge = (x) => isReturning(x, keys)
-    ? `<span class="pill p-teal" style="font-size:9px" title="${escapeHtml(keys.prev)}에도 참가한 기업이에요">재참가</span>` : '';
+    ? `<span class="pill p-teal" style="font-size:var(--fs-9)" title="${escapeHtml(keys.prev)}에도 참가한 기업이에요">재참가</span>` : '';
   const cell = (x, s) => {
     const c = cellState(x, s);
     const map = {
@@ -583,9 +583,9 @@ function renderChecklistTable(list, all){
     }[c.state];
     const tip = c.text ? escAttr(String(c.text)) : '';
     return `<td style="text-align:center;padding:5px 3px" title="${tip}">
-      <div style="display:inline-flex;flex-direction:column;align-items:center;gap:1px;min-width:44px;padding:3px 4px;border-radius:5px;background:${map.bg}">
-        <span style="font-size:12px;font-weight:800;color:${map.fg};line-height:1">${map.mark}</span>
-        ${c.text ? `<span style="font-size:9px;color:${map.fg};line-height:1.1">${escapeHtml(shortCell(c.text))}</span>` : ''}
+      <div style="display:inline-flex;flex-direction:column;align-items:center;gap:1px;min-width:44px;padding:3px 4px;border-radius:var(--rs);background:${map.bg}">
+        <span style="font-size:var(--fs-12);font-weight:800;color:${map.fg};line-height:1">${map.mark}</span>
+        ${c.text ? `<span style="font-size:var(--fs-9);color:${map.fg};line-height:1.1">${escapeHtml(shortCell(c.text))}</span>` : ''}
       </div></td>`;
   };
 
@@ -607,7 +607,7 @@ function renderChecklistTable(list, all){
       <th style="min-width:150px">기업</th>
       <th style="min-width:88px">기업 담당자</th>
       <th style="min-width:70px">진행률</th>
-      ${STEPS.map(s => `<th style="text-align:center;font-size:10px;line-height:1.2">${s.label}</th>`).join('')}
+      ${STEPS.map(s => `<th style="text-align:center;font-size:var(--fs-10);line-height:1.2">${s.label}</th>`).join('')}
       <th style="text-align:center;min-width:50px">문의</th>
       <th style="text-align:right;min-width:110px">입금/청구</th>
     </tr></thead><tbody>
@@ -619,14 +619,14 @@ function renderChecklistTable(list, all){
       return `<tr style="cursor:pointer${off ? ';opacity:.5' : ''}" onclick="openExhDr('${escAttr(x.id)}')">
         ${applyCell(x)}
         <td><div style="display:flex;align-items:center;gap:5px">
-              <span style="font-weight:700;font-size:12px${off ? ';text-decoration:line-through' : ''}">${escapeHtml(exhNames(x).ko)}</span>${
-                exhNames(x).en ? `<span style="font-size:10.5px;color:var(--i4);margin-left:4px">${escapeHtml(exhNames(x).en)}</span>` : ''}
+              <span style="font-weight:700;font-size:var(--fs-12)${off ? ';text-decoration:line-through' : ''}">${escapeHtml(exhNames(x).ko)}</span>${
+                exhNames(x).en ? `<span style="font-size:var(--fs-10_5);color:var(--i4);margin-left:4px">${escapeHtml(exhNames(x).en)}</span>` : ''}
               ${off ? '<span class="pill p-gray">참가 취소</span>' : ''}
               ${isBookOnly(x) ? `<span class="pill p-teal" title="${escapeHtml(bookOnlyTip(x))}">프로그램북만</span>` : ''}
               ${backBadge(x)}
               ${x.grade && x.grade !== 'Exhibitor' ? `<span class="pill ${gradeCls(x.grade)}">${escapeHtml(x.grade)}</span>` : ''}
             </div>
-            ${x.booth_no ? `<div style="font-size:10px;color:var(--i4)">부스 ${escapeHtml(x.booth_no)}${
+            ${x.booth_no ? `<div style="font-size:var(--fs-10);color:var(--i4)">부스 ${escapeHtml(x.booth_no)}${
               x.booth_floor ? ` · ${escapeHtml(x.booth_floor)}층` : ''}${
               x.booth_type ? ` · ${escapeHtml(x.booth_type)}` : ''}${
               x.booth_qty && x.booth_qty !== '1' ? ` ×${escapeHtml(x.booth_qty)}` : ''}</div>` : ''}</td>
@@ -635,19 +635,19 @@ function renderChecklistTable(list, all){
           const p = all[0];
           const label = p ? (p.name || p.email || '-') : '-';
           const tip = all.map(c => [c.role, c.name, c.title, c.email, c.phone].filter(Boolean).join(' · ')).join('\n');
-          return `<td style="font-size:11px;color:var(--i3);max-width:130px" title="${escapeHtml(tip)}">
+          return `<td style="font-size:var(--fs-11);color:var(--i3);max-width:130px" title="${escapeHtml(tip)}">
             <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(label)}</div>
             ${p ? leftPill(p) : ''}
-            ${all.length > 1 ? `<div style="font-size:9.5px;color:var(--i5)">외 ${all.length - 1}명</div>` : ''}</td>`;
+            ${all.length > 1 ? `<div style="font-size:var(--fs-9_5);color:var(--i5)">외 ${all.length - 1}명</div>` : ''}</td>`;
         })()}
         <td>${progressBar(p, p === 100 ? 'var(--g)' : 'var(--a)', '52px')}
-            <span style="font-size:10px;color:var(--i4)">${p}%</span></td>
+            <span style="font-size:var(--fs-10);color:var(--i4)">${p}%</span></td>
         ${STEPS.map(s => cell(x, s)).join('')}
         <td style="text-align:center" onclick="event.stopPropagation();openExhDr('${escAttr(x.id)}','logs')">
           ${openN ? `<span class="pill p-amber">${openN}</span>` : '<span style="color:var(--i6)">·</span>'}</td>
         ${(() => {
           const s = settleState(x);
-          if(!s.billed) return '<td style="text-align:right;font-size:11px;color:var(--i6)">-</td>';
+          if(!s.billed) return '<td style="text-align:right;font-size:var(--fs-11);color:var(--i6)">-</td>';
           const col = (s.state==='paid'||s.state==='settled') ? 'var(--g)'
             : (s.state==='over' ? 'var(--re)' : 'var(--i2)');
           /* 통화가 둘이면 둘 다 적는다. 하나면 통화 표시 없이 그대로 둔다 —
@@ -655,22 +655,22 @@ function renderChecklistTable(list, all){
           const st = settleByCurrency(x.id);
           const sc = Object.keys(st).filter(c => st[c].billed || st[c].paid).sort();
           const two = sc.length > 1;
-          return `<td style="text-align:right;font-size:11px">
-            ${two ? sc.map(c => `<div><span style="font-size:9px;color:var(--i5);margin-right:2px">${escapeHtml(c)}</span>
+          return `<td style="text-align:right;font-size:var(--fs-11)">
+            ${two ? sc.map(c => `<div><span style="font-size:var(--fs-9);color:var(--i5);margin-right:2px">${escapeHtml(c)}</span>
                 <span style="font-weight:700;color:${st[c].balance <= 0 ? 'var(--g)' : 'var(--i2)'}">${money(st[c].paid)}</span>
                 <span style="color:var(--i5)"> / ${money(st[c].billed)}</span></div>`).join('')
             : `<span style="font-weight:700;color:${col}">${s.cur==='USD'?'$':''}${money(s.paid)}</span>
             <span style="color:var(--i5)"> / ${money(s.billed)}</span>`}
-            ${s.state==='over' ? `<div style="font-size:9.5px;color:var(--re)">초과 ${fmtMoney(-s.balance, s.cur)}</div>` : ''}
-            ${s.state==='settled' ? '<div style="font-size:9.5px;color:var(--g)">완납 처리</div>' : ''}
-            ${s.overdue && s.balance>0 ? `<div style="font-size:9.5px;color:var(--am)">기한 ${daysSince(s.due)}일 지남</div>` : ''}
-            ${two ? '<div title="인보이스는 원화로 받고 엑스렌탈은 해외 카드로 결제해 통화가 갈릴 수 있어요 — 정상입니다" style="font-size:9px;color:var(--i5)">결제 수단이 달라요</div>' : ''}
+            ${s.state==='over' ? `<div style="font-size:var(--fs-9_5);color:var(--re)">초과 ${fmtMoney(-s.balance, s.cur)}</div>` : ''}
+            ${s.state==='settled' ? '<div style="font-size:var(--fs-9_5);color:var(--g)">완납 처리</div>' : ''}
+            ${s.overdue && s.balance>0 ? `<div style="font-size:var(--fs-9_5);color:var(--am)">기한 ${daysSince(s.due)}일 지남</div>` : ''}
+            ${two ? '<div title="인보이스는 원화로 받고 엑스렌탈은 해외 카드로 결제해 통화가 갈릴 수 있어요 — 정상입니다" style="font-size:var(--fs-9);color:var(--i5)">결제 수단이 달라요</div>' : ''}
           </td>`;
         })()}
       </tr>`;
     }).join('')}
     </tbody></table></div>
-    ${!list.length ? '<div class="empty" style="padding:30px;text-align:center;font-size:12px;color:var(--i4)">조건에 맞는 기업이 없어요</div>' : ''}
+    ${!list.length ? '<div class="empty" style="padding:30px;text-align:center;font-size:var(--fs-12);color:var(--i4)">조건에 맞는 기업이 없어요</div>' : ''}
   </div>`;
 }
 

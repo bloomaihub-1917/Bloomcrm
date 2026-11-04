@@ -41,20 +41,20 @@ export function boothDesignBlock(x){
   const rows = boothDesignFeedback(x.id);
   const me = currentUser?.email || '';
   const dateCell = (f, label) => `<div class="fg"><label class="fl">${label}</label>
-    <input type="date" class="fi" style="font-size:12px" value="${escapeHtml(x[f] || '')}"
+    <input type="date" class="fi" style="font-size:var(--fs-12)" value="${escapeHtml(x[f] || '')}"
       onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${label}')"></div>`;
 
-  return `<div style="padding:9px 11px;background:var(--i9);border-radius:8px;border-left:3px solid ${
+  return `<div style="padding:9px 11px;background:var(--i9);border-radius:var(--r);border-left:3px solid ${
       st.state === 'warn' ? 'var(--re)' : st.state === 'done' ? 'var(--g)' : 'var(--a)'};margin-bottom:10px">
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:7px">
-      <span style="font-size:11px;font-weight:700;color:var(--i2)">부스 도면 검토</span>
+      <span style="font-size:var(--fs-11);font-weight:700;color:var(--i2)">부스 도면 검토</span>
       <span class="pill ${{ none: 'p-gray', todo: 'p-amber', warn: 'p-red', done: 'p-green' }[st.state]}"
-        style="font-size:9px">${escapeHtml(st.text)}</span>
-      ${isSelf ? '' : '<span style="font-size:10px;color:var(--i5)">부스 타입은 자체 시공이 아니에요</span>'}
+        style="font-size:var(--fs-9)">${escapeHtml(st.text)}</span>
+      ${isSelf ? '' : '<span style="font-size:var(--fs-10);color:var(--i5)">부스 타입은 자체 시공이 아니에요</span>'}
     </div>
 
     <div class="fgr">${dateCell('booth_design_received_at', '도면 받은 날')}${dateCell('booth_design_checked_at', '확인한 날')}</div>
-    ${isSelf ? `<label style="display:flex;align-items:center;gap:6px;font-size:12px;margin:2px 0 8px;cursor:pointer">
+    ${isSelf ? `<label style="display:flex;align-items:center;gap:6px;font-size:var(--fs-12);margin:2px 0 8px;cursor:pointer">
       <input type="checkbox"${x.work_report_at ? ' checked' : ''}
         onchange="setExhField('${escAttr(x.id)}','work_report_at',this.checked ? '${td()}' : '','작업신고서 제출')">
       시공사가 호텔에 작업신고서 제출</label>` : ''}
@@ -71,28 +71,28 @@ export function boothDesignBlock(x){
     </div>
 
     <div style="border-top:1px solid var(--i7);margin-top:8px;padding-top:8px">
-      <div style="font-size:11px;color:var(--i4);margin-bottom:6px">
+      <div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:6px">
         오간 말은 <b>문의·기록</b> 탭에도 함께 남아요. 남기는 사람은
         <b>${escapeHtml(currentUser?.name || currentUser?.email || '(로그인 정보 없음)')}</b>으로 적힙니다.</div>
       <textarea class="fi" id="bdf-${escAttr(x.id)}" rows="2"
         placeholder="예: 시공사에 3.5m 이하로 낮춰 재도면 요청, 9/10까지 회신 약속"
-        style="width:100%;resize:vertical;font-size:12px"></textarea>
+        style="width:100%;resize:vertical;font-size:var(--fs-12)"></textarea>
       <div style="display:flex;justify-content:flex-end;margin-top:6px">
         <button class="btn bp bs" onclick="addBoothDesignFeedback('${escAttr(x.id)}')">피드백 남기기</button>
       </div>
       ${rows.length ? rows.map(l => `
         <div style="padding:7px 0;border-top:1px solid var(--i8)">
           <div style="display:flex;align-items:baseline;gap:6px;flex-wrap:wrap">
-            <span style="font-size:11.5px;font-weight:700">${escapeHtml(l.author_name || l.author_email || '알 수 없음')}</span>
-            ${l.subject ? `<span class="pill p-gray" style="font-size:9px">${escapeHtml(l.subject)}</span>` : ''}
-            <span style="font-size:10px;color:var(--i5)">${escapeHtml(l.ts || '')}</span>
+            <span style="font-size:var(--fs-11_5);font-weight:700">${escapeHtml(l.author_name || l.author_email || '알 수 없음')}</span>
+            ${l.subject ? `<span class="pill p-gray" style="font-size:var(--fs-9)">${escapeHtml(l.subject)}</span>` : ''}
+            <span style="font-size:var(--fs-10);color:var(--i5)">${escapeHtml(l.ts || '')}</span>
             ${l.author_email && l.author_email === me
-              ? `<button class="btn bs" style="margin-left:auto;font-size:10px;padding:1px 6px"
+              ? `<button class="btn bs" style="margin-left:auto;font-size:var(--fs-10);padding:1px 6px"
                   onclick="delGraphicFeedback('${escAttr(l.id)}')">삭제</button>` : ''}
           </div>
-          <div style="font-size:12px;color:var(--i2);white-space:pre-wrap;margin-top:3px">${escapeHtml(l.body || '')}</div>
+          <div style="font-size:var(--fs-12);color:var(--i2);white-space:pre-wrap;margin-top:3px">${escapeHtml(l.body || '')}</div>
         </div>`).join('')
-        : '<div style="font-size:11.5px;color:var(--i5);margin-top:8px">아직 남긴 피드백이 없어요</div>'}
+        : '<div style="font-size:var(--fs-11_5);color:var(--i5);margin-top:8px">아직 남긴 피드백이 없어요</div>'}
     </div>
   </div>`;
 }
@@ -257,18 +257,18 @@ export function dContact(x){
 
   const card = (p) => {
     const r = p.row;
-    return `<div style="padding:9px 11px;background:var(--i9);border-radius:8px;border-left:3px solid ${p.primary ? 'var(--a)' : 'var(--i6)'};margin-bottom:6px">
+    return `<div style="padding:9px 11px;background:var(--i9);border-radius:var(--r);border-left:3px solid ${p.primary ? 'var(--a)' : 'var(--i6)'};margin-bottom:6px">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
-        <span style="font-size:13px;font-weight:700${p.linked ? ';cursor:pointer;text-decoration:underline dotted' : ''}"${p.linked
+        <span style="font-size:var(--fs-13);font-weight:700${p.linked ? ';cursor:pointer;text-decoration:underline dotted' : ''}"${p.linked
           ? ` onclick="openExhPerson('${escAttr(String(r.contact_id))}')" title="마스터DB 연락처 정보 보기"` : ''}>${escapeHtml(p.name || p.email || '이름 없음')}</span>${leftPill(p)}
         ${p.title ? `<span class="pill p-gray">${escapeHtml(p.title)}</span>` : ''}
         ${p.primary ? '<span class="pill p-blue">메인</span>' : ''}
-        <select class="fi" style="width:74px;padding:2px 5px;font-size:10.5px;margin-left:auto"
+        <select class="fi" style="width:74px;padding:2px 5px;font-size:var(--fs-10_5);margin-left:auto"
           onchange="setExhContactField('${escAttr(r.id)}','role',this.value)">
           ${cRoles().map(v => `<option value="${escapeHtml(v.code)}"${(r.role || '기타') === v.code ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}
         </select>
       </div>
-      <div style="font-size:11.5px;color:var(--i3);display:flex;flex-direction:column;gap:2px">
+      <div style="font-size:var(--fs-11_5);color:var(--i3);display:flex;flex-direction:column;gap:2px">
         ${p.email ? `<div>✉ <a href="mailto:${escAttr(p.email)}" style="color:var(--a)">${escapeHtml(p.email)}</a>${
           (() => {
             // 사유를 적어 둔 줄은 더 묻지 않는다 — 대행사가 대신 진행하는 기업처럼
@@ -285,58 +285,58 @@ export function dContact(x){
         ${p.phone ? `<div>☎ ${escapeHtml(p.phone)}</div>` : ''}
         ${!p.linked ? `
           <div class="fgr" style="margin-top:5px">
-            <input class="fi" style="font-size:11.5px;padding:5px" placeholder="이름" value="${escapeHtml(r.name || '')}"
+            <input class="fi" style="font-size:var(--fs-11_5);padding:5px" placeholder="이름" value="${escapeHtml(r.name || '')}"
               onchange="setExhContactField('${escAttr(r.id)}','name',this.value)">
-            <input class="fi" style="font-size:11.5px;padding:5px" placeholder="이메일" value="${escapeHtml(r.email || '')}"
+            <input class="fi" style="font-size:var(--fs-11_5);padding:5px" placeholder="이메일" value="${escapeHtml(r.email || '')}"
               onchange="setExhContactField('${escAttr(r.id)}','email',this.value)">
           </div>
-          <input class="fi" style="font-size:11.5px;padding:5px;margin-top:4px" placeholder="연락처" value="${escapeHtml(r.phone || '')}"
+          <input class="fi" style="font-size:var(--fs-11_5);padding:5px;margin-top:4px" placeholder="연락처" value="${escapeHtml(r.phone || '')}"
             onchange="setExhContactField('${escAttr(r.id)}','phone',this.value)">` : ''}
       </div>
       <div style="display:flex;gap:5px;margin-top:7px;align-items:center;flex-wrap:wrap">
-        <span style="font-size:10px;color:${p.linked ? 'var(--a)' : 'var(--am)'}"
+        <span style="font-size:var(--fs-10);color:${p.linked ? 'var(--a)' : 'var(--am)'}"
           title="${p.linked ? '' : '이 사람은 이 전시에만 적혀 있어요 — 마스터DB에 없어서 다음 행사에 다시 쓸 수 없고, 행사 참여 이력에도 안 잡힙니다'}"
           >${p.linked ? '마스터DB 연결됨' : '마스터DB에 없음'}</span>
-        ${!p.linked ? `<button class="btn bp bs" style="font-size:10px"
+        ${!p.linked ? `<button class="btn bp bs" style="font-size:var(--fs-10)"
           onclick="promoteExhContact('${escAttr(x.id)}','${escAttr(r.id)}')"
           title="이 사람을 마스터DB 연락처로 등록하고 이 행사 참여로도 남깁니다">마스터DB로 올리기</button>` : ''}
-        ${!p.primary ? `<button class="btn bs" style="margin-left:auto;font-size:10px" onclick="setPrimaryExhContact('${escAttr(r.id)}')">메인으로</button>` : '<span style="margin-left:auto"></span>'}
-        <button class="btn bs" style="font-size:10px;opacity:.6" onclick="delExhContact('${escAttr(r.id)}')">삭제</button>
+        ${!p.primary ? `<button class="btn bs" style="margin-left:auto;font-size:var(--fs-10)" onclick="setPrimaryExhContact('${escAttr(r.id)}')">메인으로</button>` : '<span style="margin-left:auto"></span>'}
+        <button class="btn bs" style="font-size:var(--fs-10);opacity:.6" onclick="delExhContact('${escAttr(r.id)}')">삭제</button>
       </div>
     </div>`;
   };
 
   return `
-  <div style="font-size:11px;color:var(--i5);margin-bottom:8px">
+  <div style="font-size:var(--fs-11);color:var(--i5);margin-bottom:8px">
     이 전시에서 우리가 연락하는 사람들이에요. 실무·정산·현장이 다르면 여러 명 배정할 수 있어요.</div>
 
   ${list.length ? list.map(card).join('')
-    : '<div style="font-size:11.5px;color:var(--i5);padding:6px 2px;margin-bottom:6px">아직 배정된 담당자가 없어요 — 아래에서 고르세요</div>'}
+    : '<div style="font-size:var(--fs-11_5);color:var(--i5);padding:6px 2px;margin-bottom:6px">아직 배정된 담당자가 없어요 — 아래에서 고르세요</div>'}
 
   <div style="display:flex;align-items:center;gap:8px;margin:16px 0 7px;padding-top:12px;border-top:1px solid var(--i7)">
-    <span style="font-size:11px;font-weight:700;color:var(--i3)">이 기업의 마스터DB 연락처</span>
-    <span style="font-size:10.5px;color:var(--i5)">${cands.length}명</span>
-    <button class="btn bp bs" style="margin-left:auto;font-size:11px" onclick="openNewContact('${escAttr(x.id)}')">+ 직접 입력</button>
+    <span style="font-size:var(--fs-11);font-weight:700;color:var(--i3)">이 기업의 마스터DB 연락처</span>
+    <span style="font-size:var(--fs-10_5);color:var(--i5)">${cands.length}명</span>
+    <button class="btn bp bs" style="margin-left:auto;font-size:var(--fs-11)" onclick="openNewContact('${escAttr(x.id)}')">+ 직접 입력</button>
   </div>
 
   ${cands.length ? cands.map(c => {
     const on = usedIds.has(String(c.id));
     const sub = [c.titleKo || c.titleEn, c.deptKo || c.deptEn, cleanEmail(c.email1)].filter(Boolean).join(' · ');
-    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;margin-bottom:4px;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:var(--rd-7);margin-bottom:4px;
       background:${on ? 'var(--ad)' : 'var(--W)'};border:1px solid ${on ? 'var(--a)' : 'var(--i7)'}">
       <div style="flex:1;min-width:0">
-        <div style="font-size:12.5px;font-weight:600;cursor:pointer" onclick="openExhPerson('${escAttr(String(c.id))}')" title="마스터DB 연락처 정보 보기">${escapeHtml(c.nameKo || c.nameEn || '이름 없음')}${
+        <div style="font-size:var(--fs-12_5);font-weight:600;cursor:pointer" onclick="openExhPerson('${escAttr(String(c.id))}')" title="마스터DB 연락처 정보 보기">${escapeHtml(c.nameKo || c.nameEn || '이름 없음')}${
           c.nameKo && c.nameEn ? `<span style="font-weight:400;color:var(--i4);margin-left:5px">${escapeHtml(c.nameEn)}</span>` : ''}</div>
-        ${sub ? `<div style="font-size:10.5px;color:var(--i4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(sub)}</div>` : ''}
+        ${sub ? `<div style="font-size:var(--fs-10_5);color:var(--i4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(sub)}</div>` : ''}
       </div>
-      <button class="btn ${on ? 'bs' : 'bp bs'}" style="flex:0 0 auto;font-size:10.5px"
+      <button class="btn ${on ? 'bs' : 'bp bs'}" style="flex:0 0 auto;font-size:var(--fs-10_5)"
         onclick="${on ? `unassignExhContact('${escAttr(x.id)}','${escAttr(String(c.id))}')`
                       : `assignExhContact('${escAttr(x.id)}','${escAttr(String(c.id))}')`}"
         title="${on ? '이 전시 담당자에서 뺍니다 (마스터DB에는 그대로 남아요)' : '이 전시 담당자로 넣습니다'}">${
         on ? '배정 해제' : '배정'}</button>
     </div>`;
   }).join('')
-  : `<div style="font-size:11.5px;color:var(--am);padding:8px 2px">
+  : `<div style="font-size:var(--fs-11_5);color:var(--am);padding:8px 2px">
       이 기업 연락처가 마스터DB에 없어요 — <b>직접 입력</b>으로 추가하면 마스터DB에도 함께 등록됩니다</div>`}
   ${mailCandidates(x, list, cands)}`;
 }
@@ -403,23 +403,23 @@ function mailCandidates(x, list, cands){
   const a = (s) => escAttr(s);
   return `
   <div style="display:flex;align-items:center;gap:8px;margin:16px 0 4px;padding-top:12px;border-top:1px solid var(--i7)">
-    <span style="font-size:11px;font-weight:700;color:var(--i3)">메일함에 나온 주소 — 아직 담당자 아님</span>
-    <span style="font-size:10.5px;color:var(--i5)">${rows.length}명</span>
+    <span style="font-size:var(--fs-11);font-weight:700;color:var(--i3)">메일함에 나온 주소 — 아직 담당자 아님</span>
+    <span style="font-size:var(--fs-10_5);color:var(--i5)">${rows.length}명</span>
   </div>
-  <div style="font-size:10.5px;color:var(--i5);margin-bottom:7px">기업 담당자인지, 시공사·벤더인지 보고 골라 주세요. 관계없는 주소는 숨기면 이 행사에서 다시 안 나와요.</div>
+  <div style="font-size:var(--fs-10_5);color:var(--i5);margin-bottom:7px">기업 담당자인지, 시공사·벤더인지 보고 골라 주세요. 관계없는 주소는 숨기면 이 행사에서 다시 안 나와요.</div>
   ${rows.map(f => {
     const other = foreignDomain(f.email, cands);
-    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;margin-bottom:4px;border:1px dashed var(--i6)">
+    return `<div style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:var(--rd-7);margin-bottom:4px;border:1px dashed var(--i6)">
       <div style="flex:1;min-width:0">
-        <div style="font-size:12.5px;font-weight:600">${escapeHtml(f.name || f.email)}${other
+        <div style="font-size:var(--fs-12_5);font-weight:600">${escapeHtml(f.name || f.email)}${other
           ? `<span class="pill p-amber" style="margin-left:5px" title="이 기업의 마스터DB 연락처는 ${a(other)} 도메인을 씁니다 — 시공사·대행사일 수 있어요">다른 도메인</span>` : ''}</div>
-        <div style="font-size:10.5px;color:var(--i4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name ? escapeHtml(f.email) + ' · ' : ''}메일 ${f.n}통 · 최근 ${escapeHtml(f.last.slice(0, 10))}</div>
+        <div style="font-size:var(--fs-10_5);color:var(--i4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name ? escapeHtml(f.email) + ' · ' : ''}메일 ${f.n}통 · 최근 ${escapeHtml(f.last.slice(0, 10))}</div>
       </div>
-      <button class="btn bp bs" style="flex:0 0 auto;font-size:10.5px" onclick="openNewContact('${a(x.id)}','${a(f.name)}','${a(f.email)}')"
+      <button class="btn bp bs" style="flex:0 0 auto;font-size:var(--fs-10_5)" onclick="openNewContact('${a(x.id)}','${a(f.name)}','${a(f.email)}')"
         title="이 기업 담당자로 마스터DB에 등록하고 배정합니다 — 창에서 이름·직함을 확인한 뒤 추가돼요">기업 담당자로</button>
-      <button class="btn bs" style="flex:0 0 auto;font-size:10.5px" onclick="mailCandAsBuilder('${a(x.id)}','${a(f.name)}','${a(f.email)}')"
+      <button class="btn bs" style="flex:0 0 auto;font-size:var(--fs-10_5)" onclick="mailCandAsBuilder('${a(x.id)}','${a(f.name)}','${a(f.email)}')"
         title="이 기업 부스 시공사 담당자로 적습니다(진행 탭 «독립부스 시공사»)">시공사로</button>
-      <button class="btn bs" style="flex:0 0 auto;font-size:10.5px;opacity:.6" onclick="hideMailCand('${a(x.event_id)}','${a(f.email)}')"
+      <button class="btn bs" style="flex:0 0 auto;font-size:var(--fs-10_5);opacity:.6" onclick="hideMailCand('${a(x.event_id)}','${a(f.email)}')"
         title="담당자가 아닌 주소 — 이 행사에서 다시 보이지 않게 합니다(내 브라우저에만)">숨기기</button>
     </div>`;
   }).join('')}`;
@@ -469,7 +469,7 @@ export function openNewContact(exhId, name, email){
     <div class="fg"><label class="fl">${lb}</label><input class="fi" id="nc-${b}" placeholder="${pb}"></div>
   </div>`;
   modalShell('new-contact-modal', `담당자 추가 — ${exhNames(x).ko}`, `
-    <div style="font-size:11.5px;color:var(--i4);margin-bottom:12px;line-height:1.6">
+    <div style="font-size:var(--fs-11_5);color:var(--i4);margin-bottom:12px;line-height:1.6">
       마스터DB에도 함께 등록되고, 이 전시 담당자로 바로 배정됩니다.</div>
     ${pair('nameKo', 'nameEn', '성명 (국문)', '성명 (영문)', '예: 이호진', '예: Hojin Lee')}
     ${pair('titleKo', 'titleEn', '직함 (국문)', '직함 (영문)', '예: 팀장', '예: Manager')}
@@ -490,10 +490,10 @@ export function openNewContact(exhId, name, email){
 
          대신 기업 국가를 옆에 적어 준다. 같으면 고르면 되고, 다르면 다르게
          고르면 된다 — 판단할 자료는 주되 대신 정해 주지는 않는다. */''}
-    <div style="font-size:10.5px;color:var(--i5);margin:-6px 0 12px">
+    <div style="font-size:var(--fs-10_5);color:var(--i5);margin:-6px 0 12px">
       ${org?.country ? `이 기업은 <b>${escapeHtml(org.country)}</b>${ieyo(org.country).slice(org.country.length)} — 담당자가 같은 곳에 있으면 그대로 고르세요.` : ''}
       비워두면 나중에 마스터DB에서 채울 수 있어요.</div>
-    <div id="nc-msg" style="font-size:11.5px;min-height:16px;margin-bottom:8px"></div>
+    <div id="nc-msg" style="font-size:var(--fs-11_5);min-height:16px;margin-bottom:8px"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn bs" onclick="closeNewContact()">취소</button>
       <button class="btn bp" id="nc-save" onclick="submitNewContact('${escAttr(exhId)}')">추가</button>

@@ -64,9 +64,9 @@ function renderCoTrade(c){
 
   const t = tradeTotals(c);
   const head = t.curs.length ? `<div class="cost" style="margin-bottom:14px">
-    <div class="cosi"><div class="cosn" style="font-size:15px">${tradeMoney(t, 'billed')}</div><div class="cosl">누적 청구</div></div>
-    <div class="cosi"><div class="cosn" style="font-size:15px">${tradeMoney(t, 'paid')}</div><div class="cosl">누적 입금</div></div>
-    <div class="cosi"><div class="cosn" style="font-size:15px;color:${t.balance > 0 ? 'var(--re)' : 'var(--ge)'}">${tradeMoney(t, 'balance')}</div><div class="cosl">미수금</div></div>
+    <div class="cosi"><div class="cosn" style="font-size:var(--fs-15)">${tradeMoney(t, 'billed')}</div><div class="cosl">누적 청구</div></div>
+    <div class="cosi"><div class="cosn" style="font-size:var(--fs-15)">${tradeMoney(t, 'paid')}</div><div class="cosl">누적 입금</div></div>
+    <div class="cosi"><div class="cosn" style="font-size:var(--fs-15);color:${t.balance > 0 ? 'var(--re)' : 'var(--ge)'}">${tradeMoney(t, 'balance')}</div><div class="cosl">미수금</div></div>
   </div>` : '';
 
   const rows = list.map(x => {
@@ -80,11 +80,11 @@ function renderCoTrade(c){
         ${x.booth ? `<span class="pill p-gray">부스 ${escapeHtml(x.booth)}</span>` : ''}
         ${x.grade ? `<span class="pill p-gold">${escapeHtml(x.grade)}</span>` : ''}
         ${x.openInquiries ? `<span class="pill p-amber">미답변 문의 ${x.openInquiries}</span>` : ''}
-        <button class="btn bs" style="margin-left:auto;font-size:10.5px"
+        <button class="btn bs" style="margin-left:auto;font-size:var(--fs-10_5)"
           onclick="event.stopPropagation();goToExhibitor('${escAttr(x.exhibitorId)}','${escAttr(x.eventId)}')">전시에서 열기</button>
       </div>
       ${x.billed ? `
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:11.5px;color:var(--i3)">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:var(--fs-11_5);color:var(--i3)">
           <span class="pill ${TRADE_CLS[x.state] || 'p-gray'}">${escapeHtml(TRADE_LABEL[x.state] || x.state)}</span>
           <span>청구 <b style="color:var(--i1)">${fmtMoney(x.billed, x.cur)}</b></span>
           <span>입금 <b style="color:var(--i1)">${fmtMoney(x.paid, x.cur)}</b></span>
@@ -94,7 +94,7 @@ function renderCoTrade(c){
         </div>
         <div class="br" style="margin-top:7px"><div class="brt"><div class="brf" style="width:${pct}%;background:${
           x.state === 'unpaid' ? 'var(--re)' : x.state === 'partial' ? 'var(--am)' : 'var(--g)'}"></div></div></div>`
-        : '<div style="font-size:11.5px;color:var(--i4)">청구 내역 없음</div>'}
+        : '<div style="font-size:var(--fs-11_5);color:var(--i4)">청구 내역 없음</div>'}
     </div>`;
   }).join('');
 
@@ -113,7 +113,7 @@ export function goToExhibitor(exhId, evKey){
 
 function renderTL(c){
   const addBtn = `<div style="display:flex;justify-content:flex-end;margin-bottom:10px">
-    <button class="btn bp" style="font-size:11px" onclick="openAddCoEventModal('${escAttr(c.key)}')">+ 참여 이력 추가</button>
+    <button class="btn bp" style="font-size:var(--fs-11)" onclick="openAddCoEventModal('${escAttr(c.key)}')">+ 참여 이력 추가</button>
   </div>`;
   if(!c.events.length)return addBtn + `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><p>행사 참여 이력 없음</p></div>`;
   const byY={};c.events.forEach(e=>{if(!byY[e.year])byY[e.year]=[];byY[e.year].push(e)});
@@ -137,14 +137,14 @@ function renderCoCon(c){
     const evTags = p.events.map(ev => {
       const color = evColor(ev);
       const short = evShort(ev);
-      return `<span class="pill" style="background:${color}18;color:${color};border:1px solid ${color}40;font-size:10px">${escapeHtml(short)}</span>`;
+      return `<span class="pill" style="background:${color}18;color:${color};border:1px solid ${color}40;font-size:var(--fs-10)">${escapeHtml(short)}</span>`;
     }).join('');
     const catTag = p.cats.map(ct => `<span class="pill ${RP[ct]||'p-gray'}">${escapeHtml(ct)}</span>`).join('');
     // openContactDr은 crm-tab.js(드로어)가 window에 등록하는 함수 — 이 모듈의 책임 범위 밖
     return `<div class="conc" onclick="openContactDr(${p.id})" style="cursor:pointer">
       <div class="conav">${escapeHtml(av)}</div>
       <div style="flex:1;min-width:0">
-        <div class="connm">${escapeHtml(nm)}${p.nameEn && p.name ? `<span style="font-size:11px;color:var(--i4);font-weight:400;margin-left:6px">${escapeHtml(p.nameEn)}</span>` : ''}${leftPill(p)}</div>
+        <div class="connm">${escapeHtml(nm)}${p.nameEn && p.name ? `<span style="font-size:var(--fs-11);color:var(--i4);font-weight:400;margin-left:6px">${escapeHtml(p.nameEn)}</span>` : ''}${leftPill(p)}</div>
         <div class="conti">${escapeHtml(p.title||'')}</div>
         <div class="conps" style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">${evTags}</div>
       </div>
@@ -159,7 +159,7 @@ function renderCoSum(c){
   const yrs=c.events.map(e=>+e.year);
   return`<div class="sg">
     <div class="sc2"><div class="slbl">참여 유형 분포</div>${Object.entries(rc).map(([r,n])=>`<div class="br"><div class="brl">${escapeHtml(r)}</div><div class="brt"><div class="brf" style="width:${Math.round(n/mx*100)}%;background:${bc[r]||'#9C9890'}"></div></div><div class="brv">${n}회</div></div>`).join('')}</div>
-    <div class="sc2"><div class="slbl">관계 요약</div><div style="font-size:12px;color:var(--i2);line-height:2.1"><div>🗓 첫 참여 <strong>${yrs.length?Math.min(...yrs):'-'}년</strong></div><div>📅 최근 <strong>${yrs.length?Math.max(...yrs):'-'}년</strong></div><div>🎪 총 <strong>${c.events.length}회</strong></div><div>👤 담당자 <strong>${c.contacts.length}명</strong></div></div></div>
+    <div class="sc2"><div class="slbl">관계 요약</div><div style="font-size:var(--fs-12);color:var(--i2);line-height:2.1"><div>🗓 첫 참여 <strong>${yrs.length?Math.min(...yrs):'-'}년</strong></div><div>📅 최근 <strong>${yrs.length?Math.max(...yrs):'-'}년</strong></div><div>🎪 총 <strong>${c.events.length}회</strong></div><div>👤 담당자 <strong>${c.contacts.length}명</strong></div></div></div>
   </div>
   <div class="sc2"><div class="slbl" style="margin-bottom:7px">통합 기업명</div><div style="display:flex;gap:4px;flex-wrap:wrap">${c.branches.map(b=>`<span class="btag${b===c.mainBranch?' main':''}">${escapeHtml(b)}</span>`).join('')}</div></div>`;
 }

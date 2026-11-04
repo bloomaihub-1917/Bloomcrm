@@ -77,11 +77,11 @@ function groupSameItems(list){
 /* 정산에서 고쳤다는 표 — 이 줄은 신청서가 아니라 여기서 바뀌었다 */
 function editMark(i){
   if(!String(i.edited_at || '').trim()) return '';
-  return ` <span class="pill p-amber" style="font-size:9px" title="${escapeHtml(
+  return ` <span class="pill p-amber" style="font-size:var(--fs-9)" title="${escapeHtml(
     `정산에서 직접 고침 — ${i.edited_at}${i.edited_by ? ' · ' + i.edited_by : ''}`)}">정산수정</span>`;
 }
 
-const editHintRow = (i) => `<div style="grid-column:1/-1;font-size:10.5px;color:var(--i4);padding:2px 8px 6px">
+const editHintRow = (i) => `<div style="grid-column:1/-1;font-size:var(--fs-10_5);color:var(--i4);padding:2px 8px 6px">
   고치면 <b>청구액이 바뀝니다</b> — 이미 인보이스를 보냈다면 차액만큼 한 장 더 발행해야 해요.
   ${i.edited_at ? `지난 수정 ${escapeHtml(i.edited_at)}${i.edited_by ? ' · ' + escapeHtml(i.edited_by) : ''}` : ''}</div>`;
 
@@ -135,10 +135,10 @@ const designTargetList = (x) => `<datalist id="dsgt-${escAttr(x.id)}">${
 const designTargetRow = (x, i) => !isDesignItem(i) ? '' : `
   <div style="display:flex;gap:8px;align-items:center;padding:0 8px 7px;background:var(--i9);
       border-radius:0 0 6px 6px;margin-top:-1px">
-    <span style="font-size:10.5px;color:var(--i5);flex:0 0 auto">무엇을 디자인했나</span>
+    <span style="font-size:var(--fs-10_5);color:var(--i5);flex:0 0 auto">무엇을 디자인했나</span>
     <input class="fi" list="dsgt-${escAttr(x.id)}" value="${escapeHtml(i.note || '')}"
       placeholder="부스 타입이나 품목을 고르세요 — 예: Block System C 1부스"
-      style="flex:1;min-width:0;padding:4px 8px;font-size:11.5px"
+      style="flex:1;min-width:0;padding:4px 8px;font-size:var(--fs-11_5)"
       onchange="setItemField('${escAttr(i.id)}','note',this.value)">
   </div>`;
 
@@ -266,20 +266,20 @@ function dBilling(x){
      낸 돈이 남았으면 돌려줄지(환불) 남길지(위약금)만 묻는다. */
   const cancelCard = !cancelled ? '' : `
   <div class="uc" style="margin-bottom:16px">
-    <div style="font-size:11px;color:var(--i4);margin-bottom:6px">참가 취소 — 청구액은 받을 돈에서 빠졌어요</div>
-    <div style="display:flex;justify-content:space-between;font-size:12px;padding:2px 0">
+    <div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:6px">참가 취소 — 청구액은 받을 돈에서 빠졌어요</div>
+    <div style="display:flex;justify-content:space-between;font-size:var(--fs-12);padding:2px 0">
       <span style="color:var(--i3)">낸 돈(순입금)</span><b>${escapeHtml(fmtMoney(pb.net, pb.cur))}</b></div>
-    ${pb.refunded ? `<div style="display:flex;justify-content:space-between;font-size:11px;padding:1px 0">
+    ${pb.refunded ? `<div style="display:flex;justify-content:space-between;font-size:var(--fs-11);padding:1px 0">
       <span style="color:var(--i4)">환불 완료</span><span style="color:var(--re)">−${escapeHtml(fmtMoney(pb.refunded, pb.cur))}</span></div>` : ''}
-    ${pb.requested ? `<div style="display:flex;justify-content:space-between;font-size:11px;padding:1px 0;color:var(--am)">
+    ${pb.requested ? `<div style="display:flex;justify-content:space-between;font-size:var(--fs-11);padding:1px 0;color:var(--am)">
       <span>보내야 할 환불</span><span>${escapeHtml(fmtMoney(pb.requested, pb.cur))}</span></div>` : ''}
-    <div style="font-size:11px;margin-top:6px;color:${rfDue ? 'var(--am)' : 'var(--i4)'}">${
+    <div style="font-size:var(--fs-11);margin-top:6px;color:${rfDue ? 'var(--am)' : 'var(--i4)'}">${
       x.settled === 'yes' ? `위약금으로 남김${x.settled_note ? ` — ${escapeHtml(x.settled_note)}` : ''}`
       : rfDue ? `돌려줄지 정해야 할 돈 ${escapeHtml(fmtMoney(pb.net, pb.cur))} — 환불했으면 아래 입금 기록에 «환불»로 남기세요`
       : '낸 돈이 없어 정산할 게 없어요'}</div>
     ${rfDue ? `<div style="margin-top:8px;display:flex;gap:5px;flex-wrap:wrap;align-items:center">
         <input class="fi" id="stl-note-${escAttr(x.id)}" placeholder="사유 (예: 계약상 디파짓 환불 불가)"
-          style="flex:1 1 180px;min-width:0;font-size:11px;padding:5px">
+          style="flex:1 1 180px;min-width:0;font-size:var(--fs-11);padding:5px">
         <button class="btn bs" style="flex:0 0 auto" onclick="forfeitExh('${escAttr(x.id)}')">위약금으로 남김</button>
       </div>` : ''}
     ${x.settled === 'yes' ? `<div style="margin-top:8px;text-align:right">
@@ -289,15 +289,15 @@ function dBilling(x){
   return `${cancelCard}
   <div class="uc" style="margin-bottom:16px${cancelled ? ';display:none' : ''}">
     <div style="display:flex;justify-content:space-between;align-items:baseline">
-      <span style="font-size:11px;color:var(--i4)">청구 / 입금</span>
-      <span><b style="font-size:16px;color:${paid >= billed && billed > 0 ? 'var(--g)' : 'var(--i1)'}">${cur === 'USD' ? '$' : ''}${money(paid)}</b>
-        <span style="color:var(--i5);font-size:13px"> / ${money(billed)}${cur === 'USD' ? '' : '원'}</span></span>
+      <span style="font-size:var(--fs-11);color:var(--i4)">청구 / 입금</span>
+      <span><b style="font-size:var(--fs-16);color:${paid >= billed && billed > 0 ? 'var(--g)' : 'var(--i1)'}">${cur === 'USD' ? '$' : ''}${money(paid)}</b>
+        <span style="color:var(--i5);font-size:var(--fs-13)"> / ${money(billed)}${cur === 'USD' ? '' : '원'}</span></span>
     </div>
     <div style="margin:8px 0 4px">${progressBar(billed ? paid / billed * 100 : 0,
       paid >= billed && billed > 0 ? 'var(--g)' : 'var(--am)')}</div>
     ${/* 순입금 한 숫자만 보면 환불이 있었다는 사실이 사라진다. 통장·카드와 맞출 때는
          들어온 돈과 돌려준 돈이 갈라져 있어야 한다. */''}
-    ${pb.refunded || pb.requested ? `<div style="margin:6px 0 2px;padding:6px 8px;background:var(--i9);border-radius:6px;font-size:11px">
+    ${pb.refunded || pb.requested ? `<div style="margin:6px 0 2px;padding:6px 8px;background:var(--i9);border-radius:var(--rd-6);font-size:var(--fs-11)">
       <div style="display:flex;justify-content:space-between;padding:1px 0">
         <span style="color:var(--i4)">총 입금</span><span style="color:var(--i2)">${escapeHtml(fmtMoney(pb.gross, cur))}</span></div>
       ${pb.refunded ? `<div style="display:flex;justify-content:space-between;padding:1px 0">
@@ -320,19 +320,19 @@ function dBilling(x){
       });
       const ks = Object.keys(by);
       if(ks.length < 2) return '';
-      return `<div style="margin:6px 0 2px;padding:6px 8px;background:var(--i9);border-radius:6px">
+      return `<div style="margin:6px 0 2px;padding:6px 8px;background:var(--i9);border-radius:var(--rd-6)">
         ${ks.map(k => { const b = payPill(k === '(수단 미기재)' ? '' : k);
-          return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;padding:1px 0">
-            <span class="pill ${b.cls}" style="font-size:9px">${escapeHtml(k === '(수단 미기재)' ? '수단 미기재' : b.label)}</span>
+          return `<div style="display:flex;justify-content:space-between;align-items:center;font-size:var(--fs-11);padding:1px 0">
+            <span class="pill ${b.cls}" style="font-size:var(--fs-9)">${escapeHtml(k === '(수단 미기재)' ? '수단 미기재' : b.label)}</span>
             <span style="color:var(--i2)">${Object.keys(by[k]).map(c => escapeHtml(fmtMoney(by[k][c], c))).join(' · ')}</span>
           </div>`; }).join('')}
       </div>`;
     })()}
-    ${mixedCurrency(x.id) ? `<div style="font-size:11px;color:var(--i3);background:var(--i9);padding:6px 8px;border-radius:6px;margin:6px 0">
+    ${mixedCurrency(x.id) ? `<div style="font-size:var(--fs-11);color:var(--i3);background:var(--i9);padding:6px 8px;border-radius:var(--rd-6);margin:6px 0">
       이 기업은 <b>${mixedCurrency(x.id).join(' / ')}</b>가 함께 있어요.
       인보이스는 원화로 받고 엑스렌탈은 해외 카드로 결제하는 경우가 있어 <b>정상</b>입니다.
       위 합계는 <b>${currencyOf(x.id)}</b> 건만 더한 값이니, 나머지는 아래 목록에서 통화별로 확인하세요.</div>` : ''}
-    <div style="font-size:11px;color:${
+    <div style="font-size:var(--fs-11);color:${
       st.state === 'over' ? 'var(--re)' : (rest > 0 ? 'var(--am)' : 'var(--i4)')}">
       ${st.state === 'settled' ? `완납 처리됨${x.settled_note ? ` — ${escapeHtml(x.settled_note)}` : ''}`
         : billed === 0 ? '금액 항목을 추가하거나 인보이스를 발행해주세요'
@@ -341,23 +341,23 @@ function dBilling(x){
 </div>
     ${/* 입금 기한 — 비워 두면 행사 공통 기한(설정 › 일정 › 입금)을 쓴다. 행사 뒤에
          내기로 미리 합의한 기업은 여기 날짜를 행사 뒤로 적으면 «입금 예정»으로 분류된다. */''}
-    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;margin-top:5px;color:var(--i4)">
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:var(--fs-11);margin-top:5px;color:var(--i4)">
       <span>입금 기한</span>
-      <input type="date" class="fi" style="width:132px;padding:2px 6px;font-size:11px" value="${escapeHtml(x.pay_due_date || '')}"
+      <input type="date" class="fi" style="width:132px;padding:2px 6px;font-size:var(--fs-11)" value="${escapeHtml(x.pay_due_date || '')}"
         onchange="setExhField('${escAttr(x.id)}','pay_due_date',this.value,'입금 기한')">
       <span style="color:${st.overdue && rest > 0 ? 'var(--re)' : 'var(--i5)'}">${
         !x.pay_due_date ? (st.due ? `행사 공통 기한 ${escapeHtml(st.due)} 적용 중` : '기한 없음 — 재촉 대상에서 빠져요')
         : evPayDue && x.pay_due_date > evPayDue ? `행사 공통(${escapeHtml(evPayDue)})보다 늦게 — 사후 납부 합의`
         : ''}${st.overdue && rest > 0 ? ` · ${daysSince(st.due)}일 지남` : (rest > 0 && st.due ? ' · 입금 예정' : '')}</span>
     </div>
-    ${noAmount.length ? `<div style="font-size:11px;color:var(--am);margin-top:3px">
+    ${noAmount.length ? `<div style="font-size:var(--fs-11);color:var(--am);margin-top:3px">
       ⚠ 금액이 안 적힌 인보이스 ${noAmount.length}건이 있어 청구액이 실제보다 적을 수 있어요</div>` : ''}
     ${/* 인보이스와 어긋난 금액은 바로 아래 «추가 발행 필요»에서 무엇을 해야 하는지까지
          함께 말한다 — 같은 사실을 두 곳에서 말하면 한 곳만 고치게 된다. */''}
     ${rest !== 0 && billed > 0 && st.state !== 'settled' ? `
       <div style="margin-top:8px;display:flex;gap:5px;flex-wrap:wrap;align-items:center">
         <input class="fi" id="stl-note-${escAttr(x.id)}" placeholder="완납 처리 사유 (예: 송금 수수료 차감)"
-          style="flex:1 1 180px;min-width:0;font-size:11px;padding:5px">
+          style="flex:1 1 180px;min-width:0;font-size:var(--fs-11);padding:5px">
         <button class="btn bs" style="flex:0 0 auto" onclick="settleExh('${escAttr(x.id)}')">완납으로 닫기</button>
       </div>` : ''}
     ${st.state === 'settled' ? `<div style="margin-top:8px;text-align:right">
@@ -381,18 +381,18 @@ function dBilling(x){
     // 확인한 시점의 숫자와 지금이 같으면 덮어 둔다 — 또 바뀌면 스스로 되살아난다
     if(String(x.gap_ack || '') === gapAckToken(gap)) return ackedNote(x, 'gap', '추가 발행 필요');
     return `<div class="uc" style="border-left:3px solid var(--${more ? 're' : 'am'});margin-bottom:10px">
-      <div style="font-size:12px;font-weight:700;color:var(--${more ? 're' : 'am'})">${
+      <div style="font-size:var(--fs-12);font-weight:700;color:var(--${more ? 're' : 'am'})">${
         more ? '추가 발행 필요' : '발행액이 청구액보다 많아요'} ${escapeHtml(fmtMoney(Math.abs(gap.diff), gap.cur))}</div>
-      <div style="font-size:11px;color:var(--i3);margin-top:4px">
+      <div style="font-size:var(--fs-11);color:var(--i3);margin-top:4px">
         금액 항목 <b>${escapeHtml(fmtMoney(gap.billed, gap.cur))}</b> ·
         발행한 인보이스 <b>${escapeHtml(fmtMoney(gap.invoiced, gap.cur))}</b>${
         gap.refunded ? ` − 환불 <b>${escapeHtml(fmtMoney(gap.refunded, gap.cur))}</b> = <b>${
           escapeHtml(fmtMoney(gap.net, gap.cur))}</b>` : ''}${
         edited.length ? ` — 정산에서 직접 고친 항목 ${edited.length}건이 있어요` : ''}
       </div>
-      ${gap.external ? `<div style="font-size:10.5px;color:var(--i4);margin-top:4px">
+      ${gap.external ? `<div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:4px">
         엑스렌탈 직접 청구 <b>${escapeHtml(fmtMoney(gap.external, gap.cur))}</b>은 우리가 낼 장에서 이미 뺐어요.</div>` : ''}
-      <div style="font-size:10.5px;color:var(--i4);margin-top:4px">${
+      <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:4px">${
         more ? '차액만큼 한 장 더 발행하면 이 알림은 사라져요 — 아래 인보이스에서 발행하세요.'
              : '옛 인보이스를 무효로 두거나, 금액 항목이 빠지지 않았는지 보세요.'}</div>
       <div style="margin-top:6px;text-align:right">
@@ -405,12 +405,12 @@ function dBilling(x){
     const r = needsReissue(x.id);
     if(r && String(x.reissue_ack || '') === reissueAckToken(r)) return ackedNote(x, 'reissue', '인보이스 발행 뒤 변경');
     return r ? `<div class="uc" style="border-left:3px solid var(--re);margin-bottom:10px">
-      <div style="font-size:12px;font-weight:700;color:var(--re)">인보이스 발행 뒤에 신청이 바뀌었어요</div>
-      <div style="font-size:11px;color:var(--i3);margin-top:4px">
+      <div style="font-size:var(--fs-12);font-weight:700;color:var(--re)">인보이스 발행 뒤에 신청이 바뀌었어요</div>
+      <div style="font-size:var(--fs-11);color:var(--i3);margin-top:4px">
         마지막 인보이스 ${escapeHtml(r.last)} 이후 접수 ${r.apps.length}건 —
         ${r.apps.map(a => escapeHtml(`${appSeqLabel(a)} ${a.received_at}${a.reason ? ' (' + a.reason + ')' : ''}`)).join(' · ')}
       </div>
-      <div style="font-size:10.5px;color:var(--i4);margin-top:4px">청구액이 맞는지 보고, 다르면 옛 인보이스를 무효로 두고 다시 발행하세요.</div>
+      <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:4px">청구액이 맞는지 보고, 다르면 옛 인보이스를 무효로 두고 다시 발행하세요.</div>
       <div style="margin-top:6px;text-align:right">
         <button class="btn bs" onclick="ackExhAlert('${escAttr(x.id)}','reissue')"
           title="다시 낼 장이 없으면 덮어 두세요 — 접수가 또 들어오면 다시 알려드려요">확인함 · 이 알림 끄기</button></div>
@@ -449,11 +449,11 @@ function dBilling(x){
           ${open
             ? `<input class="fi bl-amt-in" value="${escapeHtml(i.amount || '')}" placeholder="금액"
                  onchange="setItemFieldDirect('${escAttr(i.id)}','amount',this.value)">`
-            : `<span class="bl-amt-in" style="text-align:right;font-size:12px;padding:5px 2px">${
+            : `<span class="bl-amt-in" style="text-align:right;font-size:var(--fs-12);padding:5px 2px">${
                  i.amount ? escapeHtml(money(i.amount)) : '<span style="color:var(--am)">금액 미입력</span>'}</span>`}
           ${open
             ? curSelect(i.currency, `setItemFieldDirect('${escAttr(i.id)}','currency',this.value)`)
-            : `<span style="font-size:11px;color:var(--i5);text-align:center">${escapeHtml(i.currency || 'KRW')}</span>`}
+            : `<span style="font-size:var(--fs-11);color:var(--i5);text-align:center">${escapeHtml(i.currency || 'KRW')}</span>`}
           ${open ? `
             <button class="btn bs bl-mini" onclick="voidExhItem('${escAttr(i.id)}')"
               title="${isVoided(i) ? '취소를 되돌립니다' : '취소 처리 — 지우지 않고 내려서 이력이 남아요'}">${isVoided(i) ? '↩' : '⊘'}</button>
@@ -476,45 +476,45 @@ function dBilling(x){
           const qty = gr.rows.reduce((a, i) => a + (Number(i.qty) || 0), 0);
           const amt = gr.rows.reduce((a, i) => a + itemAmount(i), 0);
           return `
-        <div class="bl-row bl-item" style="padding:6px 8px;background:var(--i9);border-radius:6px;cursor:pointer"
+        <div class="bl-row bl-item" style="padding:6px 8px;background:var(--i9);border-radius:var(--rd-6);cursor:pointer"
           onclick="toggleItemGroup('${escAttr(gkey)}')"
           title="${open ? '접어서 한 줄로 봅니다' : `회차별로 ${gr.rows.length}줄이에요 — 눌러서 펼치고 고칩니다`}">
           <span class="pill ${isBillable(head) ? 'p-gray' : 'p-amber'}" style="text-align:center">${
             isBillable(head) ? escapeHtml(l) : '제외'}</span>
           <span class="bl-nm" style="${isBillable(head) ? '' : 'color:var(--i5)'}"
             title="${escapeHtml(head.name || '')}">${escapeHtml(head.name || '')}
-            <span class="pill p-gray" style="font-size:9px">${open ? '▾' : '▸'} ${gr.rows.length}줄</span></span>
+            <span class="pill p-gray" style="font-size:var(--fs-9)">${open ? '▾' : '▸'} ${gr.rows.length}줄</span></span>
           <span class="bl-qty">${qty || ''}${
             head.unit_price ? `<span class="bl-up">${qty ? ' × ' : ''}${money(head.unit_price)}</span>` : ''}</span>
-          <span class="bl-amt-in" style="text-align:right;font-size:12px;padding:5px 2px;font-weight:700">${money(amt)}</span>
-          <span style="font-size:11px;color:var(--i5);text-align:center">${escapeHtml(head.currency || 'KRW')}</span>
+          <span class="bl-amt-in" style="text-align:right;font-size:var(--fs-12);padding:5px 2px;font-weight:700">${money(amt)}</span>
+          <span style="font-size:var(--fs-11);color:var(--i5);text-align:center">${escapeHtml(head.currency || 'KRW')}</span>
           <span></span><span></span>
         </div>` + (open ? gr.rows.map(itemRow).join('') : '');
         }).join('')
         + `<div class="bl-row bl-item bl-subtotal">
             <span></span>
-            <span style="min-width:0;font-size:11px;color:var(--i4)">${escapeHtml(l)} 소계 <span style="color:var(--i5)">${g.length}건</span></span>
+            <span style="min-width:0;font-size:var(--fs-11);color:var(--i4)">${escapeHtml(l)} 소계 <span style="color:var(--i5)">${g.length}건</span></span>
             <span class="bl-qty"></span>
-            <span class="bl-amt" style="font-size:12px">${sumText(sumByCurrency(g))}</span>
+            <span class="bl-amt" style="font-size:var(--fs-12)">${sumText(sumByCurrency(g))}</span>
             <span></span><span></span><span></span>
           </div>`;
-      }).join('') : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">아직 항목이 없어요</div>'}
+      }).join('') : '<div style="font-size:var(--fs-11_5);color:var(--i5);padding:8px 2px">아직 항목이 없어요</div>'}
       ${items.length ? `<div class="bl-row bl-item bl-total">
         <span></span>
-        <span style="min-width:0;font-size:12px;font-weight:700">총계 <span style="font-weight:400;color:var(--i4)">${items.length}건</span></span>
+        <span style="min-width:0;font-size:var(--fs-12);font-weight:700">총계 <span style="font-weight:400;color:var(--i4)">${items.length}건</span></span>
         <span class="bl-qty"></span>
-        <span class="bl-amt" style="font-size:13px">${sumText(sumByCurrency(items))}</span>
+        <span class="bl-amt" style="font-size:var(--fs-13)">${sumText(sumByCurrency(items))}</span>
         <span></span><span></span><span></span>
       </div>
       ${(() => {
         const ex = excludedSum(items);
         const ks = Object.keys(ex).filter(k => ex[k]);
-        return ks.length ? `<div style="font-size:10.5px;color:var(--i4);padding:4px 8px 0;text-align:right">
+        return ks.length ? `<div style="font-size:var(--fs-10_5);color:var(--i4);padding:4px 8px 0;text-align:right">
           청구 제외 ${ks.map(k => fmtMoney(ex[k], k)).join(' + ')}
           <span style="color:var(--i5)">— 추가 배지처럼 우리가 청구하지 않는 항목이에요</span></div>` : '';
       })()}` : ''}
     </div>
-    <div style="font-size:11px;color:var(--i4);padding:6px 2px 0;border-top:1px dashed var(--i7);margin-top:6px">
+    <div style="font-size:var(--fs-11);color:var(--i4);padding:6px 2px 0;border-top:1px dashed var(--i7);margin-top:6px">
       항목을 넣고 빼는 건 <b>신청항목</b> 탭의 접수 회차에서 해요 — 그래야 «몇 차에 무엇이 늘었나»가 남습니다.
       ${openAppFor(x.id)
         ? `<button class="btn bs" style="margin-left:4px" onclick="switchExhDT('apply')">신청항목으로</button>`
@@ -526,7 +526,7 @@ function dBilling(x){
       ${invs.length ? invs.map(v => `
         <div style="padding:8px 10px;background:var(--i9);border-radius:7px${v.status === 'void' ? ';opacity:.55' : ''}">
           <div class="bl-row bl-inv-hd">
-            <span style="min-width:0;font-size:12px;font-weight:700${v.status === 'void' ? ';text-decoration:line-through' : ''}">${escapeHtml(v.title || '인보이스')}</span>
+            <span style="min-width:0;font-size:var(--fs-12);font-weight:700${v.status === 'void' ? ';text-decoration:line-through' : ''}">${escapeHtml(v.title || '인보이스')}</span>
             ${v.status === 'void' ? '<span class="pill p-gray">무효</span>' : '<span></span>'}
             <input class="fi bl-amt-in" value="${escapeHtml(v.amount ?? '')}" placeholder="금액 미입력"
               onchange="setInvField('${escAttr(v.id)}','amount',this.value)">
@@ -534,13 +534,13 @@ function dBilling(x){
             <button class="btn bs" onclick="toggleVoidInvoice('${escAttr(v.id)}')" title="${v.status === 'void' ? '되살리기' : '취소·대체됨으로 표시(합계에서 제외)'}">${v.status === 'void' ? '되살리기' : '무효'}</button>
             <button class="btn bs" onclick="delExhInvoice('${escAttr(v.id)}')">✕</button>
           </div>
-          ${v.status === 'void' && v.void_note ? `<div style="font-size:10.5px;color:var(--i5);margin-top:3px">${escapeHtml(v.void_note)}</div>` : ''}
+          ${v.status === 'void' && v.void_note ? `<div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:3px">${escapeHtml(v.void_note)}</div>` : ''}
           <div style="display:flex;gap:6px;margin-top:6px;align-items:center;flex-wrap:wrap">
-            <label style="font-size:10.5px;color:var(--i4)">발송</label>
-            <input type="date" class="fi" style="flex:1 1 128px;min-width:0;padding:3px 6px;font-size:11px" value="${escapeHtml(v.sent_at || '')}"
+            <label style="font-size:var(--fs-10_5);color:var(--i4)">발송</label>
+            <input type="date" class="fi" style="flex:1 1 128px;min-width:0;padding:3px 6px;font-size:var(--fs-11)" value="${escapeHtml(v.sent_at || '')}"
               onchange="setInvField('${escAttr(v.id)}','sent_at',this.value)">
-            <label style="font-size:10.5px;color:var(--i4)">입금 예정</label>
-            <input type="date" class="fi" style="flex:1 1 128px;min-width:0;padding:3px 6px;font-size:11px" value="${escapeHtml(v.due_date || '')}"
+            <label style="font-size:var(--fs-10_5);color:var(--i4)">입금 예정</label>
+            <input type="date" class="fi" style="flex:1 1 128px;min-width:0;padding:3px 6px;font-size:var(--fs-11)" value="${escapeHtml(v.due_date || '')}"
               onchange="setInvField('${escAttr(v.id)}','due_date',this.value)">
             ${!v.sent_at ? '<span class="pill p-amber">미발송</span>'
               : (v.due_date && daysSince(v.due_date) > 0 && paid < billed) ? `<span class="pill p-red" style="background:var(--rb);color:var(--re)">${daysSince(v.due_date)}일 지남</span>` : ''}
@@ -550,17 +550,17 @@ function dBilling(x){
               onclick="exportExhInvoice('${escAttr(v.id)}')"
               title="정산의 금액 항목을 인보이스 양식(국문·영문)에 채워 엑셀로 내려받습니다">양식 내려받기</button>
           </div>
-        </div>`).join('') : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">발행한 인보이스가 없어요</div>'}
+        </div>`).join('') : '<div style="font-size:var(--fs-11_5);color:var(--i5);padding:8px 2px">발행한 인보이스가 없어요</div>'}
     </div>
     <div class="bl-row bl-inv-add">
-      <input class="fi" id="iv-t-${escAttr(x.id)}" placeholder="제목 (예: 부스+비품)" style="flex:1 1 140px;min-width:0;font-size:11.5px;padding:6px">
-      <input class="fi" id="iv-a-${escAttr(x.id)}" placeholder="금액" style="flex:1 1 96px;min-width:0;font-size:11.5px;padding:6px;text-align:right"
+      <input class="fi" id="iv-t-${escAttr(x.id)}" placeholder="제목 (예: 부스+비품)" style="flex:1 1 140px;min-width:0;font-size:var(--fs-11_5);padding:6px">
+      <input class="fi" id="iv-a-${escAttr(x.id)}" placeholder="금액" style="flex:1 1 96px;min-width:0;font-size:var(--fs-11_5);padding:6px;text-align:right"
         value="${items.length && !invs.length ? billedAmount(x.id) : ''}">
       <select class="fi bl-cur" id="iv-cur-${escAttr(x.id)}">
         ${currencies().map(c => `<option value="${c}"${currencyOf(x.id) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
       <button class="btn bp bs" style="flex:0 0 auto" onclick="addExhInvoice('${escAttr(x.id)}')">발행</button>
     </div>
-    <div style="font-size:10.5px;color:var(--i5);margin-top:5px">
+    <div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:5px">
       금액 항목 합계가 기본값으로 들어가요. 부스+비품 따로, 그래픽 따로 나눠 발행해도 됩니다.<br>
       <b>양식 내려받기</b>는 ${window.invoiceFolderName?.(exhEvent)
         ? `저장 폴더(<b>${escapeHtml(window.invoiceFolderName(exhEvent))}</b>)의 기업 폴더에 바로 저장돼요`
@@ -582,7 +582,7 @@ function dBilling(x){
      눌러 열 수 있게 한다. */
   const need = taxNeed(x);
   if(need.kind === 'na' && exhDrUi.taxOpenFor !== x.id) return sct('세금계산서', `
-    <div style="font-size:11.5px;color:var(--i4);padding:8px 2px;line-height:1.7">
+    <div style="font-size:var(--fs-11_5);color:var(--i4);padding:8px 2px;line-height:1.7">
       <b style="color:var(--i3)">해당 없음</b> — ${
         need.why === '카드 완납' ? '카드로 완납한 곳이라 카드사 매출로 잡혀요.'
         : need.why === '청구 없음' ? '청구할 금액 항목이 아직 없어요.'
@@ -592,17 +592,17 @@ function dBilling(x){
     </div>`);
 
   return sct('세금계산서', `
-    ${need.kind === 'pre' ? `<div style="font-size:11px;color:var(--i3);background:var(--i9);border-left:3px solid var(--am);padding:6px 8px;border-radius:6px;margin-bottom:8px">
+    ${need.kind === 'pre' ? `<div style="font-size:var(--fs-11);color:var(--i3);background:var(--i9);border-left:3px solid var(--am);padding:6px 8px;border-radius:var(--rd-6);margin-bottom:8px">
       <b>선발행(청구용)</b> — 아직 못 받은 돈이 있어요. 세금계산서를 먼저 끊어야 입금됩니다.</div>` : ''}
-    ${need.kind === 'after' ? `<div style="font-size:11px;color:var(--i3);background:var(--i9);padding:6px 8px;border-radius:6px;margin-bottom:8px">
+    ${need.kind === 'after' ? `<div style="font-size:var(--fs-11);color:var(--i3);background:var(--i9);padding:6px 8px;border-radius:var(--rd-6);margin-bottom:8px">
       <b>사후 발행</b> — 계좌이체로 완납된 곳이에요. 받은 돈에 대해 끊어 주세요.</div>` : ''}
-    ${need.kind === 'check' ? `<div style="font-size:11px;color:var(--i3);background:var(--i9);border-left:3px solid var(--am);padding:6px 8px;border-radius:6px;margin-bottom:8px">
+    ${need.kind === 'check' ? `<div style="font-size:var(--fs-11);color:var(--i3);background:var(--i9);border-left:3px solid var(--am);padding:6px 8px;border-radius:var(--rd-6);margin-bottom:8px">
       <b>결제 수단 확인</b> — 입금에 수단이 안 적혀 있어요. 카드면 발행할 것이 없고, 계좌이체면 끊어야 합니다.</div>` : ''}
     <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px">
       ${taxes.length ? taxes.map(v => `
         <div style="padding:8px 10px;background:var(--i9);border-radius:7px${v.status === 'void' ? ';opacity:.55' : ''}">
           <div class="bl-row bl-inv-hd">
-            <span style="min-width:0;font-size:12px;font-weight:700${v.status === 'void' ? ';text-decoration:line-through' : ''}">${escapeHtml(v.title || '세금계산서')}</span>
+            <span style="min-width:0;font-size:var(--fs-12);font-weight:700${v.status === 'void' ? ';text-decoration:line-through' : ''}">${escapeHtml(v.title || '세금계산서')}</span>
             ${v.status === 'void' ? '<span class="pill p-gray">무효</span>' : '<span></span>'}
             <input class="fi bl-amt-in" value="${escapeHtml(v.amount ?? '')}" placeholder="금액 미입력"
               onchange="setTaxField('${escAttr(v.id)}','amount',this.value)">
@@ -610,31 +610,31 @@ function dBilling(x){
             <button class="btn bs" onclick="toggleVoidTax('${escAttr(v.id)}')" title="${v.status === 'void' ? '되살리기' : '취소·수정 발행됨으로 표시(합계에서 제외)'}">${v.status === 'void' ? '되살리기' : '무효'}</button>
             <button class="btn bs" onclick="delExhTax('${escAttr(v.id)}')">✕</button>
           </div>
-          ${v.status === 'void' && v.void_note ? `<div style="font-size:10.5px;color:var(--i5);margin-top:3px">${escapeHtml(v.void_note)}</div>` : ''}
+          ${v.status === 'void' && v.void_note ? `<div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:3px">${escapeHtml(v.void_note)}</div>` : ''}
           <div style="margin-top:6px">${taxStageBar(v)}</div>
-        </div>`).join('') : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">발행한 세금계산서가 없어요</div>'}
+        </div>`).join('') : '<div style="font-size:var(--fs-11_5);color:var(--i5);padding:8px 2px">발행한 세금계산서가 없어요</div>'}
     </div>
     <div class="bl-row bl-inv-add">
-      <input class="fi" id="tx-t-${escAttr(x.id)}" placeholder="제목 (예: 부스+비품)" style="flex:1 1 140px;min-width:0;font-size:11.5px;padding:6px">
-      <input class="fi" id="tx-a-${escAttr(x.id)}" placeholder="금액" style="flex:1 1 96px;min-width:0;font-size:11.5px;padding:6px;text-align:right">
+      <input class="fi" id="tx-t-${escAttr(x.id)}" placeholder="제목 (예: 부스+비품)" style="flex:1 1 140px;min-width:0;font-size:var(--fs-11_5);padding:6px">
+      <input class="fi" id="tx-a-${escAttr(x.id)}" placeholder="금액" style="flex:1 1 96px;min-width:0;font-size:var(--fs-11_5);padding:6px;text-align:right">
       <select class="fi bl-cur" id="tx-cur-${escAttr(x.id)}">
         ${currencies().map(c => `<option value="${c}"${currencyOf(x.id) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
       <button class="btn bp bs" style="flex:0 0 auto" onclick="addExhTax('${escAttr(x.id)}')">추가</button>
     </div>
-    <div style="font-size:10.5px;color:var(--i5);margin:5px 0 10px">
+    <div style="font-size:var(--fs-10_5);color:var(--i5);margin:5px 0 10px">
       인보이스처럼 나눠 발행하거나(부스+비품 먼저, 그래픽 나중), 통화·금액 오류로 다시 발행할 때는
       옛 건을 무효로 두고 새로 추가하세요 — 지우면 왜 두 장인지 이력이 사라져요.</div>
     <div class="fgr bl-tax">
       <div class="fg"><label class="fl">담당자</label>
-        <input class="fi" style="font-size:12px" value="${escapeHtml(x.tax_contact_name || '')}"
+        <input class="fi" style="font-size:var(--fs-12)" value="${escapeHtml(x.tax_contact_name || '')}"
           onchange="setExhField('${escAttr(x.id)}','tax_contact_name',this.value,'세금계산서 담당자')"></div>
       <div class="fg"><label class="fl">이메일</label>
-        <input class="fi" style="font-size:12px" value="${escapeHtml(x.tax_contact_email || '')}"
+        <input class="fi" style="font-size:var(--fs-12)" value="${escapeHtml(x.tax_contact_email || '')}"
           onchange="setExhField('${escAttr(x.id)}','tax_contact_email',this.value,'세금계산서 담당자')"></div>
     </div>
     <div class="fgr bl-tax">
       <div class="fg"><label class="fl">연락처</label>
-        <input class="fi" style="font-size:12px" value="${escapeHtml(x.tax_contact_phone || '')}"
+        <input class="fi" style="font-size:var(--fs-12)" value="${escapeHtml(x.tax_contact_phone || '')}"
           onchange="setExhField('${escAttr(x.id)}','tax_contact_phone',this.value,'세금계산서 담당자')"></div>
     </div>`);
   })()}
@@ -642,36 +642,36 @@ function dBilling(x){
   ${sct('입금 내역', `
     <div style="display:flex;flex-direction:column;gap:1px;margin-bottom:8px">
       ${ins.length ? ins.map((p, i) => `
-        <div class="bl-row bl-pay" style="padding:6px 8px;background:var(--i9);border-radius:6px">
-          <select class="fi" style="font-size:10px;padding:3px 2px;min-width:0"
+        <div class="bl-row bl-pay" style="padding:6px 8px;background:var(--i9);border-radius:var(--rd-6)">
+          <select class="fi" style="font-size:var(--fs-10);padding:3px 2px;min-width:0"
             title="결제 수단" onchange="setPayField('${escAttr(p.id)}','method',this.value)">
             <option value=""${p.method ? '' : ' selected'}>미기재</option>
             ${payMethods().map(o => `<option value="${escapeHtml(o.code)}"${p.method === o.code ? ' selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}
           </select>
-          <input type="date" class="fi" style="font-size:11px;padding:3px 4px;min-width:0" value="${escapeHtml(p.paid_at || '')}"
+          <input type="date" class="fi" style="font-size:var(--fs-11);padding:3px 4px;min-width:0" value="${escapeHtml(p.paid_at || '')}"
             onchange="setPayField('${escAttr(p.id)}','paid_at',this.value)">
-          <input class="fi" style="font-size:11px;padding:3px 6px;min-width:0" value="${escapeHtml(p.note || '')}"
+          <input class="fi" style="font-size:var(--fs-11);padding:3px 6px;min-width:0" value="${escapeHtml(p.note || '')}"
             placeholder="${ins.length > 1 ? `${i + 1}차 · ` : ''}비고 (대납·승인번호 등)"
             onchange="setPayField('${escAttr(p.id)}','note',this.value)">
           <input class="fi bl-amt-in" value="${escapeHtml(p.amount || '')}" placeholder="금액"
             onchange="setPayField('${escAttr(p.id)}','amount',this.value)">
           ${curSelect(p.currency, `setPayField('${escAttr(p.id)}','currency',this.value)`)}
           <button class="btn bs" onclick="delExhPayment('${escAttr(p.id)}')">✕</button>
-        </div>`).join('') : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">입금 내역이 없어요</div>'}
+        </div>`).join('') : '<div style="font-size:var(--fs-11_5);color:var(--i5);padding:8px 2px">입금 내역이 없어요</div>'}
     </div>
     <div class="bl-row bl-pay-add">
-      <select class="fi" id="py-m-${escAttr(x.id)}" style="flex:0 0 116px;font-size:11px;padding:6px" title="결제 수단">
+      <select class="fi" id="py-m-${escAttr(x.id)}" style="flex:0 0 116px;font-size:var(--fs-11);padding:6px" title="결제 수단">
         ${payMethods().map(o => `<option value="${escapeHtml(o.code)}">${escapeHtml(o.label)}</option>`).join('')}
       </select>
-      <input type="date" class="fi" id="py-d-${escAttr(x.id)}" style="flex:1 1 120px;min-width:0;font-size:11.5px;padding:6px" value="${td()}">
-      <input class="fi" id="py-n-${escAttr(x.id)}" placeholder="비고(승인번호 등)" style="flex:1 1 90px;min-width:0;font-size:11.5px;padding:6px">
-      <input class="fi" id="py-a-${escAttr(x.id)}" placeholder="입금액" style="flex:1 1 100px;min-width:0;font-size:11.5px;padding:6px;text-align:right"
+      <input type="date" class="fi" id="py-d-${escAttr(x.id)}" style="flex:1 1 120px;min-width:0;font-size:var(--fs-11_5);padding:6px" value="${td()}">
+      <input class="fi" id="py-n-${escAttr(x.id)}" placeholder="비고(승인번호 등)" style="flex:1 1 90px;min-width:0;font-size:var(--fs-11_5);padding:6px">
+      <input class="fi" id="py-a-${escAttr(x.id)}" placeholder="입금액" style="flex:1 1 100px;min-width:0;font-size:var(--fs-11_5);padding:6px;text-align:right"
         value="${rest > 0 ? rest : ''}">
       <select class="fi bl-cur" id="py-cur-${escAttr(x.id)}">
         ${currencies().map(c => `<option value="${c}"${currencyOf(x.id) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
       <button class="btn bp bs" style="flex:0 0 auto" onclick="addExhPayment('${escAttr(x.id)}')">추가</button>
     </div>
-    <div style="font-size:10.5px;color:var(--i5);margin-top:5px">
+    <div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:5px">
       분할 입금이면 여러 번 추가하세요.</div>`)}
 
   ${sct('환불 내역', `
@@ -681,19 +681,19 @@ function dBilling(x){
         // 체크를 누르면 완료로 바뀌면서 그때 비로소 잔액에 반영된다.
         const pend = isPendingRefund(p);
         return `
-        <div class="bl-row bl-pay" style="padding:6px 8px;background:${pend ? 'var(--ab)' : 'var(--i9)'};border-radius:6px">
+        <div class="bl-row bl-pay" style="padding:6px 8px;background:${pend ? 'var(--ab)' : 'var(--i9)'};border-radius:var(--rd-6)">
           <button onclick="toggleRefundDone('${escAttr(p.id)}')"
             title="${pend ? '환불 완료로 표시 (합계에서 차감됩니다)' : '환불 요청 상태로 되돌리기'}"
-            style="display:flex;align-items:center;gap:5px;border:none;background:none;padding:0;font-size:10px;font-weight:700;color:${pend ? 'var(--am)' : 'var(--re)'}">
-            <span style="width:16px;height:16px;border-radius:4px;flex-shrink:0;line-height:1;
+            style="display:flex;align-items:center;gap:5px;border:none;background:none;padding:0;font-size:var(--fs-10);font-weight:700;color:${pend ? 'var(--am)' : 'var(--re)'}">
+            <span style="width:16px;height:16px;border-radius:var(--rd-4);flex-shrink:0;line-height:1;
               border:1.5px solid ${pend ? 'var(--am)' : 'var(--re)'};background:${pend ? 'transparent' : 'var(--re)'};
-              color:#fff;display:flex;align-items:center;justify-content:center">${pend ? '' : '✓'}</span>
+              color:var(--on);display:flex;align-items:center;justify-content:center">${pend ? '' : '✓'}</span>
             ${pend ? '요청' : '완료'}
           </button>
-          <input type="date" class="fi" style="padding:3px 6px;font-size:11px" value="${escapeHtml(pend ? (p.requested_at || '') : (p.paid_at || ''))}"
+          <input type="date" class="fi" style="padding:3px 6px;font-size:var(--fs-11)" value="${escapeHtml(pend ? (p.requested_at || '') : (p.paid_at || ''))}"
             title="${pend ? '요청일' : '환불일'}"
             onchange="setPayField('${escAttr(p.id)}','${pend ? 'requested_at' : 'paid_at'}',this.value)">
-          <input class="fi" style="min-width:0;font-size:11px;padding:3px 6px" placeholder="사유"
+          <input class="fi" style="min-width:0;font-size:var(--fs-11);padding:3px 6px" placeholder="사유"
             value="${escapeHtml(p.reason || p.note || '')}"
             onchange="setPayField('${escAttr(p.id)}','reason',this.value)">
           <input class="fi bl-amt-in" value="${escapeHtml(p.amount || '')}" placeholder="금액" style="color:var(--re)"
@@ -701,18 +701,18 @@ function dBilling(x){
           ${curSelect(p.currency, `setPayField('${escAttr(p.id)}','currency',this.value)`)}
           <button class="btn bs" onclick="delExhPayment('${escAttr(p.id)}')">✕</button>
         </div>`;
-      }).join('') : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">환불 내역이 없어요</div>'}
+      }).join('') : '<div style="font-size:var(--fs-11_5);color:var(--i5);padding:8px 2px">환불 내역이 없어요</div>'}
     </div>
     <div class="bl-row bl-pay-add">
       <span class="pill p-red" style="text-align:center">환불</span>
-      <input type="date" class="fi" id="rf-d-${escAttr(x.id)}" style="flex:1 1 130px;min-width:0;font-size:11.5px;padding:6px" value="${td()}">
-      <input class="fi" id="rf-r-${escAttr(x.id)}" placeholder="사유 (예: 부스 축소)" style="flex:1 1 100px;min-width:0;font-size:11.5px;padding:6px">
-      <input class="fi" id="rf-a-${escAttr(x.id)}" placeholder="환불액" style="flex:1 1 100px;min-width:0;font-size:11.5px;padding:6px;text-align:right">
+      <input type="date" class="fi" id="rf-d-${escAttr(x.id)}" style="flex:1 1 130px;min-width:0;font-size:var(--fs-11_5);padding:6px" value="${td()}">
+      <input class="fi" id="rf-r-${escAttr(x.id)}" placeholder="사유 (예: 부스 축소)" style="flex:1 1 100px;min-width:0;font-size:var(--fs-11_5);padding:6px">
+      <input class="fi" id="rf-a-${escAttr(x.id)}" placeholder="환불액" style="flex:1 1 100px;min-width:0;font-size:var(--fs-11_5);padding:6px;text-align:right">
       <select class="fi bl-cur" id="rf-cur-${escAttr(x.id)}">
         ${currencies().map(c => `<option value="${c}"${currencyOf(x.id) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
       <button class="btn bs" style="flex:0 0 auto" onclick="addExhRefund('${escAttr(x.id)}')">요청</button>
     </div>
-    <div style="font-size:10.5px;color:var(--i5);margin-top:5px">
+    <div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:5px">
       환불은 <b>요청</b> 상태로 들어가고, 실제로 보낸 뒤 왼쪽 체크를 누르면 <b>완료</b>가 되면서
       그때 입금 합계에서 빠져요 — 아직 안 보낸 돈이 나간 것처럼 보이지 않게요.
       ${pendingRf.length ? `<br><b style="color:var(--am)">보내야 할 환불 ${pendingRf.length}건</b>` : ''}</div>`)}

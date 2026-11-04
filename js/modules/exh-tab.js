@@ -159,7 +159,7 @@ export function boothAlertHtml(all){
   const names = ch.slice(0, 4).map(x => { const b = boothChange(x); return `${exhNames(x).ko} ${b.from}→${b.to}`; }).join(', ')
     + (ch.length > 4 ? ` 외 ${ch.length - 4}곳` : '');
   return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:9px 12px;margin-bottom:10px;
-      border:1px solid var(--am);border-radius:10px;background:var(--W);font-size:11.5px">
+      border:1px solid var(--am);border-radius:var(--rd-10);background:var(--W);font-size:var(--fs-11_5)">
     <b style="color:var(--am)">부스 바뀐 곳 ${ch.length}곳</b>
     <span style="color:var(--i3)">${escapeHtml(names)} — 알린 부스와 지금 부스가 달라요</span>
     <button class="btn bp bs" style="margin-left:auto" onclick="openExhBulkMail('booth_change')">✉ 부스 변경 안내 보내기</button>
@@ -304,7 +304,7 @@ export function hasDesignOrder(x){
   });
 }
 export const designPill = (x) => hasDesignOrder(x)
-  ? ` <span class="pill p-teal" style="font-size:9px"
+  ? ` <span class="pill p-teal" style="font-size:var(--fs-9)"
       title="부스 디자인까지 의뢰한 곳이에요 — 디자인을 받는 게 아니라 우리가 그려서 출력·시공합니다">디자인 의뢰</span>` : '';
 
 export const BASE_KINDS = {
@@ -636,7 +636,7 @@ export function buildExhEvList(){
       <span class="ev-pill-dot" style="background:${escAttr(e.color || '#9C9890')}"></span>${escapeHtml(e.short || e.name || e.key)}
       ${n ? `<span class="nbg">${n}</span>` : ''}</button>`;
 
-  const head = (t) => `<div style="font-size:10px;color:var(--i4);margin:10px 0 4px;padding-left:2px">${t}</div>`;
+  const head = (t) => `<div style="font-size:var(--fs-10);color:var(--i4);margin:10px 0 4px;padding-left:2px">${t}</div>`;
   const group = (arr, title, withCount) => arr.length
     ? (title ? head(title) : '') + arr.map(e => row(e, withCount ? activeExhibitors(e.key).length : 0)).join('')
     : '';
@@ -648,13 +648,13 @@ export function buildExhEvList(){
      진행 중 맨 뒤에 둔다 — 그 행사를 열어야 참가기업을 넣을 수 있으니 숨길 수 없고,
      «안 함»과 이름이 비슷해 둘을 헷갈렸다. */
   const hiddenNote = off.length
-    ? `<div style="font-size:10px;color:var(--i5);margin:10px 0 0;padding-left:2px"
+    ? `<div style="font-size:var(--fs-10);color:var(--i5);margin:10px 0 0;padding-left:2px"
          title="${escapeHtml(off.map(e => e.short || e.name || e.key).join(', '))}">전시 안 하는 행사 ${off.length}개는 숨겼어요 — 설정 › 행사 관리에서 켜요</div>`
     : '';
   el.innerHTML = ((
       group([...doing, ...empty], '', true)
     + group(done,  '진행 완료', true)
-  ) || '<div style="font-size:11px;color:var(--i4);padding:6px 2px">진행 중인 전시가 없어요</div>') + hiddenNote;
+  ) || '<div style="font-size:var(--fs-11);color:var(--i4);padding:6px 2px">진행 중인 전시가 없어요</div>') + hiddenNote;
 
   buildExhFilters();
 }
@@ -675,7 +675,7 @@ function exhFilterChipsHtml(){
   const attention = list.filter(x => settleState(x).state === 'over' ||
     invoicesFor(x.id).some(i => i.status !== 'void' && String(i.amount ?? '').trim() === '')).length;
   const f = (k, label, n, tip = '') => (n || k === 'all' || exhUi.exhFilter === k)
-    ? `<button class="btn bs${exhUi.exhFilter === k ? ' bp' : ''}" style="font-size:11px;padding:3px 10px;gap:5px"
+    ? `<button class="btn bs${exhUi.exhFilter === k ? ' bp' : ''}" style="font-size:var(--fs-11);padding:3px 10px;gap:5px"
         title="${escapeHtml(tip)}" onclick="setExhFilter('${k}')">${label}<span style="${exhUi.exhFilter === k ? '' : 'color:var(--i4);'}font-weight:700">${n}</span></button>`
     : '';
   return `<div style="display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px 0">
@@ -807,7 +807,7 @@ export function renderExh(){
     el.innerHTML = `<div class="empty" style="height:auto;padding:60px 20px;text-align:center">
       <div style="font-size:30px;margin-bottom:10px">🚧</div>
       <div style="font-weight:700;margin-bottom:6px">이 행사는 전시를 진행하지 않아요</div>
-      <div style="font-size:12px;color:var(--i4)">설정 › 행사 관리에서 이 행사를 고른 뒤
+      <div style="font-size:var(--fs-12);color:var(--i4)">설정 › 행사 관리에서 이 행사를 고른 뒤
         <b>진행 파트</b>에서 전시를 켜면 다시 열립니다.</div></div>`;
     return;
   }
@@ -816,9 +816,9 @@ export function renderExh(){
      헤매게 두면 안 된다. 참가기업이 하나도 없을 때도 보여야 해서 빈 화면보다
      앞에 둔다. */
   const banner = exhLocked() ? `<div style="display:flex;align-items:center;gap:9px;margin:10px 16px 0;
-      background:var(--i8);border:1px solid var(--i6);border-left:3px solid var(--g);border-radius:8px;padding:9px 13px">
+      background:var(--i8);border:1px solid var(--i6);border-left:3px solid var(--g);border-radius:var(--r);padding:9px 13px">
     <span class="pill p-green">진행 완료</span>
-    <span style="font-size:11.5px;color:var(--i3)">끝난 행사라 열람만 됩니다. 고치려면 설정 › 행사 관리 › 진행 파트에서 <b>진행 중</b>으로 되돌리세요.</span>
+    <span style="font-size:var(--fs-11_5);color:var(--i3)">끝난 행사라 열람만 됩니다. 고치려면 설정 › 행사 관리 › 진행 파트에서 <b>진행 중</b>으로 되돌리세요.</span>
   </div>` : '';
 
   const list = visibleList();
@@ -829,8 +829,8 @@ export function renderExh(){
       <div style="font-size:30px;margin-bottom:10px">🏢</div>
       <div style="font-weight:700;margin-bottom:6px">등록된 참가기업이 없어요</div>
       ${exhLocked()
-        ? '<div style="font-size:12px;color:var(--i4)">진행 완료된 행사예요 — 참가기업 없이 끝났거나, 기록이 다른 행사에 들어가 있을 수 있어요.</div>'
-        : `<div style="font-size:12px;color:var(--i4);margin-bottom:14px">
+        ? '<div style="font-size:var(--fs-12);color:var(--i4)">진행 완료된 행사예요 — 참가기업 없이 끝났거나, 기록이 다른 행사에 들어가 있을 수 있어요.</div>'
+        : `<div style="font-size:var(--fs-12);color:var(--i4);margin-bottom:14px">
              기업DB에 "전시참가기업"으로 기록된 기업을 불러오거나 직접 추가할 수 있어요</div>
            <button class="btn" onclick="openExhAdd()">참가기업 추가</button>
            <button class="btn bp" onclick="openExhImport()">참가기업 불러오기</button>`}
@@ -845,8 +845,8 @@ export function renderExh(){
   const VIEWS = [['dash','대시보드'], ['list','기업리스트'],
     ['booth','부스 현황'], ['equip','비품 현황'], ['graphic','그래픽 현황'],
     ['money','금액 현황'], ['book','프로그램북'], ['onsite','현장 처리'],['watch','파일 감시']];
-  const seg = `<div class="tbar" style="padding:10px 16px 0">
-    <div class="seg" style="flex-wrap:wrap">
+  const seg = `<div class="db-bar vtabs">
+    <div class="seg">
       ${VIEWS.map(([k, l]) => `<button class="seg-b${exhUi.exhView === k ? ' on' : ''}" onclick="setExhView('${k}')">${l}</button>`).join('')}
     </div></div>`;
 
@@ -858,8 +858,8 @@ export function renderExh(){
   const q = exhQuery();
   const searchOverride = !!q && (exhUi.exhView === 'dash' || exhUi.exhView === 'watch');
   const searchNote = searchOverride ? `<div style="display:flex;align-items:center;gap:8px;margin:12px 16px 0;
-      background:var(--i8);border:1px solid var(--i6);border-radius:8px;padding:8px 12px">
-    <span style="font-size:11.5px;color:var(--i3)">«<b>${escapeHtml(q)}</b>» 검색 결과 ${list.length}곳 —
+      background:var(--i8);border:1px solid var(--i6);border-radius:var(--r);padding:8px 12px">
+    <span style="font-size:var(--fs-11_5);color:var(--i3)">«<b>${escapeHtml(q)}</b>» 검색 결과 ${list.length}곳 —
       검색어를 지우면 ${exhUi.exhView === 'dash' ? '대시보드' : '파일 감시'}로 돌아갑니다</span></div>` : '';
 
   const bodyHtml = searchOverride ? searchNote + renderInquiryPanel() + renderChecklist(list, all)
@@ -897,15 +897,15 @@ function renderInquiryPanel(){
     <div style="display:flex;flex-direction:column;gap:1px;margin-top:8px">
       ${open.slice(0, 8).map(({ l, x }) => {
         const d = daysSince(l.ts);
-        return `<div onclick="openExhDr('${escAttr(x.id)}','logs')" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;cursor:pointer;background:var(--i9)">
-          <span style="font-weight:700;font-size:12px;min-width:120px">${escapeHtml(exhNames(x).ko)}${
-            exhNames(x).en ? `<span style="font-weight:400;color:var(--i4);font-size:10.5px;margin-left:4px">${escapeHtml(exhNames(x).en)}</span>` : ''}</span>
-          <span style="font-size:12px;color:var(--i2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(l.subject || l.body || '(내용 없음)')}</span>
+        return `<div onclick="openExhDr('${escAttr(x.id)}','logs')" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--rd-6);cursor:pointer;background:var(--i9)">
+          <span style="font-weight:700;font-size:var(--fs-12);min-width:120px">${escapeHtml(exhNames(x).ko)}${
+            exhNames(x).en ? `<span style="font-weight:400;color:var(--i4);font-size:var(--fs-10_5);margin-left:4px">${escapeHtml(exhNames(x).en)}</span>` : ''}</span>
+          <span style="font-size:var(--fs-12);color:var(--i2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(l.subject || l.body || '(내용 없음)')}</span>
           ${l.status === 'hold' ? '<span class="pill p-gray">확인 중</span>' : ''}
           <span class="pill ${d >= 3 ? 'p-amber' : 'p-gray'}">${d === 0 ? '오늘' : d + '일 경과'}</span>
         </div>`;
       }).join('')}
-      ${open.length > 8 ? `<div style="font-size:11px;color:var(--i4);padding:6px 10px">외 ${open.length - 8}건</div>` : ''}
+      ${open.length > 8 ? `<div style="font-size:var(--fs-11);color:var(--i4);padding:6px 10px">외 ${open.length - 8}건</div>` : ''}
     </div></div>`;
 }
 
@@ -1115,25 +1115,25 @@ function exhSummary(all){
 export function renderExhSummary(all){
   if(!all.length) return '';
   const s = exhSummary(all);
-  const n = (v) => `<b style="font-size:17px;font-weight:800">${v}</b>`;
-  const sub = (t) => `<div style="font-size:10.5px;color:var(--i4);margin-top:2px">${t}</div>`;
+  const n = (v) => `<b style="font-size:var(--fs-17);font-weight:800">${v}</b>`;
+  const sub = (t) => `<div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:2px">${t}</div>`;
 
   let nth = 0;
   const block = (title, body, grow = 1) => `<div style="flex:${grow};min-width:${grow > 1 ? 210 : 140}px;padding:0 12px${
     nth++ ? ';border-left:1px solid var(--i7)' : ''}">
-    <div style="font-size:10px;color:var(--i5);font-weight:600;letter-spacing:.02em">${title}</div>
+    <div style="font-size:var(--fs-10);color:var(--i5);font-weight:600;letter-spacing:.02em">${title}</div>
     <div style="margin-top:3px">${body}</div></div>`;
 
   const cnt = (obj, cls) => Object.entries(obj).sort((x, y) => y[1] - x[1])
-    .map(([k, v]) => `<span class="pill ${cls}" style="font-size:9.5px">${escapeHtml(k)} ${v}</span>`).join('');
+    .map(([k, v]) => `<span class="pill ${cls}" style="font-size:var(--fs-9_5)">${escapeHtml(k)} ${v}</span>`).join('');
 
   return `<div class="uc" style="margin:12px 0 10px;padding:11px 4px">
     <div style="display:flex;flex-wrap:wrap;gap:10px 0;align-items:flex-start">
-      ${block('참가기업', `${n(s.all.length)}<span style="font-size:11px;color:var(--i4)"> 개사</span>
-        <span style="color:var(--i6);margin:0 5px">·</span>${n(s.countries.size)}<span style="font-size:11px;color:var(--i4)"> 개국</span>
+      ${block('참가기업', `${n(s.all.length)}<span style="font-size:var(--fs-11);color:var(--i4)"> 개사</span>
+        <span style="color:var(--i6);margin:0 5px">·</span>${n(s.countries.size)}<span style="font-size:var(--fs-11);color:var(--i4)"> 개국</span>
         ${sub(`국내 ${s.co.home} · 해외 ${s.co.away}${s.co.unknown ? ` · 국가 미확인 ${s.co.unknown}` : ''}`)}`)}
 
-      ${block('부스', `${n(s.booth.total)}<span style="font-size:11px;color:var(--i4)"> 부스</span>
+      ${block('부스', `${n(s.booth.total)}<span style="font-size:var(--fs-11);color:var(--i4)"> 부스</span>
         ${sub(`국내 ${s.booth.home} · 해외 ${s.booth.away}${s.booth.unknown ? ` · 미확인 ${s.booth.unknown}` : ''}`)}
         ${s.shared ? sub(`<span title="한 부스를 나눠 쓰는 기업이에요 — 기업 수에는 있고 부스 수에는 없습니다">공동 부스 ${s.shared}곳 제외</span>`) : ''}
         ${s.bookOnly ? sub(`<span title="프로그램북에만 오르는 참가예요 — 부스도 체크리스트도 세지 않습니다">프로그램북만 ${s.bookOnly}곳 제외</span>`) : ''}`)}
@@ -1144,14 +1144,14 @@ export function renderExhSummary(all){
       ${block('부스 타입', `<div style="display:flex;flex-wrap:wrap;gap:3px">${cnt(s.type, 'p-blue')}</div>
         ${sub('부스 수 기준')}`, 2)}
 
-      ${s.prev ? block('지난 행사 대비', `<div>${n(s.prev.back)}<span style="font-size:11px;color:var(--i4)"> 재참가</span>
-        <span style="color:var(--i6);margin:0 5px">·</span>${n(s.prev.fresh)}<span style="font-size:11px;color:var(--i4)"> 신규</span></div>
+      ${s.prev ? block('지난 행사 대비', `<div>${n(s.prev.back)}<span style="font-size:var(--fs-11);color:var(--i4)"> 재참가</span>
+        <span style="color:var(--i6);margin:0 5px">·</span>${n(s.prev.fresh)}<span style="font-size:var(--fs-11);color:var(--i4)"> 신규</span></div>
         ${sub(`${escapeHtml(s.prev.key)} 대비${s.prev.dropped ? ` · <span style="color:var(--am)">이탈 ${s.prev.dropped}곳</span>` : ''}`)}`) : ''}
 
       ${Object.keys(s.grade).length
         ? block('스폰서 등급', `<div style="display:flex;flex-wrap:wrap;gap:3px">${
             Object.entries(s.grade).sort((a, b) => b[1] - a[1])
-              .map(([k, v]) => `<span class="pill ${gradeCls(k)}" style="font-size:9.5px">${escapeHtml(k)} ${v}</span>`).join('')
+              .map(([k, v]) => `<span class="pill ${gradeCls(k)}" style="font-size:var(--fs-9_5)">${escapeHtml(k)} ${v}</span>`).join('')
           }</div>${sub(`일반 ${s.all.length - Object.values(s.grade).reduce((a, b) => a + b, 0)}곳`)}`)
         : ''}
     </div></div>`;
@@ -1196,7 +1196,7 @@ const pillsOf = (cnt, cls = 'p-gray') => Object.entries(cnt)
   .sort((a, b) => b[1] - a[1])
   .map(([k, n]) => `<span class="pill ${cls}">${escapeHtml(k)} ${n}</span>`).join('');
 
-export const emptyView = (msg) => `<div class="empty" style="padding:40px 20px;text-align:center;color:var(--i4);font-size:13px">${escapeHtml(msg)}</div>`;
+export const emptyView = (msg) => `<div class="empty" style="padding:40px 20px;text-align:center;color:var(--i4);font-size:var(--fs-13)">${escapeHtml(msg)}</div>`;
 
 /* ── 현장 처리 ──
    행사 기간에 «했음»을 누른 항목은 전부 현장에서 한 일이다(2026-10-13 KIC부터
@@ -1225,7 +1225,7 @@ function renderOnsiteView(list){
   const pills = `<span class="pill p-blue">현장 처리 ${rows.length}건</span>`
     + `<span class="pill p-gray">${new Set(rows.map(r => r.x.id)).size}곳</span>`
     + days.map(d => `<span class="pill p-gray">${escapeHtml(d.slice(5).replace('-', '/'))} ${rows.filter(r => r.d === d).length}</span>`).join('')
-    + '<span style="font-size:10.5px;color:var(--i5);margin-left:2px">행사 기간에 «했음»으로 체크한 것 — 체크를 풀면 여기서도 빠집니다</span>';
+    + '<span style="font-size:var(--fs-10_5);color:var(--i5);margin-left:2px">행사 기간에 «했음»으로 체크한 것 — 체크를 풀면 여기서도 빠집니다</span>';
   const line = (r) => {
     const cat = r.i ? ((r.i.category || '') === 'graphic' ? '그래픽' : '비품') : '기본 시공';
     const name = r.i ? (r.i.name || '(이름 없음)') : '기본 시공';
@@ -1234,17 +1234,17 @@ function renderOnsiteView(list){
       : `toggleBaseDone('${escAttr(r.x.id)}')`;
     return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--i8);flex-wrap:${isMobile() ? 'wrap' : 'nowrap'}">
       <span class="pill p-gray" style="flex:0 0 auto">${r.x.booth_no ? '부스 ' + escapeHtml(r.x.booth_no) : '미배정'}</span>
-      <span onclick="openExhDr('${escAttr(r.x.id)}','progress')" style="font-size:12.5px;font-weight:700;cursor:pointer;min-width:120px">${escapeHtml(exhNames(r.x).ko)}</span>
+      <span onclick="openExhDr('${escAttr(r.x.id)}','progress')" style="font-size:var(--fs-12_5);font-weight:700;cursor:pointer;min-width:120px">${escapeHtml(exhNames(r.x).ko)}</span>
       <span class="pill ${cat === '그래픽' ? 'p-teal' : 'p-gray'}" style="flex:0 0 auto">${cat}</span>
-      <span style="flex:1;min-width:0;font-size:12.5px">${escapeHtml(name)}${r.i?.qty ? ` <span style="color:var(--i4);font-size:10.5px">· ${escapeHtml(String(r.i.qty))}개</span>` : ''}</span>
+      <span style="flex:1;min-width:0;font-size:var(--fs-12_5)">${escapeHtml(name)}${r.i?.qty ? ` <span style="color:var(--i4);font-size:var(--fs-10_5)">· ${escapeHtml(String(r.i.qty))}개</span>` : ''}</span>
       <button class="pill p-green" style="border:0;cursor:pointer;font:inherit;padding:0 10px;flex:0 0 auto"
         onclick="${undo}" title="현장 처리 — 누르면 «안 했음»으로 되돌립니다">✓ 현장</button>
     </div>`;
   };
   const inner = days.map(d => `<div style="margin-bottom:16px">
-      <div style="font-size:12px;font-weight:800;color:var(--i2);margin-bottom:4px">${escapeHtml(d)} · ${rows.filter(r => r.d === d).length}건</div>
+      <div style="font-size:var(--fs-12);font-weight:800;color:var(--i2);margin-bottom:4px">${escapeHtml(d)} · ${rows.filter(r => r.d === d).length}건</div>
       ${rows.filter(r => r.d === d).map(line).join('')}</div>`).join('');
-  return viewShell(pills, `<div style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:6px 14px">${inner}</div>`);
+  return viewShell(pills, `<div style="background:var(--W);border:1px solid var(--i7);border-radius:var(--rd-10);padding:6px 14px">${inner}</div>`);
 }
 
 /* ── 현장 추가 (대시보드 카드) ──
@@ -1271,16 +1271,16 @@ export function onsiteAddCard(all){
   groups.sort((p, q) => boothSortKey(p.x) - boothSortKey(q.x));
   const n = groups.reduce((s, g) => s + g.items.length, 0);
   const row = ({ x, items, sub }) => `<div onclick="openExhDr('${escAttr(x.id)}','billing')"
-      style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:6px;cursor:pointer;background:var(--i9);margin-bottom:4px">
+      style="display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:var(--rd-6);cursor:pointer;background:var(--i9);margin-bottom:4px">
       ${x.booth_no ? `<span class="pill p-gray" style="flex:0 0 auto">${escapeHtml(x.booth_no)}</span>` : ''}
-      <span style="font-size:11.5px;font-weight:700;flex:0 0 auto">${escapeHtml(exhNames(x).ko)}</span>
-      <span style="font-size:11px;color:var(--i4);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${
+      <span style="font-size:var(--fs-11_5);font-weight:700;flex:0 0 auto">${escapeHtml(exhNames(x).ko)}</span>
+      <span style="font-size:var(--fs-11);color:var(--i4);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${
         escapeHtml(items.map(i => (i.name || '(이름 없음)') + (i.change_kind === '취소' ? '(취소)' : '')).join(' · '))}</span>
-      <span style="font-size:11.5px;font-weight:700;flex:0 0 auto">${
+      <span style="font-size:var(--fs-11_5);font-weight:700;flex:0 0 auto">${
         escapeHtml(Object.entries(sub).map(([c, v]) => fmtMoney(v, c)).join(' · '))}</span>
     </div>`;
   return `<div class="uc">
-      <div class="uc-ttl">현장 추가 <span style="font-weight:400;color:var(--i4);font-size:11px">${groups.length}곳 · ${n}건 · ${
+      <div class="uc-ttl">현장 추가 <span style="font-weight:400;color:var(--i4);font-size:var(--fs-11)">${groups.length}곳 · ${n}건 · ${
         escapeHtml(Object.entries(sums).map(([c, v]) => fmtMoney(v, c)).join(' · '))}</span></div>
       ${groups.map(row).join('')}
     </div>`;
@@ -1300,20 +1300,20 @@ function wa(name){
    분당서울대학교병원이 한 건으로 신청했기 때문인데, 행은 따로 두고 번호만 같다.
    실수로 보이지 않게 그 줄에 표시를 남긴다 — 없으면 다음 사람이 고치려 든다. */
 export const applyCell = (x) => {
-  if(!x.apply_order) return '<td style="min-width:44px;text-align:right;font-size:11.5px;color:var(--i6)">-</td>';
+  if(!x.apply_order) return '<td style="min-width:44px;text-align:right;font-size:var(--fs-11_5);color:var(--i6)">-</td>';
   const same = activeExhibitors(x.event_id)
     .filter(o => o.id !== x.id && String(o.apply_order || '') === String(x.apply_order))
     .map(o => exhNames(o).ko);
-  return `<td style="min-width:44px;text-align:right;font-size:11.5px;color:var(--i4)"${
+  return `<td style="min-width:44px;text-align:right;font-size:var(--fs-11_5);color:var(--i4)"${
     same.length ? ` title="${escapeHtml(same.join(', '))}${wa(same[same.length - 1])} 같은 신청 건이에요 — 부스를 나눠 써서 번호를 함께 씁니다"` : ''
-  }>${escapeHtml(x.apply_order)}${same.length ? '<span style="color:var(--a);font-size:9px">*</span>' : ''}</td>`;
+  }>${escapeHtml(x.apply_order)}${same.length ? '<span style="color:var(--a);font-size:var(--fs-9)">*</span>' : ''}</td>`;
 };
 
 /* 기업 이름 칸 — 어느 보기에서든 클릭하면 그 기업 드로어로 간다 */
 export const coCell = (x, tab) => `<td style="min-width:150px">
-  <span onclick="openExhDr('${escAttr(x.id)}','${tab}')" style="cursor:pointer;font-size:12.5px;font-weight:600${
+  <span onclick="openExhDr('${escAttr(x.id)}','${tab}')" style="cursor:pointer;font-size:var(--fs-12_5);font-weight:600${
     x.status === CANCELLED ? ';text-decoration:line-through;opacity:.6' : ''}">${escapeHtml(exhNames(x).ko)}</span>${
-    exhNames(x).en ? `<div style="font-size:10.5px;color:var(--i4);font-weight:400">${escapeHtml(exhNames(x).en)}</div>` : ''}</td>`;
+    exhNames(x).en ? `<div style="font-size:var(--fs-10_5);color:var(--i4);font-weight:400">${escapeHtml(exhNames(x).en)}</div>` : ''}</td>`;
 
 /* ── 부스 현황 ──
    부스 번호로 정렬해 배치도를 훑듯 볼 수 있게 한다. 독립부스는 시공사가 따로

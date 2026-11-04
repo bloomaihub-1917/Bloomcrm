@@ -59,12 +59,12 @@ export function speakerMaterialsHtml(c){
     const stale = age !== null && age > STALE_DAYS;
     const src = `${escapeHtml(evShort(x.sp.event_id) || x.sp.event_id || '')}${x.d ? ' · ' + escapeHtml(x.d) : ''}`;
     const val = it.long
-      ? `<div style="font-size:11.5px;line-height:1.55;max-height:4.7em;overflow:hidden;white-space:pre-line">${escapeHtml(x.v)}</div>`
+      ? `<div style="font-size:var(--fs-11_5);line-height:1.55;max-height:4.7em;overflow:hidden;white-space:pre-line">${escapeHtml(x.v)}</div>`
       : it.file ? `📎 ${escapeHtml(x.v)}` : escapeHtml(x.v);
     return `<div class="ic"${it.long ? ' style="grid-column:span 2"' : ''}>
-      <div class="il">${it.label}${stale ? ' <span class="pill p-amber" style="font-size:9px">확인 필요</span>' : ''}</div>
+      <div class="il">${it.label}${stale ? ' <span class="pill p-amber" style="font-size:var(--fs-9)">확인 필요</span>' : ''}</div>
       <div class="iv" style="${stale ? 'color:var(--i4)' : ''}">${val}
-        <div style="font-size:10px;color:var(--i5);font-weight:400;margin-top:2px"
+        <div style="font-size:var(--fs-10);color:var(--i5);font-weight:400;margin-top:2px"
           title="${stale ? `받은 지 ${age}일 — 쓰기 전에 최신인지 확인하세요` : ''}">${src}</div></div></div>`;
   };
 
@@ -73,22 +73,22 @@ export function speakerMaterialsHtml(c){
       const roles = rolesOfSpeaker(sp.id);
       const titles = assignmentsFor(sp.id).map(sessTitle).filter(Boolean);
       return `<div onclick="closeContactDr();openSpeakerDr('${escAttr(sp.id)}')" title="이 행사의 연사 화면 열기"
-        style="display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:6px;cursor:pointer;background:var(--i9);margin-bottom:4px">
-        <span style="font-size:11.5px;font-weight:700;flex:0 0 auto">${escapeHtml(evShort(sp.event_id) || sp.event_id || '')}</span>
-        ${roles.map(r => `<span class="pill p-gray" style="font-size:9.5px;flex:0 0 auto">${escapeHtml(r)}</span>`).join('')}
-        <span style="font-size:11px;color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${
+        style="display:flex;align-items:center;gap:7px;padding:6px 8px;border-radius:var(--rd-6);cursor:pointer;background:var(--i9);margin-bottom:4px">
+        <span style="font-size:var(--fs-11_5);font-weight:700;flex:0 0 auto">${escapeHtml(evShort(sp.event_id) || sp.event_id || '')}</span>
+        ${roles.map(r => `<span class="pill p-gray" style="font-size:var(--fs-9_5);flex:0 0 auto">${escapeHtml(r)}</span>`).join('')}
+        <span style="font-size:var(--fs-11);color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${
           escapeHtml(titles.join(' / '))}</span>
-        ${sp.status && sp.status !== '확정' ? `<span class="pill ${sp.status === '취소' ? 'p-gray' : 'p-amber'}" style="font-size:9px;flex:0 0 auto">${escapeHtml(sp.status)}</span>` : ''}
+        ${sp.status && sp.status !== '확정' ? `<span class="pill ${sp.status === '취소' ? 'p-gray' : 'p-amber'}" style="font-size:var(--fs-9);flex:0 0 auto">${escapeHtml(sp.status)}</span>` : ''}
       </div>`;
     }).join('');
 
   return `
     <div class="sct" style="margin-top:14px;display:flex;align-items:center;justify-content:space-between">
       <span>연사 자료</span>
-      <span style="font-size:10.5px;font-weight:400;color:var(--i5)">${has.length}/${ITEMS.length} 있음${many ? ' · 가장 최근 받은 것' : ''}</span>
+      <span style="font-size:var(--fs-10_5);font-weight:400;color:var(--i5)">${has.length}/${ITEMS.length} 있음${many ? ' · 가장 최근 받은 것' : ''}</span>
     </div>
     <div class="ig">${got.map(line).join('')}</div>
-    <div style="font-size:10.5px;color:var(--i5);margin:4px 0 8px">고치려면 연사 화면에서 고칩니다 — 여기는 연사 줄에서 모아 보여주기만 해요</div>
+    <div style="font-size:var(--fs-10_5);color:var(--i5);margin:4px 0 8px">고치려면 연사 화면에서 고칩니다 — 여기는 연사 줄에서 모아 보여주기만 해요</div>
     <div class="sct">연사 이력</div>
     <div style="margin-bottom:14px">${hist}</div>`;
 }

@@ -59,7 +59,7 @@ function renderCoFieldDisplay(key, field){
       const a = href
         ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(url)}</a>`
         : escapeHtml(url);
-      return a + (label ? ` <span style="color:var(--i5);font-size:10px">${escapeHtml(label)}</span>` : '');
+      return a + (label ? ` <span style="color:var(--i5);font-size:var(--fs-10)">${escapeHtml(label)}</span>` : '');
     }).join('<span style="color:var(--i6)"> · </span>');
   } else {
     span.textContent = val || cfg.empty;
@@ -121,8 +121,8 @@ function startCoInlineEdit(key, field){
   const current = c[field] || '';
   const tag = cfg.multiline ? 'textarea' : 'input';
   const sizeStyle = cfg.multiline
-    ? 'width:220px;height:64px;resize:vertical;font-size:11px;padding:4px 6px;font-family:inherit'
-    : 'width:160px;font-size:11px;padding:2px 6px;font-family:inherit';
+    ? 'width:220px;height:64px;resize:vertical;font-size:var(--fs-11);padding:4px 6px;font-family:inherit'
+    : 'width:160px;font-size:var(--fs-11);padding:2px 6px;font-family:inherit';
   span.innerHTML = `<${tag} class="fi" id="co-inline-input-${field}-${escapeHtml(key)}" style="${sizeStyle}" placeholder="${escapeHtml(cfg.placeholder)}"></${tag}>`;
   const input = document.getElementById(`co-inline-input-${field}-${key}`);
   if(!input) return;
@@ -313,17 +313,17 @@ export function editCoDomain(key){
   wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9999;'
     + 'display:flex;align-items:center;justify-content:center;padding:16px';
   wrap.onclick = (e) => { if(e.target === wrap) closeCoDomainPopover(); };
-  wrap.innerHTML = `<div style="background:var(--W);border-radius:12px;padding:20px;width:100%;max-width:400px;
+  wrap.innerHTML = `<div style="background:var(--W);border-radius:var(--rd-12);padding:20px;width:100%;max-width:400px;
       max-height:80vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.2)" onclick="event.stopPropagation()">
-    <div style="font-size:14px;font-weight:700;margin-bottom:4px">분야 지정</div>
-    <div style="font-size:11.5px;color:var(--i3);line-height:1.6;margin-bottom:12px">
+    <div style="font-size:var(--fs-14);font-weight:700;margin-bottom:4px">분야 지정</div>
+    <div style="font-size:var(--fs-11_5);color:var(--i3);line-height:1.6;margin-bottom:12px">
       섹터를 아직 모르면 분야만 골라 두세요 — 그 분야의 «업종 미정» 자리로 들어가고,
       나중에 섹터를 알면 옆의 섹터 배지에서 옮기면 됩니다.
       ${cur.length ? `<br>지금: <b>${escapeHtml(cur.map(d => domainName(d)).join(' · '))}</b>` : ''}
     </div>
-    ${DOMAINS.map(d => `<button class="btn" style="width:100%;justify-content:flex-start;margin-bottom:5px;font-size:12px"
+    ${DOMAINS.map(d => `<button class="btn" style="width:100%;justify-content:flex-start;margin-bottom:5px;font-size:var(--fs-12)"
       data-dom="${escapeHtml(d.id)}">${escapeHtml(d.name)}${cur.includes(d.id) ? ' ✓' : ''}</button>`).join('')
-      || '<div style="font-size:11.5px;color:var(--i4)">설정 › 기업 분류에서 분야를 먼저 만들어주세요.</div>'}
+      || '<div style="font-size:var(--fs-11_5);color:var(--i4)">설정 › 기업 분류에서 분야를 먼저 만들어주세요.</div>'}
     <button class="btn bs" style="width:100%;justify-content:center;margin-top:8px"
       onclick="closeCoDomainPopover()">취소</button>
   </div>`;
@@ -379,7 +379,7 @@ export function editCoSector(key){
     const label   = parseSectorScope(name).plainName;
     return `<label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;${indent}">
       <input type="checkbox" value="${escapeHtml(name)}" ${checked} style="width:13px;height:13px;cursor:pointer">
-      <span style="font-size:12px">${prefix}${escapeHtml(label)}</span>
+      <span style="font-size:var(--fs-12)">${prefix}${escapeHtml(label)}</span>
     </label>`;
   };
 
@@ -395,21 +395,21 @@ export function editCoSector(key){
     });
     if(!items.length) return '';
     return `<div style="margin-bottom:8px">
-      <div style="font-size:10px;font-weight:700;color:var(--i4);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">${escapeHtml(g.label)}</div>
+      <div style="font-size:var(--fs-10);font-weight:700;color:var(--i4);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">${escapeHtml(g.label)}</div>
       ${items.map(checkboxRow).join('')}
     </div>`;
   }).join('');
 
   const pop = document.createElement('div');
   pop.id = 'co-sector-popover';
-  pop.style.cssText = `position:fixed;top:${rect.bottom+4}px;left:${rect.left}px;background:var(--W);border:1px solid var(--i6);border-radius:8px;padding:10px 12px;width:260px;max-height:320px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.16);z-index:9999`;
+  pop.style.cssText = `position:fixed;top:${rect.bottom+4}px;left:${rect.left}px;background:var(--W);border:1px solid var(--i6);border-radius:var(--r);padding:10px 12px;width:260px;max-height:320px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.16);z-index:9999`;
   pop.onclick = e => e.stopPropagation();
   pop.innerHTML = `
-    <div style="font-size:11px;color:var(--i4);margin-bottom:8px">섹터 선택 (복수 가능) — 이 기업이 참가한 행사별로 묶여 있어요</div>
-    ${groupsHtml || '<div style="font-size:12px;color:var(--i4)">등록된 섹터 없음</div>'}
+    <div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:8px">섹터 선택 (복수 가능) — 이 기업이 참가한 행사별로 묶여 있어요</div>
+    ${groupsHtml || '<div style="font-size:var(--fs-12);color:var(--i4)">등록된 섹터 없음</div>'}
     <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:10px">
-      <button class="btn bs" style="font-size:11px;padding:2px 8px" onclick="closeCoSectorPopover()">취소</button>
-      <button class="btn bp" style="font-size:11px;padding:2px 8px" onclick="saveCoSector('${escAttr(key)}')">저장</button>
+      <button class="btn bs" style="font-size:var(--fs-11);padding:2px 8px" onclick="closeCoSectorPopover()">취소</button>
+      <button class="btn bp" style="font-size:var(--fs-11);padding:2px 8px" onclick="saveCoSector('${escAttr(key)}')">저장</button>
     </div>`;
   document.body.appendChild(pop);
   setTimeout(() => document.addEventListener('mousedown', handleCoSectorOutsideClick), 0);
@@ -495,7 +495,7 @@ export function showAssignCatCodeUI(key){
   const el = document.getElementById('co-catcode-' + key);
   if(!el) return;
   const opts = CATEGORY_CODES.map(cc => `<option value="${cc.code}">${cc.code} · ${escapeHtml(cc.label)}</option>`).join('');
-  el.innerHTML = `<select id="co-catcode-sel-${escapeHtml(key)}" class="fi" style="font-size:11px;padding:2px 6px" onchange="doAssignCatCode('${escAttr(key)}')">
+  el.innerHTML = `<select id="co-catcode-sel-${escapeHtml(key)}" class="fi" style="font-size:var(--fs-11);padding:2px 6px" onchange="doAssignCatCode('${escAttr(key)}')">
     <option value="">prefix 선택</option>${opts}
   </select>`;
 }

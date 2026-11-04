@@ -37,10 +37,10 @@ const trackColor = (evKey, track) => trackColorOf(confCfg(evKey), track);
    처음 열리는 화면에 없으면 탭을 옮겨야 보이고, 그러면 «어디서 올리지»가
    된다. 실제로 그 말을 들었다. */
 function importBtns(){
-  return `<span id="conf-import-msg" style="font-size:10.5px;color:var(--i4)"></span>
-    <button class="btn" style="font-size:11px" onclick="downloadConfTemplate()"
+  return `<span id="conf-import-msg" style="font-size:var(--fs-10_5);color:var(--i4)"></span>
+    <button class="btn" style="font-size:var(--fs-11)" onclick="downloadConfTemplate()"
       title="세션·연사·배정 세 시트로 된 빈 양식을 받습니다">양식 받기</button>
-    <button class="btn" style="font-size:11px" onclick="pickConfFile()"
+    <button class="btn" style="font-size:var(--fs-11)" onclick="pickConfFile()"
       title="채운 양식을 올립니다 — 기존 것을 지우지 않고 더하거나 고칩니다">엑셀 올리기</button>
     <input type="file" id="conf-xlsx-input" accept=".xlsx,.xls" style="display:none"
       onchange="handleConfFile(event)">`;
@@ -80,7 +80,7 @@ function pgaSpeakers(ss, opts){
       const when = !isCo && a.start_at ? timeLabel(a.start_at, a.end_at) : '';
       const roleC = (SPEAKER_ROLES.find(r => r.key === a.role) || {}).cls || 'p-gray';
 
-      const person = `<span class="pill ${roleC}" style="font-size:8.5px;padding:1px 4px;vertical-align:1px">${
+      const person = `<span class="pill ${roleC}" style="font-size:var(--fs-8_5);padding:1px 4px;vertical-align:1px">${
           escapeHtml(roleLabel(a))}</span>
         <span style="color:var(--i2)"> ${escapeHtml(nm)}</span>${
         (sp && sp.name_snapshot && sp.name_en)
@@ -89,16 +89,16 @@ function pgaSpeakers(ss, opts){
         org ? `<span style="color:var(--i4)"> · ${escapeHtml(org)}</span>` : ''}`;
 
       return `<div style="display:flex;gap:7px;margin-top:4px">
-        <div style="flex:0 0 auto;min-width:62px;font-size:9.5px;color:var(--i3);
+        <div style="flex:0 0 auto;min-width:62px;font-size:var(--fs-9_5);color:var(--i3);
           line-height:1.5;white-space:nowrap;font-variant-numeric:tabular-nums">${escapeHtml(when)}</div>
         <div style="min-width:0;flex:1">
           ${title && !compact
-            ? `<div style="font-size:11.5px;font-weight:600;color:var(--i1);line-height:1.4">${
+            ? `<div style="font-size:var(--fs-11_5);font-weight:600;color:var(--i1);line-height:1.4">${
                  escapeHtml(titleKo || titleEn)}</div>
                ${titleKo && titleEn
-                 ? `<div style="font-size:10px;color:var(--i3);line-height:1.4">${escapeHtml(titleEn)}</div>` : ''}
-               <div style="font-size:9.5px;line-height:1.4;margin-top:1px">${person}</div>`
-            : `<div style="font-size:9.5px;line-height:1.4">${person}</div>`}
+                 ? `<div style="font-size:var(--fs-10);color:var(--i3);line-height:1.4">${escapeHtml(titleEn)}</div>` : ''}
+               <div style="font-size:var(--fs-9_5);line-height:1.4;margin-top:1px">${person}</div>`
+            : `<div style="font-size:var(--fs-9_5);line-height:1.4">${person}</div>`}
         </div>
       </div>`;
     }).join('')}
@@ -112,11 +112,11 @@ function pgaHtml(ev){
        올리는 때다. 안내에 «위의 양식 받기»라고 적어 놓고 단추가 없으면
        그게 제일 나쁘다. */
     return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
-        <div style="font-size:12.5px;font-weight:700">Program at a Glance</div>
+        <div style="font-size:var(--fs-12_5);font-weight:700">Program at a Glance</div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto">${importBtns()}</div>
       </div>
-      <div style="padding:22px;background:var(--i8);border:1px solid var(--i6);border-radius:10px;
-      font-size:12px;color:var(--i5);line-height:1.7">
+      <div style="padding:22px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-10);
+      font-size:var(--fs-12);color:var(--i5);line-height:1.7">
       세션이 없어요. 위의 <b>양식 받기</b>로 엑셀 양식을 받아 채운 뒤 <b>엑셀 올리기</b>로
       한 번에 넣거나, <b>Program</b> 탭에서 하나씩 만드세요.<br>
       표는 세션의 <b>일자 · 시각 · 장소 · 트랙</b>으로 그려져요 — 장소를 안 적은 세션은
@@ -142,10 +142,10 @@ function pgaHtml(ev){
   /* 식사·휴식 칸 — 트랙 색 없이 회색 한 칸 */
   const breakCell = (ss) => `<div onclick="openPgaSession('${escAttr(ss.id)}')"
     title="${escapeHtml([ss.title_ko, ss.title_en, timeLabel(ss.start_at, ss.end_at), ss.room].filter(Boolean).join(' · '))}"
-    style="cursor:pointer;background:var(--i7);border:1px solid var(--i6);border-radius:4px;padding:7px;
+    style="cursor:pointer;background:var(--i7);border:1px solid var(--i6);border-radius:var(--rd-4);padding:7px;
     text-align:center;margin-bottom:5px;color:var(--i4)">
-    <div style="font-size:11px;font-weight:600">${escapeHtml(ss.title_ko || ss.title_en || kindOf(ss.kind).pill || '')}</div>
-    ${ss.title_ko && ss.title_en ? `<div style="font-size:9.5px;margin-top:1px">${escapeHtml(ss.title_en)}</div>` : ''}
+    <div style="font-size:var(--fs-11);font-weight:600">${escapeHtml(ss.title_ko || ss.title_en || kindOf(ss.kind).pill || '')}</div>
+    ${ss.title_ko && ss.title_en ? `<div style="font-size:var(--fs-9_5);margin-top:1px">${escapeHtml(ss.title_en)}</div>` : ''}
   </div>`;
 
   const cell = (ss) => {
@@ -153,12 +153,12 @@ function pgaHtml(ev){
     const c = trackColor(ev.key, ss.track);
     return `<div onclick="openPgaSession('${escAttr(ss.id)}')" title="${escapeHtml(
         [ss.title_ko, ss.title_en, timeLabel(ss.start_at, ss.end_at), ss.room].filter(Boolean).join(' · '))}"
-      style="cursor:pointer;border:1px solid ${c.bd}33;border-radius:4px;overflow:hidden;margin-bottom:5px">
+      style="cursor:pointer;border:1px solid ${c.bd}33;border-radius:var(--rd-4);overflow:hidden;margin-bottom:5px">
       ${ss.track ? `<div style="background:${c.bg};border-left:3px solid ${c.bd};padding:3px 6px;
-        font-size:10.5px;font-weight:700;color:var(--i1)">${escapeHtml(ss.track)}</div>` : ''}
+        font-size:var(--fs-10_5);font-weight:700;color:var(--i1)">${escapeHtml(ss.track)}</div>` : ''}
       <div style="padding:6px 7px 8px;background:var(--W);overflow-wrap:anywhere">
-        <div style="font-size:11px;line-height:1.45;color:var(--i1)">${escapeHtml(ss.title_ko || ss.title_en || '(세션명 없음)')}</div>
-        ${ss.title_ko && ss.title_en ? `<div style="font-size:9.5px;color:var(--i4);line-height:1.4;margin-top:2px">${escapeHtml(ss.title_en)}</div>` : ''}
+        <div style="font-size:var(--fs-11);line-height:1.45;color:var(--i1)">${escapeHtml(ss.title_ko || ss.title_en || '(세션명 없음)')}</div>
+        ${ss.title_ko && ss.title_en ? `<div style="font-size:var(--fs-9_5);color:var(--i4);line-height:1.4;margin-top:2px">${escapeHtml(ss.title_en)}</div>` : ''}
         ${pgaSpeakers(ss)}
       </div>
     </div>`;
@@ -171,9 +171,9 @@ function pgaHtml(ev){
     const c = trackColor(ev.key, ss.track);
     return `<div onclick="openPgaSession('${escAttr(ss.id)}')" title="${escapeHtml(ss.title_en || '')}"
       style="cursor:pointer;background:${ss.track ? c.bg : 'var(--i8)'};border:1px solid ${ss.track ? c.bd + '55' : 'var(--i6)'};
-      border-radius:4px;padding:9px;text-align:center;margin-bottom:5px">
-      <div style="font-size:11.5px;font-weight:600">${escapeHtml(ss.title_ko || ss.title_en || '(세션명 없음)')}</div>
-      ${ss.title_en && ss.title_ko ? `<div style="font-size:9.5px;color:var(--i4);margin-top:2px">${escapeHtml(ss.title_en)}</div>` : ''}
+      border-radius:var(--rd-4);padding:9px;text-align:center;margin-bottom:5px">
+      <div style="font-size:var(--fs-11_5);font-weight:600">${escapeHtml(ss.title_ko || ss.title_en || '(세션명 없음)')}</div>
+      ${ss.title_en && ss.title_ko ? `<div style="font-size:var(--fs-9_5);color:var(--i4);margin-top:2px">${escapeHtml(ss.title_en)}</div>` : ''}
       ${(() => {
         /* 연사 항목은 장소가 있는 세션과 똑같이(시각·역할 배지·소속) 그린다.
            제목은 가운데지만 연사 줄은 왼쪽 정렬해야 시각 열이 맞는다. */
@@ -195,7 +195,7 @@ function pgaHtml(ev){
       const here = mine.filter(x => (x.start_at || '') === slot);
       const wide = here.filter(x => !x.room);
       const placed = here.filter(x => x.room);
-      const timeCol = `<td style="vertical-align:top;padding:7px 8px;font-size:10.5px;color:var(--i3);
+      const timeCol = `<td style="vertical-align:top;padding:7px 8px;font-size:var(--fs-10_5);color:var(--i3);
         white-space:nowrap;border-top:1px solid var(--i6)">${slot ? escapeHtml(timeLabel(slot,
           // 그 시간대에서 가장 늦게 끝나는 것으로 폭을 적는다
           here.map(x => x.end_at).filter(Boolean).sort().slice(-1)[0] || ''))
@@ -215,7 +215,7 @@ function pgaHtml(ev){
     };
 
     return `<tr><td colspan="${rooms.length + 1}" style="padding:9px 8px 3px;background:var(--i8);
-        border-top:1px solid var(--i6);font-size:11.5px;font-weight:700">
+        border-top:1px solid var(--i6);font-size:var(--fs-11_5);font-weight:700">
         ${escapeHtml(d ? dayLabel(d) : '날짜 미정')}
         <span style="font-weight:400;color:var(--i4);margin-left:6px">세션 ${mine.length}</span></td></tr>`
       + slots.map(rowFor).join('');
@@ -231,14 +231,14 @@ function pgaHtml(ev){
       const brk = isBreak(ss);
       return `<div onclick="openPgaSession('${escAttr(ss.id)}')"
         style="cursor:pointer;${brk ? 'color:var(--i4);' : ''}background:${brk ? 'var(--i7)' : 'var(--W)'};border:1px solid var(--i6);border-left:3px solid ${
-          ss.track ? c.bd : 'var(--i5)'};border-radius:8px;padding:9px 11px;margin-bottom:7px">
+          ss.track ? c.bd : 'var(--i5)'};border-radius:var(--r);padding:9px 11px;margin-bottom:7px">
         <div style="display:flex;gap:7px;align-items:baseline;flex-wrap:wrap">
-          <span style="font-size:11px;color:var(--i3);white-space:nowrap">${escapeHtml(timeLabel(ss.start_at, ss.end_at) || '시간 미정')}</span>
-          ${ss.room ? `<span class="pill p-gray" style="font-size:9px">${escapeHtml(ss.room)}</span>` : ''}
-          ${ss.track ? `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:${c.bg}">${escapeHtml(ss.track)}</span>` : ''}
+          <span style="font-size:var(--fs-11);color:var(--i3);white-space:nowrap">${escapeHtml(timeLabel(ss.start_at, ss.end_at) || '시간 미정')}</span>
+          ${ss.room ? `<span class="pill p-gray" style="font-size:var(--fs-9)">${escapeHtml(ss.room)}</span>` : ''}
+          ${ss.track ? `<span style="font-size:var(--fs-10);padding:2px 6px;border-radius:var(--rd-4);background:${c.bg}">${escapeHtml(ss.track)}</span>` : ''}
         </div>
-        <div style="font-size:12.5px;font-weight:600;margin-top:4px;line-height:1.45">${escapeHtml(ss.title_ko || ss.title_en || '(세션명 없음)')}</div>
-        ${ss.title_ko && ss.title_en ? `<div style="font-size:10px;color:var(--i4);line-height:1.4">${escapeHtml(ss.title_en)}</div>` : ''}
+        <div style="font-size:var(--fs-12_5);font-weight:600;margin-top:4px;line-height:1.45">${escapeHtml(ss.title_ko || ss.title_en || '(세션명 없음)')}</div>
+        ${ss.title_ko && ss.title_en ? `<div style="font-size:var(--fs-10);color:var(--i4);line-height:1.4">${escapeHtml(ss.title_en)}</div>` : ''}
         ${pgaSpeakers(ss)}
       </div>`;
     };
@@ -247,15 +247,15 @@ function pgaHtml(ev){
         .slice()
         .sort((a, b) => String(a.start_at || '').localeCompare(String(b.start_at || ''))
           || String(a.room || '').localeCompare(String(b.room || ''), 'ko', { numeric: true }));
-      return `<div style="font-size:12px;font-weight:700;margin:12px 0 6px">${escapeHtml(d ? dayLabel(d) : '날짜 미정')}
+      return `<div style="font-size:var(--fs-12);font-weight:700;margin:12px 0 6px">${escapeHtml(d ? dayLabel(d) : '날짜 미정')}
           <span style="font-weight:400;color:var(--i4)">세션 ${mine.length}</span></div>
         ${mine.map(line).join('')}`;
     };
     return `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
-        <div style="font-size:12.5px;font-weight:700">Program at a Glance</div>
+        <div style="font-size:var(--fs-12_5);font-weight:700">Program at a Glance</div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto">${importBtns()}</div>
       </div>
-      <div style="font-size:10px;color:var(--i4);margin-bottom:2px">좁은 화면에서는 시간 순 목록으로 보여드려요</div>
+      <div style="font-size:var(--fs-10);color:var(--i4);margin-bottom:2px">좁은 화면에서는 시간 순 목록으로 보여드려요</div>
       ${days.map(byDay).join('')}`;
   }
 
@@ -268,25 +268,25 @@ function pgaHtml(ev){
   const legend = usedTracks.length ? `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
     ${usedTracks.map(t => {
       const c = trackColor(ev.key, t);
-      return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:10.5px;color:var(--i3)">
-        <span style="width:11px;height:11px;border-radius:3px;background:${c.bg};border-left:3px solid ${c.bd}"></span>
+      return `<span style="display:inline-flex;align-items:center;gap:5px;font-size:var(--fs-10_5);color:var(--i3)">
+        <span style="width:11px;height:11px;border-radius:var(--rd-3);background:${c.bg};border-left:3px solid ${c.bd}"></span>
         ${escapeHtml(t)}</span>`;
     }).join('')}
-    ${noTrack.length ? `<span style="font-size:10.5px;color:var(--am)"
+    ${noTrack.length ? `<span style="font-size:var(--fs-10_5);color:var(--am)"
       title="${escapeHtml(noTrack.map(x => x.title_ko || x.title_en || x.id).join('\n'))}">
       트랙 없는 세션 ${noTrack.length}개 — 색이 안 붙어요</span>` : ''}
   </div>` : '';
 
-  const hint = noRoomOnly ? `<div style="font-size:10.5px;color:var(--i4);margin-bottom:8px;line-height:1.6">
+  const hint = noRoomOnly ? `<div style="font-size:var(--fs-10_5);color:var(--i4);margin-bottom:8px;line-height:1.6">
     장소를 적은 세션이 없어 한 칸으로 그렸어요 — 세션에 «장소»를 넣으면 방별로 나뉩니다.</div>` : '';
 
   return `<div style="display:flex;align-items:center;gap:9px;margin-bottom:8px;flex-wrap:wrap">
-      <div style="font-size:12.5px;font-weight:700">Program at a Glance</div>
-      <div style="font-size:10.5px;color:var(--i4)">세션 ${sessions.length} · ${days.length}일${
+      <div style="font-size:var(--fs-12_5);font-weight:700">Program at a Glance</div>
+      <div style="font-size:var(--fs-10_5);color:var(--i4)">세션 ${sessions.length} · ${days.length}일${
         rooms.length ? ` · ${rooms.length}개 장소` : ''}</div>
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-left:auto">
         ${importBtns()}
-        <button class="btn" style="font-size:11px" onclick="copyPga()"
+        <button class="btn" style="font-size:var(--fs-11)" onclick="copyPga()"
           title="표를 그대로 복사해 프로그램북·메일에 붙여 넣습니다">표 복사</button>
       </div>
     </div>
@@ -298,13 +298,13 @@ function pgaHtml(ev){
           `<col style="width:${(100 / Math.max(1, rooms.length || 1)).toFixed(4)}%">`).join('')}
       </colgroup>
       <thead><tr>
-        <th style="text-align:left;font-size:10px">시간</th>
-        ${(rooms.length ? rooms : ['전체']).map(rm => `<th style="text-align:center;font-size:10.5px;
+        <th style="text-align:left;font-size:var(--fs-10)">시간</th>
+        ${(rooms.length ? rooms : ['전체']).map(rm => `<th style="text-align:center;font-size:var(--fs-10_5);
           border-left:1px solid var(--i7)">${escapeHtml(rm)}</th>`).join('')}
       </tr></thead>
       <tbody>${days.map(dayBlock).join('')}</tbody>
     </table></div>
-    <div style="font-size:10px;color:var(--i4);margin-top:7px;line-height:1.6">
+    <div style="font-size:var(--fs-10);color:var(--i4);margin-top:7px;line-height:1.6">
       칸을 누르면 그 세션의 수정 칸이 열려요. 장소를 안 적은 세션은 개막식처럼 한 줄을 통째로 씁니다.
     </div>`;
 }
@@ -333,7 +333,9 @@ export function openAuditSession(sid, ev){
 export async function copyPga(){
   const el = document.getElementById('pga-table');
   if(!el) return;
-  const html = el.innerHTML;
+  /* 글자 크기·모서리 변수(tokens.css)는 붙여 넣는 곳에 없으니 지금 값(px)으로 바꿔 담는다 */
+  const root = getComputedStyle(document.documentElement);
+  const html = el.innerHTML.replace(/var\((--(?:fs-[\d_]+|rd-\w+|rs|r))\)/g, (m, name) => root.getPropertyValue(name).trim() || m);
   const text = [...el.querySelectorAll('tr')]
     .map(tr => [...tr.children].map(td => td.innerText.replace(/\s*\n\s*/g, ' ').trim()).join('\t'))
     .join('\n');

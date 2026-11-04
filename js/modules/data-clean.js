@@ -43,16 +43,16 @@ export function renderContactFill(){
   const el = document.getElementById('ctry-fill-list');
   if(!el) return;
   fillGroups = contactFillGroups();
-  if(!fillGroups.length){ el.innerHTML = '<div style="font-size:11px;color:var(--i4)">국가가 비었는데 짐작할 근거가 있는 연락처가 없어요.</div>'; return; }
+  if(!fillGroups.length){ el.innerHTML = '<div style="font-size:var(--fs-11);color:var(--i4)">국가가 비었는데 짐작할 근거가 있는 연락처가 없어요.</div>'; return; }
   // 한글 이름·소속만 보고 하는 짐작은 약하다 — 기본으로 꺼 둔다
   const weak = (g) => /한글/.test(g.why);
-  el.innerHTML = fillGroups.map((g, i) => `<label style="display:flex;gap:8px;align-items:center;font-size:12px;padding:2px 0">
+  el.innerHTML = fillGroups.map((g, i) => `<label style="display:flex;gap:8px;align-items:center;font-size:var(--fs-12);padding:2px 0">
       <input type="checkbox" class="ctry-fill-ck" data-i="${i}" ${weak(g) ? '' : 'checked'}>
       <b>${escapeHtml(g.country)}</b> <span style="color:var(--i4)">${escapeHtml(g.why)}</span>
-      <span class="pill p-gray">${g.ids.length}명</span>${weak(g) ? '<span style="font-size:10.5px;color:var(--am)">짐작이 약해요</span>' : ''}</label>`).join('')
+      <span class="pill p-gray">${g.ids.length}명</span>${weak(g) ? '<span style="font-size:var(--fs-10_5);color:var(--am)">짐작이 약해요</span>' : ''}</label>`).join('')
     + `<div style="display:flex;gap:8px;align-items:center;margin-top:8px">
         <button class="btn bp" onclick="applyContactFill()">고른 묶음 채우기</button>
-        <span id="ctry-fill-msg" style="font-size:11px;color:var(--i3)"></span></div>`;
+        <span id="ctry-fill-msg" style="font-size:var(--fs-11);color:var(--i3)"></span></div>`;
 }
 
 export async function applyContactFill(){
@@ -131,14 +131,14 @@ export async function runOrgEnrich(){
   const btn = document.getElementById('org-enrich-btn');
   if(!el) return;
   const targets = enrichTargets();
-  if(!targets.length){ el.innerHTML = '<div style="font-size:11px;color:var(--i4)">국가·업종이 빈 기업이 없어요.</div>'; return; }
+  if(!targets.length){ el.innerHTML = '<div style="font-size:var(--fs-11);color:var(--i4)">국가·업종이 빈 기업이 없어요.</div>'; return; }
   if(btn) btn.disabled = true;
   const countries = COUNTRIES.map(c => c.nameKo);
   const chunks = [];
   for(let i = 0; i < targets.length; i += 60) chunks.push(targets.slice(i, i + 60));
   enrichRows = [];
   let done = 0, failed = 0;
-  const paint = () => { el.innerHTML = `<div style="font-size:11px;color:var(--i3)">✨ 기업 ${targets.length}곳 살펴보는 중… ${done}/${chunks.length}묶음${failed ? ` · 실패 ${failed}` : ''}</div>`; };
+  const paint = () => { el.innerHTML = `<div style="font-size:var(--fs-11);color:var(--i3)">✨ 기업 ${targets.length}곳 살펴보는 중… ${done}/${chunks.length}묶음${failed ? ` · 실패 ${failed}` : ''}</div>`; };
   paint();
   // 한 묶음은 60곳 — 서버 함수가 60초에 끊기므로 나눠서, 세 묶음씩 동시에
   const work = async (chunk) => {
@@ -167,27 +167,27 @@ export async function runOrgEnrich(){
 function renderEnrich(note){
   const el = document.getElementById('org-enrich-list');
   if(!el) return;
-  if(!enrichRows.length){ el.innerHTML = `<div style="font-size:11px;color:var(--i4)">추천할 만한 기업을 찾지 못했어요.${note ? ' ' + escapeHtml(note) : ''}</div>`; return; }
+  if(!enrichRows.length){ el.innerHTML = `<div style="font-size:var(--fs-11);color:var(--i4)">추천할 만한 기업을 찾지 못했어요.${note ? ' ' + escapeHtml(note) : ''}</div>`; return; }
   const nC = enrichRows.filter(r => r.country).length, nS = enrichRows.filter(r => r.sector).length;
-  el.innerHTML = `<div style="font-size:11px;color:var(--i3);margin-bottom:6px">추천 ${enrichRows.length}곳 — 국가 ${nC} · 업종 ${nS}.
+  el.innerHTML = `<div style="font-size:var(--fs-11);color:var(--i3);margin-bottom:6px">추천 ${enrichRows.length}곳 — 국가 ${nC} · 업종 ${nS}.
       «확실»은 미리 체크해 두었고 «짐작»은 꺼 두었어요. 확인하고 체크한 것만 저장합니다.${note ? ` <span style="color:var(--am)">${escapeHtml(note)}</span>` : ''}</div>
-    <div style="max-height:360px;overflow:auto;border:1px solid var(--i6);border-radius:8px;background:var(--W)">
-    <table style="width:100%;border-collapse:collapse;font-size:11.5px">
+    <div style="max-height:360px;overflow:auto;border:1px solid var(--i6);border-radius:var(--r);background:var(--W)">
+    <table style="width:100%;border-collapse:collapse;font-size:var(--fs-11_5)">
       <thead><tr style="background:var(--i8);position:sticky;top:0">
         <th style="text-align:left;padding:5px 8px">기업</th><th style="text-align:left;padding:5px 8px">국가</th>
         <th style="text-align:left;padding:5px 8px">업종</th><th style="text-align:left;padding:5px 8px">근거</th></tr></thead>
       <tbody>${enrichRows.map((r, i) => `<tr style="border-top:1px solid var(--i7)">
-        <td style="padding:5px 8px"><b>${escapeHtml(r.name)}</b>${r.nameEn ? `<div style="font-size:10px;color:var(--i4)">${escapeHtml(r.nameEn)}</div>` : ''}
-          <span class="pill ${r.sure ? 'p-green' : 'p-amber'}" style="font-size:9.5px">${r.sure ? '확실' : '짐작'}</span></td>
+        <td style="padding:5px 8px"><b>${escapeHtml(r.name)}</b>${r.nameEn ? `<div style="font-size:var(--fs-10);color:var(--i4)">${escapeHtml(r.nameEn)}</div>` : ''}
+          <span class="pill ${r.sure ? 'p-green' : 'p-amber'}" style="font-size:var(--fs-9_5)">${r.sure ? '확실' : '짐작'}</span></td>
         <td style="padding:5px 8px">${r.country ? `<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" class="oe-c" data-i="${i}" ${r.sure ? 'checked' : ''}>${escapeHtml(r.country)}</label>` : '<span style="color:var(--i5)">-</span>'}</td>
         <td style="padding:5px 8px">${r.sector ? `<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" class="oe-s" data-i="${i}" ${r.sure ? 'checked' : ''}>${escapeHtml(r.sector)}</label>
-          ${r.undecided ? `<div style="font-size:10px;color:var(--i4)">«${escapeHtml(r.undecided)}» 대신</div>` : ''}` : '<span style="color:var(--i5)">-</span>'}</td>
+          ${r.undecided ? `<div style="font-size:var(--fs-10);color:var(--i4)">«${escapeHtml(r.undecided)}» 대신</div>` : ''}` : '<span style="color:var(--i5)">-</span>'}</td>
         <td style="padding:5px 8px;color:var(--i3)">${escapeHtml(r.reason)}</td></tr>`).join('')}</tbody></table></div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
       <button class="btn bs" onclick="document.querySelectorAll('.oe-c,.oe-s').forEach(x=>x.checked=true)">모두 체크</button>
       <button class="btn bs" onclick="document.querySelectorAll('.oe-c,.oe-s').forEach(x=>x.checked=false)">모두 해제</button>
       <button class="btn bp" style="margin-left:auto" onclick="applyOrgEnrich()">체크한 것 저장</button>
-      <span id="org-enrich-msg" style="font-size:11px;color:var(--i3)"></span></div>`;
+      <span id="org-enrich-msg" style="font-size:var(--fs-11);color:var(--i3)"></span></div>`;
 }
 
 export async function applyOrgEnrich(){

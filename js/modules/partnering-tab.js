@@ -158,7 +158,7 @@ export function buildPtnSidebar(){
   const evs = ptnEvents();
   if(!evs.length){
     ptnEvent = '';
-    evEl.innerHTML = `<div style="font-size:11px;color:var(--i4);padding:8px 4px;line-height:1.5">
+    evEl.innerHTML = `<div style="font-size:var(--fs-11);color:var(--i4);padding:8px 4px;line-height:1.5">
       파트너링을 하는 행사가 없어요.<br>설정 › 행사 관리에서 파트너링 파트를 켜 주세요.</div>`;
     sideEl.innerHTML = '';
     return;
@@ -223,34 +223,35 @@ export function renderPtn(){
   const q = document.getElementById('ptn-q');
   if(q) q.placeholder = ptnView === 'add' ? '마스터DB에서 이름·기업·국가·이메일로 찾기…' : '기업·이름·국가·이메일 검색…';
   if(!ev){
-    body.innerHTML = '<div style="font-size:12px;color:var(--i4);padding:24px 16px">파트너링을 하는 행사가 없어요.</div>';
+    body.innerHTML = '<div style="font-size:var(--fs-12);color:var(--i4);padding:24px 16px">파트너링을 하는 행사가 없어요.</div>';
     return;
   }
 
   const list = rowsFor('list');
   const card = (s) => {
     const l = list.filter(r => r.side === s.key);
-    return `<div style="flex:1;min-width:150px;background:var(--W);border:1px solid var(--i6);border-radius:8px;padding:10px 14px">
+    return `<div style="flex:1;min-width:150px;background:var(--W);border:1px solid var(--i6);border-radius:var(--r);padding:10px 14px">
       <div style="display:flex;align-items:center;gap:6px"><span class="pill ${escAttr(s.cls)}">${escapeHtml(s.label)}</span></div>
-      <div style="font-size:20px;font-weight:700;color:var(--i1);margin-top:6px">${orgCount(l)}<span style="font-size:12px;font-weight:600;color:var(--i3)">개사</span>
-        <span style="font-size:13px;font-weight:600;color:var(--i3);margin-left:4px">${l.length}명</span></div>
+      <div style="font-size:var(--fs-20);font-weight:700;color:var(--i1);margin-top:6px">${orgCount(l)}<span style="font-size:var(--fs-12);font-weight:600;color:var(--i3)">개사</span>
+        <span style="font-size:var(--fs-13);font-weight:600;color:var(--i3);margin-left:4px">${l.length}명</span></div>
     </div>`;
   };
   const counts = { list: list.length, wait: rowsFor('wait').length, assign: rowsFor('assign').length };
   const noneN = list.filter(r => r.side === 'none').length;
 
-  body.innerHTML = `${partTypeNoticeHtml()}
+  /* 보기 탭 줄 — 다른 탭처럼 제목 줄 바로 아래(.db-bar.vtabs). «DB에서 찾아 넣기»는 줄 오른쪽 단추 */
+  const tabs = `<div class="db-bar vtabs"><div class="seg">
+      ${VIEWS.filter(([k]) => k !== 'add').map(([k, label]) => `<button class="seg-b${ptnView === k ? ' on' : ''}" onclick="setPtnView('${k}')">${
+        label}${k in counts ? ` ${counts[k]}` : ''}</button>`).join('')}
+    </div>${VIEWS.filter(([k]) => k === 'add').map(([k, label]) => `<button class="btn bs${ptnView === k ? ' bp' : ''}" style="margin-left:auto" onclick="setPtnView('${k}')">+ ${label}</button>`).join('')}</div>`;
+  body.innerHTML = `${tabs}${partTypeNoticeHtml()}
     <div style="padding:12px 16px 0;display:flex;gap:10px;flex-wrap:wrap">
       ${PARTNERING_SIDES.map(card).join('')}
     </div>
-    <div style="padding:12px 16px 0"><div class="seg" style="flex-wrap:wrap">
-      ${VIEWS.map(([k, label]) => `<button class="seg-b${ptnView === k ? ' on' : ''}" onclick="setPtnView('${k}')">${
-        k === 'add' ? '+ ' : ''}${label}${k in counts ? ` ${counts[k]}` : ''}</button>`).join('')}
-    </div></div>
-    ${noneN && ptnView === 'list' ? `<div style="padding:8px 16px 0;font-size:11px;color:var(--am)">
+    ${noneN && ptnView === 'list' ? `<div style="padding:8px 16px 0;font-size:var(--fs-11);color:var(--am)">
       «${escapeHtml(PARTNERING_UNSIDED)}»로만 적혀 셀러·바이어를 모르는 참가자가 ${noneN}명 있어요 —
       «셀러·바이어 지정»에서 정해 주세요.</div>` : ''}
-    <div style="padding:10px 16px 0;font-size:11px;color:var(--i4)">${viewHint(counts)}</div>
+    <div style="padding:10px 16px 0;font-size:var(--fs-11);color:var(--i4)">${viewHint(counts)}</div>
     <div style="padding:10px 16px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">${actionsHtml()}</div>
     <div id="ptn-rows" style="padding:8px 16px 40px">${rowsHtml()}</div>`;
 }
@@ -266,17 +267,17 @@ function viewHint(counts){
 }
 
 function actionsHtml(){
-  const sel = `<button class="btn" style="font-size:11px" onclick="togglePtnAll()">전체 선택/해제</button>
-    <span id="ptn-picked-n" style="font-size:11px;color:var(--i4)">${pickedLabel()}</span>
+  const sel = `<button class="btn" style="font-size:var(--fs-11)" onclick="togglePtnAll()">전체 선택/해제</button>
+    <span id="ptn-picked-n" style="font-size:var(--fs-11);color:var(--i4)">${pickedLabel()}</span>
     <div style="flex:1"></div>`;
-  if(ptnView === 'list') return sel + `<button class="btn bp" style="font-size:11px" onclick="sendPtnToContact()"
+  if(ptnView === 'list') return sel + `<button class="btn bp" style="font-size:var(--fs-11)" onclick="sendPtnToContact()"
     title="고른 사람의 기업을 컨택 차수 명단에 넣어요. 안 고르면 지금 보이는 전부">컨택으로 보내기</button>`;
-  if(ptnView === 'wait') return sel + `<button class="btn" style="font-size:11px" onclick="sendPtnToContact()"
+  if(ptnView === 'wait') return sel + `<button class="btn" style="font-size:var(--fs-11)" onclick="sendPtnToContact()"
     title="고른 사람의 기업을 컨택 차수 명단에 넣어요">컨택으로 보내기</button>
-    <button class="btn bp" style="font-size:11px" onclick="confirmPtnPicked()">참가 확정</button>`;
-  return sel + `<label style="display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--i2);cursor:pointer">
+    <button class="btn bp" style="font-size:var(--fs-11)" onclick="confirmPtnPicked()">참가 확정</button>`;
+  return sel + `<label style="display:flex;align-items:center;gap:5px;font-size:var(--fs-11_5);color:var(--i2);cursor:pointer">
       <input type="checkbox" ${ptnConfirm ? 'checked' : ''} onchange="setPtnConfirm(this.checked)">참가 확정으로</label>
-    ${PARTNERING_SIDES.map(s => `<button class="btn bp" style="font-size:11px" onclick="assignPtnPicked('${s.key}')">${escapeHtml(s.label)}로 넣기</button>`).join('')}`;
+    ${PARTNERING_SIDES.map(s => `<button class="btn bp" style="font-size:var(--fs-11)" onclick="assignPtnPicked('${s.key}')">${escapeHtml(s.label)}로 넣기</button>`).join('')}`;
 }
 
 function renderPtnRows(){
@@ -307,7 +308,9 @@ function targetRows(){
 
 const sideBadge = (r) => { const s = sideDef(r.side); return `<span class="pill ${escAttr(s.cls)}">${escapeHtml(s.label)}</span>`; };
 const roleBadges = (r) => (r.roles || []).map(v => `<span class="pill p-gray" style="margin-right:3px">${escapeHtml(v)}</span>`).join('')
-  || '<span style="font-size:10.5px;color:var(--i5)">이 행사 기록 없음</span>';
+  || '<span style="font-size:var(--fs-10_5);color:var(--i5)">이 행사 기록 없음</span>';
+/* 줄을 누르면 그 사람의 연락처 창(마스터DB)이 이 자리에서 열린다 — 체크칸은 고르기만 */
+const openArg = (r) => r.cid != null ? escAttr(JSON.stringify(r.cid)) : '';
 const pickBox = (r) => `<input type="checkbox" ${ptnPicked.has(r.key) ? 'checked' : ''} onchange="pickPtn('${escAttr(r.key)}',this.checked)">`;
 
 function emptyHtml(){
@@ -324,7 +327,7 @@ function emptyHtml(){
         ${rowsFor('assign').length ? `<button class="btn" onclick="setPtnView('assign')">이 행사 참여자 ${rowsFor('assign').length}명 중에서 고르기</button>` : ''}
         <button class="btn bp" onclick="setPtnView('add')">+ DB에서 찾아 넣기</button></div>`
     : '';
-  return `<div style="font-size:12px;color:var(--i4);padding:20px 0">${msg}${go}</div>`;
+  return `<div style="font-size:var(--fs-12);color:var(--i4);padding:20px 0">${msg}${go}</div>`;
 }
 
 function rowsHtml(){
@@ -332,16 +335,18 @@ function rowsHtml(){
   if(!l.length) return emptyHtml();
   const more = ptnView === 'add' && l.length > ADD_LIMIT ? l.length - ADD_LIMIT : 0;
   if(more) l = l.slice(0, ADD_LIMIT);
-  const tail = more ? `<div style="font-size:11px;color:var(--i4);padding:8px 0">${more}명 더 있어요 — 검색어를 좁혀 주세요.</div>` : '';
+  const tail = more ? `<div style="font-size:var(--fs-11);color:var(--i4);padding:8px 0">${more}명 더 있어요 — 검색어를 좁혀 주세요.</div>` : '';
   const isList = ptnView === 'list' || ptnView === 'wait';
   const lead = (r) => (isList ? sideBadge(r) : roleBadges(r));
 
   // 좁은 화면에서는 표가 옆으로 넘쳐 읽을 수 없다 — 카드로 바꿔 준다
-  if(isMobile()) return l.map(r => `<label style="display:block;background:var(--W);border:1px solid var(--i6);border-radius:8px;padding:10px 12px;margin-bottom:6px">
+  if(isMobile()) return l.map(r => `<label style="display:block;background:var(--W);border:1px solid var(--i6);border-radius:var(--r);padding:10px 12px;margin-bottom:6px">
     <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">${pickBox(r)}${lead(r)}
-      <span style="font-size:13px;font-weight:600;color:var(--i1)">${escapeHtml(r.org || '소속 없음')}</span></div>
-    <div style="font-size:11.5px;color:var(--i2);margin-top:4px">${escapeHtml(r.name)}${r.title ? ' · ' + escapeHtml(r.title) : ''}</div>
-    <div style="font-size:10.5px;color:var(--i4);margin-top:2px">${escapeHtml(countryName(r.country) || '')}${r.email ? ' · ' + escapeHtml(r.email) : ''}</div>
+      <span style="font-size:var(--fs-13);font-weight:600;color:var(--i1)">${escapeHtml(r.org || '소속 없음')}</span></div>
+    <div style="font-size:var(--fs-11_5);color:var(--i2);margin-top:4px">${r.cid != null
+      ? `<a href="javascript:void(0)" style="font-weight:600;color:var(--a)" onclick="event.preventDefault();event.stopPropagation();openContactDr(${openArg(r)})">${escapeHtml(r.name)}</a>`
+      : escapeHtml(r.name)}${r.title ? ' · ' + escapeHtml(r.title) : ''}</div>
+    <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:2px">${escapeHtml(countryName(r.country) || '')}${r.email ? ' · ' + escapeHtml(r.email) : ''}</div>
   </label>`).join('') + tail;
 
   return `<div style="overflow-x:auto"><table style="width:100%">
@@ -350,16 +355,16 @@ function rowsHtml(){
       <th>기업·기관</th><th>국가</th><th>성명</th><th>직함</th><th>이메일</th>
       ${ptnView === 'list' ? '<th>연락처</th><th style="width:90px">확정일</th>' : ''}
     </tr></thead><tbody>
-    ${l.map(r => `<tr>
-      <td style="text-align:center">${pickBox(r)}</td>
+    ${l.map(r => `<tr${r.cid != null ? ` style="cursor:pointer" title="참가자 정보 보기" onclick="openContactDr(${openArg(r)})"` : ''}>
+      <td style="text-align:center" onclick="event.stopPropagation()">${pickBox(r)}</td>
       <td>${lead(r)}</td>
-      <td><span style="font-weight:600">${escapeHtml(r.org)}</span>${r.orgEn && r.orgEn !== r.org ? `<div style="font-size:10.5px;color:var(--i4)">${escapeHtml(r.orgEn)}</div>` : ''}</td>
-      <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(countryName(r.country) || '')}</td>
-      <td>${escapeHtml(r.name)}${r.nameEn && r.nameEn !== r.name ? `<div style="font-size:10.5px;color:var(--i4)">${escapeHtml(r.nameEn)}</div>` : ''}</td>
-      <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(r.title)}</td>
-      <td style="font-size:11px;color:var(--i4)">${escapeHtml(r.email)}</td>
-      ${ptnView === 'list' ? `<td style="font-size:11px;color:var(--i4)">${escapeHtml(r.phone)}</td>
-      <td style="font-size:11px;color:var(--i4)">${escapeHtml(String(r.confirmedAt).slice(0, 10))}</td>` : ''}
+      <td><span style="font-weight:600">${escapeHtml(r.org)}</span>${r.orgEn && r.orgEn !== r.org ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(r.orgEn)}</div>` : ''}</td>
+      <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(countryName(r.country) || '')}</td>
+      <td>${escapeHtml(r.name)}${r.nameEn && r.nameEn !== r.name ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(r.nameEn)}</div>` : ''}</td>
+      <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(r.title)}</td>
+      <td style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(r.email)}</td>
+      ${ptnView === 'list' ? `<td style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(r.phone)}</td>
+      <td style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(String(r.confirmedAt).slice(0, 10))}</td>` : ''}
     </tr>`).join('')}
     </tbody></table></div>` + tail;
 }
@@ -463,8 +468,8 @@ export async function assignPtnPicked(side){
 function partTypeNoticeHtml(){
   const miss = PARTNERING_SIDES.flatMap(s => s.roles).filter(k => !PART_TYPES.some(t => t.key === k));
   if(!miss.length) return '';
-  return `<div style="margin:12px 16px 0;padding:9px 12px;background:var(--ab);border:1px solid #FDE68A;border-radius:8px;
-      display:flex;align-items:center;gap:9px;font-size:11.5px;color:var(--am);flex-wrap:wrap">
+  return `<div style="margin:12px 16px 0;padding:9px 12px;background:var(--ab);border:1px solid var(--aml);border-radius:var(--r);
+      display:flex;align-items:center;gap:9px;font-size:var(--fs-11_5);color:var(--am);flex-wrap:wrap">
     <span style="flex:1;min-width:200px">참가 유형에 «${miss.map(escapeHtml).join('»·«')}»가 없어요 — 업로드·연락처 화면에서 고를 수 없어요.</span>
     <button class="btn bs" onclick="addPtnPartTypes()">지금 추가</button></div>`;
 }

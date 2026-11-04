@@ -97,7 +97,7 @@ export function followPill(f){
   if(!f || f.state === 'ask') return '';
   const c = f.state === 'nudge' ? 'p-amber' : f.state === 'snoozed' ? 'p-gray' : 'p-blue';
   const icon = f.state === 'nudge' ? '🔔' : '⏳';
-  return `<span class="pill ${c}" style="font-size:9.5px" title="${f.first ? `처음 요청 ${f.first} · 마지막 ${f.last}` : ''}">${icon} ${f.text}</span>`;
+  return `<span class="pill ${c}" style="font-size:var(--fs-9_5)" title="${f.first ? `처음 요청 ${f.first} · 마지막 ${f.last}` : ''}">${icon} ${f.text}</span>`;
 }
 
 /* 마감 입력 — «행사 N일 전»이 먼저, 날짜는 꼭 날짜여야 할 때만. 저장값은 'D-7' 또는 '2026-10-20'.
@@ -106,7 +106,7 @@ export function dueInputHtml(id, raw, evKey){
   const v = String(raw || '').trim();
   const m = v.match(/^D-(\d{1,3})$/i);
   const resolved = m && evKey ? resolveDue(evKey, v) : '';
-  return `<span style="display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;font-size:11px;color:var(--i3)">
+  return `<span style="display:inline-flex;align-items:center;gap:4px;flex-wrap:wrap;font-size:var(--fs-11);color:var(--i3)">
     행사 <input class="fi" type="number" min="0" max="365" id="${id}-rel" value="${m ? m[1] : ''}" placeholder="—"
       style="width:58px;padding:3px 6px" oninput="if(this.value)document.getElementById('${id}').value=''">일 전
     <span style="color:var(--i5)">또는</span>

@@ -71,12 +71,12 @@ export function renderSectorTree(){
 
   const mains = mainSectorsInScope();
   if(!mains.length){
-    el.innerHTML = `<div style="font-size:12px;color:var(--i4)">${settingsUi.sectorScope ? escapeHtml(settingsUi.sectorScope)+' 전용으로 ' : ''}등록된 섹터가 없어요. 아래에서 새로 만들어보세요.</div>`;
+    el.innerHTML = `<div style="font-size:var(--fs-12);color:var(--i4)">${settingsUi.sectorScope ? escapeHtml(settingsUi.sectorScope)+' 전용으로 ' : ''}등록된 섹터가 없어요. 아래에서 새로 만들어보세요.</div>`;
     return;
   }
 
   const counts = computeSectorCompanyCounts();
-  const countBadge = cnt => `<span style="font-size:10px;color:var(--i4);font-weight:400" title="클릭하면 기업DB에서 이 섹터로 필터링">${cnt||0}개사</span>`;
+  const countBadge = cnt => `<span style="font-size:var(--fs-10);color:var(--i4);font-weight:400" title="클릭하면 기업DB에서 이 섹터로 필터링">${cnt||0}개사</span>`;
 
   // 분야 배정 체크박스 칩 (공통 트리의 메인 섹터 카드용) — 한 섹터가 여러
   // 분야에 동시에 속할 수 있어 단일 select 대신 다중 선택 칩으로 표시
@@ -84,10 +84,10 @@ export function renderSectorTree(){
     const cur = new Set(domainOfSector(m));
     return `<div style="display:flex;flex-wrap:wrap;gap:3px;align-items:center" title="이 섹터가 속한 분야 (여러 개 선택 가능)">
       ${DOMAINS.length ? DOMAINS.map(d => `
-        <label style="display:inline-flex;align-items:center;gap:2px;font-size:10px;cursor:pointer;border:1px solid ${cur.has(d.id)?'var(--a)':'var(--i6)'};color:${cur.has(d.id)?'var(--a)':'var(--i4)'};border-radius:10px;padding:1px 6px 1px 4px">
+        <label style="display:inline-flex;align-items:center;gap:2px;font-size:var(--fs-10);cursor:pointer;border:1px solid ${cur.has(d.id)?'var(--a)':'var(--i6)'};color:${cur.has(d.id)?'var(--a)':'var(--i4)'};border-radius:var(--rd-10);padding:1px 6px 1px 4px">
           <input type="checkbox" style="width:10px;height:10px;margin:0" ${cur.has(d.id)?'checked':''}
             onchange="assignSectorDomain('${escAttr(m.id)}','${escAttr(d.id)}')">${escapeHtml(d.name)}
-        </label>`).join('') : '<span style="font-size:10px;color:var(--i4)">등록된 분야 없음</span>'}
+        </label>`).join('') : '<span style="font-size:var(--fs-10);color:var(--i4)">등록된 분야 없음</span>'}
     </div>`;
   };
 
@@ -98,9 +98,9 @@ export function renderSectorTree(){
     const cur = m.canonical && commonMains.some(c => c.id === m.canonical) ? m.canonical : '';
     const inheritedDoms = domainOfSector(m);
     const badge = cur && inheritedDoms.length
-      ? `<span style="font-size:10px;color:var(--te);flex-shrink:0" title="연결된 공통 섹터의 분야를 상속">🗂 ${escapeHtml(inheritedDoms.map(domainName).join(', '))}</span>`
+      ? `<span style="font-size:var(--fs-10);color:var(--te);flex-shrink:0" title="연결된 공통 섹터의 분야를 상속">🗂 ${escapeHtml(inheritedDoms.map(domainName).join(', '))}</span>`
       : '';
-    return `${badge}<select class="fi" style="font-size:10px;padding:1px 4px;width:auto;max-width:150px" title="이 행사 섹터가 대응하는 공통 섹터 (분야 집계는 공통 기준으로 통합)"
+    return `${badge}<select class="fi" style="font-size:var(--fs-10);padding:1px 4px;width:auto;max-width:150px" title="이 행사 섹터가 대응하는 공통 섹터 (분야 집계는 공통 기준으로 통합)"
       onchange="assignSectorCanonical('${escAttr(m.id)}', this.value)">
       <option value=""${!cur?' selected':''}>공통 미연결</option>
       ${commonMains.map(c => `<option value="${escapeHtml(c.id)}"${cur===c.id?' selected':''}>= ${escapeHtml(c.name)}</option>`).join('')}
@@ -116,35 +116,35 @@ export function renderSectorTree(){
     const collapsed = _collapsedMains.has(m.id);
     return `
     <div class="sector-tree-main" ondragover="event.preventDefault()" ondrop="onSectorDropToMain(event,'${m.id}')"
-      style="border:1px solid var(--i6);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:var(--W)">
+      style="border:1px solid var(--i6);border-radius:var(--r);padding:10px 12px;margin-bottom:8px;background:var(--W)">
       <div style="display:flex;align-items:center;gap:8px">
         <span onclick="toggleMainSectorCollapse('${escAttr(m.id)}')"
-          style="width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;color:var(--i4);cursor:pointer;border-radius:4px"
+          style="width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:var(--fs-14);color:var(--i4);cursor:pointer;border-radius:var(--rd-4)"
           onmouseover="this.style.background='rgba(0,0,0,.08)'" onmouseout="this.style.background='none'" title="서브섹터 접기/펼치기">${collapsed?'▸':'▾'}</span>
         <span draggable="true" ondragstart="onSectorDragStart(event,'${m.id}')" onclick="filterCoBySector('${escAttr(m.name)}')"
-          style="font-weight:700;font-size:13px;flex:1;cursor:pointer" title="클릭하면 기업DB에서 이 섹터로 필터링">${escapeHtml(parseSectorScope(m.name).plainName)}</span>
+          style="font-weight:700;font-size:var(--fs-13);flex:1;cursor:pointer" title="클릭하면 기업DB에서 이 섹터로 필터링">${escapeHtml(parseSectorScope(m.name).plainName)}</span>
         ${countBadge(sectorCountFor(counts, m.name))}
         ${settingsUi.sectorScope ? canonicalSelect(m) : domainSelect(m)}
-        <button class="btn bs" style="font-size:11px;padding:2px 8px" onclick="toggleSubAddInline('${escAttr(uid)}')">+ 서브</button>
+        <button class="btn bs" style="font-size:var(--fs-11);padding:2px 8px" onclick="toggleSubAddInline('${escAttr(uid)}')">+ 서브</button>
         <button onclick="removeSectorById('${m.id}')"
-          style="background:none;border:none;cursor:pointer;color:var(--i4);font-size:16px;line-height:1"
+          style="background:none;border:none;cursor:pointer;color:var(--i4);font-size:var(--fs-16);line-height:1"
           onmouseover="this.style.color='var(--re)'" onmouseout="this.style.color='var(--i4)'">×</button>
       </div>
       <div id="sub-add-inline-${escAttr(uid)}" style="display:none;margin-top:8px">
         <input class="fi" id="sub-add-input-${escAttr(uid)}" placeholder="서브 섹터명" style="width:60%;display:inline-block"
           onkeydown="if(event.key==='Enter')addSubSectorTo('${m.id}','${escAttr(uid)}')">
-        <button class="btn bp" style="font-size:11px" onclick="addSubSectorTo('${m.id}','${escAttr(uid)}')">추가</button>
+        <button class="btn bp" style="font-size:var(--fs-11)" onclick="addSubSectorTo('${m.id}','${escAttr(uid)}')">추가</button>
       </div>
       ${collapsed ? '' : `
       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;padding-left:14px;min-height:20px">
         ${subs.length ? subs.map(s => `
           <span class="sector-chip" draggable="true" ondragstart="onSectorDragStart(event,'${s.id}')" onclick="filterCoBySector('${escAttr(s.name)}')"
-            style="display:inline-flex;align-items:center;gap:5px;background:var(--i7);border:1px solid var(--i6);border-radius:20px;padding:3px 10px;font-size:12px;cursor:pointer" title="클릭하면 기업DB에서 이 섹터로 필터링">
+            style="display:inline-flex;align-items:center;gap:5px;background:var(--i7);border:1px solid var(--i6);border-radius:var(--rd-20);padding:3px 10px;font-size:var(--fs-12);cursor:pointer" title="클릭하면 기업DB에서 이 섹터로 필터링">
             ↳ ${escapeHtml(parseSectorScope(s.name).plainName)} ${countBadge(sectorCountFor(counts, s.name))}
             <button onclick="event.stopPropagation();removeSectorById('${s.id}')"
-              style="background:none;border:none;cursor:pointer;color:var(--i4);font-size:14px;line-height:1;padding:0 0 0 2px"
+              style="background:none;border:none;cursor:pointer;color:var(--i4);font-size:var(--fs-14);line-height:1;padding:0 0 0 2px"
               onmouseover="this.style.color='var(--re)'" onmouseout="this.style.color='var(--i4)'">×</button>
-          </span>`).join('') : '<span style="font-size:11px;color:var(--i4)">서브섹터 없음 — 드래그해서 넣을 수 있어요</span>'}
+          </span>`).join('') : '<span style="font-size:var(--fs-11);color:var(--i4)">서브섹터 없음 — 드래그해서 넣을 수 있어요</span>'}
       </div>`}
     </div>`;
   };
@@ -160,7 +160,7 @@ export function renderSectorTree(){
   if(unassigned.length) groups.push({ tag: UNASSIGNED_DOMAIN, title: '미분류', mains: unassigned });
 
   el.innerHTML = groups.map(g => `
-    <div style="font-size:11px;font-weight:700;color:var(--i3);margin:14px 0 6px;text-transform:uppercase;letter-spacing:.4px">
+    <div style="font-size:var(--fs-11);font-weight:700;color:var(--i3);margin:14px 0 6px;text-transform:uppercase;letter-spacing:.4px">
       🗂 ${escapeHtml(g.title)} <span style="font-weight:400;color:var(--i4)">(${g.mains.length})</span>
     </div>
     ${g.mains.map(m => mainCard(m, g.tag)).join('')}
@@ -348,12 +348,12 @@ export function renderSectorMergeList(){
     ? COMPANY_SECTORS.map(s => {
         const isSub = !!s.parent;
         const parentName = isSub ? (sectorName(s.parent) + ' › ') : '';
-        return `<label style="display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 0;cursor:pointer${isSub?';padding-left:16px':''}">
+        return `<label style="display:flex;align-items:center;gap:8px;font-size:var(--fs-12);padding:3px 0;cursor:pointer${isSub?';padding-left:16px':''}">
           <input type="checkbox" class="sector-merge-chk" value="${s.id}">
-          ${isSub?`<span style="color:var(--i4);font-size:11px">${escapeHtml(parentName)}</span>`:''}${escapeHtml(s.name)}
+          ${isSub?`<span style="color:var(--i4);font-size:var(--fs-11)">${escapeHtml(parentName)}</span>`:''}${escapeHtml(s.name)}
         </label>`;
       }).join('')
-    : '<div style="font-size:12px;color:var(--i4)">등록된 섹터 없음</div>';
+    : '<div style="font-size:var(--fs-12);color:var(--i4)">등록된 섹터 없음</div>';
 
   const cur = keepSel.value;
   keepSel.innerHTML = COMPANY_SECTORS.map(s =>
@@ -453,11 +453,11 @@ export function renderUnregisteredSectors(){
   const unreg = collectUnregisteredSectors();
   listEl.innerHTML = unreg.length
     ? unreg.map(u => `
-        <label style="display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 0;cursor:pointer">
+        <label style="display:flex;align-items:center;gap:8px;font-size:var(--fs-12);padding:3px 0;cursor:pointer">
           <input type="checkbox" class="sector-unreg-chk" value="${escapeHtml(u.name)}">
-          ${escapeHtml(u.name)}<span style="color:var(--i4);font-size:11px">(${u.count}개사)</span>
+          ${escapeHtml(u.name)}<span style="color:var(--i4);font-size:var(--fs-11)">(${u.count}개사)</span>
         </label>`).join('')
-    : '<div style="font-size:12px;color:var(--i4)">미등록 섹터 없음 — 업로드 데이터의 섹터 값이 모두 등록돼 있어요</div>';
+    : '<div style="font-size:var(--fs-12);color:var(--i4)">미등록 섹터 없음 — 업로드 데이터의 섹터 값이 모두 등록돼 있어요</div>';
 
   const cur = groupSel.value;
   groupSel.innerHTML = mainSectors().map(s =>
@@ -514,12 +514,12 @@ export function renderMainConvertList(){
   listEl.innerHTML = mains.length
     ? mains.map(m => {
         const childCount = subSectors(m.id).length;
-        return `<label style="display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 0;cursor:pointer">
+        return `<label style="display:flex;align-items:center;gap:8px;font-size:var(--fs-12);padding:3px 0;cursor:pointer">
           <input type="checkbox" class="mainconv-chk" value="${m.id}">
-          ${escapeHtml(m.name)}${childCount ? `<span style="color:var(--i4);font-size:11px">(서브 ${childCount}개 포함)</span>` : ''}
+          ${escapeHtml(m.name)}${childCount ? `<span style="color:var(--i4);font-size:var(--fs-11)">(서브 ${childCount}개 포함)</span>` : ''}
         </label>`;
       }).join('')
-    : '<div style="font-size:12px;color:var(--i4)">등록된 메인 섹터 없음</div>';
+    : '<div style="font-size:var(--fs-12);color:var(--i4)">등록된 메인 섹터 없음</div>';
 
   const cur = groupSel.value;
   groupSel.innerHTML = mains.map(m =>

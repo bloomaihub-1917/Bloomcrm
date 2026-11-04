@@ -49,27 +49,27 @@ export function mailStateHtml(t, l){
   if(!isInbound(l)) return '';
   // 숫자와 같은 규칙(isUnread) — 처리한 메일은 읽은 시각이 없어도 «안 읽음»을 붙이지 않는다
   const read = !isUnread(l)
-    ? `<span class="pill p-gray" style="font-size:10px" title="${escapeHtml(l.read_at ? `${l.read_by || ''} ${l.read_at}` : '처리함')}">읽음</span>`
-    : `<span class="pill p-red" style="font-size:10px">● 안 읽음</span>`;
+    ? `<span class="pill p-gray" style="font-size:var(--fs-10)" title="${escapeHtml(l.read_at ? `${l.read_by || ''} ${l.read_at}` : '처리함')}">읽음</span>`
+    : `<span class="pill p-red" style="font-size:var(--fs-10)">● 안 읽음</span>`;
   const done = l.status === 'done'
-    ? `<span class="pill p-green" style="font-size:10px" title="${escapeHtml(l.answered_at || '')}">처리함</span>`
-    : `<span class="pill p-amber" style="font-size:10px">처리 안 함</span>`;
+    ? `<span class="pill p-green" style="font-size:var(--fs-10)" title="${escapeHtml(l.answered_at || '')}">처리함</span>`
+    : `<span class="pill p-amber" style="font-size:var(--fs-10)">처리 안 함</span>`;
   return `<span data-mst="${escapeHtml(t)}|${escAttr(l.id)}" style="display:inline-flex;gap:3px">${read}${done}</span>`;
 }
 /* 펼친 본문 아래 단추 */
 export function mailActionsHtml(t, l){
   const id = escAttr(l.id);
   // 원문 보기 — 이미지·표를 봐야 할 때 메일함에서 원본을 가져와 안전한 칸에 띄운다(mail-original.js)
-  const orig = l.mail_uid ? `<button class="btn" style="font-size:10.5px" onclick="openMailOriginal('${t}','${id}')">원문 보기</button>` : '';
+  const orig = l.mail_uid ? `<button class="btn" style="font-size:var(--fs-10_5)" onclick="openMailOriginal('${t}','${id}')">원문 보기</button>` : '';
   if(!isInbound(l)) return orig ? `<div style="display:flex;gap:6px;margin-top:6px">${orig}</div>` : '';
   return `<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
     ${orig}
-    <button class="btn bp" style="font-size:10.5px" onclick="replyMail('${t}','${id}')">↩ 회신</button>
-    <button class="btn" style="font-size:10.5px" onclick="pinMail('${t}','${id}')" title="이 메일을 모든 탭 위에 붙여 두고 내용을 칸에 넣습니다">📌 고정</button>
+    <button class="btn bp" style="font-size:var(--fs-10_5)" onclick="replyMail('${t}','${id}')">↩ 회신</button>
+    <button class="btn" style="font-size:var(--fs-10_5)" onclick="pinMail('${t}','${id}')" title="이 메일을 모든 탭 위에 붙여 두고 내용을 칸에 넣습니다">📌 고정</button>
     ${l.status === 'done'
-      ? `<button class="btn" style="font-size:10.5px" onclick="setMailDone('${t}','${id}',false)">처리 취소</button>`
-      : `<button class="btn bp" style="font-size:10.5px" onclick="setMailDone('${t}','${id}',true)">✓ 처리 완료</button>`}
-    <button class="btn" style="font-size:10.5px" onclick="markMailUnread('${t}','${id}')">안 읽음으로</button>
+      ? `<button class="btn" style="font-size:var(--fs-10_5)" onclick="setMailDone('${t}','${id}',false)">처리 취소</button>`
+      : `<button class="btn bp" style="font-size:var(--fs-10_5)" onclick="setMailDone('${t}','${id}',true)">✓ 처리 완료</button>`}
+    <button class="btn" style="font-size:var(--fs-10_5)" onclick="markMailUnread('${t}','${id}')">안 읽음으로</button>
   </div>`;
 }
 /* 펼칠 때 부른다 — <details ontoggle> */
@@ -216,10 +216,10 @@ export function mailCardHtml(evKey, part){
   const open = (r) => r.t === 'sp' ? `openSpeakerDr('${escAttr(r.id)}','box')` : `openExhDr('${escAttr(r.id)}','box')`;
   const num = (k, label, color) => `<button class="seg-b${f === k ? ' on' : ''}" onclick="setDashMailFil('${part}','${k}')"
       style="${n[k] && color ? `color:${color};font-weight:700` : ''}">${label} ${n[k]}</button>`;
-  const row = (r) => `<div onclick="${open(r)}" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;background:var(--i9);margin-bottom:4px">
-      <span style="font-size:10.5px;color:var(--i4);flex:0 0 auto">${escapeHtml(String(r.l.ts || '').slice(5, 16))}</span>
-      <span style="flex:0 0 110px;font-weight:${isUnread(r.l) ? 800 : 600};font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${isUnread(r.l) ? '● ' : ''}${escapeHtml(r.who)}</span>
-      <span style="font-size:11.5px;color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r.l.subject || '(제목 없음)')}</span>
+  const row = (r) => `<div onclick="${open(r)}" style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--rd-6);cursor:pointer;background:var(--i9);margin-bottom:4px">
+      <span style="font-size:var(--fs-10_5);color:var(--i4);flex:0 0 auto">${escapeHtml(String(r.l.ts || '').slice(5, 16))}</span>
+      <span style="flex:0 0 110px;font-weight:${isUnread(r.l) ? 800 : 600};font-size:var(--fs-11_5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${isUnread(r.l) ? '● ' : ''}${escapeHtml(r.who)}</span>
+      <span style="font-size:var(--fs-11_5);color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r.l.subject || '(제목 없음)')}</span>
       ${ageDays(r.l.ts) > 0 ? `<span class="pill ${ageDays(r.l.ts) >= STALE_DAYS ? 'p-amber' : 'p-gray'}" style="flex:0 0 auto">${ageDays(r.l.ts)}일</span>` : ''}
     </div>`;
 
@@ -234,29 +234,29 @@ export function mailCardHtml(evKey, part){
   return `<div class="uc">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
       <div class="uc-ttl" style="margin:0">메일함</div>
-      <span style="font-size:10.5px;color:var(--i4)" id="mcard-last-${part}">마지막 가져옴 확인 중…</span>
+      <span style="font-size:var(--fs-10_5);color:var(--i4)" id="mcard-last-${part}">마지막 가져옴 확인 중…</span>
       <span id="mcard-un-${part}"></span>
-      <button class="btn" style="font-size:10.5px;margin-left:auto" onclick="dashMailSync('${escAttr(evKey)}','${part}')">↻ 지금 가져오기</button>
+      <button class="btn" style="font-size:var(--fs-10_5);margin-left:auto" onclick="dashMailSync('${escAttr(evKey)}','${part}')">↻ 지금 가져오기</button>
     </div>
-    <div id="mcard-msg-${part}" style="font-size:10.5px;color:var(--i4);min-height:0"></div>
+    <div id="mcard-msg-${part}" style="font-size:var(--fs-10_5);color:var(--i4);min-height:0"></div>
     <div class="seg" style="margin:8px 0 6px">${num('unread', '● 안 읽음', 'var(--re)')}${num('pending', '처리 안 함', 'var(--am)')}${num('stale', `${STALE_DAYS}일 넘게 처리 안 함`, 'var(--re)')}</div>
-    ${shown.slice(0, 8).map(row).join('') || '<div style="font-size:11px;color:var(--i5);padding:4px 2px">해당하는 메일이 없어요</div>'}
-    ${shown.length > 8 ? `<div style="font-size:10.5px;color:var(--i4);padding:2px">외 ${shown.length - 8}건 — 설정 › 행사 관리 › 메일에서 모두 볼 수 있어요</div>` : ''}
-    ${replies.length ? `<div style="font-size:11px;font-weight:700;color:var(--i2);margin:12px 0 4px">새 회신 <span style="font-weight:400;color:var(--i4)">— 자동으로 «회신 받음» 체크됨, 내용을 보고 참석 여부를 골라주세요</span></div>
-      ${replies.map(sp => { const l = lastIn(sp.id); return `<div style="display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:6px;background:var(--i9);margin-bottom:4px">
-        <span style="font-size:10.5px;color:var(--i4)">${escapeHtml(sp.invite_replied_at || '')}</span>
-        <span style="font-weight:700;font-size:11.5px;flex:0 0 auto">${escapeHtml(sp.name_snapshot || sp.name_en || '')}</span>
-        <span style="font-size:11px;color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(l ? l.subject || '' : '')}</span>
-        <button class="btn bp" style="font-size:10px" onclick="confirmReply('${escAttr(sp.id)}',true)">참석</button>
-        <button class="btn" style="font-size:10px;color:var(--re)" onclick="confirmReply('${escAttr(sp.id)}',false)">불참</button>
-        <button class="btn" style="font-size:10px" onclick="openSpeakerDr('${escAttr(sp.id)}','box')">보기</button></div>`; }).join('')}` : ''}
-    ${cands.length ? `<div style="font-size:11px;font-weight:700;color:var(--i2);margin:12px 0 4px">새 문의 후보 <span style="font-weight:400;color:var(--i4)">— 답할 일이면 문의로 올리세요(«미답변 문의»로 셉니다)</span></div>
-      ${cands.map(r => `<div style="display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:6px;background:var(--i9);margin-bottom:4px">
-        <span style="font-weight:700;font-size:11.5px;flex:0 0 110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r.who)}</span>
-        <span style="font-size:11px;color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r.l.subject || '')}</span>
-        <button class="btn bp" style="font-size:10px" onclick="mailToInquiry('${escAttr(r.l.id)}')">문의로 등록</button>
-        <button class="btn" style="font-size:10px" onclick="setMailDone('ex','${escAttr(r.l.id)}',true)">처리 완료</button>
-        <button class="btn" style="font-size:10px" onclick="${open(r)}">보기</button></div>`).join('')}` : ''}
+    ${shown.slice(0, 8).map(row).join('') || '<div style="font-size:var(--fs-11);color:var(--i5);padding:4px 2px">해당하는 메일이 없어요</div>'}
+    ${shown.length > 8 ? `<div style="font-size:var(--fs-10_5);color:var(--i4);padding:2px">외 ${shown.length - 8}건 — 설정 › 행사 관리 › 메일에서 모두 볼 수 있어요</div>` : ''}
+    ${replies.length ? `<div style="font-size:var(--fs-11);font-weight:700;color:var(--i2);margin:12px 0 4px">새 회신 <span style="font-weight:400;color:var(--i4)">— 자동으로 «회신 받음» 체크됨, 내용을 보고 참석 여부를 골라주세요</span></div>
+      ${replies.map(sp => { const l = lastIn(sp.id); return `<div style="display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:var(--rd-6);background:var(--i9);margin-bottom:4px">
+        <span style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(sp.invite_replied_at || '')}</span>
+        <span style="font-weight:700;font-size:var(--fs-11_5);flex:0 0 auto">${escapeHtml(sp.name_snapshot || sp.name_en || '')}</span>
+        <span style="font-size:var(--fs-11);color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(l ? l.subject || '' : '')}</span>
+        <button class="btn bp" style="font-size:var(--fs-10)" onclick="confirmReply('${escAttr(sp.id)}',true)">참석</button>
+        <button class="btn" style="font-size:var(--fs-10);color:var(--re)" onclick="confirmReply('${escAttr(sp.id)}',false)">불참</button>
+        <button class="btn" style="font-size:var(--fs-10)" onclick="openSpeakerDr('${escAttr(sp.id)}','box')">보기</button></div>`; }).join('')}` : ''}
+    ${cands.length ? `<div style="font-size:var(--fs-11);font-weight:700;color:var(--i2);margin:12px 0 4px">새 문의 후보 <span style="font-weight:400;color:var(--i4)">— 답할 일이면 문의로 올리세요(«미답변 문의»로 셉니다)</span></div>
+      ${cands.map(r => `<div style="display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:var(--rd-6);background:var(--i9);margin-bottom:4px">
+        <span style="font-weight:700;font-size:var(--fs-11_5);flex:0 0 110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r.who)}</span>
+        <span style="font-size:var(--fs-11);color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(r.l.subject || '')}</span>
+        <button class="btn bp" style="font-size:var(--fs-10)" onclick="mailToInquiry('${escAttr(r.l.id)}')">문의로 등록</button>
+        <button class="btn" style="font-size:var(--fs-10)" onclick="setMailDone('ex','${escAttr(r.l.id)}',true)">처리 완료</button>
+        <button class="btn" style="font-size:var(--fs-10)" onclick="${open(r)}">보기</button></div>`).join('')}` : ''}
   </div>`;
 }
 /* 카드가 그려진 뒤 마지막 가져온 시각을 채운다(계정 목록은 한 번 읽어 둔다) */
@@ -271,7 +271,7 @@ export async function fillMailCard(evKey, part){
   if(acc){
     const n = await unassignedCount(evKey);
     const u = document.getElementById(`mcard-un-${part}`);
-    if(u) u.innerHTML = n ? `<button class="btn" style="font-size:10.5px;color:var(--am);font-weight:700" onclick="openUnassigned('${escAttr(evKey)}')"
+    if(u) u.innerHTML = n ? `<button class="btn" style="font-size:var(--fs-10_5);color:var(--am);font-weight:700" onclick="openUnassigned('${escAttr(evKey)}')"
       title="아는 사람과 주소가 안 맞은 받은 메일 — 연사·참가사에 연결하거나 무시합니다">주인 없는 메일 ${n}</button>` : '';
   }
 }

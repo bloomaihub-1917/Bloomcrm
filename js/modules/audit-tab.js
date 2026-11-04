@@ -131,9 +131,9 @@ export function renderAudit(){
       <div class="audit-main">
         <div class="audit-who">${escapeHtml(e.name)}<span class="audit-email">${escapeHtml(e.email)}</span></div>
         ${(() => { const d = describeAudit(e); return `
-        ${d.where ? `<div style="font-size:11px;color:var(--i4);margin-bottom:1px">${escapeHtml(d.where)}</div>` : ''}
+        ${d.where ? `<div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:1px">${escapeHtml(d.where)}</div>` : ''}
         <div class="audit-what">${boldChange(d.what)}</div>
-        ${d.lines.length ? `<div style="font-size:11.5px;color:var(--i3);line-height:1.6;margin-top:2px">${
+        ${d.lines.length ? `<div style="font-size:var(--fs-11_5);color:var(--i3);line-height:1.6;margin-top:2px">${
           d.lines.slice(0, 6).map(l => `<div>· ${boldChange(l)}</div>`).join('')}${
           d.lines.length > 6 ? `<div style="color:var(--i5)">외 ${d.lines.length - 6}칸</div>` : ''}</div>` : ''}`; })()}
         <div class="audit-meta">
@@ -232,8 +232,8 @@ export function buildAuditUserList(){
   const sbEl = document.getElementById('audit-user-list');
   if(sbEl) sbEl.innerHTML = Object.entries(users).map(([email,name])=>`
     <button class="evc${auditUserFilter===email?' on':''}" onclick="setAuditUser('${escAttr(email)}')">
-      <div style="width:22px;height:22px;border-radius:50%;background:${userColor(email)};color:#fff;
-        display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0">
+      <div style="width:22px;height:22px;border-radius:50%;background:${userColor(email)};color:var(--on);
+        display:flex;align-items:center;justify-content:center;font-size:var(--fs-9);font-weight:700;flex-shrink:0">
         ${escapeHtml(userInitials(name))}
       </div>
       <span class="ev-n">${escapeHtml(name)}</span>

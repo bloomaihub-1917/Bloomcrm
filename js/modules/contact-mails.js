@@ -60,13 +60,13 @@ export function contactMailsHtml(c){
   groups.sort((a, b) => byTs(a.logs[0], b.logs[0]));
 
   const row = (l, hl) => `<details style="border-top:1px solid var(--i7);padding:5px 0${hl ? ';background:var(--ad);margin:0 -6px;padding-left:6px;padding-right:6px' : ''}">
-    <summary style="cursor:pointer;list-style:none;display:flex;gap:6px;align-items:baseline;font-size:11.5px">
-      <span style="font-size:10px;font-weight:700;color:${l.direction === 'in' ? 'var(--g)' : 'var(--a)'};flex:none">${l.direction === 'in' ? '받음' : '보냄'}</span>
+    <summary style="cursor:pointer;list-style:none;display:flex;gap:6px;align-items:baseline;font-size:var(--fs-11_5)">
+      <span style="font-size:var(--fs-10);font-weight:700;color:${l.direction === 'in' ? 'var(--g)' : 'var(--a)'};flex:none">${l.direction === 'in' ? '받음' : '보냄'}</span>
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:${hl ? 600 : 400}">${escapeHtml(l.subject || '(제목 없음)')}</span>
-      <span style="font-size:10px;color:var(--i4);flex:none">${escapeHtml(String(l.ts || '').slice(0, 10))}</span>
+      <span style="font-size:var(--fs-10);color:var(--i4);flex:none">${escapeHtml(String(l.ts || '').slice(0, 10))}</span>
     </summary>
-    <div style="font-size:10.5px;color:var(--i4);margin-top:3px">${escapeHtml(l.counterpart || '')}</div>
-    <div style="font-size:11px;color:var(--i2);white-space:pre-wrap;line-height:1.6;margin-top:4px;max-height:240px;overflow:auto">${escapeHtml(String(l.body || '').slice(0, 4000))}</div>
+    <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:3px">${escapeHtml(l.counterpart || '')}</div>
+    <div style="font-size:var(--fs-11);color:var(--i2);white-space:pre-wrap;line-height:1.6;margin-top:4px;max-height:240px;overflow:auto">${escapeHtml(String(l.body || '').slice(0, 4000))}</div>
     ${l.direction === 'out' && !String(l.id || '').startsWith('nolog-') ? manageHtml(l) : ''}
   </details>`;
 
@@ -74,15 +74,15 @@ export function contactMailsHtml(c){
     <div style="margin-bottom:14px">${groups.map(g => {
       const n = g.mineAll ? g.logs.length : g.logs.filter(isMine).length;
       const shown = openGroups.has(g.key);
-      return `<div style="border:1px solid var(--i6);border-radius:8px;padding:7px 10px;margin-bottom:6px">
+      return `<div style="border:1px solid var(--i6);border-radius:var(--r);padding:7px 10px;margin-bottom:6px">
         <div style="display:flex;align-items:center;gap:6px;cursor:pointer" onclick="toggleContactMailGroup('${escAttr(g.key)}')">
-          <span style="font-size:11.5px;font-weight:700;color:var(--i2)">${escapeHtml(evShort(g.ev))}</span>
-          <span style="font-size:11px;color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(g.part)}</span>
-          <span style="font-size:10.5px;color:var(--i4);flex:none">${g.logs.length}통${g.mineAll ? '' : ` · 이 사람 ${n}`} <span id="cmail-ar-${escAttr(g.key)}">${shown ? '▴' : '▾'}</span></span>
-          <button class="btn" style="font-size:10px;padding:1px 7px;flex:none" onclick="event.stopPropagation();${g.open}">열기</button>
+          <span style="font-size:var(--fs-11_5);font-weight:700;color:var(--i2)">${escapeHtml(evShort(g.ev))}</span>
+          <span style="font-size:var(--fs-11);color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(g.part)}</span>
+          <span style="font-size:var(--fs-10_5);color:var(--i4);flex:none">${g.logs.length}통${g.mineAll ? '' : ` · 이 사람 ${n}`} <span id="cmail-ar-${escAttr(g.key)}">${shown ? '▴' : '▾'}</span></span>
+          <button class="btn" style="font-size:var(--fs-10);padding:1px 7px;flex:none" onclick="event.stopPropagation();${g.open}">열기</button>
         </div>
         <div id="cmail-${escAttr(g.key)}" style="margin-top:6px${shown ? '' : ';display:none'}">
-          ${g.mineAll ? '' : '<div style="font-size:10px;color:var(--i4);margin-bottom:3px">기업으로 오간 메일 전체 — 이 사람 주소가 들어간 줄을 강조했어요</div>'}
+          ${g.mineAll ? '' : '<div style="font-size:var(--fs-10);color:var(--i4);margin-bottom:3px">기업으로 오간 메일 전체 — 이 사람 주소가 들어간 줄을 강조했어요</div>'}
           ${g.logs.map(l => row(l, !g.mineAll && isMine(l))).join('')}
         </div>
       </div>`;
@@ -92,13 +92,13 @@ export function contactMailsHtml(c){
 /* 보낸 메일 한 통 관리 — «회신 받음»(answered_at)과 메모(answer). 행사 창과 같은 기록을 고친다 */
 function manageHtml(l){
   const id = escAttr(l.id);
-  return `<div style="display:flex;gap:6px;align-items:center;margin-top:6px;font-size:11px;flex-wrap:wrap">
+  return `<div style="display:flex;gap:6px;align-items:center;margin-top:6px;font-size:var(--fs-11);flex-wrap:wrap">
     <label style="display:flex;gap:4px;align-items:center;cursor:pointer;flex:none">
       <input type="checkbox" ${l.answered_at ? 'checked' : ''} onchange="contactMailReply('${id}',this.checked)"> 회신 받음</label>
-    <span id="cm-ans-${id}" style="font-size:10px;color:var(--g);flex:none">${l.answered_at ? escapeHtml(String(l.answered_at).slice(0, 10)) : ''}</span>
-    <input class="fi" style="flex:1;min-width:160px;font-size:11px;padding:3px 6px" value="${escapeHtml(l.answer || '')}" placeholder="메모 (회신 내용·다음 할 일)"
+    <span id="cm-ans-${id}" style="font-size:var(--fs-10);color:var(--g);flex:none">${l.answered_at ? escapeHtml(String(l.answered_at).slice(0, 10)) : ''}</span>
+    <input class="fi" style="flex:1;min-width:160px;font-size:var(--fs-11);padding:3px 6px" value="${escapeHtml(l.answer || '')}" placeholder="메모 (회신 내용·다음 할 일)"
       onchange="contactMailMemo('${id}',this.value)">
-    <span id="cm-msg-${id}" style="font-size:10px;color:var(--i4);flex:none"></span>
+    <span id="cm-msg-${id}" style="font-size:var(--fs-10);color:var(--i4);flex:none"></span>
   </div>`;
 }
 const logById = (id) => {
@@ -130,24 +130,24 @@ function attemptsHtml(atts){
   const key = 'ct';
   const shown = openGroups.has(key);
   const roundOf = (id) => CONTACT_ROUNDS.find(r => r.id === id) || {};
-  return `<div style="border:1px solid var(--i6);border-radius:8px;padding:7px 10px;margin-bottom:6px">
+  return `<div style="border:1px solid var(--i6);border-radius:var(--r);padding:7px 10px;margin-bottom:6px">
     <div style="display:flex;align-items:center;gap:6px;cursor:pointer" onclick="toggleContactMailGroup('${key}')">
-      <span style="font-size:11.5px;font-weight:700;color:var(--i2)">컨택 DM·TM</span>
-      <span style="font-size:11px;color:var(--i3);flex:1">차수 연락 기록</span>
-      <span style="font-size:10.5px;color:var(--i4);flex:none">${atts.length}건 <span id="cmail-ar-${key}">${shown ? '▴' : '▾'}</span></span>
+      <span style="font-size:var(--fs-11_5);font-weight:700;color:var(--i2)">컨택 DM·TM</span>
+      <span style="font-size:var(--fs-11);color:var(--i3);flex:1">차수 연락 기록</span>
+      <span style="font-size:var(--fs-10_5);color:var(--i4);flex:none">${atts.length}건 <span id="cmail-ar-${key}">${shown ? '▴' : '▾'}</span></span>
     </div>
     <div id="cmail-${key}" style="margin-top:6px${shown ? '' : ';display:none'}">
       ${atts.map(a => { const R = REACTIONS[a.reaction] || {}; const id = escAttr(a.id); const r = roundOf(a.round_id);
-        return `<div style="border-top:1px solid var(--i7);padding:5px 0;font-size:11.5px">
+        return `<div style="border-top:1px solid var(--i7);padding:5px 0;font-size:var(--fs-11_5)">
           <div style="display:flex;gap:6px;align-items:center">
-            <span style="font-size:10px;font-weight:700;color:var(--a);flex:none">${escapeHtml(a.channel || '')}</span>
-            <span class="pill ${R.cls || 'p-gray'}" style="font-size:9.5px;flex:none">${escapeHtml(R.label || a.reaction || '')}</span>
+            <span style="font-size:var(--fs-10);font-weight:700;color:var(--a);flex:none">${escapeHtml(a.channel || '')}</span>
+            <span class="pill ${R.cls || 'p-gray'}" style="font-size:var(--fs-9_5);flex:none">${escapeHtml(R.label || a.reaction || '')}</span>
             <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml([r.event_id ? evShort(r.event_id) : '', r.name || ''].filter(Boolean).join(' · '))}</span>
-            <span style="font-size:10px;color:var(--i4);flex:none">${escapeHtml(String(a.at || '').slice(0, 10))}${a.by_name ? ' · ' + escapeHtml(a.by_name) : ''}</span>
+            <span style="font-size:var(--fs-10);color:var(--i4);flex:none">${escapeHtml(String(a.at || '').slice(0, 10))}${a.by_name ? ' · ' + escapeHtml(a.by_name) : ''}</span>
           </div>
           <div style="display:flex;gap:6px;align-items:center;margin-top:4px">
-            <input class="fi" style="flex:1;font-size:11px;padding:3px 6px" value="${escapeHtml(a.note || '')}" placeholder="메모" onchange="contactAttemptMemo('${id}',this.value)">
-            <span id="cm-msg-${id}" style="font-size:10px;color:var(--i4);flex:none"></span></div>
+            <input class="fi" style="flex:1;font-size:var(--fs-11);padding:3px 6px" value="${escapeHtml(a.note || '')}" placeholder="메모" onchange="contactAttemptMemo('${id}',this.value)">
+            <span id="cm-msg-${id}" style="font-size:var(--fs-10);color:var(--i4);flex:none"></span></div>
         </div>`; }).join('')}
     </div>
   </div>`;

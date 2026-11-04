@@ -284,38 +284,38 @@ function render(){
 
   el.innerHTML = `<div style="background:var(--W);border-radius:var(--rl);width:100%;max-width:760px;padding:18px 20px;box-shadow:var(--shl)">
     <div style="display:flex;align-items:center;margin-bottom:4px">
-      <div style="font-size:15px;font-weight:700">옛 엑셀 기록 가져오기</div>
+      <div style="font-size:var(--fs-15);font-weight:700">옛 엑셀 기록 가져오기</div>
       <button class="btn bs" style="margin-left:auto" onclick="closeRoundImport()">닫기</button>
     </div>
-    <div style="font-size:11.5px;color:var(--i4);margin-bottom:12px">${escapeHtml(r?.name || '')}에 넣습니다 · 같은 기록은 두 번 들어가지 않아요</div>
-    <input type="file" accept=".xlsx,.xls,.csv" onchange="importPickFile(this)" style="font-size:12px;margin-bottom:10px">
+    <div style="font-size:var(--fs-11_5);color:var(--i4);margin-bottom:12px">${escapeHtml(r?.name || '')}에 넣습니다 · 같은 기록은 두 번 들어가지 않아요</div>
+    <input type="file" accept=".xlsx,.xls,.csv" onchange="importPickFile(this)" style="font-size:var(--fs-12);margin-bottom:10px">
     ${im.wb ? `
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-        <label style="font-size:11px;color:var(--i3)">시트<select class="fi" onchange="importSet('sheet',this.value)">${im.wb.SheetNames.map(n => `<option${n === im.sheet ? ' selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select></label>
-        <label style="font-size:11px;color:var(--i3)">기업 칸<select class="fi" onchange="importSet('orgCol',this.value)">${colOpt(im.orgCol ?? -1, a ? '' : '—')}</select></label>
-        <label style="font-size:11px;color:var(--i3)">목표 달성으로 볼 칸 (값이 있으면 달성)<select class="fi" onchange="importSet('goalCol',this.value)">${colOpt(im.goalCol, '없음')}</select></label>
-        <label style="font-size:11px;color:var(--i3)">명단 이름${a && a.cols.source >= 0 ? ' — 비우면 «구분» 칸 값' : ''}<input class="fi" value="${escapeHtml(im.source)}" oninput="importSet('source',this.value)"></label>
+        <label style="font-size:var(--fs-11);color:var(--i3)">시트<select class="fi" onchange="importSet('sheet',this.value)">${im.wb.SheetNames.map(n => `<option${n === im.sheet ? ' selected' : ''}>${escapeHtml(n)}</option>`).join('')}</select></label>
+        <label style="font-size:var(--fs-11);color:var(--i3)">기업 칸<select class="fi" onchange="importSet('orgCol',this.value)">${colOpt(im.orgCol ?? -1, a ? '' : '—')}</select></label>
+        <label style="font-size:var(--fs-11);color:var(--i3)">목표 달성으로 볼 칸 (값이 있으면 달성)<select class="fi" onchange="importSet('goalCol',this.value)">${colOpt(im.goalCol, '없음')}</select></label>
+        <label style="font-size:var(--fs-11);color:var(--i3)">명단 이름${a && a.cols.source >= 0 ? ' — 비우면 «구분» 칸 값' : ''}<input class="fi" value="${escapeHtml(im.source)}" oninput="importSet('source',this.value)"></label>
       </div>
-      ${!a ? '<div style="font-size:12px;color:var(--re)">이 시트에서 기업 칸(업체명·기업명·국문소속 …)을 못 찾았어요. 다른 시트를 골라 보세요.</div>' : `
-      <div style="font-size:11.5px;color:var(--i3);margin-bottom:8px">머리글 ${a.hr + 1}행 · ${fmt || '<span style="color:var(--re)">TM 기록 칸을 못 찾았어요</span>'}
+      ${!a ? '<div style="font-size:var(--fs-12);color:var(--re)">이 시트에서 기업 칸(업체명·기업명·국문소속 …)을 못 찾았어요. 다른 시트를 골라 보세요.</div>' : `
+      <div style="font-size:var(--fs-11_5);color:var(--i3);margin-bottom:8px">머리글 ${a.hr + 1}행 · ${fmt || '<span style="color:var(--re)">TM 기록 칸을 못 찾았어요</span>'}
         ${a.cols.caution >= 0 ? ` · 주의사항 «${escapeHtml(H[a.cols.caution])}»` : ''}${a.cols.hours >= 0 ? ` · 통화 시간 «${escapeHtml(H[a.cols.hours])}»` : ''}</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:6px;margin-bottom:8px">
         ${[['기업DB에서 찾음', `${ok.length}곳`], ['못 찾음', `${miss.length}곳`], ['가져올 기록', `${atts.length}건`]].map(([l, v]) =>
-          `<div style="border:1px solid var(--i6);border-radius:var(--r);padding:7px 10px"><div style="font-size:10.5px;color:var(--i4)">${l}</div><div style="font-size:16px;font-weight:700">${v}</div></div>`).join('')}
+          `<div style="border:1px solid var(--i6);border-radius:var(--r);padding:7px 10px"><div style="font-size:var(--fs-10_5);color:var(--i4)">${l}</div><div style="font-size:var(--fs-16);font-weight:700">${v}</div></div>`).join('')}
       </div>
-      <div style="font-size:11.5px;margin-bottom:4px">반응 — ${Object.entries(byR).map(([k, n]) => `<span class="pill ${REACTIONS[k]?.cls || 'p-gray'}" style="margin-right:3px">${escapeHtml(REACTIONS[k]?.label || k)} ${n}</span>`).join('') || '없음'}</div>
-      <div style="font-size:11.5px;margin-bottom:8px;color:var(--i3)">담당 — ${Object.entries(byWho).map(([k, n]) => `${escapeHtml(k)} ${n}`).join(' · ') || '없음'}</div>
+      <div style="font-size:var(--fs-11_5);margin-bottom:4px">반응 — ${Object.entries(byR).map(([k, n]) => `<span class="pill ${REACTIONS[k]?.cls || 'p-gray'}" style="margin-right:3px">${escapeHtml(REACTIONS[k]?.label || k)} ${n}</span>`).join('') || '없음'}</div>
+      <div style="font-size:var(--fs-11_5);margin-bottom:8px;color:var(--i3)">담당 — ${Object.entries(byWho).map(([k, n]) => `${escapeHtml(k)} ${n}`).join(' · ') || '없음'}</div>
       ${sample.length ? `<div style="border:1px solid var(--i7);border-radius:var(--rs);max-height:220px;overflow:auto;margin-bottom:8px">
-        <table style="width:100%;border-collapse:collapse;font-size:11px">${sample.map(({ g, x }) => `<tr style="border-bottom:1px solid var(--i8)">
+        <table style="width:100%;border-collapse:collapse;font-size:var(--fs-11)">${sample.map(({ g, x }) => `<tr style="border-bottom:1px solid var(--i8)">
           <td style="padding:4px 6px;white-space:nowrap">${escapeHtml(g.name)}</td><td style="padding:4px 6px;white-space:nowrap;color:var(--i4)">${escapeHtml(x.at)}</td>
           <td style="padding:4px 6px;white-space:nowrap">${escapeHtml(x.by)}</td><td style="padding:4px 6px"><span class="pill ${REACTIONS[x.reaction]?.cls || 'p-gray'}">${escapeHtml(REACTIONS[x.reaction]?.label || '')}</span></td>
           <td style="padding:4px 6px;color:var(--i3)">${escapeHtml(x.note)}</td></tr>`).join('')}</table></div>
-        <div style="font-size:10.5px;color:var(--i4);margin:-4px 0 8px">반응은 내용의 낱말로 짐작했어요(앞 10건). 가져온 뒤 카드에서 고칠 수 있어요.</div>` : ''}
-      ${miss.length ? `<details style="margin-bottom:8px"><summary style="cursor:pointer;font-size:11.5px;color:var(--am)">기업DB에 없는 ${miss.length}곳 — 넣지 않아요</summary>
-        <div style="font-size:11px;color:var(--i3);padding:6px 4px;line-height:1.7">${miss.map(g => escapeHtml(g.name)).join(' · ')}</div>
-        <div style="font-size:10.5px;color:var(--i4)">설정 › 데이터 업로드로 기업DB에 먼저 올린 뒤 다시 가져오면 들어가요.</div></details>` : ''}
+        <div style="font-size:var(--fs-10_5);color:var(--i4);margin:-4px 0 8px">반응은 내용의 낱말로 짐작했어요(앞 10건). 가져온 뒤 카드에서 고칠 수 있어요.</div>` : ''}
+      ${miss.length ? `<details style="margin-bottom:8px"><summary style="cursor:pointer;font-size:var(--fs-11_5);color:var(--am)">기업DB에 없는 ${miss.length}곳 — 넣지 않아요</summary>
+        <div style="font-size:var(--fs-11);color:var(--i3);padding:6px 4px;line-height:1.7">${miss.map(g => escapeHtml(g.name)).join(' · ')}</div>
+        <div style="font-size:var(--fs-10_5);color:var(--i4)">설정 › 데이터 업로드로 기업DB에 먼저 올린 뒤 다시 가져오면 들어가요.</div></details>` : ''}
       <button class="btn bp" onclick="commitRoundImport()" ${ok.length ? '' : 'disabled'} id="ri-go">${ok.length}곳 · 기록 ${atts.length}건 가져오기</button>
-      <span id="ri-msg" style="font-size:11px;color:var(--i4);margin-left:6px"></span>`}` : ''}
+      <span id="ri-msg" style="font-size:var(--fs-11);color:var(--i4);margin-left:6px"></span>`}` : ''}
   </div>`;
 }
 

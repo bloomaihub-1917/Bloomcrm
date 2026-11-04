@@ -24,18 +24,18 @@ export function renderDomainList(){
   const el = document.getElementById('domain-list');
   if(!el) return;
   if(!DOMAINS.length){
-    el.innerHTML = '<span style="font-size:12px;color:var(--i4)">등록된 분야가 없어요 — 모든 섹터가 미분류로 표시됩니다.</span>';
+    el.innerHTML = '<span style="font-size:var(--fs-12);color:var(--i4)">등록된 분야가 없어요 — 모든 섹터가 미분류로 표시됩니다.</span>';
     return;
   }
   const mainCount = id => mainSectors().filter(m => domainOfSector(m).includes(id)).length;
   el.innerHTML = DOMAINS.map(d => `
-    <span style="display:inline-flex;align-items:center;gap:6px;background:var(--W);border:1px solid var(--i6);border-radius:20px;padding:4px 6px 4px 12px;font-size:12px">
+    <span style="display:inline-flex;align-items:center;gap:6px;background:var(--W);border:1px solid var(--i6);border-radius:var(--rd-20);padding:4px 6px 4px 12px;font-size:var(--fs-12)">
       <b>${escapeHtml(d.name)}</b>
-      <span style="font-size:10px;color:var(--i4)">${mainCount(d.id)}개 섹터</span>
+      <span style="font-size:var(--fs-10);color:var(--i4)">${mainCount(d.id)}개 섹터</span>
       <button onclick="renameDomain('${escAttr(d.id)}')" title="이름 변경"
-        style="background:none;border:none;cursor:pointer;color:var(--i4);font-size:12px;padding:0">✎</button>
+        style="background:none;border:none;cursor:pointer;color:var(--i4);font-size:var(--fs-12);padding:0">✎</button>
       <button onclick="removeDomain('${escAttr(d.id)}')" title="삭제"
-        style="background:none;border:none;cursor:pointer;color:var(--i4);font-size:14px;line-height:1;padding:0"
+        style="background:none;border:none;cursor:pointer;color:var(--i4);font-size:var(--fs-14);line-height:1;padding:0"
         onmouseover="this.style.color='var(--re)'" onmouseout="this.style.color='var(--i4)'">×</button>
     </span>`).join('');
 }
@@ -115,17 +115,17 @@ export function renderTagList(){
   const el = document.getElementById('tag-list');
   if(!el) return;
   if(!TAGS.length){
-    el.innerHTML = '<span style="font-size:12px;color:var(--i4)">등록된 태그가 없어요.</span>';
+    el.innerHTML = '<span style="font-size:var(--fs-12);color:var(--i4)">등록된 태그가 없어요.</span>';
     return;
   }
   el.innerHTML = TAGS.map(t => `
-    <span style="display:inline-flex;align-items:center;gap:6px;background:var(--W);border:1px solid var(--i6);border-radius:20px;padding:4px 6px 4px 12px;font-size:12px">
+    <span style="display:inline-flex;align-items:center;gap:6px;background:var(--W);border:1px solid var(--i6);border-radius:var(--rd-20);padding:4px 6px 4px 12px;font-size:var(--fs-12)">
       <b>${escapeHtml(t.label)}</b>
-      <span style="font-size:10px;color:var(--i4)">${escapeHtml(t.key)}</span>
+      <span style="font-size:var(--fs-10);color:var(--i4)">${escapeHtml(t.key)}</span>
       <button onclick="renameTag('${escAttr(t.key)}')" title="이름 변경"
-        style="background:none;border:none;cursor:pointer;color:var(--i4);font-size:12px;padding:0">✎</button>
+        style="background:none;border:none;cursor:pointer;color:var(--i4);font-size:var(--fs-12);padding:0">✎</button>
       <button onclick="removeTag('${escAttr(t.key)}')" title="삭제"
-        style="background:none;border:none;cursor:pointer;color:var(--i4);font-size:14px;line-height:1;padding:0"
+        style="background:none;border:none;cursor:pointer;color:var(--i4);font-size:var(--fs-14);line-height:1;padding:0"
         onmouseover="this.style.color='var(--re)'" onmouseout="this.style.color='var(--i4)'">×</button>
     </span>`).join('');
 }
@@ -214,13 +214,13 @@ export function renderPartTypeList(){
   if(!el) return;
   el.innerHTML = PART_TYPES.length
     ? PART_TYPES.map((t,i) => `
-        <span style="display:inline-flex;align-items:center;gap:4px;background:var(--i7);border:1px solid var(--i6);border-radius:20px;padding:3px 10px;font-size:12px">
+        <span style="display:inline-flex;align-items:center;gap:4px;background:var(--i7);border:1px solid var(--i6);border-radius:var(--rd-20);padding:3px 10px;font-size:var(--fs-12)">
           <span class="pill ${t.cls}" style="margin:0">${escapeHtml(t.label)}</span>
           <button onclick="removePartType(${i})"
-            style="background:none;border:none;cursor:pointer;color:var(--i4);font-size:14px;line-height:1;padding:0 0 0 2px"
+            style="background:none;border:none;cursor:pointer;color:var(--i4);font-size:var(--fs-14);line-height:1;padding:0 0 0 2px"
             onmouseover="this.style.color='var(--re)'" onmouseout="this.style.color='var(--i4)'">×</button>
         </span>`).join('')
-    : '<div style="font-size:12px;color:var(--i4)">등록된 참가 유형 없음</div>';
+    : '<div style="font-size:var(--fs-12);color:var(--i4)">등록된 참가 유형 없음</div>';
 
   // 참가 유형을 쓰는 드롭다운들도 함께 갱신
   document.querySelectorAll('.parttype-select').forEach(sel => {

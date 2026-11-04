@@ -98,11 +98,11 @@ export function renderCodeList(){
   const scope = clScope();
   const rows = clRowsOf(key, scope);
   const inherited = def.perEvent && scope && !rows.length;
-  const evNote = def.perEvent ? `<div style="font-size:11px;color:var(--i4);margin-bottom:8px">행사 전용 목록이 없는 행사가 이 목록을 씁니다. 한 행사만 다르게 하려면 <b>행사 › 그 행사 › ${
+  const evNote = def.perEvent ? `<div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:8px">행사 전용 목록이 없는 행사가 이 목록을 씁니다. 한 행사만 다르게 하려면 <b>행사 › 그 행사 › ${
     def.key === 'speaker_role' ? '컨퍼런스' : '부스'}</b>에서 고치세요.</div>` : '';
 
   el.innerHTML = evNote + (inherited
-    ? `<div style="font-size:11px;color:var(--i4);margin-bottom:8px">이 행사 전용 목록이 없어 <b>공통 목록</b>을 씁니다. 아래에서 항목을 추가하면 이 행사 전용 목록이 새로 만들어지고, 그때부터 공통 대신 이 목록만 쓰입니다.</div>
+    ? `<div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:8px">이 행사 전용 목록이 없어 <b>공통 목록</b>을 씁니다. 아래에서 항목을 추가하면 이 행사 전용 목록이 새로 만들어지고, 그때부터 공통 대신 이 목록만 쓰입니다.</div>
        <div style="opacity:.55;pointer-events:none">${clRowsHtml(clRowsOf(key, ''), true)}</div>`
     : clRowsHtml(rows, false))
     + `<div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--i6)">
@@ -120,13 +120,13 @@ export function renderCodeList(){
 }
 
 export function clRowsHtml(rows, readonly){
-  if(!rows.length) return '<div style="font-size:12px;color:var(--i4)">아직 항목이 없어요.</div>';
+  if(!rows.length) return '<div style="font-size:var(--fs-12);color:var(--i4)">아직 항목이 없어요.</div>';
   return rows.map(c => {
     const off = c.active === 'no';
     return `<div class="clrow" style="padding:6px 0;border-bottom:1px solid var(--i7)${off ? ';opacity:.5' : ''}">
       <div style="display:flex;gap:8px;align-items:center;min-width:0">
         <span class="pill ${escAttr(c.cls || 'p-gray')}" style="min-width:80px;text-align:center">${escapeHtml(c.label || c.code)}</span>
-        <code style="font-size:11px;color:var(--i4);min-width:110px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.code)}</code>
+        <code style="font-size:var(--fs-11);color:var(--i4);min-width:110px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.code)}</code>
       </div>
       ${readonly ? '' : `
       <label class="clf clf-grow"><span class="clf-l">이름</span>
@@ -141,10 +141,10 @@ export function clRowsHtml(rows, readonly){
       ${c.list_key === 'booth_type' ? `<span class="clf"><span class="clf-l"></span>
         <button class="btn" onclick="openBoothIncluded('${escAttr(c.id)}')"
           title="이 부스에 기본으로 딸려 오는 품목이에요 — 부스 타입을 고르면 신청항목에 자동으로 들어갑니다"
-          style="height:32px;font-size:11px">기본 제공 ${boothInclCount(c)}건</button></span>` : ''}
+          style="height:32px;font-size:var(--fs-11)">기본 제공 ${boothInclCount(c)}건</button></span>` : ''}
       <span class="clf"><span class="clf-l"></span>
         <button class="btn" onclick="toggleCodeListRow('${escAttr(c.id)}')"
-          style="height:32px;font-size:11px">${off ? '되살리기' : '숨김'}</button></span>`}
+          style="height:32px;font-size:var(--fs-11)">${off ? '되살리기' : '숨김'}</button></span>`}
     </div>`;
   }).join('');
 }
@@ -218,25 +218,25 @@ export function renderBoothInclLines(){
     <div style="display:flex;flex-direction:column;gap:6px">
       ${settingsUi.bInclLines.length ? settingsUi.bInclLines.map((o, n) => `
         <div style="display:flex;gap:6px;align-items:center">
-          <select class="fi" style="flex:0 0 78px;font-size:11.5px;padding:6px"
+          <select class="fi" style="flex:0 0 78px;font-size:var(--fs-11_5);padding:6px"
             onchange="editBoothInclLine(${n},'cat',this.value)">${cats.map(([v, l]) =>
               `<option value="${v}"${(o.cat || 'equip') === v ? ' selected' : ''}>${l}</option>`).join('')}</select>
-          <input class="fi" style="flex:0 0 96px;font-size:11.5px;padding:6px" list="bincl-cat"
+          <input class="fi" style="flex:0 0 96px;font-size:var(--fs-11_5);padding:6px" list="bincl-cat"
             value="${escapeHtml(o.code || '')}" placeholder="품목코드"
             onchange="editBoothInclLine(${n},'code',this.value)">
-          <input class="fi" style="flex:1 1 160px;min-width:0;font-size:11.5px;padding:6px"
+          <input class="fi" style="flex:1 1 160px;min-width:0;font-size:var(--fs-11_5);padding:6px"
             value="${escapeHtml(o.name || '')}" placeholder="품명"
             onchange="editBoothInclLine(${n},'name',this.value)">
-          <input class="fi" style="flex:0 0 62px;font-size:11.5px;padding:6px"
+          <input class="fi" style="flex:0 0 62px;font-size:var(--fs-11_5);padding:6px"
             value="${escapeHtml(o.qty ?? '')}" placeholder="수량" inputmode="numeric"
             onchange="editBoothInclLine(${n},'qty',this.value)">
-          <button class="btn" style="flex:0 0 auto;padding:4px 9px;font-size:11px"
+          <button class="btn" style="flex:0 0 auto;padding:4px 9px;font-size:var(--fs-11)"
             onclick="delBoothInclLine(${n})">삭제</button>
         </div>`).join('')
-        : '<div style="font-size:11.5px;color:var(--i4)">아직 없어요. 아래에서 한 줄씩 넣으세요.</div>'}
+        : '<div style="font-size:var(--fs-11_5);color:var(--i4)">아직 없어요. 아래에서 한 줄씩 넣으세요.</div>'}
     </div>
-    <button class="btn" style="margin-top:10px;font-size:11.5px" onclick="addBoothInclLine()">+ 한 줄 추가</button>
-    <div style="font-size:11px;color:var(--i4);margin-top:8px">
+    <button class="btn" style="margin-top:10px;font-size:var(--fs-11_5)" onclick="addBoothInclLine()">+ 한 줄 추가</button>
+    <div style="font-size:var(--fs-11);color:var(--i4);margin-top:8px">
       품목코드를 적으면 품목표의 그 품목에 이어 붙습니다 — 발주서에서 같은 줄로 묶여요.
       코드가 없는 것(전기 별도 시공 등)은 비워 두고 품명만 적으면 됩니다.</div>`;
 }
@@ -410,9 +410,9 @@ export function renderAliasList(){
           ${catOpts(c.label)}</select></label>
       <span class="clf"><span class="clf-l"></span>
         <button class="btn" onclick="toggleCodeListRow('${escAttr(c.id)}')"
-          style="height:32px;font-size:11px">${off ? '되살리기' : '숨김'}</button></span>
+          style="height:32px;font-size:var(--fs-11)">${off ? '되살리기' : '숨김'}</button></span>
     </div>`;
-  }).join('') : '<div style="font-size:12px;color:var(--i4)">아직 덮어쓴 표기가 없어요 — 전부 기본 표대로 처리됩니다.</div>')
+  }).join('') : '<div style="font-size:var(--fs-12);color:var(--i4)">아직 덮어쓴 표기가 없어요 — 전부 기본 표대로 처리됩니다.</div>')
     + `<div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid var(--i6)">
       <div style="flex:1;min-width:150px"><div class="mlbl">업로드에 적힌 표기</div>
         <input class="fi" id="alias-new-code" placeholder="예: Exhibitor Pass" style="width:100%"
@@ -421,7 +421,7 @@ export function renderAliasList(){
         <select class="fi" id="alias-new-cat" style="width:100%">${catOpts('attendee')}</select></div>
       <button class="btn bp" onclick="addAliasRow()" style="min-width:60px;height:36px">추가</button>
     </div>
-    <div style="font-size:10.5px;color:var(--i5);margin-top:8px">대소문자와 띄어쓰기는 무시하고 견줍니다. 바꾼 값은 <b>다음 업로드부터</b> 적용되고, 이미 저장된 연락처는 그대로입니다.</div>`;
+    <div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:8px">대소문자와 띄어쓰기는 무시하고 견줍니다. 바꾼 값은 <b>다음 업로드부터</b> 적용되고, 이미 저장된 연락처는 그대로입니다.</div>`;
 }
 
 export async function addAliasRow(){
@@ -458,7 +458,7 @@ export function renderEvCfgList(){
   if(!el) return;
   const keys = Object.keys(EXH_CFG);
   if(!keys.length){
-    el.innerHTML = `<div style="font-size:12px;color:var(--i4)">아직 정해 둔 행사가 없어요 —
+    el.innerHTML = `<div style="font-size:var(--fs-12);color:var(--i4)">아직 정해 둔 행사가 없어요 —
       <b>전시</b> 탭 › 대시보드 › 단계별 진행 카드의 <b>마감일 설정</b>에서 정합니다.</div>`;
     return;
   }
@@ -467,17 +467,17 @@ export function renderEvCfgList(){
     const due = Object.entries(cfg.due || {});
     const b = cfg.book || {};
     return `<div style="padding:8px 0;border-bottom:1px solid var(--i7)">
-      <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">${escapeHtml(k)}</div>
-      <div style="font-size:11px;color:var(--i3)">
+      <div style="font-size:var(--fs-12);font-weight:700;color:var(--i2);margin-bottom:4px">${escapeHtml(k)}</div>
+      <div style="font-size:var(--fs-11);color:var(--i3)">
         ${due.length ? due.map(([sk, v]) =>
           `<span class="pill p-gray" style="margin:2px 3px 2px 0">${escapeHtml(DUE_LABEL[sk] || sk)} ${escapeHtml(v)}</span>`).join('')
           : '<span style="color:var(--i5)">마감일 없음</span>'}
       </div>
-      <div style="font-size:11px;color:var(--i4);margin-top:3px">프로그램북 한도 ${
+      <div style="font-size:var(--fs-11);color:var(--i4);margin-top:3px">프로그램북 한도 ${
         b.chars ? `${Number(b.chars).toLocaleString()}자 · ${b.words}단어` : '기본값(1,300자 · 200단어)'}</div>
     </div>`;
   }).join('')
-    + `<div style="font-size:10.5px;color:var(--i5);margin-top:8px">고치려면 <b>전시</b> 탭에서 그 행사를 고른 뒤 <b>마감일 설정</b>을 누르세요.</div>`;
+    + `<div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:8px">고치려면 <b>전시</b> 탭에서 그 행사를 고른 뒤 <b>마감일 설정</b>을 누르세요.</div>`;
 }
 
 window.renderAliasList = renderAliasList;

@@ -103,56 +103,56 @@ function dMail(x){
   return `
   <div class="uc" style="margin-bottom:14px">
     <div class="uc-ttl">메일 보내기</div>
-    ${exhDrUi.exhReply ? `<div style="font-size:11.5px;color:var(--a);font-weight:700;margin-top:6px">↩ 회신 중 — 이 메일을 보낸 사람에게 답합니다
+    ${exhDrUi.exhReply ? `<div style="font-size:var(--fs-11_5);color:var(--a);font-weight:700;margin-top:6px">↩ 회신 중 — 이 메일을 보낸 사람에게 답합니다
       <a href="#" onclick="cancelExhReply();return false" style="font-weight:400;margin-left:6px">회신 취소</a></div>` : ''}
-    <div id="exm-from" style="font-size:11px;color:var(--i4);margin:6px 0 10px">보내는 주소 확인 중…</div>
+    <div id="exm-from" style="font-size:var(--fs-11);color:var(--i4);margin:6px 0 10px">보내는 주소 확인 중…</div>
     <div class="mlbl">받는 사람</div>
     <div style="display:flex;flex-direction:column;gap:4px;margin:4px 0 10px">
-      ${ppl.length ? ppl.map((p, i) => `<label style="display:flex;gap:6px;align-items:center;font-size:12px;cursor:pointer">
+      ${ppl.length ? ppl.map((p, i) => `<label style="display:flex;gap:6px;align-items:center;font-size:var(--fs-12);cursor:pointer">
         <input type="checkbox" class="exm-to" value="${escapeHtml(p.email)}"${(exhDrUi.exhReply ? p.reply : (p.primary || i === 0)) ? ' checked' : ''}>
         <b>${escapeHtml(p.name || '')}</b> <span style="color:var(--i4)">${escapeHtml(p.email)}</span>
-        ${p.primary ? '<span class="pill p-blue" style="font-size:9.5px">메인</span>' : ''}</label>`).join('')
-      : `<div style="font-size:11.5px;color:var(--re)">메일 주소가 있는 담당자가 없어요 —
+        ${p.primary ? '<span class="pill p-blue" style="font-size:var(--fs-9_5)">메인</span>' : ''}</label>`).join('')
+      : `<div style="font-size:var(--fs-11_5);color:var(--re)">메일 주소가 있는 담당자가 없어요 —
           <a href="#" onclick="switchExhDT('contact');return false" style="color:var(--a)">담당자 탭</a>에서 먼저 넣어주세요.</div>`}
     </div>
     <div style="display:grid;grid-template-columns:1fr auto;gap:6px;margin-bottom:8px">
-      <div><div class="mlbl">무슨 메일인가 <span style="font-size:9px;color:var(--i4)">고르면 그 단계 문구로 채워져요</span>
-        <a href="#" style="font-size:10px;margin-left:4px" title="이 행사의 전시 메일 단계를 더하고, 고치고, 끄거나 지웁니다"
+      <div><div class="mlbl">무슨 메일인가 <span style="font-size:var(--fs-9);color:var(--i4)">고르면 그 단계 문구로 채워져요</span>
+        <a href="#" style="font-size:var(--fs-10);margin-left:4px" title="이 행사의 전시 메일 단계를 더하고, 고치고, 끄거나 지웁니다"
           onclick="openExhMailEditor('${escAttr(x.event_id)}',document.getElementById('exm-step-${id}').value);return false">✎ 단계 편집</a>
-        <a href="#" style="font-size:10px;margin-left:4px" title="단계와 상관없이 꺼내 쓰는 양식 — 이 행사만 또는 모든 행사 공통"
+        <a href="#" style="font-size:var(--fs-10);margin-left:4px" title="단계와 상관없이 꺼내 쓰는 양식 — 이 행사만 또는 모든 행사 공통"
           onclick="openMailTemplates('exh','${escAttr(x.event_id)}');return false">📚 양식 보관함</a></div>
-        <select class="fi" id="exm-step-${id}" onchange="fillExhMail('${id}')" style="font-size:12px">
+        <select class="fi" id="exm-step-${id}" onchange="fillExhMail('${id}')" style="font-size:var(--fs-12)">
           <optgroup label="메일 단계">${exhMailSteps(x.event_id).map(st => `<option value="${st.key}"${st.key === exhDrUi.exhMailStep ? ' selected' : ''}>${escapeHtml(st.label)}</option>`).join('')}</optgroup>
           ${libItems('exh', x.event_id).length ? `<optgroup label="양식 보관함">${libItems('exh', x.event_id).map(it =>
             `<option value="lib:${escAttr(it.id)}"${'lib:' + it.id === exhDrUi.exhMailStep ? ' selected' : ''}>${escapeHtml(it.name)}</option>`).join('')}</optgroup>` : ''}
         </select>
         <div id="exm-var-${id}"></div></div>
       <div><div class="mlbl">언어</div>
-        <select class="fi" id="exm-lang-${id}" onchange="fillExhMail('${id}')" style="font-size:12px">
+        <select class="fi" id="exm-lang-${id}" onchange="fillExhMail('${id}')" style="font-size:var(--fs-12)">
           <option value="ko"${exhIsEnglish(x) ? '' : ' selected'}>국문</option><option value="en"${exhIsEnglish(x) ? ' selected' : ''}>영문</option>
         </select></div>
     </div>
-    <div class="mlbl">참조 <span style="font-size:9px;color:var(--i4)">쉼표로 여러 개</span></div>
-    <input class="fi" id="exm-cc-${id}" style="font-size:12px;margin-bottom:8px">
+    <div class="mlbl">참조 <span style="font-size:var(--fs-9);color:var(--i4)">쉼표로 여러 개</span></div>
+    <input class="fi" id="exm-cc-${id}" style="font-size:var(--fs-12);margin-bottom:8px">
     ${aiDraftHtml('ex', { reply: !!exhDrUi.exhReply })}
     <div data-vscope>
     <div class="mlbl">제목</div>
-    <input class="fi" id="exm-sub-${id}" value="${escapeHtml(evName ? `[${evName}] ` : '')}" style="font-size:12px;margin-bottom:8px">
+    <input class="fi" id="exm-sub-${id}" value="${escapeHtml(evName ? `[${evName}] ` : '')}" style="font-size:var(--fs-12);margin-bottom:8px">
     <div class="mlbl">내용</div>
-    <textarea class="fi" id="exm-body-${id}" rows="9" style="font-size:12px;resize:vertical">${escapeHtml(
+    <textarea class="fi" id="exm-body-${id}" rows="9" style="font-size:var(--fs-12);resize:vertical">${escapeHtml(
       `${exhNames(x).ko || ''} 담당자님, 안녕하세요.\n\n\n\n감사합니다.`)}</textarea>
     ${varChipsHtml('exh', { resolve: 'exh-drawer', note: '이 기업의 값' })}
     </div>
-    <div id="exm-deffiles" style="font-size:11px;margin-top:6px"></div>
-    <div id="exm-files" style="font-size:11px;margin-top:4px"></div>
+    <div id="exm-deffiles" style="font-size:var(--fs-11);margin-top:6px"></div>
+    <div id="exm-files" style="font-size:var(--fs-11);margin-top:4px"></div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
       <label class="btn bs" style="cursor:pointer">+ 첨부 (합쳐서 3MB)
         <input type="file" multiple style="display:none" onchange="addExhMailFiles(this)"></label>
       <button class="btn bp bs" onclick="sendExhMail('${id}')"${ppl.length ? '' : ' disabled'}>보내기</button>
-      <span id="exm-msg" style="font-size:11px;color:var(--i4)"></span>
+      <span id="exm-msg" style="font-size:var(--fs-11);color:var(--i4)"></span>
     </div>
   </div>
-  ${sent.length ? `<div style="font-size:11px;color:var(--i4);margin-top:4px;cursor:pointer" onclick="switchExhDT('box')">주고받은 메일 ${sent.length}건은 «메일함» 탭에 있어요 ›</div>` : ''}`;
+  ${sent.length ? `<div style="font-size:var(--fs-11);color:var(--i4);margin-top:4px;cursor:pointer" onclick="switchExhDT('box')">주고받은 메일 ${sent.length}건은 «메일함» 탭에 있어요 ›</div>` : ''}`;
 }
 
 /* ── 메일함 — 이 기업 담당자와 주고받은 메일 ──
@@ -168,12 +168,12 @@ function dMailBox(x){
       <summary style="cursor:pointer;list-style:none">
       <div style="display:flex;gap:7px;align-items:baseline">
         ${mailDirPill(l)}${mailStateHtml('ex', l)}
-        <div style="font-size:12px;font-weight:${l.direction === 'in' && !l.read_at ? 800 : 600};flex:1;min-width:0">${escapeHtml(l.subject || '(제목 없음)')}</div>
-        <div style="font-size:10.5px;color:var(--i4)">${escapeHtml(l.ts || '')} ▾</div></div>
-      <div style="font-size:10.5px;color:var(--i4);margin-top:2px">${escapeHtml(l.counterpart || '')}</div></summary>
-      <div style="margin-top:6px;padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;
-        font-size:12px;color:var(--i2);white-space:pre-wrap;line-height:1.6">${mailBodyHtml(l.body)}</div>${mailActionsHtml('ex', l)}</details>`).join('')
-    : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">아직 주고받은 메일이 없어요</div>'}`;
+        <div style="font-size:var(--fs-12);font-weight:${l.direction === 'in' && !l.read_at ? 800 : 600};flex:1;min-width:0">${escapeHtml(l.subject || '(제목 없음)')}</div>
+        <div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(l.ts || '')} ▾</div></div>
+      <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:2px">${escapeHtml(l.counterpart || '')}</div></summary>
+      <div style="margin-top:6px;padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-7);
+        font-size:var(--fs-12);color:var(--i2);white-space:pre-wrap;line-height:1.6">${mailBodyHtml(l.body)}</div>${mailActionsHtml('ex', l)}</details>`).join('')
+    : '<div style="font-size:var(--fs-11_5);color:var(--i5);padding:8px 2px">아직 주고받은 메일이 없어요</div>'}`;
 }
 
 /* ── 단계 문구 채우기 ──
@@ -195,9 +195,9 @@ export async function fillExhMail(exhId, first){
   const vEl = document.getElementById(`exm-var-${exhId}`);
   const prevVar = document.getElementById(`exm-varsel-${exhId}`)?.value || '';
   const vId = vs.some(v => v.id === prevVar) ? prevVar : '';
-  if(vEl) vEl.innerHTML = vs.length ? `<div style="display:flex;gap:6px;align-items:center;margin-top:5px;font-size:11px">
+  if(vEl) vEl.innerHTML = vs.length ? `<div style="display:flex;gap:6px;align-items:center;margin-top:5px;font-size:var(--fs-11)">
       <span style="color:var(--i4)">양식</span>
-      <select class="fi" id="exm-varsel-${escAttr(exhId)}" style="font-size:11.5px;flex:1" onchange="fillExhMail('${escAttr(exhId)}')">
+      <select class="fi" id="exm-varsel-${escAttr(exhId)}" style="font-size:var(--fs-11_5);flex:1" onchange="fillExhMail('${escAttr(exhId)}')">
         <option value="">기본 문구</option>
         ${vs.map(v => `<option value="${escapeHtml(v.id)}"${vId === v.id ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}
       </select></div>` : '';

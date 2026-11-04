@@ -27,7 +27,7 @@ export const mailBodyHtml = (body) => {
   const m = splitQuotedMail(body);
   if(!m.head && !m.quoted) return escapeHtml(m.attach || '(본문 없음)');
   return `${escapeHtml(m.head || '(새로 쓴 내용 없음)')}${m.attach ? `\n\n${escapeHtml(m.attach)}` : ''}${m.quoted
-    ? `<details style="margin-top:8px"><summary style="cursor:pointer;color:var(--i4);font-size:10.5px">▸ 이전 메일 보기 (${m.quoted.split('\n').length}줄)</summary><div style="margin-top:6px;padding-left:8px;border-left:2px solid var(--i6);color:var(--i3)">${escapeHtml(m.quoted)}</div></details>` : ''}`;
+    ? `<details style="margin-top:8px"><summary style="cursor:pointer;color:var(--i4);font-size:var(--fs-10_5)">▸ 이전 메일 보기 (${m.quoted.split('\n').length}줄)</summary><div style="margin-top:6px;padding-left:8px;border-left:2px solid var(--i6);color:var(--i3)">${escapeHtml(m.quoted)}</div></details>` : ''}`;
 };
 import { saveExhContact as _saveExhContact, saveExhItem as _saveExhItem, saveExhInvoice as _saveExhInvoice, saveExhTax as _saveExhTax, saveExhPayment as _saveExhPayment, saveExhLog as _saveExhLog, saveExhApp as _saveExhApp, deleteExhContact as _deleteExhContact, deleteExhItem as _deleteExhItem, deleteExhInvoice as _deleteExhInvoice, deleteExhTax as _deleteExhTax, deleteExhPayment as _deleteExhPayment, deleteExhLog as _deleteExhLog, deleteExhApp as _deleteExhApp, deleteExhibitor as _deleteExhibitor } from '../api/exh-save.js';
 import { sendMail, eventMailFrom, fileToBase64, loadMailFiles, mailFilesOf } from '../api/mail-send.js';
@@ -160,15 +160,15 @@ function exhFollowHtml(x){
   const rows = exhMailSteps(x.event_id).map(s => ({ s, f: exhFollowOf(x, s) })).filter(r => r.f);
   if(!rows.length) return '';
   rows.sort((a, b) => (b.f.state === 'nudge') - (a.f.state === 'nudge'));
-  return `<div style="padding:7px 10px;border:1px solid ${rows.some(r => r.f.state === 'nudge') ? 'var(--am)' : 'var(--i6)'};border-radius:8px;margin-bottom:10px;background:var(--W)">
-    <div style="font-size:11px;font-weight:700;color:var(--i2);margin-bottom:4px">기다리는 요청</div>
+  return `<div style="padding:7px 10px;border:1px solid ${rows.some(r => r.f.state === 'nudge') ? 'var(--am)' : 'var(--i6)'};border-radius:var(--r);margin-bottom:10px;background:var(--W)">
+    <div style="font-size:var(--fs-11);font-weight:700;color:var(--i2);margin-bottom:4px">기다리는 요청</div>
     ${rows.map(({ s, f }) => `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:3px 0">
-      <span style="font-size:11.5px;font-weight:600;min-width:96px">${escapeHtml(s.label)}</span>
+      <span style="font-size:var(--fs-11_5);font-weight:600;min-width:96px">${escapeHtml(s.label)}</span>
       ${followPill(f)}
       <span style="margin-left:auto;display:inline-flex;gap:4px">
-        ${f.state === 'nudge' ? `<button class="btn bp" style="font-size:10px;padding:1px 8px" onclick="exhAdviceAct('mail','${escAttr(s.key)}')">✉ 리마인더 초안</button>` : ''}
-        <button class="btn" style="font-size:10px;padding:1px 6px" title="리마인더를 3일 뒤로" onclick="exhSnooze('${escAttr(s.key)}',3)">+3일</button>
-        <button class="btn" style="font-size:10px;padding:1px 6px" title="리마인더를 1주 뒤로" onclick="exhSnooze('${escAttr(s.key)}',7)">+1주</button>
+        ${f.state === 'nudge' ? `<button class="btn bp" style="font-size:var(--fs-10);padding:1px 8px" onclick="exhAdviceAct('mail','${escAttr(s.key)}')">✉ 리마인더 초안</button>` : ''}
+        <button class="btn" style="font-size:var(--fs-10);padding:1px 6px" title="리마인더를 3일 뒤로" onclick="exhSnooze('${escAttr(s.key)}',3)">+3일</button>
+        <button class="btn" style="font-size:var(--fs-10);padding:1px 6px" title="리마인더를 1주 뒤로" onclick="exhSnooze('${escAttr(s.key)}',7)">+1주</button>
       </span></div>`).join('')}
   </div>`;
 }
@@ -195,7 +195,7 @@ export function renderExhDr(){
   if(h) h.innerHTML = `
     <div style="flex:1;min-width:0">
       <div class="drnm" style="${x.status === CANCELLED ? 'text-decoration:line-through;opacity:.65' : ''}">${escapeHtml(exhNames(x).ko)}${
-        exhNames(x).en ? `<span style="font-size:12px;font-weight:400;color:var(--i4);margin-left:6px">${escapeHtml(exhNames(x).en)}</span>` : ''}${
+        exhNames(x).en ? `<span style="font-size:var(--fs-12);font-weight:400;color:var(--i4);margin-left:6px">${escapeHtml(exhNames(x).en)}</span>` : ''}${
         x.status === CANCELLED ? ' <span class="pill p-gray" style="vertical-align:middle">참가 취소</span>' : ''}</div>
       <div class="drmt">${x.booth_no ? `부스 ${escapeHtml(x.booth_no)}${x.booth_floor ? `(${escapeHtml(x.booth_floor)}층)` : ''}` : ''}${
         (() => { const p = exhContact(x); return (p.name || p.email) ? ` · 담당자 ${escapeHtml(p.name || p.email)}` : ''; })()
@@ -253,22 +253,22 @@ export function stageBar(x, field, defs, who){
       ${defs.slice(1).map((d, k) => {
         const done = k + 1 <= i;
         const now = k + 1 === i;
-        return `<div style="flex:1;text-align:center;padding:5px 3px;border-radius:5px;font-size:10px;line-height:1.3;
+        return `<div style="flex:1;text-align:center;padding:5px 3px;border-radius:var(--rs);font-size:var(--fs-10);line-height:1.3;
           background:${now ? (d.who === 'us' ? 'var(--rb)' : d.who === 'team' ? 'var(--ab)' : 'var(--gb)') : done ? 'var(--gb)' : 'var(--i9)'};
           color:${now ? (d.who === 'us' ? 'var(--re)' : d.who === 'team' ? 'var(--am)' : 'var(--g)') : done ? 'var(--g)' : 'var(--i5)'};
           font-weight:${now || done ? 700 : 400}">
           ${done && !now ? '✓ ' : ''}${escapeHtml(d.label)}
-          ${d.at && x[d.at] ? `<div style="font-size:9px;font-weight:400;opacity:.75">${escapeHtml(String(x[d.at]).slice(5))}</div>` : ''}
+          ${d.at && x[d.at] ? `<div style="font-size:var(--fs-9);font-weight:400;opacity:.75">${escapeHtml(String(x[d.at]).slice(5))}</div>` : ''}
         </div>`;
       }).join('')}
     </div>
     <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
-      <span style="font-size:11.5px;color:${cur.who === 'us' ? 'var(--re)' : cur.who === 'team' ? 'var(--am)' : 'var(--i4)'};font-weight:${cur.who ? 700 : 400}">
+      <span style="font-size:var(--fs-11_5);color:${cur.who === 'us' ? 'var(--re)' : cur.who === 'team' ? 'var(--am)' : 'var(--i4)'};font-weight:${cur.who ? 700 : 400}">
         ${cur.who === 'us' ? '내 차례' : cur.who === 'team' ? `${escapeHtml(who)} 확인 중` : cur.key ? '완료' : '아직 시작 전'}
         ${days ? ` · ${days}일째` : ''}</span>
       ${cur.next ? `<button class="btn bp bs" style="margin-left:auto"
         onclick="advanceStage('${escAttr(x.id)}','${field}')">${escapeHtml(cur.action)} →</button>` : ''}
-      ${cur.key ? `<button class="btn bs" style="${cur.next ? '' : 'margin-left:auto;'}font-size:10.5px"
+      ${cur.key ? `<button class="btn bs" style="${cur.next ? '' : 'margin-left:auto;'}font-size:var(--fs-10_5)"
         onclick="rewindStage('${escAttr(x.id)}','${field}')">↩ 되돌리기</button>` : ''}
     </div>
   </div>`;
@@ -287,22 +287,22 @@ export function taxStageBar(v){
       ${TAX_STAGES.slice(1).map((d, k) => {
         const done = k + 1 <= i;
         const now = k + 1 === i;
-        return `<div style="flex:1;text-align:center;padding:4px 3px;border-radius:5px;font-size:9.5px;line-height:1.3;
+        return `<div style="flex:1;text-align:center;padding:4px 3px;border-radius:var(--rs);font-size:var(--fs-9_5);line-height:1.3;
           background:${now ? (d.who === 'us' ? 'var(--rb)' : d.who === 'team' ? 'var(--ab)' : 'var(--gb)') : done ? 'var(--gb)' : 'var(--i8)'};
           color:${now ? (d.who === 'us' ? 'var(--re)' : d.who === 'team' ? 'var(--am)' : 'var(--g)') : done ? 'var(--g)' : 'var(--i5)'};
           font-weight:${now || done ? 700 : 400}">
           ${done && !now ? '✓ ' : ''}${escapeHtml(d.label)}
-          ${d.at && v[d.at] ? `<div style="font-size:8.5px;font-weight:400;opacity:.75">${escapeHtml(String(v[d.at]).slice(5))}</div>` : ''}
+          ${d.at && v[d.at] ? `<div style="font-size:var(--fs-8_5);font-weight:400;opacity:.75">${escapeHtml(String(v[d.at]).slice(5))}</div>` : ''}
         </div>`;
       }).join('')}
     </div>
     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-      <span style="font-size:10.5px;color:${cur.who === 'us' ? 'var(--re)' : cur.who === 'team' ? 'var(--am)' : 'var(--i4)'};font-weight:${cur.who ? 700 : 400}">
+      <span style="font-size:var(--fs-10_5);color:${cur.who === 'us' ? 'var(--re)' : cur.who === 'team' ? 'var(--am)' : 'var(--i4)'};font-weight:${cur.who ? 700 : 400}">
         ${cur.who === 'us' ? '내 차례' : cur.who === 'team' ? '재무팀 확인 중' : cur.key ? '완료' : '아직 시작 전'}
         ${days ? ` · ${days}일째` : ''}</span>
-      ${cur.next ? `<button class="btn bp bs" style="margin-left:auto;font-size:10px;padding:2px 7px"
+      ${cur.next ? `<button class="btn bp bs" style="margin-left:auto;font-size:var(--fs-10);padding:2px 7px"
         onclick="advanceTaxStage('${escAttr(v.id)}')">${escapeHtml(cur.action)} →</button>` : ''}
-      ${cur.key ? `<button class="btn bs" style="${cur.next ? '' : 'margin-left:auto;'}font-size:9.5px;padding:2px 6px"
+      ${cur.key ? `<button class="btn bs" style="${cur.next ? '' : 'margin-left:auto;'}font-size:var(--fs-9_5);padding:2px 6px"
         onclick="rewindTaxStage('${escAttr(v.id)}')">↩</button>` : ''}
     </div>
   </div>`;
@@ -317,10 +317,10 @@ export function dateRow(x, field, label, hint){
   const on = !!x[field];
   return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--i8)">
     <button onclick="toggleExhDate('${escAttr(x.id)}','${field}','${escAttr(label)}')"
-      style="width:20px;height:20px;border-radius:5px;border:1.5px solid ${on ? 'var(--g)' : 'var(--i6)'};background:${on ? 'var(--g)' : 'transparent'};color:#fff;font-size:12px;font-weight:800;cursor:pointer;flex-shrink:0;line-height:1">${on ? '✓' : ''}</button>
-    <span style="font-size:12.5px;font-weight:${on ? 600 : 500};color:${on ? 'var(--i1)' : 'var(--i3)'};flex:1">${escapeHtml(label)}
-      ${hint ? `<span style="font-size:10.5px;color:var(--i5);font-weight:400"> ${escapeHtml(hint)}</span>` : ''}</span>
-    <input type="date" class="fi" style="width:140px;padding:4px 8px;font-size:11.5px" value="${escapeHtml(x[field] || '')}"
+      style="width:20px;height:20px;border-radius:var(--rs);border:1.5px solid ${on ? 'var(--g)' : 'var(--i6)'};background:${on ? 'var(--g)' : 'transparent'};color:var(--on);font-size:var(--fs-12);font-weight:800;cursor:pointer;flex-shrink:0;line-height:1">${on ? '✓' : ''}</button>
+    <span style="font-size:var(--fs-12_5);font-weight:${on ? 600 : 500};color:${on ? 'var(--i1)' : 'var(--i3)'};flex:1">${escapeHtml(label)}
+      ${hint ? `<span style="font-size:var(--fs-10_5);color:var(--i5);font-weight:400"> ${escapeHtml(hint)}</span>` : ''}</span>
+    <input type="date" class="fi" style="width:140px;padding:4px 8px;font-size:var(--fs-11_5)" value="${escapeHtml(x[field] || '')}"
       onchange="setExhField('${escAttr(x.id)}','${field}',this.value,'${escAttr(label)}')">
   </div>`;
 }
@@ -332,20 +332,20 @@ export function flagRow(x, flag, dateField, label, hint){
   const on = x[flag] === 'yes' || !!x[dateField];
   return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--i8)">
     <button onclick="toggleExhFlag('${escAttr(x.id)}','${flag}','${dateField}','${escAttr(label)}')"
-      style="width:20px;height:20px;border-radius:5px;border:1.5px solid ${on ? 'var(--g)' : 'var(--i6)'};background:${on ? 'var(--g)' : 'transparent'};color:#fff;font-size:12px;font-weight:800;cursor:pointer;flex-shrink:0;line-height:1">${on ? '✓' : ''}</button>
-    <span style="font-size:12.5px;font-weight:${on ? 600 : 500};color:${on ? 'var(--i1)' : 'var(--i3)'};flex:1">${escapeHtml(label)}
-      ${hint ? `<span style="font-size:10.5px;color:var(--i5);font-weight:400"> ${escapeHtml(hint)}</span>` : ''}
-      ${on && !x[dateField] ? '<span style="font-size:10px;color:var(--i5)"> · 날짜 미상</span>' : ''}</span>
-    <input type="date" class="fi" style="width:140px;padding:4px 8px;font-size:11.5px" value="${escapeHtml(x[dateField] || '')}"
+      style="width:20px;height:20px;border-radius:var(--rs);border:1.5px solid ${on ? 'var(--g)' : 'var(--i6)'};background:${on ? 'var(--g)' : 'transparent'};color:var(--on);font-size:var(--fs-12);font-weight:800;cursor:pointer;flex-shrink:0;line-height:1">${on ? '✓' : ''}</button>
+    <span style="font-size:var(--fs-12_5);font-weight:${on ? 600 : 500};color:${on ? 'var(--i1)' : 'var(--i3)'};flex:1">${escapeHtml(label)}
+      ${hint ? `<span style="font-size:var(--fs-10_5);color:var(--i5);font-weight:400"> ${escapeHtml(hint)}</span>` : ''}
+      ${on && !x[dateField] ? '<span style="font-size:var(--fs-10);color:var(--i5)"> · 날짜 미상</span>' : ''}</span>
+    <input type="date" class="fi" style="width:140px;padding:4px 8px;font-size:var(--fs-11_5)" value="${escapeHtml(x[dateField] || '')}"
       onchange="setExhDateWithFlag('${escAttr(x.id)}','${dateField}','${flag}',this.value,'${escAttr(label)}')">
   </div>`;
 }
 
 export function textRow(x, field, label, placeholder = '', multi = false){
   const el = multi
-    ? `<textarea class="fi" rows="2" style="font-size:12px" placeholder="${escapeHtml(placeholder)}"
+    ? `<textarea class="fi" rows="2" style="font-size:var(--fs-12)" placeholder="${escapeHtml(placeholder)}"
         onchange="setExhField('${escAttr(x.id)}','${field}',this.value,'${escAttr(label)}')">${escapeHtml(x[field] || '')}</textarea>`
-    : `<input class="fi" style="font-size:12px" placeholder="${escapeHtml(placeholder)}" value="${escapeHtml(x[field] || '')}"
+    : `<input class="fi" style="font-size:var(--fs-12)" placeholder="${escapeHtml(placeholder)}" value="${escapeHtml(x[field] || '')}"
         onchange="setExhField('${escAttr(x.id)}','${field}',this.value,'${escAttr(label)}')">`;
   return `<div class="fg"><label class="fl">${escapeHtml(label)}</label>${el}</div>`;
 }
@@ -409,7 +409,7 @@ export function syncTag(x, f, org, orgKey, label){
   if(st === 'none' && !syncNorm(x[f]) && org) return '';   // 양쪽 다 비었으면 알릴 게 없다
   const t = SYNC_TONE[st];
   const db = syncNorm(org?.[orgKey]);
-  const btn = (txt, on, tip) => `<button class="btn bs" style="font-size:10px;padding:1px 6px;flex:none"
+  const btn = (txt, on, tip) => `<button class="btn bs" style="font-size:var(--fs-10);padding:1px 6px;flex:none"
     title="${escapeHtml(tip)}" onclick="${on}">${txt}</button>`;
   const a = `'${escAttr(x.id)}','${f}','${orgKey}','${escAttr(label)}'`;
   const action =
@@ -417,7 +417,7 @@ export function syncTag(x, f, org, orgKey, label){
     : st === 'mine' ? btn('기업 DB 갱신', `pushToOrg(${a})`, '이번에 받은 값으로 기업 DB를 고칩니다')
     : st === 'none' && org && syncNorm(x[f]) ? btn('기업 DB에 넣기', `pushToOrg(${a})`, '이 값을 기업 DB에 적어 둡니다')
     : '';
-  return `<div style="font-size:10.5px;margin-top:3px;padding:3px 6px;border-radius:4px;display:flex;gap:6px;align-items:baseline;
+  return `<div style="font-size:var(--fs-10_5);margin-top:3px;padding:3px 6px;border-radius:var(--rd-4);display:flex;gap:6px;align-items:baseline;
       background:${t.b};border-left:3px solid ${t.c}">
     <span style="flex:none;color:${t.c};font-weight:700">● ${t.t}</span>
     ${db && st !== 'same' ? `<span style="flex:1;min-width:0;color:var(--i4);white-space:pre-line;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical"
@@ -435,11 +435,11 @@ function builderNameRow(x){
     : (String(x.builder || '').trim() && !SELF_INSTALL.test(String(x.builder).trim())
       ? `<span style="color:${t.c};font-weight:700">● 기업 DB에 연결되지 않음</span> <span style="color:var(--i5)">— 다시 입력하면 연결됩니다</span>` : '');
   return `<div class="fg"><label class="fl">시공사명</label>
-    <input class="fi" style="font-size:12px" list="builder-orgs" value="${escapeHtml(x.builder || '')}"
+    <input class="fi" style="font-size:var(--fs-12)" list="builder-orgs" value="${escapeHtml(x.builder || '')}"
       placeholder="기업 DB의 시공사에서 고르거나 새 이름을 적으세요"
       onchange="setBuilderOrg('${escAttr(x.id)}',this.value)">
     <datalist id="builder-orgs">${vendors.map(o => `<option value="${escapeHtml(o.name_ko || o.name_en)}">`).join('')}</datalist>
-    ${note ? `<div style="font-size:10.5px;margin-top:3px">${note}</div>` : ''}</div>`;
+    ${note ? `<div style="font-size:var(--fs-10_5);margin-top:3px">${note}</div>` : ''}</div>`;
 }
 export async function setBuilderOrg(id, value){
   const x = getExhibitorById(id);
@@ -466,17 +466,17 @@ export function builderBlock(x){
   const isSelf = (x.booth_type || '') === SELF_BUILD_TYPE;
   const hasAny = BUILDER_FIELDS.some(([f]) => String(x[f] || '').trim());
   if(!isSelf && !hasAny){
-    return `<div style="font-size:11px;color:var(--i5);padding:6px 0">
+    return `<div style="font-size:var(--fs-11);color:var(--i5);padding:6px 0">
       부스 타입이 <b>${escapeHtml(SELF_BUILD_TYPE)}</b>이면 시공사 정보를 적는 칸이 나와요</div>`;
   }
   const bOrg = getOrgById(x.builder_org_id);
   const B_ORG = { builder_tel: 'phone', builder_email: 'email' };
   const row = (f, label, ph) => `<div class="fg"><label class="fl">${escapeHtml(label)}</label>
-    <input class="fi" style="font-size:12px" value="${escapeHtml(x[f] || '')}" placeholder="${escapeHtml(ph)}"
+    <input class="fi" style="font-size:var(--fs-12)" value="${escapeHtml(x[f] || '')}" placeholder="${escapeHtml(ph)}"
       onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')">
     ${bOrg && B_ORG[f] ? syncTag(x, f, bOrg, B_ORG[f], label) : ''}</div>`;
-  return `<div style="padding:9px 11px;background:var(--i9);border-radius:8px;border-left:3px solid var(--a);margin-bottom:10px">
-    <div style="font-size:11px;font-weight:700;color:var(--i2);margin-bottom:7px">
+  return `<div style="padding:9px 11px;background:var(--i9);border-radius:var(--r);border-left:3px solid var(--a);margin-bottom:10px">
+    <div style="font-size:var(--fs-11);font-weight:700;color:var(--i2);margin-bottom:7px">
       시공사 정보${isSelf ? '' : ' <span style="font-weight:400;color:var(--i5)">— 부스 타입은 자체 시공이 아니에요</span>'}</div>
     ${builderNameRow(x)}
     <div class="fgr">${row('builder_contact', '시공 담당자', '')}${row('builder_tel', '유선번호', '02-000-0000')}</div>

@@ -39,13 +39,13 @@ export function openAddCoEventModal(key){
   const html = `
     <div id="co-event-modal" onclick="if(event.target===this)document.getElementById('co-event-modal').remove()"
       style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center">
-      <div style="background:var(--W);border-radius:12px;padding:22px;width:360px;box-shadow:0 8px 32px rgba(0,0,0,.18)">
-        <div style="font-size:14px;font-weight:700;margin-bottom:4px">📅 행사 참여 이력 추가</div>
-        <div style="font-size:11px;color:var(--i4);margin-bottom:14px">${escapeHtml(c.nameKo||c.nameEn)}</div>
+      <div style="background:var(--W);border-radius:var(--rd-12);padding:22px;width:360px;box-shadow:0 8px 32px rgba(0,0,0,.18)">
+        <div style="font-size:var(--fs-14);font-weight:700;margin-bottom:4px">📅 행사 참여 이력 추가</div>
+        <div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:14px">${escapeHtml(c.nameKo||c.nameEn)}</div>
 
         <div class="mlbl">담당자</div>
         <select class="fi" id="co-ev-add-contact" style="width:100%;margin-bottom:3px">${contactOpts}</select>
-        <div style="font-size:10.5px;color:var(--i5);margin-bottom:10px">
+        <div style="font-size:var(--fs-10_5);color:var(--i5);margin-bottom:10px">
           전시참가기업은 담당자 없이도 등록됩니다. 연사·스폰서처럼 사람 단위 역할은 담당자가 필요해요.</div>
 
         <div class="mlbl">행사</div>

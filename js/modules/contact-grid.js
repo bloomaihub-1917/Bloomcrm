@@ -74,7 +74,7 @@ export function renderGrid(){
   if(!el) return;
   const cur = roundById(currentRoundId());
   if(!cur){
-    el.innerHTML = `<div class="empty" style="height:auto;padding:60px 20px"><p style="font-size:12px">왼쪽에서 차수를 고르거나 새로 만드세요</p>
+    el.innerHTML = `<div class="empty" style="height:auto;padding:60px 20px"><p style="font-size:var(--fs-12)">왼쪽에서 차수를 고르거나 새로 만드세요</p>
       <button class="btn bp bs" onclick="openRoundEditor()">차수 만들기</button></div>`;
     return;
   }
@@ -92,13 +92,13 @@ export function renderGrid(){
   });
   const stats = Object.fromEntries(rounds.map(r => [r.id, roundStats(r, rows)]));
   const seg = (k, l) => `<button class="seg-b${gFil === k ? ' on' : ''}" onclick="setGridFil('${k}')">${l}</button>`;
-  const th = 'position:sticky;top:0;background:var(--i8);z-index:1;font-size:11px;text-align:left;padding:7px 8px;border-bottom:1px solid var(--i6);white-space:nowrap';
-  const td = 'padding:6px 8px;border-bottom:1px solid var(--i7);font-size:11.5px;vertical-align:top';
+  const th = 'position:sticky;top:0;background:var(--i8);z-index:1;font-size:var(--fs-11);text-align:left;padding:7px 8px;border-bottom:1px solid var(--i6);white-space:nowrap';
+  const td = 'padding:6px 8px;border-bottom:1px solid var(--i7);font-size:var(--fs-11_5);vertical-align:top';
 
   el.innerHTML = `
     <div class="tbar" style="flex-wrap:wrap;gap:8px">
-      <span style="font-size:13px;font-weight:700">${escapeHtml(evLabel(cur.event_id))}</span>
-      <span style="font-size:11px;color:var(--i4)">차수 ${rounds.length}개 · ${rows.length}곳</span>
+      <span style="font-size:var(--fs-13);font-weight:700">${escapeHtml(evLabel(cur.event_id))}</span>
+      <span style="font-size:var(--fs-11);color:var(--i4)">차수 ${rounds.length}개 · ${rows.length}곳</span>
       <div class="seg">${seg('all', '전체')}${seg('todo', '이 차수 연락 전')}${seg('open', '이 차수 안 끝남')}${seg('goal', '이 차수 목표 달성')}</div>
       <span class="tct">${list.length}곳</span>
     </div>
@@ -112,8 +112,8 @@ export function renderGrid(){
           const on = r.id === cur.id;
           return `<th style="${th};${on ? 'background:var(--ad);color:var(--a)' : ''};cursor:pointer" onclick="pickRound('${escAttr(r.id)}')" title="${escapeHtml(r.purpose || '')}">
             <div>${escapeHtml(r.channel || 'TM')} · ${escapeHtml(r.name)}</div>
-            <div style="font-weight:400;color:var(--i4);font-size:10.5px;margin-top:2px">연락 ${s.touched}/${s.members} · 목표 ${s.goal}</div>
-            <div style="font-weight:400;font-size:10.5px;margin-top:1px">${BUCKETS.filter(b => s[b]).map(b => `${b} ${s[b]}`).join(' · ') || '<span style="color:var(--i5)">기록 없음</span>'}</div></th>`;
+            <div style="font-weight:400;color:var(--i4);font-size:var(--fs-10_5);margin-top:2px">연락 ${s.touched}/${s.members} · 목표 ${s.goal}</div>
+            <div style="font-weight:400;font-size:var(--fs-10_5);margin-top:1px">${BUCKETS.filter(b => s[b]).map(b => `${b} ${s[b]}`).join(' · ') || '<span style="color:var(--i5)">기록 없음</span>'}</div></th>`;
         }).join('')}
         <th style="${th}">최근 연락</th>
       </tr></thead>
@@ -122,28 +122,28 @@ export function renderGrid(){
         return `<tr>
           <td style="${td};color:var(--i4)">${i + 1}</td>
           <td style="${td}"><div style="font-weight:600">${escapeHtml(row.name)}</div>
-            ${row.sources.size ? `<div style="font-size:10.5px;color:var(--i4)">${escapeHtml([...row.sources].join(' · '))}</div>` : ''}</td>
+            ${row.sources.size ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml([...row.sources].join(' · '))}</div>` : ''}</td>
           <td style="${td}">${p ? `${escapeHtml(p.nameKo || p.nameEn || '')} <span style="color:var(--i4)">${escapeHtml(p.titleKo || '')}</span>
-            <div style="font-size:10.5px;color:var(--i4)">${escapeHtml(p.phone2 || p.phone1 || '')}</div>` : '<span style="color:var(--i5)">—</span>'}</td>
+            <div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(p.phone2 || p.phone1 || '')}</div>` : '<span style="color:var(--i5)">—</span>'}</td>
           ${rounds.map(r => cellHtml(row.cells[r.id], r, r.id === cur.id, td)).join('')}
-          <td style="${td};white-space:nowrap;color:var(--i3)">${row.last ? `${escapeHtml(String(row.last.at).slice(5, 10))} ${escapeHtml(row.last.by_name || '')}<div style="font-size:10.5px;color:var(--i4)">총 ${row.total}번</div>` : '<span style="color:var(--i5)">—</span>'}</td>
+          <td style="${td};white-space:nowrap;color:var(--i3)">${row.last ? `${escapeHtml(String(row.last.at).slice(5, 10))} ${escapeHtml(row.last.by_name || '')}<div style="font-size:var(--fs-10_5);color:var(--i4)">총 ${row.total}번</div>` : '<span style="color:var(--i5)">—</span>'}</td>
         </tr>`;
       }).join('') : `<tr><td colspan="${4 + rounds.length}" style="${td};text-align:center;color:var(--i4);padding:30px">${rows.length ? '해당하는 곳이 없어요' : '이 행사 차수에 명단이 아직 없어요'}</td></tr>`}</tbody>
     </table></div>`;
 }
 
 function cellHtml(c, r, on, td){
-  const bg = on ? ';background:#F7F9FF' : '';
+  const bg = on ? ';background:var(--selb)' : '';
   if(!c) return `<td style="${td}${bg};color:var(--i5)">—</td>`;
   const a = c.atts[0];
   const R = a && REACTIONS[a.reaction];
   const head = c.m.goal_at ? `<span class="pill p-green">✓ ${escapeHtml(r.goal || '목표')}</span>`
     : c.m.closed_at ? `<span class="pill p-gray">끝냄</span>`
     : a ? `<span class="pill ${R?.cls || 'p-gray'}">${escapeHtml(R?.label || a.reaction)}</span>`
-    : `<span style="color:var(--a);font-size:11px">${r.channel === 'TM' ? '걸 차례' : '보낼 차례'}</span>`;
+    : `<span style="color:var(--a);font-size:var(--fs-11)">${r.channel === 'TM' ? '걸 차례' : '보낼 차례'}</span>`;
   return `<td style="${td}${bg};cursor:pointer" onclick="openRoundMember('${escAttr(c.m.id)}')" title="${escapeHtml(a?.note || '')}">
-    ${head}${c.atts.length ? ` <span style="font-size:10.5px;color:var(--i4)">${c.atts.length}번 · ${escapeHtml(String(a.at).slice(5, 10))}</span>` : ''}
-    ${a?.note ? `<div style="font-size:10.5px;color:var(--i3);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(a.note)}</div>` : ''}
+    ${head}${c.atts.length ? ` <span style="font-size:var(--fs-10_5);color:var(--i4)">${c.atts.length}번 · ${escapeHtml(String(a.at).slice(5, 10))}</span>` : ''}
+    ${a?.note ? `<div style="font-size:var(--fs-10_5);color:var(--i3);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(a.note)}</div>` : ''}
   </td>`;
 }
 
