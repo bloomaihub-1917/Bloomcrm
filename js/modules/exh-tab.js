@@ -678,7 +678,7 @@ function exhFilterChipsHtml(){
     ? `<button class="btn bs${exhUi.exhFilter === k ? ' bp' : ''}" style="font-size:var(--fs-11);padding:3px 10px;gap:5px"
         title="${escapeHtml(tip)}" onclick="setExhFilter('${k}')">${label}<span style="${exhUi.exhFilter === k ? '' : 'color:var(--i4);'}font-weight:700">${n}</span></button>`
     : '';
-  return `<div style="display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px 0">
+  return `<div class="sec" style="display:flex;flex-wrap:wrap;gap:6px">
     ${f('all', '전체', list.length, '참가 취소 기업은 빼고 셉니다')}${
       f('incomplete', '준비 중', incomplete, '신청서·부스·그래픽 같은 준비 단계가 아직 다 끝나지 않은 기업')}${
       f('ready', '준비 완료', list.length - incomplete, '준비 단계를 모두 마친 기업')}${
@@ -877,7 +877,7 @@ export function renderExh(){
     : exhUi.exhView === 'money'   ? window.renderMoneyView(list)
     : exhUi.exhView === 'book'    ? window.renderBookView(list)
     : exhUi.exhView === 'onsite'  ? renderOnsiteView(list)
-    : exhUi.exhView === 'watch'   ? `<div style="padding:14px 16px 40px">${renderWatchView(exhEvent)}</div>`
+    : exhUi.exhView === 'watch'   ? `<div class="sec-rows">${renderWatchView(exhEvent)}</div>`
     : renderInquiryPanel() + renderChecklist(list, all);
   // 거를 목록이 없는 화면(대시보드·파일 감시)에는 필터 칩도 두지 않는다
   const chips = (searchOverride || !['dash', 'watch'].includes(exhUi.exhView)) ? exhFilterChipsHtml() : '';

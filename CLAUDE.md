@@ -26,3 +26,13 @@
 - `db/seeds/`: 처음 값을 넣는 `seed-*.js`
 - `db/oneoff/`: 특정 행사·자료를 한 번 들여오거나 고치는 것. 짝으로 쓰는 `.py`도 같은 폴더에
 - 폴더 안에서는 `require('../pool')`, `require('../contact-ids')`로 부른다. 돌릴 때는 `backend-node`에서 `node db/oneoff/<이름>.js`
+
+## 탭 본문 단락 여백은 클래스로만 준다
+
+탭 본문에서 위에서 아래로 쌓이는 단락(요약 카드·보기 칸·필터 줄·명단)에 `padding:12px 16px 0`처럼 px를 직접 적지 않는다.
+단락마다 값을 따로 적다 보니 12·10·8·6px이 섞여 행사 DB 참가자 탭 간격이 들쭉날쭉했다(2026-11-04).
+
+- 단락은 `class="sec"`, 버튼·검색 줄은 `class="sec sec-bar"`, 맨 아래 명단은 `class="sec-rows"`(`styles/components.css`).
+  세로 간격은 `--gap-sec`, 좌우는 `--pad-x` 하나로 정한다 — 바꿀 때는 `styles/tokens.css` 값만 바꾼다.
+- 요약 숫자 카드는 `stat-grid` / `stat-card`(내용 세로 가운데 — 한 줄 카드는 가장 큰 카드 높이로 늘어난다).
+- 화면을 고친 뒤 `node scripts/refactor/check-spacing.js`로 직접 적은 여백이 없는지 확인한다.

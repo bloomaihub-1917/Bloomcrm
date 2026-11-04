@@ -83,7 +83,7 @@ function renderBoothView(list){
       .filter(([t]) => String(t || '').trim())
       .sort((a, b) => rank(a[0]) - rank(b[0]) || a[0].localeCompare(b[0], 'ko'));
     const label = (code) => code === NO_BOOTH_TYPE ? NO_BOOTH_LABEL : boothTypes(exhEvent).find(t => t.code === code)?.label || code;
-    return `<div class="subbar" style="padding:10px 16px 0"><div class="seg" style="flex-wrap:wrap">
+    return `<div class="subbar sec"><div class="seg" style="flex-wrap:wrap">
       <button class="seg-b${exhUi.boothTypeFil ? '' : ' on'}" onclick="setBoothTypeFil('')">전체 ${all0.length}</button>
       ${tabs.map(([t, n]) => `<button class="seg-b${exhUi.boothTypeFil === t ? ' on' : ''}"
         onclick="setBoothTypeFil('${escAttr(t)}')" title="${escapeHtml(t)}">${escapeHtml(label(t))} ${n}</button>`).join('')}
