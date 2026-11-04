@@ -12,7 +12,8 @@ import { auditLog, exhEvent, invoicesFor, logsFor, openInquiriesFor, taxInvoices
 import { escAttr, escapeHtml, leftPill, td } from '../../utils.js';
 import { CANCELLED, GRAPHIC_STAGES, TAX_STAGES, billableItems, billedAmount, billedByCategory, currencyOf, daysSince, eventDeadlines, fmtMoney, money, num, paidAmount, settleByCurrency, settleState, stageAge, stageOf, taxNeed } from './exh-calc.js';
 import { exhUi } from './exh-ui.js';
-import { DUE_STEPS, DUE_TAB, STEPS, applyCell, bookOnlyTip, boothAlertHtml, boothTypes, cancelledExhibitors, cellState, dueInfo, exhContacts, exhFollowOf, exhNames, gradeCls, isBookOnly, isReturning, onsiteAddCard, openExhCfg, prevOrgKeys, progressBar, progressOf, rawCellState, renderExhSummary, setBoothTypeFil, setStepFil, shortCell, toggleStepWarn } from '../../modules/exh-tab.js';
+import { DUE_STEPS, DUE_TAB, STEPS, applyCell, bookOnlyTip, boothAlertHtml, boothTypes, cancelledExhibitors, cellState, dueInfo, exhContacts, exhFollowOf, exhNames, gradeCls, isBookOnly, isReturning, onsiteAddCard, prevOrgKeys, progressBar, progressOf, rawCellState, renderExhSummary, setBoothTypeFil, setStepFil, shortCell, toggleStepWarn } from '../../modules/exh-tab.js';
+import { openExhCfg } from './exh-settings-modal.js';
 
 /* ══════════════════════════════════════════
    대시보드 — 기업 하나하나가 아니라 행사 전체를 본다.

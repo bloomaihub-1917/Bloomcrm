@@ -7,7 +7,7 @@
 
 import { trackAction } from '../../core/audit-log.js';
 import { BOOTH_EXC, BOOTH_ORIGIN, boothIncluded, graphicState, isBoothExc, isBoothGiven, itemCode, refreshExhViews } from '../../modules/exh-tab.js';
-import { graphicDueInfo } from './exh-item-views.js';
+import { graphicDueInfo } from './exh-graphic-views.js';
 import { EXH_ITEMS, EXH_LOGS, currentUser, getExhibitorById, invoicesFor, isVoided, itemsFor, liveItemsFor, logsFor } from '../../state.js';
 import { escAttr, escapeHtml, td } from '../../utils.js';
 import { GRAPHIC_STAGES, TCELL, TPILL, fmtMoney, money, stageOf } from './exh-calc.js';

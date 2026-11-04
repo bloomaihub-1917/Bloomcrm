@@ -286,6 +286,12 @@ AI에 보내는 상태 값과 ask·act·save·clear 동작은 각자 파일 그�
 **덤으로 본 것(합치기와 별개)**: 서버가 보낸메일함을 읽을 때 전시 메일 단계를 제목 낱말로 고정해 알아본다(`lib/mail/sync-sent.js` classifyExhSent).
 그런데 전시 메일 단계는 행사마다 편집할 수 있어서, 새로 만든 단계로 보낸 메일은 «기타»로 들어갈 수 있다.
 
+**큰 파일 마저 떼기** (✅ 2026-11-04): `exh-item-views` 1,538 → 820줄 — 그래픽 현황(독립부스·받을 파일 계획·품목별·기업별)을 `exh-graphic-views.js`(736줄)로.
+`exh-tab` 2,118 → 1,780줄대 — 부스 현황 보기를 `exh-booth-view.js`, 행사 설정 모달을 `exh-settings-modal.js`로. 이제 1,500줄 넘는 파일이 없다.
+master에 동작 수정 세 커밋이 따로 들어가 있어서, 견주기는 이 브랜치 바로 앞 커밋(f8b91d1, master와 같다고 확인한 것)을 풀어 놓고 했다. 105개 값 같음.
+그래픽 하위 보기 5개(base·item·kind·co·self)와 행사 설정 창은 따로 열어 에러 없음을 봤다.
+도구 메모: split-leaf는 `window.X = X;   // 주석`처럼 뒤에 주석이 붙은 줄을 window 줄로 못 알아본다 — 잠깐 주석을 떼고 돌렸다.
+
 ### 파트 I. 서버 — `backend-node/`
 - `routes/mail.js`(1,500줄) → 계정 / 발송 / 보낸 메일 / 받은 메일 / 주인 없는 메일 / 분류.
 - `db/` → `lib/`(pool, contact-ids) · `migrations/`(add-*) · `oneoff/`. 옮길 때 CLAUDE.md의 스크립트 경로도 고친다.

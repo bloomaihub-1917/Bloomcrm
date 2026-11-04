@@ -37,8 +37,11 @@ import './features/companies/add-co-event.js';   // 기업 화면에서 행사 �
 import './modules/crm-tab.js';
 import './modules/audit-tab.js';
 import './modules/exh-tab.js';
+import './features/exhibition/exh-settings-modal.js';   // 행사 설정 모달 — 단계별 마감일 + 프로그램북 글자수 한도 — 스스로 window에 건다
+import './features/exhibition/exh-booth-view.js';   // 부스 현황 보기 — 타입별·번호 겹침·엑셀로 받기 — 스스로 window에 건다
 import './features/exhibition/exh-book.js';   // 도록 순번·기본 제공·그래픽 발주 — 스스로 window에 건다
 import './features/exhibition/exh-item-views.js';   // 금액·비품·그래픽 현황 보기 — 스스로 window에 건다
+import './features/exhibition/exh-graphic-views.js';   // 그래픽 현황 — 독립부스·받을 파일 계획·품목별·기업별 진행 — 스스로 window에 건다
 import './features/exhibition/exh-dashboard.js';   // 전시 대시보드 — 스스로 window에 건다
 import './features/exhibition/exh-add.js';   // 참가기업 직접 추가·불러오기 — 스스로 window에 건다
 import './modules/exh-drawer.js';
