@@ -239,14 +239,15 @@ export function renderPtn(){
   const counts = { list: list.length, wait: rowsFor('wait').length, assign: rowsFor('assign').length };
   const noneN = list.filter(r => r.side === 'none').length;
 
-  body.innerHTML = `${partTypeNoticeHtml()}
+  /* 보기 탭 줄 — 다른 탭처럼 제목 줄 바로 아래(.db-bar.vtabs). «DB에서 찾아 넣기»는 줄 오른쪽 단추 */
+  const tabs = `<div class="db-bar vtabs"><div class="seg">
+      ${VIEWS.filter(([k]) => k !== 'add').map(([k, label]) => `<button class="seg-b${ptnView === k ? ' on' : ''}" onclick="setPtnView('${k}')">${
+        label}${k in counts ? ` ${counts[k]}` : ''}</button>`).join('')}
+    </div>${VIEWS.filter(([k]) => k === 'add').map(([k, label]) => `<button class="btn bs${ptnView === k ? ' bp' : ''}" style="margin-left:auto" onclick="setPtnView('${k}')">+ ${label}</button>`).join('')}</div>`;
+  body.innerHTML = `${tabs}${partTypeNoticeHtml()}
     <div style="padding:12px 16px 0;display:flex;gap:10px;flex-wrap:wrap">
       ${PARTNERING_SIDES.map(card).join('')}
     </div>
-    <div style="padding:12px 16px 0"><div class="seg" style="flex-wrap:wrap">
-      ${VIEWS.map(([k, label]) => `<button class="seg-b${ptnView === k ? ' on' : ''}" onclick="setPtnView('${k}')">${
-        k === 'add' ? '+ ' : ''}${label}${k in counts ? ` ${counts[k]}` : ''}</button>`).join('')}
-    </div></div>
     ${noneN && ptnView === 'list' ? `<div style="padding:8px 16px 0;font-size:var(--fs-11);color:var(--am)">
       «${escapeHtml(PARTNERING_UNSIDED)}»로만 적혀 셀러·바이어를 모르는 참가자가 ${noneN}명 있어요 —
       «셀러·바이어 지정»에서 정해 주세요.</div>` : ''}

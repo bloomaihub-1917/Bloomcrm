@@ -177,8 +177,7 @@ export function switchCV(v, btn) {
   // 모바일 헤더 타이틀 동기화
   const mh = document.getElementById('mob-crm-ttl');
   if (mh) mh.textContent = ttl;
-  document.querySelectorAll('.s-v .nr').forEach(b => b.classList.toggle('on', b.dataset.cv === v));
-  if (btn) btn.classList.add('on');
+  document.querySelectorAll('.s-v .nr, #crm-vtabs .seg-b').forEach(b => b.classList.toggle('on', b.dataset.cv === v));
   document.getElementById('crm-ttl').innerHTML = `${ttl} <span class="tb-s">${sub}</span>`;
   // 사이드바 — 차수는 오늘 할 컨택에서만, 행사별·협의 현황은 협의 보기에서만
   const contact = v === 'today' || v === 'grid' || v === 'report';
