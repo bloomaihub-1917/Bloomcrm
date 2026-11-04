@@ -160,7 +160,7 @@ function renderBoothView(list){
             title="${done ? '확정 해제' : '배정 확정으로 표시'}"
             style="width:20px;height:20px;border-radius:var(--rs);line-height:1;cursor:pointer;
               border:1.5px solid ${done ? 'var(--g)' : 'var(--i6)'};background:${done ? 'var(--g)' : 'transparent'};
-              color:#fff;font-size:var(--fs-11);font-weight:800">${done ? '✓' : ''}</button></td>
+              color:var(--on);font-size:var(--fs-11);font-weight:800">${done ? '✓' : ''}</button></td>
         <td>${self
           ? (x.builder || x.builder_contact || x.builder_mobile
             ? `<div style="font-size:var(--fs-11_5);font-weight:600">${escapeHtml(x.builder || '업체명 미입력')}</div>

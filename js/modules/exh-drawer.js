@@ -317,7 +317,7 @@ export function dateRow(x, field, label, hint){
   const on = !!x[field];
   return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--i8)">
     <button onclick="toggleExhDate('${escAttr(x.id)}','${field}','${escAttr(label)}')"
-      style="width:20px;height:20px;border-radius:var(--rs);border:1.5px solid ${on ? 'var(--g)' : 'var(--i6)'};background:${on ? 'var(--g)' : 'transparent'};color:#fff;font-size:var(--fs-12);font-weight:800;cursor:pointer;flex-shrink:0;line-height:1">${on ? '✓' : ''}</button>
+      style="width:20px;height:20px;border-radius:var(--rs);border:1.5px solid ${on ? 'var(--g)' : 'var(--i6)'};background:${on ? 'var(--g)' : 'transparent'};color:var(--on);font-size:var(--fs-12);font-weight:800;cursor:pointer;flex-shrink:0;line-height:1">${on ? '✓' : ''}</button>
     <span style="font-size:var(--fs-12_5);font-weight:${on ? 600 : 500};color:${on ? 'var(--i1)' : 'var(--i3)'};flex:1">${escapeHtml(label)}
       ${hint ? `<span style="font-size:var(--fs-10_5);color:var(--i5);font-weight:400"> ${escapeHtml(hint)}</span>` : ''}</span>
     <input type="date" class="fi" style="width:140px;padding:4px 8px;font-size:var(--fs-11_5)" value="${escapeHtml(x[field] || '')}"
@@ -332,7 +332,7 @@ export function flagRow(x, flag, dateField, label, hint){
   const on = x[flag] === 'yes' || !!x[dateField];
   return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--i8)">
     <button onclick="toggleExhFlag('${escAttr(x.id)}','${flag}','${dateField}','${escAttr(label)}')"
-      style="width:20px;height:20px;border-radius:var(--rs);border:1.5px solid ${on ? 'var(--g)' : 'var(--i6)'};background:${on ? 'var(--g)' : 'transparent'};color:#fff;font-size:var(--fs-12);font-weight:800;cursor:pointer;flex-shrink:0;line-height:1">${on ? '✓' : ''}</button>
+      style="width:20px;height:20px;border-radius:var(--rs);border:1.5px solid ${on ? 'var(--g)' : 'var(--i6)'};background:${on ? 'var(--g)' : 'transparent'};color:var(--on);font-size:var(--fs-12);font-weight:800;cursor:pointer;flex-shrink:0;line-height:1">${on ? '✓' : ''}</button>
     <span style="font-size:var(--fs-12_5);font-weight:${on ? 600 : 500};color:${on ? 'var(--i1)' : 'var(--i3)'};flex:1">${escapeHtml(label)}
       ${hint ? `<span style="font-size:var(--fs-10_5);color:var(--i5);font-weight:400"> ${escapeHtml(hint)}</span>` : ''}
       ${on && !x[dateField] ? '<span style="font-size:var(--fs-10);color:var(--i5)"> · 날짜 미상</span>' : ''}</span>

@@ -169,7 +169,7 @@ export async function removeRow(arr, id, deleteFn, label = '줄', table = ''){
      줄 전체가 없어진 거라, 되살리려면 모든 칸이 있어야 한다. */
   trackAction('delete', label + ' 삭제', x?.company_name || '',
     `<b>${escapeHtml(x?.company_name || '')}</b> — ${escapeHtml(label)} <b>${escapeHtml(ROW_LABEL(removed))}</b> 지움`
-    + (what ? ` <span style="color:#9C9890">(${escapeHtml(what)})</span>` : ''),
+    + (what ? ` <span style="color:var(--i4)">(${escapeHtml(what)})</span>` : ''),
     { kind: 'exhibitor', id: removed.exhibitor_id, tab: 'billing', table, row: id,
       op: 'delete', before: removed });
 }
@@ -322,7 +322,7 @@ export async function setItemFieldDirect(id, field, value){
   trackAction('update', '정산 직접 수정', x?.company_name || '',
     `<b>${escapeHtml(x?.company_name || '')}</b> — ${escapeHtml(i.name || '')}의 ${escapeHtml(lbl)}을(를) `
     + `<b>${escapeHtml(was || '(빈값)')}</b> → <b>${escapeHtml(String(value ?? '') || '(빈값)')}</b>로 고쳤어요 `
-    + `<span style="color:#9C9890">(신청서를 거치지 않은 변경)</span>`,
+    + `<span style="color:var(--i4)">(신청서를 거치지 않은 변경)</span>`,
     changed('exhibitor_items', id, { [field]: was }, { [field]: value ?? '' },
       { kind: 'exhibitor', id: i.exhibitor_id, tab: 'billing', field }));
   refreshExhViews();

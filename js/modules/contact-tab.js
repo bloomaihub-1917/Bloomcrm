@@ -632,7 +632,7 @@ function contactToast(html, undo){
   document.getElementById('contact-toast')?.remove();
   const el = document.createElement('div');
   el.id = 'contact-toast';
-  el.style.cssText = 'position:fixed;left:50%;bottom:84px;transform:translateX(-50%);z-index:1100;background:var(--i1);color:#fff;border-radius:var(--r);padding:9px 14px;font-size:var(--fs-12);display:flex;gap:12px;align-items:center;box-shadow:var(--shl);max-width:calc(100vw - 32px)';
+  el.style.cssText = 'position:fixed;left:50%;bottom:84px;transform:translateX(-50%);z-index:1100;background:var(--i1);color:var(--on);border-radius:var(--r);padding:9px 14px;font-size:var(--fs-12);display:flex;gap:12px;align-items:center;box-shadow:var(--shl);max-width:calc(100vw - 32px)';
   el.innerHTML = `<span>${html}</span>${undo ? `<a href="javascript:void(0)" onclick="${undo}" style="color:#9DB4FF;font-weight:700;white-space:nowrap">되돌리기</a>` : ''}`;
   document.body.appendChild(el);
   setTimeout(() => { if(el.isConnected) el.remove(); }, 6000);

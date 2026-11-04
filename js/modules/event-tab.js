@@ -1123,7 +1123,7 @@ function targetHtml(ev){
   const doms = evDomains(ev);
   if(!doms.length){
     return `<div style="padding:30px 16px;max-width:620px">
-      <div style="background:var(--ab);border:1px solid #FDE68A;border-radius:var(--rd-10);padding:14px 16px">
+      <div style="background:var(--ab);border:1px solid var(--aml);border-radius:var(--rd-10);padding:14px 16px">
         <div style="font-size:var(--fs-12_5);font-weight:700;color:var(--am);margin-bottom:5px">이 행사의 분야가 아직 없어요</div>
         <div style="font-size:var(--fs-11_5);color:var(--i3);line-height:1.6">
           타겟은 «어느 분야에서 고르나»가 정해져야 훑을 수 있어요.

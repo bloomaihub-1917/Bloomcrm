@@ -687,7 +687,7 @@ function dBilling(x){
             style="display:flex;align-items:center;gap:5px;border:none;background:none;padding:0;font-size:var(--fs-10);font-weight:700;color:${pend ? 'var(--am)' : 'var(--re)'}">
             <span style="width:16px;height:16px;border-radius:var(--rd-4);flex-shrink:0;line-height:1;
               border:1.5px solid ${pend ? 'var(--am)' : 'var(--re)'};background:${pend ? 'transparent' : 'var(--re)'};
-              color:#fff;display:flex;align-items:center;justify-content:center">${pend ? '' : '✓'}</span>
+              color:var(--on);display:flex;align-items:center;justify-content:center">${pend ? '' : '✓'}</span>
             ${pend ? '요청' : '완료'}
           </button>
           <input type="date" class="fi" style="padding:3px 6px;font-size:var(--fs-11)" value="${escapeHtml(pend ? (p.requested_at || '') : (p.paid_at || ''))}"

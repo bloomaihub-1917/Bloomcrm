@@ -483,7 +483,7 @@ function peopleHtml(ev){
           ${at && at !== '99:99' ? `<span style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(at)}</span>` : ''}
           <b style="font-size:var(--fs-13)">${escapeHtml(sp.name_snapshot || sp.name_en || sp.id)}</b>
           ${sp.name_snapshot && sp.name_en ? `<span style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(sp.name_en)}</span>` : ''}
-          <span style="margin-left:auto;font-size:var(--fs-10_5);color:#fff;background:${bc};border-radius:var(--rd-pill);padding:1px 8px">${bl}</span>
+          <span style="margin-left:auto;font-size:var(--fs-10_5);color:var(--on);background:${bc};border-radius:var(--rd-pill);padding:1px 8px">${bl}</span>
         </div>
         ${org ? `<div style="font-size:var(--fs-11);color:var(--i4);margin-top:-5px">${escapeHtml(org)}</div>` : ''}
         ${p ? `<img src="${photoSrc(p)}" alt="" loading="lazy"

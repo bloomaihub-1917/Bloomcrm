@@ -295,7 +295,7 @@ function renderGraphicItemView(list){
   const chk = (r) => `<button onclick="event.stopPropagation();toggleItemReceived('${escAttr(r.ids.join(','))}')"
     title="${r.i.received_at ? '받음 표시를 지웁니다' : '오늘 받은 것으로 표시합니다'}${
       r.n > 1 ? ` — 묶인 ${r.n}줄 모두` : ''}"
-    style="width:20px;height:20px;border-radius:var(--rs);line-height:1;flex-shrink:0;cursor:pointer;font-size:var(--fs-12);font-weight:800;color:#fff;border:1.5px solid ${
+    style="width:20px;height:20px;border-radius:var(--rs);line-height:1;flex-shrink:0;cursor:pointer;font-size:var(--fs-12);font-weight:800;color:var(--on);border:1.5px solid ${
       r.i.received_at ? 'var(--g)' : 'var(--i6)'};background:${r.i.received_at ? 'var(--g)' : 'transparent'}">${r.i.received_at ? '✓' : ''}</button>`;
 
   if(isMobile()) return viewShell(pills, shown.map(r => `
@@ -445,7 +445,7 @@ function renderGraphicKindView(list){
   /* 받음 표시 단추 — 좁은 화면에서는 손가락이 닿아야 해서 조금 키운다 */
   const gotBtn = (c, sz) => `<button onclick="event.stopPropagation();toggleItemReceived('${escAttr(c.i.id)}')"
     title="${c.i.received_at ? '받음 표시를 지웁니다' : '오늘 받은 것으로 표시합니다'}"
-    style="width:${sz}px;height:${sz}px;border-radius:var(--rs);line-height:1;flex-shrink:0;cursor:pointer;font-size:var(--fs-11);font-weight:800;color:#fff;border:1.5px solid ${
+    style="width:${sz}px;height:${sz}px;border-radius:var(--rs);line-height:1;flex-shrink:0;cursor:pointer;font-size:var(--fs-11);font-weight:800;color:var(--on);border:1.5px solid ${
       c.i.received_at ? 'var(--g)' : 'var(--i6)'};background:${c.i.received_at ? 'var(--g)' : 'transparent'}">${c.i.received_at ? '✓' : ''}</button>`;
   const dueIn = (c, w) => `<input type="date" class="fi" style="width:${w};padding:3px 6px;font-size:var(--fs-11)" value="${escapeHtml(c.i.due_at || '')}"
     onclick="event.stopPropagation()" onchange="setItemField('${escAttr(c.i.id)}','due_at',this.value)">`;

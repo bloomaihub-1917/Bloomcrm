@@ -133,7 +133,7 @@ export function renderGrid(){
 }
 
 function cellHtml(c, r, on, td){
-  const bg = on ? ';background:#F7F9FF' : '';
+  const bg = on ? ';background:var(--selb)' : '';
   if(!c) return `<td style="${td}${bg};color:var(--i5)">—</td>`;
   const a = c.atts[0];
   const R = a && REACTIONS[a.reaction];

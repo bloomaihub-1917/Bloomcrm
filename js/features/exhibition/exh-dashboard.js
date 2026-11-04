@@ -433,7 +433,7 @@ function renderDashboard(all){
     return `<div class="uc">
       <div class="uc-ttl">최근 변경</div>
       ${recent.map(l => `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--i8)">
-        <span style="width:22px;height:22px;border-radius:50%;background:${escAttr(l.color || '#9C9890')};color:#fff;font-size:var(--fs-9);font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${escapeHtml((l.name || '?').slice(0,2))}</span>
+        <span style="width:22px;height:22px;border-radius:50%;background:${escAttr(l.color || '#9C9890')};color:var(--on);font-size:var(--fs-9);font-weight:700;display:flex;align-items:center;justify-content:center;flex:0 0 auto">${escapeHtml((l.name || '?').slice(0,2))}</span>
         <span style="font-size:var(--fs-11);color:var(--i3);flex:0 0 auto">${escapeHtml(l.name || '')}</span>
         <span style="font-size:var(--fs-11_5);color:var(--i2);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(unent((l.detail || '').replace(/<[^>]+>/g, '')))}</span>
         <span style="font-size:var(--fs-10);color:var(--i5);flex:0 0 auto">${escapeHtml(String(l.ts || '').slice(5,10))}</span>

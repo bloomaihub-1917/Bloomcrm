@@ -463,7 +463,7 @@ export async function assignPtnPicked(side){
 function partTypeNoticeHtml(){
   const miss = PARTNERING_SIDES.flatMap(s => s.roles).filter(k => !PART_TYPES.some(t => t.key === k));
   if(!miss.length) return '';
-  return `<div style="margin:12px 16px 0;padding:9px 12px;background:var(--ab);border:1px solid #FDE68A;border-radius:var(--r);
+  return `<div style="margin:12px 16px 0;padding:9px 12px;background:var(--ab);border:1px solid var(--aml);border-radius:var(--r);
       display:flex;align-items:center;gap:9px;font-size:var(--fs-11_5);color:var(--am);flex-wrap:wrap">
     <span style="flex:1;min-width:200px">참가 유형에 «${miss.map(escapeHtml).join('»·«')}»가 없어요 — 업로드·연락처 화면에서 고를 수 없어요.</span>
     <button class="btn bs" onclick="addPtnPartTypes()">지금 추가</button></div>`;

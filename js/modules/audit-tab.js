@@ -232,7 +232,7 @@ export function buildAuditUserList(){
   const sbEl = document.getElementById('audit-user-list');
   if(sbEl) sbEl.innerHTML = Object.entries(users).map(([email,name])=>`
     <button class="evc${auditUserFilter===email?' on':''}" onclick="setAuditUser('${escAttr(email)}')">
-      <div style="width:22px;height:22px;border-radius:50%;background:${userColor(email)};color:#fff;
+      <div style="width:22px;height:22px;border-radius:50%;background:${userColor(email)};color:var(--on);
         display:flex;align-items:center;justify-content:center;font-size:var(--fs-9);font-weight:700;flex-shrink:0">
         ${escapeHtml(userInitials(name))}
       </div>

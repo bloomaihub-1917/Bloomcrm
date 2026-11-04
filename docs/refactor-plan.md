@@ -312,3 +312,11 @@ A(기록) → B → D·E의 공용 꺼내기 → F → 폴더 옮기기 → 큰 
 - 다시 돌리기: `node scripts/refactor/tokenize.js`(시험) → `--apply`. 확인: `scripts/refactor/style-hash.mjs`를 master와 견준다
   (화면 21곳의 HTML·실제 글자 크기·모서리가 같음, PGA 복사 HTML 같음).
 - index.html의 CSS 캐시 번호를 올렸다 — 예전 tokens.css가 캐시에 남으면 변수가 없어 글자가 기본 크기로 보인다.
+
+## 색 값 정리 (2026-11-04)
+- js·CSS 스타일 값에 직접 적힌 색 64곳을 tokens.css 변수로 바꿨다(값 그대로).
+  - 기존 변수와 같은 값은 그 변수로(#9C9890 → `--i4`, #DC2626 → `--re` …).
+  - 색 바탕 위 흰 글씨는 `--on`, 흰 바탕은 `--W`.
+  - 나머지 값에는 새 이름: 연한 테두리 `--al/--gl/--pl/--aml/--tel/--rel`, 남보라 `--in*`, 금색 알약 `--yb/--yk`, 짙은 주황 단추 `--amb2/--amd/--amk`, 고른 줄 `--selb`, 기록 창 글씨 `--code`, 사이드바 초록 칸 `--gs`.
+- 그대로 둔 색: 따옴표 안의 데이터 색(행사 색·기록 색·사용자 색·캔버스), 메일 본문·메일처럼 보이는 흰 종이 미리보기, 업로드 알림의 아이콘 색 몇 개, 정의 없는 변수의 대체값.
+- 다시 돌리기: `node scripts/refactor/tokenize-colors.js`(시험) → `--apply`. style-hash.mjs는 이제 실제 색(글씨·바탕·테두리)도 견준다 — master와 21개 화면 같음.

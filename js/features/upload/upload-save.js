@@ -61,11 +61,11 @@ function showSuspectModal(suspectRows){
       </div>
       <!-- 판단 버튼 -->
       <div style="display:flex;gap:6px;margin-top:10px">
-        <button class="btn" style="flex:1;font-size:var(--fs-11);background:#FEF3C7;border-color:#F59E0B;color:#92400E"
+        <button class="btn" style="flex:1;font-size:var(--fs-11);background:var(--amb2);border-color:var(--amd);color:var(--amk)"
           onclick="decideSuspect(${i}, 'same')">
           ✅ 동일 인물 — 기존에 행사만 추가
         </button>
-        <button class="btn" style="flex:1;font-size:var(--fs-11);background:#EEF2FF;border-color:#6366F1;color:#3730A3"
+        <button class="btn" style="flex:1;font-size:var(--fs-11);background:var(--ad);border-color:var(--in6);color:var(--ink2)"
           onclick="decideSuspect(${i}, 'diff')">
           👤 다른 사람 — 신규 등록
         </button>

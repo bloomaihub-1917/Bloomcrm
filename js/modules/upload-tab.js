@@ -493,7 +493,7 @@ function renderColumnMappingPreview(headers, rows, colMap){
   const warnCols = [named.length ? `<b>${escapeHtml(named.join(', '))}</b>` : '', blankN ? `<b>머리글 없는 열 ${blankN}개</b>` : '']
     .filter(Boolean).join(', ');
   const warnRow = unmappedWithData.length
-    ? `<tr><td colspan="4" style="padding:10px 12px;background:var(--ab);border-bottom:1px solid #FDE68A;font-size:var(--fs-11);color:var(--am)">
+    ? `<tr><td colspan="4" style="padding:10px 12px;background:var(--ab);border-bottom:1px solid var(--aml);font-size:var(--fs-11);color:var(--am)">
         ${uploadUi.aiOn ? `<button class="btn" id="ai-map-btn" style="font-size:var(--fs-10_5);margin-right:6px" onclick="aiFillColumns()"
           title="머리글과 값의 모양(한글=가, 영문=a, 숫자=9)만 보냅니다. 실제 이름·메일·전화는 보내지 않아요">✨ AI로 남은 열 맞추기</button>` : ''}
         ⚠️ ${warnCols} 에는 데이터가 있지만 아직 어느 DB 항목에 넣을지 정하지 않았어요.
