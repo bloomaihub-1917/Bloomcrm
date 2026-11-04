@@ -382,6 +382,12 @@ async function sendSpBulk(){
   if(!list.length){ say('받을 연사를 골라주세요.'); return; }
   const st = curStep();
   if(!st) return;
+  /* 문구에 한쪽 말만 있으면 그쪽 연사에게 제목 없는 메일이 나간다 — 참가사 일괄 메일처럼 보내기 전에 막는다.
+     초안·보관함 양식·고친 문구 어느 길이든 연사마다 실제로 나갈 제목을 보고 센다 */
+  for(const [en, lang] of [[true, '영문'], [false, '국문']]){
+    const n = list.filter(sp => isEn(sp) === en && (() => { const m = mailFor(sp); return m && !String(m.subject || '').trim(); })()).length;
+    if(n){ say(`${lang}으로 갈 연사 ${n}명의 ${lang} 제목이 비었어요 — ${lang} 문구를 채우거나 그 연사를 빼 주세요.`); return; }
+  }
   const from = await eventMailFrom(bm.evKey);
   if(!from.ok){ say(from.text); return; }
   const notTurn = st.lib ? 0 : list.filter(sp => !isTurn(stateOf(sp, bm.step))).length;
