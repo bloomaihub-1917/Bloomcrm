@@ -525,7 +525,7 @@ export function openAddContactModal(){
           <div><div class="mlbl">직함 (영문)</div>
             <input class="fi" id="ac-titleEn" placeholder="Team Leader" style="width:100%"></div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+        <div class="ac-contact-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
           <div><div class="mlbl">이메일</div>
             <input class="fi" id="ac-email1" placeholder="name@company.com" style="width:100%"></div>
           <div><div class="mlbl">전화번호</div>
@@ -548,15 +548,18 @@ export function openAddContactModal(){
         <!-- 소속이 아직 기업DB에 없으면 여기서 만들어진다. 그때 섹터를 함께
              넣어 두지 않으면 미분류로 떨어져, 나중에 기업DB에서 다시 찾아
              붙여야 한다 — 사람을 넣는 자리에서 같이 정한다. -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
-          <div><div class="mlbl">분야</div>
+        <div style="border:1px solid var(--i6);border-radius:var(--r);padding:10px 12px;margin-bottom:16px;background:var(--i9)">
+        <div style="font-size:var(--fs-11);font-weight:700;color:var(--i3);margin-bottom:8px">소속 기업 분류 <span style="font-weight:400;color:var(--i4)">— 기업DB에 없는 소속이면 새 기업에 붙어요</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div><div class="mlbl">분야 <span style="font-weight:400;color:var(--i4)">— 큰 갈래</span></div>
             <select class="fi" id="ac-domain" style="width:100%" onchange="onAddContactDomainChange()">
               ${coDomainOptionsHtml(pick.domain)}
             </select></div>
-          <div><div class="mlbl">섹터 <span style="font-weight:400;color:var(--i4)">— 새로 만들어질 기업에 붙어요</span></div>
+          <div><div class="mlbl">섹터 <span style="font-weight:400;color:var(--i4)">— 분야 안 세부</span></div>
             <select class="fi" id="ac-sector" style="width:100%">
               ${coSectorOptionsHtml(pick.domain, pick.sector)}
             </select></div>
+        </div>
         </div>
 
         <div style="display:flex;gap:8px;justify-content:flex-end">

@@ -720,3 +720,5 @@ tr.row-sel{background:var(--ad)}
 .bk-al.info .bk-al-tag{background:var(--i4)}
 .fg:has(.bk-al.err) .fi{border-color:var(--re);box-shadow:0 0 0 2px var(--rb)}
 .fg:has(.bk-al.warn) .fi{border-color:var(--am);box-shadow:0 0 0 2px var(--ab)}
+/* 연락처 추가 창 — 모바일에서는 이메일·전화번호 한 줄, 국가는 그 아래 */
+@media(max-width:768px){.ac-contact-row{grid-template-columns:1fr 1fr!important}.ac-contact-row>:last-child{grid-column:1/-1}}
