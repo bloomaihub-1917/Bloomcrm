@@ -25,7 +25,7 @@ import {
   evPartOn, evPartDone, evPartState,
   findOrgByName, orgName, ORGS,
 } from '../state.js';
-import { td, escapeHtml, escAttr, isMobile, cleanEmail, countryName, leftPill, levenshteinDist, phoneMatch } from '../utils.js';
+import { td, escapeHtml, escAttr, isMobile, mobEvSelectHtml, cleanEmail, countryName, leftPill, levenshteinDist, phoneMatch } from '../utils.js';
 export { cleanEmail };   // exh-drawer가 여기서 가져다 쓴다
 import { postToSheet as _postToSheet } from '../api.js';
 import { saveExhCfgToSheet as _saveExhCfgToSheet } from '../api/settings-save.js';
@@ -798,7 +798,13 @@ export function renderExh(){
   if(ttl) ttl.innerHTML = `전시 진행관리 <span class="tb-s">${ev ? escapeHtml(ev.short || ev.name) + ' · ' : ''}참가기업 준비 현황</span>`;
   // 모바일 헤더 제목은 행사명으로 (화면이 좁아 부제를 넣을 자리가 없다)
   const mttl = document.getElementById('mob-exh-ttl');
-  if(mttl) mttl.textContent = ev ? (ev.short || ev.name || '전시 진행관리') : '전시 진행관리';
+  if(mttl){
+    /* 연사 탭처럼 행사 이름을 눌러 바로 다른 행사로 — 사이드바 목록과 같은 순서(진행 중 → 완료 → 나머지) */
+    mttl.style.minWidth = '0';
+    const opts = exhEventOptions(), st = (e) => evPartState(e.key, 'exh');
+    mttl.innerHTML = mobEvSelectHtml([['', opts.filter(e => st(e) === 'doing')], ['진행 완료', opts.filter(e => st(e) === 'done')],
+      ['전시 안 함', opts.filter(e => st(e) === 'none')]], exhEvent, 'setExhEvent2') || '전시 진행관리';
+  }
   updateExhBadge();
 
   // 이 행사가 전시를 안 하기로 돼 있으면 목록을 열지 않는다 — 참가기업이

@@ -443,3 +443,18 @@ export function splitQuotedMail(text){
 /* 연사 사진 data URL — base64 글자가 아니면 그리지 않는다(서버도 막지만, 속성 밖으로 못 나가게 화면에서 한 번 더) */
 export const photoSrc = (p) => /^image\/(jpeg|png|webp)$/.test(p.content_type || 'image/jpeg') && /^[A-Za-z0-9+/]+={0,2}$/.test(String(p.data || ''))
   ? `data:${p.content_type || 'image/jpeg'};base64,${p.data}` : '';
+
+/* 휴대폰 머리줄의 행사 고르기 — 탭 이름만으로는 어느 행사를 보는지 모르니, 행사 이름 자체를
+   고르는 칸으로 둔다(연사·전시·행사 DB 공통). groups = [[묶음 이름 또는 '', 행사들], …] */
+export function mobEvSelectHtml(groups, current, fn){
+  const opt = (e) => `<option value="${escapeHtml(e.key)}"${current === e.key ? ' selected' : ''}>${escapeHtml(e.short || e.name || e.key)}</option>`;
+  const body = groups.filter(([, l]) => l.length).map(([g, l]) => g
+    ? `<optgroup label="${escapeHtml(g)}">${l.map(opt).join('')}</optgroup>` : l.map(opt).join('')).join('');
+  if(!body) return '';
+  return `<select onchange="${fn}(this.value)" aria-label="행사 고르기"
+    style="max-width:100%;font:inherit;font-weight:700;color:inherit;background:transparent;border:0;
+    padding:2px 18px 2px 0;appearance:none;-webkit-appearance:none;cursor:pointer;
+    background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);
+    background-position:calc(100% - 9px) 55%,calc(100% - 4px) 55%;background-size:5px 5px;background-repeat:no-repeat;
+    text-overflow:ellipsis;overflow:hidden;white-space:nowrap">${body}</select>`;
+}

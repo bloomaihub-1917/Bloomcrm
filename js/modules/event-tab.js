@@ -25,7 +25,7 @@ import {
   EXHIBITORS, exhibitorsForEvent, PART_TYPES, evParts, evPartDone, getOrgById, CO_DB, speakersForEvent,
 } from '../state.js';
 import { RP, EVENT_PARTS, partStateOf, PARTNERING_SIDES, PARTNERING_UNSIDED } from '../constants.js';
-import { td, escapeHtml, escAttr, countryName, isMobile } from '../utils.js';
+import { td, escapeHtml, escAttr, countryName, isMobile, mobEvSelectHtml } from '../utils.js';
 import { saveEventToSheet, postToSheet } from '../api.js';
 import { batchCreateExhibitors } from '../api/exh-save.js';
 import { saveTargetToSheet, buildEvFil, renderCrm, updBadges } from './crm-tab.js';
@@ -252,7 +252,13 @@ export function renderEvDb(){
     ? escapeHtml(ev.short || ev.name) + ' · 참여자와 기업'
     : '행사를 골라주세요'}</span>`;
   const mttl = document.getElementById('mob-evdb-ttl');
-  if(mttl) mttl.textContent = ev ? (ev.short || ev.name || '행사 DB') : '행사 DB';
+  if(mttl){
+    /* 연사 탭처럼 행사 이름을 눌러 바로 다른 행사로 — 사이드바와 같은 최근 순 */
+    mttl.style.minWidth = '0';
+    const sorted = [...EVENT_LIST].sort((a, b) =>
+      String(b.date_start || b.date || '').localeCompare(String(a.date_start || a.date || '')));
+    mttl.innerHTML = mobEvSelectHtml([['', sorted]], evdbEvent, 'setEvDbEvent') || '행사 DB';
+  }
 
   if(!ev){
     el.innerHTML = `<div class="empty" style="height:auto;padding:60px 20px;text-align:center">

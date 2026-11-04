@@ -30,7 +30,7 @@ import {
   leadOf, coOf, TALK_FIELDS, roleLabel,
 } from '../state.js';
 import { SPEAKER_ROLES, NEED_MARK, SPEAKER_NEEDS, SP_CONSENTS } from '../constants.js';
-import { td, escapeHtml, escAttr, isMobile, leftPill, countryName, photoSrc } from '../utils.js';
+import { td, escapeHtml, escAttr, isMobile, leftPill, countryName, photoSrc, mobEvSelectHtml } from '../utils.js';
 import { progressBar, shortCell } from './exh-tab.js';
 /* 화면 상태는 ../features/conference/conf-ui.js의 confUi 한곳에 둔다 — 이 탭의 구획을 다른 파일로 떼어도 같은 값을 보게 */
 import { confUi } from '../features/conference/conf-ui.js';
@@ -130,16 +130,7 @@ export function buildConfEvList(){
   const mt = document.getElementById('mob-conf-ttl');
   if(mt){
     mt.style.minWidth = '0';   // 긴 행사명이 오른쪽 단추를 밀어내지 않게
-    const live = [...doing, ...done];
-    const opt = (e) => `<option value="${escapeHtml(e.key)}"${confUi.confEvent === e.key ? ' selected' : ''}>${escapeHtml(e.short || e.name || e.key)}</option>`;
-    mt.innerHTML = live.length ? `<select onchange="setConfEvent(this.value)" aria-label="행사 고르기"
-        style="max-width:100%;font:inherit;font-weight:700;color:inherit;background:transparent;border:0;
-        padding:2px 18px 2px 0;appearance:none;-webkit-appearance:none;cursor:pointer;
-        background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);
-        background-position:calc(100% - 9px) 55%,calc(100% - 4px) 55%;background-size:5px 5px;background-repeat:no-repeat;
-        text-overflow:ellipsis;overflow:hidden;white-space:nowrap">
-        ${doing.map(opt).join('')}${done.length ? `<optgroup label="진행 완료">${done.map(opt).join('')}</optgroup>` : ''}
-      </select>` : '컨퍼런스';
+    mt.innerHTML = mobEvSelectHtml([['', doing], ['진행 완료', done]], confUi.confEvent, 'setConfEvent') || '컨퍼런스';
   }
 }
 
