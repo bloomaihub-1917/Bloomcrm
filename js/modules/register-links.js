@@ -22,6 +22,7 @@ const COLS = [
   { k: 'email',   ko: '이메일*',        en: 'Email' },
   { k: 'phone',   ko: '전화',           en: 'Phone' },
 ];
+const VIA_ICON = { link: '🔗 링크', excel: '📄 엑셀', manual: '✍️ 직접' };
 const norm = (s) => String(s || '').replace(/[\s*()·/]/g, '').toLowerCase();
 
 let openEv = '';
@@ -135,7 +136,7 @@ function subRow(s){
     <td style="padding:6px 4px"><b>${escapeHtml(d.name)}</b>${d.title ? `<div style="color:var(--i4)">${escapeHtml(d.title)}</div>` : ''}</td>
     <td style="padding:6px 4px">${escapeHtml(d.org)}</td>
     <td style="padding:6px 4px">${escapeHtml(d.email)}${d.phone ? `<div style="color:var(--i4)">${escapeHtml(d.phone)}</div>` : ''}</td>
-    <td style="padding:6px 4px;color:var(--i4)">${s.via === 'excel' ? '📄 엑셀' : '🔗 링크'}<div>${escapeHtml(s.created_at)}</div></td>
+    <td style="padding:6px 4px;color:var(--i4)">${VIA_ICON[s.via] || '🔗 링크'}<div>${escapeHtml(s.created_at)}</div></td>
     <td style="padding:6px 4px;white-space:nowrap;text-align:right">
       <button class="btn bp" style="font-size:10.5px" onclick="decideRegister('${escAttr(s.id)}','accept',this)">확정</button>
       <button class="btn" style="font-size:10.5px;color:var(--re)" onclick="decideRegister('${escAttr(s.id)}','drop',this)">버리기</button></td>
@@ -146,7 +147,8 @@ function render(){
   const bd = document.getElementById('reg-links-bd');
   if(!bd) return;
   bd.style.color = '';
-  const opts = PART_TYPES.map(t => `<option value="${escapeHtml(t.key)}">${escapeHtml(t.label || t.key)}</option>`).join('');
+  const keep = document.getElementById('reg-new-role')?.value;
+  const opts = PART_TYPES.map(t => `<option value="${escapeHtml(t.key)}"${t.key === keep ? ' selected' : ''}>${escapeHtml(t.label || t.key)}</option>`).join('');
   bd.innerHTML = `<div style="font-size:11.5px;color:var(--i4);line-height:1.55;margin-bottom:12px">
       링크로 받은 신청과 엑셀로 올린 명단은 <b>마스터DB에 바로 들어가지 않아요</b>. 참여자 목록에는 «타겟»으로 보이고,
       여기 «확정»이나 참여자 목록의 «참가 확정»을 누르면 그때 마스터DB로 옮겨 참가 확정으로 넣어요. 같은 이메일이 이미 있으면 그 사람에 붙여요.</div>
@@ -172,6 +174,13 @@ function render(){
       <button class="btn" style="font-size:11px" onclick="downloadRegisterTemplate()">📥 엑셀 양식 내려받기</button>
       <button class="btn" style="font-size:11px" onclick="document.getElementById('reg-file').click()">📤 엑셀 올리기</button>
       <input type="file" id="reg-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="uploadRegisterExcel(event)">
+    </div>
+    <div style="margin-top:12px;border-top:1px solid var(--i6);padding-top:12px">
+      <div style="font-size:11.5px;color:var(--i4);margin-bottom:6px">한 명씩 직접 넣기 — 위에서 고른 참가 유형으로 신청 대기에 들어가요</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${COLS.map(c => `<input id="reg-one-${c.k}" class="fi" placeholder="${escAttr(c.ko)}" style="flex:1;min-width:110px;font-size:12px"${c.k === 'email' ? ' type="email"' : ''} onkeydown="if(event.key==='Enter')addRegisterOne()">`).join('')}
+        <button class="btn bp" style="font-size:11px" onclick="addRegisterOne(this)">＋ 신청자 추가</button>
+      </div>
     </div>
     <div id="reg-upload-msg" style="font-size:11.5px;margin-top:6px"></div>`;
 }
@@ -285,6 +294,24 @@ export async function uploadRegisterExcel(e){
   trackAction('create', '등록 신청', openEv, `엑셀 ${r.added}줄 올림 (${role})`);
 }
 
+/* ── 한 명씩 직접 입력 — 엑셀과 같은 길(import)로 한 줄만 보낸다 ── */
+export async function addRegisterOne(btn){
+  const role = document.getElementById('reg-new-role')?.value || '';
+  const row = { line: 1 };
+  COLS.forEach(c => { row[c.k] = (document.getElementById('reg-one-' + c.k)?.value || '').trim(); });
+  const miss = COLS.filter(c => c.ko.endsWith('*') && !row[c.k]).map(c => c.ko.replace('*', ''));
+  if(miss.length){ showMsg(`${miss.join('·')}을(를) 채워 주세요.`, true); return; }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)){ showMsg('이메일 형식을 확인해 주세요.', true); return; }
+  if(btn) btn.disabled = true;
+  const r = await importRegisterRows(openEv, { role, rows: [row], via: 'manual' });
+  if(btn) btn.disabled = false;
+  if(!r.ok || !r.added){ showMsg(r.error || '넣지 못했어요 — 필수 칸·이메일을 확인해 주세요.', true); return; }
+  await reload();
+  showMsg(`${row.name}님을 «${role}» 신청 대기에 넣었어요. 확정하면 마스터DB로 옮겨요.`);
+  trackAction('create', '등록 신청', openEv, `직접 입력 ${row.name} (${role})`);
+}
+
+window.addRegisterOne = addRegisterOne;
 window.openRegisterLinks = openRegisterLinks;
 window.makeRegisterLink = makeRegisterLink;
 window.toggleRegisterLink = toggleRegisterLink;

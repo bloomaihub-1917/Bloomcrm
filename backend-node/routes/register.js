@@ -5,7 +5,7 @@
             POST /r/<열쇠>        제출 → 임시 표(register_submissions)에만 쌓는다
      CRM    GET  /api/register/<행사>           이 행사의 링크·신청 대기
             POST /api/register/<행사>           새 링크 { role, title }
-            POST /api/register/<행사>/import    엑셀 명단 { role, rows } → 임시 표에
+            POST /api/register/<행사>/import    엑셀 명단·직접 입력 { role, rows, via } → 임시 표에
             PUT  /api/register/link/<열쇠>      { enabled }
             POST /api/register/sub/<id>/accept  확정 → 마스터DB(연락처 + 참가 확정)로 옮긴다
             POST /api/register/sub/<id>/drop    버린다(마스터DB에 안 남는다)
@@ -67,6 +67,10 @@ const subShape = (r) => {
   return { id: r.id, token: r.token || '', role: r.role || '', via: r.via || 'link', created_at: r.created_at || '', data };
 };
 
+/* 들어온 길 — link(바깥 링크)·excel(엑셀 명단)·manual(직원이 한 명씩 입력) */
+const VIA = { link: ['등록 링크', '🔗 등록 링크', '등록 링크 신청'], excel: ['엑셀 명단', '📄 엑셀 명단', '엑셀 명단'], manual: ['직접 입력', '✍️ 직접 입력', '직접 입력'] };
+const viaOf = (v) => VIA[v] || VIA.link;
+
 async function stage(eventId, role, token, via, v) {
   await pool.query(`INSERT INTO register_submissions (id, token, event_id, role, data, status, created_at, decided_at, decided_by, contact_id, via)
     VALUES ($1,$2,$3,$4,$5,'',$6,'','','',$7)`,
@@ -114,6 +118,7 @@ router.post('/:eventId/import', async (req, res) => {
   const eventId = String(req.params.eventId);
   const role = clip(req.body && req.body.role, 40);
   const rows = Array.isArray(req.body && req.body.rows) ? req.body.rows : [];
+  const via = req.body && req.body.via === 'manual' ? 'manual' : 'excel';
   if (!role) return res.status(400).json({ ok: false, error: '참가 유형을 골라 주세요' });
   if (!rows.length) return res.status(400).json({ ok: false, error: '올릴 줄이 없어요' });
   if (rows.length > 2000) return res.status(413).json({ ok: false, error: '한 번에 2,000줄까지 올릴 수 있어요' });
@@ -126,7 +131,7 @@ router.post('/:eventId/import', async (req, res) => {
     for (let i = 0; i < rows.length; i++) {
       const v = cleanRow(rows[i]);
       if (FIELDS.some((f) => f.need && !v[f.k]) || !EMAIL.test(v.email)) { bad.push(Number(rows[i] && rows[i].line) || i + 2); continue; }
-      await stage(eventId, role, '', 'excel', v);
+      await stage(eventId, role, '', via, v);
       added++;
     }
     res.json({ ok: true, added, bad });
@@ -181,11 +186,11 @@ async function accept(id, by) {
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
       [cid, ko ? v.name : '', ko ? '' : v.name, orgKo ? v.org : '', orgKo ? '' : v.org,
         titleKo ? v.title : '', titleKo ? '' : v.title, v.country,
-        `${sub.via === 'excel' ? '엑셀 명단' : '등록 링크'} · ${ev.name || sub.event_id}`,
+        `${viaOf(sub.via)[0]} · ${ev.name || sub.event_id}`,
         kstStamp(Date.now()).slice(0, 10), v.email, v.phone, ko ? 'ko' : 'en']);
     }
     const today = kstStamp(Date.now()).slice(0, 10);
-    const note = [`${sub.via === 'excel' ? '엑셀 명단' : '등록 링크 신청'}(${sub.created_at})`, v.memo].filter(Boolean).join(' — ');
+    const note = [`${viaOf(sub.via)[2]}(${sub.created_at})`, v.memo].filter(Boolean).join(' — ');
     /* 같은 행사·같은 유형으로 이미 있으면 그 줄을 확정하고 메모를 덧붙인다 */
     const dup = (await client.query(`SELECT id, note, confirmed_at FROM participations
       WHERE event_id = $1 AND contact_id = $2 AND role = $3 LIMIT 1`, [sub.event_id, cid, sub.role])).rows[0];
@@ -198,7 +203,7 @@ async function accept(id, by) {
       partId = newId('P-');
       await client.query(`INSERT INTO participations (id, event_id, contact_id, role, note, matched, confirmed_at)
         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [partId, sub.event_id, cid, sub.role, note, sub.via === 'excel' ? '📄 엑셀 명단' : '🔗 등록 링크', today]);
+      [partId, sub.event_id, cid, sub.role, note, viaOf(sub.via)[1], today]);
     }
     await client.query('UPDATE register_submissions SET contact_id = $2 WHERE id = $1', [sub.id, cid]);
     await client.query(`INSERT INTO activity_log (id, ts, email, name, type, action, target, detail, link)
@@ -209,8 +214,8 @@ async function accept(id, by) {
     await client.query('COMMIT');
     /* 화면이 다시 읽지 않고 제 목록에 바로 넣을 수 있게 넣은 그대로 돌려준다 */
     return { contactId: cid, created, partId, existingPart: !!dup, confirmedAt: (dup && dup.confirmed_at) || today,
-      role: sub.role, note, matched: sub.via === 'excel' ? '📄 엑셀 명단' : '🔗 등록 링크', data: v,
-      source: `${sub.via === 'excel' ? '엑셀 명단' : '등록 링크'} · ${ev.name || sub.event_id}` };
+      role: sub.role, note, matched: viaOf(sub.via)[1], data: v,
+      source: `${viaOf(sub.via)[0]} · ${ev.name || sub.event_id}` };
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});
     throw e;

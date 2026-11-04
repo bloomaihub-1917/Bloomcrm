@@ -495,10 +495,10 @@ const confirmBadge = (r) => r.confirmedAt
   ? `<span class="pill p-green" style="cursor:pointer" title="${escapeHtml(r.confirmedAt)}에 확정 — 눌러서 해제"
       onclick="event.stopPropagation();toggleEvDbConfirm(${cidArg(r)})">✓ 확정</span>`
   : `<span class="pill p-gray" style="cursor:pointer" title="${r.pendingId
-      ? `${r.via === 'excel' ? '엑셀로 올린' : '등록 링크로 받은'} 신청(${escapeHtml(r.submittedAt || '')}) — 마스터DB에는 아직 없어요. 눌러서 참가 확정하면 옮겨요`
+      ? `${r.via === 'excel' ? '엑셀로 올린' : r.via === 'manual' ? '직접 입력한' : '등록 링크로 받은'} 신청(${escapeHtml(r.submittedAt || '')}) — 마스터DB에는 아직 없어요. 눌러서 참가 확정하면 옮겨요`
       : '눌러서 참가 확정'}"
       onclick="event.stopPropagation();toggleEvDbConfirm(${cidArg(r)})">타겟</span>${r.pendingId
-      ? `<div style="font-size:var(--fs-9_5);color:var(--i4);margin-top:2px">${r.via === 'excel' ? '📄 엑셀' : '🔗 신청'}</div>` : ''}`;
+      ? `<div style="font-size:var(--fs-9_5);color:var(--i4);margin-top:2px">${r.via === 'excel' ? '📄 엑셀' : r.via === 'manual' ? '✍️ 직접' : '🔗 신청'}</div>` : ''}`;
 /* 신청 대기 줄의 cid는 글자('R-…')다 — onclick에 그대로 박으면 깨지니 따옴표째 넘긴다 */
 const cidArg = (r) => escAttr(JSON.stringify(r.cid));
 
@@ -1151,7 +1151,7 @@ async function saveConfirm(rows, on){
 /* 등록 링크·엑셀로 들어온 신청자 지우기.
    신청 대기는 임시 표에서 버린다(마스터DB에 없다). 이미 확정해 옮긴 사람은 이 행사 참여 기록만 지운다 —
    연락처는 다른 행사 기록이 있을 수 있어 마스터DB에 남긴다. 다른 경로(업로드·초청)로 넣은 사람은 건드리지 않는다 */
-const REG_MARKS = ['🔗 등록 링크', '📄 엑셀 명단'];
+const REG_MARKS = ['🔗 등록 링크', '📄 엑셀 명단', '✍️ 직접 입력'];
 export async function deleteEvDbRegistrants(){
   const rows = evPeople(evdbEvent).filter(r => evdbPickedPeople.has(r.cid));
   if(!rows.length){ alert('먼저 지울 신청자를 골라주세요.'); return; }
