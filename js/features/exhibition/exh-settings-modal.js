@@ -28,7 +28,7 @@ export function openExhCfg(){
   const ev = exhEventOptions().find(e => e.key === exhEvent);
 
   window.modalShell('exh-cfg-modal', `${ev ? (ev.short || ev.name) : exhEvent} 설정`, `
-    <div style="font-size:11.5px;color:var(--i4);margin-bottom:10px">
+    <div style="font-size:var(--fs-11_5);color:var(--i4);margin-bottom:10px">
       대부분은 비워 두세요 — 마감이 없으면 ASAP로 보고, 요청한 뒤 ${followCfg(exhEvent).first}일이 지나면
       <b>처리 필요</b>에 «리마인더 보낼 때»로 올라옵니다(기준은 설정 › 행사 관리 › 일정).
       도록 인쇄·반입처럼 정말 넘기면 안 되는 것만 «행사 N일 전»으로 적으세요 — 행사 날짜가 바뀌면 따라갑니다.</div>
@@ -39,8 +39,8 @@ export function openExhCfg(){
         ${dueInputHtml(`cfg-due-${key}`, due[key] || '', exhEvent)}
       </div>`).join('')}
 
-    <div style="font-size:12px;font-weight:700;color:var(--i2);margin:18px 0 4px">프로그램북 글자수 한도</div>
-    <div style="font-size:11.5px;color:var(--i4);margin-bottom:8px">
+    <div style="font-size:var(--fs-12);font-weight:700;color:var(--i2);margin:18px 0 4px">프로그램북 글자수 한도</div>
+    <div style="font-size:var(--fs-11_5);color:var(--i4);margin-bottom:8px">
       도록 지면에 맞춘 회사소개 한도입니다. 둘 중 하나만 넘어도 넘친 것으로 봅니다.
       판형이 바뀌면 여기서 고치면 되고, 이미 받아 둔 소개글은 새 한도로 다시 셉니다.</div>
     <div style="display:flex;gap:10px">

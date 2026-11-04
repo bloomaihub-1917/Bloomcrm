@@ -476,14 +476,14 @@ function watchBodyHtml(evKey, part){
     <button class="btn bp bs" onclick="addWatchFolder(${args})">폴더 추가</button>
     ${canScan && folders.length
       ? `<button class="btn bs" onclick="scanAllWatchFolders(${args})">전부 다시 훑기</button>` : ''}
-    ${!canScan ? `<span style="font-size:11px;color:var(--i4)">
+    ${!canScan ? `<span style="font-size:var(--fs-11);color:var(--i4)">
       폴더를 읽는 건 PC의 Chrome·Edge에서만 돼요 — 여기서는 훑어 둔 결과를 보고 확인만 합니다</span>` : ''}
   </div>`;
 
   if(!folders.length){
     return head + `<div class="empty" style="padding:26px 16px">
-      <div style="font-size:13px;font-weight:700;margin-bottom:6px">지켜보는 폴더가 없어요</div>
-      <div style="font-size:12px;color:var(--i4);line-height:1.6">
+      <div style="font-size:var(--fs-13);font-weight:700;margin-bottom:6px">지켜보는 폴더가 없어요</div>
+      <div style="font-size:var(--fs-12);color:var(--i4);line-height:1.6">
         ${part === 'conf' ? '사진·발표자료·CV처럼 연사가 보내오는' : '로고·도면처럼 기업이 보내오는'} 파일이 쌓이는 폴더를 등록해두면,<br>
         무엇이 새로 들어왔는지와 담당자가 확인했는지를 여기서 봅니다.<br>
         폴더를 고르는 건 PC에서 한 번만 하면 돼요.</div></div>`;
@@ -524,15 +524,15 @@ function folderBlock(f, canScan){
       <input type="checkbox" ${w.checked_at ? 'checked' : ''} onchange="checkWatchFile('${escAttr(w.id)}')"
         title="확인했으면 체크하세요" style="flex:0 0 auto;width:16px;height:16px">
       <div style="flex:1;min-width:0">
-        <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${
+        <div style="font-size:var(--fs-12);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${
           w.gone_at ? ';text-decoration:line-through;color:var(--i4)' : ''}"
           title="${escapeHtml(w.rel_path)}">${escapeHtml(w.name)}</div>
-        <div style="font-size:10px;color:var(--i5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${
+        <div style="font-size:var(--fs-10);color:var(--i5);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${
           escapeHtml(fmtWhen(w.changed_at))}${
           w.size ? ' · ' + escapeHtml(fmtSize(w.size)) : ''}${
           w.checked_at ? ` · ${escapeHtml(w.checked_by || '')} 확인 ${escapeHtml(fmtWhen(w.checked_at))}` : ''}</div>
       </div>
-      <span class="pill ${st.cls}" style="flex:0 0 auto;font-size:9.5px">${escapeHtml(st.label)}</span>
+      <span class="pill ${st.cls}" style="flex:0 0 auto;font-size:var(--fs-9_5)">${escapeHtml(st.label)}</span>
     </div>`;
   };
 
@@ -560,26 +560,26 @@ function folderBlock(f, canScan){
       return `<div>
         <div style="display:flex;align-items:center;gap:6px;padding:7px 2px;border-bottom:1px solid var(--i8);cursor:pointer"
           onclick="toggleWatchDir('${escAttr(key)}')">
-          <span style="font-size:10px;color:var(--i5);width:16px;text-align:center">${isOpen ? '▾' : '▸'}</span>
-          <span style="font-size:12px;font-weight:700">📁 ${escapeHtml(name)}</span>
-          <span style="font-size:10.5px;color:var(--i5)">${inside.length}개</span>
-          ${subNeed ? `<span class="pill p-blue" style="font-size:9.5px">확인 필요 ${subNeed}</span>` : ''}
+          <span style="font-size:var(--fs-10);color:var(--i5);width:16px;text-align:center">${isOpen ? '▾' : '▸'}</span>
+          <span style="font-size:var(--fs-12);font-weight:700">📁 ${escapeHtml(name)}</span>
+          <span style="font-size:var(--fs-10_5);color:var(--i5)">${inside.length}개</span>
+          ${subNeed ? `<span class="pill p-blue" style="font-size:var(--fs-9_5)">확인 필요 ${subNeed}</span>` : ''}
         </div>
         ${isOpen ? `<div style="padding-left:18px">${nodeHtml(sub, p)}</div>` : ''}
       </div>`;
     }).join('') + n.files.map(fileRow).join('');
   const rows = nodeHtml(tree, '');
 
-  return `<div style="border:1px solid var(--i6);border-radius:10px;padding:11px 13px;margin-bottom:10px;background:var(--i9)">
+  return `<div style="border:1px solid var(--i6);border-radius:var(--rd-10);padding:11px 13px;margin-bottom:10px;background:var(--i9)">
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-      <span style="font-size:13px;font-weight:800;cursor:pointer" onclick="toggleWatchFolder('${escAttr(f.id)}')"
+      <span style="font-size:var(--fs-13);font-weight:800;cursor:pointer" onclick="toggleWatchFolder('${escAttr(f.id)}')"
         ondblclick="renameWatchFolder('${escAttr(f.id)}')" title="두 번 누르면 이름을 고쳐요">${
         escapeHtml(f.name)}</span>
       ${need ? `<span class="pill p-blue">확인 필요 ${need}</span>`
              : `<span class="pill p-green">다 봤어요</span>`}
-      ${bound ? `<span style="font-size:10px;color:var(--i5);padding:1px 6px;border:1px solid var(--i7);border-radius:4px"
+      ${bound ? `<span style="font-size:var(--fs-10);color:var(--i5);padding:1px 6px;border:1px solid var(--i7);border-radius:var(--rd-4)"
         title="이 PC에서 지금 보고 있는 폴더예요">📁 ${escapeHtml(bound)}</span>` : ''}
-      <span style="font-size:10.5px;color:var(--i5)">${files.length}개 파일${
+      <span style="font-size:var(--fs-10_5);color:var(--i5)">${files.length}개 파일${
         f.scanned_at ? ` · ${escapeHtml(fmtWhen(f.scanned_at))} 훑음` : ' · 아직 훑은 적 없어요'}${
         f.scanned_by ? ` (${escapeHtml(f.scanned_by)})` : ''}</span>
       <span style="margin-left:auto;display:flex;gap:4px;flex-wrap:wrap">
@@ -597,16 +597,16 @@ function folderBlock(f, canScan){
         <button class="btn bs" onclick="removeWatchFolder('${escAttr(f.id)}')" title="목록에서 빼기">빼기</button>
       </span>
     </div>
-    ${canScan && !bound ? `<div style="font-size:11px;color:var(--am);margin-top:6px">
+    ${canScan && !bound ? `<div style="font-size:var(--fs-11);color:var(--am);margin-top:6px">
       이 PC에는 아직 폴더가 매여 있지 않아요 — 「폴더 고르기」를 누르면 훑기 시작합니다${
         f.path_hint ? `<br><span style="color:var(--i4)">여기서 골라주세요: <b>${escapeHtml(f.path_hint)}</b>
           — 다른 자리를 고르면 파일 경로가 어긋나 전부 새 파일로 떠요</span>` : ''}</div>` : ''}
-    ${f.path_hint && bound ? `<div style="font-size:10.5px;color:var(--i5);margin-top:5px">
+    ${f.path_hint && bound ? `<div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:5px">
       길잡이: ${escapeHtml(f.path_hint)}</div>` : ''}
-    ${!canScan && !f.scanned_at ? `<div style="font-size:11px;color:var(--i4);margin-top:6px">
+    ${!canScan && !f.scanned_at ? `<div style="font-size:var(--fs-11);color:var(--i4);margin-top:6px">
       PC에서 한 번 훑어야 목록이 생겨요</div>` : ''}
     ${open && shown.length ? `<div style="margin-top:8px">${rows}</div>`
-      : open && files.length ? `<div style="font-size:11.5px;color:var(--i4);margin-top:8px">이 조건에 맞는 파일이 없어요</div>`
+      : open && files.length ? `<div style="font-size:var(--fs-11_5);color:var(--i4);margin-top:8px">이 조건에 맞는 파일이 없어요</div>`
       : ''}
   </div>`;
 }

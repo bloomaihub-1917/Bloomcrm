@@ -20,7 +20,7 @@ function renderLog(){
   if(!el) return;
   el.innerHTML = uploadLogs.map(l=>`
     <tr><td>${escapeHtml(l.date)}</td><td style="color:var(--i3)">${escapeHtml(l.source)}</td>
-    <td style="font-family:monospace;font-size:11px;color:var(--pu)">${escapeHtml(l.file)}</td>
+    <td style="font-family:monospace;font-size:var(--fs-11);color:var(--pu)">${escapeHtml(l.file)}</td>
     <td><span class="pill p-blue">${escapeHtml(l.cat)}</span></td>
     <td style="color:var(--g);font-weight:600">+${l.added}</td><td style="color:var(--i3)">${l.dup}건</td>
     <td style="color:var(--am)">${l.merged}건</td><td style="color:var(--i3)">${escapeHtml(l.by)}</td></tr>`).join('');
@@ -30,7 +30,7 @@ function renderMerge(){
   if(!el) return;
   el.innerHTML = mergeProps.map(m=>`
     <div style="display:flex;align-items:center;gap:11px;padding:9px 0;border-bottom:1px solid var(--i7)">
-      <div style="flex:1"><div style="font-size:12px;font-weight:600;color:var(--i1)">${escapeHtml(m.a)} <span style="color:var(--i4)">↔</span> ${escapeHtml(m.b)}</div><div style="font-size:10px;color:var(--i3);margin-top:2px">${escapeHtml(m.reason)}</div></div>
+      <div style="flex:1"><div style="font-size:var(--fs-12);font-weight:600;color:var(--i1)">${escapeHtml(m.a)} <span style="color:var(--i4)">↔</span> ${escapeHtml(m.b)}</div><div style="font-size:var(--fs-10);color:var(--i3);margin-top:2px">${escapeHtml(m.reason)}</div></div>
       ${m.status==='approved'?'<span class="pill p-green">승인됨</span>':`<button class="btn bp bs" onclick="approveMg('${m.id}',this)">병합 승인</button><button class="btn bs" style="margin-left:4px" onclick="rejectMg('${m.id}',this)">별도 유지</button>`}
     </div>`).join('');
 }

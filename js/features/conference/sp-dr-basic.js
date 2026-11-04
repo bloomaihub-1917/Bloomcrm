@@ -32,12 +32,12 @@ function basicHtml(sp, con, evKey){
   ].filter(([, a, b]) => a && a !== b).map(([k]) => k);
 
   const conBox = con
-    ? `<div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px">
-        <div style="font-size:12px;font-weight:600">${escapeHtml(con.nameKo || con.nameEn || con.id)}
-          ${con.nameKo && con.nameEn ? `<span style="font-weight:400;color:var(--i4);font-size:11px">${escapeHtml(con.nameEn)}</span>` : ''}</div>
-        <div style="font-size:11px;color:var(--i3);margin-top:2px">
+    ? `<div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-7)">
+        <div style="font-size:var(--fs-12);font-weight:600">${escapeHtml(con.nameKo || con.nameEn || con.id)}
+          ${con.nameKo && con.nameEn ? `<span style="font-weight:400;color:var(--i4);font-size:var(--fs-11)">${escapeHtml(con.nameEn)}</span>` : ''}</div>
+        <div style="font-size:var(--fs-11);color:var(--i3);margin-top:2px">
           ${escapeHtml([con.orgKo, con.titleKo].filter(Boolean).join(' · ') || '(소속·직함 없음)')}</div>
-        ${con.orgEn || con.titleEn ? `<div style="font-size:10.5px;color:var(--i4)">${escapeHtml([con.orgEn, con.titleEn].filter(Boolean).join(' · '))}</div>` : ''}
+        ${con.orgEn || con.titleEn ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml([con.orgEn, con.titleEn].filter(Boolean).join(' · '))}</div>` : ''}
         ${(() => {
           /* 메일·전화는 마스터DB 연락처에만 둔다 — 연사 쪽에 따로 적으면 번호가
              바뀌었을 때 어느 쪽이 맞는지 모르게 된다. 여기서 고치면 마스터DB가 고쳐진다. */
@@ -45,32 +45,32 @@ function basicHtml(sp, con, evKey){
              빈 칸에 예시 글자가 흐리게 들어가 있으면 값이 있는 줄 안다. */
           const have = [['email1', '메일'], ['email2', '메일 2'], ['phone1', '휴대폰'], ['phone2', '전화']]
             .filter(([k]) => String(con[k] || '').trim());
-          return have.length ? `<div style="display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin-top:6px;font-size:11px">
+          return have.length ? `<div style="display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin-top:6px;font-size:var(--fs-11)">
             ${have.map(([k, l]) => `<span style="color:var(--i4)">${l}</span><span style="color:var(--i2)">${escapeHtml(con[k])}</span>`).join('')}
-          </div>` : `<div style="font-size:10.5px;color:var(--i4);margin-top:6px">마스터DB에 등록된 메일·전화가 없어요</div>`;
+          </div>` : `<div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:6px">마스터DB에 등록된 메일·전화가 없어요</div>`;
         })()}
-        ${diff.length ? `<div style="font-size:10.5px;color:var(--am);margin-top:5px;line-height:1.6">
+        ${diff.length ? `<div style="font-size:var(--fs-10_5);color:var(--am);margin-top:5px;line-height:1.6">
           마스터DB의 ${escapeHtml(diff.join('·'))}이 아래와 달라요.
           <br>연사 자료를 새로 받아 고친 것이면 <b>마스터DB로 보내기</b>,
           그 사람이 이직해 발표 당시 소속만 남겨야 하면 그대로 두세요.</div>` : ''}
         <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">
-          <button class="btn" style="font-size:10.5px" onclick="pushSpeakerProfile()"
+          <button class="btn" style="font-size:var(--fs-10_5)" onclick="pushSpeakerProfile()"
             title="여기서 고친 소속·직함을 마스터DB 연락처에 반영합니다 — 기업DB도 새 소속으로 묶여요">마스터DB로 보내기</button>
-          <button class="btn" style="font-size:10.5px" onclick="pullSpeakerProfile()">연락처에서 끌어오기</button>
-          <button class="btn" style="font-size:10.5px" onclick="unlinkSpeakerContact()">연결 끊기</button>
+          <button class="btn" style="font-size:var(--fs-10_5)" onclick="pullSpeakerProfile()">연락처에서 끌어오기</button>
+          <button class="btn" style="font-size:var(--fs-10_5)" onclick="unlinkSpeakerContact()">연결 끊기</button>
         </div>
       </div>`
-    : `<div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px">
-        <div style="font-size:11.5px;color:var(--i3);line-height:1.6">
+    : `<div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-7)">
+        <div style="font-size:var(--fs-11_5);color:var(--i3);line-height:1.6">
           연락처를 연결하면 소속·직함을 한 번에 끌어오고, 메일·전화도 여기 보입니다. 연결하지 않아도
           아래에 직접 적을 수 있어요.</div>
         <input class="fi" style="margin-top:7px" placeholder="이름·기업·메일로 검색…"
           oninput="searchSpeakerContact(this.value)">
         <div id="sp-con-hits" style="margin-top:5px"></div>
         <div style="display:flex;align-items:center;gap:7px;margin-top:7px;flex-wrap:wrap">
-          <button class="btn" style="font-size:10.5px" onclick="createSpeakerContact()"
+          <button class="btn" style="font-size:var(--fs-10_5)" onclick="createSpeakerContact()"
             title="아래 성명·소속·직함·국적으로 마스터DB에 연락처를 만들고 바로 연결합니다">마스터DB에 새로 등록</button>
-          <span style="font-size:10px;color:var(--i4)">검색해도 없을 때 — 아래 적은 값으로 만들고 연결해요</span>
+          <span style="font-size:var(--fs-10);color:var(--i4)">검색해도 없을 때 — 아래 적은 값으로 만들고 연결해요</span>
         </div>
       </div>`;
 
@@ -79,7 +79,7 @@ function basicHtml(sp, con, evKey){
       ${fg('성명 국문', txt(sp.name_snapshot, `spField('name_snapshot',this.value,'성명 국문')`, '홍길동'))}
       ${fg('성명 영문', txt(sp.name_en, `spField('name_en',this.value,'성명 영문')`, 'Gil-dong Hong'))}
     </div>
-    <div style="font-size:10px;color:var(--i4);margin:-4px 0 12px">
+    <div style="font-size:var(--fs-10);color:var(--i4);margin:-4px 0 12px">
       프로그램에 나갈 이름입니다 — 연락처를 지워도 프로그램에서 사라지지 않도록 따로 굳혀 둡니다.
       해외 연사는 영문만 있어도 됩니다.</div>
     ${con ? `<div class="fgr">
@@ -90,16 +90,16 @@ function basicHtml(sp, con, evKey){
       ${fg('휴대폰', `<input class="fi" type="tel" value="${escapeHtml(con.phone1 || '')}" onchange="spContactField('phone1',this.value)">`)}
       ${fg('전화', `<input class="fi" type="tel" value="${escapeHtml(con.phone2 || '')}" onchange="spContactField('phone2',this.value)">`)}
     </div>
-    <div style="font-size:10px;color:var(--i4);margin:-4px 0 12px">
+    <div style="font-size:var(--fs-10);color:var(--i4);margin:-4px 0 12px">
       메일·전화는 마스터DB 연락처에 저장돼요.${!con.email1 && selfRow && selfRow.email
         ? ` <span style="color:var(--am)">마스터DB엔 메일이 없고, «연락 상대»의 연사 본인 줄에 ${escapeHtml(selfRow.email)}이 있어 메일은 그 주소로 나갑니다.</span>` : ''}</div>`
     : selfRow ? `<div class="fgr">
       ${fg('메일', `<input class="fi" type="email" value="${escapeHtml(selfRow.email || '')}" onchange="scField('${escAttr(selfRow.id)}','email',this.value,'연사 본인 메일')">`)}
       ${fg('전화', `<input class="fi" type="tel" value="${escapeHtml(selfRow.phone || '')}" onchange="scField('${escAttr(selfRow.id)}','phone',this.value,'연사 본인 전화')">`)}
     </div>
-    <div style="font-size:10px;color:var(--i4);margin:-4px 0 12px">
+    <div style="font-size:var(--fs-10);color:var(--i4);margin:-4px 0 12px">
       마스터DB 연락처가 연결되지 않아 «연락 상대»의 연사 본인 줄에 저장돼요. 아래에서 연결하면 마스터DB로 옮겨 적어 주세요.</div>`
-    : `<div style="font-size:10.5px;color:var(--i4);margin:-4px 0 12px">
+    : `<div style="font-size:var(--fs-10_5);color:var(--i4);margin:-4px 0 12px">
       메일·전화는 아래 «연락처 연결»에서 마스터DB 연락처를 연결하면 적을 수 있어요.</div>`}
     <div class="fgr">
       ${fg('소속 국문', txt(sp.org_ko, `spField('org_ko',this.value,'소속 국문')`, '○○대학교'))}
@@ -109,7 +109,7 @@ function basicHtml(sp, con, evKey){
       ${fg('직함 국문', txt(sp.title_ko, `spField('title_ko',this.value,'직함 국문')`, '교수'))}
       ${fg('직함 영문', txt(sp.title_en, `spField('title_en',this.value,'직함 영문')`, 'Professor'))}
     </div>
-    <div style="font-size:10px;color:var(--i4);margin:-4px 0 12px">
+    <div style="font-size:var(--fs-10);color:var(--i4);margin:-4px 0 12px">
       프로그램북에 나가는 값입니다 — 발표 당시의 소속이라, 나중에 이직해도 그대로 둡니다.</div>
     <div class="fgr">
       ${fg('국적', `<select class="fi" onchange="spField('nationality',this.value,'국적')">
@@ -128,8 +128,8 @@ function basicHtml(sp, con, evKey){
         <option value="en"${sp.lang_pref === 'en' ? ' selected' : ''}>영문만 (해외 연사)</option>
       </select>`, '국가로 짐작하지 않고 물어서 적습니다')}
     </div>
-    <div style="font-size:11px;font-weight:700;color:var(--i3);margin:16px 0 4px">보낸 것</div>
-    <div style="font-size:10px;color:var(--i4);margin-bottom:6px;line-height:1.6">
+    <div style="font-size:var(--fs-11);font-weight:700;color:var(--i3);margin:16px 0 4px">보낸 것</div>
+    <div style="font-size:var(--fs-10);color:var(--i4);margin-bottom:6px;line-height:1.6">
       받은 것만 적어 두면 «왜 안 오지»를 묻게 됩니다 — 안 보냈을 수도 있어요.</div>
     ${gotRow('초청 · 가이드라인 · 양식', sp.guide_sent_at, `spStamp('guide_sent_at','초청·가이드라인 보냄')`,
       `spField('guide_sent_at',this.value,'초청·가이드라인 발송')`)}
@@ -145,7 +145,7 @@ function basicHtml(sp, con, evKey){
       <option value="no"${sp.gala_rsvp === 'no' ? ' selected' : ''}>불참</option>
     </select>`, '신청서의 갈라디너 참석 여부')}
 
-    <div style="font-size:11px;font-weight:700;color:var(--i3);margin:16px 0 4px">받은 것</div>
+    <div style="font-size:var(--fs-11);font-weight:700;color:var(--i3);margin:16px 0 4px">받은 것</div>
     ${nOf('photo') ? gotRow('연사 사진', sp.photo_received_at,
       `spStamp('photo_received_at','사진 받음')`,
       `spField('photo_received_at',this.value,'사진 받은 날')`, nOf('photo')) : ''}
@@ -156,8 +156,8 @@ function basicHtml(sp, con, evKey){
       `spStamp('consent_at','동의서 받음')`,
       `spField('consent_at',this.value,'동의서 받은 날')`, nOf('consent')) : ''}
     ${nOf('consent') ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:6px;margin:6px 0 4px">
-      ${SP_CONSENTS.map(c => `<label style="font-size:10.5px;color:${sp[c.key] === 'no' ? 'var(--re)' : 'var(--i3)'}">${c.label}
-        <select class="fi" style="font-size:11px;padding:3px 5px${sp[c.key] === 'no' ? ';border-color:var(--re);color:var(--re)' : ''}"
+      ${SP_CONSENTS.map(c => `<label style="font-size:var(--fs-10_5);color:${sp[c.key] === 'no' ? 'var(--re)' : 'var(--i3)'}">${c.label}
+        <select class="fi" style="font-size:var(--fs-11);padding:3px 5px${sp[c.key] === 'no' ? ';border-color:var(--re);color:var(--re)' : ''}"
           onchange="spField('${c.key}',this.value,'동의 — ${c.label}')">
           <option value=""${!sp[c.key] ? ' selected' : ''}>미확인</option>
           <option value="yes"${sp[c.key] === 'yes' ? ' selected' : ''}>동의</option>
@@ -186,7 +186,7 @@ function basicHtml(sp, con, evKey){
 function countryGapNote(sp){
   const nat = sp.nationality, res = sp.residence_country;
   if(!nat || !res || nat === res) return '';
-  return `<div style="font-size:10.5px;color:var(--am);margin:-6px 0 12px;line-height:1.6">
+  return `<div style="font-size:var(--fs-10_5);color:var(--am);margin:-6px 0 12px;line-height:1.6">
     국적(${escapeHtml(countryName(nat))})과 거주지(${escapeHtml(countryName(res))})가 달라요 —
     연사료·항공을 어느 쪽 기준으로 할지는 «제공사항»에서 정하세요.</div>`;
 }
@@ -222,7 +222,7 @@ export function searchSpeakerContact(q){
         <div><div class="drn">${escapeHtml(c.nameKo || c.nameEn || c.id)}</div>
         <div class="drm">${escapeHtml([c.orgKo || c.orgEn, c.titleKo || c.titleEn, c.email1].filter(Boolean).join(' · '))}</div></div>
       </div>`).join('')
-    : `<div style="font-size:11px;color:var(--i4);padding:5px 2px">찾는 사람이 없어요 — 아래 «마스터DB에 새로 등록»으로 만들 수 있어요</div>`;
+    : `<div style="font-size:var(--fs-11);color:var(--i4);padding:5px 2px">찾는 사람이 없어요 — 아래 «마스터DB에 새로 등록»으로 만들 수 있어요</div>`;
 }
 
 /* 마스터DB에 없는 연사를 여기서 바로 만든다. 전에는 «마스터DB에 먼저
@@ -413,8 +413,8 @@ function bioHtml(sp, evKey){
     .filter(p => p.state);
 
   if(!parts.length){
-    return `<div style="padding:16px;background:var(--i8);border:1px solid var(--i6);border-radius:8px;
-      font-size:12px;color:var(--i5);line-height:1.7">
+    return `<div style="padding:16px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--r);
+      font-size:var(--fs-12);color:var(--i5);line-height:1.7">
       이 연사의 역할(${escapeHtml(roles.join(' · ') || '배정 없음')})은 이력을 받지 않아요.
       받아야 한다면 설정 › 행사 관리 › 컨퍼런스에서 역할별 항목을 고치세요.</div>`;
   }
@@ -424,9 +424,9 @@ function bioHtml(sp, evKey){
     const limit = lim[p.lim];
     return `<div style="margin-bottom:16px">
       <div style="display:flex;align-items:baseline;gap:7px;margin-bottom:5px">
-        <div style="font-size:11.5px;font-weight:700">${escapeHtml(p.label)}</div>
-        <div style="font-size:10px;color:var(--i4)" title="${escapeHtml(NEED_LABEL[p.state] || '')}">${NEED_MARK[p.state] || ''}</div>
-        ${p.hint ? `<div style="font-size:10px;color:var(--i4)">${escapeHtml(p.hint)}</div>` : ''}
+        <div style="font-size:var(--fs-11_5);font-weight:700">${escapeHtml(p.label)}</div>
+        <div style="font-size:var(--fs-10);color:var(--i4)" title="${escapeHtml(NEED_LABEL[p.state] || '')}">${NEED_MARK[p.state] || ''}</div>
+        ${p.hint ? `<div style="font-size:var(--fs-10);color:var(--i4)">${escapeHtml(p.hint)}</div>` : ''}
       </div>
       ${enOnly ? '' : fg(`국문 · ${countHint(koVal, limit)}`,
         area(koVal, `spField('${p.ko}',this.value,'${escAttr(p.label)} 국문')`, '', p.rows || 5))}
@@ -436,8 +436,8 @@ function bioHtml(sp, evKey){
   };
 
   return `
-    ${enOnly ? `<div style="padding:8px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;
-      font-size:11px;color:var(--i3);margin-bottom:12px">
+    ${enOnly ? `<div style="padding:8px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-7);
+      font-size:var(--fs-11);color:var(--i3);margin-bottom:12px">
       해외 연사(영문만)로 적혀 있어 국문 칸을 숨겼어요. 기본 탭의 «언어»를 바꾸면 다시 보여요.</div>` : ''}
     ${needState(evKey, roles, 'cv') ? `
       ${gotRow('CV 원본 받음', sp.cv_received_at, `spStamp('cv_received_at','CV 받음')`,
@@ -452,7 +452,7 @@ function bioHtml(sp, evKey){
       `spStamp('profile_received_at','이력 받음')`,
       `spField('profile_received_at',this.value,'이력 받은 날')`,
       parts.some(p => p.state === 'req') ? 'req' : 'opt')}
-    <div style="font-size:10.5px;color:var(--i4);margin:5px 0 14px">
+    <div style="font-size:var(--fs-10_5);color:var(--i4);margin:5px 0 14px">
       받았는지는 이 체크로 봅니다 — 해외 연사는 국문이 비는 게 정상이라 글자 유무로 세지 않아요.</div>
     ${parts.map(pair).join('')}`;
 }
@@ -463,8 +463,8 @@ function bioHtml(sp, evKey){
 function talkHtml(sp, evKey){
   const asg = assignmentsFor(sp.id);
   if(!asg.length){
-    return `<div style="padding:16px;background:var(--i8);border:1px solid var(--i6);border-radius:8px;
-      font-size:12px;color:var(--i5);line-height:1.7">
+    return `<div style="padding:16px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--r);
+      font-size:var(--fs-12);color:var(--i5);line-height:1.7">
       아직 세션에 배정되지 않았어요. «프로그램»에서 세션에 넣고 역할을 정하면
       그 역할이 요구하는 발제 정보가 여기 나타납니다.</div>`;
   }
@@ -478,26 +478,26 @@ function talkHtml(sp, evKey){
     const partners = [leadOf(raw), ...coOf(leadOf(raw))].filter(x => x && x.id !== a.id)
       .map(x => getSpeakerById(x.speaker_id)).filter(Boolean)
       .map(p => p.name_snapshot || p.name_en || p.id);
-    const coNote = partners.length ? `<div style="font-size:10.5px;color:var(--a);background:var(--i8);border-radius:6px;padding:6px 8px;margin-bottom:9px;line-height:1.6">
+    const coNote = partners.length ? `<div style="font-size:var(--fs-10_5);color:var(--a);background:var(--i8);border-radius:var(--rd-6);padding:6px 8px;margin-bottom:9px;line-height:1.6">
       ${escapeHtml(partners.join(', '))}와(과) 공동 발표 — 시간·발제·초록·자료를 함께 씁니다.
       여기서 고치면 상대 쪽에도 같이 바뀌어요.</div>` : '';
     const need = (k) => speakerNeed(evKey, a.role, k);
     const nTitle = need('title'), nAbs = need('abstract'), nSlides = need('slides');
     const head = `<div style="display:flex;align-items:baseline;gap:7px;margin-bottom:7px">
-      <span class="pill ${(SPEAKER_ROLES.find(r => r.key === a.role) || {}).cls || 'p-gray'}" style="font-size:10px">${escapeHtml(a.role || '역할 없음')}</span>
-      <div style="font-size:12px;font-weight:600;min-width:0">${escapeHtml(s ? (s.title_ko || s.title_en || s.id) : '(삭제된 세션)')}</div>
-      <div style="font-size:10.5px;color:var(--i4)">${escapeHtml(
+      <span class="pill ${(SPEAKER_ROLES.find(r => r.key === a.role) || {}).cls || 'p-gray'}" style="font-size:var(--fs-10)">${escapeHtml(a.role || '역할 없음')}</span>
+      <div style="font-size:var(--fs-12);font-weight:600;min-width:0">${escapeHtml(s ? (s.title_ko || s.title_en || s.id) : '(삭제된 세션)')}</div>
+      <div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(
         [s?.date, a.start_at ? `${a.start_at}${a.end_at ? '–' + a.end_at : ''}` : s?.start_at].filter(Boolean).join(' '))}</div>
     </div>`;
 
     if(!nTitle && !nAbs && !nSlides){
-      return `<div style="border:1px solid var(--i6);border-radius:9px;padding:11px 12px;margin-bottom:11px">
+      return `<div style="border:1px solid var(--i6);border-radius:var(--rd-9);padding:11px 12px;margin-bottom:11px">
         ${head}
-        <div style="font-size:11.5px;color:var(--i5);line-height:1.6">
+        <div style="font-size:var(--fs-11_5);color:var(--i5);line-height:1.6">
           ${escapeHtml(a.role)}${eunNeun(a.role)} 이 행사에서 발제 정보를 받지 않아요.</div></div>`;
     }
 
-    return `<div style="border:1px solid var(--i6);border-radius:9px;padding:11px 12px;margin-bottom:11px">
+    return `<div style="border:1px solid var(--i6);border-radius:var(--rd-9);padding:11px 12px;margin-bottom:11px">
       ${head}${coNote}
       ${nTitle ? `<div class="fgr">
         ${fg(`발제명 국문 ${NEED_MARK[nTitle]}`, txt(a.title_ko, `asField('${escAttr(tid)}','title_ko',this.value,'발제명 국문')`))}
@@ -509,7 +509,7 @@ function talkHtml(sp, evKey){
         ${fg('발표 종료', `<input class="fi" type="time" value="${escapeHtml(a.end_at || '')}"
           onchange="asField('${escAttr(tid)}','end_at',this.value,'발표 종료')">`)}
       </div>
-      <div style="font-size:10px;color:var(--i4);margin:-6px 0 10px">
+      <div style="font-size:var(--fs-10);color:var(--i4);margin:-6px 0 10px">
         세션 시간이 아니라 이 사람이 올라가는 시각입니다 — 연사 안내와 프로그램북에 이 값이 나갑니다.</div>
       <div class="fgr">
         ${fg('발표 언어', `<select class="fi" onchange="asField('${escAttr(tid)}','lang',this.value,'발표 언어')">
@@ -537,7 +537,7 @@ function talkHtml(sp, evKey){
           ${fg('파일명', txt(a.slides_file, `asField('${escAttr(tid)}','slides_file',this.value,'발표자료 파일')`, '원드라이브 파일명'))}
           ${fg('판', txt(a.slides_version, `asField('${escAttr(tid)}','slides_version',this.value,'발표자료 판')`, 'v2'))}
         </div>
-        <div style="font-size:10px;color:var(--i4);margin-top:-4px">
+        <div style="font-size:var(--fs-10);color:var(--i4);margin-top:-4px">
           발표자료는 현장에서 바뀝니다 — 어느 판을 받았는지 적어 두면 무엇을 틀지 헷갈리지 않아요.</div>
       </div>` : ''}
 

@@ -41,31 +41,31 @@ export async function confirmImport(){
 /* 의심 케이스 확인 모달 (원본 2896~2943행) — 사용자 데이터는 모두 escapeHtml 처리 */
 function showSuspectModal(suspectRows){
   const rows = suspectRows.map((r, i) => `
-    <div style="border:1px solid var(--i6);border-radius:8px;padding:12px;margin-bottom:10px;background:var(--i8)">
+    <div style="border:1px solid var(--i6);border-radius:var(--r);padding:12px;margin-bottom:10px;background:var(--i8)">
       <div style="display:flex;gap:10px;align-items:flex-start">
         <!-- 새 데이터 -->
         <div style="flex:1;min-width:0">
-          <div style="font-size:10px;color:var(--am);font-weight:700;margin-bottom:4px">📥 업로드 데이터</div>
-          <div style="font-size:13px;font-weight:600">${escapeHtml(r.nameKo||r.nameEn||'')}</div>
-          <div style="font-size:11px;color:var(--i3)">${escapeHtml(r.orgKo||r.orgEn||'')}</div>
-          <div style="font-size:11px;color:var(--i4)">${escapeHtml(r.email1)||'이메일 없음'}</div>
+          <div style="font-size:var(--fs-10);color:var(--am);font-weight:700;margin-bottom:4px">📥 업로드 데이터</div>
+          <div style="font-size:var(--fs-13);font-weight:600">${escapeHtml(r.nameKo||r.nameEn||'')}</div>
+          <div style="font-size:var(--fs-11);color:var(--i3)">${escapeHtml(r.orgKo||r.orgEn||'')}</div>
+          <div style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(r.email1)||'이메일 없음'}</div>
         </div>
-        <div style="color:var(--i4);font-size:18px;padding-top:14px">≈</div>
+        <div style="color:var(--i4);font-size:var(--fs-18);padding-top:14px">≈</div>
         <!-- 기존 데이터 -->
         <div style="flex:1;min-width:0">
-          <div style="font-size:10px;color:var(--a);font-weight:700;margin-bottom:4px">🗄 기존 DB</div>
-          <div style="font-size:13px;font-weight:600">${escapeHtml(r._suspectName)}</div>
-          <div style="font-size:11px;color:var(--i3)">${escapeHtml(r._suspectOrg)}</div>
-          <div style="font-size:11px;color:var(--i4)">${escapeHtml(r._suspectEmail)||'이메일 없음'}</div>
+          <div style="font-size:var(--fs-10);color:var(--a);font-weight:700;margin-bottom:4px">🗄 기존 DB</div>
+          <div style="font-size:var(--fs-13);font-weight:600">${escapeHtml(r._suspectName)}</div>
+          <div style="font-size:var(--fs-11);color:var(--i3)">${escapeHtml(r._suspectOrg)}</div>
+          <div style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(r._suspectEmail)||'이메일 없음'}</div>
         </div>
       </div>
       <!-- 판단 버튼 -->
       <div style="display:flex;gap:6px;margin-top:10px">
-        <button class="btn" style="flex:1;font-size:11px;background:#FEF3C7;border-color:#F59E0B;color:#92400E"
+        <button class="btn" style="flex:1;font-size:var(--fs-11);background:#FEF3C7;border-color:#F59E0B;color:#92400E"
           onclick="decideSuspect(${i}, 'same')">
           ✅ 동일 인물 — 기존에 행사만 추가
         </button>
-        <button class="btn" style="flex:1;font-size:11px;background:#EEF2FF;border-color:#6366F1;color:#3730A3"
+        <button class="btn" style="flex:1;font-size:var(--fs-11);background:#EEF2FF;border-color:#6366F1;color:#3730A3"
           onclick="decideSuspect(${i}, 'diff')">
           👤 다른 사람 — 신규 등록
         </button>
@@ -74,11 +74,11 @@ function showSuspectModal(suspectRows){
 
   const html = `
     <div id="suspect-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px">
-      <div style="background:var(--W);border-radius:14px;padding:24px;width:100%;max-width:560px;max-height:80vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.2)">
-        <div style="font-size:15px;font-weight:700;color:var(--i1);margin-bottom:6px">⚠️ 동일 인물 여부 확인</div>
-        <div style="font-size:12px;color:var(--i3);margin-bottom:16px">이름이 같은 기존 연락처가 있어요. 각각 판단해주세요.</div>
+      <div style="background:var(--W);border-radius:var(--rd-14);padding:24px;width:100%;max-width:560px;max-height:80vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.2)">
+        <div style="font-size:var(--fs-15);font-weight:700;color:var(--i1);margin-bottom:6px">⚠️ 동일 인물 여부 확인</div>
+        <div style="font-size:var(--fs-12);color:var(--i3);margin-bottom:16px">이름이 같은 기존 연락처가 있어요. 각각 판단해주세요.</div>
         <div id="suspect-list">${rows}</div>
-        <div style="font-size:11px;color:var(--i4);text-align:center;margin-top:8px">모두 판단하면 자동으로 진행됩니다</div>
+        <div style="font-size:var(--fs-11);color:var(--i4);text-align:center;margin-top:8px">모두 판단하면 자동으로 진행됩니다</div>
       </div>
     </div>`;
   document.body.insertAdjacentHTML('beforeend', html);
@@ -99,7 +99,7 @@ export function decideSuspect(idx, decision){
     const label = decision === 'same' ? '✅ 동일 인물로 처리' : '👤 신규 등록으로 처리';
     const color = decision === 'same' ? '#92400E' : '#3730A3';
     cards[idx].insertAdjacentHTML('beforeend',
-      `<div style="text-align:center;font-size:12px;font-weight:700;color:${color};margin-top:6px">${label}</div>`);
+      `<div style="text-align:center;font-size:var(--fs-12);font-weight:700;color:${color};margin-top:6px">${label}</div>`);
   }
 
   if(window._suspectDecisions.every(d => d !== null)){
@@ -496,7 +496,7 @@ export function resetUpload(){
   if(upBtns) upBtns.style.display = 'none';
   const prevEl = document.getElementById('parser-prev');
   if(prevEl) prevEl.innerHTML =
-    '<tr><td colspan="4" style="padding:18px;text-align:center;color:var(--i4);font-size:11px">파일을 업로드하면 컬럼 매핑이 표시됩니다</td></tr>';
+    '<tr><td colspan="4" style="padding:18px;text-align:center;color:var(--i4);font-size:var(--fs-11)">파일을 업로드하면 컬럼 매핑이 표시됩니다</td></tr>';
   parsedRows.length = 0;
   mappedContacts.length = 0;
   _orgOnlyRows.length = 0;

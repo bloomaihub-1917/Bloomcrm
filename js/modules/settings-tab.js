@@ -294,9 +294,9 @@ function renderCleanCounts(){
 async function renderSysInfo(){
   const el = document.getElementById('sys-info');
   if(!el) return;
-  const box = (t, rows) => `<div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:14px;margin-bottom:14px">
-    <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:8px">${t}</div>
-    ${rows.map(([k, v]) => `<div style="display:flex;gap:10px;font-size:12px;padding:4px 0;border-top:1px solid var(--i7)">
+  const box = (t, rows) => `<div style="background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-10);padding:14px;margin-bottom:14px">
+    <div style="font-size:var(--fs-12);font-weight:700;color:var(--i2);margin-bottom:8px">${t}</div>
+    ${rows.map(([k, v]) => `<div style="display:flex;gap:10px;font-size:var(--fs-12);padding:4px 0;border-top:1px solid var(--i7)">
       <span style="width:120px;color:var(--i4);flex:0 0 auto">${k}</span><span style="color:var(--i1)">${v}</span></div>`).join('')}
   </div>`;
   const n = (a) => (a?.length || 0).toLocaleString();
@@ -322,7 +322,7 @@ async function renderSysInfo(){
         ['상태', j.ok ? '<b style="color:var(--g)">정상</b>' : '<b style="color:var(--re)">응답 이상</b>'],
         ['배포 버전', `<code>${escapeHtml(j.commit || '-')}</code>`],
         ['응답 시간', `${Math.round(performance.now() - t0)}ms`],
-        ['주소', `<code style="font-size:11px">${escapeHtml(API_BASE_URL)}</code>`],
+        ['주소', `<code style="font-size:var(--fs-11)">${escapeHtml(API_BASE_URL)}</code>`],
       ];
     } catch(e){
       server = [['상태', '<b style="color:var(--re)">연결 안 됨</b> — 네트워크나 서버를 확인하세요']];

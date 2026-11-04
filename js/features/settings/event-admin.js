@@ -40,18 +40,18 @@ export function renderEvMgr(){
   if(!el) return;
 
   if(!EVENT_LIST.length){
-    el.innerHTML = '<div style="font-size:12px;color:var(--i4);padding:12px 0">등록된 행사 없음</div>';
+    el.innerHTML = '<div style="font-size:var(--fs-12);color:var(--i4);padding:12px 0">등록된 행사 없음</div>';
     return;
   }
 
   el.innerHTML = EVENT_LIST.map((e, i) => `
     <div onclick="openEvDetail('${escAttr(e.key)}')" title="이 행사의 설정 열기"
-      style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--W);border:1px solid var(--i6);border-radius:8px;margin-bottom:6px;cursor:pointer">
+      style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--W);border:1px solid var(--i6);border-radius:var(--r);margin-bottom:6px;cursor:pointer">
       <div style="width:12px;height:12px;border-radius:50%;background:${e.color};flex-shrink:0"></div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:13px;font-weight:600;color:var(--i1)">${escapeHtml(e.name||e.key)}</div>
-        <div style="font-size:11px;color:var(--i4)">
-          <span style="background:var(--i7);border-radius:3px;padding:1px 5px;font-family:monospace">${escapeHtml(e.key)}</span>
+        <div style="font-size:var(--fs-13);font-weight:600;color:var(--i1)">${escapeHtml(e.name||e.key)}</div>
+        <div style="font-size:var(--fs-11);color:var(--i4)">
+          <span style="background:var(--i7);border-radius:var(--rd-3);padding:1px 5px;font-family:monospace">${escapeHtml(e.key)}</span>
           · ${escapeHtml(e.short||'')}
           ${e.date_start ? '· ' + escapeHtml(e.date_start) + (e.date_end ? ' ~ ' + escapeHtml(e.date_end) : '') : (e.date ? '· ' + escapeHtml(e.date) : '')}
           ${e.location ? '· 📍' + escapeHtml(e.location) : ''}
@@ -60,7 +60,7 @@ export function renderEvMgr(){
           .map(p => { const st = partStateOf(evParts(e.key)[p.key]);
             return `<span class="pill ${escAttr(st.cls)}" style="margin-right:3px"
               title="${escapeHtml(st.label)}">${escapeHtml(p.label)}${st.key === 'done' ? ' ✓' : ''}</span>`; }).join('')
-          || '<span style="font-size:10.5px;color:var(--i5)">진행 파트 없음</span>'}</div>
+          || '<span style="font-size:var(--fs-10_5);color:var(--i5)">진행 파트 없음</span>'}</div>
         ${(() => {
           /* 마감일·한도는 상세를 열어야 보였다(설정값 탭에 따로 모아 둔 요약은 없앴다) —
              목록에서 «이 행사는 정해 뒀나»만 한눈에 보이게 한 줄로 적는다 */
@@ -68,14 +68,14 @@ export function renderEvMgr(){
           const due = Object.entries(cfg.due || {}).filter(([, v]) => v);
           const b = cfg.book || {};
           if(!due.length && !b.chars) return '';
-          return `<div style="font-size:10.5px;color:var(--i4);margin-top:4px">${
+          return `<div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:4px">${
             due.map(([k, v]) => `${escapeHtml(DUE_LABEL[k] || k)} ${escapeHtml(v)}`).join(' · ')}${
             b.chars ? `${due.length ? ' · ' : ''}프로그램북 ${Number(b.chars).toLocaleString()}자` : ''}</div>`;
         })()}
       </div>
       <button onclick="event.stopPropagation();removeEventFromList(${i})"
-        style="background:none;border:1px solid var(--i6);border-radius:5px;padding:3px 8px;
-               font-size:11px;color:var(--i3);cursor:pointer"
+        style="background:none;border:1px solid var(--i6);border-radius:var(--rs);padding:3px 8px;
+               font-size:var(--fs-11);color:var(--i3);cursor:pointer"
         onmouseover="this.style.borderColor='var(--re)';this.style.color='var(--re)'"
         onmouseout="this.style.borderColor='var(--i6)';this.style.color='var(--i3)'">삭제</button>
     </div>`

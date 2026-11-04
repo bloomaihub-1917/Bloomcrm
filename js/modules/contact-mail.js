@@ -127,10 +127,10 @@ function render(){
     el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
     document.body.appendChild(el);
   }
-  el.innerHTML = `<div style="background:var(--W);border-radius:12px;width:min(980px,100%);max-height:92vh;overflow:auto;padding:16px 18px">
+  el.innerHTML = `<div style="background:var(--W);border-radius:var(--rd-12);width:min(980px,100%);max-height:92vh;overflow:auto;padding:16px 18px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-      <div style="font-size:14px;font-weight:700">메일 보내기 — ${cm.only && list[0] ? `${escapeHtml(memberName(list[0]))} <span style="font-weight:400;color:var(--i4)">· ${escapeHtml(r.name)}</span>` : escapeHtml(r.name)}</div>
-      <span style="font-size:11px;color:var(--i4)">${cm.only ? '이 기업에 한 통 — 컨택 기록에 «DM · 보냄»으로 남깁니다' : '기업마다 한 통씩 따로 보내고 그 기업 컨택 기록에 «DM · 보냄»으로 남깁니다'}</span>
+      <div style="font-size:var(--fs-14);font-weight:700">메일 보내기 — ${cm.only && list[0] ? `${escapeHtml(memberName(list[0]))} <span style="font-weight:400;color:var(--i4)">· ${escapeHtml(r.name)}</span>` : escapeHtml(r.name)}</div>
+      <span style="font-size:var(--fs-11);color:var(--i4)">${cm.only ? '이 기업에 한 통 — 컨택 기록에 «DM · 보냄»으로 남깁니다' : '기업마다 한 통씩 따로 보내고 그 기업 컨택 기록에 «DM · 보냄»으로 남깁니다'}</span>
       <button class="drcls" style="margin-left:auto" onclick="closeRoundMail()">✕</button>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
@@ -140,60 +140,60 @@ function render(){
     <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:14px">
       ${cm.only && list[0] ? `<div>
         <div class="mlbl" style="margin:0 0 4px">받는 사람 — 체크한 사람 모두가 한 통의 받는 사람이 돼요</div>
-        <div style="border:1px solid var(--i6);border-radius:8px;max-height:360px;overflow:auto">
-          ${peopleOf(list[0]).map(p => { const mail = mailOfPerson(p), has = !!mail; return `<label style="display:flex;gap:6px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--i8);font-size:11.5px;opacity:${has ? 1 : .5}">
+        <div style="border:1px solid var(--i6);border-radius:var(--r);max-height:360px;overflow:auto">
+          ${peopleOf(list[0]).map(p => { const mail = mailOfPerson(p), has = !!mail; return `<label style="display:flex;gap:6px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--i8);font-size:var(--fs-11_5);opacity:${has ? 1 : .5}">
             <input type="checkbox" ${cm.toIds.has(String(p.id)) ? 'checked' : ''} ${has ? '' : 'disabled'} onchange="rmTo('${escAttr(String(p.id))}',this.checked)">
             <b>${escapeHtml(p.nameKo || p.nameEn || '')}</b><span style="color:var(--i4)">${escapeHtml([p.deptKo, p.titleKo].filter(Boolean).join(' '))}</span>
             <span style="color:var(--i3);margin-left:auto">${has ? escapeHtml(mail) : '메일 없음'}</span></label>`; }).join('')}
-          ${(() => { const rp = repRcpt(list[0]); return rp ? `<label style="display:flex;gap:6px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--i8);font-size:11.5px">
+          ${(() => { const rp = repRcpt(list[0]); return rp ? `<label style="display:flex;gap:6px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--i8);font-size:var(--fs-11_5)">
             <input type="checkbox" ${cm.toIds.has(REP) ? 'checked' : ''} onchange="rmTo('${REP}',this.checked)">
-            <span class="pill p-gray" style="font-size:9.5px">대표 메일</span><span style="color:var(--i4)">기업DB</span>
+            <span class="pill p-gray" style="font-size:var(--fs-9_5)">대표 메일</span><span style="color:var(--i4)">기업DB</span>
             <span style="color:var(--i3);margin-left:auto">${escapeHtml(rp.emails.join(', '))}</span></label>`
-            : `<div style="padding:6px 8px;font-size:11px;color:var(--i4)">기업DB에 대표 메일이 없어요</div>`; })()}
+            : `<div style="padding:6px 8px;font-size:var(--fs-11);color:var(--i4)">기업DB에 대표 메일이 없어요</div>`; })()}
         </div>
       </div>` : `<div>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
           <div class="mlbl" style="margin:0">받는 곳 ${picked.length}/${list.length}</div>
-          <button class="btn" style="font-size:10px;margin-left:auto" onclick="rmAll('turn')" title="걸 차례·다시 걸 차례인 곳만">보낼 차례만</button>
-          <button class="btn" style="font-size:10px" onclick="rmAll('miss')" title="부재중·번호 오류·반송이 차수에 정한 횟수 이상 이어진 곳 — 전화로 안 닿는 곳">미연결만</button>
-          <button class="btn" style="font-size:10px" onclick="rmAll(true)">전체</button>
-          <button class="btn" style="font-size:10px" onclick="rmAll(false)">해제</button>
+          <button class="btn" style="font-size:var(--fs-10);margin-left:auto" onclick="rmAll('turn')" title="걸 차례·다시 걸 차례인 곳만">보낼 차례만</button>
+          <button class="btn" style="font-size:var(--fs-10)" onclick="rmAll('miss')" title="부재중·번호 오류·반송이 차수에 정한 횟수 이상 이어진 곳 — 전화로 안 닿는 곳">미연결만</button>
+          <button class="btn" style="font-size:var(--fs-10)" onclick="rmAll(true)">전체</button>
+          <button class="btn" style="font-size:var(--fs-10)" onclick="rmAll(false)">해제</button>
         </div>
-        <div style="border:1px solid var(--i6);border-radius:8px;max-height:360px;overflow:auto">
-          ${list.map(m => { const ps = peopleTo(m, cm.who); const st = memberState(m); return `<label style="display:flex;gap:6px;align-items:center;padding:5px 8px;border-bottom:1px solid var(--i8);font-size:11.5px;opacity:${ps.length ? 1 : .5}">
+        <div style="border:1px solid var(--i6);border-radius:var(--r);max-height:360px;overflow:auto">
+          ${list.map(m => { const ps = peopleTo(m, cm.who); const st = memberState(m); return `<label style="display:flex;gap:6px;align-items:center;padding:5px 8px;border-bottom:1px solid var(--i8);font-size:var(--fs-11_5);opacity:${ps.length ? 1 : .5}">
             <input type="checkbox" ${cm.ids.has(m.id) ? 'checked' : ''} ${ps.length ? '' : 'disabled'} onchange="rmPick('${escAttr(m.id)}',this.checked)">
             <b style="flex:0 0 auto">${escapeHtml(memberName(m))}</b>
-            <span class="pill p-gray" style="font-size:9.5px">${enOf(m) ? 'EN' : 'KO'}</span>
-            <span class="pill ${isTurn(m) ? 'p-blue' : 'p-gray'}" style="font-size:9.5px">${ST[st]}</span>
-            ${ps[0]?.rep ? '<span class="pill p-gray" style="font-size:9.5px" title="메일 있는 담당자가 없어 기업DB 대표 메일로 보내요">대표 메일</span>' : ''}
+            <span class="pill p-gray" style="font-size:var(--fs-9_5)">${enOf(m) ? 'EN' : 'KO'}</span>
+            <span class="pill ${isTurn(m) ? 'p-blue' : 'p-gray'}" style="font-size:var(--fs-9_5)">${ST[st]}</span>
+            ${ps[0]?.rep ? '<span class="pill p-gray" style="font-size:var(--fs-9_5)" title="메일 있는 담당자가 없어 기업DB 대표 메일로 보내요">대표 메일</span>' : ''}
             <span style="color:var(--i4);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${ps.length ? escapeHtml(toOf(ps).join(', ')) : '메일 없음 — 담당자·대표 메일 모두 없어요'}</span>
-          </label>`; }).join('') || '<div style="padding:12px;font-size:11.5px;color:var(--i4)">명단이 비어 있어요</div>'}
+          </label>`; }).join('') || '<div style="padding:12px;font-size:var(--fs-11_5);color:var(--i4)">명단이 비어 있어요</div>'}
         </div>
       </div>`}
       <div>
         ${(() => { const libs = libItems('contact', r.event_id); return `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
-          <select class="fi" style="font-size:11.5px;flex:1" onchange="rmLib(this.value);this.value=''">
+          <select class="fi" style="font-size:var(--fs-11_5);flex:1" onchange="rmLib(this.value);this.value=''">
             <option value="">📚 양식 보관함에서 불러오기${libs.length ? '' : ' — 아직 없어요'}</option>
             ${libs.map(it => `<option value="${escapeHtml(it.id)}">${escapeHtml(it.name)}${it.scope === 'all' ? ' · 공통' : ''}</option>`).join('')}</select>
-          <button class="btn" style="font-size:10.5px" title="컨택 메일 양식을 더하고 고칩니다 — 이 행사만 또는 모든 행사 공통"
+          <button class="btn" style="font-size:var(--fs-10_5)" title="컨택 메일 양식을 더하고 고칩니다 — 이 행사만 또는 모든 행사 공통"
             onclick="openMailTemplates('contact','${escAttr(r.event_id || '')}')">양식 보관함</button></div>`; })()}
-        <details${cm.lang !== 'en' ? ' open' : ''}><summary style="cursor:pointer;font-size:11.5px;font-weight:700;margin-bottom:4px">국문 문구</summary>
-          <input class="fi" style="font-size:11.5px;margin-bottom:4px" placeholder="[{행사}] 비즈니스 상담회 주선신청 안내" value="${escapeHtml(cm.tpl.subject_ko)}" oninput="rmTpl('subject_ko',this.value)">
-          <textarea class="fi" rows="7" style="font-size:11.5px;width:100%" placeholder="{기업} {담당자}님, 안녕하세요." oninput="rmTpl('body_ko',this.value)">${escapeHtml(cm.tpl.body_ko)}</textarea></details>
-        <details${cm.lang === 'en' ? ' open' : ''} style="margin-top:6px"><summary style="cursor:pointer;font-size:11.5px;font-weight:700;margin-bottom:4px">영문 문구</summary>
-          <input class="fi" style="font-size:11.5px;margin-bottom:4px" value="${escapeHtml(cm.tpl.subject_en)}" oninput="rmTpl('subject_en',this.value)">
-          <textarea class="fi" rows="7" style="font-size:11.5px;width:100%" placeholder="Dear {담당자}," oninput="rmTpl('body_en',this.value)">${escapeHtml(cm.tpl.body_en)}</textarea></details>
+        <details${cm.lang !== 'en' ? ' open' : ''}><summary style="cursor:pointer;font-size:var(--fs-11_5);font-weight:700;margin-bottom:4px">국문 문구</summary>
+          <input class="fi" style="font-size:var(--fs-11_5);margin-bottom:4px" placeholder="[{행사}] 비즈니스 상담회 주선신청 안내" value="${escapeHtml(cm.tpl.subject_ko)}" oninput="rmTpl('subject_ko',this.value)">
+          <textarea class="fi" rows="7" style="font-size:var(--fs-11_5);width:100%" placeholder="{기업} {담당자}님, 안녕하세요." oninput="rmTpl('body_ko',this.value)">${escapeHtml(cm.tpl.body_ko)}</textarea></details>
+        <details${cm.lang === 'en' ? ' open' : ''} style="margin-top:6px"><summary style="cursor:pointer;font-size:var(--fs-11_5);font-weight:700;margin-bottom:4px">영문 문구</summary>
+          <input class="fi" style="font-size:var(--fs-11_5);margin-bottom:4px" value="${escapeHtml(cm.tpl.subject_en)}" oninput="rmTpl('subject_en',this.value)">
+          <textarea class="fi" rows="7" style="font-size:var(--fs-11_5);width:100%" placeholder="Dear {담당자}," oninput="rmTpl('body_en',this.value)">${escapeHtml(cm.tpl.body_en)}</textarea></details>
         ${varChipsHtml('contact', { ev: r.event_id })}
-        <div style="font-size:10.5px;color:var(--i4);margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
           <span>칸은 기업마다 채워집니다.</span>
           <a href="javascript:void(0)" onclick="saveRoundMailTpl()" style="color:var(--a)">이 문구를 차수 양식으로 저장</a>
           <span id="rm-saved" style="color:var(--g)"></span></div>
-        ${prev ? `<div style="margin-top:10px;padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;font-size:11.5px;white-space:pre-wrap;line-height:1.55;max-height:220px;overflow:auto"><div style="font-size:10px;color:var(--i4);margin-bottom:4px">미리보기 — ${escapeHtml(memberName(sample))}</div><b>${escapeHtml(prev.s)}</b>\n\n${escapeHtml(prev.b)}</div>` : ''}
+        ${prev ? `<div style="margin-top:10px;padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-7);font-size:var(--fs-11_5);white-space:pre-wrap;line-height:1.55;max-height:220px;overflow:auto"><div style="font-size:var(--fs-10);color:var(--i4);margin-bottom:4px">미리보기 — ${escapeHtml(memberName(sample))}</div><b>${escapeHtml(prev.s)}</b>\n\n${escapeHtml(prev.b)}</div>` : ''}
       </div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:12px">
       <button class="btn bp" onclick="sendRoundMail()" ${picked.length && !cm.sending ? '' : 'disabled'}>${cm.only ? '보내기' : `${picked.length}곳에 보내기`}</button>
-      <span id="rm-msg" style="font-size:11px;color:var(--i4)"></span>
+      <span id="rm-msg" style="font-size:var(--fs-11);color:var(--i4)"></span>
     </div>
   </div>`;
 }

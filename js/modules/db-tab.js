@@ -139,7 +139,7 @@ export async function patchContact(c, patch, label){
 export const ctryPill = (c) => {
   const r = ctryCheck(c);
   if(!r) return '';
-  return ` <span class="pill p-amber" style="font-size:9px;cursor:help"
+  return ` <span class="pill p-amber" style="font-size:var(--fs-9);cursor:help"
     title="${escapeHtml(countryCheckText(r))}">국가 확인</span>`;
 };
 
@@ -319,7 +319,7 @@ export function buildMDBFilterBar(){
   const chip = (on, onclick, dot, label, count) =>
     `<button class="seg-b${on ? ' on' : ''}" onclick="${onclick}" style="display:inline-flex;align-items:center;gap:5px">`
     + (dot ? `<span style="width:6px;height:6px;border-radius:50%;background:${dot};flex:none"></span>` : '')
-    + `${escapeHtml(label)}<span style="color:var(--i4);font-size:10px">${count}</span></button>`;
+    + `${escapeHtml(label)}<span style="color:var(--i4);font-size:var(--fs-10)">${count}</span></button>`;
 
   const evChips = chip(!mdbEvFilter, 'setMDBEv(null)', '', '전체 행사', contacts.length)
     + usedEvs.map(e => chip(mdbEvFilter === e.key, `setMDBEv('${escAttr(e.key)}')`, e.color, e.short,
@@ -334,11 +334,11 @@ export function buildMDBFilterBar(){
 
   el.innerHTML =
     `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-       <span style="font-size:10px;color:var(--i4);flex:none">행사</span>
+       <span style="font-size:var(--fs-10);color:var(--i4);flex:none">행사</span>
        <div class="seg" style="flex-wrap:wrap">${evChips}</div>
      </div>
      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-       <span style="font-size:10px;color:var(--i4);flex:none">유형</span>
+       <span style="font-size:var(--fs-10);color:var(--i4);flex:none">유형</span>
        <div class="seg" style="flex-wrap:wrap">${typeChips}</div>
      </div>`;
 }
@@ -515,7 +515,7 @@ export function buildMDBTagList(){
   const el = document.getElementById('mdb-tag-list');
   if(!el) return;
   if(!TAGS.length){
-    el.innerHTML = '<span style="font-size:12px;color:var(--i4)">등록된 태그가 없어요 — 설정 &gt; 기업 섹터에서 추가할 수 있어요.</span>';
+    el.innerHTML = '<span style="font-size:var(--fs-12);color:var(--i4)">등록된 태그가 없어요 — 설정 &gt; 기업 섹터에서 추가할 수 있어요.</span>';
     return;
   }
   el.innerHTML = TAGS.map(t => `
@@ -643,8 +643,8 @@ export function renderMDBSelectionBar(){
   if(!n){ el.style.display = 'none'; el.innerHTML=''; return; }
   el.style.display = 'flex';
   el.innerHTML = `
-    <span style="font-size:12px;font-weight:600;color:var(--i1)">${n}명 선택됨</span>${
-      isMobile() ? '<span style="font-size:10.5px;color:var(--i5)">탭하면 선택·해제 · 길게 눌러 시작</span>' : ''}
+    <span style="font-size:var(--fs-12);font-weight:600;color:var(--i1)">${n}명 선택됨</span>${
+      isMobile() ? '<span style="font-size:var(--fs-10_5);color:var(--i5)">탭하면 선택·해제 · 길게 눌러 시작</span>' : ''}
     <button class="btn bp bs" onclick="openMDBBulkEditModal()">기업명/카테고리/국가/상태 일괄 변경</button>
     <button class="btn bs" onclick="openMDBToCrmModal()"
       title="고른 사람들을 행사 참가자로 올리고, 소속 기업을 CRM 타겟으로 잡습니다">행사에 초청</button>
@@ -800,7 +800,7 @@ function renderMdbAiBar(msg){
   el.innerHTML = `<span class="pill p-blue" style="cursor:default" title="${escapeHtml(mdbUi.mdbAi.q)}">✨ ${escapeHtml(p.explain || mdbUi.mdbAi.q)}</span>
     <span style="color:var(--i4)">${bits.join(' · ')}</span>
     ${p.unsupported ? `<span style="color:var(--am)">⚠️ 반영 못 한 조건: ${escapeHtml(p.unsupported)}</span>` : ''}
-    <button class="btn bs" style="font-size:10.5px" onclick="clearMdbAi()">✕ 질문 지우기</button>`;
+    <button class="btn bs" style="font-size:var(--fs-10_5)" onclick="clearMdbAi()">✕ 질문 지우기</button>`;
 }
 
 export function mdbFilterPairs(pairs){

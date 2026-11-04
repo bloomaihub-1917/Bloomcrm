@@ -50,21 +50,21 @@ export function findSimilarCompanyPairs(){
 export function renderSimilarCompanyList(){
   const el = document.getElementById('similar-co-list');
   if(!el) return;
-  el.innerHTML = '<div style="font-size:12px;color:var(--i4)">검사 중...</div>';
+  el.innerHTML = '<div style="font-size:var(--fs-12);color:var(--i4)">검사 중...</div>';
 
   const pairs = findSimilarCompanyPairs();
   if(!pairs.length){
-    el.innerHTML = '<div style="font-size:12px;color:var(--i4)">유사한 기업명 후보를 못 찾았어요.</div>';
+    el.innerHTML = '<div style="font-size:var(--fs-12);color:var(--i4)">유사한 기업명 후보를 못 찾았어요.</div>';
     return;
   }
 
   el.innerHTML = pairs.map(({a, b, similarity}) => `
-    <div style="background:var(--W);border:1px solid var(--i6);border-radius:8px;padding:10px 12px">
-      <div style="font-size:11px;color:var(--i4);margin-bottom:6px">유사도 ${Math.round(similarity*100)}%</div>
+    <div style="background:var(--W);border:1px solid var(--i6);border-radius:var(--r);padding:10px 12px">
+      <div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:6px">유사도 ${Math.round(similarity*100)}%</div>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <div style="flex:1;min-width:120px;font-size:13px;font-weight:600">${escapeHtml(a.nameKo||a.nameEn)} <span style="font-size:11px;color:var(--i4);font-weight:400">(${a.contacts.length}명)</span></div>
+        <div style="flex:1;min-width:120px;font-size:var(--fs-13);font-weight:600">${escapeHtml(a.nameKo||a.nameEn)} <span style="font-size:var(--fs-11);color:var(--i4);font-weight:400">(${a.contacts.length}명)</span></div>
         <span style="color:var(--i4)">↔</span>
-        <div style="flex:1;min-width:120px;font-size:13px;font-weight:600">${escapeHtml(b.nameKo||b.nameEn)} <span style="font-size:11px;color:var(--i4);font-weight:400">(${b.contacts.length}명)</span></div>
+        <div style="flex:1;min-width:120px;font-size:var(--fs-13);font-weight:600">${escapeHtml(b.nameKo||b.nameEn)} <span style="font-size:var(--fs-11);color:var(--i4);font-weight:400">(${b.contacts.length}명)</span></div>
       </div>
       <div style="display:flex;gap:6px;margin-top:8px">
         <button class="btn bp bs" onclick="mergeCompanies('${escAttr(b.key)}','${escAttr(a.key)}')">"${escapeHtml(a.nameKo||a.nameEn)}"로 합치기</button>
@@ -81,20 +81,20 @@ export async function aiFindCompanyPairs(){
   const el = document.getElementById('similar-co-list');
   if(!el) return;
   const known = CO_DB.map(c => ({ id: c.key, ko: c.nameKo || '', en: c.nameEn || '' })).filter(o => o.ko || o.en);
-  el.innerHTML = `<div style="font-size:12px;color:var(--i4)">✨ 기업 ${known.length}곳을 AI가 살펴보는 중… (1분쯤 걸릴 수 있어요)</div>`;
+  el.innerHTML = `<div style="font-size:var(--fs-12);color:var(--i4)">✨ 기업 ${known.length}곳을 AI가 살펴보는 중… (1분쯤 걸릴 수 있어요)</div>`;
   const r = await aiCompanyPairs({ known });
-  if(!r.ok){ el.innerHTML = `<div style="font-size:12px;color:var(--re)">AI로 찾지 못했어요: ${escapeHtml(r.error || '')}</div>`; return; }
+  if(!r.ok){ el.innerHTML = `<div style="font-size:var(--fs-12);color:var(--re)">AI로 찾지 못했어요: ${escapeHtml(r.error || '')}</div>`; return; }
   const pairs = (r.pairs || []).map(p => ({ ...p, A: CO_DB.find(c => c.key === p.a), B: CO_DB.find(c => c.key === p.b) })).filter(p => p.A && p.B);
-  if(!pairs.length){ el.innerHTML = '<div style="font-size:12px;color:var(--i4)">✨ AI도 같은 회사로 보이는 짝을 못 찾았어요.</div>'; return; }
+  if(!pairs.length){ el.innerHTML = '<div style="font-size:var(--fs-12);color:var(--i4)">✨ AI도 같은 회사로 보이는 짝을 못 찾았어요.</div>'; return; }
   const nm = (c) => escapeHtml(c.nameKo || c.nameEn);
   el.innerHTML = pairs.map(({ A, B, reason, caution }) => `
-    <div style="background:var(--W);border:1px solid var(--i6);border-radius:8px;padding:10px 12px">
-      <div style="font-size:11px;color:var(--i4);margin-bottom:6px">✨ AI 추천 — ${escapeHtml(reason)}</div>
-      ${caution ? `<div style="font-size:11px;color:var(--am);margin-bottom:6px">⚠️ ${escapeHtml(caution)}</div>` : ''}
+    <div style="background:var(--W);border:1px solid var(--i6);border-radius:var(--r);padding:10px 12px">
+      <div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:6px">✨ AI 추천 — ${escapeHtml(reason)}</div>
+      ${caution ? `<div style="font-size:var(--fs-11);color:var(--am);margin-bottom:6px">⚠️ ${escapeHtml(caution)}</div>` : ''}
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <div style="flex:1;min-width:120px;font-size:13px;font-weight:600">${nm(A)} <span style="font-size:11px;color:var(--i4);font-weight:400">${A.nameKo && A.nameEn ? escapeHtml(A.nameEn) + ' · ' : ''}(${A.contacts.length}명)</span></div>
+        <div style="flex:1;min-width:120px;font-size:var(--fs-13);font-weight:600">${nm(A)} <span style="font-size:var(--fs-11);color:var(--i4);font-weight:400">${A.nameKo && A.nameEn ? escapeHtml(A.nameEn) + ' · ' : ''}(${A.contacts.length}명)</span></div>
         <span style="color:var(--i4)">↔</span>
-        <div style="flex:1;min-width:120px;font-size:13px;font-weight:600">${nm(B)} <span style="font-size:11px;color:var(--i4);font-weight:400">${B.nameKo && B.nameEn ? escapeHtml(B.nameEn) + ' · ' : ''}(${B.contacts.length}명)</span></div>
+        <div style="flex:1;min-width:120px;font-size:var(--fs-13);font-weight:600">${nm(B)} <span style="font-size:var(--fs-11);color:var(--i4);font-weight:400">${B.nameKo && B.nameEn ? escapeHtml(B.nameEn) + ' · ' : ''}(${B.contacts.length}명)</span></div>
       </div>
       <div style="display:flex;gap:6px;margin-top:8px">
         <button class="btn bp bs" onclick="mergeCompanies('${escAttr(B.key)}','${escAttr(A.key)}')">"${nm(A)}"로 합치기</button>

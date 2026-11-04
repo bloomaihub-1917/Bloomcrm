@@ -46,9 +46,9 @@ const isDomestic = isDomesticSpeaker;
 function bankModeRow(sp){
   const auto = autoDomestic(sp) ? '국내' : '해외';
   const opt = (v, l) => `<option value="${v}"${(sp.bank_mode || '') === v ? ' selected' : ''}>${l}</option>`;
-  return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:11px">
+  return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:var(--fs-11)">
     <span style="color:var(--i3)">받는 양식</span>
-    <select class="fi" style="width:auto;padding:3px 6px;font-size:11px"
+    <select class="fi" style="width:auto;padding:3px 6px;font-size:var(--fs-11)"
       onchange="spField('bank_mode',this.value,'계좌 양식')">
       ${opt('', `자동 (${auto})`)}${opt('domestic', '국내 — 신분증·통장사본')}${opt('overseas', '해외 — KIC 양식·여권')}
     </select>
@@ -59,13 +59,13 @@ function bankModeRow(sp){
 function domesticBankHtml(sp, nBank){
   return `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-      <div style="font-size:11px;color:var(--am)">열람 중 — 기록에 남았습니다</div>
-      <button class="btn" style="font-size:10.5px;margin-left:auto" onclick="hideBank()">가리기</button>
+      <div style="font-size:var(--fs-11);color:var(--am)">열람 중 — 기록에 남았습니다</div>
+      <button class="btn" style="font-size:var(--fs-10_5);margin-left:auto" onclick="hideBank()">가리기</button>
     </div>
     ${bankModeRow(sp)}
-    <div style="border:1px solid var(--i6);border-radius:9px;padding:11px 12px">
-      <div style="font-size:12px;font-weight:700;margin-bottom:4px">국내 계좌 ${nBank ? NEED_MARK[nBank] : ''}</div>
-      <div style="font-size:10.5px;color:var(--i4);margin-bottom:8px;line-height:1.6">
+    <div style="border:1px solid var(--i6);border-radius:var(--rd-9);padding:11px 12px">
+      <div style="font-size:var(--fs-12);font-weight:700;margin-bottom:4px">국내 계좌 ${nBank ? NEED_MARK[nBank] : ''}</div>
+      <div style="font-size:var(--fs-10_5);color:var(--i4);margin-bottom:8px;line-height:1.6">
         신분증과 통장사본만 받습니다.</div>
       ${gotRow('신분증 받음', sp.id_card_received_at,
         `spStamp('id_card_received_at','신분증 받음')`,
@@ -80,7 +80,7 @@ function domesticBankHtml(sp, nBank){
         ${fg('예금주', txt(sp.bank_holder, `spField('bank_holder',this.value,'예금주')`, '통장사본에 적힌 그대로'))}
       </div>
       ${fg('계좌번호', txt(sp.bank_account, `spField('bank_account',this.value,'계좌번호')`))}
-      <div style="font-size:10.5px;color:var(--i4);margin-top:-4px">
+      <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:-4px">
         스캔본은 원드라이브에 두고 여기엔 파일명만 적습니다.</div>
     </div>`;
 }
@@ -92,18 +92,18 @@ function bankHtml(sp, evKey){
   const has = sp.bank_account || sp.bank_holder || sp.bank_name;
 
   if(!spDrUi.bankRevealed){
-    return `<div style="padding:14px;background:var(--i8);border:1px solid var(--i6);border-radius:9px">
-      <div style="font-size:12px;font-weight:700;margin-bottom:6px">계좌 · 여권</div>
-      <div style="font-size:11.5px;color:var(--i3);line-height:1.7">
+    return `<div style="padding:14px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-9)">
+      <div style="font-size:var(--fs-12);font-weight:700;margin-bottom:6px">계좌 · 여권</div>
+      <div style="font-size:var(--fs-11_5);color:var(--i3);line-height:1.7">
         ${has
           ? `예금주 <b>${escapeHtml(sp.bank_holder || '(없음)')}</b> · ${escapeHtml(sp.bank_name || '은행 미상')}
              <br>계좌 ${escapeHtml(mask(sp.bank_account))}`
           : '아직 계좌를 받지 않았어요.'}
         ${sp.passport_file ? `<br>여권 스캔 ${escapeHtml(sp.passport_received_at || '')} 받음` : ''}
       </div>
-      <div style="font-size:10.5px;color:var(--i4);margin-top:8px;line-height:1.6">
+      <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:8px;line-height:1.6">
         전체를 보려면 아래를 누르세요. 누가 언제 열었는지 기록에 남습니다.</div>
-      <button class="btn" style="font-size:11px;margin-top:8px" onclick="revealBank()">전체 보기</button>
+      <button class="btn" style="font-size:var(--fs-11);margin-top:8px" onclick="revealBank()">전체 보기</button>
     </div>`;
   }
 
@@ -111,20 +111,20 @@ function bankHtml(sp, evKey){
 
   return `
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-      <div style="font-size:11px;color:var(--am)">열람 중 — 기록에 남았습니다</div>
-      <button class="btn" style="font-size:10.5px;margin-left:auto" onclick="hideBank()">가리기</button>
+      <div style="font-size:var(--fs-11);color:var(--am)">열람 중 — 기록에 남았습니다</div>
+      <button class="btn" style="font-size:var(--fs-10_5);margin-left:auto" onclick="hideBank()">가리기</button>
     </div>
     ${bankModeRow(sp)}
-    <div style="border:1px solid var(--i6);border-radius:9px;padding:11px 12px;margin-bottom:11px">
-      <div style="font-size:12px;font-weight:700;margin-bottom:8px">계좌 ${nBank ? NEED_MARK[nBank] : ''}</div>
-      <div style="font-size:10.5px;color:var(--i4);margin:-2px 0 10px;line-height:1.6">
+    <div style="border:1px solid var(--i6);border-radius:var(--rd-9);padding:11px 12px;margin-bottom:11px">
+      <div style="font-size:var(--fs-12);font-weight:700;margin-bottom:8px">계좌 ${nBank ? NEED_MARK[nBank] : ''}</div>
+      <div style="font-size:var(--fs-10_5);color:var(--i4);margin:-2px 0 10px;line-height:1.6">
         KIC 연사 양식(Appendix 4 Bank Information Form) 순서대로 적습니다.
         해외 송금은 하나라도 빠지면 은행에서 되돌아옵니다.</div>
       ${gotRow('계좌 양식(Word) 받음', sp.bank_form_received_at,
         `spStamp('bank_form_received_at','계좌 양식 받음')`,
         `spField('bank_form_received_at',this.value,'계좌 양식 받은 날')`, nBank || 'opt')}
       ${fg('양식 파일명', txt(sp.bank_form_file, `spField('bank_form_file',this.value,'계좌 양식 파일')`, '원드라이브 파일명'))}
-      <div style="font-size:11px;font-weight:700;color:var(--i3);margin:4px 0 6px">연사 (Personal Information)</div>
+      <div style="font-size:var(--fs-11);font-weight:700;color:var(--i3);margin:4px 0 6px">연사 (Personal Information)</div>
       <div class="fgr">
         ${fg('이름 (First Name)', txt(sp.bank_first_name, `spField('bank_first_name',this.value,'First Name')`, '여권 표기 그대로'))}
         ${fg('성 (Last Name)', txt(sp.bank_last_name, `spField('bank_last_name',this.value,'Last Name')`, '여권 표기 그대로'))}
@@ -134,13 +134,13 @@ function bankHtml(sp, evKey){
           <option value="">미정</option>${countryOptions(sp.nationality)}</select>`, '기본 정보의 국적과 같은 칸입니다')}
         ${fg('소속 (Institution)', txt(sp.org_en, `spField('org_en',this.value,'소속 영문')`), '기본 정보의 소속 영문과 같은 칸입니다')}
       </div>
-      <div style="font-size:11px;font-weight:700;color:var(--i3);margin:4px 0 6px">받는 사람 (Account Holder)</div>
+      <div style="font-size:var(--fs-11);font-weight:700;color:var(--i3);margin:4px 0 6px">받는 사람 (Account Holder)</div>
       ${fg('예금주 (Name)', txt(sp.bank_holder, `spField('bank_holder',this.value,'예금주')`, '통장에 찍힌 영문 이름 그대로'))}
       <div class="fgr">
         ${fg('주소 (Address)', txt(sp.bank_holder_address, `spField('bank_holder_address',this.value,'예금주 주소')`))}
         ${fg('우편번호 (Postal Code)', txt(sp.bank_holder_postal, `spField('bank_holder_postal',this.value,'예금주 우편번호')`))}
       </div>
-      <div style="font-size:11px;font-weight:700;color:var(--i3);margin:4px 0 6px">은행 (Bank Info)</div>
+      <div style="font-size:var(--fs-11);font-weight:700;color:var(--i3);margin:4px 0 6px">은행 (Bank Info)</div>
       <div class="fgr">
         ${fg('은행 (Bank Name)', txt(sp.bank_name, `spField('bank_name',this.value,'은행')`))}
         ${fg('지점 (Branch Name)', txt(sp.bank_branch, `spField('bank_branch',this.value,'지점')`))}
@@ -165,16 +165,16 @@ function bankHtml(sp, evKey){
       ${fg('은행 코드 (Bank Codes)', txt(sp.bank_code, `spField('bank_code',this.value,'은행 코드')`, '예: Sort Code 123456'),
         '영국 Sort Code(6자리) · 호주 BSB(6자리) · 캐나다 CC(0+기관번호+지점번호)는 꼭 받습니다')}
       ${fg('비고 (Other Remarks)', area(sp.bank_note, `spField('bank_note',this.value,'계좌 비고')`, '', 2))}
-      <div style="font-size:10.5px;color:var(--i4);margin-top:-4px">
+      <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:-4px">
         연사료는 USD로 보냅니다 — USD를 받을 수 있는 계좌인지 확인하세요.</div>
     </div>
-    ${!nPass && !sp.passport_received_at && !sp.passport_file ? '' : `<div style="border:1px solid var(--i6);border-radius:9px;padding:11px 12px">
-      <div style="font-size:12px;font-weight:700;margin-bottom:8px">여권 ${nPass ? NEED_MARK[nPass] : ''}</div>
+    ${!nPass && !sp.passport_received_at && !sp.passport_file ? '' : `<div style="border:1px solid var(--i6);border-radius:var(--rd-9);padding:11px 12px">
+      <div style="font-size:var(--fs-12);font-weight:700;margin-bottom:8px">여권 ${nPass ? NEED_MARK[nPass] : ''}</div>
       ${gotRow('여권 스캔 받음', sp.passport_received_at,
         `spStamp('passport_received_at','여권 받음')`,
         `spField('passport_received_at',this.value,'여권 받은 날')`, nPass || 'opt')}
       ${fg('파일명', txt(sp.passport_file, `spField('passport_file',this.value,'여권 파일')`, '원드라이브 파일명'))}
-      <div style="font-size:10.5px;color:var(--i4);margin-top:-4px">
+      <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:-4px">
         스캔본은 원드라이브에 두고 여기엔 파일명만 적습니다 — 이미지가 이 화면에 뜨면
         누가 옆에서 봐도 그대로 보입니다.</div>
     </div>`}`;
@@ -220,13 +220,13 @@ function photoBoxHtml(sp, evKey){
   const loading = !speakerPhotosLoaded(evKey);
   return `<div style="display:flex;gap:12px;align-items:flex-start;margin:8px 0 10px">
     ${p ? `<img src="${photoSrc(p)}" alt=""
-        style="width:96px;height:120px;object-fit:cover;object-position:50% 25%;border-radius:6px;border:1px solid var(--i6);display:block;flex:none">`
-      : `<div style="width:96px;height:120px;border-radius:6px;border:1px dashed var(--i5);display:flex;align-items:center;justify-content:center;font-size:10.5px;color:var(--i4);text-align:center">${loading ? '불러오는 중' : '사진 없음'}</div>`}
-    <div style="font-size:10.5px;color:var(--i4);line-height:1.7">
+        style="width:96px;height:120px;object-fit:cover;object-position:50% 25%;border-radius:var(--rd-6);border:1px solid var(--i6);display:block;flex:none">`
+      : `<div style="width:96px;height:120px;border-radius:var(--rd-6);border:1px dashed var(--i5);display:flex;align-items:center;justify-content:center;font-size:var(--fs-10_5);color:var(--i4);text-align:center">${loading ? '불러오는 중' : '사진 없음'}</div>`}
+    <div style="font-size:var(--fs-10_5);color:var(--i4);line-height:1.7">
       ${p ? `${escapeHtml(p.file || '')}${p.updated_at ? `<br>${escapeHtml(String(p.updated_at).slice(0, 10))} 올림` : ''}<br>` : ''}
-      <label class="btn" style="font-size:10.5px;cursor:pointer;display:inline-block;margin-top:4px">${p ? '사진 바꾸기' : '사진 올리기'}
+      <label class="btn" style="font-size:var(--fs-10_5);cursor:pointer;display:inline-block;margin-top:4px">${p ? '사진 바꾸기' : '사진 올리기'}
         <input type="file" accept="image/jpeg,image/png,image/webp" style="display:none" onchange="uploadSpPhoto(this)"></label>
-      ${p ? `<button class="btn" style="font-size:10.5px;color:var(--re);margin-top:4px" onclick="removeSpPhoto()">지우기</button>` : ''}
+      ${p ? `<button class="btn" style="font-size:var(--fs-10_5);color:var(--re);margin-top:4px" onclick="removeSpPhoto()">지우기</button>` : ''}
     </div>
   </div>`;
 }

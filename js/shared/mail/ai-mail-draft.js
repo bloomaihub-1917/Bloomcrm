@@ -31,14 +31,14 @@ const scrub = (v) => String(v || '')
 
 export function aiDraftHtml(scope, { reply } = {}){
   return `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:6px 0 8px;padding:7px 9px;
-      background:var(--ad);border-radius:7px">
-    <input class="fi" id="aid-q-${escAttr(scope)}" style="flex:1;min-width:220px;font-size:11.5px"
+      background:var(--ad);border-radius:var(--rd-7)">
+    <input class="fi" id="aid-q-${escAttr(scope)}" style="flex:1;min-width:220px;font-size:var(--fs-11_5)"
       placeholder="${escAttr(reply ? 'AI에게 — 예: 발표자료 받았다고 감사 인사, 링크는 확인 후 다시 안내' : 'AI에게 — 예: 세션 통합으로 시간이 바뀌었다고 정중하게')}"
       onkeydown="if(event.key==='Enter'){event.preventDefault();runAiDraft('${escAttr(scope)}')}">
-    <button class="btn bp" style="font-size:11px" onclick="runAiDraft('${escAttr(scope)}')">✨ AI로 ${reply ? '회신' : '초안'} 쓰기</button>
-    <button class="btn" id="aid-save-${escAttr(scope)}" style="font-size:10.5px;display:none" onclick="saveAiDraft('${escAttr(scope)}')"
+    <button class="btn bp" style="font-size:var(--fs-11)" onclick="runAiDraft('${escAttr(scope)}')">✨ AI로 ${reply ? '회신' : '초안'} 쓰기</button>
+    <button class="btn" id="aid-save-${escAttr(scope)}" style="font-size:var(--fs-10_5);display:none" onclick="saveAiDraft('${escAttr(scope)}')"
       title="AI가 쓴 틀(변수 그대로)을 양식 보관함에 남깁니다 — 다음부터 «무슨 메일인가»에서 고릅니다">양식 보관함에 저장</button>
-    <div style="flex-basis:100%;font-size:10px;color:var(--i4)" id="aid-msg-${escAttr(scope)}">
+    <div style="flex-basis:100%;font-size:var(--fs-10);color:var(--i4)" id="aid-msg-${escAttr(scope)}">
       이름·메일 내용은 AI로 보내지 않아요 — 지시 칸에도 넣지 마세요. 쓴 글은 아래 칸을 덮으니 보내기 전에 읽고 고치세요.</div>
   </div>`;
 }

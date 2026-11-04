@@ -14,4 +14,12 @@
   --re:#DC2626;--rb:#FEF2F2;--pu:#6D28D9;--pb:#F5F3FF;--te:#0F766E;--tb:#F0FDFA;
   --r:8px;--rs:5px;--rl:11px;--rx:16px;
   --sh:0 1px 3px rgba(0,0,0,.07);--shl:0 8px 24px rgba(0,0,0,.10),0 1px 4px rgba(0,0,0,.06);
+  /* 글자 크기 — 지금 쓰는 값을 그대로 이름 붙였다(--fs-10_5 = 10.5px). 단계를 줄일 때는 값만 바꾼다
+     (예: --fs-10_5:var(--fs-11)). js·CSS는 font-size에 이 변수만 쓴다. */
+  --fs-8:8px;--fs-8_5:8.5px;--fs-9:9px;--fs-9_5:9.5px;--fs-10:10px;--fs-10_5:10.5px;
+  --fs-11:11px;--fs-11_5:11.5px;--fs-12:12px;--fs-12_5:12.5px;--fs-13:13px;--fs-13_5:13.5px;
+  --fs-14:14px;--fs-15:15px;--fs-16:16px;--fs-17:17px;--fs-18:18px;--fs-19:19px;--fs-20:20px;
+  /* 둥근 모서리 — 5px은 --rs, 8px은 --r, 11px은 --rl, 16px은 --rx(위). 나머지 값도 이름만 붙였다 */
+  --rd-2:2px;--rd-3:3px;--rd-4:4px;--rd-6:6px;--rd-7:7px;--rd-9:9px;--rd-10:10px;
+  --rd-12:12px;--rd-14:14px;--rd-20:20px;--rd-pill:99px;
 }

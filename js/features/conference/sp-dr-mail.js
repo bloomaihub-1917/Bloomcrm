@@ -97,7 +97,7 @@ function peopleTabHtml(sp){
   const rows = contactsOfSpeaker(sp.id);
   const t = mailTargets(sp.id);
 
-  const row = (r) => `<div style="border:1px solid var(--i6);border-radius:8px;padding:9px 11px;margin-bottom:7px">
+  const row = (r) => `<div style="border:1px solid var(--i6);border-radius:var(--r);padding:9px 11px;margin-bottom:7px">
     <div class="fgr">
       ${fg('이름', txt(r.name, `scField('${escAttr(r.id)}','name',this.value,'연락 상대 이름')`, '홍길동'))}
       ${fg('관계', `<select class="fi" onchange="scField('${escAttr(r.id)}','kind',this.value,'연락 상대 관계')">
@@ -110,7 +110,7 @@ function peopleTabHtml(sp){
       ${fg('전화', txt(r.phone, `scField('${escAttr(r.id)}','phone',this.value,'연락 상대 전화')`,
         isSelf(r) && selfPhone(sp) ? selfPhone(sp) : ''))}
     </div>
-    ${isSelf(r) ? `<div style="font-size:10px;color:var(--i4);margin:-2px 0 5px">${
+    ${isSelf(r) ? `<div style="font-size:var(--fs-10);color:var(--i4);margin:-2px 0 5px">${
       selfEmail(sp) && r.email && norm(r.email) !== norm(selfEmail(sp))
         ? `<span style="color:var(--am)">기본 정보(마스터DB)의 ${escapeHtml(selfEmail(sp))}로 나갑니다</span> — 여기 적힌 주소는 쓰지 않아요. 바꾸려면 기본 탭에서 고치세요`
         : selfEmail(sp) ? '기본 정보(마스터DB)의 메일로 나갑니다 — 고치려면 기본 탭에서'
@@ -121,22 +121,22 @@ function peopleTabHtml(sp){
         ${['to', 'cc', ''].map(s => `<button class="seg-b${(r.send || '') === s ? ' on' : ''}"
           onclick="scField('${escAttr(r.id)}','send','${s}','${SEND_LABEL[s]}')">${SEND_LABEL[s]}</button>`).join('')}
       </div>
-      <button class="btn" style="font-size:10.5px;margin-left:auto" onclick="removeSpeakerContact('${escAttr(r.id)}')">삭제</button>
+      <button class="btn" style="font-size:var(--fs-10_5);margin-left:auto" onclick="removeSpeakerContact('${escAttr(r.id)}')">삭제</button>
     </div>
   </div>`;
 
   const summary = `<div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);
-      border-radius:7px;font-size:11.5px;color:var(--i3);line-height:1.7;margin-bottom:11px">
+      border-radius:var(--rd-7);font-size:var(--fs-11_5);color:var(--i3);line-height:1.7;margin-bottom:11px">
       ${t.to.length ? `수신 <b>${escapeHtml(t.to.join(', '))}</b>` : '<b>수신이 비어 있어요</b> — 상대 하나를 수신으로 정해주세요'}
       ${t.cc.length ? `<br>참조 ${escapeHtml(t.cc.join(', '))}` : ''}
     </div>`;
 
   return summary
     + (rows.length ? rows.map(row).join('')
-      : `<div style="font-size:11.5px;color:var(--i5);line-height:1.7;margin-bottom:9px">
+      : `<div style="font-size:var(--fs-11_5);color:var(--i5);line-height:1.7;margin-bottom:9px">
         따로 정한 연락 상대가 없어 <b>연사 본인</b>(기본 정보의 메일)에게 보냅니다.
         실무진을 거쳐야 하면 추가해서 실무진을 수신, 연사를 참조로 두세요.</div>`)
-    + `<button class="btn" style="font-size:11px" onclick="addSpeakerContact()">+ 연락 상대 추가</button>`;
+    + `<button class="btn" style="font-size:var(--fs-11)" onclick="addSpeakerContact()">+ 연락 상대 추가</button>`;
 }
 
 export async function addSpeakerContact(){
@@ -199,14 +199,14 @@ export async function removeSpeakerContact(id){
 const spLogRow = (l) => `<details style="border-top:1px solid var(--i7);padding:7px 0"${mailToggleAttr('sp', l)}>
   <summary style="cursor:pointer;list-style:none">
   <div style="display:flex;gap:7px;align-items:baseline">
-    ${mailDirPill(l)}${mailStateHtml('sp', l)}<span class="pill p-gray" style="font-size:10px">${escapeHtml(l.category || '기타')}</span>
-    <div style="font-size:11.5px;font-weight:${l.direction === 'in' && !l.read_at ? 800 : 600};flex:1;min-width:0">${escapeHtml(l.subject || '(제목 없음)')}</div>
-    <div style="font-size:10.5px;color:var(--i4)">${escapeHtml(l.ts || '')} ▾</div>
+    ${mailDirPill(l)}${mailStateHtml('sp', l)}<span class="pill p-gray" style="font-size:var(--fs-10)">${escapeHtml(l.category || '기타')}</span>
+    <div style="font-size:var(--fs-11_5);font-weight:${l.direction === 'in' && !l.read_at ? 800 : 600};flex:1;min-width:0">${escapeHtml(l.subject || '(제목 없음)')}</div>
+    <div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(l.ts || '')} ▾</div>
   </div>
-  <div style="font-size:10.5px;color:var(--i4);margin-top:2px">${escapeHtml(l.counterpart || '')}</div>
+  <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:2px">${escapeHtml(l.counterpart || '')}</div>
   </summary>
-  <div style="margin-top:6px;padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;
-    font-size:11.5px;color:var(--i2);white-space:pre-wrap;line-height:1.6">${mailBodyHtml(l.body)}</div>
+  <div style="margin-top:6px;padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-7);
+    font-size:var(--fs-11_5);color:var(--i2);white-space:pre-wrap;line-height:1.6">${mailBodyHtml(l.body)}</div>
   ${mailActionsHtml('sp', l)}
 </details>`;
 
@@ -243,8 +243,8 @@ function mailTabHtml(sp, evKey){
 
 
   return `
-    <div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;
-      font-size:11.5px;color:var(--i3);line-height:1.7;margin-bottom:11px">
+    <div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-7);
+      font-size:var(--fs-11_5);color:var(--i3);line-height:1.7;margin-bottom:11px">
       ${spDrUi.spReply ? `<div style="color:var(--a);font-weight:700">↩ 회신 중 — 이 메일을 보낸 사람에게 답합니다
         <a href="#" onclick="cancelSpeakerReply();return false" style="font-weight:400;margin-left:6px">회신 취소</a></div>` : ''}
       <span id="sp-mail-from">발신 확인 중…</span><br>
@@ -270,11 +270,11 @@ function mailTabHtml(sp, evKey){
           `<option value="lib:${escAttr(it.id)}">${escapeHtml(it.name)}</option>`).join('')}</optgroup>` : ''}
       </select>
         <div id="sp-mail-var"></div>
-        <button class="btn" style="font-size:10.5px;margin-top:5px" title="이 행사의 연락 순서 설정을 열어 고른 단계의 기본 제목·본문·첨부를 고칩니다"
+        <button class="btn" style="font-size:var(--fs-10_5);margin-top:5px" title="이 행사의 연락 순서 설정을 열어 고른 단계의 기본 제목·본문·첨부를 고칩니다"
           onclick="openFlowEditor('${escAttr(evKey)}',document.getElementById('sp-mail-kind').value)">✎ 이 단계 기본 문구 고치기</button>
-        <button class="btn" style="font-size:10.5px;margin-top:5px" title="단계와 상관없이 꺼내 쓰는 양식 — 이 행사만 또는 모든 행사 공통"
+        <button class="btn" style="font-size:var(--fs-10_5);margin-top:5px" title="단계와 상관없이 꺼내 쓰는 양식 — 이 행사만 또는 모든 행사 공통"
           onclick="openMailTemplates('conf','${escAttr(evKey)}')">📚 양식 보관함</button>
-        <button class="btn" style="font-size:10.5px;margin-top:5px" onclick="openFlowEditor('${escAttr(evKey)}')">+ 단계 추가</button>`,
+        <button class="btn" style="font-size:var(--fs-10_5);margin-top:5px" onclick="openFlowEditor('${escAttr(evKey)}')">+ 단계 추가</button>`,
         '고르면 그 단계의 기본 문구로 제목·본문이 채워집니다. 기본 문구·단계는 위 단추로 바로 고칩니다');
     })()}
     <div id="sp-bulk-pick"></div>
@@ -284,16 +284,16 @@ function mailTabHtml(sp, evKey){
     ${fg('내용', `<textarea class="fi" id="sp-mail-body" rows="10" style="resize:vertical"></textarea>
       ${varChipsHtml('conf', { resolve: 'sp-drawer', note: '이 연사의 값' })}`)}
     </div>
-    ${fg('첨부', `<div id="sp-mail-files" style="font-size:11px"></div>
-      <label class="btn" style="font-size:10.5px;margin-top:5px;display:inline-block;cursor:pointer">+ PC에서 파일 추가
+    ${fg('첨부', `<div id="sp-mail-files" style="font-size:var(--fs-11)"></div>
+      <label class="btn" style="font-size:var(--fs-10_5);margin-top:5px;display:inline-block;cursor:pointer">+ PC에서 파일 추가
         <input type="file" multiple style="display:none" onchange="addSpMailFiles(this)"></label>`,
       '단계의 기본 첨부는 «단계 편집»에서 올려 둡니다. PC에서 고른 파일은 합쳐서 3MB까지')}
     <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
-      <button class="btn bp" style="font-size:11px" onclick="sendSpeakerMail()">보내기</button>
-      <span id="sp-mail-msg" style="font-size:10.5px;color:var(--i4)"></span>
+      <button class="btn bp" style="font-size:var(--fs-11)" onclick="sendSpeakerMail()">보내기</button>
+      <span id="sp-mail-msg" style="font-size:var(--fs-10_5);color:var(--i4)"></span>
     </div>
 
-    ${logs.length ? `<div style="font-size:11px;color:var(--i4);margin-top:16px;cursor:pointer" onclick="switchSpeakerDT('box')">
+    ${logs.length ? `<div style="font-size:var(--fs-11);color:var(--i4);margin-top:16px;cursor:pointer" onclick="switchSpeakerDT('box')">
       주고받은 기록 ${logs.length}건은 «메일함» 탭에 있어요 ›</div>` : ''}`;
 }
 
@@ -304,12 +304,12 @@ function boxTabHtml(sp){
     .slice().sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')));
   const list = filterMail(logs);
   return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:2px">
-      <div style="font-size:12px;font-weight:700;color:var(--i2)">주고받은 기록 ${logs.length || ''}</div>
-      <button class="btn" style="font-size:10.5px;margin-left:auto" onclick="switchSpeakerDT('mail')">✉ 메일 쓰기</button>
+      <div style="font-size:var(--fs-12);font-weight:700;color:var(--i2)">주고받은 기록 ${logs.length || ''}</div>
+      <button class="btn" style="font-size:var(--fs-10_5);margin-left:auto" onclick="switchSpeakerDT('mail')">✉ 메일 쓰기</button>
     </div>
     ${logs.some(l => l.direction === 'in') ? mailFilBar(logs) : ''}
     ${list.length ? list.map(spLogRow).join('')
-      : `<div style="font-size:11px;color:var(--i4);padding:6px 0">${logs.length ? '이 조건에 맞는 메일이 없어요'
+      : `<div style="font-size:var(--fs-11);color:var(--i4);padding:6px 0">${logs.length ? '이 조건에 맞는 메일이 없어요'
         : '아직 주고받은 메일이 없어요 — 설정 › 행사 관리 › 메일에서 메일함 기록을 가져올 수 있어요'}</div>`}`;
 }
 
@@ -333,7 +333,7 @@ function renderSpMailFiles(kind, reset){
       📎 ${escapeHtml(f.filename)} <span style="color:var(--i4)">${kb(Number(f.size) || 0)} · ${spDrUi.spReply ? '행사 파일' : '기본 첨부'}</span></label>`).join('')
     + spDrUi.spLocalFiles.map((f, i) => `<div style="display:flex;gap:6px;align-items:center;padding:2px 0">
       📎 ${escapeHtml(f.name)} <span style="color:var(--i4)">${kb(f.size)}</span>
-      <button class="btn" style="font-size:10px;padding:1px 6px" onclick="removeSpMailFile(${i})">빼기</button></div>`).join(''))
+      <button class="btn" style="font-size:var(--fs-10);padding:1px 6px" onclick="removeSpMailFile(${i})">빼기</button></div>`).join(''))
     || '<span style="color:var(--i4)">첨부 없음</span>';
   if(localTotal > 3 * 1024 * 1024) el.innerHTML += `<div style="color:var(--re);margin-top:3px">PC 파일이 합쳐서 3MB를 넘어요 (${kb(localTotal)}) — 큰 파일은 링크로 보내주세요</div>`;
 }
@@ -365,11 +365,11 @@ function renderBulkPick(sp){
   if(!el) return;
   const pend = pendingItems(sp).filter(x => x.when !== 'ours');
   const G = { now: '지금', later: '다음', nice: '있으면 좋음' };
-  el.innerHTML = pend.length ? `<div class="mlbl">이번에 요청할 것 <span style="font-size:9px;color:var(--i4)">이미 받은 건 빠져 있어요 — 일부만 받은 건 빠진 부분을 적어요</span></div>
-    <div style="display:flex;flex-wrap:wrap;gap:4px 12px;margin:2px 0 8px">${pend.map(x => `<label style="display:flex;gap:4px;align-items:center;font-size:11.5px;cursor:pointer">
+  el.innerHTML = pend.length ? `<div class="mlbl">이번에 요청할 것 <span style="font-size:var(--fs-9);color:var(--i4)">이미 받은 건 빠져 있어요 — 일부만 받은 건 빠진 부분을 적어요</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:4px 12px;margin:2px 0 8px">${pend.map(x => `<label style="display:flex;gap:4px;align-items:center;font-size:var(--fs-11_5);cursor:pointer">
       <input type="checkbox" ${spDrUi.bulkPick.has(x.key) ? 'checked' : ''} onchange="toggleBulkItem('${escAttr(x.key)}',this.checked)">
       ${escapeHtml(x.label)}${x.more ? `<span style="color:var(--i4)">(${escapeHtml(x.more)})</span>` : ''}
-      <span style="font-size:9.5px;color:var(--i5)">${G[x.when]}</span></label>`).join('')}</div>` : '';
+      <span style="font-size:var(--fs-9_5);color:var(--i5)">${G[x.when]}</span></label>`).join('')}</div>` : '';
 }
 
 function fillBulkRequest(sp){
@@ -410,9 +410,9 @@ export function fillSpeakerMail(kind, variantId){
   if(vbox){
     const auto = vs.length ? autoVariant(sp, kind) : null;
     const cur = variantId || '';
-    vbox.innerHTML = vs.length ? `<div style="display:flex;gap:6px;align-items:center;margin-top:5px;font-size:11px">
+    vbox.innerHTML = vs.length ? `<div style="display:flex;gap:6px;align-items:center;margin-top:5px;font-size:var(--fs-11)">
       <span style="color:var(--i4)">양식</span>
-      <select class="fi" style="font-size:11.5px;flex:1" onchange="fillSpeakerMail('${escAttr(kind)}',this.value)">
+      <select class="fi" style="font-size:var(--fs-11_5);flex:1" onchange="fillSpeakerMail('${escAttr(kind)}',this.value)">
         <option value=""${!cur ? ' selected' : ''}>자동 — ${escapeHtml(auto ? auto.label : '기본 문구')}${auto ? ' (역할)' : ''}</option>
         <option value="base"${cur === 'base' ? ' selected' : ''}>기본 문구</option>
         ${vs.map(v => `<option value="${escapeHtml(v.id)}"${cur === v.id ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}

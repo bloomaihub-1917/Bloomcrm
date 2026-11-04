@@ -358,23 +358,23 @@ function renderCoMatch(msg){
     const o = getOrgById(p.b);
     if(!o) return '';
     const on = o.name_ko || o.name_en;
-    return `<div style="border:1px solid var(--i6);border-radius:8px;padding:8px 10px;margin-top:6px;background:var(--W)">
-      <div style="font-size:12px"><b>${escapeHtml(p.a)}</b> <span style="color:var(--i4)">(파일)</span> → <b>${escapeHtml(on)}</b>
+    return `<div style="border:1px solid var(--i6);border-radius:var(--r);padding:8px 10px;margin-top:6px;background:var(--W)">
+      <div style="font-size:var(--fs-12)"><b>${escapeHtml(p.a)}</b> <span style="color:var(--i4)">(파일)</span> → <b>${escapeHtml(on)}</b>
         ${o.name_ko && o.name_en ? `<span style="color:var(--i4)">${escapeHtml(o.name_en)}</span>` : ''} <span style="color:var(--i4)">(기업DB)</span></div>
-      <div style="font-size:11px;color:var(--i4);margin-top:2px">✨ ${escapeHtml(p.reason)}</div>
-      ${p.caution ? `<div style="font-size:11px;color:var(--am);margin-top:2px">⚠️ ${escapeHtml(p.caution)}</div>` : ''}
+      <div style="font-size:var(--fs-11);color:var(--i4);margin-top:2px">✨ ${escapeHtml(p.reason)}</div>
+      ${p.caution ? `<div style="font-size:var(--fs-11);color:var(--am);margin-top:2px">⚠️ ${escapeHtml(p.caution)}</div>` : ''}
       <div style="display:flex;gap:6px;margin-top:6px">
         <button class="btn bp bs" onclick="coMatchApply(${i})">기존 «${escapeHtml(on)}»으로 넣기</button>
         <button class="btn bs" onclick="coMatchSkip(${i})">새 기업으로 둠</button>
       </div></div>`;
   }).join('');
-  mergeWrap.innerHTML = `<div style="border:1px solid var(--i6);border-radius:10px;padding:10px 12px;margin:8px 0;background:var(--i8)">
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px">
+  mergeWrap.innerHTML = `<div style="border:1px solid var(--i6);border-radius:var(--rd-10);padding:10px 12px;margin:8px 0;background:var(--i8)">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:var(--fs-12)">
       <span>기업DB에 없는 회사 <b>${uploadUi.coNew.length}곳</b>이 새 기업으로 들어갈 예정이에요.</span>
-      <button class="btn bs" id="co-match-btn" style="font-size:11px" onclick="coMatchFind()"
+      <button class="btn bs" id="co-match-btn" style="font-size:var(--fs-11)" onclick="coMatchFind()"
         title="회사명만 보냅니다 — 국문·영문 표기나 약칭이 달라 같은 회사인데 새로 생기는 것을 막아요">✨ 기존 기업과 같은 곳 찾기</button>
     </div>
-    ${msg ? `<div style="font-size:11px;color:var(--i3);margin-top:6px">${msg}</div>` : ''}
+    ${msg ? `<div style="font-size:var(--fs-11);color:var(--i3);margin-top:6px">${msg}</div>` : ''}
     ${cards}</div>`;
 }
 export async function coMatchFind(){
@@ -473,7 +473,7 @@ function renderColumnMappingPreview(headers, rows, colMap){
   if(!prevEl) return;
 
   if(!headers.length){
-    prevEl.innerHTML = '<tr><td colspan="4" style="padding:18px;text-align:center;color:var(--re);font-size:11px">컬럼을 찾지 못했어요. 헤더명을 확인해주세요.</td></tr>';
+    prevEl.innerHTML = '<tr><td colspan="4" style="padding:18px;text-align:center;color:var(--re);font-size:var(--fs-11)">컬럼을 찾지 못했어요. 헤더명을 확인해주세요.</td></tr>';
     return;
   }
 
@@ -493,8 +493,8 @@ function renderColumnMappingPreview(headers, rows, colMap){
   const warnCols = [named.length ? `<b>${escapeHtml(named.join(', '))}</b>` : '', blankN ? `<b>머리글 없는 열 ${blankN}개</b>` : '']
     .filter(Boolean).join(', ');
   const warnRow = unmappedWithData.length
-    ? `<tr><td colspan="4" style="padding:10px 12px;background:var(--ab);border-bottom:1px solid #FDE68A;font-size:11px;color:var(--am)">
-        ${uploadUi.aiOn ? `<button class="btn" id="ai-map-btn" style="font-size:10.5px;margin-right:6px" onclick="aiFillColumns()"
+    ? `<tr><td colspan="4" style="padding:10px 12px;background:var(--ab);border-bottom:1px solid #FDE68A;font-size:var(--fs-11);color:var(--am)">
+        ${uploadUi.aiOn ? `<button class="btn" id="ai-map-btn" style="font-size:var(--fs-10_5);margin-right:6px" onclick="aiFillColumns()"
           title="머리글과 값의 모양(한글=가, 영문=a, 숫자=9)만 보냅니다. 실제 이름·메일·전화는 보내지 않아요">✨ AI로 남은 열 맞추기</button>` : ''}
         ⚠️ ${warnCols} 에는 데이터가 있지만 아직 어느 DB 항목에 넣을지 정하지 않았어요.
         노란색 행의 "DB 컬럼" 드롭다운으로 매핑해주세요 — 매핑하지 않으면 저장되지 않고 버려집니다.
@@ -508,14 +508,14 @@ function renderColumnMappingPreview(headers, rows, colMap){
     const needsDecision = !isAuto && hasData(h);
     return `
       <tr${needsDecision ? ' style="background:var(--ab)"' : ''}>
-        <td style="padding:7px 10px;border-bottom:1px solid var(--i7);font-family:monospace;font-size:11px;color:var(--i2)">${escapeHtml(h)}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid var(--i7);font-family:monospace;font-size:var(--fs-11);color:var(--i2)">${escapeHtml(h)}</td>
         <td style="padding:7px 10px;border-bottom:1px solid var(--i7)">
-          <select class="fi cm-select" data-header="${escapeHtml(h)}" onchange="onColumnMapChange()" style="font-size:11px;padding:3px 6px;width:auto">
+          <select class="fi cm-select" data-header="${escapeHtml(h)}" onchange="onColumnMapChange()" style="font-size:var(--fs-11);padding:3px 6px;width:auto">
             ${optionsHtml(matchedKey)}
           </select>
         </td>
-        <td style="padding:7px 10px;border-bottom:1px solid var(--i7);font-size:11px;color:var(--i3)">${escapeHtml(String(sample[h] ?? ''))}</td>
-        <td style="padding:7px 10px;border-bottom:1px solid var(--i7);font-size:10px;color:${needsDecision?'var(--am)':'var(--i3)'}" class="cm-badge"${aiWhy ? ` title="${escapeHtml(aiWhy)}"` : ''}>${aiWhy ? '✨ AI 추천 — ' + escapeHtml(aiWhy) : isAuto ? '자동 인식' : (needsDecision ? '⚠️ 매핑 필요' : '미매핑')}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid var(--i7);font-size:var(--fs-11);color:var(--i3)">${escapeHtml(String(sample[h] ?? ''))}</td>
+        <td style="padding:7px 10px;border-bottom:1px solid var(--i7);font-size:var(--fs-10);color:${needsDecision?'var(--am)':'var(--i3)'}" class="cm-badge"${aiWhy ? ` title="${escapeHtml(aiWhy)}"` : ''}>${aiWhy ? '✨ AI 추천 — ' + escapeHtml(aiWhy) : isAuto ? '자동 인식' : (needsDecision ? '⚠️ 매핑 필요' : '미매핑')}</td>
       </tr>`;
   }).join('');
 
@@ -939,20 +939,20 @@ export function renderCategoryMappingUI(){
   const guessN = Object.keys(guessOf).length;
 
   wrap.innerHTML = `
-    <div style="background:var(--i8);border:1px solid var(--i6);border-radius:8px;padding:10px 12px">
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;cursor:pointer">
+    <div style="background:var(--i8);border:1px solid var(--i6);border-radius:var(--r);padding:10px 12px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:var(--fs-12);font-weight:700;cursor:pointer">
         <input type="checkbox" id="catmap-toggle" ${uploadUi.catmapOn?'checked':''} onchange="toggleCatmap(this.checked)">
         카테고리 컬럼 값별 매핑 (${values.length}개 값)
-        ${hasSaved ? '<span style="font-size:10px;color:var(--te);font-weight:600">이전 매핑 적용됨</span>' : ''}
+        ${hasSaved ? '<span style="font-size:var(--fs-10);color:var(--te);font-weight:600">이전 매핑 적용됨</span>' : ''}
       </label>
-      <div style="font-size:10px;color:var(--i4);margin:4px 0 0 20px">컬럼 "${escapeHtml(uploadUi.lastColMap.beat)}"의 값별로 섹터를 배정합니다. 켜면 위의 일괄 카테고리 대신 행별 매핑이 적용돼요.
+      <div style="font-size:var(--fs-10);color:var(--i4);margin:4px 0 0 20px">컬럼 "${escapeHtml(uploadUi.lastColMap.beat)}"의 값별로 섹터를 배정합니다. 켜면 위의 일괄 카테고리 대신 행별 매핑이 적용돼요.
         ${guessN ? `<b style="color:var(--te)">${guessN}개 값은 표준 섹터를 자동으로 골라 뒀어요 — 맞는지만 확인해주세요.</b>` : ''}
         판단이 안 서는 값은 <b>비워 둠</b>으로 두면 기업DB에서 '미분류'로 눈에 띕니다.</div>
       <div id="catmap-table" style="display:${uploadUi.catmapOn?'block':'none'};margin-top:8px;max-height:220px;overflow-y:auto">
         ${values.map(([val, cnt]) => `
           <div style="display:flex;align-items:center;gap:8px;padding:3px 0">
-            <span style="flex:1;min-width:0;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(val)}">${escapeHtml(val)} <span style="color:var(--i4)">(${cnt}건)</span></span>
-            <select class="fi catmap-sel" data-val="${escapeHtml(val)}" style="width:55%;font-size:11px;padding:2px 4px">
+            <span style="flex:1;min-width:0;font-size:var(--fs-11);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(val)}">${escapeHtml(val)} <span style="color:var(--i4)">(${cnt}건)</span></span>
+            <select class="fi catmap-sel" data-val="${escapeHtml(val)}" style="width:55%;font-size:var(--fs-11);padding:2px 4px">
               ${(() => {
                 /* 고를 값은 셋 중 하나다 — 지난번에 사람이 정해 둔 것, 이번에 추천한 것,
                    아무것도 아니면 '비워 둠'. 'CRO|영상·이미징'처럼 둘로 갈리는 값은

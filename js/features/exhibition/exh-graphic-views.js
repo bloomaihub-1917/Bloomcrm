@@ -77,9 +77,9 @@ function renderSelfBoothView(rows){
 
   /* 숫자만 보면 12/18이 얼마나 남은 건지 안 들어온다 */
   const bar = (v, of, color) => `<div style="display:flex;align-items:center;gap:6px;min-width:120px">
-    <div style="flex:1;height:5px;border-radius:3px;background:var(--i7);overflow:hidden">
+    <div style="flex:1;height:5px;border-radius:var(--rd-3);background:var(--i7);overflow:hidden">
       <div style="width:${of ? Math.round(v / of * 100) : 0}%;height:100%;background:${v === of ? 'var(--g)' : color}"></div></div>
-    <span style="font-size:11px;font-weight:700;color:${v === of ? 'var(--g)' : 'var(--i3)'}">${v}/${of}</span></div>`;
+    <span style="font-size:var(--fs-11);font-weight:700;color:${v === of ? 'var(--g)' : 'var(--i3)'}">${v}/${of}</span></div>`;
 
   const pills = `<span class="pill p-gray">독립부스 ${list.length}곳</span>`
     + `<span class="pill ${nB === list.length ? 'p-green' : 'p-amber'}">시공사 ${nB}/${list.length}</span>`
@@ -98,30 +98,30 @@ function renderSelfBoothView(rows){
       ${[['시공사 정보', nB, 'var(--a)'], ['도면·그래픽 수령', nG, 'var(--am)'],
          ['우리 확인', nS, 'var(--am)'], ['적합 판정', nOk, 'var(--g)'], ['호텔 작업신고서', nW, 'var(--a)']].map(([l, v, c]) =>
         `<div style="min-width:150px">
-          <div style="font-size:10px;color:var(--i5);font-weight:600">${l}</div>
+          <div style="font-size:var(--fs-10);color:var(--i5);font-weight:600">${l}</div>
           <div style="margin-top:4px">${bar(v, list.length, c)}</div></div>`).join('')}
     </div>
-    ${nG > nS ? `<div style="font-size:11px;color:var(--am);margin-top:8px">받아 놓고 아직 안 본 도면이 <b>${nG - nS}건</b> 있어요 — 확인해야 적합·수정을 판정할 수 있습니다</div>` : ''}
+    ${nG > nS ? `<div style="font-size:var(--fs-11);color:var(--am);margin-top:8px">받아 놓고 아직 안 본 도면이 <b>${nG - nS}건</b> 있어요 — 확인해야 적합·수정을 판정할 수 있습니다</div>` : ''}
   </div>`;
 
-  const txt = (x, f, ph, label, w) => `<input class="fi" style="width:${w};padding:3px 6px;font-size:11.5px"
+  const txt = (x, f, ph, label, w) => `<input class="fi" style="width:${w};padding:3px 6px;font-size:var(--fs-11_5)"
     placeholder="${escapeHtml(ph)}" value="${escapeHtml(x[f] || '')}" onclick="event.stopPropagation()"
     onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')">`;
   /* 작업신고서는 냈는지만 본다 — 체크하면 오늘 날짜가 들어가고(언제 체크했는지는
      남는다), 풀면 비운다 */
-  const wr = (x) => `<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:11.5px"
+  const wr = (x) => `<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:var(--fs-11_5)"
     onclick="event.stopPropagation()"><input type="checkbox"${x.work_report_at ? ' checked' : ''}
     onchange="setExhField('${escAttr(x.id)}','work_report_at',this.checked ? '${td()}' : '','작업신고서 제출')">
     ${x.work_report_at ? '<span style="color:var(--g)">받음</span>' : '<span style="color:var(--i5)">미제출</span>'}</label>`;
-  const dt = (x, f, label) => `<input type="date" class="fi" style="width:124px;padding:3px 6px;font-size:11.5px"
+  const dt = (x, f, label) => `<input type="date" class="fi" style="width:124px;padding:3px 6px;font-size:var(--fs-11_5)"
     value="${escapeHtml(x[f] || '')}" onclick="event.stopPropagation()"
     onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')">`;
 
   /* 확인 결과는 받아 보기 전에는 고를 수 없게 둔다 — 안 본 도면에 «적합»이
      찍히면 그 부스는 아무도 다시 안 본다. */
   const resultCell = (x) => !got(x)
-    ? '<span style="font-size:11px;color:var(--i6)">도면 수령 후</span>'
-    : `<select class="fi" style="width:104px;padding:3px 5px;font-size:11.5px" onclick="event.stopPropagation()"
+    ? '<span style="font-size:var(--fs-11);color:var(--i6)">도면 수령 후</span>'
+    : `<select class="fi" style="width:104px;padding:3px 5px;font-size:var(--fs-11_5)" onclick="event.stopPropagation()"
         onchange="setExhField('${escAttr(x.id)}','booth_design_result',this.value,'도면 확인 결과')">
         ${[['', '미판정'], ['ok', '적합'], ['fix', '수정 요청']].map(([v, l]) =>
           `<option value="${v}"${(x.booth_design_result || '') === v ? ' selected' : ''}>${l}</option>`).join('')}
@@ -137,23 +137,23 @@ function renderSelfBoothView(rows){
     .map(v => String(v || '').trim()).filter(Boolean);
 
   if(isMobile()) return viewShell(pills, board + list.map(x => `
-    <div style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px">
+    <div style="background:var(--W);border:1px solid var(--i7);border-radius:var(--rd-10);padding:11px 12px;margin-bottom:7px">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px">
         <span class="pill p-gray">${x.booth_no ? '부스 ' + escapeHtml(x.booth_no) : '미배정'}</span>
         <span onclick="openExhDr('${escAttr(x.id)}','progress')"
-          style="font-size:13px;font-weight:700;flex:1;min-width:0;cursor:pointer">${escapeHtml(exhNames(x).ko)}</span>
+          style="font-size:var(--fs-13);font-weight:700;flex:1;min-width:0;cursor:pointer">${escapeHtml(exhNames(x).ko)}</span>
         ${stateCell(x)}
       </div>
       <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
-        <span style="font-size:11px;color:var(--i4);min-width:56px">시공사</span>${txt(x, 'builder', '업체명', '시공업체', '100%')}</div>
+        <span style="font-size:var(--fs-11);color:var(--i4);min-width:56px">시공사</span>${txt(x, 'builder', '업체명', '시공업체', '100%')}</div>
       <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
-        <span style="font-size:11px;color:var(--i4);min-width:56px">수령</span>${dt(x, 'booth_design_received_at', '도면 수령')}</div>
+        <span style="font-size:var(--fs-11);color:var(--i4);min-width:56px">수령</span>${dt(x, 'booth_design_received_at', '도면 수령')}</div>
       <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
-        <span style="font-size:11px;color:var(--i4);min-width:56px">확인</span>${dt(x, 'booth_design_checked_at', '도면 확인')}</div>
+        <span style="font-size:var(--fs-11);color:var(--i4);min-width:56px">확인</span>${dt(x, 'booth_design_checked_at', '도면 확인')}</div>
       <div style="display:flex;gap:6px;align-items:center">
-        <span style="font-size:11px;color:var(--i4);min-width:56px">결과</span>${resultCell(x)}</div>
+        <span style="font-size:var(--fs-11);color:var(--i4);min-width:56px">결과</span>${resultCell(x)}</div>
       <div style="display:flex;gap:6px;align-items:center;margin-top:4px">
-        <span style="font-size:11px;color:var(--i4);min-width:56px">작업신고</span>${wr(x)}</div>
+        <span style="font-size:var(--fs-11);color:var(--i4);min-width:56px">작업신고</span>${wr(x)}</div>
     </div>`).join(''));
 
   return viewShell(pills, board + `<div class="tw"><table><thead><tr>
@@ -173,7 +173,7 @@ function renderSelfBoothView(rows){
       const c = contactOf(x);
       return `<tr>
         ${applyCell(x)}
-        <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
+        <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
         ${coCell(x, 'progress')}
         <td>${txt(x, 'builder', '업체명', '시공업체', '142px')}</td>
         <td style="text-align:center">${c.length
@@ -287,7 +287,7 @@ function renderGraphicItemView(list){
 
   /* 마감 일괄 잡기 — 계획은 보통 "이 기업들 다 며칟날까지"로 세운다. 지금 걸러 놓은
      미수령 항목에만 넣는다(이미 받은 것은 건드리지 않는다). */
-  const actions = `<input type="date" id="g-bulk-due" class="fi" style="width:140px;padding:4px 7px;font-size:11.5px">
+  const actions = `<input type="date" id="g-bulk-due" class="fi" style="width:140px;padding:4px 7px;font-size:var(--fs-11_5)">
     <button class="btn bs" onclick="applyGraphicDue()"
       title="지금 보고 있는 미수령 항목의 마감일을 한꺼번에 정합니다">마감 일괄 지정</button>
     <button class="btn bp bs" onclick="openNewGraphicOrder()">+ 그래픽 주문 추가</button>`;
@@ -295,27 +295,27 @@ function renderGraphicItemView(list){
   const chk = (r) => `<button onclick="event.stopPropagation();toggleItemReceived('${escAttr(r.ids.join(','))}')"
     title="${r.i.received_at ? '받음 표시를 지웁니다' : '오늘 받은 것으로 표시합니다'}${
       r.n > 1 ? ` — 묶인 ${r.n}줄 모두` : ''}"
-    style="width:20px;height:20px;border-radius:5px;line-height:1;flex-shrink:0;cursor:pointer;font-size:12px;font-weight:800;color:#fff;border:1.5px solid ${
+    style="width:20px;height:20px;border-radius:var(--rs);line-height:1;flex-shrink:0;cursor:pointer;font-size:var(--fs-12);font-weight:800;color:#fff;border:1.5px solid ${
       r.i.received_at ? 'var(--g)' : 'var(--i6)'};background:${r.i.received_at ? 'var(--g)' : 'transparent'}">${r.i.received_at ? '✓' : ''}</button>`;
 
   if(isMobile()) return viewShell(pills, shown.map(r => `
-    <div style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px">
+    <div style="background:var(--W);border:1px solid var(--i7);border-radius:var(--rd-10);padding:11px 12px;margin-bottom:7px">
       <div style="display:flex;align-items:center;gap:8px">
         ${chk(r)}
         <span style="flex:1;min-width:0" onclick="openExhDr('${escAttr(r.x.id)}','graphic')">
-          <div style="font-size:12.5px;font-weight:600">${escapeHtml(r.i.name || '(이름 없음)')}${
+          <div style="font-size:var(--fs-12_5);font-weight:600">${escapeHtml(r.i.name || '(이름 없음)')}${
             r.qty > 1 ? `<span style="font-weight:400;color:var(--i4)"> · ${r.qty}장</span>` : ''}</div>
-          <div style="font-size:11px;color:var(--i4)">${escapeHtml(exhNames(r.x).ko)}${
+          <div style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(exhNames(r.x).ko)}${
             r.x.booth_no ? ` · 부스 ${escapeHtml(r.x.booth_no)}` : ''}</div>
         </span>
         <span class="pill ${r.d.cls}">${escapeHtml(r.d.text)}</span>
       </div>
       <div style="display:flex;gap:6px;align-items:center;margin-top:7px">
-        <span style="font-size:10.5px;color:var(--i5)">마감</span>
+        <span style="font-size:var(--fs-10_5);color:var(--i5)">마감</span>
         <input type="date" class="fi" style="${TCELL};width:130px" value="${escapeHtml(r.i.due_at || '')}"
           onchange="setItemField('${escAttr(r.ids.join(','))}','due_at',this.value)">
       </div>
-      <input class="fi" style="width:100%;margin-top:5px;padding:4px 8px;font-size:11.5px"
+      <input class="fi" style="width:100%;margin-top:5px;padding:4px 8px;font-size:var(--fs-11_5)"
         value="${escapeHtml(r.i.received_note || '')}" placeholder="받은 것 — 예: 백월_최종.ai"
         onchange="setItemField('${escAttr(r.ids.join(','))}','received_note',this.value)">
     </div>`).join('') || emptyView('해당하는 항목이 없어요'), actions);
@@ -335,11 +335,11 @@ function renderGraphicItemView(list){
     ${shown.map(r => `<tr${r.i.received_at ? ' style="opacity:.72"' : ''}>
       <td>${chk(r)}</td>
       ${coCell(r.x, 'graphic')}
-      <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(r.x.booth_no || '—')}</td>
-      <td style="font-size:12px">${escapeHtml(r.i.name || '(이름 없음)')}${
-        r.n > 1 ? `<span class="pill p-gray" style="font-size:9px;margin-left:4px"
+      <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(r.x.booth_no || '—')}</td>
+      <td style="font-size:var(--fs-12)">${escapeHtml(r.i.name || '(이름 없음)')}${
+        r.n > 1 ? `<span class="pill p-gray" style="font-size:var(--fs-9);margin-left:4px"
           title="접수 회차가 갈려 ${r.n}줄로 들어왔어요 — 받는 입장에서는 한 장의 파일이라 묶었습니다">${r.n}줄</span>` : ''}</td>
-      <td style="text-align:right;font-size:11.5px">${r.qty || ''}</td>
+      <td style="text-align:right;font-size:var(--fs-11_5)">${r.qty || ''}</td>
       <td><input type="date" class="fi" style="${TCELL}" value="${escapeHtml(r.i.due_at || '')}"
         onchange="setItemField('${escAttr(r.ids.join(','))}','due_at',this.value)"></td>
       <td style="text-align:center"><span class="pill ${r.d.cls}" style="${TPILL}">${escapeHtml(r.d.text)}</span></td>
@@ -347,7 +347,7 @@ function renderGraphicItemView(list){
         onchange="setItemField('${escAttr(r.ids.join(','))}','received_at',this.value)"></td>
       <td><input class="fi" style="${TCELL}" value="${escapeHtml(r.i.received_note || '')}"
         placeholder="예: 백월_최종.ai · CMYK" onchange="setItemField('${escAttr(r.ids.join(','))}','received_note',this.value)"></td>
-      <td style="text-align:right;font-size:11.5px">${r.amt ? escapeHtml(fmtMoney(r.amt, r.i.currency || 'KRW')) : '-'}</td>
+      <td style="text-align:right;font-size:var(--fs-11_5)">${r.amt ? escapeHtml(fmtMoney(r.amt, r.i.currency || 'KRW')) : '-'}</td>
     </tr>`).join('') || '<tr><td colspan="10" style="text-align:center;color:var(--i4);padding:24px">해당하는 항목이 없어요</td></tr>'}
     </tbody></table></div>`, actions);
 }
@@ -445,9 +445,9 @@ function renderGraphicKindView(list){
   /* 받음 표시 단추 — 좁은 화면에서는 손가락이 닿아야 해서 조금 키운다 */
   const gotBtn = (c, sz) => `<button onclick="event.stopPropagation();toggleItemReceived('${escAttr(c.i.id)}')"
     title="${c.i.received_at ? '받음 표시를 지웁니다' : '오늘 받은 것으로 표시합니다'}"
-    style="width:${sz}px;height:${sz}px;border-radius:5px;line-height:1;flex-shrink:0;cursor:pointer;font-size:11px;font-weight:800;color:#fff;border:1.5px solid ${
+    style="width:${sz}px;height:${sz}px;border-radius:var(--rs);line-height:1;flex-shrink:0;cursor:pointer;font-size:var(--fs-11);font-weight:800;color:#fff;border:1.5px solid ${
       c.i.received_at ? 'var(--g)' : 'var(--i6)'};background:${c.i.received_at ? 'var(--g)' : 'transparent'}">${c.i.received_at ? '✓' : ''}</button>`;
-  const dueIn = (c, w) => `<input type="date" class="fi" style="width:${w};padding:3px 6px;font-size:11px" value="${escapeHtml(c.i.due_at || '')}"
+  const dueIn = (c, w) => `<input type="date" class="fi" style="width:${w};padding:3px 6px;font-size:var(--fs-11)" value="${escapeHtml(c.i.due_at || '')}"
     onclick="event.stopPropagation()" onchange="setItemField('${escAttr(c.i.id)}','due_at',this.value)">`;
 
   const coSorted = (g) => g.cos.slice()
@@ -468,15 +468,15 @@ function renderGraphicKindView(list){
         ${gotBtn(c, 22)}
         <span class="pill p-gray" style="flex-shrink:0">${c.x.booth_no ? '부스 ' + escapeHtml(c.x.booth_no) : '미배정'}</span>
         <span onclick="event.stopPropagation();openExhDr('${escAttr(c.x.id)}','graphic')"
-          style="flex:1;min-width:0;font-size:12.5px;font-weight:600;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(exhNames(c.x).ko)}</span>
-        <span style="color:var(--i4);font-size:11.5px;flex-shrink:0">${c.qty}장</span>
+          style="flex:1;min-width:0;font-size:var(--fs-12_5);font-weight:600;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(exhNames(c.x).ko)}</span>
+        <span style="color:var(--i4);font-size:var(--fs-11_5);flex-shrink:0">${c.qty}장</span>
       </div>
       <div style="display:flex;align-items:center;gap:6px;margin:5px 0 0 30px">
         ${dueIn(c, '128px')}
         <span class="pill ${c.d.cls}">${escapeHtml(c.d.text)}</span>
       </div>
     </div>` : `
-    <div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:11.5px">
+    <div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:var(--fs-11_5)">
       ${gotBtn(c, 18)}
       <span class="pill p-gray" style="min-width:52px;text-align:center">${c.x.booth_no ? '부스 ' + escapeHtml(c.x.booth_no) : '미배정'}</span>
       <span onclick="event.stopPropagation();openExhDr('${escAttr(c.x.id)}','graphic')"
@@ -491,9 +491,9 @@ function renderGraphicKindView(list){
   const bar = (g) => {
     const pct = g.cos.length ? Math.round(g.got / g.cos.length * 100) : 0;
     return `<div style="display:flex;align-items:center;gap:6px">
-      <div style="flex:1;min-width:44px;height:5px;border-radius:3px;background:var(--i7);overflow:hidden">
+      <div style="flex:1;min-width:44px;height:5px;border-radius:var(--rd-3);background:var(--i7);overflow:hidden">
         <div style="width:${pct}%;height:100%;background:${g.got === g.cos.length ? 'var(--g)' : 'var(--am)'}"></div></div>
-      <span style="font-size:11px;font-weight:700;color:${g.got === g.cos.length ? 'var(--g)' : 'var(--i3)'}">${g.got}/${g.cos.length}</span>
+      <span style="font-size:var(--fs-11);font-weight:700;color:${g.got === g.cos.length ? 'var(--g)' : 'var(--i3)'}">${g.got}/${g.cos.length}</span>
     </div>`;
   };
 
@@ -502,12 +502,12 @@ function renderGraphicKindView(list){
     return `<div style="padding:8px 0;border-bottom:1px solid var(--i8)">
       <div onclick="toggleEquipRow('${escAttr(g.key)}')" style="cursor:pointer">
         <div style="display:flex;align-items:baseline;gap:7px">
-          ${g.code ? `<span class="pill p-blue" style="font-size:9px">${escapeHtml(g.code)}</span>` : ''}
-          <span style="font-size:12.5px;font-weight:600;flex:1;min-width:0">${escapeHtml(g.nameKo)}</span>
-          <span style="font-size:15px;font-weight:800">${g.qty}<span style="font-size:10px;font-weight:400;color:var(--i4)">장</span></span>
+          ${g.code ? `<span class="pill p-blue" style="font-size:var(--fs-9)">${escapeHtml(g.code)}</span>` : ''}
+          <span style="font-size:var(--fs-12_5);font-weight:600;flex:1;min-width:0">${escapeHtml(g.nameKo)}</span>
+          <span style="font-size:var(--fs-15);font-weight:800">${g.qty}<span style="font-size:var(--fs-10);font-weight:400;color:var(--i4)">장</span></span>
         </div>
         <div style="margin-top:5px">${bar(g)}</div>
-        <div style="font-size:10.5px;color:var(--i4);margin-top:3px">
+        <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:3px">
           ${g.cos.length}개사${g.late ? ` · <b style="color:var(--re)">마감 지남 ${g.late}</b>` : ''}
           ${g.krw ? ' · ' + escapeHtml(fmtMoney(g.krw, 'KRW')) : ''}${g.usd ? ' · ' + escapeHtml(fmtMoney(g.usd, 'USD')) : ''}
           <span style="color:var(--a)"> ${open ? '▲ 접기' : '▼ 주문 기업'}</span>
@@ -518,7 +518,7 @@ function renderGraphicKindView(list){
   }).join('') + `<div class="sct">기업별 주문 내역</div>` + graphicCoDetail(list), actions);
 
   return viewShell(pills, `<div class="uc"><div class="uc-ttl">품목별 합계
-      <span style="font-weight:400;color:var(--i4);font-size:10px">— 출력소에 넘기는 숫자예요. 품목을 클릭하면 주문 기업이 보이고, 거기서 바로 체크할 수 있습니다</span></div>
+      <span style="font-weight:400;color:var(--i4);font-size:var(--fs-10)">— 출력소에 넘기는 숫자예요. 품목을 클릭하면 주문 기업이 보이고, 거기서 바로 체크할 수 있습니다</span></div>
     <div class="tw" style="overflow:visible"><table><thead><tr>
       <th style="min-width:66px">품목코드</th>
       <th style="min-width:170px">품명(국문)</th>
@@ -535,13 +535,13 @@ function renderGraphicKindView(list){
         const open = exhUi.equipOpen.has(g.key);
         return `<tr onclick="toggleEquipRow('${escAttr(g.key)}')" style="cursor:pointer${open ? ';background:var(--ad)' : ''}"
           title="클릭하면 주문한 기업을 볼 수 있어요">
-          <td style="font-size:11.5px;font-weight:700;color:var(--i2)">
+          <td style="font-size:var(--fs-11_5);font-weight:700;color:var(--i2)">
             <span style="color:var(--a)">${open ? '▾' : '▸'}</span> ${escapeHtml(g.code || '—')}</td>
-          <td style="font-size:12.5px;font-weight:600">${escapeHtml(g.nameKo)}
-            ${g.excluded ? '<span class="pill p-amber" style="font-size:9px;margin-left:4px" title="우리가 청구하지 않는 항목이라 금액 합계에서 빠져 있어요">청구 제외</span>' : ''}
-            ${g.offCatalog ? '<span class="pill p-amber" style="font-size:9px;margin-left:4px" title="품목표에 없는 항목 — 이름으로 묶었어요">품목표 외</span>' : ''}</td>
-          <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(g.nameEn || '-')}</td>
-          <td style="font-size:11px;color:var(--i4)">${escapeHtml(g.spec || '-')}</td>
+          <td style="font-size:var(--fs-12_5);font-weight:600">${escapeHtml(g.nameKo)}
+            ${g.excluded ? '<span class="pill p-amber" style="font-size:var(--fs-9);margin-left:4px" title="우리가 청구하지 않는 항목이라 금액 합계에서 빠져 있어요">청구 제외</span>' : ''}
+            ${g.offCatalog ? '<span class="pill p-amber" style="font-size:var(--fs-9);margin-left:4px" title="품목표에 없는 항목 — 이름으로 묶었어요">품목표 외</span>' : ''}</td>
+          <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(g.nameEn || '-')}</td>
+          <td style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(g.spec || '-')}</td>
           <td style="text-align:right;font-weight:700">${g.qty}</td>
           <td style="text-align:right;color:var(--i4)">${g.cos.length}곳</td>
           <td>${bar(g)}</td>
@@ -550,15 +550,15 @@ function renderGraphicKindView(list){
           <td style="text-align:right">${g.usd ? escapeHtml(fmtMoney(g.usd, 'USD')) : '<span style="color:var(--i6)">-</span>'}</td>
         </tr>
         ${open ? `<tr data-detail><td colspan="10" style="padding:8px 12px 12px;background:var(--i9)">
-          <div style="font-size:10.5px;color:var(--i4);margin-bottom:4px">주문 기업 ${g.cos.length}곳 — 왼쪽 칸을 누르면 파일 받음으로 표시됩니다</div>
+          <div style="font-size:var(--fs-10_5);color:var(--i4);margin-bottom:4px">주문 기업 ${g.cos.length}곳 — 왼쪽 칸을 누르면 파일 받음으로 표시됩니다</div>
           ${coList(g)}</td></tr>` : ''}`;
       }).join('')}
     </tbody>
     <tfoot><tr style="border-top:2px solid var(--i5);font-weight:800">
-      <td colspan="4" style="font-size:12px">합계 ${groups.length}종</td>
+      <td colspan="4" style="font-size:var(--fs-12)">합계 ${groups.length}종</td>
       <td style="text-align:right">${totQty}</td>
       <td style="text-align:right;font-weight:400;color:var(--i4)">${totN}건</td>
-      <td style="font-size:12px">${totGot}/${totN}</td>
+      <td style="font-size:var(--fs-12)">${totGot}/${totN}</td>
       <td style="text-align:right">${totLate || '-'}</td>
       <td style="text-align:right">${totKrw ? escapeHtml(fmtMoney(totKrw, 'KRW')) : '-'}</td>
       <td style="text-align:right">${totUsd ? escapeHtml(fmtMoney(totUsd, 'USD')) : '-'}</td>
@@ -576,12 +576,12 @@ function graphicCoDetail(list){
   return rows.map(({ x, items }) => {
     const got = items.filter(i => i.received_at).length;
     const late = items.filter(i => !i.received_at && graphicDueInfo(i).late).length;
-    return `<div style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px">
+    return `<div style="background:var(--W);border:1px solid var(--i7);border-radius:var(--rd-10);padding:11px 12px;margin-bottom:7px">
       <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px">
         ${x.booth_no ? `<span class="pill p-blue">부스 ${escapeHtml(x.booth_no)}</span>` : ''}
         <span onclick="openExhDr('${escAttr(x.id)}','graphic')" style="cursor:pointer;flex:1;min-width:0">
-          <span style="font-size:13px;font-weight:700">${escapeHtml(exhNames(x).ko)}</span>${
-          exhNames(x).en ? `<span style="font-size:11px;color:var(--i4);margin-left:5px">${escapeHtml(exhNames(x).en)}</span>` : ''}</span>
+          <span style="font-size:var(--fs-13);font-weight:700">${escapeHtml(exhNames(x).ko)}</span>${
+          exhNames(x).en ? `<span style="font-size:var(--fs-11);color:var(--i4);margin-left:5px">${escapeHtml(exhNames(x).en)}</span>` : ''}</span>
         <span class="pill ${got === items.length ? 'p-green' : got ? 'p-amber' : 'p-gray'}">받음 ${got}/${items.length}</span>
         ${late ? `<span class="pill p-red">마감 지남 ${late}</span>` : ''}
       </div>
@@ -671,18 +671,18 @@ function renderGraphicCoView(rows){
 
   if(isMobile()) return viewShell(pills, rows.map(x => {
     const g = graphicState(x);
-    return `<div onclick="openExhDr('${escAttr(x.id)}','graphic')" style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
+    return `<div onclick="openExhDr('${escAttr(x.id)}','graphic')" style="background:var(--W);border:1px solid var(--i7);border-radius:var(--rd-10);padding:11px 12px;margin-bottom:7px;cursor:pointer">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
         <span class="pill p-gray">${escapeHtml(x.apply_order || '-')}</span>
         <span style="flex:1;min-width:0">
-          <span style="font-size:13px;font-weight:700">${escapeHtml(exhNames(x).ko)}</span>${
-          exhNames(x).en ? `<span style="font-size:11px;color:var(--i4);margin-left:5px">${escapeHtml(exhNames(x).en)}</span>` : ''}</span>
+          <span style="font-size:var(--fs-13);font-weight:700">${escapeHtml(exhNames(x).ko)}</span>${
+          exhNames(x).en ? `<span style="font-size:var(--fs-11);color:var(--i4);margin-left:5px">${escapeHtml(exhNames(x).en)}</span>` : ''}</span>
         <span class="pill ${x.graphic_type === 'design' ? 'p-blue' : 'p-gray'}">${x.graphic_type === 'design' ? '제작' : x.graphic_type === 'print' ? '출력' : '유형 미정'}</span>
         <span class="pill ${g.state === 'done' ? 'p-green' : g.state === 'warn' ? 'p-red' : 'p-amber'}">${escapeHtml(stageLabel(x))}</span>
       </div>
-      <div style="font-size:11px;color:var(--i4)">주문 ${escapeHtml(x.graphic_ordered_at || '-')} · 금액 ${escapeHtml(gAmt(x))}</div>
+      <div style="font-size:var(--fs-11);color:var(--i4)">주문 ${escapeHtml(x.graphic_ordered_at || '-')} · 금액 ${escapeHtml(gAmt(x))}</div>
       ${(() => { const gt = gGot(x); if(!gt.n) return '';
-        return `<div style="font-size:11px;margin-top:3px;color:${gt.got === gt.n ? 'var(--g)' : 'var(--am)'}">
+        return `<div style="font-size:var(--fs-11);margin-top:3px;color:${gt.got === gt.n ? 'var(--g)' : 'var(--am)'}">
           파일 ${gt.got}/${gt.n} 받음${gt.got < gt.n ? ` · 미수령 ${gt.n - gt.got}건` : ''}${
             gt.late ? ` · 마감 지남 ${gt.late}건` : ''}</div>`; })()}
     </div>`;
@@ -705,13 +705,13 @@ function renderGraphicCoView(rows){
       const g = graphicState(x);
       const isPrint = x.graphic_type === 'print';
       const dateCell = (f) => isPrint ? '<td style="color:var(--i6);text-align:center">·</td>'
-        : `<td><input type="date" class="fi" style="width:100px;padding:3px 5px;font-size:11px" value="${escapeHtml(x[f] || '')}"
+        : `<td><input type="date" class="fi" style="width:100px;padding:3px 5px;font-size:var(--fs-11)" value="${escapeHtml(x[f] || '')}"
             onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr({graphic_draft_at:'초안',graphic_revised_at:'수정안',graphic_final_at:'최종안'}[f])}')"></td>`;
       return `<tr>
         ${applyCell(x)}
         ${coCell(x, 'graphic')}
-        <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
-        <td><select class="fi" style="width:74px;padding:3px 4px;font-size:11px"
+        <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
+        <td><select class="fi" style="width:74px;padding:3px 4px;font-size:var(--fs-11)"
           onchange="setExhField('${escAttr(x.id)}','graphic_type',this.value,'그래픽 유형')">
           <option value=""${!x.graphic_type ? ' selected' : ''}>미정</option>
           <option value="design"${x.graphic_type === 'design' ? ' selected' : ''}>제작</option>
@@ -723,7 +723,7 @@ function renderGraphicCoView(rows){
         ${dateCell('graphic_draft_at')}
         ${dateCell('graphic_revised_at')}
         ${dateCell('graphic_final_at')}
-        <td style="text-align:right;font-size:11.5px;font-weight:600">${escapeHtml(gAmt(x))}</td>
+        <td style="text-align:right;font-size:var(--fs-11_5);font-weight:600">${escapeHtml(gAmt(x))}</td>
       </tr>`;
     }).join('')}
     </tbody></table></div>`, gActions);

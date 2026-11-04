@@ -34,7 +34,7 @@ export function renderCoDetail(c){
   const cdhEl = document.getElementById('cdh');
   if(cdhEl) cdhEl.innerHTML=`
     <div style="margin-bottom:10px">
-      <button onclick="backToCoList()" style="background:none;border:none;cursor:pointer;color:var(--i3);font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:4px;padding:0">
+      <button onclick="backToCoList()" style="background:none;border:none;cursor:pointer;color:var(--i3);font-size:var(--fs-11);font-weight:600;display:inline-flex;align-items:center;gap:4px;padding:0">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
         ${escapeHtml(coListLabel())} 목록
       </button>
@@ -52,8 +52,8 @@ export function renderCoDetail(c){
              입력칸으로 바꾼다 — 이름이 어느 줄에 있든 id는 따라다녀야 한다. */
           const fid = (f) => `co-${f}-${escapeHtml(c.key)}`;
           const title = (f, txt, on) => `<div class="cdn"><span id="${fid(f)}" style="cursor:pointer" onclick="${on}">${escapeHtml(txt)}</span></div>`;
-          const sub = (f, txt, on) => `<div style="font-size:12.5px;color:var(--i4);margin-bottom:2px"><span id="${fid(f)}" style="cursor:pointer" onclick="${on}">${escapeHtml(txt)}</span></div>`;
-          const add = (f, txt, on) => `<div style="font-size:11px;color:var(--i5);margin-bottom:2px">＋ <span id="${fid(f)}" style="cursor:pointer" onclick="${on}">${escapeHtml(txt)}</span></div>`;
+          const sub = (f, txt, on) => `<div style="font-size:var(--fs-12_5);color:var(--i4);margin-bottom:2px"><span id="${fid(f)}" style="cursor:pointer" onclick="${on}">${escapeHtml(txt)}</span></div>`;
+          const add = (f, txt, on) => `<div style="font-size:var(--fs-11);color:var(--i5);margin-bottom:2px">＋ <span id="${fid(f)}" style="cursor:pointer" onclick="${on}">${escapeHtml(txt)}</span></div>`;
           if(ko && en) return title('nameKo', ko, edKo) + sub('nameEn', en, edEn);
           if(ko)       return title('nameKo', ko, edKo) + add('nameEn', '영문명 추가', edEn);
           if(en)       return title('nameEn', en, edEn) + add('nameKo', '국문명 추가', edKo);
@@ -104,13 +104,13 @@ export function renderCoDetail(c){
             const a = href
               ? `<a href="${escapeHtml(href)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(url)}</a>`
               : escapeHtml(url);
-            return a + (label ? ` <span style="color:var(--i5);font-size:10px">${escapeHtml(label)}</span>` : '');
+            return a + (label ? ` <span style="color:var(--i5);font-size:var(--fs-10)">${escapeHtml(label)}</span>` : '');
           }).join('<span style="color:var(--i6)"> · </span>');
 
           /* 값 칸은 white-space:pre-line이라(메모의 줄바꿈을 살리려고) 태그 사이
              들여쓰기 줄바꿈까지 그대로 줄이 된다 — 여는 태그 바로 뒤에 붙여 쓴다 */
           const row = ([id, label, val, on, isLink]) => `
-            <div style="display:flex;gap:8px;align-items:baseline;padding:2px 0;font-size:11.5px">
+            <div style="display:flex;gap:8px;align-items:baseline;padding:2px 0;font-size:var(--fs-11_5)">
               <span style="flex:0 0 62px;color:var(--i5)">${escapeHtml(label)}</span>
               <span style="flex:1;min-width:0;color:var(--i2);white-space:pre-line;${on ? 'cursor:pointer' : ''}" ${on ? `onclick="${on}"` : ''}><span id="co-${id}-${escapeHtml(c.key)}">${
                   isLink && val ? linksHtml(val)
@@ -123,14 +123,14 @@ export function renderCoDetail(c){
             ${has.map(row).join('')}
             <div id="co-gaps-${escapeHtml(c.key)}" style="display:none">${gap.map(row).join('')}</div>
             <div style="display:flex;align-items:center;gap:10px;margin-top:5px">
-              ${gap.length ? `<button id="co-gaps-btn-${escapeHtml(c.key)}" class="btn bs" style="font-size:10.5px;padding:2px 8px"
+              ${gap.length ? `<button id="co-gaps-btn-${escapeHtml(c.key)}" class="btn bs" style="font-size:var(--fs-10_5);padding:2px 8px"
                 onclick="toggleCoGaps('${escAttr(c.key)}')">＋ 정보 추가 ${gap.length}</button>` : ''}
-              ${c.catCode ? '' : `<button class="btn bs" style="font-size:10.5px;padding:2px 8px"
+              ${c.catCode ? '' : `<button class="btn bs" style="font-size:var(--fs-10_5);padding:2px 8px"
                 onclick="showAssignCatCodeUI('${escAttr(c.key)}')">코드 부여</button>`}
-              <button class="btn bs" style="font-size:10.5px;padding:2px 8px" title="업체가 보낸 소개서·견적서 PDF를 읽어 회사소개를 채웁니다"
+              <button class="btn bs" style="font-size:var(--fs-10_5);padding:2px 8px" title="업체가 보낸 소개서·견적서 PDF를 읽어 회사소개를 채웁니다"
                 onclick="fillCoIntroFromPdf('${escAttr(c.key)}')">📄 소개서 PDF로 채우기</button>
-              <span id="co-pdf-msg-${escapeHtml(c.key)}" style="font-size:10.5px;color:var(--i4)"></span>
-              <span style="margin-left:auto;color:var(--i5);font-size:10.5px" title="${escapeHtml(c.updatedAt || '')}">${escapeHtml(shortDate(c.updatedAt) || '')}</span>
+              <span id="co-pdf-msg-${escapeHtml(c.key)}" style="font-size:var(--fs-10_5);color:var(--i4)"></span>
+              <span style="margin-left:auto;color:var(--i5);font-size:var(--fs-10_5)" title="${escapeHtml(c.updatedAt || '')}">${escapeHtml(shortDate(c.updatedAt) || '')}</span>
             </div>
           </div>`;
         })()}
@@ -141,8 +141,8 @@ export function renderCoDetail(c){
       <div class="cosi"><div class="cosn">${c.contacts.length}</div><div class="cosl">등록 담당자</div></div>
       <div class="cosi"><div class="cosn">${yrs.length?Math.min(...yrs):'-'}</div><div class="cosl">첫 참여</div></div>
       ${(() => { const t = window.tradeTotals(c); return t.billed || t.balance
-        ? `<div class="cosi"><div class="cosn" style="font-size:15px">${window.tradeMoney(t, 'billed')}</div><div class="cosl">누적 청구</div></div>
-           <div class="cosi"><div class="cosn" style="font-size:15px;color:${t.balance > 0 ? 'var(--re)' : 'var(--ge)'}">${window.tradeMoney(t, 'balance')}</div><div class="cosl">미수금</div></div>`
+        ? `<div class="cosi"><div class="cosn" style="font-size:var(--fs-15)">${window.tradeMoney(t, 'billed')}</div><div class="cosl">누적 청구</div></div>
+           <div class="cosi"><div class="cosn" style="font-size:var(--fs-15);color:${t.balance > 0 ? 'var(--re)' : 'var(--ge)'}">${window.tradeMoney(t, 'balance')}</div><div class="cosl">미수금</div></div>`
         : ''; })()}
       <div class="cosi"><div class="cosn" style="display:flex;gap:3px;flex-wrap:wrap">${roles.map(r=>`<span class="pill ${RP[r]||'p-gray'}" title="${escapeHtml([...roleEvMap[r]].join(', '))}">${escapeHtml(r)}</span>`).join('')}</div><div class="cosl">유형</div></div>
     </div>

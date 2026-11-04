@@ -302,3 +302,13 @@ master 사본과 견줌: 보내기 28·상황 물어보기 24·기존 105개 값
 
 ## 순서
 A(기록) → B → D·E의 공용 꺼내기 → F → 폴더 옮기기 → 큰 파일 쪼개기(C·D·E·G) → A(state·api) → H → I
+
+## 토큰 정리 (2026-11-04)
+- 디자인을 다시 잡기 전에, js·CSS에 숫자로 적힌 글자 크기·둥근 모서리 2,419곳을 `styles/tokens.css` 변수로 바꿨다(값은 그대로).
+  - 글자 크기 `--fs-8` ~ `--fs-20`(10.5px는 `--fs-10_5`), 모서리 `--rd-2` ~ `--rd-20`·`--rd-pill`, 5px·8px은 기존 `--rs`·`--r`.
+  - 단계를 줄일 때는 tokens.css 값만 바꾼다(예: `--fs-10_5:var(--fs-11)`).
+- 바꾸지 않은 곳(받는 쪽에 tokens.css가 없다): 인쇄·공유·보고서·메일 원문·등록 링크 파일, 메일 본문(`bodyHtml`)·메일 꼬리말 미리보기 줄.
+  PGA 표 복사는 담을 때 변수를 지금 px 값으로 바꾼다.
+- 다시 돌리기: `node scripts/refactor/tokenize.js`(시험) → `--apply`. 확인: `scripts/refactor/style-hash.mjs`를 master와 견준다
+  (화면 21곳의 HTML·실제 글자 크기·모서리가 같음, PGA 복사 HTML 같음).
+- index.html의 CSS 캐시 번호를 올렸다 — 예전 tokens.css가 캐시에 남으면 변수가 없어 글자가 기본 크기로 보인다.

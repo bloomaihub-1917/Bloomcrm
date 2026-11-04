@@ -197,7 +197,7 @@ export function renderMDBFlat(pairs){
     let evCell = '';
     if(p){
       evCell = evPill(p.eventId, !!p.confirmedAt)
-        + (p.note?`<div style="font-size:10px;color:var(--i3);margin-top:3px">${escapeHtml(p.note)}</div>`:'');
+        + (p.note?`<div style="font-size:var(--fs-10);color:var(--i3);margin-top:3px">${escapeHtml(p.note)}</div>`:'');
     } else {
       const mine = partsOfC(c);
       const evs = [...new Set(mine.map(x => x.eventId).filter(Boolean))];
@@ -206,7 +206,7 @@ export function renderMDBFlat(pairs){
       evCell = `<div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center">${shown}${more}</div>`;
     }
 
-    const contactCell = [c.email1, c.phone1].filter(Boolean).map(v=>`<div style="font-size:10px;color:var(--i3);white-space:nowrap">${escapeHtml(v)}</div>`).join('') || '<span style="color:var(--i6)">—</span>';
+    const contactCell = [c.email1, c.phone1].filter(Boolean).map(v=>`<div style="font-size:var(--fs-10);color:var(--i3);white-space:nowrap">${escapeHtml(v)}</div>`).join('') || '<span style="color:var(--i6)">—</span>';
 
     const isSel = mdbSelected.has(c.id);
     return `<tr onclick="openContactDr(${c.id})" style="cursor:pointer" class="${isSel?'row-sel':''}"
@@ -214,20 +214,20 @@ export function renderMDBFlat(pairs){
       <td onclick="event.stopPropagation()" style="text-align:center"><input type="checkbox" ${isSel?'checked':''} onclick="event.stopPropagation();toggleMDBSelect(${c.id}, event)" title="Shift를 누른 채 누르면 이전에 고른 줄까지 한꺼번에"></td>
       <td><div class="tdco">
         <div class="tdav${isSel?' sel':''}" onclick="event.stopPropagation();toggleMDBSelect(${c.id}, event)" title="클릭해서 선택/해제 · Shift를 누른 채 누르면 사이 전부">${isSel?'✓':ab(c.nameKo||c.nameEn||"")}</div>
-        <div><div class="tdnm"${(c.nameKo||c.nameEn) ? '' : ' style="color:var(--i5)" title="이름을 아직 모르는 줄 — 그 회사의 메인 컨택포인트예요"'}>${escapeHtml(personName(c))}${isBDContact(c)?' <span class="pill p-teal" style="font-size:9px;padding:1px 5px">BD</span>':''}${isCLevelContact(c)?' <span class="pill p-gold" style="font-size:9px;padding:1px 5px">C-level</span>':''}${leftPill(c)}</div><div class="tdsb">${c.nameKo && c.nameEn ? nameEn : ''}</div></div>
+        <div><div class="tdnm"${(c.nameKo||c.nameEn) ? '' : ' style="color:var(--i5)" title="이름을 아직 모르는 줄 — 그 회사의 메인 컨택포인트예요"'}>${escapeHtml(personName(c))}${isBDContact(c)?' <span class="pill p-teal" style="font-size:var(--fs-9);padding:1px 5px">BD</span>':''}${isCLevelContact(c)?' <span class="pill p-gold" style="font-size:var(--fs-9);padding:1px 5px">C-level</span>':''}${leftPill(c)}</div><div class="tdsb">${c.nameKo && c.nameEn ? nameEn : ''}</div></div>
       </div></td>
-      <td style="max-width:200px"><div class="tdnm" style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${orgTitle}">${c.orgKo?orgKo:orgEn}</div><div class="tdsb" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${orgEnTitle}">${c.orgKo?orgEn:''}</div></td>
-      <td style="color:var(--i2);font-size:12px;white-space:nowrap">${escapeHtml(contactCountryText(c))}</td>
-      <td style="color:var(--i3);font-size:12px;max-width:170px;white-space:normal;line-height:1.4">
+      <td style="max-width:200px"><div class="tdnm" style="font-size:var(--fs-13);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${orgTitle}">${c.orgKo?orgKo:orgEn}</div><div class="tdsb" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${orgEnTitle}">${c.orgKo?orgEn:''}</div></td>
+      <td style="color:var(--i2);font-size:var(--fs-12);white-space:nowrap">${escapeHtml(contactCountryText(c))}</td>
+      <td style="color:var(--i3);font-size:var(--fs-12);max-width:170px;white-space:normal;line-height:1.4">
         <div>${escapeHtml(c.titleKo||'')}${c.titleKo&&c.titleEn?' · ':''}${escapeHtml(c.titleEn||'')}</div>
-        <div style="font-size:10px;color:var(--i4);margin-top:1px">${escapeHtml(c.deptKo||'')}${c.deptKo&&c.deptEn?' · ':''}${escapeHtml(c.deptEn||'')}</div>
-        ${c.beat?`<div style="font-size:10px;color:var(--te);margin-top:2px">🏭 ${escapeHtml(c.beat)}</div>`:''}
-        ${c.products?`<div style="font-size:10px;color:var(--pu);margin-top:2px">📦 ${escapeHtml(c.products)}</div>`:''}
+        <div style="font-size:var(--fs-10);color:var(--i4);margin-top:1px">${escapeHtml(c.deptKo||'')}${c.deptKo&&c.deptEn?' · ':''}${escapeHtml(c.deptEn||'')}</div>
+        ${c.beat?`<div style="font-size:var(--fs-10);color:var(--te);margin-top:2px">🏭 ${escapeHtml(c.beat)}</div>`:''}
+        ${c.products?`<div style="font-size:var(--fs-10);color:var(--pu);margin-top:2px">📦 ${escapeHtml(c.products)}</div>`:''}
       </td>
       <td><span class="pill ${CP[roleKey]||'p-gray'}">${escapeHtml(CL[roleKey]||roleKey)}</span></td>
       <td style="max-width:200px">${evCell}</td>
       <td>${contactCell}</td>
-      <td style="color:var(--i4);font-size:11px">${escapeHtml(c.date)}</td>
+      <td style="color:var(--i4);font-size:var(--fs-11)">${escapeHtml(c.date)}</td>
       <td><span style="display:flex;align-items:center;gap:5px">
         <span class="std ${sm[c.status]||'stn'}"></span>${escapeHtml(sl[c.status]||c.status)}
       </span></td>
@@ -251,16 +251,16 @@ export function emptyStateRow(){
   if(contacts.length === 0){
     if(!sheetsConnected){
       return '<tr><td colspan="10" style="padding:40px 20px;text-align:center">'
-        + '<div style="font-size:13px;color:var(--i3);margin-bottom:6px">📋 아직 등록된 연락처가 없어요</div>'
-        + '<div style="font-size:11px;color:var(--i4)">상단 \'업로드\' 메뉴에서 파일을 추가하거나, 구글시트 연동을 확인해주세요</div>'
+        + '<div style="font-size:var(--fs-13);color:var(--i3);margin-bottom:6px">📋 아직 등록된 연락처가 없어요</div>'
+        + '<div style="font-size:var(--fs-11);color:var(--i4)">상단 \'업로드\' 메뉴에서 파일을 추가하거나, 구글시트 연동을 확인해주세요</div>'
         + '</td></tr>';
     }
     return '<tr><td colspan="10" style="padding:40px 20px;text-align:center">'
-      + '<div style="font-size:13px;color:var(--i3);margin-bottom:6px">📋 아직 등록된 연락처가 없어요</div>'
-      + '<div style="font-size:11px;color:var(--i4)">상단 \'업로드\' 메뉴에서 파일을 추가해주세요</div>'
+      + '<div style="font-size:var(--fs-13);color:var(--i3);margin-bottom:6px">📋 아직 등록된 연락처가 없어요</div>'
+      + '<div style="font-size:var(--fs-11);color:var(--i4)">상단 \'업로드\' 메뉴에서 파일을 추가해주세요</div>'
       + '</td></tr>';
   }
-  return '<tr><td colspan="10" style="padding:32px;text-align:center;color:var(--i4);font-size:13px">검색 조건에 맞는 연락처가 없어요</td></tr>';
+  return '<tr><td colspan="10" style="padding:32px;text-align:center;color:var(--i4);font-size:var(--fs-13)">검색 조건에 맞는 연락처가 없어요</td></tr>';
 }
 
 /* ── GROUP VIEW: 행사별 → 기업별 소그룹 (원본 1961~2132행) ── */
@@ -308,12 +308,12 @@ export function renderMDBGrouped(pairs){
             <div class="tdav" style="background:${avB(gi)};color:${avF(gi)}">${ab(c.nameKo||c.nameEn||"")}</div>
             <div><div class="tdnm">${escapeHtml(c.nameKo||c.nameEn)}${leftPill(c)}</div><div class="tdsb">${escapeHtml(c.nameEn)}</div></div>
           </div></td>
-          <td style="color:var(--i3);font-size:12px">${escapeHtml(c.titleKo||c.titleEn||'-')}</td>
+          <td style="color:var(--i3);font-size:var(--fs-12)">${escapeHtml(c.titleKo||c.titleEn||'-')}</td>
           <td><span class="pill ${CP[p.role]||'p-gray'}">${escapeHtml(CL[p.role]||p.role)}</span></td>
-          <td colspan="2" style="color:var(--i3);font-size:11px;font-style:italic">${escapeHtml(p.note||'')}</td>
+          <td colspan="2" style="color:var(--i3);font-size:var(--fs-11);font-style:italic">${escapeHtml(p.note||'')}</td>
           <td><span class="lt">${escapeHtml(c.lang)}</span></td>
-          <td style="color:var(--i3);font-size:11px">${escapeHtml(c.source)}</td>
-          <td style="color:var(--i4);font-size:11px">${escapeHtml(c.date)}</td>
+          <td style="color:var(--i3);font-size:var(--fs-11)">${escapeHtml(c.source)}</td>
+          <td style="color:var(--i4);font-size:var(--fs-11)">${escapeHtml(c.date)}</td>
           <td><span style="display:flex;align-items:center;gap:5px">
             <span class="std ${sm[c.status]||'stn'}"></span>${escapeHtml(sl[c.status]||c.status)}
           </span></td>
@@ -356,8 +356,8 @@ export function renderMDBGrouped(pairs){
           rows += `<tr style="pointer-events:none"><td colspan="9" style="padding:0">
             <div style="display:flex;align-items:center;gap:7px;padding:4px 20px 2px;background:${evObj.color}06">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px;color:var(--i4);flex-shrink:0"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-              <span style="font-size:11px;font-weight:600;color:var(--i3)">${escapeHtml(org)}</span>
-              <span style="font-size:10px;color:var(--i4)">${ms.length}명</span>
+              <span style="font-size:var(--fs-11);font-weight:600;color:var(--i3)">${escapeHtml(org)}</span>
+              <span style="font-size:var(--fs-10);color:var(--i4)">${ms.length}명</span>
             </div>
           </td></tr>`;
         }
@@ -368,13 +368,13 @@ export function renderMDBGrouped(pairs){
               <div class="tdav" style="background:${avB(gi)};color:${avF(gi)}">${ab(c.nameKo||c.nameEn||"")}</div>
               <div><div class="tdnm">${escapeHtml(c.nameKo||c.nameEn)}${leftPill(c)}</div><div class="tdsb">${escapeHtml(c.nameEn)}</div></div>
             </div></td>
-            <td style="color:var(--i2);font-size:12px;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(c.orgKo||c.orgEn||'')}">${ms.length>1?'':escapeHtml(c.orgKo||c.orgEn||'')}</td>
-            <td style="color:var(--i2);font-size:11px;white-space:nowrap">${escapeHtml(contactCountryText(c))}</td>
-            <td style="color:var(--i3);font-size:12px;max-width:140px;white-space:normal;line-height:1.4">${escapeHtml(c.titleKo||'')}${c.deptKo?(' · '+escapeHtml(c.deptKo)):''}</td>
+            <td style="color:var(--i2);font-size:var(--fs-12);max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(c.orgKo||c.orgEn||'')}">${ms.length>1?'':escapeHtml(c.orgKo||c.orgEn||'')}</td>
+            <td style="color:var(--i2);font-size:var(--fs-11);white-space:nowrap">${escapeHtml(contactCountryText(c))}</td>
+            <td style="color:var(--i3);font-size:var(--fs-12);max-width:140px;white-space:normal;line-height:1.4">${escapeHtml(c.titleKo||'')}${c.deptKo?(' · '+escapeHtml(c.deptKo)):''}</td>
             <td><span class="pill ${CP[p.role]||'p-gray'}">${escapeHtml(CL[p.role]||p.role)}</span></td>
-            <td style="color:var(--i3);font-size:11px;font-style:italic;max-width:160px;white-space:normal">${escapeHtml(p.note||'')}</td>
-            <td style="font-size:10px;color:var(--i3)">${escapeHtml(c.email1||c.phone1||'—')}</td>
-            <td style="color:var(--i4);font-size:11px">${escapeHtml(c.date)}</td>
+            <td style="color:var(--i3);font-size:var(--fs-11);font-style:italic;max-width:160px;white-space:normal">${escapeHtml(p.note||'')}</td>
+            <td style="font-size:var(--fs-10);color:var(--i3)">${escapeHtml(c.email1||c.phone1||'—')}</td>
+            <td style="color:var(--i4);font-size:var(--fs-11)">${escapeHtml(c.date)}</td>
             <td><span style="display:flex;align-items:center;gap:5px">
               <span class="std ${sm[c.status]||'stn'}"></span>${escapeHtml(sl[c.status]||c.status)}
             </span></td>
@@ -408,8 +408,8 @@ export function renderMDBGrouped(pairs){
           rows += `<tr style="pointer-events:none"><td colspan="9" style="padding:0">
             <div style="display:flex;align-items:center;gap:7px;padding:4px 20px 2px;background:var(--i8)">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:10px;height:10px;color:var(--i4);flex-shrink:0"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-              <span style="font-size:11px;font-weight:600;color:var(--i3)">${escapeHtml(org)}</span>
-              <span style="font-size:10px;color:var(--i4)">${cs.length}명</span>
+              <span style="font-size:var(--fs-11);font-weight:600;color:var(--i3)">${escapeHtml(org)}</span>
+              <span style="font-size:var(--fs-10);color:var(--i4)">${cs.length}명</span>
             </div>
           </td></tr>`;
         }
@@ -420,13 +420,13 @@ export function renderMDBGrouped(pairs){
               <div class="tdav" style="background:${avB(gi)};color:${avF(gi)}">${ab(c.nameKo||c.nameEn||"")}</div>
               <div><div class="tdnm">${escapeHtml(c.nameKo||c.nameEn)}${leftPill(c)}</div><div class="tdsb">${escapeHtml(c.nameEn)}</div></div>
             </div></td>
-            <td style="color:var(--i2);font-size:12px;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(c.orgKo||c.orgEn||'')}">${cs.length>1?'':escapeHtml(c.orgKo||c.orgEn||'')}</td>
-            <td style="color:var(--i2);font-size:11px;white-space:nowrap">${escapeHtml(contactCountryText(c))}</td>
-            <td style="color:var(--i3);font-size:12px;max-width:140px;white-space:normal;line-height:1.4">${escapeHtml(c.titleKo||'')}${c.deptKo?(' · '+escapeHtml(c.deptKo)):''}</td>
+            <td style="color:var(--i2);font-size:var(--fs-12);max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escapeHtml(c.orgKo||c.orgEn||'')}">${cs.length>1?'':escapeHtml(c.orgKo||c.orgEn||'')}</td>
+            <td style="color:var(--i2);font-size:var(--fs-11);white-space:nowrap">${escapeHtml(contactCountryText(c))}</td>
+            <td style="color:var(--i3);font-size:var(--fs-12);max-width:140px;white-space:normal;line-height:1.4">${escapeHtml(c.titleKo||'')}${c.deptKo?(' · '+escapeHtml(c.deptKo)):''}</td>
             <td><span class="pill p-gray">미배정</span></td>
-            <td style="color:var(--i3);font-size:11px;font-style:italic;max-width:160px;white-space:normal"></td>
-            <td style="font-size:10px;color:var(--i3)">${escapeHtml(c.email1||c.phone1||'—')}</td>
-            <td style="color:var(--i4);font-size:11px">${escapeHtml(c.date)}</td>
+            <td style="color:var(--i3);font-size:var(--fs-11);font-style:italic;max-width:160px;white-space:normal"></td>
+            <td style="font-size:var(--fs-10);color:var(--i3)">${escapeHtml(c.email1||c.phone1||'—')}</td>
+            <td style="color:var(--i4);font-size:var(--fs-11)">${escapeHtml(c.date)}</td>
             <td><span style="display:flex;align-items:center;gap:5px">
               <span class="std ${sm[c.status]||'stn'}"></span>${escapeHtml(sl[c.status]||c.status)}
             </span></td>
@@ -435,7 +435,7 @@ export function renderMDBGrouped(pairs){
       });
     }
 
-    if(!rows) rows='<tr><td colspan="9" style="padding:32px;text-align:center;color:var(--i4);font-size:13px">일치하는 연락처가 없어요</td></tr>';
+    if(!rows) rows='<tr><td colspan="9" style="padding:32px;text-align:center;color:var(--i4);font-size:var(--fs-13)">일치하는 연락처가 없어요</td></tr>';
   }
   body.innerHTML=rows;
 }
@@ -460,29 +460,29 @@ export function renderMDBMatrix(){
   if(!tw) return;
 
   tw.innerHTML=`<div style="overflow:auto;height:100%;position:relative">
-    <table style="border-collapse:collapse;font-size:12px;min-width:max-content">
+    <table style="border-collapse:collapse;font-size:var(--fs-12);min-width:max-content">
       <thead><tr>
-        <th style="position:sticky;left:0;top:0;z-index:4;background:var(--i8);padding:9px 16px;text-align:left;font-size:10px;font-weight:700;color:var(--i3);border-bottom:2px solid var(--i6);border-right:2px solid var(--i6);min-width:140px;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap">기업</th>
+        <th style="position:sticky;left:0;top:0;z-index:4;background:var(--i8);padding:9px 16px;text-align:left;font-size:var(--fs-10);font-weight:700;color:var(--i3);border-bottom:2px solid var(--i6);border-right:2px solid var(--i6);min-width:140px;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap">기업</th>
         ${usedEvs.map(e=>`
-          <th style="position:sticky;top:0;z-index:3;padding:9px 12px;text-align:center;font-size:10px;font-weight:700;color:${e.color};border-bottom:2px solid var(--i6);border-right:1px solid var(--i7);min-width:130px;white-space:nowrap;background:${e.color}12;letter-spacing:.02em">
+          <th style="position:sticky;top:0;z-index:3;padding:9px 12px;text-align:center;font-size:var(--fs-10);font-weight:700;color:${e.color};border-bottom:2px solid var(--i6);border-right:1px solid var(--i7);min-width:130px;white-space:nowrap;background:${e.color}12;letter-spacing:.02em">
             <div>${escapeHtml(e.short)}</div>
-            <div style="font-size:9px;color:var(--i4);font-weight:400;margin-top:1px">${escapeHtml(e.date)}</div>
+            <div style="font-size:var(--fs-9);color:var(--i4);font-weight:400;margin-top:1px">${escapeHtml(e.date)}</div>
           </th>`).join('')}
       </tr></thead>
       <tbody>
         ${orgs.map((org,oi)=>`
           <tr>
-            <td style="position:sticky;left:0;z-index:2;background:var(--W);padding:10px 16px;border-bottom:1px solid var(--i7);border-right:2px solid var(--i6);font-weight:600;color:var(--i1);font-size:12px;white-space:nowrap;vertical-align:top">
+            <td style="position:sticky;left:0;z-index:2;background:var(--W);padding:10px 16px;border-bottom:1px solid var(--i7);border-right:2px solid var(--i6);font-weight:600;color:var(--i1);font-size:var(--fs-12);white-space:nowrap;vertical-align:top">
               ${escapeHtml(org)}
             </td>
             ${usedEvs.map(e=>{
               const cell=orgMap[org]&&orgMap[org][e.key]||[];
-              if(!cell.length) return `<td style="padding:10px 12px;border-bottom:1px solid var(--i7);border-right:1px solid var(--i7);text-align:center;color:var(--i6);font-size:16px">—</td>`;
+              if(!cell.length) return `<td style="padding:10px 12px;border-bottom:1px solid var(--i7);border-right:1px solid var(--i7);text-align:center;color:var(--i6);font-size:var(--fs-16)">—</td>`;
               return `<td style="padding:8px 10px;border-bottom:1px solid var(--i7);border-right:1px solid var(--i7);background:${e.color}07;vertical-align:top">
                 ${cell.map(({c,p})=>`
                   <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;white-space:nowrap">
-                    <span class="pill ${CP[p.role]||'p-gray'}" style="font-size:9px;padding:1px 5px">${escapeHtml(CL[p.role]||p.role)}</span>
-                    <span style="font-size:11px;color:var(--i1);font-weight:500">${escapeHtml(c.nameKo||c.nameEn)}</span>
+                    <span class="pill ${CP[p.role]||'p-gray'}" style="font-size:var(--fs-9);padding:1px 5px">${escapeHtml(CL[p.role]||p.role)}</span>
+                    <span style="font-size:var(--fs-11);color:var(--i1);font-weight:500">${escapeHtml(c.nameKo||c.nameEn)}</span>
                   </div>`).join('')}
               </td>`;
             }).join('')}

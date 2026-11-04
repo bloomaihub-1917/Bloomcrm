@@ -67,13 +67,13 @@ export function makeResendRound(o) {
   function barHtml(st, rp) {
     const b = o.bar;
     if (!st || st.lib || b.hidden(st)) return '';
-    if (rp) return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:-2px 0 10px;padding:7px 10px;border:1px solid var(--am);border-radius:8px;font-size:11px">
+    if (rp) return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:-2px 0 10px;padding:7px 10px;border:1px solid var(--am);border-radius:var(--r);font-size:var(--fs-11)">
       <b style="color:var(--am)">↻ 다시 보내기 «${escapeHtml(rp.r.label)}»</b>
       <span style="color:var(--i3)">다시 보냄 ${rp.done}/${rp.total}${b.unit}</span>
       <span style="color:var(--i4)">· ${escapeHtml(rp.r.since)} 시작${rp.r.by ? ` · ${escapeHtml(rp.r.by)}` : ''}</span>
       <span style="color:var(--i4)">— ${b.help}</span>
-      <button class="btn" style="font-size:10px;margin-left:auto" onclick="${b.close}()">묶음 닫기</button></div>`;
-    return `<div style="margin:-2px 0 10px"><button class="btn" style="font-size:10.5px" onclick="${b.start}()"
+      <button class="btn" style="font-size:var(--fs-10);margin-left:auto" onclick="${b.close}()">묶음 닫기</button></div>`;
+    return `<div style="margin:-2px 0 10px"><button class="btn" style="font-size:var(--fs-10_5)" onclick="${b.start}()"
       title="${b.title}">${b.button}</button></div>`;
   }
   return { progress, start, close, barHtml };

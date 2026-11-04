@@ -34,7 +34,7 @@ const ADVICE_TAB = { app_received_at: 'apply', 'calc:invoice': 'billing', 'calc:
 function exhAdviceHtml(x){
   return adviceHtml({   // 틀은 shared/advice-panel.js
     a: exhDrUi.exhAdvice && exhDrUi.exhAdvice.id === x.id ? exhDrUi.exhAdvice : null,
-    wrapStyle: 'margin-bottom:10px;padding:7px 10px;border:1px solid var(--i6);border-radius:8px;background:var(--W)',
+    wrapStyle: 'margin-bottom:10px;padding:7px 10px;border:1px solid var(--i6);border-radius:var(--r);background:var(--W)',
     inputId: 'exh-advice-q',
     placeholder: '✨ 상황 물어보기 — 예: 인보이스 금액이 틀려서 다시 보내야 해',
     inputTitle: '질문과 이 참가사의 진행 상태만 AI에게 보냅니다. 회사명·금액·메일 내용은 보내지 않아요',

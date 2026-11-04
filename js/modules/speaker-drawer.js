@@ -36,7 +36,7 @@ export const mailBodyHtml = (body) => {
   const m = splitQuotedMail(body);
   if(!m.head && !m.quoted) return escapeHtml(m.attach || '(본문 없음)');
   return `${escapeHtml(m.head || '(새로 쓴 내용 없음)')}${m.attach ? `\n\n${escapeHtml(m.attach)}` : ''}${m.quoted
-    ? `<details style="margin-top:8px"><summary style="cursor:pointer;color:var(--i4);font-size:10.5px">▸ 이전 메일 보기 (${m.quoted.split('\n').length}줄)</summary><div style="margin-top:6px;padding-left:8px;border-left:2px solid var(--i6);color:var(--i3)">${escapeHtml(m.quoted)}</div></details>` : ''}`;
+    ? `<details style="margin-top:8px"><summary style="cursor:pointer;color:var(--i4);font-size:var(--fs-10_5)">▸ 이전 메일 보기 (${m.quoted.split('\n').length}줄)</summary><div style="margin-top:6px;padding-left:8px;border-left:2px solid var(--i6);color:var(--i3)">${escapeHtml(m.quoted)}</div></details>` : ''}`;
 };
 import { saveSpeaker, saveSessionSpeaker, saveSpeakerContact, deleteSpeakerContact, saveSpeakerLog } from '../api/conf-save.js';
 import { sendMail, eventMailFrom, loadMailFiles, mailFilesOf, fileToBase64 } from '../api/mail-send.js';
@@ -262,9 +262,9 @@ export function renderSpeakerDr(){
     <div style="flex:1;min-width:0">
       <div class="drnm">${escapeHtml(sp.name_snapshot || sp.name_en || '(이름 없음)')}${
         sp.name_snapshot && sp.name_en
-          ? `<span style="font-size:12px;font-weight:400;color:var(--i4);margin-left:6px">${escapeHtml(sp.name_en)}</span>` : ''}
+          ? `<span style="font-size:var(--fs-12);font-weight:400;color:var(--i4);margin-left:6px">${escapeHtml(sp.name_en)}</span>` : ''}
         ${roles.map(r => `<span class="pill ${(SPEAKER_ROLES.find(x => x.key === r) || {}).cls || 'p-gray'}"
-          style="vertical-align:middle;font-size:10px">${escapeHtml(r)}</span>`).join(' ')}</div>
+          style="vertical-align:middle;font-size:var(--fs-10)">${escapeHtml(r)}</span>`).join(' ')}</div>
       <div class="drmt">${escapeHtml(sp.status || '섭외중')}${
         window.payCountry(sp) ? ` · ${escapeHtml(countryName(window.payCountry(sp)))}${
           (sp.nationality && sp.residence_country && sp.nationality !== sp.residence_country)
@@ -275,10 +275,10 @@ export function renderSpeakerDr(){
         con ? '' : ' · 연락처 연결 안 됨'}${
         assignmentsFor(sp.id).length ? ` · 세션 ${assignmentsFor(sp.id).length}` : ''}</div>
     </div>
-    <button class="btn" style="font-size:10.5px;color:var(--i3);align-self:center"
+    <button class="btn" style="font-size:var(--fs-10_5);color:var(--i3);align-self:center"
       onclick="setSpeakerHidden('${escAttr(sp.id)}',${sp.hidden !== 'yes'})"
       title="${sp.hidden === 'yes' ? '다시 목록에 보이고 받을 항목도 셉니다' : '목록에서 접고 받을 항목에서 뺍니다 — 지우지는 않아요'}">${sp.hidden === 'yes' ? '다시 보이기' : '숨기기'}</button>
-    <button class="btn" style="font-size:10.5px;color:var(--re);align-self:center"
+    <button class="btn" style="font-size:var(--fs-10_5);color:var(--re);align-self:center"
       onclick="removeSpeakerFromDr()" title="이 연사를 지웁니다 — 배정·연락 상대·기록도 함께">지우기</button>
     <button class="drcls" onclick="closeSpeakerDr()">✕</button>`;
 
@@ -350,22 +350,22 @@ window.__spBoxHtml = (id) => { const s = getSpeakerById(id); return s ? window.b
 function reuseBoxHtml(sp){
   const pend = reusePending(sp);
   if(pend.length){
-    return `<div style="padding:8px 11px;border:1px solid var(--am);border-radius:8px;margin-bottom:12px;background:var(--ab)">
-      <div style="font-size:11.5px;font-weight:700;color:var(--am)">지난 자료 확인 대기 · ${escapeHtml(pend.map(g => g.label).join(' · '))}</div>
-      <div style="font-size:10.5px;color:var(--i3);margin-top:2px;line-height:1.6">${escapeHtml(sp.reuse_from || '')}에서 ${escapeHtml(sp.reused_at)}에 가져왔어요.
+    return `<div style="padding:8px 11px;border:1px solid var(--am);border-radius:var(--r);margin-bottom:12px;background:var(--ab)">
+      <div style="font-size:var(--fs-11_5);font-weight:700;color:var(--am)">지난 자료 확인 대기 · ${escapeHtml(pend.map(g => g.label).join(' · '))}</div>
+      <div style="font-size:var(--fs-10_5);color:var(--i3);margin-top:2px;line-height:1.6">${escapeHtml(sp.reuse_from || '')}에서 ${escapeHtml(sp.reused_at)}에 가져왔어요.
         자료 받기 메일이 «확인 요청»으로 나갑니다. 연사가 맞다고 하면 확인됨을 누르세요 — 고친 자료가 오면 칸을 고친 뒤 누릅니다.</div>
       <div style="display:flex;gap:6px;margin-top:6px">
-        <button class="btn bp" style="font-size:10.5px" onclick="confirmSpReuse()">확인됨 — 받은 날 찍기</button>
+        <button class="btn bp" style="font-size:var(--fs-10_5)" onclick="confirmSpReuse()">확인됨 — 받은 날 찍기</button>
       </div></div>`;
   }
   const c = reuseCandidates(sp);
   if(!c) return '';
-  return `<div style="padding:8px 11px;border:1px dashed var(--a);border-radius:8px;margin-bottom:12px">
-    <div style="font-size:11.5px;font-weight:700;color:var(--i2)">지난 행사에서 받은 자료가 있어요 · ${escapeHtml(c.groups.map(g => g.label).join(' · '))}</div>
-    <div style="font-size:10.5px;color:var(--i4);margin-top:2px;line-height:1.6">${escapeHtml(c.from.join(', '))}에서 가장 최근 것을 비어 있는 칸에만 넣습니다.
+  return `<div style="padding:8px 11px;border:1px dashed var(--a);border-radius:var(--r);margin-bottom:12px">
+    <div style="font-size:var(--fs-11_5);font-weight:700;color:var(--i2)">지난 행사에서 받은 자료가 있어요 · ${escapeHtml(c.groups.map(g => g.label).join(' · '))}</div>
+    <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:2px;line-height:1.6">${escapeHtml(c.from.join(', '))}에서 가장 최근 것을 비어 있는 칸에만 넣습니다.
       새로 작성을 부탁하는 대신 «맞는지 확인» 메일을 보내게 돼요.</div>
     <div style="display:flex;gap:6px;margin-top:6px">
-      <button class="btn bp" style="font-size:10.5px" onclick="applySpReuse()">지난 자료 가져오기</button>
+      <button class="btn bp" style="font-size:var(--fs-10_5)" onclick="applySpReuse()">지난 자료 가져오기</button>
     </div></div>`;
 }
 export async function applySpReuse(){
@@ -391,14 +391,14 @@ function pendingHtml(sp){
   const G = [['now', '지금 받을 것', 'var(--re)'], ['later', '다음에 받을 것', 'var(--am)'],
     ['ours', '우리가 할 일', 'var(--a)'], ['nice', '있으면 좋음', 'var(--i4)']];
   const item = (x) => `<a href="#" onclick="switchSpeakerDT('${x.tab}');return false"
-      style="display:inline-flex;gap:3px;align-items:center;margin:1px 8px 1px 0;color:var(--i2);text-decoration:none;font-size:11px">
+      style="display:inline-flex;gap:3px;align-items:center;margin:1px 8px 1px 0;color:var(--i2);text-decoration:none;font-size:var(--fs-11)">
       ${escapeHtml(x.label)}${x.more ? `<span style="color:var(--i4)">(${escapeHtml(x.more)})</span>` : ''}
-      <span style="font-size:9.5px;color:var(--i5)">[${PART_LABEL[x.tab] || ''}]</span></a>`;
+      <span style="font-size:var(--fs-9_5);color:var(--i5)">[${PART_LABEL[x.tab] || ''}]</span></a>`;
   return `<div style="margin-top:6px;display:grid;grid-template-columns:auto 1fr;gap:3px 8px;align-items:baseline">
     ${G.map(([k, l, c]) => { const xs = pend.filter(x => x.when === k); if(!xs.length) return '';
       const due = xs.find(x => x.due)?.due || '';
-      return `<span style="font-size:10.5px;font-weight:700;color:${c};white-space:nowrap">${l}</span>
-        <div>${xs.map(item).join('')}${due && k !== 'nice' ? `<span style="font-size:10px;color:var(--i4)">— 마감 ${escapeHtml(due)}</span>` : ''}</div>`; }).join('')}
+      return `<span style="font-size:var(--fs-10_5);font-weight:700;color:${c};white-space:nowrap">${l}</span>
+        <div>${xs.map(item).join('')}${due && k !== 'nice' ? `<span style="font-size:var(--fs-10);color:var(--i4)">— 마감 ${escapeHtml(due)}</span>` : ''}</div>`; }).join('')}
   </div>`;
 }
 
@@ -418,8 +418,8 @@ export async function spSnooze(days){
 export function toggleSpFlow(){ spDrUi.spFlowOpen = !spDrUi.spFlowOpen; renderSpeakerDr(); }
 function flowBoxHtml(sp){
   const f = flowStatus(sp);
-  if(f.skip) return `<div style="padding:8px 11px;border:1px solid var(--i6);border-radius:8px;margin-bottom:12px;
-    background:var(--i8);font-size:11px;color:var(--i4)">${f.cancelled
+  if(f.skip) return `<div style="padding:8px 11px;border:1px solid var(--i6);border-radius:var(--r);margin-bottom:12px;
+    background:var(--i8);font-size:var(--fs-11);color:var(--i4)">${f.cancelled
       ? '연락 단계 없음 — 취소한 연사라 더 연락하지 않아요. 섭외 상태를 바꾸면 다시 나타납니다.'
       : '연락 단계 없음 — VIP는 주최사에서 정보를 받아 전달받으므로 메일로 연락하지 않아요.'}</div>`;
   const chip = (s) => {
@@ -433,7 +433,7 @@ function flowBoxHtml(sp){
     const undo = s.applies && s.isDone && !s.resend && s.done.startsWith('field:');
     return `<span title="${escapeHtml(`${s.label} — ${st.t}${undo ? ' · 눌러서 되돌리기' : ''}`)}"${
       undo ? ` onclick="undoSpStep('${escAttr(s.key)}')"` : ''} style="${undo ? 'cursor:pointer;' : ''}display:inline-flex;align-items:center;gap:3px;
-      font-size:10px;padding:2px 7px;border-radius:10px;background:${st.bg};color:${st.c};
+      font-size:var(--fs-10);padding:2px 7px;border-radius:var(--rd-10);background:${st.bg};color:${st.c};
       ${cur ? 'font-weight:700;' : ''}${s.applies ? '' : 'text-decoration:line-through;'}white-space:nowrap">${st.m} ${escapeHtml(s.label)}</span>`;
   };
   const cur = f.current;
@@ -444,58 +444,58 @@ function flowBoxHtml(sp){
     .find(x => x.applies && x.isDone && !x.resend && x.done.startsWith('field:')) || null;
   /* 사람이 받아서 적는 단계 — 메일을 보낸다고 끝나지 않는다 */
   const markBtn = cur && !cur.resend && cur.done.startsWith('field:') && cur.key !== 'invite'
-    ? `<button class="btn" style="font-size:10.5px" onclick="spStamp('${cur.done.slice(6)}','${escAttr(cur.label)}')">${
+    ? `<button class="btn" style="font-size:var(--fs-10_5)" onclick="spStamp('${cur.done.slice(6)}','${escAttr(cur.label)}')">${
         cur.key === 'reply' ? '회신 받음 표시' : cur.key === 'confirm' ? '참가 확정 표시' : '끝남 표시'}</button>` : '';
   /* 요청하고 기다리는 중이면 공은 연사에게 있다 — 날이 차면 리마인더가 우리 일로 돌아온다(follow-up.js).
      사정을 들었으면 «+3일 / +1주»로 미룬다 — 미룬 이유는 이 연사 기록에 남는다 */
   const waiting = !!f.follow && f.follow.state !== 'nudge';
   const stepTitle = !cur ? '' : waiting ? `${cur.label} 기다림` : f.remind ? (cur.key === 'collect' ? '자료 독촉' : `${cur.label} 리마인더`) : cur.label;
-  const snoozeBtns = f.follow ? ` <button class="btn" style="font-size:10px;padding:1px 6px" title="리마인더를 3일 뒤로 미룹니다" onclick="spSnooze(3)">+3일</button><button class="btn" style="font-size:10px;padding:1px 6px" title="리마인더를 1주 뒤로 미룹니다" onclick="spSnooze(7)">+1주</button>` : '';
-  const toggle = `<button class="btn" style="font-size:10px;padding:1px 7px;margin-left:auto" onclick="toggleSpFlow()"
+  const snoozeBtns = f.follow ? ` <button class="btn" style="font-size:var(--fs-10);padding:1px 6px" title="리마인더를 3일 뒤로 미룹니다" onclick="spSnooze(3)">+3일</button><button class="btn" style="font-size:var(--fs-10);padding:1px 6px" title="리마인더를 1주 뒤로 미룹니다" onclick="spSnooze(7)">+1주</button>` : '';
+  const toggle = `<button class="btn" style="font-size:var(--fs-10);padding:1px 7px;margin-left:auto" onclick="toggleSpFlow()"
     title="${spDrUi.spFlowOpen ? '단계 칩·설명·남은 일을 접고 한 줄로' : '단계 칩·설명·남은 일·상황 물어보기 펼치기'}">${spDrUi.spFlowOpen ? '접기 ▴' : '자세히 ▾'}</button>`;
   if(!spDrUi.spFlowOpen){
     const nowLeft = pendingItems(sp).filter(x => x.when === 'now').length;
-    return `<div style="padding:6px 11px;border:1px solid var(--a);border-radius:8px;margin-bottom:10px;background:var(--W);
+    return `<div style="padding:6px 11px;border:1px solid var(--a);border-radius:var(--r);margin-bottom:10px;background:var(--W);
       display:flex;align-items:center;gap:7px;flex-wrap:wrap">
-      <span style="font-size:11px;font-weight:700;color:var(--i2)">연락 단계</span>
-      <span style="font-size:10.5px;color:var(--i4)">${f.nDone}/${f.nAll}</span>
-      ${cur ? `<span style="font-size:11.5px;font-weight:700;color:${waiting ? 'var(--i4)' : f.remind ? 'var(--am)' : 'var(--a)'};min-width:0">${
+      <span style="font-size:var(--fs-11);font-weight:700;color:var(--i2)">연락 단계</span>
+      <span style="font-size:var(--fs-10_5);color:var(--i4)">${f.nDone}/${f.nAll}</span>
+      ${cur ? `<span style="font-size:var(--fs-11_5);font-weight:700;color:${waiting ? 'var(--i4)' : f.remind ? 'var(--am)' : 'var(--a)'};min-width:0">${
           waiting ? '⏳' : f.remind ? '🔔' : '●'} ${escapeHtml(stepTitle)}${
-          cur.due && !f.follow ? ` <span style="font-weight:400;color:${cur.due < td() ? 'var(--re)' : 'var(--i4)'};font-size:10.5px">마감 ${escapeHtml(cur.due)}</span>` : ''}</span>
+          cur.due && !f.follow ? ` <span style="font-weight:400;color:${cur.due < td() ? 'var(--re)' : 'var(--i4)'};font-size:var(--fs-10_5)">마감 ${escapeHtml(cur.due)}</span>` : ''}</span>
         ${followPill(f.follow)}${snoozeBtns}
-        ${nowLeft ? `<span class="pill p-amber" style="font-size:10px" title="지금 받을 필수 자료">받을 것 ${nowLeft}</span>` : ''}
-        ${waiting ? '' : `<button class="btn bp" style="font-size:10px;padding:1px 8px" onclick="openFlowDraft('${cur.key}')">✉ ${f.remind ? '리마인더 초안' : '초안'}</button>`}`
-      : `<span style="font-size:11px;color:var(--g)">모두 마쳤어요</span>`}
+        ${nowLeft ? `<span class="pill p-amber" style="font-size:var(--fs-10)" title="지금 받을 필수 자료">받을 것 ${nowLeft}</span>` : ''}
+        ${waiting ? '' : `<button class="btn bp" style="font-size:var(--fs-10);padding:1px 8px" onclick="openFlowDraft('${cur.key}')">✉ ${f.remind ? '리마인더 초안' : '초안'}</button>`}`
+      : `<span style="font-size:var(--fs-11);color:var(--g)">모두 마쳤어요</span>`}
       ${toggle}
     </div>`;
   }
-  return `<div style="padding:9px 11px;border:1px solid var(--a);border-radius:8px;margin-bottom:12px;background:var(--W)">
+  return `<div style="padding:9px 11px;border:1px solid var(--a);border-radius:var(--r);margin-bottom:12px;background:var(--W)">
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
-      <span style="font-size:11px;font-weight:700;color:var(--i2)">연락 단계</span>
-      <span style="font-size:10.5px;color:var(--i4)">${f.nDone}/${f.nAll}</span>
+      <span style="font-size:var(--fs-11);font-weight:700;color:var(--i2)">연락 단계</span>
+      <span style="font-size:var(--fs-10_5);color:var(--i4)">${f.nDone}/${f.nAll}</span>
       ${toggle}
-      <button class="btn" style="font-size:10px;padding:1px 7px" title="이 행사의 연락 단계를 더하고, 고치고, 끄거나 지웁니다"
+      <button class="btn" style="font-size:var(--fs-10);padding:1px 7px" title="이 행사의 연락 단계를 더하고, 고치고, 끄거나 지웁니다"
         onclick="openFlowEditor('${escAttr(sp.event_id)}')">✎ 단계 편집</button>
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:4px">${f.steps.filter(s => s.done !== 'sched' || s.applies).map(chip).join('')}</div>
     ${cur ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i7)">
-        <div style="font-size:12px;font-weight:700;color:${waiting ? 'var(--i4)' : 'var(--a)'}">${waiting ? '기다리는 중' : '지금 할 일'} · ${escapeHtml(cur.resend ? `${cur.label} (다시 보내기 · ${cur.round.label || ''})` : stepTitle)}${
+        <div style="font-size:var(--fs-12);font-weight:700;color:${waiting ? 'var(--i4)' : 'var(--a)'}">${waiting ? '기다리는 중' : '지금 할 일'} · ${escapeHtml(cur.resend ? `${cur.label} (다시 보내기 · ${cur.round.label || ''})` : stepTitle)}${
           f.follow ? ` ${followPill(f.follow)}${snoozeBtns}` : ''}${
-          cur.due ? ` <span style="font-weight:400;color:${cur.due < td() ? 'var(--re)' : 'var(--i4)'};font-size:10.5px">마감 ${escapeHtml(cur.due)}</span>` : ''}</div>
-        <div style="font-size:10.5px;color:var(--i4);margin-top:2px;line-height:1.6">${escapeHtml(cur.desc || '')}</div>
-        ${cur.done === 'sched' ? `<div style="margin-top:5px;padding:6px 9px;background:var(--i8);border-radius:6px;font-size:11px;color:var(--i2);white-space:pre-wrap;line-height:1.6">${
+          cur.due ? ` <span style="font-weight:400;color:${cur.due < td() ? 'var(--re)' : 'var(--i4)'};font-size:var(--fs-10_5)">마감 ${escapeHtml(cur.due)}</span>` : ''}</div>
+        <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:2px;line-height:1.6">${escapeHtml(cur.desc || '')}</div>
+        ${cur.done === 'sched' ? `<div style="margin-top:5px;padding:6px 9px;background:var(--i8);border-radius:var(--rd-6);font-size:var(--fs-11);color:var(--i2);white-space:pre-wrap;line-height:1.6">${
           escapeHtml(changeLines(sp, false).join('\n'))}</div>` : ''}
         ${pendingHtml(sp)}
         <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">
-          <button class="btn bp" style="font-size:10.5px" onclick="openFlowDraft('${cur.key}')">✉ 메일 초안 만들기</button>
-          <button class="btn" style="font-size:10.5px" title="이 단계가 보낼 차례인 연사들에게 한 번에 보냅니다"
+          <button class="btn bp" style="font-size:var(--fs-10_5)" onclick="openFlowDraft('${cur.key}')">✉ 메일 초안 만들기</button>
+          <button class="btn" style="font-size:var(--fs-10_5)" title="이 단계가 보낼 차례인 연사들에게 한 번에 보냅니다"
             onclick="openSpeakerBulkMail('${escAttr(sp.event_id)}','${cur.key}')">📨 여러 연사에게</button>
           ${markBtn}
-          ${prevUndo ? `<button class="btn" style="font-size:10.5px" onclick="undoSpStep('${escAttr(prevUndo.key)}')"
+          ${prevUndo ? `<button class="btn" style="font-size:var(--fs-10_5)" onclick="undoSpStep('${escAttr(prevUndo.key)}')"
             title="«${escAttr(prevUndo.label)}»을 안 한 것으로 되돌립니다">↶ 이전 단계로</button>` : ''}
         </div></div>`
-      : `<div style="font-size:11px;color:var(--g);margin-top:7px">이 행사의 연락 단계를 모두 마쳤어요.${
-          prevUndo ? ` <button class="btn" style="font-size:10.5px;margin-left:6px" onclick="undoSpStep('${escAttr(prevUndo.key)}')">↶ 이전 단계로</button>` : ''}</div>`}
+      : `<div style="font-size:var(--fs-11);color:var(--g);margin-top:7px">이 행사의 연락 단계를 모두 마쳤어요.${
+          prevUndo ? ` <button class="btn" style="font-size:var(--fs-10_5);margin-left:6px" onclick="undoSpStep('${escAttr(prevUndo.key)}')">↶ 이전 단계로</button>` : ''}</div>`}
     ${adviceHtml(sp)}
   </div>`;
 }
@@ -510,7 +510,7 @@ function flowBoxHtml(sp){
 function adviceHtml(sp){
   return adviceFrame({   // 틀은 shared/advice-panel.js
     a: spDrUi.spAdvice && spDrUi.spAdvice.spId === sp.id ? spDrUi.spAdvice : null,
-    wrapStyle: 'margin-top:8px;padding:7px 10px;border:1px solid var(--i6);border-radius:8px;background:var(--W)',   // 참가사 상세 창과 같은 테두리 상자
+    wrapStyle: 'margin-top:8px;padding:7px 10px;border:1px solid var(--i6);border-radius:var(--r);background:var(--W)',   // 참가사 상세 창과 같은 테두리 상자
     inputId: 'sp-advice-q',
     placeholder: '✨ 상황 물어보기 — 예: 발표자료 파일이 깨져서 다시 받아야 해',
     inputTitle: '질문과 이 연사의 진행 상태만 AI에게 보냅니다. 이름·메일 내용은 보내지 않아요',
@@ -684,7 +684,7 @@ function missingTalk(sp, evKey){
    호출하는 자리의 라벨은 모두 이 파일의 고정 문구이고, 사람이 적은 값은
    섞지 않는다(섞을 일이 생기면 그 자리에서 escapeHtml을 씌운다). */
 export const fg = (label, inner, hint) => `<div class="fg"><label class="fl">${label}</label>${inner}${
-  hint ? `<div style="font-size:10px;color:var(--i4);margin-top:3px">${hint}</div>` : ''}</div>`;
+  hint ? `<div style="font-size:var(--fs-10);color:var(--i4);margin-top:3px">${hint}</div>` : ''}</div>`;
 
 export const txt = (val, handler, ph) => `<input class="fi" type="text" value="${escapeHtml(val || '')}"
   placeholder="${escapeHtml(ph || '')}" onchange="${handler}">`;
@@ -699,8 +699,8 @@ export const gotRow = (label, date, toggleH, dateH, need) => `<div style="displa
     padding:7px 0;border-bottom:1px solid var(--i7)">
     <input type="checkbox" ${date ? 'checked' : ''} onchange="${toggleH}">
     <div style="flex:1;min-width:0">
-      <div style="font-size:12px">${escapeHtml(label)}
-        ${need ? `<span style="color:var(--i4);font-size:10px" title="${escapeHtml(NEED_LABEL[need] || '')}">${NEED_MARK[need] || ''}</span>` : ''}</div>
+      <div style="font-size:var(--fs-12)">${escapeHtml(label)}
+        ${need ? `<span style="color:var(--i4);font-size:var(--fs-10)" title="${escapeHtml(NEED_LABEL[need] || '')}">${NEED_MARK[need] || ''}</span>` : ''}</div>
     </div>
     <input class="fi" type="date" style="width:132px" value="${escapeHtml(date || '')}" onchange="${dateH}">
   </div>`;
@@ -763,12 +763,12 @@ function offerHtml(sp, evKey){
     ${opts.map(o => `<option value="${escapeHtml(o)}"${val === o ? ' selected' : ''}>${escapeHtml(o)}</option>`).join('')}
   </select>`;
 
-  const fee = `<div style="border:1px solid var(--i6);border-radius:9px;padding:11px 12px;margin-bottom:11px">
+  const fee = `<div style="border:1px solid var(--i6);border-radius:var(--rd-9);padding:11px 12px;margin-bottom:11px">
     <div style="display:flex;align-items:baseline;gap:7px;margin-bottom:8px">
-      <div style="font-size:12px;font-weight:700">연사료</div>
-      ${sp.fee_amount ? `<div style="font-size:11px;color:var(--i3)">${escapeHtml(money(sp.fee_amount, sp.fee_currency))}</div>` : ''}
-      ${sp.fee_paid_at ? `<span class="pill p-green" style="font-size:10px">지급 ${escapeHtml(sp.fee_paid_at)}</span>`
-        : sp.fee_amount ? `<span class="pill p-amber" style="font-size:10px">미지급</span>` : ''}
+      <div style="font-size:var(--fs-12);font-weight:700">연사료</div>
+      ${sp.fee_amount ? `<div style="font-size:var(--fs-11);color:var(--i3)">${escapeHtml(money(sp.fee_amount, sp.fee_currency))}</div>` : ''}
+      ${sp.fee_paid_at ? `<span class="pill p-green" style="font-size:var(--fs-10)">지급 ${escapeHtml(sp.fee_paid_at)}</span>`
+        : sp.fee_amount ? `<span class="pill p-amber" style="font-size:var(--fs-10)">미지급</span>` : ''}
     </div>
     ${(sp.nationality && sp.residence_country && sp.nationality !== sp.residence_country) ? `
       <div class="fg"><label class="fl">지급 기준</label>
@@ -778,7 +778,7 @@ function offerHtml(sp, evKey){
             `<button class="seg-b${(sp.pay_basis || 'residence') === k ? ' on' : ''}"
               onclick="spField('pay_basis','${k}','지급 기준')">${l}</button>`).join('')}
         </div>
-        <div style="font-size:10px;color:var(--i4);margin-top:3px">
+        <div style="font-size:var(--fs-10);color:var(--i4);margin-top:3px">
           연사료 원천징수와 항공 출발지가 이 기준을 따릅니다 — 행사마다 다르니 여기서 정합니다.</div>
       </div>` : ''}
     <div class="fgr">
@@ -799,15 +799,15 @@ function offerHtml(sp, evKey){
         })())}
       ${fg('지급일', dateIn(sp.fee_paid_at, `spField('fee_paid_at',this.value,'연사료 지급일')`))}
     </div>
-    ${feeNeed ? `<div style="font-size:10.5px;color:${sp.bank_account ? 'var(--i4)' : 'var(--am)'};margin:-2px 0 8px">
+    ${feeNeed ? `<div style="font-size:var(--fs-10_5);color:${sp.bank_account ? 'var(--i4)' : 'var(--am)'};margin:-2px 0 8px">
       ${sp.bank_account ? '계좌는 «계좌·여권» 탭에 있어요' : '계좌를 아직 안 받았어요 — «계좌·여권» 탭에서 넣습니다'}</div>` : ''}
     ${fg('메모', area(sp.fee_note, `spField('fee_note',this.value,'연사료 메모')`, '지급 조건, 정산 담당 등', 2))}
   </div>`;
 
-  const stay = `<div style="border:1px solid var(--i6);border-radius:9px;padding:11px 12px;margin-bottom:11px">
+  const stay = `<div style="border:1px solid var(--i6);border-radius:var(--rd-9);padding:11px 12px;margin-bottom:11px">
     <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
-      <div style="font-size:12px;font-weight:700">숙박</div>
-      <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--i3);margin-left:auto">
+      <div style="font-size:var(--fs-12);font-weight:700">숙박</div>
+      <label style="display:flex;align-items:center;gap:5px;font-size:var(--fs-11);color:var(--i3);margin-left:auto">
         <input type="checkbox" ${sp.stay_booked === 'yes' ? 'checked' : ''}
           onchange="spField('stay_booked',this.checked?'yes':'','숙박 예약 완료')"> 예약 완료
       </label>
@@ -821,25 +821,25 @@ function offerHtml(sp, evKey){
       ${fg('체크아웃', dateIn(sp.stay_out, `spField('stay_out',this.value,'체크아웃')`))}
     </div>
     ${sp.stay_in && sp.stay_out && sp.stay_out <= sp.stay_in
-      ? `<div style="font-size:10.5px;color:var(--re);margin:-4px 0 8px">체크아웃이 체크인보다 빠르거나 같아요</div>` : ''}
+      ? `<div style="font-size:var(--fs-10_5);color:var(--re);margin:-4px 0 8px">체크아웃이 체크인보다 빠르거나 같아요</div>` : ''}
     ${fg('메모', area(sp.stay_note, `spField('stay_note',this.value,'숙박 메모')`, '조식 포함 여부, 연박 등', 2))}
   </div>`;
 
-  const air = `<div style="border:1px solid var(--i6);border-radius:9px;padding:11px 12px;margin-bottom:11px">
+  const air = `<div style="border:1px solid var(--i6);border-radius:var(--rd-9);padding:11px 12px;margin-bottom:11px">
     <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px">
-      <div style="font-size:12px;font-weight:700">항공</div>
-      ${sp.air_ticketed_at ? `<span class="pill p-green" style="font-size:10px">발권 ${escapeHtml(sp.air_ticketed_at)}</span>` : ''}
+      <div style="font-size:var(--fs-12);font-weight:700">항공</div>
+      ${sp.air_ticketed_at ? `<span class="pill p-green" style="font-size:var(--fs-10)">발권 ${escapeHtml(sp.air_ticketed_at)}</span>` : ''}
     </div>
     <div class="fgr">
       ${fg('구간', txt(sp.air_route, `spField('air_route',this.value,'항공 구간')`, 'ICN–NRT'))}
       ${fg('좌석', sel(sp.air_class, AIR_CLASSES, `spField('air_class',this.value,'좌석 등급')`, '미정'))}
     </div>
-    <div style="font-size:10.5px;font-weight:700;color:var(--i3);margin:6px 0 3px">오는 편</div>
+    <div style="font-size:var(--fs-10_5);font-weight:700;color:var(--i3);margin:6px 0 3px">오는 편</div>
     <div class="fgr">
       ${fg('편명', txt(sp.air_in_flight, `spField('air_in_flight',this.value,'오는 편명')`, 'KE001'))}
       ${fg('일시', txt(sp.air_in_at, `spField('air_in_at',this.value,'오는 편 일시')`, '2026-06-01 14:30'))}
     </div>
-    <div style="font-size:10.5px;font-weight:700;color:var(--i3);margin:6px 0 3px">가는 편</div>
+    <div style="font-size:var(--fs-10_5);font-weight:700;color:var(--i3);margin:6px 0 3px">가는 편</div>
     <div class="fgr">
       ${fg('편명', txt(sp.air_out_flight, `spField('air_out_flight',this.value,'가는 편명')`, 'KE002'))}
       ${fg('일시', txt(sp.air_out_at, `spField('air_out_at',this.value,'가는 편 일시')`, '2026-06-03 09:10'))}
@@ -851,11 +851,11 @@ function offerHtml(sp, evKey){
   /* 설정에서 숙박·항공을 «제공 안 함»으로 정한 역할은 빈 입력 칸을 늘어놓지 않는다 —
      적어 둔 값이 있거나 «그래도 적기»를 누르면 편다 */
   if(!nTravel && !hasTravel(sp) && !spDrUi.spTravelForce) return fee + `<div style="padding:8px 11px;background:var(--i8);
-    border:1px solid var(--i6);border-radius:7px;font-size:11px;color:var(--i4);display:flex;align-items:center;gap:8px">
+    border:1px solid var(--i6);border-radius:var(--rd-7);font-size:var(--fs-11);color:var(--i4);display:flex;align-items:center;gap:8px">
     숙박·항공 제공 안 함 — 설정 › 행사 › 컨퍼런스에서 이 역할(${escapeHtml(roles.join(' · ') || '배정 없음')})은 챙기지 않기로 했어요.
-    <button class="btn" style="font-size:10px;padding:1px 7px;margin-left:auto;white-space:nowrap" onclick="spTravelShow()">그래도 적기</button></div>`;
+    <button class="btn" style="font-size:var(--fs-10);padding:1px 7px;margin-left:auto;white-space:nowrap" onclick="spTravelShow()">그래도 적기</button></div>`;
   const hint = !nTravel ? `<div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);
-    border-radius:7px;font-size:11.5px;color:var(--i3);line-height:1.6;margin-bottom:11px">
+    border-radius:var(--rd-7);font-size:var(--fs-11_5);color:var(--i3);line-height:1.6;margin-bottom:11px">
     이 연사의 역할(${escapeHtml(roles.join(' · ') || '배정 없음')})은 숙박·항공을 챙기는 대상이 아니에요.
     적어 둔 값은 남겨 두지만 할 일·독촉에는 세지 않아요.</div>` : '';
 

@@ -129,15 +129,15 @@ export function buildEvFil() {
   const sel = crmEvSel();
   el.innerHTML = evs.length
     ? (sel.length > 1
-        ? `<div style="font-size:10.5px;color:var(--i4);padding:2px 8px 6px">${sel.length}개 행사를 함께 보는 중 ·
+        ? `<div style="font-size:var(--fs-10_5);color:var(--i4);padding:2px 8px 6px">${sel.length}개 행사를 함께 보는 중 ·
              <a href="javascript:void(0)" onclick="clearEvF()" style="color:var(--a)">모두 해제</a></div>` : '')
       + evs.map((e, i) => `
         <button class="evc${sel.includes(e) ? ' on' : ''}" onclick="setEvF('${escAttr(e)}')"
           title="여러 행사를 함께 보려면 차례로 누르세요">
           <span class="ev-d" style="background:${EC[i % EC.length]}"></span><span class="ev-n">${escapeHtml(e)}</span>
-          <span style="font-size:10px;color:var(--i4)">${targets.filter(t => t.event === e).length}</span>
+          <span style="font-size:var(--fs-10);color:var(--i4)">${targets.filter(t => t.event === e).length}</span>
         </button>`).join('')
-    : '<div style="padding:10px 8px;font-size:11px;color:var(--i4)">등록된 행사 없음</div>';
+    : '<div style="padding:10px 8px;font-size:var(--fs-11);color:var(--i4)">등록된 행사 없음</div>';
 }
 
 /* 누를 때마다 더하고 뺀다 — 하나만 고르던 때와 손놀림이 같고(한 번 누르면
@@ -217,7 +217,7 @@ export function renderCrm() {
   } catch (e) {
     console.error('[CRM] renderCrm 오류:', e);
     const el = document.getElementById('kanban') || document.getElementById('crm-tbody');
-    if (el) el.innerHTML = `<div style="padding:20px;color:var(--re);font-size:12px">렌더 오류: ${escapeHtml(e.message)}</div>`;
+    if (el) el.innerHTML = `<div style="padding:20px;color:var(--re);font-size:var(--fs-12)">렌더 오류: ${escapeHtml(e.message)}</div>`;
   }
 }
 
@@ -260,8 +260,8 @@ export function renderCrmSelBar(){
   el.style.display = 'flex';
   // 고른 것들이 이미 한 상태에 모여 있으면 그 단추는 눌러도 할 일이 없다
   const picked = targets.filter(t => crmSelected.has(t.id));
-  el.innerHTML = `<span style="font-size:12px;font-weight:700">${n}개 선택됨</span>
-    <span style="font-size:10.5px;color:var(--i5)">옮길 곳을 누르세요</span>
+  el.innerHTML = `<span style="font-size:var(--fs-12);font-weight:700">${n}개 선택됨</span>
+    <span style="font-size:var(--fs-10_5);color:var(--i5)">옮길 곳을 누르세요</span>
     <span style="display:flex;gap:4px;flex-wrap:wrap;margin-left:2px">
       ${KCOLS.map(col => {
         const same = picked.every(t => t.status === col.key);
@@ -374,12 +374,12 @@ export function renderTable2() {
     const i = targets.findIndex(x => x.id === t.id);
     return `<tr onclick="openDr(${t.id})">
       <td><div class="tdco"><div class="tdav" style="background:${avB(i)};color:${avF(i)}">${escapeHtml(ab(t.name))}</div><div><div class="tdnm">${escapeHtml(t.name)}</div><div class="tdsb">${escapeHtml(t.nameEn)}</div></div></div></td>
-      <td style="color:var(--i3);font-size:12px">${escapeHtml(t.event)}</td>
+      <td style="color:var(--i3);font-size:var(--fs-12)">${escapeHtml(t.event)}</td>
       <td><span class="pill ${RP[t.role] || 'p-gray'}">${escapeHtml(t.role)}</span></td>
       <td style="color:var(--i3)">${escapeHtml(t.assignee)}</td>
       <td onclick="event.stopPropagation()"><select class="stsel" onchange="chgSt(${t.id},this.value)">${['미접촉', '컨택중', '협의중', '확정', '보류'].map(s => `<option${s === t.status ? ' selected' : ''}>${s}</option>`).join('')}</select></td>
       <td><span style="display:flex;align-items:center;gap:5px"><span class="pri p${t.priority[0]}"></span>${PRI_LABEL[t.priority]}</span></td>
-      <td style="color:var(--i4);font-size:11px">${escapeHtml(t.lastActivity)}</td>
+      <td style="color:var(--i4);font-size:var(--fs-11)">${escapeHtml(t.lastActivity)}</td>
       <td onclick="event.stopPropagation()"><button class="tact" onclick="openDr(${t.id})">상세</button></td>
     </tr>`;
   }).join('');
@@ -453,7 +453,7 @@ export function dCRM(t) {
     <div class="sgbar">${STGS.map((s, k) => { const n = k + 1; const cls = n < cur ? 'done' : n === cur ? 'now' : ''; return `<div class="sgc ${cls}" onclick="setStg(${t.id},${n})">${n < cur ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="width:9px;height:9px"><polyline points="20,6 9,17 4,12"/></svg>' : ''}${s}</div>`; }).join('')}</div>
     <div class="sct">기본 정보</div>
     <div class="ig">
-      <div class="ic"><div class="il">타겟 행사</div><div class="iv" style="font-size:11px">${escapeHtml(t.event)}</div></div>
+      <div class="ic"><div class="il">타겟 행사</div><div class="iv" style="font-size:var(--fs-11)">${escapeHtml(t.event)}</div></div>
       <div class="ic"><div class="il">참여 유형</div><div class="iv"><span class="pill ${RP[t.role] || 'p-gray'}">${escapeHtml(t.role)}</span></div></div>
       <div class="ic"><div class="il">담당자</div><div class="iv">${escapeHtml(t.assignee)}</div></div>
       <div class="ic"><div class="il">우선순위</div><div class="iv"><span style="display:flex;align-items:center;gap:5px"><span class="pri p${t.priority[0]}"></span>${PRI_LABEL[t.priority]}</span></div></div>
@@ -494,7 +494,7 @@ export function dLog(t) {
     <div class="li" style="margin-bottom:6px"><select id="lt-${t.id}">${LOG_TYPES.map(x => `<option>${x}</option>`).join('')}</select><input type="text" id="lx-${t.id}" placeholder="활동 내용 (예: 견적서 요청 메일 받음)" onkeydown="if(event.key==='Enter')addLog(${t.id})"></div>
     <div class="li"><input type="text" id="lm-${t.id}" placeholder="메모 (선택) — 약속·다음 할 일 (예: 10/15까지 회신)" onkeydown="if(event.key==='Enter')addLog(${t.id})"><button class="lsub" onclick="addLog(${t.id})">기록</button></div>
     <div class="sct">활동 이력 <span style="font-weight:400;color:var(--i4)">${t.log.length ? t.log.length + '건' : ''}</span></div>
-    ${t.log.length ? '' : '<div style="font-size:11.5px;color:var(--i4);padding:6px 0 12px">아직 기록이 없어요 — 메일을 보내거나 위에서 한 줄 남겨 보세요</div>'}
+    ${t.log.length ? '' : '<div style="font-size:var(--fs-11_5);color:var(--i4);padding:6px 0 12px">아직 기록이 없어요 — 메일을 보내거나 위에서 한 줄 남겨 보세요</div>'}
     <div class="lls">${t.log.map((l, k) => logItemHtml(t, l, k)).join('')}</div>`;
 }
 
@@ -502,13 +502,13 @@ function logItemHtml(t, l, k) {
   const color = l.color || LC[l.type] || '#9C9890';
   const who = l.to ? `→ ${l.to}` : l.from ? `← ${l.from}` : '';
   const editing = logUi.memoEdit === `${t.id}:${k}`;
-  const small = 'font-size:10.5px;padding:2px 8px';
+  const small = 'font-size:var(--fs-10_5);padding:2px 8px';
   const memo = editing
-    ? `<div style="display:flex;gap:5px;margin-top:5px"><input class="fi" id="lme-${t.id}-${k}" value="${escapeHtml(l.memo || '')}" placeholder="짧게 — 약속·다음 할 일" style="flex:1;min-width:0;font-size:12px;padding:5px 8px"
+    ? `<div style="display:flex;gap:5px;margin-top:5px"><input class="fi" id="lme-${t.id}-${k}" value="${escapeHtml(l.memo || '')}" placeholder="짧게 — 약속·다음 할 일" style="flex:1;min-width:0;font-size:var(--fs-12);padding:5px 8px"
          onkeydown="if(event.key==='Enter')saveLogMemo(${t.id},${k});if(event.key==='Escape')editLogMemo(${t.id},-1)">
        <button class="lsub" style="width:auto" onclick="saveLogMemo(${t.id},${k})">저장</button></div>`
     : l.memo
-      ? `<div onclick="editLogMemo(${t.id},${k})" title="눌러서 메모 고치기" style="cursor:pointer;margin-top:4px;padding:4px 8px;border-radius:5px;background:var(--ab);font-size:11.5px;color:var(--i2);line-height:1.45">📝 ${escapeHtml(l.memo)}</div>`
+      ? `<div onclick="editLogMemo(${t.id},${k})" title="눌러서 메모 고치기" style="cursor:pointer;margin-top:4px;padding:4px 8px;border-radius:var(--rs);background:var(--ab);font-size:var(--fs-11_5);color:var(--i2);line-height:1.45">📝 ${escapeHtml(l.memo)}</div>`
       : '';
   return `<div class="lit"><div class="ltr"><div class="ld" style="background:${color}"></div>${k < t.log.length - 1 ? '<div class="lln"></div>' : ''}</div>
     <div class="lb2" style="min-width:0">
@@ -516,12 +516,12 @@ function logItemHtml(t, l, k) {
         ${l.mu ? `<button class="btn" style="${small}" onclick="openMailOriginal('un','${escAttr(l.mu)}')">원문</button>` : ''}
         ${editing || l.memo ? '' : `<button class="btn" style="${small}" onclick="editLogMemo(${t.id},${k})">+ 메모</button>`}</div>
       <div class="ltx">${escapeHtml(l.text)}</div>
-      ${who ? `<div style="font-size:10.5px;color:var(--i4);overflow-wrap:anywhere">${escapeHtml(who)}</div>` : ''}
-      ${l.fwdBy ? `<div style="font-size:10.5px;color:var(--i4)">↪ ${escapeHtml(l.fwdBy)} 전달</div>` : ''}
-      ${l.attach ? `<div style="font-size:10.5px;color:var(--i4);overflow-wrap:anywhere">📎 ${escapeHtml(l.attach)}</div>` : ''}
-      ${l.cc ? `<div style="font-size:10.5px;color:var(--i4);overflow-wrap:anywhere">참조 ${escapeHtml(l.cc)}</div>` : ''}
-      ${l.body ? `<details style="margin-top:4px"><summary style="cursor:pointer;font-size:11px;color:var(--a);font-weight:600">본문 보기</summary>
-        <div style="margin-top:4px;padding:8px 9px;border:1px solid var(--i7);border-radius:6px;background:var(--i8);font-size:11.5px;color:var(--i2);line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere;max-height:320px;overflow:auto">${escapeHtml(l.body)}</div></details>` : ''}
+      ${who ? `<div style="font-size:var(--fs-10_5);color:var(--i4);overflow-wrap:anywhere">${escapeHtml(who)}</div>` : ''}
+      ${l.fwdBy ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">↪ ${escapeHtml(l.fwdBy)} 전달</div>` : ''}
+      ${l.attach ? `<div style="font-size:var(--fs-10_5);color:var(--i4);overflow-wrap:anywhere">📎 ${escapeHtml(l.attach)}</div>` : ''}
+      ${l.cc ? `<div style="font-size:var(--fs-10_5);color:var(--i4);overflow-wrap:anywhere">참조 ${escapeHtml(l.cc)}</div>` : ''}
+      ${l.body ? `<details style="margin-top:4px"><summary style="cursor:pointer;font-size:var(--fs-11);color:var(--a);font-weight:600">본문 보기</summary>
+        <div style="margin-top:4px;padding:8px 9px;border:1px solid var(--i7);border-radius:var(--rd-6);background:var(--i8);font-size:var(--fs-11_5);color:var(--i2);line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere;max-height:320px;overflow:auto">${escapeHtml(l.body)}</div></details>` : ''}
       ${memo}
       <div class="lda">${escapeHtml(l.at || l.date)}${l.by ? ` · ${escapeHtml(l.by)}` : ''}</div></div></div>`;
 }
@@ -542,17 +542,17 @@ function composeHtml(t) {
     return eventVarValues(t.event, false)[key] ?? '';
   });
   const ev = EVENT_LIST.find(e => e.key === t.event);
-  return `<div style="border:1px solid var(--i6);border-radius:8px;padding:10px;margin-bottom:14px;background:var(--W)">
-    <div style="font-size:11px;color:var(--i4);margin-bottom:8px;overflow-wrap:anywhere">보내는 주소 · <span id="cm-from-${t.id}" style="color:${fromCache[t.event] ? (fromCache[t.event].ok ? 'var(--i2)' : 'var(--re)') : 'inherit'}">${escapeHtml(fromCache[t.event]?.text || `${ev ? (ev.short || ev.name || ev.key) : (t.event || '행사 없음')} 공용 메일 확인 중…`)}</span></div>
+  return `<div style="border:1px solid var(--i6);border-radius:var(--r);padding:10px;margin-bottom:14px;background:var(--W)">
+    <div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:8px;overflow-wrap:anywhere">보내는 주소 · <span id="cm-from-${t.id}" style="color:${fromCache[t.event] ? (fromCache[t.event].ok ? 'var(--i2)' : 'var(--re)') : 'inherit'}">${escapeHtml(fromCache[t.event]?.text || `${ev ? (ev.short || ev.name || ev.key) : (t.event || '행사 없음')} 공용 메일 확인 중…`)}</span></div>
     <div class="mlbl">받는 사람</div>
     ${cons.length ? `<div style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px">${cons.map((p, k) => `
-      <label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;min-width:0"><input type="checkbox" class="cm-to-${t.id}" value="${escapeHtml(p.email)}"${k === 0 ? ' checked' : ''}>
+      <label style="display:flex;align-items:center;gap:7px;font-size:var(--fs-12);cursor:pointer;min-width:0"><input type="checkbox" class="cm-to-${t.id}" value="${escapeHtml(p.email)}"${k === 0 ? ' checked' : ''}>
         <span style="font-weight:600;flex-shrink:0">${escapeHtml(p.name)}</span><span style="color:var(--i4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(p.title ? p.title + ' · ' : '')}${escapeHtml(p.email)}</span></label>`).join('')}</div>`
       : reps.length ? `<div style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px">
-        <div style="font-size:11px;color:var(--i4)">메일 있는 담당자가 없어 기업DB 대표 메일로 보내요</div>
-        ${reps.map(e => `<label style="display:flex;align-items:center;gap:7px;font-size:12px;cursor:pointer;min-width:0"><input type="checkbox" class="cm-to-${t.id}" value="${escapeHtml(e)}" checked>
-          <span class="pill p-gray" style="font-size:9.5px">대표 메일</span><span style="color:var(--i4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(e)}</span></label>`).join('')}</div>`
-      : '<div style="font-size:11px;color:var(--i4);margin-bottom:6px">기업DB에 메일 있는 담당자도 대표 메일도 없어요 — 아래에 직접 적어 주세요</div>'}
+        <div style="font-size:var(--fs-11);color:var(--i4)">메일 있는 담당자가 없어 기업DB 대표 메일로 보내요</div>
+        ${reps.map(e => `<label style="display:flex;align-items:center;gap:7px;font-size:var(--fs-12);cursor:pointer;min-width:0"><input type="checkbox" class="cm-to-${t.id}" value="${escapeHtml(e)}" checked>
+          <span class="pill p-gray" style="font-size:var(--fs-9_5)">대표 메일</span><span style="color:var(--i4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(e)}</span></label>`).join('')}</div>`
+      : '<div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:6px">기업DB에 메일 있는 담당자도 대표 메일도 없어요 — 아래에 직접 적어 주세요</div>'}
     <input class="fi" id="cm-tox-${t.id}" type="email" placeholder="다른 주소 (쉼표로 여러 개)" style="margin-bottom:6px">
     <input class="fi" id="cm-cc-${t.id}" type="email" placeholder="참조 (선택)" style="margin-bottom:8px">
     <div class="mlbl">제목</div>
@@ -581,19 +581,19 @@ function inboxMatch(t, items) {
 function inboxHtml(t) {
   const c = inboxCache[t.id] || { loading: true };
   const head = '<div class="sct" style="margin-bottom:7px">받은 메일 — 이 기업 주소에서 온 것</div>';
-  if (c.loading) return `<div style="margin-bottom:14px">${head}<div style="font-size:11.5px;color:var(--i4)">행사 메일함에서 찾는 중…</div></div>`;
-  if (c.error) return `<div style="margin-bottom:14px">${head}<div style="font-size:11.5px;color:var(--re)">${escapeHtml(c.error)}</div></div>`;
+  if (c.loading) return `<div style="margin-bottom:14px">${head}<div style="font-size:var(--fs-11_5);color:var(--i4)">행사 메일함에서 찾는 중…</div></div>`;
+  if (c.error) return `<div style="margin-bottom:14px">${head}<div style="font-size:var(--fs-11_5);color:var(--re)">${escapeHtml(c.error)}</div></div>`;
   const rows = c.items || [];
   return `<div style="margin-bottom:14px">${head}
-    ${rows.length ? rows.map(u => `<div style="border:1px solid var(--i7);border-radius:7px;padding:8px 9px;margin-bottom:6px">
-      <div style="font-size:12px;font-weight:600;color:var(--i1)">${escapeHtml(u.subject || '(제목 없음)')}</div>
-      <div style="font-size:10.5px;color:var(--i4);margin:2px 0 6px;overflow-wrap:anywhere">${u.fwd && u.fwd.from
+    ${rows.length ? rows.map(u => `<div style="border:1px solid var(--i7);border-radius:var(--rd-7);padding:8px 9px;margin-bottom:6px">
+      <div style="font-size:var(--fs-12);font-weight:600;color:var(--i1)">${escapeHtml(u.subject || '(제목 없음)')}</div>
+      <div style="font-size:var(--fs-10_5);color:var(--i4);margin:2px 0 6px;overflow-wrap:anywhere">${u.fwd && u.fwd.from
         ? `${escapeHtml(u.fwd.from)}${u.fwd.to ? ` → ${escapeHtml(u.fwd.to)}` : ''} · ${escapeHtml(u.fwd.sent || u.ts || '')} · ↪ ${escapeHtml(u.fwd.by)} 전달`
         : `${escapeHtml(u.from_name ? `${u.from_name} <${u.from_addr}>` : u.from_addr)} · ${escapeHtml(u.ts || '')}`}</div>
-      <input class="fi" id="ib-memo-${escAttr(u.id)}" placeholder="메모 (선택) — 무슨 내용인지 한 줄" style="font-size:12px;padding:5px 8px;margin-bottom:6px">
-      <div style="display:flex;gap:6px"><button class="btn" style="font-size:11px" onclick="openMailOriginal('un','${escAttr(u.id)}')">원문 보기</button>
+      <input class="fi" id="ib-memo-${escAttr(u.id)}" placeholder="메모 (선택) — 무슨 내용인지 한 줄" style="font-size:var(--fs-12);padding:5px 8px;margin-bottom:6px">
+      <div style="display:flex;gap:6px"><button class="btn" style="font-size:var(--fs-11)" onclick="openMailOriginal('un','${escAttr(u.id)}')">원문 보기</button>
         <button class="lsub" style="flex:1" onclick="crmLinkMail(${t.id},'${escAttr(u.id)}')">이력에 넣기</button></div></div>`).join('')
-      : `<div style="font-size:11.5px;color:var(--i4);line-height:1.5">새로 온 메일이 없어요.<br>행사 메일함은 15분마다 읽어요. 연사·참가사로 등록된 주소에서 온 메일은 그쪽 기록에 붙어 여기 나오지 않아요.<br>전화로 들은 것처럼 직접 남기려면 아래에서 «메일 받음»으로 기록하세요.</div>`}
+      : `<div style="font-size:var(--fs-11_5);color:var(--i4);line-height:1.5">새로 온 메일이 없어요.<br>행사 메일함은 15분마다 읽어요. 연사·참가사로 등록된 주소에서 온 메일은 그쪽 기록에 붙어 여기 나오지 않아요.<br>전화로 들은 것처럼 직접 남기려면 아래에서 «메일 받음»으로 기록하세요.</div>`}
   </div>`;
 }
 
@@ -748,13 +748,13 @@ export function dSpk(t) {
         <div class="evdt">${escapeHtml(ev ? (ev.short || ev.name || ev.key) : sp.event_id)}</div></div>
       <div style="display:flex;flex-wrap:wrap;gap:3px;margin:5px 0">${f.steps.filter(s => s.applies).map(s => {
         const cur = f.current && f.current.key === s.key;
-        return `<span style="font-size:10px;padding:1px 6px;border-radius:9px;background:${s.isDone ? 'var(--gb)' : cur ? 'var(--ad)' : 'var(--i8)'};color:${
+        return `<span style="font-size:var(--fs-10);padding:1px 6px;border-radius:var(--rd-9);background:${s.isDone ? 'var(--gb)' : cur ? 'var(--ad)' : 'var(--i8)'};color:${
           s.isDone ? 'var(--g)' : cur ? 'var(--a)' : 'var(--i4)'}${cur ? ';font-weight:700' : ''}">${s.isDone ? '✓' : cur ? '●' : '○'} ${escapeHtml(s.label)}</span>`;
       }).join('')}</div>
       <div style="display:flex;align-items:center;gap:8px">
-        <div style="font-size:11.5px;font-weight:600;color:${na.done ? 'var(--g)' : 'var(--a)'};flex:1">${na.done ? '✓ 연락 완료' : `지금 할 일 · ${escapeHtml(na.text)}`}${
-          na.due ? ` <span style="font-weight:400;color:${na.due < td() ? 'var(--re)' : 'var(--i4)'};font-size:10.5px">마감 ${escapeHtml(na.due)}</span>` : ''}</div>
-        <button class="btn" style="font-size:10.5px" onclick="closeDr();openSpeakerDr('${escAttr(sp.id)}'${na.done ? '' : `);openFlowDraft('${escAttr(na.step)}'`})">${na.done ? '연사 열기' : '✉ 메일 초안'}</button>
+        <div style="font-size:var(--fs-11_5);font-weight:600;color:${na.done ? 'var(--g)' : 'var(--a)'};flex:1">${na.done ? '✓ 연락 완료' : `지금 할 일 · ${escapeHtml(na.text)}`}${
+          na.due ? ` <span style="font-weight:400;color:${na.due < td() ? 'var(--re)' : 'var(--i4)'};font-size:var(--fs-10_5)">마감 ${escapeHtml(na.due)}</span>` : ''}</div>
+        <button class="btn" style="font-size:var(--fs-10_5)" onclick="closeDr();openSpeakerDr('${escAttr(sp.id)}'${na.done ? '' : `);openFlowDraft('${escAttr(na.step)}'`})">${na.done ? '연사 열기' : '✉ 메일 초안'}</button>
       </div></div>`;
   }).join('');
 }
@@ -767,18 +767,18 @@ const evOf  = (t) => {
 export function dEv(t) {
   const evs = evOf(t);
   if (!evs.length) return `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><p>행사 참여 이력 없음</p>${
-    coOf(t) ? '' : '<p style="font-size:11px;color:var(--i5)">기업DB에서 같은 이름의 기업을 못 찾았어요</p>'}</div>`;
+    coOf(t) ? '' : '<p style="font-size:var(--fs-11);color:var(--i5)">기업DB에서 같은 이름의 기업을 못 찾았어요</p>'}</div>`;
   return evs.map(e => `<div class="evc2"><div class="evc2tp"><div class="evnm">${escapeHtml(e.name)}</div><div class="evdt">${escapeHtml(e.date)}</div></div>
-    <div style="font-size:10px;color:var(--i4);margin-bottom:5px">📍 ${escapeHtml(e.loc)}</div>
+    <div style="font-size:var(--fs-10);color:var(--i4);margin-bottom:5px">📍 ${escapeHtml(e.loc)}</div>
     <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:5px">${e.roles.map(r => `<span class="pill ${RP[r] || 'p-gray'}">${escapeHtml(r)}</span>`).join('')}</div>
-    ${e.people.map(p => `<div style="font-size:11px;color:var(--i3);padding:2px 0">👤 ${escapeHtml(p)}</div>`).join('')}
+    ${e.people.map(p => `<div style="font-size:var(--fs-11);color:var(--i3);padding:2px 0">👤 ${escapeHtml(p)}</div>`).join('')}
     ${e.note ? `<div class="evno">${escapeHtml(e.note)}</div>` : ''}</div>`).join('');
 }
 export function dCon(t) {
   const cons = conOf(t);
   if (!cons.length) return `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg><p>담당자 없음</p>${
-    coOf(t) ? '<p style="font-size:11px;color:var(--i5)">기업DB에 이 기업의 연락처가 아직 없어요</p>'
-            : '<p style="font-size:11px;color:var(--i5)">기업DB에서 같은 이름의 기업을 못 찾았어요</p>'}</div>`;
+    coOf(t) ? '<p style="font-size:var(--fs-11);color:var(--i5)">기업DB에 이 기업의 연락처가 아직 없어요</p>'
+            : '<p style="font-size:var(--fs-11);color:var(--i5)">기업DB에서 같은 이름의 기업을 못 찾았어요</p>'}</div>`;
   return cons.map(p => `<div class="conc"><div class="conav">${escapeHtml(p.name.slice(0, 2))}</div><div style="flex:1"><div class="connm">${escapeHtml(p.name)}</div><div class="conti">${escapeHtml(p.title)}</div><div class="conps">${p.events.map(e => `<span class="pill p-gray">${escapeHtml(e)}</span>`).join('')}</div></div><div style="display:flex;flex-direction:column;gap:3px">${p.cats.map(c => `<span class="pill ${RP[c] || 'p-gray'}">${escapeHtml(c)}</span>`).join('')}</div></div>`).join('');
 }
 /* setStg/chgStD/addLog — 원본은 이 세 함수를 정의한 뒤 auth/audit 섹션에서

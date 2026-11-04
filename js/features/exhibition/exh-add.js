@@ -90,7 +90,7 @@ export function openExhAdd(){
       <div class="fg"><label class="fl">신청순</label>
         <input class="fi" id="exh-add-order" value="${next}" inputmode="numeric"></div>
       <div id="exh-add-hits" style="margin:-4px 0 8px"></div>
-      <div id="exh-add-msg" style="font-size:11.5px;color:var(--i4);min-height:16px"></div>
+      <div id="exh-add-msg" style="font-size:var(--fs-11_5);color:var(--i4);min-height:16px"></div>
     </div>
     <div class="mf2">
       <button class="btn" onclick="closeExhAdd()">취소</button>
@@ -114,9 +114,9 @@ export function renderExhAddHits(){
   if(exhUi.exhAddPickedOrg){
     const o = getOrgById(exhUi.exhAddPickedOrg);
     if(o){
-      box.innerHTML = `<div style="display:flex;align-items:center;gap:8px;background:var(--bl-w,#eff6ff);border:1px solid var(--bl,#3b82f6);border-radius:8px;padding:7px 10px">
-        <span style="font-size:12px;color:var(--i3)">기업DB의 <b>${escapeHtml(orgName(o))}</b>에 연결합니다</span>
-        <button class="btn" style="margin-left:auto;padding:2px 8px;font-size:11px" id="exh-add-unpick">해제</button></div>`;
+      box.innerHTML = `<div style="display:flex;align-items:center;gap:8px;background:var(--bl-w,#eff6ff);border:1px solid var(--bl,#3b82f6);border-radius:var(--r);padding:7px 10px">
+        <span style="font-size:var(--fs-12);color:var(--i3)">기업DB의 <b>${escapeHtml(orgName(o))}</b>에 연결합니다</span>
+        <button class="btn" style="margin-left:auto;padding:2px 8px;font-size:var(--fs-11)" id="exh-add-unpick">해제</button></div>`;
       document.getElementById('exh-add-unpick')?.addEventListener('click', () => {
         exhUi.exhAddPickedOrg = ''; renderExhAddHits();
       });
@@ -131,13 +131,13 @@ export function renderExhAddHits(){
     .sort((a, b) => b.score - a.score).slice(0, 6);
   if(!hits.length){ box.innerHTML = ''; return; }
 
-  box.innerHTML = `<div style="font-size:11px;color:var(--i4);margin-bottom:4px">기업DB에 비슷한 이름이 있어요 — 같은 곳이면 눌러서 연결하세요</div>
+  box.innerHTML = `<div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:4px">기업DB에 비슷한 이름이 있어요 — 같은 곳이면 눌러서 연결하세요</div>
     <div style="display:flex;flex-direction:column;gap:4px;max-height:150px;overflow:auto">${
       hits.map(({ org: o, score }) => `<button class="btn" data-org="${escapeHtml(o.id)}"
-        style="display:flex;align-items:center;gap:8px;text-align:left;padding:5px 9px;font-size:12px">
+        style="display:flex;align-items:center;gap:8px;text-align:left;padding:5px 9px;font-size:var(--fs-12)">
         <span style="font-weight:600">${escapeHtml(o.name_ko || o.name_en || '')}</span>
-        ${o.name_ko && o.name_en ? `<span style="color:var(--i4);font-size:11px">${escapeHtml(o.name_en)}</span>` : ''}
-        <span style="margin-left:auto;color:var(--i4);font-size:11px">${score >= 1 ? '같은 이름' : `${Math.round(score*100)}%`}</span>
+        ${o.name_ko && o.name_en ? `<span style="color:var(--i4);font-size:var(--fs-11)">${escapeHtml(o.name_en)}</span>` : ''}
+        <span style="margin-left:auto;color:var(--i4);font-size:var(--fs-11)">${score >= 1 ? '같은 이름' : `${Math.round(score*100)}%`}</span>
       </button>`).join('')}</div>`;
   box.querySelectorAll('[data-org]').forEach((b) => {
     b.addEventListener('click', () => {
@@ -275,7 +275,7 @@ export function openExhImport(){
           ${exhEventOptions().map(e => `<option value="${escapeHtml(e.key)}"${e.key === evKey ? ' selected' : ''}>${escapeHtml(e.name || e.key)}</option>`).join('')}
         </select></div>
       <div class="fg"><label class="fl">대상 기업</label>
-        <div id="exh-imp-list" style="max-height:300px;overflow-y:auto;border:1px solid var(--i7);border-radius:8px;padding:6px"></div></div>
+        <div id="exh-imp-list" style="max-height:300px;overflow-y:auto;border:1px solid var(--i7);border-radius:var(--r);padding:6px"></div></div>
     </div>
     <div class="mf2">
       <button class="btn" onclick="closeExhImport()">취소</button>
@@ -295,17 +295,17 @@ export function renderExhImportList(){
   const alreadyOrg = new Set(exhibitorsForEvent(evKey).map(x => String(x.org_id || '')).filter(Boolean));
 
   if(!cands.length){
-    el.innerHTML = `<div style="font-size:12px;color:var(--i4);padding:14px;text-align:center">
+    el.innerHTML = `<div style="font-size:var(--fs-12);color:var(--i4);padding:14px;text-align:center">
       이 행사에 "전시참가기업" 역할로 기록된 기업이 없어요.<br>
       업로드 시 참가 역할을 전시참가기업으로 지정했는지 확인해주세요.</div>`;
     return;
   }
   el.innerHTML = cands.map((c, i) => {
     const dup = already.has(c.company_key) || (!!c.org_id && alreadyOrg.has(String(c.org_id)));
-    return `<label style="display:flex;align-items:center;gap:9px;padding:6px 7px;border-radius:6px;cursor:${dup ? 'default' : 'pointer'};opacity:${dup ? .45 : 1}">
+    return `<label style="display:flex;align-items:center;gap:9px;padding:6px 7px;border-radius:var(--rd-6);cursor:${dup ? 'default' : 'pointer'};opacity:${dup ? .45 : 1}">
       <input type="checkbox" class="exh-imp-cb" data-i="${i}" ${dup ? 'disabled' : 'checked'}>
-      <span style="font-weight:600;font-size:12px;flex:1">${escapeHtml(c.company_name)}</span>
-      ${c.people.length ? `<span style="font-size:10px;color:var(--i4)">${escapeHtml(c.people.slice(0,2).join(', '))}${c.people.length > 2 ? ` 외 ${c.people.length - 2}` : ''}</span>` : ''}
+      <span style="font-weight:600;font-size:var(--fs-12);flex:1">${escapeHtml(c.company_name)}</span>
+      ${c.people.length ? `<span style="font-size:var(--fs-10);color:var(--i4)">${escapeHtml(c.people.slice(0,2).join(', '))}${c.people.length > 2 ? ` 외 ${c.people.length - 2}` : ''}</span>` : ''}
       ${dup ? '<span class="pill p-gray">등록됨</span>' : ''}
     </label>`;
   }).join('');

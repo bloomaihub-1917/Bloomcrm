@@ -76,25 +76,25 @@ function render(){
   const ev = EVENT_LIST.find(e => e.key === edEv) || {};
   const steps = exhMailSteps(edEv, { withOff: true });
   const ro = locked();
-  ov.innerHTML = `<div style="background:var(--W);border-radius:10px;width:min(760px,100%);padding:16px 18px;box-shadow:0 10px 30px rgba(0,0,0,.2)">
+  ov.innerHTML = `<div style="background:var(--W);border-radius:var(--rd-10);width:min(760px,100%);padding:16px 18px;box-shadow:0 10px 30px rgba(0,0,0,.2)">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-      <b style="font-size:14px">전시 메일 단계</b>
-      <span style="font-size:11.5px;color:var(--i4)">${escapeHtml(ev.name || ev.short || edEv)}</span>
-      <button class="btn" style="margin-left:auto;font-size:11px" title="단계와 상관없이 꺼내 쓰는 양식 — 이 행사만 또는 모든 행사 공통"
+      <b style="font-size:var(--fs-14)">전시 메일 단계</b>
+      <span style="font-size:var(--fs-11_5);color:var(--i4)">${escapeHtml(ev.name || ev.short || edEv)}</span>
+      <button class="btn" style="margin-left:auto;font-size:var(--fs-11)" title="단계와 상관없이 꺼내 쓰는 양식 — 이 행사만 또는 모든 행사 공통"
         onclick="openMailTemplates('exh','${escAttr(edEv)}')">📚 양식 보관함</button>
-      <button class="btn" style="font-size:11px" title="다른 행사에서 다듬은 문구·더한 단계·변형을 이번 행사로 복사합니다"
+      <button class="btn" style="font-size:var(--fs-11)" title="다른 행사에서 다듬은 문구·더한 단계·변형을 이번 행사로 복사합니다"
         onclick="openMailTemplates('exh','${escAttr(edEv)}','import')">⇩ 지난 행사에서 가져오기</button>
-      <button class="btn" style="font-size:11px" onclick="closeExhMailEditor()">닫기</button>
+      <button class="btn" style="font-size:var(--fs-11)" onclick="closeExhMailEditor()">닫기</button>
     </div>
-    <div style="font-size:11px;color:var(--i4);line-height:1.6;margin-bottom:10px">
+    <div style="font-size:var(--fs-11);color:var(--i4);line-height:1.6;margin-bottom:10px">
       참가사 메일 탭과 «여러 기업에 메일»에서 단계를 고르면 이 문구로 채워집니다. 고치면 바로 저장돼요.
       기본 단계는 끄기만 되고, 더한 단계는 지울 수 있어요. 해외 기업(기업DB 국가)에는 영문 양식이 나갑니다.
       ${ro ? '<br><b style="color:var(--re)">진행 완료된 전시라 열람만 됩니다.</b>' : ''}</div>
     ${steps.map((st, i) => rowHtml(st, i, ro)).join('')}
-    ${edOpen === 'new' ? `<div style="border:1px solid var(--a);border-radius:8px;margin-bottom:6px">${formHtml(edDraft, true)}</div>` : ''}
+    ${edOpen === 'new' ? `<div style="border:1px solid var(--a);border-radius:var(--r);margin-bottom:6px">${formHtml(edDraft, true)}</div>` : ''}
     ${ro || edOpen === 'new' ? '' : `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
-      <button class="btn bp" style="font-size:11px" onclick="newExhMailStep(-1)">+ 단계 추가</button>
-      ${EXH_CUSTOM_PRESETS.map((p, k) => `<button class="btn" style="font-size:11px" onclick="newExhMailStep(${k})">+ ${escapeHtml(p.label)}</button>`).join('')}</div>`}
+      <button class="btn bp" style="font-size:var(--fs-11)" onclick="newExhMailStep(-1)">+ 단계 추가</button>
+      ${EXH_CUSTOM_PRESETS.map((p, k) => `<button class="btn" style="font-size:var(--fs-11)" onclick="newExhMailStep(${k})">+ ${escapeHtml(p.label)}</button>`).join('')}</div>`}
   </div>`;
   fillFiles();
 }
@@ -102,20 +102,20 @@ function render(){
 function rowHtml(st, i, ro){
   const open = edOpen === st.key;
   const due = dueText(st);
-  return `<div style="border:1px solid ${open ? 'var(--a)' : 'var(--i6)'};border-radius:8px;margin-bottom:6px;background:var(--W)">
-    <div style="padding:7px 10px;display:flex;gap:8px;align-items:center;font-size:12px;flex-wrap:wrap;${st.off ? 'opacity:.55' : ''}">
+  return `<div style="border:1px solid ${open ? 'var(--a)' : 'var(--i6)'};border-radius:var(--r);margin-bottom:6px;background:var(--W)">
+    <div style="padding:7px 10px;display:flex;gap:8px;align-items:center;font-size:var(--fs-12);flex-wrap:wrap;${st.off ? 'opacity:.55' : ''}">
       <input type="checkbox" title="이 행사에서 이 단계를 씀" ${st.off ? '' : 'checked'} ${ro ? 'disabled' : ''}
         onchange="toggleExhMailStep('${escAttr(st.key)}',this.checked)">
       <b>${i + 1}. ${escapeHtml(st.label || '(이름 없음)')}</b>
-      ${st.custom ? '<span class="pill p-amber" style="font-size:9.5px">더한 단계</span>' : ''}
-      ${due ? `<span class="pill p-gray" style="font-size:9.5px">${escapeHtml(due)}</span>` : ''}
-      ${st.round ? `<span class="pill p-amber" style="font-size:9.5px" title="«여러 기업에 메일»에서 연 다시 보내기 묶음">다시 보내기 중 · ${escapeHtml(st.round.label || '')}</span>` : ''}
-      ${st.key === 'booth_change' ? '<span style="font-size:10px;color:var(--i4)">알린 부스와 지금 부스가 다른 곳에만 섬</span>' : ''}
+      ${st.custom ? '<span class="pill p-amber" style="font-size:var(--fs-9_5)">더한 단계</span>' : ''}
+      ${due ? `<span class="pill p-gray" style="font-size:var(--fs-9_5)">${escapeHtml(due)}</span>` : ''}
+      ${st.round ? `<span class="pill p-amber" style="font-size:var(--fs-9_5)" title="«여러 기업에 메일»에서 연 다시 보내기 묶음">다시 보내기 중 · ${escapeHtml(st.round.label || '')}</span>` : ''}
+      ${st.key === 'booth_change' ? '<span style="font-size:var(--fs-10);color:var(--i4)">알린 부스와 지금 부스가 다른 곳에만 섬</span>' : ''}
       ${ro ? '' : `<span style="margin-left:auto;display:flex;gap:4px">
-        ${st.off ? '' : `<button class="btn" style="font-size:10.5px" title="이 단계 메일을 여러 기업에 한 번에 보냅니다"
+        ${st.off ? '' : `<button class="btn" style="font-size:var(--fs-10_5)" title="이 단계 메일을 여러 기업에 한 번에 보냅니다"
           onclick="openExhBulkMail('${escAttr(st.key)}')">📨 여러 기업에</button>`}
-        <button class="btn" style="font-size:10.5px" onclick="editExhMailStep('${escAttr(st.key)}')">${open ? '접기' : '고치기'}</button>
-        ${st.custom ? `<button class="btn" style="font-size:10.5px;color:var(--re)" onclick="deleteExhMailStep('${escAttr(st.key)}')">지우기</button>` : ''}</span>`}
+        <button class="btn" style="font-size:var(--fs-10_5)" onclick="editExhMailStep('${escAttr(st.key)}')">${open ? '접기' : '고치기'}</button>
+        ${st.custom ? `<button class="btn" style="font-size:var(--fs-10_5);color:var(--re)" onclick="deleteExhMailStep('${escAttr(st.key)}')">지우기</button>` : ''}</span>`}
     </div>
     ${open ? formHtml(st, false) : ''}
   </div>`;
@@ -126,7 +126,7 @@ function formHtml(st, isNew){
   const fld = (f, l) => {
     const v = st[f] ?? '';
     if(f.includes('body')) return `<div style="grid-column:1/-1"><div class="mlbl">${l}</div>
-      <textarea class="fi" id="xe-${f}" rows="7" style="width:100%;resize:vertical;font-size:11.5px">${escapeHtml(v)}</textarea></div>`;
+      <textarea class="fi" id="xe-${f}" rows="7" style="width:100%;resize:vertical;font-size:var(--fs-11_5)">${escapeHtml(v)}</textarea></div>`;
     // 제목은 한 줄 통째로 — 국문 제목·본문, 영문 제목·본문 순으로 위아래로 놓인다
     return `<div${f === 'label' || f.includes('subject') ? ' style="grid-column:1/-1"' : ''}><div class="mlbl">${l}</div>
       <input class="fi" id="xe-${f}" value="${escapeHtml(v)}" style="width:100%"></div>`;
@@ -139,9 +139,9 @@ function formHtml(st, isNew){
       <option value="__end"${st.after == null || st.after === '__end' ? ' selected' : ''}>맨 끝</option></select></div>
     <div><div class="mlbl">마감일 <span style="font-weight:400;color:var(--i4)">— {마감일} 자리에 들어가요</span></div>
       <input class="fi" type="date" id="xe-due_date" value="${escapeHtml(st.due_date || '')}" style="width:160px"></div>`
-    : `<div style="grid-column:1/-1;font-size:10.5px;color:var(--i4)">{마감일}은 설정 › 행사 › 일정의 마감을 읽어요${st.due ? ` — 지금 ${escapeHtml(dueText(st))}` : ' — 이 단계는 마감이 없어요'}.</div>`;
+    : `<div style="grid-column:1/-1;font-size:var(--fs-10_5);color:var(--i4)">{마감일}은 설정 › 행사 › 일정의 마감을 읽어요${st.due ? ` — 지금 ${escapeHtml(dueText(st))}` : ' — 이 단계는 마감이 없어요'}.</div>`;
   const sinceFld = st.key === 'note' || st.key === 'booth_change' || isNew ? '' : `
-    <div style="grid-column:1/-1;font-size:10.5px;color:var(--i4);line-height:1.6">이미 받은 곳에 개정판을 다시 보내려면 «여러 기업에 메일»에서 이 단계를 고르고 «↻ 이미 받은 곳에 다시 보내기»를 누르세요.</div>`;
+    <div style="grid-column:1/-1;font-size:var(--fs-10_5);color:var(--i4);line-height:1.6">이미 받은 곳에 개정판을 다시 보내려면 «여러 기업에 메일»에서 이 단계를 고르고 «↻ 이미 받은 곳에 다시 보내기»를 누르세요.</div>`;
   return `<div style="padding:4px 11px 11px;border-top:1px solid var(--i7)">
     <div data-vscope><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
       ${FIELDS.map(([f, l]) => fld(f, l)).join('')}${extra}${sinceFld}
@@ -151,13 +151,13 @@ function formHtml(st, isNew){
     ${isNew ? '' : variantsHtml('exh', edEv, st.key, locked())}
     ${isNew ? '' : `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--i7)">
       <div class="mlbl">기본 첨부 <span style="font-weight:400;color:var(--i4)">— 이 단계 메일에 자동으로 붙어요 (파일당 3MB)</span></div>
-      <div id="xe-files" data-step="${escapeHtml(exhMailFileStep(st.key))}" style="font-size:11px;color:var(--i4)">불러오는 중…</div>
-      <label class="btn" style="font-size:10.5px;margin-top:5px;display:inline-block;cursor:pointer">+ 파일 올리기
+      <div id="xe-files" data-step="${escapeHtml(exhMailFileStep(st.key))}" style="font-size:var(--fs-11);color:var(--i4)">불러오는 중…</div>
+      <label class="btn" style="font-size:var(--fs-10_5);margin-top:5px;display:inline-block;cursor:pointer">+ 파일 올리기
         <input type="file" multiple style="display:none" onchange="uploadExhMailEdFiles('${escAttr(exhMailFileStep(st.key))}',this)"></label></div>`}
     <div style="display:flex;gap:6px;margin-top:10px;align-items:center">
-      <button class="btn bp" style="font-size:11px" onclick="saveExhMailStep('${isNew ? 'new' : escAttr(st.key)}')">${isNew ? '추가' : '저장'}</button>
-      <button class="btn" style="font-size:11px" onclick="editExhMailStep(null)">취소</button>
-      ${!custom ? `<button class="btn" style="font-size:11px;margin-left:auto" onclick="resetExhMailStep('${escAttr(st.key)}')"
+      <button class="btn bp" style="font-size:var(--fs-11)" onclick="saveExhMailStep('${isNew ? 'new' : escAttr(st.key)}')">${isNew ? '추가' : '저장'}</button>
+      <button class="btn" style="font-size:var(--fs-11)" onclick="editExhMailStep(null)">취소</button>
+      ${!custom ? `<button class="btn" style="font-size:var(--fs-11);margin-left:auto" onclick="resetExhMailStep('${escAttr(st.key)}')"
         title="이 행사에서 고친 문구를 지우고 기본 문구로 돌립니다">기본 문구로 되돌리기</button>` : ''}
     </div>
   </div>`;
@@ -170,7 +170,7 @@ function fillFiles(){
   el.innerHTML = files.length ? files.map(f => `<div style="display:flex;gap:6px;align-items:center;padding:2px 0">
       📎 <span style="color:var(--i2)">${escapeHtml(f.filename)}</span>
       <span>${(Number(f.size || 0) / 1024).toFixed(0)}KB</span>
-      <button class="btn" style="font-size:10px;padding:1px 6px;margin-left:auto" onclick="removeExhMailEdFile('${escAttr(f.id)}')">삭제</button></div>`).join('')
+      <button class="btn" style="font-size:var(--fs-10);padding:1px 6px;margin-left:auto" onclick="removeExhMailEdFile('${escAttr(f.id)}')">삭제</button></div>`).join('')
     : '없음';
 }
 

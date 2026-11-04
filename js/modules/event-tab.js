@@ -189,7 +189,7 @@ export function buildEvDbList(){
   if(!el) return;
 
   if(!EVENT_LIST.length){
-    el.innerHTML = '<div style="font-size:11px;color:var(--i4);padding:8px 4px">등록된 행사가 없어요.</div>';
+    el.innerHTML = '<div style="font-size:var(--fs-11);color:var(--i4);padding:8px 4px">등록된 행사가 없어요.</div>';
     return;
   }
   // 최근 행사부터 — 지금 챙길 일이 있는 건 대개 최근 것이다
@@ -250,7 +250,7 @@ export function renderEvDb(){
     el.innerHTML = `<div class="empty" style="height:auto;padding:60px 20px;text-align:center">
       <div style="font-size:30px;margin-bottom:10px">🗓</div>
       <div style="font-weight:700;margin-bottom:6px">등록된 행사가 없어요</div>
-      <div style="font-size:12px;color:var(--i4)">설정 › 행사 관리에서 행사를 먼저 만들어주세요</div></div>`;
+      <div style="font-size:var(--fs-12);color:var(--i4)">설정 › 행사 관리에서 행사를 먼저 만들어주세요</div></div>`;
     return;
   }
   /* 신청 대기를 처음 한 번 받아 온다 — 오면 onPendingChange가 다시 그린다 */
@@ -272,12 +272,12 @@ export function renderEvDb(){
    그래서 하나만 고르는 드롭다운이 아니라 체크로 둔다. */
 function domainField(ev){
   const on = String(ev.domain || '').split('|').map(v => v.trim()).filter(Boolean);
-  return `<div><div class="mlbl">분야 <span style="font-size:9px;color:var(--i4)">마스터DB에서 «이 분야 행사에 왔던 사람»을 찾을 때 씁니다</span></div>
+  return `<div><div class="mlbl">분야 <span style="font-size:var(--fs-9);color:var(--i4)">마스터DB에서 «이 분야 행사에 왔던 사람»을 찾을 때 씁니다</span></div>
     <div id="evdb-domain" style="display:flex;gap:10px;flex-wrap:wrap;padding:7px 0">
-      ${DOMAINS.map(d => `<label style="display:flex;align-items:center;gap:5px;font-size:11.5px;cursor:pointer">
+      ${DOMAINS.map(d => `<label style="display:flex;align-items:center;gap:5px;font-size:var(--fs-11_5);cursor:pointer">
         <input type="checkbox" class="evdb-dom" value="${escapeHtml(d.id)}"${on.includes(d.id) ? ' checked' : ''}>
         ${escapeHtml(d.name)}</label>`).join('')
-        || '<span style="font-size:11px;color:var(--i4)">설정 › 기업 분류에서 분야를 먼저 만들어주세요</span>'}
+        || '<span style="font-size:var(--fs-11);color:var(--i4)">설정 › 기업 분류에서 분야를 먼저 만들어주세요</span>'}
     </div></div>`;
 }
 
@@ -308,10 +308,10 @@ function profileHtml(ev){
   const already = orgs.filter(o => tgtKeys.has(o.key)).length;
   const parts = evParts(ev.key);
 
-  const stat = (v, l, sub) => `<div style="flex:1;min-width:118px;background:var(--W);border:1px solid var(--i6);border-radius:9px;padding:11px 13px">
-    <div style="font-size:19px;font-weight:700;color:var(--i1);line-height:1.1">${v}</div>
-    <div style="font-size:10.5px;color:var(--i4);margin-top:3px">${l}</div>
-    ${sub ? `<div style="font-size:10px;color:var(--i5);margin-top:3px">${sub}</div>` : ''}</div>`;
+  const stat = (v, l, sub) => `<div style="flex:1;min-width:118px;background:var(--W);border:1px solid var(--i6);border-radius:var(--rd-9);padding:11px 13px">
+    <div style="font-size:var(--fs-19);font-weight:700;color:var(--i1);line-height:1.1">${v}</div>
+    <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:3px">${l}</div>
+    ${sub ? `<div style="font-size:var(--fs-10);color:var(--i5);margin-top:3px">${sub}</div>` : ''}</div>`;
 
   /* 참여자와 참여 기업이 같은 수로 나오면 안 접힌 것처럼 보인다. 실제로 1기업
      1명인 행사(전시 신청 목록이 그렇다)가 있으므로, 몇 명이 한 기업으로 접혔는지
@@ -336,30 +336,30 @@ function profileHtml(ev){
     </div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px">
-      <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:13px 15px">
-        <div style="font-size:11px;font-weight:700;color:var(--i2);margin-bottom:8px">역할 분포</div>
+      <div style="background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-10);padding:13px 15px">
+        <div style="font-size:var(--fs-11);font-weight:700;color:var(--i2);margin-bottom:8px">역할 분포</div>
         ${topRoles.length ? topRoles.map(([r, n]) => `<div style="display:flex;align-items:center;gap:8px;padding:3px 0">
           <span class="pill ${escAttr(RP[r] || 'p-gray')}" style="min-width:88px;text-align:center">${escapeHtml(r)}</span>
-          <div style="flex:1;height:6px;background:var(--i7);border-radius:3px;overflow:hidden">
+          <div style="flex:1;height:6px;background:var(--i7);border-radius:var(--rd-3);overflow:hidden">
             <div style="height:100%;width:${Math.round(n / rows.length * 100)}%;background:var(--i4)"></div></div>
-          <span style="font-size:11px;color:var(--i3);min-width:34px;text-align:right">${n}명</span>
-        </div>`).join('') : '<div style="font-size:11.5px;color:var(--i4)">참여 기록이 없어요.</div>'}
-        ${roleSum > rows.length ? `<div style="font-size:10px;color:var(--i5);margin-top:6px">
+          <span style="font-size:var(--fs-11);color:var(--i3);min-width:34px;text-align:right">${n}명</span>
+        </div>`).join('') : '<div style="font-size:var(--fs-11_5);color:var(--i4)">참여 기록이 없어요.</div>'}
+        ${roleSum > rows.length ? `<div style="font-size:var(--fs-10);color:var(--i5);margin-top:6px">
           합이 참여자보다 많아요 — 한 사람이 여러 역할로 온 경우가 있습니다.</div>` : ''}
       </div>
-      <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:13px 15px">
-        <div style="font-size:11px;font-weight:700;color:var(--i2);margin-bottom:8px">국가</div>
+      <div style="background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-10);padding:13px 15px">
+        <div style="font-size:var(--fs-11);font-weight:700;color:var(--i2);margin-bottom:8px">국가</div>
         ${topCntry.length ? topCntry.map(([c, n]) =>
-          `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:11.5px">
+          `<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:var(--fs-11_5)">
             <span style="color:var(--i2)">${escapeHtml(c)}</span>
             <span style="color:var(--i4)">${n}명</span></div>`).join('')
-          : '<div style="font-size:11.5px;color:var(--i4)">참여 기록이 없어요.</div>'}
+          : '<div style="font-size:var(--fs-11_5);color:var(--i4)">참여 기록이 없어요.</div>'}
       </div>
     </div>
 
-    <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:16px">
-      <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">행사 개요</div>
-      <div style="font-size:11px;color:var(--i4);margin-bottom:12px">
+    <div style="background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-10);padding:16px">
+      <div style="font-size:var(--fs-12);font-weight:700;color:var(--i2);margin-bottom:4px">행사 개요</div>
+      <div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:12px">
         기간·장소·진행 파트는 <b>설정 › 행사 관리</b>에서 정합니다. 여기는 몇 해 뒤에 이 행사를 다시 꺼내 볼 때 필요한 것들이에요.
       </div>
 
@@ -390,7 +390,7 @@ function profileHtml(ev){
 
       <div style="display:flex;gap:8px;align-items:center">
         <button class="btn bp" onclick="saveEvDbProfile()" style="min-width:80px">저장</button>
-        <span id="evdb-prof-msg" style="font-size:11px;color:var(--g)"></span>
+        <span id="evdb-prof-msg" style="font-size:var(--fs-11);color:var(--g)"></span>
       </div>
     </div>
   </div>`;
@@ -475,7 +475,7 @@ const confirmBadge = (r) => r.confirmedAt
       ? `${r.via === 'excel' ? '엑셀로 올린' : '등록 링크로 받은'} 신청(${escapeHtml(r.submittedAt || '')}) — 마스터DB에는 아직 없어요. 눌러서 참가 확정하면 옮겨요`
       : '눌러서 참가 확정'}"
       onclick="event.stopPropagation();toggleEvDbConfirm(${cidArg(r)})">타겟</span>${r.pendingId
-      ? `<div style="font-size:9.5px;color:var(--i4);margin-top:2px">${r.via === 'excel' ? '📄 엑셀' : '🔗 신청'}</div>` : ''}`;
+      ? `<div style="font-size:var(--fs-9_5);color:var(--i4);margin-top:2px">${r.via === 'excel' ? '📄 엑셀' : '🔗 신청'}</div>` : ''}`;
 /* 신청 대기 줄의 cid는 글자('R-…')다 — onclick에 그대로 박으면 깨지니 따옴표째 넘긴다 */
 const cidArg = (r) => escAttr(JSON.stringify(r.cid));
 
@@ -517,17 +517,17 @@ function peopleHtml(ev){
     <div style="padding:8px 16px 0">${roleChips(ev.key)}</div>
     <div style="padding:10px 16px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       ${searchBoxHtml('이름·기업·직함 검색…')}
-      <button class="btn" style="font-size:11px" onclick="toggleEvDbPeopleAll()">전체 선택/해제</button>
+      <button class="btn" style="font-size:var(--fs-11)" onclick="toggleEvDbPeopleAll()">전체 선택/해제</button>
       <div style="flex:1"></div>
-      <span id="evdb-picked-n" style="font-size:11px;color:var(--i4)">${picked ? picked + '명 선택' : ''}</span>
-      <button class="btn" style="font-size:11px" onclick="confirmEvDbPeople(true)">참가 확정</button>
-      <button class="btn" style="font-size:11px" onclick="confirmEvDbPeople(false)">확정 해제</button>
-      <button class="btn" style="font-size:11px" onclick="reloadEvDbPending(this)"
+      <span id="evdb-picked-n" style="font-size:var(--fs-11);color:var(--i4)">${picked ? picked + '명 선택' : ''}</span>
+      <button class="btn" style="font-size:var(--fs-11)" onclick="confirmEvDbPeople(true)">참가 확정</button>
+      <button class="btn" style="font-size:var(--fs-11)" onclick="confirmEvDbPeople(false)">확정 해제</button>
+      <button class="btn" style="font-size:var(--fs-11)" onclick="reloadEvDbPending(this)"
         title="등록 링크·엑셀로 들어온 신청을 서버에서 다시 받아 와요">⟳ 등록자 다시 불러오기</button>
-      <button class="btn" style="font-size:11px" onclick="openRegisterLinks('${escAttr(ev.key)}')"
+      <button class="btn" style="font-size:var(--fs-11)" onclick="openRegisterLinks('${escAttr(ev.key)}')"
         title="바깥 신청 링크·엑셀 명단 — 받은 신청은 확정할 때 마스터DB로 옮겨요">🔗 등록 링크</button>
-      <button class="btn" style="font-size:11px" onclick="openEvDbMailList()">메일 대상 모으기</button>
-      <button class="btn bp" style="font-size:11px" onclick="exportEvDbPeople()">명단 내보내기 (${shown.length})</button>
+      <button class="btn" style="font-size:var(--fs-11)" onclick="openEvDbMailList()">메일 대상 모으기</button>
+      <button class="btn bp" style="font-size:var(--fs-11)" onclick="exportEvDbPeople()">명단 내보내기 (${shown.length})</button>
     </div>
     <div id="evdb-rows" style="padding:6px 16px 40px">${peopleRowsHtml()}</div>`;
 }
@@ -539,19 +539,19 @@ const searchBoxHtml = (ph) => `<div class="srch" style="width:100%;max-width:340
 
 function peopleRowsHtml(){
   const l = filteredRows();
-  if(!l.length) return '<div style="font-size:12px;color:var(--i4);padding:20px 0">해당하는 참여자가 없어요.</div>';
+  if(!l.length) return '<div style="font-size:var(--fs-12);color:var(--i4);padding:20px 0">해당하는 참여자가 없어요.</div>';
 
   // 좁은 화면에서는 표가 옆으로 넘쳐 읽을 수 없다 — 카드로 바꿔 준다
-  if(isMobile()) return l.map(r => `<div style="background:var(--W);border:1px solid var(--i6);border-radius:8px;padding:10px 12px;margin-bottom:6px">
+  if(isMobile()) return l.map(r => `<div style="background:var(--W);border:1px solid var(--i6);border-radius:var(--r);padding:10px 12px;margin-bottom:6px">
     <div style="display:flex;align-items:center;gap:7px">
       <input type="checkbox" ${evdbPickedPeople.has(r.cid) ? 'checked' : ''}
         onchange="pickEvDbPerson(${cidArg(r)},this.checked)">
-      <span style="font-size:13px;font-weight:600;color:var(--i1)">${escapeHtml(r.name)}</span>
+      <span style="font-size:var(--fs-13);font-weight:600;color:var(--i1)">${escapeHtml(r.name)}</span>
       ${confirmBadge(r)}
       ${roleBadges(r)}
     </div>
-    <div style="font-size:11px;color:var(--i3);margin-top:3px">${escapeHtml(r.org)}${r.title ? ' · ' + escapeHtml(r.title) : ''}</div>
-    <div style="font-size:10.5px;color:var(--i4);margin-top:2px">${escapeHtml(countryName(r.country) || '')}${r.email ? ' · ' + escapeHtml(r.email) : ''}</div>
+    <div style="font-size:var(--fs-11);color:var(--i3);margin-top:3px">${escapeHtml(r.org)}${r.title ? ' · ' + escapeHtml(r.title) : ''}</div>
+    <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:2px">${escapeHtml(countryName(r.country) || '')}${r.email ? ' · ' + escapeHtml(r.email) : ''}</div>
   </div>`).join('');
 
   return `<div style="overflow-x:auto"><table style="width:100%">
@@ -563,12 +563,12 @@ function peopleRowsHtml(){
       <td style="text-align:center"><input type="checkbox" ${evdbPickedPeople.has(r.cid) ? 'checked' : ''}
         onchange="pickEvDbPerson(${cidArg(r)},this.checked)"></td>
       <td>${confirmBadge(r)}</td>
-      <td><span style="font-weight:600">${escapeHtml(r.name)}</span>${r.nameEn ? `<div style="font-size:10.5px;color:var(--i4)">${escapeHtml(r.nameEn)}</div>` : ''}</td>
-      <td>${escapeHtml(r.org)}${r.orgEn && r.orgEn !== r.org ? `<div style="font-size:10.5px;color:var(--i4)">${escapeHtml(r.orgEn)}</div>` : ''}</td>
-      <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(r.title)}</td>
+      <td><span style="font-weight:600">${escapeHtml(r.name)}</span>${r.nameEn ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(r.nameEn)}</div>` : ''}</td>
+      <td>${escapeHtml(r.org)}${r.orgEn && r.orgEn !== r.org ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(r.orgEn)}</div>` : ''}</td>
+      <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(r.title)}</td>
       <td>${roleBadges(r)}</td>
-      <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(countryName(r.country) || '')}</td>
-      <td style="font-size:11px;color:var(--i4)">${escapeHtml(r.email)}</td>
+      <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(countryName(r.country) || '')}</td>
+      <td style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(r.email)}</td>
     </tr>`).join('')}
     </tbody></table></div>`;
 }
@@ -579,7 +579,7 @@ function orgsHtml(ev){
   return `<div style="padding:10px 16px 0">${roleChips(ev.key, true)}</div>
     <div style="padding:10px 16px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       ${searchBoxHtml('기업명 검색…')}
-      <button class="btn" style="font-size:11px" onclick="toggleEvDbAll()">전체 선택/해제</button>
+      <button class="btn" style="font-size:var(--fs-11)" onclick="toggleEvDbAll()">전체 선택/해제</button>
       <div style="flex:1"></div>
       <button class="btn bp" id="evdb-send-btn" onclick="openEvDbSend()">타겟으로 보내기</button>
     </div>
@@ -597,7 +597,7 @@ function filteredOrgs(){
 function orgsRowsHtml(){
   const l = filteredOrgs();
   const tail = noOrgNoteHtml();
-  if(!l.length) return '<div style="font-size:12px;color:var(--i4);padding:20px 0">해당하는 기업이 없어요.</div>' + tail;
+  if(!l.length) return '<div style="font-size:var(--fs-12);color:var(--i4);padding:20px 0">해당하는 기업이 없어요.</div>' + tail;
   const tgt = targetKeys();
   const exh = exhKeysOf(evdbEvent);
 
@@ -605,20 +605,20 @@ function orgsRowsHtml(){
     const isT = tgt.has(o.key), isX = exh.has(o.key);
     const people = o.people.slice(0, 3).map(p => p.name).filter(Boolean);
     return `<label style="display:flex;align-items:center;gap:10px;background:var(--W);border:1px solid var(--i6);
-        border-radius:8px;padding:10px 12px;margin-bottom:6px;cursor:pointer">
+        border-radius:var(--r);padding:10px 12px;margin-bottom:6px;cursor:pointer">
       <input type="checkbox" class="evdb-cb" data-k="${escapeHtml(o.key)}" ${evdbPicked.has(o.key) ? 'checked' : ''}
         onchange="pickEvDbOrg('${escAttr(o.key)}',this.checked)">
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <span style="font-size:13px;font-weight:600;color:var(--i1)">${escapeHtml(o.name)}</span>
+          <span style="font-size:var(--fs-13);font-weight:600;color:var(--i1)">${escapeHtml(o.name)}</span>
           ${isT ? '<span class="pill p-green">협의 대상</span>' : ''}
           ${isX ? '<span class="pill p-purple">전시 참가</span>' : ''}
         </div>
-        <div style="font-size:11px;color:var(--i4);margin-top:3px">
+        <div style="font-size:var(--fs-11);color:var(--i4);margin-top:3px">
           ${[...o.roles].map(r => `<span class="pill ${escAttr(RP[r] || 'p-gray')}" style="margin-right:3px">${escapeHtml(r)}</span>`).join('')}
           ${escapeHtml(countryName(o.country) || '')}
         </div>
-        <div style="font-size:10.5px;color:var(--i5);margin-top:3px">
+        <div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:3px">
           ${o.people.length
             ? `${o.people.length}명 — ${escapeHtml(people.join(', '))}${o.people.length > 3 ? ` 외 ${o.people.length - 3}명` : ''}`
             : '<span style="color:var(--i5)">담당자 미등록 — 참가기업 명부에서 왔어요</span>'}
@@ -634,12 +634,12 @@ function noOrgNoteHtml(){
   const l = evNoOrg(evdbEvent);
   if(!l.length) return '';
   const names = l.slice(0, 8).map(r => r.name).filter(Boolean);
-  return `<div style="margin-top:12px;padding:10px 12px;border:1px dashed var(--i6);border-radius:8px;background:var(--i8)">
-    <div style="font-size:11.5px;font-weight:600;color:var(--i2)">소속이 비어 기업으로 묶지 못한 ${l.length}명</div>
-    <div style="font-size:10.5px;color:var(--i4);margin-top:4px">
+  return `<div style="margin-top:12px;padding:10px 12px;border:1px dashed var(--i6);border-radius:var(--r);background:var(--i8)">
+    <div style="font-size:var(--fs-11_5);font-weight:600;color:var(--i2)">소속이 비어 기업으로 묶지 못한 ${l.length}명</div>
+    <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:4px">
       ${escapeHtml(names.join(', '))}${l.length > names.length ? ` 외 ${l.length - names.length}명` : ''}
     </div>
-    <div style="font-size:10px;color:var(--i5);margin-top:5px">
+    <div style="font-size:var(--fs-10);color:var(--i5);margin-top:5px">
       참여 기업 수에서 빠져 있고 타겟으로도 보낼 수 없어요 — 마스터DB에서 소속을 채우면 여기 올라옵니다.
     </div>
   </div>`;
@@ -735,7 +735,7 @@ export function openEvDbSend(){
     <div class="mh"><div class="mt2">타겟으로 보내기</div>
       <button class="mc" onclick="closeEvDbSend()">✕</button></div>
     <div class="mb">
-      <div style="font-size:11.5px;color:var(--i4);margin-bottom:12px">
+      <div style="font-size:var(--fs-11_5);color:var(--i4);margin-bottom:12px">
         <b>${escapeHtml(from?.short || from?.name || evdbEvent)}</b>에서 만난 <b>${picked.length}개사</b>를 보냅니다.
       </div>
 
@@ -744,7 +744,7 @@ export function openEvDbSend(){
           <button class="seg-b on" id="evdb-dest-crm" onclick="setEvDbDest('crm')">협의 대상</button>
           <button class="seg-b" id="evdb-dest-exh" onclick="setEvDbDest('exh')">전시 참가기업</button>
         </div>
-        <div id="evdb-dest-hint" style="font-size:10.5px;color:var(--i5);margin-top:6px">
+        <div id="evdb-dest-hint" style="font-size:var(--fs-10_5);color:var(--i5);margin-top:6px">
           아직 영업 전인 곳 — 미접촉부터 협의 보드에 올립니다.
         </div>
       </div>
@@ -753,7 +753,7 @@ export function openEvDbSend(){
         <select class="fi" id="evdb-send-ev" style="width:100%">
           ${EVENT_LIST.map(e => `<option value="${escapeHtml(e.key)}"${e.key === evdbEvent ? ' selected' : ''}>${escapeHtml(e.short || e.name || e.key)}</option>`).join('')}
         </select>
-        <div style="font-size:10.5px;color:var(--i5);margin-top:5px">보통은 <b>다음에 열 행사</b>를 고릅니다 — 이 사람들을 부를 행사요.</div>
+        <div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:5px">보통은 <b>다음에 열 행사</b>를 고릅니다 — 이 사람들을 부를 행사요.</div>
       </div>
 
       <div id="evdb-crm-opts">
@@ -772,12 +772,12 @@ export function openEvDbSend(){
       </div>
 
       <div class="fg"><div class="fl">고른 기업</div>
-        <div style="max-height:170px;overflow-y:auto;border:1px solid var(--i6);border-radius:7px;padding:7px 9px">
-          ${picked.map(o => `<div style="font-size:11.5px;padding:2px 0;color:var(--i2)">
+        <div style="max-height:170px;overflow-y:auto;border:1px solid var(--i6);border-radius:var(--rd-7);padding:7px 9px">
+          ${picked.map(o => `<div style="font-size:var(--fs-11_5);padding:2px 0;color:var(--i2)">
             ${escapeHtml(o.name)} <span style="color:var(--i5)">· ${o.people.length}명</span></div>`).join('')}
         </div></div>
 
-      <div id="evdb-send-msg" style="font-size:11px;color:var(--re);margin-top:8px"></div>
+      <div id="evdb-send-msg" style="font-size:var(--fs-11);color:var(--re);margin-top:8px"></div>
     </div>
     <div class="mf2">
       <button class="btn" onclick="closeEvDbSend()">취소</button>
@@ -1063,16 +1063,16 @@ export function openEvDbMailList(){
   wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9999;'
     + 'display:flex;align-items:center;justify-content:center;padding:16px';
   wrap.onclick = (e) => { if(e.target === wrap) wrap.remove(); };
-  wrap.innerHTML = `<div style="background:var(--W);border-radius:12px;padding:20px;width:100%;max-width:520px;
+  wrap.innerHTML = `<div style="background:var(--W);border-radius:var(--rd-12);padding:20px;width:100%;max-width:520px;
       max-height:82vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.2)" onclick="event.stopPropagation()">
-    <div style="font-size:14px;font-weight:700;margin-bottom:4px">메일 대상 ${mails.length}명</div>
-    <div style="font-size:11.5px;color:var(--i3);line-height:1.6;margin-bottom:10px">
+    <div style="font-size:var(--fs-14);font-weight:700;margin-bottom:4px">메일 대상 ${mails.length}명</div>
+    <div style="font-size:var(--fs-11_5);color:var(--i3);line-height:1.6;margin-bottom:10px">
       지금 보고 있는 명단에서 모았어요${evdbPickedPeople.size ? ' (고른 사람만)' : ''}.
       ${noMail.length ? `<br><span style="color:var(--am)">메일 주소가 없어 빠진 ${noMail.length}명: ${
         escapeHtml(noMail.slice(0, 6).join(', '))}${noMail.length > 6 ? ' 외' : ''}</span>` : ''}
     </div>
-    <textarea id="evdb-mail-box" readonly style="width:100%;height:190px;font-size:11px;font-family:monospace;
-      padding:8px;border:1px solid var(--i6);border-radius:8px;resize:vertical">${escapeHtml(mails.join('; '))}</textarea>
+    <textarea id="evdb-mail-box" readonly style="width:100%;height:190px;font-size:var(--fs-11);font-family:monospace;
+      padding:8px;border:1px solid var(--i6);border-radius:var(--r);resize:vertical">${escapeHtml(mails.join('; '))}</textarea>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap">
       <button class="btn bs" onclick="document.getElementById('evdb-mail-modal').remove()">닫기</button>
       <button class="btn bs" onclick="copyEvDbMails()">주소 복사</button>
@@ -1123,9 +1123,9 @@ function targetHtml(ev){
   const doms = evDomains(ev);
   if(!doms.length){
     return `<div style="padding:30px 16px;max-width:620px">
-      <div style="background:var(--ab);border:1px solid #FDE68A;border-radius:10px;padding:14px 16px">
-        <div style="font-size:12.5px;font-weight:700;color:var(--am);margin-bottom:5px">이 행사의 분야가 아직 없어요</div>
-        <div style="font-size:11.5px;color:var(--i3);line-height:1.6">
+      <div style="background:var(--ab);border:1px solid #FDE68A;border-radius:var(--rd-10);padding:14px 16px">
+        <div style="font-size:var(--fs-12_5);font-weight:700;color:var(--am);margin-bottom:5px">이 행사의 분야가 아직 없어요</div>
+        <div style="font-size:var(--fs-11_5);color:var(--i3);line-height:1.6">
           타겟은 «어느 분야에서 고르나»가 정해져야 훑을 수 있어요.
           «개요» 화면에서 분야를 골라주세요 — 예: AIASK는 건축, EVENTKOREA는 이벤트·MICE.
         </div></div></div>`;
@@ -1151,7 +1151,7 @@ function targetHtml(ev){
     onclick="setEvDbTgtFil('${v}')">${label} ${n}개사</button>`;
 
   return `<div style="padding:12px 16px 0;max-width:1000px">
-      <div style="font-size:11.5px;color:var(--i3);line-height:1.6;margin-bottom:10px">
+      <div style="font-size:var(--fs-11_5);color:var(--i3);line-height:1.6;margin-bottom:10px">
         <b>${escapeHtml(domNames)}</b> 분야의 기업 ${pool.length}개사를 훑어요 —
         이 행사(${escapeHtml(ev.short || ev.key)})의 타겟으로 잡을 곳을 고르세요.
         <span style="color:var(--i5)">분야는 «개요»에서 바꿉니다.</span>
@@ -1163,7 +1163,7 @@ function targetHtml(ev){
     </div>
     <div style="padding:10px 16px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       ${searchBoxHtml('기업명·섹터 검색…')}
-      <button class="btn" style="font-size:11px" onclick="toggleEvDbTgtAll()">전체 선택/해제</button>
+      <button class="btn" style="font-size:var(--fs-11)" onclick="toggleEvDbTgtAll()">전체 선택/해제</button>
       <div style="flex:1"></div>
       <button class="btn bp" id="evdb-tgt-btn" onclick="openEvDbTargetSend()"
         ${evdbTgtFil === 'on' ? 'disabled style="opacity:.5"' : ''}>CRM 타겟으로 잡기${
@@ -1173,18 +1173,18 @@ function targetHtml(ev){
 }
 
 function targetRowsHtml(list){
-  if(!list.length) return '<div style="font-size:12px;color:var(--i4);padding:20px 0">해당하는 기업이 없어요.</div>';
+  if(!list.length) return '<div style="font-size:var(--fs-12);color:var(--i4);padding:20px 0">해당하는 기업이 없어요.</div>';
   return list.map(co => {
     const nm = co.nameKo || co.nameEn || '(이름 없음)';
     const on = evdbTgtFil === 'on';
     return `<label style="display:flex;align-items:center;gap:10px;background:var(--W);border:1px solid var(--i6);
-        border-radius:8px;padding:9px 12px;margin-bottom:5px;${on ? '' : 'cursor:pointer'}">
+        border-radius:var(--r);padding:9px 12px;margin-bottom:5px;${on ? '' : 'cursor:pointer'}">
       ${on ? '<span class="pill p-green">타겟</span>'
            : `<input type="checkbox" ${evdbPickedTgt.has(co.key) ? 'checked' : ''}
                 onchange="pickEvDbTgt('${escAttr(co.key)}',this.checked)">`}
       <div style="flex:1;min-width:0">
-        <div style="font-size:12.5px;font-weight:600;color:var(--i1)">${escapeHtml(nm)}</div>
-        <div style="font-size:10.5px;color:var(--i4);margin-top:2px">
+        <div style="font-size:var(--fs-12_5);font-weight:600;color:var(--i1)">${escapeHtml(nm)}</div>
+        <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:2px">
           ${(co.sectors || []).map(sx => `<span class="pill p-blue" style="margin-right:3px">${escapeHtml(sx)}</span>`).join('')}
           ${co.contacts && co.contacts.length ? `담당자 ${co.contacts.length}명` : '<span style="color:var(--i5)">담당자 없음</span>'}
         </div>

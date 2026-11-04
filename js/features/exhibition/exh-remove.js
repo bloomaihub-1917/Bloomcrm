@@ -98,9 +98,9 @@ export async function removeExhibitor(id){
 /* 지우는 자리는 눈에 잘 띄면 안 된다 — 담당자 탭 맨 아래, 접힌 채로 둔다 */
 function dangerZone(x){
   return `<details style="margin-top:18px">
-    <summary style="font-size:11px;color:var(--i5);cursor:pointer">이 참가기업 지우기</summary>
-    <div style="margin-top:8px;padding:10px 12px;border:1px solid var(--re);border-radius:8px">
-      <div style="font-size:11.5px;color:var(--i3);line-height:1.6">
+    <summary style="font-size:var(--fs-11);color:var(--i5);cursor:pointer">이 참가기업 지우기</summary>
+    <div style="margin-top:8px;padding:10px 12px;border:1px solid var(--re);border-radius:var(--r)">
+      <div style="font-size:var(--fs-11_5);color:var(--i3);line-height:1.6">
         담당자·금액 항목·인보이스·세금계산서·입금·문의·접수가 <b>함께 지워집니다</b>.<br>
         참가를 접은 것뿐이라면 진행 탭에서 상태를 <b>취소</b>로 두세요 —
         부스 번호와 기록이 남아 나중에 «왜 이 자리가 비었나»에 답할 수 있어요.

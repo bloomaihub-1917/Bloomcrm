@@ -153,7 +153,7 @@ function renderMoneyView(list){
 
   /* 금액 하나 — 통화를 왼쪽에 붙인다. 원·$ 기호만으로는 표를 훑을 때 눈에 안 띈다. */
   const amt = (cur, v) => v
-    ? `<span style="font-size:9.5px;color:var(--i5);margin-right:3px">${escapeHtml(cur)}</span>${money(v)}`
+    ? `<span style="font-size:var(--fs-9_5);color:var(--i5);margin-right:3px">${escapeHtml(cur)}</span>${money(v)}`
     : '<span style="color:var(--i6)">-</span>';
 
   /* 한 칸에 두 통화가 같이 있을 수 있다(원화로 신청한 뒤 달러 항목이 하나 끼는 식).
@@ -166,9 +166,9 @@ function renderMoneyView(list){
 
   const pills = `<span class="pill p-gray">기업 ${rows.length}</span>`
     + curs.map(c => `<span class="pill p-blue">${escapeHtml(c)} ${money(total[c]?.합계 || 0)}</span>`).join('')
-    + '<span style="font-size:10.5px;color:var(--i5);margin-left:2px">금액 항목 기준(신청 금액)이라 청구액과 다를 수 있어요 — 오른쪽에 함께 뒀어요</span>'
+    + '<span style="font-size:var(--fs-10_5);color:var(--i5);margin-left:2px">금액 항목 기준(신청 금액)이라 청구액과 다를 수 있어요 — 오른쪽에 함께 뒀어요</span>'
     + (curs.length > 1
-      ? '<div style="font-size:10.5px;color:var(--i4);margin-top:4px">한 칸에 두 통화가 함께 적힌 곳은 결제 수단이 갈린 경우예요 — 인보이스는 원화로 받고 엑스렌탈은 해외 카드로 결제하면 이렇게 나옵니다. 더할 수 없으니 그대로 병기합니다.</div>'
+      ? '<div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:4px">한 칸에 두 통화가 함께 적힌 곳은 결제 수단이 갈린 경우예요 — 인보이스는 원화로 받고 엑스렌탈은 해외 카드로 결제하면 이렇게 나옵니다. 더할 수 없으니 그대로 병기합니다.</div>'
       : '');
 
   // 아무도 안 쓴 분류는 열을 만들지 않는다
@@ -214,28 +214,28 @@ function renderMoneyView(list){
       // 수단이 하나뿐이면 금액은 위에 적힌 것과 같다 — 이름만 적는다
       const txt = on.length === 1 ? `전액 ${on[0][1]}`
         : on.map(([k, l]) => `${l} ${money(Math.round(c[k]))}`).join(' · ');
-      return `<span style="display:block;font-size:9.5px;color:var(--i5);margin-top:1px">${txt}</span>`;
+      return `<span style="display:block;font-size:var(--fs-9_5);color:var(--i5);margin-top:1px">${txt}</span>`;
     };
 
     const bar = (c) => {
       const pct = c.billed ? Math.round(c.paid / c.billed * 100) : 0;
-      return `<div style="height:5px;background:var(--i7);border-radius:3px;overflow:hidden;margin-top:6px">
+      return `<div style="height:5px;background:var(--i7);border-radius:var(--rd-3);overflow:hidden;margin-top:6px">
         <div style="height:100%;width:${pct}%;background:${pct >= 100 ? 'var(--g)' : 'var(--a)'}"></div></div>`;
     };
     const line = (label, c, strong) => `<div style="padding:9px 12px;border-top:1px solid var(--i8)${
         strong ? ';background:var(--i9)' : ''}">
       <div style="display:flex;align-items:baseline;gap:8px">
-        <span style="font-size:11.5px;font-weight:${strong ? 700 : 600};color:var(--i2);flex:1">${escapeHtml(label)}</span>
-        <span style="font-size:10px;color:var(--i5)">${c.billed ? Math.round(c.paid / c.billed * 100) : 0}%</span>
+        <span style="font-size:var(--fs-11_5);font-weight:${strong ? 700 : 600};color:var(--i2);flex:1">${escapeHtml(label)}</span>
+        <span style="font-size:var(--fs-10);color:var(--i5)">${c.billed ? Math.round(c.paid / c.billed * 100) : 0}%</span>
       </div>
       <div style="display:flex;gap:10px;margin-top:3px;font-variant-numeric:tabular-nums">
-        <span style="flex:1;min-width:0"><span style="font-size:9.5px;color:var(--i5);display:block">받아야 할 돈</span>
-          <b style="font-size:12.5px">${money(c.billed)}</b></span>
-        <span style="flex:1;min-width:0"><span style="font-size:9.5px;color:var(--i5);display:block">받은 돈</span>
-          <b style="font-size:12.5px;color:var(--g)">${money(c.paid)}</b>
+        <span style="flex:1;min-width:0"><span style="font-size:var(--fs-9_5);color:var(--i5);display:block">받아야 할 돈</span>
+          <b style="font-size:var(--fs-12_5)">${money(c.billed)}</b></span>
+        <span style="flex:1;min-width:0"><span style="font-size:var(--fs-9_5);color:var(--i5);display:block">받은 돈</span>
+          <b style="font-size:var(--fs-12_5);color:var(--g)">${money(c.paid)}</b>
           ${payMix(c)}</span>
-        <span style="flex:1;min-width:0"><span style="font-size:9.5px;color:var(--i5);display:block">안 받은 돈</span>
-          <b style="font-size:12.5px;color:${c.unpaid ? 'var(--re)' : 'var(--i5)'}">${money(c.unpaid)}</b></span>
+        <span style="flex:1;min-width:0"><span style="font-size:var(--fs-9_5);color:var(--i5);display:block">안 받은 돈</span>
+          <b style="font-size:var(--fs-12_5);color:${c.unpaid ? 'var(--re)' : 'var(--i5)'}">${money(c.unpaid)}</b></span>
       </div>
       ${bar(c)}
     </div>`;
@@ -244,20 +244,20 @@ function renderMoneyView(list){
        높이에 앉는다. 카드를 세로 플렉스로 두고 합계를 아래로 밀어 두면, 카드가
        같은 높이로 늘어나면서 합계끼리 같은 줄에서 맞는다 — 두 통화의 합계를
        나란히 읽는 게 이 카드를 보는 이유다. */
-    return `<div style="flex:1 1 320px;min-width:0;background:var(--W);border:1px solid var(--i6);border-radius:10px;overflow:hidden;display:flex;flex-direction:column">
+    return `<div style="flex:1 1 320px;min-width:0;background:var(--W);border:1px solid var(--i6);border-radius:var(--rd-10);overflow:hidden;display:flex;flex-direction:column">
       <div style="padding:9px 12px;font-family:inherit">
         <span class="pill p-blue">${escapeHtml(cur)}</span>
-        <span style="font-size:10.5px;color:var(--i5);margin-left:5px">분류별 수금 현황</span>
+        <span style="font-size:var(--fs-10_5);color:var(--i5);margin-left:5px">분류별 수금 현황</span>
       </div>
       ${cats.map(([k, l]) => line(l, catS[cur][k], false)).join('')}
       <div style="margin-top:auto">${line('합계', sum, true)}
-        ${catS[cur].__left ? `<div style="padding:0 12px 9px;font-size:10px;color:var(--am);background:var(--i9)">
+        ${catS[cur].__left ? `<div style="padding:0 12px 9px;font-size:var(--fs-10);color:var(--am);background:var(--i9)">
           항목에 딱 맞지 않은 입금 ${escapeHtml(fmtMoney(catS[cur].__left, cur))} — 받은 돈에 넣지 않았어요</div>` : ''}</div>
     </div>`;
   }).join('');
 
   const catDash = catCards ? `<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">${catCards}</div>
-    <div style="font-size:10.5px;color:var(--i4);margin:-4px 0 14px;line-height:1.6">
+    <div style="font-size:var(--fs-10_5);color:var(--i4);margin:-4px 0 14px;line-height:1.6">
       입금에는 분류가 없어요 — 돈은 기업 단위로 한 번에 들어옵니다. 그래서
       <b>완납한 기업</b>의 청구를 «받은 돈»으로, <b>남은 기업</b>의 잔액을 «안 받은 돈»으로 갈랐어요.
       ${partial.length ? `<br><b style="color:var(--am)">일부만 낸 ${partial.length}곳</b>은 인보이스 낸 순서(최초 신청 → 추가 신청)대로 낸 돈을 맞춰, 금액이 다 맞은 항목만 «받은 돈»에 넣었어요.` : ''}
@@ -327,23 +327,23 @@ function renderMoneyView(list){
     const s = settleState(x);
     if(!isOwing(s)) return '';
     return isOverdue(s)
-      ? `<div style="font-size:9.5px;color:var(--re)">기한 ${daysSince(s.due)}일 지남</div>`
-      : `<div style="font-size:9.5px;color:var(--i4)">${s.due ? `입금 예정 ~${escapeHtml(s.due.slice(5).replace('-', '/'))}` : '기한 없음'}</div>`;
+      ? `<div style="font-size:var(--fs-9_5);color:var(--re)">기한 ${daysSince(s.due)}일 지남</div>`
+      : `<div style="font-size:var(--fs-9_5);color:var(--i4)">${s.due ? `입금 예정 ~${escapeHtml(s.due.slice(5).replace('-', '/'))}` : '기한 없음'}</div>`;
   };
 
   /* 참가 취소했는데 낸 돈이 남은 곳. 위 카드와 표는 취소 기업을 빼고 세므로
      여기 따로 적지 않으면 돌려줄 돈이 화면에서 사라진다. */
   const refunds = cancelledExhibitors(exhEvent).map(x => ({ x, pb: refundDue(x) })).filter(r => r.pb);
   const refundBox = refunds.length ? `<div style="background:var(--W);border:1px solid var(--i6);border-left:3px solid var(--am);
-      border-radius:8px;padding:9px 12px;margin:-2px 0 14px">
-      <div style="font-size:11.5px;font-weight:700;color:var(--i2);margin-bottom:4px">환불 확인 필요 ${refunds.length}곳
-        <span style="font-weight:400;color:var(--i4);font-size:10.5px">— 참가 취소했지만 낸 돈이 남아 있어요. 위 집계에는 들어 있지 않습니다.</span></div>
+      border-radius:var(--r);padding:9px 12px;margin:-2px 0 14px">
+      <div style="font-size:var(--fs-11_5);font-weight:700;color:var(--i2);margin-bottom:4px">환불 확인 필요 ${refunds.length}곳
+        <span style="font-weight:400;color:var(--i4);font-size:var(--fs-10_5)">— 참가 취소했지만 낸 돈이 남아 있어요. 위 집계에는 들어 있지 않습니다.</span></div>
       ${refunds.map(({ x, pb }) => `<div onclick="openExhDr('${escAttr(x.id)}','billing')"
-          style="display:flex;gap:8px;font-size:11.5px;padding:3px 0;cursor:pointer">
+          style="display:flex;gap:8px;font-size:var(--fs-11_5);padding:3px 0;cursor:pointer">
         <span style="flex:1;min-width:0">${escapeHtml(exhNames(x).ko)}</span>
-        ${pb.requested ? `<span style="color:var(--i4);font-size:10.5px">환불 요청 ${escapeHtml(fmtMoney(pb.requested, pb.cur))}</span>` : ''}
+        ${pb.requested ? `<span style="color:var(--i4);font-size:var(--fs-10_5)">환불 요청 ${escapeHtml(fmtMoney(pb.requested, pb.cur))}</span>` : ''}
         <b style="color:var(--am)">${escapeHtml(fmtMoney(pb.net, pb.cur))}</b></div>`).join('')}
-      <div style="font-size:10px;color:var(--i5);margin-top:3px">환불을 입금 기록에 «환불 완료»로 남기면 여기서 빠져요. 돌려주지 않기로 했다면 기업 정산에서 «위약금으로 남김»을 누르세요.</div>
+      <div style="font-size:var(--fs-10);color:var(--i5);margin-top:3px">환불을 입금 기록에 «환불 완료»로 남기면 여기서 빠져요. 돌려주지 않기로 했다면 기업 정산에서 «위약금으로 남김»을 누르세요.</div>
     </div>` : '';
 
   if(isMobile()) return viewShell(pills, catDash + refundBox + payFilBar + (vrows.length ? '' : noneMsg) + vrows.map(({ x, by }) => {
@@ -352,28 +352,28 @@ function renderMoneyView(list){
     const line = (key) => sc.filter(c => st[c][key]).map(c => amt(c, st[c][key])).join(' · ') || '-';
     const owing = sc.some(c => st[c].balance > 0);
     return `<div onclick="openExhDr('${escAttr(x.id)}','billing')"
-      style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
+      style="background:var(--W);border:1px solid var(--i7);border-radius:var(--rd-10);padding:11px 12px;margin-bottom:7px;cursor:pointer">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">
         <span class="pill p-gray">${escapeHtml(x.apply_order || '-')}</span>
-        <span style="font-size:13px;font-weight:700;flex:1;min-width:0">${escapeHtml(exhNames(x).ko)}</span>
+        <span style="font-size:var(--fs-13);font-weight:700;flex:1;min-width:0">${escapeHtml(exhNames(x).ko)}</span>
         <span class="pill ${x.booth_no ? 'p-blue' : 'p-gray'}">${escapeHtml(x.booth_no || '미배정')}</span>
       </div>
       ${used.map(([k, l]) => {
         const has = curs.filter(c => by[c] && by[c][k]);
         if(!has.length) return '';
-        return `<div style="display:flex;justify-content:space-between;font-size:11.5px;padding:2px 0">
+        return `<div style="display:flex;justify-content:space-between;font-size:var(--fs-11_5);padding:2px 0">
           <span style="color:var(--i4)">${l}</span><span>${has.map(c => amt(c, by[c][k])).join(' · ')}</span>
         </div>`;
       }).join('')}
-      <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;padding:4px 0 0;border-top:1px solid var(--i8);margin-top:4px">
+      <div style="display:flex;justify-content:space-between;font-size:var(--fs-12);font-weight:700;padding:4px 0 0;border-top:1px solid var(--i8);margin-top:4px">
         <span>신청 합계</span>
         <span>${curs.filter(c => by[c]?.합계).map(c => amt(c, by[c].합계)).join(' · ')}</span>
       </div>
-      <div style="font-size:11px;margin-top:3px;color:var(--i4)">청구 ${line('billed')}</div>
-      <div style="display:flex;justify-content:space-between;font-size:11px">
+      <div style="font-size:var(--fs-11);margin-top:3px;color:var(--i4)">청구 ${line('billed')}</div>
+      <div style="display:flex;justify-content:space-between;font-size:var(--fs-11)">
         <span style="color:var(--i4)">입금 ${line('paid')}${
           sc.some(c => st[c].bank || st[c].card || st[c].etc)
-            ? `<span style="color:var(--i5);font-size:10px"> (${
+            ? `<span style="color:var(--i5);font-size:var(--fs-10)"> (${
                 [['bank', '계좌'], ['card', '카드'], ['etc', '미확인']]
                   .filter(([k]) => sc.some(c => st[c][k]))
                   .map(([k, l]) => `${l} ${sc.filter(c => st[c][k]).map(c => amt(c, st[c][k])).join(' · ')}`)
@@ -405,7 +405,7 @@ function renderMoneyView(list){
         return `<tr>
           ${applyCell(x)}
           ${coCell(x, 'billing')}
-          <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
+          <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
           ${used.map(([k]) => `<td style="text-align:right">${cell(by, k)}</td>`).join('')}
           <td style="text-align:right;font-weight:700">${
             curs.filter(c => by[c]?.합계).map(c => amt(c, by[c].합계)).join('<br>') || '-'}</td>
@@ -420,8 +420,8 @@ function renderMoneyView(list){
         const m = vtotal[c];
         if(!m || !m.합계) return '';
         return `<tr style="border-top:2px solid var(--i5);font-weight:800">
-          <td colspan="3" style="font-size:12px">${escapeHtml(c)} 합계
-            <span style="font-weight:400;color:var(--i4);font-size:10.5px">${
+          <td colspan="3" style="font-size:var(--fs-12)">${escapeHtml(c)} 합계
+            <span style="font-weight:400;color:var(--i4);font-size:var(--fs-10_5)">${
               vrows.filter(r => r.by[c]?.합계).length}곳</span></td>
           ${used.map(([k]) => `<td style="text-align:right">${amt(c, m[k])}</td>`).join('')}
           <td style="text-align:right">${amt(c, m.합계)}</td>
@@ -432,8 +432,8 @@ function renderMoneyView(list){
                 s.balance ? amt(c, s.balance) : '<span style="font-weight:400">완납</span>'}</td>`; })()}
         </tr>
         <tr style="font-weight:400">
-          <td colspan="3" style="font-size:10.5px;color:var(--i4)">${escapeHtml(c)} 비중</td>
-          ${used.map(([k]) => `<td style="text-align:right;font-size:10.5px;color:var(--i4)">${
+          <td colspan="3" style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(c)} 비중</td>
+          ${used.map(([k]) => `<td style="text-align:right;font-size:var(--fs-10_5);color:var(--i4)">${
             m.합계 ? Math.round(m[k] / m.합계 * 100) + '%' : '-'}</td>`).join('')}
           <td colspan="${3 + payCols.length}"></td>
         </tr>`;
@@ -565,7 +565,7 @@ function renderEquipView(list){
     + (totKrw ? `<span class="pill p-gray">${fmtMoney(totKrw, 'KRW')}</span>` : '')
     + (totUsd ? `<span class="pill p-gray">${fmtMoney(totUsd, 'USD')}</span>` : '')
     + (offN ? `<span class="pill p-amber" title="카탈로그에 없는 품목 — 그래픽·전기처럼 다른 분류일 수 있어요">카탈로그 외 ${offN}종</span>` : '')
-    + catBlocks.map(b => `<span class="pill p-gray" style="font-size:9.5px"
+    + catBlocks.map(b => `<span class="pill p-gray" style="font-size:var(--fs-9_5)"
         title="${escapeHtml(b.gs.map(g => `${g.nameKo} ${g.qty}개`).join(', '))}">${escapeHtml(b.cat)} ${b.qty}개</span>`).join('');
 
   /* 어느 기업이 신청했는지 — 품목을 클릭하면 펼친다.
@@ -599,12 +599,12 @@ function renderEquipView(list){
       || String(a.name || '').localeCompare(String(b.name || ''), 'ko'))
     .map(c => `
     <div onclick="event.stopPropagation();openExhDr('${escAttr(c.id)}','billing')"
-      style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:11.5px">
+      style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:var(--fs-11_5)">
       <span class="pill p-gray" style="min-width:52px;text-align:center">${c.booth ? '부스 ' + escapeHtml(c.booth) : '미배정'}</span>
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${
-        isMobile() ? ';font-size:12.5px;font-weight:600' : ''}">${escapeHtml(c.name)}</span>
-      ${c.base ? `<span style="font-size:10px;color:var(--i4)" title="부스에 딸려 오는 기본 제공분이에요">기본 ${c.base}</span>` : ''}
-      <span style="color:var(--i3)">${c.shareOnly ? '<span class="pill p-blue" style="font-size:9px">비용 분담</span>' : c.qty + '개'}</span>
+        isMobile() ? ';font-size:var(--fs-12_5);font-weight:600' : ''}">${escapeHtml(c.name)}</span>
+      ${c.base ? `<span style="font-size:var(--fs-10);color:var(--i4)" title="부스에 딸려 오는 기본 제공분이에요">기본 ${c.base}</span>` : ''}
+      <span style="color:var(--i3)">${c.shareOnly ? '<span class="pill p-blue" style="font-size:var(--fs-9)">비용 분담</span>' : c.qty + '개'}</span>
       ${isMobile() ? ''   /* 좁은 화면에서는 금액이 기업명 자리를 먹는다 — 합계는 위 품목 줄에 있다 */
         : `<span style="min-width:88px;text-align:right;font-weight:600">${c.amt ? fmtMoney(c.amt, c.cur) : '-'}</span>`}
     </div>`).join('');
@@ -614,8 +614,8 @@ function renderEquipView(list){
        각각 무슨 숫자인지 알 수 없게 된다. 값마다 이름을 붙여 카드로 그린다. */
     ? catBlocks.map(b => `
       <div style="display:flex;align-items:baseline;gap:6px;padding:10px 0 4px;border-bottom:2px solid var(--i7);margin-top:6px">
-        <span style="font-size:12px;font-weight:800;color:var(--i2)">${escapeHtml(b.cat)}</span>
-        <span style="font-size:10.5px;color:var(--i4)">${b.kinds}종 · ${b.qty}개${
+        <span style="font-size:var(--fs-12);font-weight:800;color:var(--i2)">${escapeHtml(b.cat)}</span>
+        <span style="font-size:var(--fs-10_5);color:var(--i4)">${b.kinds}종 · ${b.qty}개${
           split && (b.qtyBase || b.qtyExtra) ? ` (기본 ${b.qtyBase} · 추가 ${b.qtyExtra})` : ''}${
           b.krw ? ' · ' + escapeHtml(fmtMoney(b.krw, 'KRW')) : ''}${
           b.usd ? ' · ' + escapeHtml(fmtMoney(b.usd, 'USD')) : ''}</span>
@@ -624,12 +624,12 @@ function renderEquipView(list){
       return `<div style="padding:8px 0;border-bottom:1px solid var(--i8)">
         <div onclick="toggleEquipRow('${escAttr(g.key)}')" style="cursor:pointer">
           <div style="display:flex;align-items:baseline;gap:7px">
-            ${g.code ? `<span class="pill ${g.direct ? 'p-teal' : 'p-blue'}" style="font-size:9px">${escapeHtml(g.code)}</span>` : ''}
-            <span style="font-size:12.5px;font-weight:600;flex:1;min-width:0">${escapeHtml(g.nameKo)}</span>
-            <span style="font-size:15px;font-weight:800">${g.qty}<span style="font-size:10px;font-weight:400;color:var(--i4)">개</span></span>
+            ${g.code ? `<span class="pill ${g.direct ? 'p-teal' : 'p-blue'}" style="font-size:var(--fs-9)">${escapeHtml(g.code)}</span>` : ''}
+            <span style="font-size:var(--fs-12_5);font-weight:600;flex:1;min-width:0">${escapeHtml(g.nameKo)}</span>
+            <span style="font-size:var(--fs-15);font-weight:800">${g.qty}<span style="font-size:var(--fs-10);font-weight:400;color:var(--i4)">개</span></span>
           </div>
-          ${g.nameEn ? `<div style="font-size:10.5px;color:var(--i4)">${escapeHtml(g.nameEn)}</div>` : ''}
-          <div style="font-size:10.5px;color:var(--i4);margin-top:2px">
+          ${g.nameEn ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(g.nameEn)}</div>` : ''}
+          <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:2px">
             ${split && g.qtyBase ? `기본 ${g.qtyBase} · ` : ''}${split && g.qtyExtra ? `추가 ${g.qtyExtra} · ` : ''}${
             g.spec ? escapeHtml(g.spec) + ' · ' : ''}${g.coN}개사 신청
             ${g.krw ? ' · ' + escapeHtml(fmtMoney(g.krw, 'KRW')) : ''}${g.usd ? ' · ' + escapeHtml(fmtMoney(g.usd, 'USD')) : ''}
@@ -662,16 +662,16 @@ function renderEquipView(list){
           return `<tr onclick="toggleEquipRow('${escAttr(g.key)}')" style="cursor:pointer${open ? ';background:var(--ad)' : ''}${
             first && gi ? ';border-top:2px solid var(--i6)' : ''}"
             title="클릭하면 신청한 기업을 볼 수 있어요">
-            <td style="font-size:11px;font-weight:${first ? '800' : '400'};color:var(${first ? '--i2' : '--i6'})">${
+            <td style="font-size:var(--fs-11);font-weight:${first ? '800' : '400'};color:var(${first ? '--i2' : '--i6'})">${
               escapeHtml(g.cat)}</td>
-            <td style="font-size:11.5px;font-weight:700;color:var(--i2)">
+            <td style="font-size:var(--fs-11_5);font-weight:700;color:var(--i2)">
               <span style="color:var(--a)">${open ? '▾' : '▸'}</span> ${escapeHtml(g.code || '—')}</td>
-            <td style="font-size:12.5px;font-weight:600">${escapeHtml(g.nameKo)}
-              ${g.excluded ? '<span class="pill p-amber" style="font-size:9px;margin-left:4px" title="우리가 청구하지 않는 항목이라 금액 합계에서 빠져 있어요">청구 제외</span>' : ''}
-              ${g.offCatalog ? '<span class="pill p-amber" style="font-size:9px;margin-left:4px" title="카탈로그에 없는 품목 — 직접 입력됐어요">카탈로그 외</span>' : ''}
-              ${g.direct ? '<span class="pill p-teal" style="font-size:9px;margin-left:4px" title="신청하면서 직접 적어 품목마스터에 올린 품목이에요 — 단가·규격을 확인해주세요">직접 추가</span>' : ''}</td>
-            <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(g.nameEn || '-')}</td>
-            <td style="font-size:11px;color:var(--i4)">${escapeHtml(g.spec || '-')}</td>
+            <td style="font-size:var(--fs-12_5);font-weight:600">${escapeHtml(g.nameKo)}
+              ${g.excluded ? '<span class="pill p-amber" style="font-size:var(--fs-9);margin-left:4px" title="우리가 청구하지 않는 항목이라 금액 합계에서 빠져 있어요">청구 제외</span>' : ''}
+              ${g.offCatalog ? '<span class="pill p-amber" style="font-size:var(--fs-9);margin-left:4px" title="카탈로그에 없는 품목 — 직접 입력됐어요">카탈로그 외</span>' : ''}
+              ${g.direct ? '<span class="pill p-teal" style="font-size:var(--fs-9);margin-left:4px" title="신청하면서 직접 적어 품목마스터에 올린 품목이에요 — 단가·규격을 확인해주세요">직접 추가</span>' : ''}</td>
+            <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(g.nameEn || '-')}</td>
+            <td style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(g.spec || '-')}</td>
             <td style="text-align:right;font-weight:700">${g.qty}</td>
             ${split ? `<td style="text-align:right;color:var(--i4)">${g.qtyBase || '<span style="color:var(--i6)">-</span>'}</td>
             <td style="text-align:right;font-weight:600">${g.qtyExtra || '<span style="color:var(--i6)">-</span>'}</td>` : ''}
@@ -680,13 +680,13 @@ function renderEquipView(list){
             <td style="text-align:right">${g.usd ? escapeHtml(fmtMoney(g.usd, 'USD')) : '<span style="color:var(--i6)">-</span>'}</td>
           </tr>
           ${open ? `<tr data-detail><td colspan="${split ? 11 : 9}" style="padding:8px 12px 12px;background:var(--i9)">
-            <div style="font-size:10.5px;color:var(--i4);margin-bottom:4px">신청 기업 ${g.coN}곳 — 클릭하면 그 기업 정산 탭으로 갑니다</div>
+            <div style="font-size:var(--fs-10_5);color:var(--i4);margin-bottom:4px">신청 기업 ${g.coN}곳 — 클릭하면 그 기업 정산 탭으로 갑니다</div>
             ${coList(g)}</td></tr>` : ''}`;
         }).join('')}
       </tbody>
       <tfoot>
       ${catBlocks.length > 1 ? catBlocks.map(b => `<tr style="font-weight:600;color:var(--i3);background:var(--i9)">
-        <td colspan="5" style="font-size:11px">${escapeHtml(b.cat)} 소계 <span style="font-weight:400;color:var(--i4)">${b.kinds}종</span></td>
+        <td colspan="5" style="font-size:var(--fs-11)">${escapeHtml(b.cat)} 소계 <span style="font-weight:400;color:var(--i4)">${b.kinds}종</span></td>
         <td style="text-align:right">${b.qty}</td>
         ${split ? `<td style="text-align:right;font-weight:400;color:var(--i4)">${b.qtyBase || '-'}</td>
         <td style="text-align:right">${b.qtyExtra || '-'}</td>` : ''}
@@ -695,7 +695,7 @@ function renderEquipView(list){
         <td style="text-align:right">${b.usd ? escapeHtml(fmtMoney(b.usd, 'USD')) : '-'}</td>
       </tr>`).join('') : ''}
       <tr style="border-top:2px solid var(--i5);font-weight:800">
-        <td colspan="5" style="font-size:12px">합계 ${groups.length}종</td>
+        <td colspan="5" style="font-size:var(--fs-12)">합계 ${groups.length}종</td>
         <td style="text-align:right">${totQty}</td>
         ${split ? `<td style="text-align:right;font-weight:600;color:var(--i3)">${totBase || '-'}</td>
         <td style="text-align:right">${totExtra || '-'}</td>` : ''}
@@ -705,22 +705,22 @@ function renderEquipView(list){
       </tr></tfoot></table></div>`;
 
   const summary = `<div class="uc" style="margin-bottom:14px">
-    <div class="uc-ttl">품목별 합계 <span style="font-weight:400;color:var(--i4);font-size:10px">— 발주서에 쓰는 숫자예요. 품목을 클릭하면 신청 기업이 보입니다</span></div>
+    <div class="uc-ttl">품목별 합계 <span style="font-weight:400;color:var(--i4);font-size:var(--fs-10)">— 발주서에 쓰는 숫자예요. 품목을 클릭하면 신청 기업이 보입니다</span></div>
     ${summaryBody}</div>`;
 
   const detail = rows.map(({ x, items }) => `
-    <div style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px">
+    <div style="background:var(--W);border:1px solid var(--i7);border-radius:var(--rd-10);padding:11px 12px;margin-bottom:7px">
       <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-bottom:5px">
         ${x.booth_no ? `<span class="pill p-blue">부스 ${escapeHtml(x.booth_no)}</span>` : ''}
         <span onclick="openExhDr('${escAttr(x.id)}','billing')" style="cursor:pointer;flex:1;min-width:0">
-          <span style="font-size:13px;font-weight:700">${escapeHtml(exhNames(x).ko)}</span>${
-          exhNames(x).en ? `<span style="font-size:11px;color:var(--i4);margin-left:5px">${escapeHtml(exhNames(x).en)}</span>` : ''}</span>
-        <span style="font-size:11px;color:var(--i4)">${items.length}종</span>
+          <span style="font-size:var(--fs-13);font-weight:700">${escapeHtml(exhNames(x).ko)}</span>${
+          exhNames(x).en ? `<span style="font-size:var(--fs-11);color:var(--i4);margin-left:5px">${escapeHtml(exhNames(x).en)}</span>` : ''}</span>
+        <span style="font-size:var(--fs-11);color:var(--i4)">${items.length}종</span>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:5px">
         ${items.map(i => `<span class="pill p-gray" title="${escapeHtml(fmtMoney(i.amount, i.currency || 'KRW'))}">${escapeHtml(i.name || '')}${i.qty ? ' ×' + escapeHtml(i.qty) : ''}</span>`).join('')}
       </div>
-      ${x.extra_equipment ? `<div style="font-size:11px;color:var(--i4);margin-top:5px">메모: ${escapeHtml(x.extra_equipment)}</div>` : ''}
+      ${x.extra_equipment ? `<div style="font-size:var(--fs-11);color:var(--i4);margin-top:5px">메모: ${escapeHtml(x.extra_equipment)}</div>` : ''}
     </div>`).join('');
 
   /* 내보내기는 exh-export.js가 소유한다 — 이 파일이 그쪽을 import하면 순환
@@ -738,8 +738,8 @@ function renderEquipView(list){
      여기가 그 숫자를 보는 자리라, 모자란 걸 여기서 바로 채울 수 있어야 한다. */
   const pend = activeExhibitors(exhEvent).filter(x => boothItemsPending(x.id));
   const pendNote = pend.length ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;
-      background:var(--ad);border:1px solid var(--a);border-radius:8px;padding:8px 11px;margin-bottom:12px">
-    <span style="font-size:11.5px;color:var(--i2);flex:1;min-width:180px">
+      background:var(--ad);border:1px solid var(--a);border-radius:var(--r);padding:8px 11px;margin-bottom:12px">
+    <span style="font-size:var(--fs-11_5);color:var(--i2);flex:1;min-width:180px">
       부스 기본 제공 품목이 아직 안 들어간 기업이 <b>${pend.length}곳</b> 있어요 — 그만큼 발주 수량이 모자랍니다.</span>
     <button class="btn bp bs" style="flex:0 0 auto" onclick="applyBoothItemsToEvent('${escAttr(exhEvent || '')}')">${pend.length}곳에 한 번에 넣기</button>
   </div>` : '';
@@ -763,10 +763,10 @@ export function stageCell(x, field, defs){
   const cls = st.who === 'us' ? 'p-red' : st.who === 'team' ? 'p-amber' : st.key ? 'p-green' : 'p-gray';
   return `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
     <span class="pill ${cls}">${escapeHtml(st.label)}${days ? ` ${days}일` : ''}</span>
-    ${st.next ? `<button class="btn bs" style="font-size:10px;padding:2px 7px"
+    ${st.next ? `<button class="btn bs" style="font-size:var(--fs-10);padding:2px 7px"
       onclick="event.stopPropagation();advanceStage('${escAttr(x.id)}','${field}')"
       title="다음 단계로 넘깁니다">${escapeHtml(st.action)} →</button>` : ''}
-    ${st.key ? `<button class="btn bs" style="font-size:10px;padding:2px 5px;color:var(--i4)"
+    ${st.key ? `<button class="btn bs" style="font-size:var(--fs-10);padding:2px 5px;color:var(--i4)"
       onclick="event.stopPropagation();rewindStage('${escAttr(x.id)}','${field}')" title="이전 단계로 되돌립니다">↩</button>` : ''}
   </div>`;
 }

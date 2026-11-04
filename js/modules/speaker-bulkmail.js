@@ -55,13 +55,13 @@ function stateOf(sp, key){
 }
 const isTurn = (s) => s === 'due' || s === 'resend' || s === 'remind';
 const PILL = {
-  due: '<span class="pill p-amber" style="font-size:9.5px">보낼 차례</span>',
-  resend: '<span class="pill p-amber" style="font-size:9.5px">다시 보낼 차례</span>',
-  remind: '<span class="pill p-amber" style="font-size:9.5px">🔔 리마인더 보낼 때</span>',
-  wait: '<span class="pill p-blue" style="font-size:9.5px">⏳ 요청함·기다림</span>',
-  done: '<span class="pill p-green" style="font-size:9.5px">보냄</span>',
-  na: '<span class="pill p-gray" style="font-size:9.5px">해당 없음</span>',
-  unknown: '<span class="pill p-gray" style="font-size:9.5px" title="이 연사에게 보낸 메일에서 세션 줄을 못 읽었어요 — 바뀌었는지 직접 확인하세요">알린 일정 모름</span>',
+  due: '<span class="pill p-amber" style="font-size:var(--fs-9_5)">보낼 차례</span>',
+  resend: '<span class="pill p-amber" style="font-size:var(--fs-9_5)">다시 보낼 차례</span>',
+  remind: '<span class="pill p-amber" style="font-size:var(--fs-9_5)">🔔 리마인더 보낼 때</span>',
+  wait: '<span class="pill p-blue" style="font-size:var(--fs-9_5)">⏳ 요청함·기다림</span>',
+  done: '<span class="pill p-green" style="font-size:var(--fs-9_5)">보냄</span>',
+  na: '<span class="pill p-gray" style="font-size:var(--fs-9_5)">해당 없음</span>',
+  unknown: '<span class="pill p-gray" style="font-size:var(--fs-9_5)" title="이 연사에게 보낸 메일에서 세션 줄을 못 읽었어요 — 바뀌었는지 직접 확인하세요">알린 일정 모름</span>',
 };
 const liveSpeakers = (evKey) => speakersForEvent(evKey)
   .slice().sort((a, b) => nameOf(a).localeCompare(nameOf(b), 'ko'));
@@ -209,10 +209,10 @@ function render(){
     el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:1001;display:flex;align-items:center;justify-content:center;padding:16px';
     document.body.appendChild(el);
   }
-  el.innerHTML = `<div style="background:var(--W);border-radius:12px;width:min(1000px,100%);max-height:92vh;overflow:auto;padding:16px 18px">
+  el.innerHTML = `<div style="background:var(--W);border-radius:var(--rd-12);width:min(1000px,100%);max-height:92vh;overflow:auto;padding:16px 18px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-      <div style="font-size:14px;font-weight:700">여러 연사에게 메일</div>
-      <span style="font-size:11px;color:var(--i4)">${escapeHtml(ev.name || ev.short || bm.evKey)} · 연사마다 한 통씩 따로 보내고 그 연사 기록에 남깁니다</span>
+      <div style="font-size:var(--fs-14);font-weight:700">여러 연사에게 메일</div>
+      <span style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(ev.name || ev.short || bm.evKey)} · 연사마다 한 통씩 따로 보내고 그 연사 기록에 남깁니다</span>
       <button class="drcls" style="margin-left:auto" onclick="closeSpBulkMail()">✕</button>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
@@ -220,8 +220,8 @@ function render(){
         ${steps.map(s => { const n = all.filter(sp => isTurn(stateOf(sp, s.key))).length;
           return `<option value="${escapeHtml(s.key)}"${s.key === bm.step ? ' selected' : ''}>${escapeHtml(s.label)}${s.round ? ' ↻' : ''}${n ? ` — 보낼 차례 ${n}명` : ''}</option>`; }).join('')}
         ${libs.length ? `<optgroup label="양식 보관함">${libs.map(it => `<option value="lib:${escAttr(it.id)}"${'lib:' + it.id === bm.step ? ' selected' : ''}>${escapeHtml(it.name)}</option>`).join('')}</optgroup>` : ''}</select>
-        ${vs.length ? `<div style="display:flex;gap:6px;align-items:center;margin-top:5px;font-size:11px"><span style="color:var(--i4)">양식</span>
-          <select class="fi" style="font-size:11.5px;flex:1" onchange="sbmSet('variant',this.value)" ${bm.sending ? 'disabled' : ''}>
+        ${vs.length ? `<div style="display:flex;gap:6px;align-items:center;margin-top:5px;font-size:var(--fs-11)"><span style="color:var(--i4)">양식</span>
+          <select class="fi" style="font-size:var(--fs-11_5);flex:1" onchange="sbmSet('variant',this.value)" ${bm.sending ? 'disabled' : ''}>
             <option value=""${!bm.variant ? ' selected' : ''}>자동 — 역할에 맞는 변형, 없으면 기본 문구</option>
             <option value="base"${bm.variant === 'base' ? ' selected' : ''}>모두 기본 문구</option>
             ${vs.map(v => `<option value="${escapeHtml(v.id)}"${bm.variant === v.id ? ' selected' : ''}>모두 «${escapeHtml(v.label)}»</option>`).join('')}
@@ -231,44 +231,44 @@ function render(){
         <option value="all"${bm.show === 'all' ? ' selected' : ''}>모든 연사 (${all.length}명)</option></select></div>
     </div>
     ${roundBarHtml(st, rp)}
-    ${st.key === 'schedule' ? `<div style="font-size:10.5px;color:var(--i4);margin:-4px 0 8px;line-height:1.6">알린 일정(그 연사에게 마지막으로 보낸 메일의 세션 줄)과 지금 일정이 다른 연사만 잡혀요. 보내면 새 일정이 «알린 일정»이 됩니다.${
+    ${st.key === 'schedule' ? `<div style="font-size:var(--fs-10_5);color:var(--i4);margin:-4px 0 8px;line-height:1.6">알린 일정(그 연사에게 마지막으로 보낸 메일의 세션 줄)과 지금 일정이 다른 연사만 잡혀요. 보내면 새 일정이 «알린 일정»이 됩니다.${
       nUnknown ? ` <b style="color:var(--am)">알린 일정을 못 읽은 연사 ${nUnknown}명</b> — 앱 밖에서 다른 모양으로 보냈을 수 있어요. 바뀌었는지 직접 보고 고르세요.` : ''}</div>` : ''}
-    ${st.since && st.custom ? `<div style="font-size:10.5px;color:var(--i4);margin:-4px 0 8px">대상 제한 ${escapeHtml(st.since)} — 이날까지 초청한 연사가 대상이고, 이날 이후 보낸 메일이 있으면 «보냄»으로 봅니다.</div>` : ''}
+    ${st.since && st.custom ? `<div style="font-size:var(--fs-10_5);color:var(--i4);margin:-4px 0 8px">대상 제한 ${escapeHtml(st.since)} — 이날까지 초청한 연사가 대상이고, 이날 이후 보낸 메일이 있으면 «보냄»으로 봅니다.</div>` : ''}
     <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:14px">
       <div>
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap">
           <div class="mlbl" style="margin:0">받는 연사 ${picked.length}명</div>
           <span style="margin-left:auto;display:flex;gap:4px">
-            ${failedPicked.length ? `<button class="btn" style="font-size:10px;color:var(--re)" onclick="sbmAll('failed')">실패한 ${failedPicked.length}명만</button>` : ''}
-            <button class="btn" style="font-size:10px" onclick="sbmAll('due')">보낼 차례 모두</button>
-            <button class="btn" style="font-size:10px" onclick="sbmAll('none')">해제</button></span>
+            ${failedPicked.length ? `<button class="btn" style="font-size:var(--fs-10);color:var(--re)" onclick="sbmAll('failed')">실패한 ${failedPicked.length}명만</button>` : ''}
+            <button class="btn" style="font-size:var(--fs-10)" onclick="sbmAll('due')">보낼 차례 모두</button>
+            <button class="btn" style="font-size:var(--fs-10)" onclick="sbmAll('none')">해제</button></span>
         </div>
-        <div style="border:1px solid var(--i6);border-radius:8px;max-height:400px;overflow:auto">
+        <div style="border:1px solid var(--i6);border-radius:var(--r);max-height:400px;overflow:auto">
           ${rows.length ? rows.map(({ sp, s, to }) => { const can = to.to.length > 0;
-            return `<label style="display:flex;gap:6px;align-items:center;padding:5px 8px;border-bottom:1px solid var(--i8);font-size:11.5px;cursor:${can ? 'pointer' : 'default'};opacity:${can ? 1 : .5}">
+            return `<label style="display:flex;gap:6px;align-items:center;padding:5px 8px;border-bottom:1px solid var(--i8);font-size:var(--fs-11_5);cursor:${can ? 'pointer' : 'default'};opacity:${can ? 1 : .5}">
             <input type="checkbox" ${bm.ids.has(sp.id) ? 'checked' : ''} ${can && !bm.sending ? '' : 'disabled'} onchange="sbmPick('${escAttr(sp.id)}',this.checked)">
             <b style="flex:0 0 auto">${escapeHtml(nameOf(sp))}</b>
-            <span class="pill p-gray" style="font-size:9.5px">${isEn(sp) ? 'EN' : 'KO'}</span>${PILL[s] || ''}${bm.failed.has(sp.id) ? '<span class="pill p-red" style="font-size:9.5px;background:var(--rb);color:var(--re)">실패</span>' : ''}
+            <span class="pill p-gray" style="font-size:var(--fs-9_5)">${isEn(sp) ? 'EN' : 'KO'}</span>${PILL[s] || ''}${bm.failed.has(sp.id) ? '<span class="pill p-red" style="font-size:var(--fs-9_5);background:var(--rb);color:var(--re)">실패</span>' : ''}
             <span style="color:var(--i4);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
               title="${escapeHtml([...to.to, ...to.cc.map(x => `(cc) ${x}`)].join(', '))}">${can ? escapeHtml(to.to.join(', ')) : '수신 없음 — 연사 화면 «연락 상대»에서 정하세요'}</span>
           </label>`; }).join('')
-            : '<div style="padding:14px;font-size:11.5px;color:var(--i4)">이 단계가 보낼 차례인 연사가 없어요. 위 «목록»을 «모든 연사»로 바꾸면 다 보입니다.</div>'}
+            : '<div style="padding:14px;font-size:var(--fs-11_5);color:var(--i4)">이 단계가 보낼 차례인 연사가 없어요. 위 «목록»을 «모든 연사»로 바꾸면 다 보입니다.</div>'}
         </div>
       </div>
       <div>
         ${aiDraftHtml('spbulk')}
-        <details${bm.tpl ? ' open' : ''}><summary style="cursor:pointer;font-size:11.5px;font-weight:700;margin-bottom:4px">이번 발송 문구 고치기${bm.tpl ? ' <span style="color:var(--am);font-weight:400">(고침)</span>' : ''}</summary>
+        <details${bm.tpl ? ' open' : ''}><summary style="cursor:pointer;font-size:var(--fs-11_5);font-weight:700;margin-bottom:4px">이번 발송 문구 고치기${bm.tpl ? ' <span style="color:var(--am);font-weight:400">(고침)</span>' : ''}</summary>
           <div class="mlbl">국문</div>
-          <input class="fi" style="font-size:11.5px;margin-bottom:4px" value="${escapeHtml(tpl.subject_ko)}" oninput="sbmTpl('subject_ko',this.value)" ${bm.sending ? 'disabled' : ''}>
-          <textarea class="fi" rows="6" style="font-size:11.5px;width:100%" oninput="sbmTpl('body_ko',this.value)" ${bm.sending ? 'disabled' : ''}>${escapeHtml(tpl.body_ko)}</textarea>
+          <input class="fi" style="font-size:var(--fs-11_5);margin-bottom:4px" value="${escapeHtml(tpl.subject_ko)}" oninput="sbmTpl('subject_ko',this.value)" ${bm.sending ? 'disabled' : ''}>
+          <textarea class="fi" rows="6" style="font-size:var(--fs-11_5);width:100%" oninput="sbmTpl('body_ko',this.value)" ${bm.sending ? 'disabled' : ''}>${escapeHtml(tpl.body_ko)}</textarea>
           <div class="mlbl" style="margin-top:6px">영문</div>
-          <input class="fi" style="font-size:11.5px;margin-bottom:4px" value="${escapeHtml(tpl.subject_en)}" oninput="sbmTpl('subject_en',this.value)" ${bm.sending ? 'disabled' : ''}>
-          <textarea class="fi" rows="6" style="font-size:11.5px;width:100%" oninput="sbmTpl('body_en',this.value)" ${bm.sending ? 'disabled' : ''}>${escapeHtml(tpl.body_en)}</textarea>
+          <input class="fi" style="font-size:var(--fs-11_5);margin-bottom:4px" value="${escapeHtml(tpl.subject_en)}" oninput="sbmTpl('subject_en',this.value)" ${bm.sending ? 'disabled' : ''}>
+          <textarea class="fi" rows="6" style="font-size:var(--fs-11_5);width:100%" oninput="sbmTpl('body_en',this.value)" ${bm.sending ? 'disabled' : ''}>${escapeHtml(tpl.body_en)}</textarea>
           ${varChipsHtml('conf', { ev: bm.evKey })}
-          <div style="font-size:10.5px;color:var(--i4);margin-top:4px">칸은 연사마다 채워집니다. 여기서 고친 문구는 이번 발송에만 쓰고, 기본 문구는
+          <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:4px">칸은 연사마다 채워집니다. 여기서 고친 문구는 이번 발송에만 쓰고, 기본 문구는
             <a href="#" onclick="openFlowEditor('${escAttr(bm.evKey)}','${escAttr(bm.step)}');return false">단계 편집</a>에서 고칩니다.</div>
         </details>
-        ${files.length ? `<div style="font-size:11px;margin-top:6px">기본 첨부 ${files.map(f => `<span class="pill p-blue" style="margin:2px 3px 0 0">📎 ${escapeHtml(f.filename)}</span>`).join('')}</div>` : ''}
+        ${files.length ? `<div style="font-size:var(--fs-11);margin-top:6px">기본 첨부 ${files.map(f => `<span class="pill p-blue" style="margin:2px 3px 0 0">📎 ${escapeHtml(f.filename)}</span>`).join('')}</div>` : ''}
         <div id="sbm-prev">${prevHtml(picked)}</div>
       </div>
     </div>
@@ -276,7 +276,7 @@ function render(){
       <button class="btn bp" onclick="sendSpBulkMail()" ${picked.length && !bm.sending ? '' : 'disabled'}>${picked.length}명에게 보내기</button>
       <button class="btn" onclick="sendSpTestMail()" ${picked.length && !bm.sending ? '' : 'disabled'}
         title="미리보기 중인 연사의 메일을 내 주소(${escAttr(currentUser?.email || '')})로 한 통 보냅니다 — 기록에 남지 않아요">나에게 먼저 1통</button>
-      <span id="sbm-msg" style="font-size:11px;color:var(--i4)"></span>
+      <span id="sbm-msg" style="font-size:var(--fs-11);color:var(--i4)"></span>
     </div>
   </div>`;
 }
@@ -285,15 +285,15 @@ const roundBarHtml = (st, rp) => round.barHtml(st, rp);
 
 /* 사람마다 넘겨 보는 미리보기 — 일정 변경처럼 사람마다 내용이 다른 메일을 하나씩 확인한다 */
 function prevHtml(picked){
-  if(!picked.length) return '<div style="margin-top:10px;font-size:11px;color:var(--i4)">연사를 고르면 미리보기가 보여요.</div>';
+  if(!picked.length) return '<div style="margin-top:10px;font-size:var(--fs-11);color:var(--i4)">연사를 고르면 미리보기가 보여요.</div>';
   const i = ((bm.pi % picked.length) + picked.length) % picked.length;
   const sp = picked[i], m = mailFor(sp), t = mailTargets(sp.id);
-  return `<div style="margin-top:10px;padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;font-size:11.5px;line-height:1.55">
-    <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;font-size:10.5px;color:var(--i4)">
-      <button class="btn" style="font-size:10px;padding:1px 7px" onclick="sbmPrev(-1)">◀</button>
+  return `<div style="margin-top:10px;padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-7);font-size:var(--fs-11_5);line-height:1.55">
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;font-size:var(--fs-10_5);color:var(--i4)">
+      <button class="btn" style="font-size:var(--fs-10);padding:1px 7px" onclick="sbmPrev(-1)">◀</button>
       <span>${i + 1}/${picked.length}</span>
-      <button class="btn" style="font-size:10px;padding:1px 7px" onclick="sbmPrev(1)">▶</button>
-      <b style="color:var(--i2)">${escapeHtml(nameOf(sp))}</b>${isEn(sp) ? ' (영문)' : ''}${m && m.variantLabel ? ` <span class="pill p-blue" style="font-size:9.5px">${escapeHtml(m.variantLabel)}</span>` : ''}
+      <button class="btn" style="font-size:var(--fs-10);padding:1px 7px" onclick="sbmPrev(1)">▶</button>
+      <b style="color:var(--i2)">${escapeHtml(nameOf(sp))}</b>${isEn(sp) ? ' (영문)' : ''}${m && m.variantLabel ? ` <span class="pill p-blue" style="font-size:var(--fs-9_5)">${escapeHtml(m.variantLabel)}</span>` : ''}
       <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">→ ${escapeHtml(t.to.join(', '))}${t.cc.length ? ` (cc ${escapeHtml(t.cc.join(', '))})` : ''}</span>
     </div>
     ${m ? `<div style="white-space:pre-wrap;max-height:300px;overflow:auto"><b>${escapeHtml(m.subject)}</b>\n\n${escapeHtml(m.body)}</div>` : '<div style="color:var(--re)">이 연사에게는 이 단계가 없어요.</div>'}

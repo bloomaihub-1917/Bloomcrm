@@ -45,10 +45,10 @@ export const gapAckToken = (g) => `${g.mine}|${g.net}|${g.cur}`;
 export const reissueAckToken = (r) => `${r.last}|${r.apps.map(a => a.id).sort().join(',')}`;
 
 export const ackedNote = (x, which, label) => `<div style="display:flex;align-items:center;gap:7px;margin-bottom:10px;
-    background:var(--i9);border:1px solid var(--i7);border-radius:8px;padding:7px 11px">
+    background:var(--i9);border:1px solid var(--i7);border-radius:var(--r);padding:7px 11px">
   <span class="pill p-gray">확인함</span>
-  <span style="font-size:11px;color:var(--i4)">${escapeHtml(label)} — 보고 넘어간 건이에요. 금액이나 접수가 또 바뀌면 다시 알려드려요.</span>
-  <button class="btn bs" style="margin-left:auto;font-size:11px"
+  <span style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(label)} — 보고 넘어간 건이에요. 금액이나 접수가 또 바뀌면 다시 알려드려요.</span>
+  <button class="btn bs" style="margin-left:auto;font-size:var(--fs-11)"
     onclick="unackExhAlert('${escAttr(x.id)}','${which}')">되돌리기</button></div>`;
 
 export function ackExhAlert(exhId, which){
@@ -232,7 +232,7 @@ export function appMark(i){
   const a = EXH_APPS.find(r => r.id === i.app_id);
   if(!a) return '';
   const cls = i.change_kind === '취소' ? 'p-red' : i.change_kind === '변경' ? 'p-amber' : 'p-teal';
-  return ` <span class="pill ${cls}" style="font-size:9px" title="${escapeHtml(
+  return ` <span class="pill ${cls}" style="font-size:var(--fs-9)" title="${escapeHtml(
     `${a.seq}차 · ` + (a.received_at || '') + (a.reason ? ' · ' + a.reason : ''))}">${escapeHtml(appSeqLabel(a))} ${escapeHtml(i.change_kind || '추가')}</span>`;
 }
 
@@ -248,26 +248,26 @@ export function appMark(i){
 function appItemRows(a, x, live){
   const rows = itemsFor(x.id).filter(i => i.app_id === a.id);
   if(!rows.length) return live
-    ? '<div style="font-size:11px;color:var(--i4);margin-top:6px">아직 넣은 품목이 없어요 — 아래 줄에서 넣으면 여기에 쌓입니다.</div>'
+    ? '<div style="font-size:var(--fs-11);color:var(--i4);margin-top:6px">아직 넣은 품목이 없어요 — 아래 줄에서 넣으면 여기에 쌓입니다.</div>'
     : '';
 
   const mark = (i) => i.change_kind === '취소' ? ['−', 'p-red', '취소']
     : i.change_kind === '변경' ? ['~', 'p-amber', '변경'] : ['+', 'p-teal', '추가'];
 
-  return `<div style="margin-top:6px;padding:6px 8px;background:var(--W);border-radius:6px;display:flex;flex-direction:column;gap:3px">
-    <div style="font-size:10.5px;color:var(--i4)">이 회차 ${rows.length}건${
+  return `<div style="margin-top:6px;padding:6px 8px;background:var(--W);border-radius:var(--rd-6);display:flex;flex-direction:column;gap:3px">
+    <div style="font-size:var(--fs-10_5);color:var(--i4)">이 회차 ${rows.length}건${
       live ? '' : ' — 고치려면 <b>다시 열기</b>를 누르세요'}</div>
     ${rows.map(i => { const [sg, cls, lbl] = mark(i); const dead = isVoided(i);
-      return `<div style="display:flex;align-items:center;gap:6px;font-size:11.5px${
+      return `<div style="display:flex;align-items:center;gap:6px;font-size:var(--fs-11_5)${
         dead ? ';opacity:.55' : ''}">
-        <span class="pill ${cls}" style="font-size:9px;min-width:34px;text-align:center">${lbl}</span>
+        <span class="pill ${cls}" style="font-size:var(--fs-9);min-width:34px;text-align:center">${lbl}</span>
         <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap${
           dead ? ';text-decoration:line-through' : ''}" title="${escapeHtml(i.name || '')}">${sg} ${escapeHtml(i.name || '')}</span>
-        ${live ? `<input class="fi" style="width:52px;font-size:11px;padding:3px 5px" value="${escapeHtml(i.qty || '')}"
+        ${live ? `<input class="fi" style="width:52px;font-size:var(--fs-11);padding:3px 5px" value="${escapeHtml(i.qty || '')}"
             placeholder="수량" onchange="setItemFieldDirect('${escAttr(i.id)}','qty',this.value)">
-          <input class="fi" style="width:86px;font-size:11px;padding:3px 5px;text-align:right" value="${escapeHtml(i.amount || '')}"
+          <input class="fi" style="width:86px;font-size:var(--fs-11);padding:3px 5px;text-align:right" value="${escapeHtml(i.amount || '')}"
             placeholder="금액" onchange="setItemFieldDirect('${escAttr(i.id)}','amount',this.value)">
-          <button class="btn bs" style="font-size:10.5px;padding:2px 7px" onclick="voidExhItem('${escAttr(i.id)}')"
+          <button class="btn bs" style="font-size:var(--fs-10_5);padding:2px 7px" onclick="voidExhItem('${escAttr(i.id)}')"
             title="${dead ? '취소를 되돌립니다' : '지우지 않고 내립니다 — 이력은 남아요'}">${dead ? '되돌리기' : '취소'}</button>`
         : `<span style="color:var(--i4)">${escapeHtml(i.qty || '')}${i.qty && i.amount ? ' · ' : ''}${
             i.amount ? escapeHtml(money(i.amount)) : ''}</span>`}
@@ -292,21 +292,21 @@ function appFinalRows(x){
   const sum = live.filter(isBillable).reduce((t, i) =>
     t + (Number(String(i.amount || '').replace(/[^0-9.-]/g, '')) || 0), 0);
 
-  return `<div style="margin-top:10px;border:1px solid var(--i7);border-radius:8px;padding:8px 10px">
+  return `<div style="margin-top:10px;border:1px solid var(--i7);border-radius:var(--r);padding:8px 10px">
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
-      <span style="font-size:11.5px;font-weight:700">지금 내역 ${live.length}건</span>
-      <span style="font-size:11px;color:var(--i4)">취소한 건 빼고 남은 것이에요</span>
-      <span style="margin-left:auto;font-size:12px;font-weight:700">${escapeHtml(fmtMoney(sum, cur))}</span>
+      <span style="font-size:var(--fs-11_5);font-weight:700">지금 내역 ${live.length}건</span>
+      <span style="font-size:var(--fs-11);color:var(--i4)">취소한 건 빼고 남은 것이에요</span>
+      <span style="margin-left:auto;font-size:var(--fs-12);font-weight:700">${escapeHtml(fmtMoney(sum, cur))}</span>
     </div>
-    ${live.map(i => `<div style="display:flex;align-items:center;gap:6px;font-size:11.5px;padding:2px 0">
+    ${live.map(i => `<div style="display:flex;align-items:center;gap:6px;font-size:var(--fs-11_5);padding:2px 0">
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
         title="${escapeHtml(i.name || '')}">${escapeHtml(i.name || '')}${appMark(i)}</span>
       <span style="color:var(--i4)">${escapeHtml(i.qty || '')}</span>
       <span style="min-width:76px;text-align:right">${i.amount ? escapeHtml(money(i.amount)) : '-'}</span>
-      ${open ? `<button class="btn bs" style="font-size:10.5px;padding:2px 7px" onclick="voidExhItem('${escAttr(i.id)}')"
+      ${open ? `<button class="btn bs" style="font-size:var(--fs-10_5);padding:2px 7px" onclick="voidExhItem('${escAttr(i.id)}')"
         title="${escapeHtml(open.seq + '차 접수에 취소로 기록됩니다')}">취소</button>` : ''}
     </div>`).join('')}
-    ${!open ? `<div style="font-size:10.5px;color:var(--i4);margin-top:4px">빼려면 접수를 하나 열어야 해요 — 몇 차에서 뺐는지가 남아야 하니까요.</div>` : ''}
+    ${!open ? `<div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:4px">빼려면 접수를 하나 열어야 해요 — 몇 차에서 뺐는지가 남아야 하니까요.</div>` : ''}
   </div>`;
 }
 
@@ -341,21 +341,21 @@ function appsSection(x){
   const xid = escAttr(x.id);
   const cur = open ? (exhDrUi.lastItemCat || '') : '';
   const picker = !open ? '' : `
-    <div style="font-size:11px;color:var(--a);margin:10px 0 6px">이 접수에 넣을 품목 — 분류를 고르세요</div>
+    <div style="font-size:var(--fs-11);color:var(--a);margin:10px 0 6px">이 접수에 넣을 품목 — 분류를 고르세요</div>
     <div style="display:flex;gap:6px;flex-wrap:wrap" id="it-cats-${xid}">
       ${window.itemCats().map(({ code: k, label: l }) => `<button class="btn bs${cur === k ? ' bp' : ''}" data-cat="${escapeHtml(k)}"
         onclick="pickItemCat('${xid}','${escAttr(k)}')">${escapeHtml(l)}</button>`).join('')}
     </div>
     <input type="hidden" id="it-cat-${xid}" value="${escapeHtml(cur)}">
     <div class="bl-row bl-item-add" id="it-row-${xid}" style="margin-top:6px;${cur ? '' : 'display:none'}">
-      <input class="fi" id="it-nm-${xid}" placeholder="항목명" style="flex:1 1 120px;min-width:0;font-size:11.5px;padding:6px"
+      <input class="fi" id="it-nm-${xid}" placeholder="항목명" style="flex:1 1 120px;min-width:0;font-size:var(--fs-11_5);padding:6px"
         ${cur ? `list="${itemListId(x, cur)}"` : ''} oninput="pickCatalogItem('${xid}')">
       ${catalogDatalist(x)}${window.designTargetList(x)}
-      <input class="fi" id="it-qty-${xid}" placeholder="수량" style="flex:1 1 54px;min-width:0;font-size:11.5px;padding:6px"
+      <input class="fi" id="it-qty-${xid}" placeholder="수량" style="flex:1 1 54px;min-width:0;font-size:var(--fs-11_5);padding:6px"
         oninput="calcItemAmount('${xid}')">
-      <input class="fi" id="it-up-${xid}" placeholder="단가" style="flex:1 1 78px;min-width:0;font-size:11.5px;padding:6px"
+      <input class="fi" id="it-up-${xid}" placeholder="단가" style="flex:1 1 78px;min-width:0;font-size:var(--fs-11_5);padding:6px"
         oninput="calcItemAmount('${xid}')">
-      <input class="fi" id="it-amt-${xid}" placeholder="금액" style="flex:1 1 88px;min-width:0;font-size:11.5px;padding:6px;text-align:right">
+      <input class="fi" id="it-amt-${xid}" placeholder="금액" style="flex:1 1 88px;min-width:0;font-size:var(--fs-11_5);padding:6px;text-align:right">
       <select class="fi bl-cur" id="it-cur-${xid}" onchange="rememberItemCur(this.value)">
         ${window.currencies().map(c => `<option value="${c}"${(exhDrUi.lastItemCur || currencyOf(x.id)) === c ? ' selected' : ''}>${c}</option>`).join('')}</select>
       <button class="btn bp bs" style="flex:0 0 auto" onclick="addItemHere('${xid}')">추가</button>
@@ -363,37 +363,37 @@ function appsSection(x){
   const rows = list.map(a => {
     const live = !String(a.handled_at || '').trim();
     const diff = live ? appDiffLines(a.id, x.id) : [];
-    return `<div style="border:1px solid ${live ? 'var(--a)' : 'var(--i7)'};border-radius:8px;padding:9px 10px;margin-bottom:6px;background:${live ? 'var(--ad)' : 'var(--W)'}">
+    return `<div style="border:1px solid ${live ? 'var(--a)' : 'var(--i7)'};border-radius:var(--r);padding:9px 10px;margin-bottom:6px;background:${live ? 'var(--ad)' : 'var(--W)'}">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
         <span class="pill ${a.kind === '최초' ? 'p-blue' : a.kind === '취소' ? 'p-red' : 'p-amber'}">${escapeHtml(appSeqLabel(a))} · ${escapeHtml(a.kind || '')}</span>
-        <select class="fi" style="width:auto;font-size:11px;padding:3px 6px"
+        <select class="fi" style="width:auto;font-size:var(--fs-11);padding:3px 6px"
           title="접수 경로 — 엑스렌탈은 거기서 직접 청구·수금한 건이에요"
           onchange="setAppField('${escAttr(a.id)}','channel',this.value)">${
           APP_CHANNELS.map(([c]) => `<option value="${escapeHtml(c)}"${(a.channel || '') === c ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}${
           APP_CHANNELS.some(([c]) => c === (a.channel || '')) ? '' : `<option value="${escapeHtml(a.channel || '')}" selected>${escapeHtml(a.channel || '')}</option>`}</select>
-        <input type="date" class="fi" style="width:132px;font-size:11px" value="${escapeHtml(a.received_at || '')}"
+        <input type="date" class="fi" style="width:132px;font-size:var(--fs-11)" value="${escapeHtml(a.received_at || '')}"
           onchange="setAppField('${escAttr(a.id)}','received_at',this.value)">
         ${live ? '<span class="pill p-amber">반영 중</span>'
-               : `<span style="font-size:10.5px;color:var(--i4)">반영 ${escapeHtml(a.handled_at)}${a.handler ? ' · ' + escapeHtml(a.handler) : ''}</span>`}
+               : `<span style="font-size:var(--fs-10_5);color:var(--i4)">반영 ${escapeHtml(a.handled_at)}${a.handler ? ' · ' + escapeHtml(a.handler) : ''}</span>`}
         <span style="margin-left:auto;display:flex;gap:4px">
           ${live ? `<button class="btn bs" onclick="closeExhApp('${escAttr(x.id)}','${escAttr(a.id)}')">반영 완료</button>`
                  : `<button class="btn bs" onclick="reopenExhApp('${escAttr(a.id)}')">다시 열기</button>`}
           <button class="btn bs" onclick="delExhApp('${escAttr(a.id)}')">삭제</button>
         </span>
       </div>
-      <input class="fi" style="margin-top:6px;font-size:11.5px" placeholder="왜 다시 받았나요 — 예: 프북 수정, 전시패스 추가"
+      <input class="fi" style="margin-top:6px;font-size:var(--fs-11_5)" placeholder="왜 다시 받았나요 — 예: 프북 수정, 전시패스 추가"
         value="${escapeHtml(a.reason || '')}" onchange="setAppField('${escAttr(a.id)}','reason',this.value)">
-      ${a.file_name ? `<div style="font-size:10.5px;color:var(--i4);margin-top:4px">📄 ${escapeHtml(a.file_name)}</div>` : ''}
+      ${a.file_name ? `<div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:4px">📄 ${escapeHtml(a.file_name)}</div>` : ''}
       ${appItemRows(a, x, live)}
       ${live && open && a.id === open.id ? picker : ''}
 
-      ${!live && a.summary ? `<div style="font-size:11px;color:var(--i3);margin-top:5px">${escapeHtml(a.summary)}</div>` : ''}
+      ${!live && a.summary ? `<div style="font-size:var(--fs-11);color:var(--i3);margin-top:5px">${escapeHtml(a.summary)}</div>` : ''}
     </div>`;
   }).join('');
 
   const top = add;
   if(!list.length) return sct('신청서 접수 이력',
-    top + `<div style="font-size:11.5px;color:var(--i4);margin-top:8px">아직 접수 기록이 없어요. 받은 경로를 누르면 접수가 열리고 품목을 넣을 수 있어요.</div>`);
+    top + `<div style="font-size:var(--fs-11_5);color:var(--i4);margin-top:8px">아직 접수 기록이 없어요. 받은 경로를 누르면 접수가 열리고 품목을 넣을 수 있어요.</div>`);
 
   return sct('신청서 접수 이력', top + `<div style="margin-top:10px">${rows}</div>` + appFinalRows(x),
     list.length > 1 ? `<span class="pill p-amber">변경 ${list.length - 1}회</span>` : '');
@@ -420,26 +420,26 @@ function invoiceIssueSection(x){
   const canFolder = window.folderSupported?.() ?? false;
 
   if(!items.length) return sct('인보이스 발행',
-    `<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">
+    `<div style="font-size:var(--fs-11_5);color:var(--i5);padding:8px 2px">
       청구할 금액 항목이 아직 없어요 — 위에서 신청 내역을 금액 항목으로 옮기거나
       <b>정산</b> 탭에서 항목을 넣으면 여기서 바로 발행할 수 있어요.</div>`);
 
   return sct('인보이스 발행', `
-    <div style="padding:8px 10px;background:var(--i9);border-radius:7px;margin-bottom:8px">
+    <div style="padding:8px 10px;background:var(--i9);border-radius:var(--rd-7);margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
-        <span style="font-size:11px;color:var(--i4)">담길 내용</span>
-        <b style="font-size:13px">${curs.map(c => escapeHtml(fmtMoney(by[c], c))).join(' + ')}</b>
+        <span style="font-size:var(--fs-11);color:var(--i4)">담길 내용</span>
+        <b style="font-size:var(--fs-13)">${curs.map(c => escapeHtml(fmtMoney(by[c], c))).join(' + ')}</b>
       </div>
-      <div style="font-size:10.5px;color:var(--i5);margin-top:3px">
+      <div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:3px">
         청구 항목 ${items.length}건${curs.length > 1
           ? ` · 통화가 <b>${curs.join(' / ')}</b>로 갈려 있어 ${curs.length}장으로 나눠 발행해요` : ''}</div>
     </div>
-    ${invs.length ? `<div style="font-size:11px;color:var(--am);margin-bottom:8px">
+    ${invs.length ? `<div style="font-size:var(--fs-11);color:var(--am);margin-bottom:8px">
       이미 발행한 인보이스가 ${invs.length}장 있어요 — 누르면 <b>새 번호로 한 장 더</b> 만듭니다.
       금액만 고쳐 다시 보내는 거라면 옛 건을 <b>정산</b> 탭에서 무효로 두세요.</div>` : ''}
     <button class="btn bp" id="inv-issue-${escAttr(x.id)}" onclick="issueExhInvoice('${escAttr(x.id)}')"
       title="인보이스 줄을 만들고 양식을 채워 저장합니다">인보이스 발행${curs.length > 1 ? ` (${curs.length}장)` : ''}</button>
-    <div style="font-size:10.5px;color:var(--i5);margin-top:7px">
+    <div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:7px">
       ${!canFolder
         ? '이 브라우저는 폴더 저장을 지원하지 않아 다운로드로 받아요 (Chrome·Edge 데스크톱에서 폴더 저장 가능)'
         : folder
@@ -462,33 +462,33 @@ function baseWorkBlock(x){
   return sct(`기본 시공 — ${v.label}`,
     (k === 'fascia'
       ? `<div class="fg"><label class="fl">간판명 (영문)</label>
-          <input class="fi" style="font-size:12px" value="${escapeHtml(x.fascia_name || '')}"
+          <input class="fi" style="font-size:var(--fs-12)" value="${escapeHtml(x.fascia_name || '')}"
             placeholder="${escapeHtml(bookName(x).en || '게재 영문명이 없어요')}"
             title="비우면 프로그램북 게재 영문명을 그대로 씁니다 — 간판만 다르면 여기에 적으세요"
             onchange="setExhField('${escAttr(x.id)}','fascia_name',this.value,'간판명')">
           ${fasciaName(x)
-            ? `<div style="font-size:10.5px;color:var(--i5);margin-top:3px">간판에 나갈 이름 — <b>${escapeHtml(fasciaName(x))}</b>${
+            ? `<div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:3px">간판에 나갈 이름 — <b>${escapeHtml(fasciaName(x))}</b>${
                 x.fascia_name ? ' (간판만 따로 적음)' : ' (프로그램북 게재 영문명)'}</div>`
-            : '<div style="font-size:10.5px;color:var(--re);margin-top:3px">게재 영문명이 비어 있어 간판을 만들 수 없어요 — 프로그램북 탭에서 넣거나 여기에 직접 적으세요.</div>'}</div>
+            : '<div style="font-size:var(--fs-10_5);color:var(--re);margin-top:3px">게재 영문명이 비어 있어 간판을 만들 수 없어요 — 프로그램북 탭에서 넣거나 여기에 직접 적으세요.</div>'}</div>
         <div class="fg"><label class="fl">간판명 확정</label>
-          <input type="date" class="fi" style="font-size:12px" value="${escapeHtml(baseRecvAt(x))}"
+          <input type="date" class="fi" style="font-size:var(--fs-12)" value="${escapeHtml(baseRecvAt(x))}"
             onchange="setBaseRecvAt('${escAttr(x.id)}',this.value)"></div>`
       /* 이 날짜는 그래픽 현황의 «받을 파일»과 같은 자리다 — 기본 제공 그래픽
          항목의 받은 날을 읽고 쓴다. 두 화면이 각자 적던 시절에는 한쪽이 받음,
          다른 쪽이 미수령이었다. */
       : `<div class="fg"><label class="fl">디자인 수령일</label>
-          <input type="date" class="fi" style="font-size:12px" value="${escapeHtml(baseRecvAt(x))}"
+          <input type="date" class="fi" style="font-size:var(--fs-12)" value="${escapeHtml(baseRecvAt(x))}"
             onchange="setBaseRecvAt('${escAttr(x.id)}',this.value)">
           ${baseRecvItems(x).length
-            ? `<div style="font-size:10.5px;color:var(--i5);margin-top:3px">그래픽 탭의 «${
+            ? `<div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:3px">그래픽 탭의 «${
                 escapeHtml(baseRecvItems(x).map(i => i.name || '').filter(Boolean).join(' · '))}»와 같은 칸이에요</div>`
             : ''}</div>`)
     + `<div class="fg"><label class="fl">${escapeHtml(v.done)}</label>
         <div style="padding:3px 0">${baseDoneCheck(x)}</div></div>
       <div class="fg"><label class="fl">비고</label>
-        <input class="fi" style="font-size:12px" value="${escapeHtml(x.base_note || '')}"
+        <input class="fi" style="font-size:var(--fs-12)" value="${escapeHtml(x.base_note || '')}"
           placeholder="색상·재질·시공 메모" onchange="setExhField('${escAttr(x.id)}','base_note',this.value,'기본 시공 비고')"></div>
-      <div style="font-size:10.5px;color:var(--i5)">추가 발주가 아니라 계약에 들어 있는 항목이에요 — 기업이 조용해도 우리가 만들어 세웁니다.</div>`);
+      <div style="font-size:var(--fs-10_5);color:var(--i5)">추가 발주가 아니라 계약에 들어 있는 항목이에요 — 기업이 조용해도 우리가 만들어 세웁니다.</div>`);
 }
 
 /* 참가 범위 — 체크리스트 맨 앞에 둔다. 아래 칸이 전부 비어 있는 까닭이
@@ -502,12 +502,12 @@ function scopeBlock(x){
      상관없는 묶음 정보라, 신청항목 탭에 같은 칸이 또 있으면 어디가 정본인지 헷갈린다. */
   return sct('참가 범위', `
     <div class="fg"><label class="fl">유형</label>
-      <select class="fi" style="font-size:12px"
+      <select class="fi" style="font-size:var(--fs-12)"
         onchange="setExhField('${escAttr(x.id)}','scope',this.value,'참가 범위')">
         <option value=""${book ? '' : ' selected'}>전체 진행 — 매뉴얼부터 현장까지</option>
         <option value="book"${book ? ' selected' : ''}>프로그램북만 — 받을 것이 도록뿐</option>
       </select>
-      <div style="font-size:10.5px;color:var(--i5);margin-top:3px">
+      <div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:3px">
         «프로그램북만»으로 두면 도록 외 단계는 <b>해당 없음</b>이 되고 부스 수에서도 빠집니다.
         지우는 게 아니라 집계에서 빼는 것이라, 유형을 되돌리면 적어 둔 값이 그대로 살아납니다.</div></div>`);
 }
@@ -526,8 +526,8 @@ function dApply(x){
        보니, 이미 부스가 정해져 있던 기업은 통째로 비어 있다. 여기서 넣게 한다. */
     const p = boothItemsPending(x.id);
     return p ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;
-        background:var(--ad);border:1px solid var(--a);border-radius:8px;padding:8px 11px">
-      <span style="font-size:11.5px;color:var(--i2);flex:1;min-width:0">
+        background:var(--ad);border:1px solid var(--a);border-radius:var(--r);padding:8px 11px">
+      <span style="font-size:var(--fs-11_5);color:var(--i2);flex:1;min-width:0">
         <b>${escapeHtml(p.type)}</b>에 기본으로 딸려 오는 품목 ${p.want.length}건이 아직 안 들어갔어요 —
         ${escapeHtml(p.want.map(o => [o.code, o.name].filter(Boolean).join(' ')).join(', '))}</span>
       <button class="btn bp bs" style="flex:0 0 auto"
@@ -538,7 +538,7 @@ function dApply(x){
 
   ${sct('신청서',
     /* 수신 여부는 위 접수 이력이 정한다 — 따로 누르는 칸을 두지 않는다 */
-    `<div style="font-size:11.5px;color:var(--i4);padding:2px 0">${x.app_received_at
+    `<div style="font-size:var(--fs-11_5);color:var(--i4);padding:2px 0">${x.app_received_at
       ? `신청서 수신 ${escapeHtml(x.app_received_at)} — 첫 접수일 기준으로 자동 표시돼요`
       : '아직 받은 신청서가 없어요 — 위에서 접수를 열면 자동으로 수신 처리돼요'}</div>` +
     `<div style="padding:10px 0 2px">
@@ -568,17 +568,17 @@ function dApply(x){
 
   ${sct('등록된 비품', items.length
     ? `<div style="display:flex;flex-direction:column;gap:1px">
-        ${items.map(i => `<div class="bl-row bl-item" style="padding:6px 8px;background:var(--i9);border-radius:6px">
+        ${items.map(i => `<div class="bl-row bl-item" style="padding:6px 8px;background:var(--i9);border-radius:var(--rd-6)">
           <span class="pill p-gray" style="text-align:center">비품</span>
-          <span style="min-width:0;font-size:12px;font-weight:600;word-break:break-all">${escapeHtml(i.name || '')}</span>
+          <span style="min-width:0;font-size:var(--fs-12);font-weight:600;word-break:break-all">${escapeHtml(i.name || '')}</span>
           <span class="bl-qty">${escapeHtml(i.qty || '')}${
             i.unit_price ? `<span class="bl-up">${i.qty ? ' × ' : ''}${money(i.unit_price)}</span>` : ''}</span>
           <span class="bl-amt">${fmtMoney(i.amount, i.currency || 'KRW')}</span>
           <span></span><span></span>
         </div>`).join('')}
       </div>
-      <div style="font-size:10.5px;color:var(--i5);margin-top:7px">금액을 고치거나 항목을 더하려면 <b>정산</b> 탭에서 하세요</div>`
-    : '<div style="font-size:11.5px;color:var(--i5);padding:8px 2px">아직 등록된 비품이 없어요</div>',
+      <div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:7px">금액을 고치거나 항목을 더하려면 <b>정산</b> 탭에서 하세요</div>`
+    : '<div style="font-size:var(--fs-11_5);color:var(--i5);padding:8px 2px">아직 등록된 비품이 없어요</div>',
     (items.length ? `<span class="pill p-gray">${items.length}종</span>` : '')
     /* 이 기업 한 장만 — 현장에서 다시 뽑거나 신청이 바뀐 곳만 갈아 끼울 때.
        출력은 exh-export.js가 한다(window 경유 — 인보이스 발행과 같은 이유) */
@@ -597,7 +597,7 @@ function dApply(x){
 function introMeter(v, evKey){
   const o = introOver(v, evKey);
   return `<span style="color:${o.isOver ? 'var(--re)' : 'var(--i4)'}">
-      띄어쓰기 포함 <b style="font-size:13px">${o.chars}</b>자 · <b style="font-size:13px">${o.words}</b>단어</span>
+      띄어쓰기 포함 <b style="font-size:var(--fs-13)">${o.chars}</b>자 · <b style="font-size:var(--fs-13)">${o.words}</b>단어</span>
     <span style="color:var(--i5)"> / 한도 ${o.lim.chars.toLocaleString()}자 · ${o.lim.words}단어</span>
     ${o.isOver ? `<div style="color:var(--re);font-weight:700;margin-top:3px">${o.over.join(', ')} 초과 — 기업에 줄여 달라고 요청하세요</div>`
       : o.chars ? `<div style="color:var(--g);margin-top:3px">지면에 들어갑니다 (${o.lim.chars - o.chars}자 여유)</div>` : ''}`;
@@ -616,33 +616,33 @@ function dBook(x){
   const known = (f, orgKey, label) => syncTag(x, f, getOrgById(x.org_id), orgKey, label);
   const ORG_OF = { book_address: 'address', book_website: 'website' };
   const row = (f, label, ph) => `<div class="fg"><label class="fl">${escapeHtml(label)}</label>
-    <input class="fi" style="font-size:12px" value="${escapeHtml(x[f] || '')}" placeholder="${escapeHtml(ph)}"
+    <input class="fi" style="font-size:var(--fs-12)" value="${escapeHtml(x[f] || '')}" placeholder="${escapeHtml(ph)}"
       onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr(label)}')">
     ${ORG_OF[f] ? known(f, ORG_OF[f], label) : ''}</div>`;
 
   return `
   ${sct('게재 정보', `
     ${miss.length
-      ? `<div style="font-size:11.5px;color:var(--am);background:var(--ab);padding:7px 9px;border-radius:6px;margin-bottom:10px">
+      ? `<div style="font-size:var(--fs-11_5);color:var(--am);background:var(--ab);padding:7px 9px;border-radius:var(--rd-6);margin-bottom:10px">
           아직 못 받은 항목 ${miss.length}개 — <b>${escapeHtml(miss.join(', '))}</b></div>`
-      : `<div style="font-size:11.5px;color:var(--g);background:var(--gb);padding:7px 9px;border-radius:6px;margin-bottom:10px">
+      : `<div style="font-size:var(--fs-11_5);color:var(--g);background:var(--gb);padding:7px 9px;border-radius:var(--rd-6);margin-bottom:10px">
           도록에 낼 정보가 모두 채워졌어요</div>`}
     <div class="fgr">
       <div class="fg"><label class="fl">게재 국문명</label>
-        <input class="fi" style="font-size:12px" value="${escapeHtml(x.book_name_ko || '')}"
+        <input class="fi" style="font-size:var(--fs-12)" value="${escapeHtml(x.book_name_ko || '')}"
           placeholder="${escapeHtml(bookName(x).ko)}"
           title="비우면 CRM 이름을 그대로 씁니다 — 신청서 표기가 다르면 여기에 적으세요"
           onchange="setExhField('${escAttr(x.id)}','book_name_ko',this.value,'게재 국문명')"></div>
       <div class="fg"><label class="fl">게재 영문명</label>
-        <input class="fi" style="font-size:12px" value="${escapeHtml(x.book_name_en || '')}"
+        <input class="fi" style="font-size:var(--fs-12)" value="${escapeHtml(x.book_name_en || '')}"
           placeholder="${escapeHtml(bookName(x).en)}"
           onchange="setExhField('${escAttr(x.id)}','book_name_en',this.value,'게재 영문명')"></div>
     </div>
-    <div style="font-size:10.5px;color:var(--i5);margin:-4px 0 8px">
+    <div style="font-size:var(--fs-10_5);color:var(--i5);margin:-4px 0 8px">
       도록과 <b>기본부스 간판</b>에 실제로 나가는 이름이에요. 비우면 CRM 이름을 씁니다.</div>
     <div class="fgr">
       <div class="fg"><label class="fl">게재 순서</label>
-        <input class="fi" style="font-size:12px" value="${escapeHtml(x.book_order || '')}" placeholder="예: 1"
+        <input class="fi" style="font-size:var(--fs-12)" value="${escapeHtml(x.book_order || '')}" placeholder="예: 1"
           title="번호를 적으면 그 자리로 옮기고 나머지가 한 칸씩 밀려요"
           onchange="moveBookOrder('${escAttr(x.id)}',this.value)"></div>
       <div class="fg"><label class="fl">로고</label>
@@ -660,11 +660,11 @@ function dBook(x){
     miss.length ? `<span class="pill p-amber">${miss.length}개 미수령</span>` : '<span class="pill p-green">완료</span>')}
 
   ${sct('회사소개', `
-    <textarea class="fi" id="bk-intro-${escAttr(x.id)}" rows="8" style="font-size:12.5px;line-height:1.7"
+    <textarea class="fi" id="bk-intro-${escAttr(x.id)}" rows="8" style="font-size:var(--fs-12_5);line-height:1.7"
       placeholder="도록에 실을 회사소개를 붙여넣으세요"
       oninput="drawIntroMeter('${escAttr(x.id)}')"
       onchange="setExhField('${escAttr(x.id)}','book_intro',this.value,'회사소개')">${escapeHtml(x.book_intro || '')}</textarea>
-    <div id="bk-meter-${escAttr(x.id)}" style="font-size:11.5px;margin-top:6px">${introMeter(x.book_intro, x.event_id)}</div>
+    <div id="bk-meter-${escAttr(x.id)}" style="font-size:var(--fs-11_5);margin-top:6px">${introMeter(x.book_intro, x.event_id)}</div>
     ${known('book_intro', 'intro', '회사소개')}`,
     o.chars ? `<span class="pill ${o.isOver ? 'p-red' : 'p-green'}">${o.chars}자${o.isOver ? ' 초과' : ''}</span>`
       : '<span class="pill p-red">없음</span>')}
@@ -682,36 +682,36 @@ function dProgress(x){
   ${sct('부스 배정',
     `<div class="fgr">
       <div class="fg"><label class="fl">부스 번호</label>
-        <input class="fi" style="font-size:12px" value="${escapeHtml(x.booth_no || '')}"
+        <input class="fi" style="font-size:var(--fs-12)" value="${escapeHtml(x.booth_no || '')}"
           onchange="setExhField('${escAttr(x.id)}','booth_no',this.value,'부스 번호')"></div>
       <div class="fg"><label class="fl">층</label>
-        <input class="fi" style="font-size:12px" value="${escapeHtml(x.booth_floor || '')}"
+        <input class="fi" style="font-size:var(--fs-12)" value="${escapeHtml(x.booth_floor || '')}"
           onchange="setExhField('${escAttr(x.id)}','booth_floor',this.value,'부스 층')"></div>
     </div>
     <div class="fgr">
       <div class="fg"><label class="fl">부스 타입</label>
-        <select class="fi" style="font-size:12px" onchange="setExhField('${escAttr(x.id)}','booth_type',this.value,'부스 타입')">
+        <select class="fi" style="font-size:var(--fs-12)" onchange="setExhField('${escAttr(x.id)}','booth_type',this.value,'부스 타입')">
           ${boothTypeOptions(x.booth_type)}
         </select></div>
       <div class="fg"><label class="fl">수량</label>
-        <input class="fi" style="font-size:12px" value="${escapeHtml(x.booth_qty || '')}"
+        <input class="fi" style="font-size:var(--fs-12)" value="${escapeHtml(x.booth_qty || '')}"
           onchange="setExhField('${escAttr(x.id)}','booth_qty',this.value,'부스 수량')"></div>
     </div>
     <div class="fg"><label class="fl">스폰서 등급</label>
-      <select class="fi" style="font-size:12px" onchange="setExhField('${escAttr(x.id)}','grade',this.value,'등급')">
+      <select class="fi" style="font-size:var(--fs-12)" onchange="setExhField('${escAttr(x.id)}','grade',this.value,'등급')">
         <option value=""${x.grade ? '' : ' selected'}>— 없음 —</option>${grades(x.event_id).map(g => `<option value="${escapeHtml(g.code)}"${(x.grade || '') === g.code ? ' selected' : ''}>${escapeHtml(g.label)}</option>`).join('')}
       </select></div>
     <div class="fg"><label class="fl">모기업</label>
-      <select class="fi" style="font-size:12px"
+      <select class="fi" style="font-size:var(--fs-12)"
         onchange="setExhField('${escAttr(x.id)}','host_key',this.value,'모기업')">${hostOptions(x)}</select>
-      <div style="font-size:10.5px;color:var(--i5);margin-top:3px">예하 기업이면 모기업을 고르세요 — 부스 현황에서 모기업 바로 아래 줄로 붙습니다.</div></div>` +
+      <div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:3px">예하 기업이면 모기업을 고르세요 — 부스 현황에서 모기업 바로 아래 줄로 붙습니다.</div></div>` +
     `<div style="padding:8px 0 2px">
       <label style="display:flex;align-items:flex-start;gap:7px;cursor:pointer">
         <input type="checkbox" ${isSharedBooth(x) ? 'checked' : ''}
           onchange="toggleSharedBooth('${escAttr(x.id)}')" style="margin-top:2px">
         <span>
-          <span style="font-size:12px;font-weight:600">공동 부스 — 부스 수에서 뺀다</span>
-          <span style="display:block;font-size:10.5px;color:var(--i5);margin-top:2px">
+          <span style="font-size:var(--fs-12);font-weight:600">공동 부스 — 부스 수에서 뺀다</span>
+          <span style="display:block;font-size:var(--fs-10_5);color:var(--i5);margin-top:2px">
             한 부스를 두 기관이 나눠 쓸 때 한쪽만 켜세요. 기업 수·정산은 그대로 두고
             부스 수와 조립부스 발주에서만 빠집니다.</span>
         </span>
@@ -727,17 +727,17 @@ function dProgress(x){
     boothDesignBlock(x) +
     `<div class="fgr">
       <div class="fg"><label class="fl">출입증 매수</label>
-        <input class="fi" style="font-size:12px" value="${escapeHtml(x.badge_count || '')}"
+        <input class="fi" style="font-size:var(--fs-12)" value="${escapeHtml(x.badge_count || '')}"
           onchange="setExhField('${escAttr(x.id)}','badge_count',this.value,'출입증')"></div>
       <div class="fg"><label class="fl">출입증 발급일</label>
-        <input type="date" class="fi" style="font-size:12px" value="${escapeHtml(x.badge_issued_at || '')}"
+        <input type="date" class="fi" style="font-size:var(--fs-12)" value="${escapeHtml(x.badge_issued_at || '')}"
           onchange="setExhField('${escAttr(x.id)}','badge_issued_at',this.value,'출입증 발급')"></div>
     </div>` +
     textRow(x, 'onsite_note', '현장 메모', '', true))}
 
   ${sct('기타', textRow(x, 'note', '메모', '', true) +
     `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--i8);display:flex;align-items:center;gap:9px">
-      <span style="font-size:11.5px;color:var(--i4);flex:1">${x.status === CANCELLED
+      <span style="font-size:var(--fs-11_5);color:var(--i4);flex:1">${x.status === CANCELLED
         ? '참가 취소된 기업이에요. 기록은 그대로 남아있어요.'
         : '참가가 취소되면 목록에서 빼되 기록은 남겨둬요.'}</span>
       <button class="btn bs" onclick="toggleExhCancel('${escAttr(x.id)}')">${x.status === CANCELLED ? '취소 해제' : '참가 취소 처리'}</button>

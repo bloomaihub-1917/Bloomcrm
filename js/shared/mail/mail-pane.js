@@ -86,16 +86,16 @@ function pinHtml(t, owner){
   const ps = paras(l);
   return `<div style="border-bottom:1px solid var(--i6);background:var(--ad);padding:7px 14px;flex-shrink:0;${pinned.open ? 'max-height:50dvh;overflow:auto' : ''}">
     <div style="display:flex;gap:6px;align-items:center">
-      <span style="font-size:11.5px;font-weight:700;cursor:pointer;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="togglePinMail()">
+      <span style="font-size:var(--fs-11_5);font-weight:700;cursor:pointer;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="togglePinMail()">
         📌 ${escapeHtml(l.subject || '(제목 없음)')} <span style="font-weight:400;color:var(--i4)">${escapeHtml(String(l.ts || '').slice(5, 16))} ${pinned.open ? '▴' : '▾'}</span></span>
-      <span class="mp-target" style="font-size:10px;color:var(--a)">${target ? '' : '탭에서 넣을 칸을 누르세요'}</span>
-      <button class="btn" style="font-size:10px" onclick="setMailDone('${t}','${escAttr(l.id)}',true)">처리 완료</button>
-      <button class="btn" style="font-size:10px" onclick="unpinMail()">해제</button>
+      <span class="mp-target" style="font-size:var(--fs-10);color:var(--a)">${target ? '' : '탭에서 넣을 칸을 누르세요'}</span>
+      <button class="btn" style="font-size:var(--fs-10)" onclick="setMailDone('${t}','${escAttr(l.id)}',true)">처리 완료</button>
+      <button class="btn" style="font-size:var(--fs-10)" onclick="unpinMail()">해제</button>
     </div>
     ${pinned.open ? ps.map((p, i) => `<div style="display:flex;gap:6px;align-items:flex-start;margin-top:6px">
-      <div style="flex:1;font-size:11.5px;white-space:pre-wrap;line-height:1.5;color:var(--i2)">${escapeHtml(p)}</div>
-      <button class="btn bp" style="font-size:10px;flex:0 0 auto" onclick="paneInsertPara('${t}','${escAttr(l.id)}',${i})">넣기</button></div>`).join('')
-      || '<div style="font-size:11px;color:var(--i4);margin-top:4px">본문이 없어요</div>' : ''}
+      <div style="flex:1;font-size:var(--fs-11_5);white-space:pre-wrap;line-height:1.5;color:var(--i2)">${escapeHtml(p)}</div>
+      <button class="btn bp" style="font-size:var(--fs-10);flex:0 0 auto" onclick="paneInsertPara('${t}','${escAttr(l.id)}',${i})">넣기</button></div>`).join('')
+      || '<div style="font-size:var(--fs-11);color:var(--i4);margin-top:4px">본문이 없어요</div>' : ''}
   </div>`;
 }
 
@@ -146,8 +146,8 @@ export function decorate(t){
     pane.dataset.sig = sig;
     pane.dataset.owner = String(owner);
     pane.innerHTML = `<div style="position:sticky;top:0;background:var(--W);padding:10px 14px;border-bottom:1px solid var(--i6);z-index:1;display:flex;gap:8px;align-items:center">
-        <b style="font-size:12px">메일함</b>
-        <span class="mp-target" style="font-size:10.5px;color:var(--a)">${target ? '' : '오른쪽 탭에서 넣을 칸을 누르세요'}</span>
+        <b style="font-size:var(--fs-12)">메일함</b>
+        <span class="mp-target" style="font-size:var(--fs-10_5);color:var(--a)">${target ? '' : '오른쪽 탭에서 넣을 칸을 누르세요'}</span>
         <button class="btn bp bs" style="margin-left:auto" onmousedown="event.preventDefault()" onclick="paneInsertSelection()"
           title="왼쪽에서 끌어 고른 글을 오른쪽에서 고른 칸에 넣습니다">→ 고른 글 넣기</button></div>
       <div style="padding:10px 14px">${box || ''}</div>`;

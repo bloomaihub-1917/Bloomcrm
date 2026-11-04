@@ -86,7 +86,7 @@ function renderSectorImportPreview(groups, errorMsg){
   const el = document.getElementById('sector-import-preview');
   if(!el) return;
   if(errorMsg){
-    el.innerHTML = `<div style="font-size:12px;color:var(--re)">${escapeHtml(errorMsg)}</div>`;
+    el.innerHTML = `<div style="font-size:var(--fs-12);color:var(--re)">${escapeHtml(errorMsg)}</div>`;
     return;
   }
   if(!groups){ el.innerHTML = ''; return; }
@@ -94,19 +94,19 @@ function renderSectorImportPreview(groups, errorMsg){
   const totalSubs = groups.reduce((n,g) => n + g.subs.length, 0);
   const scopeLabel = settingsUi.sectorScope ? `"${settingsUi.sectorScope}" 전용` : '"공통"';
   el.innerHTML = `
-    <div style="font-size:12px;color:var(--i2);margin-bottom:8px">
+    <div style="font-size:var(--fs-12);color:var(--i2);margin-bottom:8px">
       메인 섹터 <b>${groups.length}개</b>, 서브 섹터 <b>${totalSubs}개</b>를 ${escapeHtml(scopeLabel)} 범위에 추가합니다.
     </div>
-    <div style="max-height:180px;overflow-y:auto;border:1px solid var(--i6);border-radius:6px;padding:8px 10px;background:var(--W);margin-bottom:10px">
+    <div style="max-height:180px;overflow-y:auto;border:1px solid var(--i6);border-radius:var(--rd-6);padding:8px 10px;background:var(--W);margin-bottom:10px">
       ${groups.map(g => `
         <div style="margin-bottom:6px">
-          <div style="font-size:12px;font-weight:700;color:var(--i1)">${escapeHtml(g.main)}</div>
-          ${g.subs.length ? `<div style="font-size:11px;color:var(--i4);padding-left:12px">${g.subs.map(escapeHtml).join(', ')}</div>` : ''}
+          <div style="font-size:var(--fs-12);font-weight:700;color:var(--i1)">${escapeHtml(g.main)}</div>
+          ${g.subs.length ? `<div style="font-size:var(--fs-11);color:var(--i4);padding-left:12px">${g.subs.map(escapeHtml).join(', ')}</div>` : ''}
         </div>`).join('')}
     </div>
     <div style="display:flex;gap:6px">
-      <button class="btn bp" style="font-size:11px" onclick="confirmSectorImport()">이대로 추가</button>
-      <button class="btn bs" style="font-size:11px" onclick="cancelSectorImport()">취소</button>
+      <button class="btn bp" style="font-size:var(--fs-11)" onclick="confirmSectorImport()">이대로 추가</button>
+      <button class="btn bs" style="font-size:var(--fs-11)" onclick="cancelSectorImport()">취소</button>
     </div>`;
 }
 

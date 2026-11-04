@@ -100,18 +100,18 @@ export function renderEvDetail(){
   }).join('');
 
   const body = locked
-    ? `<div style="font-size:12px;color:var(--i4);padding:24px 0">
+    ? `<div style="font-size:var(--fs-12);color:var(--i4);padding:24px 0">
          이 행사는 <b>${escapeHtml(evSegPartLabel(settingsUi.evDetailSeg))}</b> 파트가 꺼져 있어 ${escapeHtml(EV_SEGS.find(x => x[0] === settingsUi.evDetailSeg)[1])} 설정을 쓰지 않아요.
-         <button class="btn" style="margin-left:8px;font-size:11px" onclick="setEvDetailSeg('parts')">진행 파트에서 켜기</button>
+         <button class="btn" style="margin-left:8px;font-size:var(--fs-11)" onclick="setEvDetailSeg('parts')">진행 파트에서 켜기</button>
        </div>`
     : settingsUi.evDetailSeg === 'parts' ? evPartsHtml(ev, parts)
     : settingsUi.evDetailSeg === 'booth' ? evBoothHtml(ev)
     /* 품목표는 설정 › 비품 목록 한 곳에서 고친다 — 여기서는 몇 품목인지와 바로가기만 */
     : settingsUi.evDetailSeg === 'equip' ? (() => {
         const n = EQUIP_CATALOG.filter(c => c.event_id === ev.key && c.active !== 'no').length;
-        return `<div style="font-size:12px;color:var(--i3);padding:12px 0;line-height:1.7">
+        return `<div style="font-size:var(--fs-12);color:var(--i3);padding:12px 0;line-height:1.7">
           이 행사의 품목표: <b>${n ? `${n}품목` : '아직 없음'}</b><br>
-          <button class="btn bp" style="margin-top:8px;font-size:11px"
+          <button class="btn bp" style="margin-top:8px;font-size:var(--fs-11)"
             onclick="openEquipFor('${escAttr(ev.key)}')">🪑 비품 목록에서 열기</button></div>`;
       })()
     : settingsUi.evDetailSeg === 'due'   ? evDueHtml(ev)
@@ -121,20 +121,20 @@ export function renderEvDetail(){
 
   el.innerHTML = `
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
-      <button class="btn" style="font-size:11px;height:28px" onclick="closeEvDetail()">← 행사 목록</button>
+      <button class="btn" style="font-size:var(--fs-11);height:28px" onclick="closeEvDetail()">← 행사 목록</button>
       <div style="width:12px;height:12px;border-radius:50%;background:${escAttr(ev.color || '#3B5BDB')};flex-shrink:0"></div>
-      <div style="font-size:14px;font-weight:700;color:var(--i1)">${escapeHtml(ev.name || ev.key)}</div>
-      <span style="font-size:11px;color:var(--i4);background:var(--i7);border-radius:3px;padding:1px 5px;font-family:monospace">${escapeHtml(ev.key)}</span>
+      <div style="font-size:var(--fs-14);font-weight:700;color:var(--i1)">${escapeHtml(ev.name || ev.key)}</div>
+      <span style="font-size:var(--fs-11);color:var(--i4);background:var(--i7);border-radius:var(--rd-3);padding:1px 5px;font-family:monospace">${escapeHtml(ev.key)}</span>
     </div>
     <div class="seg" style="flex-wrap:wrap;margin-bottom:14px">${seg}</div>
     ${readonly && EV_SEG_PART[settingsUi.evDetailSeg] ? `<div style="display:flex;align-items:center;gap:8px;
-        background:var(--i8);border:1px solid var(--i6);border-left:3px solid var(--g);border-radius:8px;
+        background:var(--i8);border:1px solid var(--i6);border-left:3px solid var(--g);border-radius:var(--r);
         padding:9px 12px;margin-bottom:10px">
       <span class="pill p-green">진행 완료</span>
-      <span style="font-size:11.5px;color:var(--i3)">끝난 파트라 열람만 됩니다. 고치려면 <b>진행 파트</b>에서 진행 중으로 되돌리세요.</span>
+      <span style="font-size:var(--fs-11_5);color:var(--i3)">끝난 파트라 열람만 됩니다. 고치려면 <b>진행 파트</b>에서 진행 중으로 되돌리세요.</span>
     </div>` : ''}
     <div class="${readonly && EV_SEG_PART[settingsUi.evDetailSeg] ? 'ro' : ''}"
-      style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:16px">${body}</div>`;
+      style="background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-10);padding:16px">${body}</div>`;
 
   // 비품 편집기는 이제 비품 목록 탭에만 붙는다 — 다른 자리를 가리키고 있으면 돌려놓는다
   mountEquipCatalogIdle();
@@ -151,7 +151,7 @@ async function renderEvMailbox(evKey){
   const el = document.getElementById('evd-mailbox');
   if(!el) return;
   if(!settingsUi.mailAccounts){
-    el.innerHTML = '<div style="font-size:11px;color:var(--i4)">메일 계정 불러오는 중…</div>';
+    el.innerHTML = '<div style="font-size:var(--fs-11);color:var(--i4)">메일 계정 불러오는 중…</div>';
     settingsUi.mailAccounts = await loadMailAccounts();
     if(document.getElementById('evd-mailbox') !== el) return;
   }
@@ -161,9 +161,9 @@ async function renderEvMailbox(evKey){
   const inp = (id, label, val, ph, type = 'text') => `<div><div class="mlbl">${label}</div>
     <input class="fi" id="evmb-${id}" type="${type}" value="${escapeHtml(val || '')}" placeholder="${escapeHtml(ph)}" autocomplete="off"></div>`;
   el.innerHTML = `<div>
-    <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">행사 공용 메일
-      ${box.username ? '<span class="pill p-green" style="font-size:10px;margin-left:6px">연결됨</span>' : '<span class="pill p-gray" style="font-size:10px;margin-left:6px">없음 — 메일을 보낼 수 없음</span>'}</div>
-    <div style="font-size:11px;color:var(--i4);margin-bottom:12px">
+    <div style="font-size:var(--fs-12);font-weight:700;color:var(--i2);margin-bottom:4px">행사 공용 메일
+      ${box.username ? '<span class="pill p-green" style="font-size:var(--fs-10);margin-left:6px">연결됨</span>' : '<span class="pill p-gray" style="font-size:var(--fs-10);margin-left:6px">없음 — 메일을 보낼 수 없음</span>'}</div>
+    <div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:12px">
       이 행사의 연사·참가사에게 «메일 보내기»를 누르면 이 주소로 나가고, 답장도 이 메일함으로 옵니다.
       <span id="evmb-help">${mailProv(box.provider).help}</span>
       ${r.offline ? '<br><b style="color:var(--re)">테스트 모드에서는 설정할 수 없어요.</b>' : ''}
@@ -185,8 +185,8 @@ async function renderEvMailbox(evKey){
       ${inp('name', '보내는 이름', box.from_name, '예: KIC 2026 사무국')}
     </div>
     <div style="margin-bottom:10px">${inp('hostdom', '주최사 메일 도메인 (쉼표로 여러 개)', box.host_domains, '예: kpbma.or.kr')}
-      <div style="font-size:10.5px;color:var(--i4);margin-top:3px;line-height:1.5">주최사 주소는 연락처로 넣지 않아요. 직원이 전달(FW)한 주최사 메일은 원래 받는 사람(연사·참가사) 기록에 붙어요.</div></div>
-    <details style="margin-bottom:10px"><summary style="font-size:11px;color:var(--i4);cursor:pointer">서버 (보통 고칠 일 없음)</summary>
+      <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:3px;line-height:1.5">주최사 주소는 연락처로 넣지 않아요. 직원이 전달(FW)한 주최사 메일은 원래 받는 사람(연사·참가사) 기록에 붙어요.</div></div>
+    <details style="margin-bottom:10px"><summary style="font-size:var(--fs-11);color:var(--i4);cursor:pointer">서버 (보통 고칠 일 없음)</summary>
       <div style="display:grid;grid-template-columns:2fr 1fr;gap:8px;margin-top:8px">
         ${inp('host', 'SMTP 서버', box.host, mailProv(box.provider).host)}
         ${inp('port', '포트', box.port, '465')}
@@ -197,7 +197,7 @@ async function renderEvMailbox(evKey){
         <button class="btn" onclick="removeEvMailbox('${escAttr(evKey)}')">연결 끊기</button>
         <button class="btn" onclick="syncEvSentMail('${escAttr(evKey)}')"
           title="행사 메일 보낸메일함·받은메일함을 읽어, 이 행사 연사·참가사와 주고받은 메일을 그 사람 기록에 남기고 초청 메일은 «보냄»으로 체크합니다">메일함에서 주고받은 기록 가져오기</button>` : ''}
-      <span id="evmb-msg" style="font-size:11px;color:var(--g)"></span>
+      <span id="evmb-msg" style="font-size:var(--fs-11);color:var(--g)"></span>
     </div>
     ${box.username ? `<div id="evmb-footer" style="margin-top:16px"></div>` : ''}
     <div id="evd-inbox" style="margin-top:16px"></div>
@@ -214,7 +214,7 @@ async function renderEvMailFooter(evKey){
   const el = document.getElementById('evmb-footer');
   if(!el) return;
   if(!settingsUi.evFooter || settingsUi.evFooter.evKey !== evKey){
-    el.innerHTML = '<div style="font-size:11px;color:var(--i4)">메일 푸터 불러오는 중…</div>';
+    el.innerHTML = '<div style="font-size:var(--fs-11);color:var(--i4)">메일 푸터 불러오는 중…</div>';
     const r = await loadMailFooter(evKey);
     if(document.getElementById('evmb-footer') !== el) return;
     // 예전 «여러 기업에 메일»에만 저장했던 푸터가 있으면 처음 한 번 채워 둔다(저장을 눌러야 옮겨진다)
@@ -223,32 +223,32 @@ async function renderEvMailFooter(evKey){
     if(settingsUi.evFooter.fromOld) settingsUi.evFooter.text = old;
   }
   const f = settingsUi.evFooter;
-  el.innerHTML = `<div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">메일 푸터
-      ${f.text || f.img ? '<span class="pill p-green" style="font-size:10px;margin-left:6px">모든 메일에 붙음</span>' : '<span class="pill p-gray" style="font-size:10px;margin-left:6px">없음</span>'}</div>
-    <div style="font-size:11px;color:var(--i4);margin-bottom:8px">이 행사 메일로 나가는 모든 메일(전시·연사·컨택·CRM) 맨 끝, 본문·사진 아래에 붙어요.
+  el.innerHTML = `<div style="font-size:var(--fs-12);font-weight:700;color:var(--i2);margin-bottom:4px">메일 푸터
+      ${f.text || f.img ? '<span class="pill p-green" style="font-size:var(--fs-10);margin-left:6px">모든 메일에 붙음</span>' : '<span class="pill p-gray" style="font-size:var(--fs-10);margin-left:6px">없음</span>'}</div>
+    <div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:8px">이 행사 메일로 나가는 모든 메일(전시·연사·컨택·CRM) 맨 끝, 본문·사진 아래에 붙어요.
       **굵게** *기울임* · www. 주소는 링크. 양식 문구에 서명을 따로 넣었다면 겹치니 빼주세요.
       ${f.fromOld ? '<br><b style="color:var(--am)">«여러 기업에 메일»에 저장해 두었던 푸터를 불러왔어요 — 저장을 눌러야 여기로 옮겨져요.</b>' : ''}</div>
     <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px">
       <div>
-        <textarea class="fi" id="evmb-ftext" rows="9" style="width:100%;font-size:11.5px" oninput="evFooterInput(this.value)"
+        <textarea class="fi" id="evmb-ftext" rows="9" style="width:100%;font-size:var(--fs-11_5)" oninput="evFooterInput(this.value)"
           placeholder="***행사 사무국***&#10;주소&#10;**E-mail:** ...">${escapeHtml(f.text)}</textarea>
-        <div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap;font-size:11px">
-          <label class="btn" style="font-size:10.5px;cursor:pointer">🖼 ${f.img ? '푸터 이미지 바꾸기' : '푸터 이미지 넣기'}
+        <div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap;font-size:var(--fs-11)">
+          <label class="btn" style="font-size:var(--fs-10_5);cursor:pointer">🖼 ${f.img ? '푸터 이미지 바꾸기' : '푸터 이미지 넣기'}
             <input type="file" accept="image/png,image/jpeg,image/gif" style="display:none" onchange="evFooterImg(this)"></label>
-          ${f.img ? '<button class="btn" style="font-size:10.5px" onclick="evFooterImg(null)">이미지 빼기</button>' : ''}
+          ${f.img ? '<button class="btn" style="font-size:var(--fs-10_5)" onclick="evFooterImg(null)">이미지 빼기</button>' : ''}
           <span style="color:var(--i4)">가로 1240px로 맞춰요 · 1MB 이하</span>
         </div>
         <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
           <button class="btn bp" onclick="saveEvFooter('${escAttr(evKey)}')">푸터 저장</button>
-          <span id="evmb-fmsg" style="font-size:11px;color:var(--g)"></span></div>
+          <span id="evmb-fmsg" style="font-size:var(--fs-11);color:var(--g)"></span></div>
       </div>
       <div><div class="mlbl">미리보기</div>
-        <div id="evmb-fprev" style="background:#fff;border:1px solid var(--i6);border-radius:6px;padding:10px;max-height:320px;overflow:auto">${evFooterPrev()}</div></div>
+        <div id="evmb-fprev" style="background:#fff;border:1px solid var(--i6);border-radius:var(--rd-6);padding:10px;max-height:320px;overflow:auto">${evFooterPrev()}</div></div>
     </div>`;
 }
 function evFooterPrev(){
   const f = settingsUi.evFooter;
-  if(!f || (!f.text.trim() && !f.img)) return '<span style="font-size:11px;color:var(--i4)">푸터가 없어요.</span>';
+  if(!f || (!f.text.trim() && !f.img)) return '<span style="font-size:var(--fs-11);color:var(--i4)">푸터가 없어요.</span>';
   const line = (l) => escapeHtml(l)
     .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*(.+?)\*/g, '<i>$1</i>')
     .replace(/\b((?:https?:\/\/|www\.)[^\s<]+)/g, (u) => `<a href="${u.startsWith('www.') ? 'https://' + u : u}" target="_blank" style="color:#1a0dab">${u}</a>`);
@@ -303,13 +303,13 @@ function exhMailEditorHtml(evKey){
   const steps = exhMailSteps(evKey, { withOff: true });
   return `<div style="margin-top:22px;padding-top:14px;border-top:1px solid var(--i6)">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-      <span style="font-size:12px;font-weight:700;color:var(--i2)">전시 메일 양식</span>
-      <button class="btn" style="font-size:10.5px;margin-left:auto" onclick="openExhMailEditor('${escAttr(evKey)}')">✎ 단계 편집</button>
+      <span style="font-size:var(--fs-12);font-weight:700;color:var(--i2)">전시 메일 양식</span>
+      <button class="btn" style="font-size:var(--fs-10_5);margin-left:auto" onclick="openExhMailEditor('${escAttr(evKey)}')">✎ 단계 편집</button>
     </div>
-    <div style="font-size:11px;color:var(--i4);margin-bottom:6px;line-height:1.6">
+    <div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:6px;line-height:1.6">
       단계 추가·고치기·끄기와 메일 문구·기본 첨부는 «단계 편집»에서 합니다. 참가사 메일 탭에서도 같은 창이 열리고, 고치면 바로 저장돼요.</div>
     <div style="display:flex;flex-wrap:wrap;gap:4px">${steps.map((st, i) => `<span class="pill ${st.off ? 'p-gray' : st.custom ? 'p-amber' : 'p-blue'}"
-      style="font-size:10.5px;cursor:pointer;${st.off ? 'text-decoration:line-through' : ''}" onclick="openExhMailEditor('${escAttr(evKey)}','${escAttr(st.key)}')"
+      style="font-size:var(--fs-10_5);cursor:pointer;${st.off ? 'text-decoration:line-through' : ''}" onclick="openExhMailEditor('${escAttr(evKey)}','${escAttr(st.key)}')"
       >${i + 1}. ${escapeHtml(st.label)}</span>`).join('')}</div>
   </div>`;
 }
@@ -322,7 +322,7 @@ export async function fillExhMailFiles(evKey){
     el.innerHTML = files.length ? files.map(f => `<div style="display:flex;gap:6px;align-items:center;padding:2px 0">
         📎 <span style="color:var(--i2)">${escapeHtml(f.filename)}</span>
         <span>${(Number(f.size || 0) / 1024).toFixed(0)}KB</span>
-        <button class="btn" style="font-size:10px;padding:1px 6px;margin-left:auto"
+        <button class="btn" style="font-size:var(--fs-10);padding:1px 6px;margin-left:auto"
           onclick="removeFlowFile('${escAttr(evKey)}','${escAttr(f.id)}')">삭제</button></div>`).join('') : '없음';
   });
 }
@@ -370,18 +370,18 @@ export function renderEvInbox(evKey = settingsUi.inboxEv){
     const m = await import('../../shared/mail/mail-original.js');
     const n = await m.unassignedCount(evKey);
     const b = document.getElementById('evd-un-btn');
-    if(b) b.innerHTML = n ? `<button class="btn" style="font-size:10.5px;color:var(--am);font-weight:700;margin-left:6px" onclick="openUnassigned('${escAttr(evKey)}')">주인 없는 메일 ${n}</button>` : '';
+    if(b) b.innerHTML = n ? `<button class="btn" style="font-size:var(--fs-10_5);color:var(--am);font-weight:700;margin-left:6px" onclick="openUnassigned('${escAttr(evKey)}')">주인 없는 메일 ${n}</button>` : '';
   }, 0);
-  el.innerHTML = `<span id="evd-un-btn" style="float:right"></span><div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:6px">처리 안 한 받은 메일 ${rows.length
-      ? `<span class="pill p-amber" style="font-size:10px">${rows.length}</span>${unread ? ` <span class="pill p-red" style="font-size:10px">안 읽음 ${unread}</span>` : ''}` : ''}</div>
+  el.innerHTML = `<span id="evd-un-btn" style="float:right"></span><div style="font-size:var(--fs-12);font-weight:700;color:var(--i2);margin-bottom:6px">처리 안 한 받은 메일 ${rows.length
+      ? `<span class="pill p-amber" style="font-size:var(--fs-10)">${rows.length}</span>${unread ? ` <span class="pill p-red" style="font-size:var(--fs-10)">안 읽음 ${unread}</span>` : ''}` : ''}</div>
     ${rows.length ? rows.slice(0, 50).map(({ l, t, id, who }) => `<div style="display:flex;gap:7px;align-items:baseline;padding:6px 0;border-top:1px solid var(--i7);cursor:pointer"
         onclick="${t === 'sp' ? `openSpeakerDr('${escAttr(id)}','box')` : `openExhDr('${escAttr(id)}','box')`}">
-        <span style="font-size:10.5px;color:var(--i4);white-space:nowrap">${escapeHtml(l.ts || '')}</span>
-        <span class="pill p-gray" style="font-size:10px">${t === 'sp' ? '연사' : '참가사'}</span>
-        <span style="font-size:11.5px;font-weight:${isUnread(l) ? 800 : 500}">${isUnread(l) ? '● ' : ''}${escapeHtml(who)}</span>
-        <span style="font-size:11.5px;color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(l.subject || '(제목 없음)')}</span>
+        <span style="font-size:var(--fs-10_5);color:var(--i4);white-space:nowrap">${escapeHtml(l.ts || '')}</span>
+        <span class="pill p-gray" style="font-size:var(--fs-10)">${t === 'sp' ? '연사' : '참가사'}</span>
+        <span style="font-size:var(--fs-11_5);font-weight:${isUnread(l) ? 800 : 500}">${isUnread(l) ? '● ' : ''}${escapeHtml(who)}</span>
+        <span style="font-size:var(--fs-11_5);color:var(--i3);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(l.subject || '(제목 없음)')}</span>
       </div>`).join('')
-      : '<div style="font-size:11px;color:var(--i4)">처리 안 한 받은 메일이 없어요. «메일함에서 주고받은 기록 가져오기»로 새 메일을 가져옵니다.</div>'}`;
+      : '<div style="font-size:var(--fs-11);color:var(--i4)">처리 안 한 받은 메일이 없어요. «메일함에서 주고받은 기록 가져오기»로 새 메일을 가져옵니다.</div>'}`;
 }
 window.renderEvInbox = renderEvInbox;
 const evmbSay = (t, ok) => { const m = document.getElementById('evmb-msg'); if(m){ m.style.color = ok ? 'var(--g)' : 'var(--re)'; m.textContent = t; } };
@@ -432,7 +432,7 @@ function evBasicHtml(ev){
       <div><div class="mlbl">약칭</div>
         <input class="fi" id="evd-short" value="${escapeHtml(ev.short || '')}" style="width:100%"></div>
     </div>
-    <div style="margin-bottom:8px"><div class="mlbl">영문 행사명 <span style="font-size:9.5px;color:var(--i4)">영문 메일·엑셀의 {행사}에 들어갑니다 — 비우면 행사명</span></div>
+    <div style="margin-bottom:8px"><div class="mlbl">영문 행사명 <span style="font-size:var(--fs-9_5);color:var(--i4)">영문 메일·엑셀의 {행사}에 들어갑니다 — 비우면 행사명</span></div>
       <input class="fi" id="evd-name-en" value="${escapeHtml(ev.name_en || '')}" placeholder="예: 2026 AIA East Asia Symposium" style="width:100%"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
       <div><div class="mlbl">시작일</div>
@@ -441,15 +441,15 @@ function evBasicHtml(ev){
         <input class="fi" id="evd-date-end" type="date" value="${escapeHtml(ev.date_end || '')}" style="width:100%"></div>
       <div><div class="mlbl">색상</div>
         <input type="color" id="evd-color" value="${escapeHtml(ev.color || '#3B5BDB')}"
-          style="width:100%;height:36px;border:1px solid var(--i6);border-radius:6px;cursor:pointer;padding:2px"></div>
+          style="width:100%;height:36px;border:1px solid var(--i6);border-radius:var(--rd-6);cursor:pointer;padding:2px"></div>
     </div>
     <div style="margin-bottom:12px"><div class="mlbl">장소</div>
       <input class="fi" id="evd-loc" value="${escapeHtml(ev.location || '')}" style="width:100%"></div>
     <div style="display:flex;gap:8px;align-items:center">
       <button class="btn bp" onclick="saveEvBasic()" style="min-width:80px">저장</button>
-      <span id="evd-basic-msg" style="font-size:11px;color:var(--g)"></span>
+      <span id="evd-basic-msg" style="font-size:var(--fs-11);color:var(--g)"></span>
     </div>
-    <div style="font-size:10.5px;color:var(--i5);margin-top:10px">
+    <div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:10px">
       행사 ID <code>${escapeHtml(ev.key)}</code>는 참여 기록·참가기업이 가리키는 키라 바꿀 수 없어요.
     </div>`;
 }
@@ -501,8 +501,8 @@ function evPartsHtml(ev, parts){
     const sub = (st !== 'none' && p.key === 'exh') ? exhSummary() : '';
     return `<div style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--i7);flex-wrap:wrap">
       <div style="flex:1;min-width:150px">
-        <div style="font-size:13px;font-weight:600;color:var(--i1)">${escapeHtml(p.label)}</div>
-        <div style="font-size:11px;color:var(--i4);margin-top:2px">
+        <div style="font-size:var(--fs-13);font-weight:600;color:var(--i1)">${escapeHtml(p.label)}</div>
+        <div style="font-size:var(--fs-11);color:var(--i4);margin-top:2px">
           ${sub ? escapeHtml(sub) : p.partTypes.map(t => `<span class="pill p-gray" style="margin-right:3px">${escapeHtml(t)}</span>`).join('')}
         </div>
       </div>
@@ -512,7 +512,7 @@ function evPartsHtml(ev, parts){
       </div>
     </div>`;
   }).join('')
-  + `<div style="font-size:10.5px;color:var(--i5);margin-top:12px;line-height:1.7">
+  + `<div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:12px;line-height:1.7">
       <b>안 함</b> — 그 파트를 열지 않는 행사예요. 전시를 안 함으로 두면 전시 탭에서 이 행사가 열리지 않습니다.<br>
       <b>진행 중</b> — 지금 챙기는 중. 고칠 수 있어요.<br>
       <b>진행 완료</b> — 끝난 일이라 <b>열람만</b> 됩니다. 데이터는 그대로 두고 고치는 것만 막아요.
@@ -579,15 +579,15 @@ function evBoothHtml(ev){
     const inherited = !mine.length;
     return `<div style="margin-bottom:22px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <div style="font-size:12px;font-weight:700;color:var(--i2)">${escapeHtml(label)}</div>
+        <div style="font-size:var(--fs-12);font-weight:700;color:var(--i2)">${escapeHtml(label)}</div>
         <span class="pill ${inherited ? 'p-gray' : 'p-blue'}">${inherited ? '공통' : '이 행사'}</span>
       </div>
       ${!inherited ? clRowsHtml(mine, false)
         : common.length
-          ? `<div style="font-size:11px;color:var(--i4);margin-bottom:8px">이 행사 전용 목록이 없어 <b>공통 목록</b>을 씁니다. 아래에 항목을 추가하거나 공통을 복제하면, 그때부터 이 행사는 자기 목록만 씁니다.</div>
+          ? `<div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:8px">이 행사 전용 목록이 없어 <b>공통 목록</b>을 씁니다. 아래에 항목을 추가하거나 공통을 복제하면, 그때부터 이 행사는 자기 목록만 씁니다.</div>
              <div style="opacity:.55;pointer-events:none">${clRowsHtml(common, true)}</div>
-             <button class="btn" style="font-size:11px;margin-top:8px" onclick="cloneCommonCodeList('${escAttr(key)}')">공통 ${common.length}개를 이 행사로 복제</button>`
-          : `<div style="font-size:11px;color:var(--i4)">공통 목록에도 이 행사 전용으로도 아직 항목이 없어요. 아래에서 추가하면 이 행사 전용 목록이 만들어집니다.</div>`}
+             <button class="btn" style="font-size:var(--fs-11);margin-top:8px" onclick="cloneCommonCodeList('${escAttr(key)}')">공통 ${common.length}개를 이 행사로 복제</button>`
+          : `<div style="font-size:var(--fs-11);color:var(--i4)">공통 목록에도 이 행사 전용으로도 아직 항목이 없어요. 아래에서 추가하면 이 행사 전용 목록이 만들어집니다.</div>`}
       <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--i6)">
         <div style="flex:1;min-width:140px"><div class="mlbl">저장값</div>
           <input class="fi" id="evcl-code-${escAttr(key)}" placeholder="예: Block System D" style="width:100%"
@@ -598,7 +598,7 @@ function evBoothHtml(ev){
         <button class="btn bp" onclick="addEvCodeRow('${escAttr(key)}')" style="min-width:60px;height:36px">추가</button>
       </div>
       ${key === 'booth_type' ? `<div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <span style="font-size:11px;color:var(--i4);flex:1;min-width:160px">기본 제공 품목은 부스 타입을 <b>고칠 때</b> 들어갑니다 — 이미 부스가 정해진 기업에는 여기서 한 번에 넣으세요.</span>
+        <span style="font-size:var(--fs-11);color:var(--i4);flex:1;min-width:160px">기본 제공 품목은 부스 타입을 <b>고칠 때</b> 들어갑니다 — 이미 부스가 정해진 기업에는 여기서 한 번에 넣으세요.</span>
         <button class="btn bs" onclick="applyBoothItemsToEvent('${escAttr(ev.key)}')">참가기업 전체에 지금 반영</button>
       </div>` : ''}
     </div>`;
@@ -669,21 +669,21 @@ function evDueHtml(ev){
   const due = cfg.due || {}, book = cfg.book || {};
   const fl = followCfg(ev.key);
   return `
-    <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">리마인더 기준</div>
-    <div style="font-size:11px;color:var(--i4);margin-bottom:8px;line-height:1.6">요청 메일을 보내면 공은 연사·기업에 있어요. 그래도 자료가 안 오면
+    <div style="font-size:var(--fs-12);font-weight:700;color:var(--i2);margin-bottom:4px">리마인더 기준</div>
+    <div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:8px;line-height:1.6">요청 메일을 보내면 공은 연사·기업에 있어요. 그래도 자료가 안 오면
       아래 날수가 지난 뒤 연사·전시 «처리 필요»에 «🔔 리마인더 보낼 때»로 올라옵니다. 사정이 있는 곳은 화면에서 «+3일 / +1주»로 미룹니다.</div>
-    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:18px;font-size:11.5px;color:var(--i3)">
+    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:18px;font-size:var(--fs-11_5);color:var(--i3)">
       <span>첫 요청 뒤 <input class="fi" type="number" min="1" max="60" id="evd-follow-first" value="${escapeHtml(fl.first)}" style="width:60px;padding:3px 6px">일</span>
       <span>리마인더 뒤 <input class="fi" type="number" min="1" max="60" id="evd-follow-again" value="${escapeHtml(fl.again)}" style="width:60px;padding:3px 6px">일마다</span>
     </div>
-    <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">꼭 지켜야 하는 마감 <span style="font-weight:400;color:var(--i4)">(전시)</span></div>
-    <div style="font-size:11px;color:var(--i4);margin-bottom:10px;line-height:1.6">대부분은 비워 두세요 — 비우면 ASAP이고 위 리마인더 기준으로 챙깁니다.
+    <div style="font-size:var(--fs-12);font-weight:700;color:var(--i2);margin-bottom:4px">꼭 지켜야 하는 마감 <span style="font-weight:400;color:var(--i4)">(전시)</span></div>
+    <div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:10px;line-height:1.6">대부분은 비워 두세요 — 비우면 ASAP이고 위 리마인더 기준으로 챙깁니다.
       도록 인쇄·반입처럼 넘기면 안 되는 것만 «행사 N일 전»으로 적으면 행사 날짜가 바뀌어도 따라갑니다. 연사 단계 마감은 «연락 단계 편집»에서 같은 방식으로 적습니다.</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:8px 14px;margin-bottom:18px">
       ${EV_DUE_STEPS.map(([k, l]) => `<div><div class="mlbl">${escapeHtml(l)}</div>${dueInputHtml(`evd-due-${k}`, due[k] || '', ev.key)}</div>`).join('')}
     </div>
-    <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">프로그램북 한도</div>
-    <div style="font-size:11px;color:var(--i4);margin-bottom:10px">지면 기준이 행사마다 달라요. 비워 두면 기본값(${EV_BOOK_DEFAULT.chars.toLocaleString()}자 · ${EV_BOOK_DEFAULT.words}단어)을 씁니다.</div>
+    <div style="font-size:var(--fs-12);font-weight:700;color:var(--i2);margin-bottom:4px">프로그램북 한도</div>
+    <div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:10px">지면 기준이 행사마다 달라요. 비워 두면 기본값(${EV_BOOK_DEFAULT.chars.toLocaleString()}자 · ${EV_BOOK_DEFAULT.words}단어)을 씁니다.</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:320px;margin-bottom:14px">
       <div><div class="mlbl">글자수</div>
         <input class="fi" type="number" id="evd-book-chars" value="${escapeHtml(book.chars || EV_BOOK_DEFAULT.chars)}" style="width:100%"></div>
@@ -692,7 +692,7 @@ function evDueHtml(ev){
     </div>
     <div style="display:flex;gap:8px;align-items:center">
       <button class="btn bp" onclick="saveEvDue()" style="min-width:80px">저장</button>
-      <span id="evd-due-msg" style="font-size:11px;color:var(--g)"></span>
+      <span id="evd-due-msg" style="font-size:var(--fs-11);color:var(--g)"></span>
     </div>`;
 }
 

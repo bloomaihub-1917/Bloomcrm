@@ -104,15 +104,15 @@ export function renderEquipCatalog(){
         <input class="fi" style="width:100%" value="${escapeHtml(settingsUi.eqQuery)}" placeholder="코드·품명·규격"
           oninput="setEqQuery(this.value)"></div>
     </div>
-    ${settingsUi.eqEvent ? `<div style="font-size:11px;color:var(--i4);margin-bottom:8px;line-height:1.6">
+    ${settingsUi.eqEvent ? `<div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:8px;line-height:1.6">
         전체 품목표에서 이 행사에 쓸 품목을 체크하고 이 행사 단가를 적으세요. 체크하면 기본 단가가 먼저 들어갑니다.
         품명·규격은 <a href="javascript:void(0)" onclick="setEqEvent('')" style="color:var(--a)">전체 품목표</a>에서 고칩니다.</div>` : ''}
-    <div id="eqcat-count" style="font-size:11px;color:var(--i4);margin-bottom:8px">${eqCountHtml()}</div>
+    <div id="eqcat-count" style="font-size:var(--fs-11);color:var(--i4);margin-bottom:8px">${eqCountHtml()}</div>
 
     <div id="eqcat-list">${eqListHtml()}</div>
 
     ${settingsUi.eqEvent ? '' : `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--i6)">
-      <div style="font-size:11.5px;font-weight:700;color:var(--i2);margin-bottom:8px">품목 추가</div>
+      <div style="font-size:var(--fs-11_5);font-weight:700;color:var(--i2);margin-bottom:8px">품목 추가</div>
       <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap">
         <div style="width:90px"><div class="mlbl">코드</div>
           <input class="fi" id="eq-new-code" placeholder="비우면 자동" style="width:100%"></div>
@@ -130,7 +130,7 @@ export function renderEquipCatalog(){
           <input class="fi" id="eq-new-usd" style="width:100%" placeholder="0"></div>
         <button class="btn bp" onclick="addEquipItem()" style="min-width:60px;height:36px">추가</button>
       </div>
-      <div id="eq-new-msg" style="font-size:11px;margin-top:6px"></div>
+      <div id="eq-new-msg" style="font-size:var(--fs-11);margin-top:6px"></div>
     </div>`}`;
 }
 
@@ -139,7 +139,7 @@ function eqRowHtml(c){
   const used = c.event_id ? eqUsedBy(c.id) : eqEventsUsing(c.id).length;
   return `<div class="clrow" style="padding:6px 0;border-bottom:1px solid var(--i7)${off ? ';opacity:.5' : ''}">
     <div style="display:flex;gap:8px;align-items:center;min-width:0;flex:0 0 auto">
-      <code style="font-size:11px;color:var(--i4);min-width:64px">${escapeHtml(c.code || '')}</code>
+      <code style="font-size:var(--fs-11);color:var(--i4);min-width:64px">${escapeHtml(c.code || '')}</code>
       ${c.event_id
         ? (used ? `<span class="pill p-blue" title="이 품목을 신청한 내역">${used}건</span>`
                 : `<span class="pill p-gray" title="아무도 신청하지 않았어요">미사용</span>`)
@@ -160,7 +160,7 @@ function eqRowHtml(c){
         onchange="editEquipItem('${escAttr(c.id)}','price_usd',this.value)"></label>
     <span class="clf"><span class="clf-l"></span>
       <button class="btn" onclick="removeEquipItem('${escAttr(c.id)}')"
-        style="height:32px;font-size:11px">${off ? '되살리기' : used ? '숨김' : '삭제'}</button></span>
+        style="height:32px;font-size:var(--fs-11)">${off ? '되살리기' : used ? '숨김' : '삭제'}</button></span>
   </div>`;
 }
 
@@ -201,7 +201,7 @@ const eqListHtml = () => {
   if(settingsUi.eqEvent) return eqEventListHtml();
   const rows = eqRows();
   return rows.length ? rows.map(eqRowHtml).join('')
-    : '<div style="font-size:12px;color:var(--i4);padding:8px 0">해당하는 품목이 없어요.</div>'; };
+    : '<div style="font-size:var(--fs-12);color:var(--i4);padding:8px 0">해당하는 품목이 없어요.</div>'; };
 
 /* 행사 보기 — 전체 품목 한 줄마다 «이 행사에 쓰나»와 이 행사 단가 */
 function eqEventListHtml(){
@@ -222,11 +222,11 @@ function eqEventListHtml(){
     return `<div class="clrow" style="padding:6px 0;border-bottom:1px solid var(--i7)${on ? '' : ';opacity:.6'}">
       <label style="display:flex;gap:8px;align-items:center;flex:1;min-width:200px;cursor:pointer">
         <input type="checkbox" ${on ? 'checked' : ''} onchange="toggleEqUse('${escAttr(m.id)}',this.checked)">
-        <code style="font-size:11px;color:var(--i4);min-width:56px">${escapeHtml(m.code || '')}</code>
-        <span style="font-size:12px">${escapeHtml(m.name_ko || m.name_en || '')}</span>
+        <code style="font-size:var(--fs-11);color:var(--i4);min-width:56px">${escapeHtml(m.code || '')}</code>
+        <span style="font-size:var(--fs-12)">${escapeHtml(m.name_ko || m.name_en || '')}</span>
         ${used ? `<span class="pill p-blue" title="이 행사에서 이 품목을 신청한 내역">${used}건</span>` : ''}
       </label>
-      <span style="font-size:10.5px;color:var(--i4);white-space:nowrap">기본 ${eqMoney(m.price_krw) || '-'}원${
+      <span style="font-size:var(--fs-10_5);color:var(--i4);white-space:nowrap">기본 ${eqMoney(m.price_krw) || '-'}원${
         m.price_usd ? ` · $${eqMoney(m.price_usd)}` : ''}</span>
       ${on ? `<label class="clf"><span class="clf-l">이 행사 KRW</span>
           <input class="fi" value="${escapeHtml(eqMoney(e.price_krw))}" style="width:96px;text-align:right${diff ? ';border-color:var(--am)' : ''}"
@@ -240,11 +240,11 @@ function eqEventListHtml(){
   /* 전체 품목표에 없는 이 행사만의 품목 — 전시 화면에서 바로 만든 것 따위 */
   const own = EQUIP_CATALOG.filter(c => c.event_id === settingsUi.eqEvent && !c.base_id && (c.kind || 'equip') === settingsUi.eqKind);
   const ownHtml = own.length ? `
-    <div style="font-size:11.5px;font-weight:700;color:var(--i2);margin:14px 0 4px">이 행사에만 있는 품목 ${own.length}개</div>
-    <div style="font-size:11px;color:var(--i4);margin-bottom:6px">전체 품목표에 없는 품목입니다. 다른 행사에서도 쓸 거면 «전체에 올리기»를 누르세요.</div>
+    <div style="font-size:var(--fs-11_5);font-weight:700;color:var(--i2);margin:14px 0 4px">이 행사에만 있는 품목 ${own.length}개</div>
+    <div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:6px">전체 품목표에 없는 품목입니다. 다른 행사에서도 쓸 거면 «전체에 올리기»를 누르세요.</div>
     ${own.map(c => eqRowHtml(c) + `<div style="text-align:right;margin:2px 0 6px">
-      <button class="btn" style="font-size:10.5px" onclick="promoteEqItem('${escAttr(c.id)}')">전체에 올리기</button></div>`).join('')}` : '';
-  return (list || '<div style="font-size:12px;color:var(--i4);padding:8px 0">전체 품목표에 해당하는 품목이 없어요.</div>') + ownHtml;
+      <button class="btn" style="font-size:var(--fs-10_5)" onclick="promoteEqItem('${escAttr(c.id)}')">전체에 올리기</button></div>`).join('')}` : '';
+  return (list || '<div style="font-size:var(--fs-12);color:var(--i4);padding:8px 0">전체 품목표에 해당하는 품목이 없어요.</div>') + ownHtml;
 }
 
 /* 이 행사에 쓰기 / 빼기 */

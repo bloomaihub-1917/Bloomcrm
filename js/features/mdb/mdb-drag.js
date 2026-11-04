@@ -69,8 +69,8 @@ export function contactSectorField(c){
 
   if(!co){
     return `<div class="sec-t" style="margin:16px 0 8px">소속 기업 · 분야</div>
-      <div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;
-        font-size:11.5px;color:var(--i3);line-height:1.7;margin-bottom:12px">
+      <div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-7);
+        font-size:var(--fs-11_5);color:var(--i3);line-height:1.7;margin-bottom:12px">
         아직 기업DB의 기업과 묶이지 않았어요. 분야는 <b>소속 기업의 섹터</b>에서 오기 때문에,
         묶이기 전에는 어느 분야에도 들어가지 않아요.
         <br>위 «기업 (국문)»에 이름을 적고 저장하면 기업DB에 만들어 묶어 드릴게요.
@@ -78,9 +78,9 @@ export function contactSectorField(c){
   }
 
   return `<div class="sec-t" style="margin:16px 0 8px">소속 기업 · 분야</div>
-    <div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:7px;margin-bottom:12px">
-      <div style="font-size:12px;font-weight:600">${escapeHtml(co.nameKo || co.nameEn || co.key)}</div>
-      <div style="font-size:10.5px;color:var(--i4);margin-top:2px">
+    <div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-7);margin-bottom:12px">
+      <div style="font-size:var(--fs-12);font-weight:600">${escapeHtml(co.nameKo || co.nameEn || co.key)}</div>
+      <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:2px">
         이 기업에 묶인 연락처 ${(co.contacts || []).length}명
       </div>
       <div class="fg" style="margin:9px 0 0">
@@ -91,10 +91,10 @@ export function contactSectorField(c){
             (co.sectors || []).includes(s.name) ? ' selected' : ''}>${escapeHtml(s.name)}${
             domainOfSector(s).length ? ` — ${escapeHtml(domainOfSector(s).map(domainName).join('·'))}` : ' — 분야 없음'}</option>`).join('')}
         </select>
-        <div style="font-size:10px;color:var(--i4);margin-top:3px">
+        <div style="font-size:var(--fs-10);color:var(--i4);margin-top:3px">
           섹터는 기업에 저장돼요 — 여기서 바꾸면 이 기업에 묶인 ${(co.contacts || []).length}명 모두가 함께 옮겨집니다.</div>
       </div>
-      <div style="font-size:10.5px;color:var(--i3);margin-top:8px">
+      <div style="font-size:var(--fs-10_5);color:var(--i3);margin-top:8px">
         지금 분야: <b>${doms.length ? escapeHtml(doms.map(domainName).join(' · ')) : '미분류'}</b>
       </div>
     </div>`;
@@ -255,16 +255,16 @@ function openDomainSectorPicker(cos, secs, domainId, note){
   wrap.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;'
     + 'display:flex;align-items:center;justify-content:center;padding:16px';
   wrap.onclick = (e) => { if(e.target === wrap) wrap.remove(); };
-  wrap.innerHTML = `<div style="background:var(--W);border-radius:12px;padding:20px;width:100%;max-width:420px;
+  wrap.innerHTML = `<div style="background:var(--W);border-radius:var(--rd-12);padding:20px;width:100%;max-width:420px;
       max-height:80vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.2)">
-      <div style="font-size:14px;font-weight:700;margin-bottom:4px">«${escapeHtml(domainName(domainId))}» 어느 업종인가요</div>
-      <div style="font-size:11.5px;color:var(--i3);line-height:1.6;margin-bottom:12px">
+      <div style="font-size:var(--fs-14);font-weight:700;margin-bottom:4px">«${escapeHtml(domainName(domainId))}» 어느 업종인가요</div>
+      <div style="font-size:var(--fs-11_5);color:var(--i3);line-height:1.6;margin-bottom:12px">
         기업 ${cos.length}곳을 옮깁니다. 그 기업에 묶인 연락처 전원이 함께 따라가요.${escapeHtml(note)}</div>
-      <button class="btn bp" style="width:100%;justify-content:flex-start;margin-bottom:10px;font-size:12px"
+      <button class="btn bp" style="width:100%;justify-content:flex-start;margin-bottom:10px;font-size:var(--fs-12)"
         data-sector="__domain__">업종은 나중에 — «${escapeHtml(domainName(domainId))}»에만 넣기</button>
-      <div style="font-size:10.5px;color:var(--i4);margin-bottom:8px">업종을 알면 아래에서 고르세요</div>
+      <div style="font-size:var(--fs-10_5);color:var(--i4);margin-bottom:8px">업종을 알면 아래에서 고르세요</div>
       <div id="mdb-sector-picker-list">
-        ${secs.map(s => `<button class="btn" style="width:100%;justify-content:flex-start;margin-bottom:5px;font-size:12px"
+        ${secs.map(s => `<button class="btn" style="width:100%;justify-content:flex-start;margin-bottom:5px;font-size:var(--fs-12)"
           data-sector="${escapeHtml(s.name)}">${escapeHtml(s.name)}</button>`).join('')}
       </div>
       <button class="btn bs" style="width:100%;justify-content:center;margin-top:8px"

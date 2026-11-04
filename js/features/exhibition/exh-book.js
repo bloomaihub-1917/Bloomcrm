@@ -258,7 +258,7 @@ export function renderBaseView(list){
       : `<span class="pill p-gray" title="설정 › 행사 관리에서 «기본 시공» 마감을 넣으면 남은 날이 표시됩니다">수령 마감 미설정</span>`)
     + (() => { const no = rows.filter(x => baseKind(x) === 'fascia' && !fasciaName(x));
         return no.length ? `<span class="pill p-red" title="${escapeHtml(no.map(x => exhNames(x).ko).join(', '))}">영문명 없음 ${no.length}</span>` : ''; })()
-    + '<span style="font-size:10.5px;color:var(--i5);margin-left:2px">간판은 영문으로 나갑니다 · 추가 발주가 아니라 계약에 들어 있는 것들이에요 — 기업이 조용해도 우리가 만들어 세웁니다</span>';
+    + '<span style="font-size:var(--fs-10_5);color:var(--i5);margin-left:2px">간판은 영문으로 나갑니다 · 추가 발주가 아니라 계약에 들어 있는 것들이에요 — 기업이 조용해도 우리가 만들어 세웁니다</span>';
 
   /* 받는 것이 무엇인지가 부스 타입마다 달라, 칸 하나에 두 가지를 담는다.
      기본부스는 간판에 넣을 상호를 적는 것 자체가 «받음»이다. */
@@ -313,7 +313,7 @@ export function renderBaseView(list){
   /* 날짜를 비워 두면 오늘로 찍는다 — 값을 미리 넣어 두면 «오늘»이 아니라
      «화면을 연 날»이 되어, 창을 켜 둔 채 다음 날 누르면 어제로 들어간다. */
   const actions = `<input type="date" id="base-bulk-date" class="fi"
-      style="width:136px;padding:4px 7px;font-size:11.5px" title="비우면 오늘 날짜로 찍습니다">
+      style="width:136px;padding:4px 7px;font-size:var(--fs-11_5)" title="비우면 오늘 날짜로 찍습니다">
     <button class="btn bp bs" onclick="applyBaseDone()"
       title="고른 곳의 «우리 작업» 날짜를 한 번에 찍습니다">${selN ? `${selN}곳 ` : ''}제작 완료</button>
     ${selN ? `<button class="btn bs" onclick="clearBaseDone()" title="고른 곳의 «우리 작업» 날짜를 지웁니다">완료 해제</button>` : ''}
@@ -321,21 +321,21 @@ export function renderBaseView(list){
 
   if(isMobile()) return viewShell(pills, rows.map(x => {
     const k = baseKind(x);
-    return `<div style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px">
+    return `<div style="background:var(--W);border:1px solid var(--i7);border-radius:var(--rd-10);padding:11px 12px;margin-bottom:7px">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px">
         ${selBox(x)}
         <span class="pill p-gray">${x.booth_no ? '부스 ' + escapeHtml(x.booth_no) : '미배정'}</span>
         <span onclick="openExhDr('${escAttr(x.id)}','progress')"
-          style="font-size:13px;font-weight:700;flex:1;min-width:0;cursor:pointer">${escapeHtml(exhNames(x).ko)}</span>
+          style="font-size:var(--fs-13);font-weight:700;flex:1;min-width:0;cursor:pointer">${escapeHtml(exhNames(x).ko)}</span>
         ${mark(x)}
       </div>
-      <div style="font-size:11px;color:var(--i4);margin-bottom:4px">${escapeHtml(x.booth_type || '')} · ${escapeHtml(BASE_KINDS[k].label)}${designPill(x)}</div>
+      <div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:4px">${escapeHtml(x.booth_type || '')} · ${escapeHtml(BASE_KINDS[k].label)}${designPill(x)}</div>
       <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
-        <span style="font-size:11px;color:var(--i4);min-width:64px">${escapeHtml(BASE_KINDS[k].recv)}</span>${recvCell(x)}</div>
+        <span style="font-size:var(--fs-11);color:var(--i4);min-width:64px">${escapeHtml(BASE_KINDS[k].recv)}</span>${recvCell(x)}</div>
       ${k === 'fascia' ? `<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
-        <span style="font-size:11px;color:var(--i4);min-width:64px">확정</span>${baseDate(x, 'recv')}</div>` : ''}
+        <span style="font-size:var(--fs-11);color:var(--i4);min-width:64px">확정</span>${baseDate(x, 'recv')}</div>` : ''}
       <div style="display:flex;gap:6px;align-items:center">
-        <span style="font-size:11px;color:var(--i4);min-width:64px">${escapeHtml(BASE_KINDS[k].done)}</span>${baseDoneCheck(x)}</div>
+        <span style="font-size:var(--fs-11);color:var(--i4);min-width:64px">${escapeHtml(BASE_KINDS[k].done)}</span>${baseDoneCheck(x)}</div>
     </div>`;
   }).join(''), actions);
 
@@ -359,15 +359,15 @@ export function renderBaseView(list){
       return `<tr${exhUi.baseSel.has(x.id) ? ' style="background:var(--ad)"' : ''}>
         <td style="text-align:center">${selBox(x)}</td>
         ${applyCell(x)}
-        <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
+        <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
         ${coCell(x, 'progress')}
-        <td style="font-size:11px;color:var(--i4)">${escapeHtml(x.booth_type || '')}${
+        <td style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(x.booth_type || '')}${
           x.booth_qty && x.booth_qty !== '1' ? ` <span style="color:var(--i5)">×${escapeHtml(x.booth_qty)}</span>` : ''}</td>
         <td><span class="pill ${BASE_KINDS[k].cls}" style="${TPILL}">${escapeHtml(BASE_KINDS[k].label)}</span>${designPill(x)}</td>
         <td>${recvCell(x)}</td>
         <td>${k === 'fascia'
           ? baseDate(x, 'recv')
-          : '<span style="display:inline-block;width:100%;text-align:center;font-size:11px;color:var(--i6)">·</span>'}</td>
+          : '<span style="display:inline-block;width:100%;text-align:center;font-size:var(--fs-11);color:var(--i6)">·</span>'}</td>
         <td style="text-align:center">${baseDoneCheck(x, TPILL)}</td>
         <td style="text-align:center">${mark(x)}</td>
         <td>${noteCell(x)}</td>
@@ -448,7 +448,7 @@ function renderBookView(list){
     + (overN ? `<span class="pill p-red" title="${escapeHtml(overRows.map(o => `${exhNames(o.x).ko} ${o.o.chars}자`).join(', '))}">한도 초과 ${overN}</span>` : '')
     + (dupOrders.size ? `<span class="pill p-amber" title="${escapeHtml([...dupOrders].map(o =>
         `${o}번: ${rows.filter(r => String(r.book_order || '').trim() === o).map(r => exhNames(r).ko).join(' · ')}`).join(' / '))}">겹친 순번 ${dupOrders.size}</span>` : '')
-    + `<span style="font-size:10.5px;color:var(--i5);margin-left:2px">한도 ${bookLimit().chars.toLocaleString()}자 · ${bookLimit().words}단어 (띄어쓰기 포함)</span>`;
+    + `<span style="font-size:var(--fs-10_5);color:var(--i5);margin-left:2px">한도 ${bookLimit().chars.toLocaleString()}자 · ${bookLimit().words}단어 (띄어쓰기 포함)</span>`;
 
   const actions = `<button class="btn bs" onclick="fillBookOrder()" title="지금 부스 번호순으로 1번부터 다시 매깁니다">순서 자동 매기기</button>`
     + `<button class="btn bs" onclick="renumberBook()" title="겹치거나 빈 번호를 지금 순서 그대로 1번부터 다시 매깁니다">번호 정리</button>`
@@ -458,7 +458,7 @@ function renderBookView(list){
   const logoBtn = (x) => `<button
     onclick="event.stopPropagation();cycleBookLogo('${escAttr(x.id)}')"
     title="${x.book_logo === 'yes' ? '로고 받음' : x.book_logo === 'no' ? '로고 없음 — 요청 필요' : '아직 확인 안 함'}"
-    style="border:none;background:none;padding:0;cursor:pointer;font-size:14px;line-height:1">
+    style="border:none;background:none;padding:0;cursor:pointer;font-size:var(--fs-14);line-height:1">
     ${x.book_logo === 'yes' ? '<span style="color:var(--g)">✓</span>'
       : x.book_logo === 'no' ? '<span style="color:var(--re)">✕</span>'
       : '<span style="color:var(--i6)">—</span>'}</button>`;
@@ -476,33 +476,33 @@ function renderBookView(list){
 
   if(isMobile()) return viewShell(pills, rows.map(x => {
     const miss = bookMissing(x);
-    return `<div onclick="openExhDr('${escAttr(x.id)}','book')" style="background:var(--W);border:1px solid var(--i7);border-radius:10px;padding:11px 12px;margin-bottom:7px;cursor:pointer">
+    return `<div onclick="openExhDr('${escAttr(x.id)}','book')" style="background:var(--W);border:1px solid var(--i7);border-radius:var(--rd-10);padding:11px 12px;margin-bottom:7px;cursor:pointer">
       <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:4px">
         <span class="pill ${dupOrders.has(String(x.book_order || '').trim()) ? 'p-amber' : 'p-gray'}"${
           dupOrders.has(String(x.book_order || '').trim()) ? ' title="같은 순번을 쓰는 기업이 또 있어요 — 한 부스를 나눠 쓰는 경우입니다"' : ''
         }>${escapeHtml(x.book_order || '-')}${dupOrders.has(String(x.book_order || '').trim()) ? ' ⚠' : ''}</span>
-        <span style="font-size:13px;font-weight:700;flex:1;min-width:0">${escapeHtml(bookName(x).ko)}</span>
+        <span style="font-size:var(--fs-13);font-weight:700;flex:1;min-width:0">${escapeHtml(bookName(x).ko)}</span>
         ${x.booth_no ? `<span class="pill p-blue">부스 ${escapeHtml(x.booth_no)}</span>` : ''}
       </div>
-      ${bookName(x).en ? `<div style="font-size:11px;color:var(--i4);margin-bottom:3px">${escapeHtml(bookName(x).en)}</div>` : ''}
+      ${bookName(x).en ? `<div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:3px">${escapeHtml(bookName(x).en)}</div>` : ''}
       ${(() => { const o = introOver(x.book_intro);
-        return `<div style="font-size:11px;color:${o.isOver ? 'var(--re)' : 'var(--i4)'}">회사소개 ${o.chars}자 · ${o.words}단어${
+        return `<div style="font-size:var(--fs-11);color:${o.isOver ? 'var(--re)' : 'var(--i4)'}">회사소개 ${o.chars}자 · ${o.words}단어${
           o.isOver ? ` (${o.over.join(', ')} 초과)` : ''} · 로고 ${
           x.book_logo === 'yes' ? '있음' : x.book_logo === 'no' ? '없음' : '미확인'}</div>`; })()}
       ${miss.length
-        ? `<div style="font-size:11px;color:var(--re);margin-top:3px">빠짐: ${escapeHtml(miss.join(', '))}</div>`
-        : '<div style="font-size:11px;color:var(--g);margin-top:3px">모두 채워졌어요</div>'}
+        ? `<div style="font-size:var(--fs-11);color:var(--re);margin-top:3px">빠짐: ${escapeHtml(miss.join(', '))}</div>`
+        : '<div style="font-size:var(--fs-11);color:var(--g);margin-top:3px">모두 채워졌어요</div>'}
     </div>`;
   }).join(''), actions);
 
-  const cell = (x, f, w) => `<td><input class="fi" style="width:${w};padding:3px 5px;font-size:11.5px"
+  const cell = (x, f, w) => `<td><input class="fi" style="width:${w};padding:3px 5px;font-size:var(--fs-11_5)"
     value="${escapeHtml(x[f] || '')}" onclick="event.stopPropagation()"
     onchange="setExhField('${escAttr(x.id)}','${f}',this.value,'${escAttr((BOOK_FIELDS.find(b => b[0] === f) || ['', f])[1])}')"></td>`;
 
   /* 안 적은 칸에는 CRM 이름을 흐리게 미리 보여 준다 — 빈칸이면 도록에 이름이
      안 나가는 줄 알고, 같은 이름을 56번 옮겨 적게 된다. 다른 곳만 고치면 된다. */
   const nameCell = (x, f, shown, label) => `<td><input class="fi"
-    style="width:164px;padding:3px 5px;font-size:11.5px${x[f] ? ';font-weight:600' : ''}"
+    style="width:164px;padding:3px 5px;font-size:var(--fs-11_5)${x[f] ? ';font-weight:600' : ''}"
     value="${escapeHtml(x[f] || '')}" placeholder="${escapeHtml(shown || '')}"
     title="${escapeHtml(x[f] ? '직접 적은 이름이에요' : 'CRM 이름을 그대로 씁니다 — 다르면 여기에 적으세요')}"
     onclick="event.stopPropagation()"
@@ -536,9 +536,9 @@ function renderBookView(list){
           ondrop="bookDrop(event,'${escAttr(x.id)}')"` : ''}>
         ${full ? `<td style="padding:0 2px;text-align:center" onclick="event.stopPropagation()">
           <span onmousedown="bookDragOn(this)" title="끌어서 옮기기"
-            style="cursor:grab;color:var(--i6);font-size:13px;line-height:1;user-select:none">⠿</span></td>` : ''}
+            style="cursor:grab;color:var(--i6);font-size:var(--fs-13);line-height:1;user-select:none">⠿</span></td>` : ''}
         <td><input class="fi" title="번호를 적으면 그 자리로 옮기고 나머지가 한 칸씩 밀려요"
-          style="width:42px;padding:3px 5px;font-size:11.5px;text-align:center;font-weight:700${
+          style="width:42px;padding:3px 5px;font-size:var(--fs-11_5);text-align:center;font-weight:700${
             dup ? ';border-color:var(--am)' : ''}"
           value="${escapeHtml(x.book_order || '')}" onclick="event.stopPropagation()"
           onchange="moveBookOrder('${escAttr(x.id)}',this.value)"></td>
@@ -546,7 +546,7 @@ function renderBookView(list){
         ${coCell(x, 'book')}
         ${nameCell(x, 'book_name_ko', bookName(x).ko, '게재 국문명')}
         ${nameCell(x, 'book_name_en', bookName(x).en, '게재 영문명')}
-        <td style="font-size:11.5px;color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
+        <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(x.booth_no || '—')}</td>
         ${cell(x, 'book_address', '164px')}
         ${cell(x, 'book_phone', '104px')}
         ${cell(x, 'book_website', '134px')}
@@ -588,10 +588,10 @@ export function openBookIntro(id){
   const x = getExhibitorById(id);
   if(!x) return;
   modalShell('book-intro-modal', `회사소개 — ${exhNames(x).ko}`, `
-    <textarea class="fi" id="bi-text" rows="12" style="font-size:12.5px;line-height:1.7"
+    <textarea class="fi" id="bi-text" rows="12" style="font-size:var(--fs-12_5);line-height:1.7"
       oninput="updateIntroCount()"
       placeholder="도록에 실을 회사소개를 붙여넣으세요">${escapeHtml(x.book_intro || '')}</textarea>
-    <div id="bi-meter" style="font-size:11.5px;margin:8px 0 12px"></div>
+    <div id="bi-meter" style="font-size:var(--fs-11_5);margin:8px 0 12px"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn bs" onclick="closeBookIntro()">취소</button>
       <button class="btn bp" onclick="saveBookIntro('${escAttr(id)}')">저장</button>
@@ -608,7 +608,7 @@ export function updateIntroCount(){
   const o = introOver(ta.value);
   const bad = o.isOver;
   el.innerHTML = `<span style="color:${bad ? 'var(--re)' : 'var(--i4)'}">
-      띄어쓰기 포함 <b style="font-size:13px">${o.chars}</b>자 · <b style="font-size:13px">${o.words}</b>단어</span>
+      띄어쓰기 포함 <b style="font-size:var(--fs-13)">${o.chars}</b>자 · <b style="font-size:var(--fs-13)">${o.words}</b>단어</span>
     <span style="color:var(--i5)"> / 한도 ${o.lim.chars.toLocaleString()}자 · ${o.lim.words}단어</span>
     ${bad ? `<div style="color:var(--re);font-weight:700;margin-top:3px">${o.over.join(', ')} 초과 — 줄여야 실립니다</div>`
       : `<div style="color:var(--g);margin-top:3px">지면에 들어갑니다 (${o.lim.chars - o.chars}자 여유)</div>`}`;
@@ -663,7 +663,7 @@ export function openNewCatalogItem(kind){
   if(!exhEvent){ alert('행사를 먼저 선택해주세요.'); return; }
   const isG = kind === 'graphic';
   modalShell('new-eq-modal', isG ? '그래픽 품목 추가' : '품목 추가', `
-    <div style="font-size:11.5px;color:var(--i4);margin-bottom:12px;line-height:1.6">
+    <div style="font-size:var(--fs-11_5);color:var(--i4);margin-bottom:12px;line-height:1.6">
       <b>${escapeHtml(exhEvent)}</b> ${isG ? '그래픽' : '비품'} 품목표에 추가됩니다. 다른 행사에는 영향이 없어요.</div>
     <input type="hidden" id="neq-kind" value="${escapeHtml(isG ? 'graphic' : 'equip')}">
     <div class="fgr">
@@ -679,7 +679,7 @@ export function openNewCatalogItem(kind){
       <div class="fg"><label class="fl">단가 (KRW)</label><input class="fi" id="neq-krw" placeholder="11000"></div>
       <div class="fg"><label class="fl">단가 (USD)</label><input class="fi" id="neq-usd" placeholder="11"></div>
     </div>
-    <div id="neq-msg" style="font-size:11.5px;min-height:16px;margin-bottom:8px"></div>
+    <div id="neq-msg" style="font-size:var(--fs-11_5);min-height:16px;margin-bottom:8px"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn bs" onclick="document.getElementById('new-eq-modal')?.remove()">취소</button>
       <button class="btn bp" id="neq-save" onclick="submitNewCatalogItem()">추가</button>
@@ -768,7 +768,7 @@ export function openNewGraphicOrder(){
       <div class="fg"><label class="fl">통화</label>
         <select class="fi" id="ngr-cur"><option value="KRW">KRW</option><option value="USD">USD</option></select></div>
     </div>
-    <div id="ngr-msg" style="font-size:11.5px;min-height:16px;margin-bottom:8px"></div>
+    <div id="ngr-msg" style="font-size:var(--fs-11_5);min-height:16px;margin-bottom:8px"></div>
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn bs" onclick="document.getElementById('new-gr-modal')?.remove()">취소</button>
       <button class="btn bp" id="ngr-save" onclick="submitNewGraphicOrder()">추가</button>

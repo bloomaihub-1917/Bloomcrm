@@ -82,12 +82,12 @@ function programHtml(ev){
   const totalAssigned = sessions.reduce((n, s) => n + assignmentsOfSession(s.id).length, 0);
 
   const head = `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px">
-    <div style="font-size:11.5px;color:var(--i5)">
+    <div style="font-size:var(--fs-11_5);color:var(--i5)">
       세션 <b>${sessions.length}</b>건 · 배정 <b>${totalAssigned}</b>건 · 연사 <b>${speakersForEvent(ev.key).length}</b>명
     </div>
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
       ${window.importBtns()}
-      <button class="btn" style="font-size:11px" onclick="toggleNewSession()">${confUi.confNewSession ? '닫기' : '+ 세션 만들기'}</button>
+      <button class="btn" style="font-size:var(--fs-11)" onclick="toggleNewSession()">${confUi.confNewSession ? '닫기' : '+ 세션 만들기'}</button>
     </div>
   </div>`;
 
@@ -95,7 +95,7 @@ function programHtml(ev){
 
   if(!sessions.length){
     return head + form + `<div style="padding:22px;background:var(--i8);border:1px solid var(--i6);
-      border-radius:10px;font-size:12px;color:var(--i5);line-height:1.7">
+      border-radius:var(--rd-10);font-size:var(--fs-12);color:var(--i5);line-height:1.7">
       아직 세션이 없어요. 세션을 만들고 사람을 배정해 역할을 정하면,
       역할에 따라 <b>무엇을 받아야 하는지</b>가 «연사» 화면에서 자동으로 잡혀요.
       ${days.length ? '' : '<br>발표 일자가 없네요 — 설정 › 행사 관리 › 컨퍼런스에서 일자를 먼저 정하면 고르기 쉬워요.'}
@@ -105,11 +105,11 @@ function programHtml(ev){
 
   const dayBlock = (d, list) => `<div style="margin-bottom:18px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px">
-      <div style="font-size:12px;font-weight:600">${escapeHtml(dayLabel(d))}</div>
-      <div style="font-size:10.5px;color:var(--i4)">세션 ${list.length}</div>
+      <div style="font-size:var(--fs-12);font-weight:600">${escapeHtml(dayLabel(d))}</div>
+      <div style="font-size:var(--fs-10_5);color:var(--i4)">세션 ${list.length}</div>
     </div>
     ${list.length ? list.map(s => sessionCard(ev, s, allDays, cfg)).join('')
-      : `<div style="font-size:11px;color:var(--i4);padding:8px 2px">이 날은 세션이 없어요</div>`}
+      : `<div style="font-size:var(--fs-11);color:var(--i4);padding:8px 2px">이 날은 세션이 없어요</div>`}
   </div>`;
 
   return head + form
@@ -121,8 +121,8 @@ function newSessionHtml(ev, days, cfg){
   const slots = cfg.slots || [];
   const tracks = trackOptions(ev.key);
   const roomList = roomOptions(ev.key);
-  return `<div style="margin-bottom:16px;padding:12px;background:var(--i8);border:1px solid var(--i6);border-radius:10px">
-    <div style="font-size:11px;font-weight:600;margin-bottom:8px">세션 만들기</div>
+  return `<div style="margin-bottom:16px;padding:12px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-10)">
+    <div style="font-size:var(--fs-11);font-weight:600;margin-bottom:8px">세션 만들기</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px">
       <div><div class="fl">종류</div>${kindSelect('ns-kind', '', ['ns-ko', 'ns-en'])}</div>
       <div><div class="fl">일자</div>
@@ -153,8 +153,8 @@ function newSessionHtml(ev, days, cfg){
       <div><div class="fl">세션명 (영문)</div><input class="fi" id="ns-en" placeholder="Session title"></div>
     </div>
     <div style="margin-top:9px;display:flex;gap:7px;align-items:center">
-      <button class="btn bp" style="font-size:11px" onclick="addConfSession()">만들기</button>
-      <span style="font-size:10.5px;color:var(--i4)">시간대를 고르면 시작·종료가 채워져요</span>
+      <button class="btn bp" style="font-size:var(--fs-11)" onclick="addConfSession()">만들기</button>
+      <span style="font-size:var(--fs-10_5);color:var(--i4)">시간대를 고르면 시작·종료가 채워져요</span>
     </div>
   </div>`;
 }
@@ -184,10 +184,10 @@ function sessionCard(ev, s, days, cfg){
   const coPick = (a) => {
     if(talkRows.length < 2 || !talkRows.includes(a)) return '';
     const mine = coOf(a);
-    if(mine.length) return `<span class="pill p-blue" style="font-size:9.5px" title="이 발표를 함께 하는 사람">공동 ${mine.length + 1}명</span>`;
+    if(mine.length) return `<span class="pill p-blue" style="font-size:var(--fs-9_5)" title="이 발표를 함께 하는 사람">공동 ${mine.length + 1}명</span>`;
     const opts = talkRows.filter(x => x !== a && leadOf(x) === x);
     if(!opts.length) return '';
-    return `<select class="fi" style="width:118px;font-size:10.5px;padding:3px 5px"
+    return `<select class="fi" style="width:118px;font-size:var(--fs-10_5);padding:3px 5px"
       title="발표 시간 하나·자료 하나를 나눠 맡을 때 — 상대의 시간·발제·자료를 같이 씁니다"
       onchange="setCoLead('${escAttr(a.id)}',this.value)">
       <option value=""${!a.lead_id ? ' selected' : ''}>단독 발표</option>
@@ -213,62 +213,62 @@ function sessionCard(ev, s, days, cfg){
       ondragover="onAsgDragOver(event,this)" ondragleave="onAsgDragLeave(this)"
       ondrop="onAsgDrop(event,'${escAttr(a.id)}',this)">
       <div style="display:flex;align-items:center;gap:8px">
-      <span style="cursor:grab;color:var(--i5);font-size:12px;line-height:1;user-select:none"
+      <span style="cursor:grab;color:var(--i5);font-size:var(--fs-12);line-height:1;user-select:none"
         title="끌어서 순서를 바꿉니다">⠿</span>
-      <span class="pill ${roleCls(a.role)}" style="font-size:10px">${escapeHtml(roleLabel(a) || '역할 없음')}</span>
+      <span class="pill ${roleCls(a.role)}" style="font-size:var(--fs-10)">${escapeHtml(roleLabel(a) || '역할 없음')}</span>
       <div style="flex:1;min-width:0">
-        <div><span onclick="openSpeakerDr('${escAttr(a.speaker_id)}')" style="font-size:12px;cursor:pointer;color:var(--a)">${escapeHtml(speakerName(a.speaker_id))}</span>
-          ${!isCo && a.start_at ? `<span style="font-size:10.5px;color:var(--i3);margin-left:6px">${
+        <div><span onclick="openSpeakerDr('${escAttr(a.speaker_id)}')" style="font-size:var(--fs-12);cursor:pointer;color:var(--a)">${escapeHtml(speakerName(a.speaker_id))}</span>
+          ${!isCo && a.start_at ? `<span style="font-size:var(--fs-10_5);color:var(--i3);margin-left:6px">${
             escapeHtml(timeLabel(a.start_at, a.end_at))}</span>` : ''}</div>
         ${isCo
-          ? `<div style="font-size:10.5px;color:var(--i4)">↳ ${escapeHtml(speakerName(lead.speaker_id))}와 같은 발표</div>`
+          ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">↳ ${escapeHtml(speakerName(lead.speaker_id))}와 같은 발표</div>`
           : needsTalk
-          ? `<div style="font-size:10.5px;color:${a.title_ko || a.title_en ? 'var(--i5)' : 'var(--i4)'}">
+          ? `<div style="font-size:var(--fs-10_5);color:${a.title_ko || a.title_en ? 'var(--i5)' : 'var(--i4)'}">
               ${escapeHtml(a.title_ko || a.title_en || '발제명 아직 없음')}</div>`
           : ''}
       </div>
       ${coPick(a)}
-      <select class="fi" style="width:82px;font-size:10.5px;padding:3px 5px"
+      <select class="fi" style="width:82px;font-size:var(--fs-10_5);padding:3px 5px"
         onchange="setAssignRole('${escAttr(a.id)}',this.value)">
         ${SPEAKER_ROLES.map(r => `<option value="${escapeHtml(r.key)}"${a.role === r.key ? ' selected' : ''}>${escapeHtml(r.label)}</option>`).join('')}
       </select>
-      <button class="btn" style="font-size:10.5px" onclick="removeAssign('${escAttr(a.id)}')">해제</button>
+      <button class="btn" style="font-size:var(--fs-10_5)" onclick="removeAssign('${escAttr(a.id)}')">해제</button>
       </div>
       ${isCo ? '' : `<div style="display:flex;align-items:center;gap:6px;margin-top:4px;padding-left:2px;flex-wrap:wrap">
-        <span style="font-size:10px;color:var(--i4);flex:0 0 auto">발표</span>
-        <input class="fi" type="time" style="width:96px;font-size:10.5px;padding:2px 5px"
+        <span style="font-size:var(--fs-10);color:var(--i4);flex:0 0 auto">발표</span>
+        <input class="fi" type="time" style="width:96px;font-size:var(--fs-10_5);padding:2px 5px"
           value="${escapeHtml(a.start_at || '')}" onchange="setTalkTime('${escAttr(a.id)}','start_at',this.value)">
-        <span style="font-size:10px;color:var(--i4)">–</span>
-        <input class="fi" type="time" style="width:96px;font-size:10.5px;padding:2px 5px"
+        <span style="font-size:var(--fs-10);color:var(--i4)">–</span>
+        <input class="fi" type="time" style="width:96px;font-size:var(--fs-10_5);padding:2px 5px"
           value="${escapeHtml(a.end_at || '')}" onchange="setTalkTime('${escAttr(a.id)}','end_at',this.value)">
-        <input class="fi" type="text" style="width:58px;font-size:10.5px;padding:2px 5px"
+        <input class="fi" type="text" style="width:58px;font-size:var(--fs-10_5);padding:2px 5px"
           placeholder="분" value="${escapeHtml(a.duration_min || '')}"
           onchange="setTalkTime('${escAttr(a.id)}','duration_min',this.value)"
           title="분만 적어 두면 «시간 자동 배분»이 이 길이로 이어 붙입니다">
-        ${warn ? `<span style="font-size:10px;color:var(--am)">⚠ ${escapeHtml(warn)}</span>` : ''}
-        ${overlap ? `<span style="font-size:10px;color:var(--re)">⚠ 앞 발표와 겹쳐요</span>` : ''}
-        ${outOfOrder ? `<span style="font-size:10px;color:var(--am)">⚠ 앞 사람보다 이른 시각이에요 — 순서나 시간 중 하나를 고쳐주세요</span>` : ''}
+        ${warn ? `<span style="font-size:var(--fs-10);color:var(--am)">⚠ ${escapeHtml(warn)}</span>` : ''}
+        ${overlap ? `<span style="font-size:var(--fs-10);color:var(--re)">⚠ 앞 발표와 겹쳐요</span>` : ''}
+        ${outOfOrder ? `<span style="font-size:var(--fs-10);color:var(--am)">⚠ 앞 사람보다 이른 시각이에요 — 순서나 시간 중 하나를 고쳐주세요</span>` : ''}
       </div>`}
     </div>`;
   };
 
   const brk = isBreak(s);
-  return `<div style="border:1px solid var(--i6);border-radius:9px;padding:10px 12px;margin-bottom:8px;
+  return `<div style="border:1px solid var(--i6);border-radius:var(--rd-9);padding:10px 12px;margin-bottom:8px;
     background:${brk ? 'var(--i8)' : 'var(--W)'}">
     <div style="display:flex;align-items:flex-start;gap:9px">
       <div style="flex:1;min-width:0">
-        <div style="font-size:12.5px;font-weight:600${brk ? ';color:var(--i4)' : ''}">${
-          brk ? `<span class="pill p-gray" style="font-size:9px;margin-right:5px">${escapeHtml(s.kind ? (kindOf(s.kind).pill || '세션 아님') : '세션 아님')}</span>` : ''}${
+        <div style="font-size:var(--fs-12_5);font-weight:600${brk ? ';color:var(--i4)' : ''}">${
+          brk ? `<span class="pill p-gray" style="font-size:var(--fs-9);margin-right:5px">${escapeHtml(s.kind ? (kindOf(s.kind).pill || '세션 아님') : '세션 아님')}</span>` : ''}${
           escapeHtml(s.title_ko || s.title_en || '(세션명 없음)')}</div>
-        ${s.title_ko && s.title_en ? `<div style="font-size:10.5px;color:var(--i4)">${escapeHtml(s.title_en)}</div>` : ''}
-        ${meta ? `<div style="font-size:10.5px;color:var(--i5);margin-top:2px">${escapeHtml(meta)}</div>` : ''}
+        ${s.title_ko && s.title_en ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(s.title_en)}</div>` : ''}
+        ${meta ? `<div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:2px">${escapeHtml(meta)}</div>` : ''}
       </div>
       <div style="display:flex;gap:5px;flex-shrink:0">
-        ${!brk && asg.length && s.start_at ? `<button class="btn" style="font-size:10.5px"
+        ${!brk && asg.length && s.start_at ? `<button class="btn" style="font-size:var(--fs-10_5)"
           onclick="autoTalkTimes('${escAttr(s.id)}')" title="세션 시작부터 각 발표의 «분»만큼 이어 붙입니다">시간 배분</button>` : ''}
-        <button class="btn" style="font-size:10.5px" onclick="toggleEditSession('${escAttr(s.id)}')">${editing ? '닫기' : '수정'}</button>
-        ${brk && !asg.length ? '' : `<button class="btn" style="font-size:10.5px" onclick="toggleAssign('${escAttr(s.id)}')">${open ? '닫기' : `배정 ${asg.length}`}</button>`}
-        <button class="btn" style="font-size:10.5px" onclick="removeConfSession('${escAttr(s.id)}')">삭제</button>
+        <button class="btn" style="font-size:var(--fs-10_5)" onclick="toggleEditSession('${escAttr(s.id)}')">${editing ? '닫기' : '수정'}</button>
+        ${brk && !asg.length ? '' : `<button class="btn" style="font-size:var(--fs-10_5)" onclick="toggleAssign('${escAttr(s.id)}')">${open ? '닫기' : `배정 ${asg.length}`}</button>`}
+        <button class="btn" style="font-size:var(--fs-10_5)" onclick="removeConfSession('${escAttr(s.id)}')">삭제</button>
       </div>
     </div>
     ${editing ? editSessionHtml(s, days, cfg) : ''}
@@ -308,8 +308,8 @@ function editSessionHtml(s, days, cfg){
   const roomList = roomOptions(confUi.confEvent, s.room);
   const dayList = s.date && !days.includes(s.date) ? [...days, s.date].sort() : days;
 
-  return `<div style="margin-top:9px;padding:10px;background:var(--i8);border-radius:8px">
-    <div style="font-size:11px;font-weight:600;margin-bottom:7px">세션 고치기</div>
+  return `<div style="margin-top:9px;padding:10px;background:var(--i8);border-radius:var(--r)">
+    <div style="font-size:var(--fs-11);font-weight:600;margin-bottom:7px">세션 고치기</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:7px">
       <div><div class="fl">종류</div>${kindSelect(i('kind'), s.kind, [i('ko'), i('en')])}</div>
       <div><div class="fl">일자</div>
@@ -342,9 +342,9 @@ function editSessionHtml(s, days, cfg){
     <div style="margin-top:7px"><div class="fl">메모</div>
       <textarea class="fi" id="${i('note')}" rows="2" style="resize:vertical">${escapeHtml(s.note || '')}</textarea></div>
     <div style="margin-top:8px;display:flex;gap:7px;align-items:center">
-      <button class="btn bp" style="font-size:11px" onclick="saveSessionEdit('${escAttr(s.id)}')">저장</button>
-      <button class="btn" style="font-size:11px" onclick="toggleEditSession('${escAttr(s.id)}')">취소</button>
-      <span id="es-msg-${escAttr(s.id)}" style="font-size:10.5px;color:var(--i4)"></span>
+      <button class="btn bp" style="font-size:var(--fs-11)" onclick="saveSessionEdit('${escAttr(s.id)}')">저장</button>
+      <button class="btn" style="font-size:var(--fs-11)" onclick="toggleEditSession('${escAttr(s.id)}')">취소</button>
+      <span id="es-msg-${escAttr(s.id)}" style="font-size:var(--fs-10_5);color:var(--i4)"></span>
     </div>
   </div>`;
 }
@@ -359,8 +359,8 @@ function assignFormHtml(ev, s){
   const pool = speakersForEvent(ev.key)
     .map(sp => ({ sp, roles: here.filter(a => a.speaker_id === sp.id).map(a => a.role) }))
     .sort((a, b) => String(a.sp.name_snapshot || a.sp.name_en || '').localeCompare(String(b.sp.name_snapshot || b.sp.name_en || ''), 'ko'));
-  return `<div style="margin-top:9px;padding:10px;background:var(--i8);border-radius:8px">
-    <div style="font-size:11px;font-weight:600;margin-bottom:7px">사람 배정</div>
+  return `<div style="margin-top:9px;padding:10px;background:var(--i8);border-radius:var(--r)">
+    <div style="font-size:var(--fs-11);font-weight:600;margin-bottom:7px">사람 배정</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:7px">
       <div><div class="fl">이 행사의 연사</div>
         <select class="fi" id="as-pick">
@@ -379,8 +379,8 @@ function assignFormHtml(ev, s){
         </select></div>
     </div>
     <div style="margin-top:8px;display:flex;gap:7px;align-items:center">
-      <button class="btn bp" style="font-size:11px" onclick="addAssign('${escAttr(s.id)}')">배정</button>
-      <span style="font-size:10.5px;color:var(--i4)">역할을 정하면 받을 것이 정해져요</span>
+      <button class="btn bp" style="font-size:var(--fs-11)" onclick="addAssign('${escAttr(s.id)}')">배정</button>
+      <span style="font-size:var(--fs-10_5);color:var(--i4)">역할을 정하면 받을 것이 정해져요</span>
     </div>
   </div>`;
 }

@@ -39,7 +39,7 @@ export const money = (v) => num(v).toLocaleString('ko-KR');
 
    드로어도 같은 값을 가져다 쓴다 — 표와 드로어가 다른 치수를 쓰면 같은 항목이
    화면을 옮길 때마다 크기가 달라 보인다. */
-export const TCELL = 'width:100%;box-sizing:border-box;height:28px;padding:3px 7px;font-size:11.5px';
+export const TCELL = 'width:100%;box-sizing:border-box;height:28px;padding:3px 7px;font-size:var(--fs-11_5)';
 export const TPILL = 'min-width:74px;height:22px;justify-content:center';
 
 /* ── 정산 계산 ──────────────────────────────────────────────────

@@ -116,7 +116,7 @@ function mark(head, th, dir){
     const s = document.createElement('span');
     s.className = 'ts-mark';
     s.textContent = dir > 0 ? ' ▲' : ' ▼';
-    s.style.cssText = 'font-size:9px;color:var(--a)';
+    s.style.cssText = 'font-size:var(--fs-9);color:var(--a)';
     th.appendChild(s);
   }
 }
