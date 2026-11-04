@@ -161,8 +161,14 @@ function evOrgs(evKey){
     const o = x.org_id ? getOrgById(x.org_id) : null;
     const name   = (o && o.name_ko) || x.company_name || (o && o.name_en) || '';
     const nameEn = (o && o.name_en) || '';
-    const key = x.company_key || normalizeCompanyKey(name || nameEn);
-    if(!key) return;
+    /* company_key는 영문명에서 만든 것이 많고(greencellbio) 사람 쪽 orgKey는 국문명에서 온다(그린셀바이오).
+       키 하나로만 찾으면 같은 기업이 두 줄이 된다 — 국문·영문 키 어느 것이든 이미 있는 묶음에 붙인다 */
+    const cands = [x.company_key, normalizeCompanyKey(name), normalizeCompanyKey(nameEn),
+      normalizeCompanyKey(x.company_name)].filter(Boolean);
+    if(!cands.length) return;
+    const key = cands.find(k => map.has(k))
+      || [...map.values()].find(g => g.nameEn && cands.includes(normalizeCompanyKey(g.nameEn)))?.key
+      || cands[0];
     if(!map.has(key)) map.set(key, {
       key, name: name || nameEn, nameEn,
       country: (o && o.country) || '', sector: (o && o.sectors) || '',
@@ -531,7 +537,7 @@ function peopleHtml(ev){
   const shown = filteredRows();
   const picked = evdbPickedPeople.size;
   return `<div style="padding:10px 16px 0">${statChips(ev.key)}</div>
-    <div style="padding:8px 16px 0">${roleChips(ev.key)}</div>
+    <div style="padding:10px 16px 0">${roleChips(ev.key)}</div>
     <div style="padding:10px 16px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       ${searchBoxHtml('이름·기업·직함 검색…')}
       <button class="btn" style="font-size:var(--fs-11)" onclick="toggleEvDbPeopleAll()">전체 선택/해제</button>
@@ -548,7 +554,7 @@ function peopleHtml(ev){
       <button class="btn" style="font-size:var(--fs-11)" onclick="openEvDbMailList()">메일 대상 모으기</button>
       <button class="btn bp" style="font-size:var(--fs-11)" onclick="exportEvDbPeople()">명단 내보내기 (${shown.length})</button>
     </div>
-    <div id="evdb-rows" style="padding:6px 16px 40px">${peopleRowsHtml()}</div>`;
+    <div id="evdb-rows" style="padding:10px 16px 40px">${peopleRowsHtml()}</div>`;
 }
 
 const searchBoxHtml = (ph) => `<div class="srch" style="width:100%;max-width:340px">
@@ -601,14 +607,14 @@ function peopleRowsHtml(){
 const yes = (v) => v === 'yes' || v === true;
 const ok = (on) => on ? '<span style="color:var(--g);font-weight:700">✓</span>' : '<span style="color:var(--i5)">—</span>';
 const cardsHtml = (items) => `<div style="padding:12px 16px 0;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">
-  ${items.map(([n, label, sub]) => `<div style="background:var(--W);border:1px solid var(--i6);border-radius:var(--r);padding:10px 14px">
-    <div style="font-size:var(--fs-20);font-weight:700;color:var(--i1)">${n}</div>
+  ${items.map(([n, label, sub]) => `<div style="background:var(--W);border:1px solid var(--i6);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column;justify-content:center;gap:2px">
+    <div style="font-size:var(--fs-20);font-weight:700;color:var(--i1);line-height:1.2">${n}</div>
     <div style="font-size:var(--fs-11);color:var(--i4)">${label}</div>
-    ${sub ? `<div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:2px">${sub}</div>` : ''}</div>`).join('')}</div>`;
+    ${sub ? `<div style="font-size:var(--fs-10_5);color:var(--i5)">${sub}</div>` : ''}</div>`).join('')}</div>`;
 const emptyPart = (msg) => `<div style="font-size:var(--fs-12);color:var(--i4);padding:24px 16px">${msg}</div>`;
 const matchQ = (vals) => { const q = evdbQuery.trim().toLowerCase(); return !q || vals.some(v => String(v || '').toLowerCase().includes(q)); };
 /* 명단 머리 — 검색과 «누르면 상세» 안내 */
-const partBarHtml = (ph, n, unit) => `<div style="padding:12px 16px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+const partBarHtml = (ph, n, unit) => `<div style="padding:10px 16px 0;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
   ${searchBoxHtml(ph)}<div style="flex:1"></div>
   <span style="font-size:var(--fs-11);color:var(--i4)">${n}${unit} · 줄을 누르면 상세 정보가 열려요</span></div>`;
 /* 이름 — 마스터DB에 있는 사람이면 눌러서 연락처 창을 연다(신청 대기는 아직 연락처가 없다) */
@@ -630,7 +636,7 @@ function peopleSummaryHtml(ev){
     [conf, '참가 확정', `타겟 ${all.length - conf}명`],
     [orgs, '참여 기업'],
     [countries, '국가'],
-  ]) + `<div style="padding:12px 16px 0"><div class="seg">
+  ]) + `<div style="padding:10px 16px 0"><div class="seg">
     <button class="seg-b${evdbView !== 'orgs' ? ' on' : ''}" onclick="setEvDbView('people')">사람별</button>
     <button class="seg-b${evdbView === 'orgs' ? ' on' : ''}" onclick="setEvDbView('orgs')">기업별</button></div></div>`;
 }
@@ -649,7 +655,7 @@ function exhPartHtml(ev){
     [booth, '부스 확정', `${live.length - booth}곳 남음`],
     [live.filter(x => yes(x.settled)).length, '정산 완료'],
   ]) + partBarHtml('기업명·부스 번호 검색…', live.length, '곳')
-    + `<div id="evdb-rows" style="padding:8px 16px 40px">${exhPartRowsHtml()}</div>`;
+    + `<div id="evdb-rows" style="padding:10px 16px 40px">${exhPartRowsHtml()}</div>`;
 }
 function exhPartRowsHtml(){
   const people = evPeople(evdbEvent);
@@ -686,7 +692,7 @@ function spPartHtml(ev){
     [l.filter(sp => sp.photo_received_at || sp.photo_file).length, '사진 받음'],
     [l.filter(sp => sp.consent_at).length, '동의서 받음'],
   ]) + partBarHtml('이름·소속 검색…', l.length, '명')
-    + `<div id="evdb-rows" style="padding:8px 16px 40px">${spPartRowsHtml()}</div>`;
+    + `<div id="evdb-rows" style="padding:10px 16px 40px">${spPartRowsHtml()}</div>`;
 }
 function spPartRowsHtml(){
   const l = evSpeakers(evdbEvent).filter(sp => matchQ([sp.name_snapshot, sp.name_en, sp.org_ko, sp.org_en, sp.title_ko]));
@@ -717,7 +723,7 @@ function ptnPartHtml(ev){
     [l.filter(r => r.confirmedAt).length, '참가 확정', `전체 ${l.length}명`],
     ...(none.length ? [[none.length, '셀러·바이어 미지정', '파트너링 탭에서 정해요']] : []),
   ]) + partBarHtml('이름·기업·국가 검색…', l.length, '명')
-    + `<div id="evdb-rows" style="padding:8px 16px 40px">${ptnPartRowsHtml()}</div>`;
+    + `<div id="evdb-rows" style="padding:10px 16px 40px">${ptnPartRowsHtml()}</div>`;
 }
 function ptnPartRowsHtml(){
   const l = evPtnPeople(evdbEvent).filter(r => matchQ([r.name, r.nameEn, r.org, r.orgEn, r.email, countryName(r.country)]));
@@ -745,7 +751,7 @@ function orgsHtml(ev){
       <div style="flex:1"></div>
       <button class="btn bp" id="evdb-send-btn" onclick="openEvDbSend()">타겟으로 보내기</button>
     </div>
-    <div id="evdb-rows" style="padding:8px 16px 40px">${orgsRowsHtml()}</div>`;
+    <div id="evdb-rows" style="padding:10px 16px 40px">${orgsRowsHtml()}</div>`;
 }
 
 function filteredOrgs(){
@@ -764,7 +770,7 @@ function orgsRowsHtml(){
   const exh = exhKeysOf(evdbEvent);
 
   return l.map(o => {
-    const isT = tgt.has(o.key), isX = exh.has(o.key);
+    const isT = tgt.has(o.key), isX = o.exhibitor || exh.has(o.key);
     const people = o.people.slice(0, 3).map(p => p.name).filter(Boolean);
     return `<label style="display:flex;align-items:center;gap:10px;background:var(--W);border:1px solid var(--i6);
         border-radius:var(--r);padding:10px 12px;margin-bottom:6px;cursor:pointer">
