@@ -707,3 +707,16 @@ tr.row-sel{background:var(--ad)}
 .vchips-info{font-size:var(--fs-10_5);color:var(--i3);margin-top:5px;line-height:1.5}
 .vchips-info span{color:var(--i4)}
 .vchips-info:empty{display:none}
+
+/* 연사 계좌 점검 문구(sp-dr-bank.js al) — 칸 바로 아래, 놓치지 않게 색 바탕 상자로 */
+.bk-al{display:flex;gap:7px;align-items:flex-start;margin-top:5px;padding:6px 9px;border-radius:6px;
+  border-left:3px solid;font-size:var(--fs-11_5);line-height:1.5;font-weight:600}
+.bk-al.err{background:var(--rb);border-color:var(--re);color:var(--re)}
+.bk-al.warn{background:var(--ab);border-color:var(--am);color:var(--amk)}
+.bk-al.info{background:var(--i8);border-color:var(--i4);color:var(--i3);font-weight:500}
+.bk-al-tag{flex:none;font-size:var(--fs-10_5);padding:1px 6px;border-radius:4px;color:#fff;white-space:nowrap}
+.bk-al.err .bk-al-tag{background:var(--re)}
+.bk-al.warn .bk-al-tag{background:var(--am)}
+.bk-al.info .bk-al-tag{background:var(--i4)}
+.fg:has(.bk-al.err) .fi{border-color:var(--re);box-shadow:0 0 0 2px var(--rb)}
+.fg:has(.bk-al.warn) .fi{border-color:var(--am);box-shadow:0 0 0 2px var(--ab)}

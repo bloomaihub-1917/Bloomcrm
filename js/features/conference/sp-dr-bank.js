@@ -59,11 +59,12 @@ function bankModeRow(sp){
 
 /* 계좌 점검 — 칸마다 그 칸에 걸린 문구만 바로 아래에 단다(bank-check.js).
    한데 모아 보여 주면 어느 칸을 고칠지 다시 찾아야 한다 */
-const LV = { err: ['✕', 'var(--re)'], warn: ['!', 'var(--am)'], info: ['i', 'var(--i4)'] };
+const LV = { err: ['✕', '고칠 것'], warn: ['!', '확인할 것'], info: ['i', '챙길 것'] };
 let checks = [];
+/* 눈에 띄게 — 색 바탕 상자에 굵은 표지, 고칠 것·확인할 것이 있으면 입력칸 테두리도 같은 색(.bk-al, components.css) */
 function al(field, hint){
-  const lines = checks.filter(x => x.f === field).map(x => `<div style="display:flex;gap:5px;margin-top:2px;line-height:1.5;color:${
-    x.lv === 'info' ? 'var(--i3)' : LV[x.lv][1]}"><b style="color:${LV[x.lv][1]};min-width:10px">${LV[x.lv][0]}</b><span>${escapeHtml(x.msg)}</span></div>`).join('');
+  const lines = checks.filter(x => x.f === field).map(x => `<div class="bk-al ${x.lv}">
+    <b class="bk-al-tag">${LV[x.lv][0]} ${LV[x.lv][1]}</b><span>${escapeHtml(x.msg)}</span></div>`).join('');
   return (hint || '') + lines;
 }
 
