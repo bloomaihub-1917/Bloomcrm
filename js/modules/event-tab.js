@@ -34,7 +34,7 @@ import { domainOfSector, domainName, findSectorByName } from '../domain/sectors.
 /* changed는 이 파일의 지역 변수 이름과 겹친다 — 별칭으로 들여온다 */
 import { trackAction, changed as changeMeta } from '../core/audit-log.js';
 import { sanitizeForCsv } from './audit-tab.js';
-import { pendingFor, fetchPending, onPendingChange, acceptPending } from './register-links.js';
+import { pendingFor, fetchPending, onPendingChange, acceptPending, dropPending } from './register-links.js';
 
 /* ── 모듈 상태 ──
    고른 행사와 보고 있는 화면. 다른 탭이 알 필요가 없어 state.js로 올리지 않는다. */
@@ -522,6 +522,8 @@ function peopleHtml(ev){
       <span id="evdb-picked-n" style="font-size:11px;color:var(--i4)">${picked ? picked + '명 선택' : ''}</span>
       <button class="btn" style="font-size:11px" onclick="confirmEvDbPeople(true)">참가 확정</button>
       <button class="btn" style="font-size:11px" onclick="confirmEvDbPeople(false)">확정 해제</button>
+      <button class="btn" style="font-size:11px;color:var(--re)" onclick="deleteEvDbRegistrants()"
+        title="등록 링크·엑셀로 들어온 신청자를 이 행사에서 지워요 — 다른 경로로 넣은 사람은 건드리지 않아요">신청자 삭제</button>
       <button class="btn" style="font-size:11px" onclick="reloadEvDbPending(this)"
         title="등록 링크·엑셀로 들어온 신청을 서버에서 다시 받아 와요">⟳ 등록자 다시 불러오기</button>
       <button class="btn" style="font-size:11px" onclick="openRegisterLinks('${escAttr(ev.key)}')"
@@ -981,6 +983,47 @@ async function saveConfirm(rows, on){
         before: { confirmed_at: before }, after: { confirmed_at: p.confirmedAt || '' } })) });
   return true;
 }
+
+/* 등록 링크·엑셀로 들어온 신청자 지우기.
+   신청 대기는 임시 표에서 버린다(마스터DB에 없다). 이미 확정해 옮긴 사람은 이 행사 참여 기록만 지운다 —
+   연락처는 다른 행사 기록이 있을 수 있어 마스터DB에 남긴다. 다른 경로(업로드·초청)로 넣은 사람은 건드리지 않는다 */
+const REG_MARKS = ['🔗 등록 링크', '📄 엑셀 명단'];
+export async function deleteEvDbRegistrants(){
+  const rows = evPeople(evdbEvent).filter(r => evdbPickedPeople.has(r.cid));
+  if(!rows.length){ alert('먼저 지울 신청자를 골라주세요.'); return; }
+  const pend = rows.filter(r => r.pendingId);
+  const parts = rows.filter(r => !r.pendingId).flatMap(r => r.partIds
+    .map(id => participations.find(p => p.id === id)).filter(p => p && REG_MARKS.includes(p.matched)));
+  const done = new Set(parts.map(p => p.contactId));
+  const skip = rows.filter(r => !r.pendingId && !done.has(r.cid)).length;
+  if(!pend.length && !parts.length){ alert('고른 사람 중에 등록 링크·엑셀로 들어온 신청자가 없어요.'); return; }
+  if(!confirm(`신청자 ${pend.length + done.size}명을 이 행사에서 지울까요?`
+    + (pend.length ? `
+· 신청 대기 ${pend.length}명 — 지우면 되돌릴 수 없어요` : '')
+    + (done.size ? `
+· 확정한 ${done.size}명 — 이 행사 참여 기록만 지우고, 연락처는 마스터DB에 남아요` : '')
+    + (skip ? `
+(다른 경로로 넣은 ${skip}명은 건너뛰어요)` : ''))) return;
+  let fail = 0;
+  for(const r of pend){
+    const res = await dropPending(evdbEvent, r.pendingId);
+    if(!res.ok) fail++;
+    else trackAction('delete', '등록 신청 삭제', r.name, `${evdbEvent} · ${r.name} (${r.org}) 신청 대기 삭제`);
+  }
+  for(const p of parts){
+    const res = await postToSheet({ sheet: 'participations', action: 'delete', row: [p.id] }, '행사 참여 삭제');
+    if(!res || res.ok === false){ fail++; continue; }
+    const i = participations.indexOf(p);
+    if(i >= 0) participations.splice(i, 1);
+    trackAction('delete', '등록 신청자 삭제', evdbEvent, `${evdbEvent} 참여 기록 삭제 (${p.role})`,
+      { kind: 'contact', id: p.contactId, table: 'participations', row: p.id, op: 'delete', before: p });
+  }
+  evdbPickedPeople.clear();
+  invalidateEvRows();
+  renderEvDb();
+  if(fail) alert(`${fail}건은 지우지 못했어요. 이미 처리됐거나 네트워크 문제일 수 있어요.`);
+}
+window.deleteEvDbRegistrants = deleteEvDbRegistrants;
 
 /* 신청 대기 다시 받아 오기 — 처음 한 번만 받아 오니, 그 뒤에 들어온 신청은 이걸로 */
 export async function reloadEvDbPending(btn){

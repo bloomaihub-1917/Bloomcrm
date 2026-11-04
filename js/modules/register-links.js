@@ -50,6 +50,16 @@ export function fetchPending(evKey, force){
 }
 
 /* 확정 → 서버가 연락처·참가 확정을 만들고, 그 결과를 이 화면의 contacts·participations에 그대로 넣는다 */
+/* 버리기 — 신청 대기에서만 지운다(마스터DB에는 처음부터 없다) */
+export async function dropPending(evKey, id){
+  const r = await decideRegisterSub(id, 'drop');
+  if(!r.ok) return r;
+  pending.set(evKey, pendingFor(evKey).filter(x => x.id !== id));
+  if(evKey === openEv) subs = pendingFor(evKey);
+  changed(evKey);
+  return r;
+}
+
 export async function acceptPending(evKey, id){
   const r = await decideRegisterSub(id, 'accept');
   if(!r.ok) return r;
