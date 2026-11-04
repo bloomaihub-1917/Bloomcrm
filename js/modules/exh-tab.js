@@ -845,7 +845,7 @@ export function renderExh(){
   const VIEWS = [['dash','대시보드'], ['list','기업리스트'],
     ['booth','부스 현황'], ['equip','비품 현황'], ['graphic','그래픽 현황'],
     ['money','금액 현황'], ['book','프로그램북'], ['onsite','현장 처리'],['watch','파일 감시']];
-  const seg = `<div class="tbar vtabs">
+  const seg = `<div class="db-bar vtabs">
     <div class="seg">
       ${VIEWS.map(([k, l]) => `<button class="seg-b${exhUi.exhView === k ? ' on' : ''}" onclick="setExhView('${k}')">${l}</button>`).join('')}
     </div></div>`;

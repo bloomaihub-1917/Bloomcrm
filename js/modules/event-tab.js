@@ -256,7 +256,7 @@ export function renderEvDb(){
   /* 신청 대기를 처음 한 번 받아 온다 — 오면 onPendingChange가 다시 그린다 */
   fetchPending(ev.key);
 
-  const seg = `<div class="tbar vtabs">
+  const seg = `<div class="db-bar vtabs">
     <div class="seg">
       ${VIEWS.map(([k, l]) => `<button class="seg-b${evdbView === k ? ' on' : ''}"
         onclick="setEvDbView('${k}')">${l}</button>`).join('')}

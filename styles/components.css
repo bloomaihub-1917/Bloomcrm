@@ -143,9 +143,8 @@ tr.row-sel{background:var(--ad)}
 .kadd{width:100%;padding:7px;border:1.5px dashed var(--i5);border-radius:var(--r);background:none;color:var(--i4);font-size:var(--fs-11);cursor:pointer;transition:all .12s}
 .kadd:hover{border-color:var(--a);color:var(--a);background:var(--ad)}
 .tbar{display:flex;align-items:center;gap:9px;padding:8px var(--pad-x);border-bottom:1px solid var(--i6);background:var(--W);flex-shrink:0}
-/* 보기 탭 줄 — 제목 줄 바로 아래, 화면(대시보드·목록…)을 바꾸는 탭. 연사·전시·행사 DB가 같은 모양을 쓴다 */
-.tbar.vtabs{padding:10px var(--pad-x) 0}
-.tbar.vtabs .seg{flex-wrap:wrap}
+/* 보기 탭 줄 — 제목 줄 바로 아래, 화면(대시보드·목록…)을 바꾸는 탭. Company DB의 종류 줄(.db-bar)과 같은 줄 — 연사·전시·행사 DB */
+.db-bar.vtabs .seg{flex-wrap:wrap}
 .tct{font-size:var(--fs-11);color:var(--i4);margin-left:auto}
 .stsel{padding:4px 8px;border-radius:var(--rd-pill);border:1px solid var(--i6);background:var(--i8);font-size:var(--fs-10);font-weight:600;color:var(--i2);outline:none;cursor:pointer}
 .tact{padding:4px 10px;border-radius:var(--rs);border:1px solid var(--i6);background:var(--W);font-size:var(--fs-10);font-weight:500;color:var(--i2);cursor:pointer;transition:all .1s}

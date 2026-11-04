@@ -236,7 +236,7 @@ export function renderConf(){
   scheduleSharePublish(ev.key);
 
   const segs = [['dash', '대시보드'], ['pga', 'Program at a Glance'], ['program', 'Program'], ['people', 'Speakers'], ['watch', '파일 감시']];
-  const seg = `<div class="tbar vtabs"><div class="seg">
+  const seg = `<div class="db-bar vtabs"><div class="seg">
     ${segs.map(([k, l]) => `<button class="seg-b${confUi.confView === k ? ' on' : ''}" onclick="setConfView('${k}')">${l}</button>`).join('')}
   </div></div>`;
 
