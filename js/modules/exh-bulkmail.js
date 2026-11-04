@@ -393,20 +393,24 @@ async function pushRounds(fn){
 }
 const eventExhibitors = () => EXHIBITORS.filter(x => x.event_id === bm.evKey);
 /* 이 메일을 보낸 기업·주소를 컨택 차수로 — 컨택에서 회신·후속을 체크한다(contact-tab.js importSentToRound) */
-export async function bmToContact(){
-  if(!bm || bm.sending) return;
+/* auto: 일괄 발송이 끝나면 묻지 않고 저절로 옮긴다(2026-11-04) — 같은 함수라 겹쳐 넣지 않는다.
+   돌려주는 말은 발송 결과 알림 끝에 붙인다 */
+export async function bmToContact(auto = false){
+  if(!bm || (bm.sending && !auto)) return '';
   const st = curStep();
-  if(!st) return;
+  if(!st) return '';
   const toOf = (l) => (String(l.counterpart || '').split('(cc)')[0].match(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/g) || []);
   // 참가기업에 걸린 기업DB id를 함께 넘긴다 — 주소·이름으로 짐작하는 것보다 정확하다
   const items = eventExhibitors().map(x => ({ name: exhNames(x).ko, org_id: x.org_id || '',
     sends: sentLogs(x).map(l => ({ ts: l.ts, emails: toOf(l) })).filter(s => s.emails.length) })).filter(it => it.sends.length);
-  if(!items.length){ say('이 메일을 보낸 기록이 없어요.'); return; }
+  if(!items.length){ if(!auto) say('이 메일을 보낸 기록이 없어요.'); return ''; }
   const name = `${st.label} — 회신 확인`;
-  if(!confirm(`«${st.label}»을 보낸 ${items.length}곳을 컨택 차수 «${name}»로 옮길까요?\n\n받은 주소마다 DM «보냄» 기록이 들어가고, 컨택에서 회신·부정·반송을 체크할 수 있어요.\n이미 옮긴 기업·기록은 다시 넣지 않아요.`)) return;
+  if(!auto && !confirm(`«${st.label}»을 보낸 ${items.length}곳을 컨택 차수 «${name}»로 옮길까요?\n\n받은 주소마다 DM «보냄» 기록이 들어가고, 컨택에서 회신·부정·반송을 체크할 수 있어요.\n이미 옮긴 기업·기록은 다시 넣지 않아요.`)) return;
   say('컨택으로 옮기는 중…', true);
   const { importSentToRound } = await import('./contact-tab.js');
-  const r = await importSentToRound(bm.evKey, name, items);
+  const r = await importSentToRound(bm.evKey, name, items).catch(() => ({ ok: false }));
+  if(auto) return r.ok ? (r.members || r.attempts ? ` · 컨택 «${name}»에 ${r.members}곳 넣음` : '')
+    : ' · 컨택으로 옮기지 못했어요(«컨택으로 옮기기»를 다시 눌러 주세요)';
   say(r.ok ? `컨택 «${name}»에 ${r.members}곳 · 보낸 기록 ${r.attempts}건을 넣었어요${r.members || r.attempts ? '' : ' (이미 다 옮겨져 있어요)'}.` : '옮기지 못했어요. 네트워크 확인 후 다시 시도해주세요.', !!r.ok);
 }
 /* 다시 보내기 묶음 — 틀은 shared/mail/resend-round.js(연사 일괄 메일과 같은 코드). 여기는 대상·말·다시 그리기만 */
@@ -663,8 +667,11 @@ async function sendExhBulk(){
     list.length > 1 ? `\n\n스팸으로 잡히지 않게 통마다 ${SEND_GAP}초씩 쉬어요 — 약 ${Math.ceil((list.length - 1) * SEND_GAP / 60)}분 걸려요. 다 보낼 때까지 이 창을 닫지 마세요.` : ''}`)) return;
 
   const kind = bm.step === 'note' || st.lib ? 'note' : `exh-${bm.step}`;
+  /* 멈추면 틀이 창을 먼저 닫는다(bm = null) — 닫기 전에 보낸 곳을 컨택으로 옮겨 둔다 */
+  let stopToC = Promise.resolve('');
   await runBulkSend({
-    bm, list, st, gap: SEND_GAP, pause, say, render, close,
+    bm, list, st, gap: SEND_GAP, pause, say, render,
+    close: () => { stopToC = bmToContact(true).finally(close); },
     /* 통 사이에 쉰다 — 같은 모양 메일을 쉬지 않고 수십 통 보내면 받는 쪽이 대량 발송으로 보고
        스팸함에 넣는다(특히 Gmail 같은 무료 메일 발신) */
     pauseText: (i, n, s, x) => `${i}/${n} 보냄 — 스팸으로 잡히지 않게 ${s}초 쉬었다가 다음 통 (${exhNames(x).ko})`,
@@ -688,14 +695,18 @@ async function sendExhBulk(){
     },
     track: { label: '참가사 일괄 메일', unit: '곳' },
     round: { progress: roundProgress, close: closeExhRound, curStep },
-    stopped: ({ ok, fails, unlogged }) => {
-      alert(`멈췄어요 — ${list.length}곳 중 ${ok}곳에 보냈어요.${fails.length ? `\n실패 ${fails.length}곳: ${fails.slice(0, 5).join(' / ')}` : ''}${unlogged.length ? `\n\n${unlogged.length}곳은 보냈지만 기록을 못 남겼어요(${unlogged.slice(0, 5).join(', ')}). 메일 가져오기를 하면 채워져요.` : ''}`);
+    stopped: async ({ ok, fails, unlogged }) => {
+      const toC = await stopToC;
+      alert(`멈췄어요 — ${list.length}곳 중 ${ok}곳에 보냈어요.${fails.length ? `\n실패 ${fails.length}곳: ${fails.slice(0, 5).join(' / ')}` : ''}${unlogged.length ? `\n\n${unlogged.length}곳은 보냈지만 기록을 못 남겼어요(${unlogged.slice(0, 5).join(', ')}). 메일 가져오기를 하면 채워져요.` : ''}${toC ? `
+${toC.slice(3)}` : ''}`);
       window.renderExh?.();
     },
-    done: ({ ok, fails, unlogged, closed }) => {
+    done: async ({ ok, fails, unlogged, closed }) => {
+      /* 보낸 곳은 컨택 차수로 저절로 — 컨택에서 회신·후속을 체크한다 */
+      const toC = ok ? await bmToContact(true) : '';
       pickTurn();   // 보낸 곳은 «보냄»으로 넘어가 빠진다
       render();
-      say(`${ok}곳에 보냈어요${closed ? ' · 다시 보내기 묶음을 다 보내 닫았어요' : ''}${fails.length ? ` — 실패 ${fails.length}곳: ${fails.slice(0, 5).join(' / ')}${fails.length > 5 ? ' …' : ''}` : ''}${
+      say(`${ok}곳에 보냈어요${closed ? ' · 다시 보내기 묶음을 다 보내 닫았어요' : ''}${toC}${fails.length ? ` — 실패 ${fails.length}곳: ${fails.slice(0, 5).join(' / ')}${fails.length > 5 ? ' …' : ''}` : ''}${
         unlogged.length ? ` · ${unlogged.length}곳은 보냈지만 기록을 못 남겼어요(${unlogged.slice(0, 3).join(', ')}) — 메일 가져오기를 하면 채워져요` : ''}`, !fails.length && !unlogged.length);
       window.renderExh?.();
     },
