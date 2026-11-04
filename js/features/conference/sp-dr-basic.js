@@ -249,7 +249,7 @@ export async function createSpeakerContact(){
   });
   if(sameOrg.length){
     const box = document.getElementById('sp-con-hits');
-    if(box) box.innerHTML = `<div style="font-size:var(--fs-11);color:var(--no,#b91c1c);padding:5px 2px">
+    if(box) box.innerHTML = `<div style="font-size:var(--fs-11);color:var(--re);padding:5px 2px">
         마스터DB에 이미 있는 사람이에요 — 새로 만들지 않고 아래에서 골라 연결해 주세요</div>`
       + sameOrg.slice(0, 8).map(c => `<div class="drw" onclick="linkSpeakerContact('${escAttr(c.id)}')">
         <div><div class="drn">${escapeHtml(c.nameKo || c.nameEn || c.id)} <span class="btn" style="font-size:var(--fs-10);padding:1px 6px">이 사람으로 연결</span></div>
