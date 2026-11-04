@@ -545,3 +545,10 @@ Object.assign(window, {
   pickPtn, togglePtnAll, sendPtnToContact, confirmPtnPicked, assignPtnPicked, addPtnPartTypes,
   renderPtn,   // 모바일/데스크톱 경계를 넘으면 app.js가 다시 그린다
 });
+
+/* 제목 줄 «참가자 추가» — 마스터DB에서 사람을 골라 셀러·바이어로 넣는다(features/quick-add.js).
+   넣은 사람은 확정 전이라 «확정 대기»에 보인다 — 거기로 옮겨 보여 준다 */
+window.addPtnPerson = () => window.openEvPersonAdd?.(ptnEvent, {
+  roles: [...PARTNERING_SIDES.flatMap(s => s.roles), PARTNERING_UNSIDED],
+  done: () => { ptnView = 'wait'; renderPtn(); },
+});

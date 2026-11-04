@@ -1497,3 +1497,8 @@ window.setEvDbTgtFil       = setEvDbTgtFil;
 window.pickEvDbTgt         = pickEvDbTgt;
 window.toggleEvDbTgtAll    = toggleEvDbTgtAll;
 window.openEvDbTargetSend  = openEvDbTargetSend;
+
+/* 제목 줄 «참가자 추가» — 마스터DB에서 사람을 골라 이 행사 참가자로 넣는다(features/quick-add.js) */
+window.addEvDbPerson = () => window.openEvPersonAdd?.(evdbEvent, {
+  done: () => { invalidateEvRows(); buildEvDbList(); if(evdbView !== 'people' && evdbView !== 'orgs') evdbView = 'people'; renderEvDb(); },
+});

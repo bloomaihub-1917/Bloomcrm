@@ -831,3 +831,6 @@ window.setAssignRole     = setAssignRole;
 window.removeAssign      = removeAssign;
 window.setCoLead         = setCoLead;
 window.removeConfSpeaker = removeConfSpeaker;
+
+/* 제목 줄 «연사 추가» — 지금 보고 있는 행사에 연사 줄을 만들고 연사 창을 연다(features/quick-add.js) */
+window.addConfSpeaker = () => window.openSpeakerAdd?.(confUi.confEvent, { done: renderConf });
