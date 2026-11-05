@@ -211,6 +211,30 @@ function renderDashboard(all){
       </div>`;
 
     const rest = m.전체 - m.입금;
+    /* 위 «미수금» 카드와 차이를 만드는 기업 — 카드는 기업별 (청구−입금)을 더하고 완납 처리한 곳은 빼지만,
+       여기 «남은 금액»은 전체 항목 − 전체 입금이다. 두 계산이 기업마다 얼마나 갈리는지 보인다 */
+    const gaps = [];
+    all.forEach(x => {
+      const s = settleState(x);
+      const items = billableItems(x.id).filter(i => (i.currency || 'KRW') === c).reduce((a, i) => a + num(i.amount), 0);
+      const restPart = items - (s.cur === c ? s.paid : 0);
+      const kpiPart = s.billed && s.cur === c ? (s.state === 'settled' ? 0 : s.balance) : 0;
+      const d = Math.round((restPart - kpiPart) * 100) / 100;
+      if(Math.abs(d) < 0.005) return;
+      const why = s.state === 'settled' && s.cur === c ? `완납 처리 (덜 받은 ${fmtMoney(s.balance, c)})`
+        : s.cur !== c ? `다른 통화(${s.cur})가 주 통화라 카드에서 빠짐`
+        : s.balance < 0 ? `더 받음 ${fmtMoney(-s.balance, c)} — 카드에서 다른 미수금을 깎음`
+        : items !== s.billed ? `청구액(${fmtMoney(s.billed, c)})이 항목 합과 다름` : '';
+      gaps.push({ x, d, why });
+    });
+    gaps.sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
+    const gapHtml = gaps.length ? `<details style="margin-top:4px;font-size:var(--fs-10_5)">
+        <summary style="cursor:pointer;color:var(--i4)">위 «미수금» 카드와 다른 까닭 — ${gaps.length}곳 · 차이 ${escapeHtml(fmtMoney(gaps.reduce((a, g) => a + g.d, 0), c))}</summary>
+        ${gaps.map(g => `<div onclick="openExhDr('${escAttr(g.x.id)}','billing')" style="display:flex;gap:6px;padding:3px 0;cursor:pointer;border-top:1px solid var(--i7)">
+          <span style="flex:0 0 40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700">${escapeHtml(exhNames(g.x).ko)}</span>
+          <span style="flex:1;color:var(--i4)">${escapeHtml(g.why)}</span>
+          <span style="flex:none;font-weight:700">${escapeHtml(fmtMoney(g.d, c))}</span></div>`).join('')}
+      </details>` : '';
     return `<div style="margin-bottom:12px">
       <div style="font-size:var(--fs-10_5);color:var(--i4);margin-bottom:4px">${escapeHtml(c)} · ${m.n}곳</div>
       ${bar('전체 금액', m.전체, 'var(--i5)')}
@@ -218,6 +242,7 @@ function renderDashboard(all){
       ${bar('입금 완료', m.입금, 'var(--g)')}
       <div style="font-size:var(--fs-10_5);color:${rest > 0 ? 'var(--am)' : 'var(--g)'}">
         ${rest > 0 ? '남은 금액 ' + escapeHtml(fmtMoney(rest, c)) : '전액 입금'}</div>
+      ${gapHtml}
     </div>`;
   };
 
