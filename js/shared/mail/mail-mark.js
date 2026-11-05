@@ -138,6 +138,7 @@ export async function runMailSync(evKey, say = () => {}){
       : `보낸메일함을 읽지 못했어요: ${r.error}\n`)
     + (q.ok ? `받은메일함 ${q.scanned}통 → 연사·참가사가 보낸 메일 ${(q.items || []).length}통 (이미 있는 ${(q.items || []).length - iTodo.length}통 건너뜀)${q.skipped && q.skipped.length ? ` · 진행 완료라 뺀 것: ${q.skipped.join(', ')}` : ''}\n\n`
       : `받은메일함을 읽지 못했어요: ${q.error}\n\n`)
+    + (q.ok && q.partial ? '⚠ 첨부가 큰 메일이 많아 시간 안에 다 못 읽었어요 — 남긴 뒤 «지금 가져오기»를 한 번 더 누르면 이어서 읽어요.\n\n' : '')
     + (sTodo.length ? `[보낸 메일 남길 것]\n${list(sTodo, x => `· ${x.at || x.date} ${x.t === 'ex' ? '(참가사) ' : ''}${x.name} — ${x.subject} [${x.category || '기타'}]`)}\n\n` : '')
     + (iTodo.length ? `[받은 메일 남길 것]\n${list(iTodo, x => `· ${x.at || x.date} ${x.t === 'ex' ? '(참가사) ' : ''}${x.name} — ${x.subject}`)}\n\n` : '')
     + (stamp.length ? `초청 «보냄»으로 체크: ${stamp.join(', ')}\n\n` : '')

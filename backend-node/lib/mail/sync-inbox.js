@@ -22,6 +22,8 @@ const syncInboxHandler = async (req, res) => {
   await ensureExtra().catch(() => {});
   if (req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 바꿀 수 없어요' });
   const eventId = String(req.params.eventId);
+  const t0 = Date.now();
+  let timedOut = false;
   try {
     const b = await boxOf(eventId);
     if (!b) return res.status(404).json({ ok: false, error: '이 행사에 공용 메일이 없어요' });
@@ -117,9 +119,16 @@ const syncInboxHandler = async (req, res) => {
         const need = [...keep];
         const parsed = new Map();
         stage = '받은메일함 본문 읽기';
-        if (need.length) {
-          for await (const m of client.fetch(need.join(','), { source: true }, { uid: true })) parsed.set(String(m.uid), await simpleParser(m.source));
+        /* 한 통씩 받고 시간을 잰다 — 홍보메일은 소개서 PDF가 붙어 몇 MB씩이라 40통을 한꺼번에 받으면
+           60초를 넘겨 함수가 끊겼고, 화면에는 «Failed to fetch»만 떴다(2026-11-05 EVK 지메일).
+           45초가 넘으면 멈춘다. 못 받은 메일은 저장하지 않아 다음 가져오기 때 이어 받는다 */
+        let cut = false;
+        for (const uid of need) {
+          if (Date.now() - t0 > 45000) { cut = true; break; }
+          const m = await client.fetchOne(uid, { source: true }, { uid: true });
+          if (m && m.source) parsed.set(String(m.uid), await simpleParser(m.source));
         }
+        timedOut = cut;
         const bodyText = (mail) => {
           const asBody = new Set(String(mail.text || '').trim() || mail.html ? [] : bodyParts(mail));
           const files = (mail.attachments || []).filter((a) => !asBody.has(a)).map((a) => a.filename).filter(Boolean);
@@ -127,6 +136,7 @@ const syncInboxHandler = async (req, res) => {
         };
         for (const h of heads) {
           const mail = parsed.get(h.uid);
+          if (!mail && timedOut && keep.has(h.uid)) continue;   // 시간이 모자라 못 받은 메일 — 빈 기록으로 남기지 않고 다음에
           if (mail && isAutoReply(mail)) continue;
           if (!h.who && mail && isOurs(h.from) && !isSpam(mail)) {
             /* 우리 직원이 전달한 메일 — 원래 메일의 보낸 사람·받는 사람·참조로 주인을 찾는다.
@@ -232,7 +242,7 @@ const syncInboxHandler = async (req, res) => {
     }
     if (apply) await markSynced(eventId, req.user?.name || req.user?.email || '');
     res.json({
-      ok: true, applied: apply, scanned: total, added, replied, replyNames, unassigned, unknown: unknown.filter((u) => u.status === 'new').length, promo: unknown.filter((u) => u.status === 'promo').length,
+      ok: true, applied: apply, partial: timedOut, scanned: total, added, replied, replyNames, unassigned, unknown: unknown.filter((u) => u.status === 'new').length, promo: unknown.filter((u) => u.status === 'promo').length,
       items: found.map(({ body, ...r }) => r),
       skipped: [confDone ? '컨퍼런스(진행 완료)' : '', exhDone ? '전시(진행 완료)' : ''].filter(Boolean),
     });
