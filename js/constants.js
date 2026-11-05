@@ -256,3 +256,12 @@ export const speakerRoleOf = (v) => SPEAKER_ROLES.find(r => r.key === v) || null
 export const NEED_CYCLE = ['req', 'opt', ''];
 export const NEED_MARK = { req: '●', opt: '○', '': '—' };
 export const NEED_LABEL = { req: '받아야 함', opt: '있으면 좋음', '': '묻지 않음' };
+
+/* 연락처 «출처»(contacts.origin) — 처음 들어온 길, 사람마다 하나이고 바뀌지 않는다.
+   «쓰임»은 사람이 아니라 행사마다 다르다 — 그 행사의 영업 DB인지는 sales_targets에 적는다.
+   (docs/manual-db-axes.md) */
+export const CONTACT_ORIGINS = [
+  { key:'ours',  label:'수주 행사 참가자', cls:'p-blue',   desc:'우리가 수주한 행사의 참가자' },
+  { key:'other', label:'타 행사',          cls:'p-gray',   desc:'다른 행사의 참가자 데이터' },
+  { key:'sales', label:'DB 취합',          cls:'p-purple', desc:'모아 둔 명단을 한꺼번에 올린 것' },
+];

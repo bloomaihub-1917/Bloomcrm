@@ -4,12 +4,12 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import { postToSheet } from '../../api.js';
-import { CAT_KEYS, CL, COUNTRIES, CP, RP, avB, avF } from '../../constants.js';
+import { CAT_KEYS, CL, CONTACT_ORIGINS, COUNTRIES, CP, RP, avB, avF } from '../../constants.js';
 import { changed, removed, trackAction } from '../../core/audit-log.js';
 import { countryCheckText } from '../../country-signal.js';
 import { buildCoDB } from '../../domain/co-db.js';
 import { ensureOrgsForNames, orgIdForName } from '../../domain/orgs.js';
-import { EVENT_LIST, EXH_CONTACTS, PART_TYPES, contactEvents, contacts, evColor, evShort, getContactById, hasLeft, movedTo, nextContactId, participations, speakersOfContact } from '../../state.js';
+import { EVENT_LIST, EXH_CONTACTS, PART_TYPES, SALES_TARGETS, currentUser, contactEvents, contacts, evColor, evShort, getContactById, hasLeft, movedTo, nextContactId, participations, speakersOfContact } from '../../state.js';
 import { ab, countryName, countryOptions, escAttr, escapeHtml, personFullName, personName, td, sectorKey } from '../../utils.js';
 import { coDomainOptionsHtml, coSectorOptionsHtml, currentCoSectorPick } from '../../modules/company-tab.js';
 import { contactMailsHtml } from '../../modules/contact-mails.js';
@@ -24,6 +24,53 @@ import { contactSectorField, saveContactSectorField } from './mdb-drag.js';
 ══════════════════════════════════════════ */
 let conDrId = null;
 let conEditMode = false;
+
+/* 출처(사람마다 하나, 바뀌지 않음)와 행사별 영업 DB(행사마다 켜고 끔) — docs/manual-db-axes.md.
+   누르면 바로 저장한다. 출처는 upsertPartial로 이 칸만 보내 다른 칸을 덮지 않는다. */
+function contactAxesHtml(c){
+  const chip = (o, on, click) => `<button type="button" class="pill ${on ? o.cls : 'p-gray'}" title="${escAttr(o.desc||'')}"
+      style="cursor:pointer;border:0;margin:0 4px 4px 0;${on ? '' : 'opacity:.45'}" onclick="${click}">${on ? '✓ ' : ''}${escapeHtml(o.label)}</button>`;
+  const salesEv = new Set(SALES_TARGETS.filter(t => t.contact_id === c.id).map(t => t.event_id));
+  return `
+    <div class="sct" style="margin-top:14px">출처 · 행사별 영업 DB</div>
+    <div class="ig">
+      <div class="ic" style="grid-column:span 2"><div class="il">출처 <span style="color:var(--i4);font-weight:400">처음 들어온 길 · 바뀌지 않음</span></div><div class="iv">
+        ${CONTACT_ORIGINS.map(o => chip(o, c.origin === o.key, `setContactOrigin(${c.id},'${o.key}')`)).join('')}
+      </div></div>
+      <div class="ic" style="grid-column:span 2"><div class="il">영업 DB <span style="color:var(--i4);font-weight:400">이 사람을 어느 행사의 영업 DB로 쓰나 · 행사마다</span></div><div class="iv">
+        ${EVENT_LIST.map(e => chip({ label: e.short || e.key, cls: 'p-purple', desc: e.name || e.key },
+          salesEv.has(e.key), `toggleSalesTarget(${c.id},'${escAttr(e.key)}')`)).join('')}
+      </div></div>
+    </div>`;
+}
+
+export async function setContactOrigin(cid, key){
+  const c = getContactById(cid);
+  if(!c) return;
+  /* 같은 것을 다시 누르면 비운다 — 잘못 고른 것을 되돌릴 길 */
+  const before = c.origin;
+  c.origin = c.origin === key ? '' : key;
+  renderContactDr();
+  const r = await postToSheet({ sheet:'contacts', action:'upsertPartial', data:{ id: c.id, origin: c.origin } }, '출처 저장');
+  if(r && r.ok === false){ c.origin = before; renderContactDr(); }
+}
+
+export async function toggleSalesTarget(cid, evKey){
+  const i = SALES_TARGETS.findIndex(t => t.contact_id === cid && t.event_id === evKey);
+  if(i >= 0){
+    const [row] = SALES_TARGETS.splice(i, 1);
+    renderContactDr();
+    const r = await postToSheet({ sheet:'sales_targets', action:'delete', row:[row.id] }, '영업 DB 빼기');
+    if(r && r.ok === false){ SALES_TARGETS.push(row); renderContactDr(); }
+    return;
+  }
+  const row = { id: `ST-${Date.now()}`, event_id: evKey, contact_id: cid,
+    created_at: td(), created_by: (currentUser && currentUser.email) || '' };
+  SALES_TARGETS.push(row);
+  renderContactDr();
+  const r = await postToSheet({ sheet:'sales_targets', action:'upsertPartial', data:{ ...row, contact_id: String(cid) } }, '영업 DB 넣기');
+  if(r && r.ok === false){ SALES_TARGETS.splice(SALES_TARGETS.indexOf(row), 1); renderContactDr(); }
+}
 
 export function openContactDr(id){
   conDrId = id;
@@ -250,6 +297,8 @@ export function contactViewPanel(c){
         ${isBDContact(c)?'<span class="pill p-teal" style="margin-right:4px">BD</span>':''}${isCLevelContact(c)?'<span class="pill p-gold">C-level</span>':''}${(!isBDContact(c)&&!isCLevelContact(c))?'<span style="color:var(--i4)">-</span>':''}
       </div></div>
     </div>
+
+    ${contactAxesHtml(c)}
 
     <div class="sct" style="margin-top:14px">경칭 / 직함 / 부서</div>
     <div class="ig">
@@ -870,6 +919,8 @@ export async function undoContactLeft(cid){
 
 /* 화면의 onclick이 부르는 것 — 마스터DB 탭이 아니라 이 파일이 건다 */
 window.openContactDr = openContactDr;
+window.setContactOrigin = setContactOrigin;
+window.toggleSalesTarget = toggleSalesTarget;
 window.closeContactDr = closeContactDr;
 window.renderContactDr = renderContactDr;
 window.startContactEdit = startContactEdit;

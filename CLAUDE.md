@@ -17,7 +17,7 @@
   생겼다면 `node db/fix-unsafe-contact-ids.js`(시험 실행) → `--apply`로 고친다.
 - 연락처 id를 가리키는 곳: `participations.contact_id`, `exhibitor_contacts.contact_id`,
   `speakers.contact_id`, `speaker_contacts.contact_id`, `contact_attempts.contact_id`,
-  `activity_log.link`(JSON 안). id를 바꿀 때는 이 여섯 곳을 같이 고친다.
+  `sales_targets.contact_id`, `activity_log.link`(JSON 안). id를 바꿀 때는 이 일곱 곳을 같이 고친다.
 
 ## 서버 스크립트(`backend-node/db/`)는 하는 일에 따라 폴더에 둔다
 

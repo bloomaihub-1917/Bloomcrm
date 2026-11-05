@@ -15,7 +15,8 @@ const TABLES = {
       'country', 'cat', 'lang', 'source', 'date', 'status', 'email1', 'email2', 'phone1', 'phone2',
       'beat', 'products', 'tags', 'org_id', 'left_at', 'moved_to_id',
       'memo1', 'memo2', 'memo3', 'prefix',
-      /* DB 갈래(ours/other/sales) — 화면 저장 줄은 아직 이 칸을 안 실어 보낸다. 줄 길이만큼만 쓰므로 덮이지 않는다 */
+      /* 출처(ours/other/sales) — 화면은 upsertPartial로 이 칸만 보낸다.
+         위치 배열 저장은 이 칸까지 오지 않으므로 덮이지 않는다 */
       'origin'],
   },
   events: {
@@ -225,6 +226,11 @@ const TABLES = {
     table: 'round_members', pk: 'id', idPrefix: 'RM-',
     columns: ['id', 'round_id', 'org_id', 'org_name', 'source', 'caution', 'hold_until', 'call_hours',
       'next_at', 'goal_at', 'closed_at', 'closed_reason', 'created_at', 'calling_by', 'calling_at'],
+  },
+  /* 행사별 영업 DB — 한 사람 × 한 행사에 한 줄 (db/migrations/add-sales-targets.js) */
+  sales_targets: {
+    table: 'sales_targets', pk: 'id', idPrefix: 'ST-',
+    columns: ['id', 'event_id', 'contact_id', 'created_at', 'created_by', 'note'],
   },
   contact_attempts: {
     table: 'contact_attempts', pk: 'id', idPrefix: 'CA-',

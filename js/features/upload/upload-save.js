@@ -142,6 +142,9 @@ export async function runValidationStep(newRows, dupRows){
   /* 이 파일이 어느 쪽 명단인지 — 셀러(벤더시공사)냐 발주처(잠재고객사)냐.
      비워 두면 ensureOrgsForNames가 예전처럼 '잠재고객사'로 넣는다. */
   const selectedKind   = (document.getElementById('up-kind')    ||{}).value || '';
+  /* 출처(docs/manual-db-axes.md) — 이번 파일로 새로 들어오는 사람에게만 적는다.
+     이미 있는 사람의 출처는 «처음 들어온 길»이라 바꾸지 않는다 */
+  const selectedOrigin = (document.getElementById('up-origin')  ||{}).value || '';
   console.log('[upload-tab] 업로드 확정 — selectedEv:', JSON.stringify(selectedEv),
     '| _evDirectMode:', uploadUi.evDirectMode, '| up-ev.value:', _evSel && _evSel.value,
     '| up-ev-text.value:', _evInp && _evInp.value);
@@ -201,6 +204,7 @@ export async function runValidationStep(newRows, dupRows){
     }
     existingIds.add(clean.id);
     addedContacts.push(clean);
+    clean.origin = selectedOrigin;
     // 기업 카테고리(sector) → beat 저장:
     // 값별 매핑이 켜져 있으면 컬럼 원문값을 매핑된 섹터명으로 치환('|' 복수값 개별 처리,
     // 미매핑 값은 원문 유지), 꺼져 있으면 기존처럼 일괄 선택값 적용
@@ -392,7 +396,7 @@ export async function runValidationStep(newRows, dupRows){
       const contactRows = addedContacts.map(r => [r.id, r.nameKo, r.nameEn, r.orgKo, r.orgEn, r.titleKo, r.titleEn, r.deptKo, r.deptEn,
             r.country, r.cat, r.lang, r.source, r.date, r.status, r.email1, r.email2, r.phone1, r.phone2,
             r.beat||'', r.products||'', r.tags||'', r.org_id||'', '', '',
-            r.memo1||'', r.memo2||'', r.memo3||'', r.prefix||'']);
+            r.memo1||'', r.memo2||'', r.memo3||'', r.prefix||'', r.origin||'']);
       const res = await postToSheet(
         { sheet: 'contacts', action: 'batchAppend', rows: contactRows }, '연락처 업로드');
       if(!res.ok){

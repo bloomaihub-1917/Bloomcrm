@@ -244,7 +244,8 @@ export const targets = [];
 ══════════════════════════════════════════ */
 export const CONTACT_ROUNDS   = [];  // 차수
 export const ROUND_MEMBERS    = [];  // 차수 명단 한 줄 = 기업 하나
-export const CONTACT_ATTEMPTS = [];  // 한 번 걸고 한 번 보낸 기록
+export const CONTACT_ATTEMPTS = [];
+export const SALES_TARGETS    = [];  // 행사별 영업 DB — {id, event_id, contact_id} 한 사람 × 한 행사  // 한 번 걸고 한 번 보낸 기록
 
 /* ══════════════════════════════════════════
    전시 참가기업 진행관리 (전시 탭)

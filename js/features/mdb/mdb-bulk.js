@@ -10,7 +10,7 @@ import { CAT_KEYS, CL, ROLE_TO_CAT } from '../../constants.js';
 import { changed, removed as removedMeta, trackAction } from '../../core/audit-log.js';
 import { buildCoDB } from '../../domain/co-db.js';
 import { ensureOrgsForNames, orgIdForName } from '../../domain/orgs.js';
-import { CONTACT_ATTEMPTS, CO_DB, EVENT_LIST, EXHIBITORS, EXH_CONTACTS, SPEAKERS, SPEAKER_CONTACTS, TAGS, contacts, getContactById, getOrgById, getSpeakerById, mdbCat, mdbEvFilter, mdbSelected, mdbTypeFilter, participations, setMdbView, targets } from '../../state.js';
+import { CONTACT_ATTEMPTS, CO_DB, EVENT_LIST, SALES_TARGETS, EXHIBITORS, EXH_CONTACTS, SPEAKERS, SPEAKER_CONTACTS, TAGS, contacts, getContactById, getOrgById, getSpeakerById, mdbCat, mdbEvFilter, mdbSelected, mdbTypeFilter, participations, setMdbView, targets } from '../../state.js';
 import { countryOptions, escAttr, escapeHtml, personName, td } from '../../utils.js';
 import { mdbUi } from './mdb-ui.js';
 import { MDB_CAT_VALUES, buildMDBEvList, clearMDBSelection, matchesQuery, matchesTagFilter, mdbFilterPairs, pickChanged, renderMDB, setContactTag } from '../../modules/db-tab.js';
@@ -461,6 +461,12 @@ export async function bulkDeleteMDBContacts(){
   for(const p of removedParts){
     const r = await postToSheet({ sheet:'participations', action:'delete', row:[p.id] }, '행사 참여 삭제');
     if(!r || r.ok === false) failedParts.push(p);
+  }
+  /* 행사별 영업 DB 줄도 같이 지운다 — 남기면 없는 사람을 가리킨다 */
+  const goneSales = SALES_TARGETS.filter(t => idSet.has(t.contact_id));
+  if(goneSales.length){
+    const r = await postToSheet({ sheet:'sales_targets', action:'delete', row: goneSales.map(t => t.id) }, '영업 DB 삭제');
+    if(r && r.ok !== false) goneSales.forEach(t => SALES_TARGETS.splice(SALES_TARGETS.indexOf(t), 1));
   }
   const stuck = new Set(failedParts.map(p => p.contactId));   // 참여가 남은 사람은 지우지 않는다
   const failedIds = [...stuck];

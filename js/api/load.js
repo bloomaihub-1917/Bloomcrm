@@ -5,7 +5,7 @@
     window에 거는 것은 맨 아래, 이 파일을 읽는 것은 app.js.)
 ═══════════════════════════════════════════════════════════════ */
 
-import { API_BASE_URL, CATMAPS, CODE_LISTS, COMPANY_SECTORS, CONF_SESSIONS, CONTACT_ATTEMPTS, CONTACT_ROUNDS, DOMAINS, EQUIP_CATALOG, EVENT_LIST, EXHIBITORS, EXH_APPS, EXH_CFG, EXH_CONTACTS, EXH_INVOICES, EXH_ITEMS, EXH_LOGS, EXH_PAYMENTS, EXH_TAX, ORGS, PART_TYPES, ROUND_MEMBERS, SESSION_SPEAKERS, SPEAKERS, SPEAKER_CONTACTS, SPEAKER_LOGS, TAGS, WATCH_FILES, WATCH_FOLDERS, applyCodeLists, auditLog, contacts, curApp, currentUser, loadExhCfg, participations, setDomains, setSheetsConnected, setTags, syncPartColors, targets, userColor } from '../state.js';
+import { API_BASE_URL, CATMAPS, CODE_LISTS, COMPANY_SECTORS, CONF_SESSIONS, CONTACT_ATTEMPTS, CONTACT_ROUNDS, SALES_TARGETS, DOMAINS, EQUIP_CATALOG, EVENT_LIST, EXHIBITORS, EXH_APPS, EXH_CFG, EXH_CONTACTS, EXH_INVOICES, EXH_ITEMS, EXH_LOGS, EXH_PAYMENTS, EXH_TAX, ORGS, PART_TYPES, ROUND_MEMBERS, SESSION_SPEAKERS, SPEAKERS, SPEAKER_CONTACTS, SPEAKER_LOGS, TAGS, WATCH_FILES, WATCH_FOLDERS, applyCodeLists, auditLog, contacts, curApp, currentUser, loadExhCfg, participations, setDomains, setSheetsConnected, setTags, syncPartColors, targets, userColor } from '../state.js';
 import { countryName, normalizeCat } from '../utils.js';
 import { authHeaders, normalizeParticipationRow, safeFetch, setSettingsReady, showSheetsWarning } from '../api.js';
 import { migratePartTypesToSheet, migrateSectorsToSheet, noteExhCfgBase, noteMailLibraryBase, saveTags } from './settings-save.js';
@@ -60,7 +60,7 @@ export async function loadFromSheets(hooks = {}){
            codeListData,
            confSessData, speakerData, sessSpData, spConData, spLogData,
            watchFolderData, watchFileData,
-           roundData, roundMemberData, attemptData] = await Promise.all([
+           roundData, roundMemberData, attemptData, salesTargetData] = await Promise.all([
       get('contacts'),
       get('participations'),
       get('crm_targets'),
@@ -90,6 +90,7 @@ export async function loadFromSheets(hooks = {}){
       get('contact_rounds'),
       get('round_members'),
       get('contact_attempts'),
+      get('sales_targets'),
     ]);
 
     // ── 실패 감지 (신규) ──
@@ -388,6 +389,9 @@ export async function loadFromSheets(hooks = {}){
     if(Array.isArray(roundData))       CONTACT_ROUNDS.splice(0, CONTACT_ROUNDS.length, ...roundData);
     if(Array.isArray(roundMemberData)) ROUND_MEMBERS.splice(0, ROUND_MEMBERS.length, ...roundMemberData);
     if(Array.isArray(attemptData))     CONTACT_ATTEMPTS.splice(0, CONTACT_ATTEMPTS.length, ...attemptData);
+    /* 행사별 영업 DB — contact_id는 화면이 숫자로 쓴다(CLAUDE.md) */
+    if(Array.isArray(salesTargetData)) SALES_TARGETS.splice(0, SALES_TARGETS.length,
+      ...salesTargetData.map(r => ({ ...r, contact_id: +r.contact_id })));
 
     /* ── 컨퍼런스 · 연사 ──
        서버 컬럼명(snake_case)을 그대로 쓰므로 변환 없이 통째로 담는다.

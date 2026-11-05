@@ -398,6 +398,20 @@
                 </select>
               </div>
             </div>
+            <!-- 출처(docs/manual-db-axes.md) — 이 파일로 새로 들어오는 사람에게 일괄로 적는다.
+                 행사 참가자로 올리는 명단은 «수주 행사 참가자», 모아 둔 명단을 한꺼번에 올리면 «DB 취합».
+                 행사마다의 영업 DB는 연락처 상세에서 행사별로 켠다. -->
+            <div class="mr" style="margin-top:8px">
+              <div>
+                <div class="mlbl">출처 <span style="font-size:9px;color:var(--i4)">어디서 왔나 · 바뀌지 않음</span></div>
+                <select class="fi" id="up-origin">
+                  <option value="">정하지 않음</option>
+                  <option value="ours">수주 행사 참가자</option>
+                  <option value="other">타 행사</option>
+                  <option value="sales">DB 취합</option>
+                </select>
+              </div>
+            </div>
             <!-- 카테고리 컬럼 값별 매핑 (엑셀에 카테고리 컬럼이 있을 때만 표시) -->
             <div id="catmap-wrap" style="margin-top:8px"></div>
             <div class="mr" style="margin-top:8px">

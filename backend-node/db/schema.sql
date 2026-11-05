@@ -1204,3 +1204,15 @@ ALTER TABLE round_members ADD COLUMN IF NOT EXISTS calling_at TEXT;
 
 -- 컨택 부재중 다시 걸 시간 (2026-10-09) — 부재중이면 몇 시간 뒤에 «다시 걸 차례». 비면 2시간
 ALTER TABLE contact_rounds ADD COLUMN IF NOT EXISTS retry_hours TEXT;
+
+-- 행사별 영업 DB (2026-11-06) — 이 사람을 이 행사의 영업 DB로 쓴다. 출처(contacts.origin)는 사람마다
+-- 하나이고 바뀌지 않지만, 쓰임은 행사마다 다르다. 한 사람 × 한 행사에 한 줄 (docs/manual-db-axes.md)
+CREATE TABLE IF NOT EXISTS sales_targets (
+  id         TEXT PRIMARY KEY,
+  event_id   TEXT,
+  contact_id TEXT,
+  created_at TEXT,
+  created_by TEXT,
+  note       TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_sales_targets ON sales_targets(event_id, contact_id);
