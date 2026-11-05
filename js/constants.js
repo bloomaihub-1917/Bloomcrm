@@ -10,7 +10,7 @@
    그랬다). 옛 표기(전시기업/주최)도 남겨 과거 데이터를 함께 받는다. */
 export const RP = {스폰서:'p-green',시공사:'p-teal',전시참가기업:'p-purple',연사:'p-blue',투자자:'p-amber',
   바이어:'p-teal',BD:'p-teal',기자:'p-red','기자/미디어':'p-red',참가자:'p-gray',VIP:'p-gold',
-  주최사:'p-indigo',비즈니스파트너링:'p-amber',셀러:'p-purple',
+  주최사:'p-indigo',비즈니스파트너링:'p-amber',셀러:'p-purple',학생:'p-gray',
   전시기업:'p-purple',주최:'p-indigo'};
 export const CP = {speaker:'p-blue',sponsor:'p-green',investor:'p-amber',buyer:'p-teal',bd:'p-teal',exhibitor:'p-purple',press:'p-red',attendee:'p-gray',vip:'p-gold',organizer:'p-indigo'};
 export const CL = {speaker:'연사',sponsor:'스폰서',investor:'투자자',buyer:'바이어',bd:'BD',exhibitor:'전시참가기업',press:'기자',attendee:'일반참가자',vip:'VIP',organizer:'주최'};
@@ -43,7 +43,7 @@ export const avF = i => FG[i % 6];
 export const ROLE_TO_CAT = {
   'VIP':'vip', '연사':'speaker', 'BD':'attendee', '바이어':'attendee',
   '전시참가기업':'exhibitor', '스폰서':'attendee', '주최사':'attendee', '참가자':'attendee',
-  '비즈니스파트너링':'attendee', '셀러':'attendee',
+  '비즈니스파트너링':'attendee', '셀러':'attendee', '학생':'attendee',
 };
 
 /* ── EVENT_LIST 초기 시드 데이터 ──
@@ -75,6 +75,7 @@ export const PART_TYPES_SEED = [
   {key:'비즈니스파트너링',label:'비즈니스파트너링',cls:'p-amber'},
   {key:'주최사',        label:'주최사',        cls:'p-indigo'},
   {key:'참가자',        label:'참가자',        cls:'p-gray'},
+  {key:'학생',          label:'학생',          cls:'p-gray'},
 ];
 
 /* ── 국가 목록 (ISO 3166-1 표준, 자주 쓰는 순) ── */
