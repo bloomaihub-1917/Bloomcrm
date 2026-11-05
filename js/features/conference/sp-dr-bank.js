@@ -179,7 +179,7 @@ function bankHtml(sp, evKey){
       <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:-4px">
         연사료는 USD로 보냅니다 — USD를 받을 수 있는 계좌인지 확인하세요.</div>
     </div>
-    ${!nPass && !sp.passport_received_at && !sp.passport_file ? '' : `<div style="border:1px solid var(--i6);border-radius:var(--rd-9);padding:11px 12px">
+    ${!nPass && isDomesticSpeaker(sp) && !sp.passport_received_at && !sp.passport_file ? '' : `<div style="border:1px solid var(--i6);border-radius:var(--rd-9);padding:11px 12px">
       <div style="font-size:var(--fs-12);font-weight:700;margin-bottom:8px">여권 ${nPass ? NEED_MARK[nPass] : ''}</div>
       ${gotRow('여권 스캔 받음', sp.passport_received_at,
         `spStamp('passport_received_at','여권 받음')`,
