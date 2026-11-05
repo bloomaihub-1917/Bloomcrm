@@ -323,6 +323,8 @@ export async function loadFromSheets(hooks = {}){
         domain:     r.domain     || '',
         // 영문 행사명 — 영문 메일·엑셀은 이것을 쓴다(없으면 행사명)
         name_en:    r.name_en    || '',
+        // 국내 연사료 세율 — 정산 화면에서 고른다(비면 3.3%)
+        dom_tax_rate: r.dom_tax_rate || '',
       })).filter(e => e.key));
       console.log('[CRM] events loaded:', EVENT_LIST.length, '건');
     }

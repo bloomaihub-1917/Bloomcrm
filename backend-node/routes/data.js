@@ -20,7 +20,7 @@ const TABLES = {
     table: 'events', pk: 'id', idPrefix: '',
     columns: ['id', 'name', 'short', 'date_start', 'date_end', 'location', 'color',
       'host', 'organizer', 'our_role', 'theme', 'scale', 'homepage', 'summary', 'outcome',
-      'domain', 'name_en'],
+      'domain', 'name_en', 'dom_tax_rate'],
   },
   crm_targets: {
     table: 'crm_targets', pk: 'id', idPrefix: '',

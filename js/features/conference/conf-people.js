@@ -14,6 +14,7 @@ import { CONF_SESSIONS, assignmentsFor, bankDocs, contactsOfSpeaker, getSpeakerB
 import { escAttr, escapeHtml, isMobile, photoSrc, td } from '../../utils.js';
 import { confLockNotice, confLocked, isBreak, isHiddenSp } from './conf-common.js';
 import { confUi } from './conf-ui.js';
+import { DOM_TAX_RATES, domTaxRate } from './fee-ledger-export.js';
 import { SP_COLS, SP_SENT, nextActionTd, spCell } from './speaker-cells.js';
 import { confPhotoAsked, countryChip, gSaveAssign, gSaveSpeaker, removeConfSpeaker, renderConf, schedAlertHtml, spFlagPills, spLeftPill } from '../../modules/conf-tab.js';
 import { setSpeakerHidden, toggleConfHidden } from './conf-program.js';
@@ -349,8 +350,13 @@ function peopleHtml(ev){
         title="연락 단계 메일(일정 변경 안내·자료 요청 등)을 여러 연사에게 한 번에 — 연사마다 한 통씩 따로 나갑니다">📨 여러 연사에게 메일</button>
       <button class="btn bs" id="sp-export-btn" onclick="exportSpeakers('${escAttr(ev.key)}')"
         title="프로그램표(Program At a Glance)·연사 전체 정보·약력과 초록을 엑셀 한 파일로 받습니다">엑셀 다운로드</button>
-      ${phase === 'settle' ? `<button class="btn bs" id="sp-ledger-btn" onclick="exportFeeLedger('${escAttr(ev.key)}')"
-        title="연사료 지급대장 — 국내(3.3%)·해외(8.8%·USD 환산) 두 장. 계좌번호가 모두 들어가고, 누가 받았는지 기록이 남습니다">💰 지급대장 다운로드</button>` : ''}
+      ${phase === 'settle' ? `<select class="btn bs" title="국내 연사료에서 뗄 세율 — 지급대장·대량이체에 같이 쓰입니다"
+        onchange="setDomTaxRate('${escAttr(ev.key)}', +this.value)">${DOM_TAX_RATES.map(v =>
+          `<option value="${v}"${v === domTaxRate(ev.key) ? ' selected' : ''}>세율 ${v}%</option>`).join('')}</select>
+      <button class="btn bs" id="sp-ledger-btn" onclick="exportFeeLedger('${escAttr(ev.key)}')"
+        title="연사료 지급대장 — 국내(고른 세율)·해외(8.8%·USD 환산) 두 장. 계좌번호가 모두 들어가고, 누가 받았는지 기록이 남습니다">💰 지급대장 다운로드</button>
+      <button class="btn bs" id="sp-transfer-btn" onclick="exportBulkTransfer('${escAttr(ev.key)}')"
+        title="신한 인터넷뱅킹 대량이체에 올리는 파일 — 국내 연사의 실지급액(강연료−고른 세율)과 계좌. 누가 받았는지 기록이 남습니다">🏦 대량이체 파일</button>` : ''}
       <button class="btn bs" onclick="openSpeakerShare('${escAttr(ev.key)}')"
         title="프로그램(공개 주소)·수급 현황(비밀 링크)을 웹 페이지로 바깥에 보여 줍니다">🔗 외부 공유</button></div>
   </div>${schedAlertHtml(ev.key, all)}`;

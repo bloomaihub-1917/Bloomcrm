@@ -20,7 +20,7 @@
 import { EVENT_LIST, CONF_SESSIONS, assignmentsFor, isDomesticSpeaker, paysFee, speakersForEvent } from '../../state.js';
 import { loadExcelJs } from '../../modules/exh-export.js';
 import { selfContact } from '../../modules/speaker-export.js';
-import { showSaveErrorToast } from '../../api.js';
+import { saveEventToSheet, showSaveErrorToast } from '../../api.js';
 import { trackAction } from '../../core/audit-log.js';
 import { isHiddenSp } from './conf-common.js';
 import { settleMissing } from './conf-people.js';
@@ -35,6 +35,24 @@ const WON    = '#,##0';
 const USD    = '#,##0.00';
 /* 해외 송금 환율 기본값 — 받은 사람이 노란 칸만 고치면 USD 칸이 따라온다 */
 const RATE   = 1320;
+
+/* 국내 세율 — 행사마다 정산할 때 고른다(3.3% 사업소득 · 8.8% 기타소득).
+   지급대장 [국내]와 대량이체가 같은 값을 쓴다. 행사(events.dom_tax_rate)에 저장 — 비면 3.3%. */
+export const DOM_TAX_RATES = [3.3, 8.8];
+export function domTaxRate(evKey){
+  const v = Number(EVENT_LIST.find(e => e.key === evKey)?.dom_tax_rate);
+  return DOM_TAX_RATES.includes(v) ? v : 3.3;
+}
+export async function setDomTaxRate(evKey, v){
+  const ev = EVENT_LIST.find(e => e.key === evKey);
+  if(!ev || !DOM_TAX_RATES.includes(v)) return;
+  const before = ev.dom_tax_rate;
+  ev.dom_tax_rate = String(v);
+  const r = await saveEventToSheet(ev);
+  if(!r || !r.ok){ ev.dom_tax_rate = before; showSaveErrorToast('세율을 저장하지 못했어요'); return; }
+  trackAction('edit', '국내 연사료 세율', evKey, `국내 연사료 세율을 ${v}%로 정했어요`);
+}
+window.setDomTaxRate = setDomTaxRate;
 
 const DUTY = { '연사': 'Speaker', '공동연사': 'Speaker', '좌장': 'Chair', '패널': 'Panel', '사회': 'Moderator' };
 
@@ -95,12 +113,12 @@ function totalRow(ws, row, nameCol, cols, from, money){
 const widths = (ws, ws_) => ws_.forEach((w, i) => { ws.getColumn(i + 1).width = w; });
 
 /* ── 국내 ── 강연료 I · 세액 J · 외국인 K · 실지급 L */
-function drawDomestic(wb, title, list){
+function drawDomestic(wb, title, list, rate){
   const ws = wb.addWorksheet('입금대장(국내)', { views: [{ state: 'frozen', ySplit: 3 }] });
   ws.getCell('A1').value = title;
   ws.getCell('A1').font = { bold: true, size: 14 };
   headRow(ws, 3, ['No.', '세션', '발표 제목', 'Duty', '성함', '국적', 'E-mail', 'Contact No.', '강연료',
-    '세액 3.3%\n(소득세+주민세)', '외국인 8.8%', '실지급액', '주민등록번호', '주소', '은행명', '계좌번호', '예금주', '비고']);
+    `세액 ${rate}%\n(소득세+주민세)`, '외국인 8.8%', '실지급액', '주민등록번호', '주소', '은행명', '계좌번호', '예금주', '비고']);
   const money = { 9: WON, 10: WON, 11: WON, 12: WON };
   list.forEach((sp, k) => {
     const r = 4 + k, a = firstAsg(sp), me = selfContact(sp);
@@ -108,7 +126,7 @@ function drawDomestic(wb, title, list){
       { formula: 'ROW()-3' }, sessionOf(a), a ? (a.title_en || a.title_ko || '') : '',
       DUTY[a?.role] || a?.role || '', sp.name_snapshot || sp.name_en || '', sp.nationality || '',
       me.email, me.phone, feeNum(sp),
-      { formula: `ROUNDDOWN(I${r}*3.3%,-1)` }, null, { formula: `I${r}-J${r}-K${r}` },
+      { formula: `ROUNDDOWN(I${r}*${rate}%,-1)` }, null, { formula: `I${r}-J${r}-K${r}` },
       '', '', sp.bank_name || '', sp.bank_account || '', (sp.bank_holder || '').trim(), noteOf(sp),
     ], money);
   });
@@ -174,7 +192,7 @@ export async function exportFeeLedger(evKey){
     wb.creator = 'Bloom CRM';
     wb.created = d;
     const dom = list.filter(isDomesticSpeaker), ovs = list.filter(sp => !isDomesticSpeaker(sp));
-    drawDomestic(wb, `${evName} 연사료 [국내] 지급대장`, dom);
+    drawDomestic(wb, `${evName} 연사료 [국내] 지급대장`, dom, domTaxRate(evKey));
     drawOverseas(wb, `${evName} 연사료 [해외] 지급대장`, ovs);
 
     const buf = await wb.xlsx.writeBuffer();
@@ -195,4 +213,76 @@ export async function exportFeeLedger(evKey){
   }
 }
 
+/* ══ 신한 대량이체 파일 ══
+   회계가 신한 인터넷뱅킹 «대량이체»에 올리는 양식(2026 KIC_신한 대량이체_1026.xls)을
+   지급대장과 같은 대상·같은 계좌로 찍는다. 국내 연사만 — 해외는 외화송금이라 따로다.
+     입금은행   «신한은행» → «신한»처럼 코드표 이름(최대 3바이트 → 짧은 이름)
+     입금계좌   적힌 그대로(하이픈 포함, 문자열)
+     입금액     실지급액 = 강연료 − 세액(지급대장 [국내]와 같은 계산)
+     출금통장   «26KIC홍길동» · 입금통장 «26KIC연자료» — 양식이 쓰던 그대로
+   계좌가 빈 사람은 넣지 않고 끝에 알려 준다. */
+const BANK_SHORT = [
+  [/농협|농축협|nh/i, '농협'], [/국민|kb/i, '국민'], [/기업|ibk/i, '기업'], [/산업|kdb/i, '산업'],
+  [/새마을/, '새마을금고'], [/카카오/, '카카오뱅크'], [/케이뱅크|k\s*bank/i, '케이뱅크'], [/토스/, '토스뱅크'],
+  [/sc|제일/i, 'SC제일'], [/씨티|citi/i, '한국씨티'], [/아이엠|대구|im/i, '아이엠뱅크'], [/우체국/, '우체국'],
+  [/신한/, '신한'], [/우리/, '우리'], [/하나|외환/, '하나'], [/수협/, '수협'], [/신협/, '신협'],
+  [/부산/, '부산'], [/경남/, '경남'], [/광주/, '광주'], [/전북/, '전북'], [/제주/, '제주'],
+];
+const bankShort = (n) => { const t = String(n || '').trim(); const hit = BANK_SHORT.find(([re]) => re.test(t)); return hit ? hit[1] : t.replace(/은행$/, ''); };
+/* 지급대장 [국내] J칸과 같은 계산 — ROUNDDOWN(강연료×세율, -1) */
+const domesticNet = (fee, rate) => fee - Math.floor(Math.round(fee * rate * 10) / 10000) * 10;
+
+export async function exportBulkTransfer(evKey){
+  const btn = document.getElementById('sp-transfer-btn');
+  const label = btn ? btn.innerHTML : '';
+  if(btn){ btn.disabled = true; btn.innerHTML = '만드는 중…'; }
+  try {
+    const all = speakersForEvent(evKey)
+      .filter(sp => !isHiddenSp(sp) && feeNum(sp) > 0 && paysFee(sp) && isDomesticSpeaker(sp))
+      .sort((a, b) => orderKey(a).localeCompare(orderKey(b)));
+    const list = all.filter(sp => String(sp.bank_account || '').trim() && String(sp.bank_name || '').trim());
+    const noBank = all.filter(sp => !list.includes(sp));
+    if(!list.length){ showSaveErrorToast(all.length ? '계좌가 들어온 국내 연사가 없어요' : '연사료를 줄 국내 연사가 없어요'); return; }
+
+    const ExcelJS = await loadExcelJs();
+    const ev = EVENT_LIST.find(e => e.key === evKey);
+    const evLabel = (ev && (ev.short || ev.name || ev.key)) || evKey;
+    const d = new Date(), p = (v) => String(v).padStart(2, '0');
+    const yy = String(d.getFullYear()).slice(2);
+    /* «KIC 2026» → «26KIC» — 통장에 찍히는 머리말 */
+    const tag = `${yy}${String((ev && ev.short) || evLabel).replace(/\s*20\d\d\s*/g, '').replace(/\s+/g, '')}`;
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Bloom CRM';
+    const ws = wb.addWorksheet('입력정보');
+    ws.addRow(['*입금은행', '*입금계좌', '고객관리성명', '*입금액', '출금통장표시내용', '입금통장표시내용', '입금인코드', '비고', '업체사용key']);
+    ws.getRow(1).font = { bold: true };
+    list.forEach(sp => {
+      const name = (sp.bank_holder || sp.name_snapshot || sp.name_ko || '').trim();
+      ws.addRow([bankShort(sp.bank_name), String(sp.bank_account).trim(), name, domesticNet(feeNum(sp), domTaxRate(evKey)),
+        `${tag}${name}`.slice(0, 7), `${tag}연자료`.slice(0, 7), '', '', '']);
+    });
+    [1, 2, 3, 5, 6, 7, 8, 9].forEach(c => { ws.getColumn(c).numFmt = '@'; });
+    ws.getColumn(4).numFmt = '0';
+    [8, 18, 12, 12, 16, 16, 10, 16, 12].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+
+    const buf = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${evLabel}_신한 대량이체_${yy}${p(d.getMonth() + 1)}${p(d.getDate())}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    trackAction('export', '신한 대량이체', evKey, `대량이체 파일(계좌번호 포함)을 내려받았어요 — ${list.length}명 · 세율 ${domTaxRate(evKey)}%`);
+    if(noBank.length) showSaveErrorToast(`계좌가 없어 빠진 연사 ${noBank.length}명: ${noBank.map(x => x.name_snapshot || x.name_en || '').join(', ')}`);
+  } catch(err){
+    console.error('[bulk-transfer] 내보내기 실패', err);
+    showSaveErrorToast(err.message || '대량이체 파일을 만들지 못했어요');
+  } finally {
+    if(btn){ btn.disabled = false; btn.innerHTML = label; }
+  }
+}
+
 window.exportFeeLedger = exportFeeLedger;
+window.exportBulkTransfer = exportBulkTransfer;

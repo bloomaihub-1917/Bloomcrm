@@ -254,7 +254,7 @@ export async function saveEventToSheet(ev){
     // 위치 배열이라 data.js의 events.columns와 순서가 정확히 같아야 한다
     row: [ev.key, ev.name, ev.short, ev.date_start||ev.date||'', ev.date_end||'', ev.location||'', ev.color,
       ev.host||'', ev.organizer||'', ev.our_role||'', ev.theme||'',
-      ev.scale||'', ev.homepage||'', ev.summary||'', ev.outcome||'', ev.domain||'', ev.name_en||''],
+      ev.scale||'', ev.homepage||'', ev.summary||'', ev.outcome||'', ev.domain||'', ev.name_en||'', ev.dom_tax_rate||''],
   }, '행사 저장');
   if(r.ok) console.log('[CRM] event saved:', ev.key);
   return r;
