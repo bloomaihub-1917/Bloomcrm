@@ -14,7 +14,9 @@ const TABLES = {
     columns: ['id', 'nameKo', 'nameEn', 'orgKo', 'orgEn', 'titleKo', 'titleEn', 'deptKo', 'deptEn',
       'country', 'cat', 'lang', 'source', 'date', 'status', 'email1', 'email2', 'phone1', 'phone2',
       'beat', 'products', 'tags', 'org_id', 'left_at', 'moved_to_id',
-      'memo1', 'memo2', 'memo3', 'prefix'],
+      'memo1', 'memo2', 'memo3', 'prefix',
+      /* DB 갈래(ours/other/sales) — 화면 저장 줄은 아직 이 칸을 안 실어 보낸다. 줄 길이만큼만 쓰므로 덮이지 않는다 */
+      'origin'],
   },
   events: {
     table: 'events', pk: 'id', idPrefix: '',

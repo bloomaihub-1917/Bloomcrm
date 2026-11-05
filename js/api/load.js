@@ -171,6 +171,8 @@ export async function loadFromSheets(hooks = {}){
           /* 메모·경칭 — 저장(contactRow)은 이 넷을 실어 보낸다. 읽을 때 안 담으면
              연락처를 고칠 때마다 빈칸으로 덮여 업로드한 회원번호·경칭이 지워진다. */
           memo1: r.memo1||'', memo2: r.memo2||'', memo3: r.memo3||'', prefix: r.prefix||'',
+          /* DB 갈래 — ours 수주 행사 / other 타 행사 / sales 영업 DB (db/migrations/add-contact-origin.js) */
+          origin: r.origin||'',
         };
       }));
       console.log('[CRM] contacts loaded & cleaned:', contacts.length);
