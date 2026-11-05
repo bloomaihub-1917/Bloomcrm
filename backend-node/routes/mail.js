@@ -25,6 +25,8 @@ const pool = require('../db/pool');
 /* 보낼 메일을 원문으로 먼저 만든다 — 같은 원문을 보내고 보낸메일함에도 넣는다(쪼갤 때 require가 lib/mail/box.js로만 가 «MailComposer is not defined»로 발송이 다 실패했다) */
 const MailComposer = require('nodemailer/lib/mail-composer');
 const { suggestOwners } = require('./mail-suggest');
+const { parseCandidate, findDuplicate, isPromo } = require('../lib/mail/org-candidate');
+const { contactIdAllocator } = require('../db/contact-ids');
 const { isOurs, domainOf: domOf, domainList, parseForward, forwardOf, forwardCandidates, fmtAddr } = require('./mail-forward');
 
 const router = express.Router();
@@ -628,6 +630,70 @@ router.post('/unassigned/:id/ignore', async (req, res) => {
     }
     res.json({ ok: true, ignored: n });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+/* ── 기업 후보함 ──
+   모르는 사람이 보낸 홍보·제안 메일에서 기업 후보를 뽑아 보여 준다. 사람이 고쳐 적고
+   «추가»를 눌러야 기업DB(잠재고객사)와 연락처가 생긴다 — 행사 참가 기록은 만들지 않는다.
+   뽑기는 규칙으로만 한다(메일 본문은 AI로 보내지 않는다). */
+router.get('/org-candidates/:eventId', async (req, res) => {
+  try {
+    await ensureExtra();
+    const rows = (await pool.query(`SELECT * FROM mail_unassigned WHERE event_id = $1 AND status IN ('new', 'promo') ORDER BY ts DESC LIMIT 150`,
+      [String(req.params.eventId)])).rows;
+    const items = [];
+    for (const r of rows) {
+      if (isOurs(r.from_addr) || isSelfAlias(r.from_addr, req.user)) continue;
+      const c = parseCandidate(r);
+      if (!c.promo) continue;   // 광고·제안 표시가 없는 메일은 «주인 없는 메일»에서 본다
+      const dup = await findDuplicate(pool, c);
+      items.push({ id: r.id, ts: r.ts, subject: r.subject, from_name: r.from_name, has_body: !!r.body, cand: c, dup });
+    }
+    res.json({ ok: true, items });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+router.post('/org-candidates/:id/add', async (req, res) => {
+  if (req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 바꿀 수 없어요' });
+  const b = req.body || {};
+  const org = String(b.org || '').trim();
+  if (!org) return res.status(400).json({ ok: false, error: '기업명을 적어 주세요' });
+  const client = await pool.connect();
+  try {
+    await ensureExtra();
+    await client.query('BEGIN');
+    const u = (await client.query(`SELECT * FROM mail_unassigned WHERE id = $1 FOR UPDATE`, [req.params.id])).rows[0];
+    if (!u || !['new', 'promo'].includes(u.status)) { await client.query('ROLLBACK'); return res.status(404).json({ ok: false, error: '이미 처리한 메일이에요' }); }
+    const now = new Date(), today = kstStamp(now).slice(0, 10), v = (k) => String(b[k] || '').trim();
+    // 같은 기업이 이미 있으면 새로 만들지 않고 그 기업에 담당자만 붙인다
+    const dupOrg = (await client.query(
+      `SELECT id FROM orgs WHERE regexp_replace(lower(COALESCE(name_ko,'')), '㈜|\(주\)|주식회사|\s+', '', 'g') = $1 LIMIT 1`,
+      [org.toLowerCase().replace(/㈜|\(주\)|주식회사|\s+/g, '')])).rows[0];
+    let orgId = dupOrg && dupOrg.id, created = false;
+    const src = `홍보메일 ${(u.ts || '').slice(0, 10)}`;
+    if (!orgId) {
+      orgId = `O-${now.getTime()}_${Math.floor(Math.random() * 1000)}`;
+      await client.query(`INSERT INTO orgs (id, name_ko, kind, status, sectors, country, website, notes, source, created_at, updated_at)
+        VALUES ($1,$2,'잠재고객사','활성',$3,$4,$5,$6,$7,$8,$8)`,
+      [orgId, org, v('sector'), v('country'), v('website'), v('note'), src, now.toISOString()]);
+      created = true;
+    }
+    let contactId = null;
+    const email = v('email').toLowerCase();
+    const have = email && (await client.query(`SELECT id FROM contacts WHERE lower(email1) = $1 OR lower(email2) = $1 LIMIT 1`, [email])).rows[0];
+    if (have) contactId = have.id;
+    else {
+      contactId = (await contactIdAllocator(client))();
+      await client.query(`INSERT INTO contacts (id, "nameKo", "orgKo", "titleKo", country, cat, lang, source, date, status, email1, phone1, beat, org_id, memo1)
+        VALUES ($1,$2,$3,$4,$5,'attendee','KO',$6,$7,'new',$8,$9,$10,$11,$12)`,
+      [contactId, v('name') || org, org, v('title'), v('country'), src, today, email, v('phone'), v('sector'), orgId, '모객 대상(행사 참가기업 아님)']);
+    }
+    await client.query(`UPDATE mail_unassigned SET status = 'linked', linked_t = 'org', linked_id = $1, handled_by = $2 WHERE id = $3`,
+      [orgId, req.user?.email || '', u.id]);
+    await client.query('COMMIT');
+    res.json({ ok: true, orgId, contactId, orgCreated: created, contactCreated: !have });
+  } catch (e) { await client.query('ROLLBACK').catch(() => {}); res.status(500).json({ ok: false, error: e.message }); }
+  finally { client.release(); }
 });
 
 /* 가져오기는 한 행사·한 메일함에 한 번에 하나만 — 중복 확인을 메모리에서 «날짜|제목»으로 해서,

@@ -156,10 +156,12 @@ const syncInboxHandler = async (req, res) => {
             /* 모르는 사람 — 스팸·대량 발송은 «걸러짐»으로만 기억하고(다음에 다시 안 받게),
                나머지는 «주인 없는 메일»로 모은다. 사람이 연결하기 전까지 어디에도 붙지 않는다 */
             if (!mail) continue;
-            const filtered = isSpam(mail) || isBulk(mail);
-            const bt = filtered ? { text: '' } : bodyText(mail);
+            /* 스팸만 본문 없이 «걸러짐». 대량 발송(광고·홍보)은 «promo»로 본문을 남긴다 —
+               기업 후보함이 서명에서 회사·전화를 읽는다. 주인 없는 메일 창에는 안 나온다(status 'new'만 보인다) */
+            const spam = isSpam(mail), promo = !spam && isBulk(mail);
+            const bt = spam ? { text: '' } : bodyText(mail);
             unknown.push({ uid: h.uid, at: h.at, from: h.from, fromName: h.fromName, subject: h.subject,
-              body: bt.text, warnings: filtered ? [] : mailWarnings(mail), status: filtered ? 'filtered' : 'new' });
+              body: bt.text, warnings: spam || promo ? [] : mailWarnings(mail), status: spam ? 'filtered' : promo ? 'promo' : 'new' });
             continue;
           }
           const spam = mail ? isSpam(mail) : /^\s*\[(spam|스팸)\]/i.test(h.subject);
@@ -225,12 +227,12 @@ const syncInboxHandler = async (req, res) => {
           ON CONFLICT (event_id, mail_box, mail_uid) DO NOTHING`,
         [`MU-${Date.now()}-${Math.floor(Math.random() * 100000)}`, eventId, u.uid, u.at, u.from, u.fromName, u.subject, u.body,
           JSON.stringify(u.warnings), u.status || 'new', kstStamp(Date.now())]);
-        if (u.status !== 'filtered') unassigned += r.rowCount || 0;
+        if (u.status === 'new') unassigned += r.rowCount || 0;
       }
     }
     if (apply) await markSynced(eventId, req.user?.name || req.user?.email || '');
     res.json({
-      ok: true, applied: apply, scanned: total, added, replied, replyNames, unassigned, unknown: unknown.filter((u) => u.status !== 'filtered').length,
+      ok: true, applied: apply, scanned: total, added, replied, replyNames, unassigned, unknown: unknown.filter((u) => u.status === 'new').length, promo: unknown.filter((u) => u.status === 'promo').length,
       items: found.map(({ body, ...r }) => r),
       skipped: [confDone ? '컨퍼런스(진행 완료)' : '', exhDone ? '전시(진행 완료)' : ''].filter(Boolean),
     });

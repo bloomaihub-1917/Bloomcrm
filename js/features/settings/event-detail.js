@@ -371,6 +371,9 @@ export function renderEvInbox(evKey = settingsUi.inboxEv){
     const n = await m.unassignedCount(evKey);
     const b = document.getElementById('evd-un-btn');
     if(b) b.innerHTML = n ? `<button class="btn" style="font-size:var(--fs-10_5);color:var(--am);font-weight:700;margin-left:6px" onclick="openUnassigned('${escAttr(evKey)}')">주인 없는 메일 ${n}</button>` : '';
+    const oc = await import('../../shared/mail/org-candidates.js');
+    const k = await oc.orgCandidateCount(evKey);
+    if(b && k) b.innerHTML += `<button class="btn" style="font-size:var(--fs-10_5);color:var(--te);font-weight:700;margin-left:6px" onclick="openOrgCandidates('${escAttr(evKey)}')">기업 후보 ${k}</button>`;
   }, 0);
   el.innerHTML = `<span id="evd-un-btn" style="float:right"></span><div style="font-size:var(--fs-12);font-weight:700;color:var(--i2);margin-bottom:6px">처리 안 한 받은 메일 ${rows.length
       ? `<span class="pill p-amber" style="font-size:var(--fs-10)">${rows.length}</span>${unread ? ` <span class="pill p-red" style="font-size:var(--fs-10)">안 읽음 ${unread}</span>` : ''}` : ''}</div>

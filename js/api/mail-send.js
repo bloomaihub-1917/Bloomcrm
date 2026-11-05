@@ -94,7 +94,10 @@ export const linkUnassigned    = (id, body) => mailApi(`/unassigned/${encodeURIC
 /* CRM 협의 타겟의 컨택 이력에 받은 메일을 붙인다 — { targetId, memo } */
 export const linkUnassignedCrm = (id, body) => mailApi(`/unassigned/${encodeURIComponent(id)}/link-crm`, 'POST', body);
 export const ignoreUnassigned  = (id, domain) => mailApi(`/unassigned/${encodeURIComponent(id)}/ignore`, 'POST', { domain: !!domain });
-export const syncInboxMail     = (evKey, apply) => mailApi(`/accounts/${encodeURIComponent(evKey)}/sync-inbox`, 'POST', { apply: !!apply });
+/* 기업 후보함 — 홍보·제안 메일에서 기업 후보를 뽑아 보이고, 사람이 고쳐 «추가»하면 기업·연락처를 만든다 */
+export const loadOrgCandidates = (evKey) => mailApi(`/org-candidates/${encodeURIComponent(evKey)}`);
+export const addOrgCandidate   = (id, body) => mailApi(`/org-candidates/${encodeURIComponent(id)}/add`, 'POST', body);
+export const syncInboxMail    = (evKey, apply) => mailApi(`/accounts/${encodeURIComponent(evKey)}/sync-inbox`, 'POST', { apply: !!apply });
 
 /* ── 메일 기본 첨부 (단계별 가이드·양식 파일) ──
    행사별로 한 번 받아 두고 같이 쓴다. 테스트 모드에서는 서버에 올리지 않고
