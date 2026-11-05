@@ -43,7 +43,7 @@ export const avF = i => FG[i % 6];
 export const ROLE_TO_CAT = {
   'VIP':'vip', '연사':'speaker', 'BD':'attendee', '바이어':'attendee',
   '전시참가기업':'exhibitor', '스폰서':'attendee', '주최사':'attendee', '참가자':'attendee',
-  '비즈니스파트너링':'attendee', '셀러':'attendee', '시공사':'attendee',
+  '비즈니스파트너링':'attendee', '셀러':'attendee',
 };
 
 /* ── EVENT_LIST 초기 시드 데이터 ──
@@ -71,7 +71,6 @@ export const PART_TYPES_SEED = [
   {key:'바이어',        label:'바이어',        cls:'p-teal'},
   {key:'셀러',          label:'셀러',          cls:'p-purple'},
   {key:'전시참가기업',   label:'전시참가기업',   cls:'p-purple'},
-  {key:'시공사',        label:'시공사',        cls:'p-teal'},
   {key:'스폰서',        label:'스폰서',        cls:'p-green'},
   {key:'비즈니스파트너링',label:'비즈니스파트너링',cls:'p-amber'},
   {key:'주최사',        label:'주최사',        cls:'p-indigo'},
