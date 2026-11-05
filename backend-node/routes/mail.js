@@ -22,6 +22,8 @@
 ══════════════════════════════════════════════════════════════ */
 const express = require('express');
 const pool = require('../db/pool');
+const { simpleParser } = require('mailparser');
+const crypto = require('crypto');
 /* 보낼 메일을 원문으로 먼저 만든다 — 같은 원문을 보내고 보낸메일함에도 넣는다(쪼갤 때 require가 lib/mail/box.js로만 가 «MailComposer is not defined»로 발송이 다 실패했다) */
 const MailComposer = require('nodemailer/lib/mail-composer');
 const { suggestOwners } = require('./mail-suggest');

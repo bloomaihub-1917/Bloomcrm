@@ -3,6 +3,7 @@
    (../../routes/mail.js에서 떼어 냈다. 그 파일이 이 파일을 require한다 — 이 파일은 그 파일을 부르지 않는다)
 ═══════════════════════════════════════════════════════════════ */
 const pool = require('../../db/pool');
+const { simpleParser } = require('mailparser');
 const { isOurs, domainOf: domOf, domainList, parseForward, forwardOf, forwardCandidates, fmtAddr } = require('../../routes/mail-forward');
 const { LOCAL_MAX, TOTAL_MAX, FILE_MAX, ensureFiles, b64size, cfg, transport, kstDate, kstStamp, PROVIDERS, prov, ensureBox, markSynced, secretKey, seal, BOX_SELECT, boxOf, boxTransport, boxPublic, FOOTER_IMG_MAX, withFooter, imapClient, SENT_NAMES, saveToSent, partDone, senderFor } = require('./box');
 const { bodyParts, mailText, norm, AUTO_SUBJ, isAutoReply, prevDay, syncSentHandler } = require('./sync-sent');
