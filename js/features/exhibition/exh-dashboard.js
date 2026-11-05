@@ -52,12 +52,15 @@ function renderDashboard(all){
   all.forEach(x => {
     const s = settleState(x);
     byState[s.state] = (byState[s.state] || 0) + 1;
-    if(s.billed){
-      const m = cash[s.cur] || (cash[s.cur] = { billed:0, paid:0, due:0, n:0 });
-      m.billed += s.billed; m.paid += s.paid; m.n++;
-      // «완납 처리»한 곳은 더 받을 돈이 없다 — settleState·정산 탭과 같은 기준
-      m.due += s.state === 'settled' ? 0 : s.balance;
-    }
+    /* 통화마다 따로 센다 — 주 통화(settleState)만 보면 원화·달러가 섞인 기업의 다른 통화 몫
+       (포트리아·카탈란트의 원화 비품, 프리시전·PSI의 달러 항목)이 미수금에서 빠졌다.
+       «완납 처리»한 곳은 잔액 0(settleByCurrency) — 정산 탭과 같은 기준 */
+    Object.entries(settleByCurrency(x.id)).forEach(([cur, v]) => {
+      if(!v.billed) return;
+      const m = cash[cur] || (cash[cur] = { billed:0, paid:0, due:0, n:0 });
+      m.billed += v.billed; m.paid += v.paid; m.n++;
+      m.due += v.balance;
+    });
     if(s.overdue && s.balance > 0) overdue.push({ x, s });
     const noAmt = invoicesFor(x.id).some(i => i.status !== 'void' && String(i.amount ?? '').trim() === '');
     /* 통화가 섞인 건 처리 필요에 넣지 않는다. 인보이스는 원화로 받고 엑스렌탈은
@@ -191,7 +194,8 @@ function renderDashboard(all){
         out[t.currency || 'KRW'].taxN++;
         taxTotal += amt;
       });
-      if(s.paid) put(s.cur || 'KRW', '입금', s.paid);
+      // 입금도 통화마다 — 주 통화만 넣으면 섞인 기업의 다른 통화 입금이 «남은 금액»에 그대로 남았다
+      Object.entries(settleByCurrency(x.id)).forEach(([cur, v]) => { if(v.paid) put(cur, '입금', v.paid); });
       if(s.billed || taxTotal) out[s.cur || 'KRW'].n++;
     });
     return out;
@@ -215,16 +219,14 @@ function renderDashboard(all){
        여기 «남은 금액»은 전체 항목 − 전체 입금이다. 두 계산이 기업마다 얼마나 갈리는지 보인다 */
     const gaps = [];
     all.forEach(x => {
-      const s = settleState(x);
+      const v = settleByCurrency(x.id)[c];
+      if(!v) return;
       const items = billableItems(x.id).filter(i => (i.currency || 'KRW') === c).reduce((a, i) => a + num(i.amount), 0);
-      const restPart = items - (s.cur === c ? s.paid : 0);
-      const kpiPart = s.billed && s.cur === c ? (s.state === 'settled' ? 0 : s.balance) : 0;
-      const d = Math.round((restPart - kpiPart) * 100) / 100;
+      const restPart = items - v.paid;
+      const d = Math.round((restPart - v.balance) * 100) / 100;
       if(Math.abs(d) < 0.005) return;
-      const why = s.state === 'settled' && s.cur === c ? `완납 처리 (덜 받은 ${fmtMoney(s.balance, c)})`
-        : s.cur !== c ? `다른 통화(${s.cur})가 주 통화라 카드에서 빠짐`
-        : s.balance < 0 ? `더 받음 ${fmtMoney(-s.balance, c)} — 카드에서 다른 미수금을 깎음`
-        : items !== s.billed ? `청구액(${fmtMoney(s.billed, c)})이 항목 합과 다름` : '';
+      const why = x.settled === 'yes' ? `완납 처리 (덜 받은 ${fmtMoney(v.billed - v.paid, c)})`
+        : items !== v.billed ? `청구액(${fmtMoney(v.billed, c)})이 항목 합과 다름` : '';
       gaps.push({ x, d, why });
     });
     gaps.sort((a, b) => Math.abs(b.d) - Math.abs(a.d));
