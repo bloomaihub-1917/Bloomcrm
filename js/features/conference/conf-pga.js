@@ -88,6 +88,16 @@ function pgaSpeakers(ss, opts){
         jobTitle ? `<span style="color:var(--i4)"> · ${escapeHtml(jobTitle)}</span>` : ''}${
         org ? `<span style="color:var(--i4)"> · ${escapeHtml(org)}</span>` : ''}`;
 
+      /* 시간 격자 칸은 방 하나 폭이라 좁다 — 시각을 왼쪽 칸으로 세우면 이름이
+         한 글자씩 꺾인다. 거기서는 시각을 발제명 위 한 줄로 올린다. */
+      if(opts && opts.stack){
+        return `<div style="margin-top:5px">
+          ${when ? `<div style="font-size:var(--fs-9_5);color:var(--i3);font-variant-numeric:tabular-nums">${escapeHtml(when)}</div>` : ''}
+          ${title ? `<div style="font-size:var(--fs-11);font-weight:600;color:var(--i1);line-height:1.4">${escapeHtml(title)}</div>
+            ${titleKo && titleEn ? `<div style="font-size:var(--fs-9_5);color:var(--i3);line-height:1.4">${escapeHtml(titleEn)}</div>` : ''}` : ''}
+          <div style="font-size:var(--fs-9_5);line-height:1.4">${person}</div>
+        </div>`;
+      }
       return `<div style="display:flex;gap:7px;margin-top:4px">
         <div style="flex:0 0 auto;min-width:62px;font-size:var(--fs-9_5);color:var(--i3);
           line-height:1.5;white-space:nowrap;font-variant-numeric:tabular-nums">${escapeHtml(when)}</div>
@@ -144,22 +154,29 @@ function pgaHtml(ev){
     title="${escapeHtml([ss.title_ko, ss.title_en, timeLabel(ss.start_at, ss.end_at), ss.room].filter(Boolean).join(' · '))}"
     style="cursor:pointer;background:var(--i7);border:1px solid var(--i6);border-radius:var(--rd-4);padding:7px;
     text-align:center;margin-bottom:5px;color:var(--i4)">
+    ${ss.room && ss.start_at ? `<div style="font-size:var(--fs-9_5);font-variant-numeric:tabular-nums">${escapeHtml(timeLabel(ss.start_at, ss.end_at))}</div>` : ''}
     <div style="font-size:var(--fs-11);font-weight:600">${escapeHtml(ss.title_ko || ss.title_en || kindOf(ss.kind).pill || '')}</div>
     ${ss.title_ko && ss.title_en ? `<div style="font-size:var(--fs-9_5);margin-top:1px">${escapeHtml(ss.title_en)}</div>` : ''}
   </div>`;
 
-  const cell = (ss) => {
+  const cell = (ss, opts) => {
     if(isBreak(ss)) return breakCell(ss);
     const c = trackColor(ev.key, ss.track);
+    /* 세션 자신의 시각은 칸 머리에 — 줄 머리는 큰 시간대라, 이 세션이 정확히
+       몇 시에 열리는지는 여기서만 읽힌다 */
+    const when = ss.start_at ? timeLabel(ss.start_at, ss.end_at) : '';
     return `<div onclick="openPgaSession('${escAttr(ss.id)}')" title="${escapeHtml(
         [ss.title_ko, ss.title_en, timeLabel(ss.start_at, ss.end_at), ss.room].filter(Boolean).join(' · '))}"
       style="cursor:pointer;border:1px solid ${c.bd}33;border-radius:var(--rd-4);overflow:hidden;margin-bottom:5px">
-      ${ss.track ? `<div style="background:${c.bg};border-left:3px solid ${c.bd};padding:3px 6px;
-        font-size:var(--fs-10_5);font-weight:700;color:var(--i1)">${escapeHtml(ss.track)}</div>` : ''}
+      ${ss.track || when ? `<div style="display:flex;flex-wrap:wrap;column-gap:6px;align-items:baseline;background:${ss.track ? c.bg : 'var(--i8)'};
+        border-left:3px solid ${ss.track ? c.bd : 'var(--i5)'};padding:3px 6px;font-size:var(--fs-10_5)">
+        <span style="font-weight:700;color:var(--i1);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(ss.track || '')}</span>
+        ${when ? `<span style="margin-left:auto;color:var(--i3);white-space:nowrap;font-variant-numeric:tabular-nums">${escapeHtml(when)}</span>` : ''}
+      </div>` : ''}
       <div style="padding:6px 7px 8px;background:var(--W);overflow-wrap:anywhere">
         <div style="font-size:var(--fs-11);line-height:1.45;color:var(--i1)">${escapeHtml(ss.title_ko || ss.title_en || '(세션명 없음)')}</div>
         ${ss.title_ko && ss.title_en ? `<div style="font-size:var(--fs-9_5);color:var(--i4);line-height:1.4;margin-top:2px">${escapeHtml(ss.title_en)}</div>` : ''}
-        ${pgaSpeakers(ss)}
+        ${pgaSpeakers(ss, opts)}
       </div>
     </div>`;
   };
@@ -184,22 +201,57 @@ function pgaHtml(ev){
     </div>`;
   };
 
+  /* 세로는 «큰 시간대». 전에는 시작 시각이 같은 세션만 한 줄에 놓아서, 방마다
+     시작이 조금씩 다른 행사(BIO KOREA 4/28: 13:00·14:00·14:07·14:10·15:05)는
+     세션 하나가 한 줄씩 계단처럼 내려갔고 같은 때 열린 세션이 나란히 안 보였다.
+     이제 시간이 겹치는 세션을 한 줄에 놓는다 — 줄은 방만 가르고, 세션마다의
+     정확한 시각은 그 세션 칸 머리에 적는다.
+     오전·오후는 따로 묶는다(정오 전에 시작했느냐). 하루 내내 가는 세션 하나가
+     오전과 오후를 한 줄로 이어 붙이지 않게 하려는 것이다. 장소 없는 세션
+     (개막식·오찬)은 제 줄을 따로 쓰고, 시간대는 거기서 끊긴다.
+     시각을 안 적은 세션은 맨 아래 «시간 미정» 줄로 모은다. */
+  const bandsOf = (mine) => {
+    const timed = mine.filter(x => x.start_at).slice()
+      .sort((a, b) => a.start_at.localeCompare(b.start_at) || (a.room ? 1 : 0) - (b.room ? 1 : 0));
+    const rows = [];
+    let cur = null;
+    timed.forEach(x => {
+      if(!x.room){ cur = null; rows.push({ start: x.start_at, list: [x] }); return; }
+      const half = x.start_at < '12:00' ? 'am' : 'pm';
+      if(cur && cur.half === half && (x.start_at < cur.reach || x.start_at === cur.start)){
+        cur.list.push(x);
+        if((x.end_at || '') > cur.reach) cur.reach = x.end_at;
+        return;
+      }
+      cur = { half, start: x.start_at, reach: x.end_at || x.start_at, list: [x] };
+      rows.push(cur);
+    });
+    const untimed = mine.filter(x => !x.start_at);
+    if(untimed.length) rows.push({ start: '', list: untimed });
+    return rows;
+  };
+
+  /* 줄 머리의 시각 — 맨 먼저 시작해 가장 늦게 끝나는 것까지. 다음 줄이 시작한
+     뒤까지 가는 세션(하루 내내 가는 투자 세션)은 넣지 않는다. 넣으면 오전 줄이
+     «09:00–17:00»이 되어 오후 줄과 겹쳐 보인다. */
+  const bandLabel = (row, next) => {
+    if(!row.start) return '<span style="color:var(--i4)">시간 미정</span>';
+    const ends = row.list.map(x => x.end_at).filter(Boolean).sort();
+    let end = ends.slice(-1)[0] || '';
+    if(next && next.start && end > next.start) end = ends.filter(e => e <= next.start).slice(-1)[0] || next.start;
+    return escapeHtml(timeLabel(row.start, end));
+  };
+
   const dayBlock = (d) => {
     const mine = sessions.filter(x => (x.date || '') === d);
-    /* 세로는 시간대. 같은 시각에 시작하는 것이 한 줄이 된다 —
-       시각을 안 적은 세션은 맨 아래에 «시간 미정» 줄로 모은다. */
-    const slots = [...new Set(mine.map(x => x.start_at || ''))]
-      .sort((a, b) => (a ? 0 : 1) - (b ? 0 : 1) || a.localeCompare(b));
+    const rows = bandsOf(mine);
 
-    const rowFor = (slot) => {
-      const here = mine.filter(x => (x.start_at || '') === slot);
-      const wide = here.filter(x => !x.room);
-      const placed = here.filter(x => x.room);
+    const rowFor = (row, i) => {
+      const wide = row.list.filter(x => !x.room);
+      const placed = row.list.filter(x => x.room)
+        .sort((a, b) => String(a.start_at || '').localeCompare(String(b.start_at || '')));
       const timeCol = `<td style="vertical-align:top;padding:7px 8px;font-size:var(--fs-10_5);color:var(--i3);
-        white-space:nowrap;border-top:1px solid var(--i6)">${slot ? escapeHtml(timeLabel(slot,
-          // 그 시간대에서 가장 늦게 끝나는 것으로 폭을 적는다
-          here.map(x => x.end_at).filter(Boolean).sort().slice(-1)[0] || ''))
-          : '<span style="color:var(--i4)">시간 미정</span>'}</td>`;
+        white-space:nowrap;border-top:1px solid var(--i6)">${bandLabel(row, rows[i + 1])}</td>`;
       const wideRow = wide.length
         ? `<tr>${timeCol}<td colspan="${Math.max(1, rooms.length)}" style="padding:7px 8px;border-top:1px solid var(--i6)">
             ${wide.map(wideCell).join('')}</td></tr>`
@@ -218,7 +270,90 @@ function pgaHtml(ev){
         border-top:1px solid var(--i6);font-size:var(--fs-11_5);font-weight:700">
         ${escapeHtml(d ? dayLabel(d) : '날짜 미정')}
         <span style="font-weight:400;color:var(--i4);margin-left:6px">세션 ${mine.length}</span></td></tr>`
-      + slots.map(rowFor).join('');
+      + rows.map(rowFor).join('');
+  };
+
+  /* ── 시간 격자 (화면) ──
+     달력처럼 1시간마다 줄을 긋고, 세션은 실제 시작 시각만큼 내려 놓고 길이만큼
+     높이를 준다 — 09:10 시작이면 9시 줄보다 살짝 아래에서 시작한다. 같은 때 열린
+     세션이 방마다 나란히 서고, 시작이 몇 분씩 다른 것도 눈으로 보인다.
+     위의 시간대 표(dayBlock)는 «표 복사»용으로 숨겨 둔다 — 문서·메일에 붙여 넣으면
+     자리 잡은 칸은 다 흩어지고, 거기서는 표 모양이어야 한다. */
+  const PX = 2;   // 1분 = 2px → 1시간 120px
+  const mins = (t) => { const m = /^(\d{1,2}):(\d{2})/.exec(t || ''); return m ? +m[1] * 60 + +m[2] : null; };
+  const hhmm = (n) => `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
+  // 끝을 안 적은 세션은 30분으로 그린다 — 0이면 칸이 사라진다
+  const endMin = (x) => { const s = mins(x.start_at), e = mins(x.end_at); return e !== null && e > s ? e : s + 30; };
+  const cols = rooms.length ? rooms : [''];
+
+  /* 한 방에서 시간이 겹치는 세션은 칸을 나눠 옆에 세운다(겹치는 것끼리만) */
+  const lanesOf = (list) => {
+    const sorted = list.slice().sort((a, b) => mins(a.start_at) - mins(b.start_at));
+    const out = new Map();
+    let group = [], reach = -1;
+    const flush = () => {
+      const ends = [];
+      group.forEach(x => {
+        let k = ends.findIndex(e => e <= mins(x.start_at));
+        if(k < 0){ k = ends.length; ends.push(0); }
+        ends[k] = endMin(x);
+        out.set(x, { lane: k });
+      });
+      group.forEach(x => { out.get(x).of = ends.length; });
+      group = []; reach = -1;
+    };
+    sorted.forEach(x => {
+      if(group.length && mins(x.start_at) >= reach) flush();
+      group.push(x);
+      reach = Math.max(reach, endMin(x));
+    });
+    if(group.length) flush();
+    return out;
+  };
+
+  const gridDay = (d) => {
+    const mine = sessions.filter(x => (x.date || '') === d);
+    const timed = mine.filter(x => mins(x.start_at) !== null);
+    const untimed = mine.filter(x => mins(x.start_at) === null);
+    const head = `<div class="pga-day"><div class="d">${escapeHtml(d ? dayLabel(d) : '날짜 미정')}
+        <span style="font-weight:400;color:var(--i4);margin-left:4px">${mine.length}</span></div>
+      ${cols.map(rm => `<div class="rm">${escapeHtml(rm || '전체')}</div>`).join('')}</div>`;
+    const rest = untimed.length ? `<div class="pga-untimed">
+        <span style="flex:0 0 100%;font-size:var(--fs-10_5);color:var(--i4)">시간 미정</span>
+        ${untimed.map(x => isBreak(x) ? breakCell(x) : cell(x)).join('')}</div>` : '';
+    if(!timed.length) return head + rest;
+
+    const t0 = Math.floor(Math.min(...timed.map(x => mins(x.start_at))) / 60) * 60;
+    const t1 = Math.ceil(Math.max(...timed.map(endMin)) / 60) * 60;
+    const hours = [];
+    for(let t = t0; t <= t1; t += 60) hours.push(t);
+    const w = 100 / cols.length;
+
+    const card = (x, left, width) => {
+      const top = (mins(x.start_at) - t0) * PX;
+      const h = Math.max(24, (endMin(x) - mins(x.start_at)) * PX - 3);
+      return `<div class="pga-card" style="top:${top}px;height:${h}px;--h:${h}px;left:calc(${left}% + 3px);width:calc(${width}% - 6px)">${
+        !x.room ? wideCell(x) : isBreak(x) ? breakCell(x) : cell(x, { stack: true })}</div>`;
+    };
+    const placed = cols.flatMap((rm, i) => {
+      const here = timed.filter(x => x.room && (x.room || '') === rm);
+      const lanes = lanesOf(here);
+      return here.map(x => { const l = lanes.get(x); return card(x, i * w + l.lane * w / l.of, w / l.of); });
+    });
+    // 장소 없는 세션(개막식·오찬)은 모든 방에 걸쳐 놓는다
+    const wide = timed.filter(x => !x.room).map(x => card(x, 0, 100));
+
+    return head + `<div class="pga-grid">
+        <div class="pga-axis" style="height:${(t1 - t0) * PX}px">
+          ${hours.map(t => `<div class="pga-hour" style="top:${(t - t0) * PX}px">${hhmm(t)}</div>`).join('')}
+        </div>
+        <div class="pga-rooms" style="height:${(t1 - t0) * PX}px">
+          ${hours.map(t => `<div class="pga-line" style="top:${(t - t0) * PX}px"></div>`
+            + (t < t1 ? `<div class="pga-line half" style="top:${(t - t0 + 30) * PX}px"></div>` : '')).join('')}
+          ${cols.map((_, i) => i ? `<div class="pga-col" style="left:${i * w}%"></div>` : '').join('')}
+          ${wide.join('')}${placed.join('')}
+        </div>
+      </div>` + rest;
   };
 
   /* ── 모바일 ──
@@ -291,7 +426,8 @@ function pgaHtml(ev){
       </div>
     </div>
     ${legend}${hint}
-    <div class="tw" id="pga-table"><table style="width:100%;border-collapse:collapse;table-layout:fixed">
+    <div id="pga-grid">${days.map(gridDay).join('')}</div>
+    <div class="tw" id="pga-table" style="display:none"><table style="width:100%;border-collapse:collapse;table-layout:fixed">
       <colgroup>
         <col style="width:82px">
         ${(rooms.length ? rooms : ['전체']).map(() =>
@@ -305,7 +441,8 @@ function pgaHtml(ev){
       <tbody>${days.map(dayBlock).join('')}</tbody>
     </table></div>
     <div style="font-size:var(--fs-10);color:var(--i4);margin-top:7px;line-height:1.6">
-      칸을 누르면 그 세션의 수정 칸이 열려요. 장소를 안 적은 세션은 개막식처럼 한 줄을 통째로 씁니다.
+      칸을 누르면 그 세션의 수정 칸이 열려요. 칸 높이가 세션 길이라 연사가 다 안 보이면 마우스를 올려 보세요.
+      장소를 안 적은 세션은 개막식처럼 모든 방에 걸쳐 그려집니다.
     </div>`;
 }
 
