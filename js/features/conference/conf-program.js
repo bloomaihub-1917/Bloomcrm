@@ -204,7 +204,11 @@ function sessionCard(ev, s, days, cfg){
     /* 앞 사람이 끝나기 전에 시작하면 겹친다 — 같은 무대에 둘이 설 수는 없다.
        공동 연사 줄은 앞사람과 같은 시간이므로 견주지 않고, 견줄 때도 건너뛴다 */
     const prev = isCo ? null : asg.slice(0, idx).reverse().find(x => leadOf(x) === x) || null;
-    const overlap = prev && prev.end_at && a.start_at && a.start_at < prev.end_at;
+    /* 패널은 여럿이 한 무대에 함께 앉는 자리라 앞 사람과 같은 시간이 맞다 — 겹친다고
+       알리면 패널토론 줄마다 빨간 경고가 붙는다(BIO KOREA 2026에 58줄). 패널을 이끄는
+       좌장도 그 패널과 같은 시간에 앉는다 */
+    const together = prev && (a.role === '패널' || (prev.role === '패널' && a.start_at === prev.start_at));
+    const overlap = !together && prev && prev.end_at && a.start_at && a.start_at < prev.end_at;
     /* 순서는 끌어서 정하고 시간은 따로 적으니 둘이 어긋날 수 있다.
        어느 쪽이 맞는지는 우리가 모른다 — 어긋났다는 사실만 알린다. */
     const outOfOrder = !overlap && prev && prev.start_at && a.start_at && a.start_at < prev.start_at;
