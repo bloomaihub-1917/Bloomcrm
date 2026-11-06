@@ -552,6 +552,8 @@ function peopleHtml(ev){
       <button class="btn" style="font-size:var(--fs-11)" onclick="openRegisterLinks('${escAttr(ev.key)}')"
         title="바깥 신청 링크·엑셀 명단 — 받은 신청은 확정할 때 마스터DB로 옮겨요">🔗 등록 링크</button>
       <button class="btn" style="font-size:var(--fs-11)" onclick="openEvDbMailList()">메일 대상 모으기</button>
+      <button class="btn" style="font-size:var(--fs-11)" onclick="openEvDbUpload()"
+        title="엑셀 명단을 마스터DB에 올리고 이 행사 참가자로 잇습니다 — 데이터 업로드 화면이 이 행사로 맞춰져 열려요">📤 명단 업로드</button>
       <button class="btn bp" style="font-size:var(--fs-11)" onclick="exportEvDbPeople()">명단 내보내기 (${shown.length})</button>
     </div>
     <div id="evdb-rows" class="sec-rows">${peopleRowsHtml()}</div>`;
@@ -1507,6 +1509,24 @@ window.setEvDbTgtFil       = setEvDbTgtFil;
 window.pickEvDbTgt         = pickEvDbTgt;
 window.toggleEvDbTgtAll    = toggleEvDbTgtAll;
 window.openEvDbTargetSend  = openEvDbTargetSend;
+
+/* «명단 업로드» — 참가자 명단 엑셀을 이 자리에서 올린다.
+   읽고·고르고·겹침을 거르는 일은 설정 › 데이터 업로드가 이미 한다(연결 행사를 고르면
+   그 행사 참가자로 건다). 같은 일을 여기 또 만들면 두 업로드가 따로 고쳐지며 어긋난다 —
+   그 화면을 열고 «연결 행사»를 이 행사로 맞춰 둔다. 찾아가서 행사를 다시 고르다
+   다른 행사에 거는 일이 없게. */
+window.openEvDbUpload = () => {
+  const evKey = evdbEvent;
+  window.switchApp?.('up', null);
+  if(window.toggleEvInput && document.getElementById('up-ev-text')?.style.display === 'block') window.toggleEvInput(false);
+  const sel = document.getElementById('up-ev');
+  if(!sel || ![...sel.options].some(o => o.value === evKey)) return;
+  sel.value = evKey;
+  sel.dispatchEvent(new Event('change'));
+  const ev = EVENT_LIST.find(e => e.key === evKey);
+  import('./upload-tab.js').then(m => m.addAiLog('ok',
+    `«${escapeHtml(ev?.short || evKey)}» 참가자로 올리도록 연결 행사를 맞춰 뒀어요 — 참가 역할을 고르고 파일을 올려 주세요`));
+};
 
 /* 제목 줄 «참가자 추가» — 마스터DB에서 사람을 골라 이 행사 참가자로 넣는다(features/quick-add.js) */
 window.addEvDbPerson = () => window.openEvPersonAdd?.(evdbEvent, {
