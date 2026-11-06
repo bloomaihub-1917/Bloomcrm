@@ -138,6 +138,8 @@ const matchQ = (r, q) => [r.name, r.nameEn, r.org, r.orgEn, r.title, r.email, r.
   .some(v => String(v || '').toLowerCase().includes(q));
 
 const orgCount = (rows) => new Set(rows.map(r => r.orgKey || `?${r.cid}`)).size;
+/* 국가는 코드(KR)와 이름(대한민국)이 섞여 들어와서 표시 이름으로 맞춘 뒤 센다. 빈 값은 세지 않는다 */
+const countryCount = (rows) => new Set(rows.map(r => countryName(r.country) || '').filter(Boolean)).size;
 
 function shownRows(view = ptnView){
   let l = rowsFor(view);
@@ -232,7 +234,7 @@ export function renderPtn(){
     const l = list.filter(r => r.side === s.key);
     return `<div style="flex:1;min-width:150px;background:var(--W);border:1px solid var(--i6);border-radius:var(--r);padding:10px 14px">
       <div style="display:flex;align-items:center;gap:6px"><span class="pill ${escAttr(s.cls)}">${escapeHtml(s.label)}</span></div>
-      <div style="font-size:var(--fs-20);font-weight:700;color:var(--i1);margin-top:6px">${orgCount(l)}<span style="font-size:var(--fs-12);font-weight:600;color:var(--i3)">개사</span>
+      <div style="font-size:var(--fs-20);font-weight:700;color:var(--i1);margin-top:6px">${countryCount(l)}<span style="font-size:var(--fs-12);font-weight:600;color:var(--i3);margin-right:8px">개국</span>${orgCount(l)}<span style="font-size:var(--fs-12);font-weight:600;color:var(--i3)">개사</span>
         <span style="font-size:var(--fs-13);font-weight:600;color:var(--i3);margin-left:4px">${l.length}명</span></div>
     </div>`;
   };
