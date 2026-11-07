@@ -7,6 +7,7 @@ const { LOCAL_MAX, TOTAL_MAX, FILE_MAX, ensureFiles, b64size, cfg, transport, ks
 const { simpleParser } = require('mailparser');
 const { convert: htmlToText } = require('html-to-text');
 const { ensureExtra, isSpam, isBulk, domainOf, FREE_MAIL, mailWarnings } = require('./screen');
+const { isOurs, domainList } = require('../../routes/mail-forward');
 
 /* ── 보낸메일함 → 연사 발송 기록 ──
    CRM이 생기기 전(또는 메일플러그 웹메일에서 직접) 보낸 메일은 기록에 없다. 행사
@@ -116,8 +117,13 @@ const syncSentHandler = async (req, res) => {
     const extra = (await pool.query(`
       SELECT sc.speaker_id, sc.email FROM speaker_contacts sc
         JOIN speakers s ON s.id = sc.speaker_id WHERE s.event_id = $1`, [eventId])).rows;
+    /* 우리·주최사·행사 메일함 주소는 누구의 주소도 아니다. 담당자 칸에 잘못 들어가 있으면
+       거의 모든 메일이 참조(info-kic@…)로 걸려 한 기업에 쌓였다(2026-10, 데이터포라이프에 남의 메일 190통) */
+    const hostDomains = domainList(b.host_domains);
+    const shared = new Set([norm(b.username), norm(b.from_addr)]);
+    const skip = (k) => !k || shared.has(k) || isOurs(k) || hostDomains.includes(domainOf(k));
     const byMail = new Map();
-    const add = (em, id) => { const k = norm(em); if (k && !byMail.has(k)) byMail.set(k, id); };
+    const add = (em, id) => { const k = norm(em); if (!skip(k) && !byMail.has(k)) byMail.set(k, id); };
     sp.forEach((r) => { add(r.email1, r.id); add(r.email2, r.id); });
     extra.forEach((r) => add(r.email, r.speaker_id));
     const spById = new Map(sp.map((r) => [r.id, r]));
@@ -135,7 +141,7 @@ const syncSentHandler = async (req, res) => {
           JOIN exhibitors x ON x.id = xc.exhibitor_id LEFT JOIN contacts c ON c.id = xc.contact_id
          WHERE x.event_id = $1`, [eventId])).rows
         .forEach((r) => [r.email, r.email1, r.email2].forEach((em) => {
-          const k = norm(em); if (k && !byMail.has(k) && !exByMail.has(k)) exByMail.set(k, r.exhibitor_id);
+          const k = norm(em); if (!skip(k) && !byMail.has(k) && !exByMail.has(k)) exByMail.set(k, r.exhibitor_id);
         }));
     }
     const exSeen = new Set((await pool.query(

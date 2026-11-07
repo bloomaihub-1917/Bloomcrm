@@ -33,8 +33,13 @@ const syncInboxHandler = async (req, res) => {
     const exhDone = await partDone(eventId, 'exh');
 
     /* 주소 → 사람. 같은 주소가 연사와 담당자 둘 다면 연사로 본다 */
+    /* 우리·주최사·행사 메일함 주소는 누구의 주소도 아니다 — 담당자 칸에 잘못 들어가 있어도 주인으로 잡지 않는다
+       (sync-sent.js와 같은 규칙. info-kic@…가 한 기업 담당자로 걸려 받은 메일이 그 기업에 쌓였다) */
+    const shared = new Set([norm(b.username), norm(b.from_addr)]);
+    const hostDoms = domainList(b.host_domains);
+    const skip = (k) => !k || shared.has(k) || isOurs(k) || hostDoms.includes(domOf(k));
     const byMail = new Map();
-    const add = (em, who) => { const k = norm(em); if (k && !byMail.has(k)) byMail.set(k, who); };
+    const add = (em, who) => { const k = norm(em); if (!skip(k) && !byMail.has(k)) byMail.set(k, who); };
     const sp = (await pool.query(`
       SELECT s.id, s.name_snapshot, s.name_en, s.guide_sent_at, s.invite_replied_at, c.email1, c.email2
         FROM speakers s LEFT JOIN contacts c ON c.id = s.contact_id WHERE s.event_id = $1`, [eventId])).rows;
