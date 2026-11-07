@@ -286,7 +286,7 @@ function pickTpl(evKey, key, variant){
 }
 /* 본문의 {사진} 자리 — fillExhTemplate가 이 표시로 채우고, 여기서 사진(html)이나 안내(글)로 바꾼다 */
 const PHOTO_MARK = '⟦사진⟧';
-const SEND_GAP = 20;   // 통 사이 쉬는 초 — sendExhBulkMail
+const SEND_GAP = 8;    // 통 사이 쉬는 초 — sendExhBulkMail
 function mailFor(x){
   const st = curStep();
   const en = enOf(x), ctx = { ...exhMailCtx(x), photoMark: PHOTO_MARK };
@@ -605,7 +605,7 @@ const say = (t, ok) => { const m = document.getElementById('bm-msg'); if(m){ m.s
 
 /* 시험 발송 — 미리보기 중인 기업(all이면 고른 기업 모두)의 메일을 내 주소로.
    exhibitor_id를 안 넘겨 기록에 남지 않는다 */
-const TEST_GAP = 5;   // 내 주소로만 가니 짧게 쉰다
+const TEST_GAP = 2;   // 내 주소로만 가니 짧게 쉰다
 export async function sendExhTestMail(all){
   if(!bm || bm.sending) return;
   // 받을 주소는 기본이 내 주소 — 행사 공용 메일함 등 다른 곳에서 보고 싶으면 바꾼다

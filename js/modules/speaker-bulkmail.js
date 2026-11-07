@@ -78,7 +78,7 @@ const close = () => {
 };
 /* 통 사이 쉬기 — 같은 계정에서 쉬지 않고 수십 통이면 메일 서버가 속도 제한·스팸으로 본다.
    남은 시간은 시계로 잰다(뒤로 보낸 탭에서 1초 타이머가 1분씩 밀리지 않게) */
-const SEND_GAP = 10;
+const SEND_GAP = 5;
 const pause = makePause(() => bm, (t, ok) => say(t, ok));   // 틀은 shared/mail/bulk-send.js
 let starting = false;   // «보내기»를 두 번 눌러 확인 창이 두 번 뜨는 것을 막는다
 addEventListener('beforeunload', (e) => { if(bm?.sending){ e.preventDefault(); e.returnValue = ''; } });
