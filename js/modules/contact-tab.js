@@ -28,6 +28,7 @@ import { trackAction } from '../core/audit-log.js';
 import { postToSheet } from '../api.js';
 import { reloadContactData } from '../api/exh-save.js';
 import { buildCoDB } from '../domain/co-db.js';
+import { markSalesTargets } from '../domain/sales-targets.js';
 
 /* ── 반응 — 채널마다 누를 수 있는 것이 다르다. next: 다음 연락까지 며칠(0=곧바로),
    close: 이 반응이면 끝낸다. 값은 여기 한 곳에만 둔다. ── */
@@ -237,6 +238,7 @@ export function renderToday(){
         <span style="margin-left:auto;display:flex;gap:5px">
           <button class="btn bs" onclick="openRoundEditor('${escAttr(r.id)}')">차수 고치기</button>
           <button class="btn bs" onclick="openRoundMail('${escAttr(r.id)}')" title="명단에 기업마다 한 통씩 — 보낸 것은 DM 기록으로 남아요">✉ 메일 보내기</button>
+          <button class="btn bs" onclick="openBulkRemove()" title="여러 곳을 골라 한 번에 빼요">명단 빼기</button>
           <button class="btn bs bp" onclick="openFillRound()">명단 채우기</button>
         </span>
       </div>
@@ -607,6 +609,73 @@ export async function removeContactMember(mid){
   renderToday(); renderRoundNav();
   const res = await deleteRoundMembers([mid]);
   if(!res.ok){ ROUND_MEMBERS.splice(i, 0, m); renderToday(); renderRoundNav(); }
+}
+
+/* 여러 곳을 한 번에 뺀다. 연락 기록이 있는 곳은 기록을 지우지 않도록 빼지 않고 «종료»로 닫는다.
+   영업 DB는 그대로 둔다 — 그 행사의 다른 차수에서 다시 쓸 수 있다(docs/manual-db-axes.md) */
+export async function removeOrCloseMembers(mids, { ask = true } = {}){
+  const ms = mids.map(id => ROUND_MEMBERS.find(x => x.id === id)).filter(Boolean);
+  if(!ms.length) return false;
+  const del = ms.filter(m => !attemptsOf(m.id).length);
+  const close = ms.filter(m => attemptsOf(m.id).length && !m.closed_at);
+  if(ask && !confirm(`${ms.length}곳을 컨택 명단에서 뺄까요?
+`
+    + (del.length ? `· 연락 기록 없는 ${del.length}곳 — 명단에서 뺍니다
+` : '')
+    + (close.length ? `· 연락 기록 있는 ${close.length}곳 — 기록을 남기고 «종료»로 닫습니다
+` : '')
+    + '영업 DB 표시는 그대로 둡니다.')) return false;
+  if(del.length){
+    const idx = del.map(m => [m, ROUND_MEMBERS.indexOf(m)]);
+    del.forEach(m => ROUND_MEMBERS.splice(ROUND_MEMBERS.indexOf(m), 1));
+    renderToday(); renderRoundNav();
+    const res = await deleteRoundMembers(del.map(m => m.id));
+    if(!res.ok){ idx.forEach(([m]) => ROUND_MEMBERS.push(m)); renderToday(); renderRoundNav(); return false; }
+  }
+  for(const m of close) await patchMember(m, { closed_at: today(), closed_reason: '명단에서 뺌' });
+  const r = roundById(ms[0].round_id);
+  trackAction('delete', '컨택 명단 빼기', r?.name || '', `${escapeHtml(r?.name || '')} — ${del.length}곳 뺌${close.length ? `, ${close.length}곳 종료` : ''}`);
+  return true;
+}
+
+/* 컨택 탭 — 이 차수 명단에서 여러 곳을 골라 한 번에 빼는 창 */
+export function openBulkRemove(){
+  const r = roundById(curRoundId);
+  if(!r) return;
+  const ms = membersOf(r.id).sort((a, b) => memberName(a).localeCompare(memberName(b), 'ko'));
+  overlay('round-remove', `
+    <div style="display:flex;align-items:center;margin-bottom:4px">
+      <div style="font-size:var(--fs-15);font-weight:700">명단에서 여러 곳 빼기</div>
+      <button class="btn bs" style="margin-left:auto" onclick="document.getElementById('round-remove').remove()">닫기</button>
+    </div>
+    <div style="font-size:var(--fs-11_5);color:var(--i4);margin-bottom:8px">${escapeHtml(r.name)} · ${ms.length}곳 · 연락 기록이 있는 곳은 «종료»로 닫아요</div>
+    <input type="text" placeholder="기업명으로 찾기" oninput="bulkRemoveFilter(this.value)" style="width:100%;font-size:var(--fs-12_5);padding:6px 8px;border:1px solid var(--i6);border-radius:var(--rs);margin-bottom:6px">
+    <div style="font-size:var(--fs-11);margin-bottom:4px">
+      <a href="javascript:void(0)" onclick="bulkRemoveAll(true)" style="color:var(--a)">보이는 것 모두</a>
+      <a href="javascript:void(0)" onclick="bulkRemoveAll(false)" style="color:var(--a);margin-left:6px">모두 해제</a></div>
+    <div id="rr-list" style="max-height:320px;overflow:auto;border:1px solid var(--i7);border-radius:var(--rs);padding:4px 8px;margin-bottom:8px">
+      ${ms.map(m => { const n = attemptsOf(m.id).length; return `<label data-nm="${escAttr(memberName(m).toLowerCase())}" style="display:flex;gap:6px;align-items:center;font-size:var(--fs-12);padding:2px 0">
+        <input type="checkbox" value="${escAttr(m.id)}" onchange="bulkRemoveCount()">
+        ${escapeHtml(memberName(m))} <span style="font-size:var(--fs-10_5);color:var(--i4)">${m.closed_at ? '종료됨' : n ? `기록 ${n}건 → 종료` : ''}${m.source ? ' · ' + escapeHtml(m.source) : ''}</span></label>`; }).join('')}
+    </div>
+    <button class="btn bp" id="rr-go" disabled onclick="bulkRemoveCommit()">0곳 빼기</button>`);
+}
+export function bulkRemoveFilter(v){
+  const q = v.trim().toLowerCase();
+  document.querySelectorAll('#rr-list label').forEach(l => { l.style.display = !q || l.dataset.nm.includes(q) ? 'flex' : 'none'; });
+}
+export function bulkRemoveAll(on){
+  document.querySelectorAll('#rr-list label').forEach(l => { if(l.style.display !== 'none') l.querySelector('input').checked = on; });
+  bulkRemoveCount();
+}
+export function bulkRemoveCount(){
+  const n = document.querySelectorAll('#rr-list input:checked').length;
+  const b = document.getElementById('rr-go');
+  if(b){ b.textContent = `${n}곳 빼기`; b.disabled = !n; }
+}
+export async function bulkRemoveCommit(){
+  const ids = [...document.querySelectorAll('#rr-list input:checked')].map(i => i.value);
+  if(await removeOrCloseMembers(ids)) document.getElementById('round-remove')?.remove();
 }
 
 export function setContactFil(k){ stFil = k; showLimit = 150; renderToday(); }
@@ -1000,7 +1069,15 @@ export function fillAll(on){
   fill.picked = new Set(on ? fillCandidates().filter(c => !have.has(c.key)).map(c => c.key) : []);
   renderFill();
 }
-async function addMembers(cos, source, roundId = curRoundId){
+/* 컨택 명단에 넣으면 그 행사의 영업 DB도 켠다(docs/manual-db-axes.md).
+   people을 주면 그 사람들만(Master DB에서 사람을 골라 보낸 경우), 없으면 그 기업의 재직 담당자 모두 */
+async function markSalesFor(cos, r, people){
+  const cids = people || cos.flatMap(c => fullContacts(c).filter(p => !hasLeft(p)).map(p => p.id));
+  const n = await markSalesTargets(cids, r.event_id);
+  if(n > 0) trackAction('add', '영업 DB 켬', r.name, `${escapeHtml(evLabel(r.event_id))} 영업 DB — ${n}명`);
+  return n;
+}
+async function addMembers(cos, source, roundId = curRoundId, people = null){
   const r = roundById(roundId);
   if(!r || !cos.length) return false;
   const now = nowStamp();
@@ -1015,6 +1092,7 @@ async function addMembers(cos, source, roundId = curRoundId){
     return false;
   }
   trackAction('add', '컨택 명단 채움', r.name, `${escapeHtml(r.name)} — «${escapeHtml(source)}» ${rows.length}곳 넣음`);
+  await markSalesFor(cos, r, people);
   return true;
 }
 export async function fillCommit(){
@@ -1048,15 +1126,16 @@ export async function fillAddOne(key){
 /* ── 다른 화면에서 보내기 — 기업DB·파트너링에서 고른 기업들을 고른 차수의 명단에 넣는다.
    from: 어느 화면에서 어떻게 골랐나(창 안내 글), ev: 그 행사의 차수를 맨 위에 두고 먼저 고른다,
    note: 못 넣는 곳 안내(기업DB에 없는 기업 등) ── */
-let sendCos = null;   // { keys:[], label }
-export function openSendToRound(keys, label, { from = '기업DB에서 걸러 본', ev = '', note = '' } = {}){
+let sendCos = null;   // { keys:[], label, people }
+/* people: Master DB에서 사람을 골라 보낸 경우 그 사람 id들 — 영업 DB는 이 사람들만 켠다 */
+export function openSendToRound(keys, label, { from = '기업DB에서 걸러 본', ev = '', note = '', people = null } = {}){
   const rounds = CONTACT_ROUNDS.filter(r => r.status !== 'closed')
     .sort((a, b) => (ev ? (b.event_id === ev) - (a.event_id === ev) : 0)
       || String(b.created_at || '').localeCompare(String(a.created_at || '')));
   if(!rounds.length){ alert('먼저 컨택 탭에서 차수를 만들어주세요.'); return; }
   const cur = roundById(curRoundId);
   const sel = cur && cur.status !== 'closed' && (!ev || cur.event_id === ev) ? cur.id : rounds[0].id;
-  sendCos = { keys: [...new Set(keys)], label: label || '기업DB' };
+  sendCos = { keys: [...new Set(keys)], label: label || '기업DB', people };
   overlay('round-send', `
     <div style="display:flex;align-items:center;margin-bottom:4px">
       <div style="font-size:var(--fs-15);font-weight:700">컨택 명단에 넣기</div>
@@ -1080,19 +1159,31 @@ function sendFresh(){
 export function sendRoundInfo(){
   const { have, keys } = sendFresh();
   const el = document.getElementById('rs-info');
-  if(el) el.textContent = `지금 명단 ${have.size}곳 · 이미 들어 있는 ${sendCos.keys.length - keys.length}곳은 빼고 ${keys.length}곳을 넣어요`;
+  const ev = evLabel(roundById(document.getElementById('rs-round')?.value)?.event_id);
+  const who = sendCos.people ? `고른 ${sendCos.people.length}명` : '이 기업들의 담당자';
+  if(el) el.textContent = `지금 명단 ${have.size}곳 · 이미 들어 있는 ${sendCos.keys.length - keys.length}곳은 빼고 ${keys.length}곳을 넣어요 · ${who}는 «${ev}» 영업 DB로 켜져요`;
   const b = document.getElementById('rs-go');
-  if(b){ b.textContent = `${keys.length}곳 넣기`; b.disabled = !keys.length; }
+  /* 기업이 이미 다 들어 있어도 사람을 골라 보냈으면 영업 DB는 켤 수 있다 */
+  if(b){ b.textContent = keys.length ? `${keys.length}곳 넣기` : '영업 DB만 켜기'; b.disabled = !keys.length && !sendCos.people; }
 }
 export async function sendCommit(){
   const rid = document.getElementById('rs-round')?.value;
   const cos = sendFresh().keys.map(coOf).filter(Boolean);
-  if(!cos.length) return;
-  const source = (document.getElementById('rs-src')?.value || '').trim();
-  if(await addMembers(cos, source, rid)){
+  const people = sendCos.people;
+  if(!cos.length){
+    if(!people) return;
+    const n = await markSalesFor([], roundById(rid), people);
     document.getElementById('round-send')?.remove();
-    alert(`«${roundById(rid)?.name || ''}» 명단에 ${cos.length}곳을 넣었어요.`);
+    alert(`기업은 이미 명단에 있어요. ${Math.max(n, 0)}명을 «${evLabel(roundById(rid)?.event_id)}» 영업 DB로 켰어요.`);
+    window.renderContactDr?.();
+    return;
   }
+  const source = (document.getElementById('rs-src')?.value || '').trim();
+  if(await addMembers(cos, source, rid, people)){
+    document.getElementById('round-send')?.remove();
+    alert(`«${roundById(rid)?.name || ''}» 명단에 ${cos.length}곳을 넣고, 그 행사의 영업 DB를 켰어요.`);
+  }
+  window.renderContactDr?.();
 }
 
 Object.assign(window, {
@@ -1103,4 +1194,5 @@ Object.assign(window, {
   openContactCo, openRoundMember, openPersonForm, savePersonForm,
   setContactSrc, setContactMiss, contactMemo, markCalling, syncContactNow, openRoundEditor, saveRoundEditor, toggleRoundClosed, removeRound,
   openFillRound, fillPickEv, fillToggleRole, fillToggle, fillAll, fillCommit, fillSearch, fillAddOne,
+  removeOrCloseMembers, openBulkRemove, bulkRemoveFilter, bulkRemoveAll, bulkRemoveCount, bulkRemoveCommit,
 });

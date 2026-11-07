@@ -12,6 +12,7 @@ import { buildCoDB } from '../../domain/co-db.js';
 import { ensureOrgsForNames, orgIdForName } from '../../domain/orgs.js';
 import { CONTACT_ATTEMPTS, CO_DB, EVENT_LIST, SALES_TARGETS, EXHIBITORS, EXH_CONTACTS, SPEAKERS, SPEAKER_CONTACTS, TAGS, contacts, getContactById, getOrgById, getSpeakerById, mdbCat, mdbEvFilter, mdbSelected, mdbTypeFilter, participations, setMdbView, targets } from '../../state.js';
 import { countryOptions, escAttr, escapeHtml, personName, td } from '../../utils.js';
+import { coList } from '../../domain/rounds.js';
 import { mdbUi } from './mdb-ui.js';
 import { MDB_CAT_VALUES, buildMDBEvList, clearMDBSelection, matchesQuery, matchesTagFilter, mdbFilterPairs, pickChanged, renderMDB, setContactTag } from '../../modules/db-tab.js';
 
@@ -569,3 +570,27 @@ window.setDBView = setDBView;
 window.getMDBPairs = getMDBPairs;
 window.toggleMdbCtry = toggleMdbCtry;
 window.toggleMdbLeft = toggleMdbLeft;
+
+/* ── 컨택으로 보내기 — 고른 사람들의 소속 기업을 컨택 차수 명단에 넣고,
+   그 사람들을 그 행사의 영업 DB로 켠다(docs/manual-db-axes.md).
+   컨택 명단은 기업 단위라 기업DB에 없는 사람은 넣지 못한다 — 따로 알린다 ── */
+export function mdbSendToRound(){
+  const ids = [...mdbSelected];
+  if(!ids.length) return;
+  const coByCid = new Map();
+  coList().forEach(co => (co.contacts || []).forEach(p => coByCid.set(+p.id, co.key)));
+  const keys = [], people = [], miss = [];
+  ids.forEach(id => {
+    const k = coByCid.get(+id);
+    if(k){ keys.push(k); people.push(+id); }
+    else miss.push(personName(getContactById(id)) || id);
+  });
+  if(!keys.length){ alert('고른 사람 모두 기업DB에 연결된 기업이 없어 컨택 명단에 넣을 수 없어요.'); return; }
+  window.openSendToRound?.(keys, 'Master DB에서 고른 사람', {
+    from: `Master DB에서 고른 ${people.length}명의 기업`,
+    people,
+    note: miss.length ? `기업DB에 기업이 없어 빠지는 ${miss.length}명: ${miss.slice(0, 5).join(', ')}${miss.length > 5 ? ' …' : ''}` : '',
+  });
+}
+window.mdbSendToRound = mdbSendToRound;
+

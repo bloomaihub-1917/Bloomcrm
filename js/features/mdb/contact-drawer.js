@@ -9,7 +9,7 @@ import { changed, removed, trackAction } from '../../core/audit-log.js';
 import { countryCheckText } from '../../country-signal.js';
 import { buildCoDB } from '../../domain/co-db.js';
 import { ensureOrgsForNames, orgIdForName } from '../../domain/orgs.js';
-import { EVENT_LIST, EXH_CONTACTS, PART_TYPES, SALES_TARGETS, currentUser, contactEvents, contacts, evColor, evShort, getContactById, hasLeft, movedTo, nextContactId, participations, speakersOfContact } from '../../state.js';
+import { CONTACT_ROUNDS, EVENT_LIST, EXH_CONTACTS, PART_TYPES, ROUND_MEMBERS, SALES_TARGETS, contactEvents, contacts, evColor, evShort, getContactById, hasLeft, movedTo, nextContactId, participations, speakersOfContact } from '../../state.js';
 import { ab, countryName, countryOptions, escAttr, escapeHtml, personFullName, personName, td, sectorKey } from '../../utils.js';
 import { coDomainOptionsHtml, coSectorOptionsHtml, currentCoSectorPick } from '../../modules/company-tab.js';
 import { contactMailsHtml } from '../../modules/contact-mails.js';
@@ -18,6 +18,8 @@ import { speakerMaterialsHtml } from '../../modules/contact-speaker.js';
    화면의 onclick(window)으로만 이 창을 연다. 한 방향이라 고리가 생기지 않는다 */
 import { buildMDBEvList, renderMDB, contactCountryText, contactPatch, ctryCheck, isBDContact, isCLevelContact, pickChanged } from '../../modules/db-tab.js';
 import { contactSectorField, saveContactSectorField } from './mdb-drag.js';
+import { isSalesTarget, markSalesTargets, unmarkSalesTarget } from '../../domain/sales-targets.js';
+import { coList } from '../../domain/rounds.js';
 
 /* ══════════════════════════════════════════
    연락처 상세 드로어 (원본 5614~6252행)
@@ -41,7 +43,33 @@ function contactAxesHtml(c){
         ${EVENT_LIST.map(e => chip({ label: e.short || e.key, cls: 'p-purple', desc: e.name || e.key },
           salesEv.has(e.key), `toggleSalesTarget(${c.id},'${escAttr(e.key)}')`)).join('')}
       </div></div>
+      ${contactRoundsHtml(c)}
     </div>`;
+}
+
+/* 이 사람 소속 기업이 들어가 있는 컨택 차수 — 여기서 바로 넣고 뺀다.
+   컨택 명단은 기업 단위다. 넣으면 이 사람이 그 행사의 영업 DB로 켜지고, 빼도 영업 DB는 그대로다 */
+function contactRoundsHtml(c){
+  const co = coList().find(x => (x.contacts || []).some(p => +p.id === c.id));
+  const head = `<div class="il">컨택 <span style="color:var(--i4);font-weight:400">소속 기업 단위 · 넣으면 그 행사 영업 DB로 켜져요</span></div>`;
+  if(!co) return `<div class="ic" style="grid-column:span 2">${head}<div class="iv" style="color:var(--i4)">기업DB에 연결된 기업이 없어 컨택 명단에 넣을 수 없어요</div></div>`;
+  const ms = ROUND_MEMBERS.filter(m => m.org_id === co.key).map(m => ({ m, r: CONTACT_ROUNDS.find(r => r.id === m.round_id) })).filter(x => x.r);
+  return `<div class="ic" style="grid-column:span 2">${head}<div class="iv">
+    ${ms.map(({ m, r }) => `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+      <span class="pill ${m.closed_at ? 'p-gray' : 'p-blue'}">${escapeHtml(evShort(r.event_id))} · ${escapeHtml(r.name)}${m.closed_at ? ' (종료)' : ''}</span>
+      ${m.closed_at ? '' : `<button class="btn bs" style="font-size:var(--fs-11);padding:2px 8px" onclick="drawerRemoveFromRound('${escAttr(m.id)}')">빼기</button>`}
+    </div>`).join('')}
+    <button class="btn bs" style="font-size:var(--fs-11);padding:3px 8px" onclick="drawerSendToRound(${c.id})">+ 컨택에 넣기</button>
+  </div></div>`;
+}
+
+export function drawerSendToRound(cid){
+  const co = coList().find(x => (x.contacts || []).some(p => +p.id === +cid));
+  if(!co) return;
+  window.openSendToRound?.([co.key], personName(getContactById(cid)) || '연락처', { from: '연락처에서 고른', people: [+cid] });
+}
+export async function drawerRemoveFromRound(mid){
+  if(await window.removeOrCloseMembers?.([mid])) renderContactDr();
 }
 
 export async function setContactOrigin(cid, key){
@@ -56,20 +84,10 @@ export async function setContactOrigin(cid, key){
 }
 
 export async function toggleSalesTarget(cid, evKey){
-  const i = SALES_TARGETS.findIndex(t => t.contact_id === cid && t.event_id === evKey);
-  if(i >= 0){
-    const [row] = SALES_TARGETS.splice(i, 1);
-    renderContactDr();
-    const r = await postToSheet({ sheet:'sales_targets', action:'delete', row:[row.id] }, '영업 DB 빼기');
-    if(r && r.ok === false){ SALES_TARGETS.push(row); renderContactDr(); }
-    return;
-  }
-  const row = { id: `ST-${Date.now()}`, event_id: evKey, contact_id: cid,
-    created_at: td(), created_by: (currentUser && currentUser.email) || '' };
-  SALES_TARGETS.push(row);
+  const p = isSalesTarget(cid, evKey) ? unmarkSalesTarget(cid, evKey) : markSalesTargets([cid], evKey);
   renderContactDr();
-  const r = await postToSheet({ sheet:'sales_targets', action:'upsertPartial', data:{ ...row, contact_id: String(cid) } }, '영업 DB 넣기');
-  if(r && r.ok === false){ SALES_TARGETS.splice(SALES_TARGETS.indexOf(row), 1); renderContactDr(); }
+  await p;
+  renderContactDr();
 }
 
 export function openContactDr(id){
@@ -921,6 +939,8 @@ export async function undoContactLeft(cid){
 window.openContactDr = openContactDr;
 window.setContactOrigin = setContactOrigin;
 window.toggleSalesTarget = toggleSalesTarget;
+window.drawerSendToRound = drawerSendToRound;
+window.drawerRemoveFromRound = drawerRemoveFromRound;
 window.closeContactDr = closeContactDr;
 window.renderContactDr = renderContactDr;
 window.startContactEdit = startContactEdit;
