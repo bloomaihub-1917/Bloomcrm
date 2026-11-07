@@ -757,3 +757,12 @@ tr.row-sel{background:var(--ad)}
 .pga-card:hover{height:auto!important;min-height:var(--h);z-index:6;box-shadow:0 6px 18px rgba(0,0,0,.16)}
 .pga-untimed{display:flex;gap:6px;flex-wrap:wrap;align-items:flex-start;padding:6px 0 4px 82px}
 .pga-untimed>*{flex:0 1 260px}
+
+/* 누르면 기업 정보 창이 뜨는 기업명 (Master DB 줄·카드·연락처 상세) */
+.co-link{ cursor:pointer; }
+.co-link:hover{ color:var(--a); text-decoration:underline; }
+/* 기업명 옆 «기업정보» 버튼 — 기업명만으로는 누를 수 있는지 잘 안 보여 따로 단다 */
+.co-info-btn{ margin-left:6px; padding:1px 6px; font-size:var(--fs-10); font-weight:600; line-height:1.5;
+  color:var(--a); background:var(--ad); border:1px solid var(--a); border-radius:var(--rs); cursor:pointer; vertical-align:middle; }
+.co-info-btn:hover{ background:var(--a); color:var(--W); }
+.co-info-btn.lead{ margin:0 6px 0 0; }

@@ -13,6 +13,7 @@ import './features/mdb/mdb-bulk.js';   // 마스터DB 선택 → 초청·일괄 
 import './features/mdb/mdb-views.js';   // 마스터DB 목록·카드·묶음·표 보기 — 스스로 window에 건다
 import './features/mdb/mdb-drag.js';   // 소속 기업·섹터·드래그로 분류 — 스스로 window에 건다
 import './features/mdb/contact-drawer.js';
+import './features/mdb/mdb-co-peek.js';   // 마스터DB 기업명 → 기업 정보 바로 보기 — 스스로 window에 건다
 import './features/quick-add.js';            // 제목 줄 «추가» 창(행사 참가자·연사) — 스스로 window에 건다   // 연락처 상세 창 — 스스로 window에 건다
 import './modules/upload-tab.js';
 import './features/upload/upload-read.js';   // 업로드 STEP 1 — 파일 읽기와 파일명으로 카테고리 짐작 — 스스로 window에 건다

@@ -115,7 +115,9 @@ export function renderContactDr(){
   /* 국문명이 없으면 « · John»처럼 점부터 시작하던 자리 */
   document.getElementById('con-dr-name').textContent = personFullName(c);
   document.getElementById('con-dr-meta').innerHTML =
-    '<span>🏢 ' + escapeHtml(c.orgKo||c.orgEn||'-') + '</span>' +
+    /* 기업명을 누르면 기업 정보 창(mdb-co-peek.js) */
+    '<span class="co-link" onclick="openCoPeek(' + c.id + ')" title="눌러서 기업 정보 보기">🏢 ' + escapeHtml(c.orgKo||c.orgEn||'-') +
+      ((c.orgKo||c.orgEn) ? '<button type="button" class="co-info-btn">기업정보</button>' : '') + '</span>' +
     '<span>🌐 ' + escapeHtml(contactCountryText(c)) + '</span>' +
     '<span class="pill ' + (CP[c.cat]||'p-gray') + '">' + (CL[c.cat]||c.cat) + '</span>';
 

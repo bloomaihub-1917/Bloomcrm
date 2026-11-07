@@ -60,7 +60,7 @@ function mdbCard(c, p, { showOrg = true } = {}){
       <div class="tdav${isSel ? ' sel' : ''}" style="${isSel ? '' : `background:${avB(gi)};color:${avF(gi)}`}"
         onclick="event.stopPropagation();toggleMDBSelect(${c.id})" title="탭해서 선택/해제">${isSel ? '✓' : ab(c.nameKo || c.nameEn || '')}</div>
       <div class="mdbc-hd">
-        ${showOrg && org ? `<div class="mdbc-org">${escapeHtml(org)}</div>` : ''}
+        ${showOrg && org ? `<div class="mdbc-org co-link" onclick="event.stopPropagation();openCoPeek(${c.id})" title="눌러서 기업 정보 보기">${escapeHtml(org)}<button type="button" class="co-info-btn" onclick="event.stopPropagation();openCoPeek(${c.id})">기업정보</button></div>` : ''}
         <div class="mdbc-nm"${(c.nameKo||c.nameEn) ? '' : ' style="color:var(--i5)"'}>${escapeHtml(personName(c))}${
           c.nameKo && c.nameEn ? `<span class="mdbc-en">${escapeHtml(c.nameEn)}</span>` : ''}${
           isBDContact(c) ? ' <span class="pill p-teal mdbc-tag">BD</span>' : ''}${
@@ -216,7 +216,7 @@ export function renderMDBFlat(pairs){
         <div class="tdav${isSel?' sel':''}" onclick="event.stopPropagation();toggleMDBSelect(${c.id}, event)" title="클릭해서 선택/해제 · Shift를 누른 채 누르면 사이 전부">${isSel?'✓':ab(c.nameKo||c.nameEn||"")}</div>
         <div><div class="tdnm"${(c.nameKo||c.nameEn) ? '' : ' style="color:var(--i5)" title="이름을 아직 모르는 줄 — 그 회사의 메인 컨택포인트예요"'}>${escapeHtml(personName(c))}${isBDContact(c)?' <span class="pill p-teal" style="font-size:var(--fs-9);padding:1px 5px">BD</span>':''}${isCLevelContact(c)?' <span class="pill p-gold" style="font-size:var(--fs-9);padding:1px 5px">C-level</span>':''}${leftPill(c)}</div><div class="tdsb">${c.nameKo && c.nameEn ? nameEn : ''}</div></div>
       </div></td>
-      <td style="max-width:200px"><div class="tdnm" style="font-size:var(--fs-13);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${orgTitle}">${c.orgKo?orgKo:orgEn}</div><div class="tdsb" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${orgEnTitle}">${c.orgKo?orgEn:''}</div></td>
+      <td style="max-width:200px">${(c.orgKo||c.orgEn) ? `<div class="tdnm co-link" style="font-size:var(--fs-13);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${orgTitle} — 눌러서 기업 정보 보기" onclick="event.stopPropagation();openCoPeek(${c.id})">${c.orgKo?orgKo:orgEn}</div>` : ''}<div class="tdsb" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${orgEnTitle}">${(c.orgKo||c.orgEn) ? `<button type="button" class="co-info-btn lead" onclick="event.stopPropagation();openCoPeek(${c.id})">기업정보</button>` : ''}${c.orgKo?orgEn:''}</div></td>
       <td style="color:var(--i2);font-size:var(--fs-12);white-space:nowrap">${escapeHtml(contactCountryText(c))}</td>
       <td style="color:var(--i3);font-size:var(--fs-12);max-width:170px;white-space:normal;line-height:1.4">
         <div>${escapeHtml(c.titleKo||'')}${c.titleKo&&c.titleEn?' · ':''}${escapeHtml(c.titleEn||'')}</div>
