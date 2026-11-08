@@ -610,9 +610,15 @@ export function openAddContactModal(){
             <select class="fi" id="ac-cat" style="width:100%">
               ${catOpts}
             </select></div>
-          <div><div class="mlbl">출처</div>
+          <div><div class="mlbl">들어온 경로 <span style="font-weight:400;color:var(--i4)">— 메모</span></div>
             <input class="fi" id="ac-source" placeholder="예: 명함, 행사 등록" value="직접 입력" style="width:100%"></div>
         </div>
+        <!-- 출처는 사람마다 하나, 바뀌지 않는다(docs/manual-db-axes.md) — 넣을 때 정해 둔다 -->
+        <div style="margin:-6px 0 16px"><div class="mlbl">출처</div>
+          <select class="fi" id="ac-origin" style="width:100%">
+            <option value="">— 고르지 않음 —</option>
+            ${CONTACT_ORIGINS.map(o => `<option value="${o.key}">${o.label} — ${o.desc}</option>`).join('')}
+          </select></div>
 
         <!-- 소속이 아직 기업DB에 없으면 여기서 만들어진다. 그때 섹터를 함께
              넣어 두지 않으면 미분류로 떨어져, 나중에 기업DB에서 다시 찾아
@@ -683,6 +689,7 @@ export async function saveNewContact(){
     phone2:  '',
     beat:    '',
     products:'',
+    origin:  get('ac-origin'),
   };
 
   /* 소속을 적었으면 그 기업이 있는지 보고 없으면 만든다.
@@ -706,7 +713,7 @@ export async function saveNewContact(){
     sheet: 'contacts',
     row: [c.id,c.nameKo,c.nameEn,c.orgKo,c.orgEn,c.titleKo,c.titleEn,c.deptKo,c.deptEn,
           c.country,c.cat,c.lang,c.source,c.date,c.status,c.email1,c.email2,c.phone1,c.phone2,
-          c.beat,c.products,c.tags||'',c.org_id||''],
+          c.beat,c.products,c.tags||'',c.org_id||'','','','','','','',c.origin||''],
   }, '연락처 추가', { silent: true });
   if(!r.ok){
     const idx = contacts.findIndex(x => x.id === c.id);

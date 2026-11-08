@@ -52,6 +52,9 @@ import {
   nextContactId,
   CONTACT_ATTEMPTS,
 } from '../state.js';
+import { CONTACT_ORIGINS } from '../constants.js';
+import { SALES_TARGETS } from '../state.js';
+import { isSalesTarget } from '../domain/sales-targets.js';
 import { CP, CL, RP, CAT_KEYS, ROLE_TO_CAT, COUNTRIES, avB, avF } from '../constants.js';
 import { td, ab, phoneMatch, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseSectorScope, parseTags, joinTags, isMobile, cleanEmail, personName, personFullName, leftPill, slugifySectorName } from '../utils.js';
 import { postToSheet } from '../api.js';
@@ -280,6 +283,12 @@ export function setMDBEv(ev){
   buildMDBEvList(); renderMDB();
 }
 export function setMDBType(t){ setMdbTypeFilter(t || null); renderMDB(); }
+/* 출처·행사별 영업 DB 거르기 (docs/manual-db-axes.md) — 같은 칩을 다시 누르면 풀린다 */
+export function setMDBOrigin(v){ mdbUi.mdbOrigin = mdbUi.mdbOrigin === v ? null : (v || null); renderMDB(); }
+export function setMDBSalesEv(v){ mdbUi.mdbSalesEv = mdbUi.mdbSalesEv === v ? null : (v || null); renderMDB(); }
+window.setMDBOrigin = setMDBOrigin;
+window.setMDBSalesEv = setMDBSalesEv;
+const originOf = (c) => CONTACT_ORIGINS.some(o => o.key === c.origin) ? c.origin : 'none';
 
 /* ══════════════════════════════════════════
    목록 위의 가로 거르개 — 행사와 참가 유형
@@ -332,6 +341,20 @@ export function buildMDBFilterBar(){
           byType.get(k).size);
       }).join('');
 
+  /* 출처 — 사람마다 하나, 바뀌지 않는다. 숫자는 전체 연락처 기준 */
+  const originCount = (k) => contacts.filter(c => originOf(c) === k).length;
+  const originChips = chip(!mdbUi.mdbOrigin, 'setMDBOrigin(null)', '', '전체', contacts.length)
+    + CONTACT_ORIGINS.map(o => chip(mdbUi.mdbOrigin === o.key, `setMDBOrigin('${o.key}')`, '', o.label, originCount(o.key))).join('')
+    + (originCount('none') ? chip(mdbUi.mdbOrigin === 'none', "setMDBOrigin('none')", '', '미정', originCount('none')) : '');
+
+  /* 행사별 영업 DB — 영업 DB가 한 명이라도 있는 행사만 */
+  const salesEvs = EVENT_LIST.filter(e => SALES_TARGETS.some(t => t.event_id === e.key));
+  const salesChips = salesEvs.length
+    ? chip(!mdbUi.mdbSalesEv, 'setMDBSalesEv(null)', '', '거르지 않음', contacts.length)
+      + salesEvs.map(e => chip(mdbUi.mdbSalesEv === e.key, `setMDBSalesEv('${escAttr(e.key)}')`, e.color, e.short,
+          new Set(SALES_TARGETS.filter(t => t.event_id === e.key).map(t => t.contact_id)).size)).join('')
+    : '<span style="font-size:var(--fs-10);color:var(--i4)">아직 없어요 — 컨택에 넣으면 그 행사의 영업 DB가 돼요</span>';
+
   el.innerHTML =
     `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
        <span style="font-size:var(--fs-10);color:var(--i4);flex:none">행사</span>
@@ -340,6 +363,14 @@ export function buildMDBFilterBar(){
      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
        <span style="font-size:var(--fs-10);color:var(--i4);flex:none">유형</span>
        <div class="seg" style="flex-wrap:wrap">${typeChips}</div>
+     </div>
+     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+       <span style="font-size:var(--fs-10);color:var(--i4);flex:none">출처</span>
+       <div class="seg" style="flex-wrap:wrap">${originChips}</div>
+     </div>
+     <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+       <span style="font-size:var(--fs-10);color:var(--i4);flex:none">영업 DB</span>
+       <div class="seg" style="flex-wrap:wrap">${salesChips}</div>
      </div>`;
 }
 
@@ -815,6 +846,8 @@ export function mdbFilterPairs(pairs){
       : participations.some(x => x.contactId === c.id && (x.role || '참가자') === mdbTypeFilter));
   }
   if(hidingLeft()) out = out.filter(({ c }) => !hasLeft(c));
+  if(mdbUi.mdbOrigin) out = out.filter(({ c }) => originOf(c) === mdbUi.mdbOrigin);
+  if(mdbUi.mdbSalesEv) out = out.filter(({ c }) => isSalesTarget(c.id, mdbUi.mdbSalesEv));
   if(mdbUi.mdbAi) out = out.filter(({ c }) => aiMatches(c, mdbUi.mdbAi.plan));
   if(mdbStat) out = out.filter(({ c }) => c.status === mdbStat);
   if(mdbUi.mdbCtryOnly) out = out.filter(({ c }) => !!ctryCheck(c));

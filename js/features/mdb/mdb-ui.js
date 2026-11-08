@@ -18,4 +18,6 @@ export const mdbUi = {
   mdbShowLeft: false,
   mdbAi: null,   // { q, plan }
   dragIds: [],
+  mdbOrigin: null,   // null | 'ours' | 'other' | 'sales' | 'none'(빈칸) — contacts.origin
+  mdbSalesEv: null,  // null | 행사 key — 그 행사의 영업 DB(sales_targets)인 사람만
 };
