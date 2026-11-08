@@ -8,6 +8,7 @@
 import { NEED_LABEL, NEED_MARK, SPEAKER_ROLES, SP_CONSENTS } from '../../constants.js';
 import { trackAction } from '../../core/audit-log.js';
 import { patchContact } from '../../modules/db-tab.js';
+import { ensureOrgsForNames, orgIdForName } from '../../domain/orgs.js';
 import { CONF_SESSIONS, SESSION_SPEAKERS, assignmentsFor, coOf, confCfg, contacts, contactsOfSpeaker, getSpeakerById, leadOf, nextContactId, rolesOfSpeaker, speakerNeed } from '../../state.js';
 import { countryName, countryOptions, escAttr, escapeHtml, td } from '../../utils.js';
 import { confLockNotice, confLocked, syncPartRole } from './conf-common.js';
@@ -278,6 +279,15 @@ ${
     email1: '', email2: '', phone1: '', phone2: '',
     beat: '', products: '', tags: '', org_id: '',
   };
+  /* 기업DB에도 잇는다 — 소속으로 기업을 찾고 없으면 만든다(업로드·연락처 편집과 같은 길).
+     안 하면 연락처만 생기고 기업DB에서는 이 사람이 빠져 보인다. */
+  const orgNm = (c.orgKo || c.orgEn).trim();
+  if(orgNm){
+    try {
+      await ensureOrgsForNames([orgNm]);
+      c.org_id = orgIdForName(orgNm) || '';
+    } catch(e){ console.warn('[speaker] 기업 연결 실패:', e); }
+  }
   contacts.push(c);
   const { postToSheet } = await import('../../api.js');
   const r = await postToSheet({
