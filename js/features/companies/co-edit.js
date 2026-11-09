@@ -383,29 +383,47 @@ export function editCoSector(key){
     </label>`;
   };
 
-  // 이 기업이 실제로 참가한 행사(및 공통)별로 섹터를 묶어서 보여준다 —
-  // 참가하지도 않은 다른 행사의 섹터 트리까지 뒤섞여 나오지 않게 함
-  const companyEventShorts = [...new Set((c.events||[]).map(e => e.short))];
-  const groups = [{ label: '공통', shorts: [null] }, ...companyEventShorts.map(short => ({ label: short, shorts: [short] }))];
-
-  const groupsHtml = groups.map(g => {
-    const items = COMPANY_SECTORS.filter(s => {
-      const scope = parseSectorScope(typeof s==='string'?s:s.name).eventShort;
-      return g.shorts.includes(scope);
-    });
+  /* 이 기업의 분야 안 섹터만 먼저 펼쳐 보인다 — 섹터가 60개쯤 되어 전부 늘어놓으면
+     고르기 힘들다. 공통·다른 분야는 «더 보기»로 접어 두되, 이미 고른 섹터가 들어 있는
+     묶음은 열어 둔다(접혀 있어도 체크는 그대로 저장된다). 분야가 아직 없으면 분야별로 모두 펼친다. */
+  const myDoms = coDomainsOf(c);
+  const nameOf = s => typeof s==='string' ? s : s.name;
+  const domsOf = s => domainOfSector(typeof s==='string' ? findSectorByName(s) : s);
+  const plain  = COMPANY_SECTORS.filter(s => !parseSectorScope(nameOf(s)).eventShort);
+  const section = (label, items, open, collapsible) => {
     if(!items.length) return '';
-    return `<div style="margin-bottom:8px">
-      <div style="font-size:var(--fs-10);font-weight:700;color:var(--i4);text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px">${escapeHtml(g.label)}</div>
-      ${items.map(checkboxRow).join('')}
-    </div>`;
-  }).join('');
+    const rows = items.map(checkboxRow).join('');
+    const head = `<span style="font-size:var(--fs-10);font-weight:700;color:var(--i4);letter-spacing:.04em">${escapeHtml(label)}</span>`;
+    if(!collapsible) return `<div style="margin-bottom:8px"><div style="margin-bottom:2px">${head}</div>${rows}</div>`;
+    const hasChecked = items.some(s => currentSectors.includes(nameOf(s)));
+    return `<details style="margin-bottom:6px" ${(open || hasChecked) ? 'open' : ''}><summary style="cursor:pointer;margin-bottom:2px">${head} <span style="font-size:var(--fs-10);color:var(--i4)">${items.length}</span></summary>${rows}</details>`;
+  };
+  let groupsHtml = '';
+  if(myDoms.length){
+    myDoms.forEach(d => { groupsHtml += section(`${domainName(d)} (이 기업 분야)`, plain.filter(s => domsOf(s).includes(d)), true, false); });
+    const common = plain.filter(s => domsOf(s).includes('common') && !myDoms.includes('common'));
+    groupsHtml += section('공통 — 공공기관·대학·협단체 등', common, false, true);
+    DOMAINS.filter(d => d.id !== 'common' && !myDoms.includes(d.id))
+      .forEach(d => { groupsHtml += section(`다른 분야 · ${d.name}`, plain.filter(s => domsOf(s).includes(d.id)), false, true); });
+    const noDom = plain.filter(s => !domsOf(s).length);
+    groupsHtml += section('분야 없음', noDom, false, true);
+  } else {
+    DOMAINS.forEach(d => { groupsHtml += section(d.name, plain.filter(s => domsOf(s).includes(d.id)), true, true); });
+    groupsHtml += section('분야 없음', plain.filter(s => !domsOf(s).length), true, true);
+  }
+  // 행사별로 이름 앞에 행사가 붙은 섹터(이 기업이 참가한 행사)는 따로 묶는다
+  const companyEventShorts = [...new Set((c.events||[]).map(e => e.short))];
+  companyEventShorts.forEach(short => {
+    const items = COMPANY_SECTORS.filter(s => parseSectorScope(nameOf(s)).eventShort === short);
+    groupsHtml += section(short, items, true, false);
+  });
 
   const pop = document.createElement('div');
   pop.id = 'co-sector-popover';
-  pop.style.cssText = `position:fixed;top:${rect.bottom+4}px;left:${rect.left}px;background:var(--W);border:1px solid var(--i6);border-radius:var(--r);padding:10px 12px;width:260px;max-height:320px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.16);z-index:9999`;
+  pop.style.cssText = `position:fixed;top:${rect.bottom+4}px;left:${rect.left}px;background:var(--W);border:1px solid var(--i6);border-radius:var(--r);padding:10px 12px;width:280px;max-height:360px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.16);z-index:9999`;
   pop.onclick = e => e.stopPropagation();
   pop.innerHTML = `
-    <div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:8px">섹터 선택 (복수 가능) — 이 기업이 참가한 행사별로 묶여 있어요</div>
+    <div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:8px">섹터 선택 (복수 가능) — 이 기업의 분야 안에서 먼저 보여요. 다른 분야는 «더 보기»를 눌러 펼쳐요</div>
     ${groupsHtml || '<div style="font-size:var(--fs-12);color:var(--i4)">등록된 섹터 없음</div>'}
     <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:10px">
       <button class="btn bs" style="font-size:var(--fs-11);padding:2px 8px" onclick="closeCoSectorPopover()">취소</button>

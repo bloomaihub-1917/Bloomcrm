@@ -141,7 +141,29 @@ export const CO_SORTS = [
   ['name', '기업명 순'],
   ['ko',   '국문명 순'],
   ['en',   '영문명 순'],
+  ['sector', '섹터 순'],
 ];
+
+/* 섹터 순서 — docs/category-plan.md의 큰 갈래 순(시공·설치 → 전기·설비 → 제작·렌탈 → 연출·기술
+   → 운영·서비스 → 장소 → 기타). 여기 없는 섹터는 섹터 표에 놓인 차례로 그 뒤에 온다.
+   «업종 미정»은 맨 끝. 기업은 첫 번째(주력) 섹터로 줄 세우고, 섹터가 없으면 뒤로 모은다. */
+const SECTOR_ORDER = [
+  '부스/무대/구조물',
+  '전기', '급배수·압축공기', '가스설비', '방염',
+  '판촉(기념품,굿즈)', '인쇄/출력', '행사가구/텐트/렌탈',
+  '영상', 'LED/LCD 디스플레이', '음향', '조명', '이벤트(특효)장치/장비', 'IT솔루션',
+  '대행사', '엔터에이전시(MC/공연)', '통역', '케이터링', '교통', '프리랜서',
+  '베뉴', '이벤트 프로그램/체험', '이벤트 부스', '이벤트·MICE 기타',
+];
+const sectorRank = (c) => {
+  const s = (c.sectors && c.sectors[0]) || c.sector || '';
+  if(!s) return 99999;
+  const i = SECTOR_ORDER.indexOf(s);
+  if(i >= 0) return i;
+  if(/업종 미정/.test(s)) return 9000;
+  const j = COMPANY_SECTORS.findIndex(x => (x.name || x) === s);
+  return 1000 + (j >= 0 ? j : 500);
+};
 
 export function setCoSort(v){
   coUi.coSort = v;
@@ -154,6 +176,10 @@ export function sortCoDb(){
     : coUi.coSort === 'en' ? (c.nameEn || '')
     : (c.nameKo || c.nameEn || '');
   CO_DB.sort((a, b) => {
+    if(coUi.coSort === 'sector'){
+      const d = sectorRank(a) - sectorRank(b);
+      if(d) return d;
+    }
     const x = coSortName(pick(a)), y = coSortName(pick(b));
     if(!x !== !y) return x ? -1 : 1;      // 그 이름이 없는 회사는 뒤로
     return x.localeCompare(y, 'ko');
