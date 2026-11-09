@@ -766,3 +766,5 @@ tr.row-sel{background:var(--ad)}
   color:var(--a); background:var(--ad); border:1px solid var(--a); border-radius:var(--rs); cursor:pointer; vertical-align:middle; }
 .co-info-btn:hover{ background:var(--a); color:var(--W); }
 .co-info-btn.lead{ margin:0 6px 0 0; }
+/* 데스크톱은 기업명을 누르면 같은 창이 열려 버튼이 군더더기다 — 손가락으로 이름을 누르기 어려운 모바일에서만 보인다 (2026-11-09) */
+@media (min-width:769px){ .co-info-btn{ display:none; } }
