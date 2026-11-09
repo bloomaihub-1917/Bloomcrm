@@ -47,9 +47,26 @@ let seq = 0;                 // 열린 순서 — 가장 나중에 열린 것부
 const order = new Map();     // close 함수 이름 → 열린 순번
 let trapped = false;         // 히스토리에 우리 항목이 들어가 있나
 
+/* 목록에 없는 팝업 — 화면 곳곳에서 body에 바로 붙이는 덮개 창(기업 정보, 메일 보내기,
+   양식 보관함 …)이 20곳이 넘는다. 하나씩 등록하지 않으면 새 팝업이 생길 때마다 빠져서
+   모바일 뒤로가기가 페이지를 넘겨 버렸다(2026-11-09). 그래서 body에 붙는 «화면을 다 덮는
+   고정 창»은 따로 등록하지 않아도 뒤로가기로 닫히게 한다. 닫을 때는 창을 떼어 낸다 —
+   이런 창은 모두 닫기 버튼도 remove()로 닫는다. */
+const generic = new Map();   // 요소 → 열린 순번
+function isCoverPopup(el){
+  if(!(el instanceof HTMLElement) || el.parentNode !== document.body) return false;
+  const cs = getComputedStyle(el);
+  if(cs.position !== 'fixed' || cs.display === 'none') return false;
+  const r = el.getBoundingClientRect();
+  return r.left <= 1 && r.top <= 1 && r.width >= innerWidth - 2 && r.height >= innerHeight - 2;
+}
+
 function openOnes(){
-  return OVERLAYS.filter(o => { try { return o.isOpen(); } catch(e){ return false; } })
-    .sort((a, b) => (order.get(a.close) || 0) - (order.get(b.close) || 0));
+  const reg = OVERLAYS.filter(o => { try { return o.isOpen(); } catch(e){ return false; } })
+    .map(o => ({ key: o.close, n: order.get(o.close) || 0, close: () => window[o.close]?.() }));
+  const gen = [...generic].filter(([el]) => el.isConnected && getComputedStyle(el).display !== 'none')
+    .map(([el, n]) => ({ key: el, n, close: () => el.remove() }));
+  return [...reg, ...gen].sort((a, b) => a.n - b.n);
 }
 
 /* 오버레이가 열렸을 때 — 히스토리 항목을 하나만 유지한다(중첩돼도 하나면 충분,
@@ -86,6 +103,16 @@ export function initOverlayNav(){
     };
   }
 
+  // 목록에 없는 덮개 팝업이 body에 붙으면 뒤로가기를 건다
+  new MutationObserver(muts => {
+    muts.forEach(m => m.addedNodes.forEach(el => {
+      if(generic.has(el) || !isCoverPopup(el)) return;
+      generic.set(el, ++seq);
+      if(!trapped){ history.pushState({ overlay: true }, ''); trapped = true; }
+    }));
+    muts.forEach(m => m.removedNodes.forEach(el => generic.delete(el)));
+  }).observe(document.body, { childList: true });
+
   window.addEventListener('popstate', () => {
     const open = openOnes();
     if(!open.length){
@@ -94,11 +121,8 @@ export function initOverlayNav(){
       return;
     }
     const top = open[open.length - 1];
-    const close = window[top.close];
-    if(typeof close === 'function'){
-      try { close(); } catch(e){ console.warn('[overlay-nav] 닫기 실패:', top.close, e); }
-    }
-    order.delete(top.close);
+    try { top.close(); } catch(e){ console.warn('[overlay-nav] 닫기 실패:', top.key, e); }
+    if(typeof top.key === 'string') order.delete(top.key); else generic.delete(top.key);
 
     // 아직 남은 오버레이가 있으면 다음 뒤로가기도 받도록 다시 건다
     if(openOnes().length){
