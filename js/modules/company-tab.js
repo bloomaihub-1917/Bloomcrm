@@ -608,9 +608,9 @@ function coSearchHit(c, q){
     || (sq && fields.some(v => v && squash(v).includes(sq)))
     || (bq && fields.some(v => v && bare(v).includes(bq)));
 }
-function coFilteredList({ skipCats = false, skipKind = false } = {}){
+function coFilteredList({ skipCats = false, skipKind = false, skipDomain = false } = {}){
   let list = CO_DB.filter(c => coSearchHit(c, coUi.coDashQ));
-  if(coDomainF){
+  if(coDomainF && !skipDomain){
     const names = coDomainNameSet();
     if(names) list = list.filter(c => coSecsOf(c).some(s => names.has(sectorKey(s))));
   }
@@ -646,23 +646,42 @@ export function setCoKind(k){
   renderCoList();
 }
 
+/* 종류는 거르기 줄의 작은 선택으로 내렸다 — 기업DB에서 중요한 건 분야·섹터라 위쪽 탭은 분야로 둔다 */
+export function setCoKindValue(k){
+  coUi.coKindF = k || '';
+  if(document.getElementById('cdt')?.style.display !== 'none') showCoFilteredList();
+  renderCoList();
+}
+
 function renderCoKindBar(n){
   const el = document.getElementById('co-kind-bar');
   if(!el) return;
-  // 숫자는 종류만 빼고 나머지 거르기를 다 거친 것 — 누르면 그만큼 나온다
-  const cnt = {};
-  const rest = coFilteredList({ skipKind: true });
-  rest.forEach(c => { if(c.kind) cnt[c.kind] = (cnt[c.kind] || 0) + 1; });
-  const used = ORG_KINDS.filter(k => cnt[k.key] || coUi.coKindF === k.key);
+  // 분야 탭 숫자는 분야만 빼고 나머지 거르기를 다 거친 것 — 누르면 그만큼 나온다
+  const rest = coFilteredList({ skipDomain: true });
+  const inDomain = (c, id) => {
+    const names = id === UNASSIGNED_DOMAIN
+      ? (() => { const sc = {}; CO_DB.forEach(x => (x.sectors && x.sectors.length ? x.sectors : [x.sector || '미분류']).forEach(s => { sc[s] = 1; })); return new Set(unassignedSectorNames(sc).map(sectorKey)); })()
+      : sectorNamesInDomain(id);
+    return coSecsOf(c).some(s => names.has(sectorKey(s)));
+  };
+  const domCnt = (id) => rest.filter(c => inDomain(c, id)).length;
+  const doms = [...DOMAINS.map(d => ({ id: d.id, name: d.name })), { id: UNASSIGNED_DOMAIN, name: '분야 미분류' }]
+    .map(d => ({ ...d, cnt: domCnt(d.id) })).filter(d => d.cnt || coDomainF === d.id);
+  const kindCnt = {};
+  coFilteredList({ skipKind: true }).forEach(c => { if(c.kind) kindCnt[c.kind] = (kindCnt[c.kind] || 0) + 1; });
   el.innerHTML = `
     <div class="seg">
-      <button class="seg-b${!coUi.coKindF ? ' on' : ''}" onclick="setCoKind('')">전체 ${rest.length}</button>
-      ${used.map(k => `<button class="seg-b${coUi.coKindF === k.key ? ' on' : ''}"
-        onclick="setCoKind('${escAttr(k.key)}')">${escapeHtml(k.label)} ${cnt[k.key] || 0}</button>`).join('')}
+      <button class="seg-b${!coDomainF ? ' on' : ''}" onclick="setCoDomainOnly(null)">전체 ${rest.length}</button>
+      ${doms.map(d => `<button class="seg-b${coDomainF === d.id ? ' on' : ''}"
+        onclick="setCoDomainOnly('${escAttr(d.id)}')">${escapeHtml(d.name)} ${d.cnt}</button>`).join('')}
     </div>
     <select class="fi" style="font-size:var(--fs-11);padding:3px 6px;width:auto" onchange="setCoSort(this.value)"
       title="이름 앞뒤의 (주)·주식회사는 빼고 줄 세웁니다">
       ${CO_SORTS.map(([v, l]) => `<option value="${v}"${coUi.coSort === v ? ' selected' : ''}>${l}</option>`).join('')}
+    </select>
+    <select class="fi" style="font-size:var(--fs-11);padding:3px 6px;width:auto" onchange="setCoKindValue(this.value)" title="기업 종류로 거르기">
+      <option value="">종류 전체</option>
+      ${ORG_KINDS.filter(k => kindCnt[k.key] || coUi.coKindF === k.key).map(k => `<option value="${escAttr(k.key)}"${coUi.coKindF === k.key ? ' selected' : ''}>${escapeHtml(k.label)} ${kindCnt[k.key] || 0}</option>`).join('')}
     </select>
     ${coCountryF ? `<span class="pill p-gray" style="font-size:var(--fs-10)">${{domestic:'국내',overseas:'해외',unknown:'미확인'}[coCountryF]}</span>` : ''}
     <span class="db-ct">${n}개 기업</span>
@@ -965,6 +984,8 @@ function coSectorOrder(){
     order[sectorKey(m.name)] = i++;
     COMPANY_SECTORS.filter(s => s.parent === m.id).forEach(s => { order[sectorKey(s.name)] = i++; });
   });
+  /* 정해 둔 섹터 순서(SECTOR_ORDER — 큰 갈래 순)가 있는 섹터는 그 순서가 먼저다 */
+  SECTOR_ORDER.forEach((name, idx) => { order[sectorKey(name)] = idx - SECTOR_ORDER.length; });
   return order;
 }
 
@@ -1066,6 +1087,7 @@ window.searchCoM = searchCoM;
 window.openCoSearch = openCoSearch;
 window.setCoSort = setCoSort;
 window.setCoKind = setCoKind;
+window.setCoKindValue = setCoKindValue;
 window.openAddOrgModal = openAddOrgModal;
 window.onAddOrgDomainChange = onAddOrgDomainChange;
 window.closeAddOrgModal = closeAddOrgModal;
