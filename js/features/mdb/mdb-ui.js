@@ -16,6 +16,7 @@ export const mdbUi = {
   lpSwallowClick: false,
   mdbCtryOnly: false,
   mdbShowLeft: false,
+  mdbShowOrgOnly: false,   // 담당자 없는 기업 줄 함께 보기
   mdbAi: null,   // { q, plan }
   dragIds: [],
   mdbOrigin: null,   // null | 'ours' | 'other' | 'sales' | 'none'(빈칸) — contacts.origin

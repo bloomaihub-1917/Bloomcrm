@@ -6,7 +6,7 @@
    고치려면 «기업DB에서 열기»로 간다 — 여기서는 읽기만 한다.
 ═══════════════════════════════════════════════════════════════ */
 
-import { CO_DB, CONTACT_ROUNDS, ROUND_MEMBERS, getContactById, hasLeft } from '../../state.js';
+import { CO_DB, CONTACT_ROUNDS, ORGS, ROUND_MEMBERS, contacts, getContactById, hasLeft } from '../../state.js';
 import { escapeHtml, escAttr, personName } from '../../utils.js';
 import { coList } from '../../domain/rounds.js';
 import { parseSectors } from '../../domain/sectors.js';
@@ -26,6 +26,29 @@ export function openCoPeek(cid){
     alert(`«${(c && (c.orgKo || c.orgEn)) || '소속'}»은(는) 기업DB에 연결된 기업이 없어요.\n연락처 상세 «편집»에서 기업을 연결해 주세요.`);
     return;
   }
+  peek(co);
+}
+
+/* ── 담당자 없는 기업 ──
+   마스터DB는 사람 명단이라 담당자가 한 명도 없는 기업(대표 전화·메일만 아는 곳)은
+   줄이 생기지 않는다. 대표번호는 회사의 것이라 가짜 연락처를 만들지 않고, 기업DB 값을
+   그대로 읽어 명단 아래에 기업 줄로만 보인다. 담당자를 알아내면 기업DB에서 추가한다. */
+const orgAsCo = (o) => CO_DB.find(c => c.key === o.id) || {
+  key: o.id, nameKo: o.name_ko || '', nameEn: o.name_en || '', kind: o.kind || '',
+  country: o.country || '', hq: o.hq || '', website: o.website || '', phone: o.phone || '', email: o.email || '',
+  address: o.address || '', products: o.products || '', intro: o.intro || '', notes: o.notes || '',
+  contacts: [], events: [], org: o,
+};
+export function orgsWithoutContacts(){
+  const has = new Set(contacts.map(c => String(c.org_id || '')).filter(Boolean));
+  return ORGS.filter(o => !has.has(String(o.id)));
+}
+export function openCoPeekOrg(orgId){
+  const o = ORGS.find(x => String(x.id) === String(orgId));
+  if(o) peek(orgAsCo(o));
+}
+
+function peek(co){
   const o = co.org || {};
   const ppl = (co.contacts || []).map(p => getContactById(p.id) || p);
   const working = ppl.filter(p => !hasLeft(p));
@@ -79,3 +102,4 @@ export function openCoPeek(cid){
 }
 
 window.openCoPeek = openCoPeek;
+window.openCoPeekOrg = openCoPeekOrg;

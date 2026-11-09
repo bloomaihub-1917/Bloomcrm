@@ -71,6 +71,7 @@ import { sanitizeForCsv } from './audit-tab.js';
 import { countryCheck, countryCheckText, continentOf, CONTINENT_ORDER } from '../country-signal.js';
 /* 화면 상태는 ../features/mdb/mdb-ui.js의 mdbUi 한곳에 둔다 — 이 탭의 구획을 다른 파일로 떼어도 같은 값을 보게 */
 import { mdbUi } from '../features/mdb/mdb-ui.js';
+import { orgsWithoutContacts } from '../features/mdb/mdb-co-peek.js';
 
 /* 이 사람의 국가가 자료와 어긋나는지 — 소속 기업 국가도 함께 넘겨야
    «기업에서 따라온 값 같아요»까지 말해 줄 수 있다 */
@@ -879,6 +880,7 @@ export function renderMDB(){
   const pairs = window.getMDBPairs();
   renderCtryChip();
   renderLeftChip();
+  renderOrgOnly();
   renderMdbAiBar();
   buildMDBFilterBar();
   /* 행사 목록도 여기서 다시 그린다 — 분야를 바꾸면 그 안의 인원으로 세어야
@@ -952,6 +954,41 @@ function renderLeftChip(){
     title="회사를 떠난 담당자예요. 목록에서는 내려 두고, 행사 참여 이력은 그대로 남습니다. 눌러서 함께 봅니다."
     onclick="toggleMdbLeft()">퇴사 ${n}</button>`;
 }
+
+/* 담당자 없는 기업 — 칩에 몇 곳인지 적고, 누르면 명단 아래에 기업 줄로 보인다.
+   사람 명단(행사·분야·카테고리로 거른 것)과는 다른 축이라 행사로 거를 때는 띄우지 않고,
+   검색어는 기업명·대표 전화·메일에만 건다. 줄을 누르면 기업정보 창이 열린다. */
+function renderOrgOnly(){
+  const chip = document.getElementById('mdb-orgonly-chip');
+  const box = document.getElementById('mdb-orgonly');
+  if(!chip || !box) return;
+  const all = orgsWithoutContacts();
+  if(!all.length || mdbEvFilter){ chip.style.display = 'none'; box.style.display = 'none'; return; }
+  const on = mdbUi.mdbShowOrgOnly;
+  chip.style.display = '';
+  chip.innerHTML = `<button class="pill ${on ? 'p-amber' : 'p-gray'}" style="border:0;cursor:pointer;font:inherit"
+    title="기업DB에는 있는데 담당자가 한 명도 없는 기업이에요(대표 전화·메일만 아는 곳 포함). 눌러서 명단 아래에 함께 봅니다."
+    onclick="toggleMdbOrgOnly()">담당자 없는 기업 ${all.length}</button>`;
+  if(!on){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  // 전화번호는 하이픈·괄호 없이 쳐도 걸리게
+  const norm = (v) => String(v || '').toLowerCase().replace(/[\s\-().]/g, '');
+  const q = norm(mdbQuery());
+  const hit = (o) => !q || [o.name_ko, o.name_en, o.aliases, o.phone, o.email].some(v => norm(v).includes(q));
+  const known = (o) => (o.phone || o.email) ? 1 : 0;
+  const list = all.filter(hit).sort((a, b) => known(b) - known(a)
+    || String(a.name_ko || a.name_en || '').localeCompare(String(b.name_ko || b.name_en || ''), 'ko'));
+  box.style.display = '';
+  box.innerHTML = `<div class="sec" style="font-size:var(--fs-12);font-weight:600">담당자 없는 기업 ${list.length}곳
+      <span style="font-weight:400;color:var(--i4)"> — 담당자를 알아내면 줄을 눌러 «기업DB에서 열기»로 추가하세요</span></div>
+    <div class="sec-rows">${list.map(o => `<div onclick="openCoPeekOrg('${escAttr(o.id)}')"
+        style="display:flex;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--i8);cursor:pointer;font-size:var(--fs-12);color:var(--i3)">
+        <span style="font-weight:600;min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(o.name_ko || o.name_en || '(이름 없음)')}${o.name_ko && o.name_en ? ` <span style="font-weight:400;color:var(--i4)">${escapeHtml(o.name_en)}</span>` : ''}</span>
+        ${o.kind ? `<span class="pill p-gray">${escapeHtml(o.kind)}</span>` : ''}
+        <span style="width:140px;flex:none">${escapeHtml(o.phone ? '대표 ' + o.phone : '담당자 미상')}</span>
+        <span style="width:200px;flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--i4)">${escapeHtml(o.email || '')}</span>
+      </div>`).join('') || '<div style="padding:8px 0;font-size:var(--fs-12);color:var(--i4)">검색어에 맞는 기업이 없어요</div>'}</div>`;
+}
+window.toggleMdbOrgOnly = () => { mdbUi.mdbShowOrgOnly = !mdbUi.mdbShowOrgOnly; renderMDB(); };
 
 /* 원본 1844~1876행 */
 export function updateMDBBadges(pairs){
