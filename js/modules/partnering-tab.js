@@ -17,7 +17,7 @@
    확정된 곳에 다시 연락할 일은 «컨택으로 보내기»로 차수 명단에 넣어 컨택 탭에서 한다.
 ═══════════════════════════════════════════════════════════════ */
 
-import { EVENT_LIST, contacts, participations, evPartOn, hasLeft, PART_TYPES, syncPartColors, API_BASE_URL } from '../state.js';
+import { EVENT_LIST, contacts, participations, evPartOn, hasLeft, PART_TYPES, syncPartColors, API_BASE_URL, contactOrgEn } from '../state.js';
 import { PARTNERING_SIDES, PARTNERING_UNSIDED } from '../constants.js';
 import { td, escapeHtml, escAttr, countryName, isMobile } from '../utils.js';
 import { postToSheet } from '../api.js';
@@ -85,7 +85,7 @@ function mkRow(c, extra){
   return {
     cid: c.id,
     name: c.nameKo || c.nameEn || '', nameEn: c.nameEn || '',
-    org, orgEn: c.orgEn || '', orgKey: normalizeCompanyKey(org || c.orgEn),
+    org, orgEn: contactOrgEn(c), orgKey: normalizeCompanyKey(org || c.orgEn),
     title: c.titleKo || c.titleEn || '', dept: c.deptKo || c.deptEn || '',
     country: c.country || '', email: c.email1 || c.email2 || '',
     phone: c.phone1 || c.phone2 || '', products: c.products || '',

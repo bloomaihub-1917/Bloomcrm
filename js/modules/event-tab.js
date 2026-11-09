@@ -22,7 +22,7 @@
 
 import {
   EVENT_LIST, contacts, participations, targets, DOMAINS,
-  EXHIBITORS, exhibitorsForEvent, PART_TYPES, evParts, evPartDone, getOrgById, CO_DB, speakersForEvent,
+  EXHIBITORS, exhibitorsForEvent, PART_TYPES, evParts, evPartDone, getOrgById, contactOrgEn, CO_DB, speakersForEvent,
 } from '../state.js';
 import { RP, EVENT_PARTS, partStateOf, PARTNERING_SIDES, PARTNERING_UNSIDED } from '../constants.js';
 import { td, escapeHtml, escAttr, countryName, isMobile, mobEvSelectHtml } from '../utils.js';
@@ -87,7 +87,7 @@ function evPeople(evKey){
         cid: c.id, roles: new Set(), recs: 0,
         name: c.nameKo || c.nameEn || p.contact || '',
         nameEn: c.nameEn || '', title: c.titleKo || c.titleEn || '',
-        org, orgEn: c.orgEn || '', orgKey: normalizeCompanyKey(org || c.orgEn),
+        org, orgEn: contactOrgEn(c), orgKey: normalizeCompanyKey(org || c.orgEn),
         country: c.country || '', email: c.email1 || c.email2 || '',
         sector: c.beat || '',
         phone: c.phone1 || c.phone2 || '', dept: c.deptKo || c.deptEn || '',

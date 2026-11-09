@@ -9,7 +9,7 @@ import { changed, removed, trackAction } from '../../core/audit-log.js';
 import { countryCheckText } from '../../country-signal.js';
 import { buildCoDB } from '../../domain/co-db.js';
 import { ensureOrgsForNames, orgIdForName } from '../../domain/orgs.js';
-import { CONTACT_ROUNDS, EVENT_LIST, EXH_CONTACTS, PART_TYPES, ROUND_MEMBERS, SALES_TARGETS, contactEvents, contacts, evColor, evShort, getContactById, hasLeft, movedTo, nextContactId, participations, speakersOfContact } from '../../state.js';
+import { CONTACT_ROUNDS, EVENT_LIST, EXH_CONTACTS, PART_TYPES, ROUND_MEMBERS, SALES_TARGETS, contactEvents, contacts, evColor, evShort, getContactById, hasLeft, movedTo, nextContactId, participations, speakersOfContact, contactOrgEn } from '../../state.js';
 import { ab, countryName, countryOptions, escAttr, escapeHtml, personFullName, personName, td, sectorKey } from '../../utils.js';
 import { coDomainOptionsHtml, coSectorOptionsHtml, currentCoSectorPick } from '../../modules/company-tab.js';
 import { contactMailsHtml } from '../../modules/contact-mails.js';
@@ -299,7 +299,7 @@ export function contactViewPanel(c){
     <div class="sct">기본 정보</div>
     <div class="ig">
       <div class="ic"><div class="il">기업</div><div class="iv">${escapeHtml(c.orgKo)||'-'}</div></div>
-      <div class="ic"><div class="il">영문 기업</div><div class="iv">${escapeHtml(c.orgEn)||'-'}</div></div>
+      <div class="ic"><div class="il">영문 기업</div><div class="iv">${escapeHtml(contactOrgEn(c))||'-'}</div></div>
       <div class="ic"><div class="il">국가</div><div class="iv">${escapeHtml(contactCountryText(c)) || '-'}${
         (() => {
           /* 괄호만 보면 그게 거주지인지 알 수 없다 — 상세에서는 풀어 쓴다 */

@@ -7,7 +7,7 @@
 
 import { CL, CP, ROLE_TO_CAT, avB, avF } from '../../constants.js';
 import { sanitizeForCsv } from '../../modules/audit-tab.js';
-import { EVENT_LIST, contactEvents, contacts, evColor, evShort, getContactById, hasLeft, isConfirmedFor, mdbCat, mdbEvFilter, mdbSelected, mdbStat, participations, setMdbCat, setMdbStat, sheetsConnected } from '../../state.js';
+import { EVENT_LIST, contactEvents, contacts, evColor, evShort, getContactById, hasLeft, isConfirmedFor, mdbCat, mdbEvFilter, mdbSelected, mdbStat, participations, setMdbCat, setMdbStat, sheetsConnected, contactOrgEn } from '../../state.js';
 import { ab, cleanEmail, escAttr, escapeHtml, leftPill, personName, td } from '../../utils.js';
 import { mdbUi } from './mdb-ui.js';
 import { applyMDBSort, contactCountryText, ctryPill, hidingLeft, isBDContact, isCLevelContact, matchesQuery, mdbFilterPairs, renderMDB, setMDBRowOrder, sortMDBBy, toggleMDBSelect, toggleMDBSelectAll } from '../../modules/db-tab.js';
@@ -191,7 +191,7 @@ export function renderMDBFlat(pairs){
     const nameKo = escapeHtml(c.nameKo), nameEn = escapeHtml(c.nameEn);
     const orgKo  = escapeHtml(c.orgKo),  orgEn  = escapeHtml(c.orgEn);
     const orgTitle = escapeHtml(c.orgKo||c.orgEn||'');
-    const orgEnTitle = escapeHtml(c.orgKo?(c.orgEn||''):'');
+    const orgEnTitle = escapeHtml(c.orgKo?contactOrgEn(c):'');
 
     // Events column
     let evCell = '';

@@ -156,6 +156,15 @@ export const codeCls = (listKey, evKey, code) =>
 export const ORGS = [];
 
 export function getOrgById(id){ return ORGS.find(o => o.id === id); }
+/* 사람의 영문 소속 — 본인 칸이 비면 연결된 기업DB의 영문명.
+   회사 영문명은 기업DB 한 곳에서 관리한다. 사람 칸은 업로드 때 채워진 사람만 있어
+   같은 회사 직원인데 누구는 영문명이 보이고 누구는 안 보였다(2026-11-09, 685명). */
+export function contactOrgEn(c){
+  if(!c) return '';
+  if(c.orgEn) return c.orgEn;
+  const o = c.org_id ? getOrgById(c.org_id) : null;
+  return (o && o.name_en) || '';
+}
 
 /* 이름으로 기업 찾기 — 현재 이름과 옛 이름(aliases)을 함께 본다.
    업로드로 들어온 옛 표기를 같은 회사로 이어 붙일 때 쓴다. */
