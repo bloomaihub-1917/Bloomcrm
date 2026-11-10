@@ -285,7 +285,15 @@ export function buildCoCAT(){
         const sc = parseSectorScope(s.name);
         return (sc.eventShort||'') === short;
       };
-      const mainsHere = COMPANY_SECTORS.filter(s => !s.parent && inScope(s));
+      /* 사이드바도 목록 «섹터 순»과 같은 순서(SECTOR_ORDER)로 — 정해 둔 것은 그 차례, 나머지는 표 순서, 업종 미정은 끝 */
+      const nameRank = n => {
+        const i = SECTOR_ORDER.indexOf(n);
+        if(i >= 0) return i;
+        if(/업종 미정/.test(n)) return 9000;
+        return 1000 + COMPANY_SECTORS.findIndex(x => x.name === n);
+      };
+      const mainsHere = COMPANY_SECTORS.filter(s => !s.parent && inScope(s))
+        .sort((a, b) => nameRank(a.name) - nameRank(b.name));
       const subsByParent = {};
       COMPANY_SECTORS.forEach(s => {
         if(s.parent && inScope(s)){
