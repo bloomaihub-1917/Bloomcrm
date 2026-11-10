@@ -46,8 +46,11 @@
 .nt-print-page{background:var(--i7);margin:0;padding:16px;font-family:'Pretendard','Malgun Gothic',sans-serif}
 .nt-sheet{display:flex;flex-wrap:wrap;gap:16px;justify-content:center}
 .nt-page{display:flex;justify-content:center;align-items:flex-start}
+/* 한 쪽에 여러 장 — 칸 너비는 판 너비, 간격은 인쇄 창에서(nt-print.js) */
+.nt-grid{display:grid;justify-content:center;align-content:start}
 .nt-a4{width:210mm;height:296mm;background:#fff;display:flex;justify-content:center;align-items:flex-start;overflow:hidden;box-shadow:var(--sh)}
 .nt-a4 .nt-shift{transform-origin:top center}
+.nt-a4 .nt-frame{box-shadow:none}
 .nt-shift{transform:translate(var(--nt-dx,0mm),var(--nt-dy,0mm)) scale(var(--nt-scale,1));transform-origin:center}
 .nt-print-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;background:var(--W);
   border:1px solid var(--i6);border-radius:var(--r);padding:10px 14px;margin-bottom:16px;font-size:var(--fs-12)}
@@ -71,7 +74,8 @@
      줄여(100mm → 96mm, 2026-11-10 실측) 찍었다. 폭을 쪽에 맡기면 여백을 어떻게 골라도 줄지 않는다.
      높이도 못 박지 않는다 — 여백이 있으면 296mm가 넘쳐 빈 쪽이 붙는다. 쪽 나눔은 break-after가 맡는다 */
   .nt-page{width:100%;overflow:hidden}
-  .nt-page.nt-a4{box-shadow:none;width:100%;height:auto}
+  /* 판을 내려 찍은 만큼(--nt-dy) 아래를 늘려 둔다 — 안 그러면 한 쪽에 여러 장일 때 아래 줄 끝이 잘린다 */
+  .nt-page.nt-a4{box-shadow:none;width:100%;height:auto;padding-bottom:max(0mm,var(--nt-dy,0mm))}
   .nt-card{box-shadow:none;print-color-adjust:exact;-webkit-print-color-adjust:exact}
 }
 
