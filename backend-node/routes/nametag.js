@@ -2,7 +2,7 @@
    nametag.js — 네임택 발급 (행사 DB › 네임택 탭)
 
      GET  /api/nametag/<행사>            판 + 발급 기록(최근 1000장)
-     PUT  /api/nametag/<행사>/template   판 저장 { width_mm, height_mm, lang, layout, print_offset }
+     PUT  /api/nametag/<행사>/template   판 저장 { width_mm, height_mm, lang, layout, print_offset, background_data, background_print }
      POST /api/nametag/<행사>/issue      발급 { cards:[…], reason } → batch_id와 기록
      POST /api/nametag/print/<id>/void   «인쇄 안 됨» 되돌리기(기록은 지우지 않는다)
 
@@ -38,7 +38,7 @@ router.use((req, res, next) => {
 });
 
 const TEMPLATE_COLS = `id, name, width_mm::float8 AS width_mm, height_mm::float8 AS height_mm, lang,
-  background_print, layout, print_offset, is_default, updated_at, updated_by`;
+  background_data, background_print, layout, print_offset, is_default, updated_at, updated_by`;
 const PRINT_COLS = `id, event_id, batch_id, template_id, person_key, source, ref_id, contact_id, name, company, job_title,
   badge, lang, kind, reason, printed_by, printed_at, voided_at, voided_by`;
 
@@ -54,8 +54,11 @@ router.get('/:eventId', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-/* 판 저장 — 행사마다 기본 판 하나를 고쳐 쓴다(여러 판 고르기는 판 편집기와 함께 넣는다).
-   레이아웃의 키·범위는 화면이 읽을 때 normalizeLayout으로 다시 맞추므로, 여기서는 모양만 본다. */
+/* 판 저장 — 행사마다 기본 판 하나를 고쳐 쓴다(설정 › 행사 상세 › 네임택).
+   레이아웃의 키·범위는 화면이 읽을 때 normalizeLayout으로 다시 맞추므로, 여기서는 모양만 본다.
+   배경은 «글자를 어디에 놓을지» 맞춰 보는 가늠자라 화면이 긴 변 1600px JPEG로 줄여 data URL로 보낸다.
+   파일 저장소가 없어 연사 사진(routes/photos.js)처럼 표에 둔다. 한 응답 4.5MB 한도(Vercel) 안에 들게 2MB까지만 받는다. */
+const BG_MAX = 2 * 1024 * 1024;
 router.put('/:eventId/template', async (req, res, next) => {
   try {
     const ev = String(req.params.eventId);
@@ -63,14 +66,21 @@ router.put('/:eventId/template', async (req, res, next) => {
     const layout = b.layout && typeof b.layout === 'object' ? JSON.stringify(b.layout) : null;
     if (!layout || layout.length > 20000) return res.status(400).json({ ok: false, error: '판 모양이 올바르지 않아요' });
     const offset = JSON.stringify({ x: num(b.print_offset?.x, -10, 10, 0), y: num(b.print_offset?.y, -10, 10, 0), scale: num(b.print_offset?.scale, 90, 110, 100) });
+    const bg = typeof b.background_data === 'string' && b.background_data ? b.background_data : null;
+    if (bg && (!/^data:image\/(jpeg|png|webp);base64,/.test(bg) || bg.length > BG_MAX)) {
+      return res.status(400).json({ ok: false, error: '배경 이미지는 JPG·PNG·WebP, 2MB까지예요' });
+    }
     const vals = [ev, text(b.name, 40) || '기본 네임택',
       num(b.width_mm, 20, 420, 90), num(b.height_mm, 20, 420, 120),
-      LANGS.has(b.lang) ? b.lang : 'auto', layout, offset, new Date().toISOString(), req.user?.email || ''];
+      LANGS.has(b.lang) ? b.lang : 'auto', layout, offset, new Date().toISOString(), req.user?.email || '',
+      bg, !!(bg && b.background_print)];
     const { rows } = await pool.query(`
-      INSERT INTO nametag_templates (id, event_id, name, width_mm, height_mm, lang, layout, print_offset, is_default, updated_at, updated_by)
-      VALUES ('NT-' || md5(random()::text || clock_timestamp()::text), $1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, true, $8, $9)
+      INSERT INTO nametag_templates (id, event_id, name, width_mm, height_mm, lang, layout, print_offset, is_default, updated_at, updated_by,
+        background_data, background_print)
+      VALUES ('NT-' || md5(random()::text || clock_timestamp()::text), $1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, true, $8, $9, $10, $11)
       ON CONFLICT (event_id) WHERE is_default DO UPDATE SET name = EXCLUDED.name, width_mm = EXCLUDED.width_mm,
         height_mm = EXCLUDED.height_mm, lang = EXCLUDED.lang, layout = EXCLUDED.layout, print_offset = EXCLUDED.print_offset,
+        background_data = EXCLUDED.background_data, background_print = EXCLUDED.background_print,
         updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by
       RETURNING ${TEMPLATE_COLS}`, vals);
     res.json({ ok: true, template: rows[0] });

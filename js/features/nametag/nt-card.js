@@ -18,10 +18,13 @@ function textEl(el, value){
     class="nt-fit" style="font-size:${el.size}pt;font-weight:${el.weight};transform-origin:left center">${escapeHtml(value)}</span></div>`;
 }
 
-/* card: { name, company, job_title, badge } — 이미 국·영문을 고른 값 */
-export function ntCardHtml(template, card){
+/* card: { name, company, job_title, badge } — 이미 국·영문을 고른 값
+   배경은 가늠자다. 이미 인쇄된 네임택 용지에 얹어 찍는 게 기본이라 forPrint에서는 background_print가 켜져 있을 때만 그린다 */
+export function ntCardHtml(template, card, { forPrint = false } = {}){
   const l = template.layout;
+  const bg = template.background_data && (!forPrint || template.background_print);
   return `<div class="nt-card" style="width:${template.width_mm}mm;height:${template.height_mm}mm">`
+    + (bg ? `<img class="nt-bg" src="${template.background_data}" alt="">` : '')
     + textEl(l.badge, card.badge || '')
     + textEl(l.name, card.name || '')
     + textEl(l.company, card.company || '')

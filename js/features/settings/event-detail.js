@@ -21,6 +21,7 @@ import { refreshAfterEventChange } from './taxonomy.js';
 import { renderEvMgr } from './event-admin.js';
 import { applyBoothItemsToEvent, clDef, clRowsHtml, clRowsOf, clSlug, renderEvCfgList, saveCodeRow } from './code-lists.js';
 import { mountEquipCatalogIdle, openEquipFor } from './equip-catalog.js';
+import { mountNametagEditor } from '../nametag/nt-editor.js';
 
 /* ══════════════════════════════════════════
    행사 상세 설정 — 설정 › 행사 관리에서 행사 하나를 고르면 열린다
@@ -37,7 +38,7 @@ import { mountEquipCatalogIdle, openEquipFor } from './equip-catalog.js';
 ══════════════════════════════════════════ */
 
 const EV_SEGS = [['basic','기본 정보'], ['parts','진행 파트'],
-  ['booth','부스'], ['equip','비품'], ['due','일정'], ['conf','컨퍼런스'], ['mail','메일']];
+  ['booth','부스'], ['equip','비품'], ['due','일정'], ['conf','컨퍼런스'], ['mail','메일'], ['nametag','네임택']];
 
 /* 전시를 안 하는 행사에서는 부스·비품·일정이 뜻이 없다. 감추지 않고 잠그는 건
    "왜 없지"로 끝나지 않게 하려는 것이다 — 켜는 자리를 같은 화면에서 알려준다. */
@@ -117,6 +118,8 @@ export function renderEvDetail(){
     : settingsUi.evDetailSeg === 'due'   ? evDueHtml(ev)
     : settingsUi.evDetailSeg === 'conf'  ? window.evConfHtml(ev)
     : settingsUi.evDetailSeg === 'mail'  ? '<div id="evd-mailbox"></div>'
+    /* 네임택 판 — 용지·글자 자리·배경. 발급은 행사 DB › 네임택(features/nametag/nt-editor.js) */
+    : settingsUi.evDetailSeg === 'nametag' ? '<div id="nt-ed"></div>'
     : evBasicHtml(ev);
 
   el.innerHTML = `
@@ -140,6 +143,7 @@ export function renderEvDetail(){
   mountEquipCatalogIdle();
   if(settingsUi.evDetailSeg === 'conf' && !locked) window.fillFlowFiles(ev.key);
   if(settingsUi.evDetailSeg === 'mail') renderEvMailbox(ev.key);
+  if(settingsUi.evDetailSeg === 'nametag') mountNametagEditor(ev.key);
 }
 
 /* ── 행사 공용 메일 ── (설정 › 행사 관리 › 메일)

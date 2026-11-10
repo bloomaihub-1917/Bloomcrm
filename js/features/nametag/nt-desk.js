@@ -11,8 +11,8 @@
    왼쪽 명단은 #evdb-rows라 검색(event-tab.js setEvDbQuery)이 목록만 갈아 끼운다.
 ═══════════════════════════════════════════════════════════════ */
 import { escapeHtml, escAttr } from '../../utils.js';
-import { normalizeTemplate, SIZE_PRESETS, LANG_OPTIONS, REISSUE_REASONS, MM_PX } from '../../domain/nametag-layout.js';
-import { loadNametag, saveNametagTemplate, issueNametags, voidNametag } from '../../api/nametag.js';
+import { normalizeTemplate, LANG_OPTIONS, REISSUE_REASONS, MM_PX } from '../../domain/nametag-layout.js';
+import { loadNametag, issueNametags, voidNametag } from '../../api/nametag.js';
 import { ntPeople, cardOf, langOf, SOURCE_LABEL } from './nt-people.js';
 import { ntCardHtml } from './nt-card.js';
 import { fitNametags } from './nt-fit.js';
@@ -96,7 +96,6 @@ export function ntPartHtml(ev, query){
   const re = live.filter(p => p.kind === 'reissue').length;
   const wi = live.filter(p => p.kind === 'walk_in').length;
   const t = nt.template;
-  const sizeIdx = SIZE_PRESETS.findIndex(s => s.width_mm === t.width_mm && s.height_mm === t.height_mm);
   const seg = (cur, list, fn) => `<div class="seg">${list.map(([k, l]) =>
     `<button class="seg-b${cur === k ? ' on' : ''}" onclick="${fn}('${k}')">${l}</button>`).join('')}</div>`;
 
@@ -113,11 +112,8 @@ export function ntPartHtml(ev, query){
       ${seg(nt.filter, [['todo', '안 받음'], ['done', '받음'], ['all', '전체']], 'ntSetFilter')}
       ${seg(nt.src, [['', '모두'], ['speaker', '연사'], ['exh', '부스'], ['part', '참가자']], 'ntSetSrc')}
       <div style="flex:1"></div>
-      <select class="fi" style="width:auto" onchange="ntSetPaper(this.value)" title="네임택 용지 크기 — 이 행사 기본 판에 저장돼요">
-        ${SIZE_PRESETS.map((s, i) => `<option value="${i}"${i === sizeIdx ? ' selected' : ''}>${s.label}</option>`).join('')}
-        ${sizeIdx < 0 ? `<option selected>${t.width_mm} × ${t.height_mm}mm</option>` : ''}</select>
-      <select class="fi" style="width:auto" onchange="ntSetTplLang(this.value)" title="국문·영문 중 무엇으로 찍을지 — 사람마다 오른쪽에서 바꿀 수 있어요">
-        ${LANG_OPTIONS.map(([k, l]) => `<option value="${k}"${t.lang === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
+      <span class="nt-note" title="용지·글자 자리·기본 말은 설정 › 행사 상세 › 네임택에서 정해요">판 ${t.width_mm} × ${t.height_mm}mm · ${escapeHtml((LANG_OPTIONS.find(o => o[0] === t.lang) || LANG_OPTIONS[0])[1].replace(/ \(.*\)/, ''))}${t.id ? '' : ' (기본값)'}</span>
+      <button class="btn bs" onclick="ntOpenEditor()" title="설정 › 행사 상세 › 네임택 — 용지 크기·글자 자리·배경">판 고치기</button>
       <button class="btn bs" onclick="ntWalkIn(true)" title="명단에 없는 사람 — 이름·소속만 기록에 남고 마스터DB에는 넣지 않아요">＋ 현장 신규</button>
     </div>
     <div class="sec-rows nt-layout">
@@ -257,16 +253,18 @@ export function ntWalkEdit(field, value){ if(!nt.walkIn) return; nt.walkIn[field
 export function ntSetReason(v){ nt.reason = v; }
 export function ntReload(){ nt.loaded = ''; nt.err = ''; ensureLoaded(nt.ev); rerender(); }
 
-async function saveTemplate(patch){
-  const next = { ...nt.template, ...patch };
-  try {
-    const j = await saveNametagTemplate(nt.ev, next);
-    nt.template = normalizeTemplate(j.template);
-  } catch(e){ alert('판을 저장하지 못했어요 — ' + e.message); }
-  rerender();
+/* 판은 설정 › 행사 상세 › 네임택(nt-editor.js)에서 고친다. 저장하면 여기로 알려 준다 */
+export function ntTemplateSaved(evKey, t){
+  if(nt.ev !== evKey) return;
+  nt.template = t;
+  nt.edits.forEach((e, k) => { if(e.lang) nt.edits.delete(k); });
 }
-export function ntSetPaper(i){ const s = SIZE_PRESETS[+i]; if(s) saveTemplate({ width_mm: s.width_mm, height_mm: s.height_mm }); }
-export function ntSetTplLang(v){ nt.edits.forEach((e, k) => { if(e.lang) nt.edits.delete(k); }); saveTemplate({ lang: v }); }
+export function ntOpenEditor(){
+  if(!nt.ev) return;
+  window.switchArchTab?.('ev');
+  window.openEvDetail?.(nt.ev);
+  window.setEvDetailSeg?.('nametag');
+}
 
 export async function ntPrint(){
   if(nt.busy) return;
@@ -308,4 +306,4 @@ export async function ntVoid(id){
   rerender();
 }
 
-Object.assign(window, { ntSetFilter, ntSetSrc, ntFocus, ntPick, ntPickAll, ntEdit, ntWalkIn, ntWalkEdit, ntSetReason, ntReload, ntSetPaper, ntSetTplLang, ntPrint, ntVoid });
+Object.assign(window, { ntSetFilter, ntSetSrc, ntFocus, ntPick, ntPickAll, ntEdit, ntWalkIn, ntWalkEdit, ntSetReason, ntReload, ntOpenEditor, ntPrint, ntVoid });

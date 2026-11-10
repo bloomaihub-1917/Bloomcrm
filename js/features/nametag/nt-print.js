@@ -34,7 +34,7 @@ export async function fillPrintWindow(w, template, cards){
   if(!w || w.closed) return;
   const css = (p) => new URL(p, location.href).href;
   const off = readOffset(template.print_offset);
-  const pages = cards.map(c => `<div class="nt-page"><div class="nt-frame"><div class="nt-shift">${ntCardHtml(template, c)}</div></div></div>`).join('');
+  const pages = cards.map(c => `<div class="nt-page"><div class="nt-frame"><div class="nt-shift">${ntCardHtml(template, c, { forPrint: true })}</div></div></div>`).join('');
   w.document.open();
   w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>네임택 인쇄 · ${cards.length}장</title>
 <link rel="stylesheet" href="${css('styles/tokens.css')}"><link rel="stylesheet" href="${css('styles/nametag.css')}">

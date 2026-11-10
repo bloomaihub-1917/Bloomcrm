@@ -7,6 +7,7 @@
 /* 한 장 그리기: 좌표 mm · 글자 pt. 미리보기와 인쇄가 같은 규칙을 쓴다 */
 .nt-card{position:relative;overflow:hidden;background:#fff;color:#000;
   font-family:'Pretendard','Apple SD Gothic Neo','Malgun Gothic',sans-serif}
+.nt-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:var(--nt-bg-opacity,1)}
 .nt-el{position:absolute;white-space:nowrap;overflow:hidden;line-height:1.15}
 /* 두 줄까지 쓰는 요소(영문 이름). keep-all로 한글 낱말은 쪼개지 않고, 끊을 자리가 없는 영문 낱말만 anywhere로 끊는다 */
 .nt-el:not([data-lines="1"]){white-space:normal;word-break:keep-all;overflow-wrap:anywhere}
@@ -64,3 +65,28 @@
   .nt-frame{display:block;width:fit-content;border:0;box-shadow:none}
   .nt-card{box-shadow:none;print-color-adjust:exact;-webkit-print-color-adjust:exact}
 }
+
+/* ── 판 편집기 — 설정 › 행사 상세 › 네임택 ── */
+.nt-editor{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,340px);gap:16px;align-items:start}
+.nt-panel{display:flex;flex-direction:column;gap:14px}
+.nt-panel section{display:flex;flex-direction:column;gap:8px;background:var(--W);border:1px solid var(--i6);border-radius:var(--r);padding:12px}
+.nt-panel section.nt-actions{flex-direction:row;flex-wrap:wrap;align-items:center}
+.nt-panel h4{margin:0;font-size:var(--fs-12_5)}
+.nt-row{display:flex;gap:8px}
+.nt-row > label{flex:1 1 0;min-width:0}
+.nt-num{display:flex;gap:4px;align-items:center}
+.nt-num .fi{width:72px;text-align:center}
+.nt-num button{width:32px;height:32px;flex:none;border:1px solid var(--i6);border-radius:var(--rs);background:var(--W);font-size:var(--fs-16);line-height:1}
+.nt-check{display:flex;gap:6px;align-items:flex-start;font-size:var(--fs-12)}
+.nt-check input{margin-top:3px}
+.nt-el-tabs{display:flex;flex-wrap:wrap;gap:4px}
+.nt-el-tabs button{padding:5px 12px;border:1px solid var(--i6);border-radius:var(--rs);background:var(--W);color:var(--i2);font-size:var(--fs-12)}
+.nt-el-tabs button[aria-pressed="true"]{background:var(--i1);border-color:var(--i1);color:var(--on);font-weight:700}
+.nt-el-tabs button[data-hidden="true"]{color:var(--i4);border-style:dashed}
+.nt-handle{position:absolute;cursor:move;background:transparent;border:1px dashed transparent;padding:0;touch-action:none}
+.nt-handle:hover{border-color:var(--i4)}
+.nt-handle[aria-pressed="true"]{border:1px solid var(--a);background:rgba(59,91,219,.08)}
+.nt-handle:focus-visible{outline:2px solid var(--a);outline-offset:1px}
+.nt-guide{position:absolute;background:var(--a);opacity:.5;pointer-events:none}
+.nt-safe{position:absolute;border:1px dashed var(--i5);pointer-events:none}
+@media (max-width:1100px){ .nt-editor{grid-template-columns:minmax(0,1fr)} }

@@ -35,7 +35,7 @@ export const REISSUE_REASONS = ['분실', '오타', '훼손', '기타'];
 
 export const DEFAULT_TEMPLATE = {
   id: '', name: '기본 네임택', width_mm: 90, height_mm: 120, lang: 'auto',
-  background_print: false, layout: DEFAULT_LAYOUT, print_offset: DEFAULT_OFFSET, is_default: true,
+  background_data: null, background_print: false, layout: DEFAULT_LAYOUT, print_offset: DEFAULT_OFFSET, is_default: true,
 };
 
 const num = (v, min, max, d) => {
@@ -84,6 +84,7 @@ export function normalizeTemplate(t){
     id: t.id || '', name: t.name || DEFAULT_TEMPLATE.name,
     width_mm: num(t.width_mm, 20, 420, 90), height_mm: num(t.height_mm, 20, 420, 120),
     lang: ['auto', 'ko', 'en'].includes(t.lang) ? t.lang : 'auto',
+    background_data: typeof t.background_data === 'string' && t.background_data ? t.background_data : null,
     background_print: !!t.background_print,
     layout: normalizeLayout(t.layout), print_offset: normalizeOffset(t.print_offset),
     is_default: t.is_default !== false, updated_at: t.updated_at || '', updated_by: t.updated_by || '',
@@ -91,3 +92,5 @@ export function normalizeTemplate(t){
 }
 
 export const MM_PX = 96 / 25.4;     // CSS 1mm = 96/25.4 px
+export const PT_MM = 25.4 / 72;     // 1pt = 0.3528mm
+export const LINE_HEIGHT = 1.15;    // .nt-el 줄 높이 — 편집기 손잡이 높이도 같은 값으로 잰다
