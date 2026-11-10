@@ -295,7 +295,7 @@ function actionsHtml(){
   if(ptnView === 'out') return sel + `<button class="btn bp" style="font-size:var(--fs-11)" onclick="excludePtnPicked(false)">다시 대상으로</button>`;
   return sel + (ptnView === 'assign' ? `<button class="btn" style="font-size:var(--fs-11)" onclick="excludePtnPicked(true)"
       title="파트너링과 상관없는 사람(연사·VIP 등)을 이 목록에서 빼요. «대상 아님»에서 다시 올릴 수 있어요">대상 아님으로</button>` : '')
-    + + `<label style="display:flex;align-items:center;gap:5px;font-size:var(--fs-11_5);color:var(--i2);cursor:pointer">
+    + `<label style="display:flex;align-items:center;gap:5px;font-size:var(--fs-11_5);color:var(--i2);cursor:pointer">
       <input type="checkbox" ${ptnConfirm ? 'checked' : ''} onchange="setPtnConfirm(this.checked)">참가 확정으로</label>
     ${PARTNERING_SIDES.map(s => `<button class="btn bp" style="font-size:var(--fs-11)" onclick="assignPtnPicked('${s.key}')">${escapeHtml(s.label)}로 넣기</button>`).join('')}`;
 }
