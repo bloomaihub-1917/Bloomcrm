@@ -112,7 +112,7 @@ export function ntPartHtml(ev, query){
       ${seg(nt.filter, [['todo', '안 받음'], ['done', '받음'], ['all', '전체']], 'ntSetFilter')}
       ${seg(nt.src, [['', '모두'], ['speaker', '연사'], ['exh', '부스'], ['part', '참가자']], 'ntSetSrc')}
       <div style="flex:1"></div>
-      <span class="nt-note" title="용지·글자 자리·기본 말은 설정 › 행사 상세 › 네임택에서 정해요">판 ${t.width_mm} × ${t.height_mm}mm · ${escapeHtml((LANG_OPTIONS.find(o => o[0] === t.lang) || LANG_OPTIONS[0])[1].replace(/ \(.*\)/, ''))}${t.id ? '' : ' (기본값)'}</span>
+      <span class="nt-note" title="용지·글자 자리·기본 말은 설정 › 행사 상세 › 네임택에서 정해요">판 ${t.width_mm} × ${t.height_mm}mm · ${escapeHtml((LANG_OPTIONS.find(o => o[0] === t.lang) || LANG_OPTIONS[0])[1].replace(/ \(.*\)/, ''))}${t.sheet === 'a4' ? ' · A4에 출력' : ''}${t.id ? '' : ' (기본값)'}</span>
       <button class="btn bs" onclick="ntOpenEditor()" title="설정 › 행사 상세 › 네임택 — 용지 크기·글자 자리·배경">판 고치기</button>
       <button class="btn bs" onclick="ntWalkIn(true)" title="명단에 없는 사람 — 이름·소속만 기록에 남고 마스터DB에는 넣지 않아요">＋ 현장 신규</button>
     </div>

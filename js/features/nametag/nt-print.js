@@ -6,12 +6,13 @@
    - 팝업 차단을 피하려면 단추를 누른 그 순간 창을 열어야 한다 → openPrintWindow()로 먼저 열고,
      발급 기록이 오면 fillPrintWindow()로 그린다
    - @page 크기를 판 크기로 만들어 붙인다. 한 장 = 한 쪽
+     출력 종이가 A4(sheet 'a4')면 A4 세로 한 쪽의 맨 위 가운데에 한 장씩 — 전용 용지 없이 A4에 뽑아 자를 때
    - 인쇄 보정(가로·세로 mm, 배율 %)은 프린터마다 종이 먹는 자리가 달라 이 브라우저에 따로 둔다
      (localStorage nametag.print-offset.v1). 없으면 판의 기본값
 ═══════════════════════════════════════════════════════════════ */
 import { ntCardHtml } from './nt-card.js';
 import { readyToPrint } from './nt-fit.js';
-import { normalizeOffset } from '../../domain/nametag-layout.js';
+import { normalizeOffset, A4 } from '../../domain/nametag-layout.js';
 import { escapeHtml } from '../../utils.js';
 
 const OFFSET_KEY = 'nametag.print-offset.v1';
@@ -34,14 +35,16 @@ export async function fillPrintWindow(w, template, cards){
   if(!w || w.closed) return;
   const css = (p) => new URL(p, location.href).href;
   const off = readOffset(template.print_offset);
-  const pages = cards.map(c => `<div class="nt-page"><div class="nt-frame"><div class="nt-shift">${ntCardHtml(template, c, { forPrint: true })}</div></div></div>`).join('');
+  const a4 = template.sheet === 'a4';
+  const paper = a4 ? A4 : template;
+  const pages = cards.map(c => `<div class="nt-page${a4 ? ' nt-a4' : ''}"><div class="nt-frame"><div class="nt-shift">${ntCardHtml(template, c, { forPrint: true })}</div></div></div>`).join('');
   w.document.open();
   w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>네임택 인쇄 · ${cards.length}장</title>
 <link rel="stylesheet" href="${css('styles/tokens.css')}"><link rel="stylesheet" href="${css('styles/nametag.css')}">
-<style>@page{size:${template.width_mm}mm ${template.height_mm}mm;margin:0}</style></head>
+<style>@page{size:${paper.width_mm}mm ${paper.height_mm}mm;margin:0}</style></head>
 <body class="nt-print-page">
 <div class="nt-print-bar no-print">
-  <span><b>${cards.length}장</b> · ${template.width_mm} × ${template.height_mm}mm${cards.length <= 3 ? ' · ' + escapeHtml(cards.map(c => c.name).join(', ')) : ''}</span>
+  <span><b>${cards.length}장</b> · ${template.width_mm} × ${template.height_mm}mm${a4 ? ' · A4 세로 맨 위' : ''}${cards.length <= 3 ? ' · ' + escapeHtml(cards.map(c => c.name).join(', ')) : ''}</span>
   <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
     <span style="color:#888">인쇄 보정(이 PC)</span>
     <label>가로 <input id="dx" type="number" step="0.5" value="${off.x}">mm</label>

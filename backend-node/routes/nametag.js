@@ -2,7 +2,7 @@
    nametag.js — 네임택 발급 (행사 DB › 네임택 탭)
 
      GET  /api/nametag/<행사>            판 + 발급 기록(최근 1000장)
-     PUT  /api/nametag/<행사>/template   판 저장 { width_mm, height_mm, lang, layout, print_offset, background_data, background_print }
+     PUT  /api/nametag/<행사>/template   판 저장 { width_mm, height_mm, lang, sheet, layout, print_offset, background_data, background_print }
      POST /api/nametag/<행사>/issue      발급 { cards:[…], reason } → batch_id와 기록
      POST /api/nametag/print/<id>/void   «인쇄 안 됨» 되돌리기(기록은 지우지 않는다)
 
@@ -30,6 +30,7 @@ const text = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const num = (v, min, max, d) => { const n = Number(v); return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n * 10) / 10)) : d; };
 const SOURCES = new Set(['part', 'speaker', 'exh']);
 const LANGS = new Set(['auto', 'ko', 'en']);
+const SHEETS = new Set(['fit', 'a4']);   // 출력 종이: 네임택 크기 그대로 | A4 세로 맨 위
 const REASONS = new Set(['분실', '오타', '훼손', '기타']);
 
 router.use((req, res, next) => {
@@ -37,7 +38,7 @@ router.use((req, res, next) => {
   next();
 });
 
-const TEMPLATE_COLS = `id, name, width_mm::float8 AS width_mm, height_mm::float8 AS height_mm, lang,
+const TEMPLATE_COLS = `id, name, width_mm::float8 AS width_mm, height_mm::float8 AS height_mm, lang, sheet,
   background_data, background_print, layout, print_offset, is_default, updated_at, updated_by`;
 const PRINT_COLS = `id, event_id, batch_id, template_id, person_key, source, ref_id, contact_id, name, company, job_title,
   badge, lang, kind, reason, printed_by, printed_at, voided_at, voided_by`;
@@ -73,14 +74,14 @@ router.put('/:eventId/template', async (req, res, next) => {
     const vals = [ev, text(b.name, 40) || '기본 네임택',
       num(b.width_mm, 20, 420, 100), num(b.height_mm, 20, 420, 120),
       LANGS.has(b.lang) ? b.lang : 'auto', layout, offset, new Date().toISOString(), req.user?.email || '',
-      bg, !!(bg && b.background_print)];
+      bg, !!(bg && b.background_print), SHEETS.has(b.sheet) ? b.sheet : 'fit'];
     const { rows } = await pool.query(`
       INSERT INTO nametag_templates (id, event_id, name, width_mm, height_mm, lang, layout, print_offset, is_default, updated_at, updated_by,
-        background_data, background_print)
-      VALUES ('NT-' || md5(random()::text || clock_timestamp()::text), $1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, true, $8, $9, $10, $11)
+        background_data, background_print, sheet)
+      VALUES ('NT-' || md5(random()::text || clock_timestamp()::text), $1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, true, $8, $9, $10, $11, $12)
       ON CONFLICT (event_id) WHERE is_default DO UPDATE SET name = EXCLUDED.name, width_mm = EXCLUDED.width_mm,
         height_mm = EXCLUDED.height_mm, lang = EXCLUDED.lang, layout = EXCLUDED.layout, print_offset = EXCLUDED.print_offset,
-        background_data = EXCLUDED.background_data, background_print = EXCLUDED.background_print,
+        background_data = EXCLUDED.background_data, background_print = EXCLUDED.background_print, sheet = EXCLUDED.sheet,
         updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by
       RETURNING ${TEMPLATE_COLS}`, vals);
     res.json({ ok: true, template: rows[0] });

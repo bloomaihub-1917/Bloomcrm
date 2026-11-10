@@ -7,7 +7,7 @@
 /* 한 장 그리기: 좌표 mm · 글자 pt. 미리보기와 인쇄가 같은 규칙을 쓴다 */
 .nt-card{position:relative;overflow:hidden;background:#fff;color:#000;
   font-family:'Pretendard','Apple SD Gothic Neo','Malgun Gothic',sans-serif}
-.nt-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:var(--nt-bg-opacity,1)}
+.nt-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:fill;opacity:var(--nt-bg-opacity,1)}
 .nt-el{position:absolute;white-space:nowrap;overflow:hidden;line-height:1.15}
 /* 두 줄까지 쓰는 요소(영문 이름). keep-all로 한글 낱말은 쪼개지 않고, 끊을 자리가 없는 영문 낱말만 anywhere로 끊는다 */
 .nt-el:not([data-lines="1"]){white-space:normal;word-break:keep-all;overflow-wrap:anywhere}
@@ -45,6 +45,8 @@
    사무국 화면 없이 네임택만 그린다. @page 크기는 판 크기에서 만들어 붙인다(nt-print.js) */
 .nt-print-page{background:var(--i7);margin:0;padding:16px;font-family:'Pretendard','Malgun Gothic',sans-serif}
 .nt-sheet{display:flex;flex-wrap:wrap;gap:16px;justify-content:center}
+.nt-a4{width:210mm;height:296mm;background:#fff;display:flex;justify-content:center;align-items:flex-start;overflow:hidden;box-shadow:var(--sh)}
+.nt-a4 .nt-shift{transform-origin:top center}
 .nt-shift{transform:translate(var(--nt-dx,0mm),var(--nt-dy,0mm)) scale(var(--nt-scale,1));transform-origin:center}
 .nt-print-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;background:var(--W);
   border:1px solid var(--i6);border-radius:var(--r);padding:10px 14px;margin-bottom:16px;font-size:var(--fs-12)}
@@ -63,6 +65,8 @@
   .nt-page{break-after:page;page-break-after:always;line-height:0;font-size:0}
   .nt-page:last-child{break-after:auto;page-break-after:auto}
   .nt-frame{display:block;width:fit-content;border:0;box-shadow:none}
+  /* A4: 높이를 297mm로 꽉 채우면 반올림으로 빈 쪽이 붙는다 → 296mm. 네임택은 맨 위 가운데 */
+  .nt-page.nt-a4{display:flex;box-shadow:none;width:210mm;height:296mm}
   .nt-card{box-shadow:none;print-color-adjust:exact;-webkit-print-color-adjust:exact}
 }
 

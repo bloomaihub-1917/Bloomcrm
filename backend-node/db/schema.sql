@@ -1247,3 +1247,5 @@ CREATE TABLE IF NOT EXISTS nametag_prints (
 );
 CREATE INDEX IF NOT EXISTS nametag_prints_event_idx ON nametag_prints (event_id, printed_at DESC);
 CREATE INDEX IF NOT EXISTS nametag_prints_person_idx ON nametag_prints (event_id, person_key);
+-- 네임택 출력 종이 (2026-11-10) — fit(네임택 크기 그대로) | a4(A4 세로 맨 위 가운데에 한 장씩)
+ALTER TABLE nametag_templates ADD COLUMN IF NOT EXISTS sheet TEXT NOT NULL DEFAULT 'fit';

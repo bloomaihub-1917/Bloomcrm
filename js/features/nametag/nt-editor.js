@@ -12,7 +12,7 @@
    숫자 칸은 onchange(칸을 벗어나거나 Enter)로 받고 판만 다시 그린다 — 칠 때마다 통째로 그리면 입력칸이 포커스를 잃는다.
 ═══════════════════════════════════════════════════════════════ */
 import { escapeHtml, escAttr } from '../../utils.js';
-import { normalizeTemplate, normalizeLayout, normalizeOffset, DEFAULT_LAYOUT, SIZE_PRESETS, LANG_OPTIONS, TEXT_KEYS, EL_LABEL, MM_PX, PT_MM, LINE_HEIGHT } from '../../domain/nametag-layout.js';
+import { normalizeTemplate, normalizeLayout, normalizeOffset, DEFAULT_LAYOUT, SIZE_PRESETS, SHEET_OPTIONS, LANG_OPTIONS, TEXT_KEYS, EL_LABEL, MM_PX, PT_MM, LINE_HEIGHT } from '../../domain/nametag-layout.js';
 import { loadNametag, saveNametagTemplate } from '../../api/nametag.js';
 import { ntCardHtml } from './nt-card.js';
 import { fitNametags } from './nt-fit.js';
@@ -27,7 +27,7 @@ const SAMPLES = [
 const ALIGNS = [['left', '왼쪽'], ['center', '가운데'], ['right', '오른쪽']];
 const BG_EDGE = 1600;   // 배경 이미지 긴 변 — 가늠자라 이 정도면 충분하고, 표에 넣으므로 작게
 
-const ed = { ev: '', t: null, saved: '', sel: 'name', sample: 'ko', bgOpacity: 1, busy: false, msg: '', err: '', guide: { x: false, y: false } };
+const ed = { ev: '', t: null, bgDim: null, saved: '', sel: 'name', sample: 'ko', bgOpacity: 1, busy: false, msg: '', err: '', guide: { x: false, y: false } };
 const dirty = () => !!ed.t && JSON.stringify(ed.t) !== ed.saved;
 const round = (v) => Math.round(v * 10) / 10;   // 0.1mm 단위 — v / 0.1 * 0.1은 55.800000000000004가 된다
 const snap = (v, to) => (Math.abs(v - to) <= 1 ? to : v);
@@ -130,7 +130,7 @@ function renderEditor(){
     </div>
 
     <div class="nt-panel">
-      <section><h4>용지</h4>
+      <section><h4>네임택 크기</h4>
         <select class="fi" onchange="ntEdSize(this.value)">
           ${SIZE_PRESETS.map(s => `<option value="${s.width_mm}x${s.height_mm}"${sizeVal === `${s.width_mm}x${s.height_mm}` ? ' selected' : ''}>${s.label}</option>`).join('')}
           ${SIZE_PRESETS.some(s => s.width_mm === t.width_mm && s.height_mm === t.height_mm) ? '' : `<option selected value="${sizeVal}">직접 입력 (${t.width_mm} × ${t.height_mm}mm)</option>`}
@@ -139,6 +139,9 @@ function renderEditor(){
           <label><div class="mlbl">가로 mm</div><input class="fi" type="number" min="20" max="420" step="0.5" value="${t.width_mm}" onchange="ntEdPaper('width_mm',this.value)"></label>
           <label><div class="mlbl">세로 mm</div><input class="fi" type="number" min="20" max="420" step="0.5" value="${t.height_mm}" onchange="ntEdPaper('height_mm',this.value)"></label>
         </div>
+        <label><div class="mlbl">출력 종이</div><select class="fi" onchange="ntEdSheet(this.value)">
+          ${SHEET_OPTIONS.map(([k, l]) => `<option value="${k}"${t.sheet === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        ${t.sheet === 'a4' ? '<div class="nt-note">A4 세로 한 장의 맨 위 가운데에 네임택 하나씩 찍어요. 프린터가 위 끝을 못 찍으면 인쇄 보정의 세로 값으로 내려 주세요.</div>' : ''}
         <label><div class="mlbl">기본 말</div><select class="fi" onchange="ntEdLang(this.value)">
           ${LANG_OPTIONS.map(([k, l]) => `<option value="${k}"${t.lang === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
       </section>
@@ -151,6 +154,7 @@ function renderEditor(){
             <input type="range" min="10" max="100" value="${ed.bgOpacity * 100}" style="width:100%" oninput="ntEdBgOpacity(this.value)"></label>
           <label class="nt-check"><input type="checkbox"${t.background_print ? ' checked' : ''} onchange="ntEdBgPrint(this.checked)">
             <span>배경도 함께 인쇄 <span class="nt-note">· 꺼 두면 종이에는 글자만 찍혀요(기본)</span></span></label>
+          ${bgRatioHtml()}
           <button type="button" class="btn bs" onclick="ntEdBgClear()">배경 빼기</button>` : ''}
       </section>
 
@@ -190,10 +194,30 @@ function renderEditor(){
         <button type="button" class="btn bs" onclick="ntEdRevert()"${dirty() ? '' : ' disabled'}>저장한 판으로</button>
         <span id="nt-ed-state" class="nt-note"></span>
       </section>
-      ${t.updated_at ? `<div class="nt-note">마지막 저장 ${escapeHtml(String(t.updated_at).slice(0, 16).replace('T', ' '))} UTC · ${escapeHtml(t.updated_by || '')}</div>` : '<div class="nt-note">아직 저장한 판이 없어 기본값(100 × 120mm 세로)이에요.</div>'}
+      ${t.updated_at ? `<div class="nt-note">마지막 저장 ${escapeHtml(String(t.updated_at).slice(0, 16).replace('T', ' '))} UTC · ${escapeHtml(t.updated_by || '')}</div>` : '<div class="nt-note">아직 저장한 판이 없어 기본값(100 × 120mm)이에요.</div>'}
     </div>
   </div>`;
   renderCanvas();
+}
+
+/* 배경은 네임택에 꽉 차게(늘여서) 깐다 — 용지를 스캔한 그림이면 모서리가 곧 용지 모서리다.
+   그래서 그림 비율이 네임택과 다르면 늘어나 보인다(1:1 그림을 100 × 120mm에 깔면 세로로 늘어난다).
+   그때는 알려 주고, 그림 비율대로 네임택 크기를 맞추는 단추를 준다(가로는 두고 세로를 맞춘다) */
+function bgRatioHtml(){
+  const t = ed.t, d = ed.bgDim;
+  if(!t.background_data) return '';
+  if(!d || d.url !== t.background_data){
+    const img = new Image();
+    img.onload = () => { ed.bgDim = { url: t.background_data, w: img.naturalWidth, h: img.naturalHeight }; renderEditor(); };
+    img.src = t.background_data;
+    return '';
+  }
+  const want = Math.round(t.width_mm * d.h / d.w * 10) / 10;
+  if(Math.abs(want - t.height_mm) / t.height_mm < 0.02) return '';
+  const p = SIZE_PRESETS.find(s => s.width_mm === t.width_mm && Math.abs(s.height_mm - want) / want < 0.02);
+  const h = p ? p.height_mm : want;
+  return `<div class="nt-warn">배경 그림 비율(${d.w} × ${d.h}px)이 네임택(${t.width_mm} × ${t.height_mm}mm)과 달라 늘어나 보여요.
+    <button type="button" class="btn bs" style="margin-top:6px" onclick="ntEdSize('${t.width_mm}x${h}')">네임택을 ${t.width_mm} × ${h}mm${p ? ` (${escapeHtml(p.label.replace(/^.*?\(|\)$/g, ''))})` : ''}로</button></div>`;
 }
 
 /* ── 끌기 · 방향키 ── */
@@ -293,6 +317,7 @@ export function ntEdPaper(k, v){
   if(!Number.isFinite(n)) return;
   resizePaper(k === 'width_mm' ? n : ed.t.width_mm, k === 'height_mm' ? n : ed.t.height_mm);
 }
+export function ntEdSheet(v){ ed.t.sheet = v === 'a4' ? 'a4' : 'fit'; touched(); renderEditor(); }
 export function ntEdLang(v){ ed.t.lang = v; touched(); renderCanvas(); }
 export function ntEdOffset(k, v){ ed.t.print_offset = normalizeOffset({ ...ed.t.print_offset, [k]: v }); touched(); renderCanvas(); }
 export function ntEdBgOpacity(v){ ed.bgOpacity = Math.max(0.1, Math.min(1, Number(v) / 100)); renderCanvas(); }
@@ -347,5 +372,5 @@ export function ntEdTestPrint(){
 export function ntEdForget(){ if(!dirty()) ed.ev = ''; }
 export const ntEdDirty = dirty;
 
-Object.assign(window, { mountNametagEditor, ntEdSel, ntEdSample, ntEdPatch, ntEdAlign, ntEdWeight, ntEdLines, ntEdSize, ntEdPaper, ntEdLang,
+Object.assign(window, { mountNametagEditor, ntEdSel, ntEdSample, ntEdPatch, ntEdAlign, ntEdWeight, ntEdLines, ntEdSize, ntEdPaper, ntEdSheet, ntEdLang,
   ntEdOffset, ntEdBgOpacity, ntEdBgPrint, ntEdBgClear, ntEdReset, ntEdRevert, ntEdBg, ntEdSave, ntEdTestPrint, ntEdForget });

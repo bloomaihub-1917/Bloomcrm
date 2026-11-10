@@ -25,18 +25,19 @@ export const DEFAULT_LAYOUT = {
 };
 export const DEFAULT_OFFSET = { x: 0, y: 0, scale: 100 };
 
+/* 우리가 쓰는 네임택 크기 (2026-11-10). 다른 크기는 편집기에서 가로·세로를 직접 넣는다 */
 export const SIZE_PRESETS = [
-  { label: '100 × 120mm (세로 · 기본)', width_mm: 100, height_mm: 120 },
-  { label: '90 × 120mm (세로)', width_mm: 90, height_mm: 120 },
-  { label: '100 × 70mm (가로)', width_mm: 100, height_mm: 70 },
-  { label: '105 × 148mm (A6)', width_mm: 105, height_mm: 148 },
-  { label: '86 × 54mm (명함)', width_mm: 86, height_mm: 54 },
+  { label: '100 × 120mm (기본)', width_mm: 100, height_mm: 120 },
+  { label: '100 × 100mm (투포켓 · 하단바)', width_mm: 100, height_mm: 100 },
 ];
+/* 출력 종이 — 네임택 크기 그대로(전용 용지) 또는 A4 세로 맨 위 가운데에 한 장씩 */
+export const SHEET_OPTIONS = [['fit', '네임택 크기 그대로'], ['a4', 'A4 세로 — 맨 위에']];
+export const A4 = { width_mm: 210, height_mm: 297 };
 export const LANG_OPTIONS = [['auto', '자동 (한글 이름이면 국문)'], ['ko', '국문'], ['en', '영문']];
 export const REISSUE_REASONS = ['분실', '오타', '훼손', '기타'];
 
 export const DEFAULT_TEMPLATE = {
-  id: '', name: '기본 네임택', width_mm: 100, height_mm: 120, lang: 'auto',
+  id: '', name: '기본 네임택', width_mm: 100, height_mm: 120, lang: 'auto', sheet: 'fit',
   background_data: null, background_print: false, layout: DEFAULT_LAYOUT, print_offset: DEFAULT_OFFSET, is_default: true,
 };
 
@@ -86,6 +87,7 @@ export function normalizeTemplate(t){
     id: t.id || '', name: t.name || DEFAULT_TEMPLATE.name,
     width_mm: num(t.width_mm, 20, 420, 100), height_mm: num(t.height_mm, 20, 420, 120),
     lang: ['auto', 'ko', 'en'].includes(t.lang) ? t.lang : 'auto',
+    sheet: t.sheet === 'a4' ? 'a4' : 'fit',
     background_data: typeof t.background_data === 'string' && t.background_data ? t.background_data : null,
     background_print: !!t.background_print,
     layout: normalizeLayout(t.layout), print_offset: normalizeOffset(t.print_offset),
