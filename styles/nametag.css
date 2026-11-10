@@ -70,7 +70,7 @@
      A4를 210mm로 못 박으면 인쇄 대화상자 여백이 «기본값·최소»일 때 크롬이 넘친다고 보고 쪽 전체를
      줄여(100mm → 96mm, 2026-11-10 실측) 찍었다. 폭을 쪽에 맡기면 여백을 어떻게 골라도 줄지 않는다.
      높이도 못 박지 않는다 — 여백이 있으면 296mm가 넘쳐 빈 쪽이 붙는다. 쪽 나눔은 break-after가 맡는다 */
-  .nt-page{width:100%}
+  .nt-page{width:100%;overflow:hidden}
   .nt-page.nt-a4{box-shadow:none;width:100%;height:auto}
   .nt-card{box-shadow:none;print-color-adjust:exact;-webkit-print-color-adjust:exact}
 }
@@ -98,4 +98,8 @@
 .nt-handle:focus-visible{outline:2px solid var(--a);outline-offset:1px}
 .nt-guide{position:absolute;background:var(--a);opacity:.5;pointer-events:none}
 .nt-safe{position:absolute;border:1px dashed var(--i5);pointer-events:none}
+/* 판을 위 여백만큼 내려 찍어 종이 밖으로 나가는 아래 띠 */
+.nt-cut{position:absolute;left:0;right:0;bottom:0;pointer-events:none;
+  background:repeating-linear-gradient(135deg,rgba(220,38,38,.18) 0 1.2mm,transparent 1.2mm 2.4mm);border-top:1px dashed var(--re)}
+.nt-cut span{position:absolute;right:1.5mm;top:50%;transform:translateY(-50%);font-size:6pt;line-height:1;color:var(--re);font-weight:700;white-space:nowrap}
 @media (max-width:1100px){ .nt-editor{grid-template-columns:minmax(0,1fr)} }

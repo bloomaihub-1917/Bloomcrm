@@ -23,7 +23,9 @@ export const DEFAULT_LAYOUT = {
   badge:     { x: 50, y: 24, size: 12, weight: 700, align: 'center', maxWidth: 66, show: true, lines: 1 },
   qr:        { x: 50, y: 100, size: 20, show: false },
 };
-export const DEFAULT_OFFSET = { x: 0, y: 0, scale: 100 };
+/* top: 프린터가 못 찍는 위 여백(mm). 레이저 프린터는 종이 앞끝 4mm쯤에 토너를 못 올려 판 위 끝이 비었다(2026-11-10 실측).
+   인쇄 때 판을 통째로 이만큼 내려 찍는다 → 위는 안 잘리고, 판 아래 top mm가 종이 밖으로 나간다(편집기에 칠해 보여 준다) */
+export const DEFAULT_OFFSET = { x: 0, y: 0, scale: 100, top: 4 };
 
 /* 우리가 쓰는 네임택 크기 (2026-11-10). 다른 크기는 편집기에서 가로·세로를 직접 넣는다 */
 export const SIZE_PRESETS = [
@@ -84,7 +86,7 @@ export function normalizeLayout(v){
 
 export function normalizeOffset(v){
   const o = v || {};
-  return { x: num(o.x, -10, 10, 0), y: num(o.y, -10, 10, 0), scale: num(o.scale, 90, 110, 100) };
+  return { x: num(o.x, -10, 10, 0), y: num(o.y, -10, 10, 0), scale: num(o.scale, 90, 110, 100), top: num(o.top, 0, 15, 4) };
 }
 
 /* 서버에서 온 판(없으면 null)을 화면이 그릴 수 있는 모양으로 */

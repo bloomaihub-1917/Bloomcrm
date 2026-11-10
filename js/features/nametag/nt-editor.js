@@ -78,6 +78,7 @@ function canvasHtml(){
     <div class="nt-stage" style="transform:scale(${z});--nt-bg-opacity:${ed.bgOpacity}"><div class="nt-frame">
       ${ntCardHtml(t, sampleCard())}
       <div class="nt-safe" style="left:5mm;top:5mm;right:5mm;bottom:5mm"></div>
+      ${t.print_offset.top ? `<div class="nt-cut" style="height:${t.print_offset.top}mm" title="프린터가 위 ${t.print_offset.top}mm를 못 찍어 판을 그만큼 내려 찍어요. 이 부분은 종이 밖으로 나가요"><span>종이 밖 ${t.print_offset.top}mm</span></div>` : ''}
       ${g.x ? `<div class="nt-guide" style="left:${t.width_mm / 2}mm;top:0;width:0.3mm;height:${t.height_mm}mm"></div>` : ''}
       ${g.y ? `<div class="nt-guide" style="top:${t.height_mm / 2}mm;left:0;height:0.3mm;width:${t.width_mm}mm"></div>` : ''}
       ${TEXT_KEYS.filter(k => t.layout[k].show).map(k => `<button type="button" class="nt-handle" data-k="${k}"
@@ -97,8 +98,21 @@ function renderCanvas(){
   });
   const st = document.getElementById('nt-ed-state');
   if(st) st.innerHTML = stateHtml();
+  const cw = document.getElementById('nt-ed-cut');
+  if(cw) cw.innerHTML = cutWarnHtml();
   const zl = document.getElementById('nt-ed-zoom');
   if(zl) zl.textContent = `${ed.t.width_mm} × ${ed.t.height_mm}mm · 화면 ${Math.round(zoomOf(ed.t) * 100)}%`;
+}
+
+/* 판을 위 여백만큼 내려 찍으면 아래 끝이 종이 밖으로 나간다 — 그 띠에 걸친 글자를 알려 준다 */
+function cutWarnHtml(){
+  const t = ed.t, cut = t.print_offset.top;
+  if(!cut) return '';
+  const hit = TEXT_KEYS.filter(k => {
+    const x = t.layout[k];
+    return x.show && x.y + (x.size * LINE_HEIGHT * PT_MM * x.lines + 1) / 2 > t.height_mm - cut;
+  });
+  return hit.length ? `<div class="nt-warn">${hit.map(k => EL_LABEL[k]).join('·')}이(가) 아래 «종이 밖» 띠에 걸려 잘려요. 위로 올려 주세요.</div>` : '';
 }
 
 const stateHtml = () => ed.err ? `<span style="color:var(--re)">${escapeHtml(ed.err)}</span>`
@@ -127,6 +141,7 @@ function renderEditor(){
       </div>
       <div class="nt-note" style="margin-bottom:8px">글자를 끌어서 옮기고, 고른 뒤 방향키로 1mm(Shift 0.1mm)씩 맞춰요. 가운데선 가까이 가면 자석처럼 붙어요. 점선은 가장자리 5mm 안전선이에요.</div>
       <div class="nt-stage-wrap" id="nt-ed-canvas"></div>
+      <div id="nt-ed-cut"></div>
     </div>
 
     <div class="nt-panel">
@@ -182,6 +197,8 @@ function renderEditor(){
 
       <section><h4>인쇄 보정 <span class="nt-note" style="font-weight:400">· 행사 기본값</span></h4>
         <div class="nt-note">프린터마다 종이 먹는 자리가 달라요. 인쇄 창에서 PC마다 따로 고친 값이 있으면 그 값이 먼저예요.</div>
+        <label><div class="mlbl">프린터가 못 찍는 위 여백 mm</div><input class="fi" type="number" min="0" max="15" step="0.5" value="${off.top}" onchange="ntEdOffset('top',this.value)"></label>
+        <div class="nt-note">판을 이만큼 통째로 내려 찍어 위 끝이 잘리지 않아요. 대신 판 아래 같은 만큼이 종이 밖으로 나가요(판에 빗금). 0이면 내리지 않아요.</div>
         <div class="nt-row">
           <label><div class="mlbl">가로 mm</div><input class="fi" type="number" step="0.5" value="${off.x}" onchange="ntEdOffset('x',this.value)"></label>
           <label><div class="mlbl">세로 mm</div><input class="fi" type="number" step="0.5" value="${off.y}" onchange="ntEdOffset('y',this.value)"></label>

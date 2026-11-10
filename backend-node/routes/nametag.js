@@ -66,7 +66,7 @@ router.put('/:eventId/template', async (req, res, next) => {
     const b = req.body || {};
     const layout = b.layout && typeof b.layout === 'object' ? JSON.stringify(b.layout) : null;
     if (!layout || layout.length > 20000) return res.status(400).json({ ok: false, error: '판 모양이 올바르지 않아요' });
-    const offset = JSON.stringify({ x: num(b.print_offset?.x, -10, 10, 0), y: num(b.print_offset?.y, -10, 10, 0), scale: num(b.print_offset?.scale, 90, 110, 100) });
+    const offset = JSON.stringify({ x: num(b.print_offset?.x, -10, 10, 0), y: num(b.print_offset?.y, -10, 10, 0), scale: num(b.print_offset?.scale, 90, 110, 100), top: num(b.print_offset?.top, 0, 15, 4) });
     const bg = typeof b.background_data === 'string' && b.background_data ? b.background_data : null;
     if (bg && (!/^data:image\/(jpeg|png|webp);base64,/.test(bg) || bg.length > BG_MAX)) {
       return res.status(400).json({ ok: false, error: '배경 이미지는 JPG·PNG·WebP, 2MB까지예요' });
