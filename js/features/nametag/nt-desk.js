@@ -15,17 +15,23 @@
    - 최종 등록자 명단: «명단 엑셀»이 현장 신규까지 한 줄씩 내려 준다(하단바 엑셀 올리기 양식도 이것).
      현장 신규는 «마스터DB에 올리기»로 연락처·참가 확정을 만든다
 
+   끊김 대비(2026-11-10): 발급·체크인·되돌리기·하단바는 누르는 그 순간 이 기기에 남기고(nt-outbox.js) 화면과 인쇄를
+   바로 진행한다. 서버에는 뒤에서 차례로 보낸다 — 인터넷이 끊겨도 데스크는 멈추지 않고, 연결되면 한꺼번에 들어간다.
+   위 막대의 연결 표시를 누르면 이 기기에 남긴 기록(보냄·기다림·못 보냄)을 보고 엑셀로 내려받는다.
+   서버에서 받은 것 위에 «아직 안 보낸 기기 기록»을 늘 다시 얹는다(applyPending) — 새로 받아도 안 보낸 것이 사라지지 않게.
+
    왼쪽 명단은 #evdb-rows라 검색(event-tab.js setEvDbQuery)이 목록만 갈아 끼운다.
 ═══════════════════════════════════════════════════════════════ */
 import { escapeHtml, escAttr } from '../../utils.js';
-import { contacts, participations, EVENT_LIST } from '../../state.js';
+import { contacts, participations, EVENT_LIST, currentUser } from '../../state.js';
 import { normalizeTemplate, LANG_OPTIONS, REISSUE_REASONS, MM_PX, parseScan } from '../../domain/nametag-layout.js';
-import { loadNametag, issueNametags, voidNametag, saveNametagBars, saveWalkInContact, checkInNametag, voidCheckIn, loadNametagLive, promoteWalkIns } from '../../api/nametag.js';
+import { loadNametag, loadNametagLive, promoteWalkIns } from '../../api/nametag.js';
+import { enqueue, newId, waiting, failed, deviceLog, netState, markNet, onOutbox, kick, retryFailed, dismissFailed } from './nt-outbox.js';
 import { ntPeople, walkInPeople, cardOf, SOURCE_LABEL } from './nt-people.js';
 import { ntCardHtml } from './nt-card.js';
 import { fitNametags } from './nt-fit.js';
 import { openPrintWindow, fillPrintWindow } from './nt-print.js';
-import { openCamera, closeCamera, cameraOn } from './nt-camera.js';
+import { openCamera, closeCamera, cameraOn, preloadQrReader } from './nt-camera.js';
 
 const POLL_MS = 15000;
 const nt = {
@@ -34,6 +40,8 @@ const nt = {
   people: new Map(),     // person_key → nametag_people 줄 { bar, email, phone, contact_id }
   checkins: new Map(),   // person_key → 살아 있는 체크인 { id, via, checked_at, checked_by }
   since: '',             // /live에 «이 뒤로 바뀐 것»을 묻는 기준(서버 시각)
+  syncedAt: '',          // 서버에서 마지막으로 받은 시각(이 기기 시각) — 끊기면 숫자가 언제 것인지 보여 준다
+  netView: false,        // 오른쪽에 «이 기기 기록»을 띄웠는지
   view: 'issue',         // 'issue'(발급) | 'checkin'(체크인)
   onsite: null,          // null이면 행사 기간으로 정한다(기간 안이면 현장 출력)
   filter: 'todo',        // 발급: 'todo'(안 받음) | 'done'(받음) | 'all'  · 체크인: 'todo'(안 옴) | 'done'(옴) | 'all'
@@ -54,27 +62,107 @@ const byKey = (rows, k = 'person_key') => new Map((rows || []).map(r => [r[k], r
 function ensureLoaded(evKey){
   if(nt.ev !== evKey){
     Object.assign(nt, { ev: evKey, loaded: '', err: '', template: normalizeTemplate(null), prints: [], focus: '', walkIn: null,
-      reason: '', imp: null, onsite: null, since: '', barFil: '' });
+      reason: '', imp: null, onsite: null, since: '', barFil: '', syncedAt: '', netView: false });
     nt.picked.clear(); nt.edits.clear(); nt.people.clear(); nt.checkins.clear();
   }
   if(nt.loaded === evKey || nt.loading) return;
   nt.loading = true;
   loadNametag(evKey).then(j => {
     if(nt.ev !== evKey) return;
-    nt.template = normalizeTemplate(j.template);
-    nt.prints = j.prints || [];
-    nt.people = byKey(j.people);
-    nt.checkins = byKey(j.checkins);
-    nt.since = j.now || new Date().toISOString();
+    takeFull(j);
     nt.loaded = evKey;
-  }).catch(e => { nt.err = e.message; nt.loaded = evKey; })
-    .finally(() => { nt.loading = false; rerender(); });
+  }).catch(e => {
+    nt.err = e.message; nt.loaded = evKey;
+    /* 연결 문제면 10초마다 다시 묻는다 — 연결되면 저절로 열린다 */
+    if(!e.status){ markNet(false, e.message); setTimeout(() => { if(nt.ev === evKey && nt.err) ntReload(); }, 10000); }
+  }).finally(() => { nt.loading = false; rerender(); });
 }
+/* 서버에서 통째로 받은 것 + 아직 안 보낸 기기 기록 */
+function takeFull(j){
+  nt.template = normalizeTemplate(j.template);
+  nt.prints = j.prints || [];
+  nt.people = byKey(j.people);
+  nt.checkins = byKey(j.checkins);
+  nt.since = j.now || new Date().toISOString();
+  nt.syncedAt = new Date().toISOString();
+  applyPending();
+  markNet(true);
+}
+/* 조용히 다시 받기 — 서버가 기기 기록 하나를 받지 않았을 때 등. 화면을 «불러오는 중»으로 바꾸지 않는다 */
+async function resync(){
+  const ev = nt.ev;
+  if(!ev || nt.loaded !== ev || nt.err) return;
+  try {
+    const j = await loadNametag(ev);
+    if(nt.ev !== ev) return;
+    takeFull(j);
+    refreshLists();
+  } catch(e){ markNet(false, e.message); }
+}
+
+/* ── 이 기기에 남긴 기록을 상태에 얹기 — 서버에서 새로 받은 뒤마다 «아직 안 보낸 것»을 다시 얹는다 ── */
+function applyPending(){ waiting(nt.ev).forEach(applyOp); }
+function applyOp(op){
+  const d = op.data;
+  if(op.kind === 'issue'){
+    const have = new Set(nt.prints.map(p => p.id));
+    const add = d.rows.filter(r => !have.has(r.id));
+    if(add.length) nt.prints = [...add, ...nt.prints].sort((a, b) => String(b.printed_at).localeCompare(String(a.printed_at)));
+    d.rows.forEach(r => {
+      if(r.kind === 'walk_in' && !nt.people.has(r.person_key))
+        nt.people.set(r.person_key, { person_key: r.person_key, bar: r._bar_id || null, email: r._email || '', phone: r._phone || '' });
+      if(r._checkin_id && !nt.checkins.has(r.person_key))
+        nt.checkins.set(r.person_key, { id: r._checkin_id, person_key: r.person_key, via: 'print', print_id: r.id, checked_at: r.printed_at, checked_by: r.printed_by, _wait: true });
+    });
+  } else if(op.kind === 'checkin'){
+    if(!nt.checkins.has(d.row.person_key)) nt.checkins.set(d.row.person_key, d.row);
+  } else if(op.kind === 'uncheck'){
+    if(nt.checkins.get(d.key)?.id === d.id) nt.checkins.delete(d.key);
+  } else if(op.kind === 'void'){
+    const p = nt.prints.find(x => x.id === d.id);
+    if(p && !p.voided_at) Object.assign(p, { voided_at: op.at, voided_by: d.by, _wait: true });
+  } else if(op.kind === 'bars'){
+    d.items.forEach(i => nt.people.set(i.person_key, { ...(nt.people.get(i.person_key) || { person_key: i.person_key }), bar: i.bar || null }));
+  } else if(op.kind === 'contact'){
+    nt.people.set(d.key, { ...(nt.people.get(d.key) || { person_key: d.key }), email: d.email, phone: d.phone });
+  }
+}
+/* 서버가 받았다 — 기기에서 만든 줄을 서버 줄로 바꾼다 */
+function reconcile(op, res){
+  const d = op.data;
+  if(op.kind === 'issue'){
+    const m = new Map((res.prints || []).map(p => [p.id, p]));
+    nt.prints = nt.prints.map(p => m.get(p.id) || p);
+    (res.people || []).forEach(p => nt.people.set(p.person_key, p));
+    const got = new Set((res.checkins || []).map(c => c.id));
+    (res.checkins || []).forEach(c => { const cur = nt.checkins.get(c.person_key); if(!cur || cur._wait) nt.checkins.set(c.person_key, c); });
+    /* 기기에서 체크인으로 쳤는데 서버엔 이미 다른 체크인이 있었다 → 그 줄을 받아 온다 */
+    if(d.rows.some(r => r._checkin_id && !got.has(r._checkin_id) && nt.checkins.get(r.person_key)?.id === r._checkin_id)) resync();
+  } else if(op.kind === 'checkin'){
+    const c = res.checkin, cur = nt.checkins.get(d.row.person_key);
+    if(c && (!cur || cur.id === d.row.id || cur._wait)){
+      if(c.voided_at) nt.checkins.delete(d.row.person_key); else nt.checkins.set(c.person_key, c);
+    }
+  } else if(op.kind === 'void'){
+    if(res.print) nt.prints = nt.prints.map(p => p.id === res.print.id ? res.print : p);
+  } else if(op.kind === 'bars'){
+    (res.people || []).forEach(p => nt.people.set(p.person_key, p));
+  } else if(op.kind === 'contact'){
+    if(res.person) nt.people.set(res.person.person_key, res.person);
+  }
+}
+onOutbox((type, op, res) => {
+  const here = op && op.ev === nt.ev && nt.loaded === nt.ev && !nt.err;
+  if(type === 'sent' && here){ reconcile(op, res); refreshLists(); }
+  if(type === 'fail' && here) resync();   // 기기에서 미리 바꾼 것을 서버 값으로 되돌린다(«이 기기 기록»에 못 보냄으로 남는다)
+  refreshNet();
+});
 
 /* ── 현장 실시간 — 다른 데스크의 체크인·발급·하단바를 15초마다 받아 숫자와 명단만 갈아 끼운다
    (통째로 다시 그리면 검색칸·입력칸이 포커스를 잃는다) */
 function startPolling(){
   if(nt.timer) return;
+  preloadQrReader();   // 카메라 QR 읽기 도구를 연결돼 있을 때 미리 받아 둔다
   nt.timer = setInterval(async () => {
     if(!document.getElementById('nt-desk')){ clearInterval(nt.timer); nt.timer = 0; return; }
     if(document.hidden || !nt.loaded || nt.err || nt.busy) return;
@@ -83,12 +171,24 @@ function startPolling(){
       const j = await loadNametagLive(ev, nt.since);
       if(nt.ev !== ev) return;
       mergeLive(j);
+      nt.syncedAt = new Date().toISOString();
+      markNet(true);
       refreshLists();
-    } catch(e){ console.warn('네임택 실시간', e.message); }
+    } catch(e){ console.warn('네임택 실시간', e.message); if(!e.status) markNet(false, e.message); refreshNet(); }
   }, POLL_MS);
 }
 function mergeLive(j){
-  nt.checkins = byKey(j.checkins);
+  if(j.delta){
+    /* 바뀐 것만 온다 — 취소된 줄은 지우고, 키가 바뀐 줄(현장 신규 → 마스터DB)은 옛 키에서 뗀다 */
+    const keyOf = new Map([...nt.checkins.values()].map(c => [c.id, c.person_key]));
+    const rows = [...(j.checkins || [])].sort((a, b) => (a.voided_at ? 0 : 1) - (b.voided_at ? 0 : 1));
+    rows.forEach(c => {
+      const old = keyOf.get(c.id);
+      if(old && nt.checkins.get(old)?.id === c.id && (c.voided_at || old !== c.person_key)) nt.checkins.delete(old);
+      if(c.voided_at){ if(nt.checkins.get(c.person_key)?.id === c.id) nt.checkins.delete(c.person_key); return; }
+      nt.checkins.set(c.person_key, c);
+    });
+  } else nt.checkins = byKey(j.checkins);
   if(j.prints?.length){
     const m = new Map(nt.prints.map(p => [p.id, p]));
     j.prints.forEach(p => m.set(p.id, p));
@@ -96,6 +196,7 @@ function mergeLive(j){
   }
   (j.people || []).forEach(p => nt.people.set(p.person_key, p));
   if(j.now) nt.since = j.now;
+  applyPending();
 }
 function refreshLists(){
   const st = document.getElementById('nt-stats');
@@ -104,6 +205,55 @@ function refreshLists(){
   if(rows) rows.innerHTML = ntRowsHtml(nt.ev, document.getElementById('evdb-q')?.value || '');
   const rc = document.getElementById('nt-recent');
   if(rc) rc.outerHTML = recentHtml();
+  const side = document.getElementById('nt-side');
+  if(side && nt.view === 'checkin' && !nt.netView) side.innerHTML = checkinSideHtml();
+  refreshNet();
+}
+function refreshNet(){
+  const el = document.getElementById('nt-net');
+  if(el) el.outerHTML = netHtml();
+  const nv = document.getElementById('nt-netlog');
+  if(nv) nv.outerHTML = netLogHtml();
+}
+
+/* ── 연결 표시 — 위 막대. 누르면 오른쪽에 이 기기 기록 ── */
+function netHtml(){
+  const s = netState(), w = waiting(nt.ev).length, f = failed(nt.ev).length;
+  const [cls, txt] = f ? ['bad', `⚠ 서버가 받지 않은 기록 ${f}건`]
+    : s.ok === false ? ['off', `● 연결 끊김 · 이 기기에 ${w}건 — 연결되면 자동으로 보내요`]
+    : w ? ['wait', `● 보내는 중 ${w}건`]
+    : ['ok', `● 연결됨${nt.syncedAt ? ` · ${kst(nt.syncedAt)} 받음` : ''}`];
+  return `<button type="button" id="nt-net" class="nt-net ${cls}" onclick="ntNetView()" title="이 기기에 남긴 발급·체크인 기록과 보내기 상태">${txt}</button>`;
+}
+const OP_LABEL = { issue: '발급', checkin: '체크인', uncheck: '체크인 취소', void: '인쇄 안 됨', bars: '하단바', contact: '현장 신규 연락처' };
+function opText(op, names){
+  const d = op.data, nm = (k) => names.get(k) || k;
+  if(op.kind === 'issue') return `${d.rows.length}장 — ${d.rows.slice(0, 3).map(r => r.name).join(', ')}${d.rows.length > 3 ? ' 외' : ''}${d.onsite ? ' · 현장 출력' : ''}`;
+  if(op.kind === 'checkin') return nm(d.row.person_key);
+  if(op.kind === 'uncheck') return nm(d.key);
+  if(op.kind === 'void') return d.name || d.id;
+  if(op.kind === 'bars') return `${d.items.length}명${d.via === 'excel' ? ' (엑셀)' : ''}`;
+  if(op.kind === 'contact') return `${nm(d.key)} · ${d.email || ''} ${d.phone || ''}`;
+  return '';
+}
+function netLogHtml(){
+  const s = netState(), all = deviceLog(nt.ev).slice().reverse();
+  const w = all.filter(o => o.state === 'wait').length, f = all.filter(o => o.state === 'fail').length;
+  const names = new Map(deskPeople(nt.ev).map(p => [p.key, p.nameKo || p.nameEn]));
+  const ST = { wait: ['기다림', 'p-amber'], sent: ['보냄', 'p-green'], fail: ['못 보냄', 'p-red'] };
+  return `<div id="nt-netlog"><h4>이 기기 기록 <span class="nt-note">${escapeHtml(evRow().short || evRow().name || nt.ev)}</span></h4>
+    <div class="nt-note">누르는 그 순간 이 기기(${/Mobi|Android|iPad|iPhone/.test(navigator.userAgent) ? '휴대폰·태블릿' : '이 PC'})에 먼저 남기고 서버로 보내요.
+      인터넷이 끊겨도 발급·체크인은 그대로 하면 되고, 연결되면 남은 것을 차례로 보내요. 이 화면을 닫거나 새로 고쳐도 기록은 남아요.
+      ${s.ok === false ? `<br><b>지금 연결이 끊겼어요</b>${s.err ? ` — ${escapeHtml(s.err)}` : ''}. 다른 데스크의 숫자는 ${nt.syncedAt ? kst(nt.syncedAt) : '—'} 것이에요.` : ''}</div>
+    <div class="nt-actions">
+      ${w ? `<button class="btn bp" onclick="ntSendNow()">지금 보내기 (${w}건)</button>` : ''}
+      ${f ? `<button class="btn bs" onclick="ntRetryFailed()">못 보낸 ${f}건 다시</button><button class="btn bs" onclick="ntDismissFailed()" title="확인했으면 — 기록은 남아요">확인함</button>` : ''}
+      <button class="btn bs" onclick="ntExportDeviceLog()">⬇ 기기 기록 엑셀</button>
+      <button class="btn bs" onclick="ntNetView(false)">닫기</button></div>
+    ${all.length ? `<ul class="nt-recent">${all.slice(0, 200).map(o => `<li>
+      <span class="who"><b>${OP_LABEL[o.kind] || o.kind}</b> ${escapeHtml(opText(o, names))}
+        <span class="pill ${ST[o.state][1]}">${ST[o.state][0]}</span>${o.err && o.state !== 'sent' ? `<div class="nt-note">${escapeHtml(o.err)}${o.tries ? ` · ${o.tries}번 시도` : ''}</div>` : ''}</span>
+      <span class="when">${kst(o.at)}${o.sent_at ? ` → ${kst(o.sent_at)}` : ''}</span></li>`).join('')}</ul>` : '<div class="nt-note">아직 이 기기에서 한 기록이 없어요.</div>'}</div>`;
 }
 
 /* ── 모으기 ── */
@@ -182,7 +332,7 @@ function statsHtml(){
     : '<span class="nt-note">하단바 종류가 없어요 — «판 고치기»에서 만들어요</span>';
   return `<div class="sec stat-grid" id="nt-stats">
       <div class="stat-card"><div class="n">${all.length}</div><div class="l">등록자</div><div class="s">명단 ${all.length - wi} · 현장 신규 ${wi}</div></div>
-      <div class="stat-card"><div class="n">${inn.length}<span class="nt-of"> / ${all.length}</span></div><div class="l">체크인</div><div class="s">현장 출력 ${viaPrint} · 체크인 데스크 ${inn.length - viaPrint} · ${kst(new Date().toISOString())} 기준</div></div>
+      <div class="stat-card"><div class="n">${inn.length}<span class="nt-of"> / ${all.length}</span></div><div class="l">체크인</div><div class="s">현장 출력 ${viaPrint} · 체크인 데스크 ${inn.length - viaPrint} · ${netState().ok === false ? `<b style="color:var(--re)">연결 끊김 — 다른 데스크 것은 ${kst(nt.syncedAt)}까지</b>` : `${kst(nt.syncedAt)} 기준`}</div></div>
       <div class="stat-card"><div class="n">${got}</div><div class="l">네임택 받음</div><div class="s">${all.length - got}명 남음 · 뽑은 장 ${live.length}</div></div>
       <div class="stat-card"><div class="l">하단바별 체크인</div><div class="s nt-bars">${barLine}</div></div>
     </div>`;
@@ -208,6 +358,7 @@ export function ntPartHtml(ev, query){
       ${ci ? '' : `${seg(isOnsite() ? 'on' : 'pre', [['pre', '사전 출력'], ['on', '현장 출력']], 'ntSetOnsite')}
         <span class="nt-note">${isOnsite() ? '뽑으면 바로 체크인으로 남아요' : '뽑아도 체크인은 따로 해요'}</span>`}
       <div style="flex:1"></div>
+      ${netHtml()}
       <button class="btn bs" onclick="ntExport()" title="현장 신규까지 한 줄씩 — 하단바·체크인 포함. 하단바 엑셀 올리기 양식도 이것">⬇ 명단 엑셀</button>
       ${ci ? '' : `<label class="btn bs" title="«명단 엑셀»에 하단바를 채워 올려요. 등록번호로 맞추고, 없으면 이메일·이름+소속으로">⬆ 하단바 엑셀
         <input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="ntImportBars(this.files[0]);this.value=''"></label>`}
@@ -230,7 +381,7 @@ export function ntPartHtml(ev, query){
     </div>
     <div class="sec-rows nt-layout">
       <div id="evdb-rows">${ntRowsHtml(ev.key, query)}</div>
-      <div id="nt-side" class="nt-side">${ci ? checkinSideHtml() : sideHtml(ev.key)}</div>
+      <div id="nt-side" class="nt-side">${nt.netView ? netLogHtml() : ci ? checkinSideHtml() : sideHtml(ev.key)}</div>
     </div></div>`;
 }
 
@@ -246,7 +397,7 @@ export function ntRowsHtml(evKey, query){
       <td>${escapeHtml(p.orgKo || p.orgEn)}</td>`;
   const got = (p) => { const d = done.get(p.key); return d ? `<span style="color:var(--g);font-weight:700">✓</span> ${kst(d.last)}${d.n > 1 ? ` · ${d.n}장` : ''}` : '<span style="color:var(--i5)">—</span>'; };
   const ckCell = (p) => { const c = nt.checkins.get(p.key);
-    return c ? `<span style="color:var(--g);font-weight:700">✓</span> ${kst(c.checked_at)} <span class="nt-note">${c.via === 'print' ? '현장 출력' : '데스크'}</span>` : '<span style="color:var(--i5)">—</span>'; };
+    return c ? `<span style="color:var(--g);font-weight:700">✓</span> ${kst(c.checked_at)} <span class="nt-note">${c.via === 'print' ? '현장 출력' : '데스크'}${c._wait ? ' · ⏳ 기기에만' : ''}</span>` : '<span style="color:var(--i5)">—</span>'; };
   const barCell = (p) => barTypes().length
     ? `<td onclick="event.stopPropagation()">${barSelect(barOf(p.key), `ntSetBar('${escAttr(p.key)}',this.value)`, `style="--c:${barType(barOf(p.key))?.color || 'transparent'}"`)}</td>`
     : `<td>${barChip(barOf(p.key))}</td>`;
@@ -357,7 +508,7 @@ function recentHtml(){
     <span class="who"><b>${escapeHtml(p.name)}</b> <span style="color:var(--i4)">${escapeHtml(p.company || '')}</span>
       ${KIND[p.kind] ? `<span class="pill p-gray">${KIND[p.kind]}${p.reason ? ' · ' + escapeHtml(p.reason) : ''}</span>` : ''}
       ${p.bar ? `<span class="nt-bar"><i style="background:${barTypes().find(b => b.label === p.bar)?.color || '#868e96'}"></i>${escapeHtml(p.bar)}</span>` : ''}</span>
-    <span style="display:flex;gap:6px;align-items:center"><span class="when" title="${escAttr(p.printed_by || '')}">${kst(p.printed_at)}</span>
+    <span style="display:flex;gap:6px;align-items:center"><span class="when" title="${escAttr(p.printed_by || '')}">${p._wait ? '<span title="이 기기에만 있어요 — 연결되면 보내요">⏳</span> ' : ''}${kst(p.printed_at)}</span>
       ${p.voided_at ? '<span class="when">안 됨</span>' : `<button class="btn bs" onclick="ntVoid('${escAttr(p.id)}')" title="인쇄가 안 나왔으면 되돌려요 — 기록은 남고 받은 수에서 빠져요">안 됨</button>`}</span></li>`).join('')}</ul></div>`;
 }
 
@@ -409,7 +560,7 @@ function refreshPreview(card){
 /* ── 동작 ── */
 const evPerson = (key) => deskPeople(nt.ev).find(p => p.key === key);
 
-export function ntSetView(v){ nt.view = v === 'checkin' ? 'checkin' : 'issue'; nt.filter = 'todo'; nt.imp = null;
+export function ntSetView(v){ nt.view = v === 'checkin' ? 'checkin' : 'issue'; nt.filter = 'todo'; nt.imp = null; nt.netView = false;
   if(nt.view !== 'checkin' && cameraOn()) closeCamera();
   rerender();
   if(nt.view === 'checkin') setTimeout(() => document.getElementById('evdb-q')?.focus(), 0); }
@@ -417,7 +568,7 @@ export function ntSetOnsite(v){ nt.onsite = v === 'on'; rerender(); }
 export function ntSetFilter(v){ nt.filter = v; rerender(); }
 export function ntSetSrc(v){ nt.src = v; rerender(); }
 export function ntSetBarFil(v){ nt.barFil = v; rerender(); }
-export function ntFocus(key){ nt.focus = key; nt.walkIn = null; nt.imp = null; rerender(); }
+export function ntFocus(key){ nt.focus = key; nt.walkIn = null; nt.imp = null; nt.netView = false; rerender(); }
 export function ntPick(key, on){ if(on) nt.picked.add(key); else nt.picked.delete(key); if(on && !nt.focus) nt.focus = key; nt.walkIn = null; rerender(); }
 export function ntPickAll(on){
   if(!on){ nt.picked.clear(); rerender(); return; }
@@ -457,15 +608,12 @@ export function ntOpenEditor(){
 }
 
 /* 하단바 — 한 명 / 고른 사람 모두 */
-async function saveBars(items, via){
+function saveBars(items, via){
   if(!items.length) return;
-  nt.busy = true;
-  try {
-    const j = await saveNametagBars(nt.ev, items, via);
-    (j.people || []).forEach(p => nt.people.set(p.person_key, p));
-    return j;
-  } catch(e){ alert('하단바를 저장하지 못했어요 — ' + e.message); }
-  finally { nt.busy = false; }
+  const op = { kind: 'bars', data: { items, via } };
+  applyOp(op);
+  enqueue(nt.ev, 'bars', op.data);
+  return { ok: true };
 }
 export async function ntSetBar(key, bar){ await saveBars([{ person_key: key, bar }]); rerender(); }
 export async function ntSetBarPicked(bar){
@@ -473,12 +621,11 @@ export async function ntSetBarPicked(bar){
   await saveBars(keys.map(k => ({ person_key: k, bar })));
   rerender();
 }
-export async function ntWalkContact(key, field, value){
+export function ntWalkContact(key, field, value){
   const p = nt.people.get(key) || {};
-  try {
-    const j = await saveWalkInContact(nt.ev, key, { email: field === 'email' ? value : p.email || '', phone: field === 'phone' ? value : p.phone || '' });
-    nt.people.set(key, j.person);
-  } catch(e){ alert('저장하지 못했어요 — ' + e.message); }
+  const data = { key, email: field === 'email' ? value : p.email || '', phone: field === 'phone' ? value : p.phone || '' };
+  applyOp({ kind: 'contact', data });
+  enqueue(nt.ev, 'contact', data);
 }
 
 export async function ntPrint(){
@@ -497,30 +644,41 @@ export async function ntPrint(){
     cards = list.map(p => ({ person_key: p.key, source: p.source, ref_id: p.ref_id, contact_id: p.contact_id, ...cardFor(p) }));
     if(cards.some(c => !String(c.name || '').trim())) return alert('이름이 빈 네임택이 있어요.');
   }
-  /* 팝업 차단을 피하려면 누른 그 순간 창을 연다. 기록이 오면 그린다 */
+  /* QR을 켠 판인데 그릴 도구가 없으면(외부 CDN을 못 받음) QR 없는 네임택이 나간다 → 막는다 */
+  if(nt.template.layout?.qr?.show && !window.qrcode)
+    return alert('입장 QR을 그리는 도구를 못 불러왔어요. 인터넷이 될 때 화면을 새로 고친 뒤 뽑아 주세요.\nQR 없이 뽑으려면 «판 고치기»에서 QR을 꺼 주세요.');
+  /* 팝업 차단을 피하려면 누른 그 순간 창을 연다 */
   const w = openPrintWindow();
   if(!w) return alert('인쇄 창이 막혔어요. 브라우저 주소창 오른쪽에서 이 사이트의 팝업을 허용해 주세요.');
-  nt.busy = true; rerender();
-  try {
-    const j = await issueNametags(nt.ev, cards, nt.reason || undefined, isOnsite());
-    nt.prints = [...j.prints, ...nt.prints];
-    (j.people || []).forEach(p => nt.people.set(p.person_key, p));
-    (j.checkins || []).forEach(c => nt.checkins.set(c.person_key, c));
-    await fillPrintWindow(w, nt.template, j.prints);
-    nt.picked.clear(); nt.edits.clear(); nt.reason = ''; nt.walkIn = null;
-  } catch(e){
-    w.close();
-    alert('발급하지 못했어요 — ' + e.message);
-  } finally { nt.busy = false; rerender(); }
+  /* 기록은 이 기기가 만든다(id·시각) → 기기에 남기고 바로 인쇄, 서버로는 뒤에서 보낸다(nt-outbox.js) */
+  const onsite = isOnsite(), at = new Date().toISOString(), by = currentUser?.email || '', batch = newId('NB-');
+  const done = printedMap();
+  const rows = cards.map(c => {
+    const id = newId('NP-'), fresh = c.source === 'walk_in' && !c.person_key, key = fresh ? 'w' + id : c.person_key;
+    const kind = fresh ? 'walk_in' : done.has(key) ? 'reissue' : 'issue';
+    const barId = fresh ? c.bar || '' : barOf(key);
+    return { id, event_id: nt.ev, batch_id: batch, person_key: key, source: c.source, ref_id: c.ref_id || null,
+      contact_id: c.contact_id != null && c.contact_id !== '' ? String(c.contact_id) : null,
+      name: String(c.name || '').trim(), company: c.company || '', job_title: c.job_title || null, badge: c.badge || null,
+      bar: barType(barId)?.label || null, lang: c.lang === 'en' ? 'en' : 'ko', kind, reason: kind === 'reissue' ? nt.reason : null,
+      printed_by: by, printed_at: at, voided_at: null, _wait: true,
+      _checkin_id: (onsite || fresh) && !nt.checkins.has(key) ? newId('NC-') : '', _bar_id: barId || '',
+      _email: fresh ? c.email || '' : '', _phone: fresh ? c.phone || '' : '' };
+  });
+  const data = { rows, reason: nt.reason || '', onsite };
+  applyOp({ kind: 'issue', data });
+  enqueue(nt.ev, 'issue', data);
+  nt.picked.clear(); nt.edits.clear(); nt.reason = ''; nt.walkIn = null;
+  rerender();
+  await fillPrintWindow(w, nt.template, rows);
 }
 
 export async function ntVoid(id){
   const p = nt.prints.find(x => x.id === id);
   if(!p || !confirm(`${p.name} 님 네임택이 안 나왔다고 되돌릴까요?\n기록은 남고, 받은 수에서 빠져요. 체크인은 그대로예요.`)) return;
-  try {
-    const j = await voidNametag(id);
-    nt.prints = nt.prints.map(x => x.id === id ? j.print : x);
-  } catch(e){ alert('되돌리지 못했어요 — ' + e.message); }
+  const op = { kind: 'void', at: new Date().toISOString(), data: { id, name: p.name, by: currentUser?.email || '' } };
+  applyOp(op);
+  enqueue(nt.ev, 'void', op.data);
   rerender();
 }
 
@@ -551,38 +709,50 @@ export function ntCamera(){
     const person = { name: p.nameKo || p.nameEn, org: p.orgKo || p.orgEn, bar: b ? b.label : '' };
     const had = nt.checkins.get(p.key);
     if(had) return { state: 'already', person, at: kst(had.checked_at) };
-    try {
-      const j = await checkInNametag(ev, p.key);
-      nt.checkins.set(p.key, j.checkin);
-      refreshLists();
-      const side = document.getElementById('nt-side');
-      if(side && nt.view === 'checkin') side.innerHTML = checkinSideHtml();
-      return j.already ? { state: 'already', person, at: kst(j.checkin.checked_at) } : { state: 'ok', person };
-    } catch(e){ return { state: 'error', person, error: e.message }; }
+    checkInLocal(p.key);   // 기기에 남기고 바로 초록 — 서버로는 뒤에서
+    refreshLists();
+    return { state: 'ok', person };
   }, () => nt.ev === ev && nt.view === 'checkin' && !!document.getElementById('nt-desk'));
 }
 
 /* ── 체크인 ── */
-export async function ntCheckIn(key){
-  if(nt.busy) return;
-  nt.busy = true;
-  try {
-    const j = await checkInNametag(nt.ev, key);
-    nt.checkins.set(key, j.checkin);
-  } catch(e){ alert('체크인하지 못했어요 — ' + e.message); }
-  nt.busy = false;
+function checkInLocal(key){
+  if(nt.checkins.has(key)) return;
+  const row = { id: newId('NC-'), person_key: key, via: 'desk', print_id: null, checked_at: new Date().toISOString(), checked_by: currentUser?.email || '', _wait: true };
+  nt.checkins.set(key, row);
+  enqueue(nt.ev, 'checkin', { row });
+}
+export function ntCheckIn(key){
+  checkInLocal(key);
   refreshLists();
   const q = document.getElementById('evdb-q');
   if(q && nt.view === 'checkin'){ q.select(); q.focus(); }   // 다음 사람을 바로 찾게
-  const side = document.getElementById('nt-side');
-  if(side && nt.view === 'checkin') side.innerHTML = checkinSideHtml();
 }
-export async function ntUncheck(key){
+export function ntUncheck(key){
   const c = nt.checkins.get(key), p = evPerson(key);
   if(!c || !confirm(`${p ? p.nameKo || p.nameEn : key} 님 체크인을 취소할까요? 기록은 남아요.`)) return;
-  try { await voidCheckIn(c.id); nt.checkins.delete(key); }
-  catch(e){ alert('취소하지 못했어요 — ' + e.message); }
+  nt.checkins.delete(key);
+  enqueue(nt.ev, 'uncheck', { id: c.id, key });
   rerender();
+}
+
+/* ── 이 기기 기록 ── */
+export function ntNetView(on = true){ nt.netView = !!on; rerender(); }
+export function ntSendNow(){ kick(0); }
+export function ntRetryFailed(){ retryFailed(nt.ev); }
+export function ntDismissFailed(){ dismissFailed(nt.ev); }
+export function ntExportDeviceLog(){
+  if(!window.XLSX) return alert('엑셀 도구를 못 불러왔어요. 인터넷이 될 때 화면을 새로 고쳐 주세요.');
+  const names = new Map(deskPeople(nt.ev).map(p => [p.key, p.nameKo || p.nameEn]));
+  const kstFull = (iso) => iso ? new Date(new Date(iso).getTime() + 9 * 3600e3).toISOString().slice(0, 19).replace('T', ' ') : '';
+  const ST = { wait: '기다림', sent: '보냄', fail: '못 보냄' };
+  const rows = deviceLog(nt.ev).map(o => [kstFull(o.at), OP_LABEL[o.kind] || o.kind, opText(o, names), ST[o.state], kstFull(o.sent_at), o.err || '', o.id]);
+  const ws = window.XLSX.utils.aoa_to_sheet([['기록 시각', '종류', '내용', '상태', '보낸 시각', '오류', '기기 기록 번호'], ...rows]);
+  ws['!cols'] = [20, 12, 40, 8, 20, 30, 24].map(w => ({ wch: w }));
+  const wb = window.XLSX.utils.book_new();
+  window.XLSX.utils.book_append_sheet(wb, ws, '기기 기록');
+  const ev = evRow();
+  window.XLSX.writeFile(wb, `${(ev.short || ev.name || nt.ev).replace(/[\\/:*?"<>|]/g, '')}_네임택_기기기록_${today()}.xlsx`);
 }
 
 /* ── 최종 등록자 명단 엑셀 — 하단바 엑셀 올리기 양식도 이것(등록번호 칸으로 맞춘다) ── */
@@ -682,13 +852,18 @@ export function ntImportCancel(){ nt.imp = null; rerender(); }
 export async function ntPromote(){
   const wi = walkInPeople(nt.prints, nt.people);
   if(!wi.length) return;
+  const w = waiting(nt.ev).length;
+  if(w) return alert(`이 기기에 아직 서버로 보내지 않은 기록이 ${w}건 있어요. 연결돼 다 보내진 뒤 다시 눌러 주세요.`);
   const noMail = wi.filter(p => !p.email).length;
   if(!confirm(`현장 신규 ${wi.length}명을 마스터DB에 올릴까요?\n연락처를 만들고 이 행사 «참가자»로 확정해요. 같은 이메일이 있으면 그 사람에 붙여요.${noMail ? `\n이메일이 없는 ${noMail}명은 새 연락처로 만들어요.` : ''}`)) return;
   nt.busy = true; rerender();
+  let made = 0, n = 0;
   try {
-    const j = await promoteWalkIns(nt.ev, wi.map(p => p.key));
-    let made = 0;
+    /* 50명씩 — 한 요청이 서버 시간 한도(60초)에 걸리지 않게. 중간에 끊기면 올라간 만큼은 화면에도 남는다 */
+    for(let i = 0; i < wi.length; i += 50){
+    const j = await promoteWalkIns(nt.ev, wi.slice(i, i + 50).map(p => p.key));
     (j.promoted || []).forEach(r => {
+      n++;
       const c = r.contact, cid = +c.id;
       if(r.created) made++;
       if(!contacts.some(x => x.id === cid)) contacts.push({ id: cid, nameKo: c.nameKo || '', nameEn: c.nameEn || '', orgKo: c.orgKo || '', orgEn: c.orgEn || '',
@@ -705,11 +880,16 @@ export async function ntPromote(){
       nt.people.delete(r.from);
       if(r.person) nt.people.set(r.to, r.person);
     });
-    alert(`${(j.promoted || []).length}명을 올렸어요 — 새 연락처 ${made} · 기존 연락처에 붙임 ${(j.promoted || []).length - made}`);
-  } catch(e){ alert('올리지 못했어요 — ' + e.message); }
+    }
+    alert(`${n}명을 올렸어요 — 새 연락처 ${made} · 기존 연락처에 붙임 ${n - made}`);
+  } catch(e){
+    alert(`${n ? `${n}명까지 올리고 ` : ''}멈췄어요 — ${e.message}\n다시 누르면 남은 사람만 올려요.`);
+    resync();
+  }
   nt.busy = false; rerender();
 }
 
 Object.assign(window, { ntSetView, ntSetOnsite, ntSetFilter, ntSetSrc, ntSetBarFil, ntFocus, ntPick, ntPickAll, ntEdit, ntWalkIn, ntWalkEdit,
   ntSetReason, ntReload, ntOpenEditor, ntPrint, ntVoid, ntSetBar, ntSetBarPicked, ntWalkContact, ntCheckIn, ntUncheck,
-  ntScanKey, ntCamera, ntExport, ntImportBars, ntImportApply, ntImportCancel, ntPromote });
+  ntScanKey, ntCamera, ntExport, ntImportBars, ntImportApply, ntImportCancel, ntPromote,
+  ntNetView, ntSendNow, ntRetryFailed, ntDismissFailed, ntExportDeviceLog });

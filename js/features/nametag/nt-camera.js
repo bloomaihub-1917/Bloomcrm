@@ -135,6 +135,9 @@ async function handle(txt){
   else { beep(false); show('bad', `체크인하지 못했어요 — ${escapeHtml(r.error || '')}`); }
 }
 
+/* 체크인 데스크를 열 때 미리 받아 둔다 — 그 뒤 인터넷이 끊겨도 카메라 읽기가 된다 */
+export function preloadQrReader(){ if(!('BarcodeDetector' in window)) loadJsQR().catch(() => {}); }
+
 /* onScan(key) → { state: 'ok'|'already'|'unknown'|'error', person: { name, org, bar }, at, error }
    alive() → false면 카메라를 끈다(데스크가 체크인 화면을 떠났을 때) */
 export async function openCamera(onScan, alive){

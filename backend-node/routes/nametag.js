@@ -30,6 +30,12 @@
    현장 신규는 이름·소속을 발급 기록에, 이메일·전화를 nametag_people에 둔다. 행사가 끝나고 «마스터DB에 올리기»를
    누르면 그때 연락처(같은 이메일이면 그 사람)와 참가 확정을 만들고, 그 사람의 기록 키를 w…에서 c<연락처 id>로 옮긴다.
    시험 계정은 쓰지 못한다(이름을 가려 찍을 수는 없다).
+
+   끊김 대비(2026-11-10): 데스크는 기록을 기기(태블릿·휴대폰·노트북)에 먼저 남기고 인쇄한 뒤, 연결되면 차례로 보낸다
+   (js/features/nametag/nt-outbox.js). 그래서 발급·체크인 기록 id와 시각은 기기가 만든다.
+   - 같은 id가 다시 오면(응답이 끊겨 기기가 다시 보낸 것) 새로 넣지 않고 처음 기록을 돌려준다
+   - 늦게 도착한 기록도 다른 데스크가 받도록 synced_at(서버가 받은 시각)을 두고 /live는 그것으로 묻는다
+   - 기기가 모르는 사이 다른 데스크가 먼저 뽑았으면 409로 막지 않고 «재발급 · 동시 발급»으로 남긴다(종이는 이미 나왔다)
 ══════════════════════════════════════════════════════════════ */
 const crypto = require('crypto');
 const express = require('express');
@@ -46,6 +52,13 @@ const SOURCES = new Set(['part', 'speaker', 'exh']);
 const LANGS = new Set(['auto', 'ko', 'en']);
 const SHEETS = new Set(['a4', 'fit']);   // 출력 종이: A4 맨 위 가운데 | 네임택 크기 그대로. 가로는 언제나 가운데(예전 a4l도 a4로 저장)
 const REASONS = new Set(['분실', '오타', '훼손', '기타']);
+const RACE_REASON = '동시 발급';   // 기기가 모르는 사이 다른 데스크가 먼저 뽑은 사람
+const PRINT_ID = /^NP-[0-9a-z]{8,40}$/i, CHECKIN_ID = /^NC-[0-9a-z]{8,40}$/i, BATCH_ID = /^NB-[0-9a-z]{8,40}$/i;
+/* 기기가 보낸 시각 — 이상하면(형식이 틀리거나 서버보다 10분 넘게 앞서면) 서버 시각 */
+const devTime = (v, now) => {
+  const t = Date.parse(typeof v === 'string' ? v : '');
+  return Number.isFinite(t) && t <= Date.parse(now) + 600e3 && t > Date.parse(now) - 30 * 86400e3 ? new Date(t).toISOString() : now;
+};
 const WALK_IN_ROLE = '참가자';   // 마스터DB에 올린 현장 신규의 참가 유형
 
 /* 하단바 종류 — [{ id, label, color }]. 화면(nt-editor.js)이 만든 것을 모양만 맞춰 받는다 */
@@ -71,9 +84,9 @@ router.use((req, res, next) => {
 const TEMPLATE_COLS = `id, name, width_mm::float8 AS width_mm, height_mm::float8 AS height_mm, lang, sheet,
   background_data, background_print, layout, print_offset, bar_types, is_default, updated_at, updated_by`;
 const PRINT_COLS = `id, event_id, batch_id, template_id, person_key, source, ref_id, contact_id, name, company, job_title,
-  badge, bar, lang, kind, reason, printed_by, printed_at, voided_at, voided_by`;
+  badge, bar, lang, kind, reason, printed_by, printed_at, voided_at, voided_by, synced_at`;
 const PEOPLE_COLS = `person_key, bar, email, phone, contact_id, updated_at, updated_by`;
-const CHECKIN_COLS = `id, person_key, via, print_id, checked_at, checked_by, voided_at, voided_by`;
+const CHECKIN_COLS = `id, person_key, via, print_id, checked_at, checked_by, voided_at, voided_by, synced_at`;
 
 router.get('/:eventId', async (req, res, next) => {
   try {
@@ -134,13 +147,16 @@ router.post('/:eventId/issue', async (req, res, next) => {
     const raw = Array.isArray(b.cards) ? b.cards : [];
     if (!raw.length) return res.status(400).json({ ok: false, error: '뽑을 사람을 골라 주세요' });
     if (raw.length > 500) return res.status(400).json({ ok: false, error: '한 번에 500장까지 뽑을 수 있어요' });
+    const now = new Date().toISOString();
     const cards = raw.map((c) => {
       const walkIn = c.source === 'walk_in';
       const key = text(c.person_key, 60) || null;
-      const fresh = walkIn && !(key && key.startsWith('w'));   // 처음 오는 현장 신규
-      const id = newId('NP-');
+      const devId = PRINT_ID.test(c.id || '') ? c.id : null;   // 기기가 만든 기록 id
+      const id = devId || newId('NP-');
+      const fresh = walkIn && (!key || (devId && key === 'w' + devId) || !key.startsWith('w'));   // 처음 오는 현장 신규
       return {
-        id, walkIn, fresh, source: walkIn ? 'walk_in' : SOURCES.has(c.source) ? c.source : null,
+        id, devId, walkIn, fresh, source: walkIn ? 'walk_in' : SOURCES.has(c.source) ? c.source : null,
+        at: devTime(c.printed_at, now), checkin_id: CHECKIN_ID.test(c.checkin_id || '') ? c.checkin_id : null,
         person_key: fresh ? 'w' + id : key,
         bar: text(c.bar, 20) || null, email: text(c.email, 120) || null, phone: text(c.phone, 40) || null,
         ref_id: walkIn ? null : text(c.ref_id, 60) || null,
@@ -152,12 +168,27 @@ router.post('/:eventId/issue', async (req, res, next) => {
     if (cards.some((c) => !c.source || !c.person_key)) return res.status(400).json({ ok: false, error: '명단에 없는 사람이 섞여 있어요. 화면을 새로 고쳐 주세요' });
     if (cards.some((c) => !c.name)) return res.status(400).json({ ok: false, error: '이름이 빈 네임택이 있어요' });
     const reason = REASONS.has(b.reason) ? b.reason : null;
+    const fromDevice = cards.every((c) => c.devId);
+
+    /* 다시 온 기록 — 이미 받은 id면 새로 넣지 않고 그때 기록을 돌려준다(한 묶음은 한 트랜잭션이라 다 있거나 다 없다) */
+    if (fromDevice) {
+      const ids = cards.map((c) => c.id);
+      const { rows: got } = await client.query(`SELECT ${PRINT_COLS} FROM nametag_prints WHERE id = ANY($1)`, [ids]);
+      if (got.length) {
+        const wk = got.filter((r) => r.kind === 'walk_in').map((r) => r.person_key);
+        const [pp, ck] = await Promise.all([
+          wk.length ? client.query(`SELECT ${PEOPLE_COLS} FROM nametag_people WHERE event_id = $1 AND person_key = ANY($2)`, [ev, wk]) : { rows: [] },
+          client.query(`SELECT ${CHECKIN_COLS} FROM nametag_checkins WHERE event_id = $1 AND print_id = ANY($2)`, [ev, ids]),
+        ]);
+        return res.json({ ok: true, replay: true, batch_id: got[0].batch_id, prints: got, people: pp.rows, checkins: ck.rows });
+      }
+    }
 
     const keys = cards.filter((c) => !c.fresh).map((c) => c.person_key);
     const { rows: had } = keys.length ? await client.query(
       `SELECT DISTINCT person_key FROM nametag_prints WHERE event_id = $1 AND voided_at IS NULL AND person_key = ANY($2)`, [ev, keys]) : { rows: [] };
     const already = new Set(had.map((r) => r.person_key));
-    if (already.size && !reason) {
+    if (already.size && !reason && !fromDevice) {
       return res.status(409).json({ ok: false, error: '이미 네임택을 받은 사람이 있어요. 재발급 사유를 골라 주세요', need_reason: [...already] });
     }
 
@@ -169,8 +200,7 @@ router.post('/:eventId/issue', async (req, res, next) => {
       `SELECT person_key, bar FROM nametag_people WHERE event_id = $1 AND person_key = ANY($2)`, [ev, keys]) : { rows: [] };
     const barOf = new Map(ppl.map((r) => [r.person_key, r.bar]));
     const onsite = !!b.onsite;
-    const batch = newId('NB-');
-    const at = new Date().toISOString();
+    const batch = BATCH_ID.test(b.batch_id || '') ? b.batch_id : newId('NB-');
     const by = req.user?.email || '';
     await client.query('BEGIN');
     const out = [], people = [], checkins = [];
@@ -179,27 +209,29 @@ router.post('/:eventId/issue', async (req, res, next) => {
       const bar = c.fresh ? (barLabel.has(c.bar) ? c.bar : null) : barOf.get(c.person_key) || null;
       if (c.fresh) {
         const { rows: [pp] } = await client.query(`INSERT INTO nametag_people (event_id, person_key, bar, email, phone, updated_at, updated_by)
-          VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING ${PEOPLE_COLS}`, [ev, c.person_key, bar, c.email, c.phone, at, by]);
+          VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (event_id, person_key) DO UPDATE SET updated_at = EXCLUDED.updated_at
+          RETURNING ${PEOPLE_COLS}`, [ev, c.person_key, bar, c.email, c.phone, now, by]);
         people.push(pp);
       }
       const { rows: [r] } = await client.query(`
         INSERT INTO nametag_prints (id, event_id, batch_id, template_id, person_key, source, ref_id, contact_id,
-          name, company, job_title, badge, bar, lang, kind, reason, printed_by, printed_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING ${PRINT_COLS}`,
+          name, company, job_title, badge, bar, lang, kind, reason, printed_by, printed_at, synced_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING ${PRINT_COLS}`,
       [c.id, ev, batch, templateId, c.person_key, c.source, c.ref_id, c.contact_id,
-        c.name, c.company, c.job_title, c.badge, bar ? barLabel.get(bar) || null : null, c.lang, kind, kind === 'issue' ? null : reason, by, at]);
+        c.name, c.company, c.job_title, c.badge, bar ? barLabel.get(bar) || null : null, c.lang, kind,
+        kind === 'issue' ? null : reason || RACE_REASON, by, c.at, now]);
       out.push(r);
       if (onsite || c.fresh) {
-        const { rows: [k] } = await client.query(`INSERT INTO nametag_checkins (id, event_id, person_key, via, print_id, checked_at, checked_by)
-          VALUES ($1,$2,$3,'print',$4,$5,$6) ON CONFLICT (event_id, person_key) WHERE voided_at IS NULL DO NOTHING RETURNING ${CHECKIN_COLS}`,
-        [newId('NC-'), ev, c.person_key, r.id, at, by]);
+        const { rows: [k] } = await client.query(`INSERT INTO nametag_checkins (id, event_id, person_key, via, print_id, checked_at, checked_by, synced_at)
+          VALUES ($1,$2,$3,'print',$4,$5,$6,$7) ON CONFLICT (event_id, person_key) WHERE voided_at IS NULL DO NOTHING RETURNING ${CHECKIN_COLS}`,
+        [c.checkin_id || newId('NC-'), ev, c.person_key, r.id, c.at, by, now]);
         if (k) checkins.push(k);
       }
     }
     const re = out.filter((r) => r.kind === 'reissue').length;
     const wi = out.filter((r) => r.kind === 'walk_in').length;
     await log(client, req, 'create', '네임택 발급', ev,
-      `${out.length}장${re ? ` (재발급 ${re} · ${reason})` : ''}${wi ? ` · 현장 신규 ${wi}` : ''}${checkins.length ? ` · 체크인 ${checkins.length}` : ''} — ${out.slice(0, 5).map((r) => r.name).join(', ')}${out.length > 5 ? ' 외' : ''}`);
+      `${out.length}장${re ? ` (재발급 ${re} · ${reason || RACE_REASON})` : ''}${wi ? ` · 현장 신규 ${wi}` : ''}${checkins.length ? ` · 체크인 ${checkins.length}` : ''} — ${out.slice(0, 5).map((r) => r.name).join(', ')}${out.length > 5 ? ' 외' : ''}`);
     await client.query('COMMIT');
     res.json({ ok: true, batch_id: batch, prints: out, people, checkins });
   } catch (e) {
@@ -262,9 +294,15 @@ router.post('/:eventId/checkin', async (req, res, next) => {
   try {
     const ev = String(req.params.eventId), key = text(req.body?.person_key, 60);
     if (!key) return res.status(400).json({ ok: false, error: '체크인할 사람을 골라 주세요' });
-    const { rows: [k] } = await pool.query(`INSERT INTO nametag_checkins (id, event_id, person_key, via, checked_at, checked_by)
-      VALUES ($1,$2,$3,'desk',$4,$5) ON CONFLICT (event_id, person_key) WHERE voided_at IS NULL DO NOTHING RETURNING ${CHECKIN_COLS}`,
-    [newId('NC-'), ev, key, new Date().toISOString(), req.user?.email || '']);
+    const now = new Date().toISOString();
+    const devId = CHECKIN_ID.test(req.body?.id || '') ? req.body.id : null;
+    if (devId) {   // 다시 온 체크인 — 처음 받은 것을 그대로(그 뒤 취소됐으면 취소된 줄)
+      const { rows: [again] } = await pool.query(`SELECT ${CHECKIN_COLS} FROM nametag_checkins WHERE id = $1`, [devId]);
+      if (again) return res.json({ ok: true, checkin: again, replay: true });
+    }
+    const { rows: [k] } = await pool.query(`INSERT INTO nametag_checkins (id, event_id, person_key, via, checked_at, checked_by, synced_at)
+      VALUES ($1,$2,$3,'desk',$4,$5,$6) ON CONFLICT (event_id, person_key) WHERE voided_at IS NULL DO NOTHING RETURNING ${CHECKIN_COLS}`,
+    [devId || newId('NC-'), ev, key, devTime(req.body?.checked_at, now), req.user?.email || '', now]);
     if (k) return res.json({ ok: true, checkin: k });
     const { rows: [had] } = await pool.query(`SELECT ${CHECKIN_COLS} FROM nametag_checkins
       WHERE event_id = $1 AND person_key = $2 AND voided_at IS NULL`, [ev, key]);
@@ -282,18 +320,21 @@ router.post('/checkin/:id/void', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-/* 현장 실시간 — 데스크 여러 대가 같은 숫자를 보게 화면이 15초마다 묻는다. 판(배경 그림)은 무거워 다시 보내지 않는다 */
+/* 현장 실시간 — 데스크 여러 대가 같은 숫자를 보게 화면이 15초마다 묻는다. 판(배경 그림)은 무거워 다시 보내지 않는다.
+   since 뒤로 바뀐 것만 보낸다(체크인은 취소된 줄도 — 화면이 지운다). 서버가 받은 시각(synced_at)으로 묻고,
+   쓰는 중이던 트랜잭션을 놓치지 않게 1분 겹쳐 묻는다(화면은 id로 합치니 겹쳐도 된다) */
 router.get('/:eventId/live', async (req, res, next) => {
   try {
     const ev = String(req.params.eventId);
-    const since = /^\d{4}-\d\d-\d\dT/.test(String(req.query.since || '')) ? String(req.query.since) : '1970-01-01T00:00:00Z';
+    const t = Date.parse(String(req.query.since || ''));
+    const since = Number.isFinite(t) ? new Date(t - 60e3).toISOString() : '1970-01-01T00:00:00Z';
     const now = new Date().toISOString();
     const [ck, p, pe] = await Promise.all([
-      pool.query(`SELECT ${CHECKIN_COLS} FROM nametag_checkins WHERE event_id = $1 AND voided_at IS NULL`, [ev]),
-      pool.query(`SELECT ${PRINT_COLS} FROM nametag_prints WHERE event_id = $1 AND (printed_at > $2 OR voided_at > $2) ORDER BY printed_at DESC`, [ev, since]),
+      pool.query(`SELECT ${CHECKIN_COLS} FROM nametag_checkins WHERE event_id = $1 AND (synced_at > $2 OR voided_at > $2)`, [ev, since]),
+      pool.query(`SELECT ${PRINT_COLS} FROM nametag_prints WHERE event_id = $1 AND (synced_at > $2 OR voided_at > $2) ORDER BY printed_at DESC`, [ev, since]),
       pool.query(`SELECT ${PEOPLE_COLS} FROM nametag_people WHERE event_id = $1 AND updated_at > $2`, [ev, since]),
     ]);
-    res.json({ ok: true, checkins: ck.rows, prints: p.rows, people: pe.rows, now });
+    res.json({ ok: true, delta: true, checkins: ck.rows, prints: p.rows, people: pe.rows, now });
   } catch (e) { next(e); }
 });
 
@@ -344,7 +385,7 @@ async function promoteOne(client, ev, evName, key, req) {
 
   /* 기록 키 옮기기 — c<연락처 id>에 이미 하단바·체크인이 있으면 그쪽을 살린다 */
   const to = 'c' + cid;
-  await client.query(`UPDATE nametag_prints SET person_key = $3, contact_id = $4 WHERE event_id = $1 AND person_key = $2`, [ev, key, to, cid]);
+  await client.query(`UPDATE nametag_prints SET person_key = $3, contact_id = $4, synced_at = $5 WHERE event_id = $1 AND person_key = $2`, [ev, key, to, cid, now]);
   const hadPerson = (await client.query(`SELECT bar FROM nametag_people WHERE event_id = $1 AND person_key = $2`, [ev, to])).rows[0];
   if (hadPerson) {
     await client.query(`UPDATE nametag_people SET bar = COALESCE(bar, $3), updated_at = $4, updated_by = $5
@@ -357,7 +398,7 @@ async function promoteOne(client, ev, evName, key, req) {
   const liveTo = (await client.query(`SELECT 1 FROM nametag_checkins WHERE event_id = $1 AND person_key = $2 AND voided_at IS NULL`, [ev, to])).rows[0];
   if (liveTo) await client.query(`UPDATE nametag_checkins SET voided_at = $3, voided_by = $4
     WHERE event_id = $1 AND person_key = $2 AND voided_at IS NULL`, [ev, key, now, by]);
-  await client.query(`UPDATE nametag_checkins SET person_key = $3 WHERE event_id = $1 AND person_key = $2`, [ev, key, to]);
+  await client.query(`UPDATE nametag_checkins SET person_key = $3, synced_at = $4 WHERE event_id = $1 AND person_key = $2`, [ev, key, to, now]);
   await client.query(`INSERT INTO activity_log (id, ts, email, name, type, action, target, detail, link)
     VALUES ($1,$2,$3,$4,'create','현장 신규 마스터DB에',$5,$6,$7)`,
   [newId('L-'), now, by, req.user?.name || '', ev, `${name} (${org})${created ? ' · 새 연락처' : ' · 기존 연락처에 붙임'}`,
