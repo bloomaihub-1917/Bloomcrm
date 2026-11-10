@@ -1218,3 +1218,32 @@ CREATE TABLE IF NOT EXISTS sales_targets (
   note       TEXT
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_sales_targets ON sales_targets(event_id, contact_id);
+
+-- 네임택 발급 (2026-11-10) — 행사 DB › 네임택 탭. bizmatching nametag-package를 옮겨 왔다(routes/nametag.js)
+-- 판은 행사마다 기본 하나. 출력물 한 장 = 한 줄, 찍은 값 그대로. 인쇄가 안 됐으면 voided_at으로 되돌린다
+CREATE TABLE IF NOT EXISTS nametag_templates (
+  id TEXT PRIMARY KEY, event_id TEXT NOT NULL, name TEXT NOT NULL,
+  width_mm NUMERIC(5,1) NOT NULL, height_mm NUMERIC(5,1) NOT NULL,
+  lang TEXT NOT NULL DEFAULT 'auto',                 -- auto(한글 이름이면 국문) | ko | en
+  background_data TEXT, background_print BOOLEAN NOT NULL DEFAULT false,
+  layout JSONB NOT NULL,                             -- 요소별 위치(mm)·글자 크기(pt)·정렬·줄 수
+  print_offset JSONB NOT NULL DEFAULT '{"x":0,"y":0,"scale":100}'::jsonb,
+  is_default BOOLEAN NOT NULL DEFAULT false,
+  updated_at TEXT, updated_by TEXT,
+  UNIQUE (event_id, name)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS nametag_templates_one_default ON nametag_templates (event_id) WHERE is_default;
+CREATE TABLE IF NOT EXISTS nametag_prints (
+  id TEXT PRIMARY KEY, event_id TEXT NOT NULL, batch_id TEXT NOT NULL, template_id TEXT,
+  person_key TEXT,                                   -- c<연락처 id> | s<연사 id> | x<부스 인원 id>. 현장 신규는 NULL
+  source TEXT NOT NULL CHECK (source IN ('part','speaker','exh','walk_in')),
+  ref_id TEXT, contact_id TEXT,
+  name TEXT NOT NULL, company TEXT, job_title TEXT, badge TEXT, lang TEXT,   -- 찍은 값 그대로
+  kind TEXT NOT NULL CHECK (kind IN ('issue','reissue','walk_in')), reason TEXT,
+  printed_by TEXT NOT NULL, printed_at TEXT NOT NULL,
+  voided_at TEXT, voided_by TEXT,
+  CONSTRAINT nametag_prints_reissue_reason CHECK (kind <> 'reissue' OR reason IS NOT NULL),
+  CONSTRAINT nametag_prints_walk_in CHECK ((kind = 'walk_in') = (source = 'walk_in'))
+);
+CREATE INDEX IF NOT EXISTS nametag_prints_event_idx ON nametag_prints (event_id, printed_at DESC);
+CREATE INDEX IF NOT EXISTS nametag_prints_person_idx ON nametag_prints (event_id, person_key);

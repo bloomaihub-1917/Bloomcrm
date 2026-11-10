@@ -1,0 +1,66 @@
+/* ══════════════════════════════════════════
+   네임택 발급 — 행사 DB › 네임택 탭 + 인쇄 창
+   bizmatching nametag-package의 globals.css 조각을 옮겨 이 저장소의 토큰(tokens.css)으로 바꿨다.
+   인쇄 창(js/features/nametag/nt-print.js)도 이 파일과 tokens.css만 읽는다.
+══════════════════════════════════════════ */
+
+/* 한 장 그리기: 좌표 mm · 글자 pt. 미리보기와 인쇄가 같은 규칙을 쓴다 */
+.nt-card{position:relative;overflow:hidden;background:#fff;color:#000;
+  font-family:'Pretendard','Apple SD Gothic Neo','Malgun Gothic',sans-serif}
+.nt-el{position:absolute;white-space:nowrap;overflow:hidden;line-height:1.15}
+/* 두 줄까지 쓰는 요소(영문 이름). keep-all로 한글 낱말은 쪼개지 않고, 끊을 자리가 없는 영문 낱말만 anywhere로 끊는다 */
+.nt-el:not([data-lines="1"]){white-space:normal;word-break:keep-all;overflow-wrap:anywhere}
+.nt-fit{display:inline-block}
+
+/* 미리보기 무대: 실제 mm 크기를 화면 배율로 줄여 보여 준다 */
+.nt-stage-wrap{overflow:hidden;padding:12px;background:var(--i7);border-radius:var(--r);display:flex;justify-content:center}
+.nt-stage{transform-origin:top left}
+.nt-frame{position:relative;display:inline-block;border:1px solid var(--i5);box-shadow:var(--sh);background:#fff}
+
+/* 발급 데스크 — 왼쪽 명단, 오른쪽 미리보기·인쇄 */
+.nt-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,380px);gap:var(--gap-sec);align-items:start}
+.nt-side{position:sticky;top:8px;display:flex;flex-direction:column;gap:var(--gap-sec);
+  background:var(--W);border:1px solid var(--i6);border-radius:var(--r);padding:12px}
+.nt-side h4{margin:0;font-size:var(--fs-12_5)}
+.nt-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.nt-fields .wide{grid-column:1 / -1}
+.nt-actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.nt-note{font-size:var(--fs-11);color:var(--i4)}
+.nt-warn{font-size:var(--fs-11);color:var(--am);background:var(--ab);border-radius:var(--rs);padding:6px 8px}
+.nt-recent{list-style:none;margin:0;padding:0;max-height:260px;overflow-y:auto}
+.nt-recent li{display:flex;gap:6px;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--i7);font-size:var(--fs-11_5)}
+.nt-recent li.voided .who{color:var(--i4);text-decoration:line-through}
+.nt-recent .when{color:var(--i4);font-size:var(--fs-10_5);white-space:nowrap}
+.nt-rows tr.on{background:var(--selb)}
+.nt-rows td.ck{width:28px}
+.nt-rows input[type="checkbox"]{width:16px;height:16px}
+
+@media (max-width:1100px){
+  .nt-layout{grid-template-columns:minmax(0,1fr)}
+  .nt-side{position:static}
+}
+
+/* ── 인쇄 창 ──
+   사무국 화면 없이 네임택만 그린다. @page 크기는 판 크기에서 만들어 붙인다(nt-print.js) */
+.nt-print-page{background:var(--i7);margin:0;padding:16px;font-family:'Pretendard','Malgun Gothic',sans-serif}
+.nt-sheet{display:flex;flex-wrap:wrap;gap:16px;justify-content:center}
+.nt-shift{transform:translate(var(--nt-dx,0mm),var(--nt-dy,0mm)) scale(var(--nt-scale,1));transform-origin:center}
+.nt-print-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;background:var(--W);
+  border:1px solid var(--i6);border-radius:var(--r);padding:10px 14px;margin-bottom:16px;font-size:var(--fs-12)}
+.nt-print-bar label{display:inline-flex;gap:4px;align-items:center}
+.nt-print-bar input{width:58px;padding:4px 6px;border:1px solid var(--i6);border-radius:var(--rs)}
+.nt-print-bar button{padding:6px 12px;border-radius:var(--r);border:1px solid var(--i6);background:var(--W);cursor:pointer}
+.nt-print-bar button.bp{background:var(--a);color:var(--on);border-color:var(--a)}
+
+@media print{
+  .no-print{display:none !important}
+  html,body{background:#fff !important;margin:0 !important;padding:0 !important}
+  .nt-print-page{background:#fff;padding:0}
+  .nt-sheet{display:block;gap:0}
+  /* 주의 2: 한 장은 정확히 한 쪽이어야 한다. .nt-frame이 inline-block이면 글자 기준선 아래 여백이 1~2mm 붙어
+     종이 높이를 넘기고 빈 쪽이 한 장 더 나온다 → 줄 상자를 없애고(block) 폭만 내용에 맞춘다 */
+  .nt-page{break-after:page;page-break-after:always;line-height:0;font-size:0}
+  .nt-page:last-child{break-after:auto;page-break-after:auto}
+  .nt-frame{display:block;width:fit-content;border:0;box-shadow:none}
+  .nt-card{box-shadow:none;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+}

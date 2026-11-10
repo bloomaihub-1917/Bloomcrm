@@ -35,6 +35,7 @@ import { domainOfSector, domainName, findSectorByName } from '../domain/sectors.
 import { trackAction, changed as changeMeta } from '../core/audit-log.js';
 import { sanitizeForCsv } from './audit-tab.js';
 import { pendingFor, fetchPending, onPendingChange, acceptPending, dropPending } from './register-links.js';
+import { ntPartHtml, ntRowsHtml } from '../features/nametag/nt-desk.js';
 
 /* ── 모듈 상태 ──
    고른 행사와 보고 있는 화면. 다른 탭이 알 필요가 없어 state.js로 올리지 않는다. */
@@ -53,7 +54,7 @@ const evdbPickedTgt = new Set();      // 고른 기업의 org id
 /* 탭 — 행사 정보(개요) 뒤에 파트별로 연다: 참가자(사람 전체·기업별), 전시기업, 연사, 파트너링.
    파트 탭은 위에 숫자 요약, 아래에 명단 — 줄을 누르면 그 사람·기업의 상세 창이 이 자리에서 열린다.
    'orgs'(기업별)는 참가자 탭 안의 보기라 탭 줄에는 없다. */
-const VIEWS = [['profile', '개요'], ['people', '참가자'], ['exh', '전시기업'], ['sp', '연사'], ['ptn', '파트너링'], ['target', '협의 대상']];
+const VIEWS = [['profile', '개요'], ['people', '참가자'], ['exh', '전시기업'], ['sp', '연사'], ['ptn', '파트너링'], ['nametag', '네임택'], ['target', '협의 대상']];
 const tabOf = (v) => v === 'orgs' ? 'people' : v;
 
 /* ══════════════════════════════════════════
@@ -242,6 +243,7 @@ export function setEvDbQuery(v){
     : evdbView === 'exh' ? exhPartRowsHtml()
     : evdbView === 'sp' ? spPartRowsHtml()
     : evdbView === 'ptn' ? ptnPartRowsHtml()
+    : evdbView === 'nametag' ? ntRowsHtml(evdbEvent, evdbQuery)
     : peopleRowsHtml();
 }
 
@@ -288,6 +290,7 @@ export function renderEvDb(){
     : evdbView === 'exh' ? exhPartHtml(ev)
     : evdbView === 'sp' ? spPartHtml(ev)
     : evdbView === 'ptn' ? ptnPartHtml(ev)
+    : evdbView === 'nametag' ? ntPartHtml(ev, evdbQuery)
     : peopleSummaryHtml(ev) + peopleHtml(ev));
 }
 

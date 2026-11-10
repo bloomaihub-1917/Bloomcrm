@@ -13,6 +13,7 @@ const aiRoutes = require('./routes/ai');
 const photoRoutes = require('./routes/photos');
 const shareRoutes = require('./routes/share');
 const registerRoutes = require('./routes/register');
+const nametagRoutes = require('./routes/nametag');
 const { supplyPage } = require('./routes/share-pages');
 
 /* 로컬(server.js)과 Vercel 서버리스(api/index.js)가 이 app을 그대로
@@ -92,6 +93,8 @@ app.use('/api/photos', requireAuth, photoRoutes);
 // 연사 프로그램·수급 현황 바깥 공유 — 켜고 끄기·스냅숏 올리기(routes/share.js)
 app.use('/api/share', requireAuth, shareRoutes);
 app.use('/api/register', requireAuth, registerRoutes);
+// 네임택 발급 — 행사 DB › 네임택 탭(routes/nametag.js)
+app.use('/api/nametag', requireAuth, nametagRoutes);
 // 메일 자동 가져오기 — 로그인 대신 비밀 키(CRON_SECRET)로. GitHub 예약 작업이 부른다
 app.use('/api/cron', mailRoutes.cron);
 
