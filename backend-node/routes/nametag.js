@@ -30,7 +30,7 @@ const text = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const num = (v, min, max, d) => { const n = Number(v); return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n * 10) / 10)) : d; };
 const SOURCES = new Set(['part', 'speaker', 'exh']);
 const LANGS = new Set(['auto', 'ko', 'en']);
-const SHEETS = new Set(['a4', 'a4l', 'fit']);   // 출력 종이: A4 맨 위 가운데 | A4 맨 위 왼쪽 | 네임택 크기 그대로
+const SHEETS = new Set(['a4', 'fit']);   // 출력 종이: A4 맨 위 가운데 | 네임택 크기 그대로. 가로는 언제나 가운데(예전 a4l도 a4로 저장)
 const REASONS = new Set(['분실', '오타', '훼손', '기타']);
 
 router.use((req, res, next) => {

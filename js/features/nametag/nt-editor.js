@@ -143,7 +143,7 @@ function renderEditor(){
           ${SHEET_OPTIONS.map(([k, l]) => `<option value="${k}"${t.sheet === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
         <div class="nt-note">${t.sheet === 'fit'
           ? '인쇄 쪽 크기를 네임택 크기로 알려 줘요. 프린터가 이 크기를 안 받으면 A4 맨 위로 바꿔 주세요.'
-          : `인쇄 대화상자에서는 A4로 두고, 네임택 종이를 그대로 넣어요. 쪽 맨 위${t.sheet === 'a4l' ? ' 왼쪽' : ' 가운데'}에 찍혀요. 위 끝이 잘리면 인쇄 보정의 세로 값으로 내려 주세요.`}</div>
+          : `인쇄 대화상자에서는 A4로 두고, 네임택 종이를 그대로 넣어요. 쪽 맨 위 가운데에 찍혀요. 위 끝이 잘리면 인쇄 보정의 세로 값으로 내려 주세요.`}</div>
         <label><div class="mlbl">기본 말</div><select class="fi" onchange="ntEdLang(this.value)">
           ${LANG_OPTIONS.map(([k, l]) => `<option value="${k}"${t.lang === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
       </section>

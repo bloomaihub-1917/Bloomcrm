@@ -1247,7 +1247,7 @@ CREATE TABLE IF NOT EXISTS nametag_prints (
 );
 CREATE INDEX IF NOT EXISTS nametag_prints_event_idx ON nametag_prints (event_id, printed_at DESC);
 CREATE INDEX IF NOT EXISTS nametag_prints_person_idx ON nametag_prints (event_id, person_key);
--- 네임택 출력 종이 (2026-11-10) — a4(A4 쪽 맨 위 가운데, 기본) | a4l(맨 위 왼쪽) | fit(네임택 크기 그대로)
+-- 네임택 출력 종이 (2026-11-10) — a4(A4 쪽 맨 위 가운데, 기본) | fit(네임택 크기 그대로). 가로는 언제나 가운데
 -- 100 × 120mm를 그 크기로 알려 주면 프린터가 안 받아 A4로 알려 주고 위쪽에만 찍는다
 ALTER TABLE nametag_templates ADD COLUMN IF NOT EXISTS sheet TEXT NOT NULL DEFAULT 'a4';
 ALTER TABLE nametag_templates ALTER COLUMN sheet SET DEFAULT 'a4';
