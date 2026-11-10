@@ -147,6 +147,13 @@ export function buildCoDB(){
     const sectors = o.sectors ? parseSectors(o.sectors) : [];
     const name = orgName(o);
 
+    /* 기업 칸(대표 전화·메일)이 비었으면 보여줄 담당자 연락처 — 퇴사자는 건너뛴다.
+       복사해 저장하지 않는다(담당자가 바뀌면 옛 값이 대표번호로 굳는다). 화면이 «담당자»로 구분해 보여준다. */
+    const fromContact = (f) => {
+      const k = coContacts.find(x => !x.left_at && x[f]);
+      return k ? { v: k[f], who: k.nameKo || k.nameEn || '' } : null;
+    };
+
     CO_DB.push({
       // key는 화면 곳곳이 기업을 지목할 때 쓰는 값 — 이제 안정 id다.
       // 이름을 고쳐도 선택 상태나 링크가 끊기지 않는다.
@@ -175,6 +182,8 @@ export function buildCoDB(){
       products: o.products || '',
       phone:    o.phone || '',
       email:    o.email || '',
+      fbPhone:  o.phone ? null : fromContact('phone1'),
+      fbEmail:  o.email ? null : fromContact('email1'),
       address:  o.address || '',
       intro:    o.intro || '',
       catCode:  o.cat_code || '',

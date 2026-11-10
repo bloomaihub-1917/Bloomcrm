@@ -148,6 +148,17 @@ function startCoInlineEdit(key, field){
   });
 }
 
+/* 담당자 연락처를 기업 대표 칸에 저장 — 사람이 «이게 대표번호다»라고 확인했을 때만 누른다 */
+export async function saveCoRepFromContact(key, field){
+  const c = CO_DB.find(x => x.key === key);
+  const fb = c && (field === 'phone' ? c.fbPhone : c.fbEmail);
+  if(!fb) return;
+  /* 저장하면 상세를 바로 다시 그리므로, 대신 보이던 값은 먼저 비운다 */
+  if(field === 'phone') c.fbPhone = null; else c.fbEmail = null;
+  await saveCoTextField(key, field, fb.v);
+  renderCoList();
+}
+
 export function editCoNameKo(key){ startCoInlineEdit(key, 'nameKo'); }
 export function editCoNameEn(key){ startCoInlineEdit(key, 'nameEn'); }
 export function editCoNotes(key){ startCoInlineEdit(key, 'notes'); }
@@ -545,6 +556,7 @@ window.editCoProducts = editCoProducts;
 window.editCoDomain = editCoDomain;
 window.closeCoDomainPopover = closeCoDomainPopover;
 window.editCoPhone = editCoPhone;
+window.saveCoRepFromContact = saveCoRepFromContact;
 window.editCoAddress = editCoAddress;
 window.editCoIntro = editCoIntro;
 window.fillCoIntroFromPdf = fillCoIntroFromPdf;

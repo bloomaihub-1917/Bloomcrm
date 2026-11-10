@@ -154,6 +154,12 @@ const sectorRank = (c) => {
   return j >= 0 ? j : 5000;
 };
 
+/* 기업 칸이 비어 담당자 연락처로 대신 보여줄 때 — 연하게, «담당자»를 알린다(대표번호로 오해하지 않게) */
+function coFromContact(fb, dash){
+  if(!fb) return dash;
+  return `<span style="color:var(--i4)" title="${escapeHtml((fb.who ? fb.who + ' ' : '') + '담당자 연락처 — 기업 대표 연락처는 비어 있어요')}">${escapeHtml(fb.v)}<span style="font-size:var(--fs-9);margin-left:3px">담당자</span></span>`;
+}
+
 export function setCoSort(v){
   coUi.coSort = v;
   sortCoDb();
@@ -912,8 +918,8 @@ function coTableCell(key, c, i){
     }
     case 'kind':    return coKindPill(c.kind);
     case 'country': return (c.country || c.hq) ? escapeHtml(countryName(c.country || c.hq)) : dash;
-    case 'phone':   return c.phone ? escapeHtml(c.phone) : dash;
-    case 'email':   return c.email ? escapeHtml(c.email) : dash;
+    case 'phone':   return c.phone ? escapeHtml(c.phone) : coFromContact(c.fbPhone, dash);
+    case 'email':   return c.email ? escapeHtml(c.email) : coFromContact(c.fbEmail, dash);
     case 'website': {
       const site = c.website ? parseLinks(c.website)[0] : null;
       const href = site ? safeUrl(site.url) : '';

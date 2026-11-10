@@ -121,6 +121,14 @@ export function renderCoDetail(c){
 
           return `<div style="margin-top:7px">
             ${has.map(row).join('')}
+            ${[['phone','대표 전화',c.fbPhone],['email','대표 메일',c.fbEmail]].filter(f => f[2]).map(([id, label, fb]) => `
+            <div style="display:flex;gap:8px;align-items:baseline;padding:2px 0;font-size:var(--fs-11_5)">
+              <span style="flex:0 0 62px;color:var(--i5)">${label}</span>
+              <span style="flex:1;min-width:0;color:var(--i4)" title="기업 대표 칸은 비어 있어서 담당자 연락처를 대신 보여줘요">${escapeHtml(fb.v)}
+                <span style="font-size:var(--fs-10)">${escapeHtml(fb.who)} 담당자</span>
+                <button class="btn bs" style="font-size:var(--fs-10);padding:1px 6px;margin-left:4px" title="이 값이 실제 기업 대표 ${label.slice(3)}일 때만 — 기업 칸에 저장해요"
+                  onclick="saveCoRepFromContact('${escAttr(c.key)}','${id}')">대표로 저장</button></span>
+            </div>`).join('')}
             <div id="co-gaps-${escapeHtml(c.key)}" style="display:none">${gap.map(row).join('')}</div>
             <div style="display:flex;align-items:center;gap:10px;margin-top:5px">
               ${gap.length ? `<button id="co-gaps-btn-${escapeHtml(c.key)}" class="btn bs" style="font-size:var(--fs-10_5);padding:2px 8px"
