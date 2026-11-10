@@ -392,7 +392,13 @@ export function editCoSector(key){
   const plain  = COMPANY_SECTORS.filter(s => !parseSectorScope(nameOf(s)).eventShort);
   const section = (label, items, open, collapsible) => {
     if(!items.length) return '';
-    const rows = items.map(checkboxRow).join('');
+    /* 설정의 «큰 갈래»가 바뀌는 자리마다 작은 제목을 끼운다 */
+    const rows = items.map((s, i) => {
+      const g = typeof s === 'string' ? '' : (s.group || '');
+      const prev = i ? (typeof items[i-1] === 'string' ? '' : (items[i-1].group || '')) : '';
+      const gh = g && g !== prev ? `<div style="font-size:var(--fs-10);font-weight:700;color:var(--a);margin:6px 0 1px">▍${escapeHtml(g)}</div>` : '';
+      return gh + checkboxRow(s);
+    }).join('');
     const head = `<span style="font-size:var(--fs-10);font-weight:700;color:var(--i4);letter-spacing:.04em">${escapeHtml(label)}</span>`;
     if(!collapsible) return `<div style="margin-bottom:8px"><div style="margin-bottom:2px">${head}</div>${rows}</div>`;
     const hasChecked = items.some(s => currentSectors.includes(nameOf(s)));

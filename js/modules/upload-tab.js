@@ -57,6 +57,7 @@ import {
   currentUser,
   nextContactId,
 } from '../state.js';
+import { SECTOR_RENAMES } from '../state.js';
 import { CL } from '../constants.js';
 import { td, normalizeCat, normalizeCountry, escapeHtml, escAttr, scopedSectorName, slugifySectorName, sectorRowValues, sectorKey } from '../utils.js';
 import { postToSheet } from '../api.js';
@@ -282,7 +283,10 @@ const SECTOR_ALIASES = {
 function normalizeSector(v){
   const t = String(v || '').trim();
   if(!t) return '';
-  return SECTOR_ALIASES[t] || SECTOR_ALIASES[t.toLowerCase()] || t;
+  /* 설정에서 이름을 바꾼 섹터는 옛 표기로 와도 바뀐 이름으로(바뀐 것이 또 바뀌어도 끝까지 따라간다) */
+  let cur = SECTOR_ALIASES[t] || SECTOR_ALIASES[t.toLowerCase()] || t;
+  for(let i = 0; i < 5 && SECTOR_RENAMES[cur]; i++) cur = SECTOR_RENAMES[cur];
+  return cur;
 }
 
 /* 컬럼명 자동 매핑 후보 탐색 (원본 2515~2539행) */

@@ -751,6 +751,10 @@ export function setCompanySectors(arr){
   COMPANY_SECTORS.push(...(arr || []));
 }
 
+/* 섹터 이름을 바꾼 기록 { 옛 이름: 새 이름 } — settings 'sector_renames'. 옛 표기로 적힌 명단을
+   올려도 바뀐 이름으로 들어가게 업로드가 이걸 본다. */
+export const SECTOR_RENAMES = {};
+
 /* ══════════════════════════════════════════
    PART_TYPES — 행사 참가 유형 목록 (원본 6337~6347행)
 ══════════════════════════════════════════ */

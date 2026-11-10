@@ -6,6 +6,7 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import { API_BASE_URL, CATMAPS, CODE_LISTS, COMPANY_SECTORS, CONF_SESSIONS, CONTACT_ATTEMPTS, CONTACT_ROUNDS, SALES_TARGETS, DOMAINS, EQUIP_CATALOG, EVENT_LIST, EXHIBITORS, EXH_APPS, EXH_CFG, EXH_CONTACTS, EXH_INVOICES, EXH_ITEMS, EXH_LOGS, EXH_PAYMENTS, EXH_TAX, ORGS, PART_TYPES, ROUND_MEMBERS, SESSION_SPEAKERS, SPEAKERS, SPEAKER_CONTACTS, SPEAKER_LOGS, TAGS, WATCH_FILES, WATCH_FOLDERS, applyCodeLists, auditLog, contacts, curApp, currentUser, loadExhCfg, participations, setDomains, setSheetsConnected, setTags, syncPartColors, targets, userColor } from '../state.js';
+import { SECTOR_RENAMES } from '../state.js';
 import { countryName, normalizeCat } from '../utils.js';
 import { authHeaders, normalizeParticipationRow, safeFetch, setSettingsReady, showSheetsWarning } from '../api.js';
 import { migratePartTypesToSheet, migrateSectorsToSheet, noteExhCfgBase, noteMailLibraryBase, saveTags } from './settings-save.js';
@@ -210,6 +211,13 @@ export async function loadFromSheets(hooks = {}){
         saveTags();
       }
 
+      // ── settings 시트 → 섹터 이름 바꾼 기록 ──
+      const renRow = settingsData.find(row => row.key === 'sector_renames');
+      if(renRow){
+        try { Object.assign(SECTOR_RENAMES, JSON.parse(renRow.value) || {}); }
+        catch(e){ console.warn('[CRM] sector_renames 파싱 실패:', e); }
+      }
+
       // ── settings 시트 → 행사별 전시 설정 (마감일·프로그램북 한도) ──
       loadExhCfg(settingsData);
       noteExhCfgBase(EXH_CFG);
@@ -236,6 +244,7 @@ export async function loadFromSheets(hooks = {}){
         id: r.id || '', name: r.name || '', parent: r.parent || null,
         domain: r.domain || '', canonical: r.canonical || '',
         order: r.sort_order == null || r.sort_order === '' ? null : Number(r.sort_order),
+        group: r.group_name || '',
       })).filter(s => s.id && s.name);
       loaded.sort((a, b) => (a.order ?? 1e9) - (b.order ?? 1e9));
       COMPANY_SECTORS.splice(0, COMPANY_SECTORS.length, ...loaded);

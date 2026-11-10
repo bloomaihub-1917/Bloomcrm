@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS sectors (
   parent    TEXT,
   domain    TEXT,
   canonical TEXT,
+  group_name TEXT,     -- 큰 갈래(시공·설치 / 전기·설비 …) — 메인 섹터에만. 사이드바·설정이 이 값으로 제목을 묶는다
   sort_order INTEGER   -- 화면에 줄 세우는 순서(작을수록 위). 설정에서 바꾸면 사이드바·목록·선택창이 같이 따른다
 );
 

@@ -12,7 +12,8 @@ import { buildCoDB } from '../../domain/co-db.js';
 import { UNASSIGNED_DOMAIN, collectUnregisteredSectors, computeSectorCompanyCounts, domainName, domainOfSector, joinSectors, mainSectors, parseSectors, sectorCountFor, sectorId, sectorName, subSectors } from '../../domain/sectors.js';
 import { buildCoCAT, renderCoDashboard, setCoCat } from '../../modules/company-tab.js';
 import { renderMDB } from '../../modules/db-tab.js';
-import { API_BASE_URL, COMPANY_SECTORS, DOMAINS, EVENT_LIST, contacts, currentUser } from '../../state.js';
+import { API_BASE_URL, COMPANY_SECTORS, DOMAINS, EVENT_LIST, ORGS, SECTOR_RENAMES, contacts, currentUser } from '../../state.js';
+import { applyOrgLocal } from '../../domain/org-save.js';
 import { escAttr, escapeHtml, joinDomains, parseDomains, parseSectorScope, scopedSectorName, sectorKey, sectorRowValues, slugifySectorName } from '../../utils.js';
 import { populateUploadEvDropdown } from '../upload/upload-event-select.js';
 import { settingsUi } from './settings-ui.js';
@@ -123,11 +124,14 @@ export function renderSectorTree(){
           onmouseover="this.style.background='rgba(0,0,0,.08)'" onmouseout="this.style.background='none'" title="서브섹터 접기/펼치기">${collapsed?'▸':'▾'}</span>
         <span draggable="true" ondragstart="onSectorDragStart(event,'${m.id}')" onclick="filterCoBySector('${escAttr(m.name)}')"
           style="font-weight:700;font-size:var(--fs-13);flex:1;cursor:pointer" title="클릭하면 기업DB에서 이 섹터로 필터링">${escapeHtml(parseSectorScope(m.name).plainName)}</span>
+        <button onclick="renameSectorById('${escAttr(m.id)}')" title="이름 바꾸기 — 이 섹터가 적힌 기업·연락처도 함께 바뀌어요" style="background:none;border:none;cursor:pointer;color:var(--i4);font-size:var(--fs-12);padding:0 2px">✎</button>
         ${countBadge(sectorCountFor(counts, m.name))}
         <span style="display:inline-flex;flex-direction:column;gap:0;flex-shrink:0" title="순서 — 사이드바·기업DB 목록·섹터 선택창에 그대로 반영돼요">
           <button ${prevId?`onclick="moveSectorNear('${escAttr(m.id)}','${escAttr(prevId)}')"`:'disabled'} style="background:none;border:none;cursor:${prevId?'pointer':'default'};color:${prevId?'var(--i3)':'var(--i6)'};font-size:var(--fs-10);line-height:1;padding:0 4px">▲</button>
           <button ${nextId?`onclick="moveSectorNear('${escAttr(m.id)}','${escAttr(nextId)}')"`:'disabled'} style="background:none;border:none;cursor:${nextId?'pointer':'default'};color:${nextId?'var(--i3)':'var(--i6)'};font-size:var(--fs-10);line-height:1;padding:0 4px">▼</button>
         </span>
+        <input class="fi" list="sector-group-list" value="${escAttr(m.group||'')}" placeholder="큰 갈래" title="큰 갈래 — 같은 이름끼리 사이드바·선택창에서 한 제목 아래 묶여요"
+          style="width:84px;font-size:var(--fs-10);padding:1px 6px" onchange="setSectorGroup('${escAttr(m.id)}', this.value)">
         ${settingsUi.sectorScope ? canonicalSelect(m) : domainSelect(m)}
         <button class="btn bs" style="font-size:var(--fs-11);padding:2px 8px" onclick="toggleSubAddInline('${escAttr(uid)}')">+ 서브</button>
         <button onclick="removeSectorById('${m.id}')"
@@ -145,6 +149,7 @@ export function renderSectorTree(){
           <span class="sector-chip" draggable="true" ondragstart="onSectorDragStart(event,'${s.id}')" onclick="filterCoBySector('${escAttr(s.name)}')"
             style="display:inline-flex;align-items:center;gap:5px;background:var(--i7);border:1px solid var(--i6);border-radius:var(--rd-20);padding:3px 10px;font-size:var(--fs-12);cursor:pointer" title="클릭하면 기업DB에서 이 섹터로 필터링">
             ↳ ${escapeHtml(parseSectorScope(s.name).plainName)} ${countBadge(sectorCountFor(counts, s.name))}
+            <button onclick="event.stopPropagation();renameSectorById('${escAttr(s.id)}')" title="이름 바꾸기" style="background:none;border:none;cursor:pointer;color:var(--i4);font-size:var(--fs-11);padding:0 1px">✎</button>
             <button onclick="event.stopPropagation();removeSectorById('${s.id}')"
               style="background:none;border:none;cursor:pointer;color:var(--i4);font-size:var(--fs-14);line-height:1;padding:0 0 0 2px"
               onmouseover="this.style.color='var(--re)'" onmouseout="this.style.color='var(--i4)'">×</button>
@@ -167,8 +172,10 @@ export function renderSectorTree(){
     <div style="font-size:var(--fs-11);font-weight:700;color:var(--i3);margin:14px 0 6px;text-transform:uppercase;letter-spacing:.4px">
       🗂 ${escapeHtml(g.title)} <span style="font-weight:400;color:var(--i4)">(${g.mains.length})</span>
     </div>
-    ${g.mains.map((m, i) => mainCard(m, g.tag, g.mains[i-1]?.id, g.mains[i+1]?.id)).join('')}
-  `).join('');
+    ${g.mains.map((m, i) => (m.group && m.group !== (g.mains[i-1]?.group||'')
+        ? `<div style="font-size:var(--fs-10);font-weight:700;color:var(--a);margin:10px 0 4px 2px;letter-spacing:.3px">▍${escapeHtml(m.group)}</div>` : '')
+      + mainCard(m, g.tag, g.mains[i-1]?.id, g.mains[i+1]?.id)).join('')}
+  `).join('') + `<datalist id="sector-group-list">${[...new Set(COMPANY_SECTORS.map(s => s.group).filter(Boolean))].map(n => `<option value="${escAttr(n)}">`).join('')}</datalist>`;
 }
 
 /* 섹터 순서 한 칸 옮기기 — 같은 분야 묶음 안의 이웃과 자리를 바꾼다. 순서(sort_order)는 표에 저장돼
@@ -192,6 +199,88 @@ export async function moveSectorNear(id, otherId){
     return;
   }
   trackAction('edit', '섹터 순서', sectorName(id), `섹터 순서: «${sectorName(id)}» ↔ «${sectorName(otherId)}»`);
+}
+
+/* 큰 갈래 지정 — 같은 갈래끼리 한 덩어리로 모이게, 같은 갈래의 마지막 섹터 바로 뒤로 옮겨 놓는다.
+   (떨어져 있으면 사이드바에 같은 제목이 여러 번 찍힌다) */
+export async function setSectorGroup(id, value){
+  const s = COMPANY_SECTORS.find(x => x.id === id);
+  if(!s) return;
+  const g = String(value || '').trim();
+  if((s.group || '') === g) return;
+  const before = COMPANY_SECTORS.map(x => [x, x.order, x.group]);
+  s.group = g;
+  if(g){
+    let last = -1;
+    COMPANY_SECTORS.forEach((x, k) => { if(x !== s && !x.parent && (x.group || '') === g) last = k; });
+    if(last >= 0){
+      const cur = COMPANY_SECTORS.indexOf(s);
+      COMPANY_SECTORS.splice(cur, 1);
+      COMPANY_SECTORS.splice(last >= cur ? last : last + 1, 0, s);
+    }
+  }
+  const changed = [];
+  COMPANY_SECTORS.forEach((x, k) => { if(x.order !== k + 1){ x.order = k + 1; changed.push(x); } });
+  if(!changed.includes(s)) changed.push(s);
+  window.renderSectorList();
+  try { buildCoCAT(); if(document.getElementById('co-dash')) renderCoDashboard(); } catch(e){}
+  const r = await postToSheet({ sheet: 'sectors', action: 'batchUpsert', rows: changed.map(sectorRowValues) }, '섹터 큰 갈래');
+  if(!r.ok){
+    COMPANY_SECTORS.splice(0, COMPANY_SECTORS.length, ...before.map(b => b[0]));
+    before.forEach(([x, o, gr]) => { x.order = o; x.group = gr; });
+    window.renderSectorList();
+    try { buildCoCAT(); } catch(e){}
+    return;
+  }
+  trackAction('edit', '섹터 큰 갈래', s.name, `섹터 «${parseSectorScope(s.name).plainName}» 큰 갈래: ${g || '(없음)'}`);
+}
+
+/* 섹터 이름 바꾸기 — 기업(orgs.sectors)과 연락처(beat)는 섹터를 «이름 글자 그대로» 들고 있어서,
+   표의 이름만 고치면 전부 미등록 값으로 떨어진다. 같이 바꾸고, 옛 이름은 기록해 둔다
+   (옛 표기로 적힌 명단을 올려도 새 이름으로 들어가게 — settings 'sector_renames'). */
+export async function renameSectorById(id){
+  const s = COMPANY_SECTORS.find(x => x.id === id);
+  if(!s) return;
+  const sc = parseSectorScope(s.name);
+  const raw = (prompt('섹터 새 이름', sc.plainName) || '').trim();
+  if(!raw || raw === sc.plainName) return;
+  const newName = scopedSectorName(sc.eventShort || '', raw);
+  if(COMPANY_SECTORS.some(x => x.id !== id && sectorKey(x.name) === sectorKey(newName))){
+    alert('이미 있는 섹터 이름이에요. 두 섹터를 하나로 합치려면 «섹터 병합»을 쓰세요.'); return;
+  }
+  const oldName = s.name;
+  const orgs = ORGS.filter(o => parseSectors(o.sectors).includes(oldName));
+  const cons = contacts.filter(c => c.beat && parseSectors(c.beat).includes(oldName));
+  if(!confirm(`«${oldName}» → «${newName}»
+
+이 섹터가 적힌 기업 ${orgs.length}곳, 연락처 ${cons.length}명의 값도 함께 바꿔요. 계속할까요?`)) return;
+
+  const swap = str => joinSectors(parseSectors(str).map(n => n === oldName ? newName : n));
+  const sendAll = async (sheet, rows, label) => {
+    for(let i = 0; i < rows.length; i += 100){
+      const r = await postToSheet({ sheet, action: 'batchUpsert', dataRows: rows.slice(i, i + 100) }, label);
+      if(!r.ok) return false;
+    }
+    return true;
+  };
+  const now = new Date().toISOString();
+  const orgRows = orgs.map(o => ({ id: o.id, sectors: swap(o.sectors), updated_at: now }));
+  if(!await sendAll('orgs', orgRows, '섹터 이름 변경 - 기업')){ alert('기업 값 저장에 실패해서 이름 바꾸기를 멈췄어요. 새로고침 후 다시 시도해 주세요.'); return; }
+  if(!await sendAll('contacts', cons.map(c => ({ id: c.id, beat: swap(c.beat) })), '섹터 이름 변경 - 연락처')){
+    alert('연락처 값 저장에 실패해서 멈췄어요. 기업 값은 이미 바뀌었으니, 새로고침 후 같은 이름으로 다시 시도하면 이어서 바뀝니다.'); return;
+  }
+  orgRows.forEach(applyOrgLocal);
+  cons.forEach(c => { c.beat = swap(c.beat); });
+
+  s.name = newName;
+  const rs = await upsertSectorRow(s);
+  if(!rs.ok){ s.name = oldName; alert('섹터 이름 저장에 실패했어요. 새로고침 후 같은 이름으로 다시 시도해 주세요.'); return; }
+  SECTOR_RENAMES[oldName] = newName;
+  postToSheet({ sheet: 'settings', action: 'upsert', row: ['sector_renames', JSON.stringify(SECTOR_RENAMES)] }, '섹터 이름 기록');
+
+  trackAction('edit', '섹터 이름 변경', newName, `섹터 이름: ${oldName} → ${newName} (기업 ${orgs.length}곳, 연락처 ${cons.length}명)`);
+  window.renderSectorList();
+  try { buildCoDB(); buildCoCAT(); renderMDB(); if(document.getElementById('co-dash')) renderCoDashboard(); } catch(e){}
 }
 
 /* 행사 스코프 메인 섹터를 공통 섹터에 연결/해제 (행사 트리 카드의 드롭다운 onchange) */
@@ -630,4 +719,6 @@ window.convertMainsToGroup   = convertMainsToGroup;
 window.onSectorScopeChange   = onSectorScopeChange;
 window.assignSectorDomain     = assignSectorDomain;
 window.moveSectorNear         = moveSectorNear;
+window.setSectorGroup         = setSectorGroup;
+window.renameSectorById       = renameSectorById;
 window.assignSectorCanonical  = assignSectorCanonical;

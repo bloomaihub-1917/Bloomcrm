@@ -287,7 +287,12 @@ export function buildCoCAT(){
       const visibleMains = mainsHere;
       if(!visibleMains.length) return;
       if(short) rows.push(`<div style="font-size:var(--fs-10);font-weight:700;color:var(--i4);text-transform:uppercase;letter-spacing:.04em;margin:6px 0 2px 14px">${escapeHtml(short)}</div>`);
+      let prevGroup = '';
       visibleMains.forEach(m => {
+        /* 설정의 «큰 갈래» — 갈래가 바뀌는 자리에 제목 한 줄 */
+        const grp = m.group || '';
+        if(grp && grp !== prevGroup) rows.push(`<div style="font-size:var(--fs-10);font-weight:700;color:var(--a);margin:8px 0 2px 14px;letter-spacing:.3px">▍${escapeHtml(grp)}</div>`);
+        prevGroup = grp;
         const subs = subsByParent[m.id] || [];
         const hasSubs = subs.length > 0;
         const collapsed = _collapsedCoMains.has(m.id);
