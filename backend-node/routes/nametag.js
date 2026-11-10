@@ -30,7 +30,7 @@ const text = (v, max) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const num = (v, min, max, d) => { const n = Number(v); return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n * 10) / 10)) : d; };
 const SOURCES = new Set(['part', 'speaker', 'exh']);
 const LANGS = new Set(['auto', 'ko', 'en']);
-const SHEETS = new Set(['fit', 'a4']);   // 출력 종이: 네임택 크기 그대로 | A4 세로 맨 위
+const SHEETS = new Set(['a4', 'a4l', 'fit']);   // 출력 종이: A4 맨 위 가운데 | A4 맨 위 왼쪽 | 네임택 크기 그대로
 const REASONS = new Set(['분실', '오타', '훼손', '기타']);
 
 router.use((req, res, next) => {
@@ -74,7 +74,7 @@ router.put('/:eventId/template', async (req, res, next) => {
     const vals = [ev, text(b.name, 40) || '기본 네임택',
       num(b.width_mm, 20, 420, 100), num(b.height_mm, 20, 420, 120),
       LANGS.has(b.lang) ? b.lang : 'auto', layout, offset, new Date().toISOString(), req.user?.email || '',
-      bg, !!(bg && b.background_print), SHEETS.has(b.sheet) ? b.sheet : 'fit'];
+      bg, !!(bg && b.background_print), SHEETS.has(b.sheet) ? b.sheet : 'a4'];
     const { rows } = await pool.query(`
       INSERT INTO nametag_templates (id, event_id, name, width_mm, height_mm, lang, layout, print_offset, is_default, updated_at, updated_by,
         background_data, background_print, sheet)

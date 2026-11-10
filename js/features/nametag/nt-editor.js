@@ -12,7 +12,7 @@
    숫자 칸은 onchange(칸을 벗어나거나 Enter)로 받고 판만 다시 그린다 — 칠 때마다 통째로 그리면 입력칸이 포커스를 잃는다.
 ═══════════════════════════════════════════════════════════════ */
 import { escapeHtml, escAttr } from '../../utils.js';
-import { normalizeTemplate, normalizeLayout, normalizeOffset, DEFAULT_LAYOUT, SIZE_PRESETS, SHEET_OPTIONS, LANG_OPTIONS, TEXT_KEYS, EL_LABEL, MM_PX, PT_MM, LINE_HEIGHT } from '../../domain/nametag-layout.js';
+import { normalizeTemplate, normalizeLayout, normalizeOffset, DEFAULT_LAYOUT, SIZE_PRESETS, SHEET_OPTIONS, SHEETS, LANG_OPTIONS, TEXT_KEYS, EL_LABEL, MM_PX, PT_MM, LINE_HEIGHT } from '../../domain/nametag-layout.js';
 import { loadNametag, saveNametagTemplate } from '../../api/nametag.js';
 import { ntCardHtml } from './nt-card.js';
 import { fitNametags } from './nt-fit.js';
@@ -141,7 +141,9 @@ function renderEditor(){
         </div>
         <label><div class="mlbl">출력 종이</div><select class="fi" onchange="ntEdSheet(this.value)">
           ${SHEET_OPTIONS.map(([k, l]) => `<option value="${k}"${t.sheet === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
-        ${t.sheet === 'a4' ? '<div class="nt-note">A4 세로 한 장의 맨 위 가운데에 네임택 하나씩 찍어요. 프린터가 위 끝을 못 찍으면 인쇄 보정의 세로 값으로 내려 주세요.</div>' : ''}
+        <div class="nt-note">${t.sheet === 'fit'
+          ? '인쇄 쪽 크기를 네임택 크기로 알려 줘요. 프린터가 이 크기를 안 받으면 A4 맨 위로 바꿔 주세요.'
+          : `인쇄 대화상자에서는 A4로 두고, 네임택 종이를 그대로 넣어요. 쪽 맨 위${t.sheet === 'a4l' ? ' 왼쪽' : ' 가운데'}에 찍혀요. 위 끝이 잘리면 인쇄 보정의 세로 값으로 내려 주세요.`}</div>
         <label><div class="mlbl">기본 말</div><select class="fi" onchange="ntEdLang(this.value)">
           ${LANG_OPTIONS.map(([k, l]) => `<option value="${k}"${t.lang === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
       </section>
@@ -317,7 +319,7 @@ export function ntEdPaper(k, v){
   if(!Number.isFinite(n)) return;
   resizePaper(k === 'width_mm' ? n : ed.t.width_mm, k === 'height_mm' ? n : ed.t.height_mm);
 }
-export function ntEdSheet(v){ ed.t.sheet = v === 'a4' ? 'a4' : 'fit'; touched(); renderEditor(); }
+export function ntEdSheet(v){ ed.t.sheet = SHEETS.includes(v) ? v : 'a4'; touched(); renderEditor(); }
 export function ntEdLang(v){ ed.t.lang = v; touched(); renderCanvas(); }
 export function ntEdOffset(k, v){ ed.t.print_offset = normalizeOffset({ ...ed.t.print_offset, [k]: v }); touched(); renderCanvas(); }
 export function ntEdBgOpacity(v){ ed.bgOpacity = Math.max(0.1, Math.min(1, Number(v) / 100)); renderCanvas(); }

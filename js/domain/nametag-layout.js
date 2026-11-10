@@ -30,14 +30,22 @@ export const SIZE_PRESETS = [
   { label: '100 × 120mm (기본)', width_mm: 100, height_mm: 120 },
   { label: '100 × 100mm (투포켓 · 하단바)', width_mm: 100, height_mm: 100 },
 ];
-/* 출력 종이 — 네임택 크기 그대로(전용 용지) 또는 A4 세로 맨 위 가운데에 한 장씩 */
-export const SHEET_OPTIONS = [['fit', '네임택 크기 그대로'], ['a4', 'A4 세로 — 맨 위에']];
+/* 출력 종이 — 인쇄할 때 프린터에 알려 주는 쪽 크기와, 그 쪽 안에서 네임택을 놓는 자리.
+   100 × 120mm 같은 작은 종이를 그 크기로 알려 주면 프린터(드라이버)가 받지 않는 일이 많다(2026-11-10 현장).
+   그래서 기본은 A4 쪽의 맨 위에 그리고, 작은 종이를 그대로 넣어 위쪽만 찍히게 한다.
+   가로 자리는 종이를 넣는 방식에 맞춘다 — 급지대 가운데 맞춤이면 가운데, 왼쪽에 붙여 넣으면 왼쪽 */
+export const SHEET_OPTIONS = [
+  ['a4', 'A4 맨 위 가운데 — 종이를 가운데 맞춰 넣을 때'],
+  ['a4l', 'A4 맨 위 왼쪽 — 종이를 왼쪽에 붙여 넣을 때'],
+  ['fit', '네임택 크기 그대로 — 프린터가 이 크기를 받을 때'],
+];
+export const SHEETS = SHEET_OPTIONS.map(o => o[0]);
 export const A4 = { width_mm: 210, height_mm: 297 };
 export const LANG_OPTIONS = [['auto', '자동 (한글 이름이면 국문)'], ['ko', '국문'], ['en', '영문']];
 export const REISSUE_REASONS = ['분실', '오타', '훼손', '기타'];
 
 export const DEFAULT_TEMPLATE = {
-  id: '', name: '기본 네임택', width_mm: 100, height_mm: 120, lang: 'auto', sheet: 'fit',
+  id: '', name: '기본 네임택', width_mm: 100, height_mm: 120, lang: 'auto', sheet: 'a4',
   background_data: null, background_print: false, layout: DEFAULT_LAYOUT, print_offset: DEFAULT_OFFSET, is_default: true,
 };
 
@@ -87,7 +95,7 @@ export function normalizeTemplate(t){
     id: t.id || '', name: t.name || DEFAULT_TEMPLATE.name,
     width_mm: num(t.width_mm, 20, 420, 100), height_mm: num(t.height_mm, 20, 420, 120),
     lang: ['auto', 'ko', 'en'].includes(t.lang) ? t.lang : 'auto',
-    sheet: t.sheet === 'a4' ? 'a4' : 'fit',
+    sheet: SHEETS.includes(t.sheet) ? t.sheet : 'a4',
     background_data: typeof t.background_data === 'string' && t.background_data ? t.background_data : null,
     background_print: !!t.background_print,
     layout: normalizeLayout(t.layout), print_offset: normalizeOffset(t.print_offset),

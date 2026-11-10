@@ -47,6 +47,8 @@
 .nt-sheet{display:flex;flex-wrap:wrap;gap:16px;justify-content:center}
 .nt-a4{width:210mm;height:296mm;background:#fff;display:flex;justify-content:center;align-items:flex-start;overflow:hidden;box-shadow:var(--sh)}
 .nt-a4 .nt-shift{transform-origin:top center}
+.nt-a4l{justify-content:flex-start}
+.nt-a4l .nt-shift{transform-origin:top left}
 .nt-shift{transform:translate(var(--nt-dx,0mm),var(--nt-dy,0mm)) scale(var(--nt-scale,1));transform-origin:center}
 .nt-print-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:space-between;background:var(--W);
   border:1px solid var(--i6);border-radius:var(--r);padding:10px 14px;margin-bottom:16px;font-size:var(--fs-12)}
