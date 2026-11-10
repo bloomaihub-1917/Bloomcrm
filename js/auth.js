@@ -132,6 +132,8 @@ export function doLogout(){
     trackAction('login', '로그아웃', currentUser.email, `${currentUser.name}님이 로그아웃했어요`);
   }
   closeUserMenu();
+  // 기기에 둔 서버 읽기(명단 등, sw.js)를 지운다 — 다른 사람이 이 기기로 들어와도 남지 않게
+  try { window.caches?.delete('bloom-api-v1'); } catch(e){}
   // 테스트 모드는 Firebase 세션이 없으므로 signOut 없이 바로 정리
   if(!auth.currentUser){
     localStorage.removeItem('crm_session');

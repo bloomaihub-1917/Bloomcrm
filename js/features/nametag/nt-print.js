@@ -78,9 +78,18 @@ export async function fillPrintWindow(w, template, cards){
   const per = readPer();
   const canUse = (p) => a4 && fitsA4(template, p, per.gap, off.top + off.y);
   if(!canUse(PER_PAGE.find(p => p[0] === per.n))) per.n = 1;
+  /* 스타일은 글자로 넣는다 — 인쇄 창은 따로 받지 않아도 되게(끊겨도 기기에 둔 것으로, sw.js).
+     화면이 실제로 읽은 주소(배포 때 붙는 ?v=…까지)로 받는다. 못 받으면 예전처럼 링크로 */
+  const sheet = async (p) => {
+    const href = document.querySelector(`link[rel="stylesheet"][href*="${p}"]`)?.href || css(p);
+    try { const r = await fetch(href); if(r.ok) return `<style>${(await r.text()).replace(/<\/style/gi, '')}</style>`; } catch {}
+    return `<link rel="stylesheet" href="${href}">`;
+  };
+  const styles = (await Promise.all(['styles/tokens.css', 'styles/nametag.css'].map(sheet))).join('');
+  if(w.closed) return;
   w.document.open();
   w.document.write(`<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>네임택 인쇄 · ${cards.length}장</title>
-<link rel="stylesheet" href="${css('styles/tokens.css')}"><link rel="stylesheet" href="${css('styles/nametag.css')}">
+${styles}
 <style>@page{size:${paper.width_mm}mm ${paper.height_mm}mm;margin:0}</style></head>
 <body class="nt-print-page">
 <div class="nt-print-bar no-print">

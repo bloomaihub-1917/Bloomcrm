@@ -93,6 +93,15 @@ initAuth((loggedIn) => {
     if(ls) ls.style.display = 'flex';
   }
 });
+/* 끊겨도 앱이 열리게 — 한 번 연 화면·도구·명단을 기기에 둔다(sw.js). 처음 연 그 한 번은 서비스 워커가 아직 안 붙어
+   받은 파일이 기기에 안 남으니, 받은 파일 목록을 넘겨 담아 두게 한다 */
+if('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')){
+  navigator.serviceWorker.register('./sw.js').then(() => navigator.serviceWorker.ready).then(reg => {
+    const urls = [location.href.split('#')[0], ...performance.getEntriesByType('resource').map(r => r.name)];
+    reg.active?.postMessage({ type: 'warm', urls });
+  }).catch(e => console.warn('오프라인 캐시', e.message));
+}
+
 // 로그인 여부와 무관하게 항상 초기화되는 부분(원본 6708행)
 buildCoDB(); buildCoCAT(); buildEvFil(); populateUploadEvDropdown();
 

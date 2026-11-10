@@ -51,6 +51,13 @@ jobs:
             .replace(/(src|href)="((?:js|styles)\/[^"?]+\.(?:js|css))"/g, (m, a, p) => (n++, `${a}="${p}?v=${v}"`));
           fs.writeFileSync('index.html', h);
           console.log(`주소 ${n}곳에 ?v=${v}`);
+          // 끊겨도 앱이 열리게(sw.js) — 화면 파일 전부의 목록. 서비스 워커는 이 파일 내용이 바뀌어야 새로 깔리니 끝에 커밋 번호를 적는다
+          //   js는 위에서 모두 ?v=<커밋>이 붙었다. css는 index.html에 적힌 주소 그대로(이미 ?v=날짜가 붙은 것은 그대로 둔다)
+          const css = [...h.matchAll(/href="(styles\/[^"]+\.css[^"]*)"/g)].map((m) => m[1]);
+          const files = ['./', ...walk('js').filter((f) => f.endsWith('.js')).map((f) => f.split(path.sep).join('/') + '?v=' + v), ...css];
+          fs.writeFileSync('precache.json', JSON.stringify(files));
+          fs.appendFileSync('sw.js', '\n// 배포 ' + v + '\n');
+          console.log(`미리 받아 둘 화면 파일 ${files.length}개`);
           EOF
           rm -rf .github
 

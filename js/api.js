@@ -128,7 +128,8 @@ export async function authHeaders(){
 export async function safeFetch(url, label, attempt = 1, headers = null){
   try {
     console.log('[CRM] fetching', label, attempt > 1 ? `(재시도 ${attempt-1})` : '', '...');
-    const res  = await fetch(url, { method: 'GET', redirect: 'follow', credentials: 'omit', headers: headers || await authHeaders() });
+    /* 끊긴 채로 로그인 토큰이 만료되면 authHeaders가 실패한다 — 그래도 묻는다. 기기에 둔 마지막 답(sw.js)이 온다 */
+    const res  = await fetch(url, { method: 'GET', redirect: 'follow', credentials: 'omit', headers: headers || await authHeaders().catch(() => ({})) });
     const text = await res.text();
     const json = JSON.parse(text);
     if(json && json.error){ console.error('[CRM]', label, 'error:', json.error); return null; }

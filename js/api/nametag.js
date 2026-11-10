@@ -9,7 +9,8 @@ import { API_BASE_URL } from '../state.js';
 const TIMEOUT = 20000;
 async function call(path, method = 'GET', body){
   if(!API_BASE_URL) throw new Error('서버에 연결되지 않았어요');
-  const headers = await authHeaders();
+  /* 읽기는 로그인 토큰을 못 받아도(끊긴 채 만료) 묻는다 — 기기에 둔 마지막 답이 온다(sw.js) */
+  const headers = method === 'GET' ? await authHeaders().catch(() => ({})) : await authHeaders();
   if(body) headers['Content-Type'] = 'application/json';
   const ac = new AbortController(), t = setTimeout(() => ac.abort(), TIMEOUT);
   let res;
@@ -17,6 +18,7 @@ async function call(path, method = 'GET', body){
   catch(e){ throw new Error(e.name === 'AbortError' ? '서버가 답하지 않아요' : '인터넷에 연결되지 않았어요'); }
   finally { clearTimeout(t); }
   const j = await res.json().catch(() => ({}));
+  if(res.headers.get('x-bloom-cache')) j._cached = true;   // 인터넷이 아니라 기기에 둔 마지막 답
   if(!j.ok){ const e = new Error(j.error || `요청 실패 (${res.status})`); e.status = res.status; e.data = j; throw e; }
   return j;
 }

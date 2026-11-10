@@ -84,9 +84,10 @@ function takeFull(j){
   nt.people = byKey(j.people);
   nt.checkins = byKey(j.checkins);
   nt.since = j.now || new Date().toISOString();
-  nt.syncedAt = new Date().toISOString();
+  /* 기기에 둔 마지막 답이면(끊김) 받은 시각은 그 답의 시각 */
+  nt.syncedAt = j._cached ? j.now || '' : new Date().toISOString();
   applyPending();
-  markNet(true);
+  markNet(!j._cached, j._cached ? '인터넷에 연결되지 않았어요 — 기기에 둔 명단으로 열었어요' : '');
 }
 /* 조용히 다시 받기 — 서버가 기기 기록 하나를 받지 않았을 때 등. 화면을 «불러오는 중»으로 바꾸지 않는다 */
 async function resync(){
@@ -163,7 +164,12 @@ onOutbox((type, op, res) => {
 function startPolling(){
   if(nt.timer) return;
   preloadQrReader();   // 카메라 QR 읽기 도구를 연결돼 있을 때 미리 받아 둔다
-  nt.timer = setInterval(async () => {
+  nt.timer = setInterval(pollLive, POLL_MS);
+}
+/* 창을 내려 두면(document.hidden) 묻지 않는다 — 다시 보이면 15초를 기다리지 않고 바로 묻는다 */
+document.addEventListener('visibilitychange', () => { if(!document.hidden && nt.timer) pollLive(); });
+async function pollLive(){
+  {
     if(!document.getElementById('nt-desk')){ clearInterval(nt.timer); nt.timer = 0; return; }
     if(document.hidden || !nt.loaded || nt.err || nt.busy) return;
     const ev = nt.ev;
@@ -175,7 +181,7 @@ function startPolling(){
       markNet(true);
       refreshLists();
     } catch(e){ console.warn('네임택 실시간', e.message); if(!e.status) markNet(false, e.message); refreshNet(); }
-  }, POLL_MS);
+  }
 }
 function mergeLive(j){
   if(j.delta){
