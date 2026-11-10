@@ -25,6 +25,7 @@ import { ntPeople, walkInPeople, cardOf, SOURCE_LABEL } from './nt-people.js';
 import { ntCardHtml } from './nt-card.js';
 import { fitNametags } from './nt-fit.js';
 import { openPrintWindow, fillPrintWindow } from './nt-print.js';
+import { openCamera, closeCamera, cameraOn } from './nt-camera.js';
 
 const POLL_MS = 15000;
 const nt = {
@@ -203,6 +204,7 @@ export function ntPartHtml(ev, query){
   return `<div id="nt-desk">
     <div class="sec sec-bar">
       ${seg(nt.view, [['issue', '🖨 발급'], ['checkin', '✓ 체크인']], 'ntSetView')}
+      ${ci ? `<button class="btn bp" onclick="ntCamera()" title="노트북 웹캠·휴대폰 카메라로 네임택 QR을 읽어요. 켜 두면 비추는 대로 바로 체크인돼요">📷 카메라 체크인</button>` : ''}
       ${ci ? '' : `${seg(isOnsite() ? 'on' : 'pre', [['pre', '사전 출력'], ['on', '현장 출력']], 'ntSetOnsite')}
         <span class="nt-note">${isOnsite() ? '뽑으면 바로 체크인으로 남아요' : '뽑아도 체크인은 따로 해요'}</span>`}
       <div style="flex:1"></div>
@@ -407,7 +409,9 @@ function refreshPreview(card){
 /* ── 동작 ── */
 const evPerson = (key) => deskPeople(nt.ev).find(p => p.key === key);
 
-export function ntSetView(v){ nt.view = v === 'checkin' ? 'checkin' : 'issue'; nt.filter = 'todo'; nt.imp = null; rerender();
+export function ntSetView(v){ nt.view = v === 'checkin' ? 'checkin' : 'issue'; nt.filter = 'todo'; nt.imp = null;
+  if(nt.view !== 'checkin' && cameraOn()) closeCamera();
+  rerender();
   if(nt.view === 'checkin') setTimeout(() => document.getElementById('evdb-q')?.focus(), 0); }
 export function ntSetOnsite(v){ nt.onsite = v === 'on'; rerender(); }
 export function ntSetFilter(v){ nt.filter = v; rerender(); }
@@ -535,6 +539,27 @@ export function ntScanKey(e){
     if(nt.checkins.has(p.key)) return alert(`${p.nameKo || p.nameEn} 님은 이미 ${kst(nt.checkins.get(p.key).checked_at)}에 체크인했어요.`);
     ntCheckIn(p.key);
   } else ntFocus(p.key);
+}
+
+/* ── 카메라 체크인 — 켜 두면 QR이 비치는 대로 바로 체크인(nt-camera.js). 체크인 화면을 떠나면 꺼진다 ── */
+export function ntCamera(){
+  const ev = nt.ev;
+  openCamera(async (k) => {
+    const p = deskPeople(ev).find(x => x.key.toLowerCase() === k);
+    if(!p) return { state: 'unknown' };
+    const b = barType(barOf(p.key));
+    const person = { name: p.nameKo || p.nameEn, org: p.orgKo || p.orgEn, bar: b ? b.label : '' };
+    const had = nt.checkins.get(p.key);
+    if(had) return { state: 'already', person, at: kst(had.checked_at) };
+    try {
+      const j = await checkInNametag(ev, p.key);
+      nt.checkins.set(p.key, j.checkin);
+      refreshLists();
+      const side = document.getElementById('nt-side');
+      if(side && nt.view === 'checkin') side.innerHTML = checkinSideHtml();
+      return j.already ? { state: 'already', person, at: kst(j.checkin.checked_at) } : { state: 'ok', person };
+    } catch(e){ return { state: 'error', person, error: e.message }; }
+  }, () => nt.ev === ev && nt.view === 'checkin' && !!document.getElementById('nt-desk'));
 }
 
 /* ── 체크인 ── */
@@ -687,4 +712,4 @@ export async function ntPromote(){
 
 Object.assign(window, { ntSetView, ntSetOnsite, ntSetFilter, ntSetSrc, ntSetBarFil, ntFocus, ntPick, ntPickAll, ntEdit, ntWalkIn, ntWalkEdit,
   ntSetReason, ntReload, ntOpenEditor, ntPrint, ntVoid, ntSetBar, ntSetBarPicked, ntWalkContact, ntCheckIn, ntUncheck,
-  ntScanKey, ntExport, ntImportBars, ntImportApply, ntImportCancel, ntPromote });
+  ntScanKey, ntCamera, ntExport, ntImportBars, ntImportApply, ntImportCancel, ntPromote });

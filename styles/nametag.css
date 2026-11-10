@@ -94,6 +94,23 @@
   .nt-card{box-shadow:none;print-color-adjust:exact;-webkit-print-color-adjust:exact}
 }
 
+/* ── 카메라 체크인 — 화면 구석에 떠 있는 창(nt-camera.js). 명단을 다시 그려도 꺼지지 않게 body에 붙는다 ── */
+#nt-cam{position:fixed;right:16px;bottom:16px;z-index:9000;width:340px;background:var(--W);border:1px solid var(--i6);
+  border-radius:var(--r);box-shadow:var(--sh);display:flex;flex-direction:column;overflow:hidden}
+.nt-cam-head{display:flex;gap:6px;align-items:center;padding:8px 10px;font-size:var(--fs-12_5)}
+.nt-cam-view{position:relative;background:#000;aspect-ratio:1/1}
+.nt-cam-view video{width:100%;height:100%;object-fit:cover;display:block}
+/* 가운데 네모 — jsQR은 이 안(화면 짧은 변의 80%)만 읽는다 */
+.nt-cam-aim{position:absolute;inset:10%;border:3px solid rgba(255,255,255,.85);border-radius:12px;box-shadow:0 0 0 999px rgba(0,0,0,.25)}
+.nt-cam-msg{min-height:64px;padding:10px 12px;font-size:var(--fs-13);display:flex;flex-direction:column;justify-content:center;gap:2px;text-align:center}
+.nt-cam-msg b{font-size:var(--fs-18)}
+.nt-cam-msg span{color:inherit;opacity:.85}
+.nt-cam-msg[data-state="idle"]{color:var(--i3)}
+.nt-cam-msg[data-state="ok"]{background:var(--g);color:#fff;font-weight:700}
+.nt-cam-msg[data-state="warn"]{background:var(--ab);color:var(--am);font-weight:700}
+.nt-cam-msg[data-state="bad"]{background:var(--rb);color:var(--re);font-weight:700}
+@media (max-width:600px){ #nt-cam{left:8px;right:8px;bottom:8px;width:auto} .nt-cam-view{aspect-ratio:4/3} }
+
 /* ── 판 편집기 — 설정 › 행사 상세 › 네임택 ── */
 .nt-editor{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,340px);gap:16px;align-items:start}
 .nt-panel{display:flex;flex-direction:column;gap:14px}
