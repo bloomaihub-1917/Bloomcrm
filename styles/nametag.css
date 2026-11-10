@@ -12,6 +12,10 @@
 /* 두 줄까지 쓰는 요소(영문 이름). keep-all로 한글 낱말은 쪼개지 않고, 끊을 자리가 없는 영문 낱말만 anywhere로 끊는다 */
 .nt-el:not([data-lines="1"]){white-space:normal;word-break:keep-all;overflow-wrap:anywhere}
 .nt-fit{display:inline-block}
+/* 입장 QR — SVG가 칸을 꽉 채운다. ghost는 담을 사람이 없을 때 화면에만 보이는 자리 */
+.nt-qr{position:absolute}
+.nt-qr svg{display:block;width:100%;height:100%}
+.nt-qr-ghost{display:flex;align-items:center;justify-content:center;border:1px dashed var(--i4);color:var(--i4);font-size:7pt;background:rgba(255,255,255,.6)}
 
 /* 미리보기 무대: 실제 mm 크기를 화면 배율로 줄여 보여 준다 */
 .nt-stage-wrap{overflow:hidden;padding:12px;background:var(--i7);border-radius:var(--r);display:flex;justify-content:center}
@@ -33,6 +37,17 @@
 .nt-recent li.voided .who{color:var(--i4);text-decoration:line-through}
 .nt-recent .when{color:var(--i4);font-size:var(--fs-10_5);white-space:nowrap}
 .nt-rows tr.on{background:var(--selb)}
+.nt-rows tr.in td{background:var(--gb, #ebfbee)}
+/* 하단바 — 색 점 + 이름. big은 미리보기·인쇄 창에서 크게 */
+.nt-bar{display:inline-flex;align-items:center;gap:4px;font-size:var(--fs-11);white-space:nowrap;color:var(--i2)}
+.nt-bar i{display:inline-block;width:14px;height:8px;border-radius:2px;flex:none}
+.nt-bar.big{font-size:var(--fs-14);font-weight:700}
+.nt-bar.big i{width:28px;height:12px}
+.nt-bar-none{color:var(--i4)}
+.nt-bars{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center}
+.nt-bar-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px;border-radius:var(--rs);background:var(--i7)}
+.nt-bar-sel{width:auto;min-width:96px;padding-top:3px;padding-bottom:3px;border-left:6px solid var(--c, transparent)}
+.nt-of{font-size:var(--fs-14);color:var(--i4);font-weight:400}
 .nt-rows td.ck{width:28px}
 .nt-rows input[type="checkbox"]{width:16px;height:16px}
 

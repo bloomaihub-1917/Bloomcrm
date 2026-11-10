@@ -1251,3 +1251,24 @@ CREATE INDEX IF NOT EXISTS nametag_prints_person_idx ON nametag_prints (event_id
 -- 100 × 120mm를 그 크기로 알려 주면 프린터가 안 받아 A4로 알려 주고 위쪽에만 찍는다
 ALTER TABLE nametag_templates ADD COLUMN IF NOT EXISTS sheet TEXT NOT NULL DEFAULT 'a4';
 ALTER TABLE nametag_templates ALTER COLUMN sheet SET DEFAULT 'a4';
+-- 네임택 하단바·체크인 (2026-11-10) — db/migrations/add-nametag-checkin.js
+-- 하단바 종류는 행사마다 다르다 → 판에 둔다. 사람별 하단바·현장 신규 연락처는 nametag_people,
+-- 체크인은 한 번 = 한 줄(취소는 voided_at). 현장 신규의 person_key는 w<첫 발급 id>
+ALTER TABLE nametag_templates ADD COLUMN IF NOT EXISTS bar_types JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE nametag_prints ADD COLUMN IF NOT EXISTS bar TEXT;
+ALTER TABLE nametag_prints DROP CONSTRAINT IF EXISTS nametag_prints_walk_in;
+ALTER TABLE nametag_prints ADD CONSTRAINT nametag_prints_walk_in CHECK (kind <> 'walk_in' OR source = 'walk_in');
+CREATE TABLE IF NOT EXISTS nametag_people (
+  event_id TEXT NOT NULL, person_key TEXT NOT NULL,
+  bar TEXT, email TEXT, phone TEXT, contact_id TEXT,   -- contact_id: 현장 신규를 마스터DB에 올린 연락처
+  updated_at TEXT, updated_by TEXT,
+  PRIMARY KEY (event_id, person_key)
+);
+CREATE TABLE IF NOT EXISTS nametag_checkins (
+  id TEXT PRIMARY KEY, event_id TEXT NOT NULL, person_key TEXT NOT NULL,
+  via TEXT NOT NULL CHECK (via IN ('print','desk')), print_id TEXT,   -- print: 현장 출력과 함께 · desk: 체크인 데스크에서
+  checked_at TEXT NOT NULL, checked_by TEXT NOT NULL,
+  voided_at TEXT, voided_by TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS nametag_checkins_one_live ON nametag_checkins (event_id, person_key) WHERE voided_at IS NULL;
+CREATE INDEX IF NOT EXISTS nametag_checkins_event_idx ON nametag_checkins (event_id, checked_at DESC);

@@ -41,6 +41,16 @@ const savePer = (v) => { try { localStorage.setItem(PER_KEY, JSON.stringify(v));
 const fitsA4 = (t, [, cols, rows], gap, top) =>
   cols * t.width_mm + (cols - 1) * gap <= A4.width_mm && top + rows * t.height_mm + (rows - 1) * gap <= A4.height_mm - 1;
 
+/* 하단바 — 종이에는 안 찍는다. 뽑아 나온 네임택에 어느 띠를 끼울지 인쇄 창 위에 보여 준다 */
+function barSummary(template, cards){
+  if(!(template.bar_types || []).length) return '';
+  const color = (l) => (template.bar_types.find(b => b.label === l) || {}).color || '#868e96';
+  if(cards.length === 1) return cards[0].bar
+    ? ` · 하단바 <b class="nt-bar big"><i style="background:${color(cards[0].bar)}"></i>${escapeHtml(cards[0].bar)}</b>` : ' · 하단바 미정';
+  const m = new Map(); cards.forEach(c => m.set(c.bar || '', (m.get(c.bar || '') || 0) + 1));
+  return ' · ' + [...m.entries()].map(([l, n]) => l ? `<span class="nt-bar"><i style="background:${color(l)}"></i>${escapeHtml(l)} <b>${n}</b></span>` : `<span class="nt-bar nt-bar-none">미정 ${n}</span>`).join(' ');
+}
+
 function pagesHtml(template, cards, a4, n, gap){
   const [, cols] = PER_PAGE.find(p => p[0] === n);
   const pages = [];
@@ -74,7 +84,7 @@ export async function fillPrintWindow(w, template, cards){
 <style>@page{size:${paper.width_mm}mm ${paper.height_mm}mm;margin:0}</style></head>
 <body class="nt-print-page">
 <div class="nt-print-bar no-print">
-  <span><b>${cards.length}장</b><span id="pg"></span> · ${template.width_mm} × ${template.height_mm}mm${a4 ? ' · A4 맨 위 가운데 — 인쇄 대화상자에서 용지 A4' : ''}${cards.length <= 3 ? ' · ' + escapeHtml(cards.map(c => c.name).join(', ')) : ''}</span>
+  <span><b>${cards.length}장</b><span id="pg"></span>${barSummary(template, cards)} · ${template.width_mm} × ${template.height_mm}mm${a4 ? ' · A4 맨 위 가운데 — 인쇄 대화상자에서 용지 A4' : ''}${cards.length <= 3 ? ' · ' + escapeHtml(cards.map(c => c.name).join(', ')) : ''}</span>
   <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
     ${a4 ? `<label title="A4 한 쪽에 몇 장씩 — 이 PC에 기억해요">한 쪽에 <select id="pp">${PER_PAGE.map(p =>
       `<option value="${p[0]}"${p[0] === per.n ? ' selected' : ''}${canUse(p) || p[0] === 1 ? '' : ' disabled'}>${p[3]}${canUse(p) || p[0] === 1 ? '' : ' — A4에 안 들어가요'}</option>`).join('')}</select></label>

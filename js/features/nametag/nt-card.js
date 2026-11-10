@@ -7,6 +7,7 @@
    bizmatching nametag-package의 lib/nametag-render.tsx를 문자열 템플릿으로 옮겼다.
 ═══════════════════════════════════════════════════════════════ */
 import { escapeHtml } from '../../utils.js';
+import { qrText } from '../../domain/nametag-layout.js';
 
 const ANCHOR = { left: 'translateY(-50%)', center: 'translate(-50%, -50%)', right: 'translate(-100%, -50%)' };
 
@@ -18,7 +19,20 @@ function textEl(el, value){
     class="nt-fit" style="font-size:${el.size}pt;font-weight:${el.weight};transform-origin:left center">${escapeHtml(value)}</span></div>`;
 }
 
-/* card: { name, company, job_title, badge } — 이미 국·영문을 고른 값
+/* 입장 QR — 담을 사람이 없으면(편집기 견본·시험 인쇄) 화면에만 자리를 보여 주고 종이에는 안 찍는다.
+   그림은 qrcode-generator(index.html에서 불러옴)로 SVG를 만들어 바로 넣는다 → 인쇄 창이 따로 불러올 것이 없다 */
+function qrEl(l, card, forPrint){
+  const q = l.qr;
+  if(!q || !q.show) return '';
+  const box = `left:${q.x - q.size / 2}mm;top:${q.y - q.size / 2}mm;width:${q.size}mm;height:${q.size}mm`;
+  const txt = qrText(card);
+  if(!txt || !window.qrcode) return forPrint ? '' : `<div class="nt-qr nt-qr-ghost" style="${box}">입장 QR</div>`;
+  const qr = window.qrcode(0, 'M');
+  qr.addData(txt); qr.make();
+  return `<div class="nt-qr" style="${box}">${qr.createSvgTag({ cellSize: 1, margin: 0, scalable: true })}</div>`;
+}
+
+/* card: { name, company, job_title, badge, person_key } — 이미 국·영문을 고른 값. person_key가 있으면 입장 QR에 담는다
    배경은 가늠자다. 이미 인쇄된 네임택 용지에 얹어 찍는 게 기본이라 forPrint에서는 background_print가 켜져 있을 때만 그린다 */
 export function ntCardHtml(template, card, { forPrint = false } = {}){
   const l = template.layout;
@@ -29,5 +43,6 @@ export function ntCardHtml(template, card, { forPrint = false } = {}){
     + textEl(l.name, card.name || '')
     + textEl(l.company, card.company || '')
     + textEl(l.job_title, card.job_title || '')
+    + qrEl(l, card, forPrint)
     + `</div>`;
 }

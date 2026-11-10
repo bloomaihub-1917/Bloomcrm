@@ -16,5 +16,11 @@ async function call(path, method = 'GET', body){
 
 export const loadNametag = (evKey) => call(`/${encodeURIComponent(evKey)}`);
 export const saveNametagTemplate = (evKey, t) => call(`/${encodeURIComponent(evKey)}/template`, 'PUT', t);
-export const issueNametags = (evKey, cards, reason) => call(`/${encodeURIComponent(evKey)}/issue`, 'POST', { cards, reason });
+export const issueNametags = (evKey, cards, reason, onsite) => call(`/${encodeURIComponent(evKey)}/issue`, 'POST', { cards, reason, onsite: !!onsite });
 export const voidNametag = (id) => call(`/print/${encodeURIComponent(id)}/void`, 'POST', {});
+export const saveNametagBars = (evKey, items, via) => call(`/${encodeURIComponent(evKey)}/bars`, 'PUT', { items, via });
+export const saveWalkInContact = (evKey, key, v) => call(`/${encodeURIComponent(evKey)}/people/${encodeURIComponent(key)}`, 'PUT', v);
+export const checkInNametag = (evKey, key) => call(`/${encodeURIComponent(evKey)}/checkin`, 'POST', { person_key: key });
+export const voidCheckIn = (id) => call(`/checkin/${encodeURIComponent(id)}/void`, 'POST', {});
+export const loadNametagLive = (evKey, since) => call(`/${encodeURIComponent(evKey)}/live?since=${encodeURIComponent(since || '')}`);
+export const promoteWalkIns = (evKey, keys) => call(`/${encodeURIComponent(evKey)}/promote`, 'POST', { person_keys: keys });

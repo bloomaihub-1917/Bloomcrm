@@ -6,10 +6,12 @@
    서버(routes/nametag.js)는 저장할 때 모양만 보고, 키·범위는 읽을 때 여기서 맞춘다 —
    DB에 무엇이 들어 있든 화면은 이 함수를 거친 값만 그린다.
 
-   입장 QR(qr)은 자리만 남겨 둔다. CRM에는 아직 입장 체크인이 없어 그리지 않는다.
+   입장 QR(qr): 판에서 켜면 사람마다 «nt:<등록번호>»를 QR로 찍는다. 체크인 데스크에서 바코드 스캐너로 읽으면
+   검색칸에 그 글자가 들어오고 Enter에 바로 체크인한다(parseScan). 크기는 mm, x·y는 QR 가운데.
 ═══════════════════════════════════════════════════════════════ */
 
 export const TEXT_KEYS = ['name', 'company', 'job_title', 'badge'];
+export const EL_KEYS = [...TEXT_KEYS, 'qr'];
 export const EL_LABEL = { name: '이름', company: '소속', job_title: '직함', badge: '구분', qr: '입장 QR' };
 
 /* 100×120mm(10 × 12cm) 세로 네임택 기준값 — 우리 행사 기본 용지 (2026-11-10)
@@ -21,7 +23,7 @@ export const DEFAULT_LAYOUT = {
   company:   { x: 50, y: 72, size: 18, weight: 400, align: 'center', maxWidth: 88, show: true, lines: 1 },
   job_title: { x: 50, y: 81.3, size: 15, weight: 400, align: 'center', maxWidth: 88, show: true, lines: 1 },
   badge:     { x: 50, y: 24, size: 12, weight: 700, align: 'center', maxWidth: 66, show: true, lines: 1 },
-  qr:        { x: 50, y: 100, size: 20, show: false },
+  qr:        { x: 50, y: 100, size: 18, show: false },   // 켜면 이름·소속 아래 가운데. 아래 «종이 밖» 띠(4mm)에 안 걸린다
 };
 /* top: 프린터가 못 찍는 위 여백(mm). 레이저 프린터는 종이 앞끝 4mm쯤에 토너를 못 올려 판 위 끝이 비었다(2026-11-10 실측).
    인쇄 때 판을 통째로 이만큼 내려 찍는다 → 위는 안 잘리고, 판 아래 top mm가 종이 밖으로 나간다(편집기에 칠해 보여 준다) */
@@ -47,7 +49,7 @@ export const REISSUE_REASONS = ['분실', '오타', '훼손', '기타'];
 
 export const DEFAULT_TEMPLATE = {
   id: '', name: '기본 네임택', width_mm: 100, height_mm: 120, lang: 'auto', sheet: 'a4',
-  background_data: null, background_print: false, layout: DEFAULT_LAYOUT, print_offset: DEFAULT_OFFSET, is_default: true,
+  background_data: null, background_print: false, layout: DEFAULT_LAYOUT, print_offset: DEFAULT_OFFSET, bar_types: [], is_default: true,
 };
 
 const num = (v, min, max, d) => {
@@ -89,9 +91,20 @@ export function normalizeOffset(v){
   return { x: num(o.x, -10, 10, 0), y: num(o.y, -10, 10, 0), scale: num(o.scale, 90, 110, 100), top: num(o.top, 0, 15, 4) };
 }
 
+/* 하단바 종류 — 투포켓 명찰 아래에 끼우는 색 띠. 행사마다 종류가 달라 판에 둔다(2026-11-10 등록 담당자 피드백)
+   [{ id, label, color }]. id는 한 번 정하면 바꾸지 않는다(사람마다 정해 둔 값이 이 id를 가리킨다) */
+export const BAR_COLORS = ['#e03131', '#1971c2', '#2f9e44', '#f08c00', '#7048e8', '#212529', '#868e96', '#e64980'];
+export function normalizeBarTypes(v){
+  const seen = new Set();
+  return (Array.isArray(v) ? v : []).slice(0, 20).map(b => ({
+    id: String(b?.id || '').trim().slice(0, 20), label: String(b?.label || '').trim().slice(0, 20),
+    color: /^#[0-9a-f]{6}$/i.test(b?.color) ? b.color.toLowerCase() : '#868e96',
+  })).filter(b => b.id && b.label && !seen.has(b.id) && seen.add(b.id));
+}
+
 /* 서버에서 온 판(없으면 null)을 화면이 그릴 수 있는 모양으로 */
 export function normalizeTemplate(t){
-  if(!t) return { ...DEFAULT_TEMPLATE, layout: normalizeLayout(null), print_offset: { ...DEFAULT_OFFSET } };
+  if(!t) return { ...DEFAULT_TEMPLATE, layout: normalizeLayout(null), print_offset: { ...DEFAULT_OFFSET }, bar_types: [] };
   return {
     id: t.id || '', name: t.name || DEFAULT_TEMPLATE.name,
     width_mm: num(t.width_mm, 20, 420, 100), height_mm: num(t.height_mm, 20, 420, 120),
@@ -100,8 +113,34 @@ export function normalizeTemplate(t){
     background_data: typeof t.background_data === 'string' && t.background_data ? t.background_data : null,
     background_print: !!t.background_print,
     layout: normalizeLayout(t.layout), print_offset: normalizeOffset(t.print_offset),
+    bar_types: normalizeBarTypes(t.bar_types),
     is_default: t.is_default !== false, updated_at: t.updated_at || '', updated_by: t.updated_by || '',
   };
+}
+
+/* ── 입장 QR ──
+   담는 글자는 «nt:» + 등록번호(person_key)를 소문자로. 스캐너는 키보드처럼 글자를 쳐 넣는데, 한글 입력 상태면
+   영문이 한글로 바뀌어 들어온다(c → ㅊ). 대문자는 한글 자판에서 되살릴 수 없어 소문자만 쓰고,
+   읽을 때 한글을 두벌식 자판 글쇠로 되돌린다(deHangul) */
+export const qrText = (card) => card && card.person_key ? 'nt:' + String(card.person_key).toLowerCase() : '';
+const CHO = ['r', 'R', 's', 'e', 'E', 'f', 'a', 'q', 'Q', 't', 'T', 'd', 'w', 'W', 'c', 'z', 'x', 'v', 'g'];
+const JUNG = ['k', 'o', 'i', 'O', 'j', 'p', 'u', 'P', 'h', 'hk', 'ho', 'hl', 'y', 'n', 'nj', 'np', 'nl', 'b', 'm', 'ml', 'l'];
+const JONG = ['', 'r', 'R', 'rt', 's', 'sw', 'sg', 'e', 'f', 'fr', 'fa', 'fq', 'ft', 'fx', 'fv', 'fg', 'a', 'q', 'qt', 't', 'T', 'd', 'w', 'c', 'z', 'x', 'v', 'g'];
+const COMPAT = ['r', 'R', 'rt', 's', 'sw', 'sg', 'e', 'E', 'f', 'fr', 'fa', 'fq', 'ft', 'fx', 'fv', 'fg', 'a', 'q', 'Q', 'qt', 't', 'T', 'd', 'w', 'W', 'c', 'z', 'x', 'v', 'g',
+  'k', 'o', 'i', 'O', 'j', 'p', 'u', 'P', 'h', 'hk', 'ho', 'hl', 'y', 'n', 'nj', 'np', 'nl', 'b', 'm', 'ml', 'l'];
+export function deHangul(s){
+  return String(s || '').replace(/[가-힣ㄱ-ㅣ]/g, ch => {
+    const c = ch.charCodeAt(0);
+    if(c >= 0x3131 && c <= 0x3163) return COMPAT[c - 0x3131] || '';
+    const i = c - 0xac00;
+    return CHO[Math.floor(i / 588)] + JUNG[Math.floor((i % 588) / 28)] + JONG[i % 28];
+  });
+}
+/* 스캐너가 쳐 넣은 글자 → 등록번호(소문자). QR이 아니면 '' */
+export function parseScan(s){
+  const v = deHangul(String(s || '').trim()).toLowerCase();
+  const m = /^nt:(\S+)$/.exec(v);
+  return m ? m[1] : '';
 }
 
 export const MM_PX = 96 / 25.4;     // CSS 1mm = 96/25.4 px

@@ -12,7 +12,7 @@
    숫자 칸은 onchange(칸을 벗어나거나 Enter)로 받고 판만 다시 그린다 — 칠 때마다 통째로 그리면 입력칸이 포커스를 잃는다.
 ═══════════════════════════════════════════════════════════════ */
 import { escapeHtml, escAttr } from '../../utils.js';
-import { normalizeTemplate, normalizeLayout, normalizeOffset, DEFAULT_LAYOUT, SIZE_PRESETS, SHEET_OPTIONS, SHEETS, LANG_OPTIONS, TEXT_KEYS, EL_LABEL, MM_PX, PT_MM, LINE_HEIGHT } from '../../domain/nametag-layout.js';
+import { normalizeTemplate, normalizeLayout, normalizeOffset, DEFAULT_LAYOUT, BAR_COLORS, SIZE_PRESETS, SHEET_OPTIONS, SHEETS, LANG_OPTIONS, TEXT_KEYS, EL_KEYS, EL_LABEL, MM_PX, PT_MM, LINE_HEIGHT } from '../../domain/nametag-layout.js';
 import { loadNametag, saveNametagTemplate } from '../../api/nametag.js';
 import { ntCardHtml } from './nt-card.js';
 import { fitNametags } from './nt-fit.js';
@@ -58,7 +58,7 @@ export async function mountNametagEditor(evKey){
 function sampleCard(){
   if(ed.sample.startsWith('p:')){
     const p = ntPeople(ed.ev).find(x => x.key === ed.sample.slice(2));
-    if(p) return cardOf(p, ed.t.lang);
+    if(p) return { ...cardOf(p, ed.t.lang), person_key: p.key };   // 이 행사 사람이면 입장 QR도 그 사람 것으로
   }
   return (SAMPLES.find(s => s[0] === ed.sample) || SAMPLES[0])[2];
 }
@@ -66,6 +66,7 @@ function sampleCard(){
 /* 손잡이: 글자 칸을 대강 감싸는 네모(가로 = 칸 너비, 세로 = 글자 크기 × 줄 수) */
 function handleBox(key){
   const x = ed.t.layout[key];
+  if(key === 'qr') return `left:${x.x - x.size / 2}mm;top:${x.y - x.size / 2}mm;width:${x.size}mm;height:${x.size}mm`;
   const h = x.size * LINE_HEIGHT * PT_MM * x.lines + 1;
   const left = x.align === 'left' ? x.x : x.align === 'right' ? x.x - x.maxWidth : x.x - x.maxWidth / 2;
   return `left:${left}mm;top:${x.y - h / 2}mm;width:${x.maxWidth}mm;height:${h}mm`;
@@ -81,7 +82,7 @@ function canvasHtml(){
       ${t.print_offset.top ? `<div class="nt-cut" style="height:${t.print_offset.top}mm" title="프린터가 위 ${t.print_offset.top}mm를 못 찍어 판을 그만큼 내려 찍어요. 이 부분은 종이 밖으로 나가요"><span>종이 밖 ${t.print_offset.top}mm</span></div>` : ''}
       ${g.x ? `<div class="nt-guide" style="left:${t.width_mm / 2}mm;top:0;width:0.3mm;height:${t.height_mm}mm"></div>` : ''}
       ${g.y ? `<div class="nt-guide" style="top:${t.height_mm / 2}mm;left:0;height:0.3mm;width:${t.width_mm}mm"></div>` : ''}
-      ${TEXT_KEYS.filter(k => t.layout[k].show).map(k => `<button type="button" class="nt-handle" data-k="${k}"
+      ${EL_KEYS.filter(k => t.layout[k].show).map(k => `<button type="button" class="nt-handle" data-k="${k}"
         aria-pressed="${ed.sel === k}" aria-label="${EL_LABEL[k]} 옮기기" title="${EL_LABEL[k]} — 끌어 옮기거나 방향키로" style="${handleBox(k)}"></button>`).join('')}
     </div></div></div>`;
 }
@@ -108,9 +109,9 @@ function renderCanvas(){
 function cutWarnHtml(){
   const t = ed.t, cut = t.print_offset.top;
   if(!cut) return '';
-  const hit = TEXT_KEYS.filter(k => {
+  const hit = EL_KEYS.filter(k => {
     const x = t.layout[k];
-    return x.show && x.y + (x.size * LINE_HEIGHT * PT_MM * x.lines + 1) / 2 > t.height_mm - cut;
+    return x.show && x.y + (k === 'qr' ? x.size : x.size * LINE_HEIGHT * PT_MM * x.lines + 1) / 2 > t.height_mm - cut;
   });
   return hit.length ? `<div class="nt-warn">${hit.map(k => EL_LABEL[k]).join('·')}이(가) 아래 «종이 밖» 띠에 걸려 잘려요. 위로 올려 주세요.</div>` : '';
 }
@@ -163,6 +164,15 @@ function renderEditor(){
           ${LANG_OPTIONS.map(([k, l]) => `<option value="${k}"${t.lang === k ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
       </section>
 
+      <section><h4>하단바 종류 <span class="nt-note" style="font-weight:400">· 이 행사</span></h4>
+        <div class="nt-note">투포켓 명찰 아래에 끼우는 색 띠예요. 발급 데스크 명단에 사람마다 어느 띠를 줄지 보여 주고, 인쇄 창에도 띄워요. 종이에는 찍지 않아요.</div>
+        ${(t.bar_types || []).map((b, i) => `<div class="nt-row" style="align-items:center">
+          <input type="color" value="${b.color}" onchange="ntEdBarSet(${i},'color',this.value)" title="띠 색" style="flex:none;width:36px;height:32px;padding:0;border:1px solid var(--i6);border-radius:var(--rs)">
+          <input class="fi" value="${escAttr(b.label)}" maxlength="20" placeholder="예: VIP" oninput="ntEdBarSet(${i},'label',this.value)">
+          <button type="button" class="btn bs" style="flex:none" onclick="ntEdBarDel(${i})" title="이 종류 빼기">빼기</button></div>`).join('')}
+        <button type="button" class="btn bs" onclick="ntEdBarAdd()">＋ 하단바 종류</button>
+      </section>
+
       <section><h4>배경 <span class="nt-note" style="font-weight:400">· 가늠자</span></h4>
         <div class="nt-note">네임택 용지를 찍거나 스캔해 올리면 글자를 어디에 놓을지 맞춰 볼 수 있어요.</div>
         <input class="fi" type="file" accept="image/png,image/jpeg,image/webp" onchange="ntEdBg(this.files[0])"${ed.busy ? ' disabled' : ''}>
@@ -175,14 +185,19 @@ function renderEditor(){
           <button type="button" class="btn bs" onclick="ntEdBgClear()">배경 빼기</button>` : ''}
       </section>
 
-      <section><h4>글자</h4>
-        <div class="nt-el-tabs">${TEXT_KEYS.map(k => `<button type="button" aria-pressed="${ed.sel === k}" data-hidden="${!t.layout[k].show}" onclick="ntEdSel('${k}')">${EL_LABEL[k]}</button>`).join('')}</div>
+      <section><h4>글자 · 입장 QR</h4>
+        <div class="nt-el-tabs">${EL_KEYS.map(k => `<button type="button" aria-pressed="${ed.sel === k}" data-hidden="${!t.layout[k].show}" onclick="ntEdSel('${k}')">${EL_LABEL[k]}</button>`).join('')}</div>
         <label class="nt-check"><input type="checkbox"${el.show ? ' checked' : ''} onchange="ntEdPatch({show:this.checked},true)"><span>${EL_LABEL[ed.sel]} 넣기</span></label>
         <div class="nt-row">
           <label><div class="mlbl">가로 위치 mm</div><input id="nt-ed-x" class="fi" type="number" step="0.5" value="${el.x}" onchange="ntEdPatch({x:+this.value})"></label>
           <label><div class="mlbl">세로 위치 mm</div><input id="nt-ed-y" class="fi" type="number" step="0.5" value="${el.y}" onchange="ntEdPatch({y:+this.value})"></label>
         </div>
         <button type="button" class="btn bs" onclick="ntEdPatch({x:${t.width_mm / 2}},true)">가로 가운데로</button>
+        ${ed.sel === 'qr' ? `<div><div class="mlbl">QR 크기 mm</div><div class="nt-num">
+          <button type="button" onclick="ntEdPatch({size:${Math.max(8, el.size - 1)}},true)" aria-label="작게">−</button>
+          <input class="fi" type="number" min="8" max="120" step="1" value="${el.size}" onchange="ntEdPatch({size:+this.value},true)">
+          <button type="button" onclick="ntEdPatch({size:${Math.min(120, el.size + 1)}},true)" aria-label="크게">+</button></div>
+          <div class="nt-note">사람마다 «등록번호»를 담아요. 체크인 데스크에서 바코드 스캐너로 읽으면 바로 체크인돼요. 15mm보다 작으면 스캐너가 못 읽을 수 있어요.</div></div>` : `
         <div><div class="mlbl">글자 크기 pt</div><div class="nt-num">
           <button type="button" onclick="ntEdPatch({size:${Math.max(6, el.size - 1)}},true)" aria-label="작게">−</button>
           <input class="fi" type="number" min="6" max="120" step="1" value="${el.size}" onchange="ntEdPatch({size:+this.value},true)">
@@ -192,7 +207,7 @@ function renderEditor(){
         <div><div class="mlbl">줄 수</div>${seg(el.lines, [[1, '한 줄'], [2, '두 줄']], 'ntEdLines')}
           <div class="nt-note">두 줄이면 긴 영문 이름이 줄을 바꿔 들어가요. 아래 글자와 겹치지 않게 자리를 넉넉히 두세요.</div></div>
         <label><div class="mlbl">글자 칸 너비 mm</div><input class="fi" type="number" min="5" max="420" step="1" value="${el.maxWidth}" onchange="ntEdPatch({maxWidth:+this.value},true)">
-          <div class="nt-note">이 너비를 넘으면 줄을 바꾸거나 글자를 줄여 칸 안에 넣어요.</div></label>
+          <div class="nt-note">이 너비를 넘으면 줄을 바꾸거나 글자를 줄여 칸 안에 넣어요.</div></label>`}
       </section>
 
       <section><h4>인쇄 보정 <span class="nt-note" style="font-weight:400">· 행사 기본값</span></h4>
@@ -323,6 +338,7 @@ function resizePaper(w, h){
   const t = ed.t, kx = w / t.width_mm, ky = h / t.height_mm;
   const lay = {};
   TEXT_KEYS.forEach(k => { const e = t.layout[k]; lay[k] = { ...e, x: round(e.x * kx), y: round(e.y * ky), maxWidth: round(e.maxWidth * kx) }; });
+  lay.qr = { ...t.layout.qr, x: round(t.layout.qr.x * kx), y: round(t.layout.qr.y * ky) };
   t.layout = normalizeLayout({ ...t.layout, ...lay });
   Object.assign(t, { width_mm: w, height_mm: h });
   touched(); renderEditor();
@@ -339,6 +355,25 @@ export function ntEdPaper(k, v){
 export function ntEdSheet(v){ ed.t.sheet = SHEETS.includes(v) ? v : 'a4'; touched(); renderEditor(); }
 export function ntEdLang(v){ ed.t.lang = v; touched(); renderCanvas(); }
 export function ntEdOffset(k, v){ ed.t.print_offset = normalizeOffset({ ...ed.t.print_offset, [k]: v }); touched(); renderCanvas(); }
+/* 하단바 종류 — id는 처음 만들 때 한 번 정한다(사람마다 정해 둔 값이 id를 가리킨다). 이름·색은 언제든 바꾼다 */
+export function ntEdBarAdd(){
+  const l = ed.t.bar_types = ed.t.bar_types || [];
+  if(l.length >= 20) return alert('하단바 종류는 20개까지예요.');
+  l.push({ id: 'b' + Date.now().toString(36), label: '', color: BAR_COLORS[l.length % BAR_COLORS.length] });
+  touched(); renderEditor();
+}
+export function ntEdBarSet(i, k, v){
+  const b = (ed.t.bar_types || [])[i];
+  if(!b) return;
+  b[k] = k === 'label' ? String(v).slice(0, 20) : v;
+  touched();
+}
+export function ntEdBarDel(i){
+  const b = (ed.t.bar_types || [])[i];
+  if(!b || !confirm(`하단바 «${b.label || '이름 없음'}»을 뺄까요?
+이 띠로 정해 둔 사람은 «지운 종류»로 보여요. 저장해야 반영돼요.`)) return;
+  ed.t.bar_types.splice(i, 1); touched(); renderEditor();
+}
 export function ntEdBgOpacity(v){ ed.bgOpacity = Math.max(0.1, Math.min(1, Number(v) / 100)); renderCanvas(); }
 export function ntEdBgPrint(on){ ed.t.background_print = !!on; touched(); renderCanvas(); }
 export function ntEdBgClear(){ Object.assign(ed.t, { background_data: null, background_print: false }); touched(); renderEditor(); }
@@ -368,6 +403,7 @@ export async function ntEdBg(file){
 
 export async function ntEdSave(){
   if(ed.busy) return;
+  if((ed.t.bar_types || []).some(b => !String(b.label || '').trim())) return alert('이름이 빈 하단바 종류가 있어요. 이름을 적거나 빼 주세요.');
   ed.busy = true; touched(); renderCanvas();
   try {
     const j = await saveNametagTemplate(ed.ev, ed.t);
@@ -392,4 +428,4 @@ export function ntEdForget(){ if(!dirty()) ed.ev = ''; }
 export const ntEdDirty = dirty;
 
 Object.assign(window, { mountNametagEditor, ntEdSel, ntEdSample, ntEdPatch, ntEdAlign, ntEdWeight, ntEdLines, ntEdSize, ntEdPaper, ntEdSheet, ntEdLang,
-  ntEdOffset, ntEdBgOpacity, ntEdBgPrint, ntEdBgClear, ntEdReset, ntEdRevert, ntEdBg, ntEdSave, ntEdTestPrint, ntEdForget });
+  ntEdOffset, ntEdBarAdd, ntEdBarSet, ntEdBarDel, ntEdBgOpacity, ntEdBgPrint, ntEdBgClear, ntEdReset, ntEdRevert, ntEdBg, ntEdSave, ntEdTestPrint, ntEdForget });

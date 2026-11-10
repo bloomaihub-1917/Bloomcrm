@@ -17,6 +17,26 @@ const HANGUL = /[가-힣]/;
 const s = (v) => String(v ?? '').trim();
 export const SOURCE_LABEL = { speaker: '연사', exh: '부스', part: '참가자', walk_in: '현장 신규' };
 
+/* 현장 신규 — 마스터DB에 없는 사람이라 발급 기록(nametag_prints)에서 모은다. 키는 w<첫 발급 id>.
+   찍은 값은 «안 됨»이 아닌 마지막 발급 것(다 안 됨이면 마지막 것). 이메일·전화는 nametag_people */
+export function walkInPeople(prints, peopleRows){
+  const m = new Map();
+  [...prints].sort((a, b) => String(a.printed_at).localeCompare(String(b.printed_at))).forEach(p => {
+    const k = s(p.person_key);
+    if(!k.startsWith('w')) return;
+    const cur = m.get(k);
+    if(cur && p.voided_at && !cur.voided) return;
+    m.set(k, { voided: !!p.voided_at, p });
+  });
+  return [...m.entries()].map(([key, { p }]) => {
+    const pp = peopleRows.get(key) || {};
+    const ko = HANGUL.test(p.name);
+    return { key, source: 'walk_in', ref_id: '', contact_id: '', email: s(pp.email), phone: s(pp.phone),
+      nameKo: ko ? s(p.name) : '', nameEn: ko ? '' : s(p.name), orgKo: s(p.company), orgEn: s(p.company),
+      titleKo: s(p.job_title), titleEn: s(p.job_title), badgeKo: s(p.badge), badgeEn: s(p.badge), confirmed: true, walkIn: true };
+  });
+}
+
 export function ntPeople(evKey){
   const byId = new Map(contacts.map(c => [s(c.id), c]));
   const out = new Map();
@@ -24,7 +44,8 @@ export function ntPeople(evKey){
 
   speakersForEvent(evKey).filter(sp => sp.hidden !== 'yes' && sp.status !== '취소').forEach(sp => {
     const cid = s(sp.contact_id);
-    put({
+    const c = cid ? byId.get(cid) : null;
+    put({ email: s(c?.email1) || s(sp.email),
       key: cid ? `c${cid}` : `s${sp.id}`, source: 'speaker', ref_id: s(sp.id), contact_id: cid,
       nameKo: s(sp.name_snapshot), nameEn: s(sp.name_en), orgKo: s(sp.org_ko), orgEn: s(sp.org_en),
       titleKo: s(sp.title_ko), titleEn: s(sp.title_en), badgeKo: '연사', badgeEn: 'Speaker',
@@ -40,7 +61,7 @@ export function ntPeople(evKey){
     const c = cid ? byId.get(cid) : null;
     const name = s(ec.name) || s(c?.nameKo) || s(c?.nameEn);
     if(!name) return;
-    put({
+    put({ email: s(ec.email) || s(c?.email1),
       key: cid ? `c${cid}` : `x${ec.id}`, source: 'exh', ref_id: s(ec.id), contact_id: cid,
       nameKo: HANGUL.test(name) ? name : s(c?.nameKo), nameEn: s(c?.nameEn) || (HANGUL.test(name) ? '' : name),
       orgKo: s(o?.name_ko) || s(x.company_name), orgEn: s(o?.name_en) || s(x.book_name_en),
@@ -62,7 +83,7 @@ export function ntPeople(evKey){
     const c = byId.get(cid);
     if(!c) return;
     const role = [...m.roles][0] || '';
-    put({
+    put({ email: s(c.email1),
       key: `c${cid}`, source: 'part', ref_id: m.partId, contact_id: cid,
       nameKo: s(c.nameKo), nameEn: s(c.nameEn), orgKo: s(c.orgKo), orgEn: s(contactOrgEn(c)),
       titleKo: s(c.titleKo), titleEn: s(c.titleEn), badgeKo: role, badgeEn: role,
