@@ -144,25 +144,14 @@ export const CO_SORTS = [
   ['sector', '섹터 순'],
 ];
 
-/* 섹터 순서 — docs/category-plan.md의 큰 갈래 순(시공·설치 → 전기·설비 → 제작·렌탈 → 연출·기술
-   → 운영·서비스 → 장소 → 기타). 여기 없는 섹터는 섹터 표에 놓인 차례로 그 뒤에 온다.
-   «업종 미정»은 맨 끝. 기업은 첫 번째(주력) 섹터로 줄 세우고, 섹터가 없으면 뒤로 모은다. */
-const SECTOR_ORDER = [
-  '부스/무대/구조물',
-  '전기', '급배수·압축공기', '가스설비', '방염',
-  '판촉(기념품,굿즈)', '인쇄/출력', '행사가구/텐트/렌탈',
-  '영상', 'LED/LCD 디스플레이', '음향', '조명', '이벤트(특효)장치/장비', 'IT솔루션',
-  '대행사', '엔터에이전시(MC/공연)', '통역', '케이터링', '교통', '프리랜서',
-  '베뉴', '이벤트 프로그램/체험', '이벤트 부스', '이벤트·MICE 기타',
-];
+/* 섹터 순서 — 설정의 섹터 표(sectors.sort_order)가 정본이다. 사이드바·위쪽 칩·«섹터 순» 정렬·
+   섹터 선택창이 모두 COMPANY_SECTORS의 이 순서를 읽는다(순서는 설정 › 섹터 트리에서 바꾼다).
+   기업은 첫 번째(주력) 섹터로 줄 세우고, 섹터가 없으면 뒤로 모은다. */
 const sectorRank = (c) => {
   const s = (c.sectors && c.sectors[0]) || c.sector || '';
   if(!s) return 99999;
-  const i = SECTOR_ORDER.indexOf(s);
-  if(i >= 0) return i;
-  if(/업종 미정/.test(s)) return 9000;
   const j = COMPANY_SECTORS.findIndex(x => (x.name || x) === s);
-  return 1000 + (j >= 0 ? j : 500);
+  return j >= 0 ? j : 5000;
 };
 
 export function setCoSort(v){
@@ -285,15 +274,7 @@ export function buildCoCAT(){
         const sc = parseSectorScope(s.name);
         return (sc.eventShort||'') === short;
       };
-      /* 사이드바도 목록 «섹터 순»과 같은 순서(SECTOR_ORDER)로 — 정해 둔 것은 그 차례, 나머지는 표 순서, 업종 미정은 끝 */
-      const nameRank = n => {
-        const i = SECTOR_ORDER.indexOf(n);
-        if(i >= 0) return i;
-        if(/업종 미정/.test(n)) return 9000;
-        return 1000 + COMPANY_SECTORS.findIndex(x => x.name === n);
-      };
-      const mainsHere = COMPANY_SECTORS.filter(s => !s.parent && inScope(s))
-        .sort((a, b) => nameRank(a.name) - nameRank(b.name));
+      const mainsHere = COMPANY_SECTORS.filter(s => !s.parent && inScope(s));
       const subsByParent = {};
       COMPANY_SECTORS.forEach(s => {
         if(s.parent && inScope(s)){
@@ -992,8 +973,6 @@ function coSectorOrder(){
     order[sectorKey(m.name)] = i++;
     COMPANY_SECTORS.filter(s => s.parent === m.id).forEach(s => { order[sectorKey(s.name)] = i++; });
   });
-  /* 정해 둔 섹터 순서(SECTOR_ORDER — 큰 갈래 순)가 있는 섹터는 그 순서가 먼저다 */
-  SECTOR_ORDER.forEach((name, idx) => { order[sectorKey(name)] = idx - SECTOR_ORDER.length; });
   return order;
 }
 

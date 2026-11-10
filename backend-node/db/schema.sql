@@ -19,7 +19,8 @@ CREATE TABLE IF NOT EXISTS sectors (
   name      TEXT NOT NULL,
   parent    TEXT,
   domain    TEXT,
-  canonical TEXT
+  canonical TEXT,
+  sort_order INTEGER   -- 화면에 줄 세우는 순서(작을수록 위). 설정에서 바꾸면 사이드바·목록·선택창이 같이 따른다
 );
 
 -- 행사. 아래 profile 계열 7개는 "어떤 행사였나"를 적어 두는 칸이다 —

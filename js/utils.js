@@ -208,7 +208,7 @@ export function joinTags(arr){
    헬퍼를 거쳐야 한다 (컬럼 폭이 모자라면 replaceAll이 뒷 컬럼을 통째로
    지워버리는 회귀를 원천 차단). */
 export function sectorRowValues(s){
-  return [s.id, s.name, s.parent || '', s.domain || '', s.canonical || ''];
+  return [s.id, s.name, s.parent || '', s.domain || '', s.canonical || '', s.order == null ? null : s.order]; // 빈 값은 '' 가 아니라 null — INTEGER 칸이라
 }
 
 /* 섹터명 → 깔끔한 id 슬러그 (연속 특수문자는 밑줄 1개로, 충돌할 때만 짧은 번호를 붙임) */

@@ -110,7 +110,7 @@ export function renderSectorTree(){
   // 한 섹터가 여러 분야 그룹에 동시에 나타날 수 있어(예: Investor = BIO + VC),
   // "+서브 추가" 인라인 입력창의 DOM id가 그룹마다 겹치지 않도록 domTag(그룹 키)를
   // 붙여 고유화한다. 실제 부모 섹터 id(m.id)는 별도 인자로 그대로 전달.
-  const mainCard = (m, domTag) => {
+  const mainCard = (m, domTag, prevId, nextId) => {
     const subs = subSectors(m.id);
     const uid = `${m.id}::${domTag}`;
     const collapsed = _collapsedMains.has(m.id);
@@ -124,6 +124,10 @@ export function renderSectorTree(){
         <span draggable="true" ondragstart="onSectorDragStart(event,'${m.id}')" onclick="filterCoBySector('${escAttr(m.name)}')"
           style="font-weight:700;font-size:var(--fs-13);flex:1;cursor:pointer" title="클릭하면 기업DB에서 이 섹터로 필터링">${escapeHtml(parseSectorScope(m.name).plainName)}</span>
         ${countBadge(sectorCountFor(counts, m.name))}
+        <span style="display:inline-flex;flex-direction:column;gap:0;flex-shrink:0" title="순서 — 사이드바·기업DB 목록·섹터 선택창에 그대로 반영돼요">
+          <button ${prevId?`onclick="moveSectorNear('${escAttr(m.id)}','${escAttr(prevId)}')"`:'disabled'} style="background:none;border:none;cursor:${prevId?'pointer':'default'};color:${prevId?'var(--i3)':'var(--i6)'};font-size:var(--fs-10);line-height:1;padding:0 4px">▲</button>
+          <button ${nextId?`onclick="moveSectorNear('${escAttr(m.id)}','${escAttr(nextId)}')"`:'disabled'} style="background:none;border:none;cursor:${nextId?'pointer':'default'};color:${nextId?'var(--i3)':'var(--i6)'};font-size:var(--fs-10);line-height:1;padding:0 4px">▼</button>
+        </span>
         ${settingsUi.sectorScope ? canonicalSelect(m) : domainSelect(m)}
         <button class="btn bs" style="font-size:var(--fs-11);padding:2px 8px" onclick="toggleSubAddInline('${escAttr(uid)}')">+ 서브</button>
         <button onclick="removeSectorById('${m.id}')"
@@ -163,8 +167,31 @@ export function renderSectorTree(){
     <div style="font-size:var(--fs-11);font-weight:700;color:var(--i3);margin:14px 0 6px;text-transform:uppercase;letter-spacing:.4px">
       🗂 ${escapeHtml(g.title)} <span style="font-weight:400;color:var(--i4)">(${g.mains.length})</span>
     </div>
-    ${g.mains.map(m => mainCard(m, g.tag)).join('')}
+    ${g.mains.map((m, i) => mainCard(m, g.tag, g.mains[i-1]?.id, g.mains[i+1]?.id)).join('')}
   `).join('');
+}
+
+/* 섹터 순서 한 칸 옮기기 — 같은 분야 묶음 안의 이웃과 자리를 바꾼다. 순서(sort_order)는 표에 저장돼
+   사이드바·기업DB 목록·«섹터 순» 정렬·섹터 선택창이 모두 이 값을 읽는다. 전부 1부터 다시 매겨 저장한다. */
+export async function moveSectorNear(id, otherId){
+  const i = COMPANY_SECTORS.findIndex(x => x.id === id);
+  const j = COMPANY_SECTORS.findIndex(x => x.id === otherId);
+  if(i < 0 || j < 0) return;
+  const before = COMPANY_SECTORS.map(x => x.order);
+  [COMPANY_SECTORS[i], COMPANY_SECTORS[j]] = [COMPANY_SECTORS[j], COMPANY_SECTORS[i]];
+  const changed = [];
+  COMPANY_SECTORS.forEach((x, k) => { if(x.order !== k + 1){ x.order = k + 1; changed.push(x); } });
+  window.renderSectorList();
+  try { buildCoCAT(); if(document.getElementById('co-dash')) renderCoDashboard(); } catch(e){}
+  const r = await postToSheet({ sheet: 'sectors', action: 'batchUpsert', rows: changed.map(sectorRowValues) }, '섹터 순서');
+  if(!r.ok){
+    [COMPANY_SECTORS[i], COMPANY_SECTORS[j]] = [COMPANY_SECTORS[j], COMPANY_SECTORS[i]];
+    COMPANY_SECTORS.forEach((x, k) => { x.order = before[k]; });
+    window.renderSectorList();
+    try { buildCoCAT(); } catch(e){}
+    return;
+  }
+  trackAction('edit', '섹터 순서', sectorName(id), `섹터 순서: «${sectorName(id)}» ↔ «${sectorName(otherId)}»`);
 }
 
 /* 행사 스코프 메인 섹터를 공통 섹터에 연결/해제 (행사 트리 카드의 드롭다운 onchange) */
@@ -198,7 +225,7 @@ export async function assignSectorDomain(sectorId, domainId){
   trackAction('edit', '섹터 분야 배정', s.name,
     `섹터 "${parseSectorScope(s.name).plainName}" 분야 ${added?'추가':'해제'}: ${domainName(domainId)}`);
   window.renderSectorList();
-  try { buildCoCAT(); } catch(e){}
+  try { buildCoCAT(); if(document.getElementById('co-dash')) renderCoDashboard(); } catch(e){}
 }
 
 /* uid = "섹터id::그룹태그" — 다중 분야 소속 시 같은 섹터 카드가 여러 그룹에
@@ -602,4 +629,5 @@ window.toggleAllMainConv     = toggleAllMainConv;
 window.convertMainsToGroup   = convertMainsToGroup;
 window.onSectorScopeChange   = onSectorScopeChange;
 window.assignSectorDomain     = assignSectorDomain;
+window.moveSectorNear         = moveSectorNear;
 window.assignSectorCanonical  = assignSectorCanonical;

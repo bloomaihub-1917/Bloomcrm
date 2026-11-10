@@ -231,10 +231,14 @@ export async function loadFromSheets(hooks = {}){
 
     // ── sectors 시트 → COMPANY_SECTORS (스프레드시트에서 직접 행 추가/삭제 가능) ──
     if(sectorsData && Array.isArray(sectorsData) && sectorsData.length){
-      COMPANY_SECTORS.splice(0, COMPANY_SECTORS.length, ...sectorsData.map(r => ({
+      /* 섹터 순서 — 표의 sort_order가 정본(설정에서 바꾼다). 값이 없는 섹터는 뒤로, 서로는 읽은 순서 */
+      const loaded = sectorsData.map(r => ({
         id: r.id || '', name: r.name || '', parent: r.parent || null,
         domain: r.domain || '', canonical: r.canonical || '',
-      })).filter(s => s.id && s.name));
+        order: r.sort_order == null || r.sort_order === '' ? null : Number(r.sort_order),
+      })).filter(s => s.id && s.name);
+      loaded.sort((a, b) => (a.order ?? 1e9) - (b.order ?? 1e9));
+      COMPANY_SECTORS.splice(0, COMPANY_SECTORS.length, ...loaded);
       console.log('[CRM] sectors 시트 로드:', COMPANY_SECTORS.length, '개');
     } else if(Array.isArray(sectorsData) && settingsData && Array.isArray(settingsData)){
       // 구버전 호환: settings 시트의 JSON blob에서 마이그레이션 (1회) → sectors 시트로 옮겨 저장

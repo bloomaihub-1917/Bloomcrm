@@ -40,7 +40,7 @@ const TABLES = {
   },
   sectors: {
     table: 'sectors', pk: 'id', idPrefix: null, // sectors도 id(slug)를 클라이언트가 직접 정함
-    columns: ['id', 'name', 'parent', 'domain', 'canonical'],
+    columns: ['id', 'name', 'parent', 'domain', 'canonical', 'sort_order'],
   },
   /* companies는 내렸다 — orgs가 그 자리를 대신한다.
 
