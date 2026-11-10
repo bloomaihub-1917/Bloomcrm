@@ -10,7 +10,11 @@
      참가자 명단       확정된 셀러·바이어
      확정 대기         셀러·바이어로는 있지만 아직 확정 전 → «참가 확정»
      셀러·바이어 지정   이 행사에 다른 역할(참가자·BD 등)로만 있는 사람 → «셀러로»/«바이어로»
+     대상 아님         연사·VIP 등 파트너링과 상관없는 사람 → «다시 대상으로»
      DB에서 찾아 넣기   마스터DB 전체에서 찾아 → «셀러로»/«바이어로»
+
+   «대상 아님»은 표를 새로 두지 않고 그 사람의 이 행사 참가 기록(다른 역할 줄) 메모에
+   EXCLUDE_MARK를 붙여 둔다 — 연락처 창의 행사 이력에도 그대로 보인다.
 
    데이터는 participations 한 표다. 셀러·바이어는 그 행사 참가 기록의 역할(role),
    확정은 confirmed_at. 편을 가르는 기준은 constants.js의 PARTNERING_SIDES 한 곳이다.
@@ -31,17 +35,20 @@ import { coList } from '../domain/rounds.js';
 
 /* ── 모듈 상태 — 다른 탭이 알 필요가 없어 state.js로 올리지 않는다 ── */
 let ptnEvent = '';
-let ptnView = 'list';    // list | wait | assign | add
+let ptnView = 'list';    // list | wait | assign | out | add
 let ptnSide = '';        // '' | 'seller' | 'buyer' | 'none'(구분 없음) — 명단·확정 대기에서만
 let ptnQuery = '';
 let ptnConfirm = true;   // 지정·추가할 때 바로 참가 확정으로
 const ptnPicked = new Set();   // 고른 줄의 key
-const ADD_LIMIT = 100;   // DB에서 찾아 넣기 — 한 번에 보여 줄 사람 수
+const ADD_LIMIT = 100;
+const EXCLUDE_MARK = '파트너링 대상 아님';
+const isExcl = (p) => String(p.note || '').includes(EXCLUDE_MARK);   // DB에서 찾아 넣기 — 한 번에 보여 줄 사람 수
 
 const VIEWS = [
   ['list',   '참가자 명단'],
   ['wait',   '확정 대기'],
   ['assign', '셀러·바이어 지정'],
+  ['out',    '대상 아님'],
   ['add',    'DB에서 찾아 넣기'],
 ];
 
@@ -68,10 +75,15 @@ function evIndex(evKey){
     if(p.eventId !== evKey || p.contactId == null) return;
     const c = byId.get(p.contactId);
     if(!c) return;
-    if(!people.has(c.id)) people.set(c.id, { c, sides: {}, others: new Set() });
+    if(!people.has(c.id)) people.set(c.id, { c, sides: {}, others: new Set(), otherParts: [], excluded: false });
     const m = people.get(c.id);
     const side = sideOf(p.role);
-    if(!side){ if(p.role) m.others.add(p.role); return; }
+    if(!side){
+      if(p.role) m.others.add(p.role);
+      m.otherParts.push(p);
+      if(isExcl(p)) m.excluded = true;
+      return;
+    }
     const s = m.sides[side] || (m.sides[side] = { parts: [], confirmedAt: '' });
     s.parts.push(p);
     // 한 줄이라도 확정이면 그 편으로는 온 것이다
@@ -110,10 +122,12 @@ function rowsFor(view, evKey = ptnEvent){
     }));
     return out.sort(bySideOrg);
   }
-  if(view === 'assign'){
-    // 이 행사에 있지만 셀러·바이어 어느 쪽도 아닌 사람(«구분 없음»도 여기서 정한다)
+  if(view === 'assign' || view === 'out'){
+    // 이 행사에 있지만 셀러·바이어 어느 쪽도 아닌 사람(«구분 없음»도 여기서 정한다).
+    // «대상 아님»으로 뺀 사람은 지정 목록에서 빠지고 «대상 아님»에만 보인다
     idx.forEach(m => {
       if(m.sides.seller || m.sides.buyer) return;
+      if(m.excluded !== (view === 'out')) return;
       const roles = [...m.others, ...(m.sides.none ? [PARTNERING_UNSIDED] : [])];
       if(hasLeft(m.c)) return;
       out.push(mkRow(m.c, { key: `a|${m.c.id}`, side: '', roles }));
@@ -238,7 +252,7 @@ export function renderPtn(){
         <span style="font-size:var(--fs-13);font-weight:600;color:var(--i3);margin-left:4px">${l.length}명</span></div>
     </div>`;
   };
-  const counts = { list: list.length, wait: rowsFor('wait').length, assign: rowsFor('assign').length };
+  const counts = { list: list.length, wait: rowsFor('wait').length, assign: rowsFor('assign').length, out: rowsFor('out').length };
   const noneN = list.filter(r => r.side === 'none').length;
 
   /* 보기 탭 줄 — 다른 탭처럼 제목 줄 바로 아래(.db-bar.vtabs). «DB에서 찾아 넣기»는 줄 오른쪽 단추 */
@@ -264,7 +278,8 @@ function viewHint(counts){
     ? `참가가 확정된 셀러·바이어예요. 확정 전인 ${counts.wait}명은 «확정 대기»에 있어요.`
     : '참가가 확정된 셀러·바이어예요.';
   if(ptnView === 'wait') return '셀러·바이어로 넣었지만 아직 확정 전인 사람이에요. 참가가 정해지면 골라서 «참가 확정»을 누르세요.';
-  if(ptnView === 'assign') return '이 행사에 다른 역할(참가자·BD 등)로만 들어 있는 사람이에요. 골라서 셀러나 바이어로 정하세요.';
+  if(ptnView === 'assign') return '이 행사에 다른 역할(참가자·BD 등)로만 들어 있는 사람이에요. 골라서 셀러나 바이어로 정하세요. 연사·VIP처럼 파트너링과 상관없는 사람은 «대상 아님»으로 빼 두세요.';
+  if(ptnView === 'out') return '파트너링 대상이 아니라고 뺀 사람이에요. 다시 셀러·바이어 후보로 올리려면 골라서 «다시 대상으로»를 누르세요.';
   return '마스터DB 전체에서 찾아요. 위 검색창에 이름·기업·국가를 넣고, 골라서 셀러나 바이어로 넣으세요.';
 }
 
@@ -277,7 +292,10 @@ function actionsHtml(){
   if(ptnView === 'wait') return sel + `<button class="btn" style="font-size:var(--fs-11)" onclick="sendPtnToContact()"
     title="고른 사람의 기업을 컨택 차수 명단에 넣어요">컨택으로 보내기</button>
     <button class="btn bp" style="font-size:var(--fs-11)" onclick="confirmPtnPicked()">참가 확정</button>`;
-  return sel + `<label style="display:flex;align-items:center;gap:5px;font-size:var(--fs-11_5);color:var(--i2);cursor:pointer">
+  if(ptnView === 'out') return sel + `<button class="btn bp" style="font-size:var(--fs-11)" onclick="excludePtnPicked(false)">다시 대상으로</button>`;
+  return sel + (ptnView === 'assign' ? `<button class="btn" style="font-size:var(--fs-11)" onclick="excludePtnPicked(true)"
+      title="파트너링과 상관없는 사람(연사·VIP 등)을 이 목록에서 빼요. «대상 아님»에서 다시 올릴 수 있어요">대상 아님으로</button>` : '')
+    + + `<label style="display:flex;align-items:center;gap:5px;font-size:var(--fs-11_5);color:var(--i2);cursor:pointer">
       <input type="checkbox" ${ptnConfirm ? 'checked' : ''} onchange="setPtnConfirm(this.checked)">참가 확정으로</label>
     ${PARTNERING_SIDES.map(s => `<button class="btn bp" style="font-size:var(--fs-11)" onclick="assignPtnPicked('${s.key}')">${escapeHtml(s.label)}로 넣기</button>`).join('')}`;
 }
@@ -320,6 +338,7 @@ function emptyHtml(){
     list: '아직 참가가 확정된 셀러·바이어가 없어요.',
     wait: '확정을 기다리는 셀러·바이어가 없어요.',
     assign: '이 행사에 다른 역할로만 들어 있는 사람이 없어요.',
+    out: '대상 아님으로 뺀 사람이 없어요.',
     add: ptnQuery.trim() ? '찾는 사람이 없어요.' : '위 검색창에 이름·기업·국가를 넣으면 마스터DB에서 찾아 드려요.',
   }[ptnView];
   /* 명단이 비었으면 어디서 채우는지 바로 잇는다 */
@@ -421,6 +440,30 @@ export async function confirmPtnPicked(){
     `${escapeHtml(ptnEvent)} 파트너링 ${l.length}명 참가 확정`,
     { table: 'participations', op: 'update-many',
       rows: changes.map(({ p, before }) => ({ row: p.id, before: { confirmed_at: before.confirmedAt }, after: { confirmed_at: when } })) });
+}
+
+/* 대상 아님으로 빼기 / 다시 대상으로 — 그 사람의 이 행사 다른 역할 줄 메모에 표시를 붙이고 뗀다 */
+export async function excludePtnPicked(on){
+  const l = shownRows().filter(r => ptnPicked.has(r.key));
+  if(!l.length){ alert(on ? '뺄 사람을 골라주세요.' : '다시 올릴 사람을 골라주세요.'); return; }
+  const idx = evIndex(ptnEvent);
+  const changes = [];
+  l.forEach(r => (idx.get(r.cid)?.otherParts || []).forEach(p => {
+    if(isExcl(p) === on) return;
+    const before = { note: p.note || '' };
+    p.note = on
+      ? [p.note, EXCLUDE_MARK].filter(Boolean).join(' · ')
+      : String(p.note || '').split(' · ').filter(x => x.trim() !== EXCLUDE_MARK).join(' · ').replace(EXCLUDE_MARK, '').trim();
+    changes.push({ p, before });
+  }));
+  ptnPicked.clear();
+  afterSave();
+  const what = on ? '파트너링 대상 아님' : '파트너링 대상 복귀';
+  if(!await saveParts(changes, what)) return;
+  trackAction('edit', what, l.length + '명',
+    `${escapeHtml(ptnEvent)} ${l.length}명을 ${on ? '파트너링 대상에서 뺌' : '다시 파트너링 대상으로 올림'}`,
+    { table: 'participations', op: 'update-many',
+      rows: changes.map(({ p, before }) => ({ row: p.id, before: { note: before.note }, after: { note: p.note } })) });
 }
 
 /* 셀러로/바이어로 넣기 — 지정·찾아 넣기 공통.
@@ -544,7 +587,7 @@ export function initPtnTab(){
 
 Object.assign(window, {
   setPtnEvent, setPtnSide, setPtnView, setPtnQuery, setPtnConfirm, exportPtn,
-  pickPtn, togglePtnAll, sendPtnToContact, confirmPtnPicked, assignPtnPicked, addPtnPartTypes,
+  pickPtn, togglePtnAll, sendPtnToContact, confirmPtnPicked, assignPtnPicked, excludePtnPicked, addPtnPartTypes,
   renderPtn,   // 모바일/데스크톱 경계를 넘으면 app.js가 다시 그린다
 });
 
