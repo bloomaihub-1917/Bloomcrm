@@ -71,7 +71,7 @@ router.put('/:eventId/template', async (req, res, next) => {
       return res.status(400).json({ ok: false, error: '배경 이미지는 JPG·PNG·WebP, 2MB까지예요' });
     }
     const vals = [ev, text(b.name, 40) || '기본 네임택',
-      num(b.width_mm, 20, 420, 90), num(b.height_mm, 20, 420, 120),
+      num(b.width_mm, 20, 420, 100), num(b.height_mm, 20, 420, 120),
       LANGS.has(b.lang) ? b.lang : 'auto', layout, offset, new Date().toISOString(), req.user?.email || '',
       bg, !!(bg && b.background_print)];
     const { rows } = await pool.query(`

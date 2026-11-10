@@ -12,19 +12,21 @@
 export const TEXT_KEYS = ['name', 'company', 'job_title', 'badge'];
 export const EL_LABEL = { name: '이름', company: '소속', job_title: '직함', badge: '구분', qr: '입장 QR' };
 
-/* 90×120mm 세로 네임택 기준값.
+/* 100×120mm(10 × 12cm) 세로 네임택 기준값 — 우리 행사 기본 용지 (2026-11-10)
    이름은 두 줄까지 쓴다(영문 이름은 한 줄에 안 들어가는 일이 잦다). 소속·직함은 그 두 번째 줄을 피해 아래에 둔다.
-   구분(연사·바이어 등)은 위에 작게 — 꾸러미에서는 기본으로 껐지만 우리 행사는 연사·셀러·바이어를 가르는 일이 많아 켠다 */
+   구분(연사·바이어 등)은 위에 작게 — 꾸러미에서는 기본으로 껐지만 우리 행사는 연사·셀러·바이어를 가르는 일이 많아 켠다.
+   가로 위치는 가운데(50), 칸 너비는 좌우 6mm씩 남긴 88mm */
 export const DEFAULT_LAYOUT = {
-  name:      { x: 45, y: 50, size: 36, weight: 700, align: 'center', maxWidth: 80, show: true, lines: 2 },
-  company:   { x: 45, y: 72, size: 18, weight: 400, align: 'center', maxWidth: 80, show: true, lines: 1 },
-  job_title: { x: 45, y: 81.3, size: 15, weight: 400, align: 'center', maxWidth: 80, show: true, lines: 1 },
-  badge:     { x: 45, y: 24, size: 12, weight: 700, align: 'center', maxWidth: 60, show: true, lines: 1 },
-  qr:        { x: 45, y: 100, size: 20, show: false },
+  name:      { x: 50, y: 50, size: 36, weight: 700, align: 'center', maxWidth: 88, show: true, lines: 2 },
+  company:   { x: 50, y: 72, size: 18, weight: 400, align: 'center', maxWidth: 88, show: true, lines: 1 },
+  job_title: { x: 50, y: 81.3, size: 15, weight: 400, align: 'center', maxWidth: 88, show: true, lines: 1 },
+  badge:     { x: 50, y: 24, size: 12, weight: 700, align: 'center', maxWidth: 66, show: true, lines: 1 },
+  qr:        { x: 50, y: 100, size: 20, show: false },
 };
 export const DEFAULT_OFFSET = { x: 0, y: 0, scale: 100 };
 
 export const SIZE_PRESETS = [
+  { label: '100 × 120mm (세로 · 기본)', width_mm: 100, height_mm: 120 },
   { label: '90 × 120mm (세로)', width_mm: 90, height_mm: 120 },
   { label: '100 × 70mm (가로)', width_mm: 100, height_mm: 70 },
   { label: '105 × 148mm (A6)', width_mm: 105, height_mm: 148 },
@@ -34,7 +36,7 @@ export const LANG_OPTIONS = [['auto', '자동 (한글 이름이면 국문)'], ['
 export const REISSUE_REASONS = ['분실', '오타', '훼손', '기타'];
 
 export const DEFAULT_TEMPLATE = {
-  id: '', name: '기본 네임택', width_mm: 90, height_mm: 120, lang: 'auto',
+  id: '', name: '기본 네임택', width_mm: 100, height_mm: 120, lang: 'auto',
   background_data: null, background_print: false, layout: DEFAULT_LAYOUT, print_offset: DEFAULT_OFFSET, is_default: true,
 };
 
@@ -82,7 +84,7 @@ export function normalizeTemplate(t){
   if(!t) return { ...DEFAULT_TEMPLATE, layout: normalizeLayout(null), print_offset: { ...DEFAULT_OFFSET } };
   return {
     id: t.id || '', name: t.name || DEFAULT_TEMPLATE.name,
-    width_mm: num(t.width_mm, 20, 420, 90), height_mm: num(t.height_mm, 20, 420, 120),
+    width_mm: num(t.width_mm, 20, 420, 100), height_mm: num(t.height_mm, 20, 420, 120),
     lang: ['auto', 'ko', 'en'].includes(t.lang) ? t.lang : 'auto',
     background_data: typeof t.background_data === 'string' && t.background_data ? t.background_data : null,
     background_print: !!t.background_print,

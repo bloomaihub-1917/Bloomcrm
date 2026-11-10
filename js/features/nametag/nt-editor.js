@@ -190,7 +190,7 @@ function renderEditor(){
         <button type="button" class="btn bs" onclick="ntEdRevert()"${dirty() ? '' : ' disabled'}>저장한 판으로</button>
         <span id="nt-ed-state" class="nt-note"></span>
       </section>
-      ${t.updated_at ? `<div class="nt-note">마지막 저장 ${escapeHtml(String(t.updated_at).slice(0, 16).replace('T', ' '))} UTC · ${escapeHtml(t.updated_by || '')}</div>` : '<div class="nt-note">아직 저장한 판이 없어 기본값(90 × 120mm 세로)이에요.</div>'}
+      ${t.updated_at ? `<div class="nt-note">마지막 저장 ${escapeHtml(String(t.updated_at).slice(0, 16).replace('T', ' '))} UTC · ${escapeHtml(t.updated_by || '')}</div>` : '<div class="nt-note">아직 저장한 판이 없어 기본값(100 × 120mm 세로)이에요.</div>'}
     </div>
   </div>`;
   renderCanvas();
