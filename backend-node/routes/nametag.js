@@ -169,7 +169,7 @@ router.post('/:eventId/issue', async (req, res, next) => {
       };
     });
     if (cards.some((c) => !c.source || !c.person_key)) return res.status(400).json({ ok: false, error: '명단에 없는 사람이 섞여 있어요. 화면을 새로 고쳐 주세요' });
-    if (cards.some((c) => !c.name)) return res.status(400).json({ ok: false, error: '이름이 빈 네임택이 있어요' });
+    // 이름이 빈 네임택도 뽑는다(소속만 찍거나 손으로 쓸 빈 네임택, 2026-11-11). 기록의 name은 빈 글자로 남는다
     const reason = REASONS.has(b.reason) ? b.reason : null;
     const fromDevice = cards.every((c) => c.devId);
 
@@ -353,6 +353,7 @@ async function promoteOne(client, ev, evName, key, req) {
     AND voided_at IS NULL ORDER BY printed_at DESC LIMIT 1`, [ev, key])).rows[0] || first;
   const pp = (await client.query(`SELECT * FROM nametag_people WHERE event_id = $1 AND person_key = $2`, [ev, key])).rows[0] || {};
   const name = last.name || first.name, org = last.company || '', title = last.job_title || '';
+  if (!name) return null;   // 이름 없이 뽑은 현장 신규는 연락처로 만들지 않는다(누군지 모른다) — 현장 신규로 남는다
   const email = String(pp.email || '').trim(), phone = String(pp.phone || '').trim();
   const ko = HANGUL.test(name), orgKo = HANGUL.test(org), titleKo = HANGUL.test(title);
   const found = email ? (await client.query(`SELECT * FROM contacts

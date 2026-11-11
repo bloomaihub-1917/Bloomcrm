@@ -102,7 +102,8 @@ export function ntPeople(evKey){
     p.roles = [...r];
   });
 
-  return [...out.values()].filter(p => p.nameKo || p.nameEn)
+  // 이름이 없어도 소속이 있으면 명단에 둔다 — 이름 없이도 뽑을 수 있다(2026-11-11)
+  return [...out.values()].filter(p => p.nameKo || p.nameEn || p.orgKo || p.orgEn)
     .sort((a, b) => (a.orgKo || a.orgEn).localeCompare(b.orgKo || b.orgEn, 'ko') || (a.nameKo || a.nameEn).localeCompare(b.nameKo || b.nameEn, 'ko'));
 }
 

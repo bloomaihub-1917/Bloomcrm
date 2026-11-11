@@ -399,7 +399,7 @@ export function ntPartHtml(ev, query){
   const seg = (cur, list, fn) => `<div class="seg">${list.map(([k, l]) =>
     `<button class="seg-b${cur === k ? ' on' : ''}" onclick="${fn}('${k}')">${l}</button>`).join('')}</div>`;
   const ci = nt.view === 'checkin';
-  const wiTodo = walkInPeople(nt.prints, nt.people).length;
+  const wiTodo = walkInPeople(nt.prints, nt.people).filter(p => p.nameKo || p.nameEn).length;   // 이름 없는 현장 신규는 올리지 않는다
   setTimeout(fitPreview, 0);
   return `<div id="nt-desk">
     <div class="sec sec-bar">
@@ -445,7 +445,7 @@ export function ntRowsHtml(evKey, query){
   const shown = l.slice(0, 600);
   const more = l.length > shown.length ? `<div class="nt-note" style="padding:8px 0">${l.length - shown.length}명 더 있어요 — 검색으로 좁혀 주세요.</div>` : '';
   const srcPill = (p) => `<span class="pill ${p.source === 'speaker' ? 'p-green' : p.source === 'walk_in' ? 'p-amber' : 'p-gray'}">${SOURCE_LABEL[p.source]}</span>${p.badgeKo && p.source === 'part' ? ` <span style="font-size:var(--fs-11);color:var(--i3)">${escapeHtml(p.badgeKo)}</span>` : ''}`;
-  const who = (p) => `<td><span style="font-weight:600">${escapeHtml(p.nameKo || p.nameEn)}</span>${p.nameKo && p.nameEn && p.nameKo !== p.nameEn ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(p.nameEn)}</div>` : ''}</td>
+  const who = (p) => `<td><span style="font-weight:600">${p.nameKo || p.nameEn ? escapeHtml(p.nameKo || p.nameEn) : '<span style="color:var(--i4);font-weight:400">(이름 없음)</span>'}</span>${p.nameKo && p.nameEn && p.nameKo !== p.nameEn ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(p.nameEn)}</div>` : ''}</td>
       <td>${escapeHtml(p.orgKo || p.orgEn)}</td>`;
   const got = (p) => { const d = done.get(p.key); return d ? `<span style="color:var(--g);font-weight:700">✓</span> ${kst(d.last)}${d.n > 1 ? ` · ${d.n}장` : ''}` : '<span style="color:var(--i5)">—</span>'; };
   const ckCell = (p) => { const c = nt.checkins.get(p.key);
@@ -544,7 +544,7 @@ function walkInHtml(){
     <input class="fi" type="${type}" value="${escAttr(w[k] || '')}" oninput="ntWalkEdit('${k}',this.value)"></label>`;
   return `<h4>현장 신규</h4>
     <div id="nt-preview">${previewHtml(w)}</div>
-    <div class="nt-fields">${f('name', '이름 *', true)}${f('company', '소속', true)}${f('job_title', '직함')}${f('badge', '구분')}
+    <div class="nt-fields">${f('name', '이름', true)}${f('company', '소속', true)}${f('job_title', '직함')}${f('badge', '구분')}
       ${barTypes().length ? `<label class="wide"><div class="mlbl">하단바 <span class="nt-note">· 비워 두고 나중에 채워도 돼요</span></div>${barSelect(w.bar, `ntWalkEdit('bar',this.value)`)}</label>` : ''}
       ${f('email', '이메일', false, 'email')}${f('phone', '전화')}</div>
     <div class="nt-note">명단에 없는 사람이에요. 현장 출력으로 뽑으면 체크인으로도 남아요(사전 출력이면 체크인은 따로). 행사가 끝난 뒤 «마스터DB에»로 연락처·참가 확정을 만들어요.</div>
@@ -687,7 +687,6 @@ export async function ntPrint(){
   let cards;
   if(nt.walkIn){
     const w = nt.walkIn;
-    if(!String(w.name || '').trim()) return alert('이름을 적어 주세요.');
     cards = [{ source: 'walk_in', name: w.name, company: w.company, job_title: w.job_title, badge: w.badge, bar: w.bar,
       email: w.email, phone: w.phone, lang: /[가-힣]/.test(w.name) ? 'ko' : 'en' }];
   } else {
@@ -696,7 +695,7 @@ export async function ntPrint(){
     const done = printedMap();
     if(list.some(p => done.has(p.key)) && !nt.reason) return alert('이미 받은 사람이 있어요. 재발급 사유를 골라 주세요.');
     cards = list.map(p => ({ person_key: p.key, source: p.source, ref_id: p.ref_id, contact_id: p.contact_id, ...cardFor(p) }));
-    if(cards.some(c => !String(c.name || '').trim())) return alert('이름이 빈 네임택이 있어요.');
+    // 이름이 비어도 뽑는다 — 소속만 찍거나 손으로 쓸 빈 네임택(2026-11-11)
   }
   /* QR을 켠 판인데 그릴 도구가 없으면(외부 CDN을 못 받음) QR 없는 네임택이 나간다 → 막는다 */
   if(nt.template.layout?.qr?.show && !window.qrcode)
@@ -904,7 +903,7 @@ export function ntImportCancel(){ nt.imp = null; rerender(); }
 
 /* ── 현장 신규 → 마스터DB — 연락처(같은 이메일이면 그 사람)와 이 행사 참가 확정을 만들고, 기록 키를 c<연락처 id>로 옮긴다 ── */
 export async function ntPromote(){
-  const wi = walkInPeople(nt.prints, nt.people);
+  const wi = walkInPeople(nt.prints, nt.people).filter(p => p.nameKo || p.nameEn);   // 이름 없이 뽑은 사람은 누군지 몰라 올리지 않는다
   if(!wi.length) return;
   const w = waiting(nt.ev).length;
   if(w) return alert(`이 기기에 아직 서버로 보내지 않은 기록이 ${w}건 있어요. 연결돼 다 보내진 뒤 다시 눌러 주세요.`);
