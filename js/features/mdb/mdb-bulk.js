@@ -594,3 +594,126 @@ export function mdbSendToRound(){
 }
 window.mdbSendToRound = mdbSendToRound;
 
+
+/* ══════════════════════════════════════════
+   마스터DB 선택 2명 → 같은 사람으로 합치기
+
+   행사에서 참가자를 넣고, 연사 화면에서 또 넣으면 같은 사람이 연락처 두 줄이 된다.
+   남길 쪽을 고르면 다른 쪽의 행사 참가·연사·전시 담당자·컨택 기록·영업 DB를 모두
+   남길 쪽으로 옮기고, 남길 쪽의 빈 칸은 다른 쪽 값으로 채운 뒤 다른 쪽을 지운다.
+   서버(routes/data.js mergeContacts)가 한 번에 처리하므로 중간에 실패하면 아무것도 바뀌지 않는다.
+══════════════════════════════════════════ */
+function mergeRefsOf(id){
+  const k = String(id);
+  const n = (arr) => arr.filter(r => String(r.contact_id ?? r.contactId ?? '') === k).length;
+  const parts = participations.filter(p => String(p.contactId) === k);
+  const evs = [...new Set(parts.map(p => {
+    const ev = EVENT_LIST.find(e => e.key === (p.eventId || p.event));
+    return `${(ev && (ev.short || ev.key)) || p.eventId || p.event}${p.role ? ' ' + p.role : ''}`;
+  }))];
+  return { evs, sp: n(SPEAKERS) + n(SPEAKER_CONTACTS), exh: n(EXH_CONTACTS), att: n(CONTACT_ATTEMPTS), sales: n(SALES_TARGETS) };
+}
+function mergeCard(c, checked){
+  const r = mergeRefsOf(c.id);
+  const line = (label, v) => v ? `<div><span style="color:var(--i5)">${label}</span> ${escapeHtml(v)}</div>` : '';
+  const extra = [r.sp && `연사 ${r.sp}`, r.exh && `전시 담당 ${r.exh}`, r.att && `컨택 ${r.att}`, r.sales && `영업 DB ${r.sales}`]
+    .filter(Boolean).join(' · ');
+  return `<label style="display:flex;gap:8px;align-items:flex-start;border:1px solid var(--i7);border-radius:var(--r);padding:10px;cursor:pointer;font-size:var(--fs-11_5);line-height:1.6">
+    <input type="radio" name="mdb-merge-keep" value="${escAttr(String(c.id))}" ${checked ? 'checked' : ''} style="margin-top:3px">
+    <div style="flex:1;min-width:0">
+      <div style="font-size:var(--fs-12_5);font-weight:600">${escapeHtml(personName(c))}${c.nameKo && c.nameEn ? ` <span style="font-weight:400;color:var(--i4)">${escapeHtml(c.nameEn)}</span>` : ''}</div>
+      ${line('소속', [c.orgKo || c.orgEn, c.deptKo || c.deptEn].filter(Boolean).join(' · '))}
+      ${line('직함', c.titleKo || c.titleEn)}
+      ${line('메일', [c.email1, c.email2].filter(Boolean).join(', '))}
+      ${line('전화', [c.phone1, c.phone2].filter(Boolean).join(', '))}
+      ${line('행사', r.evs.join(', '))}
+      ${line('그 밖', extra)}
+      <div style="color:var(--i5);font-size:var(--fs-10_5)">출처 ${escapeHtml(c.source || '-')} · 등록 ${escapeHtml(c.date || '-')}</div>
+    </div></label>`;
+}
+export function openMDBMergeModal(){
+  const [a, b] = [...mdbSelected].map(id => getContactById(id));
+  if(mdbSelected.size !== 2 || !a || !b){ alert('같은 사람인 두 명을 골라 주세요.'); return; }
+  closeMDBMergeModal();
+  /* 행사 기록이 많거나 칸이 더 찬 쪽을 남기기로 먼저 골라 둔다 */
+  const score = (c) => Object.values(c).filter(v => String(v ?? '').trim()).length
+    + participations.filter(p => String(p.contactId) === String(c.id)).length * 3;
+  const keepFirst = score(a) >= score(b);
+  const pop = document.createElement('div');
+  pop.id = 'mdb-merge-modal';
+  pop.className = 'mw on';
+  pop.addEventListener('click', (e) => { if(e.target === pop) closeMDBMergeModal(); });
+  pop.innerHTML = `<div class="modal" style="max-width:640px">
+    <div class="mh"><div style="flex:1;min-width:0"><div class="mt2">같은 사람으로 합치기</div>
+      <div style="font-size:var(--fs-11);color:var(--i4);margin-top:2px">남길 쪽을 고르세요. 다른 쪽의 행사 참가·연사·전시 담당·컨택 기록은 모두 남길 쪽으로 옮겨지고, 비어 있는 칸은 다른 쪽 값으로 채워져요.</div></div></div>
+    <div class="mb">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px">
+        ${mergeCard(a, keepFirst)}${mergeCard(b, !keepFirst)}
+      </div>
+      <div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:8px">두 쪽 값이 다르면 남길 쪽 값을 그대로 둬요. 메일·전화가 다르면 남길 쪽의 두 번째 칸이 비어 있을 때 그리로 옮겨요. 합친 뒤에는 되돌릴 수 없어요.</div>
+      <div id="mdb-merge-msg" style="font-size:var(--fs-11_5);color:var(--re);min-height:16px;margin-top:4px"></div>
+    </div>
+    <div class="mf2">
+      <button class="btn" onclick="closeMDBMergeModal()">취소</button>
+      <button class="btn bp" id="mdb-merge-btn" onclick="confirmMDBMerge()">합치기</button>
+    </div></div>`;
+  document.body.appendChild(pop);
+}
+export function closeMDBMergeModal(){ document.getElementById('mdb-merge-modal')?.remove(); }
+
+export async function confirmMDBMerge(){
+  const ids = [...mdbSelected];
+  const keepId = document.querySelector('input[name="mdb-merge-keep"]:checked')?.value;
+  const dropId = ids.map(String).find(id => id !== keepId);
+  if(!keepId || !dropId) return;
+  const keep = getContactById(ids.find(id => String(id) === keepId));
+  const drop = getContactById(ids.find(id => String(id) === dropId));
+  const btn = document.getElementById('mdb-merge-btn');
+  if(btn){ btn.disabled = true; btn.textContent = '합치는 중…'; }
+  const r = await postToSheet({ sheet:'contacts', action:'merge', data:{ keep: keepId, drop: dropId } }, '연락처 합치기');
+  if(!r || r.ok === false){
+    const m = document.getElementById('mdb-merge-msg');
+    if(m) m.textContent = (r && r.error) || '합치지 못했어요';
+    if(btn){ btn.disabled = false; btn.textContent = '합치기'; }
+    return;
+  }
+  /* 서버가 채운 빈 칸을 화면 사본에도 채운다 */
+  const sv = r.contact || {};
+  Object.keys(keep).forEach(k => {
+    if(k === 'id') return;
+    const v = sv[k];
+    if(k === 'tags' && v != null) keep.tags = v;
+    else if(!String(keep[k] ?? '').trim() && String(v ?? '').trim()) keep[k] = v;
+  });
+  /* 다른 쪽을 가리키던 줄을 옮긴다 — 겹쳐서 서버가 지운 줄은 화면에서도 뺀다 */
+  const goneP = new Set((r.goneParts || []).map(String));
+  for(let i = participations.length - 1; i >= 0; i--){
+    const p = participations[i];
+    if(goneP.has(String(p.id))) participations.splice(i, 1);
+    else if(String(p.contactId) === dropId) p.contactId = keep.id;
+  }
+  const goneS = new Set((r.goneSales || []).map(String));
+  for(let i = SALES_TARGETS.length - 1; i >= 0; i--){
+    const t = SALES_TARGETS[i];
+    if(goneS.has(String(t.id))) SALES_TARGETS.splice(i, 1);
+    else if(String(t.contact_id) === dropId) t.contact_id = typeof t.contact_id === 'number' ? keep.id : keepId;
+  }
+  [SPEAKERS, SPEAKER_CONTACTS, EXH_CONTACTS, CONTACT_ATTEMPTS].forEach(arr => arr.forEach(x => {
+    if(String(x.contact_id ?? '') === dropId) x.contact_id = typeof x.contact_id === 'number' ? keep.id : keepId;
+  }));
+  contacts.forEach(c => { if(String(c.moved_to_id || '') === dropId) c.moved_to_id = keepId; });
+  const di = contacts.indexOf(drop);
+  if(di >= 0) contacts.splice(di, 1);
+
+  trackAction('edit', '연락처 합치기', personName(keep),
+    `${personName(drop)}(${dropId})을 ${personName(keep)}(${keepId})에 합침`,
+    removedMeta('contacts', dropId, [r.dropped || drop]));
+  closeMDBMergeModal();
+  mdbSelected.clear();
+  buildCoDB();
+  window.invalidateEvRows?.();
+  renderMDB();
+}
+window.openMDBMergeModal = openMDBMergeModal;
+window.closeMDBMergeModal = closeMDBMergeModal;
+window.confirmMDBMerge = confirmMDBMerge;

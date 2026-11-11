@@ -682,6 +682,8 @@ export function renderMDBSelectionBar(){
       title="고른 사람들을 행사 참가자로 올리고, 소속 기업을 CRM 타겟으로 잡습니다">행사에 초청</button>
     <button class="btn bs" onclick="mdbSendToRound()"
       title="소속 기업을 컨택 차수 명단에 넣고, 고른 사람들을 그 행사의 영업 DB로 켭니다">컨택으로 보내기</button>
+${n === 2 ? `<button class="btn bs" onclick="openMDBMergeModal()"
+      title="같은 사람이 두 줄로 생겼을 때 — 행사·연사·전시 기록을 한쪽으로 모으고 다른 쪽을 지웁니다">같은 사람으로 합치기</button>` : ''}
     <button class="btn bs" style="color:var(--re);border-color:var(--re)" onclick="bulkDeleteMDBContacts()">선택 삭제</button>
     <button class="btn bs" style="margin-left:auto" onclick="clearMDBSelection()">선택 해제</button>
   `;

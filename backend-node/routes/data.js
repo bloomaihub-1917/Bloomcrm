@@ -447,6 +447,74 @@ router.get('/', async (req, res) => {
 });
 
 const REPLACE_ALL_OK = new Set(['sectors']);
+
+/* 같은 사람이 연락처 두 줄로 생긴 것을 하나로 합친다.
+   행사에서 참가자를 넣고 연사 화면에서 또 넣으면 같은 사람이 둘이 된다.
+   { keep, drop }: drop을 가리키던 곳을 모두 keep으로 옮기고, keep의 빈 칸을 drop 값으로 채운 뒤 drop을 지운다.
+   연락처 id를 가리키는 곳은 CLAUDE.md의 일곱 곳과 같다. 한 트랜잭션이라 중간에 실패하면 아무것도 바뀌지 않는다. */
+const CONTACT_REFS = [['participations', 'contact_id'], ['exhibitor_contacts', 'contact_id'],
+  ['speakers', 'contact_id'], ['speaker_contacts', 'contact_id'], ['contact_attempts', 'contact_id'],
+  ['sales_targets', 'contact_id']];
+async function mergeContacts(req, res, { keep, drop }) {
+  keep = String(keep || ''); drop = String(drop || '');
+  if (!keep || !drop || keep === drop) return res.status(400).json({ ok: false, error: '합칠 두 사람을 골라 주세요' });
+  let client;
+  try { client = await pool.connect(); }
+  catch (e) { return res.status(503).json({ ok: false, error: '데이터베이스에 연결하지 못했어요' }); }
+  try {
+    await client.query('BEGIN');
+    const rows = (await client.query(`SELECT * FROM contacts WHERE id = ANY($1::text[]) FOR UPDATE`, [[keep, drop]])).rows;
+    const k = rows.find(r => String(r.id) === keep), d = rows.find(r => String(r.id) === drop);
+    if (!k || !d) { await client.query('ROLLBACK'); return res.status(404).json({ ok: false, error: '연락처를 찾지 못했어요' }); }
+
+    const filled = (v) => v != null && String(v).trim() !== '';
+    const patch = {};
+    for (const c of TABLES.contacts.columns) {
+      if (c === 'id' || c === 'moved_to_id' || c === 'left_at') continue;
+      if (c === 'tags') {   // 태그는 둘을 합친다
+        const all = [...new Set([k.tags, d.tags].flatMap(t => String(t || '').split(',')).map(s => s.trim()).filter(Boolean))].join(',');
+        if (all !== String(k.tags || '')) patch.tags = all;
+      } else if (!filled(k[c]) && filled(d[c])) patch[c] = d[c];
+    }
+    /* 메일·전화가 다르면 비어 있는 두 번째 칸으로 옮겨 잃지 않는다 */
+    for (const [a, b] of [['email1', 'email2'], ['phone1', 'phone2']]) {
+      const have = [patch[a] ?? k[a], patch[b] ?? k[b]].map(v => String(v || '').trim().toLowerCase());
+      const extra = [d[a], d[b]].find(v => filled(v) && !have.includes(String(v).trim().toLowerCase()));
+      if (extra && !filled(patch[b] ?? k[b])) patch[b] = extra;
+    }
+    const pc = Object.keys(patch);
+    if (pc.length) await client.query(
+      `UPDATE contacts SET ${pc.map((c, i) => `"${c}" = $${i + 2}`).join(', ')} WHERE id = $1`, [keep, ...pc.map(c => patch[c])]);
+
+    /* 같은 행사·같은 역할의 참가 기록, 같은 행사의 영업 DB 줄은 겹치니 옮기지 않고 지운다 */
+    const goneParts = (await client.query(
+      `DELETE FROM participations p USING participations x
+        WHERE p.contact_id = $1 AND x.contact_id = $2 AND x.event_id = p.event_id AND x.role = p.role RETURNING p.id`,
+      [drop, keep])).rows.map(r => r.id);
+    const goneSales = (await client.query(
+      `DELETE FROM sales_targets s USING sales_targets x
+        WHERE s.contact_id = $1 AND x.contact_id = $2 AND x.event_id = s.event_id RETURNING s.id`,
+      [drop, keep])).rows.map(r => r.id);
+    const moved = {};
+    for (const [t, c] of CONTACT_REFS) {
+      const r = await client.query(`UPDATE "${t}" SET "${c}" = $2 WHERE "${c}" = $1`, [drop, keep]);
+      if (r.rowCount) moved[t] = r.rowCount;
+    }
+    await client.query(`UPDATE activity_log SET link = replace(link, $1, $2) WHERE link LIKE '%' || $1 || '%'`,
+      [`"${drop}"`, `"${keep}"`]);
+    await client.query(`UPDATE contacts SET moved_to_id = $2 WHERE moved_to_id = $1`, [drop, keep]);
+    await client.query(`DELETE FROM contacts WHERE id = $1`, [drop]);
+    await client.query('COMMIT');
+    const merged = (await pool.query(`SELECT * FROM contacts WHERE id = $1`, [keep])).rows[0];
+    res.json({ ok: true, contact: merged, dropped: d, goneParts, goneSales, moved });
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('[data] 연락처 합치기 실패:', e.message);
+    res.status(500).json({ ok: false, error: '합치지 못했어요 — 아무것도 바뀌지 않았어요' });
+  } finally {
+    client.release();
+  }
+}
 router.post('/', async (req, res) => {
   // 시험 계정은 가린 값을 보고 있다 — 저장하면 «애크**»가 진짜 값을 덮는다
   if (req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 읽기만 할 수 있어요' });
@@ -459,6 +527,8 @@ router.post('/', async (req, res) => {
   if (action === 'replaceAll' && !REPLACE_ALL_OK.has(sheet)) {
     return res.status(400).json({ ok: false, error: `${sheet}는 통째로 바꿀 수 없어요` });
   }
+
+  if (sheet === 'contacts' && action === 'merge') return mergeContacts(req, res, data || {});
 
   let savedId = null;
   let client;
