@@ -3,8 +3,13 @@
 
    글자 폭은 그려 봐야 안다. .nt-el은 칸(max-width)이고 .nt-fit은 그 안의 글자다.
    - data-lines="1": 한 줄만 쓴다 → 넘치면 가로로 줄인다
-   - data-lines="2" 이상: 줄을 바꿔 쓴다 → 허용한 줄 수를 넘기면 글자 크기를 낮춘다
-   bizmatching nametag-package의 lib/nametag-fit.ts를 그대로 옮겼다. 고치기 전에 아래 주석 두 개를 읽을 것.
+   - data-lines="2" 이상: 줄을 바꿔 쓴다 — 띄어쓰기에서만 나눈다(2026-11-11)
+     · 한 줄로 조금만(KEEP_ONE_LINE) 줄이면 들어가면 한 줄
+     · 아니면 띄어쓰기 자리 중 줄 길이가 가장 고르게 되는 곳에서 나눈다(긴 줄이 가장 짧아지게)
+     · 그래도 긴 줄이 칸보다 넓으면 글자를 조금 줄이고 나머지는 가로로 줄인다(SQUEEZE) — 글자 크기를
+       통째로 낮추던 예전 방식은 두 줄이 되면 글자가 너무 작아졌다
+     · 띄어쓰기가 없는 한 낱말은 나누지 않고 한 줄로 가로로 줄인다
+   bizmatching nametag-package의 lib/nametag-fit.ts를 옮겨 왔다. 고치기 전에 아래 주석을 읽을 것.
 
    인쇄 창은 window.open으로 연 다른 문서라, getComputedStyle·document.fonts를 그 문서의 것으로 쓴다.
 ═══════════════════════════════════════════════════════════════ */
@@ -12,6 +17,8 @@
 const MIN_PT = 6;
 /* 한 줄로 이만큼만 줄이면 들어가는 글자는 줄을 바꾸지 않는다 — 칸을 살짝 넘긴 한글 이름까지 두 줄이 되면 보기 나쁘다 */
 const KEEP_ONE_LINE = 0.85;
+/* 나눈 줄이 칸보다 넓을 때 가로로만 줄여도 되는 정도 — 이보다 더 줄여야 하면 글자 크기를 낮춘다 */
+const SQUEEZE = 0.85;
 
 function fitOneLine(el, span){
   const box = el.clientWidth;
@@ -24,41 +31,66 @@ function fitOneLine(el, span){
   span.style.transform = `translateX(${-span.offsetLeft}px) scale(${Math.max(0.3, box / natural)})`;
 }
 
-function overflows(span, lines){
-  const win = span.ownerDocument.defaultView || window;
-  const lh = parseFloat(win.getComputedStyle(span).lineHeight);
-  return Number.isFinite(lh) && lh > 0 ? span.offsetHeight > lh * lines + 0.5 : false;
+/* 낱말들을 n줄로 — 띄어쓰기 자리만 쓴다. 가장 긴 줄이 가장 짧아지는 나눔을 고른다(낱말 수가 적어 다 재 본다) */
+function bestSplit(span, words, n){
+  const w = (s) => { span.textContent = s; return span.offsetWidth; };
+  const memo = new Map();
+  // from번째 낱말부터 k줄로 나눌 때 { max: 가장 긴 줄 폭, lines }
+  const go = (from, k) => {
+    const key = from + ':' + k;
+    if(memo.has(key)) return memo.get(key);
+    let best = null;
+    if(k === 1) best = { max: w(words.slice(from).join(' ')), lines: [words.slice(from).join(' ')] };
+    else for(let i = from + 1; i <= words.length - (k - 1); i++){
+      const head = words.slice(from, i).join(' '), hw = w(head), rest = go(i, k - 1);
+      const max = Math.max(hw, rest.max);
+      if(!best || max < best.max) best = { max, lines: [head, ...rest.lines] };
+    }
+    memo.set(key, best);
+    return best;
+  };
+  let best = null;
+  for(let k = 2; k <= Math.min(n, words.length); k++){
+    const r = go(0, k);
+    if(!best || r.max < best.max - 0.5) best = r;   // 줄을 더 늘려도 별로 안 짧아지면 적은 줄로
+  }
+  return best;
 }
 
 function fitWrapped(el, span, lines, base){
+  const text = span.dataset.text;
+  span.textContent = text;
   el.style.whiteSpace = 'nowrap';
   const box = el.clientWidth, oneLine = span.offsetWidth;
-  if(oneLine <= box || (oneLine > 0 && box / oneLine >= KEEP_ONE_LINE)){ fitOneLine(el, span); return; }
-  el.style.whiteSpace = '';
-  if(!overflows(span, lines)) return;
-  // 들어가는 가장 큰 크기를 반씩 좁혀 찾는다
-  let lo = MIN_PT, hi = base;
-  for(let i = 0; i < 8 && hi - lo > 0.25; i++){
-    const mid = (lo + hi) / 2;
-    span.style.fontSize = `${mid}pt`;
-    if(overflows(span, lines)) hi = mid; else lo = mid;
+  const words = text.split(/\s+/).filter(Boolean);
+  /* 한 줄로 들어가거나 조금만 줄이면 되면, 또는 나눌 띄어쓰기가 없으면 한 줄 */
+  if(oneLine <= box || (oneLine > 0 && box / oneLine >= KEEP_ONE_LINE) || words.length < 2){ fitOneLine(el, span); return; }
+  const best = bestSplit(span, words, lines);
+  /* 줄은 우리가 나눈다 — 브라우저가 낱말 가운데를 끊지 않게 pre로 둔다 */
+  el.style.whiteSpace = 'pre';
+  span.textContent = best.lines.join('\n');
+  const widest = span.offsetWidth;
+  if(widest > box){
+    /* 가로로 SQUEEZE까지는 줄여 쓰고, 그래도 넘치는 만큼만 글자를 낮춘다 */
+    const pt = Math.max(MIN_PT, Math.min(base, base * box / widest / SQUEEZE));
+    if(pt < base) span.style.fontSize = `${pt}pt`;
+    fitOneLine(el, span);
   }
-  span.style.fontSize = `${lo}pt`;
-  // 끊을 자리가 없는 한 낱말은 줄을 바꿔도 안 줄어든다 → 마지막으로 가로로 한 번 더
-  fitOneLine(el, span);
 }
 
 export function fitNametags(root = document){
   for(const el of Array.from(root.querySelectorAll('.nt-el'))){
     const span = el.firstElementChild;
     if(!span) continue;
+    /* 처음 글자를 둔다 — 다시 맞출 때(창 크기·장 수를 바꿀 때) 나눈 줄을 되돌리려고 */
+    if(span.dataset.text == null) span.dataset.text = span.textContent;
     const base = Number(el.dataset.size);
     const lines = Math.max(1, Math.round(Number(el.dataset.lines) || 1));
     span.style.transform = '';
     el.style.whiteSpace = '';
     if(base > 0) span.style.fontSize = `${base}pt`;
     if(lines > 1 && base > 0) fitWrapped(el, span, lines, base);
-    else fitOneLine(el, span);
+    else { span.textContent = span.dataset.text; fitOneLine(el, span); }
   }
 }
 
