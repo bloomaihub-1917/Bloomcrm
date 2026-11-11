@@ -713,6 +713,7 @@ export async function ntPrint(){
     return { id, event_id: nt.ev, batch_id: batch, person_key: key, source: c.source, ref_id: c.ref_id || null,
       contact_id: c.contact_id != null && c.contact_id !== '' ? String(c.contact_id) : null,
       name: String(c.name || '').trim(), company: c.company || '', job_title: c.job_title || null, badge: c.badge || null,
+      name_alt: c.name_alt || '', company_alt: c.company_alt || '', job_title_alt: c.job_title_alt || '',   // 병기 — 인쇄 창만 쓴다(기록에는 안 남김)
       bar: barType(barId)?.label || null, lang: c.lang === 'en' ? 'en' : 'ko', kind, reason: kind === 'reissue' ? nt.reason : null,
       printed_by: by, printed_at: at, voided_at: null, _wait: true,
       _checkin_id: onsite && !nt.checkins.has(key) ? newId('NC-') : '', _bar_id: barId || '',   // 현장 신규도 사전 출력이면 체크인 안 함

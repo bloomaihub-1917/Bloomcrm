@@ -111,11 +111,15 @@ export function ntPeople(evKey){
 export const langOf = (p, lang) => lang === 'ko' || lang === 'en' ? lang : (HANGUL.test(p.nameKo) ? 'ko' : 'en');
 
 /* 찍을 값 — 고른 말이 비어 있으면 다른 말로 채운다 */
+const other = (k, e, ko) => { k = String(k || '').trim(); e = String(e || '').trim();
+  return ko ? (k && e && e !== k ? e : '') : (e && k && k !== e ? k : ''); };
 export function cardOf(p, lang){
   const ko = langOf(p, lang) === 'ko';
   const pick = (k, e) => ko ? (k || e) : (e || k);
   return {
     name: pick(p.nameKo, p.nameEn), company: pick(p.orgKo, p.orgEn),
     job_title: pick(p.titleKo, p.titleEn), badge: pick(p.badgeKo, p.badgeEn), lang: ko ? 'ko' : 'en',
+    // 병기 — 본 칸에 찍힌 말의 «다른 말». 한쪽만 있거나 같으면 비운다
+    name_alt: other(p.nameKo, p.nameEn, ko), company_alt: other(p.orgKo, p.orgEn, ko), job_title_alt: other(p.titleKo, p.titleEn, ko),
   };
 }

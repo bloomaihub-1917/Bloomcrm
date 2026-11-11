@@ -12,7 +12,7 @@
    숫자 칸은 onchange(칸을 벗어나거나 Enter)로 받고 판만 다시 그린다 — 칠 때마다 통째로 그리면 입력칸이 포커스를 잃는다.
 ═══════════════════════════════════════════════════════════════ */
 import { escapeHtml, escAttr } from '../../utils.js';
-import { normalizeTemplate, normalizeLayout, normalizeOffset, DEFAULT_LAYOUT, BAR_COLORS, SIZE_PRESETS, SHEET_OPTIONS, SHEETS, LANG_OPTIONS, TEXT_KEYS, EL_KEYS, EL_LABEL, MM_PX, PT_MM, LINE_HEIGHT } from '../../domain/nametag-layout.js';
+import { normalizeTemplate, normalizeLayout, normalizeOffset, DEFAULT_LAYOUT, BAR_COLORS, SIZE_PRESETS, SHEET_OPTIONS, SHEETS, LANG_OPTIONS, TEXT_KEYS, EL_KEYS, EL_LABEL, LINE_GAPS, MM_PX, PT_MM } from '../../domain/nametag-layout.js';
 import { loadNametag, saveNametagTemplate } from '../../api/nametag.js';
 import { ntCardHtml } from './nt-card.js';
 import { fitNametags } from './nt-fit.js';
@@ -22,7 +22,8 @@ import { ntTemplateSaved } from './nt-desk.js';
 import { PART_TYPES } from '../../state.js';
 
 const SAMPLES = [
-  ['ko', '국문 견본', { name: '홍길동', company: '스튜디오블룸', job_title: '사업개발 팀장', badge: '연사' }],
+  ['ko', '국문 견본', { name: '홍길동', company: '스튜디오블룸', job_title: '사업개발 팀장', badge: '연사',
+    name_alt: 'Gildong Hong', company_alt: 'Studio Bloom', job_title_alt: 'Head of Business Development' }],
   ['en', '긴 영문 이름', { name: 'Maximilian Alexander Wolfgang-Schneider', company: 'Boehringer Ingelheim Pharmaceuticals GmbH', job_title: 'Senior Vice President, Business Development', badge: 'Speaker' }],
 ];
 const ALIGNS = [['left', '왼쪽'], ['center', '가운데'], ['right', '오른쪽']];
@@ -68,7 +69,7 @@ function sampleCard(){
 function handleBox(key){
   const x = ed.t.layout[key];
   if(key === 'qr') return `left:${x.x - x.size / 2}mm;top:${x.y - x.size / 2}mm;width:${x.size}mm;height:${x.size}mm`;
-  const h = x.size * LINE_HEIGHT * PT_MM * x.lines + 1;
+  const h = x.size * x.lh * PT_MM * x.lines + 1;
   const left = x.align === 'left' ? x.x : x.align === 'right' ? x.x - x.maxWidth : x.x - x.maxWidth / 2;
   return `left:${left}mm;top:${x.y - h / 2}mm;width:${x.maxWidth}mm;height:${h}mm`;
 }
@@ -114,7 +115,7 @@ function cutWarnHtml(){
   if(!cut) return '';
   const hit = EL_KEYS.filter(k => {
     const x = t.layout[k];
-    return x.show && x.y + (k === 'qr' ? x.size : x.size * LINE_HEIGHT * PT_MM * x.lines + 1) / 2 > t.height_mm - cut;
+    return x.show && x.y + (k === 'qr' ? x.size : x.size * x.lh * PT_MM * x.lines + 1) / 2 > t.height_mm - cut;
   });
   return hit.length ? `<div class="nt-warn">${hit.map(k => EL_LABEL[k]).join('·')}이(가) 아래 «종이 밖» 띠에 걸려 잘려요. 위로 올려 주세요.</div>` : '';
 }
@@ -212,13 +213,15 @@ function renderEditor(){
         <div><div class="mlbl">정렬</div>${seg(el.align, ALIGNS, 'ntEdAlign')}</div>
         <div><div class="mlbl">굵기</div>${seg(el.weight, [[400, '보통'], [700, '굵게']], 'ntEdWeight')}</div>
         <div><div class="mlbl">줄 수</div>${seg(el.lines, [[1, '한 줄'], [2, '두 줄']], 'ntEdLines')}
-          <div class="nt-note">두 줄이면 긴 영문 이름이 줄을 바꿔 들어가요. 아래 글자와 겹치지 않게 자리를 넉넉히 두세요.</div></div>
+          <div class="nt-note">두 줄이면 띄어쓰기에서 줄을 바꿔 들어가요. 아래 글자와 겹치지 않게 자리를 넉넉히 두세요.</div></div>
+        <div><div class="mlbl">줄 간격 <span class="nt-note">· 두 줄일 때 줄 사이</span></div>${seg(el.lh, LINE_GAPS.map(v => [v, v < 1 ? '아주 좁게' : v === 1 ? '좁게' : v === 1.15 ? '보통' : '넓게']), 'ntEdLh')}
+          <input class="fi" type="number" min="0.8" max="2" step="0.05" value="${el.lh}" onchange="ntEdLh(this.value)" title="글자 크기의 배 — 1이면 글자 높이만큼" style="width:90px"></div>
         <label><div class="mlbl">글자 칸 너비 mm</div><input class="fi" type="number" min="5" max="420" step="1" value="${el.maxWidth}" onchange="ntEdPatch({maxWidth:+this.value},true)">
           <div class="nt-note">이 너비를 넘으면 줄을 바꾸거나 글자를 줄여 칸 안에 넣어요.</div></label>`}
       </section>
 
       <section><h4>인쇄 보정 <span class="nt-note" style="font-weight:400">· 행사 기본값</span></h4>
-        <div class="nt-note">프린터마다 종이 먹는 자리가 달라요. 인쇄 창에서 PC마다 따로 고친 값이 있으면 그 값이 먼저예요.</div>
+        <div class="nt-note">프린터마다 종이 먹는 자리가 달라요. 인쇄 창에서 PC마다 따로 고칠 수 있고, 판 값과 PC 값 중 나중에 고친 것을 써요.</div>
         <label><div class="mlbl">프린터가 못 찍는 위 여백 mm</div><input class="fi" type="number" min="0" max="15" step="0.5" value="${off.top}" onchange="ntEdOffset('top',this.value)"></label>
         <div class="nt-note">판을 이만큼 통째로 내려 찍어 위 끝이 잘리지 않아요. 대신 판 아래 같은 만큼이 종이 밖으로 나가요(판에 빗금). 0이면 내리지 않아요.</div>
         <div class="nt-row">
@@ -339,6 +342,7 @@ export function ntEdPatch(p, full){
 export const ntEdAlign = (v) => ntEdPatch({ align: v }, true);
 export const ntEdWeight = (v) => ntEdPatch({ weight: +v }, true);
 export const ntEdLines = (v) => ntEdPatch({ lines: +v }, true);
+export const ntEdLh = (v) => ntEdPatch({ lh: +v }, true);
 /* 용지를 바꾸면 글자 자리를 새 용지 비율로 옮긴다 — 안 그러면 90×120 자리가 100×70 밖으로 나간다.
    가로 위치·칸 너비는 가로 비율, 세로 위치는 세로 비율. 글자 크기는 그대로 둔다(종이가 작아져도 이름은 읽혀야 한다) */
 function resizePaper(w, h){
@@ -445,5 +449,5 @@ export function ntEdTestPrint(){
 export function ntEdForget(){ if(!dirty()) ed.ev = ''; }
 export const ntEdDirty = dirty;
 
-Object.assign(window, { mountNametagEditor, ntEdSel, ntEdSample, ntEdPatch, ntEdAlign, ntEdWeight, ntEdLines, ntEdSize, ntEdPaper, ntEdSheet, ntEdLang,
+Object.assign(window, { mountNametagEditor, ntEdSel, ntEdSample, ntEdPatch, ntEdAlign, ntEdWeight, ntEdLines, ntEdLh, ntEdSize, ntEdPaper, ntEdSheet, ntEdLang,
   ntEdOffset, ntEdBarAdd, ntEdBarSet, ntEdBarRole, ntEdBarDel, ntEdBgOpacity, ntEdBgPrint, ntEdBgClear, ntEdReset, ntEdRevert, ntEdBg, ntEdSave, ntEdTestPrint, ntEdForget });

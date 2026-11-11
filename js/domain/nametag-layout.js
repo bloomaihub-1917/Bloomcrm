@@ -10,9 +10,12 @@
    검색칸에 그 글자가 들어오고 Enter에 바로 체크인한다(parseScan). 크기는 mm, x·y는 QR 가운데.
 ═══════════════════════════════════════════════════════════════ */
 
-export const TEXT_KEYS = ['name', 'company', 'job_title', 'badge'];
+/* 국/영문 병기(2026-11-11): *_alt는 «다른 말»로 한 번 더 찍는 칸 — 본 칸이 국문이면 영문, 영문이면 국문.
+   기본은 꺼 두고, 판에서 켜면 병기가 된다. 다른 말 값이 없거나 본 칸과 같으면 비운다(nt-people.js cardOf) */
+export const TEXT_KEYS = ['name', 'name_alt', 'company', 'company_alt', 'job_title', 'job_title_alt', 'badge'];
 export const EL_KEYS = [...TEXT_KEYS, 'qr'];
-export const EL_LABEL = { name: '이름', company: '소속', job_title: '직함', badge: '구분', qr: '입장 QR' };
+export const EL_LABEL = { name: '이름', name_alt: '이름 병기', company: '소속', company_alt: '소속 병기', job_title: '직함', job_title_alt: '직함 병기', badge: '구분', qr: '입장 QR' };
+export const LINE_GAPS = [0.9, 1, 1.15, 1.3];   // 줄 간격(글자 크기의 배) — 두 줄일 때 줄 사이
 
 /* 100×120mm(10 × 12cm) 세로 네임택 기준값 — 우리 행사 기본 용지 (2026-11-10)
    이름은 두 줄까지 쓴다(영문 이름은 한 줄에 안 들어가는 일이 잦다). 소속·직함은 그 두 번째 줄을 피해 아래에 둔다.
@@ -23,6 +26,10 @@ export const DEFAULT_LAYOUT = {
   company:   { x: 50, y: 72, size: 18, weight: 400, align: 'center', maxWidth: 88, show: true, lines: 1 },
   job_title: { x: 50, y: 81.3, size: 15, weight: 400, align: 'center', maxWidth: 88, show: true, lines: 1 },
   badge:     { x: 50, y: 24, size: 12, weight: 700, align: 'center', maxWidth: 66, show: true, lines: 1 },
+  // 병기 — 켜면 본 칸 바로 아래 작게. 자리는 판마다 옮긴다
+  name_alt:      { x: 50, y: 61, size: 16, weight: 400, align: 'center', maxWidth: 88, show: false, lines: 1 },
+  company_alt:   { x: 50, y: 77, size: 12, weight: 400, align: 'center', maxWidth: 88, show: false, lines: 1 },
+  job_title_alt: { x: 50, y: 86, size: 11, weight: 400, align: 'center', maxWidth: 88, show: false, lines: 1 },
   qr:        { x: 50, y: 100, size: 18, show: false },   // 켜면 이름·소속 아래 가운데. 아래 «종이 밖» 띠(4mm)에 안 걸린다
 };
 /* top: 프린터가 못 찍는 위 여백(mm). 레이저 프린터는 종이 앞끝 4mm쯤에 토너를 못 올려 판 위 끝이 비었다(2026-11-10 실측).
@@ -67,6 +74,7 @@ function normText(v, d){
     maxWidth: num(o.maxWidth, 5, 420, d.maxWidth),
     show: typeof o.show === 'boolean' ? o.show : d.show,
     lines: Math.round(num(o.lines, 1, 3, d.lines)),
+    lh: num(o.lh, 0.8, 2, d.lh || 1.15),   // 줄 간격 — 두 줄일 때 줄 사이(글자 크기의 배)
   };
 }
 
@@ -74,10 +82,7 @@ export function normalizeLayout(v){
   const o = v || {};
   const q = o.qr || {};
   return {
-    name: normText(o.name, DEFAULT_LAYOUT.name),
-    company: normText(o.company, DEFAULT_LAYOUT.company),
-    job_title: normText(o.job_title, DEFAULT_LAYOUT.job_title),
-    badge: normText(o.badge, DEFAULT_LAYOUT.badge),
+    ...Object.fromEntries(TEXT_KEYS.map(k => [k, normText(o[k], DEFAULT_LAYOUT[k])])),
     qr: {
       x: num(q.x, -50, 470, DEFAULT_LAYOUT.qr.x), y: num(q.y, -50, 470, DEFAULT_LAYOUT.qr.y),
       size: num(q.size, 8, 120, DEFAULT_LAYOUT.qr.size),
@@ -146,4 +151,4 @@ export function parseScan(s){
 
 export const MM_PX = 96 / 25.4;     // CSS 1mm = 96/25.4 px
 export const PT_MM = 25.4 / 72;     // 1pt = 0.3528mm
-export const LINE_HEIGHT = 1.15;    // .nt-el 줄 높이 — 편집기 손잡이 높이도 같은 값으로 잰다
+export const LINE_HEIGHT = 1.15;    // 기본 줄 간격 — 칸마다 lh로 바꾼다(편집기 손잡이 높이도 그 값으로 잰다)
