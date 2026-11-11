@@ -16,6 +16,29 @@ import { buildExhEvList, renderExh } from './modules/exh-tab.js';
 import { initEvDbTab } from './modules/event-tab.js';
 import { buildConfEvList, renderConf } from './modules/conf-tab.js';
 import { initPtnTab } from './modules/partnering-tab.js';
+import { ensureLogs, logsLoaded } from './api/lazy-logs.js';
+import { curApp } from './state.js';
+
+/* 메일 기록·활동 기록은 로그인 때 받지 않는다(api/lazy-logs.js) — 쓰는 탭에 들어갈 때 받고, 다 받으면 그 탭을 다시 그린다.
+   mail: 전시·연사·컨택(연사 진행 단계)·기업DB(미답변 문의)·설정(행사 상세 메일)  audit: 활동 로그·전시/연사 대시보드 */
+const NEEDS = { exh: ['mail', 'audit'], conf: ['mail', 'audit'], crm: ['mail'], co: ['mail'], arch: ['mail'], up: ['mail'], audit: ['audit'] };
+function redraw(app){
+  if(app==='crm')   renderCrm();
+  if(app==='exh')   renderExh();
+  if(app==='conf')  renderConf();
+  if(app==='audit') { buildAuditUserList(); renderAudit(); }
+  /* 기업DB·설정은 지금 열린 화면 상태를 지키려고 다시 그리지 않는다 — 다음에 그릴 때부터 반영된다 */
+}
+function needLogs(app){
+  const kinds = (NEEDS[app] || []).filter(k => !logsLoaded(k));
+  if(!kinds.length) return;
+  Promise.all(kinds.map(k => ensureLogs(k))).then(() => { if(curApp === app) redraw(app); })
+    .catch(e => console.warn('[CRM] 기록 불러오기 실패:', e));
+}
+/* 로그인 때 전체를 다시 읽고 받아 둔 기록도 새로 받은 뒤(load.js) — 지금 탭을 다시 그린다 */
+window.refreshLogViews = () => redraw(curApp);
+/* 로그인 전에 그 탭에 들어가 있었으면(새로 고침 등) 그때는 못 받았다 — 전체를 읽은 뒤 한 번 더 */
+window.needLogsForCurrent = () => needLogs(curApp);
 
 export function switchApp(app, btn){
   setCurApp(app);
@@ -50,6 +73,7 @@ export function switchApp(app, btn){
   if(app==='audit')  { buildAuditUserList(); renderAudit(); }
   if(app==='arch')   { switchArchTab('ev'); }
   if(app==='up')     populateUploadEvDropdown();
+  needLogs(app);
   if(isMobile()){
     updateMobNav(app);
     closeSb();

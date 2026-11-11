@@ -5,10 +5,11 @@
     window에 거는 것은 맨 아래, 이 파일을 읽는 것은 app.js.)
 ═══════════════════════════════════════════════════════════════ */
 
-import { API_BASE_URL, CATMAPS, CODE_LISTS, COMPANY_SECTORS, CONF_SESSIONS, CONTACT_ATTEMPTS, CONTACT_ROUNDS, SALES_TARGETS, DOMAINS, EQUIP_CATALOG, EVENT_LIST, EXHIBITORS, EXH_APPS, EXH_CFG, EXH_CONTACTS, EXH_INVOICES, EXH_ITEMS, EXH_LOGS, EXH_PAYMENTS, EXH_TAX, ORGS, PART_TYPES, ROUND_MEMBERS, SESSION_SPEAKERS, SPEAKERS, SPEAKER_CONTACTS, SPEAKER_LOGS, TAGS, WATCH_FILES, WATCH_FOLDERS, applyCodeLists, auditLog, contacts, curApp, currentUser, loadExhCfg, participations, setDomains, setSheetsConnected, setTags, syncPartColors, targets, userColor } from '../state.js';
+import { API_BASE_URL, CATMAPS, CODE_LISTS, COMPANY_SECTORS, CONF_SESSIONS, CONTACT_ATTEMPTS, CONTACT_ROUNDS, SALES_TARGETS, DOMAINS, EQUIP_CATALOG, EVENT_LIST, EXHIBITORS, EXH_APPS, EXH_CFG, EXH_CONTACTS, EXH_INVOICES, EXH_ITEMS, EXH_PAYMENTS, EXH_TAX, ORGS, PART_TYPES, ROUND_MEMBERS, SESSION_SPEAKERS, SPEAKERS, SPEAKER_CONTACTS, TAGS, WATCH_FILES, WATCH_FOLDERS, applyCodeLists, contacts, curApp, currentUser, loadExhCfg, participations, setDomains, setSheetsConnected, setTags, syncPartColors, targets } from '../state.js';
 import { SECTOR_RENAMES } from '../state.js';
 import { countryName, normalizeCat } from '../utils.js';
 import { authHeaders, normalizeParticipationRow, safeFetch, setSettingsReady, showSheetsWarning } from '../api.js';
+import { setLazyFixtures, refreshLoadedLogs } from './lazy-logs.js';
 import { migratePartTypesToSheet, migrateSectorsToSheet, noteExhCfgBase, noteMailLibraryBase, saveTags } from './settings-save.js';
 
 /* ══════════════════════════════════════════
@@ -36,7 +37,7 @@ import { migratePartTypesToSheet, migrateSectorsToSheet, noteExhCfgBase, noteMai
 /* 테스트 로그인(test/test/test) 전용 — 표 이름 → 행 배열. 있으면 loadFromSheets가
    서버 대신 이것을 읽는다. 쓰기는 API_BASE_URL이 비어 있어 어차피 나가지 않는다. */
 let TEST_FIXTURES = null;
-export function setTestFixtures(fx){ TEST_FIXTURES = fx; }
+export function setTestFixtures(fx){ TEST_FIXTURES = fx; setLazyFixtures(fx); }
 
 export async function loadFromSheets(hooks = {}){
   // 백엔드 API는 유일한 데이터 소스 — 미연동 시 빈 화면 유지
@@ -53,6 +54,8 @@ export async function loadFromSheets(hooks = {}){
   const get = (sheet) => TEST_FIXTURES
     ? Promise.resolve(TEST_FIXTURES[sheet] ?? [])
     : safeFetch(base + sheet, sheet, 1, headers);
+  /* 메일 기록·활동 기록은 여기서 받지 않는다 — 쓰는 화면에 들어갈 때 받는다(lazy-logs.js, 2026-11-11) */
+  const later = () => Promise.resolve(undefined);
 
   try {
     const [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, partTypesData,
@@ -65,7 +68,7 @@ export async function loadFromSheets(hooks = {}){
       get('contacts'),
       get('participations'),
       get('crm_targets'),
-      get('activity_log'),
+      later(),   // activity_log
       get('events'),
       get('settings'),
       get('sectors'),
@@ -77,7 +80,7 @@ export async function loadFromSheets(hooks = {}){
       get('exhibitor_invoices'),
       get('exhibitor_tax_invoices'),
       get('exhibitor_payments'),
-      get('exhibitor_logs'),
+      later(),   // exhibitor_logs
       get('exhibitor_apps'),
       get('equip_catalog'),
       get('code_lists'),
@@ -85,7 +88,7 @@ export async function loadFromSheets(hooks = {}){
       get('speakers'),
       get('session_speakers'),
       get('speaker_contacts'),
-      get('speaker_logs'),
+      later(),   // speaker_logs
       get('watch_folders'),
       get('watch_files'),
       get('contact_rounds'),
@@ -97,10 +100,10 @@ export async function loadFromSheets(hooks = {}){
     // ── 실패 감지 (신규) ──
     // safeFetch는 실패 시 예외 대신 null을 반환하므로, 여기서 null 개수를
     // 세지 않으면 "전 시트 로드 실패"도 성공으로 표시되는 버그가 있었다.
-    const _results = [conData, partsData, targetsData, logsData, eventsData, settingsData, sectorsData, partTypesData,
+    const _results = [conData, partsData, targetsData, eventsData, settingsData, sectorsData, partTypesData,
       orgsData,
-      exhData, exhConData, exhItemData, exhInvData, exhTaxData, exhPayData, exhLogData, exhAppData, equipCatData,
-      confSessData, speakerData, sessSpData, spConData, spLogData,
+      exhData, exhConData, exhItemData, exhInvData, exhTaxData, exhPayData, exhAppData, equipCatData,
+      confSessData, speakerData, sessSpData, spConData,
       watchFolderData, watchFileData,
       roundData, roundMemberData, attemptData,
       codeListData];
@@ -392,11 +395,7 @@ export async function loadFromSheets(hooks = {}){
     if(exhTaxData  && Array.isArray(exhTaxData))  EXH_TAX.splice(0, EXH_TAX.length, ...exhTaxData);
     if(exhPayData  && Array.isArray(exhPayData))  EXH_PAYMENTS.splice(0, EXH_PAYMENTS.length, ...exhPayData);
     if(exhAppData  && Array.isArray(exhAppData))  EXH_APPS.splice(0, EXH_APPS.length, ...exhAppData);
-    if(exhLogData  && Array.isArray(exhLogData)){
-      EXH_LOGS.splice(0, EXH_LOGS.length, ...exhLogData);
-      const open = EXH_LOGS.filter(l => l.kind === 'inquiry' && !l.answered_at).length;
-      if(open) console.log('[CRM] 미답변 문의:', open, '건');
-    }
+    // exhibitor_logs·speaker_logs — 그 화면에 들어갈 때 받는다(lazy-logs.js)
 
     /* ── 컨택 — TM/DM 차수 ── 표가 아직 없으면(마이그레이션 전) null이라 건너뛴다 */
     if(Array.isArray(roundData))       CONTACT_ROUNDS.splice(0, CONTACT_ROUNDS.length, ...roundData);
@@ -413,57 +412,9 @@ export async function loadFromSheets(hooks = {}){
     if(speakerData  && Array.isArray(speakerData))  SPEAKERS.splice(0, SPEAKERS.length, ...speakerData);
     if(sessSpData   && Array.isArray(sessSpData))   SESSION_SPEAKERS.splice(0, SESSION_SPEAKERS.length, ...sessSpData);
     if(spConData    && Array.isArray(spConData))    SPEAKER_CONTACTS.splice(0, SPEAKER_CONTACTS.length, ...spConData);
-    if(spLogData    && Array.isArray(spLogData))    SPEAKER_LOGS.splice(0, SPEAKER_LOGS.length, ...spLogData);
     if(SPEAKERS.length) console.log('[CRM] speakers loaded:', SPEAKERS.length, '· 배정', SESSION_SPEAKERS.length);
 
-    // activity_log 업데이트
-    if(logsData && Array.isArray(logsData)){
-      // 구버전 행 복구: 예전 saveAuditToSheets가 6개 값을 한 칸씩 밀린 순서
-      // [id←ts, ts←name, email←email, name←action, type←target, action←detail]
-      // 로 저장했었다. id 자리에 ISO 시각이 들어있으면 구버전 행으로 보고 되돌린다.
-      const ACTION_TYPE = {
-        '로그인':'login', '로그아웃':'login',
-        '상태 변경':'status', '행사 참여 추가':'status',
-        '컨택 기록 추가':'log',
-        '타겟 추가':'add', '연락처 추가':'add',
-        '단계 변경':'stage',
-        '연락처 정보 수정':'edit', '행사 추가':'edit', '행사 삭제':'edit',
-        '파일 업로드':'upload',
-      };
-      /* 예전 행에는 link 칸이 없고, 손으로 넣은 행에 엉뚱한 글자가 들어 있을 수도
-         있다. 못 읽으면 그냥 링크 없는 줄로 둔다 — 로그 목록이 통째로 안 뜨는
-         것보다 낫다. */
-      const parseAuditLink = (v) => {
-        if(!v) return null;
-        try {
-          const o = JSON.parse(v);
-          if(!o || typeof o !== 'object') return null;
-          /* 두 가지가 여기 담긴다: 눌러서 갈 곳(kind·id)과 되돌릴 재료(table·before).
-             둘 중 하나만 있는 줄도 있다 — 설정 삭제는 갈 창이 없고, 옛 기록은
-             재료가 없다. 하나라도 있으면 살린다. 예전에는 kind·id가 둘 다
-             있어야 받아서, 재료만 담긴 줄이 읽을 때 통째로 버려졌다. */
-          return (o.kind && o.id) || o.table || o.before ? o : null;
-        }
-        catch(e){ return null; }
-      };
-      const remoteLog = logsData.map(r=>{
-        const legacy = /^\d{4}-\d{2}-\d{2}T/.test(String(r.id||'')) && !r.detail && !r.target;
-        const row = legacy
-          ? { ts: r.id, email: r.email, name: r.ts, type: '', action: r.name, target: r.type, detail: r.action }
-          : r;
-        return {
-          id: row.id || (Date.now() + Math.random()),
-          ts: row.ts || new Date().toISOString(),
-          email: row.email||'', name: row.name||'',
-          color: userColor(row.email||''),
-          type: row.type || ACTION_TYPE[row.action] || 'login',
-          action: row.action||'', target: row.target||'',
-          detail: row.detail||'',
-          extra: parseAuditLink(row.link),
-        };
-      });
-      auditLog.splice(0, auditLog.length, ...remoteLog);
-    }
+    // activity_log — 활동 로그 화면에 들어갈 때 받는다(lazy-logs.js)
 
     // UI 갱신 (각 tab 모듈이 넘겨준 hooks를 통해 호출 — 없으면 조용히 건너뜀)
     try { hooks.buildMDBEvList?.(); hooks.renderMDB?.(); } catch(e){}
@@ -475,6 +426,8 @@ export async function loadFromSheets(hooks = {}){
     if(curApp==='audit') hooks.renderAudit?.();
 
     console.log('Sheets data loaded successfully');
+    /* 이미 받아 둔 메일·활동 기록이 있으면 그것도 새로 — 다 받으면 그 화면을 다시 그린다 */
+    refreshLoadedLogs().then(() => { window.refreshLogViews?.(); window.needLogsForCurrent?.(); }).catch(() => {});
   } catch(err){
     console.warn('loadFromSheets error — 구글시트 연결 실패:', err);
     setSheetsConnected(false);

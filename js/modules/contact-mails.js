@@ -16,6 +16,7 @@ import { escapeHtml, escAttr, nowStamp } from '../utils.js';
 import { saveSpeakerLog } from '../api/conf-save.js';
 import { saveExhLog, saveAttempt } from '../api/exh-save.js';
 import { REACTIONS } from './contact-tab.js';
+import { ensureLogs, logsLoaded } from '../api/lazy-logs.js';
 
 const isMail = (l) => l.direction === 'in' || l.direction === 'out';
 const byTs = (a, b) => String(b.ts || '').localeCompare(String(a.ts || ''));
@@ -30,6 +31,11 @@ export function toggleContactMailGroup(key){
 }
 
 export function contactMailsHtml(c){
+  /* 메일 기록은 처음 쓸 때 받는다(api/lazy-logs.js) — 받는 동안 자리만 두고, 다 받으면 연락처 창을 다시 그린다 */
+  if(!logsLoaded('mail')){
+    ensureLogs('mail').then(ok => { if(ok) window.renderContactDr?.(); });
+    return `<div class="sct" style="margin-top:14px">주고받은 메일</div><div style="font-size:var(--fs-11_5);color:var(--i4)">메일 기록을 불러오는 중…</div>`;
+  }
   const mine = [c.email1, c.email2].map(e => String(e || '').trim().toLowerCase()).filter(Boolean);
   const isMine = (l) => mine.some(e => String(l.counterpart || '').toLowerCase().includes(e));
 
