@@ -47,6 +47,7 @@ const nt = {
   filter: 'todo',        // 발급: 'todo'(안 받음) | 'done'(받음) | 'all'  · 체크인: 'todo'(안 옴) | 'done'(옴) | 'all'
   src: '',               // '' | 'speaker' | 'exh' | 'part' | 'walk_in'
   barFil: '',            // '' | '_none'(미정) | 하단바 종류 id
+  sort: readSort(),      // 'org'(소속 → 이름) | 'kind'(구분 → 이름) | 'name'(이름) — 이 기기에 기억(nametag.sort.v1)
   picked: new Set(), focus: '',
   edits: new Map(),      // person_key → { name, company, job_title, badge, lang }
   walkIn: null,          // 현장 신규 입력 중이면 { name, company, job_title, badge, bar, email, phone }
@@ -54,6 +55,7 @@ const nt = {
   reason: '', busy: false, timer: 0,
 };
 
+function readSort(){ try { const v = localStorage.getItem('nametag.sort.v1'); return ['org', 'kind', 'name'].includes(v) ? v : 'org'; } catch { return 'org'; } }
 const rerender = () => window.renderEvDb?.();
 const evRow = () => EVENT_LIST.find(e => e.key === nt.ev) || {};
 const today = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
@@ -311,10 +313,24 @@ function cardFor(p){
   return { ...base, person_key: p.key, ...Object.fromEntries(Object.entries(e).filter(([k, v]) => k !== 'lang' && v != null)) };
 }
 
+/* 정렬 — 구분은 연사 · 부스 · 참가자 · 현장 신규 차례, 그 안에서 참가 구분(역할) → 이름 */
+const SORTS = [['org', '소속 → 이름'], ['kind', '구분 → 이름'], ['name', '이름']];
+const SRC_ORDER = Object.keys(SOURCE_LABEL);
+const ko = (a, b) => String(a || '').localeCompare(String(b || ''), 'ko');
+const nameOf = (p) => p.nameKo || p.nameEn, orgOf = (p) => p.orgKo || p.orgEn;
+function sortPeople(l){
+  const byName = (a, b) => ko(nameOf(a), nameOf(b)) || ko(orgOf(a), orgOf(b));
+  const cmp = nt.sort === 'name' ? byName
+    : nt.sort === 'kind' ? (a, b) => (SRC_ORDER.indexOf(a.source) - SRC_ORDER.indexOf(b.source))
+        || (!a.badgeKo - !b.badgeKo) || ko(a.badgeKo, b.badgeKo) || byName(a, b)
+    : (a, b) => ko(orgOf(a), orgOf(b)) || byName(a, b);
+  return [...l].sort(cmp);
+}
+
 function visible(evKey, query){
   const done = nt.view === 'checkin' ? nt.checkins : printedMap();
   const q = String(query || '').trim().toLowerCase();
-  return deskPeople(evKey).filter(p =>
+  return sortPeople(deskPeople(evKey)).filter(p =>
     (!nt.src || p.source === nt.src)
     && (nt.filter === 'all' || (nt.filter === 'done') === done.has(p.key))
     && (!nt.barFil || (nt.barFil === '_none' ? !barOf(p.key) : barOf(p.key) === nt.barFil))
@@ -380,6 +396,8 @@ export function ntPartHtml(ev, query){
       ${barTypes().length ? `<select class="fi" style="width:auto" onchange="ntSetBarFil(this.value)" title="하단바로 걸러 보기">
         <option value="">하단바 전체</option><option value="_none"${nt.barFil === '_none' ? ' selected' : ''}>하단바 미정</option>
         ${barTypes().map(b => `<option value="${escAttr(b.id)}"${nt.barFil === b.id ? ' selected' : ''}>${escapeHtml(b.label)}</option>`).join('')}</select>` : ''}
+      <select class="fi" style="width:auto" onchange="ntSetSort(this.value)" title="명단 차례 — 이 기기에 기억해요">
+        ${SORTS.map(([k, l]) => `<option value="${k}"${nt.sort === k ? ' selected' : ''}>정렬: ${l}</option>`).join('')}</select>
       <div style="flex:1"></div>
       ${ci ? '' : `<span class="nt-note" title="용지·글자 자리·기본 말·하단바 종류는 설정 › 행사 상세 › 네임택에서 정해요">판 ${t.width_mm} × ${t.height_mm}mm · ${escapeHtml((LANG_OPTIONS.find(o => o[0] === t.lang) || LANG_OPTIONS[0])[1].replace(/ \(.*\)/, ''))}${t.sheet === 'fit' ? '' : ' · A4 맨 위 가운데'}${t.id ? '' : ' (기본값)'}</span>
       <button class="btn bs" onclick="ntOpenEditor()" title="설정 › 행사 상세 › 네임택 — 용지 크기·글자 자리·배경·하단바 종류">판 고치기</button>
@@ -574,6 +592,7 @@ export function ntSetOnsite(v){ nt.onsite = v === 'on'; rerender(); }
 export function ntSetFilter(v){ nt.filter = v; rerender(); }
 export function ntSetSrc(v){ nt.src = v; rerender(); }
 export function ntSetBarFil(v){ nt.barFil = v; rerender(); }
+export function ntSetSort(v){ nt.sort = SORTS.some(s => s[0] === v) ? v : 'org'; try { localStorage.setItem('nametag.sort.v1', nt.sort); } catch {} rerender(); }
 export function ntFocus(key){ nt.focus = key; nt.walkIn = null; nt.imp = null; nt.netView = false; rerender(); }
 export function ntPick(key, on){ if(on) nt.picked.add(key); else nt.picked.delete(key); if(on && !nt.focus) nt.focus = key; nt.walkIn = null; rerender(); }
 export function ntPickAll(on){
@@ -767,7 +786,7 @@ export function ntExport(){
   if(!window.XLSX) return alert('엑셀 도구를 아직 못 불러왔어요. 잠시 뒤 다시 눌러 주세요.');
   const done = printedMap();
   const kstFull = (iso) => iso ? new Date(new Date(iso).getTime() + 9 * 3600e3).toISOString().slice(0, 16).replace('T', ' ') : '';
-  const rows = deskPeople(nt.ev).map(p => {
+  const rows = sortPeople(deskPeople(nt.ev)).map(p => {
     const d = done.get(p.key), c = nt.checkins.get(p.key), b = barType(barOf(p.key));
     return [p.key, SOURCE_LABEL[p.source], p.nameKo, p.nameEn, p.orgKo || p.orgEn, p.titleKo || p.titleEn, p.email || '',
       p.badgeKo || '', b ? b.label : '', d ? d.n : 0, d ? kstFull(d.last) : '', c ? 'Y' : '', c ? kstFull(c.checked_at) : '',
@@ -895,7 +914,7 @@ export async function ntPromote(){
   nt.busy = false; rerender();
 }
 
-Object.assign(window, { ntSetView, ntSetOnsite, ntSetFilter, ntSetSrc, ntSetBarFil, ntFocus, ntPick, ntPickAll, ntEdit, ntWalkIn, ntWalkEdit,
+Object.assign(window, { ntSetView, ntSetOnsite, ntSetFilter, ntSetSrc, ntSetBarFil, ntSetSort, ntFocus, ntPick, ntPickAll, ntEdit, ntWalkIn, ntWalkEdit,
   ntSetReason, ntReload, ntOpenEditor, ntPrint, ntVoid, ntSetBar, ntSetBarPicked, ntWalkContact, ntCheckIn, ntUncheck,
   ntScanKey, ntCamera, ntExport, ntImportBars, ntImportApply, ntImportCancel, ntPromote,
   ntNetView, ntSendNow, ntRetryFailed, ntDismissFailed, ntExportDeviceLog });
