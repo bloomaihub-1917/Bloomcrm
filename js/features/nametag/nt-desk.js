@@ -47,7 +47,7 @@ const nt = {
   filter: 'todo',        // 발급: 'todo'(안 받음) | 'done'(받음) | 'all'  · 체크인: 'todo'(안 옴) | 'done'(옴) | 'all'
   src: '',               // '' | 'speaker' | 'exh' | 'part' | 'walk_in'
   barFil: '',            // '' | '_none'(미정) | 하단바 종류 id
-  sort: readSort(),      // 'org'(소속 → 이름) | 'kind'(구분 → 이름) | 'name'(이름) — 이 기기에 기억(nametag.sort.v1)
+  sort: readSort(),      // 'org'(소속 → 이름) | 'kind'(구분 → 이름) | 'bar'(하단바 → 이름) | 'name'(이름) — 이 기기에 기억(nametag.sort.v1)
   alias: new Map(),      // 옛 키(s<연사>·x<담당자>) → 지금 키(c<연락처>) — foldAliases
   defBar: new Map(),     // 사람 키 → 참가 역할로 정해지는 하단바 id(사람마다 정한 띠가 없을 때) — foldAliases
   picked: new Set(), focus: '',
@@ -57,7 +57,7 @@ const nt = {
   reason: '', busy: false, timer: 0,
 };
 
-function readSort(){ try { const v = localStorage.getItem('nametag.sort.v1'); return ['org', 'kind', 'name'].includes(v) ? v : 'org'; } catch { return 'org'; } }
+function readSort(){ try { const v = localStorage.getItem('nametag.sort.v1'); return ['org', 'kind', 'bar', 'name'].includes(v) ? v : 'org'; } catch { return 'org'; } }
 const rerender = () => window.renderEvDb?.();
 const evRow = () => EVENT_LIST.find(e => e.key === nt.ev) || {};
 const today = () => new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
@@ -338,13 +338,16 @@ function cardFor(p){
 }
 
 /* 정렬 — 구분은 연사 · 부스 · 참가자 · 현장 신규 차례, 그 안에서 참가 구분(역할) → 이름 */
-const SORTS = [['org', '소속 → 이름'], ['kind', '구분 → 이름'], ['name', '이름']];
+const SORTS = [['org', '소속 → 이름'], ['kind', '구분 → 이름'], ['bar', '하단바 → 이름'], ['name', '이름']];
 const SRC_ORDER = Object.keys(SOURCE_LABEL);
 const ko = (a, b) => String(a || '').localeCompare(String(b || ''), 'ko');
 const nameOf = (p) => p.nameKo || p.nameEn, orgOf = (p) => p.orgKo || p.orgEn;
 function sortPeople(l){
   const byName = (a, b) => ko(nameOf(a), nameOf(b)) || ko(orgOf(a), orgOf(b));
+  /* 하단바 — 판에 적은 종류 차례(설정 › 행사 상세 › 네임택), 미정·지운 종류는 맨 뒤 */
+  const barRank = (p) => { const i = barTypes().findIndex(b => b.id === barOf(p.key)); return i < 0 ? 999 : i; };
   const cmp = nt.sort === 'name' ? byName
+    : nt.sort === 'bar' ? (a, b) => (barRank(a) - barRank(b)) || byName(a, b)
     : nt.sort === 'kind' ? (a, b) => (SRC_ORDER.indexOf(a.source) - SRC_ORDER.indexOf(b.source))
         || (!a.badgeKo - !b.badgeKo) || ko(a.badgeKo, b.badgeKo) || byName(a, b)
     : (a, b) => ko(orgOf(a), orgOf(b)) || byName(a, b);
