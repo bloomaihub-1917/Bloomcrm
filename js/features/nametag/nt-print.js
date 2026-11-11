@@ -5,7 +5,8 @@
    다시 받아야 하는데, 찍을 값은 이미 발급 기록으로 손에 있다.
    - 팝업 차단을 피하려면 단추를 누른 그 순간 창을 열어야 한다 → openPrintWindow()로 먼저 열고,
      발급 기록이 오면 fillPrintWindow()로 그린다
-   - 창을 연다고 바로 인쇄 대화상자를 띄우지 않는다. 창 위 «인쇄»를 눌러야 연다(보정·장 수를 먼저 고르게)
+   - 창을 연다고 바로 인쇄 대화상자를 띄우지 않는다. 창 위 «인쇄»를 눌러야 연다(보정·장 수를 먼저 고르게).
+     «인쇄»를 한 번도 안 누르고 닫으면 데스크가 «안 됨으로 되돌릴까요?»를 묻는다(opts.onUnprinted)
    - @page 크기를 판 크기로 만들어 붙인다. 한 장 = 한 쪽
      출력 종이가 A4(sheet 'a4')면 A4 세로 한 쪽의 맨 위 가운데에 한 장씩 — 작은 종이를 그 크기로
      알려 주면 프린터가 안 받아서, A4로 알려 주고 네임택 종이를 그대로 넣어 위쪽만 찍는다.
@@ -27,18 +28,24 @@ import { readyToPrint, fitNametags } from './nt-fit.js';
 import { normalizeOffset, A4 } from '../../domain/nametag-layout.js';
 import { escapeHtml } from '../../utils.js';
 
-/* PC 보정은 종이마다 따로 둔다(«A4» · «판 크기 그대로 W×H»). 예전에는 한 값을 모든 행사가 같이 써서,
-   A4 행사에서 맞춘 세로 10mm가 100×100mm «판 크기 그대로» 행사에 그대로 붙어 아래 14mm가 잘렸다(2026-11-11 KHIDI-AI).
-   예전 값(v1)은 A4 종이에만 이어 쓴다 */
-const OFFSET_KEY = 'nametag.print-offset.v1';
+/* 인쇄 보정 — 판 값(설정 › 행사 상세 › 네임택)과 이 PC 값(인쇄 창에서 고친 것) 중 «나중에 고친 것»을 쓴다.
+   - PC 값은 종이마다 따로(«A4» · «판 크기 그대로 W×H») — A4 행사에서 맞춘 세로 10mm가 100×100mm 판에 붙어 잘렸다(2026-11-11)
+   - PC 값을 저장할 때 그때의 판 값을 같이 적어 둔다. 그 뒤 판 값이 바뀌었으면 판 값을 쓴다 — 예전에는 PC 값이 한 번
+     생기면 판에서 0으로 고쳐도 그 PC는 계속 옛 값으로 찍었다
+   - 예전 공용 값(nametag.print-offset.v1)은 더는 읽지 않는다 */
 const offsetKey = (t) => t.sheet === 'fit' ? `nametag.print-offset.fit-${t.width_mm}x${t.height_mm}` : 'nametag.print-offset.a4';
+const sameOffset = (a, b) => JSON.stringify(normalizeOffset(a)) === JSON.stringify(normalizeOffset(b));
+/* → { o: 보정값, pc: 이 PC 값인지 } */
 const readOffset = (t) => {
   try {
-    const v = JSON.parse(localStorage.getItem(offsetKey(t)) || (t.sheet === 'fit' ? 'null' : localStorage.getItem(OFFSET_KEY) || 'null'));
-    return normalizeOffset(v || t.print_offset);
-  } catch { return normalizeOffset(t.print_offset); }
+    const v = JSON.parse(localStorage.getItem(offsetKey(t)) || 'null');
+    if(v && v.o && (!v.base || sameOffset(v.base, t.print_offset))) return { o: normalizeOffset(v.o), pc: true };
+    if(v && !v.o && v.x != null) return { o: normalizeOffset(v), pc: true };   // 판 값을 적기 전에 저장한 PC 값(오늘 인쇄 창에서 고친 것)
+  } catch {}
+  return { o: normalizeOffset(t.print_offset), pc: false };
 };
-const saveOffset = (t, o) => { try { localStorage.setItem(offsetKey(t), JSON.stringify(o)); } catch {} };
+const saveOffset = (t, o) => { try { localStorage.setItem(offsetKey(t), JSON.stringify({ o, base: normalizeOffset(t.print_offset) })); } catch {} };
+const clearOffset = (t) => { try { localStorage.removeItem(offsetKey(t)); } catch {} };
 /* 출력 종이 — 인쇄 창에서 고른다(2026-11-11). 프린터마다 받는 종이가 달라 이 PC에, 판 크기마다 기억한다.
    고른 적이 없으면 판에 정한 종이(설정 › 행사 상세 › 네임택) */
 const SHEET_KEY = 'nametag.sheet.v1';
@@ -55,20 +62,25 @@ const readPer = () => {
       cut1: v.cut1 === true, cutN: v.cutN !== false }; }
   catch { return { n: 1, gap: 0, cut1: false, cutN: true }; }
 };
-/* 칼선 — 네임택 가장자리에서 CUT_OFF 떨어져 CUT_LEN 길이. 묶음 위아래로 CUT_ROOM씩 비운다 */
+/* 칼선 — 네임택 가장자리에서 CUT_OFF 떨어져 CUT_LEN 길이.
+   켜고 끄는 것으로 판이 움직이면 안 된다(예전에는 위 칼선 자리 8mm만큼 판을 내려 «밀림»으로 보였다, 2026-11-11).
+   그래서 판은 그대로 두고, 위 칼선은 판 위에 남은 자리(위 여백 + 세로)만큼만 긋는다. 자리가 모자라면 위 칼선은 빼고
+   아래 칼선으로 세로 자를 자리를 알린다. 아래 칼선 자리(CUT_ROOM)만 묶음 아래에 둔다 */
 const CUT_OFF = 2, CUT_LEN = 6, CUT_ROOM = CUT_OFF + CUT_LEN;
-function cutMarks(t, cols, rows, gap){
+function cutMarks(t, cols, rows, gap, above = 0){
   const xs = [...new Set(Array.from({ length: cols }, (_, i) => [i * (t.width_mm + gap), i * (t.width_mm + gap) + t.width_mm]).flat())];
   const ys = [...new Set(Array.from({ length: rows }, (_, i) => [i * (t.height_mm + gap), i * (t.height_mm + gap) + t.height_mm]).flat())];
   const W = cols * t.width_mm + (cols - 1) * gap, H = rows * t.height_mm + (rows - 1) * gap;
   const v = (x, y) => `<i class="nt-trim v" style="left:${x}mm;top:${y}mm;height:${CUT_LEN}mm"></i>`;
   const h = (x, y) => `<i class="nt-trim h" style="left:${x}mm;top:${y}mm;width:${CUT_LEN}mm"></i>`;
-  return xs.map(x => v(x, -CUT_ROOM) + v(x, H + CUT_OFF)).join('') + ys.map(y => h(-CUT_ROOM, y) + h(W + CUT_OFF, y)).join('');
+  const topLen = Math.min(CUT_LEN, above - CUT_OFF);
+  const vTop = (x) => topLen >= 2 ? `<i class="nt-trim v" style="left:${x}mm;top:${-CUT_OFF - topLen}mm;height:${topLen}mm"></i>` : '';
+  return xs.map(x => vTop(x) + v(x, H + CUT_OFF)).join('') + ys.map(y => h(-CUT_ROOM, y) + h(W + CUT_OFF, y)).join('');
 }
 const savePer = (v) => { try { localStorage.setItem(PER_KEY, JSON.stringify(v)); } catch {} };
 /* 이 배치가 A4 한 쪽에 들어가나 — 위 여백까지 넣어 잰다 */
 const fitsA4 = (t, n, gap, top, cut) => { const [, cols, rows] = PER_PAGE.find(p => p[0] === n);
-  return cols * t.width_mm + (cols - 1) * gap <= A4.width_mm && top + (cut ? 2 * CUT_ROOM : 0) + rows * t.height_mm + (rows - 1) * gap <= A4.height_mm - 1; };
+  return cols * t.width_mm + (cols - 1) * gap <= A4.width_mm && top + (cut ? CUT_ROOM : 0) + rows * t.height_mm + (rows - 1) * gap <= A4.height_mm - 1; };
 
 /* 하단바 — 종이에는 안 찍는다. 뽑아 나온 네임택에 어느 띠를 끼울지 인쇄 창 위에 보여 준다 */
 function barSummary(template, cards){
@@ -80,14 +92,14 @@ function barSummary(template, cards){
   return ' · ' + [...m.entries()].map(([l, n]) => l ? `<span class="nt-bar"><i style="background:${color(l)}"></i>${escapeHtml(l)} <b>${n}</b></span>` : `<span class="nt-bar nt-bar-none">미정 ${n}</span>`).join(' ');
 }
 
-function pagesHtml(template, cards, a4, n, gap, cut){
+function pagesHtml(template, cards, a4, n, gap, cut, above = 0){
   const [, cols, rows] = PER_PAGE.find(p => p[0] === n);
   const pages = [];
   for(let i = 0; i < cards.length; i += n) pages.push(cards.slice(i, i + n));
   /* 칼선은 꽉 찬 쪽 기준으로 긋는다 — 마지막 쪽에 덜 찼어도 자를 자리는 같다 */
-  const marks = cut ? cutMarks(template, cols, rows, gap) : '';
+  const marks = cut ? cutMarks(template, cols, rows, gap, above) : '';
   return pages.map(group => `<div class="nt-page${a4 ? ' nt-a4' : ''}"${a4 ? '' : ` style="height:${template.height_mm}mm"`}><div class="nt-shift"><div class="nt-grid"
-    style="grid-template-columns:repeat(${cols},${template.width_mm}mm);gap:${gap}mm${cut ? `;margin:${CUT_ROOM}mm 0` : ''}">${group.map(c =>
+    style="grid-template-columns:repeat(${cols},${template.width_mm}mm);gap:${gap}mm${cut ? `;margin-bottom:${CUT_ROOM}mm` : ''}">${group.map(c =>
     `<div class="nt-frame">${ntCardHtml(template, c, { forPrint: true })}</div>`).join('')}${marks}</div></div></div>`).join('');
 }
 
@@ -100,13 +112,29 @@ export function openPrintWindow(){
   return w;
 }
 
-export async function fillPrintWindow(w, template, cards){
+/* 인쇄 창 한 번 — «인쇄»를 눌렀는지. 안 누르고 창을 닫거나 다음 인쇄로 창을 덮으면 onUnprinted를 부른다 */
+let session = null;
+function endSession(s){
+  if(!s || s.done) return;
+  s.done = true; clearInterval(s.timer);
+  if(!s.printed) s.onUnprinted?.();
+}
+
+/* opts.onUnprinted — 발급 기록을 만든 인쇄(데스크)만 넘긴다. «인쇄»를 한 번도 안 누르고 창을 닫으면 부른다(2026-11-11):
+   기록은 창을 열 때 이미 남아서, 보정만 보다 닫으면 안 뽑은 사람이 «받음·체크인»으로 남았다 */
+export async function fillPrintWindow(w, template, cards, opts = {}){
   if(!w || w.closed) return;
+  endSession(session);   // 같은 창을 다시 쓰면 앞의 인쇄는 여기서 끝난다
+  const me = session = { printed: false, done: false, onUnprinted: opts.onUnprinted, timer: 0 };
+  if(opts.onUnprinted) me.timer = setInterval(() => { if(w.closed) endSession(me); }, 700);
   const css = (p) => new URL(p, location.href).href;
   const tp = { ...template, sheet: readSheet(template) };   // 이번 인쇄의 종이 — 창에서 바꾼다
   let a4 = tp.sheet !== 'fit';
-  const off = readOffset(tp);
   const per = readPer();
+  /* 보정값은 실제로 찍는 종이 것 — 판 크기 그대로라도 2장·4장은 A4로 찍으니 A4 값 */
+  const paperOf = () => tp.sheet === 'fit' && per.n === 1 ? tp : { ...tp, sheet: 'a4' };
+  let offR = readOffset(paperOf()), offKey = offsetKey(paperOf());
+  const off = offR.o;
   /* 스타일은 글자로 넣는다 — 인쇄 창은 따로 받지 않아도 되게(끊겨도 기기에 둔 것으로, sw.js).
      화면이 실제로 읽은 주소(배포 때 붙는 ?v=…까지)로 받는다. 못 받으면 예전처럼 링크로 */
   const sheet = async (p) => {
@@ -130,8 +158,8 @@ ${styles}
     <label title="한 쪽에 몇 장씩 — 이 PC에 기억해요. 쪽 크기는 왼쪽에 보여요">한 쪽에 <select id="pp">${PER_PAGE.map(p =>
       `<option value="${p[0]}"${p[0] === per.n ? ' selected' : ''}>${p[3]}</option>`).join('')}</select></label>
     <label title="여러 장일 때 네임택 사이 간격">간격 <input id="gp" type="number" min="0" max="20" step="0.5" value="${per.gap}">mm</label>
-    <label id="ctw" title="네임택 가장자리마다 바깥에 짧은 재단선 — A4에 찍어 자를 때. 켜면 판이 ${CUT_ROOM}mm 내려가요"><input id="ct" type="checkbox" style="width:auto"> 칼선</label>
-    <span style="color:#888">인쇄 보정(이 PC)</span>
+    <label id="ctw" title="네임택 가장자리마다 바깥에 짧은 재단선 — A4에 찍어 자를 때. 켜도 판은 움직이지 않아요(위 칼선은 판 위에 남은 자리만큼만 그어요)"><input id="ct" type="checkbox" style="width:auto"> 칼선</label>
+    <span id="osrc" style="color:#888"></span><button id="ors" type="button" title="이 PC에서 고친 값을 지우고 판에 정한 값(설정 › 행사 상세 › 네임택)으로">판 값으로</button>
     <label>가로 <input id="dx" type="number" step="0.5" value="${off.x}">mm</label>
     <label title="프린터가 못 찍는 위 여백 — 판을 이만큼 내려 찍는다">위 여백 <input id="dt" type="number" min="0" max="15" step="0.5" value="${off.top}">mm</label>
     <label>세로 <input id="dy" type="number" step="0.5" value="${off.y}">mm</label>
@@ -152,12 +180,21 @@ ${styles}
     d.body.style.setProperty('--nt-scale', String(o.scale / 100));
     return o;
   };
+  /* 보정값이 어디 것인지 — 이 PC 값이면 «판 값으로»를 보인다 */
+  const showSrc = () => {
+    d.getElementById('osrc').textContent = `인쇄 보정 · ${offR.pc ? '이 PC 값' : '판 값'}${paperOf().sheet === 'fit' ? '' : ' (A4)'}`;
+    d.getElementById('ors').style.display = offR.pc ? '' : 'none';
+  };
+  const putOffset = (o) => { d.getElementById('dx').value = o.x; d.getElementById('dy').value = o.y; d.getElementById('dt').value = o.top; d.getElementById('sc').value = o.scale; apply(); };
   /* 한 쪽에 몇 장 — 바꾸면 쪽을 다시 짠다 */
   const layout = (ev) => {
     const pp = d.getElementById('pp'), gp = d.getElementById('gp');
     per.gap = Math.min(20, Math.max(0, Number(gp.value) || 0));
     per.n = PER_PAGE.some(p => p[0] === +pp.value) ? +pp.value : 1;
     savePer(per);
+    /* 찍는 종이가 바뀌었으면(종이 고르기 · 1장 ↔ 여러 장) 그 종이의 보정값으로 */
+    if(offsetKey(paperOf()) !== offKey){ offKey = offsetKey(paperOf()); offR = readOffset(paperOf()); putOffset(offR.o); }
+    showSrc();
     const o = normalizeOffset({ top: d.getElementById('dt').value, y: d.getElementById('dy').value });
     const onA4 = a4 || per.n > 1;   // 여러 장은 언제나 A4
     const paper = onA4 ? A4 : template;
@@ -169,7 +206,7 @@ ${styles}
     d.getElementById('ctw').style.display = onA4 ? '' : 'none';
     savePer(per);
     d.getElementById('pgsz').textContent = `@page{size:${paper.width_mm}mm ${paper.height_mm}mm;margin:0}`;
-    d.getElementById('sheet').innerHTML = pagesHtml(template, cards, onA4, per.n, per.gap, marks);
+    d.getElementById('sheet').innerHTML = pagesHtml(template, cards, onA4, per.n, per.gap, marks, o.top + o.y);
     const pages = Math.ceil(cards.length / per.n);
     d.getElementById('pg').textContent = per.n > 1 ? ` · A4 ${pages}쪽` : '';
     const cut = onA4 && !fitsA4(template, per.n, per.gap, o.top + o.y, marks);
@@ -183,14 +220,16 @@ ${styles}
   };
   layout();
   apply();
-  ['dx', 'dy', 'sc', 'dt'].forEach(id => d.getElementById(id).addEventListener('change', () => { saveOffset(tp, apply()); if(id !== 'dx') layout(); }));
-  /* 종이를 바꾸면 그 종이의 보정값으로 바꿔 끼우고 쪽을 다시 짠다 */
+  ['dx', 'dy', 'sc', 'dt'].forEach(id => d.getElementById(id).addEventListener('change', () => {
+    const o = apply(); saveOffset(paperOf(), o); offR = { o, pc: true };
+    if(id !== 'dx') layout(); else showSrc();
+  }));
+  d.getElementById('ors').addEventListener('click', () => { clearOffset(paperOf()); offR = readOffset(paperOf()); putOffset(offR.o); layout(); });
+  /* 종이를 바꾸면 쪽을 다시 짠다 — 그 종이의 보정값은 layout이 바꿔 끼운다 */
   d.getElementById('sh').addEventListener('change', (e) => {
     tp.sheet = e.target.value === 'fit' ? 'fit' : 'a4'; a4 = tp.sheet !== 'fit';
     saveSheet(template, tp.sheet);
-    const o = readOffset(tp);
-    d.getElementById('dx').value = o.x; d.getElementById('dy').value = o.y; d.getElementById('dt').value = o.top; d.getElementById('sc').value = o.scale;
-    apply(); layout();
+    layout();
   });
   ['pp', 'gp', 'ct'].forEach(id => d.getElementById(id)?.addEventListener('change', layout));
   /* 인쇄 대화상자는 «인쇄»를 눌렀을 때만 연다 — 창이 열리자마자 띄우면 대화상자가 두 개(이 창 · 프린터)로 보여 헷갈렸다(2026-11-11).
@@ -198,6 +237,7 @@ ${styles}
   const go = d.getElementById('go');
   go.addEventListener('click', async () => {
     go.disabled = true; go.textContent = '준비 중…';
+    me.printed = true;
     try { await readyToPrint(d); w.focus(); w.print(); }
     finally { go.disabled = false; go.textContent = '인쇄'; }
   });
