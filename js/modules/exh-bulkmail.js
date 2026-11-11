@@ -300,7 +300,9 @@ function mailFor(x){
   // 이미지 대체 문구 — 이미지를 안 띄우는 메일 프로그램과 스팸 필터가 읽는 글
   const alt = { top: en ? `${evName} Thank-you letter` : `${evName} 감사 서한`,
     photo: (i) => en ? `${firm} booth photo ${i + 1}` : `${firm} 부스 사진 ${i + 1}` };
-  let body = raw.split(PHOTO_MARK).join(note).replace(/\n{3,}/g, '\n\n').trim();
+  let body = raw.split(PHOTO_MARK).join(note);
+  if(bm.html) body = htmlToText(body);
+  body = body.replace(/\n{3,}/g, '\n\n').trim();
   // 글 없이 이미지만이면 글자 본문이 비지 않게 — 이미지만 든 메일은 스팸으로 잡히기 쉽다
   if(bannerOf(en) && !body.replace(/\(.*?\)/g, '').trim()) body = `${alt.top}\n${body}`.trim();
   return { subject: again + fillExhTemplate(bm.tpl[en ? 'subject_en' : 'subject_ko'], x, st, en, ctx),
@@ -308,10 +310,30 @@ function mailFor(x){
 }
 /* 사진이 든 html 본문 — srcs[i]는 i번째 사진 주소(보낼 때 cid:, 미리보기 때 blob:).
    {사진}이 없으면 본문 맨 끝에 넣는다. alt는 mailFor의 대체 문구 */
+/* «HTML로 보내기» — 문구를 HTML 소스로 쓴다. 위험한 태그·on* 속성·javascript: 주소는 뺀다 */
+const BAD_TAGS = 'script,iframe,frame,object,embed,form,input,button,textarea,select,link,meta,base,svg,math';
+function cleanHtml(src){
+  const doc = new DOMParser().parseFromString(`<body>${src}</body>`, 'text/html');
+  doc.body.querySelectorAll(BAD_TAGS).forEach(n => n.remove());
+  doc.body.querySelectorAll('*').forEach(n => [...n.attributes].forEach(a => {
+    if(/^on/i.test(a.name) || (/^(href|src|action|formaction)$/i.test(a.name) && /^\s*(javascript|vbscript|data:text)/i.test(a.value))) n.removeAttribute(a.name);
+  }));
+  return doc.body.innerHTML;
+}
+/* HTML을 못 보는 메일 프로그램용 글 본문 */
+function htmlToText(src){
+  const doc = new DOMParser().parseFromString(`<body>${String(src).replace(/\s*\n\s*/g, ' ')}</body>`, 'text/html');
+  doc.body.querySelectorAll('script,style').forEach(n => n.remove());
+  doc.body.querySelectorAll('br').forEach(n => n.replaceWith('\n'));
+  doc.body.querySelectorAll('p,div,tr,h1,h2,h3,h4,li,table').forEach(n => n.append('\n'));
+  doc.body.querySelectorAll('td,th').forEach(n => n.append(' '));
+  doc.body.querySelectorAll('a[href]').forEach(n => { const h = n.getAttribute('href'); if(/^https?:/i.test(h) && n.textContent.trim() !== h) n.append(` (${h})`); });
+  return doc.body.textContent.replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
 function bodyHtml(raw, srcs, top, alt){
   const a = (s) => alt ? ` alt="${escapeHtml(s)}"` : '';
   const imgs = srcs.map((s, i) => `<img src="${s}"${a(alt && alt.photo(i))} style="display:block;max-width:100%;width:640px;height:auto;margin:8px 0;border-radius:4px">`).join('');
-  const txt = (s) => escapeHtml(s).replace(/\n/g, '<br>');
+  const txt = bm?.html ? cleanHtml : (s) => escapeHtml(s).replace(/\n/g, '<br>');
   const parts = String(raw).split(PHOTO_MARK);
   const inner = parts.length > 1 ? parts.map(txt).join(imgs) : txt(raw) + (imgs ? `<br>${imgs}` : '');
   const head = top ? `<img src="${top}"${a(alt && alt.top)} style="display:block;max-width:100%;width:640px;height:auto;margin:0 0 12px">` : '';
@@ -365,7 +387,7 @@ async function buildMail(x){
   const top = bannerOf(m.en);
   const ph = await photoAttachments(x.id, top ? await shrink(top, 1400, .85) : null);
   if(ph.error) return { error: ph.error };
-  if(!ph.list.length && !ph.top) return { ...m, attachments: [] };
+  if(!ph.list.length && !ph.top) return { ...m, ...(bm.html ? { html: bodyHtml(m.raw, [], null, m.alt) } : {}), attachments: [] };
   const stamp = Date.now().toString(36);
   const attachments = ph.list.map((a, i) => ({ ...a, cid: `p${i}.${stamp}@bloom` }));
   const head = ph.top ? { ...ph.top, cid: `top.${stamp}@bloom` } : null;
@@ -527,6 +549,9 @@ function render(){
         <details${bm.lang === 'en' ? ' open' : ''} style="margin-top:6px"><summary style="cursor:pointer;font-size:var(--fs-11_5);font-weight:700;margin-bottom:4px">영문 문구</summary>
           <input class="fi" style="font-size:var(--fs-11_5);margin-bottom:4px" value="${escapeHtml(bm.tpl.subject_en)}" oninput="bmTpl('subject_en',this.value)" ${bm.sending ? 'disabled' : ''}>
           <textarea class="fi" rows="7" style="font-size:var(--fs-11_5);width:100%" oninput="bmTpl('body_en',this.value)" ${bm.sending ? 'disabled' : ''}>${escapeHtml(bm.tpl.body_en)}</textarea></details>
+        <label style="display:flex;gap:6px;align-items:center;margin-top:6px;font-size:var(--fs-11)">
+          <input type="checkbox" ${bm.html ? 'checked' : ''} onchange="bmSet('html',this.checked)" ${bm.sending ? 'disabled' : ''}>
+          <b>HTML로 보내기</b><span style="color:var(--i4)">문구 칸을 HTML 소스로 씁니다 — 줄바꿈은 &lt;br&gt;, 표·스타일은 태그 안에. 글만 보는 프로그램용 본문은 자동으로 붙어요</span></label>
         ${varChipsHtml('exh', { ev: bm.evKey })}
         <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:4px">칸은 기업마다 채워집니다. 여기서 고친 문구는 이번 발송에만 쓰고, 기본 문구와 단계는
           <a href="#" onclick="openExhMailEditor('${escAttr(bm.evKey)}','${escAttr(bm.step)}');return false">✎ 단계 편집</a>에서 고칩니다.</div>
@@ -569,7 +594,7 @@ function prevHtml(picked){
       <b style="color:var(--i2)">${escapeHtml(exhNames(x).ko)}</b>${m.en ? ' (영문)' : ''}
       <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0">→ ${escapeHtml(mailsOf(x, bm.who).join(', '))}</span>
     </div>
-    ${photosOf(x.id).length || bannerOf(m.en)
+    ${bm.html || photosOf(x.id).length || bannerOf(m.en)
       ? `<div style="max-height:420px;overflow:auto;background:#fff;padding:6px;border-radius:var(--rs)"><b>${escapeHtml(m.subject)}</b><br><br>${
           bodyHtml(m.raw, photosOf(x.id).map(thumbOf), bannerOf(m.en) && thumbOf(bannerOf(m.en)), m.alt).replace(/width:640px/g, 'width:320px')}</div>`
       : `<div style="white-space:pre-wrap;max-height:240px;overflow:auto"><b>${escapeHtml(m.subject)}</b>\n\n${escapeHtml(m.body)}</div>`}
