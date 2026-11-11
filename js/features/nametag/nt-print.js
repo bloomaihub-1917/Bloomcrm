@@ -11,8 +11,9 @@
      가로는 언제나 가운데. 예전 'a4l'(왼쪽)도 가운데로 찍는다
    - 위 여백(top): 프린터가 못 찍는 종이 앞끝(4mm쯤). 판을 통째로 그만큼 내려 찍는다(세로 보정에 더한다)
    - 한 쪽에 몇 장(판 용지와 상관없이): 1장 · 2장(위·아래) · 4장(2 × 2). 여러 장을 한 번에 뽑을 때 종이를 아낀다.
-     묶음은 쪽 맨 위 가운데에 붙여 놓고, 인쇄 보정·위 여백은 묶음 전체를 옮긴다. 급지는 현장이 맞춘다(2026-11-11) —
-     A4 판이면 A4 쪽(묶음이 A4보다 크면 묶음 크기로 키운다), 판 크기 그대로(fit)면 묶음 크기 쪽. 쪽 크기는 인쇄 창 위에 보인다
+     묶음은 쪽 맨 위 가운데에 붙여 놓고, 인쇄 보정·위 여백은 묶음 전체를 옮긴다. 2장·4장은 판 용지가 «판 크기 그대로»여도
+     언제나 A4 쪽으로 찍는다 — 쪽을 묶음 크기(판 두 배)로 잡으면 프린터가 못 찍는 가장자리에서 잘린다(2026-11-11).
+     A4에 다 안 들어가는 배치도 고를 수는 있지만 인쇄 창 위에 «잘려요»로 알린다
      고른 값과 간격은 이 브라우저에 둔다(localStorage nametag.per-page.v1)
    - 인쇄 보정(가로·세로 mm, 배율 %)은 프린터마다 종이 먹는 자리가 달라 이 브라우저에 따로 둔다
      (localStorage nametag.print-offset.v1). 없으면 판의 기본값
@@ -38,15 +39,9 @@ const readPer = () => {
   catch { return { n: 1, gap: 0 }; }
 };
 const savePer = (v) => { try { localStorage.setItem(PER_KEY, JSON.stringify(v)); } catch {} };
-/* 이 배치를 찍을 쪽 크기 — A4 판이면 A4(묶음이 더 크면 키운다, 위 여백까지 넣어 잰다), 판 크기 그대로면 묶음 크기 */
-function pageSize(t, n, gap, top, a4){
-  const [, cols, rows] = PER_PAGE.find(p => p[0] === n);
-  const w = cols * t.width_mm + (cols - 1) * gap, h = rows * t.height_mm + (rows - 1) * gap;
-  if(!a4) return { width_mm: w, height_mm: h, big: false };
-  const big = w > A4.width_mm || top + h > A4.height_mm - 1;
-  return { width_mm: Math.max(A4.width_mm, w), height_mm: Math.max(A4.height_mm, Math.ceil(top + h + 1)), big };
-}
-const mm = (v) => Math.round(v * 10) / 10;
+/* 이 배치가 A4 한 쪽에 들어가나 — 위 여백까지 넣어 잰다 */
+const fitsA4 = (t, n, gap, top) => { const [, cols, rows] = PER_PAGE.find(p => p[0] === n);
+  return cols * t.width_mm + (cols - 1) * gap <= A4.width_mm && top + rows * t.height_mm + (rows - 1) * gap <= A4.height_mm - 1; };
 
 /* 하단바 — 종이에는 안 찍는다. 뽑아 나온 네임택에 어느 띠를 끼울지 인쇄 창 위에 보여 준다 */
 function barSummary(template, cards){
@@ -58,12 +53,11 @@ function barSummary(template, cards){
   return ' · ' + [...m.entries()].map(([l, n]) => l ? `<span class="nt-bar"><i style="background:${color(l)}"></i>${escapeHtml(l)} <b>${n}</b></span>` : `<span class="nt-bar nt-bar-none">미정 ${n}</span>`).join(' ');
 }
 
-function pagesHtml(template, cards, a4, n, gap, size){
+function pagesHtml(template, cards, a4, n, gap){
   const [, cols] = PER_PAGE.find(p => p[0] === n);
   const pages = [];
   for(let i = 0; i < cards.length; i += n) pages.push(cards.slice(i, i + n));
-  const box = a4 ? (size.big ? ` style="width:${size.width_mm}mm;height:${size.height_mm - 1}mm"` : '') : ` style="height:${size.height_mm}mm"`;
-  return pages.map(group => `<div class="nt-page${a4 ? ' nt-a4' : ''}"${box}><div class="nt-shift"><div class="nt-grid"
+  return pages.map(group => `<div class="nt-page${a4 ? ' nt-a4' : ''}"${a4 ? '' : ` style="height:${template.height_mm}mm"`}><div class="nt-shift"><div class="nt-grid"
     style="grid-template-columns:repeat(${cols},${template.width_mm}mm);gap:${gap}mm">${group.map(c =>
     `<div class="nt-frame">${ntCardHtml(template, c, { forPrint: true })}</div>`).join('')}</div></div></div>`).join('');
 }
@@ -112,7 +106,7 @@ ${styles}
   </span>
 </div>
 <div class="nt-sheet" id="sheet"></div>
-<p class="no-print" style="font-size:12px;color:#888;text-align:center">인쇄 대화상자에서 용지 크기를 위에 적힌 쪽 크기로, «여백 없음», 배율 100%로 찍어 주세요. 안 나온 장은 데스크의 최근 발급에서 «안 됨»으로 되돌려요.</p>
+<p class="no-print" style="font-size:12px;color:#888;text-align:center">인쇄 대화상자에서 용지 크기를 위에 적힌 대로(2장·4장은 A4), «여백 없음», 배율 100%로 찍어 주세요. 안 나온 장은 데스크의 최근 발급에서 «안 됨»으로 되돌려요.</p>
 </body></html>`);
   w.document.close();
 
@@ -131,13 +125,16 @@ ${styles}
     per.n = PER_PAGE.some(p => p[0] === +pp.value) ? +pp.value : 1;
     savePer(per);
     const o = normalizeOffset({ top: d.getElementById('dt').value, y: d.getElementById('dy').value });
-    const size = pageSize(template, per.n, per.gap, o.top + o.y, a4);
-    d.getElementById('pgsz').textContent = `@page{size:${mm(size.width_mm)}mm ${mm(size.height_mm)}mm;margin:0}`;
-    d.getElementById('sheet').innerHTML = pagesHtml(template, cards, a4, per.n, per.gap, size);
+    const onA4 = a4 || per.n > 1;   // 여러 장은 언제나 A4
+    const paper = onA4 ? A4 : template;
+    d.getElementById('pgsz').textContent = `@page{size:${paper.width_mm}mm ${paper.height_mm}mm;margin:0}`;
+    d.getElementById('sheet').innerHTML = pagesHtml(template, cards, onA4, per.n, per.gap);
     const pages = Math.ceil(cards.length / per.n);
-    d.getElementById('pg').textContent = per.n > 1 ? ` · ${pages}쪽` : '';
-    const isA4 = a4 && !size.big;
-    d.getElementById('psz').textContent = ` · 쪽 ${isA4 ? 'A4' : `${mm(size.width_mm)} × ${mm(size.height_mm)}mm`}${a4 ? ' 맨 위 가운데' : ''}${size.big ? ' (A4보다 커서 키움)' : ''}`;
+    d.getElementById('pg').textContent = per.n > 1 ? ` · A4 ${pages}쪽` : '';
+    const cut = onA4 && !fitsA4(template, per.n, per.gap, o.top + o.y);
+    const psz = d.getElementById('psz');
+    psz.innerHTML = onA4 ? ` · A4 맨 위 가운데${cut ? ' <b style="color:#e03131">— A4에 다 안 들어가 잘려요. 간격·위 여백을 줄이거나 장 수를 줄여 주세요</b>' : ''}`
+      : ` · 쪽 ${template.width_mm} × ${template.height_mm}mm`;
     fitNametags(d.getElementById('sheet'));
   };
   layout();
