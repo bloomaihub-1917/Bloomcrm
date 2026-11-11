@@ -47,6 +47,7 @@ let evdbQuery = '';        // 검색어
 const evdbPicked = new Set();   // 기업 화면에서 고른 기업 (company_key)
 /* 참여자 화면 — 확정/타겟 거르개와 고른 사람 */
 let evdbStatFil = '';           // '' | 'confirmed' | 'target'
+let evdbViaFil = '';            // '' | 들어온 길(VIA 키) — 참여자 화면
 const evdbPickedPeople = new Set();   // 고른 사람의 cid
 /* CRM 타겟 화면 — 창고에서 끌어올 기업 */
 let evdbTgtFil = 'new';         // 'new'(아직 타겟 아님) | 'on'(이미 타겟)
@@ -73,6 +74,27 @@ let _cache = { key: null, people: [], recs: 0, noOrg: [] };
 
    contactId가 비어 있는 옛 기록은 접을 근거가 없으니 각자 한 명으로 둔다 —
    전부 한 명으로 뭉치는 것보다 낫다. */
+/* 들어온 길 — 참가 기록(participations.matched)에 넣은 곳이 적혀 있다(2026-11-11).
+   등록 링크·직접 입력·엑셀은 등록 화면(register-links.js)이 받은 신청을 확정한 것, 나머지는 앱 안에서 넣은 것.
+   아직 확정 전인 신청(신청 대기)은 그 신청의 경로로 친다 */
+const VIA = [
+  ['link', '🔗 등록 링크'], ['manual', '✍️ 직접 입력'], ['excel', '📄 엑셀 명단'], ['app', '앱에서 추가'],
+  ['speaker', '연사에서'], ['exh', '전시에서'], ['mdb', '마스터DB 초청'], ['onsite', '현장 등록'], ['etc', '기록 없음'],
+];
+const VIA_LABEL = Object.fromEntries(VIA);
+function viaOfMatched(m){
+  m = String(m || '');
+  if(m === '🔗 등록 링크') return 'link';
+  if(m === '✍️ 직접 입력') return 'manual';
+  if(m === '📄 엑셀 명단') return 'excel';
+  if(m.includes('연사')) return 'speaker';
+  if(m.includes('전시')) return 'exh';
+  if(m.includes('마스터DB')) return 'mdb';
+  if(m.includes('현장')) return 'onsite';
+  if(m.includes('앱에서')) return 'app';
+  return 'etc';
+}
+
 function evPeople(evKey){
   if(_cache.key === evKey) return _cache.people;
   const byId = new Map(contacts.map(c => [c.id, c]));
@@ -95,10 +117,11 @@ function evPeople(evKey){
         phone: c.phone1 || c.phone2 || '', dept: c.deptKo || c.deptEn || '',
         /* 확정은 참여 기록에 붙는다. 한 사람이 두 역할이면 줄도 둘이라,
            한 줄이라도 확정이면 그 사람은 온 것으로 본다. */
-        partIds: [], confirmedAt: '',
+        partIds: [], confirmedAt: '', vias: new Set(),
       });
     }
     const m = map.get(key);
+    m.vias.add(viaOfMatched(p.matched));
     m.recs++;
     m.partIds.push(p.id);
     if(p.confirmedAt && !m.confirmedAt) m.confirmedAt = p.confirmedAt;
@@ -117,6 +140,7 @@ function evPeople(evKey){
       country: d.country || '', email: d.email || '', sector: '',
       phone: d.phone || '', dept: '', partIds: [], confirmedAt: '',
       via: s.via, submittedAt: s.created_at,
+      vias: new Set([s.via === 'excel' ? 'excel' : s.via === 'manual' ? 'manual' : 'link']),
     });
   });
 
@@ -224,7 +248,7 @@ export function setEvDbEvent(key){
   evdbRoleFil = ''; evdbQuery = '';
   /* 고른 사람·기업과 확정/타겟 필터는 이전 행사의 것이다 — 남겨 두면 다른 행사
      화면에서 안 보이는 사람이 골라진 채로 «확정»·내보내기에 섞인다. */
-  evdbStatFil = '';
+  evdbStatFil = ''; evdbViaFil = '';
   evdbPicked.clear(); evdbPickedPeople.clear(); evdbPickedTgt.clear();
   buildEvDbList();
   renderEvDb();
@@ -233,6 +257,7 @@ export function setEvDbEvent(key){
 export function setEvDbView(v){ evdbView = v; evdbPicked.clear(); renderEvDb(); }
 export function setEvDbRole(v){ evdbRoleFil = v; evdbPicked.clear(); renderEvDb(); }
 export function setEvDbStat(v){ evdbStatFil = v; evdbPickedPeople.clear(); renderEvDb(); }
+export function setEvDbVia(v){ evdbViaFil = v; evdbPickedPeople.clear(); renderEvDb(); }
 
 /* 검색은 글자를 칠 때마다 다시 그리는데, 통째로 갈면 입력칸이 포커스를 잃는다.
    목록만 갈아 끼우고 입력칸은 그대로 둔다(설정 탭 비품 검색과 같은 방식). */
@@ -517,6 +542,7 @@ function filteredRows(){
   if(evdbRoleFil) l = l.filter(r => r.roles.has(evdbRoleFil));
   if(evdbStatFil === 'confirmed') l = l.filter(r => !!r.confirmedAt);
   if(evdbStatFil === 'target')    l = l.filter(r => !r.confirmedAt);
+  if(evdbViaFil) l = l.filter(r => r.vias?.has(evdbViaFil));
   const q = evdbQuery.trim().toLowerCase();
   if(q) l = l.filter(r => [r.name, r.nameEn, r.org, r.orgEn, r.title, r.email]
     .some(v => String(v || '').toLowerCase().includes(q)));
@@ -539,11 +565,25 @@ function statChips(evKey){
   </div>`;
 }
 
+/* 들어온 길 칩 — 한 사람이 두 길로 들어왔으면(링크로 신청 + 연사로 추가) 양쪽에 한 번씩 잡힌다 */
+function viaChips(evKey){
+  const all = evPeople(evKey), cnt = {};
+  all.forEach(r => r.vias?.forEach(v => { cnt[v] = (cnt[v] || 0) + 1; }));
+  const keys = VIA.map(v => v[0]).filter(k => cnt[k]);
+  if(!keys.length) return '';
+  return `<div class="seg" style="flex-wrap:wrap" title="참가자를 넣은 길 — 등록 링크·직접 입력·엑셀은 등록 화면에서 받은 신청">
+    <button class="seg-b${!evdbViaFil ? ' on' : ''}" onclick="setEvDbVia('')">들어온 길 전체</button>
+    ${keys.map(k => `<button class="seg-b${evdbViaFil === k ? ' on' : ''}" onclick="setEvDbVia('${k}')">${VIA_LABEL[k]} ${cnt[k]}명</button>`).join('')}
+  </div>`;
+}
+const viaTags = (r) => [...(r.vias || [])].map(v => VIA_LABEL[v]).join(' · ');
+
 function peopleHtml(ev){
   const shown = filteredRows();
   const picked = evdbPickedPeople.size;
   return `<div class="sec">${statChips(ev.key)}</div>
     <div class="sec">${roleChips(ev.key)}</div>
+    <div class="sec">${viaChips(ev.key)}</div>
     <div class="sec sec-bar">
       ${searchBoxHtml('이름·기업·직함 검색…')}
       <button class="btn" style="font-size:var(--fs-11)" onclick="toggleEvDbPeopleAll()">전체 선택/해제</button>
@@ -585,12 +625,13 @@ function peopleRowsHtml(){
     </div>
     <div style="font-size:var(--fs-11);color:var(--i3);margin-top:3px">${escapeHtml(r.org)}${r.title ? ' · ' + escapeHtml(r.title) : ''}</div>
     <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:2px">${escapeHtml(countryName(r.country) || '')}${r.email ? ' · ' + escapeHtml(r.email) : ''}</div>
+    <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:2px">${escapeHtml(viaTags(r))}</div>
   </div>`).join('');
 
   return `<div style="overflow-x:auto"><table style="width:100%">
     <thead><tr>
       <th style="width:26px"></th><th style="width:74px">참가</th>
-      <th>성명</th><th>기업·기관</th><th>직함</th><th>역할</th><th>국가</th><th>연락처</th>
+      <th>성명</th><th>기업·기관</th><th>직함</th><th>역할</th><th>들어온 길</th><th>국가</th><th>연락처</th>
     </tr></thead><tbody>
     ${l.map(r => `<tr>
       <td style="text-align:center"><input type="checkbox" ${evdbPickedPeople.has(r.cid) ? 'checked' : ''}
@@ -600,6 +641,7 @@ function peopleRowsHtml(){
       <td>${escapeHtml(r.org)}${r.orgEn && r.orgEn !== r.org ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(r.orgEn)}</div>` : ''}</td>
       <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(r.title)}</td>
       <td>${roleBadges(r)}</td>
+      <td style="font-size:var(--fs-11);color:var(--i3);white-space:nowrap">${escapeHtml(viaTags(r))}</td>
       <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(countryName(r.country) || '')}</td>
       <td style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(r.email)}</td>
     </tr>`).join('')}
@@ -1237,11 +1279,11 @@ export function exportEvDbPeople(){
   if(!l.length){ alert('내보낼 명단이 없어요.'); return; }
 
   const ev = EVENT_LIST.find(e => e.key === evdbEvent);
-  const head = ['참가', '성명', '영문명', '기업·기관', '부서', '직함', '역할', '국가', '이메일', '연락처', '확정일'];
+  const head = ['참가', '성명', '영문명', '기업·기관', '부서', '직함', '역할', '들어온 길', '국가', '이메일', '연락처', '확정일'];
   const body = l.map(r => [
     r.confirmedAt ? '확정' : '타겟',
     r.name, r.nameEn, r.org, r.dept, r.title,
-    [...r.roles].join('|'), countryName(r.country) || '', r.email, r.phone, r.confirmedAt,
+    [...r.roles].join('|'), viaTags(r), countryName(r.country) || '', r.email, r.phone, r.confirmedAt,
   ]);
   const csv = [head, ...body]
     .map(row => row.map(v => '"' + sanitizeForCsv(v).replace(/"/g, '""') + '"').join(','))
@@ -1494,6 +1536,7 @@ window.buildEvDbList    = buildEvDbList;
 window.setEvDbEvent     = setEvDbEvent;
 window.setEvDbView      = setEvDbView;
 window.setEvDbRole      = setEvDbRole;
+window.setEvDbVia       = setEvDbVia;
 window.setEvDbQuery     = setEvDbQuery;
 window.renderEvDb       = renderEvDb;
 window.saveEvDbProfile  = saveEvDbProfile;
