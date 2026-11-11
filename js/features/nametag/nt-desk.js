@@ -426,7 +426,7 @@ export function ntPartHtml(ev, query){
       <div style="flex:1"></div>
       ${ci ? '' : `<span class="nt-note" title="용지·글자 자리·기본 말·하단바 종류는 설정 › 행사 상세 › 네임택에서 정해요">판 ${t.width_mm} × ${t.height_mm}mm · ${escapeHtml((LANG_OPTIONS.find(o => o[0] === t.lang) || LANG_OPTIONS[0])[1].replace(/ \(.*\)/, ''))}${t.sheet === 'fit' ? '' : ' · A4 맨 위 가운데'}${t.id ? '' : ' (기본값)'}</span>
       <button class="btn bs" onclick="ntOpenEditor()" title="설정 › 행사 상세 › 네임택 — 용지 크기·글자 자리·배경·하단바 종류">판 고치기</button>
-      <button class="btn bs" onclick="ntWalkIn(true)" title="명단에 없는 사람 — 뽑으면 체크인으로 남고, 나중에 마스터DB에 올려요">＋ 현장 신규</button>`}
+      <button class="btn bs" onclick="ntWalkIn(true)" title="명단에 없는 사람 — 현장 출력으로 뽑으면 체크인으로도 남고, 나중에 마스터DB에 올려요">＋ 현장 신규</button>`}
     </div>
     <div class="sec-rows nt-layout">
       <div id="evdb-rows">${ntRowsHtml(ev.key, query)}</div>
@@ -544,7 +544,7 @@ function walkInHtml(){
     <div class="nt-fields">${f('name', '이름 *', true)}${f('company', '소속', true)}${f('job_title', '직함')}${f('badge', '구분')}
       ${barTypes().length ? `<label class="wide"><div class="mlbl">하단바 <span class="nt-note">· 비워 두고 나중에 채워도 돼요</span></div>${barSelect(w.bar, `ntWalkEdit('bar',this.value)`)}</label>` : ''}
       ${f('email', '이메일', false, 'email')}${f('phone', '전화')}</div>
-    <div class="nt-note">명단에 없는 사람이에요. 뽑으면 체크인으로 남고, 행사가 끝난 뒤 «마스터DB에»로 연락처·참가 확정을 만들어요.</div>
+    <div class="nt-note">명단에 없는 사람이에요. 현장 출력으로 뽑으면 체크인으로도 남아요(사전 출력이면 체크인은 따로). 행사가 끝난 뒤 «마스터DB에»로 연락처·참가 확정을 만들어요.</div>
     <div class="nt-actions"><button class="btn bp" onclick="ntPrint()"${nt.busy ? ' disabled' : ''}>🖨 인쇄</button>
       <button class="btn bs" onclick="ntWalkIn(false)">취소</button></div>${recentHtml()}`;
 }
@@ -713,7 +713,7 @@ export async function ntPrint(){
       name: String(c.name || '').trim(), company: c.company || '', job_title: c.job_title || null, badge: c.badge || null,
       bar: barType(barId)?.label || null, lang: c.lang === 'en' ? 'en' : 'ko', kind, reason: kind === 'reissue' ? nt.reason : null,
       printed_by: by, printed_at: at, voided_at: null, _wait: true,
-      _checkin_id: (onsite || fresh) && !nt.checkins.has(key) ? newId('NC-') : '', _bar_id: barId || '',
+      _checkin_id: onsite && !nt.checkins.has(key) ? newId('NC-') : '', _bar_id: barId || '',   // 현장 신규도 사전 출력이면 체크인 안 함
       _email: fresh ? c.email || '' : '', _phone: fresh ? c.phone || '' : '' };
   });
   const data = { rows, reason: nt.reason || '', onsite };

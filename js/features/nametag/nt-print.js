@@ -27,12 +27,18 @@ import { readyToPrint, fitNametags } from './nt-fit.js';
 import { normalizeOffset, A4 } from '../../domain/nametag-layout.js';
 import { escapeHtml } from '../../utils.js';
 
+/* PC 보정은 종이마다 따로 둔다(«A4» · «판 크기 그대로 W×H»). 예전에는 한 값을 모든 행사가 같이 써서,
+   A4 행사에서 맞춘 세로 10mm가 100×100mm «판 크기 그대로» 행사에 그대로 붙어 아래 14mm가 잘렸다(2026-11-11 KHIDI-AI).
+   예전 값(v1)은 A4 종이에만 이어 쓴다 */
 const OFFSET_KEY = 'nametag.print-offset.v1';
-const readOffset = (fallback) => {
-  try { const v = JSON.parse(localStorage.getItem(OFFSET_KEY) || 'null'); return v ? normalizeOffset(v) : normalizeOffset(fallback); }
-  catch { return normalizeOffset(fallback); }
+const offsetKey = (t) => t.sheet === 'fit' ? `nametag.print-offset.fit-${t.width_mm}x${t.height_mm}` : 'nametag.print-offset.a4';
+const readOffset = (t) => {
+  try {
+    const v = JSON.parse(localStorage.getItem(offsetKey(t)) || (t.sheet === 'fit' ? 'null' : localStorage.getItem(OFFSET_KEY) || 'null'));
+    return normalizeOffset(v || t.print_offset);
+  } catch { return normalizeOffset(t.print_offset); }
 };
-const saveOffset = (o) => { try { localStorage.setItem(OFFSET_KEY, JSON.stringify(o)); } catch {} };
+const saveOffset = (t, o) => { try { localStorage.setItem(offsetKey(t), JSON.stringify(o)); } catch {} };
 
 /* 한 쪽에 몇 장 — [장 수, 가로 칸, 세로 줄, 이름] */
 const PER_PAGE = [[1, 1, 1, '1장'], [2, 1, 2, '2장 (위·아래)'], [4, 2, 2, '4장 (2 × 2)']];
@@ -91,7 +97,7 @@ export function openPrintWindow(){
 export async function fillPrintWindow(w, template, cards){
   if(!w || w.closed) return;
   const css = (p) => new URL(p, location.href).href;
-  const off = readOffset(template.print_offset);
+  const off = readOffset(template);
   const a4 = template.sheet !== 'fit';
   const per = readPer();
   /* 스타일은 글자로 넣는다 — 인쇄 창은 따로 받지 않아도 되게(끊겨도 기기에 둔 것으로, sw.js).
@@ -158,13 +164,16 @@ ${styles}
     d.getElementById('pg').textContent = per.n > 1 ? ` · A4 ${pages}쪽` : '';
     const cut = onA4 && !fitsA4(template, per.n, per.gap, o.top + o.y, marks);
     const psz = d.getElementById('psz');
+    /* 판 크기 그대로 — 종이가 곧 판이라 아래로 내린 만큼(세로 + 위 여백, 배율로 커진 만큼) 아래가 잘린다 */
+    const sc = normalizeOffset({ scale: d.getElementById('sc').value }).scale / 100;
+    const fitCut = onA4 ? 0 : Math.round((o.y + o.top + template.height_mm * (sc - 1)) * 10) / 10;
     psz.innerHTML = onA4 ? ` · A4 맨 위 가운데${cut ? ' <b style="color:#e03131">— A4에 다 안 들어가 잘려요. 간격·위 여백을 줄이거나, 칼선을 끄거나, 장 수를 줄여 주세요</b>' : ''}`
-      : ` · 쪽 ${template.width_mm} × ${template.height_mm}mm`;
+      : ` · 쪽 ${template.width_mm} × ${template.height_mm}mm${fitCut > 0 ? ` <b style="color:#e03131">— 판을 ${fitCut}mm 내려 찍어 아래 ${fitCut}mm가 잘려요. 세로·위 여백을 0에 가깝게 줄여 주세요</b>` : ''}`;
     fitNametags(d.getElementById('sheet'));
   };
   layout();
   apply();
-  ['dx', 'dy', 'sc', 'dt'].forEach(id => d.getElementById(id).addEventListener('change', () => { saveOffset(apply()); if(id !== 'dx' && id !== 'sc') layout(); }));
+  ['dx', 'dy', 'sc', 'dt'].forEach(id => d.getElementById(id).addEventListener('change', () => { saveOffset(template, apply()); if(id !== 'dx') layout(); }));
   ['pp', 'gp', 'ct'].forEach(id => d.getElementById(id)?.addEventListener('change', layout));
   /* 인쇄 대화상자는 «인쇄»를 눌렀을 때만 연다 — 창이 열리자마자 띄우면 대화상자가 두 개(이 창 · 프린터)로 보여 헷갈렸다(2026-11-11).
      누르면 글꼴·그림(QR)이 다 그려질 때까지 기다렸다가 연다 */

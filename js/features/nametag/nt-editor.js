@@ -80,7 +80,7 @@ function canvasHtml(){
     <div class="nt-stage" style="transform:scale(${z});--nt-bg-opacity:${ed.bgOpacity}"><div class="nt-frame">
       ${ntCardHtml(t, sampleCard())}
       <div class="nt-safe" style="left:5mm;top:5mm;right:5mm;bottom:5mm"></div>
-      ${t.print_offset.top ? `<div class="nt-cut" style="height:${t.print_offset.top}mm" title="프린터가 위 ${t.print_offset.top}mm를 못 찍어 판을 그만큼 내려 찍어요. 이 부분은 종이 밖으로 나가요"><span>종이 밖 ${t.print_offset.top}mm</span></div>` : ''}
+      ${cutOf(t) ? `<div class="nt-cut" style="height:${cutOf(t)}mm" title="판을 ${cutOf(t)}mm 내려 찍어요(위 여백${t.sheet === 'fit' && t.print_offset.y ? ' + 세로 보정' : ''}). 이 부분은 종이 밖으로 나가요"><span>종이 밖 ${cutOf(t)}mm</span></div>` : ''}
       ${g.x ? `<div class="nt-guide" style="left:${t.width_mm / 2}mm;top:0;width:0.3mm;height:${t.height_mm}mm"></div>` : ''}
       ${g.y ? `<div class="nt-guide" style="top:${t.height_mm / 2}mm;left:0;height:0.3mm;width:${t.width_mm}mm"></div>` : ''}
       ${EL_KEYS.filter(k => t.layout[k].show).map(k => `<button type="button" class="nt-handle" data-k="${k}"
@@ -106,9 +106,11 @@ function renderCanvas(){
   if(zl) zl.textContent = `${ed.t.width_mm} × ${ed.t.height_mm}mm · 화면 ${Math.round(zoomOf(ed.t) * 100)}%`;
 }
 
-/* 판을 위 여백만큼 내려 찍으면 아래 끝이 종이 밖으로 나간다 — 그 띠에 걸친 글자를 알려 준다 */
+/* 판을 위 여백만큼 내려 찍으면 아래 끝이 종이 밖으로 나간다 — 그 띠에 걸친 글자를 알려 준다.
+   «판 크기 그대로»는 종이가 곧 판이라 세로 보정으로 내린 만큼도 잘린다 */
+const cutOf = (t) => Math.max(0, t.print_offset.top + (t.sheet === 'fit' ? t.print_offset.y : 0));
 function cutWarnHtml(){
-  const t = ed.t, cut = t.print_offset.top;
+  const t = ed.t, cut = cutOf(t);
   if(!cut) return '';
   const hit = EL_KEYS.filter(k => {
     const x = t.layout[k];

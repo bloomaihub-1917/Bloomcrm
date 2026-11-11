@@ -139,7 +139,8 @@ router.put('/:eventId/template', async (req, res, next) => {
 
 /* 발급 — 기록이 먼저다. 화면은 돌려받은 기록으로 인쇄 창을 그린다 → 기록과 종이가 늘 같다.
    이미 받은(무효 아닌 기록이 있는) 사람이 섞이면 재발급이고, 사유가 있어야 한다.
-   onsite(현장 출력)면 뽑은 사람을 모두 체크인한다. 새 현장 신규는 언제나 현장 출력이다.
+   onsite(현장 출력)면 뽑은 사람을 모두 체크인한다. 현장 신규도 같다 — 사전 출력으로 뽑으면 체크인하지 않는다
+   (예전에는 현장 신규를 언제나 체크인해 사전 출력 중에도 체크인으로 잡혔다, 2026-11-11).
    새 현장 신규는 person_key = w<발급 id>. 그 사람을 다시 뽑을 때는 화면이 그 키를 보낸다(재발급). */
 router.post('/:eventId/issue', async (req, res, next) => {
   const client = await pool.connect();
@@ -223,7 +224,7 @@ router.post('/:eventId/issue', async (req, res, next) => {
         c.name, c.company, c.job_title, c.badge, bar ? barLabel.get(bar) || null : null, c.lang, kind,
         kind === 'issue' ? null : reason || RACE_REASON, by, c.at, now]);
       out.push(r);
-      if (onsite || c.fresh) {
+      if (onsite) {
         const { rows: [k] } = await client.query(`INSERT INTO nametag_checkins (id, event_id, person_key, via, print_id, checked_at, checked_by, synced_at)
           VALUES ($1,$2,$3,'print',$4,$5,$6,$7) ON CONFLICT (event_id, person_key) WHERE voided_at IS NULL DO NOTHING RETURNING ${CHECKIN_COLS}`,
         [c.checkin_id || newId('NC-'), ev, c.person_key, r.id, c.at, by, now]);
