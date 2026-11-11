@@ -99,6 +99,7 @@ export function normalizeBarTypes(v){
   return (Array.isArray(v) ? v : []).slice(0, 20).map(b => ({
     id: String(b?.id || '').trim().slice(0, 20), label: String(b?.label || '').trim().slice(0, 20),
     color: /^#[0-9a-f]{6}$/i.test(b?.color) ? b.color.toLowerCase() : '#868e96',
+    roles: [...new Set((Array.isArray(b?.roles) ? b.roles : []).map(r => String(r || '').trim().slice(0, 30)).filter(Boolean))].slice(0, 30),
   })).filter(b => b.id && b.label && !seen.has(b.id) && seen.add(b.id));
 }
 

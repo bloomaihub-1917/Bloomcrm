@@ -49,6 +49,7 @@ const nt = {
   barFil: '',            // '' | '_none'(미정) | 하단바 종류 id
   sort: readSort(),      // 'org'(소속 → 이름) | 'kind'(구분 → 이름) | 'name'(이름) — 이 기기에 기억(nametag.sort.v1)
   alias: new Map(),      // 옛 키(s<연사>·x<담당자>) → 지금 키(c<연락처>) — foldAliases
+  defBar: new Map(),     // 사람 키 → 참가 역할로 정해지는 하단바 id(사람마다 정한 띠가 없을 때) — foldAliases
   picked: new Set(), focus: '',
   edits: new Map(),      // person_key → { name, company, job_title, badge, lang }
   walkIn: null,          // 현장 신규 입력 중이면 { name, company, job_title, badge, bar, email, phone }
@@ -66,7 +67,7 @@ function ensureLoaded(evKey){
   if(nt.ev !== evKey){
     Object.assign(nt, { ev: evKey, loaded: '', err: '', template: normalizeTemplate(null), prints: [], focus: '', walkIn: null,
       reason: '', imp: null, onsite: null, since: '', barFil: '', syncedAt: '', netView: false });
-    nt.picked.clear(); nt.edits.clear(); nt.people.clear(); nt.checkins.clear(); nt.alias.clear();
+    nt.picked.clear(); nt.edits.clear(); nt.people.clear(); nt.checkins.clear(); nt.alias.clear(); nt.defBar.clear();
   }
   if(nt.loaded === evKey || nt.loading) return;
   nt.loading = true;
@@ -98,7 +99,11 @@ function takeFull(j){
    서버 기록은 그대로 두고 화면에서 이어 붙인다. 지금 키에 이미 기록이 있으면 그것이 먼저(더 새것) */
 function foldAliases(){
   if(!nt.ev) return;
-  nt.alias = new Map(ntPeople(nt.ev).filter(p => p.alt).map(p => [p.alt, p.key]));
+  const roster = ntPeople(nt.ev);
+  nt.alias = new Map(roster.filter(p => p.alt).map(p => [p.alt, p.key]));
+  /* 하단바 기본값 — 판의 하단바 종류마다 고른 참가 역할(설정 › 행사 상세 › 네임택). 위에 있는 종류가 먼저 */
+  const types = (nt.template.bar_types || []).filter(b => b.roles?.length);
+  nt.defBar = new Map(types.length ? roster.map(p => [p.key, types.find(b => b.roles.some(r => p.roles?.includes(r)))?.id || '']).filter(x => x[1]) : []);
   nt.alias.forEach((key, alt) => {
     const pe = nt.people.get(alt);
     if(pe){ if(!nt.people.has(key)) nt.people.set(key, { ...pe, person_key: key, _alt: alt }); nt.people.delete(alt); }
@@ -297,7 +302,9 @@ function printedMap(){
 }
 
 const barTypes = () => nt.template.bar_types || [];
-const barOf = (key) => nt.people.get(key)?.bar || '';
+/* 사람마다 정한 띠 → 없으면 참가 역할로 정해지는 띠(nt.defBar) */
+const barOf = (key) => nt.people.get(key)?.bar || nt.defBar.get(key) || '';
+const barIsDefault = (key) => !nt.people.get(key)?.bar && !!nt.defBar.get(key);
 const barType = (id) => barTypes().find(b => b.id === id);
 const barChip = (id, big) => {
   if(!id) return big ? '<span class="nt-bar nt-bar-none">하단바 미정</span>' : '';
@@ -305,8 +312,8 @@ const barChip = (id, big) => {
   return b ? `<span class="nt-bar${big ? ' big' : ''}"><i style="background:${b.color}"></i>${escapeHtml(b.label)}</span>`
     : `<span class="nt-bar nt-bar-none" title="설정에서 지운 종류예요">지운 종류</span>`;
 };
-const barSelect = (cur, on, extra = '') => `<select class="fi nt-bar-sel" ${extra} onchange="${on}">
-  <option value="">${cur ? '— 빼기' : '— 미정'}</option>
+const barSelect = (cur, on, extra = '', byRole = false) => `<select class="fi nt-bar-sel" ${extra} onchange="${on}"${byRole ? ' title="참가 역할로 정해진 띠예요 — 바꾸면 이 사람만 따로 정해져요"' : ''}>
+  <option value="">${byRole ? '— 역할대로' : cur ? '— 빼기' : '— 미정'}</option>
   ${barTypes().map(b => `<option value="${escAttr(b.id)}"${b.id === cur ? ' selected' : ''}>${escapeHtml(b.label)}</option>`).join('')}
   ${cur && !barType(cur) ? '<option selected value="">지운 종류</option>' : ''}</select>`;
 
@@ -441,7 +448,7 @@ export function ntRowsHtml(evKey, query){
   const ckCell = (p) => { const c = nt.checkins.get(p.key);
     return c ? `<span style="color:var(--g);font-weight:700">✓</span> ${kst(c.checked_at)} <span class="nt-note">${c.via === 'print' ? '현장 출력' : '데스크'}${c._wait ? ' · ⏳ 기기에만' : ''}</span>` : '<span style="color:var(--i5)">—</span>'; };
   const barCell = (p) => barTypes().length
-    ? `<td onclick="event.stopPropagation()">${barSelect(barOf(p.key), `ntSetBar('${escAttr(p.key)}',this.value)`, `style="--c:${barType(barOf(p.key))?.color || 'transparent'}"`)}</td>`
+    ? `<td onclick="event.stopPropagation()">${barSelect(barOf(p.key), `ntSetBar('${escAttr(p.key)}',this.value)`, `style="--c:${barType(barOf(p.key))?.color || 'transparent'}"`, barIsDefault(p.key))}</td>`
     : `<td>${barChip(barOf(p.key))}</td>`;
 
   if(ci) return `<div style="overflow-x:auto"><table class="nt-rows" style="width:100%">
@@ -642,6 +649,7 @@ export function ntTemplateSaved(evKey, t){
   if(nt.ev !== evKey) return;
   nt.template = t;
   nt.edits.forEach((e, k) => { if(e.lang) nt.edits.delete(k); });
+  foldAliases();   // 하단바 종류의 역할이 바뀌었을 수 있다
 }
 export function ntOpenEditor(){
   if(!nt.ev) return;

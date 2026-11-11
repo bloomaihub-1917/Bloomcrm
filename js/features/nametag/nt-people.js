@@ -91,6 +91,17 @@ export function ntPeople(evKey){
     });
   });
 
+  /* 참가 역할 — 하단바 기본값을 고르는 데 쓴다(nt-desk.js defaultBar). 연사·부스 담당자는 그 역할도 더한다 */
+  const partRoles = new Map();
+  participations.filter(p => p.eventId === evKey && p.contactId != null && p.role)
+    .forEach(p => { const k = s(p.contactId); (partRoles.get(k) || partRoles.set(k, new Set()).get(k)).add(s(p.role)); });
+  out.forEach(p => {
+    const r = new Set(p.contact_id ? partRoles.get(p.contact_id) || [] : []);
+    if(p.source === 'speaker') r.add('연사');
+    if(p.source === 'exh') r.add('전시참가기업');
+    p.roles = [...r];
+  });
+
   return [...out.values()].filter(p => p.nameKo || p.nameEn)
     .sort((a, b) => (a.orgKo || a.orgEn).localeCompare(b.orgKo || b.orgEn, 'ko') || (a.nameKo || a.nameEn).localeCompare(b.nameKo || b.nameEn, 'ko'));
 }

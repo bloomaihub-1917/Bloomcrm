@@ -19,6 +19,7 @@ import { fitNametags } from './nt-fit.js';
 import { openPrintWindow, fillPrintWindow } from './nt-print.js';
 import { ntPeople, cardOf } from './nt-people.js';
 import { ntTemplateSaved } from './nt-desk.js';
+import { PART_TYPES } from '../../state.js';
 
 const SAMPLES = [
   ['ko', '국문 견본', { name: '홍길동', company: '스튜디오블룸', job_title: '사업개발 팀장', badge: '연사' }],
@@ -165,11 +166,15 @@ function renderEditor(){
       </section>
 
       <section><h4>하단바 종류 <span class="nt-note" style="font-weight:400">· 이 행사</span></h4>
-        <div class="nt-note">투포켓 명찰 아래에 끼우는 색 띠예요. 발급 데스크 명단에 사람마다 어느 띠를 줄지 보여 주고, 인쇄 창에도 띄워요. 종이에는 찍지 않아요.</div>
+        <div class="nt-note">투포켓 명찰 아래에 끼우는 색 띠예요. 발급 데스크 명단에 사람마다 어느 띠를 줄지 보여 주고, 인쇄 창에도 띄워요. 종이에는 찍지 않아요.
+          종류마다 참가 역할을 고르면 그 역할인 사람은 따로 정하지 않아도 그 띠로 잡혀요. 한 사람이 여러 역할이면 위에 있는 종류가 먼저예요.</div>
         ${(t.bar_types || []).map((b, i) => `<div class="nt-row" style="align-items:center">
           <input type="color" value="${b.color}" onchange="ntEdBarSet(${i},'color',this.value)" title="띠 색" style="flex:none;width:36px;height:32px;padding:0;border:1px solid var(--i6);border-radius:var(--rs)">
           <input class="fi" value="${escAttr(b.label)}" maxlength="20" placeholder="예: VIP" oninput="ntEdBarSet(${i},'label',this.value)">
-          <button type="button" class="btn bs" style="flex:none" onclick="ntEdBarDel(${i})" title="이 종류 빼기">빼기</button></div>`).join('')}
+          <button type="button" class="btn bs" style="flex:none" onclick="ntEdBarDel(${i})" title="이 종류 빼기">빼기</button></div>
+          <div class="nt-roles" title="이 역할인 사람은 기본으로 이 띠 — 한 역할은 한 종류에만">${roleChoices().map(r => {
+            const on = (b.roles || []).includes(r), other = !on && (t.bar_types || []).find(x => x !== b && (x.roles || []).includes(r));
+            return `<button type="button" class="nt-role${on ? ' on' : ''}" style="--c:${b.color}" onclick="ntEdBarRole(${i},'${escAttr(r)}')"${other ? ` title="지금은 «${escAttr(other.label)}»에 있어요 — 누르면 이리 옮겨요"` : ''}>${escapeHtml(r)}${other ? ' ·' : ''}</button>`; }).join('')}</div>`).join('')}
         <button type="button" class="btn bs" onclick="ntEdBarAdd()">＋ 하단바 종류</button>
       </section>
 
@@ -368,6 +373,17 @@ export function ntEdBarSet(i, k, v){
   b[k] = k === 'label' ? String(v).slice(0, 20) : v;
   touched();
 }
+/* 참가 역할 고르기 — 한 역할은 한 종류에만(다른 종류에 있으면 이리 옮긴다) */
+const roleChoices = () => [...new Set([...PART_TYPES.map(p => p.key || p.label).filter(Boolean),
+  ...(ed.t?.bar_types || []).flatMap(b => b.roles || [])])];
+export function ntEdBarRole(i, role){
+  const l = ed.t.bar_types || [], b = l[i];
+  if(!b) return;
+  const on = (b.roles || []).includes(role);
+  l.forEach(x => { x.roles = (x.roles || []).filter(r => r !== role); });
+  if(!on) b.roles.push(role);
+  touched(); renderEditor();
+}
 export function ntEdBarDel(i){
   const b = (ed.t.bar_types || [])[i];
   if(!b || !confirm(`하단바 «${b.label || '이름 없음'}»을 뺄까요?
@@ -428,4 +444,4 @@ export function ntEdForget(){ if(!dirty()) ed.ev = ''; }
 export const ntEdDirty = dirty;
 
 Object.assign(window, { mountNametagEditor, ntEdSel, ntEdSample, ntEdPatch, ntEdAlign, ntEdWeight, ntEdLines, ntEdSize, ntEdPaper, ntEdSheet, ntEdLang,
-  ntEdOffset, ntEdBarAdd, ntEdBarSet, ntEdBarDel, ntEdBgOpacity, ntEdBgPrint, ntEdBgClear, ntEdReset, ntEdRevert, ntEdBg, ntEdSave, ntEdTestPrint, ntEdForget });
+  ntEdOffset, ntEdBarAdd, ntEdBarSet, ntEdBarRole, ntEdBarDel, ntEdBgOpacity, ntEdBgPrint, ntEdBgClear, ntEdReset, ntEdRevert, ntEdBg, ntEdSave, ntEdTestPrint, ntEdForget });
