@@ -732,10 +732,8 @@ function unprinted(ev, rows, onsite){
   const live = rows.filter(r => !nt.prints.find(p => p.id === r.id)?.voided_at);
   if(!live.length) return;
   const ck = live.filter(r => r._checkin_id && nt.checkins.get(r.person_key)?.id === r._checkin_id);
-  if(!confirm(`인쇄하지 않고 인쇄 창을 닫았어요.
-방금 발급한 ${live.length}장(${live.slice(0, 3).map(r => r.name || '이름 없음').join(', ')}${live.length > 3 ? ' 외' : ''})을 «안 됨»으로 되돌릴까요?`
-    + (ck.length ? `
-함께 남긴 체크인 ${ck.length}건도 취소해요.` : '') + '\n\n실제로 뽑았으면 «취소»를 눌러 주세요.')) return;
+  if(!confirm(`인쇄하지 않고 인쇄 창을 닫았어요.\n방금 발급한 ${live.length}장(${live.slice(0, 3).map(r => r.name || '이름 없음').join(', ')}${live.length > 3 ? ' 외' : ''})을 «안 됨»으로 되돌릴까요?`
+    + (ck.length ? `\n함께 남긴 체크인 ${ck.length}건도 취소해요.` : '') + '\n\n실제로 뽑았으면 «취소»를 눌러 주세요.')) return;
   const by = currentUser?.email || '';
   live.forEach(r => {
     const op = { kind: 'void', at: new Date().toISOString(), data: { id: r.id, name: r.name, by } };
