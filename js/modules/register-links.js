@@ -16,10 +16,10 @@ import { trackAction } from '../core/audit-log.js';
 
 /* 양식의 열 — 서버 FIELDS와 같은 순서·이름. 머리줄 글자로 칸을 찾는다(국문·영문 둘 다 받는다) */
 const COLS = [
-  { k: 'name',    ko: '이름*',          en: 'Name' },
-  { k: 'org',     ko: '소속*',          en: 'Organization' },
+  { k: 'name',    ko: '이름',          en: 'Name' },
+  { k: 'org',     ko: '소속',          en: 'Organization' },
   { k: 'title',   ko: '직함',           en: 'Job title' },
-  { k: 'email',   ko: '이메일*',        en: 'Email' },
+  { k: 'email',   ko: '이메일',        en: 'Email' },
   { k: 'phone',   ko: '전화',           en: 'Phone' },
 ];
 const VIA_ICON = { link: '🔗 링크', excel: '📄 엑셀', manual: '✍️ 직접' };
@@ -249,7 +249,7 @@ export function downloadRegisterTemplate(){
   const guide = XLSX.utils.aoa_to_sheet([
     ['작성 안내'], [''],
     ['• 한 줄에 한 사람씩 적어 주세요. 머리줄(첫 줄)은 지우거나 바꾸지 마세요.'],
-    ['• *표 칸(이름·소속·이메일)은 꼭 채워 주세요. 빠진 줄은 올라가지 않아요.'],
+    ['• 아는 칸만 채우면 돼요. 이메일을 적으면 같은 이메일의 기존 연락처에 붙여요.'],
     ['• 영문 머리줄(Name, Organization, Job title, Email, Phone)도 받아요.'],
     ['• 첫째 줄의 (예시) 줄은 지우고 쓰세요. 남겨 두어도 올릴 때 빠져요.'],
     [`• 참가 유형: ${role || '(올릴 때 고른 유형)'}`],
@@ -274,9 +274,8 @@ export async function uploadRegisterExcel(e){
     const head = (aoa[0] || []).map(norm);
     const at = {};
     COLS.forEach(c => { const i = head.findIndex(h => h && (h === norm(c.ko) || h === norm(c.en))); if(i >= 0) at[c.k] = i; });
-    const missing = ['name', 'org', 'email'].filter(k => !(k in at));
-    if(missing.length){
-      showMsg(`머리줄에서 ${missing.map(k => COLS.find(c => c.k === k).ko.replace('*', '')).join('·')} 칸을 못 찾았어요 — 내려받은 양식을 써 주세요.`, true);
+    if(!Object.keys(at).length){
+      showMsg('머리줄(이름·소속·직함·이메일·전화)을 못 찾았어요 — 내려받은 양식을 써 주세요.', true);
       return;
     }
     rows = aoa.slice(1).map((r, i) => {
@@ -290,7 +289,7 @@ export async function uploadRegisterExcel(e){
   const r = await importRegisterRows(openEv, { role, rows });
   if(!r.ok){ showMsg(r.error || '올리지 못했어요', true); return; }
   await reload();
-  showMsg(`${r.added}줄을 신청 대기에 올렸어요${r.bad.length ? ` · ${r.bad.length}줄은 필수 칸이 비었거나 이메일이 틀려 뺐어요(${r.bad.slice(0, 15).join(', ')}${r.bad.length > 15 ? ' …' : ''}행)` : ''}.`, !!r.bad.length);
+  showMsg(`${r.added}줄을 신청 대기에 올렸어요${r.bad.length ? ` · ${r.bad.length}줄은 빈 줄이거나 이메일이 틀려 뺐어요(${r.bad.slice(0, 15).join(', ')}${r.bad.length > 15 ? ' …' : ''}행)` : ''}.`, !!r.bad.length);
   trackAction('create', '등록 신청', openEv, `엑셀 ${r.added}줄 올림 (${role})`);
 }
 
@@ -299,15 +298,14 @@ export async function addRegisterOne(btn){
   const role = document.getElementById('reg-new-role')?.value || '';
   const row = { line: 1 };
   COLS.forEach(c => { row[c.k] = (document.getElementById('reg-one-' + c.k)?.value || '').trim(); });
-  const miss = COLS.filter(c => c.ko.endsWith('*') && !row[c.k]).map(c => c.ko.replace('*', ''));
-  if(miss.length){ showMsg(`${miss.join('·')}을(를) 채워 주세요.`, true); return; }
-  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)){ showMsg('이메일 형식을 확인해 주세요.', true); return; }
+  if(!COLS.some(c => row[c.k])){ showMsg('한 칸이라도 채워 주세요.', true); return; }
+  if(row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)){ showMsg('이메일 형식을 확인해 주세요.', true); return; }
   if(btn) btn.disabled = true;
   const r = await importRegisterRows(openEv, { role, rows: [row], via: 'manual' });
   if(btn) btn.disabled = false;
-  if(!r.ok || !r.added){ showMsg(r.error || '넣지 못했어요 — 필수 칸·이메일을 확인해 주세요.', true); return; }
+  if(!r.ok || !r.added){ showMsg(r.error || '넣지 못했어요 — 이메일 형식을 확인해 주세요.', true); return; }
   await reload();
-  showMsg(`${row.name}님을 «${role}» 신청 대기에 넣었어요. 확정하면 마스터DB로 옮겨요.`);
+  showMsg(`${row.name || row.email || row.org}님을 «${role}» 신청 대기에 넣었어요. 확정하면 마스터DB로 옮겨요.`);
   trackAction('create', '등록 신청', openEv, `직접 입력 ${row.name} (${role})`);
 }
 

@@ -130,7 +130,8 @@ router.post('/:eventId/import', async (req, res) => {
     let added = 0;
     for (let i = 0; i < rows.length; i++) {
       const v = cleanRow(rows[i]);
-      if (FIELDS.some((f) => f.need && !v[f.k]) || !EMAIL.test(v.email)) { bad.push(Number(rows[i] && rows[i].line) || i + 2); continue; }
+      /* 우리가 모아 올리는 명단이라 필수 칸이 없다 — 다 빈 줄과 틀린 이메일만 뺀다 */
+      if (FIELDS.every((f) => !v[f.k]) || (v.email && !EMAIL.test(v.email))) { bad.push(Number(rows[i] && rows[i].line) || i + 2); continue; }
       await stage(eventId, role, '', via, v);
       added++;
     }
@@ -163,8 +164,9 @@ async function accept(id, by) {
     const v = cleanRow(subShape(sub).data);
     const ev = (await client.query('SELECT name FROM events WHERE id = $1', [sub.event_id])).rows[0] || {};
     const ko = HANGUL.test(v.name), orgKo = HANGUL.test(v.org), titleKo = HANGUL.test(v.title);
-    const found = (await client.query(`SELECT * FROM contacts
-      WHERE lower(trim(email1)) = $1 OR lower(trim(email2)) = $1 ORDER BY id LIMIT 1`, [v.email.toLowerCase()])).rows[0];
+    /* 엑셀·직접 입력은 이메일 없이도 들어온다 — 빈 이메일로 찾으면 이메일 없는 아무나 걸리니 찾지 않는다 */
+    const found = v.email ? (await client.query(`SELECT * FROM contacts
+      WHERE lower(trim(email1)) = $1 OR lower(trim(email2)) = $1 ORDER BY id LIMIT 1`, [v.email.toLowerCase()])).rows[0] : null;
     let cid, created = false;
     if (found) {
       cid = found.id;
