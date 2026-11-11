@@ -55,6 +55,13 @@
   .nt-layout{grid-template-columns:minmax(0,1fr)}
   .nt-side{position:static}
 }
+/* 휴대폰 — 명단 카드(nt-desk.js mobileRowsHtml)와 아래 «미리보기 · 인쇄» 막대(mobileBarHtml) */
+.nt-mrow{display:flex;gap:10px;align-items:center;padding:10px 12px;margin-bottom:6px;background:var(--W);border:1px solid var(--i6);border-radius:var(--r)}
+.nt-mrow.on{border-color:var(--a);background:var(--selb)}
+.nt-mrow-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:var(--fs-13)}
+.nt-mrow-main .nt-note{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nt-mbar{position:sticky;bottom:0;z-index:5;display:flex;gap:8px;align-items:center;padding:10px 12px;margin-bottom:var(--gap-sec);
+  background:var(--W);border:1px solid var(--i6);border-radius:var(--r);box-shadow:var(--sh);font-weight:700;font-size:var(--fs-13)}
 
 /* ── 인쇄 창 ──
    사무국 화면 없이 네임택만 그린다. @page 크기는 판 크기에서 만들어 붙인다(nt-print.js) */

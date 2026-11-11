@@ -736,6 +736,24 @@ tr.row-sel{background:var(--ad)}
 .stat-card .n{font-size:var(--fs-20);font-weight:700;color:var(--i1);line-height:1.2}
 .stat-card .l{font-size:var(--fs-11);color:var(--i4)}
 .stat-card .s{font-size:var(--fs-10_5);color:var(--i5)}
+/* 휴대폰(2026-11-11) — 칩 줄·숫자 카드·단추 줄이 몇 줄씩 쌓여 명단이 첫 화면 밖(700px 아래)으로 밀렸다.
+   - 칩 줄(.seg)은 줄을 바꾸지 않고 옆으로 민다
+   - 숫자 카드는 작게
+   - 자주 안 쓰는 단추(.m-hide)는 «⋯ 더보기»(.m-more)를 눌러야 보인다. 데스크톱에서는 늘 보인다 */
+.m-more{display:none}
+@media(max-width:768px){
+  .sec .seg{flex-wrap:nowrap !important;overflow-x:auto;max-width:100%;scrollbar-width:none}
+  .sec .seg::-webkit-scrollbar{display:none}
+  .sec .seg-b{white-space:nowrap;flex:none}
+  .stat-grid{grid-template-columns:repeat(auto-fit,minmax(76px,1fr));gap:6px}
+  .stat-card{padding:6px 8px}
+  .stat-card .n{font-size:var(--fs-15)}
+  .stat-card .l{font-size:var(--fs-10)}
+  .stat-card .s{font-size:var(--fs-9_5)}
+  .m-hide{display:none !important}
+  .m-open .m-hide{display:inline-flex !important}
+  .m-more{display:inline-flex}
+}
 
 /* ── Program at a Glance 시간 격자 (conf-pga.js) ──
    달력처럼 1시간마다 줄을 긋고 세션을 실제 시각만큼 내려 놓는다. 칸 높이가 곧 길이라

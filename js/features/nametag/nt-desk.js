@@ -22,7 +22,7 @@
 
    왼쪽 명단은 #evdb-rows라 검색(event-tab.js setEvDbQuery)이 목록만 갈아 끼운다.
 ═══════════════════════════════════════════════════════════════ */
-import { escapeHtml, escAttr } from '../../utils.js';
+import { escapeHtml, escAttr, isMobile } from '../../utils.js';
 import { contacts, participations, EVENT_LIST, currentUser } from '../../state.js';
 import { normalizeTemplate, LANG_OPTIONS, REISSUE_REASONS, MM_PX, parseScan } from '../../domain/nametag-layout.js';
 import { loadNametag, loadNametagLive, promoteWalkIns } from '../../api/nametag.js';
@@ -406,13 +406,14 @@ export function ntPartHtml(ev, query){
       ${seg(nt.view, [['issue', '🖨 발급'], ['checkin', '✓ 체크인']], 'ntSetView')}
       ${ci ? `<button class="btn bp" onclick="ntCamera()" title="노트북 웹캠·휴대폰 카메라로 네임택 QR을 읽어요. 켜 두면 비추는 대로 바로 체크인돼요">📷 카메라 체크인</button>` : ''}
       ${ci ? '' : `${seg(isOnsite() ? 'on' : 'pre', [['pre', '사전 출력'], ['on', '현장 출력']], 'ntSetOnsite')}
-        <span class="nt-note">${isOnsite() ? '뽑으면 바로 체크인으로 남아요' : '뽑아도 체크인은 따로 해요'}</span>`}
+        <span class="nt-note m-hide">${isOnsite() ? '뽑으면 바로 체크인으로 남아요' : '뽑아도 체크인은 따로 해요'}</span>`}
       <div style="flex:1"></div>
       ${netHtml()}
-      <button class="btn bs" onclick="ntExport()" title="현장 신규까지 한 줄씩 — 하단바·체크인 포함. 하단바 엑셀 올리기 양식도 이것">⬇ 명단 엑셀</button>
-      ${ci ? '' : `<label class="btn bs" title="«명단 엑셀»에 하단바를 채워 올려요. 등록번호로 맞추고, 없으면 이메일·이름+소속으로">⬆ 하단바 엑셀
+      <button class="btn bs m-more" onclick="this.parentElement.classList.toggle('m-open')">⋯ 더보기</button>
+      <button class="btn bs m-hide" onclick="ntExport()" title="현장 신규까지 한 줄씩 — 하단바·체크인 포함. 하단바 엑셀 올리기 양식도 이것">⬇ 명단 엑셀</button>
+      ${ci ? '' : `<label class="btn bs m-hide" title="«명단 엑셀»에 하단바를 채워 올려요. 등록번호로 맞추고, 없으면 이메일·이름+소속으로">⬆ 하단바 엑셀
         <input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="ntImportBars(this.files[0]);this.value=''"></label>`}
-      ${wiTodo ? `<button class="btn bs" onclick="ntPromote()" title="현장 신규를 연락처·이 행사 참가 확정으로 — 같은 이메일이면 그 사람에 붙여요">현장 신규 ${wiTodo}명 마스터DB에</button>` : ''}
+      ${wiTodo ? `<button class="btn bs m-hide" onclick="ntPromote()" title="현장 신규를 연락처·이 행사 참가 확정으로 — 같은 이메일이면 그 사람에 붙여요">현장 신규 ${wiTodo}명 마스터DB에</button>` : ''}
     </div>
     ${statsHtml()}
     <div class="sec sec-bar">
@@ -427,13 +428,14 @@ export function ntPartHtml(ev, query){
       <select class="fi" style="width:auto" onchange="ntSetSort(this.value)" title="명단 차례 — 이 기기에 기억해요">
         ${SORTS.map(([k, l]) => `<option value="${k}"${nt.sort === k ? ' selected' : ''}>정렬: ${l}</option>`).join('')}</select>
       <div style="flex:1"></div>
-      ${ci ? '' : `<span class="nt-note" title="용지·글자 자리·기본 말·하단바 종류는 설정 › 행사 상세 › 네임택에서 정해요">판 ${t.width_mm} × ${t.height_mm}mm · ${escapeHtml((LANG_OPTIONS.find(o => o[0] === t.lang) || LANG_OPTIONS[0])[1].replace(/ \(.*\)/, ''))}${t.sheet === 'fit' ? '' : ' · A4 맨 위 가운데'}${t.id ? '' : ' (기본값)'}</span>
-      <button class="btn bs" onclick="ntOpenEditor()" title="설정 › 행사 상세 › 네임택 — 용지 크기·글자 자리·배경·하단바 종류">판 고치기</button>
+      ${ci ? '' : `<button class="btn bs m-more" onclick="this.parentElement.classList.toggle('m-open')">⋯ 더보기</button><span class="nt-note m-hide" title="용지·글자 자리·기본 말·하단바 종류는 설정 › 행사 상세 › 네임택에서 정해요">판 ${t.width_mm} × ${t.height_mm}mm · ${escapeHtml((LANG_OPTIONS.find(o => o[0] === t.lang) || LANG_OPTIONS[0])[1].replace(/ \(.*\)/, ''))}${t.sheet === 'fit' ? '' : ' · A4 맨 위 가운데'}${t.id ? '' : ' (기본값)'}</span>
+      <button class="btn bs m-hide" onclick="ntOpenEditor()" title="설정 › 행사 상세 › 네임택 — 용지 크기·글자 자리·배경·하단바 종류">판 고치기</button>
       <button class="btn bs" onclick="ntWalkIn(true)" title="명단에 없는 사람 — 현장 출력으로 뽑으면 체크인으로도 남고, 나중에 마스터DB에 올려요">＋ 현장 신규</button>
-      <button class="btn bs" onclick="ntPrintBlank()" title="이름 없이 배경만 — A4 한 장에 4매. 손으로 쓸 여분 네임택. 기록은 남기지 않아요">빈 네임택 4매</button>`}
+      <button class="btn bs m-hide" onclick="ntPrintBlank()" title="이름 없이 배경만 — A4 한 장에 4매. 손으로 쓸 여분 네임택. 기록은 남기지 않아요">빈 네임택 4매</button>`}
     </div>
     <div class="sec-rows nt-layout">
       <div id="evdb-rows">${ntRowsHtml(ev.key, query)}</div>
+      ${mobileBarHtml(ev.key)}
       <div id="nt-side" class="nt-side">${nt.netView ? netLogHtml() : ci ? checkinSideHtml() : sideHtml(ev.key)}</div>
     </div></div>`;
 }
@@ -451,6 +453,7 @@ export function ntRowsHtml(evKey, query){
   const got = (p) => { const d = done.get(p.key); return d ? `<span style="color:var(--g);font-weight:700">✓</span> ${kst(d.last)}${d.n > 1 ? ` · ${d.n}장` : ''}` : '<span style="color:var(--i5)">—</span>'; };
   const ckCell = (p) => { const c = nt.checkins.get(p.key);
     return c ? `<span style="color:var(--g);font-weight:700">✓</span> ${kst(c.checked_at)} <span class="nt-note">${c.via === 'print' ? '현장 출력' : '데스크'}${c._wait ? ' · ⏳ 기기에만' : ''}</span>` : '<span style="color:var(--i5)">—</span>'; };
+  if(isMobile()) return mobileRowsHtml(shown, ci, done, srcPill, got, ckCell) + more;
   const barCell = (p) => barTypes().length
     ? `<td onclick="event.stopPropagation()">${barSelect(barOf(p.key), `ntSetBar('${escAttr(p.key)}',this.value)`, `style="--c:${barType(barOf(p.key))?.color || 'transparent'}"`, barIsDefault(p.key))}</td>`
     : `<td>${barChip(barOf(p.key))}</td>`;
@@ -476,6 +479,31 @@ export function ntRowsHtml(evKey, query){
       <td style="font-size:var(--fs-11);white-space:nowrap">${got(p)}</td>
       <td style="font-size:var(--fs-11);white-space:nowrap">${ckCell(p)}</td></tr>`).join('')}
     </tbody></table></div>${more}`;
+}
+
+/* ── 휴대폰 — 명단은 표 대신 카드(표가 838px라 옆으로 밀어야 했다), 발급은 아래에 «미리보기 · 인쇄» 막대 ── */
+function mobileRowsHtml(shown, ci, done, srcPill, got, ckCell){
+  return shown.map(p => {
+    const c = nt.checkins.get(p.key), name = p.nameKo || p.nameEn;
+    const act = ci
+      ? (c ? `<button class="btn bs" onclick="event.stopPropagation();ntUncheck('${escAttr(p.key)}')">취소</button>`
+           : `<button class="btn bp" onclick="event.stopPropagation();ntCheckIn('${escAttr(p.key)}')"${nt.busy ? ' disabled' : ''}>체크인</button>`)
+      : `<input type="checkbox"${nt.picked.has(p.key) ? ' checked' : ''} onclick="event.stopPropagation()" onchange="ntPick('${escAttr(p.key)}',this.checked)" style="width:20px;height:20px">`;
+    return `<div class="nt-mrow${(ci ? c : nt.focus === p.key) ? ' on' : ''}"${ci ? '' : ` onclick="ntFocus('${escAttr(p.key)}')"`}>
+      <div class="nt-mrow-main">
+        <div><b>${name ? escapeHtml(name) : '<span style="color:var(--i4);font-weight:400">(이름 없음)</span>'}</b> ${srcPill(p)} ${barChip(barOf(p.key))}</div>
+        <div class="nt-note">${escapeHtml(p.orgKo || p.orgEn)}${p.titleKo || p.titleEn ? ' · ' + escapeHtml(p.titleKo || p.titleEn) : ''}</div>
+        <div class="nt-note">${ci ? ckCell(p) : `받음 ${got(p)}${c ? ` · 체크인 ${kst(c.checked_at)}` : ''}`}</div>
+      </div>${act}</div>`;
+  }).join('');
+}
+function mobileBarHtml(evKey){
+  if(!isMobile() || nt.view === 'checkin' || nt.netView) return '';
+  const n = nt.picked.size || (nt.focus ? 1 : 0);
+  if(!n && !nt.walkIn) return '';
+  return `<div class="nt-mbar"><span>${nt.walkIn ? '현장 신규' : `${n}명`}</span><div style="flex:1"></div>
+    <button class="btn bs" onclick="document.getElementById('nt-side')?.scrollIntoView({behavior:'smooth'})">미리보기 ↓</button>
+    <button class="btn bp" onclick="ntPrint()"${nt.busy ? ' disabled' : ''}>🖨 인쇄</button></div>`;
 }
 
 /* ── 오른쪽: 미리보기 · 고쳐 찍기 · 인쇄 · 최근 발급 ── */

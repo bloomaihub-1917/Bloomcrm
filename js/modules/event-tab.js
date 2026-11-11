@@ -591,16 +591,17 @@ function peopleHtml(ev){
       <span id="evdb-picked-n" style="font-size:var(--fs-11);color:var(--i4)">${picked ? picked + '명 선택' : ''}</span>
       <button class="btn" style="font-size:var(--fs-11)" onclick="confirmEvDbPeople(true)">참가 확정</button>
       <button class="btn" style="font-size:var(--fs-11)" onclick="confirmEvDbPeople(false)">확정 해제</button>
-      <button class="btn" style="font-size:var(--fs-11);color:var(--re)" onclick="deleteEvDbRegistrants()"
+      <button class="btn m-more" style="font-size:var(--fs-11)" onclick="this.parentElement.classList.toggle('m-open')">⋯ 더보기</button>
+      <button class="btn m-hide" style="font-size:var(--fs-11);color:var(--re)" onclick="deleteEvDbRegistrants()"
         title="등록 링크·엑셀로 들어온 신청자를 이 행사에서 지워요 — 다른 경로로 넣은 사람은 건드리지 않아요">신청자 삭제</button>
-      <button class="btn" style="font-size:var(--fs-11)" onclick="reloadEvDbPending(this)"
+      <button class="btn m-hide" style="font-size:var(--fs-11)" onclick="reloadEvDbPending(this)"
         title="등록 링크·엑셀로 들어온 신청을 서버에서 다시 받아 와요">⟳ 등록자 다시 불러오기</button>
-      <button class="btn" style="font-size:var(--fs-11)" onclick="openRegisterLinks('${escAttr(ev.key)}')"
+      <button class="btn m-hide" style="font-size:var(--fs-11)" onclick="openRegisterLinks('${escAttr(ev.key)}')"
         title="바깥 신청 링크·엑셀 명단 — 받은 신청은 확정할 때 마스터DB로 옮겨요">🔗 등록 링크</button>
-      <button class="btn" style="font-size:var(--fs-11)" onclick="openEvDbMailList()">메일 대상 모으기</button>
-      <button class="btn" style="font-size:var(--fs-11)" onclick="openEvDbUpload()"
+      <button class="btn m-hide" style="font-size:var(--fs-11)" onclick="openEvDbMailList()">메일 대상 모으기</button>
+      <button class="btn m-hide" style="font-size:var(--fs-11)" onclick="openEvDbUpload()"
         title="엑셀 명단을 마스터DB에 올리고 이 행사 참가자로 잇습니다 — 데이터 업로드 화면이 이 행사로 맞춰져 열려요">📤 명단 업로드</button>
-      <button class="btn bp" style="font-size:var(--fs-11)" onclick="exportEvDbPeople()">명단 내보내기 (${shown.length})</button>
+      <button class="btn bp m-hide" style="font-size:var(--fs-11)" onclick="exportEvDbPeople()">명단 내보내기 (${shown.length})</button>
     </div>
     <div id="evdb-rows" class="sec-rows">${peopleRowsHtml()}</div>`;
 }
