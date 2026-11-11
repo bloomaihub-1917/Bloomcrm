@@ -131,6 +131,7 @@ export async function fillPrintWindow(w, template, cards, opts = {}){
   const tp = { ...template, sheet: readSheet(template) };   // 이번 인쇄의 종이 — 창에서 바꾼다
   let a4 = tp.sheet !== 'fit';
   const per = readPer();
+  if(PER_PAGE.some(p => p[0] === opts.perPage)) per.n = opts.perPage;   // 빈 네임택은 처음부터 한 쪽에 4장
   /* 보정값은 실제로 찍는 종이 것 — 판 크기 그대로라도 2장·4장은 A4로 찍으니 A4 값 */
   const paperOf = () => tp.sheet === 'fit' && per.n === 1 ? tp : { ...tp, sheet: 'a4' };
   let offR = readOffset(paperOf()), offKey = offsetKey(paperOf());
@@ -191,7 +192,7 @@ ${styles}
     const pp = d.getElementById('pp'), gp = d.getElementById('gp');
     per.gap = Math.min(20, Math.max(0, Number(gp.value) || 0));
     per.n = PER_PAGE.some(p => p[0] === +pp.value) ? +pp.value : 1;
-    savePer(per);
+    if(!opts.perPage) savePer(per);   // 빈 네임택(4매)으로 연 창은 평소 장 수를 바꾸지 않는다
     /* 찍는 종이가 바뀌었으면(종이 고르기 · 1장 ↔ 여러 장) 그 종이의 보정값으로 */
     if(offsetKey(paperOf()) !== offKey){ offKey = offsetKey(paperOf()); offR = readOffset(paperOf()); putOffset(offR.o); }
     showSrc();
@@ -204,7 +205,7 @@ ${styles}
     const marks = onA4 && (per.n > 1 ? per.cutN : per.cut1);
     ct.checked = marks;
     d.getElementById('ctw').style.display = onA4 ? '' : 'none';
-    savePer(per);
+    if(!opts.perPage) savePer(per);   // 빈 네임택(4매)으로 연 창은 평소 장 수를 바꾸지 않는다
     d.getElementById('pgsz').textContent = `@page{size:${paper.width_mm}mm ${paper.height_mm}mm;margin:0}`;
     d.getElementById('sheet').innerHTML = pagesHtml(template, cards, onA4, per.n, per.gap, marks, o.top + o.y);
     const pages = Math.ceil(cards.length / per.n);

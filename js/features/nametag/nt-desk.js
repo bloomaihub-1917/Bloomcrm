@@ -429,7 +429,8 @@ export function ntPartHtml(ev, query){
       <div style="flex:1"></div>
       ${ci ? '' : `<span class="nt-note" title="용지·글자 자리·기본 말·하단바 종류는 설정 › 행사 상세 › 네임택에서 정해요">판 ${t.width_mm} × ${t.height_mm}mm · ${escapeHtml((LANG_OPTIONS.find(o => o[0] === t.lang) || LANG_OPTIONS[0])[1].replace(/ \(.*\)/, ''))}${t.sheet === 'fit' ? '' : ' · A4 맨 위 가운데'}${t.id ? '' : ' (기본값)'}</span>
       <button class="btn bs" onclick="ntOpenEditor()" title="설정 › 행사 상세 › 네임택 — 용지 크기·글자 자리·배경·하단바 종류">판 고치기</button>
-      <button class="btn bs" onclick="ntWalkIn(true)" title="명단에 없는 사람 — 현장 출력으로 뽑으면 체크인으로도 남고, 나중에 마스터DB에 올려요">＋ 현장 신규</button>`}
+      <button class="btn bs" onclick="ntWalkIn(true)" title="명단에 없는 사람 — 현장 출력으로 뽑으면 체크인으로도 남고, 나중에 마스터DB에 올려요">＋ 현장 신규</button>
+      <button class="btn bs" onclick="ntPrintBlank()" title="이름 없이 배경만 — A4 한 장에 4매. 손으로 쓸 여분 네임택. 기록은 남기지 않아요">빈 네임택 4매</button>`}
     </div>
     <div class="sec-rows nt-layout">
       <div id="evdb-rows">${ntRowsHtml(ev.key, query)}</div>
@@ -727,6 +728,14 @@ export async function ntPrint(){
   const ev = nt.ev;
   await fillPrintWindow(w, nt.template, rows, { onUnprinted: () => unprinted(ev, rows, onsite) });
 }
+/* 빈 네임택 — 이름·소속 없이 판 배경만, A4 한 장에 4매(2026-11-11). 손으로 쓸 여분이라 발급 기록은 남기지 않는다.
+   배경을 «가늠자»로만 둔 판(인쇄에 배경 안 찍음)이어도 이때는 배경을 찍는다. 더 필요하면 인쇄 대화상자의 매수로 */
+export function ntPrintBlank(){
+  if(!nt.template.background_data) return alert('이 판에 배경이 없어요. 설정 › 행사 상세 › 네임택에서 배경을 넣어 주세요.');
+  const w = openPrintWindow();
+  if(!w) return alert('인쇄 창이 막혔어요. 브라우저 주소창 오른쪽에서 이 사이트의 팝업을 허용해 주세요.');
+  fillPrintWindow(w, { ...nt.template, background_print: true }, Array.from({ length: 4 }, () => ({ name: '' })), { perPage: 4 });
+}
 /* 인쇄 창에서 «인쇄»를 한 번도 안 누르고 닫았다 — 방금 남긴 발급(과 현장 출력 체크인)을 되돌릴지 묻는다 */
 function unprinted(ev, rows, onsite){
   if(nt.ev !== ev) return;
@@ -960,7 +969,7 @@ export async function ntPromote(){
   nt.busy = false; rerender();
 }
 
-Object.assign(window, { ntSetView, ntSetOnsite, ntSetFilter, ntSetSrc, ntSetBarFil, ntSetSort, ntFocus, ntPick, ntPickAll, ntEdit, ntWalkIn, ntWalkEdit,
+Object.assign(window, { ntPrintBlank, ntSetView, ntSetOnsite, ntSetFilter, ntSetSrc, ntSetBarFil, ntSetSort, ntFocus, ntPick, ntPickAll, ntEdit, ntWalkIn, ntWalkEdit,
   ntSetReason, ntReload, ntOpenEditor, ntPrint, ntVoid, ntSetBar, ntSetBarPicked, ntWalkContact, ntCheckIn, ntUncheck,
   ntScanKey, ntCamera, ntExport, ntImportBars, ntImportApply, ntImportCancel, ntPromote,
   ntNetView, ntSendNow, ntRetryFailed, ntDismissFailed, ntExportDeviceLog });
