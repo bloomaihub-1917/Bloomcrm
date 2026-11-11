@@ -5,6 +5,7 @@
    다시 받아야 하는데, 찍을 값은 이미 발급 기록으로 손에 있다.
    - 팝업 차단을 피하려면 단추를 누른 그 순간 창을 열어야 한다 → openPrintWindow()로 먼저 열고,
      발급 기록이 오면 fillPrintWindow()로 그린다
+   - 창을 연다고 바로 인쇄 대화상자를 띄우지 않는다. 창 위 «인쇄»를 눌러야 연다(보정·장 수를 먼저 고르게)
    - @page 크기를 판 크기로 만들어 붙인다. 한 장 = 한 쪽
      출력 종이가 A4(sheet 'a4')면 A4 세로 한 쪽의 맨 위 가운데에 한 장씩 — 작은 종이를 그 크기로
      알려 주면 프린터가 안 받아서, A4로 알려 주고 네임택 종이를 그대로 넣어 위쪽만 찍는다.
@@ -141,10 +142,17 @@ ${styles}
   apply();
   ['dx', 'dy', 'sc', 'dt'].forEach(id => d.getElementById(id).addEventListener('change', () => { saveOffset(apply()); if(id !== 'dx' && id !== 'sc') layout(); }));
   ['pp', 'gp'].forEach(id => d.getElementById(id)?.addEventListener('change', layout));
-  d.getElementById('go').addEventListener('click', () => w.print());
+  /* 인쇄 대화상자는 «인쇄»를 눌렀을 때만 연다 — 창이 열리자마자 띄우면 대화상자가 두 개(이 창 · 프린터)로 보여 헷갈렸다(2026-11-11).
+     누르면 글꼴·그림(QR)이 다 그려질 때까지 기다렸다가 연다 */
+  const go = d.getElementById('go');
+  go.addEventListener('click', async () => {
+    go.disabled = true; go.textContent = '준비 중…';
+    try { await readyToPrint(d); w.focus(); w.print(); }
+    finally { go.disabled = false; go.textContent = '인쇄'; }
+  });
   d.getElementById('cl').addEventListener('click', () => w.close());
 
   await readyToPrint(d);
   w.focus();
-  w.print();
+  go.focus();   // Enter로 바로 찍게
 }
