@@ -39,6 +39,12 @@ const readOffset = (t) => {
   } catch { return normalizeOffset(t.print_offset); }
 };
 const saveOffset = (t, o) => { try { localStorage.setItem(offsetKey(t), JSON.stringify(o)); } catch {} };
+/* 출력 종이 — 인쇄 창에서 고른다(2026-11-11). 프린터마다 받는 종이가 달라 이 PC에, 판 크기마다 기억한다.
+   고른 적이 없으면 판에 정한 종이(설정 › 행사 상세 › 네임택) */
+const SHEET_KEY = 'nametag.sheet.v1';
+const sizeKey = (t) => `${t.width_mm}x${t.height_mm}`;
+const readSheet = (t) => { try { const v = JSON.parse(localStorage.getItem(SHEET_KEY) || '{}')[sizeKey(t)]; return v === 'fit' || v === 'a4' ? v : t.sheet === 'fit' ? 'fit' : 'a4'; } catch { return t.sheet === 'fit' ? 'fit' : 'a4'; } };
+const saveSheet = (t, v) => { try { const m = JSON.parse(localStorage.getItem(SHEET_KEY) || '{}'); m[sizeKey(t)] = v; localStorage.setItem(SHEET_KEY, JSON.stringify(m)); } catch {} };
 
 /* 한 쪽에 몇 장 — [장 수, 가로 칸, 세로 줄, 이름] */
 const PER_PAGE = [[1, 1, 1, '1장'], [2, 1, 2, '2장 (위·아래)'], [4, 2, 2, '4장 (2 × 2)']];
@@ -97,8 +103,9 @@ export function openPrintWindow(){
 export async function fillPrintWindow(w, template, cards){
   if(!w || w.closed) return;
   const css = (p) => new URL(p, location.href).href;
-  const off = readOffset(template);
-  const a4 = template.sheet !== 'fit';
+  const tp = { ...template, sheet: readSheet(template) };   // 이번 인쇄의 종이 — 창에서 바꾼다
+  let a4 = tp.sheet !== 'fit';
+  const off = readOffset(tp);
   const per = readPer();
   /* 스타일은 글자로 넣는다 — 인쇄 창은 따로 받지 않아도 되게(끊겨도 기기에 둔 것으로, sw.js).
      화면이 실제로 읽은 주소(배포 때 붙는 ?v=…까지)로 받는다. 못 받으면 예전처럼 링크로 */
@@ -117,6 +124,9 @@ ${styles}
 <div class="nt-print-bar no-print">
   <span><b>${cards.length}장</b><span id="pg"></span>${barSummary(template, cards)} · ${template.width_mm} × ${template.height_mm}mm<span id="psz"></span>${cards.length <= 3 ? ' · ' + escapeHtml(cards.map(c => c.name).join(', ')) : ''}</span>
   <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <label title="프린터에 넣는 종이 — 이 PC에 기억해요. 인쇄 보정도 종이마다 따로예요">종이 <select id="sh">
+      <option value="a4"${a4 ? ' selected' : ''}>A4 (맨 위 가운데)</option>
+      <option value="fit"${a4 ? '' : ' selected'}>판 크기 그대로 (${template.width_mm} × ${template.height_mm}mm)</option></select></label>
     <label title="한 쪽에 몇 장씩 — 이 PC에 기억해요. 쪽 크기는 왼쪽에 보여요">한 쪽에 <select id="pp">${PER_PAGE.map(p =>
       `<option value="${p[0]}"${p[0] === per.n ? ' selected' : ''}>${p[3]}</option>`).join('')}</select></label>
     <label title="여러 장일 때 네임택 사이 간격">간격 <input id="gp" type="number" min="0" max="20" step="0.5" value="${per.gap}">mm</label>
@@ -130,7 +140,7 @@ ${styles}
   </span>
 </div>
 <div class="nt-sheet" id="sheet"></div>
-<p class="no-print" style="font-size:12px;color:#888;text-align:center">인쇄 대화상자에서 용지 크기를 위에 적힌 대로(2장·4장은 A4), «여백 없음», 배율 100%로 찍어 주세요. 안 나온 장은 데스크의 최근 발급에서 «안 됨»으로 되돌려요.</p>
+<p class="no-print" style="font-size:12px;color:#888;text-align:center">인쇄 대화상자에서 용지 크기를 위에서 고른 종이대로(2장·4장은 A4), «여백 없음», 배율 100%로 찍어 주세요. 안 나온 장은 데스크의 최근 발급에서 «안 됨»으로 되돌려요.</p>
 </body></html>`);
   w.document.close();
 
@@ -173,7 +183,15 @@ ${styles}
   };
   layout();
   apply();
-  ['dx', 'dy', 'sc', 'dt'].forEach(id => d.getElementById(id).addEventListener('change', () => { saveOffset(template, apply()); if(id !== 'dx') layout(); }));
+  ['dx', 'dy', 'sc', 'dt'].forEach(id => d.getElementById(id).addEventListener('change', () => { saveOffset(tp, apply()); if(id !== 'dx') layout(); }));
+  /* 종이를 바꾸면 그 종이의 보정값으로 바꿔 끼우고 쪽을 다시 짠다 */
+  d.getElementById('sh').addEventListener('change', (e) => {
+    tp.sheet = e.target.value === 'fit' ? 'fit' : 'a4'; a4 = tp.sheet !== 'fit';
+    saveSheet(template, tp.sheet);
+    const o = readOffset(tp);
+    d.getElementById('dx').value = o.x; d.getElementById('dy').value = o.y; d.getElementById('dt').value = o.top; d.getElementById('sc').value = o.scale;
+    apply(); layout();
+  });
   ['pp', 'gp', 'ct'].forEach(id => d.getElementById(id)?.addEventListener('change', layout));
   /* 인쇄 대화상자는 «인쇄»를 눌렀을 때만 연다 — 창이 열리자마자 띄우면 대화상자가 두 개(이 창 · 프린터)로 보여 헷갈렸다(2026-11-11).
      누르면 글꼴·그림(QR)이 다 그려질 때까지 기다렸다가 연다 */
