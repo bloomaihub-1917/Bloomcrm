@@ -62,7 +62,11 @@
 .nt-sheet{display:flex;flex-wrap:wrap;gap:16px;justify-content:center}
 .nt-page{display:flex;justify-content:center;align-items:flex-start}
 /* 한 쪽에 여러 장 — 칸 너비는 판 너비, 간격은 인쇄 창에서(nt-print.js) */
-.nt-grid{display:grid;justify-content:center;align-content:start}
+.nt-grid{display:grid;justify-content:center;align-content:start;position:relative}
+/* 칼선(재단선) — 묶음 바깥에만. 위치·길이는 nt-print.js cutMarks */
+.nt-trim{position:absolute;display:block;background:#000;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+.nt-trim.v{width:0.2mm;margin-left:-0.1mm}
+.nt-trim.h{height:0.2mm;margin-top:-0.1mm}
 .nt-a4{width:210mm;height:296mm;background:#fff;display:flex;justify-content:center;align-items:flex-start;overflow:hidden;box-shadow:var(--sh)}
 .nt-a4 .nt-shift{transform-origin:top center}
 .nt-a4 .nt-frame{box-shadow:none}
