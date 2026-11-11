@@ -735,9 +735,7 @@ function unprinted(ev, rows, onsite){
   if(!confirm(`인쇄하지 않고 인쇄 창을 닫았어요.
 방금 발급한 ${live.length}장(${live.slice(0, 3).map(r => r.name || '이름 없음').join(', ')}${live.length > 3 ? ' 외' : ''})을 «안 됨»으로 되돌릴까요?`
     + (ck.length ? `
-함께 남긴 체크인 ${ck.length}건도 취소해요.` : '') + '
-
-실제로 뽑았으면 «취소»를 눌러 주세요.')) return;
+함께 남긴 체크인 ${ck.length}건도 취소해요.` : '') + '\n\n실제로 뽑았으면 «취소»를 눌러 주세요.')) return;
   const by = currentUser?.email || '';
   live.forEach(r => {
     const op = { kind: 'void', at: new Date().toISOString(), data: { id: r.id, name: r.name, by } };
