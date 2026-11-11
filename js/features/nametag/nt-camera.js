@@ -6,6 +6,8 @@
    - 읽기: 브라우저에 BarcodeDetector가 있으면 그것(안드로이드 크롬·맥), 없으면 jsQR(윈도 크롬 등)을 그때 불러 쓴다
    - 같은 QR이 계속 비쳐도 COOLDOWN 동안은 다시 부르지 않는다(한 번 비추면 한 번)
    - 창은 화면 구석에 떠 있다. 명단을 다시 그려도 카메라가 꺼지지 않게 데스크 밖(body)에 둔다
+   - ⛶ 전체 화면(2026-11-11): 태블릿·노트북을 입구에 세워 두고 쓰게 창을 화면 가득 키운다. 브라우저 전체 화면도 함께
+     요청한다(안 되는 기기 — 아이폰 사파리 — 는 창만 가득). 다시 누르거나 Esc로 줄인다. 고른 크기는 이 기기에 기억
    - 카메라는 https(또는 localhost)에서만 켜진다
 ═══════════════════════════════════════════════════════════════ */
 import { escapeHtml } from '../../utils.js';
@@ -15,6 +17,7 @@ const JSQR_URL = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
 const COOLDOWN = 4000;   // 같은 QR을 다시 받기까지(ms)
 const EVERY = 120;       // 몇 ms마다 한 번 읽을지 — 휴대폰이 뜨거워지지 않게
 
+const FULL_KEY = 'nametag.camera-full.v1';
 const cam = { stream: null, raf: 0, last: 0, seen: new Map(), detector: null, onScan: null, busy: false, facing: 'environment', alive: null };
 
 function loadJsQR(){
@@ -47,14 +50,36 @@ function panel(){
   el.innerHTML = `<div class="nt-cam-head"><b>📷 카메라 체크인</b>
       <span style="flex:1"></span>
       <button type="button" class="btn bs" data-act="flip" title="앞·뒤 카메라 바꾸기">↺</button>
+      <button type="button" class="btn bs" data-act="full" title="화면 가득 키우기 · 줄이기 (Esc로도 줄여요)">⛶ 전체 화면</button>
       <button type="button" class="btn bs" data-act="close">끄기</button></div>
     <div class="nt-cam-view"><video playsinline muted></video><div class="nt-cam-aim"></div></div>
     <div class="nt-cam-msg" data-state="idle">네임택 QR을 네모 안에 비춰 주세요</div>`;
   document.body.appendChild(el);
   el.querySelector('[data-act="close"]').addEventListener('click', closeCamera);
   el.querySelector('[data-act="flip"]').addEventListener('click', () => { cam.facing = cam.facing === 'environment' ? 'user' : 'environment'; start(); });
+  el.querySelector('[data-act="full"]').addEventListener('click', () => setFull(!el.classList.contains('full')));
   return el;
 }
+
+/* 전체 화면 — 창을 화면 가득(클래스 full) + 되면 브라우저 전체 화면 */
+function setFull(on, remember = true){
+  const el = document.getElementById('nt-cam');
+  if(!el) return;
+  el.classList.toggle('full', on);
+  el.querySelector('[data-act="full"]').textContent = on ? '⛶ 작게' : '⛶ 전체 화면';
+  if(remember){ try { localStorage.setItem(FULL_KEY, on ? '1' : ''); } catch {} }
+  if(on){ if(!document.fullscreenElement) el.requestFullscreen?.().catch(() => {}); }
+  else if(document.fullscreenElement === el) document.exitFullscreen?.().catch(() => {});
+}
+/* 브라우저 전체 화면에서 Esc로 빠지면 창도 줄인다 */
+document.addEventListener('fullscreenchange', () => {
+  const el = document.getElementById('nt-cam');
+  if(el?.classList.contains('full') && !document.fullscreenElement) setFull(false);
+});
+/* 브라우저 전체 화면을 못 쓰는 기기에서도 Esc로 줄인다 */
+document.addEventListener('keydown', (e) => {
+  if(e.key === 'Escape' && !document.fullscreenElement && document.getElementById('nt-cam')?.classList.contains('full')) setFull(false);
+});
 
 function show(state, html){
   const m = document.querySelector('#nt-cam .nt-cam-msg');
@@ -144,6 +169,9 @@ export async function openCamera(onScan, alive){
   if(!navigator.mediaDevices?.getUserMedia) return alert('이 브라우저에서는 카메라를 쓸 수 없어요. https 주소로 열었는지 확인해 주세요.');
   cam.onScan = onScan; cam.alive = alive || null; cam.seen.clear();
   panel();
+  /* 지난번에 전체 화면으로 썼으면 창만 가득(브라우저 전체 화면은 누른 순간에만 요청할 수 있다) */
+  let full = false; try { full = localStorage.getItem(FULL_KEY) === '1'; } catch {}
+  if(full) setFull(true, false);
   show('idle', '카메라를 켜는 중…');
   if('BarcodeDetector' in window){
     try { if((await window.BarcodeDetector.getSupportedFormats()).includes('qr_code')) cam.detector = new window.BarcodeDetector({ formats: ['qr_code'] }); }
@@ -158,6 +186,7 @@ export async function openCamera(onScan, alive){
 
 export function closeCamera(){
   stopStream();
+  if(document.fullscreenElement?.id === 'nt-cam') document.exitFullscreen?.().catch(() => {});
   document.getElementById('nt-cam')?.remove();
 }
 export const cameraOn = () => !!document.getElementById('nt-cam');

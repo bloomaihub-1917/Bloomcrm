@@ -120,6 +120,13 @@
 .nt-cam-msg[data-state="ok"]{background:var(--g);color:#fff;font-weight:700}
 .nt-cam-msg[data-state="warn"]{background:var(--ab);color:var(--am);font-weight:700}
 .nt-cam-msg[data-state="bad"]{background:var(--rb);color:var(--re);font-weight:700}
+/* 전체 화면 — 입구에 세워 둔 태블릿·노트북. 영상이 남는 자리를 다 쓰고, 알림 글자를 멀리서도 보이게 키운다 */
+#nt-cam.full{inset:0;width:auto;border:0;border-radius:0;box-shadow:none}
+#nt-cam.full .nt-cam-head{font-size:var(--fs-16);padding:10px 14px}
+#nt-cam.full .nt-cam-view{flex:1;min-height:0;aspect-ratio:auto}
+#nt-cam.full .nt-cam-aim{inset:auto;left:50%;top:50%;width:min(60vw,55vh);aspect-ratio:1/1;transform:translate(-50%,-50%)}
+#nt-cam.full .nt-cam-msg{min-height:18vh;font-size:clamp(20px,4vh,40px)}
+#nt-cam.full .nt-cam-msg b{font-size:clamp(28px,6vh,64px)}
 @media (max-width:600px){ #nt-cam{left:8px;right:8px;bottom:8px;width:auto} .nt-cam-view{aspect-ratio:4/3} }
 
 /* ── 판 편집기 — 설정 › 행사 상세 › 네임택 ── */
