@@ -48,6 +48,7 @@ const nt = {
   src: '',               // '' | 'speaker' | 'exh' | 'part' | 'walk_in'
   barFil: '',            // '' | '_none'(미정) | 하단바 종류 id
   sort: readSort(),      // 'org'(소속 → 이름) | 'kind'(구분 → 이름) | 'name'(이름) — 이 기기에 기억(nametag.sort.v1)
+  alias: new Map(),      // 옛 키(s<연사>·x<담당자>) → 지금 키(c<연락처>) — foldAliases
   picked: new Set(), focus: '',
   edits: new Map(),      // person_key → { name, company, job_title, badge, lang }
   walkIn: null,          // 현장 신규 입력 중이면 { name, company, job_title, badge, bar, email, phone }
@@ -65,7 +66,7 @@ function ensureLoaded(evKey){
   if(nt.ev !== evKey){
     Object.assign(nt, { ev: evKey, loaded: '', err: '', template: normalizeTemplate(null), prints: [], focus: '', walkIn: null,
       reason: '', imp: null, onsite: null, since: '', barFil: '', syncedAt: '', netView: false });
-    nt.picked.clear(); nt.edits.clear(); nt.people.clear(); nt.checkins.clear();
+    nt.picked.clear(); nt.edits.clear(); nt.people.clear(); nt.checkins.clear(); nt.alias.clear();
   }
   if(nt.loaded === evKey || nt.loading) return;
   nt.loading = true;
@@ -89,7 +90,21 @@ function takeFull(j){
   /* 기기에 둔 마지막 답이면(끊김) 받은 시각은 그 답의 시각 */
   nt.syncedAt = j._cached ? j.now || '' : new Date().toISOString();
   applyPending();
+  foldAliases();
   markNet(!j._cached, j._cached ? '인터넷에 연결되지 않았어요 — 기기에 둔 명단으로 열었어요' : '');
+}
+/* 옛 키로 남은 기록을 지금 키로 — 연사·부스 담당자가 마스터DB 연락처에 이어지면 키가 s<연사 id>·x<담당자 id>에서
+   c<연락처 id>로 바뀐다. 그 전에 정한 하단바·체크인·발급이 «미정·안 받음»으로 보였다(2026-11-11 KHIDI-AI 연사 18명).
+   서버 기록은 그대로 두고 화면에서 이어 붙인다. 지금 키에 이미 기록이 있으면 그것이 먼저(더 새것) */
+function foldAliases(){
+  if(!nt.ev) return;
+  nt.alias = new Map(ntPeople(nt.ev).filter(p => p.alt).map(p => [p.alt, p.key]));
+  nt.alias.forEach((key, alt) => {
+    const pe = nt.people.get(alt);
+    if(pe){ if(!nt.people.has(key)) nt.people.set(key, { ...pe, person_key: key, _alt: alt }); nt.people.delete(alt); }
+    const ck = nt.checkins.get(alt);
+    if(ck){ if(!nt.checkins.has(key)) nt.checkins.set(key, { ...ck, person_key: key }); nt.checkins.delete(alt); }
+  });
 }
 /* 조용히 다시 받기 — 서버가 기기 기록 하나를 받지 않았을 때 등. 화면을 «불러오는 중»으로 바꾸지 않는다 */
 async function resync(){
@@ -205,6 +220,7 @@ function mergeLive(j){
   (j.people || []).forEach(p => nt.people.set(p.person_key, p));
   if(j.now) nt.since = j.now;
   applyPending();
+  foldAliases();
 }
 function refreshLists(){
   const st = document.getElementById('nt-stats');
@@ -272,9 +288,10 @@ function printedMap(){
   const m = new Map();
   nt.prints.forEach(p => {
     if(p.voided_at || !p.person_key) return;
-    const v = m.get(p.person_key) || { n: 0, last: '' };
+    const k = nt.alias?.get(p.person_key) || p.person_key;   // 옛 키로 뽑은 것도(foldAliases)
+    const v = m.get(k) || { n: 0, last: '' };
     v.n++; if(p.printed_at > v.last) v.last = p.printed_at;
-    m.set(p.person_key, v);
+    m.set(k, v);
   });
   return m;
 }
@@ -367,6 +384,7 @@ export function ntPartHtml(ev, query){
   if(nt.err) return `<div class="sec"><div class="nt-warn">네임택 기록을 못 불러왔어요 — ${escapeHtml(nt.err)}
     <button class="btn bs" onclick="ntReload()">다시</button></div></div>`;
   startPolling();
+  foldAliases();   // 그사이 연락처에 이어진 사람이 있으면
   const t = nt.template;
   const seg = (cur, list, fn) => `<div class="seg">${list.map(([k, l]) =>
     `<button class="seg-b${cur === k ? ' on' : ''}" onclick="${fn}('${k}')">${l}</button>`).join('')}</div>`;

@@ -46,7 +46,7 @@ export function ntPeople(evKey){
     const cid = s(sp.contact_id);
     const c = cid ? byId.get(cid) : null;
     put({ email: s(c?.email1) || s(sp.email),
-      key: cid ? `c${cid}` : `s${sp.id}`, source: 'speaker', ref_id: s(sp.id), contact_id: cid,
+      key: cid ? `c${cid}` : `s${sp.id}`, alt: cid ? `s${sp.id}` : '', source: 'speaker', ref_id: s(sp.id), contact_id: cid,
       nameKo: s(sp.name_snapshot), nameEn: s(sp.name_en), orgKo: s(sp.org_ko), orgEn: s(sp.org_en),
       titleKo: s(sp.title_ko), titleEn: s(sp.title_en), badgeKo: '연사', badgeEn: 'Speaker',
       confirmed: sp.status === '확정' || !!sp.confirmed_at,
@@ -62,7 +62,7 @@ export function ntPeople(evKey){
     const name = s(ec.name) || s(c?.nameKo) || s(c?.nameEn);
     if(!name) return;
     put({ email: s(ec.email) || s(c?.email1),
-      key: cid ? `c${cid}` : `x${ec.id}`, source: 'exh', ref_id: s(ec.id), contact_id: cid,
+      key: cid ? `c${cid}` : `x${ec.id}`, alt: cid ? `x${ec.id}` : '', source: 'exh', ref_id: s(ec.id), contact_id: cid,
       nameKo: HANGUL.test(name) ? name : s(c?.nameKo), nameEn: s(c?.nameEn) || (HANGUL.test(name) ? '' : name),
       orgKo: s(o?.name_ko) || s(x.company_name), orgEn: s(o?.name_en) || s(x.book_name_en),
       titleKo: s(c?.titleKo), titleEn: s(c?.titleEn),
