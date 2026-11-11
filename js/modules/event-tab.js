@@ -36,6 +36,7 @@ import { trackAction, changed as changeMeta } from '../core/audit-log.js';
 import { sanitizeForCsv } from './audit-tab.js';
 import { pendingFor, fetchPending, onPendingChange, acceptPending, dropPending } from './register-links.js';
 import { ntPartHtml, ntRowsHtml } from '../features/nametag/nt-desk.js';
+import { autoLinkEvent } from '../features/conference/sp-autolink.js';
 
 /* ── 모듈 상태 ──
    고른 행사와 보고 있는 화면. 다른 탭이 알 필요가 없어 state.js로 올리지 않는다. */
@@ -254,6 +255,8 @@ export function renderEvDb(){
   const el = document.getElementById('evdb-body');
   if(!el) return;
   const ev = EVENT_LIST.find(e => e.key === evdbEvent);
+  /* 연사 화면에만 있고 마스터DB에 없는 연사를 이어 참가자로 나오게 한다(sp-autolink.js) */
+  if(ev) autoLinkEvent(ev.key, () => renderEvDb());
 
   const ttl = document.getElementById('evdb-ttl');
   if(ttl) ttl.innerHTML = `행사 DB <span class="tb-s">${ev

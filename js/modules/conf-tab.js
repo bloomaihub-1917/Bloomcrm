@@ -69,6 +69,7 @@ import { renderWatchView, initWatchFolders } from './exh-watch.js';
 
 /* 10개 함수를 ../features/conference/conf-common.js로 옮겼다 — 이 파일에서도 쓰고, 옛 경로로 가져가는 곳도 있어 다시 내보낸다 */
 import { consentRefused, reuseState, setConfLockEv, onConfLockFallback, confLocked, confLockNotice, guardConf, MEAL_TITLE, isHiddenSp, isBreak , speakerName, syncPartRole } from '../features/conference/conf-common.js';
+import { autoLinkEvent } from '../features/conference/sp-autolink.js';
 export { consentRefused, reuseState, setConfLockEv, onConfLockFallback, confLocked, confLockNotice, guardConf, MEAL_TITLE, isHiddenSp, isBreak , speakerName, syncPartRole } from '../features/conference/conf-common.js';
 
 
@@ -217,6 +218,8 @@ export function renderConf(){
     body.innerHTML = emptyBox('행사를 고르면 프로그램과 연사가 보여요.');
     return;
   }
+  /* 마스터DB에 연결 안 된 연사를 이어 참가자 목록에도 나오게 한다(sp-autolink.js) */
+  if(!confLocked()) autoLinkEvent(ev.key, () => renderConf());
   if(evPartState(ev.key, 'conf') === 'none'){
     body.innerHTML = emptyBox(
       `이 행사는 <b>컨퍼런스</b> 파트가 꺼져 있어요.<br>`

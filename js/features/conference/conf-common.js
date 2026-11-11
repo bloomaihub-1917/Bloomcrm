@@ -5,6 +5,7 @@
 
 import { SESSION_SPEAKERS, evPartDone, assignmentsFor, getSpeakerById, participations, EXH_CFG } from '../../state.js';
 import { postToSheet } from '../../api.js';
+import { td } from '../../utils.js';
 import { saveExhCfgToSheet } from '../../api/settings-save.js';
 import { trackAction } from '../../core/audit-log.js';
 import { makePartLock } from '../../core/part-lock.js';
@@ -65,17 +66,19 @@ export async function syncPartRole(spId){
   const sp = getSpeakerById(spId);
   if(!sp || !sp.contact_id) return;
   const roles = assignmentsFor(spId).map(a => a.role);
-  if(!roles.length) return;
-  const want = roles.every(r => r === 'VIP') ? 'VIP' : '연사';
+  /* 세션 배정 전이어도 연사로 넣는다 — 배정을 기다리면 참가자 목록에서 빠진다 */
+  const want = roles.length && roles.every(r => r === 'VIP') ? 'VIP' : '연사';
   const p = participations.find(x => String(x.contactId) === String(sp.contact_id)
     && x.eventId === sp.event_id && (x.role === '연사' || x.role === 'VIP'));
   if(!p){
     /* 참가 기록이 없으면 만든다 — 연사 화면이 정본이고 마스터DB는 따라온다 */
     const part = { id: `P-${Date.now()}-0`, eventId: sp.event_id, event: sp.event_id,
       // 참여 기록의 contactId는 숫자다(api.js가 +r.cid로 읽는다) — 문자열이면 === 비교에서 빠진다
-      contactId: Number(sp.contact_id), contact: '', role: want, note: '', matched: '✅ 연사 화면에서 추가' };
+      contactId: Number(sp.contact_id), contact: '', role: want, note: '', matched: '✅ 연사 화면에서 추가',
+      // 확정된 연사는 참가 확정으로 — 아니면 타겟
+      confirmedAt: sp.status === '확정' ? td() : '' };
     const r = await postToSheet({ sheet: 'participations',
-      row: [part.id, part.eventId, '', part.contactId, '', '', '', part.role, part.note, part.matched] },
+      row: [part.id, part.eventId, '', part.contactId, '', '', '', part.role, part.note, part.matched, part.confirmedAt] },
       '행사 참가 추가', { silent: true });
     if(!r || !r.ok) return;
     participations.push(part);
