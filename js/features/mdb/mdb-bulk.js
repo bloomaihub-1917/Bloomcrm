@@ -14,7 +14,7 @@ import { CONTACT_ATTEMPTS, CO_DB, EVENT_LIST, SALES_TARGETS, EXHIBITORS, EXH_CON
 import { countryOptions, escAttr, escapeHtml, personName, td } from '../../utils.js';
 import { coList } from '../../domain/rounds.js';
 import { mdbUi } from './mdb-ui.js';
-import { MDB_CAT_VALUES, buildMDBEvList, clearMDBSelection, matchesQuery, matchesTagFilter, mdbFilterPairs, pickChanged, renderMDB, setContactTag } from '../../modules/db-tab.js';
+import { mdbCatOK, buildMDBEvList, clearMDBSelection, matchesQuery, matchesTagFilter, mdbFilterPairs, pickChanged, renderMDB, setContactTag } from '../../modules/db-tab.js';
 
 /* ══════════════════════════════════════════
    마스터DB 선택 → 행사에 초청
@@ -510,17 +510,8 @@ export function getMDBPairs(){
   if(mdbEvFilter){
     // 특정 행사 — participations 기준
     let evParts = participations.filter(p => p.eventId === mdbEvFilter);
-    if(mdbCat !== 'all' && !MDB_CAT_VALUES.includes(mdbCat)){
-      // 태그(BD/C-level/커스텀) — cat이 아니라 연락처의 영구 태그로 직접 검사(다른 카테고리와 비배타적)
-      evParts = evParts.filter(p => matchesTagFilter(getContactById(p.contactId), mdbCat));
-    } else if(mdbCat !== 'all'){
-      // "전체"와 동일하게: 연락처 자체의 cat 또는 참가 역할 둘 중 하나라도 맞으면 포함
-      evParts = evParts.filter(p => {
-        const c = getContactById(p.contactId);
-        if(c && c.cat === mdbCat) return true;
-        return ROLE_TO_CAT[p.role] === mdbCat;
-      });
-    }
+    // 칩(역할/태그) — 행사를 골랐으면 그 행사에서의 역할만 본다
+    if(mdbCat !== 'all') evParts = evParts.filter(p => mdbCatOK(getContactById(p.contactId), p));
     if(mdbTypeFilter) evParts = evParts.filter(p => (p.role || '참가자') === mdbTypeFilter);
     // 한 행사당 한 사람은 1번만 (카테고리 필터 이후에 중복 제거해야 다중 트랙 참가자가 안 빠짐)
     const seenCids = new Set();
@@ -534,15 +525,7 @@ export function getMDBPairs(){
     pairs = contacts
       .filter(c => { if(seenIds.has(c.id)) return false; seenIds.add(c.id); return true; })
       .map(c => ({ c, p: null }));
-    if(mdbCat !== 'all' && !MDB_CAT_VALUES.includes(mdbCat)){
-      // 태그(BD/C-level/커스텀) — cat이 아니라 연락처의 영구 태그로 직접 검사(다른 카테고리와 비배타적)
-      pairs = pairs.filter(({c}) => matchesTagFilter(c, mdbCat));
-    } else if(mdbCat !== 'all'){
-      pairs = pairs.filter(({c}) => {
-        if(c.cat === mdbCat) return true;
-        return participations.some(p => p.contactId === c.id && ROLE_TO_CAT[p.role] === mdbCat);
-      });
-    }
+    if(mdbCat !== 'all') pairs = pairs.filter(({c}) => mdbCatOK(c, null));
   }
 
   pairs = mdbFilterPairs(pairs);

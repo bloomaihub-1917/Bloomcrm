@@ -165,6 +165,35 @@ export function contactOrgEn(c){
   const o = c.org_id ? getOrgById(c.org_id) : null;
   return (o && o.name_en) || '';
 }
+/* 역할은 사람이 아니라 «사람 × 행사»에 붙는다(participations.role) — 사람 카테고리(contacts.cat)는
+   더 이상 거르기·표시에 쓰지 않는다(2026-11-12). 참여 기록이 없는 사람은 NO_ROLE로 거른다. */
+export const NO_ROLE = '__none';
+let _roleIdx = null, _roleIdxKey = '';
+function roleIndex(){
+  const key = participations.length + ':' + participations.reduce((n, p) => n + (p.role || '').length, 0);
+  if(_roleIdx && _roleIdxKey === key) return _roleIdx;
+  const evDate = new Map(EVENT_LIST.map(e => [e.key, e.date || '']));
+  const m = new Map();
+  participations.forEach(p => {
+    const k = String(p.contactId), r = p.role || '참가자', d = evDate.get(p.eventId) || '';
+    if(!m.has(k)) m.set(k, { roles: new Set(), latest: r, d });
+    const x = m.get(k); x.roles.add(r);
+    if(d > x.d){ x.latest = r; x.d = d; }
+  });
+  _roleIdx = m; _roleIdxKey = key;
+  return m;
+}
+/* 이 사람이 맡았던 역할들(모든 행사) */
+export function contactRoles(c){ return c ? (roleIndex().get(String(c.id))?.roles || new Set()) : new Set(); }
+/* 가장 최근 행사에서의 역할 — 참여 기록이 없으면 '' */
+export function contactLatestRole(c){ return c ? (roleIndex().get(String(c.id))?.latest || '') : ''; }
+/* 역할 칩 거르기. p(특정 행사 참여)가 있으면 그 참여의 역할만 본다 */
+export function matchesRole(c, role, p){
+  if(role === NO_ROLE) return !p && !roleIndex().has(String(c?.id));
+  if(p) return (p.role || '참가자') === role;
+  return contactRoles(c).has(role);
+}
+
 /* 섹터는 기업에 붙는다 — 사람 화면은 소속 기업의 섹터를 읽기만 한다(첫 번째가 주력).
    사람에게 적힌 beat는 «업종 메모»일 뿐 섹터가 아니다(2026-11-12). */
 export function contactOrgSectors(c){

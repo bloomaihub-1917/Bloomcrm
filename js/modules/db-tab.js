@@ -53,7 +53,7 @@ import {
   CONTACT_ATTEMPTS,
 } from '../state.js';
 import { CONTACT_ORIGINS } from '../constants.js';
-import { SALES_TARGETS } from '../state.js';
+import { SALES_TARGETS, NO_ROLE, matchesRole, contactRoles, contactLatestRole } from '../state.js';
 import { isSalesTarget } from '../domain/sales-targets.js';
 import { CP, CL, RP, CAT_KEYS, ROLE_TO_CAT, COUNTRIES, avB, avF } from '../constants.js';
 import { td, ab, phoneMatch, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseSectorScope, parseTags, joinTags, isMobile, cleanEmail, personName, personFullName, leftPill, slugifySectorName } from '../utils.js';
@@ -194,6 +194,15 @@ export function isCLevelContact(c){
    전에는 이 목록이 speaker·vip·attendee 셋뿐이라, 사이드바에서 스폰서·투자자·
    바이어로 거르면 카테고리가 아니라 태그로 오인돼 아무것도 안 나왔다. */
 export const MDB_CAT_VALUES = CAT_KEYS;
+/* 왼쪽 칩 값이 역할(참가 유형)인가 — 아니면 태그 키다 */
+export function isRoleFilter(v){ return v === NO_ROLE || PART_TYPES.some(t => t.key === v); }
+/* 지금 고른 칩(전체 / 역할 / 참여 기록 없음 / 태그)에 맞는가. p는 행사 참여 한 줄(있으면 그 행사의 역할만 본다) */
+export function mdbCatOK(c, p){
+  if(mdbCat === 'all') return true;
+  if(!c) return false;
+  if(!isRoleFilter(mdbCat)) return matchesTagFilter(c, mdbCat);
+  return matchesRole(c, mdbCat, p);
+}
 export function matchesTagFilter(c, tagKey){
   return tagKey === 'clevel' ? isCLevelContact(c) : hasTag(c, tagKey);
 }
@@ -515,7 +524,7 @@ const MDB_SORT_KEYS = {
   org:     ({c}) => (c.orgKo||c.orgEn||'').toLowerCase(),
   country: ({c}) => countryName(c.country||'').toLowerCase(),
   title:   ({c}) => (c.titleKo||c.titleEn||'').toLowerCase(),
-  cat:     ({c,p}) => { const roleKey = p ? p.role : c.cat; return String(CL[roleKey]||roleKey||'').toLowerCase(); },
+  cat:     ({c,p}) => { return String((p ? p.role : contactLatestRole(c)) || '').toLowerCase(); },
   events:  ({c,p}) => p ? String(evShort(p.eventId)||'').toLowerCase() : contactEvents(c).length,
   contact: ({c}) => (c.email1||c.phone1||'').toLowerCase(),
   date:    ({c}) => c.date||'',
@@ -799,7 +808,7 @@ export async function askMdbAi(){
     today: new Date().toISOString().slice(0, 10),
     events: EVENT_LIST.map(e => ({ key: e.key, short: e.short || '', date: e.date || '' })),
     roles: [...new Set(['참가자', ...PART_TYPES.map(t => t.key), ...participations.map(p => p.role).filter(Boolean)])],
-    cats: CAT_KEYS.map(k => ({ key: k, label: CL[k] || k })),
+    cats: [],   // 사람 카테고리는 쓰지 않는다 — 역할(roles)로 거른다
     tags: TAGS.map(t => ({ key: t.key, label: t.label || t.key })),
     countries: [...new Set(contacts.map(c => String(c.country || '').trim()).filter(Boolean))],
   });
@@ -1013,24 +1022,22 @@ export function updateMDBBadges(pairs){
     return bp;
   })();
 
-  const cats=['all','speaker','vip','attendee','exhibitor'];
-  const ids =['ct-all','ct-sp','ct-vip','ct-at','ct-ex'];
-  // 사람 → 참가 역할이 닿는 카테고리들. 사람마다 참가 표 전체를 훑으면 연락처×참가만큼 돌았다
-  const catsOf = new Map();
-  participations.forEach(pp => { const k = pp.contactId; const ct = ROLE_TO_CAT[pp.role]; if(!ct) return; if(!catsOf.has(k)) catsOf.set(k, new Set()); catsOf.get(k).add(ct); });
   const byId = new Map(basePairs.map(({c}) => [c.id, c]));
-  cats.forEach((cat,i)=>{
-    const el=document.getElementById(ids[i]);if(!el)return;
-    if(cat==='all'){ el.textContent=[...new Set(basePairs.map(({c})=>c.id))].length; return; }
-    if(mdbEvFilter){
-      el.textContent=basePairs.filter(({c,p})=>(c&&c.cat===cat)||(p&&ROLE_TO_CAT[p.role]===cat)).length;
-    } else {
-      el.textContent=basePairs.filter(({c})=>{
-        if(c.cat===cat) return true;
-        return !!catsOf.get(c.id)?.has(cat);
-      }).length;
-    }
+  { const el = document.getElementById('ct-all'); if(el) el.textContent = byId.size; }
+  // 역할 칩 — 참가 유형 목록(설정) 순서. 행사를 골랐으면 그 행사에서의 역할로 센다
+  const roleCount = new Map();
+  basePairs.forEach(({c,p}) => {
+    const rs = p ? [p.role || '참가자'] : [...contactRoles(c)];
+    if(!p && !rs.length) rs.push(NO_ROLE);
+    rs.forEach(r => roleCount.set(r, (roleCount.get(r) || 0) + 1));
   });
+  const roleList = document.getElementById('mdb-role-list');
+  if(roleList){
+    const keys = PART_TYPES.map(t => t.key).filter(k => roleCount.get(k) || mdbCat === k);
+    [...roleCount.keys()].forEach(k => { if(k !== NO_ROLE && !keys.includes(k)) keys.push(k); });
+    if(!mdbEvFilter) keys.push(NO_ROLE);
+    roleList.innerHTML = keys.map(k => `<button class="nr${mdbCat===k?' on':''}" onclick="filterCat('${escAttr(k)}',this)"${k===NO_ROLE?' title="어느 행사에도 참여 기록이 없는 사람 — 모아 둔 명단 등"':''}>${k===NO_ROLE?'참여 기록 없음':escapeHtml(k)}<span class="nbg">${roleCount.get(k)||0}</span></button>`).join('');
+  }
   // 태그(BD/C-level/커스텀)는 cat이 아니라 연락처의 영구 태그만 별도로 세는
   // 비배타적 보조 배지 — attendee 등과 겹쳐도 되므로 위 cats 루프와 분리해서 처리한다.
   TAGS.forEach(t => {

@@ -9,7 +9,7 @@ import { changed, removed, trackAction } from '../../core/audit-log.js';
 import { countryCheckText } from '../../country-signal.js';
 import { buildCoDB } from '../../domain/co-db.js';
 import { ensureOrgsForNames, orgIdForName } from '../../domain/orgs.js';
-import { CONTACT_ROUNDS, EVENT_LIST, EXH_CONTACTS, PART_TYPES, ROUND_MEMBERS, SALES_TARGETS, contactEvents, contacts, evColor, evShort, getContactById, hasLeft, movedTo, nextContactId, participations, speakersOfContact, contactOrgEn, contactOrgSectors } from '../../state.js';
+import { CONTACT_ROUNDS, EVENT_LIST, EXH_CONTACTS, PART_TYPES, ROUND_MEMBERS, SALES_TARGETS, contactEvents, contacts, evColor, evShort, getContactById, hasLeft, movedTo, nextContactId, participations, speakersOfContact, contactOrgEn, contactOrgSectors, contactRoles, contactLatestRole } from '../../state.js';
 import { ab, countryName, countryOptions, escAttr, escapeHtml, personFullName, personName, td, sectorKey } from '../../utils.js';
 import { coDomainOptionsHtml, coSectorOptionsHtml, currentCoSectorPick } from '../../modules/company-tab.js';
 import { contactMailsHtml } from '../../modules/contact-mails.js';
@@ -119,7 +119,7 @@ export function renderContactDr(){
     '<span class="co-link" onclick="openCoPeek(' + c.id + ')" title="눌러서 기업 정보 보기">🏢 ' + escapeHtml(c.orgKo||c.orgEn||'-') +
       ((c.orgKo||c.orgEn) ? '<button type="button" class="co-info-btn">기업정보</button>' : '') + '</span>' +
     '<span>🌐 ' + escapeHtml(contactCountryText(c)) + '</span>' +
-    '<span class="pill ' + (CP[c.cat]||'p-gray') + '">' + (CL[c.cat]||c.cat) + '</span>';
+    (contactLatestRole(c) ? '<span class="pill ' + (RP[contactLatestRole(c)]||'p-gray') + '" title="가장 최근 행사에서의 역할">' + escapeHtml(contactLatestRole(c)) + '</span>' : '');
 
   document.getElementById('con-dr-body').innerHTML = conEditMode ? contactEditForm(c) : contactViewPanel(c);
 }
@@ -312,7 +312,9 @@ export function contactViewPanel(c){
         (() => { const r = ctryCheck(c); return r
           ? `<div style="font-size:var(--fs-10_5);color:var(--am);font-weight:400;margin-top:3px;line-height:1.5">${
               escapeHtml(countryCheckText(r))}</div>` : ''; })()}</div></div>
-      <div class="ic"><div class="il">카테고리</div><div class="iv"><span class="pill ${CP[c.cat]||'p-gray'}">${CL[c.cat]||c.cat}</span></div></div>
+      <div class="ic"><div class="il">역할 <span style="font-weight:400;color:var(--i4)">(행사 참여)</span></div><div class="iv">${(() => { const rs = [...contactRoles(c)];
+        return rs.length ? rs.map(x => `<span class="pill ${RP[x]||'p-gray'}" style="margin-right:4px">${escapeHtml(x)}</span>`).join('')
+          : '<span style="color:var(--i4)">참여 기록 없음</span>'; })()}</div></div>
       <div class="ic"><div class="il">태그</div><div class="iv">
         ${isBDContact(c)?'<span class="pill p-teal" style="margin-right:4px">BD</span>':''}${isCLevelContact(c)?'<span class="pill p-gold">C-level</span>':''}${(!isBDContact(c)&&!isCLevelContact(c))?'<span style="color:var(--i4)">-</span>':''}
       </div></div>
@@ -420,11 +422,8 @@ export function contactEditForm(c){
       <div class="fg"><label class="fl">국가</label>
         <select class="fi" id="ce-country">${countryOptions(c.country)}</select>
       </div>
-      <div class="fg"><label class="fl">카테고리</label>
-        <select class="fi" id="ce-cat">
-          ${c.cat && !CAT_KEYS.includes(c.cat) ? `<option value="${escapeHtml(c.cat)}" selected>${escapeHtml(CL[c.cat] || c.cat)} (목록에서 내림)</option>` : ''}
-          ${CAT_KEYS.map(k=>`<option value="${k}"${c.cat===k?' selected':''}>${CL[k]}</option>`).join('')}
-        </select>
+      <div class="fg"><label class="fl">역할</label>
+        <div style="font-size:var(--fs-11);color:var(--i4);line-height:1.5;padding-top:6px">행사마다 다르니 사람에게 적지 않아요 — 보기 화면 «참여 행사»에서 행사별로 정해요.</div>
       </div>
     </div>
 
@@ -503,7 +502,6 @@ export async function saveContactEdit(){
   c.orgKo   = document.getElementById('ce-org').value.trim();
   c.orgEn   = document.getElementById('ce-orgEn').value.trim();
   c.country = document.getElementById('ce-country').value;
-  c.cat     = document.getElementById('ce-cat').value;
   c.titleKo = document.getElementById('ce-titleKo').value.trim();
   c.titleEn = document.getElementById('ce-titleEn').value.trim();
   c.deptKo  = document.getElementById('ce-deptKo').value.trim();
@@ -568,8 +566,6 @@ export async function saveContactEdit(){
 ══════════════════════════════════════════ */
 export function openAddContactModal(){
   const pick = currentCoSectorPick();
-  const catOpts = CAT_KEYS.map(k =>
-    `<option value="${k}">${CL[k]}</option>`).join('');
   const countryOpts = COUNTRIES.map(c =>
     `<option value="${c.nameKo}">${c.nameKo}</option>`).join('');
 
@@ -609,11 +605,7 @@ export function openAddContactModal(){
             </select></div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
-          <div><div class="mlbl">카테고리</div>
-            <select class="fi" id="ac-cat" style="width:100%">
-              ${catOpts}
-            </select></div>
-          <div><div class="mlbl">들어온 경로 <span style="font-weight:400;color:var(--i4)">— 메모</span></div>
+          <div style="grid-column:1/-1"><div class="mlbl">들어온 경로 <span style="font-weight:400;color:var(--i4)">— 메모</span></div>
             <input class="fi" id="ac-source" placeholder="예: 명함, 행사 등록" value="직접 입력" style="width:100%"></div>
         </div>
         <!-- 출처는 사람마다 하나, 바뀌지 않는다(docs/manual-db-axes.md) — 넣을 때 정해 둔다 -->
@@ -681,7 +673,7 @@ export async function saveNewContact(){
     titleEn: get('ac-titleEn'),
     deptKo:  '', deptEn: '',
     country: get('ac-country') || '대한민국',
-    cat:     get('ac-cat')     || 'attendee',
+    cat:     'attendee',   // 사람 카테고리는 쓰지 않는다 — 역할은 행사 참여에 적는다
     lang:    nameKo ? 'KO' : 'EN',
     source:  get('ac-source')  || '직접 입력',
     date:    today,

@@ -5,12 +5,12 @@
     window에 거는 것은 맨 아래, 이 파일을 읽는 것은 app.js.)
 ═══════════════════════════════════════════════════════════════ */
 
-import { CL, CP, ROLE_TO_CAT, avB, avF } from '../../constants.js';
+import { CL, CP, RP, ROLE_TO_CAT, avB, avF } from '../../constants.js';
 import { sanitizeForCsv } from '../../modules/audit-tab.js';
-import { EVENT_LIST, contactEvents, contacts, evColor, evShort, getContactById, hasLeft, isConfirmedFor, mdbCat, mdbEvFilter, mdbSelected, mdbStat, participations, setMdbCat, setMdbStat, sheetsConnected, contactOrgEn, contactOrgSectors } from '../../state.js';
+import { EVENT_LIST, contactEvents, contacts, evColor, evShort, getContactById, hasLeft, isConfirmedFor, mdbCat, mdbEvFilter, mdbSelected, mdbStat, participations, setMdbCat, setMdbStat, sheetsConnected, contactOrgEn, contactOrgSectors, contactLatestRole } from '../../state.js';
 import { ab, cleanEmail, escAttr, escapeHtml, leftPill, personName, td } from '../../utils.js';
 import { mdbUi } from './mdb-ui.js';
-import { applyMDBSort, contactCountryText, ctryPill, hidingLeft, isBDContact, isCLevelContact, matchesQuery, mdbFilterPairs, renderMDB, setMDBRowOrder, sortMDBBy, toggleMDBSelect, toggleMDBSelectAll } from '../../modules/db-tab.js';
+import { mdbCatOK, applyMDBSort, contactCountryText, ctryPill, hidingLeft, isBDContact, isCLevelContact, matchesQuery, mdbFilterPairs, renderMDB, setMDBRowOrder, sortMDBBy, toggleMDBSelect, toggleMDBSelectAll } from '../../modules/db-tab.js';
 
 /* ══════════════════════════════════════════
    모바일 카드 뷰
@@ -49,7 +49,7 @@ function mContactLinks(c){
    showOrg=false는 행사별 보기처럼 기업명이 이미 그룹 머리글에 있을 때 쓴다. */
 function mdbCard(c, p, { showOrg = true } = {}){
   const gi = contacts.indexOf(c);
-  const roleKey = p ? p.role : c.cat;
+  const roleKey = p ? p.role : contactLatestRole(c);
   const isSel = mdbSelected.has(c.id);
   const org = c.orgKo || c.orgEn || '';
   const title = [c.titleKo || c.titleEn, c.deptKo || c.deptEn].filter(Boolean).join(' · ');
@@ -70,7 +70,7 @@ function mdbCard(c, p, { showOrg = true } = {}){
       <span class="std ${ST_MARK[c.status] || 'stn'}" title="${escapeHtml(ST_LABEL[c.status] || c.status || '')}"></span>
     </div>
     <div class="mdbc-pills">
-      <span class="pill ${CP[roleKey] || 'p-gray'}">${escapeHtml(CL[roleKey] || roleKey || '미분류')}</span>
+      <span class="pill ${RP[roleKey] || 'p-gray'}">${escapeHtml(roleKey || '참여 없음')}</span>
       ${contactCountryText(c) ? `<span class="pill p-gray">${escapeHtml(contactCountryText(c))}</span>` : ''}${ctryPill(c)}
       ${mEvPills(c, p)}
     </div>
@@ -108,10 +108,7 @@ function renderMDBGroupedCards(pairs){
     const q = (document.getElementById('mdb-q') || {}).value || '';
     EVENT_LIST.filter(e => participations.some(p => p.eventId === e.key)).forEach(evObj => {
       let evParts = participations.filter(p => p.eventId === evObj.key);
-      if(mdbCat !== 'all') evParts = evParts.filter(p => {
-        const c = getContactById(p.contactId);
-        return (c && c.cat === mdbCat) || ROLE_TO_CAT[p.role] === mdbCat;
-      });
+      if(mdbCat !== 'all') evParts = evParts.filter(p => mdbCatOK(getContactById(p.contactId), p));
       let members = mdbFilterPairs(evParts.map(p => ({ c: getContactById(p.contactId), p })).filter(x => x.c));
       if(q) members = members.filter(({ c }) => matchesQuery(c, q));
       if(!members.length) return;
@@ -186,7 +183,7 @@ export function renderMDBFlat(pairs){
   participations.forEach(x => { const k = String(x.contactId); if(!pByC.has(k)) pByC.set(k, []); pByC.get(k).push(x); });
   const partsOfC = (c) => pByC.get(String(c.id)) || [];
   body.innerHTML = pairs.map(({c,p})=>{
-    const roleKey = p ? p.role : c.cat;
+    const roleKey = p ? p.role : contactLatestRole(c);
 
     const nameKo = escapeHtml(c.nameKo), nameEn = escapeHtml(c.nameEn);
     const orgKo  = escapeHtml(c.orgKo),  orgEn  = escapeHtml(c.orgEn);
@@ -224,7 +221,7 @@ export function renderMDBFlat(pairs){
         ${(() => { const s0 = contactOrgSectors(c)[0]; return s0 ? `<div style="font-size:var(--fs-10);color:var(--te);margin-top:2px" title="소속 기업 섹터">🏭 ${escapeHtml(s0)}</div>` : ''; })()}
         ${c.products?`<div style="font-size:var(--fs-10);color:var(--pu);margin-top:2px">📦 ${escapeHtml(c.products)}</div>`:''}
       </td>
-      <td><span class="pill ${CP[roleKey]||'p-gray'}">${escapeHtml(CL[roleKey]||roleKey)}</span></td>
+      <td>${roleKey?`<span class="pill ${RP[roleKey]||'p-gray'}">${escapeHtml(roleKey)}</span>`:`<span style="font-size:var(--fs-11);color:var(--i4)">참여 없음</span>`}</td>
       <td style="max-width:200px">${evCell}</td>
       <td>${contactCell}</td>
       <td style="color:var(--i4);font-size:var(--fs-11)">${escapeHtml(c.date)}</td>
@@ -326,13 +323,7 @@ export function renderMDBGrouped(pairs){
     usedEvs.forEach(evObj=>{
       // Filter participations matching current cat/stat/search
       let evParts = participations.filter(p=>p.eventId===evObj.key);
-      if(mdbCat!=='all'){
-        evParts=evParts.filter(p=>{
-          const c=getContactById(p.contactId);
-          if(c&&c.cat===mdbCat) return true;
-          return ROLE_TO_CAT[p.role]===mdbCat;
-        });
-      }
+      if(mdbCat!=='all') evParts=evParts.filter(p=>mdbCatOK(getContactById(p.contactId),p));
       let members = mdbFilterPairs(evParts.map(p=>({c:getContactById(p.contactId),p})).filter(x=>x.c));
       const q=(document.getElementById('mdb-q')||{}).value||'';
       if(q) members = members.filter(({c}) => matchesQuery(c, q));
@@ -387,7 +378,7 @@ export function renderMDBGrouped(pairs){
     const assignedIds = new Set(participations.map(p=>p.contactId));
     let unassigned = contacts.filter(c => !assignedIds.has(c.id));
     if(hidingLeft()) unassigned = unassigned.filter(c => !hasLeft(c));
-    if(mdbCat!=='all') unassigned = unassigned.filter(c=>c.cat===mdbCat);
+    if(mdbCat!=='all') unassigned = unassigned.filter(c=>mdbCatOK(c,null));
     if(mdbStat) unassigned = unassigned.filter(c=>c.status===mdbStat);
     const qU=(document.getElementById('mdb-q')||{}).value||'';
     if(qU) unassigned = unassigned.filter(c => matchesQuery(c, qU));
@@ -448,7 +439,7 @@ export function renderMDBMatrix(){
   const orgMap={};
   participations.forEach(p=>{
     const c=getContactById(p.contactId);if(!c)return;
-    if(mdbCat!=='all'&&c.cat!==mdbCat&&ROLE_TO_CAT[p.role]!==mdbCat) return;
+    if(!mdbCatOK(c,p)) return;
     const k=c.orgKo||c.orgEn||'';
     if(!orgMap[k]) orgMap[k]={};
     if(!orgMap[k][p.eventId]) orgMap[k][p.eventId]=[];
@@ -497,12 +488,12 @@ export function filterCat(cat,btn){setMdbCat(cat);document.querySelectorAll('#sb
 export function filterStat(s,btn){setMdbStat(mdbStat===s?null:s);document.querySelectorAll('#sbp-mdb .s-s .nr').forEach(b=>b.classList.remove('on'));if(mdbStat)btn.classList.add('on');renderMDB()}
 export function segCat(cat,btn){setMdbCat(cat);document.querySelectorAll('.mdb-seg-b').forEach(b=>b.classList.remove('on'));if(btn)btn.classList.add('on');renderMDB();}
 export function exportCSV(){
-  const h=['경칭','이름','영문명','기업','영문기업','국가','직함(국)','직함(영)','부서(국)','부서(영)','카테고리','분야','전시품목','언어','이메일1','이메일2','연락처1','연락처2','출처','날짜','상태','태그','메모1','메모2','메모3'];
+  const h=['경칭','이름','영문명','기업','영문기업','국가','직함(국)','직함(영)','부서(국)','부서(영)','최근 역할','업종 메모','전시품목','언어','이메일1','이메일2','연락처1','연락처2','출처','날짜','상태','태그','메모1','메모2','메모3'];
   const rows=contacts.map(c=>[
     c.prefix||'',
     c.nameKo,c.nameEn,c.orgKo,c.orgEn,contactCountryText(c),
     c.titleKo,c.titleEn,c.deptKo,c.deptEn,
-    CL[c.cat]||c.cat,
+    contactLatestRole(c),
     c.beat||'',
     c.products||'',
     c.lang,
