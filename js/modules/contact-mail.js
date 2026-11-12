@@ -20,6 +20,7 @@ import { trackAction } from '../core/audit-log.js';
 import { varPattern, eventVarValues } from '../shared/mail/mail-vars.js';
 import { varChipsHtml } from '../shared/mail/var-chips.js';
 import { libItems, libItem } from '../shared/mail/mail-templates.js';
+import { looksHtml, cleanHtml, htmlToText } from '../shared/mail/html-body.js';
 import { memberState, renderRoundNav, pickedPersonId } from './contact-tab.js';
 import { roundById, membersOf, attemptsOf, memberName, peopleOf, coOf, evLabel } from '../domain/rounds.js';
 
@@ -66,7 +67,8 @@ function addDays(n){
   const p = (x) => String(x).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
-function fill(t, m, person, en){
+/* html이면 채우는 값도 HTML 글자로 바꾼다 — 기업명의 & < 가 태그로 읽히지 않게 */
+function fill(t, m, person, en, html){
   const ev = EVENT_LIST.find(e => e.key === roundById(cm.rid)?.event_id) || {};
   // 대표 메일로 가는 곳은 이름이 없다 — {담당자}는 «담당자»/Sir/Madam
   const nm = person ? (en ? person.nameEn : person.name) : '';
@@ -77,7 +79,15 @@ function fill(t, m, person, en){
     담당자: nm || (en ? 'Sir/Madam' : '담당자'),
     행사: (en ? (ev.name_en || ev.name) : ev.name) || evLabel(ev.key),
   };
-  return String(t || '').replace(varPattern('contact'), (_, k) => vars[k] ?? '');
+  return String(t || '').replace(varPattern('contact'), (_, k) => html ? escapeHtml(vars[k] ?? '') : (vars[k] ?? ''));
+}
+/* 본문 — 문구가 태그로 시작하면 HTML로 보낸다(docs/html-mail-guide.md). text는 HTML을 못 보는 프로그램용 */
+function bodyOf(m, person, en){
+  const t = cm.tpl[en ? 'body_en' : 'body_ko'];
+  if(!looksHtml(t)) return { text: fill(t, m, person, en) };
+  const src = fill(t, m, person, en, true);
+  return { text: htmlToText(src),
+    html: `<div style="font-family:'Malgun Gothic',Arial,sans-serif;font-size:14px;line-height:1.6;color:#222">${cleanHtml(src)}</div>` };
 }
 
 /* mid를 주면 그 기업 한 곳만 — 카드의 «✉ 이 기업에 메일». 받는 사람은 카드에서
@@ -117,7 +127,7 @@ function render(){
   const sample = picked[0];
   const sp = sample && peopleTo(sample, cm.who)[0];
   const prev = sample ? { s: fill(cm.tpl[enOf(sample) ? 'subject_en' : 'subject_ko'], sample, sp, enOf(sample)),
-    b: fill(cm.tpl[enOf(sample) ? 'body_en' : 'body_ko'], sample, sp, enOf(sample)) } : null;
+    b: bodyOf(sample, sp, enOf(sample)) } : null;
   const opt = (v, cur, l) => `<option value="${v}"${v === cur ? ' selected' : ''}>${l}</option>`;
   const ST = { todo: '보낼 차례', again: '다시 보낼 차례', wait: '기다림', done: '끝남' };
   let el = document.getElementById('round-mail');
@@ -185,10 +195,10 @@ function render(){
           <textarea class="fi" rows="7" style="font-size:var(--fs-11_5);width:100%" placeholder="Dear {담당자}," oninput="rmTpl('body_en',this.value)">${escapeHtml(cm.tpl.body_en)}</textarea></details>
         ${varChipsHtml('contact', { ev: r.event_id })}
         <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:4px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <span>칸은 기업마다 채워집니다.</span>
+          <span>칸은 기업마다 채워집니다. 본문을 &lt;table&gt; 같은 태그로 시작하면 HTML로 보내요(<a href="https://github.com/bloomaihub-1917/Bloomcrm/blob/master/docs/html-mail-guide.md" target="_blank" rel="noopener" style="color:var(--a)">작성 가이드</a>).</span>
           <a href="javascript:void(0)" onclick="saveRoundMailTpl()" style="color:var(--a)">이 문구를 차수 양식으로 저장</a>
           <span id="rm-saved" style="color:var(--g)"></span></div>
-        ${prev ? `<div style="margin-top:10px;padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-7);font-size:var(--fs-11_5);white-space:pre-wrap;line-height:1.55;max-height:220px;overflow:auto"><div style="font-size:var(--fs-10);color:var(--i4);margin-bottom:4px">미리보기 — ${escapeHtml(memberName(sample))}</div><b>${escapeHtml(prev.s)}</b>\n\n${escapeHtml(prev.b)}</div>` : ''}
+        ${prev ? `<div style="margin-top:10px;padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-7);font-size:var(--fs-11_5);white-space:pre-wrap;line-height:1.55;max-height:220px;overflow:auto"><div style="font-size:var(--fs-10);color:var(--i4);margin-bottom:4px">미리보기 — ${escapeHtml(memberName(sample))}</div><b>${escapeHtml(prev.s)}</b>${prev.b.html ? `<div style="white-space:normal;background:#fff;padding:6px;margin-top:8px;border-radius:var(--rs)"><div style="font-size:var(--fs-10);color:var(--i4);margin-bottom:4px">HTML로 보냄</div>${prev.b.html}</div>` : `\n\n${escapeHtml(prev.b.text)}`}</div>` : ''}
       </div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:12px">
@@ -281,13 +291,13 @@ export async function sendRoundMail(){
     const p = ppl.find(x => !x.rep) || ppl[0];   // {담당자}는 사람 이름 먼저
     const en = enOf(m);
     const subject = fill(cm.tpl[en ? 'subject_en' : 'subject_ko'], m, p, en);
-    const text = fill(cm.tpl[en ? 'body_en' : 'body_ko'], m, p, en);
+    const { text, html } = bodyOf(m, p, en);
     const to = toOf(ppl);
     if(!to.length){ fails.push(`${memberName(m)}: 받는 메일 없음`); continue; }
     // 대표 메일만 받는 곳은 사람이 아니다 — 기록에 «대표 메일»로 남기고 contact_id는 비운다
     const person = ppl.find(x => !x.rep);
     const contact_name = person ? person.name : '대표 메일';
-    const res = await sendMail({ to, subject, text, round_member_id: m.id, event_id: r.event_id,
+    const res = await sendMail({ to, subject, text, html, round_member_id: m.id, event_id: r.event_id,
       contact_id: person ? person.id : '', contact_name, category: r.name, kind: 'contact-dm' });
     if(!res.ok){ fails.push(`${memberName(m)}: ${res.error || '실패'}`); continue; }
     ok++;

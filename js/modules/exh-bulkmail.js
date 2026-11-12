@@ -33,6 +33,7 @@ import { trackAction } from '../core/audit-log.js';
 import { makeResendRound } from '../shared/mail/resend-round.js';
 import { makePause, runBulkSend } from '../shared/mail/bulk-send.js';
 import { varChipsHtml } from '../shared/mail/var-chips.js';
+import { cleanHtml, htmlToText } from '../shared/mail/html-body.js';
 import { aiDraftHtml, registerAiDraft } from '../shared/mail/ai-mail-draft.js';
 import './exh-mail-editor.js';
 
@@ -310,26 +311,6 @@ function mailFor(x){
 }
 /* 사진이 든 html 본문 — srcs[i]는 i번째 사진 주소(보낼 때 cid:, 미리보기 때 blob:).
    {사진}이 없으면 본문 맨 끝에 넣는다. alt는 mailFor의 대체 문구 */
-/* «HTML로 보내기» — 문구를 HTML 소스로 쓴다. 위험한 태그·on* 속성·javascript: 주소는 뺀다 */
-const BAD_TAGS = 'script,iframe,frame,object,embed,form,input,button,textarea,select,link,meta,base,svg,math';
-function cleanHtml(src){
-  const doc = new DOMParser().parseFromString(`<body>${src}</body>`, 'text/html');
-  doc.body.querySelectorAll(BAD_TAGS).forEach(n => n.remove());
-  doc.body.querySelectorAll('*').forEach(n => [...n.attributes].forEach(a => {
-    if(/^on/i.test(a.name) || (/^(href|src|action|formaction)$/i.test(a.name) && /^\s*(javascript|vbscript|data:text)/i.test(a.value))) n.removeAttribute(a.name);
-  }));
-  return doc.body.innerHTML;
-}
-/* HTML을 못 보는 메일 프로그램용 글 본문 */
-function htmlToText(src){
-  const doc = new DOMParser().parseFromString(`<body>${String(src).replace(/\s*\n\s*/g, ' ')}</body>`, 'text/html');
-  doc.body.querySelectorAll('script,style').forEach(n => n.remove());
-  doc.body.querySelectorAll('br').forEach(n => n.replaceWith('\n'));
-  doc.body.querySelectorAll('p,div,tr,h1,h2,h3,h4,li,table').forEach(n => n.append('\n'));
-  doc.body.querySelectorAll('td,th').forEach(n => n.append(' '));
-  doc.body.querySelectorAll('a[href]').forEach(n => { const h = n.getAttribute('href'); if(/^https?:/i.test(h) && n.textContent.trim() !== h) n.append(` (${h})`); });
-  return doc.body.textContent.replace(/[ \t]+/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
-}
 function bodyHtml(raw, srcs, top, alt){
   const a = (s) => alt ? ` alt="${escapeHtml(s)}"` : '';
   const imgs = srcs.map((s, i) => `<img src="${s}"${a(alt && alt.photo(i))} style="display:block;max-width:100%;width:640px;height:auto;margin:8px 0;border-radius:4px">`).join('');
