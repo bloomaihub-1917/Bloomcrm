@@ -8,6 +8,7 @@ const { isOurs, domainOf: domOf, domainList, parseForward, forwardOf, forwardCan
 const { LOCAL_MAX, TOTAL_MAX, FILE_MAX, ensureFiles, b64size, cfg, transport, kstDate, kstStamp, PROVIDERS, prov, ensureBox, markSynced, secretKey, seal, BOX_SELECT, boxOf, boxTransport, boxPublic, FOOTER_IMG_MAX, withFooter, imapClient, SENT_NAMES, saveToSent, partDone, senderFor } = require('./box');
 const { bodyParts, mailText, norm, AUTO_SUBJ, isAutoReply, prevDay, syncSentHandler } = require('./sync-sent');
 const { ensureExtra, isSpam, isBulk, domainOf, FREE_MAIL, mailWarnings } = require('./screen');
+const { isDaemon, recordBounce } = require('./bounces');
 
 /* ── 받은메일함 → 연사·참가사 기록 ──
    상대가 보낸 메일도 그 사람 기록에 쌓는다. 보낸 사람 주소가 이 행사 연사(마스터DB
@@ -77,6 +78,7 @@ const syncInboxHandler = async (req, res) => {
     try { await client.connect(); }
     catch (e) { throw new Error(`${stage} 실패: ${e.responseText || e.message} — 메일플러그 IMAP 사용이 켜져 있는지, 앱 비밀번호가 맞는지 확인해주세요`); }
     const found = [];
+    const bounces = [], bounced = [];   // 반송 메일(mailer-daemon) — bounces.js
     let total = 0;
     try {
       stage = '받은메일함 열기';
@@ -99,6 +101,8 @@ const syncInboxHandler = async (req, res) => {
           const from = f0.address || '';
           if (!from || self.has(norm(from))) continue;
           if (ignored.has(domainOf(from))) continue;
+          // 반송 메일 — 보낸 곳에 «반송»을 남기려고 따로 모은다(이미 처리한 것은 knownUn에 있다)
+          if (isDaemon(from)) { if (!knownUn.has(String(m.uid || ''))) bounces.push({ uid: String(m.uid || ''), dt: env.date || m.internalDate || Date.now() }); continue; }
           // 부재중·자동 답장·반송은 제목만 보고도 거른다 — 사람 메일이 아니다
           if (AUTO_SUBJ.test(String(env.subject || ''))) continue;
           const who = byMail.get(norm(from));
@@ -133,6 +137,18 @@ const syncInboxHandler = async (req, res) => {
           if (Date.now() - t0 > 45000) { cut = true; break; }
           const m = await client.fetchOne(uid, { source: true }, { uid: true });
           if (m && m.source) parsed.set(String(m.uid), await simpleParser(m.source));
+        }
+        /* 반송 메일 — 가져오기(apply) 때만 읽고 남긴다. 최신부터 30통씩, 시간이 남을 때만 */
+        if (apply) {
+          const names = (w) => (w.t === 'sp' ? spName.get(w.id) : exName.get(w.id));
+          for (const bn of bounces.slice(-30).reverse()) {
+            if (Date.now() - t0 > 50000) { cut = true; break; }
+            const m = await client.fetchOne(bn.uid, { source: true }, { uid: true });
+            if (!m || !m.source) continue;
+            const r = await recordBounce({ eventId, uid: bn.uid, at: kstStamp(bn.dt), mail: await simpleParser(m.source),
+              skip, byMail, names, user: req.user });
+            bounced.push(...r.done);
+          }
         }
         timedOut = cut;
         const bodyText = (mail) => {
@@ -248,7 +264,8 @@ const syncInboxHandler = async (req, res) => {
     }
     if (apply) await markSynced(eventId, req.user?.name || req.user?.email || '');
     res.json({
-      ok: true, applied: apply, partial: timedOut, scanned: total, added, replied, replyNames, unassigned, unknown: unknown.filter((u) => u.status === 'new').length, promo: unknown.filter((u) => u.status === 'promo').length,
+      ok: true, applied: apply, partial: timedOut,
+      bounced, bouncePending: apply ? 0 : bounces.length, scanned: total, added, replied, replyNames, unassigned, unknown: unknown.filter((u) => u.status === 'new').length, promo: unknown.filter((u) => u.status === 'promo').length,
       items: found.map(({ body, ...r }) => r),
       skipped: [confDone ? '컨퍼런스(진행 완료)' : '', exhDone ? '전시(진행 완료)' : ''].filter(Boolean),
     });
