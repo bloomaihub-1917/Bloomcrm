@@ -10,6 +10,7 @@ import { sanitizeForCsv } from '../../modules/audit-tab.js';
 import { EVENT_LIST, contactEvents, contacts, evColor, evShort, getContactById, hasLeft, isConfirmedFor, mdbCat, mdbEvFilter, mdbSelected, mdbStat, participations, setMdbCat, setMdbStat, sheetsConnected, contactOrgEn, contactOrgSectors, contactLatestRole } from '../../state.js';
 import { ab, cleanEmail, escAttr, escapeHtml, leftPill, personName, td } from '../../utils.js';
 import { mdbUi } from './mdb-ui.js';
+import { renderChunked, listKey, moreRow, moreDiv } from '../../shared/chunked-list.js';
 import { mdbCatOK, applyMDBSort, contactCountryText, ctryPill, hidingLeft, isBDContact, isCLevelContact, matchesQuery, mdbFilterPairs, renderMDB, setMDBRowOrder, sortMDBBy, toggleMDBSelect, toggleMDBSelectAll } from '../../modules/db-tab.js';
 
 /* ══════════════════════════════════════════
@@ -83,10 +84,14 @@ function renderMDBFlatCards(pairs){
   const tw = document.getElementById('mdb-tw');
   if(!tw) return;
   pairs = applyMDBSort(pairs);
-  tw.innerHTML = pairs.length
-    ? `<div class="mdbc-list">${pairs.map(({ c, p }) => mdbCard(c, p)).join('')}</div>`
-    : `<div class="mdbc-empty">${contacts.length ? '검색 조건에 맞는 연락처가 없어요'
+  if(!pairs.length){
+    tw.innerHTML = `<div class="mdbc-empty">${contacts.length ? '검색 조건에 맞는 연락처가 없어요'
         : '아직 등록된 연락처가 없어요 — 업로드 메뉴에서 파일을 추가해주세요'}</div>`;
+    return;
+  }
+  let list = document.getElementById('mdbc-flat');
+  if(!list || list.parentElement !== tw){ tw.innerHTML = '<div class="mdbc-list" id="mdbc-flat"></div>'; list = tw.firstElementChild; }
+  renderChunked(list, pairs, ({ c, p }) => mdbCard(c, p), { key: listKey(pairs.map(({c,p}) => c.id + (p ? ':' + p.eventId : ''))), sentinel: moreDiv });
 }
 
 /* 행사별 보기 — 모바일 */
@@ -182,7 +187,7 @@ export function renderMDBFlat(pairs){
   const pByC = new Map();
   participations.forEach(x => { const k = String(x.contactId); if(!pByC.has(k)) pByC.set(k, []); pByC.get(k).push(x); });
   const partsOfC = (c) => pByC.get(String(c.id)) || [];
-  body.innerHTML = pairs.map(({c,p})=>{
+  const flatRow = ({c,p})=>{
     const roleKey = p ? p.role : contactLatestRole(c);
 
     const nameKo = escapeHtml(c.nameKo), nameEn = escapeHtml(c.nameEn);
@@ -229,7 +234,8 @@ export function renderMDBFlat(pairs){
         <span class="std ${sm[c.status]||'stn'}"></span>${escapeHtml(sl[c.status]||c.status)}
       </span></td>
     </tr>`;
-  }).join('') || emptyStateRow();
+  };
+  renderChunked(body, pairs, flatRow, { key: listKey(pairs.map(({c,p}) => c.id + (p ? ':' + p.eventId : ''))), sentinel: moreRow(10), empty: emptyStateRow() });
 
   // 헤더 체크박스는 지금 보이는 목록이 전부 선택돼 있을 때만 체크 표시
   const selectAllEl = document.getElementById('mdb-select-all');

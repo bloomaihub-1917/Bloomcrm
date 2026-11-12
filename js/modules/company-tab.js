@@ -26,6 +26,7 @@
    나중에 settings-tab.js(섹터트리)를 만들 때 여기 정의를 재사용/통합해야 함.
 ═══════════════════════════════════════════════════════════════ */
 
+import { renderChunked, listKey, moreRow, debounce } from '../shared/chunked-list.js';
 import {
   currentUser,
   CO_DB,
@@ -943,14 +944,15 @@ function coTableRow(cols, c, i){
 
 /* 칸이 화면보다 넓어지면 찌그러뜨리는 대신 옆으로 밀리게 둔다 — 글자가
    겹쳐서 못 읽는 것보다 낫다. */
-export function coCompanyTableHtml(list, emptyText){
+/* body 칸 id를 주면 tbody를 비워 두고 부른 쪽이 fillCoTableBody로 나눠 그린다 */
+export function coCompanyTableHtml(list, emptyText, bodyId = ''){
   if(!list.length) return `<div style="font-size:var(--fs-12);color:var(--i4);padding:14px 2px">${escapeHtml(emptyText || '해당하는 기업이 없어요')}</div>`;
   const cols = coTableCols();
   return `<div style="overflow-x:auto;border:1px solid var(--i6);border-radius:var(--r);margin-top:12px;background:var(--W)">
     <table>
       <thead><tr>${cols.map(col =>
         `<th${col.align === 'right' ? ' style="text-align:right"' : ''}>${col.label}</th>`).join('')}</tr></thead>
-      <tbody>${list.map((c, i) => coTableRow(cols, c, i)).join('')}</tbody>
+      <tbody${bodyId ? ` id="${bodyId}">` : `>${list.map((c, i) => coTableRow(cols, c, i)).join('')}`}</tbody>
     </table></div>`;
 }
 
@@ -992,9 +994,13 @@ export function setCoDashQ(v){
   coUi.coDashQ = v;
   // 데스크톱·모바일 칸이 서로 다른 값을 들고 있지 않게 맞춘다
   ['co-q','co-q-m'].forEach(id => { const e = document.getElementById(id); if(e && e.value !== v) e.value = v; });
+  redrawCoForQuery();
+}
+/* 타자가 멈추면 한 번 그린다 — 글자마다 1,700곳 표를 다시 그리면 입력이 밀린다 */
+const redrawCoForQuery = debounce(() => {
   if(document.getElementById('cdt')?.style.display !== 'none') showCoFilteredList();
   renderCoList();   // 본문 표도 함께 다시 그린다
-}
+}, 200);
 
 function coChip(on, label, n, onclick, title){
   return `<button class="btn bs${on ? ' bp' : ''}" style="font-size:var(--fs-11);padding:3px 10px;gap:5px" onclick="${onclick}"${title ? ` title="${escapeHtml(title)}"` : ''}>
@@ -1045,7 +1051,10 @@ export function renderCoDashboard(list = coFilteredList()){
   el.innerHTML = `
     ${secChips ? `<div style="display:flex;gap:8px">${rowLbl('섹터')}
       <div style="display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:0">${secChips}</div></div>` : ''}
-    ${coCompanyTableHtml(list, coUi.coDashQ || coUi.coAi ? '찾는 조건에 맞는 기업이 없어요' : '해당하는 기업이 없어요')}`;
+    ${coCompanyTableHtml(list, coUi.coDashQ || coUi.coAi ? '찾는 조건에 맞는 기업이 없어요' : '해당하는 기업이 없어요', 'co-dash-body')}`;
+  const cols = coTableCols();
+  renderChunked(document.getElementById('co-dash-body'), list, (c, i) => coTableRow(cols, c, i),
+    { key: listKey(list.map(c => c.id || c.name)), sentinel: moreRow(cols.length) });
   if(coUi.coDashScroll != null){ el.scrollTop = coUi.coDashScroll; coUi.coDashScroll = null; }
 }
 

@@ -8,6 +8,7 @@
    cancelContactEdit 래퍼 함수 호출로 바꿨다 — 동작은 동일)
 ═══════════════════════════════════════════════════════════════ */
 
+import { debounce } from '../shared/chunked-list.js';
 import { speakerMaterialsHtml } from './contact-speaker.js';
 import { contactMailsHtml } from './contact-mails.js';
 import {
@@ -885,8 +886,11 @@ export function mdbFilterPairs(pairs){
 export function searchMdbM(v){
   const d = document.getElementById('mdb-q');
   if(d) d.value = v;
-  renderMDB();
+  renderMDBSoon();
 }
+/* 검색칸 입력 — 타자가 멈추면 한 번 그린다 */
+export const renderMDBSoon = debounce(() => renderMDB(), 200);
+window.renderMDBSoon = renderMDBSoon;
 
 export function renderMDB(){
   const pairs = window.getMDBPairs();
