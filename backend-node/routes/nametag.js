@@ -62,6 +62,30 @@ const devTime = (v, now) => {
 const WALK_IN_ROLE = '참가자';   // 마스터DB에 올린 현장 신규의 참가 유형
 
 /* 하단바 종류 — [{ id, label, color }]. 화면(nt-editor.js)이 만든 것을 모양만 맞춰 받는다 */
+const EL_KEYS = ['name', 'name_alt', 'company', 'company_alt', 'job_title', 'job_title_alt', 'badge', 'qr'];
+function cleanBarLayout(v) {
+  const out = {};
+  if (!v || typeof v !== 'object') return out;
+  for (const k of EL_KEYS) {
+    const s = v[k];
+    if (!s || typeof s !== 'object') continue;
+    const d = {};
+    const n = (f, min, max) => {
+      const x = Number(s[f]);
+      if (s[f] != null && s[f] !== '' && Number.isFinite(x)) d[f] = Math.min(max, Math.max(min, Math.round(x * 10) / 10));
+    };
+    n('x', -50, 470); n('y', -50, 470); n('size', k === 'qr' ? 8 : 6, 120);
+    if (k !== 'qr') {
+      n('maxWidth', 5, 420); n('lh', 0.8, 2); n('lines', 1, 3);
+      if (d.lines) d.lines = Math.round(d.lines);
+      if (s.weight === 400 || s.weight === 700) d.weight = s.weight;
+      if (['left', 'center', 'right'].includes(s.align)) d.align = s.align;
+    }
+    if (typeof s.show === 'boolean') d.show = s.show;
+    if (Object.keys(d).length) out[k] = d;
+  }
+  return out;
+}
 function cleanBarTypes(v) {
   const seen = new Set();
   return (Array.isArray(v) ? v : []).slice(0, 20).map((b) => ({
@@ -71,6 +95,8 @@ function cleanBarTypes(v) {
     roles: [...new Set((Array.isArray(b && b.roles) ? b.roles : []).map((r) => text(r, 30)).filter(Boolean))].slice(0, 30),
     // 이 띠의 네임택 말 — '' 판대로 | 'ko' 국문만 | 'both' 국·영문 병기(2026-11-12)
     text: ['ko', 'both'].includes(b && b.text) ? b.text : '',
+    // 이 띠의 글자 자리 — 기본 판에서 바꾼 값만 { name: { size, y, … } }(2026-11-12)
+    layout: cleanBarLayout(b && b.layout),
   })).filter((b) => b.id && b.label && !seen.has(b.id) && seen.add(b.id));
 }
 async function barTypesOf(q, ev) {

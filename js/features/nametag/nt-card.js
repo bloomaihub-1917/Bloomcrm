@@ -7,7 +7,7 @@
    bizmatching nametag-package의 lib/nametag-render.tsx를 문자열 템플릿으로 옮겼다.
 ═══════════════════════════════════════════════════════════════ */
 import { escapeHtml } from '../../utils.js';
-import { qrText, TEXT_KEYS } from '../../domain/nametag-layout.js';
+import { qrText, TEXT_KEYS, layoutFor } from '../../domain/nametag-layout.js';
 
 const ANCHOR = { left: 'translateY(-50%)', center: 'translate(-50%, -50%)', right: 'translate(-100%, -50%)' };
 
@@ -35,12 +35,13 @@ function qrEl(l, card, forPrint){
 }
 
 /* 하단바가 정한 말(nt-desk.js cardFor) — card._alt true면 병기 칸을 켜고, false면 끈다. 없으면 판대로 */
-const altShown = (el, k, card) => k.endsWith('_alt') && typeof card._alt === 'boolean' ? { ...el, show: card._alt } : el;
+export const altShown = (el, k, card) => k.endsWith('_alt') && typeof card._alt === 'boolean' ? { ...el, show: card._alt } : el;
 
 /* card: { name, company, job_title, badge, person_key } — 이미 국·영문을 고른 값. person_key가 있으면 입장 QR에 담는다
    배경은 가늠자다. 이미 인쇄된 네임택 용지에 얹어 찍는 게 기본이라 forPrint에서는 background_print가 켜져 있을 때만 그린다 */
 export function ntCardHtml(template, card, { forPrint = false } = {}){
-  const l = template.layout;
+  /* 하단바마다 글자 자리가 다를 수 있다 — 데스크 카드는 _bar, 인쇄 줄은 _bar_id(nt-desk.js) */
+  const l = layoutFor(template, card._bar || card._bar_id);
   const bg = template.background_data && (!forPrint || template.background_print);
   return `<div class="nt-card" style="width:${template.width_mm}mm;height:${template.height_mm}mm">`
     + (bg ? `<img class="nt-bg" src="${template.background_data}" alt="">` : '')

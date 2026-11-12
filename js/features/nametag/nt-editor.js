@@ -12,9 +12,9 @@
    숫자 칸은 onchange(칸을 벗어나거나 Enter)로 받고 판만 다시 그린다 — 칠 때마다 통째로 그리면 입력칸이 포커스를 잃는다.
 ═══════════════════════════════════════════════════════════════ */
 import { escapeHtml, escAttr } from '../../utils.js';
-import { normalizeTemplate, normalizeLayout, normalizeOffset, DEFAULT_LAYOUT, BAR_COLORS, SIZE_PRESETS, SHEET_OPTIONS, SHEETS, LANG_OPTIONS, TEXT_KEYS, EL_KEYS, EL_LABEL, LINE_GAPS, MM_PX, PT_MM, BAR_TEXT } from '../../domain/nametag-layout.js';
+import { normalizeTemplate, normalizeLayout, normalizeOffset, DEFAULT_LAYOUT, BAR_COLORS, SIZE_PRESETS, SHEET_OPTIONS, SHEETS, LANG_OPTIONS, TEXT_KEYS, EL_KEYS, EL_LABEL, LINE_GAPS, MM_PX, PT_MM, BAR_TEXT, layoutFor, layoutDiff } from '../../domain/nametag-layout.js';
 import { loadNametag, saveNametagTemplate } from '../../api/nametag.js';
-import { ntCardHtml } from './nt-card.js';
+import { ntCardHtml, altShown } from './nt-card.js';
 import { fitNametags } from './nt-fit.js';
 import { openPrintWindow, fillPrintWindow } from './nt-print.js';
 import { ntPeople, cardOf } from './nt-people.js';
@@ -29,10 +29,21 @@ const SAMPLES = [
 const ALIGNS = [['left', '왼쪽'], ['center', '가운데'], ['right', '오른쪽']];
 const BG_EDGE = 1600;   // 배경 이미지 긴 변 — 가늠자라 이 정도면 충분하고, 표에 넣으므로 작게
 
-const ed = { ev: '', t: null, bgDim: null, saved: '', sel: 'name', sample: 'ko', bgOpacity: 1, busy: false, msg: '', err: '', guide: { x: false, y: false } };
+const ed = { ev: '', t: null, bgDim: null, saved: '', sel: 'name', bar: '', sample: 'ko', bgOpacity: 1, busy: false, msg: '', err: '', guide: { x: false, y: false } };
 const dirty = () => !!ed.t && JSON.stringify(ed.t) !== ed.saved;
 const round = (v) => Math.round(v * 10) / 10;   // 0.1mm 단위 — v / 0.1 * 0.1은 55.800000000000004가 된다
 const snap = (v, to) => (Math.abs(v - to) <= 1 ? to : v);
+/* 고칠 판(2026-11-12) — ed.bar가 비면 기본 판, 하단바 id면 그 띠를 받는 사람의 판(기본 판 + 띠가 바꾼 값) */
+const curBar = () => ed.bar && (ed.t.bar_types || []).find(b => b.id === ed.bar);
+const L = () => layoutFor(ed.t, curBar() ? ed.bar : '');
+function setEl(key, full){
+  const b = curBar();
+  if(!b){ ed.t.layout = normalizeLayout({ ...ed.t.layout, [key]: full }); return; }
+  const v = normalizeLayout({ ...L(), [key]: full })[key], d = layoutDiff(ed.t.layout[key], v);
+  const lay = { ...(b.layout || {}) };
+  if(Object.keys(d).length) lay[key] = d; else delete lay[key];
+  b.layout = lay;
+}
 const zoomOf = (t) => Math.min(1, 460 / (t.width_mm * MM_PX), 560 / (t.height_mm * MM_PX));
 
 /* 설정 › 행사 상세가 <div id="nt-ed">를 그린 뒤 부른다 */
@@ -60,14 +71,21 @@ export async function mountNametagEditor(evKey){
 function sampleCard(){
   if(ed.sample.startsWith('p:')){
     const p = ntPeople(ed.ev).find(x => x.key === ed.sample.slice(2));
-    if(p) return { ...cardOf(p, ed.t.lang), person_key: p.key };   // 이 행사 사람이면 입장 QR도 그 사람 것으로
+    if(p) return { ...cardOf(p, barText() === 'ko' ? 'ko' : ed.t.lang), person_key: p.key, ...barCard() };   // 이 행사 사람이면 입장 QR도 그 사람 것으로
   }
-  return (SAMPLES.find(s => s[0] === ed.sample) || SAMPLES[0])[2];
+  return { ...(SAMPLES.find(s => s[0] === ed.sample) || SAMPLES[0])[2], ...barCard() };
+}
+/* 띠 판을 고칠 때 견본도 그 띠의 말(국문만·병기)로 */
+const barText = () => curBar()?.text || '';
+function barCard(){
+  const b = curBar();
+  if(!b) return {};
+  return { _bar: b.id, _alt: b.text === 'ko' ? false : b.text === 'both' ? true : undefined };
 }
 
 /* 손잡이: 글자 칸을 대강 감싸는 네모(가로 = 칸 너비, 세로 = 글자 크기 × 줄 수) */
 function handleBox(key){
-  const x = ed.t.layout[key];
+  const x = L()[key];
   if(key === 'qr') return `left:${x.x - x.size / 2}mm;top:${x.y - x.size / 2}mm;width:${x.size}mm;height:${x.size}mm`;
   const h = x.size * x.lh * PT_MM * x.lines + 1;
   const left = x.align === 'left' ? x.x : x.align === 'right' ? x.x - x.maxWidth : x.x - x.maxWidth / 2;
@@ -84,10 +102,13 @@ function canvasHtml(){
       ${cutOf(t) ? `<div class="nt-cut" style="height:${cutOf(t)}mm" title="판을 ${cutOf(t)}mm 내려 찍어요(위 여백${t.sheet === 'fit' && t.print_offset.y ? ' + 세로 보정' : ''}). 이 부분은 종이 밖으로 나가요"><span>종이 밖 ${cutOf(t)}mm</span></div>` : ''}
       ${g.x ? `<div class="nt-guide" style="left:${t.width_mm / 2}mm;top:0;width:0.3mm;height:${t.height_mm}mm"></div>` : ''}
       ${g.y ? `<div class="nt-guide" style="top:${t.height_mm / 2}mm;left:0;height:0.3mm;width:${t.width_mm}mm"></div>` : ''}
-      ${EL_KEYS.filter(k => t.layout[k].show).map(k => `<button type="button" class="nt-handle" data-k="${k}"
+      ${EL_KEYS.filter(k => shown(k)).map(k => `<button type="button" class="nt-handle" data-k="${k}"
         aria-pressed="${ed.sel === k}" aria-label="${EL_LABEL[k]} 옮기기" title="${EL_LABEL[k]} — 끌어 옮기거나 방향키로" style="${handleBox(k)}"></button>`).join('')}
     </div></div></div>`;
 }
+
+/* 판에 찍히는 칸 — 띠가 병기를 켜고 끄면 그대로 */
+const shown = (k) => altShown(L()[k], k, sampleCard()).show;
 
 function renderCanvas(){
   const c = document.getElementById('nt-ed-canvas');
@@ -114,8 +135,8 @@ function cutWarnHtml(){
   const t = ed.t, cut = cutOf(t);
   if(!cut) return '';
   const hit = EL_KEYS.filter(k => {
-    const x = t.layout[k];
-    return x.show && x.y + (k === 'qr' ? x.size : x.size * x.lh * PT_MM * x.lines + 1) / 2 > t.height_mm - cut;
+    const x = L()[k];
+    return shown(k) && x.y + (k === 'qr' ? x.size : x.size * x.lh * PT_MM * x.lines + 1) / 2 > t.height_mm - cut;
   });
   return hit.length ? `<div class="nt-warn">${hit.map(k => EL_LABEL[k]).join('·')}이(가) 아래 «종이 밖» 띠에 걸려 잘려요. 위로 올려 주세요.</div>` : '';
 }
@@ -127,7 +148,8 @@ const stateHtml = () => ed.err ? `<span style="color:var(--re)">${escapeHtml(ed.
 function renderEditor(){
   const box = document.getElementById('nt-ed');
   if(!box || !ed.t) return;
-  const t = ed.t, el = t.layout[ed.sel];
+  if(ed.bar && !curBar()) ed.bar = '';
+  const t = ed.t, lay = L(), el = lay[ed.sel], bar = curBar(), over = bar?.layout || {};
   const sizeVal = `${t.width_mm}x${t.height_mm}`;
   const people = ntPeople(ed.ev).slice(0, 30);
   const seg = (cur, list, fn) => `<div class="seg">${list.map(([k, l]) =>
@@ -197,7 +219,14 @@ function renderEditor(){
       </section>
 
       <section><h4>글자 · 입장 QR</h4>
-        <div class="nt-el-tabs">${EL_KEYS.map(k => `<button type="button" aria-pressed="${ed.sel === k}" data-hidden="${!t.layout[k].show}" onclick="ntEdSel('${k}')">${EL_LABEL[k]}</button>`).join('')}</div>
+        ${(t.bar_types || []).length ? `<label><div class="mlbl">고칠 판</div><select class="fi" onchange="ntEdBar(this.value)">
+          <option value="">기본 판 — 하단바가 따로 안 정한 사람</option>
+          ${t.bar_types.map(b => `<option value="${escAttr(b.id)}"${ed.bar === b.id ? ' selected' : ''}>하단바 «${escapeHtml(b.label || '이름 없음')}»${Object.keys(b.layout || {}).length ? ' · 자리 따로' : ''}</option>`).join('')}</select></label>
+        ${bar ? `<div class="nt-note" style="border-left:3px solid ${bar.color};padding-left:8px">«${escapeHtml(bar.label)}» 띠를 받는 사람만 이렇게 찍혀요. 여기서 바꾼 값만 따로 두고, 나머지는 기본 판을 따라가요.
+          ${Object.keys(over).length ? `<button type="button" class="btn bs" style="margin-top:6px" onclick="ntEdBarLayoutReset()">이 띠 전부 기본 판대로</button>` : ''}</div>` : ''}` : ''}
+        <div class="nt-el-tabs">${EL_KEYS.map(k => `<button type="button" aria-pressed="${ed.sel === k}" data-hidden="${!shown(k)}" onclick="ntEdSel('${k}')">${EL_LABEL[k]}${over[k] ? ' •' : ''}</button>`).join('')}</div>
+        ${bar && over[ed.sel] ? `<button type="button" class="btn bs" onclick="ntEdBarLayoutReset('${ed.sel}')">${EL_LABEL[ed.sel]}만 기본 판대로</button>` : ''}
+        ${bar && ed.sel.endsWith('_alt') && bar.text ? `<div class="nt-note">이 띠는 말을 «${bar.text === 'ko' ? '국문만' : '국·영문 병기'}»으로 정해서 병기 넣기는 띠를 따라요.</div>` : ''}
         <label class="nt-check"><input type="checkbox"${el.show ? ' checked' : ''} onchange="ntEdPatch({show:this.checked},true)"><span>${EL_LABEL[ed.sel]} 넣기</span></label>
         <div class="nt-row">
           <label><div class="mlbl">가로 위치 mm</div><input id="nt-ed-x" class="fi" type="number" step="0.5" value="${el.x}" onchange="ntEdPatch({x:+this.value})"></label>
@@ -274,11 +303,11 @@ function moveTo(key, x, y, magnet = true){
   x = magnet ? snap(round(x), t.width_mm / 2) : round(x);
   y = magnet ? snap(round(y), t.height_mm / 2) : round(y);
   ed.guide = { x: x === t.width_mm / 2, y: y === t.height_mm / 2 };
-  t.layout[key] = { ...t.layout[key], x, y };
+  setEl(key, { ...L()[key], x, y });
   ed.msg = ''; ed.err = '';
 }
 const syncXY = () => {
-  const el = ed.t.layout[ed.sel];
+  const el = L()[ed.sel];
   const xi = document.getElementById('nt-ed-x'), yi = document.getElementById('nt-ed-y');
   if(xi) xi.value = el.x;
   if(yi) yi.value = el.y;
@@ -291,7 +320,7 @@ function startDrag(e, key){
   e.preventDefault();
   h.setPointerCapture?.(e.pointerId);
   const z = zoomOf(ed.t);
-  const start = { px: e.clientX, py: e.clientY, x: ed.t.layout[key].x, y: ed.t.layout[key].y };
+  const start = { px: e.clientX, py: e.clientY, x: L()[key].x, y: L()[key].y };
   const toMm = (d) => d / (MM_PX * z);
   let raf = 0;
   const onMove = (ev) => {
@@ -325,7 +354,7 @@ function onKey(e, key){
   if(!d) return;
   e.preventDefault();
   ed.sel = key;
-  const el = ed.t.layout[key];
+  const el = L()[key];
   moveTo(key, el.x + d[0], el.y + d[1], false);
   ed.guide = { x: false, y: false };
   renderCanvas(); syncXY();
@@ -338,7 +367,7 @@ export function ntEdSel(k){ ed.sel = k; renderEditor(); }
 export function ntEdSample(v){ ed.sample = v; renderCanvas(); }
 /* full: 패널도 다시 그린다(단추·체크 — 포커스를 잃어도 되는 것) */
 export function ntEdPatch(p, full){
-  ed.t.layout = normalizeLayout({ ...ed.t.layout, [ed.sel]: { ...ed.t.layout[ed.sel], ...p } });
+  setEl(ed.sel, { ...L()[ed.sel], ...p });
   touched();
   if(full) renderEditor(); else renderCanvas();
 }
@@ -354,6 +383,12 @@ function resizePaper(w, h){
   TEXT_KEYS.forEach(k => { const e = t.layout[k]; lay[k] = { ...e, x: round(e.x * kx), y: round(e.y * ky), maxWidth: round(e.maxWidth * kx) }; });
   lay.qr = { ...t.layout.qr, x: round(t.layout.qr.x * kx), y: round(t.layout.qr.y * ky) };
   t.layout = normalizeLayout({ ...t.layout, ...lay });
+  /* 띠가 따로 둔 자리도 같은 비율로 */
+  (t.bar_types || []).forEach(b => Object.values(b.layout || {}).forEach(d => {
+    if(d.x != null) d.x = round(d.x * kx);
+    if(d.y != null) d.y = round(d.y * ky);
+    if(d.maxWidth != null) d.maxWidth = round(d.maxWidth * kx);
+  }));
   Object.assign(t, { width_mm: w, height_mm: h });
   touched(); renderEditor();
 }
@@ -402,7 +437,17 @@ export function ntEdBarDel(i){
 export function ntEdBgOpacity(v){ ed.bgOpacity = Math.max(0.1, Math.min(1, Number(v) / 100)); renderCanvas(); }
 export function ntEdBgPrint(on){ ed.t.background_print = !!on; touched(); renderCanvas(); }
 export function ntEdBgClear(){ Object.assign(ed.t, { background_data: null, background_print: false }); touched(); renderEditor(); }
+export function ntEdBar(id){ ed.bar = id || ''; renderEditor(); }
+/* key가 있으면 그 칸만, 없으면 이 띠 전부 기본 판대로 */
+export function ntEdBarLayoutReset(key){
+  const b = curBar();
+  if(!b) return;
+  if(key){ const l = { ...(b.layout || {}) }; delete l[key]; b.layout = l; }
+  else { if(!confirm(`«${b.label}» 띠의 글자 자리를 모두 기본 판대로 되돌릴까요?`)) return; b.layout = {}; }
+  touched(); renderEditor();
+}
 export function ntEdReset(){
+  if(curBar()) return ntEdBarLayoutReset();
   if(!confirm('글자 자리·크기를 기본값으로 되돌릴까요? 저장하기 전까지는 판에 반영되지 않아요.')) return;
   ed.t.layout = normalizeLayout(DEFAULT_LAYOUT); touched(); renderEditor();
 }
@@ -453,4 +498,4 @@ export function ntEdForget(){ if(!dirty()) ed.ev = ''; }
 export const ntEdDirty = dirty;
 
 Object.assign(window, { mountNametagEditor, ntEdSel, ntEdSample, ntEdPatch, ntEdAlign, ntEdWeight, ntEdLines, ntEdLh, ntEdSize, ntEdPaper, ntEdSheet, ntEdLang,
-  ntEdOffset, ntEdBarAdd, ntEdBarSet, ntEdBarRole, ntEdBarDel, ntEdBgOpacity, ntEdBgPrint, ntEdBgClear, ntEdReset, ntEdRevert, ntEdBg, ntEdSave, ntEdTestPrint, ntEdForget });
+  ntEdOffset, ntEdBarAdd, ntEdBarSet, ntEdBarRole, ntEdBarDel, ntEdBar, ntEdBarLayoutReset, ntEdBgOpacity, ntEdBgPrint, ntEdBgClear, ntEdReset, ntEdRevert, ntEdBg, ntEdSave, ntEdTestPrint, ntEdForget });

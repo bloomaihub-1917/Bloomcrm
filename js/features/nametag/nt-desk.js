@@ -24,7 +24,7 @@
 ═══════════════════════════════════════════════════════════════ */
 import { escapeHtml, escAttr, isMobile } from '../../utils.js';
 import { contacts, participations, EVENT_LIST, currentUser } from '../../state.js';
-import { normalizeTemplate, LANG_OPTIONS, REISSUE_REASONS, MM_PX, parseScan, TEXT_KEYS, EL_LABEL } from '../../domain/nametag-layout.js';
+import { normalizeTemplate, LANG_OPTIONS, REISSUE_REASONS, MM_PX, parseScan, TEXT_KEYS, EL_LABEL, layoutFor } from '../../domain/nametag-layout.js';
 import { loadNametag, loadNametagLive, promoteWalkIns } from '../../api/nametag.js';
 import { enqueue, newId, waiting, failed, deviceLog, netState, markNet, onOutbox, kick, retryFailed, dismissFailed } from './nt-outbox.js';
 import { ntPeople, walkInPeople, cardOf, SOURCE_LABEL } from './nt-people.js';
@@ -337,7 +337,7 @@ function cardFor(p){
      데스크에서 «말»을 바꿨으면 그쪽이 먼저(병기 켬·끔은 띠를 따른다) */
   const text = barType(barOf(p.key))?.text || '';
   const base = cardOf(p, e.lang || (text === 'ko' ? 'ko' : nt.template.lang));
-  return { ...base, person_key: p.key, _alt: text === 'ko' ? false : text === 'both' ? true : undefined,
+  return { ...base, person_key: p.key, _bar: barOf(p.key), _alt: text === 'ko' ? false : text === 'both' ? true : undefined,
     ...Object.fromEntries(Object.entries(e).filter(([k, v]) => k !== 'lang' && v != null)) };
 }
 
@@ -634,7 +634,7 @@ function importHtml(){
    이름이 길어 배경 그림에 걸리는 사람 하나만 살짝 내리는 식. 고른 사람이 여럿이면 미리보기 중인 사람만 */
 const POS_STEP = 1;
 function posHtml(key, card){
-  const l = nt.template.layout, pos = card._pos || {};
+  const l = layoutFor(nt.template, card._bar), pos = card._pos || {};
   const keys = TEXT_KEYS.filter(k => l[k]?.show && card[k]);
   if(!keys.length) return '<div class="nt-note">찍힐 글자가 없어요.</div>';
   const v = (n) => n ? (n > 0 ? '+' : '') + n : '0';

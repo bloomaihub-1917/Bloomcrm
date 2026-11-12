@@ -106,7 +106,31 @@ export function normalizeBarTypes(v){
     color: /^#[0-9a-f]{6}$/i.test(b?.color) ? b.color.toLowerCase() : '#868e96',
     roles: [...new Set((Array.isArray(b?.roles) ? b.roles : []).map(r => String(r || '').trim().slice(0, 30)).filter(Boolean))].slice(0, 30),
     text: BAR_TEXT.some(o => o[0] === b?.text) ? b.text : '',
+    layout: normalizeBarLayout(b?.layout),
   })).filter(b => b.id && b.label && !seen.has(b.id) && seen.add(b.id));
+}
+/* 하단바마다 글자 자리(2026-11-12) — 띠에 따라 이름 크기·자리가 다르다(VIP는 이름을 크게 등).
+   기본 판에서 바꾼 값만 { name: { size: 44, y: 48 } }처럼 둔다 → 기본 판을 고치면 안 바꾼 값은 따라간다 */
+export function normalizeBarLayout(v){
+  const o = v && typeof v === 'object' ? v : {}, out = {};
+  for(const k of EL_KEYS){
+    const src = o[k];
+    if(!src || typeof src !== 'object') continue;
+    const full = k === 'qr' ? normalizeLayout({ qr: src }).qr : normText(src, DEFAULT_LAYOUT[k]);
+    const d = Object.fromEntries(Object.keys(src).filter(f => f in full && src[f] != null).map(f => [f, full[f]]));
+    if(Object.keys(d).length) out[k] = d;
+  }
+  return out;
+}
+/* 이 띠를 받는 사람의 판 — 띠가 바꾼 값을 기본 판 위에 얹는다 */
+export function layoutFor(t, barId){
+  const o = barId && (t.bar_types || []).find(b => b.id === barId)?.layout;
+  if(!o || !Object.keys(o).length) return t.layout;
+  return Object.fromEntries(EL_KEYS.map(k => [k, o[k] ? { ...t.layout[k], ...o[k] } : t.layout[k]]));
+}
+/* 기본 판과 다른 값만 — 편집기가 띠 판을 고칠 때 */
+export function layoutDiff(base, full){
+  return Object.fromEntries(Object.keys(full).filter(f => full[f] !== base[f]).map(f => [f, full[f]]));
 }
 /* 하단바마다 네임택 말(2026-11-12) — 같은 행사에서 띠에 따라 국문만 / 국·영문 병기가 갈린다.
    '' 판대로 · 'ko' 국문만(병기 칸 끔) · 'both' 국·영문 병기(병기 칸 켬 — 자리는 판의 병기 칸) */
