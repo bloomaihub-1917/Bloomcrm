@@ -29,6 +29,12 @@
 .nt-side h4{margin:0;font-size:var(--fs-12_5)}
 .nt-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .nt-fields .wide{grid-column:1 / -1}
+/* 글자 위치 · 이번만(nt-desk.js posHtml) */
+.nt-pos summary{cursor:pointer;font-size:var(--fs-12);font-weight:600;color:var(--i3)}
+.nt-pos[open] summary{margin-bottom:6px}
+.nt-pos-row{display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-bottom:4px}
+.nt-pos-row .btn{min-width:30px;justify-content:center}
+.nt-pos-lbl{width:64px;font-size:var(--fs-12)}
 .nt-actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .nt-note{font-size:var(--fs-11);color:var(--i4)}
 .nt-warn{font-size:var(--fs-11);color:var(--am);background:var(--ab);border-radius:var(--rs);padding:6px 8px}

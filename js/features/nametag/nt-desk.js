@@ -24,7 +24,7 @@
 ═══════════════════════════════════════════════════════════════ */
 import { escapeHtml, escAttr, isMobile } from '../../utils.js';
 import { contacts, participations, EVENT_LIST, currentUser } from '../../state.js';
-import { normalizeTemplate, LANG_OPTIONS, REISSUE_REASONS, MM_PX, parseScan } from '../../domain/nametag-layout.js';
+import { normalizeTemplate, LANG_OPTIONS, REISSUE_REASONS, MM_PX, parseScan, TEXT_KEYS, EL_LABEL } from '../../domain/nametag-layout.js';
 import { loadNametag, loadNametagLive, promoteWalkIns } from '../../api/nametag.js';
 import { enqueue, newId, waiting, failed, deviceLog, netState, markNet, onOutbox, kick, retryFailed, dismissFailed } from './nt-outbox.js';
 import { ntPeople, walkInPeople, cardOf, SOURCE_LABEL } from './nt-people.js';
@@ -548,6 +548,8 @@ function sideHtml(evKey){
         <option value="ko"${card.lang === 'ko' ? ' selected' : ''}>국문</option><option value="en"${card.lang === 'en' ? ' selected' : ''}>영문</option></select></label>
     </div>
     <div class="nt-note">여기서 고친 값은 이번 네임택과 발급 기록에만 남아요. 마스터DB는 그대로예요.</div>
+    <details class="nt-pos"${card._pos ? ' open' : ''}><summary>글자 위치 · 이번만</summary>
+      <div id="nt-pos">${posHtml(focus.key, card)}</div></details>
     ${focus.walkIn ? walkInContactHtml(focus) : ''}
     ${again.length ? `<div class="nt-warn">${again.length === 1 ? escapeHtml(cardFor(again[0]).name) + ' 님은' : `${again.length}명은`} 이미 받았어요 — 재발급 사유
       <select class="fi" style="width:auto;margin-left:4px" onchange="ntSetReason(this.value)"><option value="">고르세요</option>
@@ -622,6 +624,45 @@ function importHtml(){
       <span class="when">${['badbar', 'miss', 'many'].includes(r.state) ? `하단바 ${escapeHtml(r.raw)}` : `${barChip(r.from) || '미정'} → ${barChip(r.to) || '미정'}`}</span></li>`).join('')}</ul>
     <div class="nt-actions"><button class="btn bp" onclick="ntImportApply()"${nt.busy || !(c.change + c.clear) ? ' disabled' : ''}>${c.change + c.clear}명 하단바 넣기</button>
       <button class="btn bs" onclick="ntImportCancel()">취소</button></div>`;
+}
+
+/* 글자 위치 · 이번만(2026-11-12) — 이 사람 네임택에서 글자 칸을 1mm씩 옮긴다. 판은 그대로, 인쇄하면 사라진다.
+   이름이 길어 배경 그림에 걸리는 사람 하나만 살짝 내리는 식. 고른 사람이 여럿이면 미리보기 중인 사람만 */
+const POS_STEP = 1;
+function posHtml(key, card){
+  const l = nt.template.layout, pos = card._pos || {};
+  const keys = TEXT_KEYS.filter(k => l[k]?.show && card[k]);
+  if(!keys.length) return '<div class="nt-note">찍힐 글자가 없어요.</div>';
+  const v = (n) => n ? (n > 0 ? '+' : '') + n : '0';
+  return keys.map(k => { const d = pos[k] || {};
+    return `<div class="nt-pos-row"><span class="nt-pos-lbl">${EL_LABEL[k]}</span>
+      ${[['↑', 0, -1, '위로'], ['↓', 0, 1, '아래로'], ['←', -1, 0, '왼쪽으로'], ['→', 1, 0, '오른쪽으로']].map(([a, x, y, t]) =>
+        `<button class="btn bs" title="${t} ${POS_STEP}mm" onclick="ntNudge('${escAttr(key)}','${k}',${x},${y})">${a}</button>`).join('')}
+      <span class="nt-note">가로 ${v(d.dx)} · 세로 ${v(d.dy)} mm</span></div>`; }).join('')
+    + `<div class="nt-note">이 사람의 이번 인쇄에만 써요. 판(설정 › 행사 상세 › 네임택)은 그대로예요.
+      ${card._pos ? `<button class="btn bs" onclick="ntNudgeReset('${escAttr(key)}')">처음 자리로</button>` : ''}</div>`;
+}
+function refreshPos(key){
+  const p = evPerson(key), el = document.getElementById('nt-pos');
+  if(!p) return;
+  const card = cardFor(p);
+  if(el) el.innerHTML = posHtml(key, card);
+  refreshPreview(card);
+}
+export function ntNudge(key, k, x, y){
+  const e = nt.edits.get(key) || {};
+  const pos = { ...(e._pos || {}) }, d = { dx: 0, dy: 0, ...(pos[k] || {}) };
+  const r = (n) => Math.round(n * 10) / 10;
+  d.dx = r(d.dx + x * POS_STEP); d.dy = r(d.dy + y * POS_STEP);
+  if(d.dx || d.dy) pos[k] = d; else delete pos[k];
+  e._pos = Object.keys(pos).length ? pos : undefined;
+  nt.edits.set(key, e);
+  refreshPos(key);
+}
+export function ntNudgeReset(key){
+  const e = nt.edits.get(key);
+  if(e) e._pos = undefined;
+  refreshPos(key);
 }
 
 function fitPreview(){
@@ -743,6 +784,7 @@ export async function ntPrint(){
       contact_id: c.contact_id != null && c.contact_id !== '' ? String(c.contact_id) : null,
       name: String(c.name || '').trim(), company: c.company || '', job_title: c.job_title || null, badge: c.badge || null,
       name_alt: c.name_alt || '', company_alt: c.company_alt || '', job_title_alt: c.job_title_alt || '',   // 병기 — 인쇄 창만 쓴다(기록에는 안 남김)
+      _pos: c._pos || null,   // 글자 위치 · 이번만 — 인쇄 창만 쓴다(서버로 안 보냄)
       bar: barType(barId)?.label || null, lang: c.lang === 'en' ? 'en' : 'ko', kind, reason: kind === 'reissue' ? nt.reason : null,
       printed_by: by, printed_at: at, voided_at: null, _wait: true,
       _checkin_id: onsite && !nt.checkins.has(key) ? newId('NC-') : '', _bar_id: barId || '',   // 현장 신규도 사전 출력이면 체크인 안 함
@@ -997,7 +1039,7 @@ export async function ntPromote(){
   nt.busy = false; rerender();
 }
 
-Object.assign(window, { ntPrintBlank, ntSetView, ntSetOnsite, ntSetFilter, ntSetSrc, ntSetBarFil, ntSetSort, ntFocus, ntPick, ntPickAll, ntEdit, ntWalkIn, ntWalkEdit,
+Object.assign(window, { ntNudge, ntNudgeReset, ntPrintBlank, ntSetView, ntSetOnsite, ntSetFilter, ntSetSrc, ntSetBarFil, ntSetSort, ntFocus, ntPick, ntPickAll, ntEdit, ntWalkIn, ntWalkEdit,
   ntSetReason, ntReload, ntOpenEditor, ntPrint, ntVoid, ntSetBar, ntSetBarPicked, ntWalkContact, ntCheckIn, ntUncheck,
   ntScanKey, ntCamera, ntExport, ntImportBars, ntImportApply, ntImportCancel, ntPromote,
   ntNetView, ntSendNow, ntRetryFailed, ntDismissFailed, ntExportDeviceLog });
