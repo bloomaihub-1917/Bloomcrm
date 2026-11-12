@@ -17,10 +17,11 @@ import { saveRound, saveAttempt, saveRoundMember } from '../api/exh-save.js';
 import { sendMail, eventMailFrom } from '../api/mail-send.js';
 import { escapeHtml, escAttr, nowStamp } from '../utils.js';
 import { trackAction } from '../core/audit-log.js';
-import { varPattern, eventVarValues } from '../shared/mail/mail-vars.js';
+import { varPattern, eventVarValues, unknownVars } from '../shared/mail/mail-vars.js';
 import { varChipsHtml } from '../shared/mail/var-chips.js';
 import { libItems, libItem } from '../shared/mail/mail-templates.js';
 import { looksHtml, cleanHtml, htmlToText } from '../shared/mail/html-body.js';
+import { exhMailSteps } from './exh-mail.js';
 import { memberState, renderRoundNav, pickedPersonId } from './contact-tab.js';
 import { roundById, membersOf, attemptsOf, memberName, peopleOf, coOf, evLabel } from '../domain/rounds.js';
 
@@ -181,10 +182,14 @@ function render(){
         </div>
       </div>`}
       <div>
-        ${(() => { const libs = libItems('contact', r.event_id); return `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+        ${(() => { const libs = libItems('contact', r.event_id);
+          // 같은 행사의 전시 메일 단계(설정 › 전시 메일 단계)도 불러올 수 있게
+          const steps = r.event_id ? exhMailSteps(r.event_id).filter(s => (s.subject_ko || s.body_ko || s.subject_en || s.body_en)) : [];
+          return `<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
           <select class="fi" style="font-size:var(--fs-11_5);flex:1" onchange="rmLib(this.value);this.value=''">
-            <option value="">📚 양식 보관함에서 불러오기${libs.length ? '' : ' — 아직 없어요'}</option>
-            ${libs.map(it => `<option value="${escapeHtml(it.id)}">${escapeHtml(it.name)}${it.scope === 'all' ? ' · 공통' : ''}</option>`).join('')}</select>
+            <option value="">📚 양식 불러오기${libs.length || steps.length ? '' : ' — 아직 없어요'}</option>
+            ${libs.length ? `<optgroup label="양식 보관함">${libs.map(it => `<option value="${escapeHtml(it.id)}">${escapeHtml(it.name)}${it.scope === 'all' ? ' · 공통' : ''}</option>`).join('')}</optgroup>` : ''}
+            ${steps.length ? `<optgroup label="전시 메일 단계 — 이 행사">${steps.map(st => `<option value="exh:${escapeHtml(st.key)}">${escapeHtml(st.label || st.key)}</option>`).join('')}</optgroup>` : ''}</select>
           <button class="btn" style="font-size:var(--fs-10_5)" title="컨택 메일 양식을 더하고 고칩니다 — 이 행사만 또는 모든 행사 공통"
             onclick="openMailTemplates('contact','${escAttr(r.event_id || '')}')">양식 보관함</button></div>`; })()}
         <details${cm.lang !== 'en' ? ' open' : ''}><summary style="cursor:pointer;font-size:var(--fs-11_5);font-weight:700;margin-bottom:4px">국문 문구</summary>
@@ -232,12 +237,18 @@ export function rmTpl(k, v){ if(cm) cm.tpl[k] = v; }
 
 /* 양식 보관함에서 불러오기 — 이번 창의 문구만 바꾼다. 차수 양식으로 남기려면 «차수 양식으로 저장» */
 export function rmLib(id){
-  const it = cm && id && libItem(id);
+  const ev = cm && roundById(cm.rid)?.event_id;
+  const it = cm && id && (id.startsWith('exh:')
+    ? (() => { const st = exhMailSteps(ev).find(s => s.key === id.slice(4)); return st && { ...st, name: st.label || st.key }; })()
+    : libItem(id));
   if(!it) return;
   const has = Object.values(cm.tpl).some(v => String(v || '').trim());
   if(has && !confirm(`지금 문구를 «${it.name}» 양식으로 바꿀까요?`)) return;
   cm.tpl = { subject_ko: it.subject_ko || '', body_ko: it.body_ko || '', subject_en: it.subject_en || '', body_en: it.body_en || '' };
   render();
+  // 전시 단계의 {부스}·{보내는사람} 같은 칸은 컨택에서 못 채운다 — 글자 그대로 나가니 알린다
+  const unk = unknownVars(Object.values(cm.tpl).join('\n'), 'contact');
+  if(unk.length) alert(`컨택 메일에서 채우지 못하는 칸이 있어요: ${unk.join(' ')}\n\n그대로 두면 글자 그대로 나가요. 문구에서 고쳐 주세요.`);
 }
 /* 양식 보관함을 고치면(mail-templates.js refreshAll) 불러오기 목록을 다시 그린다 — 문구는 cm.tpl에 담겨 있어 그대로 */
 export function refreshRoundMail(){ if(cm && document.getElementById('round-mail')) render(); }
