@@ -34,6 +34,9 @@ function qrEl(l, card, forPrint){
   return `<div class="nt-qr" style="${box}">${qr.createSvgTag({ cellSize: 1, margin: 0, scalable: true })}</div>`;
 }
 
+/* 하단바가 정한 말(nt-desk.js cardFor) — card._alt true면 병기 칸을 켜고, false면 끈다. 없으면 판대로 */
+const altShown = (el, k, card) => k.endsWith('_alt') && typeof card._alt === 'boolean' ? { ...el, show: card._alt } : el;
+
 /* card: { name, company, job_title, badge, person_key } — 이미 국·영문을 고른 값. person_key가 있으면 입장 QR에 담는다
    배경은 가늠자다. 이미 인쇄된 네임택 용지에 얹어 찍는 게 기본이라 forPrint에서는 background_print가 켜져 있을 때만 그린다 */
 export function ntCardHtml(template, card, { forPrint = false } = {}){
@@ -41,7 +44,7 @@ export function ntCardHtml(template, card, { forPrint = false } = {}){
   const bg = template.background_data && (!forPrint || template.background_print);
   return `<div class="nt-card" style="width:${template.width_mm}mm;height:${template.height_mm}mm">`
     + (bg ? `<img class="nt-bg" src="${template.background_data}" alt="">` : '')
-    + TEXT_KEYS.map(k => textEl(l[k], card[k] || '', card._pos?.[k])).join('')   // 병기 칸(*_alt)도 같은 규칙
+    + TEXT_KEYS.map(k => textEl(altShown(l[k], k, card), card[k] || '', card._pos?.[k])).join('')   // 병기 칸(*_alt)도 같은 규칙
     + qrEl(l, card, forPrint)
     + `</div>`;
 }

@@ -105,8 +105,12 @@ export function normalizeBarTypes(v){
     id: String(b?.id || '').trim().slice(0, 20), label: String(b?.label || '').trim().slice(0, 20),
     color: /^#[0-9a-f]{6}$/i.test(b?.color) ? b.color.toLowerCase() : '#868e96',
     roles: [...new Set((Array.isArray(b?.roles) ? b.roles : []).map(r => String(r || '').trim().slice(0, 30)).filter(Boolean))].slice(0, 30),
+    text: BAR_TEXT.some(o => o[0] === b?.text) ? b.text : '',
   })).filter(b => b.id && b.label && !seen.has(b.id) && seen.add(b.id));
 }
+/* 하단바마다 네임택 말(2026-11-12) — 같은 행사에서 띠에 따라 국문만 / 국·영문 병기가 갈린다.
+   '' 판대로 · 'ko' 국문만(병기 칸 끔) · 'both' 국·영문 병기(병기 칸 켬 — 자리는 판의 병기 칸) */
+export const BAR_TEXT = [['', '판대로'], ['ko', '국문만'], ['both', '국·영문 병기']];
 
 /* 서버에서 온 판(없으면 null)을 화면이 그릴 수 있는 모양으로 */
 export function normalizeTemplate(t){

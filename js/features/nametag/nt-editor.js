@@ -12,7 +12,7 @@
    숫자 칸은 onchange(칸을 벗어나거나 Enter)로 받고 판만 다시 그린다 — 칠 때마다 통째로 그리면 입력칸이 포커스를 잃는다.
 ═══════════════════════════════════════════════════════════════ */
 import { escapeHtml, escAttr } from '../../utils.js';
-import { normalizeTemplate, normalizeLayout, normalizeOffset, DEFAULT_LAYOUT, BAR_COLORS, SIZE_PRESETS, SHEET_OPTIONS, SHEETS, LANG_OPTIONS, TEXT_KEYS, EL_KEYS, EL_LABEL, LINE_GAPS, MM_PX, PT_MM } from '../../domain/nametag-layout.js';
+import { normalizeTemplate, normalizeLayout, normalizeOffset, DEFAULT_LAYOUT, BAR_COLORS, SIZE_PRESETS, SHEET_OPTIONS, SHEETS, LANG_OPTIONS, TEXT_KEYS, EL_KEYS, EL_LABEL, LINE_GAPS, MM_PX, PT_MM, BAR_TEXT } from '../../domain/nametag-layout.js';
 import { loadNametag, saveNametagTemplate } from '../../api/nametag.js';
 import { ntCardHtml } from './nt-card.js';
 import { fitNametags } from './nt-fit.js';
@@ -170,10 +170,13 @@ function renderEditor(){
 
       <section><h4>하단바 종류 <span class="nt-note" style="font-weight:400">· 이 행사</span></h4>
         <div class="nt-note">투포켓 명찰 아래에 끼우는 색 띠예요. 발급 데스크 명단에 사람마다 어느 띠를 줄지 보여 주고, 인쇄 창에도 띄워요. 종이에는 찍지 않아요.
-          종류마다 참가 역할을 고르면 그 역할인 사람은 따로 정하지 않아도 그 띠로 잡혀요. 한 사람이 여러 역할이면 위에 있는 종류가 먼저예요.</div>
+          종류마다 참가 역할을 고르면 그 역할인 사람은 따로 정하지 않아도 그 띠로 잡혀요. 한 사람이 여러 역할이면 위에 있는 종류가 먼저예요.
+          말을 «국문만»으로 두면 그 띠를 받는 사람은 국문으로만, «국·영문 병기»면 병기 칸까지 찍어요. 병기 칸 자리는 글자 칸에서 병기를 켜고 맞춰 두세요.</div>
         ${(t.bar_types || []).map((b, i) => `<div class="nt-row" style="align-items:center">
           <input type="color" value="${b.color}" onchange="ntEdBarSet(${i},'color',this.value)" title="띠 색" style="flex:none;width:36px;height:32px;padding:0;border:1px solid var(--i6);border-radius:var(--rs)">
           <input class="fi" value="${escAttr(b.label)}" maxlength="20" placeholder="예: VIP" oninput="ntEdBarSet(${i},'label',this.value)">
+          <select class="fi" style="flex:none;width:auto" onchange="ntEdBarSet(${i},'text',this.value)" title="이 띠를 받는 사람의 네임택 말 — 병기 자리는 아래 «병기» 칸으로 맞춰요">
+            ${BAR_TEXT.map(([k, l]) => `<option value="${k}"${(b.text || '') === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
           <button type="button" class="btn bs" style="flex:none" onclick="ntEdBarDel(${i})" title="이 종류 빼기">빼기</button></div>
           <div class="nt-roles" title="이 역할인 사람은 기본으로 이 띠 — 한 역할은 한 종류에만">${roleChoices().map(r => {
             const on = (b.roles || []).includes(r), other = !on && (t.bar_types || []).find(x => x !== b && (x.roles || []).includes(r));

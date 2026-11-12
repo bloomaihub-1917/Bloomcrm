@@ -333,8 +333,12 @@ const kst = (iso) => {
 /* 이 사람에게 찍을 값 — 데스크에서 고친 값이 있으면 그것 */
 function cardFor(p){
   const e = nt.edits.get(p.key) || {};
-  const base = cardOf(p, e.lang || nt.template.lang);
-  return { ...base, person_key: p.key, ...Object.fromEntries(Object.entries(e).filter(([k, v]) => k !== 'lang' && v != null)) };
+  /* 하단바가 말을 정했으면 그대로 — 국문만이면 국문으로 찍고 병기를 끄고, 병기면 병기 칸을 켠다.
+     데스크에서 «말»을 바꿨으면 그쪽이 먼저(병기 켬·끔은 띠를 따른다) */
+  const text = barType(barOf(p.key))?.text || '';
+  const base = cardOf(p, e.lang || (text === 'ko' ? 'ko' : nt.template.lang));
+  return { ...base, person_key: p.key, _alt: text === 'ko' ? false : text === 'both' ? true : undefined,
+    ...Object.fromEntries(Object.entries(e).filter(([k, v]) => k !== 'lang' && v != null)) };
 }
 
 /* 정렬 — 구분은 연사 · 부스 · 참가자 · 현장 신규 차례, 그 안에서 참가 구분(역할) → 이름 */
@@ -785,6 +789,7 @@ export async function ntPrint(){
       name: String(c.name || '').trim(), company: c.company || '', job_title: c.job_title || null, badge: c.badge || null,
       name_alt: c.name_alt || '', company_alt: c.company_alt || '', job_title_alt: c.job_title_alt || '',   // 병기 — 인쇄 창만 쓴다(기록에는 안 남김)
       _pos: c._pos || null,   // 글자 위치 · 이번만 — 인쇄 창만 쓴다(서버로 안 보냄)
+      _alt: typeof c._alt === 'boolean' ? c._alt : undefined,   // 하단바가 정한 병기 켬·끔 — 인쇄 창만 쓴다
       bar: barType(barId)?.label || null, lang: c.lang === 'en' ? 'en' : 'ko', kind, reason: kind === 'reissue' ? nt.reason : null,
       printed_by: by, printed_at: at, voided_at: null, _wait: true,
       _checkin_id: onsite && !nt.checkins.has(key) ? newId('NC-') : '', _bar_id: barId || '',   // 현장 신규도 사전 출력이면 체크인 안 함

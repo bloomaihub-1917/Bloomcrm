@@ -69,6 +69,8 @@ function cleanBarTypes(v) {
     color: /^#[0-9a-f]{6}$/i.test(b && b.color) ? b.color.toLowerCase() : '#888888',
     // 이 띠를 기본으로 줄 참가 역할(참가 유형 이름) — 사람마다 정한 띠가 없으면 역할로 정한다(2026-11-11)
     roles: [...new Set((Array.isArray(b && b.roles) ? b.roles : []).map((r) => text(r, 30)).filter(Boolean))].slice(0, 30),
+    // 이 띠의 네임택 말 — '' 판대로 | 'ko' 국문만 | 'both' 국·영문 병기(2026-11-12)
+    text: ['ko', 'both'].includes(b && b.text) ? b.text : '',
   })).filter((b) => b.id && b.label && !seen.has(b.id) && seen.add(b.id));
 }
 async function barTypesOf(q, ev) {
