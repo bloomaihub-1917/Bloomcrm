@@ -9,7 +9,7 @@ import { changed, removed, trackAction } from '../../core/audit-log.js';
 import { countryCheckText } from '../../country-signal.js';
 import { buildCoDB } from '../../domain/co-db.js';
 import { ensureOrgsForNames, orgIdForName } from '../../domain/orgs.js';
-import { CONTACT_ROUNDS, EVENT_LIST, EXH_CONTACTS, PART_TYPES, ROUND_MEMBERS, SALES_TARGETS, contactEvents, contacts, evColor, evShort, getContactById, hasLeft, movedTo, nextContactId, participations, speakersOfContact, contactOrgEn } from '../../state.js';
+import { CONTACT_ROUNDS, EVENT_LIST, EXH_CONTACTS, PART_TYPES, ROUND_MEMBERS, SALES_TARGETS, contactEvents, contacts, evColor, evShort, getContactById, hasLeft, movedTo, nextContactId, participations, speakersOfContact, contactOrgEn, contactOrgSectors } from '../../state.js';
 import { ab, countryName, countryOptions, escAttr, escapeHtml, personFullName, personName, td, sectorKey } from '../../utils.js';
 import { coDomainOptionsHtml, coSectorOptionsHtml, currentCoSectorPick } from '../../modules/company-tab.js';
 import { contactMailsHtml } from '../../modules/contact-mails.js';
@@ -329,11 +329,14 @@ export function contactViewPanel(c){
       <div class="ic"><div class="il">부서 (영문)</div><div class="iv">${escapeHtml(c.deptEn)||'-'}</div></div>
     </div>
 
-    ${c.beat ? `
-    <div class="sct" style="margin-top:14px">분야</div>
+    ${(() => { const secs = contactOrgSectors(c); return (secs.length || c.beat) ? `
+    <div class="sct" style="margin-top:14px">소속 기업 섹터</div>
     <div class="ig">
-      <div class="ic"><div class="il">분야</div><div class="iv"><span class="pill p-teal">${escapeHtml(c.beat)}</span></div></div>
-    </div>` : ''}
+      <div class="ic"><div class="il">섹터</div><div class="iv">${secs.length
+        ? secs.map(s => `<span class="pill p-teal">${escapeHtml(s)}</span>`).join(' ')
+        : `<span style="color:var(--i4)">${c.org_id ? '기업에 섹터가 없어요' : '기업DB에 연결되지 않았어요'}</span>`}</div></div>
+      ${c.beat ? `<div class="ic"><div class="il">업종 메모</div><div class="iv">${escapeHtml(c.beat)}</div></div>` : ''}
+    </div>` : ''; })()}
 
     ${c.products ? `
     <div class="sct" style="margin-top:14px">전시 품목</div>

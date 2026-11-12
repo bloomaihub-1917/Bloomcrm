@@ -7,7 +7,7 @@
 
 import { CL, CP, ROLE_TO_CAT, avB, avF } from '../../constants.js';
 import { sanitizeForCsv } from '../../modules/audit-tab.js';
-import { EVENT_LIST, contactEvents, contacts, evColor, evShort, getContactById, hasLeft, isConfirmedFor, mdbCat, mdbEvFilter, mdbSelected, mdbStat, participations, setMdbCat, setMdbStat, sheetsConnected, contactOrgEn } from '../../state.js';
+import { EVENT_LIST, contactEvents, contacts, evColor, evShort, getContactById, hasLeft, isConfirmedFor, mdbCat, mdbEvFilter, mdbSelected, mdbStat, participations, setMdbCat, setMdbStat, sheetsConnected, contactOrgEn, contactOrgSectors } from '../../state.js';
 import { ab, cleanEmail, escAttr, escapeHtml, leftPill, personName, td } from '../../utils.js';
 import { mdbUi } from './mdb-ui.js';
 import { applyMDBSort, contactCountryText, ctryPill, hidingLeft, isBDContact, isCLevelContact, matchesQuery, mdbFilterPairs, renderMDB, setMDBRowOrder, sortMDBBy, toggleMDBSelect, toggleMDBSelectAll } from '../../modules/db-tab.js';
@@ -221,7 +221,7 @@ export function renderMDBFlat(pairs){
       <td style="color:var(--i3);font-size:var(--fs-12);max-width:170px;white-space:normal;line-height:1.4">
         <div>${escapeHtml(c.titleKo||'')}${c.titleKo&&c.titleEn?' · ':''}${escapeHtml(c.titleEn||'')}</div>
         <div style="font-size:var(--fs-10);color:var(--i4);margin-top:1px">${escapeHtml(c.deptKo||'')}${c.deptKo&&c.deptEn?' · ':''}${escapeHtml(c.deptEn||'')}</div>
-        ${c.beat?`<div style="font-size:var(--fs-10);color:var(--te);margin-top:2px">🏭 ${escapeHtml(c.beat)}</div>`:''}
+        ${(() => { const s0 = contactOrgSectors(c)[0]; return s0 ? `<div style="font-size:var(--fs-10);color:var(--te);margin-top:2px" title="소속 기업 섹터">🏭 ${escapeHtml(s0)}</div>` : ''; })()}
         ${c.products?`<div style="font-size:var(--fs-10);color:var(--pu);margin-top:2px">📦 ${escapeHtml(c.products)}</div>`:''}
       </td>
       <td><span class="pill ${CP[roleKey]||'p-gray'}">${escapeHtml(CL[roleKey]||roleKey)}</span></td>

@@ -165,6 +165,12 @@ export function contactOrgEn(c){
   const o = c.org_id ? getOrgById(c.org_id) : null;
   return (o && o.name_en) || '';
 }
+/* 섹터는 기업에 붙는다 — 사람 화면은 소속 기업의 섹터를 읽기만 한다(첫 번째가 주력).
+   사람에게 적힌 beat는 «업종 메모»일 뿐 섹터가 아니다(2026-11-12). */
+export function contactOrgSectors(c){
+  const o = c && c.org_id ? getOrgById(c.org_id) : null;
+  return o && o.sectors ? String(o.sectors).split('|').map(s => s.trim()).filter(Boolean) : [];
+}
 
 /* 이름으로 기업 찾기 — 현재 이름과 옛 이름(aliases)을 함께 본다.
    업로드로 들어온 옛 표기를 같은 회사로 이어 붙일 때 쓴다. */
