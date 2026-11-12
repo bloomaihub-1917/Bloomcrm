@@ -25,6 +25,7 @@ const crypto = require('crypto');
 const express = require('express');
 const pool = require('../db/pool');
 const { contactIdAllocator } = require('../db/contact-ids');
+const { orgResolver } = require('../db/orgs');
 
 let ready = null;
 const ensure = () => ready || (ready = pool.query(`CREATE TABLE IF NOT EXISTS register_links (
@@ -168,12 +169,14 @@ async function accept(id, by) {
     const found = v.email ? (await client.query(`SELECT * FROM contacts
       WHERE lower(trim(email1)) = $1 OR lower(trim(email2)) = $1 ORDER BY id LIMIT 1`, [v.email.toLowerCase()])).rows[0] : null;
     let cid, created = false;
+    /* 소속은 기업DB에 잇는다 — 없으면 만든다(db/orgs.js). 안 하면 Master DB에만 있고 기업DB에선 빠진다 */
+    const orgId = v.org ? await (await orgResolver(client, { source: `신청 확정 · ${ev.name || sub.event_id}` }))(orgKo ? v.org : '', orgKo ? '' : v.org) : '';
     if (found) {
       cid = found.id;
       /* 빈 칸만 채운다 */
       const fill = {
         [ko ? 'nameKo' : 'nameEn']: v.name, [orgKo ? 'orgKo' : 'orgEn']: v.org,
-        [titleKo ? 'titleKo' : 'titleEn']: v.title, phone1: v.phone, country: v.country,
+        [titleKo ? 'titleKo' : 'titleEn']: v.title, phone1: v.phone, country: v.country, org_id: orgId,
       };
       const sets = [], args = [cid];
       Object.entries(fill).forEach(([col, val]) => {
@@ -184,12 +187,12 @@ async function accept(id, by) {
       cid = (await contactIdAllocator(client))();
       created = true;
       await client.query(`INSERT INTO contacts (id, "nameKo", "nameEn", "orgKo", "orgEn", "titleKo", "titleEn",
-          country, source, date, email1, phone1, lang)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+          country, source, date, email1, phone1, lang, org_id)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
       [cid, ko ? v.name : '', ko ? '' : v.name, orgKo ? v.org : '', orgKo ? '' : v.org,
         titleKo ? v.title : '', titleKo ? '' : v.title, v.country,
         `${viaOf(sub.via)[0]} · ${ev.name || sub.event_id}`,
-        kstStamp(Date.now()).slice(0, 10), v.email, v.phone, ko ? 'ko' : 'en']);
+        kstStamp(Date.now()).slice(0, 10), v.email, v.phone, ko ? 'ko' : 'en', orgId]);
     }
     const today = kstStamp(Date.now()).slice(0, 10);
     const note = [`${viaOf(sub.via)[2]}(${sub.created_at})`, v.memo].filter(Boolean).join(' — ');

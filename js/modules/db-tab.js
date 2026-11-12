@@ -860,6 +860,7 @@ export function mdbFilterPairs(pairs){
   if(hidingLeft()) out = out.filter(({ c }) => !hasLeft(c));
   if(mdbUi.mdbOrigin) out = out.filter(({ c }) => originOf(c) === mdbUi.mdbOrigin);
   if(mdbUi.mdbSalesEv) out = out.filter(({ c }) => isSalesTarget(c.id, mdbUi.mdbSalesEv));
+  if(mdbUi.mdbUnlinked) out = out.filter(({ c }) => isUnlinkedContact(c));
   if(mdbUi.mdbAi) out = out.filter(({ c }) => aiMatches(c, mdbUi.mdbAi.plan));
   if(mdbStat) out = out.filter(({ c }) => c.status === mdbStat);
   if(mdbUi.mdbCtryOnly) out = out.filter(({ c }) => !!ctryCheck(c));
@@ -892,6 +893,7 @@ export function renderMDB(){
   renderCtryChip();
   renderLeftChip();
   renderOrgOnly();
+  renderUnlinkedChip();
   renderMdbAiBar();
   buildMDBFilterBar();
   /* 행사 목록도 여기서 다시 그린다 — 분야를 바꾸면 그 안의 인원으로 세어야
@@ -965,6 +967,51 @@ function renderLeftChip(){
     title="회사를 떠난 담당자예요. 목록에서는 내려 두고, 행사 참여 이력은 그대로 남습니다. 눌러서 함께 봅니다."
     onclick="toggleMdbLeft()">퇴사 ${n}</button>`;
 }
+
+/* 기업DB 미연결 — 소속은 적혀 있는데 기업DB(orgs)에 이어지지 않은 사람.
+   이 사람의 기업은 기업DB에서 통째로 빠져 보인다. 서버 스크립트·신청 확정이 org_id를 비워 넣어
+   11-09·11-12에 160명씩 생겼다 — 입구(backend-node/db/orgs.js)를 막았지만, 그래도 생기면 여기서 바로 보인다. */
+export function isUnlinkedContact(c){
+  if(!c || !String(c.orgKo || c.orgEn || '').trim()) return false;
+  return !(c.org_id && getOrgById(c.org_id));
+}
+/* «A / B»·줄바꿈으로 붙여 쓴 소속은 앞의 것(주 소속)으로 — 서버 db/orgs.js primaryOrgName과 같은 규칙 */
+const primaryOrgName = s => { let t = String(s || '').replace(/\s*\n\s*/g, ' ').trim(); return /\s\/|\/\s/.test(t) ? t.split(/\s*\/\s*/)[0].trim() : t; };
+function renderUnlinkedChip(){
+  const chip = document.getElementById('mdb-unlinked-chip');
+  if(!chip) return;
+  const n = contacts.filter(isUnlinkedContact).length;
+  if(!n && !mdbUi.mdbUnlinked){ chip.style.display = 'none'; chip.innerHTML = ''; return; }
+  chip.style.display = '';
+  const on = mdbUi.mdbUnlinked;
+  chip.innerHTML = `<button class="pill ${on ? 'p-amber' : 'p-red'}" style="border:0;cursor:pointer;font:inherit"
+    title="소속은 적혀 있는데 기업DB에 이어지지 않은 사람 — 이 기업은 기업DB에서 빠져 보여요. 눌러서 이 사람들만 봅니다."
+    onclick="toggleMdbUnlinked()">기업DB 미연결 ${n}</button>${on && n ? ` <button class="btn bs" style="font-size:var(--fs-11)"
+    title="같은 이름(법인격·띄어쓰기 무시, 옛 이름 포함)의 기업에 잇고, 없으면 기업DB에 새로 만들어요"
+    onclick="linkUnlinkedContacts()">기업DB에 연결</button>` : ''}`;
+}
+export function toggleMdbUnlinked(){ mdbUi.mdbUnlinked = !mdbUi.mdbUnlinked; renderMDB(); }
+export async function linkUnlinkedContacts(){
+  const list = contacts.filter(isUnlinkedContact);
+  if(!list.length) return;
+  const nameOf = c => primaryOrgName(c.orgKo) || primaryOrgName(c.orgEn);
+  const names = [...new Set(list.map(nameOf).filter(Boolean))];
+  if(!confirm(`${list.length}명의 소속 ${names.length}곳을 기업DB에 이어요.
+이름이 같은 기업이 있으면 잇고, 없으면 «잠재고객사»로 새로 만들어요. 계속할까요?`)) return;
+  const r = await ensureOrgsForNames(names);
+  if(!r.ok){ alert('기업을 만들지 못했어요. 새로고침 후 다시 시도해 주세요.'); return; }
+  const rows = [];
+  list.forEach(c => { const oid = orgIdForName(nameOf(c)) || orgIdForName(c.orgEn); if(oid){ c.org_id = oid; rows.push({ id: c.id, org_id: oid }); } });
+  for(let i = 0; i < rows.length; i += 100){
+    const w = await postToSheet({ sheet: 'contacts', action: 'batchUpsert', dataRows: rows.slice(i, i + 100) }, '기업DB 연결');
+    if(!w.ok){ alert('일부를 저장하지 못했어요. 새로고침 후 다시 시도해 주세요.'); break; }
+  }
+  try { buildCoDB(); } catch(e){}
+  renderMDB();
+  alert(`${rows.length}명을 기업DB에 이었어요${r.created ? ` · 새 기업 ${r.created}곳` : ''}`);
+}
+window.toggleMdbUnlinked = toggleMdbUnlinked;
+window.linkUnlinkedContacts = linkUnlinkedContacts;
 
 /* 담당자 없는 기업 — 칩에 몇 곳인지 적고, 누르면 명단 아래에 기업 줄로 보인다.
    사람 명단(행사·분야·카테고리로 거른 것)과는 다른 축이라 행사로 거를 때는 띄우지 않고,

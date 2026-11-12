@@ -19,9 +19,18 @@
   `speakers.contact_id`, `speaker_contacts.contact_id`, `contact_attempts.contact_id`,
   `sales_targets.contact_id`, `activity_log.link`(JSON 안). id를 바꿀 때는 이 일곱 곳을 같이 고친다.
 
+## 연락처를 넣으면 기업DB에 잇는다
+
+소속만 적고 `org_id`를 비워 넣으면 Master DB에는 있는데 기업DB에는 그 기업이 없다.
+2026-11-09·11-12 두 번, 일회성 스크립트와 신청 확정(`routes/register.js`)이 이렇게 넣어 160명씩 생겼다.
+
+- 서버 코드·스크립트는 `orgResolver(client)`(`backend-node/db/orgs.js`)로 `org_id`를 받아 같이 넣는다 —
+  같은 이름(법인격·띄어쓰기 무시, 옛 이름 포함)이 있으면 잇고 없으면 만든다. 화면은 `ensureOrgsForNames`(`js/domain/orgs.js`).
+- 그래도 빠진 사람은 Master DB 위 «기업DB 미연결 N명» 칩에 보이고, «기업DB에 연결»로 한 번에 잇는다.
+
 ## 서버 스크립트(`backend-node/db/`)는 하는 일에 따라 폴더에 둔다
 
-- `db/` 바로 아래: 여럿이 함께 쓰는 것만 — `pool.js`, `contact-ids.js`, `schema.sql`, `seed.sql`, `fix-unsafe-contact-ids.js`
+- `db/` 바로 아래: 여럿이 함께 쓰는 것만 — `pool.js`, `contact-ids.js`, `orgs.js`, `schema.sql`, `seed.sql`, `fix-unsafe-contact-ids.js`
 - `db/migrations/`: 표에 칸·표를 더하는 `add-*.js`
 - `db/seeds/`: 처음 값을 넣는 `seed-*.js`
 - `db/oneoff/`: 특정 행사·자료를 한 번 들여오거나 고치는 것. 짝으로 쓰는 `.py`도 같은 폴더에
