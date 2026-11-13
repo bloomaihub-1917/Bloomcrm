@@ -11,10 +11,11 @@ import { qrText, TEXT_KEYS, layoutFor } from '../../domain/nametag-layout.js';
 
 const ANCHOR = { left: 'translateY(-50%)', center: 'translate(-50%, -50%)', right: 'translate(-100%, -50%)' };
 
-/* d: 이 사람만 옮긴 거리 { dx, dy }(mm) — 데스크 «글자 위치 · 이번만»(nt-desk.js). 판은 그대로다 */
+/* d: 이 사람만 옮긴 거리 { dx, dy }(mm)와 키운·줄인 글자 { ds }(pt) — 데스크 «글자 위치·크기 · 이번만»(nt-desk.js). 판은 그대로다 */
 function textEl(el, value, d){
   if(!el.show || !value) return '';
   const x = el.x + (+d?.dx || 0), y = el.y + (+d?.dy || 0);
+  el = d?.ds ? { ...el, size: Math.min(120, Math.max(6, el.size + +d.ds)) } : el;
   /* 줄여 맞출 때의 축은 왼쪽 끝 — 넘치는 글자는 정렬과 무관하게 칸 왼쪽부터 흘러나간다(nt-fit.js 주의 1) */
   return `<div class="nt-el" data-lines="${el.lines}" data-size="${el.size}"
     style="left:${x}mm;top:${y}mm;max-width:${el.maxWidth}mm;transform:${ANCHOR[el.align]};text-align:${el.align};line-height:${el.lh || 1.15}"><span

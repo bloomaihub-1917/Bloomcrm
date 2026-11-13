@@ -552,7 +552,7 @@ function sideHtml(evKey){
         <option value="ko"${card.lang === 'ko' ? ' selected' : ''}>국문</option><option value="en"${card.lang === 'en' ? ' selected' : ''}>영문</option></select></label>
     </div>
     <div class="nt-note">여기서 고친 값은 이번 네임택과 발급 기록에만 남아요. 마스터DB는 그대로예요.</div>
-    <details class="nt-pos"${card._pos ? ' open' : ''}><summary>글자 위치 · 이번만</summary>
+    <details class="nt-pos"${card._pos ? ' open' : ''}><summary>글자 위치·크기 · 이번만</summary>
       <div id="nt-pos">${posHtml(focus.key, card)}</div></details>
     ${focus.walkIn ? walkInContactHtml(focus) : ''}
     ${again.length ? `<div class="nt-warn">${again.length === 1 ? escapeHtml(cardFor(again[0]).name) + ' 님은' : `${again.length}명은`} 이미 받았어요 — 재발급 사유
@@ -630,9 +630,10 @@ function importHtml(){
       <button class="btn bs" onclick="ntImportCancel()">취소</button></div>`;
 }
 
-/* 글자 위치 · 이번만(2026-11-12) — 이 사람 네임택에서 글자 칸을 1mm씩 옮긴다. 판은 그대로, 인쇄하면 사라진다.
-   이름이 길어 배경 그림에 걸리는 사람 하나만 살짝 내리는 식. 고른 사람이 여럿이면 미리보기 중인 사람만 */
-const POS_STEP = 1;
+/* 글자 위치·크기 · 이번만(2026-11-12) — 이 사람 네임택에서 글자 칸을 1mm씩 옮기고, 2pt씩 키우고 줄인다. 판은 그대로, 인쇄하면 사라진다.
+   이름이 길어 배경 그림에 걸리는 사람 하나만 살짝 내리거나, 이름이 너무 커 보이는 사람만 줄이는 식(2026-11-13 영문 긴 이름).
+   고른 사람이 여럿이면 미리보기 중인 사람만 */
+const POS_STEP = 1, SIZE_STEP = 2;
 function posHtml(key, card){
   const l = layoutFor(nt.template, card._bar), pos = card._pos || {};
   const keys = TEXT_KEYS.filter(k => l[k]?.show && card[k]);
@@ -642,9 +643,11 @@ function posHtml(key, card){
     return `<div class="nt-pos-row"><span class="nt-pos-lbl">${EL_LABEL[k]}</span>
       ${[['↑', 0, -1, '위로'], ['↓', 0, 1, '아래로'], ['←', -1, 0, '왼쪽으로'], ['→', 1, 0, '오른쪽으로']].map(([a, x, y, t]) =>
         `<button class="btn bs" title="${t} ${POS_STEP}mm" onclick="ntNudge('${escAttr(key)}','${k}',${x},${y})">${a}</button>`).join('')}
-      <span class="nt-note">가로 ${v(d.dx)} · 세로 ${v(d.dy)} mm</span></div>`; }).join('')
+      <button class="btn bs" title="글자 ${SIZE_STEP}pt 작게" onclick="ntNudge('${escAttr(key)}','${k}',0,0,-1)">A−</button>
+      <button class="btn bs" title="글자 ${SIZE_STEP}pt 크게" onclick="ntNudge('${escAttr(key)}','${k}',0,0,1)">A+</button>
+      <span class="nt-note">가로 ${v(d.dx)} · 세로 ${v(d.dy)} mm · 크기 ${l[k].size + (d.ds || 0)}pt${d.ds ? ` (${v(d.ds)})` : ''}</span></div>`; }).join('')
     + `<div class="nt-note">이 사람의 이번 인쇄에만 써요. 판(설정 › 행사 상세 › 네임택)은 그대로예요.
-      ${card._pos ? `<button class="btn bs" onclick="ntNudgeReset('${escAttr(key)}')">처음 자리로</button>` : ''}</div>`;
+      ${card._pos ? `<button class="btn bs" onclick="ntNudgeReset('${escAttr(key)}')">처음대로</button>` : ''}</div>`;
 }
 function refreshPos(key){
   const p = evPerson(key), el = document.getElementById('nt-pos');
@@ -653,12 +656,15 @@ function refreshPos(key){
   if(el) el.innerHTML = posHtml(key, card);
   refreshPreview(card);
 }
-export function ntNudge(key, k, x, y){
+export function ntNudge(key, k, x, y, s = 0){
   const e = nt.edits.get(key) || {};
-  const pos = { ...(e._pos || {}) }, d = { dx: 0, dy: 0, ...(pos[k] || {}) };
+  const pos = { ...(e._pos || {}) }, d = { dx: 0, dy: 0, ds: 0, ...(pos[k] || {}) };
   const r = (n) => Math.round(n * 10) / 10;
   d.dx = r(d.dx + x * POS_STEP); d.dy = r(d.dy + y * POS_STEP);
-  if(d.dx || d.dy) pos[k] = d; else delete pos[k];
+  /* 크기는 판 크기에서 6~120pt 안으로만 */
+  const p = evPerson(key), base = p ? layoutFor(nt.template, cardFor(p)._bar)[k]?.size || 0 : 0;
+  if(s) d.ds = Math.min(120 - base, Math.max(6 - base, d.ds + s * SIZE_STEP));
+  if(d.dx || d.dy || d.ds) pos[k] = d; else delete pos[k];
   e._pos = Object.keys(pos).length ? pos : undefined;
   nt.edits.set(key, e);
   refreshPos(key);
