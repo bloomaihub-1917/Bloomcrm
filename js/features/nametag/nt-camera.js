@@ -228,7 +228,7 @@ async function readName(){
     if(r.exact) await checkKey(r.exact);
     else if(r.list.length){
       beep(false);
-      show('pick', `<span>누구인지 골라 주세요${r.read ? ` · 읽은 글자 «${escapeHtml(r.read)}»` : ''}</span>
+      show('pick', `<span>${escapeHtml(r.why || '누구인지 골라 주세요')}${r.read ? ` · 읽은 글자 «${escapeHtml(r.read)}»` : ''}</span>
         <div class="nt-cam-pick">${r.list.map(p => `<button type="button" class="btn bs" data-key="${escapeHtml(p.key)}"><b>${escapeHtml(p.name)}</b> ${escapeHtml(p.org || '')}</button>`).join('')}</div>`, 15000);
     } else { beep(false); show('bad', `명단에서 이름을 못 찾았어요${r.read ? ` — 읽은 글자 «${escapeHtml(r.read)}»` : ''}. 이름을 네모 가득 비추고 다시 눌러 주세요`, 6000); }
   } catch(e){ beep(false); show('bad', `이름을 읽지 못했어요 — ${escapeHtml(e.message || String(e))}`, 6000); }

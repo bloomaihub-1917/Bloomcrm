@@ -872,7 +872,8 @@ export function ntCamera(){
 
 /* 이름 읽기(nt-camera.js) — 읽은 글자에서 명단의 이름을 찾는다(2026-11-13).
    글자 읽기는 틀리기 쉽다(한 글자 바뀜·띄어쓰기·소속이 섞임) → 띄어쓰기를 빼고, 읽은 글자 안에서 이름과 가장 비슷한 토막을 잰다.
-   이름이 통째로 들어 있고 그런 사람이 한 명뿐이면 바로 체크인, 아니면 비슷한 사람을 4명까지 후보로 */
+   바로 체크인은 이름이 통째로 맞고 «소속»도 맞을 때만(2026-11-13 — 동명이인). 같은 이름·같은 소속이 둘 이상이면 «직함»으로 가른다.
+   소속을 못 읽었거나(작은 글씨) 그래도 못 가르면 후보를 4명까지 띄워 사람이 고른다(소속·직함을 함께 보여 준다) */
 const lev = (a, b) => {
   const d = Array.from({ length: b.length + 1 }, (_, j) => j);
   for(let i = 1; i <= a.length; i++){
@@ -890,18 +891,29 @@ function nearIn(text, name){
     for(let i = 0; i + n <= text.length; i++) best = Math.max(best, 1 - lev(text.slice(i, i + n), name) / name.length);
   return best;
 }
+const KO = (s) => String(s || '').replace(/주식회사|㈜|\(주\)|재단법인|사단법인/g, '').replace(/[^가-힣]/g, '');
+const EN = (s) => String(s || '').toLowerCase().replace(/\b(inc|co|ltd|corp|corporation|llc|gmbh)\b/g, '').replace(/[^a-z]/g, '');
+const SAME = 0.75;   // 소속·직함이 이만큼 닮으면 맞은 것으로(긴 소속은 글자 몇 개를 잘못 읽기 쉽다)
+/* 국문·영문 둘 중 더 닮은 쪽. 그 사람에게 값이 없으면 null(확인할 것이 없음) */
+const near2 = (t, ko, en) => { const k = KO(ko), e = EN(en); return k.length < 2 && e.length < 2 ? null : Math.max(nearIn(t.ko, k), nearIn(t.en, e)); };
 function matchName(people, raw){
-  const ko = String(raw || '').replace(/[^가-힣]/g, '');
-  const en = String(raw || '').toLowerCase().replace(/[^a-z]/g, '');
+  const t = { ko: KO(raw), en: EN(raw) };
   const read = String(raw || '').replace(/\s+/g, ' ').trim().slice(0, 40);
-  if(!ko && !en) return { exact: '', list: [], read };
-  const scored = people.map(p => {
-    const k = String(p.nameKo || '').replace(/[^가-힣]/g, ''), e = String(p.nameEn || '').toLowerCase().replace(/[^a-z]/g, '');
-    return { p, s: Math.max(nearIn(ko, k), nearIn(en, e)) };
-  }).filter(x => x.s >= 0.6).sort((a, b) => b.s - a.s);
-  const full = scored.filter(x => x.s === 1);
-  const exact = full.length === 1 && (scored.length < 2 || scored[1].s < 1) ? full[0].p.key : '';
-  return { exact, read, list: scored.slice(0, 4).map(({ p }) => ({ key: p.key, name: p.nameKo || p.nameEn, org: p.orgKo || p.orgEn })) };
+  if(!t.ko && !t.en) return { exact: '', list: [], read };
+  const scored = people.map(p => ({ p,
+    n: Math.max(nearIn(t.ko, KO(p.nameKo)), nearIn(t.en, EN(p.nameEn))),
+    o: near2(t, p.orgKo, p.orgEn), j: near2(t, p.titleKo, p.titleEn) }))
+    .filter(x => x.n >= 0.6)
+    .sort((a, b) => (b.n * 2 + (b.o || 0) + (b.j || 0) / 2) - (a.n * 2 + (a.o || 0) + (a.j || 0) / 2));
+  const same = scored.filter(x => x.n === 1);
+  /* 이름이 맞은 사람 중 소속도 맞는 사람 → 여럿이면 직함까지 맞는 사람 */
+  let sure = same.filter(x => x.o == null || x.o >= SAME);
+  if(sure.length > 1) sure = sure.filter(x => x.j != null && x.j >= SAME);
+  const exact = sure.length === 1 ? sure[0].p.key : '';
+  const why = exact ? '' : same.length > 1 ? `같은 이름이 ${same.length}명이에요 — 소속·직함을 보고 골라 주세요`
+    : same.length === 1 ? '소속이 명단과 다르거나 못 읽었어요 — 맞는지 보고 눌러 주세요' : '';
+  return { exact, read, why, list: scored.slice(0, 4).map(({ p }) => ({ key: p.key, name: p.nameKo || p.nameEn,
+    org: [p.orgKo || p.orgEn, p.titleKo || p.titleEn].filter(Boolean).join(' · ') })) };
 }
 
 /* ── 체크인 ── */
