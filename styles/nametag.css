@@ -24,10 +24,13 @@
 .nt-stage{transform-origin:top left}
 .nt-frame{position:relative;display:inline-block;border:1px solid var(--i5);box-shadow:var(--sh);background:#fff}
 
-/* 발급 데스크 — 왼쪽 명단, 오른쪽 미리보기·인쇄 */
+/* 발급 데스크 — 왼쪽 명단, 오른쪽 미리보기·인쇄. 휴대폰(768px 이하)만 위아래로 쌓는다.
+   오른쪽 칸은 명단을 내려도 제자리(sticky) — 높이는 스크롤 영역에 맞추고(nt-desk.js fitSide) 넘치면 칸 안에서 내린다 */
 .nt-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,380px);gap:var(--gap-sec);align-items:start}
 .nt-side{position:sticky;top:8px;display:flex;flex-direction:column;gap:var(--gap-sec);
+  max-height:var(--nt-side-max,none);overflow-y:auto;overscroll-behavior:contain;
   background:var(--W);border:1px solid var(--i6);border-radius:var(--r);padding:12px}
+.nt-side > *{flex-shrink:0}
 .nt-side h4{margin:0;font-size:var(--fs-12_5)}
 .nt-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .nt-fields .wide{grid-column:1 / -1}
@@ -68,8 +71,11 @@
 .nt-rows input[type="checkbox"]{width:16px;height:16px}
 
 @media (max-width:1100px){
+  .nt-layout{grid-template-columns:minmax(0,1fr) minmax(260px,42%)}
+}
+@media (max-width:768px){
   .nt-layout{grid-template-columns:minmax(0,1fr)}
-  .nt-side{position:static}
+  .nt-side{position:static;max-height:none;overflow:visible}
 }
 /* 휴대폰 — 명단 카드(nt-desk.js mobileRowsHtml)와 아래 «미리보기 · 인쇄» 막대(mobileBarHtml) */
 .nt-mrow{display:flex;gap:10px;align-items:center;padding:10px 12px;margin-bottom:6px;background:var(--W);border:1px solid var(--i6);border-radius:var(--r)}

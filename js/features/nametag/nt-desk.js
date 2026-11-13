@@ -194,6 +194,18 @@ function startPolling(){
 }
 /* 창을 내려 두면(document.hidden) 묻지 않는다 — 다시 보이면 15초를 기다리지 않고 바로 묻는다 */
 document.addEventListener('visibilitychange', () => { if(!document.hidden && nt.timer) pollLive(); });
+
+/* 오른쪽 미리보기 칸은 명단을 내려도 제자리에 서 있다(sticky) — 칸이 보이는 높이보다 길면 아래가 안 보이므로
+   칸 높이를 스크롤 영역 높이에 맞추고, 넘치는 것은 칸 안에서 따로 내린다(2026-11-13) */
+function fitSide(){
+  const s = document.getElementById('nt-side');
+  if(!s) return;
+  let sc = s.parentElement;
+  while(sc && sc !== document.body && !/(auto|scroll)/.test(getComputedStyle(sc).overflowY)) sc = sc.parentElement;
+  const h = sc && sc !== document.body ? sc.clientHeight : window.innerHeight;
+  s.style.setProperty('--nt-side-max', Math.max(240, h - 16) + 'px');
+}
+window.addEventListener('resize', () => requestAnimationFrame(fitSide));
 async function pollLive(){
   {
     if(!document.getElementById('nt-desk')){ clearInterval(nt.timer); nt.timer = 0; return; }
@@ -423,6 +435,7 @@ export function ntPartHtml(ev, query){
   if(nt.err) return `<div class="sec"><div class="nt-warn">네임택 기록을 못 불러왔어요 — ${escapeHtml(nt.err)}
     <button class="btn bs" onclick="ntReload()">다시</button></div></div>`;
   startPolling();
+  requestAnimationFrame(fitSide);
   foldAliases();   // 그사이 연락처에 이어진 사람이 있으면
   const t = nt.template;
   const seg = (cur, list, fn) => `<div class="seg">${list.map(([k, l]) =>
