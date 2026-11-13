@@ -153,6 +153,20 @@ const matchQ = (r, q) => [r.name, r.nameEn, r.org, r.orgEn, r.title, r.email, r.
 
 const orgCount = (rows) => new Set(rows.map(r => r.orgKey || `?${r.cid}`)).size;
 /* 국가는 코드(KR)와 이름(대한민국)이 섞여 들어와서 표시 이름으로 맞춘 뒤 센다. 빈 값은 세지 않는다 */
+/* 나라별 기업 수 — 카드 아래에 «중국 5 · 이집트 3 …»으로 적는다. 국가가 빈 기업은 따로 센다 */
+function countryList(rows){
+  const by = new Map(); const noCtry = new Set();
+  rows.forEach(r => {
+    const k = r.orgKey || `?${r.cid}`, c = countryName(r.country) || '';
+    if(!c){ noCtry.add(k); return; }
+    if(!by.has(c)) by.set(c, new Set());
+    by.get(c).add(k);
+  });
+  const items = [...by].sort((a, b) => b[1].size - a[1].size || a[0].localeCompare(b[0], 'ko'))
+    .map(([c, set]) => `${escapeHtml(c)} <b style="color:var(--i2)">${set.size}</b>`);
+  if(noCtry.size) items.push(`<span style="color:var(--am)">국가 미기재 <b>${noCtry.size}</b></span>`);
+  return items.join('<span style="color:var(--i6);margin:0 5px">·</span>');
+}
 const countryCount = (rows) => new Set(rows.map(r => countryName(r.country) || '').filter(Boolean)).size;
 
 function shownRows(view = ptnView){
@@ -250,6 +264,7 @@ export function renderPtn(){
       <div style="display:flex;align-items:center;gap:6px"><span class="pill ${escAttr(s.cls)}">${escapeHtml(s.label)}</span></div>
       <div style="font-size:var(--fs-20);font-weight:700;color:var(--i1);margin-top:6px">${countryCount(l)}<span style="font-size:var(--fs-12);font-weight:600;color:var(--i3);margin-right:8px">개국</span>${orgCount(l)}<span style="font-size:var(--fs-12);font-weight:600;color:var(--i3)">개사</span>
         <span style="font-size:var(--fs-13);font-weight:600;color:var(--i3);margin-left:4px">${l.length}명</span></div>
+      ${l.length ? `<div style="font-size:var(--fs-11);color:var(--i3);margin-top:6px;line-height:1.6" title="나라별 기업 수">${countryList(l)}</div>` : ''}
     </div>`;
   };
   const counts = { list: list.length, wait: rowsFor('wait').length, assign: rowsFor('assign').length, out: rowsFor('out').length };
