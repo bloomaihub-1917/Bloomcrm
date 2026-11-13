@@ -15,7 +15,12 @@ const ANCHOR = { left: 'translateY(-50%)', center: 'translate(-50%, -50%)', righ
 function textEl(el, value, d){
   if(!el.show || !value) return '';
   const x = el.x + (+d?.dx || 0), y = el.y + (+d?.dy || 0);
-  el = d?.ds ? { ...el, size: Math.min(120, Math.max(6, el.size + +d.ds)) } : el;
+  /* 줄일 때는 칸 너비도 같은 비율로 좁힌다 — 칸보다 긴 이름은 칸에 꽉 차게 맞춰지므로 글자 크기만 낮추면
+     도로 칸만큼 늘어나 하나도 안 줄었다(2026-11-13 긴 영문 이름). 키울 때는 칸을 그대로 둔다(옆으로 넘치지 않게) */
+  if(d?.ds){
+    const size = Math.min(120, Math.max(6, el.size + +d.ds));
+    el = { ...el, size, maxWidth: size < el.size ? Math.round(el.maxWidth * size / el.size * 10) / 10 : el.maxWidth };
+  }
   /* 줄여 맞출 때의 축은 왼쪽 끝 — 넘치는 글자는 정렬과 무관하게 칸 왼쪽부터 흘러나간다(nt-fit.js 주의 1) */
   return `<div class="nt-el" data-lines="${el.lines}" data-size="${el.size}"
     style="left:${x}mm;top:${y}mm;max-width:${el.maxWidth}mm;transform:${ANCHOR[el.align]};text-align:${el.align};line-height:${el.lh || 1.15}"><span
