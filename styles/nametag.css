@@ -31,6 +31,9 @@
 .nt-side h4{margin:0;font-size:var(--fs-12_5)}
 .nt-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .nt-fields .wide{grid-column:1 / -1}
+/* 명단 표 제목 — 눌러서 정렬(nt-desk.js sortTh) */
+.nt-rows th.nt-sort{cursor:pointer;user-select:none;white-space:nowrap}
+.nt-rows th.nt-sort:hover, .nt-rows th.nt-sort.on{color:var(--i1)}
 .nt-fields .nt-ta{resize:vertical;min-height:0;line-height:1.4;font-family:inherit}
 /* 글자 위치 · 이번만(nt-desk.js posHtml) */
 .nt-pos summary{cursor:pointer;font-size:var(--fs-12);font-weight:600;color:var(--i3)}

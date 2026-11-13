@@ -353,12 +353,25 @@ function cardFor(p){
 }
 
 /* 정렬 — 구분은 연사 · 부스 · 참가자 · 현장 신규 차례, 그 안에서 참가 구분(역할) → 이름 */
-const SORTS = [['org', '소속 → 이름'], ['kind', '구분 → 이름'], ['bar', '하단바 → 이름'], ['name', '이름']];
+const SORTS = [['org', '소속 → 이름'], ['kind', '구분 → 이름'], ['bar', '하단바 → 이름'], ['name', '이름 (국문 가나다 → 영문 ABC)']];
 const SRC_ORDER = Object.keys(SOURCE_LABEL);
 const ko = (a, b) => String(a || '').localeCompare(String(b || ''), 'ko');
 const nameOf = (p) => p.nameKo || p.nameEn, orgOf = (p) => p.orgKo || p.orgEn;
+/* 이름 차례(2026-11-13) — 국문 이름(가나다) 먼저, 그다음 영문 이름(ABC).
+   외국인은 한글 읽기(«로베르토 몰리나로»)를 넣어 둔 경우가 많다 → 영문명이 있으면 영문명 알파벳 차례로.
+   한국 이름으로 보는 것은 띄어쓰기 없는 한글 2~4자뿐(«남궁민수»까지) */
+const KR_NAME = /^[가-힣]{2,4}$/;
+function nameKey(p){
+  const k = String(p.nameKo || '').trim(), e = String(p.nameEn || '').trim();
+  if(KR_NAME.test(k) || (k && !e)) return [/[가-힣]/.test(k) ? 0 : 1, k];
+  return [e ? 1 : 2, e || k];
+}
+function byNameKey(a, b){
+  const x = nameKey(a), y = nameKey(b);
+  return (x[0] - y[0]) || (x[0] === 0 ? ko(x[1], y[1]) : x[1].localeCompare(y[1], 'en', { sensitivity: 'base' }));
+}
 function sortPeople(l){
-  const byName = (a, b) => ko(nameOf(a), nameOf(b)) || ko(orgOf(a), orgOf(b));
+  const byName = (a, b) => byNameKey(a, b) || ko(orgOf(a), orgOf(b));
   /* 하단바 — 판에 적은 종류 차례(설정 › 행사 상세 › 네임택), 미정·지운 종류는 맨 뒤 */
   const barRank = (p) => { const i = barTypes().findIndex(b => b.id === barOf(p.key)); return i < 0 ? 999 : i; };
   const cmp = nt.sort === 'name' ? byName
@@ -366,7 +379,8 @@ function sortPeople(l){
     : nt.sort === 'kind' ? (a, b) => (SRC_ORDER.indexOf(a.source) - SRC_ORDER.indexOf(b.source))
         || (!a.badgeKo - !b.badgeKo) || ko(a.badgeKo, b.badgeKo) || byName(a, b)
     : (a, b) => ko(orgOf(a), orgOf(b)) || byName(a, b);
-  return [...l].sort(cmp);
+  const out = [...l].sort(cmp);
+  return nt.sortDesc ? out.reverse() : out;
 }
 
 function visible(evKey, query){
@@ -474,7 +488,7 @@ export function ntRowsHtml(evKey, query){
     : `<td>${barChip(barOf(p.key))}</td>`;
 
   if(ci) return `<div style="overflow-x:auto"><table class="nt-rows" style="width:100%">
-    <thead><tr><th>성명</th><th>소속</th><th>구분</th><th>하단바</th><th>네임택</th><th>체크인</th></tr></thead><tbody>
+    <thead><tr>${sortTh('name', '성명')}${sortTh('org', '소속')}${sortTh('kind', '구분')}${sortTh('bar', '하단바')}<th>네임택</th><th>체크인</th></tr></thead><tbody>
     ${shown.map(p => { const c = nt.checkins.get(p.key);
       return `<tr class="${c ? 'in' : ''}">${who(p)}<td>${srcPill(p)}</td><td>${barChip(barOf(p.key))}</td>
       <td style="font-size:var(--fs-11);white-space:nowrap">${got(p)}</td>
@@ -485,7 +499,7 @@ export function ntRowsHtml(evKey, query){
   const allOn = shown.every(p => nt.picked.has(p.key));
   return `<div style="overflow-x:auto"><table class="nt-rows" style="width:100%">
     <thead><tr><th class="ck"><input type="checkbox"${allOn ? ' checked' : ''} onchange="ntPickAll(this.checked)" title="보이는 사람 모두 고르기"></th>
-      <th>성명</th><th>소속</th><th>직함</th><th>구분</th><th>하단바</th><th>받음</th><th>체크인</th></tr></thead><tbody>
+      ${sortTh('name', '성명')}${sortTh('org', '소속')}<th>직함</th>${sortTh('kind', '구분')}${sortTh('bar', '하단바')}<th>받음</th><th>체크인</th></tr></thead><tbody>
     ${shown.map(p => `<tr class="${nt.focus === p.key ? 'on' : ''}" style="cursor:pointer" onclick="ntFocus('${escAttr(p.key)}')">
       <td class="ck" onclick="event.stopPropagation()"><input type="checkbox"${nt.picked.has(p.key) ? ' checked' : ''} onchange="ntPick('${escAttr(p.key)}',this.checked)"></td>
       ${who(p)}
@@ -752,7 +766,13 @@ export function ntSetOnsite(v){ nt.onsite = v === 'on'; rerender(); }
 export function ntSetFilter(v){ nt.filter = v; rerender(); }
 export function ntSetSrc(v){ nt.src = v; rerender(); }
 export function ntSetBarFil(v){ nt.barFil = v; rerender(); }
-export function ntSetSort(v){ nt.sort = SORTS.some(s => s[0] === v) ? v : 'org'; try { localStorage.setItem('nametag.sort.v1', nt.sort); } catch {} rerender(); }
+export function ntSetSort(v){ nt.sort = SORTS.some(s => s[0] === v) ? v : 'org'; nt.sortDesc = false; try { localStorage.setItem('nametag.sort.v1', nt.sort); } catch {} rerender(); }
+/* 표 제목을 눌러 정렬 — 처음 누르면 오름차순, 같은 제목을 또 누르면 내림차순(2026-11-13) */
+export function ntSortBy(v){
+  if(nt.sort === v){ nt.sortDesc = !nt.sortDesc; rerender(); return; }
+  ntSetSort(v);
+}
+const sortTh = (k, label) => `<th class="nt-sort${nt.sort === k ? ' on' : ''}" onclick="ntSortBy('${k}')" title="눌러서 ${label} 차례로 — 한 번 더 누르면 거꾸로">${label}${nt.sort === k ? (nt.sortDesc ? ' ▼' : ' ▲') : ''}</th>`;
 export function ntFocus(key){ nt.focus = key; nt.walkIn = null; nt.imp = null; nt.netView = false; rerender(); }
 export function ntPick(key, on){ if(on) nt.picked.add(key); else nt.picked.delete(key); if(on && !nt.focus) nt.focus = key; nt.walkIn = null; rerender(); }
 export function ntPickAll(on){
@@ -1164,7 +1184,7 @@ export async function ntPromote(){
   nt.busy = false; rerender();
 }
 
-Object.assign(window, { ntNudge, ntNudgeReset, ntEditReset, ntPrintBlank, ntSetView, ntSetOnsite, ntSetFilter, ntSetSrc, ntSetBarFil, ntSetSort, ntFocus, ntPick, ntPickAll, ntEdit, ntWalkIn, ntWalkEdit,
+Object.assign(window, { ntNudge, ntNudgeReset, ntEditReset, ntPrintBlank, ntSetView, ntSetOnsite, ntSetFilter, ntSetSrc, ntSetBarFil, ntSetSort, ntSortBy, ntFocus, ntPick, ntPickAll, ntEdit, ntWalkIn, ntWalkEdit,
   ntSetReason, ntReload, ntOpenEditor, ntPrint, ntVoid, ntSetBar, ntSetBarPicked, ntWalkContact, ntCheckIn, ntUncheck,
   ntScanKey, ntCamera, ntExport, ntImportBars, ntImportApply, ntImportCancel, ntPromote,
   ntNetView, ntSendNow, ntRetryFailed, ntDismissFailed, ntExportDeviceLog });
