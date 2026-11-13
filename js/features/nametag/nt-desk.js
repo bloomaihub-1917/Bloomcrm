@@ -867,7 +867,41 @@ export function ntCamera(){
     checkInLocal(p.key);   // 기기에 남기고 바로 초록 — 서버로는 뒤에서
     refreshLists();
     return { state: 'ok', person };
-  }, () => nt.ev === ev && nt.view === 'checkin' && !!document.getElementById('nt-desk'));
+  }, () => nt.ev === ev && nt.view === 'checkin' && !!document.getElementById('nt-desk'), (text) => matchName(deskPeople(ev), text));
+}
+
+/* 이름 읽기(nt-camera.js) — 읽은 글자에서 명단의 이름을 찾는다(2026-11-13).
+   글자 읽기는 틀리기 쉽다(한 글자 바뀜·띄어쓰기·소속이 섞임) → 띄어쓰기를 빼고, 읽은 글자 안에서 이름과 가장 비슷한 토막을 잰다.
+   이름이 통째로 들어 있고 그런 사람이 한 명뿐이면 바로 체크인, 아니면 비슷한 사람을 4명까지 후보로 */
+const lev = (a, b) => {
+  const d = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for(let i = 1; i <= a.length; i++){
+    let prev = d[0]; d[0] = i;
+    for(let j = 1; j <= b.length; j++){ const t = d[j]; d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = t; }
+  }
+  return d[b.length];
+};
+/* text 안에서 name과 가장 비슷한 토막의 닮음(0~1) */
+function nearIn(text, name){
+  if(!name || name.length < 2 || !text) return 0;
+  if(text.includes(name)) return 1;
+  let best = 0;
+  for(let n = Math.max(1, name.length - 1); n <= name.length + 1; n++)
+    for(let i = 0; i + n <= text.length; i++) best = Math.max(best, 1 - lev(text.slice(i, i + n), name) / name.length);
+  return best;
+}
+function matchName(people, raw){
+  const ko = String(raw || '').replace(/[^가-힣]/g, '');
+  const en = String(raw || '').toLowerCase().replace(/[^a-z]/g, '');
+  const read = String(raw || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  if(!ko && !en) return { exact: '', list: [], read };
+  const scored = people.map(p => {
+    const k = String(p.nameKo || '').replace(/[^가-힣]/g, ''), e = String(p.nameEn || '').toLowerCase().replace(/[^a-z]/g, '');
+    return { p, s: Math.max(nearIn(ko, k), nearIn(en, e)) };
+  }).filter(x => x.s >= 0.6).sort((a, b) => b.s - a.s);
+  const full = scored.filter(x => x.s === 1);
+  const exact = full.length === 1 && (scored.length < 2 || scored[1].s < 1) ? full[0].p.key : '';
+  return { exact, read, list: scored.slice(0, 4).map(({ p }) => ({ key: p.key, name: p.nameKo || p.nameEn, org: p.orgKo || p.orgEn })) };
 }
 
 /* ── 체크인 ── */

@@ -139,6 +139,15 @@
 .nt-cam-msg[data-state="ok"]{background:var(--g);color:#fff;font-weight:700}
 .nt-cam-msg[data-state="warn"]{background:var(--ab);color:var(--am);font-weight:700}
 .nt-cam-msg[data-state="bad"]{background:var(--rb);color:var(--re);font-weight:700}
+/* 이름 읽기 단추 — 영상 바로 아래 넓게(입구에 세운 태블릿에서 누르기 쉽게) */
+.nt-cam-act{padding:8px 10px 0}
+.nt-cam-act .btn{width:100%;justify-content:center}
+#nt-cam.full .nt-cam-act .btn{font-size:clamp(18px,3vh,28px);padding:10px}
+.nt-cam-msg[data-state="pick"]{background:var(--ab);color:var(--i1)}
+/* 이름 읽기 후보 — 누르면 그 사람으로 체크인 */
+.nt-cam-pick{display:flex;flex-direction:column;gap:4px;margin-top:6px}
+.nt-cam-pick .btn{justify-content:flex-start;gap:6px;text-align:left}
+.nt-cam-pick .btn b{font-size:inherit}
 /* 전체 화면 — 입구에 세워 둔 태블릿·노트북. 영상이 남는 자리를 다 쓰고, 알림 글자를 멀리서도 보이게 키운다 */
 #nt-cam.full{inset:0;width:auto;border:0;border-radius:0;box-shadow:none}
 #nt-cam.full .nt-cam-head{font-size:var(--fs-16);padding:10px 14px}
