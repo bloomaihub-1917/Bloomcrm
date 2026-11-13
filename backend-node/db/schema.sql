@@ -1272,6 +1272,8 @@ CREATE TABLE IF NOT EXISTS nametag_checkins (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS nametag_checkins_one_live ON nametag_checkins (event_id, person_key) WHERE voided_at IS NULL;
 CREATE INDEX IF NOT EXISTS nametag_checkins_event_idx ON nametag_checkins (event_id, checked_at DESC);
+-- 네임택 사람별 글자 위치·크기 (2026-11-13) — db/migrations/add-nametag-pos.js
+ALTER TABLE nametag_people ADD COLUMN IF NOT EXISTS pos JSONB;   -- { name: { dx, dy, ds }, … } mm·pt, 판에서 바꾼 만큼
 -- 네임택 끊김 대비 (2026-11-10) — db/migrations/add-nametag-offline.js
 -- 기록 id는 기기가 만든다(같은 기록이 두 번 와도 한 번만). synced_at = 서버가 받은 시각 — /live는 이것으로 묻는다
 ALTER TABLE nametag_prints ADD COLUMN IF NOT EXISTS synced_at TEXT;

@@ -148,6 +148,8 @@ function applyOp(op){
     d.items.forEach(i => nt.people.set(i.person_key, { ...(nt.people.get(i.person_key) || { person_key: i.person_key }), bar: i.bar || null }));
   } else if(op.kind === 'contact'){
     nt.people.set(d.key, { ...(nt.people.get(d.key) || { person_key: d.key }), email: d.email, phone: d.phone });
+  } else if(op.kind === 'pos'){
+    nt.people.set(d.key, { ...(nt.people.get(d.key) || { person_key: d.key }), pos: d.pos });
   }
 }
 /* 서버가 받았다 — 기기에서 만든 줄을 서버 줄로 바꾼다 */
@@ -170,7 +172,7 @@ function reconcile(op, res){
     if(res.print) nt.prints = nt.prints.map(p => p.id === res.print.id ? res.print : p);
   } else if(op.kind === 'bars'){
     (res.people || []).forEach(p => nt.people.set(p.person_key, p));
-  } else if(op.kind === 'contact'){
+  } else if(op.kind === 'contact' || op.kind === 'pos'){
     if(res.person) nt.people.set(res.person.person_key, res.person);
   }
 }
@@ -254,7 +256,7 @@ function netHtml(){
     : ['ok', `● 연결됨${nt.syncedAt ? ` · ${kst(nt.syncedAt)} 받음` : ''}`];
   return `<button type="button" id="nt-net" class="nt-net ${cls}" onclick="ntNetView()" title="이 기기에 남긴 발급·체크인 기록과 보내기 상태">${txt}</button>`;
 }
-const OP_LABEL = { issue: '발급', checkin: '체크인', uncheck: '체크인 취소', void: '인쇄 안 됨', bars: '하단바', contact: '현장 신규 연락처' };
+const OP_LABEL = { issue: '발급', checkin: '체크인', uncheck: '체크인 취소', void: '인쇄 안 됨', bars: '하단바', contact: '현장 신규 연락처', pos: '글자 조정' };
 function opText(op, names){
   const d = op.data, nm = (k) => names.get(k) || k;
   if(op.kind === 'issue') return `${d.rows.length}장 — ${d.rows.slice(0, 3).map(r => r.name).join(', ')}${d.rows.length > 3 ? ' 외' : ''}${d.onsite ? ' · 현장 출력' : ''}`;
@@ -263,6 +265,7 @@ function opText(op, names){
   if(op.kind === 'void') return d.name || d.id;
   if(op.kind === 'bars') return `${d.items.length}명${d.via === 'excel' ? ' (엑셀)' : ''}`;
   if(op.kind === 'contact') return `${nm(d.key)} · ${d.email || ''} ${d.phone || ''}`;
+  if(op.kind === 'pos') return `${nm(d.key)}${d.pos ? '' : ' · 판대로 되돌림'}`;
   return '';
 }
 function netLogHtml(){
@@ -330,6 +333,8 @@ const kst = (iso) => {
   return d.slice(0, 10) === today() ? d.slice(11, 16) : `${d.slice(5, 10).replace('-', '/')} ${d.slice(11, 16)}`;
 };
 
+/* 사람별 글자 위치·크기 — 서버(nametag_people.pos)에 저장된 값(2026-11-13) */
+const posOf = (key) => nt.people.get(key)?.pos || undefined;
 /* 이 사람에게 찍을 값 — 데스크에서 고친 값이 있으면 그것 */
 function cardFor(p){
   const e = nt.edits.get(p.key) || {};
@@ -337,7 +342,7 @@ function cardFor(p){
      데스크에서 «말»을 바꿨으면 그쪽이 먼저(병기 켬·끔은 띠를 따른다) */
   const text = barType(barOf(p.key))?.text || '';
   const base = cardOf(p, e.lang || (text === 'ko' ? 'ko' : nt.template.lang));
-  return { ...base, person_key: p.key, _bar: barOf(p.key), _alt: text === 'ko' ? false : text === 'both' ? true : undefined,
+  return { ...base, person_key: p.key, _bar: barOf(p.key), _pos: posOf(p.key), _alt: text === 'ko' ? false : text === 'both' ? true : undefined,
     ...Object.fromEntries(Object.entries(e).filter(([k, v]) => k !== 'lang' && v != null)) };
 }
 
@@ -452,7 +457,7 @@ export function ntRowsHtml(evKey, query){
   const shown = l.slice(0, 600);
   const more = l.length > shown.length ? `<div class="nt-note" style="padding:8px 0">${l.length - shown.length}명 더 있어요 — 검색으로 좁혀 주세요.</div>` : '';
   const srcPill = (p) => `<span class="pill ${p.source === 'speaker' ? 'p-green' : p.source === 'walk_in' ? 'p-amber' : 'p-gray'}">${SOURCE_LABEL[p.source]}</span>${p.badgeKo && p.source === 'part' ? ` <span style="font-size:var(--fs-11);color:var(--i3)">${escapeHtml(p.badgeKo)}</span>` : ''}`;
-  const who = (p) => `<td><span style="font-weight:600">${p.nameKo || p.nameEn ? escapeHtml(p.nameKo || p.nameEn) : '<span style="color:var(--i4);font-weight:400">(이름 없음)</span>'}</span>${p.nameKo && p.nameEn && p.nameKo !== p.nameEn ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(p.nameEn)}</div>` : ''}</td>
+  const who = (p) => `<td><span style="font-weight:600">${p.nameKo || p.nameEn ? escapeHtml(p.nameKo || p.nameEn) : '<span style="color:var(--i4);font-weight:400">(이름 없음)</span>'}</span>${adjChip(p.key)}${p.nameKo && p.nameEn && p.nameKo !== p.nameEn ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(p.nameEn)}</div>` : ''}</td>
       <td>${escapeHtml(p.orgKo || p.orgEn)}</td>`;
   const got = (p) => { const d = done.get(p.key); return d ? `<span style="color:var(--g);font-weight:700">✓</span> ${kst(d.last)}${d.n > 1 ? ` · ${d.n}장` : ''}` : '<span style="color:var(--i5)">—</span>'; };
   const ckCell = (p) => { const c = nt.checkins.get(p.key);
@@ -495,7 +500,7 @@ function mobileRowsHtml(shown, ci, done, srcPill, got, ckCell){
       : `<input type="checkbox"${nt.picked.has(p.key) ? ' checked' : ''} onclick="event.stopPropagation()" onchange="ntPick('${escAttr(p.key)}',this.checked)" style="width:20px;height:20px">`;
     return `<div class="nt-mrow${(ci ? c : nt.focus === p.key) ? ' on' : ''}"${ci ? '' : ` onclick="ntFocus('${escAttr(p.key)}')"`}>
       <div class="nt-mrow-main">
-        <div><b>${name ? escapeHtml(name) : '<span style="color:var(--i4);font-weight:400">(이름 없음)</span>'}</b> ${srcPill(p)} ${barChip(barOf(p.key))}</div>
+        <div><b>${name ? escapeHtml(name) : '<span style="color:var(--i4);font-weight:400">(이름 없음)</span>'}</b>${adjChip(p.key)} ${srcPill(p)} ${barChip(barOf(p.key))}</div>
         <div class="nt-note">${escapeHtml(p.orgKo || p.orgEn)}${p.titleKo || p.titleEn ? ' · ' + escapeHtml(p.titleKo || p.titleEn) : ''}</div>
         <div class="nt-note">${ci ? ckCell(p) : `받음 ${got(p)}${c ? ` · 체크인 ${kst(c.checked_at)}` : ''}`}</div>
       </div>${act}</div>`;
@@ -552,7 +557,7 @@ function sideHtml(evKey){
         <option value="ko"${card.lang === 'ko' ? ' selected' : ''}>국문</option><option value="en"${card.lang === 'en' ? ' selected' : ''}>영문</option></select></label>
     </div>
     <div class="nt-note">여기서 고친 값은 이번 네임택과 발급 기록에만 남아요. 마스터DB는 그대로예요.</div>
-    <details class="nt-pos"${card._pos ? ' open' : ''}><summary>글자 위치·크기 · 이번만</summary>
+    <details class="nt-pos"${card._pos ? ' open' : ''}><summary>글자 위치·크기 · 이 사람만<span id="nt-pos-sum">${card._pos ? ' <span class="nt-adj">판과 다름</span>' : ''}</span></summary>
       <div id="nt-pos">${posHtml(focus.key, card)}</div></details>
     ${focus.walkIn ? walkInContactHtml(focus) : ''}
     ${again.length ? `<div class="nt-warn">${again.length === 1 ? escapeHtml(cardFor(again[0]).name) + ' 님은' : `${again.length}명은`} 이미 받았어요 — 재발급 사유
@@ -630,7 +635,8 @@ function importHtml(){
       <button class="btn bs" onclick="ntImportCancel()">취소</button></div>`;
 }
 
-/* 글자 위치·크기 · 이번만(2026-11-12) — 이 사람 네임택에서 글자 칸을 1mm씩 옮기고, 2pt씩 키우고 줄인다. 판은 그대로, 인쇄하면 사라진다.
+/* 글자 위치·크기 · 이 사람만(2026-11-12) — 이 사람 네임택에서 글자 칸을 1mm씩 옮기고, 2pt씩 키우고 줄인다. 판은 그대로.
+   2026-11-13부터 서버(nametag_people.pos)에 저장한다 — 다시 뽑아도, 다른 데스크에서 뽑아도 그대로. 명단에 «조정» 표시.
    이름이 길어 배경 그림에 걸리는 사람 하나만 살짝 내리거나, 이름이 너무 커 보이는 사람만 줄이는 식(2026-11-13 영문 긴 이름).
    고른 사람이 여럿이면 미리보기 중인 사람만 */
 const POS_STEP = 1, SIZE_STEP = 2;
@@ -639,40 +645,67 @@ function posHtml(key, card){
   const keys = TEXT_KEYS.filter(k => l[k]?.show && card[k]);
   if(!keys.length) return '<div class="nt-note">찍힐 글자가 없어요.</div>';
   const v = (n) => n ? (n > 0 ? '+' : '') + n : '0';
-  return keys.map(k => { const d = pos[k] || {};
-    return `<div class="nt-pos-row"><span class="nt-pos-lbl">${EL_LABEL[k]}</span>
+  const sum = posSummary(l, card._pos);
+  return (sum ? `<div class="nt-adj-note">판과 다르게 찍혀요 — ${escapeHtml(sum)}</div>` : '')
+    + keys.map(k => { const d = pos[k] || {};
+    return `<div class="nt-pos-row${d.dx || d.dy || d.ds ? ' on' : ''}"><span class="nt-pos-lbl">${EL_LABEL[k]}</span>
       ${[['↑', 0, -1, '위로'], ['↓', 0, 1, '아래로'], ['←', -1, 0, '왼쪽으로'], ['→', 1, 0, '오른쪽으로']].map(([a, x, y, t]) =>
         `<button class="btn bs" title="${t} ${POS_STEP}mm" onclick="ntNudge('${escAttr(key)}','${k}',${x},${y})">${a}</button>`).join('')}
       <button class="btn bs" title="글자 ${SIZE_STEP}pt 작게" onclick="ntNudge('${escAttr(key)}','${k}',0,0,-1)">A−</button>
       <button class="btn bs" title="글자 ${SIZE_STEP}pt 크게" onclick="ntNudge('${escAttr(key)}','${k}',0,0,1)">A+</button>
       <span class="nt-note">가로 ${v(d.dx)} · 세로 ${v(d.dy)} mm · 크기 ${l[k].size + (d.ds || 0)}pt${d.ds ? ` (${v(d.ds)})` : ''}</span></div>`; }).join('')
-    + `<div class="nt-note">이 사람의 이번 인쇄에만 써요. 판(설정 › 행사 상세 › 네임택)은 그대로예요.
-      ${card._pos ? `<button class="btn bs" onclick="ntNudgeReset('${escAttr(key)}')">처음대로</button>` : ''}</div>`;
+    + `<div class="nt-note">이 사람에게 저장돼요 — 다시 뽑아도, 다른 데스크에서 뽑아도 이대로 찍혀요. 판(설정 › 행사 상세 › 네임택)은 그대로예요.
+      ${card._pos ? `<button class="btn bs" onclick="ntNudgeReset('${escAttr(key)}')">판대로 되돌리기</button>` : ''}</div>`;
+}
+/* 판과 다른 점을 한 줄로 — «이름 34pt(판 44) ↓2mm · 소속 →1mm» */
+function posSummary(l, pos){
+  if(!pos) return '';
+  const mm = (n, a, b) => n ? `${n > 0 ? a : b}${Math.abs(n)}mm` : '';
+  return TEXT_KEYS.filter(k => pos[k]).map(k => { const d = pos[k], base = l[k]?.size || 0;
+    return [EL_LABEL[k], d.ds ? `${base + d.ds}pt(판 ${base})` : '', mm(d.dy, '↓', '↑'), mm(d.dx, '→', '←')].filter(Boolean).join(' '); }).join(' · ');
+}
+/* 명단 이름 옆 — 이 사람만 글자 위치·크기를 바꿨다 */
+function adjChip(key){
+  const pos = posOf(key);
+  if(!pos) return '';
+  const tip = posSummary(layoutFor(nt.template, barOf(key)), pos);
+  return ` <span class="nt-adj" title="판과 다르게 찍혀요 — ${escAttr(tip)}">조정</span>`;
 }
 function refreshPos(key){
   const p = evPerson(key), el = document.getElementById('nt-pos');
   if(!p) return;
   const card = cardFor(p);
   if(el) el.innerHTML = posHtml(key, card);
+  const sum = document.getElementById('nt-pos-sum');
+  if(sum) sum.innerHTML = card._pos ? ' <span class="nt-adj">판과 다름</span>' : '';
   refreshPreview(card);
 }
+/* 누를 때마다 보내지 않고, 멈춘 뒤 한 번 — 기기에 먼저 남기고(끊겨도 된다) 서버로는 뒤에서 */
+const posTimers = new Map();
+function setPos(key, pos){
+  nt.people.set(key, { ...(nt.people.get(key) || { person_key: key }), pos });
+  refreshPos(key);
+  clearTimeout(posTimers.get(key));
+  posTimers.set(key, setTimeout(() => {
+    posTimers.delete(key);
+    const data = { key, pos: posOf(key) || null };
+    enqueue(nt.ev, 'pos', data);
+    refreshLists();
+  }, 700));
+}
 export function ntNudge(key, k, x, y, s = 0){
-  const e = nt.edits.get(key) || {};
-  const pos = { ...(e._pos || {}) }, d = { dx: 0, dy: 0, ds: 0, ...(pos[k] || {}) };
+  const pos = { ...(posOf(key) || {}) }, d = { dx: 0, dy: 0, ds: 0, ...(pos[k] || {}) };
   const r = (n) => Math.round(n * 10) / 10;
   d.dx = r(d.dx + x * POS_STEP); d.dy = r(d.dy + y * POS_STEP);
   /* 크기는 판 크기에서 6~120pt 안으로만 */
   const p = evPerson(key), base = p ? layoutFor(nt.template, cardFor(p)._bar)[k]?.size || 0 : 0;
   if(s) d.ds = Math.min(120 - base, Math.max(6 - base, d.ds + s * SIZE_STEP));
   if(d.dx || d.dy || d.ds) pos[k] = d; else delete pos[k];
-  e._pos = Object.keys(pos).length ? pos : undefined;
-  nt.edits.set(key, e);
-  refreshPos(key);
+  setPos(key, Object.keys(pos).length ? pos : null);
 }
 export function ntNudgeReset(key){
-  const e = nt.edits.get(key);
-  if(e) e._pos = undefined;
-  refreshPos(key);
+  if(!confirm('이 사람의 글자 위치·크기를 판대로 되돌릴까요?')) return;
+  setPos(key, null);
 }
 
 function fitPreview(){
@@ -963,7 +996,7 @@ export function ntExportDeviceLog(){
 }
 
 /* ── 최종 등록자 명단 엑셀 — 하단바 엑셀 올리기 양식도 이것(등록번호 칸으로 맞춘다) ── */
-const XCOLS = ['등록번호', '출처', '이름(국문)', '이름(영문)', '소속', '직함', '이메일', '구분', '하단바', '네임택', '마지막 발급', '체크인', '체크인 시각', '체크인 방법'];
+const XCOLS = ['등록번호', '출처', '이름(국문)', '이름(영문)', '소속', '직함', '이메일', '구분', '하단바', '네임택', '마지막 발급', '체크인', '체크인 시각', '체크인 방법', '글자 조정'];
 export function ntExport(){
   if(!window.XLSX) return alert('엑셀 도구를 아직 못 불러왔어요. 잠시 뒤 다시 눌러 주세요.');
   const done = printedMap();
@@ -972,7 +1005,7 @@ export function ntExport(){
     const d = done.get(p.key), c = nt.checkins.get(p.key), b = barType(barOf(p.key));
     return [p.key, SOURCE_LABEL[p.source], p.nameKo, p.nameEn, p.orgKo || p.orgEn, p.titleKo || p.titleEn, p.email || '',
       p.badgeKo || '', b ? b.label : '', d ? d.n : 0, d ? kstFull(d.last) : '', c ? 'Y' : '', c ? kstFull(c.checked_at) : '',
-      c ? (c.via === 'print' ? '현장 출력' : '체크인 데스크') : ''];
+      c ? (c.via === 'print' ? '현장 출력' : '체크인 데스크') : '', posSummary(layoutFor(nt.template, barOf(p.key)), posOf(p.key))];
   });
   const ws = window.XLSX.utils.aoa_to_sheet([XCOLS, ...rows]);
   ws['!cols'] = [16, 8, 12, 18, 24, 16, 24, 10, 10, 6, 16, 6, 16, 12].map(w => ({ wch: w }));

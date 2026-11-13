@@ -37,6 +37,10 @@
 .nt-pos-row{display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-bottom:4px}
 .nt-pos-row .btn{min-width:30px;justify-content:center}
 .nt-pos-lbl{width:64px;font-size:var(--fs-12)}
+.nt-pos-row.on .nt-pos-lbl, .nt-pos-row.on .nt-note{color:var(--am);font-weight:700}
+/* 판과 다르게 찍히는 사람 — 명단 «조정» 칩 · 옆 칸 요약(2026-11-13) */
+.nt-adj{display:inline-block;margin-left:4px;padding:0 6px;border-radius:9px;background:var(--ab);color:var(--am);font-size:var(--fs-10_5);font-weight:700;vertical-align:1px}
+.nt-adj-note{margin-bottom:6px;padding:6px 8px;border-radius:var(--rs);background:var(--ab);color:var(--am);font-size:var(--fs-12);font-weight:600}
 .nt-actions{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .nt-note{font-size:var(--fs-11);color:var(--i4)}
 .nt-warn{font-size:var(--fs-11);color:var(--am);background:var(--ab);border-radius:var(--rs);padding:6px 8px}

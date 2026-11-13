@@ -7,6 +7,7 @@
      POST /api/nametag/print/<id>/void      «인쇄 안 됨» 되돌리기(기록은 지우지 않는다)
      PUT  /api/nametag/<행사>/bars          하단바 정하기 { items:[{ person_key, bar }], via } — 한 명·여러 명·엑셀 모두
      PUT  /api/nametag/<행사>/people/<key>  현장 신규의 이메일·전화 { email, phone }
+     PUT  /api/nametag/<행사>/people/<key>/pos  사람별 글자 위치·크기 { pos: { name: { dx, dy, ds }, … } | null }
      POST /api/nametag/<행사>/checkin       체크인 { person_key } — 사전 출력한 사람이 현장에 왔을 때
      POST /api/nametag/checkin/<id>/void    체크인 취소(지우지 않는다)
      GET  /api/nametag/<행사>/live?since=   현장 실시간 — 살아 있는 체크인 전부 + since 뒤로 바뀐 발급 기록·사람
@@ -115,7 +116,7 @@ const TEMPLATE_COLS = `id, name, width_mm::float8 AS width_mm, height_mm::float8
   background_data, background_print, layout, print_offset, bar_types, is_default, updated_at, updated_by`;
 const PRINT_COLS = `id, event_id, batch_id, template_id, person_key, source, ref_id, contact_id, name, company, job_title,
   badge, bar, lang, kind, reason, printed_by, printed_at, voided_at, voided_by, synced_at`;
-const PEOPLE_COLS = `person_key, bar, email, phone, contact_id, updated_at, updated_by`;
+const PEOPLE_COLS = `person_key, bar, email, phone, contact_id, pos, updated_at, updated_by`;
 const CHECKIN_COLS = `id, person_key, via, print_id, checked_at, checked_by, voided_at, voided_by, synced_at`;
 
 router.get('/:eventId', async (req, res, next) => {
@@ -320,6 +321,34 @@ router.put('/:eventId/people/:key', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+/* 사람별 글자 위치·크기(2026-11-13) — 발급 데스크 «글자 위치·크기 · 이 사람만». 판에서 옮긴 mm(dx·dy)와 바꾼 pt(ds)만 둔다.
+   다시 뽑아도, 다른 데스크에서 뽑아도 이 값으로 찍는다. null이면 판대로 */
+const POS_KEYS = ['name', 'name_alt', 'company', 'company_alt', 'job_title', 'job_title_alt', 'badge'];
+function cleanPos(v) {
+  if (!v || typeof v !== 'object') return null;
+  const n = (x, m) => { const y = Math.round(Number(x) * 10) / 10; return Number.isFinite(y) ? Math.max(-m, Math.min(m, y)) : 0; };
+  const out = {};
+  for (const k of POS_KEYS) {
+    const s = v[k];
+    if (!s || typeof s !== 'object') continue;
+    const d = { dx: n(s.dx, 200), dy: n(s.dy, 200), ds: n(s.ds, 114) };
+    if (d.dx || d.dy || d.ds) out[k] = d;
+  }
+  return Object.keys(out).length ? out : null;
+}
+router.put('/:eventId/people/:key/pos', async (req, res, next) => {
+  try {
+    const ev = String(req.params.eventId), key = text(req.params.key, 60);
+    if (!key) return res.status(400).json({ ok: false, error: '사람이 없어요' });
+    const pos = cleanPos(req.body && req.body.pos);
+    const { rows } = await pool.query(`
+      INSERT INTO nametag_people (event_id, person_key, pos, updated_at, updated_by) VALUES ($1,$2,$3::jsonb,$4,$5)
+      ON CONFLICT (event_id, person_key) DO UPDATE SET pos = EXCLUDED.pos, updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by
+      RETURNING ${PEOPLE_COLS}`, [ev, key, pos ? JSON.stringify(pos) : null, new Date().toISOString(), req.user?.email || '']);
+    res.json({ ok: true, person: rows[0] });
+  } catch (e) { next(e); }
+});
+
 /* 체크인 — 사전 출력한 사람이 현장에 왔을 때. 이미 체크인했으면 그 기록을 돌려준다(두 데스크가 동시에 눌러도 하나) */
 router.post('/:eventId/checkin', async (req, res, next) => {
   try {
@@ -420,8 +449,8 @@ async function promoteOne(client, ev, evName, key, req) {
   await client.query(`UPDATE nametag_prints SET person_key = $3, contact_id = $4, synced_at = $5 WHERE event_id = $1 AND person_key = $2`, [ev, key, to, cid, now]);
   const hadPerson = (await client.query(`SELECT bar FROM nametag_people WHERE event_id = $1 AND person_key = $2`, [ev, to])).rows[0];
   if (hadPerson) {
-    await client.query(`UPDATE nametag_people SET bar = COALESCE(bar, $3), updated_at = $4, updated_by = $5
-      WHERE event_id = $1 AND person_key = $2`, [ev, to, pp.bar || null, now, by]);
+    await client.query(`UPDATE nametag_people SET bar = COALESCE(bar, $3), pos = COALESCE(pos, $6::jsonb), updated_at = $4, updated_by = $5
+      WHERE event_id = $1 AND person_key = $2`, [ev, to, pp.bar || null, now, by, pp.pos ? JSON.stringify(pp.pos) : null]);
     await client.query(`DELETE FROM nametag_people WHERE event_id = $1 AND person_key = $2`, [ev, key]);
   } else {
     await client.query(`UPDATE nametag_people SET person_key = $3, contact_id = $4, updated_at = $5, updated_by = $6
