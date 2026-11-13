@@ -51,7 +51,7 @@ const nt = {
   alias: new Map(),      // 옛 키(s<연사>·x<담당자>) → 지금 키(c<연락처>) — foldAliases
   defBar: new Map(),     // 사람 키 → 참가 역할로 정해지는 하단바 id(사람마다 정한 띠가 없을 때) — foldAliases
   picked: new Set(), focus: '',
-  edits: new Map(),      // person_key → { name, company, job_title, badge, lang }
+  // 고친 글자는 nt.people.get(key).edits에 둔다(서버 nametag_people.edits에 저장 — 2026-11-13)
   walkIn: null,          // 현장 신규 입력 중이면 { name, company, job_title, badge, bar, email, phone }
   imp: null,             // 하단바 엑셀 미리보기 { file, rows:[{ key, name, from, to, state }], counts }
   reason: '', busy: false, timer: 0,
@@ -67,7 +67,7 @@ function ensureLoaded(evKey){
   if(nt.ev !== evKey){
     Object.assign(nt, { ev: evKey, loaded: '', err: '', template: normalizeTemplate(null), prints: [], focus: '', walkIn: null,
       reason: '', imp: null, onsite: null, since: '', barFil: '', syncedAt: '', netView: false });
-    nt.picked.clear(); nt.edits.clear(); nt.people.clear(); nt.checkins.clear(); nt.alias.clear(); nt.defBar.clear();
+    nt.picked.clear(); nt.people.clear(); nt.checkins.clear(); nt.alias.clear(); nt.defBar.clear();
   }
   if(nt.loaded === evKey || nt.loading) return;
   nt.loading = true;
@@ -150,6 +150,8 @@ function applyOp(op){
     nt.people.set(d.key, { ...(nt.people.get(d.key) || { person_key: d.key }), email: d.email, phone: d.phone });
   } else if(op.kind === 'pos'){
     nt.people.set(d.key, { ...(nt.people.get(d.key) || { person_key: d.key }), pos: d.pos });
+  } else if(op.kind === 'edits'){
+    nt.people.set(d.key, { ...(nt.people.get(d.key) || { person_key: d.key }), edits: d.edits });
   }
 }
 /* 서버가 받았다 — 기기에서 만든 줄을 서버 줄로 바꾼다 */
@@ -172,7 +174,7 @@ function reconcile(op, res){
     if(res.print) nt.prints = nt.prints.map(p => p.id === res.print.id ? res.print : p);
   } else if(op.kind === 'bars'){
     (res.people || []).forEach(p => nt.people.set(p.person_key, p));
-  } else if(op.kind === 'contact' || op.kind === 'pos'){
+  } else if(op.kind === 'contact' || op.kind === 'pos' || op.kind === 'edits'){
     if(res.person) nt.people.set(res.person.person_key, res.person);
   }
 }
@@ -256,7 +258,7 @@ function netHtml(){
     : ['ok', `● 연결됨${nt.syncedAt ? ` · ${kst(nt.syncedAt)} 받음` : ''}`];
   return `<button type="button" id="nt-net" class="nt-net ${cls}" onclick="ntNetView()" title="이 기기에 남긴 발급·체크인 기록과 보내기 상태">${txt}</button>`;
 }
-const OP_LABEL = { issue: '발급', checkin: '체크인', uncheck: '체크인 취소', void: '인쇄 안 됨', bars: '하단바', contact: '현장 신규 연락처', pos: '글자 조정' };
+const OP_LABEL = { issue: '발급', checkin: '체크인', uncheck: '체크인 취소', void: '인쇄 안 됨', bars: '하단바', contact: '현장 신규 연락처', pos: '글자 조정', edits: '글자 고침' };
 function opText(op, names){
   const d = op.data, nm = (k) => names.get(k) || k;
   if(op.kind === 'issue') return `${d.rows.length}장 — ${d.rows.slice(0, 3).map(r => r.name).join(', ')}${d.rows.length > 3 ? ' 외' : ''}${d.onsite ? ' · 현장 출력' : ''}`;
@@ -266,6 +268,7 @@ function opText(op, names){
   if(op.kind === 'bars') return `${d.items.length}명${d.via === 'excel' ? ' (엑셀)' : ''}`;
   if(op.kind === 'contact') return `${nm(d.key)} · ${d.email || ''} ${d.phone || ''}`;
   if(op.kind === 'pos') return `${nm(d.key)}${d.pos ? '' : ' · 판대로 되돌림'}`;
+  if(op.kind === 'edits') return `${nm(d.key)}${d.edits ? '' : ' · 원래 글자로 되돌림'}`;
   return '';
 }
 function netLogHtml(){
@@ -335,13 +338,16 @@ const kst = (iso) => {
 
 /* 사람별 글자 위치·크기 — 서버(nametag_people.pos)에 저장된 값(2026-11-13) */
 const posOf = (key) => nt.people.get(key)?.pos || undefined;
+const editsOf = (key) => nt.people.get(key)?.edits || null;
+/* 찍을 말 — 데스크에서 고른 말 → 하단바가 정한 말(국문만) → 판의 기본 말 */
+const langFor = (p, e) => e.lang || (barType(barOf(p.key))?.text === 'ko' ? 'ko' : nt.template.lang);
 /* 이 사람에게 찍을 값 — 데스크에서 고친 값이 있으면 그것 */
 function cardFor(p){
-  const e = nt.edits.get(p.key) || {};
+  const e = editsOf(p.key) || {};
   /* 하단바가 말을 정했으면 그대로 — 국문만이면 국문으로 찍고 병기를 끄고, 병기면 병기 칸을 켠다.
      데스크에서 «말»을 바꿨으면 그쪽이 먼저(병기 켬·끔은 띠를 따른다) */
   const text = barType(barOf(p.key))?.text || '';
-  const base = cardOf(p, e.lang || (text === 'ko' ? 'ko' : nt.template.lang));
+  const base = cardOf(p, langFor(p, e));
   return { ...base, person_key: p.key, _bar: barOf(p.key), _pos: posOf(p.key), _alt: text === 'ko' ? false : text === 'both' ? true : undefined,
     ...Object.fromEntries(Object.entries(e).filter(([k, v]) => k !== 'lang' && v != null)) };
 }
@@ -539,8 +545,14 @@ function sideHtml(evKey){
   const card = cardFor(focus);
   const done = printedMap();
   const again = list.filter(p => done.has(p.key));
-  const f = (k, label, wide) => `<label class="${wide ? 'wide' : ''}"><div class="mlbl">${label}</div>
-    <input class="fi" value="${escAttr(card[k] || '')}" oninput="ntEdit('${escAttr(focus.key)}','${k}',this.value)"></label>`;
+  const ed = editsOf(focus.key) || {};
+  const mark = (k) => k in ed ? ' <span class="nt-adj">고침</span>' : '';
+  /* 이름·소속·직함은 Enter로 줄을 바꿔 찍는다(2026-11-13) — 칸 높이는 줄 수만큼 */
+  const f = (k, label, wide) => k === 'badge'
+    ? `<label class="${wide ? 'wide' : ''}"><div class="mlbl">${label}${mark(k)}</div>
+    <input class="fi" value="${escAttr(card[k] || '')}" oninput="ntEdit('${escAttr(focus.key)}','${k}',this.value)"></label>`
+    : `<label class="${wide ? 'wide' : ''}"><div class="mlbl">${label}${mark(k)}</div>
+    <textarea class="fi nt-ta" rows="${String(card[k] || '').split('\n').length}" oninput="this.rows=this.value.split('\\n').length;ntEdit('${escAttr(focus.key)}','${k}',this.value)">${escapeHtml(card[k] || '')}</textarea></label>`;
   /* 여러 명이면 하단바별 장 수 — 인쇄해 나온 종이에 어느 띠를 끼울지 */
   const barCnt = list.length > 1 && barTypes().length ? (() => {
     const c = new Map(); list.forEach(p => c.set(barOf(p.key), (c.get(barOf(p.key)) || 0) + 1));
@@ -556,7 +568,8 @@ function sideHtml(evKey){
       <label class="wide"><div class="mlbl">말</div><select class="fi" onchange="ntEdit('${escAttr(focus.key)}','lang',this.value)">
         <option value="ko"${card.lang === 'ko' ? ' selected' : ''}>국문</option><option value="en"${card.lang === 'en' ? ' selected' : ''}>영문</option></select></label>
     </div>
-    <div class="nt-note">여기서 고친 값은 이번 네임택과 발급 기록에만 남아요. 마스터DB는 그대로예요.</div>
+    <div class="nt-note">고친 글자는 이 사람 네임택에 저장돼요 — 다시 뽑아도 이대로예요. 이름·소속·직함은 Enter로 줄을 바꿔요. 마스터DB는 그대로예요.
+      ${Object.keys(ed).length ? `<button class="btn bs" onclick="ntEditReset('${escAttr(focus.key)}')">원래 글자로</button>` : ''}</div>
     <details class="nt-pos"${card._pos ? ' open' : ''}><summary>글자 위치·크기 · 이 사람만<span id="nt-pos-sum">${card._pos ? ' <span class="nt-adj">판과 다름</span>' : ''}</span></summary>
       <div id="nt-pos">${posHtml(focus.key, card)}</div></details>
     ${focus.walkIn ? walkInContactHtml(focus) : ''}
@@ -666,10 +679,16 @@ function posSummary(l, pos){
 }
 /* 명단 이름 옆 — 이 사람만 글자 위치·크기를 바꿨다 */
 function adjChip(key){
-  const pos = posOf(key);
-  if(!pos) return '';
-  const tip = posSummary(layoutFor(nt.template, barOf(key)), pos);
-  return ` <span class="nt-adj" title="판과 다르게 찍혀요 — ${escAttr(tip)}">조정</span>`;
+  const pos = posOf(key), ed = editsOf(key);
+  if(!pos && !ed) return '';
+  return ` <span class="nt-adj" title="명단·판과 다르게 찍혀요 — ${escAttr(adjText(key))}">조정</span>`;
+}
+/* 명단·판과 다른 점 — «글자 고침: 이름·직함 / 이름 34pt(판 44) ↓2mm» */
+const EDIT_LABEL = { name: '이름', company: '소속', job_title: '직함', badge: '구분', lang: '말' };
+function adjText(key){
+  const ed = editsOf(key), pos = posOf(key);
+  return [ed ? `글자 고침: ${Object.keys(ed).map(k => EDIT_LABEL[k] || k).join('·')}` : '',
+    pos ? posSummary(layoutFor(nt.template, barOf(key)), pos) : ''].filter(Boolean).join(' / ');
 }
 function refreshPos(key){
   const p = evPerson(key), el = document.getElementById('nt-pos');
@@ -741,19 +760,36 @@ export function ntPickAll(on){
   visible(nt.ev, document.getElementById('evdb-q')?.value || '').slice(0, 600).forEach(p => nt.picked.add(p.key));
   rerender();
 }
+/* 고친 글자 — 기기에 먼저 남기고 멈춘 뒤 서버로(2026-11-13). 원래 값과 같아지면 그 칸은 «고침»에서 뺀다 */
+const editTimers = new Map();
+function setEdits(key, edits){
+  nt.people.set(key, { ...(nt.people.get(key) || { person_key: key }), edits: edits && Object.keys(edits).length ? edits : null });
+  clearTimeout(editTimers.get(key));
+  editTimers.set(key, setTimeout(() => {
+    editTimers.delete(key);
+    enqueue(nt.ev, 'edits', { key, edits: editsOf(key) });
+    refreshLists();
+  }, 700));
+}
 export function ntEdit(key, field, value){
-  const e = nt.edits.get(key) || {};
-  e[field] = value;
-  nt.edits.set(key, e);
   const p = evPerson(key);
   if(!p) return;
   if(field === 'lang'){
     /* 말을 바꾸면 그 말의 값으로 다시 채운다 — 앞서 고친 글자는 버린다 */
-    nt.edits.set(key, { lang: value });
+    setEdits(key, { lang: value });
     rerender();
     return;
   }
+  const e = { ...(editsOf(key) || {}) };
+  const orig = cardOf(p, langFor(p, e))[field] || '';
+  if(value === orig) delete e[field]; else e[field] = value;
+  setEdits(key, e);
   refreshPreview(cardFor(p));
+}
+export function ntEditReset(key){
+  if(!confirm('고친 글자를 지우고 원래 글자(명단 값)로 되돌릴까요?')) return;
+  setEdits(key, null);
+  rerender();
 }
 export function ntWalkIn(on){ nt.walkIn = on ? { name: '', company: '', job_title: '', badge: '', bar: '', email: '', phone: '' } : null; nt.imp = null; rerender(); }
 export function ntWalkEdit(field, value){ if(!nt.walkIn) return; nt.walkIn[field] = value; if(field !== 'bar' && field !== 'email' && field !== 'phone') refreshPreview(nt.walkIn); }
@@ -764,7 +800,6 @@ export function ntReload(){ nt.loaded = ''; nt.err = ''; ensureLoaded(nt.ev); re
 export function ntTemplateSaved(evKey, t){
   if(nt.ev !== evKey) return;
   nt.template = t;
-  nt.edits.forEach((e, k) => { if(e.lang) nt.edits.delete(k); });
   foldAliases();   // 하단바 종류의 역할이 바뀌었을 수 있다
 }
 export function ntOpenEditor(){
@@ -837,7 +872,7 @@ export async function ntPrint(){
   const data = { rows, reason: nt.reason || '', onsite };
   applyOp({ kind: 'issue', data });
   enqueue(nt.ev, 'issue', data);
-  nt.picked.clear(); nt.edits.clear(); nt.reason = ''; nt.walkIn = null;
+  nt.picked.clear(); nt.reason = ''; nt.walkIn = null;   // 고친 글자·위치는 그 사람에게 저장돼 있어 그대로 둔다
   rerender();
   const ev = nt.ev;
   await fillPrintWindow(w, nt.template, rows, { onUnprinted: () => unprinted(ev, rows, onsite) });
@@ -996,7 +1031,7 @@ export function ntExportDeviceLog(){
 }
 
 /* ── 최종 등록자 명단 엑셀 — 하단바 엑셀 올리기 양식도 이것(등록번호 칸으로 맞춘다) ── */
-const XCOLS = ['등록번호', '출처', '이름(국문)', '이름(영문)', '소속', '직함', '이메일', '구분', '하단바', '네임택', '마지막 발급', '체크인', '체크인 시각', '체크인 방법', '글자 조정'];
+const XCOLS = ['등록번호', '출처', '이름(국문)', '이름(영문)', '소속', '직함', '이메일', '구분', '하단바', '네임택', '마지막 발급', '체크인', '체크인 시각', '체크인 방법', '조정(명단·판과 다름)'];
 export function ntExport(){
   if(!window.XLSX) return alert('엑셀 도구를 아직 못 불러왔어요. 잠시 뒤 다시 눌러 주세요.');
   const done = printedMap();
@@ -1005,7 +1040,7 @@ export function ntExport(){
     const d = done.get(p.key), c = nt.checkins.get(p.key), b = barType(barOf(p.key));
     return [p.key, SOURCE_LABEL[p.source], p.nameKo, p.nameEn, p.orgKo || p.orgEn, p.titleKo || p.titleEn, p.email || '',
       p.badgeKo || '', b ? b.label : '', d ? d.n : 0, d ? kstFull(d.last) : '', c ? 'Y' : '', c ? kstFull(c.checked_at) : '',
-      c ? (c.via === 'print' ? '현장 출력' : '체크인 데스크') : '', posSummary(layoutFor(nt.template, barOf(p.key)), posOf(p.key))];
+      c ? (c.via === 'print' ? '현장 출력' : '체크인 데스크') : '', adjText(p.key)];
   });
   const ws = window.XLSX.utils.aoa_to_sheet([XCOLS, ...rows]);
   ws['!cols'] = [16, 8, 12, 18, 24, 16, 24, 10, 10, 6, 16, 6, 16, 12].map(w => ({ wch: w }));
@@ -1129,7 +1164,7 @@ export async function ntPromote(){
   nt.busy = false; rerender();
 }
 
-Object.assign(window, { ntNudge, ntNudgeReset, ntPrintBlank, ntSetView, ntSetOnsite, ntSetFilter, ntSetSrc, ntSetBarFil, ntSetSort, ntFocus, ntPick, ntPickAll, ntEdit, ntWalkIn, ntWalkEdit,
+Object.assign(window, { ntNudge, ntNudgeReset, ntEditReset, ntPrintBlank, ntSetView, ntSetOnsite, ntSetFilter, ntSetSrc, ntSetBarFil, ntSetSort, ntFocus, ntPick, ntPickAll, ntEdit, ntWalkIn, ntWalkEdit,
   ntSetReason, ntReload, ntOpenEditor, ntPrint, ntVoid, ntSetBar, ntSetBarPicked, ntWalkContact, ntCheckIn, ntUncheck,
   ntScanKey, ntCamera, ntExport, ntImportBars, ntImportApply, ntImportCancel, ntPromote,
   ntNetView, ntSendNow, ntRetryFailed, ntDismissFailed, ntExportDeviceLog });

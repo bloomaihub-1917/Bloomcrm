@@ -31,6 +31,7 @@
 .nt-side h4{margin:0;font-size:var(--fs-12_5)}
 .nt-fields{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .nt-fields .wide{grid-column:1 / -1}
+.nt-fields .nt-ta{resize:vertical;min-height:0;line-height:1.4;font-family:inherit}
 /* 글자 위치 · 이번만(nt-desk.js posHtml) */
 .nt-pos summary{cursor:pointer;font-size:var(--fs-12);font-weight:600;color:var(--i3)}
 .nt-pos[open] summary{margin-bottom:6px}

@@ -78,6 +78,18 @@ function fitWrapped(el, span, lines, base){
   }
 }
 
+/* 손으로 바꾼 줄(데스크에서 Enter, 2026-11-13) — 그 줄 그대로 쓰고, 가장 긴 줄이 칸보다 넓으면 fitWrapped처럼 줄인다 */
+function fitBroken(el, span, base){
+  el.style.whiteSpace = 'pre';
+  span.textContent = span.dataset.text;
+  const box = el.clientWidth, widest = span.offsetWidth;
+  if(widest > box && base > 0){
+    const pt = Math.max(MIN_PT, Math.min(base, base * box / widest / SQUEEZE));
+    if(pt < base) span.style.fontSize = `${pt}pt`;
+  }
+  fitOneLine(el, span);
+}
+
 export function fitNametags(root = document){
   for(const el of Array.from(root.querySelectorAll('.nt-el'))){
     const span = el.firstElementChild;
@@ -89,7 +101,8 @@ export function fitNametags(root = document){
     span.style.transform = '';
     el.style.whiteSpace = '';
     if(base > 0) span.style.fontSize = `${base}pt`;
-    if(lines > 1 && base > 0) fitWrapped(el, span, lines, base);
+    if(span.dataset.text.includes('\n')) fitBroken(el, span, base);
+    else if(lines > 1 && base > 0) fitWrapped(el, span, lines, base);
     else { span.textContent = span.dataset.text; fitOneLine(el, span); }
   }
 }

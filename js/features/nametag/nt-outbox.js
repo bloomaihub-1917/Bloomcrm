@@ -67,12 +67,14 @@ export function enqueue(ev, kind, data){
 }
 
 /* 서버에 보낼 꼴 — 기기 줄에서 그때 만든다(같은 내용을 두 번 저장하지 않게) */
+/* 발급 기록에는 한 줄로 — 줄바꿈은 종이에 찍을 때만 쓴다(명단·엑셀·마스터DB 올리기가 한 줄을 기대한다) */
+const one = (v) => v == null ? v : String(v).replace(/\s*\n\s*/g, ' ').trim();
 function request(op){
   const d = op.data, ev = `/${enc(op.ev)}`;
   switch(op.kind){
     case 'issue': return [`${ev}/issue`, 'POST', { batch_id: d.rows[0]?.batch_id, reason: d.reason || undefined, onsite: !!d.onsite,
       cards: d.rows.map(r => ({ id: r.id, checkin_id: r._checkin_id || undefined, printed_at: r.printed_at, person_key: r.person_key,
-        source: r.source, ref_id: r.ref_id, contact_id: r.contact_id, name: r.name, company: r.company, job_title: r.job_title,
+        source: r.source, ref_id: r.ref_id, contact_id: r.contact_id, name: one(r.name), company: one(r.company), job_title: one(r.job_title),
         badge: r.badge, lang: r.lang, bar: r._bar_id || undefined, email: r._email || undefined, phone: r._phone || undefined })) }];
     case 'checkin': return [`${ev}/checkin`, 'POST', { person_key: d.row.person_key, id: d.row.id, checked_at: d.row.checked_at }];
     case 'uncheck': return [`/checkin/${enc(d.id)}/void`, 'POST', {}];
@@ -80,6 +82,7 @@ function request(op){
     case 'bars': return [`${ev}/bars`, 'PUT', { items: d.items, via: d.via }];
     case 'contact': return [`${ev}/people/${enc(d.key)}`, 'PUT', { email: d.email, phone: d.phone }];
     case 'pos': return [`${ev}/people/${enc(d.key)}/pos`, 'PUT', { pos: d.pos }];
+    case 'edits': return [`${ev}/people/${enc(d.key)}/edits`, 'PUT', { edits: d.edits }];
   }
   return null;
 }

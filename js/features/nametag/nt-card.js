@@ -23,7 +23,7 @@ function textEl(el, value, d){
   }
   /* 줄여 맞출 때의 축은 왼쪽 끝 — 넘치는 글자는 정렬과 무관하게 칸 왼쪽부터 흘러나간다(nt-fit.js 주의 1) */
   return `<div class="nt-el" data-lines="${el.lines}" data-size="${el.size}"
-    style="left:${x}mm;top:${y}mm;max-width:${el.maxWidth}mm;transform:${ANCHOR[el.align]};text-align:${el.align};line-height:${el.lh || 1.15}"><span
+    style="left:${x}mm;top:${y}mm;max-width:${el.maxWidth}mm;transform:${ANCHOR[el.align]};text-align:${el.align};line-height:${el.lh || 1.15}${String(value).includes('\n') ? ';white-space:pre' : ''}"><span
     class="nt-fit" style="font-size:${el.size}pt;font-weight:${el.weight};transform-origin:left center">${escapeHtml(value)}</span></div>`;
 }
 

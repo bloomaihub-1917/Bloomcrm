@@ -14,7 +14,9 @@
 import { contacts, participations, speakersForEvent, exhibitorsForEvent, EXH_CONTACTS, getOrgById, contactOrgEn } from '../../state.js';
 
 const HANGUL = /[가-힣]/;
-const s = (v) => String(v ?? '').trim();
+/* 값이 없는 자리에 적어 둔 «-»·«—»·«N/A»·«없음» 같은 표시는 빈칸으로 — 네임택에 «-»가 찍혔다(2026-11-13) */
+const BLANK = /^(?:[-–—_.·/\s]+|n\/?a|none|null|없음|미정|해당\s*없음)$/i;
+const s = (v) => { const t = String(v ?? '').trim(); return BLANK.test(t) ? '' : t; };
 export const SOURCE_LABEL = { speaker: '연사', exh: '부스', part: '참가자', walk_in: '현장 신규' };
 
 /* 현장 신규 — 마스터DB에 없는 사람이라 발급 기록(nametag_prints)에서 모은다. 키는 w<첫 발급 id>.

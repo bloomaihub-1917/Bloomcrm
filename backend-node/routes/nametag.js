@@ -8,6 +8,7 @@
      PUT  /api/nametag/<행사>/bars          하단바 정하기 { items:[{ person_key, bar }], via } — 한 명·여러 명·엑셀 모두
      PUT  /api/nametag/<행사>/people/<key>  현장 신규의 이메일·전화 { email, phone }
      PUT  /api/nametag/<행사>/people/<key>/pos  사람별 글자 위치·크기 { pos: { name: { dx, dy, ds }, … } | null }
+     PUT  /api/nametag/<행사>/people/<key>/edits 사람별로 고친 글자 { edits: { name, company, job_title, badge, lang } | null }
      POST /api/nametag/<행사>/checkin       체크인 { person_key } — 사전 출력한 사람이 현장에 왔을 때
      POST /api/nametag/checkin/<id>/void    체크인 취소(지우지 않는다)
      GET  /api/nametag/<행사>/live?since=   현장 실시간 — 살아 있는 체크인 전부 + since 뒤로 바뀐 발급 기록·사람
@@ -116,7 +117,7 @@ const TEMPLATE_COLS = `id, name, width_mm::float8 AS width_mm, height_mm::float8
   background_data, background_print, layout, print_offset, bar_types, is_default, updated_at, updated_by`;
 const PRINT_COLS = `id, event_id, batch_id, template_id, person_key, source, ref_id, contact_id, name, company, job_title,
   badge, bar, lang, kind, reason, printed_by, printed_at, voided_at, voided_by, synced_at`;
-const PEOPLE_COLS = `person_key, bar, email, phone, contact_id, pos, updated_at, updated_by`;
+const PEOPLE_COLS = `person_key, bar, email, phone, contact_id, pos, edits, updated_at, updated_by`;
 const CHECKIN_COLS = `id, person_key, via, print_id, checked_at, checked_by, voided_at, voided_by, synced_at`;
 
 router.get('/:eventId', async (req, res, next) => {
@@ -349,6 +350,31 @@ router.put('/:eventId/people/:key/pos', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+/* 사람별로 고친 글자(2026-11-13) — 이름·소속·직함·구분은 줄바꿈까지 그대로(세 줄까지), 말은 ko|en.
+   빈 문자열도 «비워서 찍기»라 남긴다. 고친 칸이 하나도 없으면 null */
+function cleanEdits(v) {
+  if (!v || typeof v !== 'object') return null;
+  const out = {};
+  for (const k of ['name', 'company', 'job_title', 'badge']) {
+    if (typeof v[k] !== 'string') continue;
+    out[k] = v[k].replace(/\r/g, '').split('\n').map((l) => l.trim()).slice(0, 3).join('\n').slice(0, 200);
+  }
+  if (v.lang === 'ko' || v.lang === 'en') out.lang = v.lang;
+  return Object.keys(out).length ? out : null;
+}
+router.put('/:eventId/people/:key/edits', async (req, res, next) => {
+  try {
+    const ev = String(req.params.eventId), key = text(req.params.key, 60);
+    if (!key) return res.status(400).json({ ok: false, error: '사람이 없어요' });
+    const edits = cleanEdits(req.body && req.body.edits);
+    const { rows } = await pool.query(`
+      INSERT INTO nametag_people (event_id, person_key, edits, updated_at, updated_by) VALUES ($1,$2,$3::jsonb,$4,$5)
+      ON CONFLICT (event_id, person_key) DO UPDATE SET edits = EXCLUDED.edits, updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by
+      RETURNING ${PEOPLE_COLS}`, [ev, key, edits ? JSON.stringify(edits) : null, new Date().toISOString(), req.user?.email || '']);
+    res.json({ ok: true, person: rows[0] });
+  } catch (e) { next(e); }
+});
+
 /* 체크인 — 사전 출력한 사람이 현장에 왔을 때. 이미 체크인했으면 그 기록을 돌려준다(두 데스크가 동시에 눌러도 하나) */
 router.post('/:eventId/checkin', async (req, res, next) => {
   try {
@@ -409,7 +435,9 @@ async function promoteOne(client, ev, evName, key, req) {
   const last = (await client.query(`SELECT name, company, job_title FROM nametag_prints WHERE event_id = $1 AND person_key = $2
     AND voided_at IS NULL ORDER BY printed_at DESC LIMIT 1`, [ev, key])).rows[0] || first;
   const pp = (await client.query(`SELECT * FROM nametag_people WHERE event_id = $1 AND person_key = $2`, [ev, key])).rows[0] || {};
-  const name = last.name || first.name, org = last.company || '', title = last.job_title || '';
+  // 줄바꿈해 찍었어도 연락처에는 한 줄로
+  const one = (v) => String(v || '').replace(/\s*\n\s*/g, ' ').trim();
+  const name = one(last.name || first.name), org = one(last.company), title = one(last.job_title);
   if (!name) return null;   // 이름 없이 뽑은 현장 신규는 연락처로 만들지 않는다(누군지 모른다) — 현장 신규로 남는다
   const email = String(pp.email || '').trim(), phone = String(pp.phone || '').trim();
   const ko = HANGUL.test(name), orgKo = HANGUL.test(org), titleKo = HANGUL.test(title);
@@ -449,8 +477,9 @@ async function promoteOne(client, ev, evName, key, req) {
   await client.query(`UPDATE nametag_prints SET person_key = $3, contact_id = $4, synced_at = $5 WHERE event_id = $1 AND person_key = $2`, [ev, key, to, cid, now]);
   const hadPerson = (await client.query(`SELECT bar FROM nametag_people WHERE event_id = $1 AND person_key = $2`, [ev, to])).rows[0];
   if (hadPerson) {
-    await client.query(`UPDATE nametag_people SET bar = COALESCE(bar, $3), pos = COALESCE(pos, $6::jsonb), updated_at = $4, updated_by = $5
-      WHERE event_id = $1 AND person_key = $2`, [ev, to, pp.bar || null, now, by, pp.pos ? JSON.stringify(pp.pos) : null]);
+    await client.query(`UPDATE nametag_people SET bar = COALESCE(bar, $3), pos = COALESCE(pos, $6::jsonb), edits = COALESCE(edits, $7::jsonb),
+      updated_at = $4, updated_by = $5 WHERE event_id = $1 AND person_key = $2`,
+    [ev, to, pp.bar || null, now, by, pp.pos ? JSON.stringify(pp.pos) : null, pp.edits ? JSON.stringify(pp.edits) : null]);
     await client.query(`DELETE FROM nametag_people WHERE event_id = $1 AND person_key = $2`, [ev, key]);
   } else {
     await client.query(`UPDATE nametag_people SET person_key = $3, contact_id = $4, updated_at = $5, updated_by = $6
