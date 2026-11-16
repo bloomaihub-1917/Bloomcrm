@@ -598,6 +598,8 @@ function peopleHtml(ev){
         title="등록 링크·엑셀로 들어온 신청을 서버에서 다시 받아 와요">⟳ 등록자 다시 불러오기</button>
       <button class="btn m-hide" style="font-size:var(--fs-11)" onclick="openRegisterLinks('${escAttr(ev.key)}')"
         title="바깥 신청 링크·엑셀 명단 — 받은 신청은 확정할 때 마스터DB로 옮겨요">🔗 등록 링크</button>
+      <button class="btn m-hide" style="font-size:var(--fs-11)" onclick="openEvDupes('${escAttr(ev.key)}')"
+        title="메일·전화·이름이 같은 참가자를 묶어 보여 줘요 — 같은 사람 둘을 골라 하나로 합쳐요">중복 찾기</button>
       <button class="btn m-hide" style="font-size:var(--fs-11)" onclick="openEvDbMailList()">메일 대상 모으기</button>
       <button class="btn m-hide" style="font-size:var(--fs-11)" onclick="openEvDbUpload()"
         title="엑셀 명단을 마스터DB에 올리고 이 행사 참가자로 잇습니다 — 데이터 업로드 화면이 이 행사로 맞춰져 열려요">📤 명단 업로드</button>

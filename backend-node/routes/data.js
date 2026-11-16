@@ -455,7 +455,7 @@ const REPLACE_ALL_OK = new Set(['sectors']);
 const CONTACT_REFS = [['participations', 'contact_id'], ['exhibitor_contacts', 'contact_id'],
   ['speakers', 'contact_id'], ['speaker_contacts', 'contact_id'], ['contact_attempts', 'contact_id'],
   ['sales_targets', 'contact_id']];
-async function mergeContacts(req, res, { keep, drop }) {
+async function mergeContacts(req, res, { keep, drop, set }) {
   keep = String(keep || ''); drop = String(drop || '');
   if (!keep || !drop || keep === drop) return res.status(400).json({ ok: false, error: '합칠 두 사람을 골라 주세요' });
   let client;
@@ -482,6 +482,16 @@ async function mergeContacts(req, res, { keep, drop }) {
       const extra = [d[a], d[b]].find(v => filled(v) && !have.includes(String(v).trim().toLowerCase()));
       if (extra && !filled(patch[b] ?? k[b])) patch[b] = extra;
     }
+    /* 화면에서 칸마다 고른 값(A·B·둘 다 적기) — 자동으로 채운 값보다 앞선다 */
+    const SETTABLE = new Set(TABLES.contacts.columns.filter(c => !['id', 'moved_to_id', 'left_at', 'org_id', 'origin'].includes(c)));
+    if (set && typeof set === 'object') for (const [c, v] of Object.entries(set)) {
+      if (!SETTABLE.has(c)) continue;
+      if (String(v ?? '') !== String(k[c] ?? '')) patch[c] = String(v ?? '');
+      else delete patch[c];
+    }
+    /* 소속을 B 쪽 값으로 골랐으면 기업 연결도 B 쪽을 따른다 */
+    if (set && 'orgKo' in set && String(set.orgKo || '') === String(d.orgKo || '')
+      && String(d.orgKo || '') !== String(k.orgKo || '') && filled(d.org_id)) patch.org_id = d.org_id;
     const pc = Object.keys(patch);
     if (pc.length) await client.query(
       `UPDATE contacts SET ${pc.map((c, i) => `"${c}" = $${i + 2}`).join(', ')} WHERE id = $1`, [keep, ...pc.map(c => patch[c])]);
@@ -503,6 +513,17 @@ async function mergeContacts(req, res, { keep, drop }) {
     await client.query(`UPDATE activity_log SET link = replace(link, $1, $2) WHERE link LIKE '%' || $1 || '%'`,
       [`"${drop}"`, `"${keep}"`]);
     await client.query(`UPDATE contacts SET moved_to_id = $2 WHERE moved_to_id = $1`, [drop, keep]);
+    /* 네임택 — 발급·하단바·고친 글자·체크인은 사람 키(c<id>)로 붙어 있다. 남길 쪽에 이미 있는 하단바 줄은 두고,
+       둘 다 체크인했으면 지우는 쪽 체크인은 취소로 돌린다(한 사람에 살아 있는 체크인은 하나) */
+    const ck = `c${keep}`, cd = `c${drop}`;
+    await client.query(`UPDATE nametag_prints SET person_key = $2 WHERE person_key = $1`, [cd, ck]);
+    await client.query(`DELETE FROM nametag_people x USING nametag_people y
+      WHERE x.person_key = $1 AND y.person_key = $2 AND y.event_id = x.event_id`, [cd, ck]);
+    await client.query(`UPDATE nametag_people SET person_key = $2 WHERE person_key = $1`, [cd, ck]);
+    await client.query(`UPDATE nametag_checkins x SET voided_at = $3, voided_by = 'merge'
+      FROM nametag_checkins y WHERE x.person_key = $1 AND y.person_key = $2 AND y.event_id = x.event_id
+        AND x.voided_at IS NULL AND y.voided_at IS NULL`, [cd, ck, new Date().toISOString()]);
+    await client.query(`UPDATE nametag_checkins SET person_key = $2 WHERE person_key = $1`, [cd, ck]);
     await client.query(`DELETE FROM contacts WHERE id = $1`, [drop]);
     await client.query('COMMIT');
     const merged = (await pool.query(`SELECT * FROM contacts WHERE id = $1`, [keep])).rows[0];

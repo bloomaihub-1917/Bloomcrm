@@ -10,6 +10,7 @@
 
 import './modules/db-tab.js';
 import './features/mdb/mdb-bulk.js';   // 마스터DB 선택 → 초청·일괄 고치기·지우기 — 스스로 window에 건다
+import './features/mdb/contact-merge.js';   // 같은 사람 합치기(칸마다 A·B·둘 다) · 행사 DB 중복 찾기 — 스스로 window에 건다
 import './features/mdb/mdb-views.js';   // 마스터DB 목록·카드·묶음·표 보기 — 스스로 window에 건다
 import './features/mdb/mdb-drag.js';   // 소속 기업·섹터·드래그로 분류 — 스스로 window에 건다
 import './features/mdb/contact-drawer.js';
