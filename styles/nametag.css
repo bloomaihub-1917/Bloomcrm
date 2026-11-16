@@ -154,8 +154,13 @@
 .nt-cam-msg[data-state="warn"]{background:var(--ab);color:var(--am);font-weight:700}
 .nt-cam-msg[data-state="bad"]{background:var(--rb);color:var(--re);font-weight:700}
 /* 이름 읽기 단추 — 영상 바로 아래 넓게(입구에 세운 태블릿에서 누르기 쉽게) */
-.nt-cam-act{padding:8px 10px 0}
-.nt-cam-act .btn{width:100%;justify-content:center}
+.nt-cam-act{padding:8px 10px 0;display:flex;gap:8px;align-items:center}
+.nt-cam-act .btn{flex:1;justify-content:center}
+/* 자동 이름 읽기 켜고 끄기(nt-camera.js) */
+.nt-cam-auto{display:inline-flex;gap:4px;align-items:center;font-size:var(--fs-12_5);white-space:nowrap;cursor:pointer}
+.nt-cam-auto input{width:16px;height:16px}
+#nt-cam.full .nt-cam-auto{font-size:clamp(16px,2.4vh,24px)}
+#nt-cam.full .nt-cam-auto input{width:22px;height:22px}
 #nt-cam.full .nt-cam-act .btn{font-size:clamp(18px,3vh,28px);padding:10px}
 .nt-cam-msg[data-state="pick"]{background:var(--ab);color:var(--i1)}
 /* 이름 읽기 후보 — 누르면 그 사람으로 체크인 */

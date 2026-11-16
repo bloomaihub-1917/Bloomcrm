@@ -1019,7 +1019,8 @@ function matchName(people, raw){
   const exact = sure.length === 1 ? sure[0].p.key : '';
   const why = exact ? '' : same.length > 1 ? `같은 이름이 ${same.length}명이에요 — 소속·직함을 보고 골라 주세요`
     : same.length === 1 ? '소속이 명단과 다르거나 못 읽었어요 — 맞는지 보고 눌러 주세요' : '';
-  return { exact, read, why, list: scored.slice(0, 4).map(({ p }) => ({ key: p.key, name: p.nameKo || p.nameEn,
+  /* best: 가장 닮은 이름의 닮음(0~1) — 자동 이름 읽기는 이것이 낮으면 후보를 띄우지 않는다(nt-camera.js AUTO_PICK) */
+  return { exact, read, why, best: scored[0]?.n || 0, list: scored.slice(0, 4).map(({ p }) => ({ key: p.key, name: p.nameKo || p.nameEn,
     org: [p.orgKo || p.orgEn, p.titleKo || p.titleEn].filter(Boolean).join(' · ') })) };
 }
 
