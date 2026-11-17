@@ -371,10 +371,16 @@ const sameText = (a, b) => String(a || '').replace(/\s+/g, ' ').trim() === Strin
 function staleOf(p, done = printedMap()){
   const d = done.get(p.key);
   if(!d || !d.rec) return null;
-  const r = d.rec, c = cardFor(p), out = [];
-  if(!sameText(r.name, c.name)) out.push(`이름 «${r.name || ''}» → «${c.name || ''}»`);
-  if(!sameText(r.company, c.company)) out.push(`소속 «${r.company || ''}» → «${c.company || ''}»`);
-  if(!sameText(r.job_title, c.job_title)) out.push(`직함 «${r.job_title || ''}» → «${c.job_title || ''}»`);
+  /* 뽑은 값이 지금 CRM 값(국문·영문 어느 쪽이든, 데스크에서 고친 글자 포함)에 그대로 있으면 바뀐 게 아니다 —
+     국문으로 뽑았는데 지금 판이 영문으로 고르는 것처럼 «말»만 다른 것은 재출력 대상이 아니다 */
+  const r = d.rec, c = cardFor(p), e = editsOf(p.key) || {}, out = [];
+  const check = (label, printed, now, ...crm) => {
+    if(!sameText(printed, now) && ![now, ...crm].some(v => String(v || '').trim() && sameText(printed, v)))
+      out.push(`${label} «${printed || ''}» → «${now || ''}»`);
+  };
+  check('이름', r.name, c.name, p.nameKo, p.nameEn, e.name);
+  check('소속', r.company, c.company, p.orgKo, p.orgEn, e.company);
+  check('직함', r.job_title, c.job_title, p.titleKo, p.titleEn, e.job_title);
   const bar = barType(barOf(p.key))?.label || '';
   if(!sameText(r.bar, bar)) out.push(`하단바 «${r.bar || ''}» → «${bar}»`);
   return out;
