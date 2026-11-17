@@ -312,8 +312,8 @@ function printedMap(){
   nt.prints.forEach(p => {
     if(p.voided_at || !p.person_key) return;
     const k = nt.alias?.get(p.person_key) || p.person_key;   // 옛 키로 뽑은 것도(foldAliases)
-    const v = m.get(k) || { n: 0, last: '' };
-    v.n++; if(p.printed_at > v.last) v.last = p.printed_at;
+    const v = m.get(k) || { n: 0, last: '', rec: null };
+    v.n++; if(p.printed_at > v.last){ v.last = p.printed_at; v.rec = p; }
     m.set(k, v);
   });
   return m;
@@ -364,6 +364,22 @@ function cardFor(p){
     ...Object.fromEntries(Object.entries(e).filter(([k, v]) => k !== 'lang' && v != null)) };
 }
 
+/* 재출력 필요 — 마지막으로 뽑은 네임택과 지금 찍힐 값이 다르면 무엇이 바뀌었는지 돌려준다.
+   명단을 고친 뒤(담당자 교체·직함·회사명·하단바) 이미 나간 네임택 중 다시 뽑을 것만 골라 보려고(2026-11-18).
+   뽑은 적이 없으면 null — 그 사람은 «안 받음»에 있다 */
+const sameText = (a, b) => String(a || '').replace(/\s+/g, ' ').trim() === String(b || '').replace(/\s+/g, ' ').trim();
+function staleOf(p, done = printedMap()){
+  const d = done.get(p.key);
+  if(!d || !d.rec) return null;
+  const r = d.rec, c = cardFor(p), out = [];
+  if(!sameText(r.name, c.name)) out.push(`이름 «${r.name || ''}» → «${c.name || ''}»`);
+  if(!sameText(r.company, c.company)) out.push(`소속 «${r.company || ''}» → «${c.company || ''}»`);
+  if(!sameText(r.job_title, c.job_title)) out.push(`직함 «${r.job_title || ''}» → «${c.job_title || ''}»`);
+  const bar = barType(barOf(p.key))?.label || '';
+  if(!sameText(r.bar, bar)) out.push(`하단바 «${r.bar || ''}» → «${bar}»`);
+  return out;
+}
+
 /* 정렬 — 구분은 연사 · 부스 · 참가자 · 현장 신규 차례, 그 안에서 참가 구분(역할) → 이름 */
 const SORTS = [['org', '소속 → 이름'], ['kind', '구분 → 이름'], ['bar', '하단바 → 이름'], ['name', '이름 (국문 가나다 → 영문 ABC)']];
 const SRC_ORDER = Object.keys(SOURCE_LABEL);
@@ -400,7 +416,7 @@ function visible(evKey, query){
   const q = String(query || '').trim().toLowerCase();
   return sortPeople(deskPeople(evKey)).filter(p =>
     (!nt.src || p.source === nt.src)
-    && (nt.filter === 'all' || (nt.filter === 'done') === done.has(p.key))
+    && (nt.filter === 'all' || (nt.filter === 'stale' ? !!staleOf(p, done)?.length : (nt.filter === 'done') === done.has(p.key)))
     && (!nt.barFil || (nt.barFil === '_none' ? !barOf(p.key) : barOf(p.key) === nt.barFil))
     && (!q || [p.nameKo, p.nameEn, p.orgKo, p.orgEn, p.titleKo, p.badgeKo, p.email, p.key].some(v => String(v || '').toLowerCase().includes(q))));
 }
@@ -462,7 +478,10 @@ export function ntPartHtml(ev, query){
       <div class="srch" style="width:100%;max-width:300px">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         <input type="text" id="evdb-q" placeholder="이름·소속·이메일 검색…" value="${escAttr(query || '')}" style="width:100%" oninput="setEvDbQuery(this.value)" onkeydown="ntScanKey(event)"${ci ? ' autofocus' : ''}></div>
-      ${seg(nt.filter, ci ? [['todo', '안 옴'], ['done', '옴'], ['all', '전체']] : [['todo', '안 받음'], ['done', '받음'], ['all', '전체']], 'ntSetFilter')}
+      ${seg(nt.filter, ci ? [['todo', '안 옴'], ['done', '옴'], ['all', '전체']] : [['todo', '안 받음'], ['done', '받음'], ['all', '전체'],
+        /* 뽑은 뒤 바뀐 사람이 있을 때만 — 눌러서 그 사람들만 골라 다시 뽑는다 */
+        ...(() => { const done = printedMap(), n = deskPeople(ev.key).filter(p => staleOf(p, done)?.length).length;
+          return n || nt.filter === 'stale' ? [['stale', `재출력 필요 ${n}`]] : []; })()], 'ntSetFilter')}
       ${seg(nt.src, [['', '모두'], ['speaker', '연사'], ['exh', '부스'], ['part', '참가자'], ['walk_in', '현장 신규']], 'ntSetSrc')}
       ${barTypes().length ? `<select class="fi" style="width:auto" onchange="ntSetBarFil(this.value)" title="하단바로 걸러 보기">
         <option value="">하단바 전체</option><option value="_none"${nt.barFil === '_none' ? ' selected' : ''}>하단바 미정</option>
@@ -492,7 +511,10 @@ export function ntRowsHtml(evKey, query){
   const srcPill = (p) => `<span class="pill ${p.source === 'speaker' ? 'p-green' : p.source === 'walk_in' ? 'p-amber' : 'p-gray'}">${SOURCE_LABEL[p.source]}</span>${p.badgeKo && p.source === 'part' ? ` <span style="font-size:var(--fs-11);color:var(--i3)">${escapeHtml(p.badgeKo)}</span>` : ''}`;
   const who = (p) => `<td><span style="font-weight:600">${p.nameKo || p.nameEn ? escapeHtml(p.nameKo || p.nameEn) : '<span style="color:var(--i4);font-weight:400">(이름 없음)</span>'}</span>${adjChip(p.key)}${p.nameKo && p.nameEn && p.nameKo !== p.nameEn ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(p.nameEn)}</div>` : ''}</td>
       <td>${escapeHtml(p.orgKo || p.orgEn)}</td>`;
-  const got = (p) => { const d = done.get(p.key); return d ? `<span style="color:var(--g);font-weight:700">✓</span> ${kst(d.last)}${d.n > 1 ? ` · ${d.n}장` : ''}` : '<span style="color:var(--i5)">—</span>'; };
+  const got = (p) => { const d = done.get(p.key); if(!d) return '<span style="color:var(--i5)">—</span>';
+    const st = staleOf(p, done);
+    return `<span style="color:var(--g);font-weight:700">✓</span> ${kst(d.last)}${d.n > 1 ? ` · ${d.n}장` : ''}${st && st.length
+      ? ` <span class="pill p-amber" title="${escAttr('뽑은 뒤 바뀐 것\n' + st.join('\n'))}">재출력 필요</span>` : ''}`; };
   const ckCell = (p) => { const c = nt.checkins.get(p.key);
     return c ? `<span style="color:var(--g);font-weight:700">✓</span> ${kst(c.checked_at)} <span class="nt-note">${c.via === 'print' ? '현장 출력' : '데스크'}${c._wait ? ' · ⏳ 기기에만' : ''}</span>` : '<span style="color:var(--i5)">—</span>'; };
   if(isMobile()) return mobileRowsHtml(shown, ci, done, srcPill, got, ckCell) + more;
