@@ -738,66 +738,110 @@ export async function removeAssign(aid){
   renderConf();
 }
 
-export async function removeConfSpeaker(spId){
+export async function removeConfSpeaker(spId){ return removeConfSpeakers([spId]); }
+
+/* 연사 여러 명을 한 번에 지운다 — 표에서 고른 연사(confUi.confPicked)나 카드·연사 창의 한 명.
+   배정이 있으면 예전에는 거부하고 «먼저 해제하세요»라고 했다. 그러면 세 군데를 돌아다녀야
+   지워지고, 결국 안 지운 채로 둔다 — 잘못 올린 연사가 프로그램에 남는 쪽이 더 나쁘다.
+   지금은 무엇이 함께 지워지는지 보여주고 한 번에 지운다.
+   함께 지우는 것: 세션 배정 · 연락 상대 · 주고받은 기록 · 이 행사의 «연사/VIP» 참가 기록
+   (같은 연락처로 남는 다른 연사 줄이 없을 때만 — 행사 DB에 연사로 남아 있으면 안 지운 것처럼 보인다).
+   마스터DB 연락처는 지우지 않는다 — 그 사람은 다른 행사·참가자로 남을 수 있다. */
+export async function removeConfSpeakers(ids){
   if(confLocked()){ confLockNotice(); return; }
-  const sp = getSpeakerById(spId);
-  if(!sp) return;
-  /* 배정이 있으면 예전에는 거부하고 «먼저 해제하세요»라고 했다. 그러면 세
-   군데를 돌아다녀야 지워지고, 결국 안 지운 채로 둔다 — 잘못 올린 연사가
-   프로그램에 남는 쪽이 더 나쁘다. 지금은 무엇이 함께 지워지는지 세션 이름까지
-   보여주고 한 번에 지운다. */
-  const asg = assignmentsFor(spId);
-  const asgLines = asg.map(a => {
-    const ss = CONF_SESSIONS.find(x => x.id === a.session_id);
-    return `${ss ? (ss.title_ko || ss.title_en || ss.id) : '(삭제된 세션)'} — ${a.role}`;
+  const sps = [...new Set(ids)].map(getSpeakerById).filter(Boolean);
+  if(!sps.length) return;
+  const idSet = new Set(sps.map(sp => sp.id));
+  const plan = sps.map(sp => {
+    const asg = assignmentsFor(sp.id).slice();
+    /* 연사 줄에 딸린 것들 — 연사 줄만 지워서 이것들이 없는 사람을 가리킨 채 DB에 남아
+       있었다(실제로 네 줄이 그랬다). 계좌·여권을 열어 본 기록까지 주인 없이 떠돈다. */
+    const cons = SPEAKER_CONTACTS.filter(c => c.speaker_id === sp.id).map(c => ({ ...c }));
+    const logs = SPEAKER_LOGS.filter(l => l.speaker_id === sp.id).map(l => ({ ...l }));
+    const cid = String(sp.contact_id || '');
+    const stillSpeaker = cid && SPEAKERS.some(x => !idSet.has(x.id) && x.event_id === sp.event_id && String(x.contact_id || '') === cid);
+    const parts = cid && !stillSpeaker ? participations.filter(p => String(p.contactId) === cid
+      && (p.eventId || p.event) === sp.event_id && (p.role === '연사' || p.role === 'VIP')).map(p => ({ ...p })) : [];
+    return { sp, asg, cons, logs, parts };
   });
-  /* 연사 줄에 딸린 것들 — 연락 상대와 주고받은 기록. 연사 줄만 지워서 이것들이
-     없는 사람을 가리킨 채 DB에 남아 있었다(실제로 네 줄이 그랬다). 화면에서는
-     안 보이니 아무도 모르고, 계좌·여권을 열어 본 기록까지 주인 없이 떠돈다.
-     «이력·제공사항이 함께 지워집니다»라고 물어 놓고 안 지우면 그 말이 거짓이 된다. */
-  const goneCons = SPEAKER_CONTACTS.filter(c => c.speaker_id === spId).map(c => ({ ...c }));
-  const goneLogs = SPEAKER_LOGS.filter(l => l.speaker_id === spId).map(l => ({ ...l }));
-  if(!confirm(`«${sp.name_snapshot || spId}» 연사를 지울까요?\n이력·제공사항·계좌 정보가 함께 지워집니다.`
-    + (asgLines.length ? `\n\n세션 배정 ${asgLines.length}건도 함께 풀립니다:\n· ${asgLines.join('\n· ')}` : '')
-    + (goneCons.length || goneLogs.length
-      ? `\n\n연락 상대 ${goneCons.length}명, 주고받은 기록 ${goneLogs.length}건도 함께 지워져요.` : '')
+  const sum = (k) => plan.reduce((n, x) => n + x[k].length, 0);
+  const names = sps.map(sp => sp.name_snapshot || sp.name_en || sp.id);
+  const asgLines = plan.flatMap(x => x.asg.map(a => {
+    const ss = CONF_SESSIONS.find(s => s.id === a.session_id);
+    return `${ss ? (ss.title_ko || ss.title_en || ss.id) : '(삭제된 세션)'} — ${a.role}${sps.length > 1 ? ` (${x.sp.name_snapshot || x.sp.name_en || ''})` : ''}`;
+  }));
+  if(!confirm((sps.length === 1 ? `«${names[0]}» 연사를 지울까요?` : `연사 ${sps.length}명을 지울까요?\n· ${names.slice(0, 12).join('\n· ')}${names.length > 12 ? `\n… 외 ${names.length - 12}명` : ''}`)
+    + `\n이력·제공사항·계좌 정보가 함께 지워집니다.`
+    + (asgLines.length ? `\n\n세션 배정 ${asgLines.length}건도 함께 풀립니다:\n· ${asgLines.slice(0, 12).join('\n· ')}${asgLines.length > 12 ? '\n…' : ''}` : '')
+    + (sum('cons') || sum('logs') ? `\n\n연락 상대 ${sum('cons')}명, 주고받은 기록 ${sum('logs')}건도 함께 지워져요.` : '')
+    + (sum('parts') ? `\n행사 DB의 연사 참가 기록 ${sum('parts')}건도 빠져요(마스터DB 연락처는 남아요).` : '')
     + `\n\n되돌릴 수 없어요.`)) return;
 
-  /* 배정을 먼저 푼다 — 사람을 먼저 지우면 중간에 실패했을 때 이름 없는
-     배정 줄이 프로그램에 남는다. */
-  for(const a of asg.slice()){
+  const done = [], failed = [];
+  for(const x of plan){
+    const ok = await removeOneSpeaker(x);
+    (ok ? done : failed).push(x);
+    if(ok === null) break;   // 잠김 — 더 하지 않는다
+  }
+  if(confUi.confPicked) done.forEach(x => confUi.confPicked.delete(x.sp.id));
+  if(done.length){
+    trackAction('delete', '연사', confUi.confEvent, done.map(x => x.sp.name_snapshot || x.sp.id).join(', '),
+      removed('speakers', done.map(x => x.sp.id).join(','), done.map(x => x.sp),
+        { also: done.flatMap(x => [...x.cons, ...x.logs, ...x.parts.map(p => ({ table: 'participations', before: p }))]) }));
+  }
+  if(failed.length) alert(`${failed.length}명은 지우지 못했어요 — 잠시 뒤 다시 해주세요.\n· ${failed.map(x => x.sp.name_snapshot || x.sp.id).join('\n· ')}`);
+  window.invalidateEvRows?.();
+  renderConf();
+  buildConfEvList();
+}
+
+/* 한 명 — 배정 → 연락 상대·기록 → 참가 기록 → 연사 줄 차례. 사람을 먼저 지우면 중간에 실패했을 때
+   이름 없는 배정 줄이 프로그램에 남는다. 성공 true · 실패 false · 잠김 null */
+async function removeOneSpeaker({ sp, asg, cons, logs, parts }){
+  const bad = (r) => r && r.ok === false;
+  for(const a of asg){
     const r = await gDelAssign(a.id);
-    if(r && r.ok === false){
-      if(!r.locked) alert('배정을 푸는 중에 멈췄어요 — 연사는 지우지 않았습니다.');
-      renderConf();
-      return;
-    }
+    if(bad(r)) return r.locked ? null : false;
     const k = SESSION_SPEAKERS.findIndex(x => x.id === a.id);
     if(k >= 0) SESSION_SPEAKERS.splice(k, 1);
   }
-
-  for(const [del, list, what] of [[gDelSpeakerContact, goneCons, '연락 상대'], [gDelSpeakerLog, goneLogs, '주고받은 기록']]){
+  for(const [del, list, arr] of [[gDelSpeakerContact, cons, SPEAKER_CONTACTS], [gDelSpeakerLog, logs, SPEAKER_LOGS]]){
     for(const g of list){
       const r = await del(g.id);
-      if(r && r.ok === false){
-        if(!r.locked) alert(`${what}을 지우는 중에 멈췄어요 — 연사는 지우지 않았습니다. 잠시 뒤 다시 해주세요.`);
-        renderConf();
-        return;
-      }
+      if(bad(r)) return r.locked ? null : false;
+      const k = arr.findIndex(x => x.id === g.id);
+      if(k >= 0) arr.splice(k, 1);
     }
   }
-  [[SPEAKER_CONTACTS, goneCons], [SPEAKER_LOGS, goneLogs]].forEach(([arr, gone]) => {
-    gone.forEach(g => { const k = arr.findIndex(x => x.id === g.id); if(k >= 0) arr.splice(k, 1); });
-  });
-
-  const res = await gDelSpeaker(spId);
-  if(res && res.ok === false){ if(!res.locked) alert('연사를 지우지 못했어요.'); return; }
-  const i = SPEAKERS.findIndex(x => x.id === spId);
+  for(const p of parts){
+    const r = await postToSheet({ sheet: 'participations', action: 'delete', row: [p.id] }, '행사 참가 삭제');
+    if(bad(r)) return false;
+    const k = participations.findIndex(x => x.id === p.id);
+    if(k >= 0) participations.splice(k, 1);
+  }
+  const res = await gDelSpeaker(sp.id);
+  if(bad(res)) return res.locked ? null : false;
+  const i = SPEAKERS.findIndex(x => x.id === sp.id);
   if(i >= 0) SPEAKERS.splice(i, 1);
-  trackAction('delete', '연사', confUi.confEvent, sp.name_snapshot || spId,
-    removed('speakers', spId, sp, { also: [...goneCons, ...goneLogs] }));
+  return true;
+}
+
+/* 표에서 연사 고르기 — 체크한 연사만 «선택 삭제» */
+export function toggleConfPick(spId, on){
+  if(!confUi.confPicked) confUi.confPicked = new Set();
+  on ? confUi.confPicked.add(spId) : confUi.confPicked.delete(spId);
   renderConf();
-  buildConfEvList();
+}
+export function toggleConfPickAll(ids, on){
+  if(!confUi.confPicked) confUi.confPicked = new Set();
+  ids.forEach(id => on ? confUi.confPicked.add(id) : confUi.confPicked.delete(id));
+  renderConf();
+}
+export function clearConfPick(){ confUi.confPicked?.clear(); renderConf(); }
+export function removePickedSpeakers(){
+  const ids = [...(confUi.confPicked || [])].filter(id => getSpeakerById(id)?.event_id === confUi.confEvent);
+  if(!ids.length){ alert('지울 연사를 먼저 체크해 주세요.'); return; }
+  removeConfSpeakers(ids);
 }
 
 /* ── 인라인 핸들러용 노출 ── */
@@ -825,6 +869,11 @@ window.setAssignRole     = setAssignRole;
 window.removeAssign      = removeAssign;
 window.setCoLead         = setCoLead;
 window.removeConfSpeaker = removeConfSpeaker;
+window.removeConfSpeakers = removeConfSpeakers;
+window.toggleConfPick = toggleConfPick;
+window.toggleConfPickAll = toggleConfPickAll;
+window.clearConfPick = clearConfPick;
+window.removePickedSpeakers = removePickedSpeakers;
 
 /* 제목 줄 «연사 추가» — 지금 보고 있는 행사에 연사 줄을 만들고 연사 창을 연다(features/quick-add.js) */
 window.addConfSpeaker = () => window.openSpeakerAdd?.(confUi.confEvent, { done: renderConf });

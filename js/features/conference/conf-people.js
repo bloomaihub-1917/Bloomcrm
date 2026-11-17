@@ -592,6 +592,23 @@ function peopleHtml(ev){
       + list.map(card).join('');
   }
 
+  /* 고르기 칸 — 준비·정산 표가 같이 쓴다. 고른 연사는 위 줄의 «선택 삭제»로 한 번에 지운다 */
+  const picked = confUi.confPicked || new Set();
+  const pickedHere = list.filter(sp => picked.has(sp.id));
+  const allOn = list.length && pickedHere.length === list.length;
+  const idsArg = escAttr(JSON.stringify(list.map(sp => sp.id)));
+  const pickTh = `<th style="width:28px;text-align:center"><input type="checkbox" ${allOn ? 'checked' : ''}
+    title="보이는 연사 모두 고르기/풀기" onclick="event.stopPropagation()" onchange="toggleConfPickAll(${idsArg}, this.checked)"></th>`;
+  const pickTd = (sp) => `<td style="text-align:center" onclick="event.stopPropagation()"><input type="checkbox"
+    ${picked.has(sp.id) ? 'checked' : ''} onchange="toggleConfPick('${escAttr(sp.id)}', this.checked)"></td>`;
+  const pickBar = pickedHere.length ? `<div class="sec-bar" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;
+      padding:6px 10px;background:var(--ad);border-radius:var(--r)">
+      <span style="font-size:var(--fs-12);font-weight:600">${pickedHere.length}명 선택됨</span>
+      <button class="btn" style="font-size:var(--fs-11);color:var(--re);border-color:var(--re)" onclick="removePickedSpeakers()"
+        title="고른 연사를 지웁니다 — 세션 배정·연락 상대·기록과 행사 DB의 연사 참가 기록도 함께. 마스터DB 연락처는 남아요">선택 삭제</button>
+      <button class="btn" style="font-size:var(--fs-11);margin-left:auto" onclick="clearConfPick()">선택 해제</button>
+    </div>` : '';
+
   /* 이름·세션 칸 — 준비·정산 표가 같이 쓴다 */
   const nameTd = (sp) => {
     const name = sp.name_snapshot || sp.name_en || sp.id;
@@ -637,7 +654,7 @@ function peopleHtml(ev){
       const dom = isDomesticSpeaker(sp);
       const vp = sp.video_publish;
       return `<tr style="cursor:pointer" onclick="openSpeakerDr('${escAttr(sp.id)}')">
-        ${nameTd(sp)}${sessTd(sp)}
+        ${pickTd(sp)}${nameTd(sp)}${sessTd(sp)}
         <td style="text-align:right;font-size:var(--fs-11_5);white-space:nowrap">${on ? won(sp)
           : `<span style="font-size:var(--fs-10_5);color:var(--i5)">${paysFee(sp) ? '없음' : '해당 없음'}</span>`}</td>
         <td style="font-size:var(--fs-11);white-space:nowrap">${on ? `<span style="font-size:var(--fs-9_5);color:var(--i4);margin-right:5px">${dom ? '국내' : '해외'}</span>${
@@ -652,9 +669,9 @@ function peopleHtml(ev){
           ? ` <span style="font-size:var(--fs-9_5);color:var(--i4)">${escapeHtml(shortCell(sp.video_publish_at))}</span>` : ''}</td>
       </tr>`;
     };
-    return summary + searchNote + filterBar
+    return summary + searchNote + filterBar + pickBar
       + `<div class="tw"><table><thead><tr>
-          <th style="min-width:160px">연사</th>
+          ${pickTh}<th style="min-width:160px">연사</th>
           <th style="min-width:120px">세션</th>
           <th style="text-align:right;min-width:80px">연사료</th>
           <th style="min-width:150px" title="국내: 신분증·통장사본·계좌번호 / 해외: 계좌·여권">서류</th>
@@ -662,7 +679,7 @@ function peopleHtml(ev){
           <th style="min-width:80px" title="행사 뒤 홈페이지·교육 자료 게재 동의">영상 게재</th>
         </tr></thead><tbody>${shown.map(srow).join('')}
         ${noFee.length ? `<tr onclick="toggleConfNoFee()" style="cursor:pointer;background:var(--i8)">
-          <td colspan="6" style="font-size:var(--fs-11);color:var(--i4)">${confUi.confShowNoFee ? '▾' : '▸'} 연사료 없음 ${noFee.length}명 (VIP 등 포함) — ${
+          <td colspan="7" style="font-size:var(--fs-11);color:var(--i4)">${confUi.confShowNoFee ? '▾' : '▸'} 연사료 없음 ${noFee.length}명 (VIP 등 포함) — ${
             escapeHtml(noFee.map(sp => sp.name_snapshot || sp.name_en || '').join(', '))}</td></tr>
           ${confUi.confShowNoFee ? noFee.map(srow).join('') : ''}` : ''}
         </tbody></table></div>
@@ -681,7 +698,7 @@ function peopleHtml(ev){
     const to = contactsOfSpeaker(sp.id).filter(x => x.send === 'to' && x.email);
 
     return `<tr style="cursor:pointer" onclick="openSpeakerDr('${escAttr(sp.id)}')">
-      ${nameTd(sp)}${sessTd(sp)}
+      ${pickTd(sp)}${nameTd(sp)}${sessTd(sp)}
       <td style="min-width:70px">
         ${progressBar(pr.pct, pr.pct === 100 ? 'var(--g)' : 'var(--a)')}
         <div style="font-size:var(--fs-9_5);color:var(--i4);margin-top:2px">${pr.n}/${pr.of}</div></td>
@@ -707,9 +724,9 @@ function peopleHtml(ev){
     </tr>`;
   };
 
-  return summary + searchNote + filterBar + (phase === 'prep' ? needChips : '')
+  return summary + searchNote + filterBar + (phase === 'prep' ? needChips : '') + pickBar
     + `<div class="tw"><table><thead><tr>
-        <th style="min-width:140px">연사</th>
+        ${pickTh}<th style="min-width:140px">연사</th>
         <th style="min-width:120px">세션</th>
         <th style="min-width:70px">진행률</th>
         <th style="min-width:110px" title="연락 단계에서 다음에 할 일 — 누르면 그 메일 초안이 열립니다">지금 할 일</th>
