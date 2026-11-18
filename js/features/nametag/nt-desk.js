@@ -651,7 +651,11 @@ function walkInContactHtml(p){
 
 function walkInHtml(){
   const w = nt.walkIn;
-  const f = (k, label, wide, type = 'text') => `<label class="${wide ? 'wide' : ''}"><div class="mlbl">${label}</div>
+  /* 이름·소속·직함은 Enter로 줄을 바꿔 찍는다 — 명단에 있는 사람과 같다(2026-11-18). 칸 높이는 줄 수만큼 */
+  const f = (k, label, wide, type = 'text') => ['name', 'company', 'job_title'].includes(k)
+    ? `<label class="${wide ? 'wide' : ''}"><div class="mlbl">${label}</div>
+    <textarea class="fi nt-ta" rows="${String(w[k] || '').split('\n').length}" oninput="this.rows=this.value.split('\\n').length;ntWalkEdit('${k}',this.value)">${escapeHtml(w[k] || '')}</textarea></label>`
+    : `<label class="${wide ? 'wide' : ''}"><div class="mlbl">${label}</div>
     <input class="fi" type="${type}" value="${escAttr(w[k] || '')}" oninput="ntWalkEdit('${k}',this.value)"></label>`;
   const card = walkCard();
   return `<h4>현장 신규</h4>
@@ -661,7 +665,8 @@ function walkInHtml(){
       ${f('email', '이메일', false, 'email')}${f('phone', '전화')}</div>
     <details class="nt-pos"${card._pos ? ' open' : ''}><summary>글자 위치·크기 · 이 사람만<span id="nt-pos-sum">${card._pos ? ' <span class="nt-adj">판과 다름</span>' : ''}</span></summary>
       <div id="nt-pos">${posHtml('', card)}</div></details>
-    <div class="nt-note">명단에 없는 사람이에요. 현장 출력으로 뽑으면 체크인으로도 남아요(사전 출력이면 체크인은 따로). 행사가 끝난 뒤 «마스터DB에»로 연락처·참가 확정을 만들어요.</div>
+    <div class="nt-note">이름·소속·직함은 Enter로 줄을 바꿔요 — 바꾼 줄과 글자 위치·크기는 뽑을 때 이 사람에게 저장돼요.
+      명단에 없는 사람이에요. 현장 출력으로 뽑으면 체크인으로도 남아요(사전 출력이면 체크인은 따로). 행사가 끝난 뒤 «마스터DB에»로 연락처·참가 확정을 만들어요.</div>
     <div class="nt-actions"><button class="btn bp" onclick="ntPrint()"${nt.busy ? ' disabled' : ''}>🖨 인쇄</button>
       <button class="btn bs" onclick="ntWalkIn(false)">취소</button></div>${recentHtml()}`;
 }
@@ -971,10 +976,17 @@ export async function ntPrint(){
   const data = { rows, reason: nt.reason || '', onsite };
   applyOp({ kind: 'issue', data });
   enqueue(nt.ev, 'issue', data);
-  /* 현장 신규에서 맞춘 글자 위치·크기 — 발급으로 생긴 사람 줄에 저장(발급 다음 차례로 보낸다) */
-  rows.filter(r => r.kind === 'walk_in' && r._pos).forEach(r => {
-    nt.people.set(r.person_key, { ...(nt.people.get(r.person_key) || { person_key: r.person_key }), pos: r._pos });
-    enqueue(nt.ev, 'pos', { key: r.person_key, pos: r._pos });
+  /* 현장 신규에서 맞춘 글자 위치·크기와 바꾼 줄 — 발급으로 생긴 사람 줄에 저장(발급 다음 차례로 보낸다).
+     발급 기록에는 글자가 한 줄로 남으므로(nt-outbox.js one), 줄을 바꾼 칸만 «고친 글자»(edits)로 둔다 —
+     다시 뽑아도, 다른 데스크에서도 바꾼 줄 그대로. 명단에 있는 사람이 데스크에서 고친 글자와 같은 자리다(2026-11-18) */
+  rows.filter(r => r.kind === 'walk_in').forEach(r => {
+    const ed = Object.fromEntries(['name', 'company', 'job_title'].filter(k => String(r[k] || '').includes('\n')).map(k => [k, String(r[k])]));
+    const has = Object.keys(ed).length;
+    if(!r._pos && !has) return;
+    nt.people.set(r.person_key, { ...(nt.people.get(r.person_key) || { person_key: r.person_key }),
+      ...(r._pos ? { pos: r._pos } : {}), ...(has ? { edits: ed } : {}) });
+    if(r._pos) enqueue(nt.ev, 'pos', { key: r.person_key, pos: r._pos });
+    if(has) enqueue(nt.ev, 'edits', { key: r.person_key, edits: ed });
   });
   nt.picked.clear(); nt.reason = ''; nt.walkIn = null;   // 고친 글자·위치는 그 사람에게 저장돼 있어 그대로 둔다
   rerender();
