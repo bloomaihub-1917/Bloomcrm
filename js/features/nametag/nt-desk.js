@@ -653,11 +653,14 @@ function walkInHtml(){
   const w = nt.walkIn;
   const f = (k, label, wide, type = 'text') => `<label class="${wide ? 'wide' : ''}"><div class="mlbl">${label}</div>
     <input class="fi" type="${type}" value="${escAttr(w[k] || '')}" oninput="ntWalkEdit('${k}',this.value)"></label>`;
+  const card = walkCard();
   return `<h4>현장 신규</h4>
-    <div id="nt-preview">${previewHtml(w)}</div>
+    <div id="nt-preview">${previewHtml(card)}</div>
     <div class="nt-fields">${f('name', '이름', true)}${f('company', '소속', true)}${f('job_title', '직함')}${f('badge', '구분')}
       ${barTypes().length ? `<label class="wide"><div class="mlbl">하단바 <span class="nt-note">· 비워 두고 나중에 채워도 돼요</span></div>${barSelect(w.bar, `ntWalkEdit('bar',this.value)`)}</label>` : ''}
       ${f('email', '이메일', false, 'email')}${f('phone', '전화')}</div>
+    <details class="nt-pos"${card._pos ? ' open' : ''}><summary>글자 위치·크기 · 이 사람만<span id="nt-pos-sum">${card._pos ? ' <span class="nt-adj">판과 다름</span>' : ''}</span></summary>
+      <div id="nt-pos">${posHtml('', card)}</div></details>
     <div class="nt-note">명단에 없는 사람이에요. 현장 출력으로 뽑으면 체크인으로도 남아요(사전 출력이면 체크인은 따로). 행사가 끝난 뒤 «마스터DB에»로 연락처·참가 확정을 만들어요.</div>
     <div class="nt-actions"><button class="btn bp" onclick="ntPrint()"${nt.busy ? ' disabled' : ''}>🖨 인쇄</button>
       <button class="btn bs" onclick="ntWalkIn(false)">취소</button></div>${recentHtml()}`;
@@ -713,6 +716,8 @@ function importHtml(){
 const POS_STEP = 1, SIZE_STEP = 2;
 function posHtml(key, card){
   const l = layoutFor(nt.template, card._bar), pos = card._pos || {};
+  /* 현장 신규(아직 뽑기 전, key '') — 뽑을 때 그 사람에게 저장한다(ntWalkNudge) */
+  const nudge = (k, x, y, s) => key ? `ntNudge('${escAttr(key)}','${k}',${x},${y}${s ? `,${s}` : ''})` : `ntWalkNudge('${k}',${x},${y}${s ? `,${s}` : ''})`;
   const keys = TEXT_KEYS.filter(k => l[k]?.show && card[k]);
   if(!keys.length) return '<div class="nt-note">찍힐 글자가 없어요.</div>';
   const v = (n) => n ? (n > 0 ? '+' : '') + n : '0';
@@ -721,12 +726,12 @@ function posHtml(key, card){
     + keys.map(k => { const d = pos[k] || {};
     return `<div class="nt-pos-row${d.dx || d.dy || d.ds ? ' on' : ''}"><span class="nt-pos-lbl">${EL_LABEL[k]}</span>
       ${[['↑', 0, -1, '위로'], ['↓', 0, 1, '아래로'], ['←', -1, 0, '왼쪽으로'], ['→', 1, 0, '오른쪽으로']].map(([a, x, y, t]) =>
-        `<button class="btn bs" title="${t} ${POS_STEP}mm" onclick="ntNudge('${escAttr(key)}','${k}',${x},${y})">${a}</button>`).join('')}
-      <button class="btn bs" title="글자 ${SIZE_STEP}pt 작게" onclick="ntNudge('${escAttr(key)}','${k}',0,0,-1)">A−</button>
-      <button class="btn bs" title="글자 ${SIZE_STEP}pt 크게" onclick="ntNudge('${escAttr(key)}','${k}',0,0,1)">A+</button>
+        `<button class="btn bs" title="${t} ${POS_STEP}mm" onclick="${nudge(k, x, y)}">${a}</button>`).join('')}
+      <button class="btn bs" title="글자 ${SIZE_STEP}pt 작게" onclick="${nudge(k, 0, 0, -1)}">A−</button>
+      <button class="btn bs" title="글자 ${SIZE_STEP}pt 크게" onclick="${nudge(k, 0, 0, 1)}">A+</button>
       <span class="nt-note">가로 ${v(d.dx)} · 세로 ${v(d.dy)} mm · 크기 ${l[k].size + (d.ds || 0)}pt${d.ds ? ` (${v(d.ds)})` : ''}</span></div>`; }).join('')
-    + `<div class="nt-note">이 사람에게 저장돼요 — 다시 뽑아도, 다른 데스크에서 뽑아도 이대로 찍혀요. 판(설정 › 행사 상세 › 네임택)은 그대로예요.
-      ${card._pos ? `<button class="btn bs" onclick="ntNudgeReset('${escAttr(key)}')">판대로 되돌리기</button>` : ''}</div>`;
+    + `<div class="nt-note">${key ? '이 사람에게 저장돼요 — 다시 뽑아도, 다른 데스크에서 뽑아도 이대로 찍혀요.' : '뽑을 때 이 사람에게 저장돼요 — 다시 뽑아도, 다른 데스크에서 뽑아도 이대로 찍혀요.'} 판(설정 › 행사 상세 › 네임택)은 그대로예요.
+      ${card._pos ? `<button class="btn bs" onclick="${key ? `ntNudgeReset('${escAttr(key)}')` : 'ntWalkNudgeReset()'}">판대로 되돌리기</button>` : ''}</div>`;
 }
 /* 판과 다른 점을 한 줄로 — «이름 34pt(판 44) ↓2mm · 소속 →1mm» */
 function posSummary(l, pos){
@@ -856,7 +861,37 @@ export function ntEditReset(key){
   rerender();
 }
 export function ntWalkIn(on){ nt.walkIn = on ? { name: '', company: '', job_title: '', badge: '', bar: '', email: '', phone: '' } : null; nt.imp = null; rerender(); }
-export function ntWalkEdit(field, value){ if(!nt.walkIn) return; nt.walkIn[field] = value; if(field !== 'bar' && field !== 'email' && field !== 'phone') refreshPreview(nt.walkIn); }
+/* 현장 신규 미리보기 카드 — 고른 하단바의 판(layoutFor)과 글자 위치·크기(아직 이 화면에만, 뽑을 때 저장) */
+const walkCard = () => ({ ...nt.walkIn, _bar: nt.walkIn.bar || '', _pos: nt.walkIn.pos || undefined });
+function refreshWalkPos(){
+  const card = walkCard(), el = document.getElementById('nt-pos');
+  if(el) el.innerHTML = posHtml('', card);
+  const sum = document.getElementById('nt-pos-sum');
+  if(sum) sum.innerHTML = card._pos ? ' <span class="nt-adj">판과 다름</span>' : '';
+  refreshPreview(card);
+}
+export function ntWalkEdit(field, value){
+  if(!nt.walkIn) return;
+  nt.walkIn[field] = value;
+  if(field === 'email' || field === 'phone') return;
+  /* 글자가 생기거나 없어지면 조정할 칸도 바뀐다. 하단바를 바꾸면 그 띠의 판으로 */
+  if(field === 'bar' || field === 'name' || field === 'company' || field === 'job_title' || field === 'badge') refreshWalkPos();
+  else refreshPreview(walkCard());
+}
+/* 현장 신규 글자 위치·크기(2026-11-18) — 명단에 있는 사람의 ntNudge와 같은 규칙. 뽑을 때 nametag_people.pos로 저장한다 */
+export function ntWalkNudge(k, x, y, s = 0){
+  const w = nt.walkIn;
+  if(!w) return;
+  const pos = { ...(w.pos || {}) }, d = { dx: 0, dy: 0, ds: 0, ...(pos[k] || {}) };
+  const r = (n) => Math.round(n * 10) / 10;
+  d.dx = r(d.dx + x * POS_STEP); d.dy = r(d.dy + y * POS_STEP);
+  const base = layoutFor(nt.template, w.bar || '')[k]?.size || 0;
+  if(s) d.ds = Math.min(120 - base, Math.max(6 - base, d.ds + s * SIZE_STEP));
+  if(d.dx || d.dy || d.ds) pos[k] = d; else delete pos[k];
+  w.pos = Object.keys(pos).length ? pos : null;
+  refreshWalkPos();
+}
+export function ntWalkNudgeReset(){ if(!nt.walkIn) return; nt.walkIn.pos = null; refreshWalkPos(); }
 export function ntSetReason(v){ nt.reason = v; }
 export function ntReload(){ nt.loaded = ''; nt.err = ''; ensureLoaded(nt.ev); rerender(); }
 
@@ -900,7 +935,7 @@ export async function ntPrint(){
   if(nt.walkIn){
     const w = nt.walkIn;
     cards = [{ source: 'walk_in', name: w.name, company: w.company, job_title: w.job_title, badge: w.badge, bar: w.bar,
-      email: w.email, phone: w.phone, lang: /[가-힣]/.test(w.name) ? 'ko' : 'en' }];
+      email: w.email, phone: w.phone, lang: /[가-힣]/.test(w.name) ? 'ko' : 'en', _pos: w.pos || null }];
   } else {
     const list = targets(nt.ev);
     if(!list.length) return alert('뽑을 사람을 골라 주세요.');
@@ -936,6 +971,11 @@ export async function ntPrint(){
   const data = { rows, reason: nt.reason || '', onsite };
   applyOp({ kind: 'issue', data });
   enqueue(nt.ev, 'issue', data);
+  /* 현장 신규에서 맞춘 글자 위치·크기 — 발급으로 생긴 사람 줄에 저장(발급 다음 차례로 보낸다) */
+  rows.filter(r => r.kind === 'walk_in' && r._pos).forEach(r => {
+    nt.people.set(r.person_key, { ...(nt.people.get(r.person_key) || { person_key: r.person_key }), pos: r._pos });
+    enqueue(nt.ev, 'pos', { key: r.person_key, pos: r._pos });
+  });
   nt.picked.clear(); nt.reason = ''; nt.walkIn = null;   // 고친 글자·위치는 그 사람에게 저장돼 있어 그대로 둔다
   rerender();
   const ev = nt.ev;
@@ -1229,7 +1269,7 @@ export async function ntPromote(){
   nt.busy = false; rerender();
 }
 
-Object.assign(window, { ntNudge, ntNudgeReset, ntEditReset, ntPrintBlank, ntSetView, ntSetOnsite, ntSetFilter, ntSetSrc, ntSetBarFil, ntSetSort, ntSortBy, ntFocus, ntPick, ntPickAll, ntEdit, ntWalkIn, ntWalkEdit,
+Object.assign(window, { ntNudge, ntNudgeReset, ntWalkNudge, ntWalkNudgeReset, ntEditReset, ntPrintBlank, ntSetView, ntSetOnsite, ntSetFilter, ntSetSrc, ntSetBarFil, ntSetSort, ntSortBy, ntFocus, ntPick, ntPickAll, ntEdit, ntWalkIn, ntWalkEdit,
   ntSetReason, ntReload, ntOpenEditor, ntPrint, ntVoid, ntSetBar, ntSetBarPicked, ntWalkContact, ntCheckIn, ntUncheck,
   ntScanKey, ntCamera, ntExport, ntImportBars, ntImportApply, ntImportCancel, ntPromote,
   ntNetView, ntSendNow, ntRetryFailed, ntDismissFailed, ntExportDeviceLog });
