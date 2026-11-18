@@ -373,10 +373,15 @@ function staleOf(p, done = printedMap()){
   if(!d || !d.rec) return null;
   /* 뽑은 값이 지금 CRM 값(국문·영문 어느 쪽이든, 데스크에서 고친 글자 포함)에 그대로 있으면 바뀐 게 아니다 —
      국문으로 뽑았는데 지금 판이 영문으로 고르는 것처럼 «말»만 다른 것은 재출력 대상이 아니다 */
+  /* 단, 뽑을 때 그 말(영문판이면 영문) 값이 비어 다른 말로 채워 찍었는데 지금은 그 말 값이 생겼으면 재출력 —
+     영문 이름 없이 «안상노»로 찍힌 영문 네임택은 «Sang-No Ahn»이 생기면 다시 뽑아야 한다 */
   const r = d.rec, c = cardFor(p), e = editsOf(p.key) || {}, out = [];
-  const check = (label, printed, now, ...crm) => {
-    if(!sameText(printed, now) && ![now, ...crm].some(v => String(v || '').trim() && sameText(printed, v)))
-      out.push(`${label} «${printed || ''}» → «${now || ''}»`);
+  const has = (v) => !!String(v || '').trim();
+  const check = (label, printed, now, ko, en, edit) => {
+    if(sameText(printed, now) || (has(edit) && sameText(printed, edit))) return;
+    const mine = r.lang === 'ko' ? ko : en, other = r.lang === 'ko' ? en : ko;
+    if((has(mine) && sameText(printed, mine)) || (!has(mine) && has(other) && sameText(printed, other))) return;
+    out.push(`${label} «${printed || ''}» → «${now || ''}»`);
   };
   check('이름', r.name, c.name, p.nameKo, p.nameEn, e.name);
   check('소속', r.company, c.company, p.orgKo, p.orgEn, e.company);
