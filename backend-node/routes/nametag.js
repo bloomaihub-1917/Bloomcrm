@@ -239,7 +239,10 @@ router.post('/:eventId/issue', async (req, res, next) => {
     const out = [], people = [], checkins = [];
     for (const c of cards) {
       const kind = c.fresh ? 'walk_in' : already.has(c.person_key) ? 'reissue' : 'issue';
-      const bar = c.fresh ? (barLabel.has(c.bar) ? c.bar : null) : barOf.get(c.person_key) || null;
+      /* 사람 줄에 없으면 데스크가 보낸 띠 — 참가 역할로 정해지는 띠(nt-desk.js defBar)는 사람 줄에 안 남아,
+         예전에는 기록에 빈칸으로 남고 뽑자마자 «재출력 필요»로 보였다(2026-11-18 GPBFair 509장 중 506장) */
+      const sent = barLabel.has(c.bar) ? c.bar : null;
+      const bar = c.fresh ? sent : barOf.get(c.person_key) || sent;
       if (c.fresh) {
         const { rows: [pp] } = await client.query(`INSERT INTO nametag_people (event_id, person_key, bar, email, phone, updated_at, updated_by)
           VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (event_id, person_key) DO UPDATE SET updated_at = EXCLUDED.updated_at

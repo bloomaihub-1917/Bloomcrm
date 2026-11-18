@@ -382,7 +382,10 @@ function staleOf(p, done = printedMap()){
   check('소속', r.company, c.company, p.orgKo, p.orgEn, e.company);
   check('직함', r.job_title, c.job_title, p.titleKo, p.titleEn, e.job_title);
   const bar = barType(barOf(p.key))?.label || '';
-  if(!sameText(r.bar, bar)) out.push(`하단바 «${r.bar || ''}» → «${bar}»`);
+  /* 기록의 하단바가 비었고 지금 띠가 참가 역할로 정해진 것이면 바뀐 게 아니다 — 11-18 전 서버가 역할 띠를
+     기록에 안 남겼다(routes/nametag.js issue). 사람마다 따로 정한 띠로 바뀐 것만 센다 */
+  const roleBarUnrecorded = !String(r.bar || '').trim() && barIsDefault(p.key);
+  if(!roleBarUnrecorded && !sameText(r.bar, bar)) out.push(`하단바 «${r.bar || ''}» → «${bar}»`);
   return out;
 }
 
