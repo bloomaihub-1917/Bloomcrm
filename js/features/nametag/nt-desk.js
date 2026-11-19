@@ -338,6 +338,9 @@ const barSelect = (cur, on, extra = '', byRole = false) => `<select class="fi nt
 /* 현장 출력 — 고르지 않았으면 행사 기간(한국 시각)으로 정한다 */
 function isOnsite(){
   if(nt.onsite != null) return nt.onsite;
+  return inPeriod();
+}
+function inPeriod(){
   const ev = evRow(), s = ev.date_start || ev.date || '', e = ev.date_end || s, d = today();
   return !!s && s <= d && d <= e;
 }
@@ -975,7 +978,9 @@ export async function ntPrint(){
       _alt: typeof c._alt === 'boolean' ? c._alt : undefined,   // 하단바가 정한 병기 켬·끔 — 인쇄 창만 쓴다
       bar: barType(barId)?.label || null, lang: c.lang === 'en' ? 'en' : 'ko', kind, reason: kind === 'reissue' ? nt.reason : null,
       printed_by: by, printed_at: at, voided_at: null, _wait: true,
-      _checkin_id: onsite && !nt.checkins.has(key) ? newId('NC-') : '', _bar_id: barId || '',   // 현장 신규도 사전 출력이면 체크인 안 함
+      /* 현장 신규는 행사 기간이면 «사전 출력»으로 둬도 체크인 — 그 자리에 온 사람이다.
+         재출력하려고 사전 출력으로 바꾼 채 현장 신규를 뽑아 체크인이 빠졌다(2026-11-19 GPBFair) */
+      _checkin_id: (onsite || (fresh && inPeriod())) && !nt.checkins.has(key) ? newId('NC-') : '', _bar_id: barId || '',
       _email: fresh ? c.email || '' : '', _phone: fresh ? c.phone || '' : '' };
   });
   const data = { rows, reason: nt.reason || '', onsite };

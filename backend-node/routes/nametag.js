@@ -257,7 +257,7 @@ router.post('/:eventId/issue', async (req, res, next) => {
         c.name, c.company, c.job_title, c.badge, bar ? barLabel.get(bar) || null : null, c.lang, kind,
         kind === 'issue' ? null : reason || RACE_REASON, by, c.at, now]);
       out.push(r);
-      if (onsite) {
+      if (onsite || (c.fresh && c.checkin_id)) {   // 현장 신규는 데스크가 체크인 id를 붙여 보내면(행사 기간) 사전 출력이어도 체크인
         const { rows: [k] } = await client.query(`INSERT INTO nametag_checkins (id, event_id, person_key, via, print_id, checked_at, checked_by, synced_at)
           VALUES ($1,$2,$3,'print',$4,$5,$6,$7) ON CONFLICT (event_id, person_key) WHERE voided_at IS NULL DO NOTHING RETURNING ${CHECKIN_COLS}`,
         [c.checkin_id || newId('NC-'), ev, c.person_key, r.id, c.at, by, now]);
