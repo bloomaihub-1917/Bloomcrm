@@ -217,13 +217,14 @@ async function acceptWith(client, id, by) {
     let partId;
     if (dup) {
       partId = dup.id;
-      await client.query('UPDATE participations SET note = $2, confirmed_at = $3 WHERE id = $1',
-        [dup.id, [dup.note, note].filter(Boolean).join('\n').slice(0, 4000), dup.confirmed_at || today]);
+      await client.query('UPDATE participations SET note = $2, confirmed_at = $3, registered_at = COALESCE(registered_at, $4) WHERE id = $1',
+        [dup.id, [dup.note, note].filter(Boolean).join('\n').slice(0, 4000), dup.confirmed_at || today, sub.created_at || null]);
     } else {
       partId = newId('P-');
-      await client.query(`INSERT INTO participations (id, event_id, contact_id, role, note, matched, confirmed_at)
-        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [partId, sub.event_id, cid, sub.role, note, viaOf(sub.via)[1], today]);
+      /* registered_at = 신청한 때(KST) — 결과보고 «일자별 등록 추이»가 이것으로 센다 */
+      await client.query(`INSERT INTO participations (id, event_id, contact_id, role, note, matched, confirmed_at, registered_at)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [partId, sub.event_id, cid, sub.role, note, viaOf(sub.via)[1], today, sub.created_at || null]);
     }
     const undo = { partId, partNew: !dup, prevNote: dup ? dup.note || '' : '', prevConfirmed: dup ? dup.confirmed_at || '' : '', contactNew: created };
     await client.query('UPDATE register_submissions SET contact_id = $2, undo = $3 WHERE id = $1', [sub.id, cid, JSON.stringify(undo)]);

@@ -385,7 +385,7 @@ async function readParticipations() {
     SELECT p.id, p.event_id AS ev_id, COALESCE(e.name, '') AS "행사명",
            p.contact_id AS cid, COALESCE(c."orgKo", '') AS "소속",
            COALESCE(c."nameKo", '') AS "성명", COALESCE(c."titleKo", '') AS "직함",
-           p.role AS type, p.note, p.matched, p.confirmed_at
+           p.role AS type, p.note, p.matched, p.confirmed_at, p.registered_at
     FROM participations p
     LEFT JOIN events e ON e.id = p.event_id
     LEFT JOIN contacts c ON c.id = p.contact_id

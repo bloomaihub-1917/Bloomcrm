@@ -474,18 +474,59 @@ function statsHtml(){
 /* ── 결과보고 수치(2026-11-20) — 사전등록(연사 → 하단바 종류 차례 → 하단바 미정) / 현장등록(현장 신규).
    참석 = 체크인. 연사는 띠가 VIP여도 따로 센다. 띠 이름은 보고서 말로 바꿔 보인다 ── */
 const REPORT_NAME = { participant: '일반 참가자', participants: '일반 참가자', 'business meeting': '셀러', seller: '셀러', buyer: '바이어', speaker: '연사' };
+/* 사전등록: 등록 = 명단, 참석 = 체크인(따로 센다). 현장등록: 현장 신규(이름 있는 사람) — 등록하면서 체크인한 것으로 센다.
+   연사라도 하단바가 VIP면 VIP로 센다(2026-11-20 사용자) */
+const reportName = (b) => b ? REPORT_NAME[b.label.trim().toLowerCase()] || b.label : '미정';
 function reportRows(){
-  const all = deskPeople(nt.ev), pre = all.filter(p => !p.walkIn), wi = all.filter(p => p.walkIn);
+  const all = deskPeople(nt.ev), pre = all.filter(p => !p.walkIn), wi = all.filter(p => p.walkIn && (p.nameKo || p.nameEn));
   const groups = new Map([['연사', []]]);
-  barTypes().forEach(b => { const n = REPORT_NAME[b.label.trim().toLowerCase()] || b.label; if(!groups.has(n)) groups.set(n, []); });
+  barTypes().forEach(b => { const n = reportName(b); if(!groups.has(n)) groups.set(n, []); });
   pre.forEach(p => {
-    const b = barType(barOf(p.key));
-    const n = p.source === 'speaker' ? '연사' : b ? REPORT_NAME[b.label.trim().toLowerCase()] || b.label : '미정';
-    if(!groups.has(n)) groups.set(n, []);
-    groups.get(n).push(p);
+    const b = barType(barOf(p.key)), n = reportName(b);
+    const g = p.source === 'speaker' && n !== 'VIP' ? '연사' : n;
+    if(!groups.has(g)) groups.set(g, []);
+    groups.get(g).push(p);
   });
   const row = (name, l) => ({ name, n: l.length, inn: l.filter(p => nt.checkins.has(p.key)).length, absent: l.filter(p => !nt.checkins.has(p.key) && isAbsent(p.key)).length });
-  return { pre: [...groups].filter(([, l]) => l.length).map(([n, l]) => row(n, l)), preSum: row('소계', pre), wi: row('현장등록', wi), total: row('종합', all) };
+  const pr = [...groups].filter(([, l]) => l.length).map(([n, l]) => row(n, l)), preSum = row('소계', pre);
+  const w = { name: '현장등록', n: wi.length, inn: wi.length, absent: 0 };
+  return { pre: pr, preSum, wi: w, total: { name: '종합', n: preSum.n + w.n, inn: preSum.inn + w.inn, absent: preSum.absent } };
+}
+/* 일자별 등록 — 사전등록한 사람마다 이 행사 참가 기록 중 가장 이른 등록일(participations.registered_at) */
+function regDays(){
+  const first = new Map();
+  participations.filter(x => (x.eventId || x.event) === nt.ev && x.registeredAt).forEach(x => {
+    const k = String(x.contactId), d = String(x.registeredAt).slice(0, 10);
+    if(!first.has(k) || d < first.get(k)) first.set(k, d);
+  });
+  const pre = deskPeople(nt.ev).filter(p => !p.walkIn);
+  const days = {}; let none = 0;
+  pre.forEach(p => { const d = p.contact_id ? first.get(String(p.contact_id)) : ''; if(d) days[d] = (days[d] || 0) + 1; else none++; });
+  const keys = Object.keys(days).sort();
+  if(!keys.length) return { list: [], none };
+  const list = [];
+  for(let t = new Date(keys[0] + 'T00:00:00Z'), end = new Date(keys.at(-1) + 'T00:00:00Z'), sum = 0; t <= end; t = new Date(t.getTime() + 864e5)){
+    const d = t.toISOString().slice(0, 10), n = days[d] || 0; sum += n;
+    list.push({ d, n, sum, we: [0, 6].includes(t.getUTCDay()) });
+  }
+  return { list, none };
+}
+function regChartHtml(){
+  const { list, none } = regDays();
+  if(!list.length) return `<div class="nt-note" style="margin-top:14px">일자별 등록 추이 — 등록일이 있는 사람이 없어요. CRM 신청서로 들어오면 신청한 날이 남아요.</div>`;
+  const W = Math.max(640, list.length * 30), H = 260, L = 34, R = 40, T = 24, B = 34, iw = W - L - R, ih = H - T - B;
+  const maxN = Math.max(1, ...list.map(x => x.n)), maxS = Math.max(1, list.at(-1).sum), bw = iw / list.length;
+  const y1 = (v) => T + ih - v / maxN * ih, y2 = (v) => T + ih - v / maxS * ih, cx = (i) => L + bw * i + bw / 2;
+  const bars = list.map((x, i) => x.n ? `<rect x="${cx(i) - bw * .32}" y="${y1(x.n)}" width="${bw * .64}" height="${T + ih - y1(x.n)}" fill="var(--navy,#1f3864)"/>
+      <text x="${cx(i)}" y="${y1(x.n) - 4}" text-anchor="middle" font-size="10" fill="currentColor">${x.n}</text>` : '').join('');
+  const line = `<polyline fill="none" stroke="#ed7d31" stroke-width="2" points="${list.map((x, i) => `${cx(i)},${y2(x.sum)}`).join(' ')}"/>`;
+  const days = list.map((x, i) => `<text x="${cx(i)}" y="${H - 14}" text-anchor="middle" font-size="9.5" fill="${x.we ? '#c00000' : 'currentColor'}"${x.we ? ' font-weight="700"' : ''}>${+x.d.slice(5, 7)}/${+x.d.slice(8)}</text>`).join('');
+  return `<div style="margin-top:16px"><b>일자별 등록 추이</b> <span class="nt-note">막대: 일별 등록 · 선: 누적(오른쪽 축 ${maxS}명) · 빨간 날짜 = 주말${none ? ` · 등록일 없는 사전등록 ${none}명은 빠짐` : ''}</span>
+    <div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="max-width:none;color:var(--i2)">
+      <line x1="${L}" y1="${T + ih}" x2="${W - R}" y2="${T + ih}" stroke="var(--bd,#ccc)"/>
+      <text x="${L - 4}" y="${T + 4}" text-anchor="end" font-size="9.5" fill="currentColor">${maxN}</text>
+      <text x="${W - R + 4}" y="${T + 4}" font-size="9.5" fill="#ed7d31">${maxS}</text>
+      ${bars}${line}${days}</svg></div></div>`;
 }
 function reportHtml(){
   const r = reportRows(), T = r.total.n || 1;
@@ -506,7 +547,8 @@ function reportHtml(){
       ${tr('<b>현장등록</b>', r.wi)}
       ${tr('<b>종합</b>', { ...r.total, name: '' }, 'total')}
     </tbody></table></div>
-    <div class="nt-note" style="margin-top:6px">참석 = 체크인 · 비율 = 전체 등록 대비 · 연사는 하단바와 상관없이 «연사», 나머지는 하단바 종류로 나눠요 · ${kst(nt.syncedAt)} 기준</div></div>`;
+    <div class="nt-note" style="margin-top:6px">사전등록: 등록 = 명단, 참석 = 체크인 · 현장등록: 현장 신규(등록하면서 체크인) · 비율 = 전체 등록 대비 · 연사는 하단바가 VIP면 VIP로, 나머지는 하단바 종류로 나눠요 · ${kst(nt.syncedAt)} 기준</div>
+    ${regChartHtml()}</div>`;
 }
 export function ntReport(on){ nt.report = !!on; rerender(); }
 export function ntReportExcel(){
@@ -519,6 +561,9 @@ export function ntReportExcel(){
   ws['!cols'] = [10, 14, 8, 8, 8, 8, 10, 8].map(w => ({ wch: w }));
   const wb = window.XLSX.utils.book_new();
   window.XLSX.utils.book_append_sheet(wb, ws, '등록·참석 현황');
+  const { list } = regDays();
+  if(list.length) window.XLSX.utils.book_append_sheet(wb,
+    window.XLSX.utils.aoa_to_sheet([['날짜', '일별 등록', '누적', '주말'], ...list.map(x => [x.d, x.n, x.sum, x.we ? 'Y' : ''])]), '일자별 등록');
   const ev = evRow();
   window.XLSX.writeFile(wb, `${(ev.short || ev.name || nt.ev).replace(/[\\/:*?"<>|]/g, '')}_등록참석현황_${today()}.xlsx`);
 }

@@ -105,6 +105,7 @@ export function normalizeParticipationRow(r){
     matched:   r.matched || '',
     /* 비어 있으면 타겟(부를 후보), 날짜가 있으면 그날 참가가 확정됐다는 뜻 */
     confirmedAt: r.confirmed_at || '',
+    registeredAt: r.registered_at || '',   // 등록(신청)한 때 KST — 결과보고 일자별 등록 추이
   };
 }
 
