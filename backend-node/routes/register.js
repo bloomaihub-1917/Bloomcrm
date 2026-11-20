@@ -415,6 +415,26 @@ publicRouter.options('/:token/submit', (req, res) => {
   res.sendStatus(204);
 });
 
+publicRouter.post('/:token/submit', express.text({ type: '*/*', limit: '40kb' }), async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  try {
+    const row = await linkByToken(req.params.token);
+    if (!row) return res.status(404).json({ ok: false, error: 'closed' });
+    let b = req.body;
+    if (typeof b === 'string') { try { b = JSON.parse(b); } catch (e) { b = null; } }
+    if (!b || typeof b !== 'object') return res.status(400).json({ ok: false, error: 'bad' });
+    if (clip(b.website)) return res.json({ ok: true });
+    const v = cleanRow(b);
+    if (FIELDS.some((f) => f.need && !v[f.k])) return res.status(400).json({ ok: false, error: 'need' });
+    if (!EMAIL.test(v.email)) return res.status(400).json({ ok: false, error: 'email' });
+    if (b.consent !== 'yes') return res.status(400).json({ ok: false, error: 'consent' });
+    await stage(row.event_id, row.role, row.token, 'link', v);
+    await pool.query('UPDATE register_links SET submits = COALESCE(submits,0) + 1, last_at = $2 WHERE token = $1',
+      [row.token, kstStamp(Date.now())]);
+    res.json({ ok: true });
+  } catch (e) { console.error('[register] 홈페이지 제출 실패:', e.message); res.status(500).json({ ok: false, error: 'fail' }); }
+});
+
 module.exports = router;
 module.exports.publicRouter = publicRouter;
 module.exports.FIELDS = FIELDS;
