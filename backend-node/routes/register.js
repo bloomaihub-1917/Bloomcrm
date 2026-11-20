@@ -17,15 +17,14 @@
    확인 없이 사람 창고에 섞이면 안 된다 — 임시 표에 두었다가, 등록 링크 창에서 «확정»을
    누르면 그때 연락처를 만들고(또는 붙이고) 참가 확정으로 넣는다.
 
-   같은 사람 판정은 이메일 하나로만 한다(email1·email2, 대소문자 무시). 이미 있으면
+   같은 사람 판정은 메일 → 전화 끝 8자리 → 이름+소속 순(db/contact-upsert.js). 이미 있으면
    새로 만들지 않고 빈 칸만 채운다 — 바깥 사람이 우리 DB의 값을 덮어쓰지 못하게.
-   연락처 id는 contactIdAllocator로(CLAUDE.md «16자리 이하»).
+   연락처는 contactUpserter로 넣는다(같은 사람 찾기·16자리 id·기업DB 연결 — CLAUDE.md).
 ══════════════════════════════════════════════════════════════ */
 const crypto = require('crypto');
 const express = require('express');
 const pool = require('../db/pool');
-const { contactIdAllocator } = require('../db/contact-ids');
-const { orgResolver } = require('../db/orgs');
+const { contactUpserter } = require('../db/contact-upsert');
 
 let ready = null;
 const ensure = () => ready || (ready = pool.query(`CREATE TABLE IF NOT EXISTS register_links (
@@ -185,35 +184,18 @@ async function accept(id, by) {
     const v = cleanRow(subShape(sub).data);
     const ev = (await client.query('SELECT name FROM events WHERE id = $1', [sub.event_id])).rows[0] || {};
     const ko = HANGUL.test(v.name), orgKo = HANGUL.test(v.org), titleKo = HANGUL.test(v.title);
-    /* 엑셀·직접 입력은 이메일 없이도 들어온다 — 빈 이메일로 찾으면 이메일 없는 아무나 걸리니 찾지 않는다 */
-    const found = v.email ? (await client.query(`SELECT * FROM contacts
-      WHERE lower(trim(email1)) = $1 OR lower(trim(email2)) = $1 ORDER BY id LIMIT 1`, [v.email.toLowerCase()])).rows[0] : null;
-    let cid, created = false;
-    /* 소속은 기업DB에 잇는다 — 없으면 만든다(db/orgs.js). 안 하면 Master DB에만 있고 기업DB에선 빠진다 */
-    const orgId = v.org ? await (await orgResolver(client, { source: `신청 확정 · ${ev.name || sub.event_id}` }))(orgKo ? v.org : '', orgKo ? '' : v.org) : '';
-    if (found) {
-      cid = found.id;
-      /* 빈 칸만 채운다 */
-      const fill = {
-        [ko ? 'nameKo' : 'nameEn']: v.name, [orgKo ? 'orgKo' : 'orgEn']: v.org,
-        [titleKo ? 'titleKo' : 'titleEn']: v.title, phone1: v.phone, country: v.country, org_id: orgId,
-      };
-      const sets = [], args = [cid];
-      Object.entries(fill).forEach(([col, val]) => {
-        if (val && !String(found[col] || '').trim()) { args.push(val); sets.push(`"${col}" = $${args.length}`); }
-      });
-      if (sets.length) await client.query(`UPDATE contacts SET ${sets.join(', ')} WHERE id = $1`, args);
-    } else {
-      cid = (await contactIdAllocator(client))();
-      created = true;
-      await client.query(`INSERT INTO contacts (id, "nameKo", "nameEn", "orgKo", "orgEn", "titleKo", "titleEn",
-          country, source, date, email1, phone1, lang, org_id)
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
-      [cid, ko ? v.name : '', ko ? '' : v.name, orgKo ? v.org : '', orgKo ? '' : v.org,
-        titleKo ? v.title : '', titleKo ? '' : v.title, v.country,
-        `${viaOf(sub.via)[0]} · ${ev.name || sub.event_id}`,
-        kstStamp(Date.now()).slice(0, 10), v.email, v.phone, ko ? 'ko' : 'en', orgId]);
-    }
+    /* 같은 사람 찾기·id·기업DB 연결은 연락처 넣기 한 길(db/contact-upsert.js)로 —
+       전에는 메일로만 찾아, 메일을 바꿔 신청한 기존 연락처가 새로 한 명 더 생겼다.
+       이제 전화 끝 8자리·이름+소속도 본다. 있으면 빈 칸만 채운다 */
+    const put = await contactUpserter(client, { source: `${viaOf(sub.via)[0]} · ${ev.name || sub.event_id}` });
+    const r = await put({
+      [ko ? 'nameKo' : 'nameEn']: v.name, [orgKo ? 'orgKo' : 'orgEn']: v.org,
+      [titleKo ? 'titleKo' : 'titleEn']: v.title, email1: v.email, phone1: v.phone, country: v.country,
+      lang: ko ? 'ko' : 'en',
+    });
+    const cid = r.id, created = r.created;
+    /* 이름만 같은 기존 연락처는 새 사람으로 넣되 활동 기록에 남겨 «중복 찾기»에서 보게 한다 */
+    const suspectNote = r.suspect ? ` · 같은 이름 기존 연락처 #${r.suspect.id} 있음(확인)` : '';
     const today = kstStamp(Date.now()).slice(0, 10);
     const note = [[`${viaOf(sub.via)[2]}(${sub.created_at})`, v.memo].filter(Boolean).join(' — '), extraLines(v)]
       .filter(Boolean).join('\n');
@@ -235,7 +217,7 @@ async function accept(id, by) {
     await client.query(`INSERT INTO activity_log (id, ts, email, name, type, action, target, detail, link)
       VALUES ($1,$2,'',$3,'create','등록 신청 확정',$4,$5,$6)`,
     [newId('L-'), new Date().toISOString(), by, sub.event_id,
-      `${v.name} (${v.org}) — ${sub.role}${created ? ' · 새 연락처' : ' · 기존 연락처에 붙임'}`,
+      `${v.name} (${v.org}) — ${sub.role}${created ? ' · 새 연락처' : ` · 기존 연락처에 붙임(${r.by})`}${suspectNote}`,
       JSON.stringify({ kind: 'contact', id: cid, table: 'participations', row: partId })]);
     await client.query('COMMIT');
     /* 화면이 다시 읽지 않고 제 목록에 바로 넣을 수 있게 넣은 그대로 돌려준다 */

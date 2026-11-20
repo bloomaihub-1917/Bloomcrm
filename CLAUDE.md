@@ -28,9 +28,21 @@
   같은 이름(법인격·띄어쓰기 무시, 옛 이름 포함)이 있으면 잇고 없으면 만든다. 화면은 `ensureOrgsForNames`(`js/domain/orgs.js`).
 - 그래도 빠진 사람은 Master DB 위 «기업DB 미연결 N명» 칩에 보이고, «기업DB에 연결»로 한 번에 잇는다.
 
+## 연락처는 한 길(`contactUpserter`)로 넣는다
+
+스크립트마다 «이미 있는 사람인가»를 따로 짜다 보니(메일만 / 이름+기업만 / id 직접 / org_id 빠뜨림)
+긴 id·기업DB 미연결·중복 연락처가 길마다 되풀이됐다(2026-11-20 정리).
+
+- 서버 코드·스크립트는 `backend-node/db/contact-upsert.js`를 쓴다. 같은 사람 찾기 → 빈 칸만 채우기 또는 새 id →
+  `orgResolver`로 기업DB 연결까지 한 번에 한다. 연락처를 `INSERT INTO contacts`로 직접 넣지 않는다.
+- 같은 사람 기준: 메일(+이름 맞음) → 전화 끝 8자리(+이름 맞음) → 이름+소속. 메일만 같고 이름이 다르거나 이름만 같으면
+  «의심» — 새 사람으로 넣고 목록으로 보여 준다. 화면 엑셀 업로드(`js/modules/upload-tab.js`)도 같은 기준이니 한쪽을 바꾸면 다른 쪽도 바꾼다.
+- 일회성 가져오기는 `runImport({ name, source }, async ({ client, put }) => …)` 틀로 쓴다 — 기본 시험 실행, `--apply`로 저장,
+  끝에 새로/붙임/의심/새 기업 수와 점검을 찍는다. 점검만 할 때는 `node db/contact-upsert.js`.
+
 ## 서버 스크립트(`backend-node/db/`)는 하는 일에 따라 폴더에 둔다
 
-- `db/` 바로 아래: 여럿이 함께 쓰는 것만 — `pool.js`, `contact-ids.js`, `orgs.js`, `schema.sql`, `seed.sql`, `fix-unsafe-contact-ids.js`
+- `db/` 바로 아래: 여럿이 함께 쓰는 것만 — `pool.js`, `contact-ids.js`, `orgs.js`, `contact-upsert.js`, `schema.sql`, `seed.sql`, `fix-unsafe-contact-ids.js`
 - `db/migrations/`: 표에 칸·표를 더하는 `add-*.js`
 - `db/seeds/`: 처음 값을 넣는 `seed-*.js`
 - `db/oneoff/`: 특정 행사·자료를 한 번 들여오거나 고치는 것. 짝으로 쓰는 `.py`도 같은 폴더에

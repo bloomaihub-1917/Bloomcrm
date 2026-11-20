@@ -67,6 +67,7 @@ import { buildCoCAT } from './company-tab.js';
 import { buildCoDB } from '../domain/co-db.js';
 import { batchUpsertCompanies, patchOrgFields } from '../domain/org-save.js';
 import { ensureOrgsForNames, orgIdForName, suggestSector } from '../domain/orgs.js';
+import { normalizeCompanyKey } from '../domain/org-names.js';
 import { renderMDB, buildMDBEvList } from './db-tab.js';
 import { trackAction } from '../core/audit-log.js';
 /* 화면 상태는 ../features/upload/upload-ui.js의 uploadUi 한곳에 둔다 — 이 탭의 구획을 다른 파일로 떼어도 같은 값을 보게 */
@@ -656,12 +657,18 @@ function applyColumnMap(colMap){
     addAiLog('ok', '카테고리 적용 방식: 컬럼(' + escapeHtml(colMap.cat) + ')에서 행별로 인식');
   }
 
-  // 실제 contacts 형식으로 변환 + 중복 감지
-  // 1순위: email1 완전 일치 → 확실한 중복
-  // 2순위: 이름(한글 or 영문) 일치 → 의심 케이스 (사용자 확인 필요)
+  // 실제 contacts 형식으로 변환 + 중복 감지 — 서버 연락처 넣기 한 길(backend-node/db/contact-upsert.js)과 같은 기준
+  // 1순위: 메일(email1·email2) 같고 이름 맞음 → 중복   (메일 같고 이름 다름 → 의심)
+  // 2순위: 전화 끝 8자리 같고 이름 맞음 → 중복
+  // 3순위: 이름 같고 소속(법인격·띄어쓰기 무시)도 같음 → 중복
+  // 4순위: 이름만 같음 → 의심 케이스 (사용자 확인 필요)
   const emailMap = {};
   const nameMap  = {};
+  const telMap   = {};
+  const telKey = (v) => { const d = String(v || '').replace(/\D/g, ''); return d.length >= 8 ? d.slice(-8) : ''; };
+  const orgKeysOf = (c) => [c.orgKo, c.orgEn].map(o => normalizeCompanyKey(o)).filter(Boolean);
   contacts.forEach(c => {
+    [c.phone1, c.phone2].map(telKey).filter(Boolean).forEach(k => { if(!telMap[k]) telMap[k] = c; });
     if(c.email1) emailMap[c.email1.toLowerCase()] = c;
     if(c.email2) emailMap[c.email2.toLowerCase()] = c;
     const nk = (c.nameKo||c.name||'').trim();
@@ -671,6 +678,7 @@ function applyColumnMap(colMap){
   });
 
   let dupCount = 0;
+  const dupByCount = {};
   let countryDetectedCount = 0;
   const result = rows.map(r => {
     const rawNameKo      = colMap.nameKo      ? String(r[colMap.nameKo]     ||'').trim() : '';
@@ -744,7 +752,17 @@ function applyColumnMap(colMap){
       return !!((ck && nkTrim && ck === nkTrim) || (ce && neTrim && ce === neTrim.toLowerCase()));
     };
     const mailHit = email1Val ? emailMap[email1Val] : null;
-    const existByEmail = mailHit && sameName(mailHit) ? mailHit : null;
+    const byMail = mailHit && sameName(mailHit) ? mailHit : null;
+    /* 메일로 못 찾으면 전화(끝 8자리)+이름, 이름+소속으로 — 메일을 바꿔 쓴 기존 사람이 새로 한 명 더 생기지 않게 */
+    const phoneVals = [colMap.phone1, colMap.phone2].filter(Boolean).map(k => telKey(r[k])).filter(Boolean);
+    const telHit = !byMail && (nkTrim || neTrim) ? phoneVals.map(k => telMap[k]).find(c => c && c.id != null && sameName(c)) : null;
+    const rowOrgKeys = orgKeysOf({ orgKo: org, orgEn: orgEnVal });
+    const orgHit = !byMail && !telHit && rowOrgKeys.length
+      ? [...(nameMap[nkTrim] || []), ...(nameMap[neTrim] || [])].find(c => c.id != null && orgKeysOf(c).some(k => rowOrgKeys.includes(k)))
+      : null;
+    const existByEmail = byMail || telHit || orgHit;
+    const dupBy = byMail ? '메일' : telHit ? '전화' : orgHit ? '이름+소속' : '';
+    if(dupBy) dupByCount[dupBy] = (dupByCount[dupBy] || 0) + 1;
     // 메일은 같은데 이름이 다른 기존 연락처 — «의심»으로 돌려 사람이 고르게 한다
     const mailOther = mailHit && !existByEmail && mailHit.id != null ? mailHit : null;
 
@@ -832,7 +850,8 @@ function applyColumnMap(colMap){
       status: 'new',
       _dup: isDup,
       _suspect: isSuspect,
-      _suspectId: suspectMatch ? suspectMatch.id : null,
+      // 전화·이름+소속으로 찾은 중복도 저장 단계가 그 사람에게 행사를 붙이도록 id를 넘긴다
+      _suspectId: suspectMatch ? suspectMatch.id : ((telHit || orgHit) ? existByEmail.id : null),
       _suspectName: suspectMatch ? (suspectMatch.nameKo||suspectMatch.nameEn||'') : '',
       _suspectOrg:  suspectMatch ? (suspectMatch.orgKo||suspectMatch.orgEn||'') : '',
       _suspectEmail:suspectMatch ? (suspectMatch.email1||'') : '',
@@ -860,10 +879,11 @@ function applyColumnMap(colMap){
   if(colMap.country) addAiLog('ok', '국가 정보 ' + countryDetectedCount + '건 인식 완료');
   if(colMap.beat) addAiLog('ok', '분야 컬럼 인식: ' + escapeHtml(colMap.beat));
   if(colMap.products) addAiLog('ok', '전시 품목 컬럼 인식: ' + escapeHtml(colMap.products));
-  if(dupCount > 0) addAiLog('warn', '중복 감지: ' + dupCount + '건 (기존 DB와 이름+기업 일치 — 스킵 예정)');
+  if(dupCount > 0) addAiLog('warn', '기존 연락처와 같은 사람: ' + dupCount + '건 (' +
+    Object.entries(dupByCount).map(([k, n]) => k + ' ' + n).join(' · ') + ') — 새로 만들지 않고 기존 사람에 붙여요');
   const suspectCount  = mappedContacts.filter(c => c._suspect).length;
   const sectorSel     = (document.getElementById('up-sector')||{}).value||'';
-  addAiLog('ok', '파싱 완료: 신규 ' + newCount + '건 추가 준비, 중복(이메일) ' + dupCount + '건 스킵' +
+  addAiLog('ok', '파싱 완료: 신규 ' + newCount + '건 추가 준비, 기존 사람 ' + dupCount + '건' +
     (suspectCount ? ', ⚠️ 의심 ' + suspectCount + '건 확인 필요' : '') +
     (sectorSel ? ' / 기업 카테고리: ' + escapeHtml(sectorSel) : ''));
   if(suspectCount > 0){
