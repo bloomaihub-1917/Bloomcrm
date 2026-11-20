@@ -55,7 +55,27 @@ const FIELDS = [
   { k: 'phone',   ko: '전화',        en: 'Phone',        need: false, max: 40,  type: 'tel' },
 ];
 const EMAIL = /^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]{2,}$/;
-const cleanRow = (b) => { const v = {}; FIELDS.forEach((f) => { v[f.k] = clip(b && b[f.k], f.max); }); return v; };
+/* 기본 칸 밖의 항목(참가목적·관심분야·부스 규모 …) — 행사 홈페이지 신청서마다 다르니
+   { 항목 이름: 값 }으로 그대로 받아 두었다가 확정할 때 참가 메모로 옮긴다 */
+const clipLong = (v, n) => String(v ?? '').replace(/[\u0000-\u0009\u000b-\u001f]/g, ' ').trim().slice(0, n);
+const cleanExtra = (x) => {
+  const o = {};
+  if (!x || typeof x !== 'object' || Array.isArray(x)) return o;
+  Object.entries(x).slice(0, 30).forEach(([k, val]) => {
+    const key = clip(k, 40);
+    const v = Array.isArray(val) ? val.map((s) => clip(s, 200)).filter(Boolean).join(', ') : clipLong(val, 2000);
+    if (key && v) o[key] = v;
+  });
+  return o;
+};
+const cleanRow = (b) => {
+  const v = {};
+  FIELDS.forEach((f) => { v[f.k] = clip(b && b[f.k], f.max); });
+  const ex = cleanExtra(b && b.extra);
+  if (Object.keys(ex).length) v.extra = ex;
+  return v;
+};
+const extraLines = (v) => Object.entries(v.extra || {}).map(([k, x]) => `${k}: ${x}`).join('\n');
 
 const shape = (r) => ({
   token: r.token, path: `/r/${r.token}`, role: r.role || '', title: r.title || '',
@@ -195,7 +215,8 @@ async function accept(id, by) {
         kstStamp(Date.now()).slice(0, 10), v.email, v.phone, ko ? 'ko' : 'en', orgId]);
     }
     const today = kstStamp(Date.now()).slice(0, 10);
-    const note = [`${viaOf(sub.via)[2]}(${sub.created_at})`, v.memo].filter(Boolean).join(' — ');
+    const note = [[`${viaOf(sub.via)[2]}(${sub.created_at})`, v.memo].filter(Boolean).join(' — '), extraLines(v)]
+      .filter(Boolean).join('\n');
     /* 같은 행사·같은 유형으로 이미 있으면 그 줄을 확정하고 메모를 덧붙인다 */
     const dup = (await client.query(`SELECT id, note, confirmed_at FROM participations
       WHERE event_id = $1 AND contact_id = $2 AND role = $3 LIMIT 1`, [sub.event_id, cid, sub.role])).rows[0];
@@ -384,6 +405,14 @@ publicRouter.post('/:token', async (req, res, next) => {
     } catch (e) { console.error('[register] 제출 실패:', e.message); return res.status(500).type('html').send(formPage(row, lang, v, t.fail)); }
     res.type('html').send(donePage(row, v, lang));
   } catch (e) { next(e); }
+});
+
+/* 행사 홈페이지가 제 신청서를 그대로 두고 여기로 보낸다 — POST /r/<열쇠>/submit
+   본문은 JSON 글자({ name, org, title, email, phone, extra, consent }). text/plain으로 받아
+   브라우저가 사전 확인(preflight) 없이 보내게 한다. 열쇠가 있어야 들어온다 */
+publicRouter.options('/:token/submit', (req, res) => {
+  res.set({ 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST', 'Access-Control-Allow-Headers': 'Content-Type' });
+  res.sendStatus(204);
 });
 
 module.exports = router;

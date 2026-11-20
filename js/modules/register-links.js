@@ -129,11 +129,17 @@ function linkRow(l){
   </div>`;
 }
 
+/* 홈페이지 신청서의 기본 칸 밖 항목 — 확정하면 참가 메모로 옮겨진다 */
+const extraHtml = (x) => {
+  const e = Object.entries(x || {});
+  return e.length ? `<div style="color:var(--i4);font-size:11px;white-space:pre-line;max-width:320px">${e.map(([k, v]) => `${escapeHtml(k)}: ${escapeHtml(v)}`).join('\n')}</div>` : '';
+};
+
 function subRow(s){
   const d = s.data || {};
   return `<tr>
     <td style="padding:6px 4px"><span class="pill p-blue" style="font-size:10px">${escapeHtml(s.role)}</span></td>
-    <td style="padding:6px 4px"><b>${escapeHtml(d.name)}</b>${d.title ? `<div style="color:var(--i4)">${escapeHtml(d.title)}</div>` : ''}</td>
+    <td style="padding:6px 4px"><b>${escapeHtml(d.name)}</b>${d.title ? `<div style="color:var(--i4)">${escapeHtml(d.title)}</div>` : ''}${extraHtml(d.extra)}</td>
     <td style="padding:6px 4px">${escapeHtml(d.org)}</td>
     <td style="padding:6px 4px">${escapeHtml(d.email)}${d.phone ? `<div style="color:var(--i4)">${escapeHtml(d.phone)}</div>` : ''}</td>
     <td style="padding:6px 4px;color:var(--i4)">${VIA_ICON[s.via] || '🔗 링크'}<div>${escapeHtml(s.created_at)}</div></td>
