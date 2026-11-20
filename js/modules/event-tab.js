@@ -538,6 +538,10 @@ const confirmBadge = (r) => r.confirmedAt
       ? `<div style="font-size:var(--fs-9_5);color:var(--i4);margin-top:2px">${r.via === 'excel' ? '📄 엑셀' : r.via === 'manual' ? '✍️ 직접' : '🔗 신청'}</div>` : ''}`;
 /* 신청 대기 줄의 cid는 글자('R-…')다 — onclick에 그대로 박으면 깨지니 따옴표째 넘긴다 */
 const cidArg = (r) => escAttr(JSON.stringify(r.cid));
+/* 줄을 누르면 그 사람 연락처를 바로 수정 칸으로 연다(2026-11-20). 신청 대기는 아직 연락처가 없어 열 것이 없다.
+   이름을 누르면 예전처럼 보기 칸 */
+const editable = (r) => !r.pendingId && r.cid != null;
+const editRow = (r) => editable(r) ? ` onclick="openContactDr(${cidArg(r)},{edit:true})" title="눌러서 정보 수정 — 이름을 누르면 상세 보기"` : '';
 
 /* 한 사람이 여러 역할일 수 있다 — 하나만 보여주면 나머지를 못 본다 */
 const roleBadges = (r) => [...r.roles]
@@ -626,9 +630,9 @@ function peopleRowsHtml(){
   if(!l.length) return '<div style="font-size:var(--fs-12);color:var(--i4);padding:20px 0">해당하는 참여자가 없어요.</div>';
 
   // 좁은 화면에서는 표가 옆으로 넘쳐 읽을 수 없다 — 카드로 바꿔 준다
-  if(isMobile()) return l.map(r => `<div style="background:var(--W);border:1px solid var(--i6);border-radius:var(--r);padding:10px 12px;margin-bottom:6px">
+  if(isMobile()) return l.map(r => `<div style="background:var(--W);border:1px solid var(--i6);border-radius:var(--r);padding:10px 12px;margin-bottom:6px${editable(r) ? ';cursor:pointer' : ''}"${editRow(r)}>
     <div style="display:flex;align-items:center;gap:7px">
-      <input type="checkbox" ${evdbPickedPeople.has(r.cid) ? 'checked' : ''}
+      <input type="checkbox" ${evdbPickedPeople.has(r.cid) ? 'checked' : ''} onclick="event.stopPropagation()"
         onchange="pickEvDbPerson(${cidArg(r)},this.checked)">
       <span style="font-size:var(--fs-13)">${personNameHtml(r)}</span>
       ${confirmBadge(r)}
@@ -644,8 +648,8 @@ function peopleRowsHtml(){
       <th style="width:26px"></th><th style="width:74px">참가</th>
       <th>성명</th><th>기업·기관</th><th>직함</th><th>역할</th><th>들어온 길</th><th>신청 일시</th><th>국가</th><th>연락처</th>
     </tr></thead><tbody>
-    ${l.map(r => `<tr>
-      <td style="text-align:center"><input type="checkbox" ${evdbPickedPeople.has(r.cid) ? 'checked' : ''}
+    ${l.map(r => `<tr${editable(r) ? ' style="cursor:pointer"' : ''}${editRow(r)}>
+      <td style="text-align:center" onclick="event.stopPropagation()"><input type="checkbox" ${evdbPickedPeople.has(r.cid) ? 'checked' : ''}
         onchange="pickEvDbPerson(${cidArg(r)},this.checked)"></td>
       <td>${confirmBadge(r)}</td>
       <td>${personNameHtml(r)}${r.nameEn ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(r.nameEn)}</div>` : ''}</td>

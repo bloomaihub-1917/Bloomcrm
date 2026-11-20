@@ -90,9 +90,10 @@ export async function toggleSalesTarget(cid, evKey){
   renderContactDr();
 }
 
-export function openContactDr(id){
+/* opts.edit — 바로 수정 칸으로 연다(행사 DB 참가자 줄을 누를 때, 2026-11-20) */
+export function openContactDr(id, opts = {}){
   conDrId = id;
-  conEditMode = false;
+  conEditMode = !!opts.edit;
   renderContactDr();
   document.getElementById('con-dr').classList.add('on');
   document.getElementById('con-bd').classList.add('on');
@@ -541,6 +542,7 @@ export async function saveContactEdit(){
   conEditMode = false;
   renderContactDr();
   try { renderMDB(); } catch(e){}
+  try { window.renderEvDb?.(); } catch(e){}   // 행사 DB 참가자 표에서 고쳤으면 그 줄도 바로
 
   // 구글시트 동기화 — upsert (id 일치 행 덮어쓰기). 실패 시 편집 전 상태로 롤백
   const r = await postToSheet({
@@ -554,6 +556,7 @@ export async function saveContactEdit(){
     Object.assign(c, prev);
     renderContactDr();
     try { renderMDB(); } catch(e){}
+    try { window.renderEvDb?.(); } catch(e){}
     return;
   }
   trackAction('status', '연락처 정보 수정', personName(c),
