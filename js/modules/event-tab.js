@@ -47,6 +47,7 @@ let evdbQuery = '';        // 검색어
 const evdbPicked = new Set();   // 기업 화면에서 고른 기업 (company_key)
 /* 참여자 화면 — 확정/타겟 거르개와 고른 사람 */
 let evdbStatFil = '';           // '' | 'confirmed' | 'target'
+let evdbRegFil = '';            // '' | 'pre'(사전등록) | 'onsite'(현장등록) — 참여자 화면
 let evdbViaFil = '';            // '' | 들어온 길(VIA 키) — 참여자 화면
 const evdbPickedPeople = new Set();   // 고른 사람의 cid
 /* CRM 타겟 화면 — 창고에서 끌어올 기업 */
@@ -129,7 +130,7 @@ function evPeople(evKey){
     m.recs++;
     m.partIds.push(p.id);
     if(p.confirmedAt && !m.confirmedAt) m.confirmedAt = p.confirmedAt;
-    const ra = regAtOf(p.note);
+    const ra = p.registeredAt || regAtOf(p.note);   // 등록일 칸(participations.registered_at)이 먼저
     if(ra && (!m.regAt || ra < m.regAt)) m.regAt = ra;
     if(p.role) m.roles.add(p.role);
   });
@@ -151,6 +152,9 @@ function evPeople(evKey){
   });
 
   const people = [...map.values()];
+  /* 사전/현장 등록 — 네임택 데스크 현장 신규로만 들어온 사람(matched «현장 등록»)이 현장등록, 나머지는 사전등록.
+     현장에서 왔어도 이미 사전등록한 사람에 붙었으면 사전등록이다 */
+  people.forEach(r => { r.onsite = !r.pendingId && r.vias.size > 0 && [...r.vias].every(v => v === 'onsite'); });
   _cache = { key: evKey, people, recs, noOrg: people.filter(r => !r.orgKey && !r.pendingId) };
   return people;
 }
@@ -254,7 +258,7 @@ export function setEvDbEvent(key){
   evdbRoleFil = ''; evdbQuery = '';
   /* 고른 사람·기업과 확정/타겟 필터는 이전 행사의 것이다 — 남겨 두면 다른 행사
      화면에서 안 보이는 사람이 골라진 채로 «확정»·내보내기에 섞인다. */
-  evdbStatFil = ''; evdbViaFil = '';
+  evdbStatFil = ''; evdbViaFil = ''; evdbRegFil = '';
   evdbPicked.clear(); evdbPickedPeople.clear(); evdbPickedTgt.clear();
   buildEvDbList();
   renderEvDb();
@@ -263,6 +267,7 @@ export function setEvDbEvent(key){
 export function setEvDbView(v){ evdbView = v; evdbPicked.clear(); renderEvDb(); }
 export function setEvDbRole(v){ evdbRoleFil = v; evdbPicked.clear(); renderEvDb(); }
 export function setEvDbStat(v){ evdbStatFil = v; evdbPickedPeople.clear(); renderEvDb(); }
+export function setEvDbReg(v){ evdbRegFil = v; evdbPickedPeople.clear(); renderEvDb(); }
 export function setEvDbVia(v){ evdbViaFil = v; evdbPickedPeople.clear(); renderEvDb(); }
 
 /* 검색은 글자를 칠 때마다 다시 그리는데, 통째로 갈면 입력칸이 포커스를 잃는다.
@@ -553,6 +558,7 @@ function filteredRows(){
   if(evdbStatFil === 'confirmed') l = l.filter(r => !!r.confirmedAt);
   if(evdbStatFil === 'target')    l = l.filter(r => !r.confirmedAt);
   if(evdbViaFil) l = l.filter(r => r.vias?.has(evdbViaFil));
+  if(evdbRegFil) l = l.filter(r => evdbRegFil === 'onsite' ? r.onsite : !r.onsite);
   const q = evdbQuery.trim().toLowerCase();
   if(q) l = l.filter(r => [r.name, r.nameEn, r.org, r.orgEn, r.title, r.email]
     .some(v => String(v || '').toLowerCase().includes(q)));
@@ -572,6 +578,10 @@ function statChips(evKey){
     ${chip('', '전체', all.length)}
     ${chip('confirmed', '참가 확정', conf)}
     ${chip('target', '타겟', all.length - conf)}
+  </div>
+  <div class="seg" style="flex-wrap:wrap" title="현장등록 = 네임택 데스크 «현장 신규»로 와서 마스터DB에 올린 사람 · 나머지는 사전등록">
+    ${[['', '등록 전체', all.length], ['pre', '사전등록', all.filter(r => !r.onsite).length], ['onsite', '현장등록', all.filter(r => r.onsite).length]]
+      .map(([v, label, n]) => `<button class="seg-b${evdbRegFil === v ? ' on' : ''}" onclick="setEvDbReg('${v}')">${label} ${n}명</button>`).join('')}
   </div>`;
 }
 
@@ -586,6 +596,7 @@ function viaChips(evKey){
     ${keys.map(k => `<button class="seg-b${evdbViaFil === k ? ' on' : ''}" onclick="setEvDbVia('${k}')">${VIA_LABEL[k]} ${cnt[k]}명</button>`).join('')}
   </div>`;
 }
+const regBadge = (r) => r.onsite ? '<span class="pill p-amber">현장</span>' : '<span class="pill p-gray">사전</span>';
 const viaTags = (r) => [...(r.vias || [])].map(v => VIA_LABEL[v]).join(' · ');
 
 function peopleHtml(ev){
@@ -636,6 +647,7 @@ function peopleRowsHtml(){
         onchange="pickEvDbPerson(${cidArg(r)},this.checked)">
       <span style="font-size:var(--fs-13)">${personNameHtml(r)}</span>
       ${confirmBadge(r)}
+      ${regBadge(r)}
       ${roleBadges(r)}
     </div>
     <div style="font-size:var(--fs-11);color:var(--i3);margin-top:3px">${escapeHtml(r.org)}${r.title ? ' · ' + escapeHtml(r.title) : ''}</div>
@@ -645,17 +657,18 @@ function peopleRowsHtml(){
 
   return `<div style="overflow-x:auto"><table style="width:100%">
     <thead><tr>
-      <th style="width:26px"></th><th style="width:74px">참가</th>
+      <th style="width:26px"></th><th style="width:74px">참가</th><th>등록</th>
       <th>성명</th><th>기업·기관</th><th>직함</th><th>역할</th><th>들어온 길</th><th>신청 일시</th><th>국가</th><th>연락처</th>
     </tr></thead><tbody>
     ${l.map(r => `<tr${editable(r) ? ' style="cursor:pointer"' : ''}${editRow(r)}>
       <td style="text-align:center" onclick="event.stopPropagation()"><input type="checkbox" ${evdbPickedPeople.has(r.cid) ? 'checked' : ''}
         onchange="pickEvDbPerson(${cidArg(r)},this.checked)"></td>
       <td>${confirmBadge(r)}</td>
+      <td>${regBadge(r)}</td>
       <td>${personNameHtml(r)}${r.nameEn ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(r.nameEn)}</div>` : ''}</td>
       <td>${escapeHtml(r.org)}${r.orgEn && r.orgEn !== r.org ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(r.orgEn)}</div>` : ''}</td>
       <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(r.title)}</td>
-      <td>${roleBadges(r)}</td>
+      <td${r.pendingId ? '' : ` onclick="event.stopPropagation();openEvDbRoles(${cidArg(r)})" title="눌러서 역할 고치기" style="cursor:pointer"`}>${roleBadges(r)}${r.pendingId ? '' : ' <span style="color:var(--i5);font-size:var(--fs-10_5)">✎</span>'}</td>
       <td style="font-size:var(--fs-11);color:var(--i3);white-space:nowrap">${escapeHtml(viaTags(r))}</td>
       <td style="font-size:var(--fs-11);color:var(--i3);white-space:nowrap">${escapeHtml(r.regAt || '')}</td>
       <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(countryName(r.country) || '')}</td>
@@ -1264,6 +1277,67 @@ export async function deleteEvDbRegistrants(){
 }
 window.deleteEvDbRegistrants = deleteEvDbRegistrants;
 
+/* 역할 고치기(2026-11-20) — 한 사람의 이 행사 역할을 체크로 고른다. 더한 역할은 참여 기록을 새로 만들고(확정이면 확정 그대로),
+   뺀 역할은 그 참여 기록을 지운다. 하나는 남아야 한다(다 빼려면 «참가자 삭제»). 연락처·연사·전시 명단은 건드리지 않는다 */
+export function openEvDbRoles(cid){
+  const r = evPeople(evdbEvent).find(x => x.cid === cid);
+  if(!r || r.pendingId) return;
+  const used = new Set(); evPeople(evdbEvent).forEach(x => x.roles.forEach(k => used.add(k)));
+  const keys = [...new Set([...PART_TYPES.map(t => t.key), ...used])];
+  document.getElementById('evdb-roles')?.remove();
+  const box = document.createElement('div');
+  box.id = 'evdb-roles';
+  box.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:9999;display:flex;align-items:center;justify-content:center';
+  box.innerHTML = `<div style="background:var(--W);border-radius:var(--r);padding:16px 18px;min-width:280px;max-width:90vw;box-shadow:0 8px 30px rgba(0,0,0,.2)">
+    <div style="font-weight:700;margin-bottom:4px">${escapeHtml(r.name)} — 역할</div>
+    <div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:10px">이 행사에서 맡는 역할을 골라요. 네임택 하단바도 역할을 따라가요.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px 14px">${keys.map(k => `<label style="display:flex;gap:6px;align-items:center;font-size:var(--fs-12)">
+      <input type="checkbox" value="${escAttr(k)}"${r.roles.has(k) ? ' checked' : ''}>${escapeHtml(k)}</label>`).join('')}</div>
+    <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:14px">
+      <button class="btn" onclick="document.getElementById('evdb-roles').remove()">취소</button>
+      <button class="btn bp" onclick="saveEvDbRoles(${cidArg(r)})">저장</button></div></div>`;
+  box.addEventListener('click', e => { if(e.target === box) box.remove(); });
+  document.body.appendChild(box);
+}
+export async function saveEvDbRoles(cid){
+  const box = document.getElementById('evdb-roles');
+  const r = evPeople(evdbEvent).find(x => x.cid === cid);
+  if(!box || !r) return;
+  const want = new Set([...box.querySelectorAll('input:checked')].map(i => i.value));
+  if(!want.size) return alert('역할을 하나는 골라 주세요. 이 행사에서 빼려면 «참가자 삭제»를 써요.');
+  const parts = r.partIds.map(id => participations.find(p => p.id === id)).filter(Boolean);
+  const drop = parts.filter(p => !want.has(p.role));
+  const addKeys = [...want].filter(k => !parts.some(p => p.role === k));
+  /* 바꾼 역할은 뺀 줄의 역할만 고쳐 쓴다 — 그 줄의 등록일·확정일·메모가 그대로 남는다 */
+  const swap = drop.splice(0, Math.min(drop.length, addKeys.length)).map((p, i) => ({ p, role: addKeys[i] }));
+  const add = addKeys.slice(swap.length).map((k, i) => ({
+    id: 'P-' + Date.now() + '-r' + i, eventId: evdbEvent, event: evdbEvent, contactId: cid, contact: r.name,
+    role: k, note: '', matched: '✅ 역할 고침', confirmedAt: r.confirmedAt || '',
+  }));
+  box.remove();
+  if(!add.length && !drop.length && !swap.length) return;
+  const row = (p, role) => [p.id, p.eventId, '', p.contactId, '', '', '', role, p.note || '', p.matched || '', p.confirmedAt || ''];
+  let fail = 0;
+  if(swap.length || add.length){
+    const res = await postToSheet({ sheet: 'participations', action: 'batchUpsert',
+      rows: [...swap.map(x => row(x.p, x.role)), ...add.map(p => row(p, p.role))] }, '역할 고침');
+    if(res && res.ok !== false){ swap.forEach(x => { x.p.role = x.role; }); add.forEach(p => participations.push(p)); }
+    else fail += swap.length + add.length;
+  }
+  for(const p of drop){
+    const res = await postToSheet({ sheet: 'participations', action: 'delete', row: [p.id] }, '역할 고침');
+    if(!res || res.ok === false){ fail++; continue; }
+    const i = participations.indexOf(p);
+    if(i >= 0) participations.splice(i, 1);
+  }
+  trackAction('edit', '역할 고침', r.name, `${evdbEvent} · ${r.name}: ${[...r.roles].join('·')} → ${[...want].join('·')}`);
+  invalidateEvRows();
+  renderEvDb();
+  if(fail) alert(`${fail}건은 저장하지 못했어요. 화면을 새로 고쳐 확인해 주세요.`);
+}
+window.openEvDbRoles = openEvDbRoles;
+window.saveEvDbRoles = saveEvDbRoles;
+
 /* 신청 대기 다시 받아 오기 — 처음 한 번만 받아 오니, 그 뒤에 들어온 신청은 이걸로 */
 export async function reloadEvDbPending(btn){
   if(btn){ btn.disabled = true; btn.textContent = '불러오는 중…'; }
@@ -1562,6 +1636,7 @@ window.setEvDbEvent     = setEvDbEvent;
 window.setEvDbView      = setEvDbView;
 window.setEvDbRole      = setEvDbRole;
 window.setEvDbVia       = setEvDbVia;
+window.setEvDbReg       = setEvDbReg;
 window.setEvDbQuery     = setEvDbQuery;
 window.renderEvDb       = renderEvDb;
 window.saveEvDbProfile  = saveEvDbProfile;
