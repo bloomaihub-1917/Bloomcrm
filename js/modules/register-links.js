@@ -142,7 +142,7 @@ function subRow(s){
     <td style="padding:6px 4px"><b>${escapeHtml(d.name)}</b>${d.title ? `<div style="color:var(--i4)">${escapeHtml(d.title)}</div>` : ''}${extraHtml(d.extra)}</td>
     <td style="padding:6px 4px">${escapeHtml(d.org)}</td>
     <td style="padding:6px 4px">${escapeHtml(d.email)}${d.phone ? `<div style="color:var(--i4)">${escapeHtml(d.phone)}</div>` : ''}</td>
-    <td style="padding:6px 4px;color:var(--i4)">${VIA_ICON[s.via] || '🔗 링크'}<div>${escapeHtml(s.created_at)}</div></td>
+    <td style="padding:6px 4px;white-space:nowrap"><b style="font-weight:600;color:var(--i2)">${escapeHtml(s.created_at)}</b><div style="color:var(--i4)">${VIA_ICON[s.via] || '🔗 링크'}</div></td>
     <td style="padding:6px 4px;white-space:nowrap;text-align:right">
       <button class="btn bp" style="font-size:10.5px" onclick="decideRegister('${escAttr(s.id)}','accept',this)">확정</button>
       <button class="btn" style="font-size:10.5px;color:var(--re)" onclick="decideRegister('${escAttr(s.id)}','drop',this)">버리기</button></td>
@@ -163,7 +163,10 @@ function render(){
       신청 대기 ${subs.length}건
       ${subs.length > 1 ? `<button class="btn" style="margin-left:auto;font-size:11px" onclick="acceptAllRegister(this)">모두 확정</button>` : ''}</div>
     ${subs.length ? `<div style="overflow-x:auto;margin-bottom:16px"><table style="width:100%;border-collapse:collapse;font-size:11.5px;color:var(--i2)">
-      ${subs.map(subRow).join('')}</table></div>`
+      <thead><tr style="color:var(--i4);text-align:left;font-size:11px">
+        <th style="padding:4px">유형</th><th style="padding:4px">이름</th><th style="padding:4px">소속</th>
+        <th style="padding:4px">연락처</th><th style="padding:4px;white-space:nowrap">신청 일시 ↓</th><th></th></tr></thead>
+      ${[...subs].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))).map(subRow).join('')}</table></div>`
       : '<div style="font-size:12px;color:var(--i4);margin-bottom:16px">대기 중인 신청이 없어요.</div>'}
 
     <div style="font-size:13px;font-weight:700;color:var(--i1);margin:4px 0 8px">신청 링크</div>

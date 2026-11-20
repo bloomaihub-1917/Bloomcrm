@@ -95,6 +95,10 @@ function viaOfMatched(m){
   return 'etc';
 }
 
+/* 신청 일시 — 등록 링크·엑셀로 받아 확정한 참가는 메모 첫 줄에 «등록 링크 신청(2026-11-20 16:15)»으로 남는다 */
+const REG_AT = /(?:등록 링크 신청|엑셀 명단|직접 입력)\((\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2})?)\)/;
+const regAtOf = (note) => { const m = REG_AT.exec(String(note || '')); return m ? m[1] : ''; };
+
 function evPeople(evKey){
   if(_cache.key === evKey) return _cache.people;
   const byId = new Map(contacts.map(c => [c.id, c]));
@@ -117,7 +121,7 @@ function evPeople(evKey){
         phone: c.phone1 || c.phone2 || '', dept: c.deptKo || c.deptEn || '',
         /* 확정은 참여 기록에 붙는다. 한 사람이 두 역할이면 줄도 둘이라,
            한 줄이라도 확정이면 그 사람은 온 것으로 본다. */
-        partIds: [], confirmedAt: '', vias: new Set(),
+        partIds: [], confirmedAt: '', regAt: '', vias: new Set(),
       });
     }
     const m = map.get(key);
@@ -125,6 +129,8 @@ function evPeople(evKey){
     m.recs++;
     m.partIds.push(p.id);
     if(p.confirmedAt && !m.confirmedAt) m.confirmedAt = p.confirmedAt;
+    const ra = regAtOf(p.note);
+    if(ra && (!m.regAt || ra < m.regAt)) m.regAt = ra;
     if(p.role) m.roles.add(p.role);
   });
 
@@ -139,7 +145,7 @@ function evPeople(evKey){
       org, orgEn: '', orgKey: normalizeCompanyKey(org),
       country: d.country || '', email: d.email || '', sector: '',
       phone: d.phone || '', dept: '', partIds: [], confirmedAt: '',
-      via: s.via, submittedAt: s.created_at,
+      via: s.via, submittedAt: s.created_at, regAt: s.created_at || '',
       vias: new Set([s.via === 'excel' ? 'excel' : s.via === 'manual' ? 'manual' : 'link']),
     });
   });
@@ -628,13 +634,13 @@ function peopleRowsHtml(){
     </div>
     <div style="font-size:var(--fs-11);color:var(--i3);margin-top:3px">${escapeHtml(r.org)}${r.title ? ' · ' + escapeHtml(r.title) : ''}</div>
     <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:2px">${escapeHtml(countryName(r.country) || '')}${r.email ? ' · ' + escapeHtml(r.email) : ''}</div>
-    <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:2px">${escapeHtml(viaTags(r))}</div>
+    <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:2px">${escapeHtml(viaTags(r))}${r.regAt ? ' · 신청 ' + escapeHtml(r.regAt) : ''}</div>
   </div>`).join('');
 
   return `<div style="overflow-x:auto"><table style="width:100%">
     <thead><tr>
       <th style="width:26px"></th><th style="width:74px">참가</th>
-      <th>성명</th><th>기업·기관</th><th>직함</th><th>역할</th><th>들어온 길</th><th>국가</th><th>연락처</th>
+      <th>성명</th><th>기업·기관</th><th>직함</th><th>역할</th><th>들어온 길</th><th>신청 일시</th><th>국가</th><th>연락처</th>
     </tr></thead><tbody>
     ${l.map(r => `<tr>
       <td style="text-align:center"><input type="checkbox" ${evdbPickedPeople.has(r.cid) ? 'checked' : ''}
@@ -645,6 +651,7 @@ function peopleRowsHtml(){
       <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(r.title)}</td>
       <td>${roleBadges(r)}</td>
       <td style="font-size:var(--fs-11);color:var(--i3);white-space:nowrap">${escapeHtml(viaTags(r))}</td>
+      <td style="font-size:var(--fs-11);color:var(--i3);white-space:nowrap">${escapeHtml(r.regAt || '')}</td>
       <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(countryName(r.country) || '')}</td>
       <td style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(r.email)}</td>
     </tr>`).join('')}
@@ -780,7 +787,7 @@ function ptnPartRowsHtml(){
   const l = evPtnPeople(evdbEvent).filter(r => matchQ([r.name, r.nameEn, r.org, r.orgEn, r.email, countryName(r.country)]));
   if(!l.length) return emptyPart('해당하는 참가자가 없어요.');
   return `<div style="overflow-x:auto"><table style="width:100%">
-    <thead><tr><th>구분</th><th>성명</th><th>기업·기관</th><th>직함</th><th>국가</th><th>연락처</th><th>참가</th></tr></thead><tbody>
+    <thead><tr><th>구분</th><th>성명</th><th>기업·기관</th><th>직함</th><th>국가</th><th>연락처</th><th>신청 일시</th><th>참가</th></tr></thead><tbody>
     ${l.map(r => { const s = ptnSide(r); const click = !r.pendingId && r.cid != null;
       return `<tr${click ? ` style="cursor:pointer" onclick="openContactDr(${escAttr(JSON.stringify(r.cid))})" title="연락처 상세 보기"` : ''}>
       <td>${s ? `<span class="pill ${escAttr(s.cls)}">${escapeHtml(s.label)}</span>` : '<span class="pill p-gray">미지정</span>'}</td>
@@ -789,6 +796,7 @@ function ptnPartRowsHtml(){
       <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(r.title)}</td>
       <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(countryName(r.country) || '')}</td>
       <td style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(r.email)}</td>
+      <td style="font-size:var(--fs-11);color:var(--i3);white-space:nowrap">${escapeHtml(r.regAt || '')}</td>
       <td>${r.confirmedAt ? '<span class="pill p-green">✓ 확정</span>' : '<span class="pill p-gray">타겟</span>'}</td></tr>`; }).join('')}</tbody></table></div>`;
 }
 
