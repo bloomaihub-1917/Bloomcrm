@@ -814,7 +814,7 @@ function ptnPartRowsHtml(){
   return `<div style="overflow-x:auto"><table style="width:100%">
     <thead><tr><th>구분</th><th>성명</th><th>기업·기관</th><th>직함</th><th>국가</th><th>연락처</th><th>신청 일시</th><th>참가</th></tr></thead><tbody>
     ${l.map(r => { const s = ptnSide(r); const click = !r.pendingId && r.cid != null;
-      return `<tr${click ? ` style="cursor:pointer" onclick="openContactDr(${escAttr(JSON.stringify(r.cid))})" title="연락처 상세 보기"` : ''}>
+      return `<tr${click ? ` style="cursor:pointer" onclick="openContactDr(${escAttr(JSON.stringify(r.cid))},{edit:true})" title="눌러서 정보 수정"` : ''}>
       <td>${s ? `<span class="pill ${escAttr(s.cls)}">${escapeHtml(s.label)}</span>` : '<span class="pill p-gray">미지정</span>'}</td>
       <td><span style="font-weight:600">${escapeHtml(r.name)}</span>${r.nameEn ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(r.nameEn)}</div>` : ''}</td>
       <td>${escapeHtml(r.org)}</td>

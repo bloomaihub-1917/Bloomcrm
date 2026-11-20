@@ -543,6 +543,7 @@ export async function saveContactEdit(){
   renderContactDr();
   try { renderMDB(); } catch(e){}
   try { window.renderEvDb?.(); } catch(e){}   // 행사 DB 참가자 표에서 고쳤으면 그 줄도 바로
+  try { window.renderPtn?.(); } catch(e){}     // 파트너링 표도
 
   // 구글시트 동기화 — upsert (id 일치 행 덮어쓰기). 실패 시 편집 전 상태로 롤백
   const r = await postToSheet({
@@ -557,6 +558,7 @@ export async function saveContactEdit(){
     renderContactDr();
     try { renderMDB(); } catch(e){}
     try { window.renderEvDb?.(); } catch(e){}
+    try { window.renderPtn?.(); } catch(e){}
     return;
   }
   trackAction('status', '연락처 정보 수정', personName(c),

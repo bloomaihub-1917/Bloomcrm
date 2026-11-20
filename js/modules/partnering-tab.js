@@ -380,7 +380,7 @@ function rowsHtml(){
     <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">${pickBox(r)}${lead(r)}
       <span style="font-size:var(--fs-13);font-weight:600;color:var(--i1)">${escapeHtml(r.org || '소속 없음')}</span></div>
     <div style="font-size:var(--fs-11_5);color:var(--i2);margin-top:4px">${r.cid != null
-      ? `<a href="javascript:void(0)" style="font-weight:600;color:var(--a)" onclick="event.preventDefault();event.stopPropagation();openContactDr(${openArg(r)})">${escapeHtml(r.name)}</a>`
+      ? `<a href="javascript:void(0)" style="font-weight:600;color:var(--a)" title="눌러서 정보 수정" onclick="event.preventDefault();event.stopPropagation();openContactDr(${openArg(r)},{edit:true})">${escapeHtml(r.name)}</a>`
       : escapeHtml(r.name)}${r.title ? ' · ' + escapeHtml(r.title) : ''}</div>
     <div style="font-size:var(--fs-10_5);color:var(--i4);margin-top:2px">${escapeHtml(countryName(r.country) || '')}${r.email ? ' · ' + escapeHtml(r.email) : ''}</div>
   </label>`).join('') + tail;
@@ -391,12 +391,12 @@ function rowsHtml(){
       <th>기업·기관</th><th>국가</th><th>성명</th><th>직함</th><th>이메일</th>
       ${ptnView === 'list' ? '<th>연락처</th><th style="width:90px">확정일</th>' : ''}
     </tr></thead><tbody>
-    ${l.map(r => `<tr${r.cid != null ? ` style="cursor:pointer" title="참가자 정보 보기" onclick="openContactDr(${openArg(r)})"` : ''}>
+    ${l.map(r => `<tr${r.cid != null ? ` style="cursor:pointer" title="눌러서 정보 수정 — 성명을 누르면 상세 보기" onclick="openContactDr(${openArg(r)},{edit:true})"` : ''}>
       <td style="text-align:center" onclick="event.stopPropagation()">${pickBox(r)}</td>
       <td>${lead(r)}</td>
       <td><span style="font-weight:600">${escapeHtml(r.org)}</span>${r.orgEn && r.orgEn !== r.org ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(r.orgEn)}</div>` : ''}</td>
       <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(countryName(r.country) || '')}</td>
-      <td>${escapeHtml(r.name)}${r.nameEn && r.nameEn !== r.name ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(r.nameEn)}</div>` : ''}</td>
+      <td>${r.cid != null ? `<a href="javascript:void(0)" style="color:inherit" onclick="event.preventDefault();event.stopPropagation();openContactDr(${openArg(r)})">${escapeHtml(r.name)}</a>` : escapeHtml(r.name)}${r.nameEn && r.nameEn !== r.name ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(r.nameEn)}</div>` : ''}</td>
       <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(r.title)}</td>
       <td style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(r.email)}</td>
       ${ptnView === 'list' ? `<td style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(r.phone)}</td>
