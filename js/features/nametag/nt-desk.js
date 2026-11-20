@@ -499,7 +499,7 @@ function reportHtml(){
       <div class="stat-card"><div class="n">${r.wi.n}</div><div class="l">현장등록</div><div class="s">${pct(r.wi.n, T)}</div></div></div>
     <div style="display:flex;align-items:center;gap:8px;margin:14px 0 6px"><b>구분별 등록 · 참석 현황</b><div style="flex:1"></div>
       <button class="btn bs" onclick="ntReportExcel()">⬇ 엑셀</button><button class="btn bs" onclick="ntReport(false)">닫기</button></div>
-    <div style="overflow-x:auto"><table class="nt-rows nt-report" style="width:100%">
+    <div style="overflow-x:auto"><table class="nt-rows nt-report" data-nosort style="width:100%">
       <thead><tr><th>분류</th><th>세부 구분</th><th class="num">등록</th><th class="num">비율</th><th class="num">참석</th><th class="num">미참석</th><th class="num">참석률</th></tr></thead><tbody>
       ${r.pre.map((x, i) => tr(i ? '' : '<b>사전등록</b>', x)).join('')}
       ${tr('', r.preSum, 'sum')}

@@ -38,7 +38,7 @@ function unitsOf(body){
 /* 정렬하면 뜻이 깨지는 표 — 표시가 없는데 colspan으로 여러 칸을 먹는 줄이
    섞여 있으면 그 줄이 무엇에 딸린 것인지 알 수 없어 손대지 않는다. */
 function sortable(table){
-  if(!table || !table.tBodies.length) return false;
+  if(!table || !table.tBodies.length || table.hasAttribute('data-nosort')) return false;   // 차례가 뜻인 표(소계·합계 줄) — 손대지 않는다
   const units = unitsOf(table.tBodies[0]);
   if(units.length < 2) return false;
   return !units.some(u => [...u.head.cells].some(c => c.colSpan > 1));
