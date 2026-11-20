@@ -604,6 +604,8 @@ function peopleHtml(ev){
         title="등록 링크·엑셀로 들어온 신청을 서버에서 다시 받아 와요">⟳ 등록자 다시 불러오기</button>
       <button class="btn m-hide" style="font-size:var(--fs-11)" onclick="openRegisterLinks('${escAttr(ev.key)}')"
         title="바깥 신청 링크·엑셀 명단 — 받은 신청은 확정할 때 마스터DB로 옮겨요">🔗 등록 링크</button>
+      <button class="btn m-hide" style="font-size:var(--fs-11)" onclick="openRosterSync('${escAttr(ev.key)}')"
+        title="주최·플랫폼이 보낸 새 명단 파일과 이 행사 역할 명단을 견줘 새로 들어옴·바뀐 값·빠짐을 한 번에 반영해요">📋 명단 맞추기</button>
       <button class="btn m-hide" style="font-size:var(--fs-11)" onclick="openEvDupes('${escAttr(ev.key)}')"
         title="메일·전화·이름이 같은 참가자를 묶어 보여 줘요 — 같은 사람 둘을 골라 하나로 합쳐요">중복 찾기</button>
       <button class="btn m-hide" style="font-size:var(--fs-11)" onclick="openEvDbMailList()">메일 대상 모으기</button>
@@ -672,8 +674,8 @@ const cardsHtml = (items) => `<div class="sec stat-grid">
 const emptyPart = (msg) => `<div style="font-size:var(--fs-12);color:var(--i4);padding:24px 16px">${msg}</div>`;
 const matchQ = (vals) => { const q = evdbQuery.trim().toLowerCase(); return !q || vals.some(v => String(v || '').toLowerCase().includes(q)); };
 /* 명단 머리 — 검색과 «누르면 상세» 안내 */
-const partBarHtml = (ph, n, unit) => `<div class="sec sec-bar">
-  ${searchBoxHtml(ph)}<div style="flex:1"></div>
+const partBarHtml = (ph, n, unit, extra = '') => `<div class="sec sec-bar">
+  ${searchBoxHtml(ph)}${extra}<div style="flex:1"></div>
   <span style="font-size:var(--fs-11);color:var(--i4)">${n}${unit} · 줄을 누르면 상세 정보가 열려요</span></div>`;
 /* 이름 — 마스터DB에 있는 사람이면 눌러서 연락처 창을 연다(신청 대기는 아직 연락처가 없다) */
 function personNameHtml(r){
@@ -780,7 +782,8 @@ function ptnPartHtml(ev){
     ...PARTNERING_SIDES.map(s => { const rs = l.filter(r => ptnSide(r) === s); return [`${orgN(rs)}<span style="font-size:var(--fs-12);font-weight:600;color:var(--i3)">개사</span>`, s.label, `${rs.length}명`]; }),
     [l.filter(r => r.confirmedAt).length, '참가 확정', `전체 ${l.length}명`],
     ...(none.length ? [[none.length, '셀러·바이어 미지정', '파트너링 탭에서 정해요']] : []),
-  ]) + partBarHtml('이름·기업·국가 검색…', l.length, '명')
+  ]) + partBarHtml('이름·기업·국가 검색…', l.length, '명', `<button class="btn" style="font-size:var(--fs-11)" onclick="openRosterSync('${escAttr(ev.key)}','셀러')"
+      title="플랫폼이 보낸 새 셀러·바이어 파일과 견줘 새로 들어옴·바뀐 값·빠짐을 한 번에 반영해요">📋 명단 맞추기</button>`)
     + `<div id="evdb-rows" class="sec-rows">${ptnPartRowsHtml()}</div>`;
 }
 function ptnPartRowsHtml(){
