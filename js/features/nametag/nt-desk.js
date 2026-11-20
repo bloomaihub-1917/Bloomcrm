@@ -471,6 +471,58 @@ function statsHtml(){
     </div>`;
 }
 
+/* ── 결과보고 수치(2026-11-20) — 사전등록(연사 → 하단바 종류 차례 → 하단바 미정) / 현장등록(현장 신규).
+   참석 = 체크인. 연사는 띠가 VIP여도 따로 센다. 띠 이름은 보고서 말로 바꿔 보인다 ── */
+const REPORT_NAME = { participant: '일반 참가자', participants: '일반 참가자', 'business meeting': '셀러', seller: '셀러', buyer: '바이어', speaker: '연사' };
+function reportRows(){
+  const all = deskPeople(nt.ev), pre = all.filter(p => !p.walkIn), wi = all.filter(p => p.walkIn);
+  const groups = new Map([['연사', []]]);
+  barTypes().forEach(b => { const n = REPORT_NAME[b.label.trim().toLowerCase()] || b.label; if(!groups.has(n)) groups.set(n, []); });
+  pre.forEach(p => {
+    const b = barType(barOf(p.key));
+    const n = p.source === 'speaker' ? '연사' : b ? REPORT_NAME[b.label.trim().toLowerCase()] || b.label : '미정';
+    if(!groups.has(n)) groups.set(n, []);
+    groups.get(n).push(p);
+  });
+  const row = (name, l) => ({ name, n: l.length, inn: l.filter(p => nt.checkins.has(p.key)).length, absent: l.filter(p => !nt.checkins.has(p.key) && isAbsent(p.key)).length });
+  return { pre: [...groups].filter(([, l]) => l.length).map(([n, l]) => row(n, l)), preSum: row('소계', pre), wi: row('현장등록', wi), total: row('종합', all) };
+}
+function reportHtml(){
+  const r = reportRows(), T = r.total.n || 1;
+  const pct = (a, b) => b ? (a / b * 100).toFixed(1) + '%' : '—';
+  const tr = (cat, x, cls = '') => `<tr class="${cls}"><td>${cat}</td><td>${escapeHtml(x.name)}</td><td class="num">${x.n}명</td>
+    <td class="num">${pct(x.n, T)}</td><td class="num">${x.inn}명</td><td class="num" style="color:var(--re)">${x.n - x.inn}명${x.absent ? ` <span class="nt-note">(불참 ${x.absent})</span>` : ''}</td><td class="num">${pct(x.inn, x.n)}</td></tr>`;
+  return `<div class="sec" id="nt-report">
+    <div class="stat-grid">
+      <div class="stat-card"><div class="n">${r.total.n}</div><div class="l">총 등록자</div><div class="s">참석 ${r.total.inn}명 · ${pct(r.total.inn, r.total.n)}</div></div>
+      <div class="stat-card"><div class="n">${r.preSum.n}</div><div class="l">사전등록</div><div class="s">${pct(r.preSum.n, T)}</div></div>
+      <div class="stat-card"><div class="n">${r.wi.n}</div><div class="l">현장등록</div><div class="s">${pct(r.wi.n, T)}</div></div></div>
+    <div style="display:flex;align-items:center;gap:8px;margin:14px 0 6px"><b>구분별 등록 · 참석 현황</b><div style="flex:1"></div>
+      <button class="btn bs" onclick="ntReportExcel()">⬇ 엑셀</button><button class="btn bs" onclick="ntReport(false)">닫기</button></div>
+    <div style="overflow-x:auto"><table class="nt-rows nt-report" style="width:100%">
+      <thead><tr><th>분류</th><th>세부 구분</th><th class="num">등록</th><th class="num">비율</th><th class="num">참석</th><th class="num">미참석</th><th class="num">참석률</th></tr></thead><tbody>
+      ${r.pre.map((x, i) => tr(i ? '' : '<b>사전등록</b>', x)).join('')}
+      ${tr('', r.preSum, 'sum')}
+      ${tr('<b>현장등록</b>', r.wi)}
+      ${tr('<b>종합</b>', { ...r.total, name: '' }, 'total')}
+    </tbody></table></div>
+    <div class="nt-note" style="margin-top:6px">참석 = 체크인 · 비율 = 전체 등록 대비 · 연사는 하단바와 상관없이 «연사», 나머지는 하단바 종류로 나눠요 · ${kst(nt.syncedAt)} 기준</div></div>`;
+}
+export function ntReport(on){ nt.report = !!on; rerender(); }
+export function ntReportExcel(){
+  if(!window.XLSX) return alert('엑셀 도구를 아직 못 불러왔어요. 잠시 뒤 다시 눌러 주세요.');
+  const r = reportRows(), T = r.total.n || 1, pct = (a, b) => b ? Math.round(a / b * 1000) / 10 + '%' : '';
+  const line = (cat, x) => [cat, x.name, x.n, pct(x.n, T), x.inn, x.n - x.inn, x.absent, pct(x.inn, x.n)];
+  const aoa = [['분류', '세부 구분', '등록', '비율', '참석', '미참석', '(불참 확인)', '참석률'],
+    ...r.pre.map((x, i) => line(i ? '' : '사전등록', x)), line('', r.preSum), line('현장등록', r.wi), line('종합', { ...r.total, name: '' })];
+  const ws = window.XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [10, 14, 8, 8, 8, 8, 10, 8].map(w => ({ wch: w }));
+  const wb = window.XLSX.utils.book_new();
+  window.XLSX.utils.book_append_sheet(wb, ws, '등록·참석 현황');
+  const ev = evRow();
+  window.XLSX.writeFile(wb, `${(ev.short || ev.name || nt.ev).replace(/[\\/:*?"<>|]/g, '')}_등록참석현황_${today()}.xlsx`);
+}
+
 /* ── 본문 ── */
 export function ntPartHtml(ev, query){
   ensureLoaded(ev.key);
@@ -495,12 +547,14 @@ export function ntPartHtml(ev, query){
       <div style="flex:1"></div>
       ${netHtml()}
       <button class="btn bs m-more" onclick="this.parentElement.classList.toggle('m-open')">⋯ 더보기</button>
+      <button class="btn bs${nt.report ? ' on' : ''}" onclick="ntReport(${!nt.report})" title="결과보고용 — 사전등록(연사·하단바별)·현장등록의 등록·참석·참석률">📊 결과보고 수치</button>
       <button class="btn bs m-hide" onclick="ntExport()" title="현장 신규까지 한 줄씩 — 하단바·체크인 포함. 하단바 엑셀 올리기 양식도 이것">⬇ 명단 엑셀</button>
       ${ci ? '' : `<label class="btn bs m-hide" title="«명단 엑셀»에 하단바를 채워 올려요. 등록번호로 맞추고, 없으면 이메일·이름+소속으로">⬆ 하단바 엑셀
         <input type="file" accept=".xlsx,.xls,.csv" style="display:none" onchange="ntImportBars(this.files[0]);this.value=''"></label>`}
       ${wiTodo ? `<button class="btn bs m-hide" onclick="ntPromote()" title="현장 신규를 연락처·이 행사 참가 확정으로 — 같은 이메일이면 그 사람에 붙여요">현장 신규 ${wiTodo}명 마스터DB에</button>` : ''}
     </div>
     ${statsHtml()}
+    ${nt.report ? reportHtml() : ''}
     <div class="sec sec-bar">
       <div class="srch" style="width:100%;max-width:300px">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -1320,6 +1374,6 @@ export async function ntPromote(){
 }
 
 Object.assign(window, { ntNudge, ntNudgeReset, ntWalkNudge, ntWalkNudgeReset, ntEditReset, ntPrintBlank, ntSetView, ntSetOnsite, ntSetFilter, ntSetSrc, ntSetBarFil, ntSetSort, ntSortBy, ntFocus, ntPick, ntPickAll, ntEdit, ntWalkIn, ntWalkEdit,
-  ntSetReason, ntReload, ntOpenEditor, ntPrint, ntVoid, ntSetBar, ntSetBarPicked, ntWalkContact, ntCheckIn, ntUncheck, ntAbsent,
+  ntSetReason, ntReload, ntOpenEditor, ntPrint, ntVoid, ntSetBar, ntSetBarPicked, ntWalkContact, ntCheckIn, ntUncheck, ntAbsent, ntReport, ntReportExcel,
   ntScanKey, ntCamera, ntExport, ntImportBars, ntImportApply, ntImportCancel, ntPromote,
   ntNetView, ntSendNow, ntRetryFailed, ntDismissFailed, ntExportDeviceLog });

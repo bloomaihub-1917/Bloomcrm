@@ -204,3 +204,9 @@
   background:repeating-linear-gradient(135deg,rgba(220,38,38,.18) 0 1.2mm,transparent 1.2mm 2.4mm);border-top:1px dashed var(--re)}
 .nt-cut span{position:absolute;right:1.5mm;top:50%;transform:translateY(-50%);font-size:6pt;line-height:1;color:var(--re);font-weight:700;white-space:nowrap}
 @media (max-width:1100px){ .nt-editor{grid-template-columns:minmax(0,1fr)} }
+
+/* 결과보고 수치 표 (nt-desk.js reportHtml) */
+.nt-report th.num, .nt-report td.num { text-align: right; white-space: nowrap; }
+.nt-report tr.sum td { background: var(--bg2, #f3f0fa); font-weight: 700; }
+.nt-report tr.total td { background: var(--navy, #1f3864); color: #fff; font-weight: 700; }
+.nt-report tr.total td[style] { color: #fff !important; }
