@@ -117,7 +117,7 @@ const TEMPLATE_COLS = `id, name, width_mm::float8 AS width_mm, height_mm::float8
   background_data, background_print, layout, print_offset, bar_types, is_default, updated_at, updated_by`;
 const PRINT_COLS = `id, event_id, batch_id, template_id, person_key, source, ref_id, contact_id, name, company, job_title,
   badge, bar, lang, kind, reason, printed_by, printed_at, voided_at, voided_by, synced_at`;
-const PEOPLE_COLS = `person_key, bar, email, phone, contact_id, pos, edits, updated_at, updated_by`;
+const PEOPLE_COLS = `person_key, bar, email, phone, contact_id, pos, edits, absent_at, absent_by, updated_at, updated_by`;
 const CHECKIN_COLS = `id, person_key, via, print_id, checked_at, checked_by, voided_at, voided_by, synced_at`;
 
 router.get('/:eventId', async (req, res, next) => {
@@ -349,6 +349,21 @@ router.put('/:eventId/people/:key/pos', async (req, res, next) => {
       INSERT INTO nametag_people (event_id, person_key, pos, updated_at, updated_by) VALUES ($1,$2,$3::jsonb,$4,$5)
       ON CONFLICT (event_id, person_key) DO UPDATE SET pos = EXCLUDED.pos, updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by
       RETURNING ${PEOPLE_COLS}`, [ev, key, pos ? JSON.stringify(pos) : null, new Date().toISOString(), req.user?.email || '']);
+    res.json({ ok: true, person: rows[0] });
+  } catch (e) { next(e); }
+});
+
+/* 체크인 데스크 «불참»(2026-11-20) — { absent: true|false }. 체크인과 따로 남고, 체크인하면 데스크가 불참을 지운다 */
+router.put('/:eventId/people/:key/absent', async (req, res, next) => {
+  try {
+    const ev = String(req.params.eventId), key = text(req.params.key, 60);
+    if (!key) return res.status(400).json({ ok: false, error: '사람이 없어요' });
+    const on = !!(req.body && req.body.absent), now = new Date().toISOString(), by = req.user?.email || '';
+    const { rows } = await pool.query(`
+      INSERT INTO nametag_people (event_id, person_key, absent_at, absent_by, updated_at, updated_by) VALUES ($1,$2,$3,$4,$5,$6)
+      ON CONFLICT (event_id, person_key) DO UPDATE SET absent_at = EXCLUDED.absent_at, absent_by = EXCLUDED.absent_by,
+        updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by
+      RETURNING ${PEOPLE_COLS}`, [ev, key, on ? now : null, on ? by : null, now, by]);
     res.json({ ok: true, person: rows[0] });
   } catch (e) { next(e); }
 });
