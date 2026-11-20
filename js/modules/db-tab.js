@@ -898,6 +898,7 @@ export function renderMDB(){
   renderLeftChip();
   renderOrgOnly();
   renderUnlinkedChip();
+  renderDupeChip();
   renderMdbAiBar();
   buildMDBFilterBar();
   /* 행사 목록도 여기서 다시 그린다 — 분야를 바꾸면 그 안의 인원으로 세어야
@@ -993,6 +994,22 @@ function renderUnlinkedChip(){
     onclick="toggleMdbUnlinked()">기업DB 미연결 ${n}</button>${on && n ? ` <button class="btn bs" style="font-size:var(--fs-11)"
     title="같은 이름(법인격·띄어쓰기 무시, 옛 이름 포함)의 기업에 잇고, 없으면 기업DB에 새로 만들어요"
     onclick="linkUnlinkedContacts()">기업DB에 연결</button>` : ''}`;
+}
+/* 중복 의심 — 메일·전화가 같은 연락처 묶음 수. 누르면 «중복 찾기»(Master DB 전체)가 열린다.
+   행사 DB 중복 찾기는 그 행사 사람끼리만 봐서, 다른 행사로 들어온 같은 사람이 안 잡혔다.
+   렌더마다 세지 않고 연락처 수가 바뀔 때만 다시 센다(합치기·넣기·지우기 뒤) */
+let dupeCache = { n: -1, key: '' };
+function renderDupeChip(){
+  const chip = document.getElementById('mdb-dupe-chip');
+  if(!chip || !window.strongDupCount) return;
+  const key = `${contacts.length}`;
+  if(dupeCache.key !== key){ dupeCache = { key, n: window.strongDupCount() }; }
+  const n = dupeCache.n;
+  if(!n){ chip.style.display = 'none'; chip.innerHTML = ''; return; }
+  chip.style.display = '';
+  chip.innerHTML = `<button class="pill p-amber" style="border:0;cursor:pointer;font:inherit"
+    title="메일이나 전화(끝 8자리)가 같은 연락처 묶음 — 눌러서 같은 사람이면 하나로 합쳐요"
+    onclick="openEvDupes('')">중복 의심 ${n}</button>`;
 }
 export function toggleMdbUnlinked(){ mdbUi.mdbUnlinked = !mdbUi.mdbUnlinked; renderMDB(); }
 export async function linkUnlinkedContacts(){

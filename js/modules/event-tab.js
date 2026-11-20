@@ -783,7 +783,9 @@ function ptnPartHtml(ev){
     [l.filter(r => r.confirmedAt).length, '참가 확정', `전체 ${l.length}명`],
     ...(none.length ? [[none.length, '셀러·바이어 미지정', '파트너링 탭에서 정해요']] : []),
   ]) + partBarHtml('이름·기업·국가 검색…', l.length, '명', `<button class="btn" style="font-size:var(--fs-11)" onclick="openRosterSync('${escAttr(ev.key)}','셀러')"
-      title="플랫폼이 보낸 새 셀러·바이어 파일과 견줘 새로 들어옴·바뀐 값·빠짐을 한 번에 반영해요">📋 명단 맞추기</button>`)
+      title="플랫폼이 보낸 새 셀러·바이어 파일과 견줘 새로 들어옴·바뀐 값·빠짐을 한 번에 반영해요">📋 명단 맞추기</button>
+    <button class="btn" style="font-size:var(--fs-11)" onclick="openEvDupes('${escAttr(ev.key)}')"
+      title="메일·전화·이름이 같은 참가자를 묶어 보여 줘요 — 같은 사람 둘을 골라 하나로 합쳐요">중복 찾기</button>`)
     + `<div id="evdb-rows" class="sec-rows">${ptnPartRowsHtml()}</div>`;
 }
 function ptnPartRowsHtml(){

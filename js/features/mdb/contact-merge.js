@@ -9,7 +9,7 @@
    «남길 기록»(id) 쪽에 다른 쪽의 행사 참가·연사·전시 담당·컨택·영업 DB·네임택 발급을 모두 옮기고
    다른 쪽을 지운다 — 서버 한 트랜잭션(backend-node/routes/data.js mergeContacts).
 
-   부르는 곳: 마스터DB 선택 막대(mdb-bulk.js), 행사 DB 참가자 «중복 찾기»(아래 openEvDupes).
+   부르는 곳: 마스터DB 선택 막대(mdb-bulk.js), «중복 찾기»(아래 openEvDupes — 행사 DB 참가자·파트너링, Master DB 칩).
 ═══════════════════════════════════════════════════════════════ */
 
 import { postToSheet } from '../../api.js';
@@ -189,9 +189,11 @@ function applyMergeLocally(keep, drop, r){
 }
 
 /* ══════════════════════════════════════════
-   행사 DB 참가자 → 중복 찾기
+   중복 찾기 — 행사 DB 참가자·파트너링(그 행사 사람끼리) · Master DB(연락처 전체)
 
-   이 행사 참가자(연락처) 가운데 같은 사람일 수 있는 묶음을 보여 준다.
+   같은 사람일 수 있는 묶음을 보여 준다. 행사 안에서만 찾으면 행사를 넘나드는 중복
+   (다른 행사로 들어온 같은 사람 — 점검의 «같은 메일 두 명»)이 안 잡혀 Master DB에서도 연다.
+   전체에서는 이름만 같은 묶음(동명이인)이 많아 기본은 접어 두고 «이름만 같음도 보기»로 연다.
    묶는 기준: 같은 메일 · 같은 전화(숫자 끝 8자리) · 같은 국문 이름 · 같은 영문 이름(순서·대소문자 무시).
    이름만 같으면 동명이인일 수 있어 «이름만 같음»으로 따로 표시한다. 두 사람을 골라 합친다.
 ══════════════════════════════════════════ */
@@ -199,8 +201,10 @@ const enKey = (v) => s(v).toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/).f
 const telKey = (v) => { const d = s(v).replace(/\D/g, ''); return d.length >= 8 ? d.slice(-8) : ''; };
 
 function dupGroups(evKey){
-  const ids = [...new Set(participations.filter(p => (p.eventId || p.event) === evKey && p.contactId != null).map(p => String(p.contactId)))];
-  const people = ids.map(id => getContactById(id)).filter(Boolean);
+  const people = evKey
+    ? [...new Set(participations.filter(p => (p.eventId || p.event) === evKey && p.contactId != null).map(p => String(p.contactId)))]
+      .map(id => getContactById(id)).filter(Boolean)
+    : contacts.filter(c => !s(c.moved_to_id));
   const parent = new Map(people.map(c => [String(c.id), String(c.id)]));
   const find = (x) => { while(parent.get(x) !== x){ parent.set(x, parent.get(parent.get(x))); x = parent.get(x); } return x; };
   const why = new Map();   // root 쌍 이유
@@ -231,9 +235,10 @@ function dupGroups(evKey){
   }).sort((x, y) => (x.nameOnly - y.nameOnly) || personName(x.people[0]).localeCompare(personName(y.people[0]), 'ko'));
 }
 
-let dupEv = '', dupPicked = [];
+let dupEv = '', dupPicked = [], dupNameOnly = false;
+/* evKey가 비면 Master DB 전체 */
 export function openEvDupes(evKey){
-  dupEv = evKey; dupPicked = [];
+  dupEv = evKey || ''; dupPicked = []; dupNameOnly = !!dupEv;
   closeEvDupes();
   const pop = document.createElement('div');
   pop.id = 'ev-dupes-modal';
@@ -247,7 +252,12 @@ export function closeEvDupes(){ document.getElementById('ev-dupes-modal')?.remov
 function renderEvDupes(){
   const pop = document.getElementById('ev-dupes-modal');
   if(!pop) return;
-  const groups = dupGroups(dupEv);
+  const allGroups = dupGroups(dupEv);
+  const nameOnlyN = allGroups.filter(g => g.nameOnly).length;
+  const groups = dupNameOnly ? allGroups : allGroups.filter(g => !g.nameOnly);
+  /* 전체에서는 묶음이 수백 개일 수 있다 — 앞의 200개만 그린다 */
+  const shownGroups = groups.slice(0, 200);
+  const evNames = (c) => dupEv ? '' : [...new Set(participations.filter(p => String(p.contactId) === String(c.id)).map(p => p.eventId || p.event).filter(Boolean))].join(', ');
   const roleOf = (c) => [...new Set(participations.filter(p => (p.eventId || p.event) === dupEv && String(p.contactId) === String(c.id)).map(p => p.role).filter(Boolean))].join(', ');
   const person = (c) => {
     const id = String(c.id), on = dupPicked.includes(id);
@@ -256,18 +266,21 @@ function renderEvDupes(){
       <div><b>${escapeHtml(s(c.nameKo) || s(c.nameEn) || '(이름 없음)')}</b>${s(c.nameKo) && s(c.nameEn) ? `<div style="color:var(--i4);font-size:var(--fs-10_5)">${escapeHtml(c.nameEn)}</div>` : ''}</div>
       <div>${escapeHtml(s(c.orgKo) || s(c.orgEn))}<div style="color:var(--i4);font-size:var(--fs-10_5)">${escapeHtml(s(c.titleKo) || s(c.titleEn))}</div></div>
       <div style="font-size:var(--fs-11);color:var(--i3)">${escapeHtml([c.email1, c.email2].filter(v => s(v)).join(', '))}<div>${escapeHtml([c.phone1, c.phone2].filter(v => s(v)).join(', '))}</div></div>
-      <div style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(roleOf(c))}<div style="font-size:var(--fs-10_5)">${escapeHtml(c.source || '')}</div></div>
+      <div style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(dupEv ? roleOf(c) : evNames(c))}<div style="font-size:var(--fs-10_5)">${escapeHtml(c.source || '')}</div></div>
     </label>`;
   };
-  const list = groups.length ? groups.map(g => `<div style="border:1px solid var(--i7);border-radius:var(--r);margin-bottom:8px;padding:4px">
+  const list = groups.length ? shownGroups.map(g => `<div style="border:1px solid var(--i7);border-radius:var(--r);margin-bottom:8px;padding:4px">
       <div style="font-size:var(--fs-10_5);color:${g.nameOnly ? 'var(--i5)' : 'var(--ac, var(--i2))'};padding:4px 8px">
         같은 ${escapeHtml(g.reasons.join(' · '))}${g.nameOnly ? ' — 이름만 같아요. 동명이인일 수 있어요' : ''}</div>
       ${g.people.map(person).join('')}</div>`).join('')
+      + (groups.length > shownGroups.length ? `<div style="padding:8px;text-align:center;color:var(--i4);font-size:var(--fs-11)">앞의 ${shownGroups.length}묶음만 보여요 — 합치고 나면 다음 묶음이 올라와요</div>` : '')
     : '<div style="padding:24px;text-align:center;color:var(--i4)">겹쳐 보이는 사람이 없어요.</div>';
-  const strong = groups.filter(g => !g.nameOnly).length;
+  const strong = allGroups.length - nameOnlyN;
   pop.innerHTML = `<div class="modal" style="max-width:920px">
-    <div class="mh"><div style="flex:1;min-width:0"><div class="mt2">중복 찾기 — ${escapeHtml(dupEv)}</div>
-      <div style="font-size:var(--fs-11);color:var(--i4);margin-top:2px">겹쳐 보이는 묶음 ${groups.length}개(메일·전화가 같은 것 ${strong}개). 같은 사람인 두 명을 골라 «합치기»를 누르세요.</div></div></div>
+    <div class="mh"><div style="flex:1;min-width:0"><div class="mt2">중복 찾기 — ${escapeHtml(dupEv || 'Master DB 전체')}</div>
+      <div style="font-size:var(--fs-11);color:var(--i4);margin-top:2px">겹쳐 보이는 묶음 ${allGroups.length}개(메일·전화가 같은 것 ${strong}개). 같은 사람인 두 명을 골라 «합치기»를 누르세요.</div>
+      ${nameOnlyN ? `<label style="font-size:var(--fs-11);color:var(--i3);display:inline-flex;gap:4px;align-items:center;margin-top:4px;cursor:pointer">
+        <input type="checkbox" ${dupNameOnly ? 'checked' : ''} onchange="toggleDupNameOnly(this.checked)"> 이름만 같은 묶음 ${nameOnlyN}개도 보기 (동명이인일 수 있어요)</label>` : ''}</div></div>
     <div class="mb" style="max-height:62vh;overflow:auto">${list}</div>
     <div class="mf2">
       <span style="margin-right:auto;font-size:var(--fs-11_5);color:var(--i4)">${dupPicked.length}/2명 선택</span>
@@ -275,6 +288,9 @@ function renderEvDupes(){
       <button class="btn bp" ${dupPicked.length === 2 ? '' : 'disabled'} onclick="mergeEvDupes()">합치기</button>
     </div></div>`;
 }
+export function toggleDupNameOnly(on){ dupNameOnly = on; dupPicked = []; renderEvDupes(); }
+/* Master DB 칩 — 메일·전화가 같은 묶음 수 */
+export function strongDupCount(){ return dupGroups('').filter(g => !g.nameOnly).length; }
 export function toggleEvDupe(id){
   const i = dupPicked.indexOf(id);
   if(i >= 0) dupPicked.splice(i, 1);
@@ -287,6 +303,7 @@ export function mergeEvDupes(){
   openContactMerge(x, y, { onDone: () => {
     dupPicked = [];
     window.renderEvDb?.();
+    if(!dupEv) window.renderMDB?.();
     renderEvDupes();   // 목록은 열어 둔 채 다시 센다
   } });
 }
@@ -298,3 +315,5 @@ window.openEvDupes = openEvDupes;
 window.closeEvDupes = closeEvDupes;
 window.toggleEvDupe = toggleEvDupe;
 window.mergeEvDupes = mergeEvDupes;
+window.toggleDupNameOnly = toggleDupNameOnly;
+window.strongDupCount = strongDupCount;
