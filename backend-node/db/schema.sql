@@ -1285,3 +1285,5 @@ CREATE INDEX IF NOT EXISTS nametag_prints_synced_idx ON nametag_prints (event_id
 CREATE INDEX IF NOT EXISTS nametag_checkins_synced_idx ON nametag_checkins (event_id, synced_at);
 
 ALTER TABLE participations ADD COLUMN IF NOT EXISTS registered_at TEXT;   -- 등록(신청) 시각 KST YYYY-MM-DD HH:MM — db/migrations/add-participation-registered-at.js
+ALTER TABLE nametag_people ADD COLUMN IF NOT EXISTS removed_at TIMESTAMPTZ; -- 현장 신규 삭제 — db/migrations/add-nametag-removed.js
+ALTER TABLE nametag_people ADD COLUMN IF NOT EXISTS removed_by TEXT;

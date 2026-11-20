@@ -82,6 +82,7 @@ function request(op){
     case 'bars': return [`${ev}/bars`, 'PUT', { items: d.items, via: d.via }];
     case 'contact': return [`${ev}/people/${enc(d.key)}`, 'PUT', { email: d.email, phone: d.phone }];
     case 'pos': return [`${ev}/people/${enc(d.key)}/pos`, 'PUT', { pos: d.pos }];
+    case 'remove': return [`${ev}/people/${enc(d.key)}/removed`, 'PUT', { removed: !!d.removed }];
     case 'absent': return [`${ev}/people/${enc(d.key)}/absent`, 'PUT', { absent: !!d.absent }];
     case 'edits': return [`${ev}/people/${enc(d.key)}/edits`, 'PUT', { edits: d.edits }];
   }

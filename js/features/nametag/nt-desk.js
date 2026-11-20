@@ -152,6 +152,8 @@ function applyOp(op){
     nt.people.set(d.key, { ...(nt.people.get(d.key) || { person_key: d.key }), pos: d.pos });
   } else if(op.kind === 'edits'){
     nt.people.set(d.key, { ...(nt.people.get(d.key) || { person_key: d.key }), edits: d.edits });
+  } else if(op.kind === 'remove'){
+    nt.people.set(d.key, { ...(nt.people.get(d.key) || { person_key: d.key }), removed_at: d.removed ? op.at || new Date().toISOString() : null, removed_by: d.removed ? d.by || '' : null });
   } else if(op.kind === 'absent'){
     nt.people.set(d.key, { ...(nt.people.get(d.key) || { person_key: d.key }), absent_at: d.absent ? op.at || new Date().toISOString() : null, absent_by: d.absent ? d.by || '' : null });
   }
@@ -176,7 +178,7 @@ function reconcile(op, res){
     if(res.print) nt.prints = nt.prints.map(p => p.id === res.print.id ? res.print : p);
   } else if(op.kind === 'bars'){
     (res.people || []).forEach(p => nt.people.set(p.person_key, p));
-  } else if(op.kind === 'contact' || op.kind === 'pos' || op.kind === 'edits' || op.kind === 'absent'){
+  } else if(op.kind === 'contact' || op.kind === 'pos' || op.kind === 'edits' || op.kind === 'absent' || op.kind === 'remove'){
     if(res.person) nt.people.set(res.person.person_key, res.person);
   }
 }
@@ -272,7 +274,7 @@ function netHtml(){
     : ['ok', `● 연결됨${nt.syncedAt ? ` · ${kst(nt.syncedAt)} 받음` : ''}`];
   return `<button type="button" id="nt-net" class="nt-net ${cls}" onclick="ntNetView()" title="이 기기에 남긴 발급·체크인 기록과 보내기 상태">${txt}</button>`;
 }
-const OP_LABEL = { issue: '발급', checkin: '체크인', uncheck: '체크인 취소', void: '인쇄 안 됨', bars: '하단바', contact: '현장 신규 연락처', pos: '글자 조정', edits: '글자 고침', absent: '불참' };
+const OP_LABEL = { issue: '발급', checkin: '체크인', uncheck: '체크인 취소', void: '인쇄 안 됨', bars: '하단바', contact: '현장 신규 연락처', pos: '글자 조정', edits: '글자 고침', absent: '불참', remove: '현장 신규 삭제' };
 function opText(op, names){
   const d = op.data, nm = (k) => names.get(k) || k;
   if(op.kind === 'issue') return `${d.rows.length}장 — ${d.rows.slice(0, 3).map(r => r.name).join(', ')}${d.rows.length > 3 ? ' 외' : ''}${d.onsite ? ' · 현장 출력' : ''}`;
@@ -283,6 +285,7 @@ function opText(op, names){
   if(op.kind === 'contact') return `${nm(d.key)} · ${d.email || ''} ${d.phone || ''}`;
   if(op.kind === 'pos') return `${nm(d.key)}${d.pos ? '' : ' · 판대로 되돌림'}`;
   if(op.kind === 'edits') return `${nm(d.key)}${d.edits ? '' : ' · 원래 글자로 되돌림'}`;
+  if(op.kind === 'remove') return `${nm(d.key)}${d.removed ? '' : ' · 되살림'}`;
   if(op.kind === 'absent') return `${nm(d.key)}${d.absent ? '' : ' · 불참 취소'}`;
   return '';
 }
@@ -759,6 +762,7 @@ function sideHtml(evKey){
       <button class="btn bp" onclick="ntPrint()"${nt.busy ? ' disabled' : ''}>🖨 ${list.length > 1 ? `${list.length}장 인쇄` : '인쇄'}</button>
       <span class="nt-note">${isOnsite() ? '현장 출력 — 체크인도 함께' : '사전 출력 — 체크인은 따로'}</span>
       ${nt.picked.size ? `<button class="btn bs" onclick="ntPickAll(false)">고른 것 풀기</button>` : ''}
+      ${(() => { const w = list.filter(p => p.walkIn).length; return w ? `<button class="btn bs" style="color:var(--re)" onclick="ntRemoveWalkIns()" title="시험·STAFF처럼 사람이 아닌 현장 신규 — 명단·결과보고·마스터DB 올리기에서 빠져요. 발급·체크인 기록은 남아요">현장 신규 ${w > 1 ? w + '명 ' : ''}삭제</button>` : ''; })()}
     </div>${recentHtml()}`;
 }
 
@@ -1233,6 +1237,24 @@ function matchName(people, raw){
 /* ── 체크인 ── */
 const absentPill = (key) => { const pp = nt.people.get(key) || {};
   return `<span class="pill p-gray" title="${escAttr(pp.absent_by || '')}">불참</span> <span class="nt-note">${kst(pp.absent_at)}</span>`; };
+/* 현장 신규 삭제 — 고른(또는 보고 있는) 사람 중 현장 신규만. 기록은 남는다 */
+export function ntRemoveWalkIns(){
+  const keys = nt.picked.size ? [...nt.picked] : nt.focus ? [nt.focus] : [];
+  const ppl = deskPeople(nt.ev).filter(p => p.walkIn && keys.includes(p.key));
+  if(!ppl.length) return;
+  if(!confirm(`현장 신규 ${ppl.length}명을 지울까요?
+${ppl.slice(0, 8).map(p => p.nameKo || p.nameEn || '(이름 없음)').join(', ')}${ppl.length > 8 ? ' 외' : ''}
+
+명단·결과보고·마스터DB 올리기에서 빠져요. 발급·체크인 기록은 남아요.`)) return;
+  const by = currentUser?.email || '', at = new Date().toISOString();
+  ppl.forEach(p => {
+    applyOp({ kind: 'remove', at, data: { key: p.key, removed: true, by } });
+    enqueue(nt.ev, 'remove', { key: p.key, removed: true, by });
+    nt.picked.delete(p.key);
+  });
+  if(ppl.some(p => p.key === nt.focus)) nt.focus = '';
+  rerender();
+}
 export function ntAbsent(key, on){
   const p = evPerson(key);
   if(on && !confirm(`${p ? p.nameKo || p.nameEn : key} 님을 불참으로 둘까요?`)) return;
@@ -1419,6 +1441,6 @@ export async function ntPromote(){
 }
 
 Object.assign(window, { ntNudge, ntNudgeReset, ntWalkNudge, ntWalkNudgeReset, ntEditReset, ntPrintBlank, ntSetView, ntSetOnsite, ntSetFilter, ntSetSrc, ntSetBarFil, ntSetSort, ntSortBy, ntFocus, ntPick, ntPickAll, ntEdit, ntWalkIn, ntWalkEdit,
-  ntSetReason, ntReload, ntOpenEditor, ntPrint, ntVoid, ntSetBar, ntSetBarPicked, ntWalkContact, ntCheckIn, ntUncheck, ntAbsent, ntReport, ntReportExcel,
+  ntSetReason, ntReload, ntOpenEditor, ntPrint, ntVoid, ntSetBar, ntSetBarPicked, ntWalkContact, ntCheckIn, ntUncheck, ntAbsent, ntRemoveWalkIns, ntReport, ntReportExcel,
   ntScanKey, ntCamera, ntExport, ntImportBars, ntImportApply, ntImportCancel, ntPromote,
   ntNetView, ntSendNow, ntRetryFailed, ntDismissFailed, ntExportDeviceLog });

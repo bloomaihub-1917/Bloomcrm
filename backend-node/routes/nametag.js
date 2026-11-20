@@ -117,7 +117,7 @@ const TEMPLATE_COLS = `id, name, width_mm::float8 AS width_mm, height_mm::float8
   background_data, background_print, layout, print_offset, bar_types, is_default, updated_at, updated_by`;
 const PRINT_COLS = `id, event_id, batch_id, template_id, person_key, source, ref_id, contact_id, name, company, job_title,
   badge, bar, lang, kind, reason, printed_by, printed_at, voided_at, voided_by, synced_at`;
-const PEOPLE_COLS = `person_key, bar, email, phone, contact_id, pos, edits, absent_at, absent_by, updated_at, updated_by`;
+const PEOPLE_COLS = `person_key, bar, email, phone, contact_id, pos, edits, absent_at, absent_by, removed_at, removed_by, updated_at, updated_by`;
 const CHECKIN_COLS = `id, person_key, via, print_id, checked_at, checked_by, voided_at, voided_by, synced_at`;
 
 router.get('/:eventId', async (req, res, next) => {
@@ -353,6 +353,22 @@ router.put('/:eventId/people/:key/pos', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+/* 현장 신규 «삭제»(2026-11-20) — { removed: true|false }. 현장 신규(w…)만. 발급·체크인 기록은 남기고 명단·결과보고·마스터DB 올리기에서 뺀다 */
+router.put('/:eventId/people/:key/removed', async (req, res, next) => {
+  try {
+    const ev = String(req.params.eventId), key = text(req.params.key, 60);
+    if (!key || !key.startsWith('w')) return res.status(400).json({ ok: false, error: '현장 신규만 지울 수 있어요' });
+    const on = !!(req.body && req.body.removed), now = new Date().toISOString(), by = req.user?.email || '';
+    const { rows } = await pool.query(`
+      INSERT INTO nametag_people (event_id, person_key, removed_at, removed_by, updated_at, updated_by) VALUES ($1,$2,$3,$4,$5,$6)
+      ON CONFLICT (event_id, person_key) DO UPDATE SET removed_at = EXCLUDED.removed_at, removed_by = EXCLUDED.removed_by,
+        updated_at = EXCLUDED.updated_at, updated_by = EXCLUDED.updated_by
+      RETURNING ${PEOPLE_COLS}`, [ev, key, on ? now : null, on ? by : null, now, by]);
+    await log(pool, req, 'delete', on ? '네임택 현장 신규 삭제' : '네임택 현장 신규 되살림', ev, key);
+    res.json({ ok: true, person: rows[0] });
+  } catch (e) { next(e); }
+});
+
 /* 체크인 데스크 «불참»(2026-11-20) — { absent: true|false }. 체크인과 따로 남고, 체크인하면 데스크가 불참을 지운다 */
 router.put('/:eventId/people/:key/absent', async (req, res, next) => {
   try {
@@ -521,6 +537,9 @@ router.post('/:eventId/promote', async (req, res, next) => {
     .map((k) => text(k, 60)).filter((k) => k.startsWith('w')))].slice(0, 1000);
   if (!keys.length) return res.status(400).json({ ok: false, error: '올릴 현장 신규가 없어요' });
   try {
+    /* 지운 현장 신규는 올리지 않는다 */
+    const gone = new Set((await pool.query(`SELECT person_key FROM nametag_people WHERE event_id = $1 AND person_key = ANY($2) AND removed_at IS NOT NULL`, [ev, keys])).rows.map((r) => r.person_key));
+    keys.splice(0, keys.length, ...keys.filter((k) => !gone.has(k)));
     const evName = ((await pool.query('SELECT name FROM events WHERE id = $1', [ev])).rows[0] || {}).name;
     const out = [];
     for (const key of keys) {

@@ -30,7 +30,7 @@ export function walkInPeople(prints, peopleRows){
     if(cur && p.voided_at && !cur.voided) return;
     m.set(k, { voided: !!p.voided_at, p });
   });
-  return [...m.entries()].map(([key, { p }]) => {
+  return [...m.entries()].filter(([key]) => !peopleRows.get(key)?.removed_at).map(([key, { p }]) => {   // 지운 현장 신규는 뺀다
     const pp = peopleRows.get(key) || {};
     const ko = HANGUL.test(p.name);
     return { key, source: 'walk_in', ref_id: '', contact_id: '', email: s(pp.email), phone: s(pp.phone),
