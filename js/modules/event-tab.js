@@ -732,11 +732,14 @@ function exhPartRowsHtml(){
          참가기업 쪽 키 셋 중 하나와 사람의 국문·영문 키 중 하나가 맞으면 같은 기업으로 본다 */
       const keys = new Set([x.company_key, normalizeCompanyKey(exhName(x)), normalizeCompanyKey(exhNameEn(x))].filter(Boolean));
       const ps = people.filter(r => !r.pendingId && (keys.has(r.orgKey) || keys.has(normalizeCompanyKey(r.orgEn))));
-      return `<tr style="cursor:pointer" onclick="openExhDr('${escAttr(x.id)}')" title="참가기업 상세 보기">
+      /* 줄을 누르면 담당자 탭(고치는 칸)으로 연다. 담당자 이름을 누르면 그 사람 연락처를 바로 수정(2026-11-20) */
+      const who = ps.slice(0, 2).map(p => `<a style="cursor:pointer;text-decoration:underline dotted" title="${escAttr(p.name)} 정보 수정"
+        onclick="event.stopPropagation();openContactDr(${escAttr(JSON.stringify(p.cid))},{edit:true})">${escapeHtml(p.name)}</a>`).join(', ');
+      return `<tr style="cursor:pointer" onclick="openExhDr('${escAttr(x.id)}','contact')" title="눌러서 담당자·진행 수정 — 담당자 이름을 누르면 그 사람 정보 수정">
         <td><span style="font-weight:600">${escapeHtml(exhName(x))}</span>${exhNameEn(x) ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(exhNameEn(x))}</div>` : ''}</td>
         <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(x.booth_no || '')}${x.booth_type ? ` <span style="color:var(--i4)">${escapeHtml(x.booth_type)}${x.booth_qty ? ' ×' + escapeHtml(x.booth_qty) : ''}</span>` : ''}</td>
         <td>${x.status ? `<span class="pill ${x.status === '취소' ? 'p-red' : 'p-gray'}">${escapeHtml(x.status)}</span>` : ''}</td>
-        <td style="font-size:var(--fs-11);color:var(--i3)">${ps.length ? escapeHtml(ps.slice(0, 2).map(p => p.name).join(', ')) + (ps.length > 2 ? ` 외 ${ps.length - 2}명` : '') : '<span style="color:var(--i5)">미등록</span>'}</td>
+        <td style="font-size:var(--fs-11);color:var(--i3)">${ps.length ? who + (ps.length > 2 ? ` 외 ${ps.length - 2}명` : '') : '<span style="color:var(--i5)">미등록</span>'}</td>
         <td style="text-align:center">${ok(yes(x.app_received))}</td>
         <td style="text-align:center">${ok(yes(x.booth_confirmed) || !!x.booth_confirmed_at)}</td>
         <td style="text-align:center">${ok(yes(x.settled))}</td></tr>`;
@@ -763,7 +766,7 @@ function spPartRowsHtml(){
   if(!l.length) return emptyPart('해당하는 연사가 없어요.');
   return `<div style="overflow-x:auto"><table style="width:100%">
     <thead><tr><th>성명</th><th>소속</th><th>직함</th><th>상태</th><th style="text-align:center">프로필</th><th style="text-align:center">사진</th><th style="text-align:center">동의</th></tr></thead><tbody>
-    ${l.map(sp => `<tr style="cursor:pointer" onclick="openSpeakerDr('${escAttr(sp.id)}')" title="연사 상세 보기">
+    ${l.map(sp => `<tr style="cursor:pointer" onclick="openSpeakerDr('${escAttr(sp.id)}','basic')" title="눌러서 정보 수정 — 성명·소속·직함·연락처">
       <td><span style="font-weight:600">${escapeHtml(sp.name_snapshot || sp.name_en || '')}</span>${sp.name_en && sp.name_snapshot ? `<div style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(sp.name_en)}</div>` : ''}</td>
       <td>${escapeHtml(sp.org_ko || sp.org_en || '')}</td>
       <td style="font-size:var(--fs-11_5);color:var(--i3)">${escapeHtml(sp.title_ko || sp.title_en || '')}</td>

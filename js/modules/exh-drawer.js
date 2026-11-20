@@ -126,6 +126,7 @@ export function closeExhDr(){
   exhDrUi.exhMailFiles = [];
   document.getElementById('exh-dr')?.classList.remove('on');
   document.getElementById('exh-bd')?.classList.remove('on');
+  try { window.renderEvDb?.(); } catch(e){}   // 행사 DB 전시기업 표에서 열어 고쳤으면 닫을 때 그 줄도 새 값으로
 }
 export function switchExhDT(v){ exhDrUi.drTab = tabKey(v); renderExhDr(); }
 

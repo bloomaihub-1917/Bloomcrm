@@ -148,6 +148,7 @@ export function closeSpeakerDr(){
   spDrUi.bankRevealed = false;
   document.getElementById('sp-dr')?.classList.remove('on');
   document.getElementById('sp-bd')?.classList.remove('on');
+  try { window.renderEvDb?.(); } catch(e){}   // 행사 DB 연사 표에서 열어 고쳤으면 닫을 때 그 줄도 새 값으로
 }
 export function switchSpeakerDT(v){ spDrUi.spTab = v; renderSpeakerDr(); }
 
