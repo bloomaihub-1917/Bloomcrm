@@ -33,6 +33,8 @@ const ensure = () => ready || (ready = pool.query(`CREATE TABLE IF NOT EXISTS re
   .then(() => pool.query(`CREATE TABLE IF NOT EXISTS register_submissions (
     id TEXT PRIMARY KEY, token TEXT, event_id TEXT, role TEXT, data TEXT, status TEXT,
     created_at TEXT, decided_at TEXT, decided_by TEXT, contact_id TEXT, via TEXT)`))
+  /* 확정 취소용 — 확정이 무엇을 만들었나(참가 기록 id·새로 만든 줄인지·덧붙이기 전 메모·새 연락처인지) */
+  .then(() => pool.query(`ALTER TABLE register_submissions ADD COLUMN IF NOT EXISTS undo TEXT`))
   .catch((e) => { ready = null; throw e; }));
 
 const newToken = () => crypto.randomBytes(15).toString('base64url');
@@ -177,10 +179,20 @@ async function accept(id, by) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    const r = await acceptWith(client, id, by);
+    await client.query(r.gone ? 'ROLLBACK' : 'COMMIT');
+    return r;
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally { client.release(); }
+}
+async function acceptWith(client, id, by) {
+  {
     /* 둘이 동시에 누르면 한 번만 — 아직 대기인 줄만 잡는다 */
     const sub = (await client.query(`UPDATE register_submissions SET status = 'done', decided_at = $2, decided_by = $3
       WHERE id = $1 AND COALESCE(status,'') = '' RETURNING *`, [id, kstStamp(Date.now()), by])).rows[0];
-    if (!sub) { await client.query('ROLLBACK'); return { gone: true }; }
+    if (!sub) return { gone: true };
     const v = cleanRow(subShape(sub).data);
     const ev = (await client.query('SELECT name FROM events WHERE id = $1', [sub.event_id])).rows[0] || {};
     const ko = HANGUL.test(v.name), orgKo = HANGUL.test(v.org), titleKo = HANGUL.test(v.title);
@@ -213,27 +225,116 @@ async function accept(id, by) {
         VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [partId, sub.event_id, cid, sub.role, note, viaOf(sub.via)[1], today]);
     }
-    await client.query('UPDATE register_submissions SET contact_id = $2 WHERE id = $1', [sub.id, cid]);
+    const undo = { partId, partNew: !dup, prevNote: dup ? dup.note || '' : '', prevConfirmed: dup ? dup.confirmed_at || '' : '', contactNew: created };
+    await client.query('UPDATE register_submissions SET contact_id = $2, undo = $3 WHERE id = $1', [sub.id, cid, JSON.stringify(undo)]);
     await client.query(`INSERT INTO activity_log (id, ts, email, name, type, action, target, detail, link)
       VALUES ($1,$2,'',$3,'create','등록 신청 확정',$4,$5,$6)`,
     [newId('L-'), new Date().toISOString(), by, sub.event_id,
       `${v.name} (${v.org}) — ${sub.role}${created ? ' · 새 연락처' : ` · 기존 연락처에 붙임(${r.by})`}${suspectNote}`,
       JSON.stringify({ kind: 'contact', id: cid, table: 'participations', row: partId })]);
-    await client.query('COMMIT');
     /* 화면이 다시 읽지 않고 제 목록에 바로 넣을 수 있게 넣은 그대로 돌려준다 */
     return { contactId: cid, created, partId, existingPart: !!dup, confirmedAt: (dup && dup.confirmed_at) || today,
       role: sub.role, note, matched: viaOf(sub.via)[1], data: v,
       source: `${viaOf(sub.via)[0]} · ${ev.name || sub.event_id}` };
+  }
+}
+
+/* ── 확정 취소 — 확정이 만든 것을 되돌리고 신청 대기로 돌린다 ──
+   2026-11-17 엑셀 71줄을 «모두 확정»한 뒤 잘못 올린 명단인 걸 알고 스크립트로 되돌렸다
+   (db/oneoff/rollback-gpb-register-1117.js). 그 일을 화면에서 한다.
+   · 확정이 새로 만든 참가 기록은 지우고, 이미 있던 줄에 덧붙였으면 메모·확정일을 그 전으로
+   · 확정이 새로 만든 연락처는 다른 곳(다른 행사 참가·연사·전시 담당·컨택·영업 DB·네임택·다른 확정)에
+     쓰이지 않을 때만 지운다 — 쓰이고 있으면 남기고 알린다
+   · 기존 연락처의 빈 칸을 채운 값은 그대로 둔다(틀린 값이 아니다)
+   undo 칸이 없는 옛 확정(11-20 전)은 활동 기록 «등록 신청 확정»에서 읽는다 */
+const CONTACT_USES = [['participations', 'contact_id'], ['exhibitor_contacts', 'contact_id'], ['speakers', 'contact_id'],
+  ['speaker_contacts', 'contact_id'], ['contact_attempts', 'contact_id'], ['sales_targets', 'contact_id']];
+async function undoWith(client, id, by) {
+  const sub = (await client.query(`SELECT * FROM register_submissions WHERE id = $1 FOR UPDATE`, [id])).rows[0];
+  if (!sub || sub.status !== 'done') return { gone: true };
+  let u = null;
+  try { u = sub.undo ? JSON.parse(sub.undo) : null; } catch (e) { u = null; }
+  const cid = String(sub.contact_id || '');
+  if (!u && cid) {
+    const log = (await client.query(`SELECT detail, link FROM activity_log WHERE action = '등록 신청 확정' AND target = $1
+      AND link LIKE '%' || $2 || '%' ORDER BY ts DESC LIMIT 1`, [sub.event_id, `"${cid}"`])).rows[0];
+    if (log) {
+      let l = {}; try { l = JSON.parse(log.link || '{}'); } catch (e) { /* 깨진 기록 */ }
+      const contactNew = String(log.detail || '').includes('· 새 연락처');
+      u = { partId: l.row || '', partNew: contactNew ? true : null, prevNote: null, prevConfirmed: null, contactNew };
+    }
+  }
+  if (!u) return { error: '이 확정이 무엇을 만들었는지 기록이 없어 되돌릴 수 없어요' };
+
+  const marker = `${viaOf(sub.via)[2]}(${sub.created_at})`;
+  const part = u.partId ? (await client.query(`SELECT * FROM participations WHERE id = $1`, [u.partId])).rows[0] : null;
+  let partDeleted = false, partRestored = null;
+  if (part) {
+    const note = String(part.note || '');
+    /* 옛 확정은 새 줄이었는지 모른다 — 메모가 이 신청 표시로 시작하면 새 줄이다 */
+    const isNew = u.partNew === true || (u.partNew === null && note.startsWith(marker));
+    if (isNew) {
+      await client.query(`DELETE FROM participations WHERE id = $1`, [part.id]);
+      partDeleted = true;
+    } else {
+      const prevNote = u.prevNote != null ? u.prevNote
+        : note.split('\n').filter((x) => !x.startsWith(marker)).join('\n');
+      const prevConf = u.prevConfirmed != null ? u.prevConfirmed : part.confirmed_at;
+      await client.query(`UPDATE participations SET note = $2, confirmed_at = $3 WHERE id = $1`, [part.id, prevNote, prevConf || null]);
+      partRestored = { id: part.id, note: prevNote, confirmedAt: prevConf || '' };
+    }
+  }
+  let contactDeleted = false, contactKept = '';
+  if (u.contactNew && cid) {
+    let uses = 0;
+    for (const [tb, col] of CONTACT_USES) uses += Number((await client.query(`SELECT count(*) n FROM "${tb}" WHERE "${col}" = $1`, [cid])).rows[0].n);
+    uses += Number((await client.query(`SELECT count(*) n FROM register_submissions WHERE contact_id = $1 AND id <> $2 AND status = 'done'`, [cid, sub.id])).rows[0].n);
+    /* 네임택 표는 행사를 돌려 본 DB에만 있다 — 없으면 셀 것도 없다 */
+    const nt = await client.query(`SELECT to_regclass('nametag_people') t`);
+    if (nt.rows[0].t) uses += Number((await client.query(`SELECT count(*) n FROM nametag_people WHERE person_key = $1`, [`c${cid}`])).rows[0].n);
+    if (uses) contactKept = '다른 기록에 쓰이고 있어 연락처는 남겼어요';
+    else { await client.query(`DELETE FROM contacts WHERE id = $1`, [cid]); contactDeleted = true; }
+  }
+  await client.query(`UPDATE register_submissions SET status = '', decided_at = '', decided_by = '', contact_id = '', undo = NULL WHERE id = $1`, [sub.id]);
+  let d = {}; try { d = JSON.parse(sub.data || '{}'); } catch (e) { /* 빈 칸 */ }
+  await client.query(`INSERT INTO activity_log (id, ts, email, name, type, action, target, detail, link)
+    VALUES ($1,$2,'',$3,'delete','등록 확정 취소',$4,$5,$6)`,
+  [newId('L-'), new Date().toISOString(), by, sub.event_id,
+    `${d.name || ''} (${d.org || ''}) — ${sub.role} · ${sub.decided_at} ${sub.decided_by || ''} 확정을 취소해 신청 대기로`
+      + `${partDeleted ? ' · 참가 기록 지움' : partRestored ? ' · 참가 기록 되돌림' : ''}${contactDeleted ? ' · 새 연락처 지움' : ''}${contactKept ? ' · ' + contactKept : ''}`,
+    JSON.stringify({ kind: 'contact', id: cid, table: 'register_submissions', row: sub.id })]);
+  return { ok: true, contactId: cid, partId: u.partId || '', partDeleted, partRestored, contactDeleted, contactKept,
+    submission: subShape({ ...sub, status: '' }) };
+}
+async function undo(id, by) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const r = await undoWith(client, id, by);
+    await client.query(r.ok ? 'COMMIT' : 'ROLLBACK');
+    return r;
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});
     throw e;
   } finally { client.release(); }
 }
 
+/* 최근 확정 — 확정 취소할 수 있게 보여 준다(최근 30일) */
+router.get('/:eventId/decided', async (req, res) => {
+  try {
+    await ensure();
+    if (req.user && req.user.isTest) return res.json({ ok: true, decided: [] });
+    const since = kstStamp(Date.now() - 30 * 86400e3);
+    const { rows } = await pool.query(`SELECT * FROM register_submissions WHERE event_id = $1 AND status = 'done'
+      AND decided_at >= $2 ORDER BY decided_at DESC, created_at`, [String(req.params.eventId), since]);
+    res.json({ ok: true, decided: rows.map((r) => ({ ...subShape(r), decided_at: r.decided_at || '', decided_by: r.decided_by || '', contact_id: r.contact_id || '' })) });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 router.post('/sub/:id/:act', async (req, res) => {
   if (req.user && req.user.isTest) return res.status(403).json({ ok: false, error: '시험 계정은 바꿀 수 없어요' });
   const { id, act } = req.params;
-  if (!['accept', 'drop'].includes(act)) return res.status(400).json({ ok: false, error: '모르는 처리예요' });
+  if (!['accept', 'drop', 'undo'].includes(act)) return res.status(400).json({ ok: false, error: '모르는 처리예요' });
   const by = req.user?.name || req.user?.email || '';
   try {
     await ensure();
@@ -241,6 +342,12 @@ router.post('/sub/:id/:act', async (req, res) => {
       const u = await pool.query(`UPDATE register_submissions SET status = 'dropped', decided_at = $2, decided_by = $3
         WHERE id = $1 AND COALESCE(status,'') = ''`, [id, kstStamp(Date.now()), by]);
       return u.rowCount ? res.json({ ok: true }) : res.status(409).json({ ok: false, error: '이미 처리된 신청이에요' });
+    }
+    if (act === 'undo') {
+      const u = await undo(id, by);
+      if (u.gone) return res.status(409).json({ ok: false, error: '확정된 신청이 아니에요(이미 취소했을 수 있어요)' });
+      if (u.error) return res.status(409).json({ ok: false, error: u.error });
+      return res.json(u);
     }
     const r = await accept(id, by);
     if (r.gone) return res.status(409).json({ ok: false, error: '이미 처리된 신청이에요' });
@@ -418,5 +525,9 @@ publicRouter.post('/:token/submit', express.text({ type: '*/*', limit: '40kb' })
 });
 
 module.exports = router;
+module.exports.acceptWith = acceptWith;
+module.exports.undoWith = undoWith;
+module.exports.stage = stage;
+module.exports.ensure = ensure;
 module.exports.publicRouter = publicRouter;
 module.exports.FIELDS = FIELDS;

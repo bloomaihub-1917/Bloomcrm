@@ -40,4 +40,6 @@ export const createRegisterLink = (evKey, body) => registerApi(`/${encodeURIComp
 export const setRegisterLink   = (token, body) => registerApi(`/link/${encodeURIComponent(token)}`, 'PUT', body);
 export const importRegisterRows = (evKey, body) => registerApi(`/${encodeURIComponent(evKey)}/import`, 'POST', body);
 export const decideRegisterSub = (id, act) => registerApi(`/sub/${encodeURIComponent(id)}/${act}`, 'POST', {});
+/* 최근 30일 확정 — «확정 취소»로 되돌릴 수 있게 */
+export const loadRegisterDecided = (evKey) => registerApi(`/${encodeURIComponent(evKey)}/decided`);
 

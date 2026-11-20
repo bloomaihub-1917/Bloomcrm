@@ -7,10 +7,12 @@
    링크로 온 신청도, 엑셀로 올린 줄도 마스터DB에 바로 가지 않는다 — 이 창의
    «신청 대기»에 쌓였다가 «확정»을 누르면 그때 연락처를 만들고(같은 이메일이면 그 사람에
    붙여 빈 칸만 채운다) 이 행사 참가 확정으로 넣는다. «버리기»는 마스터DB에 남지 않는다.
+   «최근 확정»(30일)에서 확정을 취소하면 그 확정이 만든 참가 기록·새 연락처를 지우고 신청 대기로
+   돌린다 — 잘못 올린 명단을 «모두 확정»했을 때(2026-11-17 71명) 스크립트 없이 되돌린다.
    서버는 routes/register.js.
 ══════════════════════════════════════════════════════════════ */
 import { PART_TYPES, contacts, participations } from '../state.js';
-import { loadRegisterLinks, createRegisterLink, setRegisterLink, importRegisterRows, decideRegisterSub, shareUrl } from '../api/share-register.js';
+import { loadRegisterLinks, createRegisterLink, setRegisterLink, importRegisterRows, decideRegisterSub, loadRegisterDecided, shareUrl } from '../api/share-register.js';
 import { escapeHtml, escAttr } from '../utils.js';
 import { trackAction } from '../core/audit-log.js';
 
@@ -28,6 +30,8 @@ const norm = (s) => String(s || '').replace(/[\s*()·/]/g, '').toLowerCase();
 let openEv = '';
 let links = [];
 let subs = [];
+let decided = null;   // 최근 확정 — 펼칠 때 받아 온다(null = 아직 안 받음)
+let decidedOpen = false;
 
 /* ── 신청 대기 — 행사 참여자 목록(event-tab.js)도 같은 것을 «타겟» 줄로 보여 준다.
    마스터DB에는 없는 사람이라 목록이 따로 받아 둔다. 확정은 어느 쪽에서 눌러도 acceptPending 하나로 */
@@ -83,7 +87,21 @@ export async function acceptPending(evKey, id){
   return r;
 }
 
+/* 확정 취소 → 서버가 참가 기록·새 연락처를 되돌리고 신청을 대기로 돌린다. 이 화면의 목록도 똑같이 */
+export async function undoAccepted(evKey, id){
+  const r = await decideRegisterSub(id, 'undo');
+  if(!r.ok) return r;
+  if(r.partDeleted){ const k = participations.findIndex(p => p.id === r.partId); if(k >= 0) participations.splice(k, 1); }
+  if(r.partRestored){ const p = participations.find(x => x.id === r.partRestored.id); if(p){ p.note = r.partRestored.note; p.confirmedAt = r.partRestored.confirmedAt; } }
+  if(r.contactDeleted){ const k = contacts.findIndex(c => String(c.id) === String(r.contactId)); if(k >= 0) contacts.splice(k, 1); }
+  if(r.submission) pending.set(evKey, [...pendingFor(evKey).filter(x => x.id !== id), r.submission]);
+  if(evKey === openEv) subs = pendingFor(evKey);
+  changed(evKey);
+  return r;
+}
+
 export async function openRegisterLinks(evKey){
+  if(openEv !== evKey){ decided = null; decidedOpen = false; }
   openEv = evKey;
   let el = document.getElementById('reg-links');
   if(!el){
@@ -169,6 +187,7 @@ function render(){
       ${[...subs].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at))).map(subRow).join('')}</table></div>`
       : '<div style="font-size:12px;color:var(--i4);margin-bottom:16px">대기 중인 신청이 없어요.</div>'}
 
+    ${decidedHtml()}
     <div style="font-size:13px;font-weight:700;color:var(--i1);margin:4px 0 8px">신청 링크</div>
     ${links.length ? links.map(linkRow).join('') : '<div style="font-size:12px;color:var(--i4);margin-bottom:10px">아직 만든 링크가 없어요.</div>'}
 
@@ -224,12 +243,83 @@ export async function decideRegister(id, act, btn){
   const r = act === 'accept' ? await acceptPending(openEv, id) : await decideRegisterSub(id, act);
   if(!r.ok){ alert(r.error || '처리하지 못했어요'); if(btn) btn.disabled = false; await reload(); return; }
   if(act === 'drop'){ subs = subs.filter(x => x.id !== id); pending.set(openEv, subs); changed(openEv); }
-  if(act === 'accept') accepted++;
+  if(act === 'accept'){ accepted++; staleDecided(); }
   render();
   if(accepted) showMsg(`${accepted}명을 참가 확정해 마스터DB로 옮겼어요.`);
   trackAction(act === 'accept' ? 'create' : 'delete', '등록 신청', openEv,
     `${s?.data?.name || ''} (${s?.data?.org || ''}) ${act === 'accept' ? '확정 → 마스터DB' : '버림'}`);
 }
+/* ── 최근 확정 — 확정 시각(분)·처리한 사람으로 묶는다. «모두 확정»한 묶음을 통째로 취소할 수 있게 ── */
+function decidedGroups(){
+  const g = new Map();
+  (decided || []).forEach(s => {
+    const k = `${String(s.decided_at).slice(0, 16)}|${s.decided_by || ''}`;
+    if(!g.has(k)) g.set(k, { at: String(s.decided_at).slice(0, 16), by: s.decided_by || '', rows: [] });
+    g.get(k).rows.push(s);
+  });
+  return [...g.values()];
+}
+function decidedHtml(){
+  const head = `<div style="font-size:13px;font-weight:700;color:var(--i1);margin:4px 0 8px;display:flex;align-items:center;gap:8px">
+    <a href="javascript:void(0)" style="color:var(--i1);text-decoration:none" onclick="toggleRegisterDecided()">${decidedOpen ? '▾' : '▸'} 최근 확정${decided ? ` ${decided.length}건` : ''}</a>
+    <span style="font-size:11px;font-weight:400;color:var(--i4)">30일 · 잘못 확정했으면 취소해 신청 대기로 돌려요</span></div>`;
+  if(!decidedOpen) return head;
+  if(decided === null) return head + '<div style="font-size:12px;color:var(--i4);margin-bottom:16px">불러오는 중…</div>';
+  if(!decided.length) return head + '<div style="font-size:12px;color:var(--i4);margin-bottom:16px">최근 30일에 확정한 신청이 없어요.</div>';
+  return head + `<div style="margin-bottom:16px">${decidedGroups().map(g => `
+    <div style="border:1px solid var(--i6);border-radius:9px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--i7);font-size:12px">
+        <b>${escapeHtml(g.at)}</b><span style="color:var(--i4)">${escapeHtml(g.by || '-')} · ${g.rows.length}건</span>
+        ${g.rows.length > 1 ? `<button class="btn" style="margin-left:auto;font-size:11px;color:var(--re)" onclick="undoRegisterGroup('${escAttr(g.at)}','${escAttr(g.by)}',this)">이 묶음 모두 확정 취소</button>` : ''}</div>
+      <table style="width:100%;border-collapse:collapse;font-size:11.5px;color:var(--i2)">${g.rows.map(s => { const d = s.data || {}; return `<tr>
+        <td style="padding:5px 10px"><span class="pill p-blue" style="font-size:10px">${escapeHtml(s.role)}</span></td>
+        <td style="padding:5px 4px"><b>${escapeHtml(d.name)}</b></td><td style="padding:5px 4px">${escapeHtml(d.org)}</td>
+        <td style="padding:5px 4px;color:var(--i4)">${escapeHtml(d.email)}</td>
+        <td style="padding:5px 10px;text-align:right"><button class="btn" style="font-size:10.5px" onclick="undoRegister('${escAttr(s.id)}',this)">확정 취소</button></td></tr>`; }).join('')}</table>
+    </div>`).join('')}</div>`;
+}
+/* 새로 확정하면 «최근 확정»을 다시 받는다 */
+function staleDecided(){ decided = null; if(decidedOpen) reloadDecided(); }
+export async function toggleRegisterDecided(){
+  decidedOpen = !decidedOpen;
+  render();
+  if(decidedOpen && decided === null) await reloadDecided();
+}
+async function reloadDecided(){
+  const r = await loadRegisterDecided(openEv);
+  decided = r.ok ? (r.decided || []) : [];
+  if(!r.ok) showMsg(r.error || '최근 확정을 불러오지 못했어요', true);
+  render();
+}
+const undoNote = (r) => [r.partDeleted ? '참가 기록 지움' : r.partRestored ? '참가 기록 되돌림' : '', r.contactDeleted ? '새 연락처 지움' : '', r.contactKept || ''].filter(Boolean).join(' · ');
+export async function undoRegister(id, btn){
+  const s = (decided || []).find(x => x.id === id);
+  if(!confirm(`${s?.data?.name || '이 신청'}의 확정을 취소할까요?\n확정 때 만든 참가 기록을 지우고(이미 있던 줄이면 그 전으로), 그때 새로 만든 연락처는 다른 곳에 안 쓰였으면 지워요. 신청은 대기로 돌아가요.`)) return;
+  if(btn) btn.disabled = true;
+  const r = await undoAccepted(openEv, id);
+  if(!r.ok){ alert(r.error || '취소하지 못했어요'); if(btn) btn.disabled = false; return; }
+  decided = (decided || []).filter(x => x.id !== id);
+  render();
+  showMsg(`${s?.data?.name || ''} 확정을 취소해 신청 대기로 돌렸어요 — ${undoNote(r)}`);
+  window.invalidateEvRows?.(); window.renderEvDb?.();
+}
+export async function undoRegisterGroup(at, by, btn){
+  const rows = (decided || []).filter(s => String(s.decided_at).slice(0, 16) === at && (s.decided_by || '') === by);
+  if(!rows.length) return;
+  if(!confirm(`${at} ${by || ''}이(가) 확정한 ${rows.length}건을 모두 취소할까요?\n확정 때 만든 참가 기록과, 다른 곳에 안 쓰인 새 연락처를 지우고 모두 신청 대기로 돌려요.`)) return;
+  if(btn){ btn.disabled = true; btn.textContent = '취소 중…'; }
+  let done = 0, fail = 0, delC = 0, keptC = 0;
+  for(const s of rows){
+    const r = await undoAccepted(openEv, s.id);
+    if(r.ok){ done++; if(r.contactDeleted) delC++; if(r.contactKept) keptC++; decided = decided.filter(x => x.id !== s.id); }
+    else fail++;
+  }
+  render();
+  showMsg(`${done}건 확정을 취소해 신청 대기로 돌렸어요 · 새 연락처 ${delC}명 지움${keptC ? ` · ${keptC}명은 다른 기록이 있어 남김` : ''}${fail ? ` · ${fail}건 실패` : ''}`, !!fail);
+  trackAction('delete', '등록 확정 취소', openEv, `${at} ${by} 확정 ${rows.length}건 중 ${done}건 취소${fail ? ` (실패 ${fail})` : ''}`);
+  window.invalidateEvRows?.(); window.renderEvDb?.();
+}
+
 export async function acceptAllRegister(btn){
   if(!confirm(`대기 중인 ${subs.length}건을 모두 확정해 마스터DB로 옮길까요?`)) return;
   if(btn) btn.disabled = true;
@@ -238,6 +328,7 @@ export async function acceptAllRegister(btn){
     const r = await acceptPending(openEv, s.id);
     if(r.ok) accepted++; else fail++;
   }
+  staleDecided();
   await reload();
   showMsg(`${accepted}명을 참가 확정해 마스터DB로 옮겼어요${fail ? ` · ${fail}건은 못 옮겼어요` : ''}.`, !!fail);
   trackAction('create', '등록 신청', openEv, `모두 확정 → 마스터DB${fail ? ` (실패 ${fail})` : ''}`);
@@ -325,5 +416,8 @@ window.toggleRegisterLink = toggleRegisterLink;
 window.copyRegisterLink = copyRegisterLink;
 window.decideRegister = decideRegister;
 window.acceptAllRegister = acceptAllRegister;
+window.toggleRegisterDecided = toggleRegisterDecided;
+window.undoRegister = undoRegister;
+window.undoRegisterGroup = undoRegisterGroup;
 window.downloadRegisterTemplate = downloadRegisterTemplate;
 window.uploadRegisterExcel = uploadRegisterExcel;
