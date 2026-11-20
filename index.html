@@ -330,6 +330,7 @@
     <span id="mdb-orgonly-chip" style="display:none"></span>
     <span id="mdb-unlinked-chip" style="display:none"></span>
     <span id="mdb-dupe-chip" style="display:none"></span>
+    <span id="mdb-health-chip" style="display:none"></span>
     <span class="db-ct" id="db-ct"></span>
   </div>
   <!-- 질문으로 찾기 (db-tab.js:askMdbAi) — 질문만 서버로 가고, 거르기는 화면이 한다 -->
@@ -713,6 +714,12 @@
   <div id="arch-pane-clean" style="padding:16px 20px;max-width:900px;display:none">
     <div style="font-size:13px;font-weight:700;color:var(--i1);margin-bottom:6px">데이터 정리</div>
     <div style="font-size:11px;color:var(--i4);margin-bottom:14px">한 번씩 돌리는 청소 도구입니다. 여러 줄을 한꺼번에 바꾸니 무엇이 바뀌는지 확인하고 누르세요.</div>
+    <!-- 데이터 점검 (features/mdb/data-health.js) — Master DB 칩 «🩺 점검»과 같은 창 -->
+    <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:16px;margin-bottom:16px;display:flex;gap:12px;align-items:center">
+      <div style="flex:1"><div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:4px">🩺 데이터 점검</div>
+        <div style="font-size:11px;color:var(--i4)">긴 id·연락처 없는 참가 기록·같은 역할 두 줄·기업DB 미연결·중복 의심·메일 없는 참가자·연사 서류를 한 번에 셉니다. 손볼 것이 있으면 하루 처음 열 때 알려 드려요.</div></div>
+      <button class="btn bp" onclick="openDataHealth()" style="min-width:120px">점검 열기</button>
+    </div>
     <div style="background:var(--i8);border:1px solid var(--i6);border-radius:10px;padding:16px;margin-top:0">
       <div style="font-size:12px;font-weight:700;color:var(--i2);margin-bottom:6px">🌐 국가 데이터 정리 <span id="clean-cnt-country" class="pill p-gray" style="margin-left:4px;font-weight:600"></span></div>
       <div style="font-size:11px;color:var(--i4);margin-bottom:10px">"KR", "한국", "USA" 같은 약자·다른 표기를 한글 국가명(예: 대한민국)으로 통일해서 저장해요. 연락처와 기업 둘 다 정리합니다.</div>
