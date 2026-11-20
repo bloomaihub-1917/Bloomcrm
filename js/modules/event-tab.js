@@ -22,7 +22,7 @@
 
 import {
   EVENT_LIST, contacts, participations, targets, DOMAINS,
-  EXHIBITORS, exhibitorsForEvent, PART_TYPES, evParts, evPartDone, getOrgById, contactOrgEn, CO_DB, speakersForEvent,
+  EXHIBITORS, exhibitorsForEvent, PART_TYPES, evParts, evPartDone, getOrgById, findOrgByName, contactOrgEn, CO_DB, speakersForEvent,
 } from '../state.js';
 import { RP, EVENT_PARTS, partStateOf, PARTNERING_SIDES, PARTNERING_UNSIDED } from '../constants.js';
 import { td, escapeHtml, escAttr, countryName, isMobile, mobEvSelectHtml } from '../utils.js';
@@ -116,7 +116,7 @@ function evPeople(evKey){
         cid: c.id, roles: new Set(), recs: 0,
         name: c.nameKo || c.nameEn || p.contact || '',
         nameEn: c.nameEn || '', title: c.titleKo || c.titleEn || '',
-        org, orgEn: contactOrgEn(c), orgKey: normalizeCompanyKey(org || c.orgEn),
+        org, orgEn: contactOrgEn(c), orgKey: normalizeCompanyKey(org || c.orgEn), orgId: c.org_id || null,
         country: c.country || '', email: c.email1 || c.email2 || '',
         sector: c.beat || '',
         phone: c.phone1 || c.phone2 || '', dept: c.deptKo || c.deptEn || '',
@@ -182,6 +182,7 @@ function evOrgs(evKey){
     });
     const o = map.get(r.orgKey);
     o.people.push(r);
+    if(!o.orgId && r.orgId) o.orgId = r.orgId;   // 기업DB에서 열 때 쓴다(기업별 보기 기업명 누르기)
     r.roles.forEach(v => o.roles.add(v));
     if(!o.nameEn && r.orgEn) o.nameEn = r.orgEn;
     if(!o.country && r.country) o.country = r.country;
@@ -213,6 +214,7 @@ function evOrgs(evKey){
     const g = map.get(key);
     g.roles.add('전시참가기업');
     g.exhibitor = true;
+    if(!g.orgId && x.org_id) g.orgId = x.org_id;
     if(!g.nameEn && nameEn) g.nameEn = nameEn;
     if(!g.country && o && o.country) g.country = o.country;
   });
@@ -855,14 +857,20 @@ function orgsRowsHtml(){
 
   return l.map(o => {
     const isT = tgt.has(o.key), isX = o.exhibitor || exh.has(o.key);
-    const people = o.people.slice(0, 3).map(p => p.name).filter(Boolean);
+    /* 카드를 누르면 고르기(체크). 기업명을 누르면 기업DB에서 그 기업 정보 수정, 사람 이름을 누르면 그 사람 연락처 수정(2026-11-20).
+       카드가 label이라 이름 누르기가 체크까지 바꾸지 않게 preventDefault */
+    const stop = 'event.preventDefault();event.stopPropagation();';
+    const people = o.people.slice(0, 3).filter(p => p.name).map(p => p.cid != null
+      ? `<a style="cursor:pointer;text-decoration:underline dotted" title="${escAttr(p.name)} 정보 수정" onclick="${stop}openContactDr(${escAttr(JSON.stringify(p.cid))},{edit:true})">${escapeHtml(p.name)}</a>`
+      : escapeHtml(p.name));
     return `<label style="display:flex;align-items:center;gap:10px;background:var(--W);border:1px solid var(--i6);
         border-radius:var(--r);padding:10px 12px;margin-bottom:6px;cursor:pointer">
       <input type="checkbox" class="evdb-cb" data-k="${escapeHtml(o.key)}" ${evdbPicked.has(o.key) ? 'checked' : ''}
         onchange="pickEvDbOrg('${escAttr(o.key)}',this.checked)">
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-          <span style="font-size:var(--fs-13);font-weight:600;color:var(--i1)">${escapeHtml(o.name)}</span>
+          <a style="font-size:var(--fs-13);font-weight:600;color:var(--i1);cursor:pointer;text-decoration:underline dotted" title="기업DB에서 이 기업 정보 수정"
+            onclick="${stop}openEvDbOrg('${escAttr(o.key)}')">${escapeHtml(o.name)}</a>
           ${isT ? '<span class="pill p-green">협의 대상</span>' : ''}
           ${isX ? '<span class="pill p-purple">전시 참가</span>' : ''}
         </div>
@@ -872,7 +880,7 @@ function orgsRowsHtml(){
         </div>
         <div style="font-size:var(--fs-10_5);color:var(--i5);margin-top:3px">
           ${o.people.length
-            ? `${o.people.length}명 — ${escapeHtml(people.join(', '))}${o.people.length > 3 ? ` 외 ${o.people.length - 3}명` : ''}`
+            ? `${o.people.length}명 — ${people.join(', ')}${o.people.length > 3 ? ` 외 ${o.people.length - 3}명` : ''}`
             : '<span style="color:var(--i5)">담당자 미등록 — 참가기업 명부에서 왔어요</span>'}
         </div>
       </div>
@@ -1639,6 +1647,16 @@ window.setEvDbVia       = setEvDbVia;
 window.setEvDbReg       = setEvDbReg;
 window.setEvDbQuery     = setEvDbQuery;
 window.renderEvDb       = renderEvDb;
+/* 기업별 보기 기업명 — 기업DB로 넘어가 그 기업을 연다(고치는 자리는 기업DB 하나, exh-drawer openOrgFromExh와 같다) */
+window.openEvDbOrg = (key) => {
+  const g = evOrgs(evdbEvent).find(o => o.key === key);
+  if(!g) return;
+  const org = (g.orgId && getOrgById(g.orgId)) || findOrgByName(g.name, normalizeCompanyKey) || (g.nameEn && findOrgByName(g.nameEn, normalizeCompanyKey));
+  if(!org){ alert(`«${g.name}»은(는) 아직 기업DB에 없어요.
+Master DB 위 «기업DB 미연결» 칩으로 연결하거나 기업DB에서 먼저 등록해 주세요.`); return; }
+  window.switchApp?.('co');
+  setTimeout(() => window.selectCo?.(org.id), 60);
+};
 window.saveEvDbProfile  = saveEvDbProfile;
 window.pickEvDbOrg      = pickEvDbOrg;
 window.toggleEvDbAll    = toggleEvDbAll;
