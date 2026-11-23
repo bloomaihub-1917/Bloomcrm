@@ -165,7 +165,9 @@ export async function tplVarDelete(part, ev, step, id){
 }
 
 /* ══ 양식 보관함 ══ */
-export const libItems = (part, ev) => MAIL_LIBRARY.filter(it => it.part === part && (it.scope === 'all' || it.scope === ev));
+/* hideIn: 공통 양식을 몇몇 행사에서만 빼고 싶을 때 그 행사 key 목록(예: 이벤트 코리아는 자기 양식만 쓴다) */
+export const libItems = (part, ev) => MAIL_LIBRARY.filter(it => it.part === part && (it.scope === 'all' || it.scope === ev)
+  && !(ev && Array.isArray(it.hideIn) && it.hideIn.includes(ev)));
 export const libItem = (id) => MAIL_LIBRARY.find(it => it.id === id) || null;
 async function pushLibrary(fn, label){
   const backup = clone(MAIL_LIBRARY);
