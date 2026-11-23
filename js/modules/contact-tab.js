@@ -29,6 +29,7 @@ import { postToSheet } from '../api.js';
 import { reloadContactData } from '../api/exh-save.js';
 import { buildCoDB } from '../domain/co-db.js';
 import { markSalesTargets } from '../domain/sales-targets.js';
+import { ensureOrgsForNames, orgIdForName } from '../domain/orgs.js';
 
 /* ── 반응 — 채널마다 누를 수 있는 것이 다르다. next: 다음 연락까지 며칠(0=곧바로),
    close: 이 반응이면 끝낸다. 값은 여기 한 곳에만 둔다. ── */
@@ -1046,7 +1047,16 @@ function renderFill(){
     <button class="btn bs" onclick="document.getElementById('round-fill').remove();openRoundImport('${escAttr(r.id)}')">엑셀 기록 가져오기</button>
     <div style="font-size:var(--fs-12);font-weight:600;margin:16px 0 6px;padding-top:12px;border-top:1px solid var(--i7)">한 곳씩 찾아 넣기</div>
     <input type="text" id="rf-q" placeholder="기업명 검색" oninput="fillSearch(this.value)" style="width:100%;font-size:var(--fs-12_5);padding:6px 8px;border:1px solid var(--i6);border-radius:var(--rs)">
-    <div id="rf-res" style="margin-top:4px"></div>`);
+    <div id="rf-res" style="margin-top:4px"></div>
+    <div style="font-size:var(--fs-12);font-weight:600;margin:16px 0 6px;padding-top:12px;border-top:1px solid var(--i7)">기업DB에 없는 곳 새로 넣기</div>
+    <div style="font-size:var(--fs-11_5);color:var(--i3);margin-bottom:6px">기업은 기업DB에, 담당자는 Master DB에 함께 들어가요. 같은 이름의 기업·사람이 있으면 거기에 이어요.</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end">
+      ${[['co', '기업명 *', '(주)블룸', 160], ['name', '담당자 이름', '홍길동', 100], ['title', '직위', '팀장', 70],
+         ['phone', '전화', '010-0000-0000', 120], ['email', '메일', 'name@company.com', 160]].map(([k, l, ph, w]) =>
+        `<label style="display:flex;flex-direction:column;gap:2px;font-size:var(--fs-10_5);color:var(--i4);flex:1;min-width:${w}px">${l}
+          <input id="rf-n-${k}" placeholder="${ph}" style="font-size:var(--fs-12);padding:5px 7px;border:1px solid var(--i6);border-radius:var(--rs)"></label>`).join('')}
+      <button class="btn bs bp" id="rf-n-go" onclick="fillAddNew()">넣기</button>
+    </div>`);
 }
 export function fillMode(m){
   if(fill.mode === m) return;
@@ -1118,6 +1128,69 @@ export function fillSearch(v){
 export async function fillAddOne(key){
   const c = coOf(key);
   if(c && await addMembers([c], '직접 추가')) fillSearch(document.getElementById('rf-q')?.value || '');
+}
+
+/* 기업DB에 없는 곳을 한 줄씩 — 기업을 만들고(이름 같으면 잇고) 담당자를 Master DB에 넣은 뒤 명단에 넣는다 */
+export async function fillAddNew(){
+  const v = (k) => (document.getElementById(`rf-n-${k}`)?.value || '').trim();
+  const coNm = v('co'), name = v('name'), email = v('email'), phone = v('phone'), title = v('title');
+  if(!coNm){ alert('기업명을 적어주세요.'); return; }
+  if(email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ alert('메일 주소 모양이 아니에요.'); return; }
+  const r = roundById(curRoundId);
+  if(!r) return;
+  const btn = document.getElementById('rf-n-go'); if(btn) btn.disabled = true;
+  try {
+    const res = await ensureOrgsForNames([coNm], '잠재고객사');
+    const orgId = orgIdForName(coNm);
+    if(!res.ok || !orgId){ alert('기업DB에 기업을 넣지 못했어요. 다시 눌러 주세요.'); return; }
+    let cid = null;
+    if(name){
+      const nk = (x) => String(x || '').replace(/\s/g, '').toLowerCase();
+      const same = contacts.find(c => !hasLeft(c) && (nk(c.nameKo) === nk(name) || nk(c.nameEn) === nk(name))
+        && (String(c.org_id || '') === String(orgId) || (email && nk(c.email1) === nk(email))));
+      if(same){
+        cid = same.id;
+        const patch = {};
+        if(!same.email1 && email) patch.email1 = email;
+        if(!same.phone1 && phone) patch.phone1 = phone;
+        if(!same.titleKo && title) patch.titleKo = title;
+        if(!same.org_id) patch.org_id = String(orgId);
+        if(Object.keys(patch).length){
+          Object.assign(same, patch);
+          await postToSheet({ sheet: 'contacts', action: 'upsert', row: contactRow23(same) }, '담당자 고침');
+        }
+      } else {
+        const ko = /[가-힣]/.test(name);
+        const o = coOf(orgId)?.org || {};
+        const c = {
+          id: newContactId(), nameKo: ko ? name : '', nameEn: ko ? '' : name,
+          orgKo: /[가-힣]/.test(coNm) ? coNm : (o.name_ko || ''), orgEn: /[가-힣]/.test(coNm) ? (o.name_en || '') : coNm,
+          titleKo: title, titleEn: '', deptKo: '', deptEn: '', country: '', cat: 'attendee', lang: ko ? 'KO' : 'EN',
+          source: `${evLabel(r.event_id)} 컨택(${r.name || ''})`, date: td(), status: 'new',
+          email1: email, email2: '', phone1: phone, phone2: '', beat: '', products: '', tags: '', org_id: String(orgId),
+          left_at: '', moved_to_id: '', memo1: '', memo2: '', memo3: '', prefix: '',
+        };
+        if(!Number.isSafeInteger(c.id)){ alert('연락처 번호를 만들지 못했어요. 다시 눌러 주세요.'); return; }
+        contacts.push(c);
+        const pr = await postToSheet({ sheet: 'contacts', row: contactRow23(c) }, '담당자 추가');
+        if(!pr.ok){ contacts.splice(contacts.indexOf(c), 1); return; }
+        cid = c.id;
+        trackAction('add', '연락처 추가', name, `${escapeHtml(name)} / ${escapeHtml(coNm)} 추가 — 컨택 «${escapeHtml(r.name || '')}»에서`,
+          { kind: 'contact', id: c.id });
+      }
+    }
+    try { buildCoDB(); } catch(e){}
+    const co = coList().find(c => String(c.key) === String(orgId));
+    if(!co){ alert('기업DB에서 방금 넣은 기업을 찾지 못했어요. 새로고침 뒤 «한 곳씩 찾아 넣기»로 넣어주세요.'); return; }
+    if(membersOf(r.id).some(m => String(m.org_id) === String(co.key))){
+      alert(`«${coName(co)}»은(는) 이미 명단에 있어요.${cid ? ' 담당자는 Master DB에 넣었어요.' : ''}`);
+    } else if(!await addMembers([co], '직접 추가', r.id, cid ? [cid] : null)) return;
+    if(cid) pickedContact[membersOf(r.id).find(m => String(m.org_id) === String(co.key))?.id] = String(cid);
+    ['co', 'name', 'title', 'phone', 'email'].forEach(k => { const el = document.getElementById(`rf-n-${k}`); if(el) el.value = ''; });
+    contactToast(`«${escapeHtml(coName(co))}»${name ? ` · ${escapeHtml(name)}` : ''} 명단에 넣었어요`);
+  } finally {
+    if(btn) btn.disabled = false;
+  }
 }
 
 /* ══════════════════════════════════════════
@@ -1193,6 +1266,6 @@ Object.assign(window, {
   toggleContactGoal, closeContactMember, reopenContactMember, saveContactMemberEdit, removeContactMember,
   openContactCo, openRoundMember, openPersonForm, savePersonForm,
   setContactSrc, setContactMiss, contactMemo, markCalling, syncContactNow, openRoundEditor, saveRoundEditor, toggleRoundClosed, removeRound,
-  openFillRound, fillPickEv, fillToggleRole, fillToggle, fillAll, fillCommit, fillSearch, fillAddOne,
+  openFillRound, fillAddNew, fillPickEv, fillToggleRole, fillToggle, fillAll, fillCommit, fillSearch, fillAddOne,
   removeOrCloseMembers, openBulkRemove, bulkRemoveFilter, bulkRemoveAll, bulkRemoveCount, bulkRemoveCommit,
 });
