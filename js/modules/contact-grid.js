@@ -23,7 +23,7 @@ import { trackAction } from '../core/audit-log.js';
 
 /* 반응을 보고서의 네 칸으로 묶는다 — 엑셀 총괄표의 긍정·보류·부정·오류와 같다 */
 export const BUCKET = {
-  positive: '긍정', reply: '긍정', hold: '보류', negative: '부정',
+  positive: '긍정', reply: '긍정', hold: '보류', low: '보류', negative: '부정',
   noanswer: '미연결', wrongnum: '미연결', bounce: '미연결', sent: '보냄',
 };
 const BUCKETS = ['긍정', '보류', '부정', '미연결', '보냄'];

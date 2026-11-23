@@ -34,8 +34,10 @@ import { ensureOrgsForNames, orgIdForName } from '../domain/orgs.js';
 /* ── 반응 — 채널마다 누를 수 있는 것이 다르다. next: 다음 연락까지 며칠(0=곧바로),
    close: 이 반응이면 끝낸다. 값은 여기 한 곳에만 둔다. ── */
 export const REACTIONS = {
-  positive: { label: '긍정',     cls: 'p-green', next: 2 },
-  hold:     { label: '보류',     cls: 'p-amber', next: 3 },
+  /* TM은 관심 상·중·하로 남긴다(이벤트코리아 TM 계획) — 보고 묶음은 긍정·보류 그대로 */
+  positive: { label: '관심 상',  cls: 'p-green', next: 2 },
+  hold:     { label: '관심 중',  cls: 'p-amber', next: 3 },
+  low:      { label: '관심 하',  cls: 'p-gray',  next: 14 },
   negative: { label: '부정',     cls: 'p-red',   close: true },
   noanswer: { label: '부재중',   cls: 'p-gray',  next: 0, miss: true, retry: true },
   wrongnum: { label: '번호 오류', cls: 'p-red',   next: 0, miss: true },
@@ -44,7 +46,7 @@ export const REACTIONS = {
   reply:    { label: '회신',     cls: 'p-green', next: 2 },
 };
 const CH_REACTIONS = {
-  TM:   ['positive', 'hold', 'negative', 'noanswer', 'wrongnum'],
+  TM:   ['positive', 'hold', 'low', 'negative', 'noanswer', 'wrongnum'],
   DM:   ['sent', 'reply', 'bounce', 'negative'],
   문자: ['sent', 'reply', 'negative'],
 };
@@ -91,6 +93,7 @@ export function pickedPersonId(m, people = peopleOf(m)){
 const pickedChannel = {};          // 줄마다 고른 채널
 let showLimit = 150;
 let srcFil = '';                   // 명단 거르기 — 명단을 나눠 맡을 때
+let ownFil = (() => { try { return localStorage.getItem('contact_owner') || ''; } catch(e){ return ''; } })();   // '' 전체 | '__me' 내 담당 | '__none' 담당 없음 | 이름
 let missFil = false;               // 미연결이 정한 횟수 넘게 이어진 곳만
 const memoDraft = {};              // 줄마다 치던 메모 — 화면을 다시 그려도 남게
 let busy = 0;                      // 저장 중인 일 — 이 동안 받아 온 것은 덮어쓰지 않는다
@@ -105,6 +108,25 @@ function callingOf(m){
   return mins >= -1 && mins < CALL_MIN ? { by: m.calling_by, mins: Math.max(0, Math.floor(mins)), me: m.calling_by === myName() } : null;
 }
 const othersCalling = (m) => { const c = callingOf(m); return c && !c.me ? 1 : 0; };
+
+/* ── 담당·표시 — 분야별로 나눠 맡고(assignee), 특별관 후보·소개서 등급을 표시한다(tags) ── */
+export const tagsOf = (m) => String(m.tags || '').split(',').map(s => s.trim()).filter(Boolean);
+export const gradeOf = (m) => (tagsOf(m).find(t => /^소개서 [상중하]$/.test(t)) || '').slice(4);
+const isMine = (m) => !!m.assignee && [currentUser?.name, currentUser?.email].filter(Boolean).includes(m.assignee);
+/* 담당 이름 후보 — 이 행사 차수에 이미 적힌 담당 + 기록을 남긴 사람 + 나 */
+function ownerNames(r){
+  const s = new Set();
+  CONTACT_ROUNDS.filter(x => x.event_id === r.event_id).forEach(x => membersOf(x.id).forEach(m => m.assignee && s.add(m.assignee)));
+  CONTACT_ATTEMPTS.forEach(a => a.by_name && s.add(a.by_name));
+  if(myName()) s.add(myName());
+  return [...s].sort((a, b) => a.localeCompare(b, 'ko'));
+}
+const ownerList = (r) => `<datalist id="ct-owners">${ownerNames(r).map(n => `<option value="${escapeHtml(n)}">`).join('')}</datalist>`;
+export function setContactOwner(v){
+  ownFil = v; showLimit = 150;
+  try { localStorage.setItem('contact_owner', v); } catch(e){}
+  renderToday();
+}
 
 /* 15개 함수를 ../domain/rounds.js로 옮겼다 — 이 파일에서도 쓰고, 옛 경로로 가져가는 곳도 있어 다시 내보낸다 */
 import { roundById, membersOf, attemptsOf, evOf, evLabel, today, addDays, genId, coList, coOf, coName, memberName, contactOf, fullContacts, peopleOf } from '../domain/rounds.js';
@@ -201,11 +223,15 @@ export function renderToday(){
   const limit = +r.noanswer_limit || DEFAULT_NOANSWER_LIMIT;
   const sources = [...new Set(all.map(x => x.m.source || ''))].filter(Boolean).sort();
   if(srcFil && !sources.includes(srcFil)) srcFil = '';
+  const owners = [...new Set(all.map(x => x.m.assignee || ''))].filter(Boolean).sort((a, b) => a.localeCompare(b, 'ko'));
+  if(ownFil && !['__me', '__none'].includes(ownFil) && !owners.includes(ownFil)) ownFil = '';
+  const ownN = (f) => all.filter(x => f === '__me' ? isMine(x.m) : f === '__none' ? !x.m.assignee : x.m.assignee === f).length;
   const missN = all.filter(x => x.st !== 'done' && missStreak(x.atts) >= limit).length;
   // 미연결 거르기를 켜면 상태(지금 할 곳·기다림)와 상관없이 안 끝난 곳을 다 본다 — 세는 숫자와 맞게
   let list = all.filter(x => missFil || stFil === 'all' ? true : stFil === 'now' ? (x.st === 'todo' || x.st === 'again') : x.st === stFil)
     .filter(x => matchQ(x.m, q))
     .filter(x => !srcFil || (x.m.source || '') === srcFil)
+    .filter(x => !ownFil || (ownFil === '__me' ? isMine(x.m) : ownFil === '__none' ? !x.m.assignee : x.m.assignee === ownFil))
     .filter(x => !missFil || (x.st !== 'done' && missStreak(x.atts) >= limit));
   // 다시 걸 차례 → 걸 차례 → 기다림 → 끝남. 다시 걸 차례는 오래 전에 건 곳부터
   const ORDER = { again: 0, todo: 1, wait: 2, done: 3 };
@@ -239,6 +265,7 @@ export function renderToday(){
         <span style="margin-left:auto;display:flex;gap:5px">
           <button class="btn bs" onclick="openRoundEditor('${escAttr(r.id)}')">차수 고치기</button>
           <button class="btn bs" onclick="openRoundMail('${escAttr(r.id)}')" title="명단에 기업마다 한 통씩 — 보낸 것은 DM 기록으로 남아요">✉ 메일 보내기</button>
+          <button class="btn bs" onclick="openAssign()" title="분야별로 누가 맡을지 정해요">담당 나누기</button>
           <button class="btn bs" onclick="openBulkRemove()" title="여러 곳을 골라 한 번에 빼요">명단 빼기</button>
           <button class="btn bs bp" onclick="openFillRound()">명단 채우기</button>
         </span>
@@ -255,6 +282,11 @@ export function renderToday(){
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:var(--fs-11);color:var(--i4)">
         ${sources.length > 1 ? `<select onchange="setContactSrc(this.value)" style="font-size:var(--fs-11);padding:3px 4px;border:1px solid ${srcFil ? 'var(--a)' : 'var(--i6)'};border-radius:var(--rs);color:${srcFil ? 'var(--a)' : 'var(--i2)'}">
           <option value="">명단 전체</option>${sources.map(x => `<option${x === srcFil ? ' selected' : ''}>${escapeHtml(x)}</option>`).join('')}</select>` : ''}
+        <select onchange="setContactOwner(this.value)" title="분야별로 나눠 맡은 몫만 봐요 — «담당 나누기»로 정해요" style="font-size:var(--fs-11);padding:3px 4px;border:1px solid ${ownFil ? 'var(--a)' : 'var(--i6)'};border-radius:var(--rs);color:${ownFil ? 'var(--a)' : 'var(--i2)'}">
+          <option value="">담당 전체</option>
+          <option value="__me"${ownFil === '__me' ? ' selected' : ''}>내 담당 (${ownN('__me')})</option>
+          ${owners.map(o => `<option value="${escapeHtml(o)}"${o === ownFil ? ' selected' : ''}>${escapeHtml(o)} (${ownN(o)})</option>`).join('')}
+          <option value="__none"${ownFil === '__none' ? ' selected' : ''}>담당 없음 (${ownN('__none')})</option></select>
         ${missN ? `<label style="display:flex;align-items:center;gap:3px;cursor:pointer;color:${missFil ? 'var(--am)' : 'var(--i3)'}"><input type="checkbox" ${missFil ? 'checked' : ''} onchange="setContactMiss(this.checked)" style="margin:0">미연결 ${limit}번 이상 이어진 곳 ${missN}</label>` : ''}
         ${missFil && list.length ? `<button class="btn bs" onclick="openRoundMail('${escAttr(r.id)}',null,[${list.map(x => `'${escAttr(x.m.id)}'`).join(',')}])" title="전화가 안 닿는 곳 — 메일로 넘긴다">✉ 이 ${list.length}곳에 메일</button>` : ''}
         <span>오늘 기록 ${todayAtts.length}건 · 내 기록 ${mine}건</span>
@@ -319,6 +351,8 @@ function card(r, { m, atts, st }){
       <a href="javascript:void(0)" onclick="openContactCo('${escAttr(m.org_id)}')" style="font-size:var(--fs-13);font-weight:700;color:var(--i1)">${escapeHtml(memberName(m))}</a>
       ${co?.country ? `<span style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(co.country)}</span>` : ''}
       ${m.source ? `<span class="pill p-gray">${escapeHtml(m.source)}</span>` : ''}
+      ${m.assignee ? `<span class="pill ${isMine(m) ? 'p-blue' : 'p-gray'}" title="담당">👤 ${escapeHtml(m.assignee)}</span>` : ''}
+      ${tagsOf(m).map(t => `<span class="pill ${t === '특별관 후보' ? 'p-green' : t === '소개서 하' ? 'p-amber' : 'p-gray'}">${t === '특별관 후보' ? '🌱 ' : ''}${escapeHtml(t)}</span>`).join('')}
       <span style="margin-left:auto;display:flex;gap:4px;align-items:center">
         ${atts.length ? `<span style="font-size:var(--fs-10_5);color:var(--i4)">${atts.length}번째${miss ? ` · 미연결 ${miss}번 이어짐` : ''}</span>` : ''}
         <span class="pill ${m.goal_at ? 'p-green' : s.cls}">${m.goal_at ? `목표 달성 ${escapeHtml(m.goal_at.slice(5))}` : m.closed_at ? `끝냄${m.closed_reason ? ` · ${escapeHtml(m.closed_reason)}` : ''}` : escapeHtml(s.label(verb))}${
@@ -365,7 +399,7 @@ function card(r, { m, atts, st }){
       ${m.goal_at ? '' : m.closed_at
         ? `<a href="javascript:void(0)" onclick="reopenContactMember('${escAttr(m.id)}')" style="color:var(--a)">다시 열기</a>`
         : `<a href="javascript:void(0)" onclick="closeContactMember('${escAttr(m.id)}')" style="color:var(--i3)">끝내기</a>`}
-      <a href="javascript:void(0)" onclick="toggleContactEdit('${escAttr(m.id)}')" style="color:var(--i3)">${editOpen.has(m.id) ? '닫기' : '주의사항·시간 고치기'}</a>
+      <a href="javascript:void(0)" onclick="toggleContactEdit('${escAttr(m.id)}')" style="color:var(--i3)">${editOpen.has(m.id) ? '닫기' : '담당·표시·주의사항 고치기'}</a>
       ${atts.length ? '' : `<a href="javascript:void(0)" onclick="removeContactMember('${escAttr(m.id)}')" style="color:var(--i4)">명단에서 빼기</a>`}
     </div>
     ${editOpen.has(m.id) ? editForm(m) : ''}
@@ -483,6 +517,14 @@ function editForm(m){
     ${f('hold_until', '이날 전에는 연락 안 함', 'date')}
     ${f('call_hours', '통화 가능 시간', 'text', '오후 1시~4시')}
     ${f('source', '명단', 'text', '2022 전시 국내')}
+    <label style="display:flex;flex-direction:column;gap:2px;font-size:var(--fs-10_5);color:var(--i4);flex:1;min-width:120px">담당
+      <input id="rmf-assignee-${escAttr(m.id)}" list="ct-owners" value="${escapeHtml(m.assignee || '')}" placeholder="이름" style="font-size:var(--fs-11_5);padding:4px 6px;border:1px solid var(--i6);border-radius:var(--rd-4)">
+      ${ownerList(roundById(m.round_id) || { event_id: '' })}</label>
+    <label style="display:flex;flex-direction:column;gap:2px;font-size:var(--fs-10_5);color:var(--i4);min-width:100px">소개자료 등급
+      <select id="rmf-grade-${escAttr(m.id)}" style="font-size:var(--fs-11_5);padding:4px 6px;border:1px solid var(--i6);border-radius:var(--rd-4)">
+        ${['', '하', '중', '상'].map(g => `<option value="${g}"${gradeOf(m) === g ? ' selected' : ''}>${g ? `소개서 ${g}` : '안 봄'}</option>`).join('')}</select></label>
+    <label style="display:flex;align-items:center;gap:4px;font-size:var(--fs-11_5);color:var(--i2);cursor:pointer;padding-bottom:4px">
+      <input type="checkbox" id="rmf-eco-${escAttr(m.id)}" ${tagsOf(m).includes('특별관 후보') ? 'checked' : ''} style="margin:0">🌱 특별관 후보</label>
     <button class="btn bs bp" onclick="saveContactMemberEdit('${escAttr(m.id)}')">저장</button>
   </div>`;
 }
@@ -597,7 +639,13 @@ export async function saveContactMemberEdit(mid){
   const m = ROUND_MEMBERS.find(x => x.id === mid);
   if(!m) return;
   const v = (k) => (document.getElementById(`rmf-${k}-${mid}`)?.value || '').trim();
-  const patch = { caution: v('caution'), hold_until: v('hold_until'), call_hours: v('call_hours'), source: v('source') };
+  const grade = document.getElementById(`rmf-grade-${mid}`)?.value || '';
+  const eco = !!document.getElementById(`rmf-eco-${mid}`)?.checked;
+  const tags = tagsOf(m).filter(t => t !== '특별관 후보' && !/^소개서 [상중하]$/.test(t));
+  if(grade) tags.push(`소개서 ${grade}`);
+  if(eco) tags.push('특별관 후보');
+  const patch = { caution: v('caution'), hold_until: v('hold_until'), call_hours: v('call_hours'), source: v('source'),
+    assignee: v('assignee'), tags: tags.join(',') };
   editOpen.delete(mid);
   await patchMember(m, patch);
 }
@@ -721,7 +769,7 @@ function typing(){
   const a = document.activeElement;
   const inView = a && a.closest && a.closest('#v-today') && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName);
   return inView || Object.keys(personForm).length || editOpen.size
-    || document.getElementById('round-ed') || document.getElementById('round-fill') || document.getElementById('round-import');
+    || document.getElementById('round-ed') || document.getElementById('round-fill') || document.getElementById('round-import') || document.getElementById('round-assign');
 }
 export async function syncContactNow(force){
   if(busy) return;
@@ -1193,6 +1241,70 @@ export async function fillAddNew(){
   }
 }
 
+/* ── 담당 나누기 — 명단 기업의 분야마다 맡을 사람을 적으면 그 분야 기업에 담당이 붙는다.
+   한 기업이 여러 분야면 위쪽 분야의 담당이 붙는다. 이미 담당이 있는 곳은 그대로 두고,
+   «바꾸기»를 켜면 덮는다. 분야가 없는 기업은 «미분류». ── */
+const memberSec = (m) => { const co = coOf(m.org_id); const s = co ? coSecs(co).filter(Boolean) : []; return s.length ? s : ['미분류']; };
+export function openAssign(){
+  const r = roundById(curRoundId);
+  if(!r) return;
+  const ms = membersOf(r.id);
+  const secs = new Map();
+  ms.forEach(m => memberSec(m).forEach(s => {
+    if(!secs.has(s)) secs.set(s, { n: 0, none: 0, owners: new Map() });
+    const x = secs.get(s); x.n++;
+    if(!m.assignee) x.none++; else x.owners.set(m.assignee, (x.owners.get(m.assignee) || 0) + 1);
+  }));
+  const rows = [...secs.entries()].sort((a, b) => b[1].n - a[1].n || a[0].localeCompare(b[0], 'ko'));
+  const top = (x) => [...x.owners.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+  overlay('round-assign', `
+    <div style="display:flex;align-items:center;margin-bottom:4px">
+      <div style="font-size:var(--fs-15);font-weight:700">담당 나누기</div>
+      <button class="btn bs" style="margin-left:auto" onclick="document.getElementById('round-assign').remove()">닫기</button>
+    </div>
+    <div style="font-size:var(--fs-11_5);color:var(--i4);margin-bottom:10px">${escapeHtml(r.name)} · ${ms.length}곳 · 담당 없음 ${ms.filter(m => !m.assignee).length}곳<br>
+      분야마다 맡을 사람을 적으세요. 한 기업이 여러 분야에 걸치면 위쪽 분야의 담당이 붙어요. 한 곳씩 바꿀 때는 카드의 «담당·표시·주의사항 고치기»에서 바꿔요.</div>
+    ${ownerList(r)}
+    <div style="max-height:360px;overflow:auto;border:1px solid var(--i7);border-radius:var(--rs)">
+      <table style="width:100%;border-collapse:collapse;font-size:var(--fs-12)">
+        <thead><tr style="background:var(--i8);font-size:var(--fs-11);color:var(--i3)"><th style="text-align:left;padding:5px 8px">분야</th><th style="text-align:right;padding:5px 8px">기업</th><th style="text-align:right;padding:5px 8px">담당 없음</th><th style="text-align:left;padding:5px 8px">맡을 사람</th></tr></thead>
+        <tbody>${rows.map(([s, x]) => `<tr style="border-top:1px solid var(--i8)">
+          <td style="padding:4px 8px">${escapeHtml(s)}</td><td style="text-align:right;padding:4px 8px">${x.n}</td>
+          <td style="text-align:right;padding:4px 8px;color:${x.none ? 'var(--am)' : 'var(--i4)'}">${x.none || ''}</td>
+          <td style="padding:3px 8px"><input class="ra-in" data-sec="${escapeHtml(s)}" list="ct-owners" value="${escapeHtml(top(x))}" placeholder="이름" style="width:100%;font-size:var(--fs-12);padding:3px 6px;border:1px solid var(--i6);border-radius:var(--rd-4)"></td></tr>`).join('')}
+        </tbody></table></div>
+    <label style="display:flex;align-items:center;gap:5px;font-size:var(--fs-11_5);color:var(--i2);margin:8px 0">
+      <input type="checkbox" id="ra-over" style="margin:0">이미 담당이 있는 곳도 바꾸기</label>
+    <button class="btn bp" onclick="assignCommit()">담당 붙이기</button>`);
+}
+export async function assignCommit(){
+  const r = roundById(curRoundId);
+  if(!r) return;
+  const over = !!document.getElementById('ra-over')?.checked;
+  const bySec = new Map([...document.querySelectorAll('#round-assign .ra-in')].map(el => [el.dataset.sec, el.value.trim()]));
+  const order = [...bySec.keys()];
+  const changes = [];
+  membersOf(r.id).forEach(m => {
+    if(m.assignee && !over) return;
+    const secs = memberSec(m);
+    const sec = order.find(s => secs.includes(s) && bySec.get(s));
+    const who = sec ? bySec.get(sec) : '';
+    if(who && who !== m.assignee) changes.push({ m, who, before: m.assignee || '' });
+  });
+  if(!changes.length){ alert('바뀌는 곳이 없어요.'); return; }
+  changes.forEach(c => { c.m.assignee = c.who; });
+  busy++;
+  const res = await postToSheet({ sheet: 'round_members', action: 'batchUpsert', dataRows: changes.map(c => ({ id: c.m.id, assignee: c.who })) }, '컨택 담당 나누기');
+  busy--;
+  if(!res.ok){ changes.forEach(c => { c.m.assignee = c.before; }); renderToday(); return; }
+  const cnt = {}; changes.forEach(c => { cnt[c.who] = (cnt[c.who] || 0) + 1; });
+  const summary = Object.entries(cnt).map(([k, n]) => `${escapeHtml(k)} ${n}곳`);
+  trackAction('edit', '컨택 담당 나눔', r.name, `${escapeHtml(r.name)} — ${summary.join(', ')}`);
+  document.getElementById('round-assign')?.remove();
+  renderToday();
+  contactToast(`담당을 붙였어요 — ${summary.join(' · ')}`);
+}
+
 /* ══════════════════════════════════════════
    전역 노출 — 인라인 onclick에서 부른다
 ══════════════════════════════════════════ */
@@ -1260,7 +1372,7 @@ export async function sendCommit(){
 }
 
 Object.assign(window, {
-  fillMode, fillPickSec, openSendToRound, sendRoundInfo, sendCommit,
+  fillMode, fillPickSec, openSendToRound, openAssign, assignCommit, setContactOwner, sendRoundInfo, sendCommit,
   pickRound, renderToday, setContactFil, contactShowMore, toggleContactHist, toggleContactEdit,
   pickContactPerson, pickContactChannel, recordContact, undoContactAttempt, setContactNext,
   toggleContactGoal, closeContactMember, reopenContactMember, saveContactMemberEdit, removeContactMember,

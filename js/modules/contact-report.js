@@ -12,7 +12,8 @@
    반응은 그날까지의 마지막 반응으로 본다. 지난 보고를 다시 만들 때 쓴다.
 ══════════════════════════════════════════════════════════════ */
 import { CONTACT_ROUNDS, CONTACT_ATTEMPTS } from '../state.js';
-import { REACTIONS, currentRoundId } from './contact-tab.js';
+import { REACTIONS, currentRoundId, tagsOf } from './contact-tab.js';
+import { peopleOf } from '../domain/rounds.js';
 import { roundById, membersOf, attemptsOf, memberName, evLabel } from '../domain/rounds.js';
 import { BUCKET } from './contact-grid.js';
 import { escapeHtml, escAttr, td } from '../utils.js';
@@ -67,6 +68,21 @@ export function roundReport(r, d){
     if(dayOf(a) >= mon) s.week++;
     if(dayOf(a) === d){ s.day++; const b = BUCKET[a.reaction]; if(s[b] !== undefined) s[b]++; }
   });
+  /* 담당 배정별 — 맡은 곳 기준(누가 걸었든). 주간 회의에서 보는 숫자: 연락한 곳·메일 확보·관심 상 */
+  const byOwner = new Map();
+  membersOf(r.id).forEach(m => {
+    const k = m.assignee || '(담당 없음)';
+    if(!byOwner.has(k)) byOwner.set(k, { total: 0, touched: 0, mail: 0, eco: 0, week: 0, ...Object.fromEntries(BUCKETS.map(b => [b, 0])) });
+    const s = byOwner.get(k);
+    const ma = attemptsOf(m.id).filter(a => dayOf(a) <= d);
+    s.total++;
+    if(ma.length) s.touched++;
+    const b = ma.length && BUCKET[ma[0].reaction];
+    if(b && s[b] !== undefined) s[b]++;
+    if(peopleOf(m).some(p => /@/.test(String(p.email1 || '') + String(p.email2 || '')))) s.mail++;
+    if(tagsOf(m).includes('특별관 후보')) s.eco++;
+    s.week += ma.filter(a => dayOf(a) >= mon).length;
+  });
   const trend = Array.from({ length: 14 }, (_, i) => shift(d, i - 13)).map(day => {
     const xs = atts.filter(a => dayOf(a) === day);
     return { day, n: xs.length, orgs: new Set(xs.map(a => a.member_id)).size, pos: xs.filter(a => BUCKET[a.reaction] === '긍정').length };
@@ -76,7 +92,7 @@ export function roundReport(r, d){
     .sort((a, b) => String(a.at).localeCompare(String(b.at)));
   // 오늘 진행한 반응별 수 (곳이 아니라 건)
   const dayB = Object.fromEntries(BUCKETS.map(b => [b, atts.filter(a => dayOf(a) === d && BUCKET[a.reaction] === b).length]));
-  return { sum, bySrc: [...bySrc.entries()].sort((a, b) => b[1].total - a[1].total), byStaff: [...byStaff.entries()].sort((a, b) => b[1].total - a[1].total), trend, notes, dayB, mon };
+  return { sum, bySrc: [...bySrc.entries()].sort((a, b) => b[1].total - a[1].total), byStaff: [...byStaff.entries()].sort((a, b) => b[1].total - a[1].total), byOwner: [...byOwner.entries()].sort((a, b) => b[1].total - a[1].total), trend, notes, dayB, mon };
 }
 
 /* ── 일일보고 문장 ── */
@@ -119,7 +135,7 @@ export function renderReport(){
   }
   const d = repDate || td();
   const rep = roundReport(r, d);
-  const { sum, bySrc, byStaff, trend } = rep;
+  const { sum, bySrc, byStaff, byOwner, trend } = rep;
   const goal = r.goal || '목표';
   const evRounds = CONTACT_ROUNDS.filter(x => x.event_id === r.event_id)
     .sort((a, b) => String(a.date_from || a.created_at || '').localeCompare(String(b.date_from || b.created_at || '')));
@@ -161,6 +177,13 @@ export function renderReport(){
       ${bySrc.map(([src, s]) => `<tr><td style="${tdl}">${escapeHtml(src)}</td>${statCols(s)}<td style="${tdc}">${s.day || ''}</td><td style="${tdc}">${s.week || ''}</td></tr>`).join('')}
       <tr style="font-weight:700;background:var(--i9)"><td style="${tdl}">합계</td>${statCols(sum)}<td style="${tdc}">${sum.day || ''}</td><td style="${tdc}">${sum.week || ''}</td></tr>
       </tbody></table>`, `<span style="font-size:10.5px;color:var(--i4)">반응은 곳마다 ${fmtDay(d)}까지의 마지막 반응</span>`)}
+
+    ${byOwner.length > 1 || byOwner[0]?.[0] !== '(담당 없음)' ? box('담당 배정별', `<table style="width:100%;border-collapse:collapse"><thead><tr><th style="${thl}">담당</th>
+        <th style="${th}">맡은 곳</th><th style="${th}">연락한 곳</th><th style="${th}">진행률</th><th style="${th}">메일 확보</th>${BUCKETS.map(b => `<th style="${th}">${b === '긍정' ? '관심 상' : b === '보류' ? '관심 중·하' : b}</th>`).join('')}<th style="${th}">특별관 후보</th><th style="${th}">이번 주 건</th></tr></thead><tbody>
+      ${byOwner.map(([k, s]) => `<tr><td style="${tdl}">${escapeHtml(k)}</td><td style="${tdc}">${s.total}</td><td style="${tdc}">${s.touched}</td>
+        <td style="${tdc};color:var(--a);font-weight:600">${pct(s.touched, s.total)}%</td><td style="${tdc}">${s.mail || ''}</td>
+        ${BUCKETS.map(b => `<td style="${tdc}">${s[b] || ''}</td>`).join('')}<td style="${tdc}">${s.eco || ''}</td><td style="${tdc}">${s.week || ''}</td></tr>`).join('')}
+      </tbody></table>`, '<span style="font-size:10.5px;color:var(--i4)">맡은 곳 기준 — 메일 확보는 담당자 메일이 있는 곳</span>') : ''}
 
     ${box('담당자별', byStaff.length ? `<table style="width:100%;border-collapse:collapse"><thead><tr><th style="${thl}">담당</th>
         <th style="${th}">${fmtDay(d)}</th>${BUCKETS.map(b => `<th style="${th}">${b}</th>`).join('')}<th style="${th}">이번 주</th><th style="${th}">누계</th></tr></thead><tbody>

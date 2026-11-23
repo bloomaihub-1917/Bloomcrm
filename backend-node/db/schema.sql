@@ -1204,6 +1204,11 @@ ALTER TABLE contact_rounds ADD COLUMN IF NOT EXISTS mail_body_en    TEXT;
 ALTER TABLE round_members ADD COLUMN IF NOT EXISTS calling_by TEXT;
 ALTER TABLE round_members ADD COLUMN IF NOT EXISTS calling_at TEXT;
 
+-- 컨택 담당 배정·표시 (2026-11-23) — 분야별로 나눠 맡는다(이벤트코리아 TM 계획).
+-- assignee: 맡은 사람 이름, tags: 쉼표로 «특별관 후보», «소개서 상|중|하»
+ALTER TABLE round_members ADD COLUMN IF NOT EXISTS assignee TEXT;
+ALTER TABLE round_members ADD COLUMN IF NOT EXISTS tags TEXT;
+
 -- 컨택 부재중 다시 걸 시간 (2026-10-09) — 부재중이면 몇 시간 뒤에 «다시 걸 차례». 비면 2시간
 ALTER TABLE contact_rounds ADD COLUMN IF NOT EXISTS retry_hours TEXT;
 

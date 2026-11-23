@@ -225,7 +225,8 @@ const TABLES = {
   round_members: {
     table: 'round_members', pk: 'id', idPrefix: 'RM-',
     columns: ['id', 'round_id', 'org_id', 'org_name', 'source', 'caution', 'hold_until', 'call_hours',
-      'next_at', 'goal_at', 'closed_at', 'closed_reason', 'created_at', 'calling_by', 'calling_at'],
+      'next_at', 'goal_at', 'closed_at', 'closed_reason', 'created_at', 'calling_by', 'calling_at',
+      'assignee', 'tags'],
   },
   /* 행사별 영업 DB — 한 사람 × 한 행사에 한 줄 (db/migrations/add-sales-targets.js) */
   sales_targets: {
