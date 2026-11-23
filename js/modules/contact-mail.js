@@ -205,7 +205,7 @@ function render(){
           <span id="rm-saved" style="color:var(--g)"></span></div>
       </div>
       <div style="min-width:0">
-        ${prev ? `<div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-7);font-size:var(--fs-11_5);white-space:pre-wrap;line-height:1.55;height:calc(92vh - 150px);overflow:auto"><div style="font-size:var(--fs-10);color:var(--i4);margin-bottom:4px">미리보기 — ${escapeHtml(memberName(sample))}</div><b>${escapeHtml(prev.s)}</b>${prev.b.html ? `<div style="white-space:normal;background:#fff;padding:6px;margin-top:8px;overflow-x:auto;border-radius:var(--rs)"><div style="font-size:var(--fs-10);color:var(--i4);margin-bottom:4px">HTML로 보냄</div>${prev.b.html}</div>` : `\n\n${escapeHtml(prev.b.text)}`}</div>` : ''}
+        ${prev ? `<div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-7);font-size:var(--fs-11_5);white-space:pre-wrap;line-height:1.55;height:calc(92vh - 150px);overflow:auto"><div style="font-size:var(--fs-10);color:var(--i4);margin-bottom:4px">미리보기 — ${escapeHtml(memberName(sample))}</div><b>${escapeHtml(prev.s)}</b>${prev.b.html ? `<div class="rm-pvhtml" style="white-space:normal;background:#fff;padding:6px;margin-top:8px;overflow:hidden;border-radius:var(--rs)"><div style="font-size:var(--fs-10);color:var(--i4);margin-bottom:4px">HTML로 보냄</div><div class="rm-pvbody" style="width:max-content;min-width:100%">${prev.b.html}</div></div>` : `\n\n${escapeHtml(prev.b.text)}`}</div>` : ''}
       </div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:12px">
@@ -213,6 +213,12 @@ function render(){
       <span id="rm-msg" style="font-size:var(--fs-11);color:var(--i4)"></span>
     </div>
   </div>`;
+  // 넓은 HTML 메일(1000px 표)을 칸 너비에 맞춰 줄여 보여 준다 — 가로 스크롤로 잘려 깨져 보이지 않게
+  const pv = el.querySelector('.rm-pvhtml > .rm-pvbody');
+  if (pv) requestAnimationFrame(() => {
+    const box = pv.parentElement.clientWidth - 12, w = pv.scrollWidth;
+    pv.style.zoom = w > box ? String(box / w) : '';
+  });
 }
 
 export function rmSet(k, v){
