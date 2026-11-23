@@ -263,6 +263,7 @@ export function renderToday(){
         ${period ? `<span style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(period)}${dday !== null ? ` · ${dday >= 0 ? `D-${dday}` : '기간 지남'}` : ''}</span>` : ''}
         ${r.status === 'closed' ? '<span class="pill p-gray">닫은 차수</span>' : ''}
         <span style="margin-left:auto;display:flex;gap:5px">
+          ${/^https?:\/\//.test(r.script_url || '') ? `<a class="btn bs" href="${escapeHtml(r.script_url)}" target="_blank" rel="noopener" title="통화 스크립트를 새 창으로 열어요 — 링크는 «차수 고치기»에서 바꿔요">📄 스크립트</a>` : ''}
           <button class="btn bs" onclick="openRoundEditor('${escAttr(r.id)}')">차수 고치기</button>
           <button class="btn bs" onclick="openRoundMail('${escAttr(r.id)}')" title="명단에 기업마다 한 통씩 — 보낸 것은 DM 기록으로 남아요">✉ 메일 보내기</button>
           <button class="btn bs" onclick="openAssign()" title="분야별로 누가 맡을지 정해요">담당 나누기</button>
@@ -388,7 +389,7 @@ function card(r, { m, atts, st }){
       <select onchange="pickContactChannel('${escAttr(m.id)}',this.value)" style="font-size:var(--fs-11);padding:3px 4px;border:1px solid var(--i6);border-radius:var(--rs)">
         ${CHANNELS.map(c => `<option${c === ch ? ' selected' : ''}>${c}</option>`).join('')}</select>
       ${CH_REACTIONS[ch].map(k => `<button class="btn bs ct-r${k === 'negative' ? ' ct-neg' : ''}" onclick="recordContact('${escAttr(m.id)}','${k}')">${REACTIONS[k].label}</button>`).join('')}
-      <input type="text" id="ca-memo-${escAttr(m.id)}" value="${escapeHtml(memoDraft[m.id] || '')}" oninput="contactMemo('${escAttr(m.id)}',this.value)" placeholder="메모 — 반응 단추를 누르면 함께 남아요" style="flex:1;min-width:140px;font-size:var(--fs-11_5);padding:4px 8px;border:1px solid var(--i6);border-radius:var(--rs)">
+      <textarea id="ca-memo-${escAttr(m.id)}" rows="3" oninput="contactMemo('${escAttr(m.id)}',this.value)" placeholder="메모 — 통화 내용·관심 분야·다음에 할 말. 반응 단추를 누르면 함께 남아요" style="order:-1;flex:1 1 100%;width:100%;min-height:58px;resize:vertical;font-family:inherit;font-size:var(--fs-12);line-height:1.5;padding:6px 8px;margin-bottom:2px;border:1px solid var(--i6);border-radius:var(--rs)">${escapeHtml(memoDraft[m.id] || '')}</textarea>
       ${ch === 'TM' ? `<button class="btn bs ct-call" onclick="markCalling('${escAttr(m.id)}')" title="다른 사람이 같은 곳에 걸지 않게 «거는 중»으로 보여 줘요 — 반응을 남기면 풀려요"
         style="${calling && calling.me ? 'background:var(--ad);border-color:var(--a);color:var(--a)' : ''}">${calling && calling.me ? '📞 거는 중 · 풀기' : '📞 거는 중'}</button>` : ''}
       ${people.some(p => /@/.test(String(p.email1 || '') + String(p.email2 || ''))) || /@/.test(String(co?.email || '')) ? `<button class="btn bs" onclick="openRoundMail('${escAttr(r.id)}','${escAttr(m.id)}')" title="이 기업에만 메일 한 통 — 보낸 것은 DM 기록으로 남아요">✉ 이 기업에 메일</button>` : ''}
@@ -858,6 +859,7 @@ export function openRoundEditor(id){
     ${fld('re-goal', '목표 — 이걸 하면 그 기업은 끝나요', r?.goal || '', { ph: '주선신청' })}
     <div style="display:flex;gap:8px">${fld('re-from', '시작', r?.date_from || today(), { type: 'date' })}${fld('re-to', '마감', r?.date_to || '', { type: 'date' })}</div>
     <div style="display:flex;gap:8px">${fld('re-retry', '부재중이면 몇 시간 뒤 다시 걸까요', r?.retry_hours ?? String(DEFAULT_RETRY_HOURS), { type: 'number' })}${fld('re-limit', '부재중·반송이 몇 번 이어지면 알려 줄까요', r?.noanswer_limit || String(DEFAULT_NOANSWER_LIMIT), { type: 'number' })}</div>
+    ${fld('re-script', '스크립트 링크 — 통화하면서 열어 볼 문서', r?.script_url || '', { ph: 'https://claude.ai/artifact/…' })}
     ${fld('re-note', '메모', r?.note || '')}
     <div style="display:flex;gap:6px;align-items:center;margin-top:6px">
       ${r ? (nAtt
@@ -876,7 +878,7 @@ export async function saveRoundEditor(id){
   if(!v('re-ev')){ alert('행사를 골라주세요.'); return; }
   const ch = document.querySelector('#re-ch .seg-b.on')?.dataset.ch || 'TM';
   const data = { event_id: v('re-ev'), name, channel: ch, purpose: v('re-purpose'), goal: v('re-goal'),
-    date_from: v('re-from'), date_to: v('re-to'), noanswer_limit: v('re-limit'), retry_hours: v('re-retry'), note: v('re-note') };
+    date_from: v('re-from'), date_to: v('re-to'), noanswer_limit: v('re-limit'), retry_hours: v('re-retry'), note: v('re-note'), script_url: v('re-script') };
   const old = id ? roundById(id) : null;
   if(old){
     const before = { ...old };

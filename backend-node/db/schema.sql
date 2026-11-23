@@ -1204,6 +1204,9 @@ ALTER TABLE contact_rounds ADD COLUMN IF NOT EXISTS mail_body_en    TEXT;
 ALTER TABLE round_members ADD COLUMN IF NOT EXISTS calling_by TEXT;
 ALTER TABLE round_members ADD COLUMN IF NOT EXISTS calling_at TEXT;
 
+-- 컨택 차수별 TM 스크립트 링크 (2026-11-23)
+ALTER TABLE contact_rounds ADD COLUMN IF NOT EXISTS script_url TEXT;
+
 -- 컨택 담당 배정·표시 (2026-11-23) — 분야별로 나눠 맡는다(이벤트코리아 TM 계획).
 -- assignee: 맡은 사람 이름, tags: 쉼표로 «특별관 후보», «소개서 상|중|하»
 ALTER TABLE round_members ADD COLUMN IF NOT EXISTS assignee TEXT;
