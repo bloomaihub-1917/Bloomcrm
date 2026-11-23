@@ -21,6 +21,7 @@ import './features/quick-add.js';            // 제목 줄 «추가» 창(행사
 import './modules/upload-tab.js';
 import './features/upload/upload-read.js';   // 업로드 STEP 1 — 파일 읽기와 파일명으로 카테고리 짐작 — 스스로 window에 건다
 import './features/upload/upload-save.js';   // 업로드 STEP 4 — 의심 케이스 확인과 마스터DB 반영 — 스스로 window에 건다
+import './features/upload/g2b-buyers.js';   // 업로드 › 나라장터 발주기관 → 바이어 — 스스로 window에 건다
 import './features/upload/upload-logs.js';   // 업로드 › 수집 로그·기업 병합 관리 하위 탭 — 스스로 window에 건다
 import './modules/settings-tab.js';
 import './features/settings/sector-tree.js';   // 섹터 트리·병합·묶기·편입 — 스스로 window에 건다

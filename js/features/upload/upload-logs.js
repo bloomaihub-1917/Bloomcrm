@@ -51,15 +51,16 @@ export function rejectMg(id, btn){
 /* up 탭 사이드바 하위탭(업로드/로그/기업 병합 관리) 전환 (원본 switchUV, 2208~2216행) */
 export function switchUV(v, btn){
   uploadUi.upV = v;
-  ['upload','log','merge'].forEach(id=>{const el=document.getElementById('upv-'+id);if(el)el.style.display=id===v?'block':'none'});
+  ['upload','log','merge','g2b'].forEach(id=>{const el=document.getElementById('upv-'+id);if(el)el.style.display=id===v?'block':'none'});
   document.querySelectorAll('#arch-up-sub .nr').forEach(b=>b.classList.remove('on'));
   if(btn) btn.classList.add('on');
-  const tt={upload:'업로드 & AI 파서',log:'수집 로그',merge:'기업 병합 관리'};
-  const sb={upload:'파일 업로드 후 자동 파싱',log:'업로드 이력 확인',merge:'동일 기업 통합 관리'};
+  const tt={upload:'업로드 & AI 파서',log:'수집 로그',merge:'기업 병합 관리',g2b:'나라장터 발주기관 → 바이어'};
+  const sb={upload:'파일 업로드 후 자동 파싱',log:'업로드 이력 확인',merge:'동일 기업 통합 관리',g2b:'공고 담당자를 행사 바이어·영업 대상으로'};
   const ttlEl = document.getElementById('up-ttl');
   if(ttlEl) ttlEl.innerHTML=`${tt[v]} <span class="tb-s">${sb[v]}</span>`;
   if(v==='log') renderLog();
   if(v==='merge') renderMerge();
+  if(v==='g2b') window.renderG2bBuyers?.();
 }
 
 

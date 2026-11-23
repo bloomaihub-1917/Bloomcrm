@@ -786,3 +786,13 @@ tr.row-sel{background:var(--ad)}
 .co-info-btn.lead{ margin:0 6px 0 0; }
 /* 데스크톱은 기업명을 누르면 같은 창이 열려 버튼이 군더더기다 — 손가락으로 이름을 누르기 어려운 모바일에서만 보인다 (2026-11-09) */
 @media (min-width:769px){ .co-info-btn{ display:none; } }
+
+/* 업로드 › 나라장터 발주기관 → 바이어 (features/upload/g2b-buyers.js) */
+.g2b-note{font-size:var(--fs-11);color:var(--i3);line-height:1.6}
+.g2b-note .btn{margin-left:8px}
+.g2b-err{font-size:var(--fs-12);color:#C0392B}
+.g2b-done{font-size:var(--fs-12);color:var(--i1)}
+.g2b-sub{font-size:var(--fs-12);font-weight:700;color:var(--i2);margin-top:var(--gap-sec)}
+.g2b-ul{font-size:var(--fs-11);color:var(--i2);line-height:1.8;padding-left:18px;margin:4px 0 0}
+.g2b-tag{font-size:var(--fs-10_5);color:var(--i4)}
+#g2b-out .stat-grid{margin-top:var(--gap-sec)}
