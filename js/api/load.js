@@ -6,6 +6,7 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import { API_BASE_URL, CATMAPS, CODE_LISTS, COMPANY_SECTORS, CONF_SESSIONS, CONTACT_ATTEMPTS, CONTACT_ROUNDS, SALES_TARGETS, DOMAINS, EQUIP_CATALOG, EVENT_LIST, EXHIBITORS, EXH_APPS, EXH_CFG, EXH_CONTACTS, EXH_INVOICES, EXH_ITEMS, EXH_PAYMENTS, EXH_TAX, ORGS, PART_TYPES, ROUND_MEMBERS, SESSION_SPEAKERS, SPEAKERS, SPEAKER_CONTACTS, TAGS, WATCH_FILES, WATCH_FOLDERS, applyCodeLists, contacts, curApp, currentUser, loadExhCfg, participations, setDomains, setSheetsConnected, setTags, syncPartColors, targets } from '../state.js';
+import { loadRetros } from '../modules/event-retro.js';
 import { SECTOR_RENAMES } from '../state.js';
 import { countryName, normalizeCat } from '../utils.js';
 import { authHeaders, normalizeParticipationRow, safeFetch, setSettingsReady, showSheetsWarning } from '../api.js';
@@ -236,6 +237,8 @@ export async function loadFromSheets(hooks = {}){
           if(parsed && typeof parsed === 'object') CATMAPS[evKey] = parsed;
         } catch(e){ console.warn('[CRM] catmap 파싱 실패:', row.key, e); }
       });
+      /* 행사 회고 — key='retro_<행사key>' (modules/event-retro.js) */
+      loadRetros(settingsData);
       const catmapCount = Object.keys(CATMAPS).length;
       if(catmapCount) console.log('[CRM] 카테고리 매핑 로드:', catmapCount, '개 행사');
     }

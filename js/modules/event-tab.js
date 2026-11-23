@@ -36,6 +36,7 @@ import { trackAction, changed as changeMeta } from '../core/audit-log.js';
 import { sanitizeForCsv } from './audit-tab.js';
 import { pendingFor, fetchPending, onPendingChange, acceptPending, dropPending } from './register-links.js';
 import { ntPartHtml, ntRowsHtml } from '../features/nametag/nt-desk.js';
+import { retroHtml } from './event-retro.js';   // 행사 회고 — 기록 숫자 + 잘된 것·막힌 것·다음엔 미리 할 것
 import { autoLinkEvent } from '../features/conference/sp-autolink.js';
 
 /* ── 모듈 상태 ──
@@ -57,7 +58,7 @@ const evdbPickedTgt = new Set();      // 고른 기업의 org id
 /* 탭 — 행사 정보(개요) 뒤에 파트별로 연다: 참가자(사람 전체·기업별), 전시기업, 연사, 파트너링.
    파트 탭은 위에 숫자 요약, 아래에 명단 — 줄을 누르면 그 사람·기업의 상세 창이 이 자리에서 열린다.
    'orgs'(기업별)는 참가자 탭 안의 보기라 탭 줄에는 없다. */
-const VIEWS = [['profile', '개요'], ['people', '참가자'], ['exh', '전시기업'], ['sp', '연사'], ['ptn', '파트너링'], ['nametag', '네임택'], ['target', '협의 대상']];
+const VIEWS = [['profile', '개요'], ['people', '참가자'], ['exh', '전시기업'], ['sp', '연사'], ['ptn', '파트너링'], ['nametag', '네임택'], ['target', '협의 대상'], ['retro', '회고']];
 const tabOf = (v) => v === 'orgs' ? 'people' : v;
 
 /* ══════════════════════════════════════════
@@ -332,6 +333,7 @@ export function renderEvDb(){
     : evdbView === 'sp' ? spPartHtml(ev)
     : evdbView === 'ptn' ? ptnPartHtml(ev)
     : evdbView === 'nametag' ? ntPartHtml(ev, evdbQuery)
+    : evdbView === 'retro' ? retroHtml(ev)
     : peopleSummaryHtml(ev) + peopleHtml(ev));
 }
 

@@ -555,6 +555,8 @@ export function setDomains(arr){
    같은 행사 재업로드 시 매핑 UI에 자동 preselect된다.
 ══════════════════════════════════════════ */
 export const CATMAPS = {};
+/* 행사 회고 — settings key='retro_<행사키>' JSON { good, bad, next:[{id,t,dn,by,at}], carry } (modules/event-retro.js) */
+export const RETROS = {};
 
 /* ══════════════════════════════════════════
    EXH_CFG — 행사별 전시 설정 (settings 시트 key='exh_cfg_<행사키>' JSON)
