@@ -138,7 +138,7 @@ function render(){
     el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:1000;display:flex;align-items:center;justify-content:center;padding:16px';
     document.body.appendChild(el);
   }
-  el.innerHTML = `<div style="background:var(--W);border-radius:var(--rd-12);width:min(1560px,100%);max-height:92vh;overflow:auto;padding:16px 18px">
+  el.innerHTML = `<div style="background:var(--W);border-radius:var(--rd-12);width:min(1800px,100%);max-height:92vh;overflow:auto;padding:16px 18px">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
       <div style="font-size:var(--fs-14);font-weight:700">메일 보내기 — ${cm.only && list[0] ? `${escapeHtml(memberName(list[0]))} <span style="font-weight:400;color:var(--i4)">· ${escapeHtml(r.name)}</span>` : escapeHtml(r.name)}</div>
       <span style="font-size:var(--fs-11);color:var(--i4)">${cm.only ? '이 기업에 한 통 — 컨택 기록에 «DM · 보냄»으로 남깁니다' : '기업마다 한 통씩 따로 보내고 그 기업 컨택 기록에 «DM · 보냄»으로 남깁니다'}</span>
@@ -148,7 +148,7 @@ function render(){
       <div><div class="mlbl">언어</div><select class="fi" onchange="rmSet('lang',this.value)">${opt('auto', cm.lang, '기업별 자동 (해외는 영문)')}${opt('ko', cm.lang, '모두 국문')}${opt('en', cm.lang, '모두 영문')}</select></div>
       ${cm.only ? '<div></div>' : `<div><div class="mlbl">받는 사람</div><select class="fi" onchange="rmSet('who',this.value)">${opt('one', cm.who, '한 명 (최근 연락한 사람)')}${opt('all', cm.who, '메일 있는 담당자 모두')}</select></div>`}
     </div>
-    <div style="display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1fr) minmax(0,1.7fr);gap:14px">
+    <div style="display:grid;grid-template-columns:minmax(0,.7fr) minmax(0,.9fr) minmax(0,2.4fr);gap:14px">
       ${cm.only && list[0] ? `<div>
         <div class="mlbl" style="margin:0 0 4px">받는 사람 — 체크한 사람 모두가 한 통의 받는 사람이 돼요</div>
         <div style="border:1px solid var(--i6);border-radius:var(--r);max-height:360px;overflow:auto">
