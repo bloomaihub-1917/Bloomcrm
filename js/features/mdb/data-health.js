@@ -11,7 +11,7 @@
    항목마다 «고치러 가기»가 그 화면을 연다. 화면이 가진 데이터로만 센다(서버를 따로 부르지 않는다).
    Master DB 칩 줄의 «🩺 점검»으로 열고, 하루 처음 열 때 손볼 것이 있으면 한 번 알려 준다.
 ══════════════════════════════════════════════════════════════ */
-import { contacts, participations, EVENT_LIST, SPEAKERS, currentUser } from '../../state.js';
+import { contacts, participations, EVENT_LIST, SPEAKERS, currentUser, isWalkInOnly } from '../../state.js';
 import { escapeHtml, escAttr, td } from '../../utils.js';
 import { postToSheet } from '../../api.js';
 import { trackAction } from '../../core/audit-log.js';
@@ -95,7 +95,8 @@ export function healthItems(){
     const seen = new Set();
     participations.filter((p) => evOf(p) === e.key).forEach((p) => {
       const c = byId.get(String(p.contactId));
-      if(!c || seen.has(c.id) || s(c.email1) || s(c.email2)) return;
+      /* 현장 등록·연락처 없음은 원래 메일을 받지 않는다 — 빠진 값이 아니다(state.js isWalkInOnly) */
+      if(!c || seen.has(c.id) || s(c.email1) || s(c.email2) || isWalkInOnly(c)) return;
       seen.add(c.id);
       noMail.push({ ev: e.key, c });
     });

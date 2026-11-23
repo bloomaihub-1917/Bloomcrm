@@ -72,6 +72,24 @@ export const participations = [];
    저장하지 않고 읽을 때 JOIN해서 만든다). 연락은 하지 않되 이력은 남긴다. */
 export const hasLeft = (c) => !!String((c && c.left_at) || '').trim();
 
+/* 현장 등록만 있고 메일·전화가 없는 사람(2026-11-23) — 네임택 현장 신규를 마스터DB에 올리면 생긴다.
+   소속과 행사 참가는 맞아 기업DB 인원·행사 이력에는 들어가지만, 연락할 길이 없어
+   Master DB 기본 목록·컨택에서는 내린다(퇴사자처럼 — 행사로 거르거나 이름으로 찾으면 함께 나온다).
+   다음에 메일을 적고 신청하면 이름+소속으로 같은 사람에 붙어 저절로 보통 연락처가 된다.
+   표시 칸을 따로 두지 않고 참가 기록으로 가린다 — 서버 올리기(routes/nametag.js)가 matched '현장 등록'으로 넣는다 */
+export const WALK_IN_MATCHED = '현장 등록';
+let _walkOnly = { key: '', ids: new Set() };
+export function isWalkInOnly(c){
+  if(!c || [c.email1, c.email2, c.phone1, c.phone2].some(v => String(v || '').trim())) return false;
+  const key = `${participations.length}|${contacts.length}`;
+  if(_walkOnly.key !== key){
+    const walk = new Set(), other = new Set();
+    participations.forEach(p => (p.matched === WALK_IN_MATCHED ? walk : other).add(String(p.contactId)));
+    _walkOnly = { key, ids: new Set([...walk].filter(id => !other.has(id))) };
+  }
+  return _walkOnly.ids.has(String(c.id));
+}
+
 /* 이직해 새로 만든 연락처 — 없으면 null(퇴사만 알고 행선지는 모르는 경우) */
 export function movedTo(c){
   const id = (c && c.moved_to_id) || '';

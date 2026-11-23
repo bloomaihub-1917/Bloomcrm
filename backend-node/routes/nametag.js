@@ -42,7 +42,7 @@
 const crypto = require('crypto');
 const express = require('express');
 const pool = require('../db/pool');
-const { contactIdAllocator } = require('../db/contact-ids');
+const { contactUpserter } = require('../db/contact-upsert');
 
 const router = express.Router();
 const newId = (p) => p + Date.now() + crypto.randomBytes(3).toString('hex');
@@ -458,9 +458,12 @@ router.get('/:eventId/live', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-/* 현장 신규 → 마스터DB. 한 사람씩 트랜잭션: 연락처 찾기(이메일)/만들기 → 이 행사 참가 확정 → 기록 키 옮기기.
-   연락처 id는 contactIdAllocator로(CLAUDE.md «16자리 이하»). 이미 옮긴 사람은 건너뛴다 */
-async function promoteOne(client, ev, evName, key, req) {
+/* 현장 신규 → 마스터DB. 한 사람씩(SAVEPOINT): 같은 사람 찾기/만들기 → 이 행사 참가 확정 → 기록 키 옮기기.
+   연락처는 contactUpserter로 넣는다(CLAUDE.md «한 길») — 현장 신규는 메일·전화가 거의 없어(11-19 GPBFair 69명 모두)
+   메일로만 찾던 예전 길은 사전 등록한 사람도 새로 만들고 기업DB에 잇지 않았다. 이제 이름+소속으로 찾고 기업DB에 잇는다.
+   메일·전화가 없는 새 사람은 Master DB 기본 목록·컨택에서 내려 보인다(화면 state.js isWalkInOnly) — 참가 기록 matched '현장 등록'으로 가린다.
+   이미 옮긴 사람은 건너뛴다 */
+async function promoteOne(client, put, ev, evName, key, req) {
   const by = req.user?.email || '';
   const now = new Date().toISOString();
   const first = (await client.query(`SELECT * FROM nametag_prints WHERE event_id = $1 AND person_key = $2
@@ -475,26 +478,10 @@ async function promoteOne(client, ev, evName, key, req) {
   if (!name) return null;   // 이름 없이 뽑은 현장 신규는 연락처로 만들지 않는다(누군지 모른다) — 현장 신규로 남는다
   const email = String(pp.email || '').trim(), phone = String(pp.phone || '').trim();
   const ko = HANGUL.test(name), orgKo = HANGUL.test(org), titleKo = HANGUL.test(title);
-  const found = email ? (await client.query(`SELECT * FROM contacts
-    WHERE lower(trim(email1)) = $1 OR lower(trim(email2)) = $1 ORDER BY id LIMIT 1`, [email.toLowerCase()])).rows[0] : null;
-  let cid, created = false, contact;
-  if (found) {
-    cid = found.id;
-    /* 빈 칸만 채운다 */
-    const fill = { [ko ? 'nameKo' : 'nameEn']: name, [orgKo ? 'orgKo' : 'orgEn']: org, [titleKo ? 'titleKo' : 'titleEn']: title, phone1: phone };
-    const sets = [], args = [cid];
-    Object.entries(fill).forEach(([col, val]) => { if (val && !String(found[col] || '').trim()) { args.push(val); sets.push(`"${col}" = $${args.length}`); } });
-    if (sets.length) await client.query(`UPDATE contacts SET ${sets.join(', ')} WHERE id = $1`, args);
-    contact = (await client.query('SELECT * FROM contacts WHERE id = $1', [cid])).rows[0];
-  } else {
-    cid = (await contactIdAllocator(client))();
-    created = true;
-    contact = (await client.query(`INSERT INTO contacts (id, "nameKo", "nameEn", "orgKo", "orgEn", "titleKo", "titleEn",
-        source, date, email1, phone1, lang, cat, status)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'attendee','new') RETURNING *`,
-    [cid, ko ? name : '', ko ? '' : name, orgKo ? org : '', orgKo ? '' : org, titleKo ? title : '', titleKo ? '' : title,
-      `현장 등록 · ${evName || ev}`, kstStamp(Date.now()).slice(0, 10), email, phone, ko ? 'ko' : 'en'])).rows[0];
-  }
+  const r = await put({ [ko ? 'nameKo' : 'nameEn']: name, [orgKo ? 'orgKo' : 'orgEn']: org, [titleKo ? 'titleKo' : 'titleEn']: title,
+    email1: email, phone1: phone, cat: 'attendee', status: 'new', source: `현장 등록 · ${evName || ev}` });
+  const cid = r.id, created = r.created;
+  const contact = (await client.query('SELECT * FROM contacts WHERE id = $1', [cid])).rows[0];
   const today = kstStamp(Date.now()).slice(0, 10);
   const note = `현장 신규 네임택(${kstStamp(first.printed_at)})`;
   /* 이미 이 행사 참가 기록이 있으면 그 줄을 확정하고 메모를 덧붙인다 */
@@ -525,10 +512,10 @@ async function promoteOne(client, ev, evName, key, req) {
   await client.query(`UPDATE nametag_checkins SET person_key = $3, synced_at = $4 WHERE event_id = $1 AND person_key = $2`, [ev, key, to, now]);
   await client.query(`INSERT INTO activity_log (id, ts, email, name, type, action, target, detail, link)
     VALUES ($1,$2,$3,$4,'create','현장 신규 마스터DB에',$5,$6,$7)`,
-  [newId('L-'), now, by, req.user?.name || '', ev, `${name} (${org})${created ? ' · 새 연락처' : ' · 기존 연락처에 붙임'}`,
+  [newId('L-'), now, by, req.user?.name || '', ev, `${name} (${org})${created ? ' · 새 연락처' : ` · 기존 연락처에 붙임(${r.by})`}${r.suspect ? ' · 이름 같은 사람 있음 — 확인' : ''}`,
     JSON.stringify({ kind: 'contact', id: cid, table: 'participations', row: part.id })]);
   const person = (await client.query(`SELECT ${PEOPLE_COLS} FROM nametag_people WHERE event_id = $1 AND person_key = $2`, [ev, to])).rows[0] || null;
-  return { from: key, to, created, contact, participation: part, person };
+  return { from: key, to, created, by: r.by, suspect: !!r.suspect, contact, participation: part, person };
 }
 
 router.post('/:eventId/promote', async (req, res, next) => {
@@ -542,20 +529,27 @@ router.post('/:eventId/promote', async (req, res, next) => {
     keys.splice(0, keys.length, ...keys.filter((k) => !gone.has(k)));
     const evName = ((await pool.query('SELECT name FROM events WHERE id = $1', [ev])).rows[0] || {}).name;
     const out = [];
-    for (const key of keys) {
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-        const r = await promoteOne(client, ev, evName, key, req);
-        await client.query(r ? 'COMMIT' : 'ROLLBACK');
+    /* 연락처 색인은 한 번만 읽는다 — 사람마다 SAVEPOINT로 나눠 한 사람이 틀려도 나머지는 들어간다 */
+    const client = await pool.connect();
+    let put;
+    try {
+      await client.query('BEGIN');
+      put = await contactUpserter(client, { source: `현장 등록 · ${evName || ev}` });
+      for (const key of keys) {
+        await client.query('SAVEPOINT one');
+        const r = await promoteOne(client, put, ev, evName, key, req);
+        await client.query(r ? 'RELEASE SAVEPOINT one' : 'ROLLBACK TO SAVEPOINT one');
         if (r) out.push(r);
-      } catch (e) {
-        await client.query('ROLLBACK').catch(() => {});
-        throw e;
-      } finally { client.release(); }
-    }
-    res.json({ ok: true, promoted: out });
+      }
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw e;
+    } finally { client.release(); }
+    res.json({ ok: true, promoted: out, orgsCreated: put.orgsCreated.length });
   } catch (e) { next(e); }
 });
 
 module.exports = router;
+
+module.exports.promoteOne = promoteOne;   // 시험용

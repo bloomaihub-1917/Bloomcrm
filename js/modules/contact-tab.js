@@ -18,7 +18,7 @@
    데이터: contact_rounds · round_members · contact_attempts (schema.sql 참고)
 ══════════════════════════════════════════════════════════════ */
 import {
-  EVENT_LIST, CO_DB, contacts, participations, currentUser, hasLeft, crmV, curApp,
+  EVENT_LIST, CO_DB, contacts, participations, currentUser, hasLeft, isWalkInOnly, crmV, curApp,
   CONTACT_ROUNDS, ROUND_MEMBERS, CONTACT_ATTEMPTS,
   nextContactId,
 } from '../state.js';
@@ -1082,7 +1082,7 @@ export function fillAll(on){
 /* 컨택 명단에 넣으면 그 행사의 영업 DB도 켠다(docs/manual-db-axes.md).
    people을 주면 그 사람들만(Master DB에서 사람을 골라 보낸 경우), 없으면 그 기업의 재직 담당자 모두 */
 async function markSalesFor(cos, r, people){
-  const cids = people || cos.flatMap(c => fullContacts(c).filter(p => !hasLeft(p)).map(p => p.id));
+  const cids = people || cos.flatMap(c => fullContacts(c).filter(p => !hasLeft(p) && !isWalkInOnly(p)).map(p => p.id));
   const n = await markSalesTargets(cids, r.event_id);
   if(n > 0) trackAction('add', '영업 DB 켬', r.name, `${escapeHtml(evLabel(r.event_id))} 영업 DB — ${n}명`);
   return n;

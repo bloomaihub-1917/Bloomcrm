@@ -54,7 +54,7 @@ import {
   CONTACT_ATTEMPTS,
 } from '../state.js';
 import { CONTACT_ORIGINS } from '../constants.js';
-import { SALES_TARGETS, NO_ROLE, matchesRole, contactRoles, contactLatestRole } from '../state.js';
+import { SALES_TARGETS, NO_ROLE, matchesRole, contactRoles, contactLatestRole, isWalkInOnly } from '../state.js';
 import { isSalesTarget } from '../domain/sales-targets.js';
 import { CP, CL, RP, CAT_KEYS, ROLE_TO_CAT, COUNTRIES, avB, avF } from '../constants.js';
 import { td, ab, phoneMatch, countryName, countryOptions, escapeHtml, escAttr, sectorKey, parseSectorScope, parseTags, joinTags, isMobile, cleanEmail, personName, personFullName, leftPill, slugifySectorName } from '../utils.js';
@@ -772,6 +772,8 @@ export const mdbQuery = () => String((document.getElementById('mdb-q')||{}).valu
      여기서 빼면 «분명히 있었는데 검색이 안 되네» 하고 같은 사람을 또 등록하게
      된다. 찾는 걸 막는 건 감추는 것보다 나쁘다. */
 export const hidingLeft = () => !mdbUi.mdbShowLeft && !mdbEvFilter && !mdbQuery() && !(mdbUi.mdbAi && mdbUi.mdbAi.plan.include_left);
+/* 현장 등록·연락처 없음 — 퇴사자와 같은 때 내린다(행사로 거르거나 이름으로 찾으면 함께) */
+export const hidingWalkIn = () => !mdbUi.mdbShowWalkIn && !mdbEvFilter && !mdbQuery();
 
 /* ══════════════════════════════════════════
    질문으로 찾기 — «작년 KIC 연사 중 올해 안 온 미국 사람»
@@ -859,6 +861,7 @@ export function mdbFilterPairs(pairs){
       : participations.some(x => x.contactId === c.id && (x.role || '참가자') === mdbTypeFilter));
   }
   if(hidingLeft()) out = out.filter(({ c }) => !hasLeft(c));
+  if(hidingWalkIn()) out = out.filter(({ c }) => !isWalkInOnly(c));
   if(mdbUi.mdbOrigin) out = out.filter(({ c }) => originOf(c) === mdbUi.mdbOrigin);
   if(mdbUi.mdbSalesEv) out = out.filter(({ c }) => isSalesTarget(c.id, mdbUi.mdbSalesEv));
   if(mdbUi.mdbUnlinked) out = out.filter(({ c }) => isUnlinkedContact(c));
@@ -896,6 +899,7 @@ export function renderMDB(){
   const pairs = window.getMDBPairs();
   renderCtryChip();
   renderLeftChip();
+  renderWalkInChip();
   renderOrgOnly();
   renderUnlinkedChip();
   renderDupeChip();
@@ -951,6 +955,17 @@ function renderCtryChip(){
 /* 퇴사자가 몇 명 빠졌는지 — 목록에서 조용히 사라지면 «있었는데 없어졌다»가
    된다. 숫자를 적어 두고, 누르면 함께 보여 준다. 행사별 보기에서는 애초에
    빼지 않으므로 칩도 띄우지 않는다. */
+/* 현장 등록·연락처 없음 — 네임택 현장 신규로 들어와 메일·전화가 없는 사람. 기업DB에는 들어가고 여기서는 내린다 */
+function renderWalkInChip(){
+  const el = document.getElementById('mdb-walkin-chip');
+  if(!el) return;
+  const n = mdbEvFilter || mdbQuery() ? 0 : contacts.filter(isWalkInOnly).length;
+  if(!n){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = '';
+  el.innerHTML = `<button class="pill ${mdbUi.mdbShowWalkIn ? 'p-amber' : 'p-gray'}" style="border:0;cursor:pointer;font:inherit"
+    title="네임택 현장 신규로 들어와 메일·전화가 없는 사람이에요. 기업DB 인원·행사 이력에는 들어가고, 연락할 길이 없어 여기서는 내려 둡니다. 눌러서 함께 봅니다."
+    onclick="toggleMdbWalkIn()">현장 등록·연락처 없음 ${n}</button>`;
+}
 function renderLeftChip(){
   const el = document.getElementById('mdb-left-chip');
   if(!el) return;
@@ -1083,6 +1098,7 @@ export function updateMDBBadges(pairs){
       bp = bp.filter(({c}) => inDom.has(String(c.id)));
     }
     if(hidingLeft()) bp = bp.filter(({c}) => !hasLeft(c));
+    if(hidingWalkIn()) bp = bp.filter(({c}) => !isWalkInOnly(c));
     if(mdbStat) bp=bp.filter(({c})=>c.status===mdbStat);
     const q=(document.getElementById('mdb-q')||{}).value||'';
     // orgEn이 빠져 있어 영문 기업명으로 검색하면 목록에는 나오는데 배지 숫자는

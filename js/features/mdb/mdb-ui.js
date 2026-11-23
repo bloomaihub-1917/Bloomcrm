@@ -16,6 +16,7 @@ export const mdbUi = {
   lpSwallowClick: false,
   mdbCtryOnly: false,
   mdbShowLeft: false,
+  mdbShowWalkIn: false,   // 현장 등록·연락처 없음 함께 보기(state.js isWalkInOnly)
   mdbShowOrgOnly: false,   // 담당자 없는 기업 줄 함께 보기
   mdbAi: null,   // { q, plan }
   dragIds: [],

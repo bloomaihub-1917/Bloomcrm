@@ -537,6 +537,7 @@ export function getMDBPairs(){
 /* ── Main render dispatcher (원본 1829~1842행) ── */
 export function toggleMdbCtry(){ mdbUi.mdbCtryOnly = !mdbUi.mdbCtryOnly; renderMDB(); }
 export function toggleMdbLeft(){ mdbUi.mdbShowLeft = !mdbUi.mdbShowLeft; renderMDB(); }
+export function toggleMdbWalkIn(){ mdbUi.mdbShowWalkIn = !mdbUi.mdbShowWalkIn; renderMDB(); }
 
 
 /* 화면의 onclick이 부르는 것 */
@@ -554,6 +555,7 @@ window.setDBView = setDBView;
 window.getMDBPairs = getMDBPairs;
 window.toggleMdbCtry = toggleMdbCtry;
 window.toggleMdbLeft = toggleMdbLeft;
+window.toggleMdbWalkIn = toggleMdbWalkIn;
 
 /* ── 컨택으로 보내기 — 고른 사람들의 소속 기업을 컨택 차수 명단에 넣고,
    그 사람들을 그 행사의 영업 DB로 켠다(docs/manual-db-axes.md).

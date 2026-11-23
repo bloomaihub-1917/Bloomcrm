@@ -3,7 +3,7 @@
    (modules/contact-tab.js에서 옮겼다 — 탭 화면 파일에 기대지 않게)
 ═══════════════════════════════════════════════════════════════ */
 
-import { CONTACT_ROUNDS, ROUND_MEMBERS, CONTACT_ATTEMPTS, EVENT_LIST, CO_DB, contacts, participations, hasLeft } from '../state.js';
+import { CONTACT_ROUNDS, ROUND_MEMBERS, CONTACT_ATTEMPTS, EVENT_LIST, CO_DB, contacts, participations, hasLeft, isWalkInOnly } from '../state.js';
 import { td } from '../utils.js';
 
 /* ══════════════════════════════════════════
@@ -65,6 +65,7 @@ export function fullContacts(co){
   return (co ? co.contacts : []).map(p => contactOf(p.id) || p);
 }
 export function peopleOf(m){
-  return fullContacts(coOf(m.org_id)).filter(c => !hasLeft(c))
+  /* 현장 등록·연락처 없음(state.js isWalkInOnly)은 걸 곳이 없다 — 컨택 담당자에서 뺀다 */
+  return fullContacts(coOf(m.org_id)).filter(c => !hasLeft(c) && !isWalkInOnly(c))
     .sort((a, b) => (!!(b.phone1 || b.phone2) - !!(a.phone1 || a.phone2)));
 }

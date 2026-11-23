@@ -24,6 +24,8 @@
 ═══════════════════════════════════════════════════════════════ */
 import { escapeHtml, escAttr, isMobile } from '../../utils.js';
 import { contacts, participations, EVENT_LIST, currentUser } from '../../state.js';
+import { reloadOrgs } from '../../domain/orgs.js';
+import { buildCoDB } from '../../domain/co-db.js';
 import { normalizeTemplate, LANG_OPTIONS, REISSUE_REASONS, MM_PX, parseScan, TEXT_KEYS, EL_LABEL, layoutFor } from '../../domain/nametag-layout.js';
 import { loadNametag, loadNametagLive, promoteWalkIns } from '../../api/nametag.js';
 import { enqueue, newId, waiting, failed, deviceLog, netState, markNet, onOutbox, kick, retryFailed, dismissFailed } from './nt-outbox.js';
@@ -1399,20 +1401,22 @@ export async function ntImportApply(){
 }
 export function ntImportCancel(){ nt.imp = null; rerender(); }
 
-/* ── 현장 신규 → 마스터DB — 연락처(같은 이메일이면 그 사람)와 이 행사 참가 확정을 만들고, 기록 키를 c<연락처 id>로 옮긴다 ── */
+/* ── 현장 신규 → 마스터DB — 같은 사람(메일·전화·이름+소속)을 찾거나 연락처를 만들어 기업DB에 잇고(서버 contactUpserter),
+   이 행사 참가 확정을 만든 뒤 기록 키를 c<연락처 id>로 옮긴다. 메일·전화가 없는 새 사람은 Master DB·컨택에서 내려 보인다 ── */
 export async function ntPromote(){
   const wi = walkInPeople(nt.prints, nt.people).filter(p => p.nameKo || p.nameEn);   // 이름 없이 뽑은 사람은 누군지 몰라 올리지 않는다
   if(!wi.length) return;
   const w = waiting(nt.ev).length;
   if(w) return alert(`이 기기에 아직 서버로 보내지 않은 기록이 ${w}건 있어요. 연결돼 다 보내진 뒤 다시 눌러 주세요.`);
-  const noMail = wi.filter(p => !p.email).length;
-  if(!confirm(`현장 신규 ${wi.length}명을 마스터DB에 올릴까요?\n연락처를 만들고 이 행사 «참가자»로 확정해요. 같은 이메일이 있으면 그 사람에 붙여요.${noMail ? `\n이메일이 없는 ${noMail}명은 새 연락처로 만들어요.` : ''}`)) return;
+  const noReach = wi.filter(p => !p.email && !p.phone).length;
+  if(!confirm(`현장 신규 ${wi.length}명을 마스터DB에 올릴까요?\n이 행사 «참가자»로 확정하고 소속을 기업DB에 이어요. 메일·전화나 이름+소속이 같은 사람이 있으면 그 사람에 붙여요.${noReach ? `\n메일·전화가 없는 ${noReach}명은 기업DB에는 들어가고, Master DB·컨택에서는 «현장 등록·연락처 없음»으로 내려 둬요.` : ''}`)) return;
   nt.busy = true; rerender();
-  let made = 0, n = 0;
+  let made = 0, n = 0, orgsMade = 0;
   try {
     /* 50명씩 — 한 요청이 서버 시간 한도(60초)에 걸리지 않게. 중간에 끊기면 올라간 만큼은 화면에도 남는다 */
     for(let i = 0; i < wi.length; i += 50){
     const j = await promoteWalkIns(nt.ev, wi.slice(i, i + 50).map(p => p.key));
+    orgsMade += j.orgsCreated || 0;
     (j.promoted || []).forEach(r => {
       n++;
       const c = r.contact, cid = +c.id;
@@ -1420,7 +1424,7 @@ export async function ntPromote(){
       if(!contacts.some(x => x.id === cid)) contacts.push({ id: cid, nameKo: c.nameKo || '', nameEn: c.nameEn || '', orgKo: c.orgKo || '', orgEn: c.orgEn || '',
         titleKo: c.titleKo || '', titleEn: c.titleEn || '', deptKo: c.deptKo || '', deptEn: c.deptEn || '', country: c.country || '', cat: c.cat || 'attendee',
         lang: c.lang || 'ko', source: c.source || '', date: c.date || '', status: c.status || 'new', email1: c.email1 || '', email2: c.email2 || '',
-        phone1: c.phone1 || '', phone2: c.phone2 || '', beat: c.beat || '', products: c.products || '', tags: c.tags || '' });
+        phone1: c.phone1 || '', phone2: c.phone2 || '', beat: c.beat || '', products: c.products || '', tags: c.tags || '', org_id: c.org_id || '' });
       const pt = r.participation, old = participations.find(p => p.id === pt.id);
       if(old) old.confirmedAt = pt.confirmed_at || old.confirmedAt;
       else participations.push({ id: pt.id, eventId: nt.ev, event: nt.ev, contactId: cid, contact: '', role: pt.role, note: pt.note || '', matched: pt.matched || '', confirmedAt: pt.confirmed_at });
@@ -1432,7 +1436,10 @@ export async function ntPromote(){
       if(r.person) nt.people.set(r.to, r.person);
     });
     }
-    alert(`${n}명을 올렸어요 — 새 연락처 ${made} · 기존 연락처에 붙임 ${n - made}`);
+    /* 서버가 새로 만든 기업은 화면에 없다 — 다시 읽어야 기업DB에 보이고 «미연결»로 안 잡힌다 */
+    if(orgsMade) await reloadOrgs();
+    try { buildCoDB(); } catch(e){}
+    alert(`${n}명을 올렸어요 — 새 연락처 ${made} · 기존 연락처에 붙임 ${n - made}${orgsMade ? ` · 새 기업 ${orgsMade}곳` : ''}`);
   } catch(e){
     alert(`${n ? `${n}명까지 올리고 ` : ''}멈췄어요 — ${e.message}\n다시 누르면 남은 사람만 올려요.`);
     resync();
