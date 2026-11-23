@@ -32,10 +32,16 @@ export function renderG2bBuyers(){
 }
 
 function pickSheet(wb){
+  /* 이 양식은 두 번째 시트(«검증 공고»)가 공고 명단이다 — 첫 시트는 기관별 우선순위 요약 */
   const named = wb.SheetNames.find(n => n.replace(/\s/g, '') === '검증공고');
-  if(named) return named;
-  return wb.SheetNames.find(n => XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: '' })
-    .some(r => r.some(c => String(c).replace(/\s/g, '') === '사업명'))) || wb.SheetNames[0];
+  return named || wb.SheetNames[1] || wb.SheetNames[0];
+}
+
+function readSheet(){
+  const sheet = document.getElementById('g2b-sheet').value;
+  ui.rows = XLSX.utils.sheet_to_json(ui.wb.Sheets[sheet], { header: 1, defval: '', raw: true })
+    .map(r => r.map(c => (c instanceof Date ? c.toISOString().slice(0, 10) : c)));
+  runG2b(false);
 }
 
 function handleG2bFile(e){
@@ -45,13 +51,14 @@ function handleG2bFile(e){
   const reader = new FileReader();
   reader.onload = (ev) => {
     try {
-      const wb = XLSX.read(ev.target.result, { type: 'array' });
-      const sheet = pickSheet(wb);
-      ui.rows = XLSX.utils.sheet_to_json(wb.Sheets[sheet], { header: 1, defval: '', raw: true })
-        .map(r => r.map(c => (c instanceof Date ? c.toISOString().slice(0, 10) : c)));
-      ui.file = `${file.name} › ${sheet}`;
-      document.getElementById('g2b-file').textContent = ui.file;
-      runG2b(false);
+      ui.wb = XLSX.read(ev.target.result, { type: 'array' });
+      const pick = pickSheet(ui.wb);
+      const sel = document.getElementById('g2b-sheet');
+      sel.innerHTML = ui.wb.SheetNames.map((n, i) => `<option value="${h(n)}">${i + 1}번째 · ${h(n)}</option>`).join('');
+      sel.value = pick;
+      sel.parentElement.style.display = '';
+      document.getElementById('g2b-file').textContent = file.name;
+      readSheet();
     } catch(err){ show(`<div class="g2b-err">엑셀을 읽지 못했어요 — ${h(err.message)}</div>`); }
   };
   reader.readAsArrayBuffer(file);
@@ -100,4 +107,5 @@ function report(r, applied){
 
 window.handleG2bFile = handleG2bFile;
 window.runG2b = runG2b;
+window.readG2bSheet = readSheet;
 window.renderG2bBuyers = renderG2bBuyers;
