@@ -464,10 +464,11 @@
     <div id="upv-g2b" style="display:none"><div class="uc">
       <div class="uc-ttl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V10l7-5 7 5v11"/></svg>나라장터 발주기관 → 행사 바이어 · 영업 파이프라인</div>
       <div class="g2b-note">나라장터 행사대행 공고 엑셀(두 번째 시트 «검증 공고» — 영업 기준 기관·사업명·사업/계약 담당자·전화·이메일)을 올리면
-        담당자를 Master DB에 넣고(기업DB 연결), 고른 행사의 <b>바이어</b>로 넣고, 기관마다 <b>영업 파이프라인</b>에 공고를 기록으로 남깁니다.
+        담당자를 Master DB에 넣고(기업DB 연결), 고른 행사의 <b>바이어</b>로 넣고, 기관마다 <b>영업 파이프라인</b>에 공고를 기록으로 남깁니다. 차수를 고르면 그 <b>차수 명단</b>에 기관을 넣고 담당자를 영업 DB로 켭니다.
         먼저 시험 실행 결과를 보여 드리고, «이대로 저장»을 눌러야 들어갑니다.</div>
       <div class="sec sec-bar">
-        <label>행사 <select id="g2b-ev"></select></label>
+        <label>행사 <select id="g2b-ev" onchange="g2bEvChanged()"></select></label>
+        <label>차수 <select id="g2b-round" onchange="g2bRoundChanged()"></select></label>
         <input type="file" id="g2b-input" accept=".xlsx,.xls" style="display:none" onchange="handleG2bFile(event)">
         <button class="btn bp" onclick="document.getElementById('g2b-input').click()">엑셀 선택…</button>
         <span id="g2b-file" class="g2b-tag"></span>

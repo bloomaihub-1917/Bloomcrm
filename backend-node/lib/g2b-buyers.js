@@ -7,6 +7,7 @@
      1) 사업·계약 담당자 → Master DB (contactUpserter — 같은 사람 찾기·16자리 id·기업DB 연결)
      2) 같은 사람 → 고른 행사의 «바이어» 참가
      3) 기관마다 영업 파이프라인(crm_targets) 한 줄 — 공고(사업명·금액·게시일·공고번호)를 기록으로
+     4) 차수를 고르면 그 차수 명단(round_members)에 기관을 넣고, 담당자를 그 행사 영업 DB(sales_targets)로 켠다
    를 한 번에 한다. 이미 있는 참가·파이프라인 줄은 건드리지 않고, 파이프라인에는 새 공고만 기록에 더한다.
 
    rows: «검증 공고» 시트를 배열 그대로(머리글 줄 포함). 머리글 이름으로 칸을 찾는다. */
@@ -40,7 +41,7 @@ function findHeader(rows){
   return { hi, col };
 }
 
-async function importG2bBuyers(client, { rows, eventId, role = '바이어', source = '나라장터 공고' }){
+async function importG2bBuyers(client, { rows, eventId, roundId = '', role = '바이어', source = '나라장터 공고', by = '' }){
   const ev = (await client.query('SELECT id, name FROM events WHERE id = $1', [eventId])).rows[0];
   if (!ev) throw new Error(`행사(${eventId})를 찾지 못했어요`);
   const h = findHeader(rows || []);
@@ -69,6 +70,7 @@ async function importG2bBuyers(client, { rows, eventId, role = '바이어', sour
         const { id, created } = await put({ nameKo: name, orgKo: org, deptKo: dept, titleKo: (full.match(TITLES) || [''])[0], email1: email, phone1: phone });
         if (!id) continue;
         const p = people.get(id) || { id, name: name || email, org, kinds: [], created };
+        if (!p.orgId) p.orgId = (await client.query('SELECT org_id FROM contacts WHERE id=$1', [id])).rows[0]?.org_id || '';
         if (!p.kinds.includes(kind)) p.kinds.push(kind);
         people.set(id, p);
       }
@@ -113,6 +115,32 @@ async function importG2bBuyers(client, { rows, eventId, role = '바이어', sour
     orgs.push({ org, deals: deals.length, state: '새로' });
   }
 
+  // 4) 차수 명단 — 고른 차수에 기관을 넣고(이미 있으면 건너뜀), 담당자는 이 행사 영업 DB로 켠다(화면 «명단 채우기»와 같다)
+  let round = null, rmNew = 0, rmHad = 0, stNew = 0;
+  const noOrg = [];
+  if (roundId) {
+    round = (await client.query('SELECT id, name, event_id FROM contact_rounds WHERE id=$1', [roundId])).rows[0];
+    if (!round || round.event_id !== ev.id) throw new Error('고른 차수가 이 행사의 차수가 아니에요');
+    const kst = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 16).replace('T', ' ');
+    const have = new Set((await client.query('SELECT org_id FROM round_members WHERE round_id=$1', [round.id])).rows.map((x) => x.org_id));
+    const stamp = Date.now();
+    for (const org of byOrg.keys()) {
+      const orgId = [...people.values()].find((p) => p.org === org && p.orgId)?.orgId;
+      if (!orgId) { noOrg.push(org); continue; }
+      if (have.has(orgId)) { rmHad++; continue; }
+      await client.query(`INSERT INTO round_members (id, round_id, org_id, org_name, source, caution, hold_until, call_hours, next_at, goal_at, closed_at, closed_reason, created_at)
+        VALUES ($1,$2,$3,$4,$5,'','','','','','','',$6)`, [`RM-${stamp}_${rmNew}`, round.id, orgId, org, source, kst]);
+      have.add(orgId); rmNew++;
+    }
+    const on = new Set((await client.query('SELECT contact_id FROM sales_targets WHERE event_id=$1', [ev.id])).rows.map((x) => String(x.contact_id)));
+    for (const p of people.values()) {
+      if (on.has(String(p.id))) continue;
+      await client.query('INSERT INTO sales_targets (id, event_id, contact_id, created_at, created_by) VALUES ($1,$2,$3,$4,$5)',
+        [`ST-${stamp}_${stNew}`, ev.id, String(p.id), kst.slice(0, 10), by]);
+      stNew++;
+    }
+  }
+
   const s = put.stat;
   return {
     event: ev, deals: data.length, orgCount: byOrg.size,
@@ -121,6 +149,7 @@ async function importG2bBuyers(client, { rows, eventId, role = '바이어', sour
     orgsCreated: (put.orgsCreated || []).map((o) => o.name_ko || o.name || String(o)),
     participations: { created: partNew, existed: partHad },
     pipeline: { created: crmNew, dealsAdded: crmAdded },
+    round: round ? { name: round.name, added: rmNew, existed: rmHad, salesOn: stNew, noContact: noOrg } : null,
   };
 }
 

@@ -7,7 +7,7 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import { authHeaders } from '../../api.js';
-import { API_BASE_URL, EVENT_LIST, currentUser } from '../../state.js';
+import { API_BASE_URL, CONTACT_ROUNDS, EVENT_LIST, currentUser } from '../../state.js';
 import { escapeHtml as h } from '../../utils.js';
 
 const ui = { rows: null, file: '', busy: false };
@@ -29,7 +29,21 @@ export function renderG2bBuyers(){
     sel.innerHTML = evs.map(e => `<option value="${h(e.key)}">${h(e.short || e.name || e.key)}</option>`).join('');
     if(evs.some(e => e.key === 'EVK')) sel.value = 'EVK';
   }
+  fillRounds();
 }
+
+/* 차수 — 그 행사의 열린 차수. 이름에 «바이어»가 든 차수를 먼저 고른다. 안 넣으려면 «넣지 않음» */
+function fillRounds(){
+  const ev = document.getElementById('g2b-ev')?.value;
+  const sel = document.getElementById('g2b-round');
+  if(!sel) return;
+  const rs = CONTACT_ROUNDS.filter(r => r.event_id === ev && r.status !== 'closed');
+  sel.innerHTML = '<option value="">넣지 않음</option>' + rs.map(r => `<option value="${h(r.id)}">${h(r.name)}${r.channel ? ` · ${h(r.channel)}` : ''}</option>`).join('');
+  const buyer = rs.find(r => /바이어/.test(r.name || ''));
+  if(buyer) sel.value = buyer.id;
+}
+
+function g2bEvChanged(){ fillRounds(); if(ui.rows) runG2b(false); }
 
 function pickSheet(wb){
   /* 이 양식은 두 번째 시트(«검증 공고»)가 공고 명단이다 — 첫 시트는 기관별 우선순위 요약 */
@@ -69,10 +83,11 @@ function show(html){ const el = document.getElementById('g2b-out'); if(el) el.in
 async function runG2b(apply){
   if(!ui.rows || ui.busy) return;
   const eventId = document.getElementById('g2b-ev').value;
+  const roundId = document.getElementById('g2b-round')?.value || '';
   if(apply && !confirm('이 결과대로 저장할까요?')) return;
   ui.busy = true;
   show(`<div class="g2b-note">${apply ? '저장하는 중…' : '시험 실행 중…'}</div>`);
-  const j = await post({ eventId, rows: ui.rows, apply });
+  const j = await post({ eventId, roundId, rows: ui.rows, apply });
   ui.busy = false;
   if(!j.ok){ show(`<div class="g2b-err">${h(j.error || '실패')}</div>`); return; }
   show(report(j.report, j.applied));
@@ -92,6 +107,8 @@ function report(r, applied){
       ${stat(c.created, `새 연락처 · 붙임 ${c.attached}`)}
       ${stat(r.participations.created, `${ev} 바이어 추가`)}
       ${stat(r.pipeline.created, `영업 파이프라인 새 기관${r.pipeline.dealsAdded ? ` · 공고 ${r.pipeline.dealsAdded}건 더함` : ''}`)}
+      ${r.round ? stat(r.round.added, `차수 «${h(r.round.name)}» 명단에 넣을 기관${r.round.existed ? ` · 이미 ${r.round.existed}` : ''}`) : ''}
+      ${r.round ? stat(r.round.salesOn, '영업 DB로 켤 담당자') : ''}
       ${stat(r.orgsCreated.length, '기업DB 새 기업')}
     </div>
     ${list(`담당자 ${r.people.length}명`, r.people.map(p =>
@@ -101,6 +118,7 @@ function report(r, applied){
       `<li>${h(s.name)} (${h(s.org)}) ≈ ${h(s.withName)} (${h(s.withOrg)}) — ${h(s.why)}</li>`))}
     ${list(`이름·메일이 없어 연락처로 못 넣은 ${r.skipped.length}건 (기관은 파이프라인에 들어가요)`, r.skipped.map(s =>
       `<li>${h(s.org)} ${h(s.kind)} — ${h(s.dept)} ${h(s.phone)}</li>`))}
+    ${r.round ? list(`담당자가 없어 차수 명단에 못 넣는 기관 ${r.round.noContact.length}곳 — 파이프라인에는 들어가요`, r.round.noContact.map(o => `<li>${h(o)}</li>`)) : ''}
     ${list('기업DB에 새로 만드는 기업', r.orgsCreated.length ? [`<li>${r.orgsCreated.map(h).join(', ')}</li>`] : [])}
     ${list('영업 파이프라인', r.orgs.map(o => `<li>${h(o.org)} · 공고 ${o.deals}건 <span class="g2b-tag">${h(o.state)}</span></li>`))}`;
 }
@@ -109,3 +127,5 @@ window.handleG2bFile = handleG2bFile;
 window.runG2b = runG2b;
 window.readG2bSheet = readSheet;
 window.renderG2bBuyers = renderG2bBuyers;
+window.g2bEvChanged = g2bEvChanged;
+window.g2bRoundChanged = () => { if(ui.rows) runG2b(false); };
