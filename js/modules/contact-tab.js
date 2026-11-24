@@ -360,6 +360,7 @@ function card(r, { m, atts, st }){
           st === 'wait' ? ` · ${escapeHtml(waitUntil(m, atts))}부터` : ''}</span>
       </span>
     </div>
+    ${histLine(co)}
     ${calling && !calling.me ? `<div style="font-size:var(--fs-11_5);color:var(--am);background:var(--ab);border-radius:var(--rd-4);padding:3px 7px;margin-top:5px;font-weight:600">📞 ${escapeHtml(calling.by)} 님이 거는 중 · ${calling.mins ? `${calling.mins}분 전부터` : '방금'}</div>` : ''}
     ${recentOther ? `<div style="font-size:var(--fs-11);color:var(--a);margin-top:4px">${escapeHtml(recentOther.by_name || '')} 님이 ${escapeHtml(String(recentOther.at).slice(11, 16))}에 기록했어요</div>` : ''}
     ${m.caution ? `<div style="font-size:var(--fs-11);color:var(--re);margin-top:4px">⚠ ${escapeHtml(m.caution)}</div>` : ''}
@@ -732,6 +733,15 @@ export function setContactFil(k){ stFil = k; showLimit = 150; renderToday(); }
 export function setContactSrc(v){ srcFil = v; showLimit = 150; renderToday(); }
 export function setContactMiss(on){ missFil = !!on; showLimit = 150; renderToday(); }
 /* 치던 메모는 담아만 둔다 — 다시 그리지 않는다 */
+/* TM 걸기 전에 이 기업이 어느 행사에 어떤 역할로 왔는지 — 기업DB(co.events)와 같은 값. 최근 행사부터 */
+function histLine(co){
+  const evs = (co?.events || []).slice().sort((a, b) => String(b.date || b.year).localeCompare(String(a.date || a.year)));
+  if(!evs.length) return co ? `<div style="font-size:var(--fs-11);color:var(--i4);margin-top:4px">참가 이력 없음</div>` : '';
+  return `<div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:var(--fs-11);margin-top:4px">
+    <span style="color:var(--i4)">참가 이력</span>
+    ${evs.map(e => `<span class="pill p-gray" title="${escAttr([e.name, e.roles.join('·'), e.people.join(', ')].filter(Boolean).join(' — '))}">${escapeHtml(e.short || e.name)}${e.roles.length ? ` · ${escapeHtml(e.roles.join('·'))}` : ''}</span>`).join('')}
+  </div>`;
+}
 export function contactMemo(mid, v){ memoDraft[mid] = v; }
 
 /* «거는 중» — 전화번호를 누르면(fromTel) 찍고, 단추는 찍고 풀기를 오간다.
