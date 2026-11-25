@@ -17,7 +17,7 @@ import { escAttr, escapeHtml, nowStamp, td } from '../../utils.js';
 import { CANCELLED, TAX_STAGES, currencyOf, fmtMoney, isBillable, settleState, stageOf, taxNeed } from './exh-calc.js';
 import { exhDrUi } from './exh-drawer-ui.js';
 import { closeExhDr, deleteExhContact, deleteExhInvoice, deleteExhItem, deleteExhLog, deleteExhPayment, deleteExhTax, localId, openExhDr, openOrgFromExh, orgForField, renderExhDr, saveExhContact, saveExhInvoice, saveExhItem, saveExhLog, saveExhPayment, saveExhTax, saveFailed, setBuilderOrg, switchExhDT, syncNorm } from '../../modules/exh-drawer.js';
-import { addBoothDesignFeedback, assignExhContact, catalogPickMissing, closeNewContact, hideMailCand, mailCandAsBuilder, needsCatalog, openExhPerson, openNewContact, pickCatalogItem, promoteExhContact, setBoothDesignResult, submitNewContact, unassignExhContact } from './exh-dr-booth.js';
+import { addBoothDesignFeedback, assignExhContact, catalogPickMissing, closeNewContact, hideMailCand, mailCandAsBuilder, needsCatalog, openExhPerson, openNewContact, pickCatalogItem, promoteExhContact, setBoothDesignResult, unassignExhContact } from './exh-dr-booth.js';
 import { ackExhAlert, addExhApp, addItemHere, closeExhApp, delExhApp, drawIntroMeter, reopenExhApp, setAppField, unackExhAlert, voidExhItem } from './exh-dr-progress.js';
 import { editItemRow, openTaxAnyway, pickItemCat, rememberItemCat, rememberItemCur, swapItemList, toggleItemGroup } from './exh-dr-billing.js';
 
@@ -701,7 +701,6 @@ window.ackExhAlert = ackExhAlert;
 window.unackExhAlert = unackExhAlert;
 window.openNewContact = openNewContact;
 window.closeNewContact = closeNewContact;
-window.submitNewContact = submitNewContact;
 window.assignExhContact = assignExhContact;
 window.unassignExhContact = unassignExhContact;
 window.drawIntroMeter = drawIntroMeter;

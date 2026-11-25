@@ -12,12 +12,10 @@
    - 둘 이상(누군지 모름) → 건드리지 않는다(연사 창에서 골라 잇기)
    그 뒤 syncPartRole이 참가 기록(연사·VIP)을 만든다.
    ────────────────────────────────────────────────────────────────────────── */
-import { contacts, nextContactId, speakersForEvent } from '../../state.js';
-import { postToSheet } from '../../api.js';
+import { contacts, speakersForEvent } from '../../state.js';
+import { upsertContact } from '../../api/contacts.js';
 import { saveSpeaker } from '../../api/conf-save.js';
-import { ensureOrgsForNames, orgIdForName } from '../../domain/orgs.js';
 import { trackAction } from '../../core/audit-log.js';
-import { td } from '../../utils.js';
 import { confLocked, syncPartRole } from './conf-common.js';
 
 const normOrg = s => String(s || '').toLowerCase().replace(/\(주\)|㈜|\(재\)|주식회사|재단법인|\s|[().,]/g, '');
@@ -35,32 +33,13 @@ function findSame(sp){
 }
 
 async function createContact(sp){
-  const nameKo = String(sp.name_snapshot || '').trim(), nameEn = String(sp.name_en || '').trim();
-  const c = {
-    id: nextContactId(),   // CLAUDE.md — 16자리 이하
-    nameKo, nameEn,
-    orgKo: sp.org_ko || '', orgEn: sp.org_en || '',
-    titleKo: sp.title_ko || '', titleEn: sp.title_en || '',
-    deptKo: '', deptEn: '',
-    country: sp.nationality || sp.residence_country || '', cat: 'speaker', lang: nameKo ? 'KO' : 'EN',
-    source: `${sp.event_id || ''} 연사`, date: td(), status: 'new',
-    email1: '', email2: '', phone1: '', phone2: '',
-    beat: '', products: '', tags: '', org_id: '',
-  };
-  const orgNm = (c.orgKo || c.orgEn).trim();
-  if(orgNm){
-    try { await ensureOrgsForNames([orgNm]); c.org_id = orgIdForName(orgNm) || ''; }
-    catch(e){ console.warn('[sp-autolink] 기업 연결 실패:', e); }
-  }
-  const r = await postToSheet({
-    sheet: 'contacts',
-    row: [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
-      c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
-      c.beat, c.products, c.tags, c.org_id],
-  }, '연사 마스터DB 자동 등록', { silent: true });
-  if(!r || !r.ok) return null;
-  contacts.push(c);
-  return c;
+  /* 서버 한 길(api/contacts.js) — 16자리 id·기업DB 연결·같은 사람 찾기를 서버가 한다 */
+  const u = await upsertContact({
+    nameKo: String(sp.name_snapshot || '').trim(), nameEn: String(sp.name_en || '').trim(),
+    orgKo: sp.org_ko || '', orgEn: sp.org_en || '', titleKo: sp.title_ko || '', titleEn: sp.title_en || '',
+    country: sp.nationality || sp.residence_country || '', cat: 'speaker',
+  }, { source: `${sp.event_id || ''} 연사` });
+  return u.ok && u.contact ? u.contact : null;
 }
 
 /* 한 연사 — 이었으면 true */

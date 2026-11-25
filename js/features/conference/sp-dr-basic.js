@@ -8,11 +8,11 @@
 import { NEED_LABEL, NEED_MARK, SPEAKER_ROLES, SP_CONSENTS } from '../../constants.js';
 import { trackAction } from '../../core/audit-log.js';
 import { patchContact } from '../../modules/db-tab.js';
-import { ensureOrgsForNames, orgIdForName } from '../../domain/orgs.js';
-import { CONF_SESSIONS, SESSION_SPEAKERS, assignmentsFor, coOf, confCfg, contacts, contactsOfSpeaker, getSpeakerById, leadOf, nextContactId, rolesOfSpeaker, speakerNeed } from '../../state.js';
-import { countryName, countryOptions, escAttr, escapeHtml, td } from '../../utils.js';
+import { CONF_SESSIONS, SESSION_SPEAKERS, assignmentsFor, coOf, confCfg, contacts, contactsOfSpeaker, getSpeakerById, leadOf, rolesOfSpeaker, speakerNeed } from '../../state.js';
+import { countryName, countryOptions, escAttr, escapeHtml } from '../../utils.js';
 import { confLockNotice, confLocked, syncPartRole } from './conf-common.js';
 import { spDrUi } from './speaker-drawer-ui.js';
+import { openPersonPicker } from '../mdb/person-picker.js';
 import { STATUSES, area, asField, asStamp, closeSpeakerDr, countHint, dateIn, eunNeun, fg, gotRow, needState, patchSpeaker, renderSpeakerDr, spField, spStamp, txt } from '../../modules/speaker-drawer.js';
 
 /* ══════════════════════════════════════════
@@ -236,75 +236,23 @@ export async function createSpeakerContact(){
   if(!sp) return;
   const nameKo = String(sp.name_snapshot || '').trim(), nameEn = String(sp.name_en || '').trim();
   if(!nameKo && !nameEn){ alert('성명을 먼저 적어주세요.'); return; }
-
-  /* 같은 이름이 이미 있으면 한 번 묻는다 — 검색을 건너뛰고 누르는 일이 있다 */
-  const same = contacts.filter(c => (nameKo && c.nameKo === nameKo) || (nameEn && c.nameEn === nameEn));
-
-  /* 이름에 소속까지 같으면 같은 사람이다 — 새로 만들지 않고 그 사람을 고르게 한다.
-     행사마다 «새로 등록»을 눌러 같은 사람이 둘 생겼다(노연홍, 11-04 Jump AI·GPBFair). */
-  const normOrg = s => String(s || '').toLowerCase().replace(/\(주\)|㈜|\(재\)|주식회사|재단법인|\s|[().,]/g, '');
-  const spOrgs = [sp.org_ko, sp.org_en].map(normOrg).filter(Boolean);
-  const sameOrg = same.filter(c => {
-    const orgs = [c.orgKo, c.orgEn].map(normOrg).filter(Boolean);
-    return !spOrgs.length || !orgs.length || orgs.some(o => spOrgs.includes(o));
+  /* «사람 고르기» 창 — 이름으로 먼저 찾아 보여 주고(어느 행사에 왔었는지까지), 없으면 연사에 적은 값으로 만든다.
+     만들 때도 서버가 같은 사람(메일·전화·이름+소속)을 한 번 더 본다 — 행사마다 «새로 등록»을 눌러
+     같은 사람이 둘 생겼다(노연홍, 11-04 Jump AI·GPBFair). */
+  openPersonPicker({
+    title: '연사를 마스터DB에 잇기',
+    sub: '같은 사람이 있으면 고르고, 없으면 연사에 적은 값으로 새로 만들어요',
+    query: nameKo || nameEn,
+    prefill: { nameKo, nameEn, orgKo: sp.org_ko || '', orgEn: sp.org_en || '', titleKo: sp.title_ko || '', titleEn: sp.title_en || '' },
+    newDefaults: { cat: 'speaker', country: sp.nationality || sp.residence_country || '' },
+    source: `${sp.event_id || ''} 연사`, pickLabel: '연결',
+    onPick: async (c, how) => {
+      await linkSpeakerContact(String(c.id));
+      trackAction('add', how?.created ? '연사 마스터DB 등록' : '연사 연결', sp.event_id || '',
+        `${c.nameKo || c.nameEn} ${how?.created ? '마스터DB 등록 + ' : ''}연사 연결`, { kind: 'contact', id: String(c.id) });
+      return true;
+    },
   });
-  if(sameOrg.length){
-    const box = document.getElementById('sp-con-hits');
-    if(box) box.innerHTML = `<div style="font-size:var(--fs-11);color:var(--re);padding:5px 2px">
-        마스터DB에 이미 있는 사람이에요 — 새로 만들지 않고 아래에서 골라 연결해 주세요</div>`
-      + sameOrg.slice(0, 8).map(c => `<div class="drw" onclick="linkSpeakerContact('${escAttr(c.id)}')">
-        <div><div class="drn">${escapeHtml(c.nameKo || c.nameEn || c.id)} <span class="btn" style="font-size:var(--fs-10);padding:1px 6px">이 사람으로 연결</span></div>
-        <div class="drm">${escapeHtml([c.orgKo || c.orgEn, c.titleKo || c.titleEn, c.email1].filter(Boolean).join(' · '))}</div></div>
-      </div>`).join('');
-    else alert(`마스터DB에 이미 있는 사람이에요: ${sameOrg[0].nameKo || sameOrg[0].nameEn} — ${sameOrg[0].orgKo || sameOrg[0].orgEn || '소속 없음'}\n검색해서 연결해 주세요.`);
-    return;
-  }
-
-  if(same.length && !confirm(`마스터DB에 같은 이름이 ${same.length}명 있어요:
-
-${
-      same.slice(0, 5).map(c => `· ${c.nameKo || c.nameEn} — ${c.orgKo || c.orgEn || '소속 없음'}`).join('\n')
-    }
-
-그래도 새로 만들까요? (같은 사람이면 취소하고 위에서 검색해 연결하세요)`)) return;
-
-  const c = {
-    id: nextContactId(),   // 규칙 하나로(CLAUDE.md) — 16자리 이하, 남과 안 겹친다
-    nameKo, nameEn,
-    orgKo: sp.org_ko || '', orgEn: sp.org_en || '',
-    titleKo: sp.title_ko || '', titleEn: sp.title_en || '',
-    deptKo: '', deptEn: '',
-    country: sp.nationality || sp.residence_country || '', cat: 'speaker', lang: nameKo ? 'KO' : 'EN',
-    source: `${sp.event_id || ''} 연사`, date: td(), status: 'new',
-    email1: '', email2: '', phone1: '', phone2: '',
-    beat: '', products: '', tags: '', org_id: '',
-  };
-  /* 기업DB에도 잇는다 — 소속으로 기업을 찾고 없으면 만든다(업로드·연락처 편집과 같은 길).
-     안 하면 연락처만 생기고 기업DB에서는 이 사람이 빠져 보인다. */
-  const orgNm = (c.orgKo || c.orgEn).trim();
-  if(orgNm){
-    try {
-      await ensureOrgsForNames([orgNm]);
-      c.org_id = orgIdForName(orgNm) || '';
-    } catch(e){ console.warn('[speaker] 기업 연결 실패:', e); }
-  }
-  contacts.push(c);
-  const { postToSheet } = await import('../../api.js');
-  const r = await postToSheet({
-    sheet: 'contacts',
-    row: [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
-      c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
-      c.beat, c.products, c.tags, c.org_id],
-  }, '연사 마스터DB 등록', { silent: true });
-  if(!r || !r.ok){
-    const i = contacts.indexOf(c);
-    if(i >= 0) contacts.splice(i, 1);
-    alert('마스터DB 저장에 실패했어요. 잠시 뒤 다시 해주세요.');
-    return;
-  }
-  trackAction('add', '연사 마스터DB 등록', sp.event_id || '', `${nameKo || nameEn} 마스터DB 등록 + 연사 연결`,
-    { kind: 'contact', id: String(c.id) });
-  await linkSpeakerContact(String(c.id));
 }
 
 /* 기본 탭의 메일·전화 칸 — 연결된 마스터DB 연락처를 고친다 */

@@ -15,6 +15,7 @@ const shareRoutes = require('./routes/share');
 const registerRoutes = require('./routes/register');
 const nametagRoutes = require('./routes/nametag');
 const importRoutes = require('./routes/imports');
+const contactRoutes = require('./routes/contacts');
 const { supplyPage } = require('./routes/share-pages');
 
 /* 로컬(server.js)과 Vercel 서버리스(api/index.js)가 이 app을 그대로
@@ -98,6 +99,8 @@ app.use('/api/register', requireAuth, registerRoutes);
 app.use('/api/nametag', requireAuth, nametagRoutes);
 // 정해진 양식 엑셀 가져오기 — 시험 실행 뒤 저장(routes/imports.js)
 app.use('/api/imports', requireAuth, importRoutes);
+// 화면에서 연락처를 넣는 한 길 — 같은 사람 찾기·기업DB 연결(routes/contacts.js, db/contact-upsert.js)
+app.use('/api/contacts', requireAuth, contactRoutes);
 // 메일 자동 가져오기 — 로그인 대신 비밀 키(CRON_SECRET)로. GitHub 예약 작업이 부른다
 app.use('/api/cron', mailRoutes.cron);
 

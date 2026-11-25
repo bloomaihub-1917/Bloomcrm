@@ -6,9 +6,11 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import { trackAction } from '../../core/audit-log.js';
+import { openPersonPicker, closePersonPicker } from '../mdb/person-picker.js';
+import { upsertContact } from '../../api/contacts.js';
 import { ieyo } from '../../country-signal.js';
 import { SELF_BUILD_TYPE, boothDesignState, boothTypes, cleanEmail, contactsForExhibitor, exhContacts, exhLockNotice, exhLocked, exhNames, patchExh, refreshExhViews } from '../../modules/exh-tab.js';
-import { EXH_CONTACTS, EXH_LOGS, catalogFor, contacts, contactsFor, currentUser, exhibitorsForEvent, findCatalogByName, getExhibitorById, getOrgById, logsFor, nextContactId, participations } from '../../state.js';
+import { EXH_CONTACTS, EXH_LOGS, catalogFor, contacts, contactsFor, currentUser, exhibitorsForEvent, findCatalogByName, getExhibitorById, getOrgById, logsFor, participations } from '../../state.js';
 import { countryOptions, escAttr, escapeHtml, leftPill, td } from '../../utils.js';
 import { modalShell } from './exh-book.js';
 import { money } from './exh-calc.js';
@@ -460,112 +462,46 @@ export function mailCandAsBuilder(exhId, name, email){
 
    성명·직함·부서를 국문·영문으로 나눠 받는다 — 해외 기업은 영문만, 국내는
    국문만 오는 일이 많아 한 칸에 몰아넣으면 나중에 갈라내야 한다. */
+/* 담당자 추가 — «사람 고르기» 창(features/mdb/person-picker.js). 이 기업 사람부터 보여 주고, 없으면 새로 만든다.
+   새로 만들 때는 서버 한 길(같은 메일·전화·이름+소속이면 그 사람)로 넣어 같은 사람이 둘 생기지 않는다.
+   국가는 미리 고르지 않는다 — 기업 국가를 베낀 값이 열아홉 명 틀려 있었다(«포트리아 코리아» 담당자가 «미국»).
+   메일함 후보에서 열면 이름·메일을 미리 채우고 메일로 먼저 찾는다. */
 export function openNewContact(exhId, name, email){
   const x = getExhibitorById(exhId);
   if(!x) return;
-  const org = x.org_id ? getOrgById(x.org_id) : null;
-  const pair = (a, b, la, lb, pa, pb) => `<div class="fgr">
-    <div class="fg"><label class="fl">${la}</label><input class="fi" id="nc-${a}" placeholder="${pa}"></div>
-    <div class="fg"><label class="fl">${lb}</label><input class="fi" id="nc-${b}" placeholder="${pb}"></div>
-  </div>`;
-  modalShell('new-contact-modal', `담당자 추가 — ${exhNames(x).ko}`, `
-    <div style="font-size:var(--fs-11_5);color:var(--i4);margin-bottom:12px;line-height:1.6">
-      마스터DB에도 함께 등록되고, 이 전시 담당자로 바로 배정됩니다.</div>
-    ${pair('nameKo', 'nameEn', '성명 (국문)', '성명 (영문)', '예: 이호진', '예: Hojin Lee')}
-    ${pair('titleKo', 'titleEn', '직함 (국문)', '직함 (영문)', '예: 팀장', '예: Manager')}
-    ${pair('deptKo', 'deptEn', '부서 (국문)', '부서 (영문)', '예: 마케팅팀', '예: Marketing')}
-    ${pair('email', 'phone', '이메일', '연락처', 'name@company.com', '010-0000-0000')}
-    <div class="fgr">
-      <div class="fg"><label class="fl">이 전시에서의 역할</label>
-        <select class="fi" id="nc-role">${cRoles().map(v => `<option value="${escapeHtml(v.code)}"${v.code === '실무' ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}</select></div>
-      <div class="fg"><label class="fl">국가 <span style="font-weight:400;color:var(--i5)">— 이 사람이 있는 곳</span></label>
-        <select class="fi" id="nc-country">
-          <option value="" selected>— 모르면 비워두세요</option>
-          ${countryOptions('')}
-        </select></div>
-    </div>
-    ${/* 기업 국가를 미리 골라 두지 않는다. 그렇게 채운 값이 열아홉 명 틀려 있었다 —
-         「포트리아 코리아 유한회사」 담당자가 «미국», 「시믹코리아」 담당자가 «일본».
-         본사가 어디인지와 이 사람이 어디 있는지는 다른 질문이다.
-
-         대신 기업 국가를 옆에 적어 준다. 같으면 고르면 되고, 다르면 다르게
-         고르면 된다 — 판단할 자료는 주되 대신 정해 주지는 않는다. */''}
-    <div style="font-size:var(--fs-10_5);color:var(--i5);margin:-6px 0 12px">
-      ${org?.country ? `이 기업은 <b>${escapeHtml(org.country)}</b>${ieyo(org.country).slice(org.country.length)} — 담당자가 같은 곳에 있으면 그대로 고르세요.` : ''}
-      비워두면 나중에 마스터DB에서 채울 수 있어요.</div>
-    <div id="nc-msg" style="font-size:var(--fs-11_5);min-height:16px;margin-bottom:8px"></div>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
-      <button class="btn bs" onclick="closeNewContact()">취소</button>
-      <button class="btn bp" id="nc-save" onclick="submitNewContact('${escAttr(exhId)}')">추가</button>
-    </div>`);
-  // 메일함에서 온 사람이면 이름·주소를 채워 둔다 — 이름이 한글이면 국문, 아니면 영문 칸
-  const setV = (id, v) => { const el = document.getElementById('nc-' + id); if(el && v) el.value = v; };
-  setV('email', email);
-  setV(/[가-힣]/.test(name || '') ? 'nameKo' : 'nameEn', name);
-  document.getElementById('nc-nameKo')?.focus();
-}
-export const closeNewContact = () => document.getElementById('new-contact-modal')?.remove();
-
-export async function submitNewContact(exhId){
   if(exhLocked()){ exhLockNotice(); return; }
-  const v = (id) => (document.getElementById('nc-' + id) || {}).value?.trim() || '';
-  const msg = document.getElementById('nc-msg');
-  const btn = document.getElementById('nc-save');
-  const fail = (t) => { if(msg){ msg.style.color = 'var(--re)'; msg.textContent = t; }
-    if(btn){ btn.disabled = false; btn.textContent = '추가'; } };
-
-  const nameKo = v('nameKo'), nameEn = v('nameEn');
-  if(!nameKo && !nameEn) return fail('성명을 국문이나 영문 중 하나는 입력해주세요.');
-  if(btn){ btn.disabled = true; btn.textContent = '추가 중…'; }
-
+  const org = x.org_id ? getOrgById(x.org_id) : null;
+  const used = new Set(contactsFor(exhId).map(r => String(r.contact_id || '')).filter(Boolean));
+  const ko = /[가-힣]/.test(name || '');
+  openPersonPicker({
+    title: `담당자 추가 — ${exhNames(x).ko}`,
+    sub: '이 기업 사람 중에서 고르거나, 없으면 새로 만들어요. 마스터DB에 들어가고 이 전시 담당자로 바로 배정돼요',
+    scopeOrg: { name: org?.name_ko || org?.name_en || x.company_name || '', org_id: x.org_id || '' },
+    query: cleanEmail(email || '') || '',
+    prefill: { [ko ? 'nameKo' : 'nameEn']: name || '', email1: cleanEmail(email || ''), orgKo: org?.name_ko || x.company_name || '', orgEn: org?.name_en || '' },
+    newDefaults: { cat: 'exhibitor' },
+    source: `${x.event_id || ''} 전시 담당자`,
+    extraHtml: `<div class="mlbl">이 전시에서의 역할</div>
+      <select class="fi" id="pp-exh-role" style="width:100%">${cRoles().map(v => `<option value="${escapeHtml(v.code)}"${v.code === '실무' ? ' selected' : ''}>${escapeHtml(v.label)}</option>`).join('')}</select>`,
+    mark: (c) => used.has(String(c.id)) ? '이미 담당자' : '',
+    pickLabel: '배정',
+    onPick: (c, how) => assignPicked(exhId, c, document.getElementById('pp-exh-role')?.value || '실무', how),
+  });
+}
+export const closeNewContact = () => closePersonPicker();
+async function assignPicked(exhId, c, role, how){
   const x = getExhibitorById(exhId);
-  const org = x?.org_id ? getOrgById(x.org_id) : null;
-  const today = td();
-  const c = {
-    id: nextContactId(),   // CLAUDE.md 16자리 규칙
-    nameKo, nameEn,
-    orgKo: org?.name_ko || x?.company_name || '', orgEn: org?.name_en || '',
-    titleKo: v('titleKo'), titleEn: v('titleEn'),
-    deptKo: v('deptKo'), deptEn: v('deptEn'),
-    /* 기업 국가를 베끼지 않는다 — 사람이 고른 값만 넣고, 안 골랐으면 비운다.
-       빈 칸은 마스터DB의 «국가 확인» 목록에 잡혀 나중에라도 채울 수 있다. */
-    country: v('country'), cat: 'exhibitor', lang: nameKo ? 'KO' : 'EN',
-    source: `${x?.event_id || ''} 전시 담당자`, date: today, status: 'new',
-    email1: v('email'), email2: '', phone1: v('phone'), phone2: '',
-    beat: '', products: '', tags: '', org_id: x?.org_id || '',
-  };
-
-  /* 마스터DB에 먼저 넣는다 — 저장이 실패하면 전시 쪽도 만들지 않는다.
-     반쪽만 생기면 어느 쪽이 맞는지 알 수 없게 된다. */
-  contacts.push(c);
-  const { postToSheet } = await import('../../api.js');
-  const r = await postToSheet({
-    sheet: 'contacts',
-    row: [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
-      c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
-      c.beat, c.products, c.tags, c.org_id],
-  }, '담당자 추가', { silent: true });
-  if(!r.ok){
-    const i = contacts.indexOf(c);
-    if(i >= 0) contacts.splice(i, 1);
-    return fail('마스터DB 저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
-  }
-
-  const ok = await assignExhContact(exhId, String(c.id), v('role'));
-  if(!ok) return fail('마스터DB에는 등록됐지만 전시 배정에 실패했어요 — 아래 목록에서 다시 배정해주세요.');
-
-  /* 이 행사에 참여하는 것으로도 남긴다.
-     여기서 만든 사람은 "그 행사 전시 담당자"라서 행사 참여가 곧 사실인데,
-     전에는 마스터DB에만 들어가 참여 이력이 비어 있었다. 그러면 기업DB의
-     행사별 집계와 CRM의 참여 이력에서 이 사람이 통째로 빠진다. */
-  await addExhParticipation(c.id, x?.event_id, v('role'));
-
+  const ok = await assignExhContact(exhId, String(c.id), role);
+  if(!ok) return '전시 배정에 실패했어요 — 잠시 뒤 다시 해 주세요.';
+  /* 이 행사에 참여하는 것으로도 남긴다 — 그 행사 전시 담당자라 참여가 곧 사실이다.
+     빠지면 기업DB의 행사별 집계와 CRM 참여 이력에서 이 사람이 통째로 빠진다. */
+  await addExhParticipation(c.id, x?.event_id, role);
   trackAction('add', '담당자 추가', x?.company_name || '',
-    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(nameKo || nameEn)} 마스터DB 등록 + 전시 배정`,
+    `<b>${escapeHtml(x?.company_name || '')}</b> ${escapeHtml(c.nameKo || c.nameEn || '')} ${how?.created ? '마스터DB 등록 + ' : ''}전시 배정`,
     { kind: 'exhibitor', id: x?.id, tab: 'contact' });
-  closeNewContact();
   try { const { buildCoDB } = await import('../../modules/company-tab.js'); buildCoDB(); } catch(e){}
   refreshExhViews();
+  return true;
 }
 
 /* ── 예전에 이 전시에만 적어 둔 담당자를 마스터DB로 올린다 ──
@@ -589,34 +525,19 @@ export async function promoteExhContact(exhId, rowId){
 
   const x = getExhibitorById(exhId);
   const org = x?.org_id ? getOrgById(x.org_id) : null;
-  const today = td();
   // 이름 칸에 "메디라마 (MediRama)"처럼 기업명이 들어간 줄이 있다. 그대로 두면
   // 사람 이름이 기업명이 되므로, 한글이 있으면 국문 이름으로만 넣는다.
-  const c = {
-    id: nextContactId(),
+  // 넣기는 서버 한 길 — 같은 메일·전화·이름+소속인 사람이 있으면 새로 만들지 않고 그 사람에 잇는다
+  const u = await upsertContact({
     nameKo: /[가-힣]/.test(nm) ? nm : '', nameEn: /[가-힣]/.test(nm) ? '' : nm,
     orgKo: org?.name_ko || x?.company_name || '', orgEn: org?.name_en || '',
-    titleKo: '', titleEn: '', deptKo: '', deptEn: '',
-    country: org?.country || '', cat: 'exhibitor', lang: /[가-힣]/.test(nm) ? 'KO' : 'EN',
-    source: `${x?.event_id || ''} 전시 담당자(옮김)`, date: today, status: 'new',
-    email1: em, email2: '', phone1: String(r.phone || '').trim(), phone2: '',
-    beat: '', products: '', tags: '', org_id: x?.org_id || '',
-  };
-
-  contacts.push(c);
-  const { postToSheet } = await import('../../api.js');
-  const res = await postToSheet({
-    sheet: 'contacts',
-    row: [c.id, c.nameKo, c.nameEn, c.orgKo, c.orgEn, c.titleKo, c.titleEn, c.deptKo, c.deptEn,
-      c.country, c.cat, c.lang, c.source, c.date, c.status, c.email1, c.email2, c.phone1, c.phone2,
-      c.beat, c.products, c.tags, c.org_id],
-  }, '담당자 마스터DB 등록', { silent: true });
-  if(!res.ok){
-    const i = contacts.indexOf(c);
-    if(i >= 0) contacts.splice(i, 1);
-    saveFailed(res, '마스터DB 저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
+    email1: em, phone1: String(r.phone || '').trim(), cat: 'exhibitor',
+  }, { source: `${x?.event_id || ''} 전시 담당자(옮김)` });
+  if(!u.ok || !u.contact){
+    saveFailed(u, u.error || '마스터DB 저장에 실패했어요. 네트워크 확인 후 다시 시도해주세요.');
     return;
   }
+  const c = u.contact;
 
   // 이 줄을 그 연락처에 연결한다 — 새 줄을 만들지 않아야 역할·메인 표시가 남는다
   const before = { contact_id: r.contact_id, name: r.name, email: r.email, phone: r.phone };
