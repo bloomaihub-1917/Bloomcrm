@@ -452,7 +452,8 @@ router.get('/', async (req, res) => {
 /* ── 분야 = 차수 = 담당자 ──
    기업이 새로 들어오거나 분야가 바뀌면, 그 분야를 맡은 차수(contact_rounds.sector) 명단에 붙이고
    담당은 차수 담당자(owner)로 둔다. 기업DB 손 등록·엑셀 업로드·컨택 «+ 기업» 어느 길로 넣어도 여기를 지난다.
-   이미 명단에 있거나(빼기 했다가 다시 저장해도) 분야가 그대로면 건드리지 않는다. */
+   이미 명단에 있거나(빼기 했다가 다시 저장해도) 분야가 그대로면 건드리지 않는다.
+   같은 행사의 다른 차수에 이미 있는 기업도 넣지 않는다 — 코엑스·킨텍스 등록업체처럼 따로 뺀 차수가 있다(11-25). */
 const splitSectors = (v) => String(v || '').split('|').map((x) => x.trim()).filter(Boolean);
 function orgIdsIn({ data, dataRows, rows }) {
   if (data) return [data.id].filter(Boolean);
@@ -480,17 +481,20 @@ async function enrollTouchedOrgs(client, user, before) {
   const changed = touched.filter((o) => !before.has(o.id) || before.get(o.id) !== (o.sectors || ''));
   if (!changed.length) return 0;
   const rounds = (await client.query(
-    `SELECT id, sector, owner FROM contact_rounds WHERE coalesce(sector,'') <> '' AND coalesce(status,'') NOT IN ('끝남','closed')`)).rows;
+    `SELECT id, event_id, sector, owner FROM contact_rounds WHERE coalesce(sector,'') <> '' AND coalesce(status,'') NOT IN ('끝남','closed')`)).rows;
   if (!rounds.length) return 0;
   const have = new Set((await client.query(
     `SELECT round_id || '|' || org_id k FROM round_members WHERE round_id = ANY($1::text[]) AND org_id = ANY($2::text[])`,
     [rounds.map((r) => r.id), changed.map((o) => o.id)])).rows.map((x) => x.k));
+  const inEvent = new Set((await client.query(
+    `SELECT DISTINCT r.event_id || '|' || m.org_id k FROM round_members m JOIN contact_rounds r ON r.id = m.round_id
+      WHERE m.org_id = ANY($1::text[])`, [changed.map((o) => o.id)])).rows.map((x) => x.k));
   const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
   const recs = [];
   changed.forEach((o) => {
     const secs = splitSectors(o.sectors);
     rounds.forEach((r) => {
-      if (!secs.includes(r.sector) || have.has(r.id + '|' + o.id)) return;
+      if (!secs.includes(r.sector) || have.has(r.id + '|' + o.id) || inEvent.has(r.event_id + '|' + o.id)) return;
       recs.push({ id: genId('RM-'), round_id: r.id, org_id: o.id, org_name: o.name_ko || o.name_en || '',
         source: '기업DB 등록', created_at: now, assignee: r.owner || '' });
     });
