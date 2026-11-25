@@ -205,7 +205,7 @@ function render(){
           <span id="rm-saved" style="color:var(--g)"></span></div>
       </div>
       <div style="min-width:0">
-        ${prev ? `<div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-7);font-size:var(--fs-11_5);white-space:pre-wrap;line-height:1.55;height:calc(92vh - 150px);overflow:auto"><div style="font-size:var(--fs-10);color:var(--i4);margin-bottom:4px">미리보기 — ${escapeHtml(memberName(sample))}</div><b>${escapeHtml(prev.s)}</b>${prev.b.html ? `<div class="rm-pvhtml" style="white-space:normal;background:#fff;padding:6px;margin-top:8px;overflow:hidden;border-radius:var(--rs)"><div style="font-size:var(--fs-10);color:var(--i4);margin-bottom:4px">HTML로 보냄</div><div class="rm-pvbody" style="width:max-content;min-width:100%">${prev.b.html}</div></div>` : `\n\n${escapeHtml(prev.b.text)}`}</div>` : ''}
+        ${prev ? `<div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-7);font-size:var(--fs-11_5);white-space:pre-wrap;line-height:1.55;height:calc(92vh - 150px);overflow:auto"><div style="font-size:var(--fs-10);color:var(--i4);margin-bottom:4px">미리보기 — ${escapeHtml(memberName(sample))}</div><b>${escapeHtml(prev.s)}</b>${prev.b.html ? `<div class="rm-pvhtml" style="white-space:normal;background:#fff;padding:6px;margin-top:8px;overflow:hidden;border-radius:var(--rs)"><div style="font-size:var(--fs-10);color:var(--i4);margin-bottom:4px">HTML로 보냄</div><div class="rm-pvbody">${prev.b.html}</div></div>` : `\n\n${escapeHtml(prev.b.text)}`}</div>` : ''}
       </div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:12px">
@@ -216,7 +216,11 @@ function render(){
   // 넓은 HTML 메일(1000px 표)을 칸 너비에 맞춰 줄여 보여 준다 — 가로 스크롤로 잘려 깨져 보이지 않게
   const pv = el.querySelector('.rm-pvhtml > .rm-pvbody');
   if (pv) requestAnimationFrame(() => {
-    const box = pv.parentElement.clientWidth - 12, w = pv.scrollWidth;
+    // 메일 클라이언트처럼 폭을 정해 그린다 — max-content로 두면 긴 문단이 한 줄로 늘어나 전체가 아주 작게 줄어든다
+    const box = pv.parentElement.clientWidth - 12;
+    const fixed = Math.max(0, ...[...pv.querySelectorAll('table[width], td[width]')].map(t => /%/.test(t.getAttribute('width')) ? 0 : parseInt(t.getAttribute('width'), 10) || 0));
+    const w = Math.max(box, fixed);
+    pv.style.width = w + 'px';
     pv.style.zoom = w > box ? String(box / w) : '';
   });
 }
