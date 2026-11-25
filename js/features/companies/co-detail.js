@@ -87,6 +87,7 @@ export function renderCoDetail(c){
             ['bizNo',   '사업자번호', c.bizNo,  `editCoBizNo('${escAttr(c.key)}')`, false],
             ['abbr',    '약어',     c.abbr,    `editCoAbbr('${escAttr(c.key)}')`, false],
             ['source',  '출처',     c.source,  `editCoSource('${escAttr(c.key)}')`, false],
+            ['createdBy', '넣은 사람', [c.createdBy, (c.createdAt || '').slice(0, 10)].filter(Boolean).join(' · '), '', false],
             ['phone',   '대표 전화', c.phone,   `editCoPhone('${escAttr(c.key)}')`, false],
             ['email',   '대표 메일', c.email,   `editCoEmail('${escAttr(c.key)}')`, false],
             ['products','취급 품목', c.products, `editCoProducts('${escAttr(c.key)}')`, false],

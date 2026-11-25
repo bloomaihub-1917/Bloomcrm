@@ -19,7 +19,7 @@
 ══════════════════════════════════════════════════════════════ */
 import {
   EVENT_LIST, CO_DB, contacts, participations, currentUser, hasLeft, isWalkInOnly, crmV, curApp,
-  CONTACT_ROUNDS, ROUND_MEMBERS, CONTACT_ATTEMPTS,
+  CONTACT_ROUNDS, ROUND_MEMBERS, CONTACT_ATTEMPTS, COMPANY_SECTORS,
   nextContactId,
 } from '../state.js';
 import { saveRound, deleteRound, saveRoundMember, deleteRoundMembers, addRoundMembers, saveAttempt, deleteAttempt, addAttempts } from '../api/exh-save.js';
@@ -116,7 +116,7 @@ const isMine = (m) => !!m.assignee && [currentUser?.name, currentUser?.email].fi
 /* 담당 이름 후보 — 이 행사 차수에 이미 적힌 담당 + 기록을 남긴 사람 + 나 */
 function ownerNames(r){
   const s = new Set();
-  CONTACT_ROUNDS.filter(x => x.event_id === r.event_id).forEach(x => membersOf(x.id).forEach(m => m.assignee && s.add(m.assignee)));
+  CONTACT_ROUNDS.filter(x => x.event_id === r.event_id).forEach(x => { if(x.owner) s.add(x.owner); membersOf(x.id).forEach(m => m.assignee && s.add(m.assignee)); });
   CONTACT_ATTEMPTS.forEach(a => a.by_name && s.add(a.by_name));
   if(myName()) s.add(myName());
   return [...s].sort((a, b) => a.localeCompare(b, 'ko'));
@@ -164,9 +164,14 @@ export function renderRoundNav(){
   const byEv = new Map();
   CONTACT_ROUNDS.forEach(r => { if(!byEv.has(r.event_id)) byEv.set(r.event_id, []); byEv.get(r.event_id).push(r); });
   // 최근 행사가 위로
+  // «내 분야만» — 내가 담당인 차수(owner)만 남긴다. 담당 차수가 하나도 없으면 단추를 안 보인다
+  const mine = (r) => !!r.owner && [currentUser?.name, currentUser?.email].filter(Boolean).includes(r.owner);
+  const myN = CONTACT_ROUNDS.filter(mine).length;
+  if(navMine && myN) byEv.forEach((list, k) => { const f = list.filter(mine); if(f.length) byEv.set(k, f); else byEv.delete(k); });
   const evKeys = [...byEv.keys()].sort((a, b) =>
     String(evOf(b)?.date || '').localeCompare(String(evOf(a)?.date || '')));
-  el.innerHTML = evKeys.map(k => `
+  el.innerHTML = (myN ? `<div class="seg" style="margin:4px 6px 2px"><button type="button" class="seg-b${navMine ? ' on' : ''}" onclick="setRoundNavMine(true)">내 분야 ${myN}</button><button type="button" class="seg-b${navMine ? '' : ' on'}" onclick="setRoundNavMine(false)">전체</button></div>` : '')
+    + evKeys.map(k => `
       <div style="font-size:var(--fs-10_5);color:var(--i4);padding:6px 8px 2px;font-weight:600">${escapeHtml(evLabel(k))}</div>
       ${byEv.get(k).sort((a, b) => (a.status === 'closed') - (b.status === 'closed')).map(r => {
         const ms = membersOf(r.id);
@@ -174,10 +179,16 @@ export function renderRoundNav(){
         return `<button class="nr${r.id === curRoundId ? ' on' : ''}" onclick="pickRound('${escAttr(r.id)}')"
           style="${r.status === 'closed' ? 'opacity:.55' : ''}" title="${escapeHtml(r.purpose || r.name || '')}">
           <span class="pill p-gray" style="margin-right:4px;padding:1px 5px">${escapeHtml(r.channel || 'TM')}</span>
-          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left">${escapeHtml(r.name || '(이름 없음)')}</span>
+          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left">${escapeHtml(r.name || '(이름 없음)')}${r.owner ? `<span style="color:var(--i4);font-size:var(--fs-10_5)"> · ${escapeHtml(r.owner)}</span>` : ''}</span>
           <span class="nbg">${r.status === 'closed' ? '닫음' : n}</span></button>`;
       }).join('')}`).join('')
     + `<button class="nr" onclick="openRoundEditor()" style="color:var(--a)">+ 차수 만들기</button>`;
+}
+let navMine = (() => { try { return localStorage.getItem('ct-nav-mine') !== '0'; } catch(e){ return true; } })();
+export function setRoundNavMine(on){
+  navMine = !!on;
+  try { localStorage.setItem('ct-nav-mine', on ? '1' : '0'); } catch(e){}
+  renderRoundNav();
 }
 export function pickRound(id){
   curRoundId = id; stFil = 'now'; showLimit = 150;
@@ -870,6 +881,14 @@ export function openRoundEditor(id){
     <div style="display:flex;gap:8px">${fld('re-from', '시작', r?.date_from || today(), { type: 'date' })}${fld('re-to', '마감', r?.date_to || '', { type: 'date' })}</div>
     <div style="display:flex;gap:8px">${fld('re-retry', '부재중이면 몇 시간 뒤 다시 걸까요', r?.retry_hours ?? String(DEFAULT_RETRY_HOURS), { type: 'number' })}${fld('re-limit', '부재중·반송이 몇 번 이어지면 알려 줄까요', r?.noanswer_limit || String(DEFAULT_NOANSWER_LIMIT), { type: 'number' })}</div>
     ${fld('re-script', '스크립트 링크 — 통화하면서 열어 볼 문서', r?.script_url || '', { ph: 'https://claude.ai/artifact/…' })}
+    <div style="display:flex;gap:8px">
+      <label style="flex:1;display:flex;flex-direction:column;gap:3px;font-size:var(--fs-11);color:var(--i3);margin-bottom:9px">분야 — 이 분야로 기업DB에 들어오는 기업이 이 차수에 자동으로 붙어요
+        <input id="re-sector" list="re-sectors" value="${escapeHtml(r?.sector || '')}" placeholder="비우면 자동으로 안 붙어요" style="font-size:var(--fs-12_5);padding:6px 8px;border:1px solid var(--i6);border-radius:var(--rs)">
+        <datalist id="re-sectors">${COMPANY_SECTORS.map(x => `<option value="${escapeHtml(x.name || x.label || x.id || '')}">`).join('')}</datalist></label>
+      <label style="flex:1;display:flex;flex-direction:column;gap:3px;font-size:var(--fs-11);color:var(--i3);margin-bottom:9px">분야 담당자 — 새로 붙는 기업의 담당이 돼요
+        <input id="re-owner" list="ct-owners" value="${escapeHtml(r?.owner || '')}" placeholder="이름" style="font-size:var(--fs-12_5);padding:6px 8px;border:1px solid var(--i6);border-radius:var(--rs)">
+        ${ownerList(r || { event_id: evSel })}</label>
+    </div>
     ${fld('re-note', '메모', r?.note || '')}
     <div style="display:flex;gap:6px;align-items:center;margin-top:6px">
       ${r ? (nAtt
@@ -888,7 +907,8 @@ export async function saveRoundEditor(id){
   if(!v('re-ev')){ alert('행사를 골라주세요.'); return; }
   const ch = document.querySelector('#re-ch .seg-b.on')?.dataset.ch || 'TM';
   const data = { event_id: v('re-ev'), name, channel: ch, purpose: v('re-purpose'), goal: v('re-goal'),
-    date_from: v('re-from'), date_to: v('re-to'), noanswer_limit: v('re-limit'), retry_hours: v('re-retry'), note: v('re-note'), script_url: v('re-script') };
+    date_from: v('re-from'), date_to: v('re-to'), noanswer_limit: v('re-limit'), retry_hours: v('re-retry'), note: v('re-note'), script_url: v('re-script'),
+    sector: v('re-sector'), owner: v('re-owner') };
   const old = id ? roundById(id) : null;
   if(old){
     const before = { ...old };
@@ -896,6 +916,8 @@ export async function saveRoundEditor(id){
     const res = await saveRound({ id, ...data });
     if(!res.ok){ Object.assign(old, before); return; }
     trackAction('edit', '컨택 차수 고침', name, `${escapeHtml(evLabel(data.event_id))} — 차수 «${escapeHtml(name)}» 고침`);
+    // 담당자를 새로 정하면 아직 담당이 없는 기업을 그 사람 몫으로 — 이미 다른 사람이 맡은 곳은 그대로
+    if(data.owner && data.owner !== before.owner) await giveUnassigned(id, data.owner);
   } else {
     const r = { id: genId('CR-'), ...data, status: 'open', created_at: nowStamp(), created_by: currentUser?.email || '' };
     CONTACT_ROUNDS.push(r);
@@ -908,6 +930,14 @@ export async function saveRoundEditor(id){
   document.getElementById('round-ed')?.remove();
   renderRoundNav(); (window.renderCrm || renderToday)();
   if(!old && !membersOf(curRoundId).length) openFillRound();
+}
+async function giveUnassigned(rid, who){
+  const ms = membersOf(rid).filter(m => !m.assignee);
+  if(!ms.length) return;
+  ms.forEach(m => { m.assignee = who; });
+  const res = await postToSheet({ sheet: 'round_members', action: 'batchUpsert', dataRows: ms.map(m => ({ id: m.id, assignee: who })) }, '분야 담당 지정');
+  if(!res.ok){ ms.forEach(m => { m.assignee = ''; }); return; }
+  trackAction('edit', '컨택 담당 나누기', roundById(rid)?.name || '', `담당 없던 ${ms.length}곳 → ${escapeHtml(who)}`);
 }
 export async function toggleRoundClosed(id){
   const r = roundById(id);
@@ -966,7 +996,7 @@ export async function importSentToRound(evKey, name, items){
     if(!m){
       const last = it.sends.map(s => s.ts).sort().pop() || now;
       m = { id: genId('RM-', i), round_id: r.id, org_id: orgId, org_name: co ? coName(co) : it.name, source: name,
-        caution: '', hold_until: '', call_hours: '', goal_at: '', closed_at: '', closed_reason: '', created_at: now,
+        assignee: r.owner || '', caution: '', hold_until: '', call_hours: '', goal_at: '', closed_at: '', closed_reason: '', created_at: now,
         // 마지막으로 보낸 날 + «보냄» 기다림 날수 뒤가 다음 확인일
         next_at: (() => { const d = new Date(String(last).slice(0, 10)); d.setDate(d.getDate() + (REACTIONS.sent.next || 3)); return d.toISOString().slice(0, 10); })() };
       mem.push(m);
@@ -1152,7 +1182,7 @@ async function addMembers(cos, source, roundId = curRoundId, people = null){
   if(!r || !cos.length) return false;
   const now = nowStamp();
   const rows = cos.map((c, i) => ({ id: genId('RM-', i), round_id: r.id, org_id: c.key, org_name: coName(c),
-    source, caution: '', hold_until: '', call_hours: '', next_at: '', goal_at: '', closed_at: '', closed_reason: '', created_at: now }));
+    source, assignee: r.owner || '', caution: '', hold_until: '', call_hours: '', next_at: '', goal_at: '', closed_at: '', closed_reason: '', created_at: now }));
   ROUND_MEMBERS.push(...rows);
   (window.renderCrm || renderToday)(); renderRoundNav();
   const res = await addRoundMembers(rows);
@@ -1385,7 +1415,7 @@ export async function sendCommit(){
 
 Object.assign(window, {
   fillMode, fillPickSec, openSendToRound, openAssign, assignCommit, setContactOwner, sendRoundInfo, sendCommit,
-  pickRound, renderToday, setContactFil, contactShowMore, toggleContactHist, toggleContactEdit,
+  pickRound, setRoundNavMine, renderToday, setContactFil, contactShowMore, toggleContactHist, toggleContactEdit,
   pickContactPerson, pickContactChannel, recordContact, undoContactAttempt, setContactNext,
   toggleContactGoal, closeContactMember, reopenContactMember, saveContactMemberEdit, removeContactMember,
   openContactCo, openRoundMember, openPersonForm, savePersonForm,

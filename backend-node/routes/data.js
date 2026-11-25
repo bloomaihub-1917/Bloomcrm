@@ -72,7 +72,7 @@ const TABLES = {
     table: 'orgs', pk: 'id', idPrefix: 'O-',
     columns: ['id', 'name_ko', 'name_en', 'abbr', 'aliases', 'kind', 'status', 'sectors',
       'country', 'hq', 'website', 'biz_no', 'cat_code', 'notes', 'products',
-      'phone', 'email', 'address', 'intro', 'source', 'created_at', 'updated_at'],
+      'phone', 'email', 'address', 'intro', 'source', 'created_at', 'updated_at', 'created_by'],
   },
 
   /* ── 전시 참가기업 진행관리 ──
@@ -220,7 +220,8 @@ const TABLES = {
     table: 'contact_rounds', pk: 'id', idPrefix: 'CR-',
     columns: ['id', 'event_id', 'name', 'channel', 'purpose', 'goal', 'date_from', 'date_to',
       'noanswer_limit', 'status', 'note', 'created_at', 'created_by',
-      'mail_subject_ko', 'mail_body_ko', 'mail_subject_en', 'mail_body_en', 'retry_hours', 'script_url'],
+      'mail_subject_ko', 'mail_body_ko', 'mail_subject_en', 'mail_body_en', 'retry_hours', 'script_url',
+      'sector', 'owner'],
   },
   round_members: {
     table: 'round_members', pk: 'id', idPrefix: 'RM-',
@@ -447,6 +448,58 @@ router.get('/', async (req, res) => {
   }
 });
 
+
+/* ── 분야 = 차수 = 담당자 ──
+   기업이 새로 들어오거나 분야가 바뀌면, 그 분야를 맡은 차수(contact_rounds.sector) 명단에 붙이고
+   담당은 차수 담당자(owner)로 둔다. 기업DB 손 등록·엑셀 업로드·컨택 «+ 기업» 어느 길로 넣어도 여기를 지난다.
+   이미 명단에 있거나(빼기 했다가 다시 저장해도) 분야가 그대로면 건드리지 않는다. */
+const splitSectors = (v) => String(v || '').split('|').map((x) => x.trim()).filter(Boolean);
+function orgIdsIn({ data, dataRows, rows }) {
+  if (data) return [data.id].filter(Boolean);
+  if (dataRows) return dataRows.map((d) => d && d.id).filter(Boolean);
+  return (rows || []).map((r) => r && r[0]).filter(Boolean);
+}
+async function orgsBefore(client, ids) {
+  const m = new Map();
+  if (!ids.length) return m;
+  const r = await client.query('SELECT id, sectors FROM orgs WHERE id = ANY($1::text[])', [ids]);
+  r.rows.forEach((x) => m.set(x.id, x.sectors || ''));
+  return m;
+}
+async function enrollTouchedOrgs(client, user, before) {
+  // 이 거래에서 넣거나 고친 줄만
+  const touched = (await client.query(
+    `SELECT id, name_ko, name_en, sectors, created_by FROM orgs WHERE xmin::text = (txid_current() % 4294967296)::text`)).rows;
+  if (!touched.length) return 0;
+  const fresh = touched.filter((o) => !before.has(o.id));
+  const me = (user && user.email) || '';
+  if (me && fresh.length) {
+    await client.query(`UPDATE orgs SET created_by = $2 WHERE id = ANY($1::text[]) AND coalesce(created_by,'') = ''`,
+      [fresh.map((o) => o.id), me]);
+  }
+  const changed = touched.filter((o) => !before.has(o.id) || before.get(o.id) !== (o.sectors || ''));
+  if (!changed.length) return 0;
+  const rounds = (await client.query(
+    `SELECT id, sector, owner FROM contact_rounds WHERE coalesce(sector,'') <> '' AND coalesce(status,'') NOT IN ('끝남','closed')`)).rows;
+  if (!rounds.length) return 0;
+  const have = new Set((await client.query(
+    `SELECT round_id || '|' || org_id k FROM round_members WHERE round_id = ANY($1::text[]) AND org_id = ANY($2::text[])`,
+    [rounds.map((r) => r.id), changed.map((o) => o.id)])).rows.map((x) => x.k));
+  const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+  const recs = [];
+  changed.forEach((o) => {
+    const secs = splitSectors(o.sectors);
+    rounds.forEach((r) => {
+      if (!secs.includes(r.sector) || have.has(r.id + '|' + o.id)) return;
+      recs.push({ id: genId('RM-'), round_id: r.id, org_id: o.id, org_name: o.name_ko || o.name_en || '',
+        source: '기업DB 등록', created_at: now, assignee: r.owner || '' });
+    });
+  });
+  if (recs.length) await bulkUpsert(client, 'round_members', 'id',
+    ['id', 'round_id', 'org_id', 'org_name', 'source', 'created_at', 'assignee'], recs, { onConflict: 'nothing' });
+  return recs.length;
+}
+
 const REPLACE_ALL_OK = new Set(['sectors']);
 
 /* 같은 사람이 연락처 두 줄로 생긴 것을 하나로 합친다.
@@ -556,8 +609,10 @@ router.post('/', async (req, res) => {
   let client;
   try { client = await pool.connect(); }
   catch (e) { console.error('[data] DB 연결 실패:', e.message); return res.status(503).json({ ok: false, error: '데이터베이스에 연결하지 못했어요' }); }
+  let enrolled = 0;
   try {
     await client.query('BEGIN');
+    const orgBefore = sheet === 'orgs' && action !== 'delete' ? await orgsBefore(client, orgIdsIn(req.body || {})) : null;
 
     if (sheet === 'participations') {
       if (action === 'delete') {
@@ -633,8 +688,12 @@ router.post('/', async (req, res) => {
       }
     }
 
+    if (orgBefore) enrolled = await enrollTouchedOrgs(client, req.user, orgBefore);
+
     await client.query('COMMIT');
-    res.json(savedId ? { ok: true, id: savedId } : { ok: true }); // 신규 생성 시 프론트가 id를 받도록
+    const out = savedId ? { ok: true, id: savedId } : { ok: true };
+    if (enrolled) out.enrolled = enrolled;
+    res.json(out); // 신규 생성 시 프론트가 id를 받도록
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});
     console.error(`[data] ${sheet}/${action} 실패:`, e.message);

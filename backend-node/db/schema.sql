@@ -1295,3 +1295,8 @@ CREATE INDEX IF NOT EXISTS nametag_checkins_synced_idx ON nametag_checkins (even
 ALTER TABLE participations ADD COLUMN IF NOT EXISTS registered_at TEXT;   -- 등록(신청) 시각 KST YYYY-MM-DD HH:MM — db/migrations/add-participation-registered-at.js
 ALTER TABLE nametag_people ADD COLUMN IF NOT EXISTS removed_at TIMESTAMPTZ; -- 현장 신규 삭제 — db/migrations/add-nametag-removed.js
 ALTER TABLE nametag_people ADD COLUMN IF NOT EXISTS removed_by TEXT;
+
+-- 분야 = 차수 = 담당자 (db/migrations/add-round-owner-sector.js)
+ALTER TABLE contact_rounds ADD COLUMN IF NOT EXISTS sector TEXT;   -- 이 분야로 들어온 새 기업이 자동으로 붙는다
+ALTER TABLE contact_rounds ADD COLUMN IF NOT EXISTS owner  TEXT;   -- 분야 담당자 — 자동으로 붙은 기업의 assignee
+ALTER TABLE orgs ADD COLUMN IF NOT EXISTS created_by TEXT;         -- 기업을 넣은 사람(메일)

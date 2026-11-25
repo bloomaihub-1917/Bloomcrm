@@ -188,6 +188,8 @@ export function buildCoDB(){
       intro:    o.intro || '',
       catCode:  o.cat_code || '',
       source:   o.source || '',
+      createdBy: o.created_by || '',
+      createdAt: o.created_at || '',
       updatedAt: o.updated_at || '',
       branches: [...new Set(coContacts.map(c => (c.orgKo || c.orgEn || '').trim()).filter(Boolean))],
       mainBranch: name,
