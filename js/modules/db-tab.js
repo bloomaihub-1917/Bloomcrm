@@ -904,6 +904,7 @@ export function renderMDB(){
   renderUnlinkedChip();
   renderDupeChip();
   window.renderHealthChip?.();   // 데이터 점검(features/mdb/data-health.js)
+  window.renderPrepChip?.();     // 행사 준비 D-n(modules/event-prep.js)
   renderMdbAiBar();
   buildMDBFilterBar();
   /* 행사 목록도 여기서 다시 그린다 — 분야를 바꾸면 그 안의 인원으로 세어야

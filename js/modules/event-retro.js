@@ -5,8 +5,8 @@
    GPBFair(11-19)만 해도 네임택 재출력 349장, 등록 71명 되돌리기, 현장 신규 68명이
    지나고 나서야 보였다. 여기서는 두 가지를 한 화면에 둔다.
    1) 기록으로 본 이 행사 — 참가 기록·활동 기록·네임택에서 숫자를 뽑는다(손으로 적지 않는다)
-   2) 잘된 것 · 막힌 것 · 다음엔 미리 할 것 — 사람이 적는다. «다음엔 미리 할 것»은 D-n을 달아 두고,
-      아직 안 끝난 행사의 회고 보기에 «지난 행사에서 넘어온 할 일»로 날짜를 붙여 띄운다(했음 체크는 그 행사에 남는다).
+   2) 잘된 것 · 막힌 것 · 다음엔 미리 할 것 — 사람이 적는다. «다음엔 미리 할 것»은 D-n을 달아 두면
+      다음 행사의 «준비» 보기(event-prep.js)에 날짜를 붙여 넘어가고, «기본 단계로» 올리면 모든 행사 공통이 된다.
    저장은 settings 표 key='retro_<행사키>' JSON 하나. 여럿이 함께 적으므로 적을 때마다 서버 값을 다시 읽어
    그 위에 한 줄만 더하거나 뺀다(남이 방금 적은 줄을 덮지 않게).
 ══════════════════════════════════════════════════════════════ */
@@ -20,16 +20,17 @@ import { trackAction } from '../core/audit-log.js';
 const SECS = [
   ['good', '👍 잘된 것', '다음에도 그대로 할 것'],
   ['bad',  '🧱 막힌 것', '시간이 많이 들었거나 되돌린 일'],
-  ['next', '📌 다음엔 미리 할 것', 'D-n을 달면 다음 행사 회고 보기에 날짜와 함께 넘어가요'],
+  ['next', '📌 다음엔 미리 할 것', 'D-n을 달면 다음 행사의 «준비» 보기에 날짜와 함께 넘어가요'],
 ];
 export const DN = [['30', 'D-30'], ['14', 'D-14'], ['7', 'D-7'], ['3', 'D-3'], ['1', 'D-1'], ['0', '당일'], ['-1', '끝난 뒤']];
 const dnLabel = (n) => (DN.find(([k]) => k === String(n)) || [, ''])[1];
-const empty = () => ({ good: [], bad: [], next: [], carry: {} });
+const empty = () => ({ good: [], bad: [], next: [] });
 const evOf = (k) => EVENT_LIST.find((e) => e.key === k);
 const evName = (k) => { const e = evOf(k); return e ? (e.short || e.name || k) : k; };
 const evStart = (e) => String((e && (e.date_start || e.date)) || '');
 const evEnd = (e) => String((e && (e.date_end || e.date_start || e.date)) || '');
-const dayAdd = (d, n) => { const t = new Date(d + 'T00:00:00'); t.setDate(t.getDate() + n); return t.toISOString().slice(0, 10); };
+/* 날짜만 더한다 — UTC로 계산해야 한국 시간에서 하루 앞당겨지지 않는다 */
+const dayAdd = (d, n) => { const t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
 const me = () => (currentUser && (currentUser.name || currentUser.email)) || '';
 export const retroOf = (k) => ({ ...empty(), ...(RETROS[k] || {}) });
 
@@ -96,6 +97,7 @@ function secHtml(ev, r, [sec, title, hint]){
       <span style="font-weight:400;color:var(--i4);font-size:var(--fs-11)">${hint}</span></div>
     ${items.map((x) => `<div style="display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--i7);font-size:var(--fs-12)">
       ${sec === 'next' ? `<span class="pill ${x.dn === '-1' ? 'p-gray' : 'p-blue'}" style="flex:0 0 auto">${escapeHtml(dnLabel(x.dn) || '때 미정')}</span>` : ''}
+      ${x.promoted ? '<span class="pill p-green" style="flex:0 0 auto" title="모든 행사 공통 기본 단계에 들어갔어요(행사 준비)">기본 단계</span>' : ''}
       <span style="flex:1;color:var(--i1);white-space:pre-wrap;line-height:1.5">${escapeHtml(x.t)}</span>
       <span style="color:var(--i5);font-size:var(--fs-10_5);white-space:nowrap">${escapeHtml(x.by || '')} ${escapeHtml(String(x.at || '').slice(5, 10))}</span>
       <button class="btn bs" style="font-size:var(--fs-10_5);padding:0 6px" title="지우기" onclick="retroDel('${escAttr(ev.key)}','${sec}','${escAttr(x.id)}')">✕</button></div>`).join('')}
@@ -107,39 +109,10 @@ function secHtml(ev, r, [sec, title, hint]){
   </div>`;
 }
 
-/* ── 3) 지난 행사에서 넘어온 할 일 — 아직 안 끝난 행사에만. 날짜 = 이 행사 시작일 − n일 ── */
-function carryHtml(ev){
-  const start = evStart(ev);
-  if(!start || evEnd(ev) < td()) return '';
-  const r = retroOf(ev.key);
-  const list = [];
-  Object.keys(RETROS).forEach((k) => {
-    if(k === ev.key) return;
-    (RETROS[k].next || []).forEach((x) => {
-      if(x.dn === '-1' || x.dn == null || x.dn === '') return;
-      list.push({ ...x, from: k, due: dayAdd(start, -Number(x.dn)) });
-    });
-  });
-  if(!list.length) return '';
-  list.sort((a, b) => a.due.localeCompare(b.due));
-  const today = td();
-  const doneN = list.filter((x) => r.carry[x.id]).length;
-  return `<div class="sec"><div style="border:1px solid var(--a);border-radius:10px;padding:12px 14px">
-    <div style="font-size:var(--fs-12);font-weight:700;color:var(--i1)">🔁 지난 행사에서 넘어온 할 일 <span class="pill p-blue">${doneN}/${list.length}</span>
-      <span style="font-weight:400;color:var(--i4);font-size:var(--fs-11)">지난 회고의 «다음엔 미리 할 것» — 이 행사 날짜(${escapeHtml(start)})에 맞춰 날을 붙였어요</span></div>
-    ${list.map((x) => { const done = r.carry[x.id]; const late = !done && x.due < today;
-      return `<label style="display:flex;gap:8px;align-items:flex-start;padding:6px 0;border-bottom:1px solid var(--i7);font-size:var(--fs-12);cursor:pointer">
-        <input type="checkbox" ${done ? 'checked' : ''} onchange="retroCarry('${escAttr(ev.key)}','${escAttr(x.id)}',this.checked)" style="margin-top:3px">
-        <span class="pill ${done ? 'p-gray' : late ? 'p-red' : 'p-blue'}" style="flex:0 0 auto">${escapeHtml(dnLabel(x.dn))} · ${escapeHtml(x.due.slice(5))}</span>
-        <span style="flex:1;line-height:1.5;${done ? 'color:var(--i4);text-decoration:line-through' : 'color:var(--i1)'}">${escapeHtml(x.t)}</span>
-        <span style="color:var(--i5);font-size:var(--fs-10_5);white-space:nowrap">${escapeHtml(evName(x.from))}${done ? ` · ${escapeHtml(done.by || '')} ${escapeHtml(String(done.at || '').slice(5, 10))}` : ''}</span></label>`; }).join('')}
-  </div></div>`;
-}
-
 export function retroHtml(ev){
   const r = retroOf(ev.key);
   const ended = evEnd(ev) && evEnd(ev) < td();
-  return carryHtml(ev) + (ended || (r.good.length + r.bad.length + r.next.length) ? factsHtml(ev) : '')
+  return (ended || (r.good.length + r.bad.length + r.next.length) ? factsHtml(ev) : '')
     + `<div class="sec">${ended ? '' : `<div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:8px">행사가 끝나면 여기 회고를 남겨요. 지금 적어 두어도 돼요.</div>`}
       ${SECS.map((s) => secHtml(ev, r, s)).join('')}</div>`;
 }
@@ -180,13 +153,6 @@ export async function retroDel(evKey, sec, id){
     trackAction('delete', '행사 회고', evKey, `${SECS.find((s) => s[0] === sec)[1]} — ${x.t.slice(0, 80)}`);
   }
 }
-export async function retroCarry(evKey, id, on){
-  await change(evKey, (r) => {
-    r.carry = { ...(r.carry || {}) };
-    if(on) r.carry[id] = { at: new Date().toISOString(), by: me() }; else delete r.carry[id];
-  }, '지난 행사 할 일');
-}
-
 /* settings 줄 → RETROS (load.js) */
 export function loadRetros(settingsRows){
   Object.keys(RETROS).forEach((k) => delete RETROS[k]);
@@ -197,4 +163,4 @@ export function loadRetros(settingsRows){
   });
 }
 
-Object.assign(window, { retroAdd, retroDel, retroCarry });
+Object.assign(window, { retroAdd, retroDel });

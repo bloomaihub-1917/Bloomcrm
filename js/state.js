@@ -557,6 +557,8 @@ export function setDomains(arr){
 export const CATMAPS = {};
 /* 행사 회고 — settings key='retro_<행사키>' JSON { good, bad, next:[{id,t,dn,by,at}], carry } (modules/event-retro.js) */
 export const RETROS = {};
+/* 행사 준비 — settings key='prep_<행사키>' JSON { done, extra } · 기본 단계는 'prep_steps' (modules/event-prep.js) */
+export const PREPS = {};
 
 /* ══════════════════════════════════════════
    EXH_CFG — 행사별 전시 설정 (settings 시트 key='exh_cfg_<행사키>' JSON)

@@ -21,12 +21,14 @@ import { isHiddenSp } from '../conference/conf-common.js';
 import { confUi } from '../conference/conf-ui.js';
 import { mdbUi } from './mdb-ui.js';
 import { isUnlinkedContact } from '../../modules/db-tab.js';
+import { prepDue } from '../../modules/event-prep.js';
 
 const s = (v) => String(v ?? '').trim();
 const evOf = (p) => p.eventId || p.event || '';
 const evName = (k) => { const e = EVENT_LIST.find((x) => x.key === k); return e ? (e.short || e.name || k) : k; };
 const personName = (c) => s(c && c.nameKo) || s(c && c.nameEn) || '(이름 없음)';
-const dayAdd = (d, n) => { const t = new Date(d + 'T00:00:00'); t.setDate(t.getDate() + n); return t.toISOString().slice(0, 10); };
+/* 날짜만 더한다 — UTC로 계산해야 한국 시간에서 하루 앞당겨지지 않는다 */
+const dayAdd = (d, n) => { const t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
 const evEnd = (e) => s(e.date_end || e.date_start || e.date);
 
 /* 지금 챙기는 행사 — 끝나지 않았거나 끝난 지 2주 안(결과보고·감사 메일을 보낸다) */
@@ -146,7 +148,9 @@ export function renderHealthChip(){
 /* ── 하루 한 번 알림 — 그날 처음 Master DB를 그릴 때 손볼 것이 있으면 ── */
 const dayKey = () => `bloom.health.day.${(currentUser && (currentUser.email || currentUser.name)) || ''}`;
 function dailyNotice(bad){
-  if(!bad.length) return;
+  /* 행사 준비(event-prep.js) — 지난 일·일주일 안에 할 일도 같은 알림에 */
+  const due = prepDue();
+  if(!bad.length && !due.length) return;
   let seen = '';
   try { seen = localStorage.getItem(dayKey()) || ''; } catch(e){ return; }
   if(seen === td()) return;
@@ -155,11 +159,15 @@ function dailyNotice(bad){
   const t = document.createElement('div');
   t.id = 'health-toast';
   t.style.cssText = 'position:fixed;right:20px;bottom:20px;z-index:900;background:var(--bg,#fff);border:1px solid var(--i6);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.14);padding:14px 16px;max-width:340px;font-size:var(--fs-12)';
-  t.innerHTML = `<div style="font-weight:700;color:var(--i1);margin-bottom:4px">🩺 오늘 데이터 점검 — 손볼 것 ${bad.length}가지</div>
-    <div style="color:var(--i3);line-height:1.6">${bad.map((x) => `${x.tone === 'red' ? '🔴' : '🟡'} ${escapeHtml(x.label)} ${x.n.toLocaleString()}`).join('<br>')}</div>
+  const late = due.filter((x) => x.late).length;
+  t.innerHTML = `${due.length ? `<div style="font-weight:700;color:var(--i1);margin-bottom:4px">📅 행사 준비 — ${late ? `지난 일 ${late} · ` : ''}일주일 안 ${due.length - late}</div>
+    <div style="color:var(--i3);line-height:1.6;margin-bottom:6px">${due.slice(0, 4).map((x) => `${x.late ? '🔴' : '🟡'} ${escapeHtml(x.due.slice(5))} <b>${escapeHtml(evName(x.ev))}</b> ${escapeHtml(x.t.slice(0, 30))}`).join('<br>')}${due.length > 4 ? '<br>…' : ''}</div>` : ''}
+    ${bad.length ? `<div style="font-weight:700;color:var(--i1);margin-bottom:4px">🩺 오늘 데이터 점검 — 손볼 것 ${bad.length}가지</div>
+    <div style="color:var(--i3);line-height:1.6">${bad.map((x) => `${x.tone === 'red' ? '🔴' : '🟡'} ${escapeHtml(x.label)} ${x.n.toLocaleString()}`).join('<br>')}</div>` : ''}
     <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:10px">
       <button class="btn bs" onclick="document.getElementById('health-toast')?.remove()">나중에</button>
-      <button class="btn bp bs" onclick="document.getElementById('health-toast')?.remove();openDataHealth()">보기</button></div>`;
+      ${due.length ? `<button class="btn bs" onclick="document.getElementById('health-toast')?.remove();openPrepDue()">준비 보기</button>` : ''}
+      ${bad.length ? `<button class="btn bp bs" onclick="document.getElementById('health-toast')?.remove();openDataHealth()">점검 보기</button>` : ''}</div>`;
   document.body.appendChild(t);
 }
 
