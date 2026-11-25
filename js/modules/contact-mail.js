@@ -205,7 +205,7 @@ function render(){
           <span id="rm-saved" style="color:var(--g)"></span></div>
       </div>
       <div style="min-width:0">
-        ${prev ? `<div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-7);font-size:var(--fs-11_5);white-space:pre-wrap;line-height:1.55;height:calc(92vh - 150px);overflow:auto"><div style="font-size:var(--fs-10);color:var(--i4);margin-bottom:4px">미리보기 — ${escapeHtml(memberName(sample))}</div><b>${escapeHtml(prev.s)}</b>${prev.b.html ? `<div class="rm-pvhtml" style="white-space:normal;background:#fff;padding:6px;margin-top:8px;overflow:hidden;border-radius:var(--rs)"><div style="font-size:var(--fs-10);color:var(--i4);margin-bottom:4px">HTML로 보냄</div><div class="rm-pvbody">${prev.b.html}</div></div>` : `\n\n${escapeHtml(prev.b.text)}`}</div>` : ''}
+        ${prev ? `<div style="padding:9px 11px;background:var(--i8);border:1px solid var(--i6);border-radius:var(--rd-7);font-size:var(--fs-11_5);white-space:pre-wrap;line-height:1.55;height:calc(92vh - 150px);overflow:auto"><div style="font-size:var(--fs-10);color:var(--i4);margin-bottom:4px">미리보기 — ${escapeHtml(memberName(sample))}</div><b>${escapeHtml(prev.s)}</b>${prev.b.html ? `<div class="rm-pvhtml" style="white-space:normal;background:#fff;padding:6px;margin-top:8px;overflow:hidden;border-radius:var(--rs)"><div style="font-size:var(--fs-10);color:var(--i4);margin-bottom:4px">HTML로 보냄</div><iframe class="rm-pvframe" title="HTML 메일 미리보기" style="display:block;border:0;background:#fff;transform-origin:0 0" srcdoc="${escapeHtml(`<!doctype html><meta charset=utf-8><style>html,body{margin:0;background:#fff}</style>${prev.b.html}`)}"></iframe></div>` : `\n\n${escapeHtml(prev.b.text)}`}</div>` : ''}
       </div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:12px">
@@ -213,15 +213,23 @@ function render(){
       <span id="rm-msg" style="font-size:var(--fs-11);color:var(--i4)"></span>
     </div>
   </div>`;
-  // 넓은 HTML 메일(1000px 표)을 칸 너비에 맞춰 줄여 보여 준다 — 가로 스크롤로 잘려 깨져 보이지 않게
-  const pv = el.querySelector('.rm-pvhtml > .rm-pvbody');
-  if (pv) requestAnimationFrame(() => {
-    // 메일 클라이언트처럼 폭을 정해 그린다 — max-content로 두면 긴 문단이 한 줄로 늘어나 전체가 아주 작게 줄어든다
-    const box = pv.parentElement.clientWidth - 12;
-    const fixed = Math.max(0, ...[...pv.querySelectorAll('table[width], td[width]')].map(t => /%/.test(t.getAttribute('width')) ? 0 : parseInt(t.getAttribute('width'), 10) || 0));
-    const w = Math.max(box, fixed);
-    pv.style.width = w + 'px';
-    pv.style.zoom = w > box ? String(box / w) : '';
+  /* HTML 메일은 iframe 안에 그린다 — 화면 안에 바로 넣으면 CRM의 표·칸 스타일이 덮어써 칸이 늘어나고 줄이 생긴다.
+     본문 표 폭(보통 1000px)으로 그린 뒤 칸 너비에 맞춰 줄인다 */
+  const fr = el.querySelector('.rm-pvframe');
+  if (fr) fr.addEventListener('load', () => {
+    const d = fr.contentDocument; if(!d) return;
+    const box = fr.parentElement.clientWidth - 12;
+    const fixed = Math.max(0, ...[...d.querySelectorAll('table[width], td[width]')].map(t => /%/.test(t.getAttribute('width')) ? 0 : parseInt(t.getAttribute('width'), 10) || 0));
+    const w = Math.max(box, fixed), k = w > box ? box / w : 1;
+    fr.style.width = w + 'px';
+    const fit = () => {
+      const h = d.documentElement.scrollHeight;
+      fr.style.height = h + 'px';
+      fr.style.transform = k < 1 ? `scale(${k})` : '';
+      fr.style.marginBottom = k < 1 ? `${-h * (1 - k)}px` : '';
+    };
+    fit();
+    d.querySelectorAll('img').forEach(im => { if(!im.complete) im.addEventListener('load', fit); });
   });
 }
 
