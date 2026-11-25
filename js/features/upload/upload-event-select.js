@@ -5,7 +5,7 @@
     window에 거는 것은 맨 아래, 이 파일을 읽는 것은 app.js.)
 ═══════════════════════════════════════════════════════════════ */
 
-import { COMPANY_SECTORS, EVENT_LIST, ORG_KINDS, PART_TYPES } from '../../state.js';
+import { COMPANY_SECTORS, CONTACT_ROUNDS, EVENT_LIST, ORG_KINDS, PART_TYPES } from '../../state.js';
 import { escapeHtml } from '../../utils.js';
 import { uploadUi } from './upload-ui.js';
 import { renderCategoryMappingUI } from '../../modules/upload-tab.js';
@@ -30,6 +30,22 @@ function refreshUploadRoleOptions(){
 
 export function populateUploadEvDropdown(){
   refreshUploadRoleOptions();
+  // 컨택 차수 — 열린 차수만, 행사별로 묶고 최근 행사부터
+  const rSel = document.getElementById('up-round');
+  if(rSel){
+    const cur = rSel.value;
+    const evOf = (k) => EVENT_LIST.find(e => e.key === k);
+    const byEv = new Map();
+    CONTACT_ROUNDS.filter(r => r.status !== 'closed').forEach(r => {
+      if(!byEv.has(r.event_id)) byEv.set(r.event_id, []);
+      byEv.get(r.event_id).push(r);
+    });
+    rSel.innerHTML = '<option value="">넣지 않음</option>' + [...byEv.keys()]
+      .sort((a, b) => String(evOf(b)?.date || '').localeCompare(String(evOf(a)?.date || '')))
+      .map(k => `<optgroup label="${escapeHtml(evOf(k)?.short || evOf(k)?.name || k)}">${byEv.get(k)
+        .sort((a, b) => String(a.name).localeCompare(String(b.name), 'ko'))
+        .map(r => `<option value="${escapeHtml(r.id)}"${r.id === cur ? ' selected' : ''}>${escapeHtml(r.name || '(이름 없음)')}${r.owner ? ` · ${escapeHtml(r.owner)}` : ''}</option>`).join('')}</optgroup>`).join('');
+  }
   // sector 드롭다운 채우기
   const secSel = document.getElementById('up-sector');
   if(secSel){

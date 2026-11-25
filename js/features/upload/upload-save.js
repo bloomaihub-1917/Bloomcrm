@@ -13,9 +13,10 @@ import { batchUpsertCompanies } from '../../domain/org-save.js';
 import { ensureOrgsForNames, orgIdForName } from '../../domain/orgs.js';
 import { buildCoCAT } from '../../modules/company-tab.js';
 import { buildMDBEvList, renderMDB } from '../../modules/db-tab.js';
-import { API_BASE_URL, CATMAPS, COMPANY_SECTORS, CO_DB, EVENT_LIST, aiLogs, contacts, currentUser, getContactById, getOrgById, mappedContacts, parsedRows, parserPrev, participations, setAiStep, setDetectedCatFromFilename, setUploadedFileName, uploadedFileName } from '../../state.js';
+import { API_BASE_URL, CATMAPS, COMPANY_SECTORS, CONTACT_ROUNDS, ROUND_MEMBERS, CO_DB, EVENT_LIST, aiLogs, contacts, currentUser, getContactById, getOrgById, mappedContacts, parsedRows, parserPrev, participations, setAiStep, setDetectedCatFromFilename, setUploadedFileName, uploadedFileName } from '../../state.js';
 import { escapeHtml, scopedSectorName, sectorKey, sectorRowValues, slugifySectorName, td } from '../../utils.js';
 import { uploadUi } from './upload-ui.js';
+import { addRoundMembers } from '../../api/exh-save.js';
 import { COMPANY_FILL, _orgOnlyRows, addAiLog, callHook, collectCatMapFromUI, companyInfoOf, genContactId } from '../../modules/upload-tab.js';
 
 /* ═══════════════════════════════════════
@@ -145,6 +146,7 @@ export async function runValidationStep(newRows, dupRows){
   /* 출처(docs/manual-db-axes.md) — 이번 파일로 새로 들어오는 사람에게만 적는다.
      이미 있는 사람의 출처는 «처음 들어온 길»이라 바꾸지 않는다 */
   const selectedOrigin = (document.getElementById('up-origin')  ||{}).value || '';
+  const selectedRound  = (document.getElementById('up-round')   ||{}).value || '';
   console.log('[upload-tab] 업로드 확정 — selectedEv:', JSON.stringify(selectedEv),
     '| _evDirectMode:', uploadUi.evDirectMode, '| up-ev.value:', _evSel && _evSel.value,
     '| up-ev-text.value:', _evInp && _evInp.value);
@@ -327,6 +329,33 @@ export async function runValidationStep(newRows, dupRows){
     addAiLog('warn', '기업 등록에 실패했어요 — 연락처는 저장되지만 기업DB 연결은 나중에 해야 해요.');
   }
 
+  /* ── 고른 컨택 차수 명단에도 넣는다 — 새 기업뿐 아니라 이 파일에 나온 기존 기업도(이미 명단에 있으면 건너뜀).
+     담당은 그 차수의 분야 담당자 */
+  let roundAdded = 0, roundName = '';
+  const round = selectedRound && CONTACT_ROUNDS.find(r => r.id === selectedRound);
+  if(round){
+    roundName = round.name || '';
+    const names = new Set(touchedCompanyKeys);
+    dupRows.forEach(c => { const nm = (c.orgKo || c.orgEn || '').trim(); if(nm) names.add(nm); });
+    const have = new Set(ROUND_MEMBERS.filter(m => m.round_id === round.id).map(m => String(m.org_id)));
+    const now = td() + ' ' + new Date().toTimeString().slice(0, 8);
+    const rows = [];
+    names.forEach(nm => {
+      const id = orgIdForName(nm);
+      if(!id || have.has(String(id))) return;
+      have.add(String(id));
+      const o = getOrgById(id) || {};
+      rows.push({ id: 'RM-' + Date.now() + '_' + rows.length, round_id: round.id, org_id: id,
+        org_name: o.name_ko || o.name_en || nm, source: uploadedFileName || '업로드',
+        assignee: round.owner || '', created_at: now });
+    });
+    if(rows.length){
+      const r = await addRoundMembers(rows);
+      if(r && r.ok){ ROUND_MEMBERS.push(...rows); roundAdded = rows.length; addAiLog('ok', `컨택 «${roundName}»에 기업 ${rows.length}곳을 넣었어요.`); }
+      else addAiLog('warn', `컨택 «${roundName}»에 넣지 못했어요 — 컨택 탭 «명단 채우기»로 다시 넣어 주세요.`);
+    } else addAiLog('ok', `컨택 «${roundName}»에는 새로 넣을 기업이 없어요(이미 명단에 있음).`);
+  }
+
   try {
     buildCoDB(); buildCoCAT(); renderMDB(); buildMDBEvList();
   } catch(e){ console.warn('[upload-tab] 업로드 후 화면 갱신 실패:', e); }
@@ -452,6 +481,7 @@ export async function runValidationStep(newRows, dupRows){
     const evMsg = selectedEv ? ` / 행사 "${selectedEv}" ${newParts.length}건 연결` : '';
     trackAction('upload', '파일 업로드', uploadedFileName,
       '<b>' + escapeHtml(uploadedFileName) + '</b> 업로드 — 신규 ' + addedContacts.length + '건 저장' + evMsg
+      + (roundAdded ? ` / 컨택 «${escapeHtml(roundName)}» ${roundAdded}곳` : '')
       + (catSel ? ' / 카테고리 매핑 적용' : '')
       + (partsSaveFailed ? ' (⚠️ 행사 연결 저장 실패)' : ''));
   } else {
@@ -463,6 +493,8 @@ export async function runValidationStep(newRows, dupRows){
   if(btn){ btn.disabled = false; }
   addAiLog('ok', '검증/저장 완료: 신규 ' + addedContacts.length + '건 Master DB 반영' + (API_BASE_URL?' (서버 저장 포함)':''));
   alert(addedContacts.length + '건이 Master DB에 추가되었어요' + (API_BASE_URL?' (서버에도 저장됨)':'')
+    + (roundAdded ? `
+컨택 «${roundName}»에 기업 ${roundAdded}곳을 넣었어요` : '')
     + (partsSaveFailed ? '\n⚠️ 단, 행사 참여 기록 저장은 실패했어요 — 감사 로그를 확인해주세요.' : ''));
   resetUpload();
   callHook('switchApp', 'mdb', document.querySelector('.atab'));
