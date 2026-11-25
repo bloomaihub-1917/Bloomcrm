@@ -199,6 +199,8 @@ export function exhIsEnglish(x){
 
 /* 문구 채우기. ctx는 부르는 쪽이 넘긴다(exh-tab의 계산 함수를 여기서 부르면 순환이 된다):
    { names:{ko,en}, contact:{name}, booth, billed, unpaid } */
+/* 직함이 없으면 {직함} 자리를 옆 띄어쓰기와 함께 지운다 — «이창원 님께», «Dear  Kim»이 되지 않게 */
+export const dropEmptyTitle = (t, title) => title ? t : t.replace(/ \{직함\}/g, '').replace(/\{직함\} /g, '').replace(/\{직함\}/g, '');
 export function fillExhTemplate(text, x, step, en, ctx = {}){
   const ev = EVENT_LIST.find(e => e.key === x.event_id);
   const evName = ev ? ((en && ev.name_en) || ev.name || ev.short || ev.key) : x.event_id;
@@ -210,6 +212,8 @@ export function fillExhTemplate(text, x, step, en, ctx = {}){
     ...eventVarValues(x.event_id, en),   // {행사일}·{장소}·{주최}… 행사 칸(mail-vars.js)
     기업: en ? (names.en || names.ko || '') : (names.ko || names.en || ''),
     담당자: (ctx.contact && ctx.contact.name) || (en ? 'Sir/Madam' : '담당자'),
+    // 이름이 없으면(«담당자»·Sir/Madam) 직함도 비운다 — «담당자 부장님»이 되지 않게
+    직함: ctx.contact && ctx.contact.name ? ((en ? ctx.contact.titleEn : ctx.contact.title) || '') : '',
     행사: evName,
     부스: x.booth_no || (en ? 'TBA' : '배정 예정'),
     마감일: due || (en ? 'your earliest convenience' : '가급적 빠른 시일'),
@@ -222,7 +226,7 @@ export function fillExhTemplate(text, x, step, en, ctx = {}){
     // 영문 메일 서명에 한글 이름은 빼고 «… Secretariat»만 남긴다
     보내는사람: en && /[가-힣]/.test(me) ? '' : me,
   };
-  let t = String(text || '');
+  let t = dropEmptyTitle(String(text || ''), vars.직함);
   if(!due) t = t.replace(/\{마감일\}까지/g, '가급적 빠른 시일 내에').replace(/by \{마감일\}/g, 'at your earliest convenience');
   return t.replace(varPattern('exh'), (_, k) => vars[k] ?? '')
     .replace(/^\s*드림\s*$/gm, '')

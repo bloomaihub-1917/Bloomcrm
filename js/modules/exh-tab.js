@@ -435,6 +435,7 @@ export function resolveContact(row){
       email: cleanEmail(c.email1),
       phone: c.phone1 || '',
       title: c.titleKo || c.titleEn || '',
+      titleEn: c.titleEn || c.titleKo || '',
       role:  row.role || '', primary: row.is_primary === 'yes',
     };
   }

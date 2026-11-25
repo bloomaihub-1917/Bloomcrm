@@ -21,7 +21,7 @@ import { varPattern, eventVarValues, unknownVars } from '../shared/mail/mail-var
 import { varChipsHtml } from '../shared/mail/var-chips.js';
 import { libItems, libItem } from '../shared/mail/mail-templates.js';
 import { looksHtml, cleanHtml, htmlToText } from '../shared/mail/html-body.js';
-import { exhMailSteps } from './exh-mail.js';
+import { exhMailSteps, dropEmptyTitle } from './exh-mail.js';
 import { memberState, renderRoundNav, pickedPersonId } from './contact-tab.js';
 import { roundById, membersOf, attemptsOf, memberName, peopleOf, coOf, evLabel } from '../domain/rounds.js';
 
@@ -46,7 +46,8 @@ const isMail = (e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e);
 const mailOfPerson = (p) => [p.email1, p.email2].map(e => String(e || '').trim()).find(isMail) || '';
 /* 기업DB «대표 메일» — 쉼표·세미콜론으로 여러 개 적힌 곳도 있다 */
 export const repMails = (m) => [...new Set(String(coOf(m.org_id)?.email || '').split(/[,;\s]+/).map(e => e.trim()).filter(isMail))];
-const personRcpt = (p) => ({ id: String(p.id), name: p.nameKo || p.nameEn || '', nameEn: p.nameEn || p.nameKo || '', emails: [mailOfPerson(p)], rep: false });
+const personRcpt = (p) => ({ id: String(p.id), name: p.nameKo || p.nameEn || '', nameEn: p.nameEn || p.nameKo || '',
+  title: p.titleKo || p.titleEn || '', titleEn: p.titleEn || p.titleKo || '', emails: [mailOfPerson(p)], rep: false });
 const repRcpt = (m) => { const e = repMails(m); return e.length ? { id: REP, name: '', nameEn: '', emails: e, rep: true } : null; };
 const mailable = (m) => peopleOf(m).filter(mailOfPerson).map(personRcpt);
 /* 이 기업에 보낼 수 있는 곳 전부 — 한 기업 창의 체크 목록 */
@@ -78,9 +79,10 @@ function fill(t, m, person, en, html){
     ...eventVarValues(ev.key, en),   // {행사일}·{장소}·{주최}… 행사 칸(mail-vars.js)
     기업: en ? (co?.nameEn || memberName(m)) : memberName(m),
     담당자: nm || (en ? 'Sir/Madam' : '담당자'),
+    직함: nm ? ((en ? person.titleEn : person.title) || '') : '',
     행사: (en ? (ev.name_en || ev.name) : ev.name) || evLabel(ev.key),
   };
-  return String(t || '').replace(varPattern('contact'), (_, k) => html ? escapeHtml(vars[k] ?? '') : (vars[k] ?? ''));
+  return dropEmptyTitle(String(t || ''), vars.직함).replace(varPattern('contact'), (_, k) => html ? escapeHtml(vars[k] ?? '') : (vars[k] ?? ''));
 }
 /* 본문 — 문구가 태그로 시작하면 HTML로 보낸다(docs/html-mail-guide.md). text는 HTML을 못 보는 프로그램용 */
 function bodyOf(m, person, en){

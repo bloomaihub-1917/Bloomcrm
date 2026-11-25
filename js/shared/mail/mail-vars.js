@@ -61,6 +61,7 @@ export const MAIL_VARS = {
   exh: [
     { key: '기업',     group: '받는 곳', desc: '참가사 이름 (영문 메일은 영문명)' },
     { key: '담당자',   group: '받는 곳', desc: '참가사 담당자 이름 (없으면 «담당자» / Sir/Madam)' },
+    { key: '직함',     group: '받는 곳', desc: '담당자 직함 — 마스터DB 직함 (영문 메일은 영문 직함, 없으면 비움)' },
     { key: '부스',     group: '부스·비용', desc: '부스 번호 (없으면 «배정 예정»)' },
     { key: '청구액',   group: '부스·비용', desc: '청구 총액' },
     { key: '미납액',   group: '부스·비용', desc: '아직 안 들어온 금액' },
@@ -73,6 +74,7 @@ export const MAIL_VARS = {
   contact: [
     { key: '기업',   group: '받는 곳', desc: '명단 기업 이름 (영문 메일은 영문명)' },
     { key: '담당자', group: '받는 곳', desc: '받는 사람 이름 (없으면 «담당자» / Sir/Madam)' },
+    { key: '직함',   group: '받는 곳', desc: '받는 사람 직함 — 마스터DB 직함 (영문 메일은 영문 직함, 없으면 비움)' },
     ...EVENT_DEFS,
   ],
   crm: [
