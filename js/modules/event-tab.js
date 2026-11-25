@@ -82,14 +82,19 @@ let _cache = { key: null, people: [], recs: 0, noOrg: [] };
    아직 확정 전인 신청(신청 대기)은 그 신청의 경로로 친다 */
 const VIA = [
   ['link', '🔗 등록 링크'], ['manual', '✍️ 직접 입력'], ['excel', '📄 엑셀 명단'], ['app', '앱에서 추가'],
+  ['roster', '📋 명단 맞추기'], ['ptn', '파트너링에서'],
   ['speaker', '연사에서'], ['exh', '전시에서'], ['mdb', '마스터DB 초청'], ['onsite', '현장 등록'], ['etc', '기록 없음'],
 ];
 const VIA_LABEL = Object.fromEntries(VIA);
+/* «✅ 역할 고침»은 이미 이 행사에 있는 사람에게 역할 줄을 더한 것이라 들어온 길이 아니다 — ''를 돌려 세지 않는다 */
 function viaOfMatched(m){
   m = String(m || '');
   if(m === '🔗 등록 링크') return 'link';
   if(m === '✍️ 직접 입력') return 'manual';
   if(m === '📄 엑셀 명단') return 'excel';
+  if(m.includes('역할 고침')) return '';
+  if(m.includes('명단 맞추기')) return 'roster';
+  if(m.includes('파트너링')) return 'ptn';
   if(m.includes('연사')) return 'speaker';
   if(m.includes('전시')) return 'exh';
   if(m.includes('마스터DB')) return 'mdb';
@@ -128,7 +133,8 @@ function evPeople(evKey){
       });
     }
     const m = map.get(key);
-    m.vias.add(viaOfMatched(p.matched));
+    const via = viaOfMatched(p.matched);
+    if(via) m.vias.add(via);
     m.recs++;
     m.partIds.push(p.id);
     if(p.confirmedAt && !m.confirmedAt) m.confirmedAt = p.confirmedAt;
@@ -154,6 +160,8 @@ function evPeople(evKey){
   });
 
   const people = [...map.values()];
+  /* 역할 고침 줄만 남은 사람(처음 줄이 지워진 경우)은 들어온 길을 모른다 */
+  people.forEach(r => { if(!r.vias.size) r.vias.add('etc'); });
   /* 사전/현장 등록 — 네임택 데스크 현장 신규로만 들어온 사람(matched «현장 등록»)이 현장등록, 나머지는 사전등록.
      현장에서 왔어도 이미 사전등록한 사람에 붙었으면 사전등록이다 */
   people.forEach(r => { r.onsite = !r.pendingId && r.vias.size > 0 && [...r.vias].every(v => v === 'onsite'); });

@@ -19,7 +19,7 @@ import { BUCKET } from './contact-grid.js';
 import { escapeHtml, escAttr, td } from '../utils.js';
 import { trackAction } from '../core/audit-log.js';
 
-const BUCKETS = ['긍정', '보류', '부정', '미연결'];
+const BUCKETS = ['관심 상', '관심 중·하', '부정', '미연결'];
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 let repDate = null;   // 기준일 — 비면 오늘
 
@@ -85,10 +85,10 @@ export function roundReport(r, d){
   });
   const trend = Array.from({ length: 14 }, (_, i) => shift(d, i - 13)).map(day => {
     const xs = atts.filter(a => dayOf(a) === day);
-    return { day, n: xs.length, orgs: new Set(xs.map(a => a.member_id)).size, pos: xs.filter(a => BUCKET[a.reaction] === '긍정').length };
+    return { day, n: xs.length, orgs: new Set(xs.map(a => a.member_id)).size, pos: xs.filter(a => BUCKET[a.reaction] === '관심 상').length };
   });
-  // 오늘 특이사항 — 메모가 있는 긍정·보류·부정
-  const notes = atts.filter(a => dayOf(a) === d && a.note && ['긍정', '보류', '부정'].includes(BUCKET[a.reaction]))
+  // 오늘 특이사항 — 메모가 있는 관심 상·관심 중·하·부정
+  const notes = atts.filter(a => dayOf(a) === d && a.note && ['관심 상', '관심 중·하', '부정'].includes(BUCKET[a.reaction]))
     .sort((a, b) => String(a.at).localeCompare(String(b.at)));
   // 오늘 진행한 반응별 수 (곳이 아니라 건)
   const dayB = Object.fromEntries(BUCKETS.map(b => [b, atts.filter(a => dayOf(a) === d && BUCKET[a.reaction] === b).length]));
@@ -108,7 +108,7 @@ export function dailyText(r, d, rep = roundReport(r, d)){
   L.push(`  최근 반응 — ${BUCKETS.map(b => `${b} ${sum[b]}`).join(' · ')}`);
   if(bySrc.length > 1){
     L.push('· 명단별');
-    bySrc.forEach(([src, s]) => L.push(`  - ${src}: ${s.total}곳 중 ${s.touched}곳 연락(${pct(s.touched, s.total)}%) · 긍정 ${s['긍정']} · 보류 ${s['보류']} · 부정 ${s['부정']} · ${goal} ${s.goal}`));
+    bySrc.forEach(([src, s]) => L.push(`  - ${src}: ${s.total}곳 중 ${s.touched}곳 연락(${pct(s.touched, s.total)}%) · 관심 상 ${s['관심 상']} · 관심 중·하 ${s['관심 중·하']} · 부정 ${s['부정']} · ${goal} ${s.goal}`));
   }
   if(notes.length){
     L.push('· 특이사항');
@@ -179,7 +179,7 @@ export function renderReport(){
       </tbody></table>`, `<span style="font-size:10.5px;color:var(--i4)">반응은 곳마다 ${fmtDay(d)}까지의 마지막 반응</span>`)}
 
     ${byOwner.length > 1 || byOwner[0]?.[0] !== '(담당 없음)' ? box('담당 배정별', `<table style="width:100%;border-collapse:collapse"><thead><tr><th style="${thl}">담당</th>
-        <th style="${th}">맡은 곳</th><th style="${th}">연락한 곳</th><th style="${th}">진행률</th><th style="${th}">메일 확보</th>${BUCKETS.map(b => `<th style="${th}">${b === '긍정' ? '관심 상' : b === '보류' ? '관심 중·하' : b}</th>`).join('')}<th style="${th}">특별관 후보</th><th style="${th}">이번 주 건</th></tr></thead><tbody>
+        <th style="${th}">맡은 곳</th><th style="${th}">연락한 곳</th><th style="${th}">진행률</th><th style="${th}">메일 확보</th>${BUCKETS.map(b => `<th style="${th}">${b}</th>`).join('')}<th style="${th}">특별관 후보</th><th style="${th}">이번 주 건</th></tr></thead><tbody>
       ${byOwner.map(([k, s]) => `<tr><td style="${tdl}">${escapeHtml(k)}</td><td style="${tdc}">${s.total}</td><td style="${tdc}">${s.touched}</td>
         <td style="${tdc};color:var(--a);font-weight:600">${pct(s.touched, s.total)}%</td><td style="${tdc}">${s.mail || ''}</td>
         ${BUCKETS.map(b => `<td style="${tdc}">${s[b] || ''}</td>`).join('')}<td style="${tdc}">${s.eco || ''}</td><td style="${tdc}">${s.week || ''}</td></tr>`).join('')}
@@ -192,7 +192,7 @@ export function renderReport(){
       </tbody></table>` : '<div style="padding:14px 12px;font-size:11.5px;color:var(--i4)">아직 기록이 없어요</div>', '<span style="font-size:10.5px;color:var(--i4)">건 수 — 같은 곳에 두 번 걸면 두 건</span>')}
 
     ${box('최근 14일', `<div style="display:flex;align-items:flex-end;gap:4px;padding:12px 12px 6px;min-width:520px">
-      ${trend.map(t => `<div style="flex:1;text-align:center" title="${escapeHtml(t.day)} · ${t.n}건 · ${t.orgs}곳 · 긍정 ${t.pos}">
+      ${trend.map(t => `<div style="flex:1;text-align:center" title="${escapeHtml(t.day)} · ${t.n}건 · ${t.orgs}곳 · 관심 상 ${t.pos}">
         <div style="font-size:10px;color:var(--i3);height:13px">${t.n || ''}</div>
         <div style="height:${Math.round(t.n / maxN * 70)}px;min-height:${t.n ? 2 : 0}px;background:${t.day === d ? 'var(--a)' : 'var(--i5)'};border-radius:3px 3px 0 0"></div>
         <div style="font-size:10px;color:${t.day === d ? 'var(--a)' : 'var(--i4)'};margin-top:3px;white-space:nowrap">${escapeHtml(t.day.slice(8))}</div></div>`).join('')}

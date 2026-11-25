@@ -687,7 +687,7 @@ export function renderMDBSelectionBar(){
   el.innerHTML = `
     <span style="font-size:var(--fs-12);font-weight:600;color:var(--i1)">${n}명 선택됨</span>${
       isMobile() ? '<span style="font-size:var(--fs-10_5);color:var(--i5)">탭하면 선택·해제 · 길게 눌러 시작</span>' : ''}
-    <button class="btn bp bs" onclick="openMDBBulkEditModal()">기업명/카테고리/국가/상태 일괄 변경</button>
+    <button class="btn bp bs" onclick="openMDBBulkEditModal()">기업명/국가/상태 일괄 변경</button>
     <button class="btn bs" onclick="openMDBToCrmModal()"
       title="고른 사람들을 행사 참가자로 올리고, 소속 기업을 CRM 타겟으로 잡습니다">행사에 초청</button>
     <button class="btn bs" onclick="mdbSendToRound()"

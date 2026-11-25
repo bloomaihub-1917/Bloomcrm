@@ -5,14 +5,14 @@
     window에 거는 것은 맨 아래, 이 파일을 읽는 것은 app.js.)
 ═══════════════════════════════════════════════════════════════ */
 
-import { postToSheet } from '../../api.js';
+import { authHeaders, postToSheet, safeFetch } from '../../api.js';
 import { deleteRoundMembers, saveAttempt, saveExhibitor, saveRoundMember } from '../../api/exh-save.js';
 import { aiCompanyPairs } from '../../api/ai.js';
 import { changed, removed as removedMeta, trackAction } from '../../core/audit-log.js';
 import { buildCoDB } from '../../domain/co-db.js';
 import { normalizeCompanyKey } from '../../domain/org-names.js';
 import { applyOrgLocal, patchOrgFields } from '../../domain/org-save.js';
-import { CONTACT_ATTEMPTS, CO_DB, EXHIBITORS, ORGS, ROUND_MEMBERS, contacts, getOrgById } from '../../state.js';
+import { API_BASE_URL, CONTACT_ATTEMPTS, CO_DB, EXHIBITORS, ORGS, ROUND_MEMBERS, contacts, getOrgById } from '../../state.js';
 import { escAttr, escapeHtml, levenshteinDist } from '../../utils.js';
 import { buildCoCAT, renderCoList } from '../../modules/company-tab.js';
 
@@ -47,19 +47,50 @@ export function findSimilarCompanyPairs(){
   return pairs.sort((x,y) => y.similarity - x.similarity).slice(0, 50);
 }
 
-export function renderSimilarCompanyList(){
+/* ── «다른 기업임» — 사람이 같은 회사가 아니라고 본 짝. settings key='co_not_same' JSON ["idA|idB", …](id 순서대로).
+   전에는 화면에서 카드만 치워서 다시 찾으면 같은 짝이 또 나왔다 ── */
+let NOT_SAME = null;
+const pairKey = (a, b) => [String(a), String(b)].sort().join('|');
+async function readNotSame(){
+  if(!API_BASE_URL) return NOT_SAME || new Set();
+  const rows = await safeFetch(API_BASE_URL + '/api/data?sheet=settings', 'settings(다른 기업임)', 1, await authHeaders());
+  if(!Array.isArray(rows)) throw new Error('서버 값을 읽지 못했어요');
+  const row = rows.find(x => x.key === 'co_not_same');
+  try { const v = row ? JSON.parse(row.value) : []; return new Set(Array.isArray(v) ? v : []); } catch(e){ return new Set(); }
+}
+async function loadNotSame(){
+  if(NOT_SAME) return NOT_SAME;
+  try { NOT_SAME = await readNotSame(); } catch(e){ console.warn('[CRM] 다른 기업임 목록을 못 읽었어요:', e); NOT_SAME = new Set(); }
+  return NOT_SAME;
+}
+export async function markNotSameCompany(a, b, btn){
+  let set;
+  try { set = await readNotSame(); } catch(e){ alert(e.message); return; }
+  set.add(pairKey(a, b));
+  if(API_BASE_URL){
+    const r = await postToSheet({ sheet: 'settings', action: 'upsert', row: ['co_not_same', JSON.stringify([...set])] }, '다른 기업임');
+    if(!r || r.ok === false){ alert('저장하지 못했어요. 새로고침 후 다시 시도해 주세요.'); return; }
+  }
+  NOT_SAME = set;
+  const A = CO_DB.find(c => c.key === a), B = CO_DB.find(c => c.key === b);
+  trackAction('edit', '다른 기업임', (A && (A.nameKo || A.nameEn)) || a, `${escapeHtml((A && (A.nameKo || A.nameEn)) || a)} ↔ ${escapeHtml((B && (B.nameKo || B.nameEn)) || b)} — 다시 제안하지 않음`);
+  btn?.closest('[data-co-pair]')?.remove();
+}
+
+export async function renderSimilarCompanyList(){
   const el = document.getElementById('similar-co-list');
   if(!el) return;
   el.innerHTML = '<div style="font-size:var(--fs-12);color:var(--i4)">검사 중...</div>';
 
-  const pairs = findSimilarCompanyPairs();
+  const notSame = await loadNotSame();
+  const pairs = findSimilarCompanyPairs().filter(p => !notSame.has(pairKey(p.a.key, p.b.key)));
   if(!pairs.length){
     el.innerHTML = '<div style="font-size:var(--fs-12);color:var(--i4)">유사한 기업명 후보를 못 찾았어요.</div>';
     return;
   }
 
   el.innerHTML = pairs.map(({a, b, similarity}) => `
-    <div style="background:var(--W);border:1px solid var(--i6);border-radius:var(--r);padding:10px 12px">
+    <div data-co-pair style="background:var(--W);border:1px solid var(--i6);border-radius:var(--r);padding:10px 12px">
       <div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:6px">유사도 ${Math.round(similarity*100)}%</div>
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <div style="flex:1;min-width:120px;font-size:var(--fs-13);font-weight:600">${escapeHtml(a.nameKo||a.nameEn)} <span style="font-size:var(--fs-11);color:var(--i4);font-weight:400">(${a.contacts.length}명)</span></div>
@@ -69,7 +100,7 @@ export function renderSimilarCompanyList(){
       <div style="display:flex;gap:6px;margin-top:8px">
         <button class="btn bp bs" onclick="mergeCompanies('${escAttr(b.key)}','${escAttr(a.key)}')">"${escapeHtml(a.nameKo||a.nameEn)}"로 합치기</button>
         <button class="btn bp bs" onclick="mergeCompanies('${escAttr(a.key)}','${escAttr(b.key)}')">"${escapeHtml(b.nameKo||b.nameEn)}"로 합치기</button>
-        <button class="btn bs" onclick="this.closest('div[style*=\\'border-radius:8px\\']').remove()">다른 기업임</button>
+        <button class="btn bs" onclick="markNotSameCompany('${escAttr(a.key)}','${escAttr(b.key)}',this)">다른 기업임</button>
       </div>
     </div>`).join('');
 }
@@ -84,11 +115,13 @@ export async function aiFindCompanyPairs(){
   el.innerHTML = `<div style="font-size:var(--fs-12);color:var(--i4)">✨ 기업 ${known.length}곳을 AI가 살펴보는 중… (1분쯤 걸릴 수 있어요)</div>`;
   const r = await aiCompanyPairs({ known });
   if(!r.ok){ el.innerHTML = `<div style="font-size:var(--fs-12);color:var(--re)">AI로 찾지 못했어요: ${escapeHtml(r.error || '')}</div>`; return; }
-  const pairs = (r.pairs || []).map(p => ({ ...p, A: CO_DB.find(c => c.key === p.a), B: CO_DB.find(c => c.key === p.b) })).filter(p => p.A && p.B);
+  const notSame = await loadNotSame();
+  const pairs = (r.pairs || []).map(p => ({ ...p, A: CO_DB.find(c => c.key === p.a), B: CO_DB.find(c => c.key === p.b) }))
+    .filter(p => p.A && p.B && !notSame.has(pairKey(p.a, p.b)));
   if(!pairs.length){ el.innerHTML = '<div style="font-size:var(--fs-12);color:var(--i4)">✨ AI도 같은 회사로 보이는 짝을 못 찾았어요.</div>'; return; }
   const nm = (c) => escapeHtml(c.nameKo || c.nameEn);
   el.innerHTML = pairs.map(({ A, B, reason, caution }) => `
-    <div style="background:var(--W);border:1px solid var(--i6);border-radius:var(--r);padding:10px 12px">
+    <div data-co-pair style="background:var(--W);border:1px solid var(--i6);border-radius:var(--r);padding:10px 12px">
       <div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:6px">✨ AI 추천 — ${escapeHtml(reason)}</div>
       ${caution ? `<div style="font-size:var(--fs-11);color:var(--am);margin-bottom:6px">⚠️ ${escapeHtml(caution)}</div>` : ''}
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
@@ -99,7 +132,7 @@ export async function aiFindCompanyPairs(){
       <div style="display:flex;gap:6px;margin-top:8px">
         <button class="btn bp bs" onclick="mergeCompanies('${escAttr(B.key)}','${escAttr(A.key)}')">"${nm(A)}"로 합치기</button>
         <button class="btn bp bs" onclick="mergeCompanies('${escAttr(A.key)}','${escAttr(B.key)}')">"${nm(B)}"로 합치기</button>
-        <button class="btn bs" onclick="this.parentElement.parentElement.remove()">다른 기업임</button>
+        <button class="btn bs" onclick="markNotSameCompany('${escAttr(A.key)}','${escAttr(B.key)}',this)">다른 기업임</button>
       </div>
     </div>`).join('');
 }
@@ -238,3 +271,4 @@ window.mergeCompanies = mergeCompanies;
 window.mergeCoInto = mergeCompanies;
 window.renderSimilarCompanyList = renderSimilarCompanyList;
 window.aiFindCompanyPairs = aiFindCompanyPairs;
+window.markNotSameCompany = markNotSameCompany;

@@ -16,7 +16,7 @@ import { buildMDBEvList, renderMDB } from '../../modules/db-tab.js';
 import { API_BASE_URL, CATMAPS, COMPANY_SECTORS, CONTACT_ROUNDS, ROUND_MEMBERS, CO_DB, EVENT_LIST, aiLogs, contacts, currentUser, getContactById, getOrgById, mappedContacts, parsedRows, parserPrev, participations, setAiStep, setDetectedCatFromFilename, setUploadedFileName, uploadedFileName } from '../../state.js';
 import { escapeHtml, scopedSectorName, sectorKey, sectorRowValues, slugifySectorName, td } from '../../utils.js';
 import { uploadUi } from './upload-ui.js';
-import { addRoundMembers } from '../../api/exh-save.js';
+import { addRoundMembers, reloadContactData } from '../../api/exh-save.js';
 import { COMPANY_FILL, _orgOnlyRows, addAiLog, callHook, collectCatMapFromUI, companyInfoOf, genContactId } from '../../modules/upload-tab.js';
 
 /* ═══════════════════════════════════════
@@ -337,6 +337,10 @@ export async function runValidationStep(newRows, dupRows){
     roundName = round.name || '';
     const names = new Set(touchedCompanyKeys);
     dupRows.forEach(c => { const nm = (c.orgKo || c.orgEn || '').trim(); if(nm) names.add(nm); });
+    /* 위에서 기업을 저장할 때 서버가 분야가 맞는 열린 차수에 이미 붙였을 수 있다(data.js enrollTouchedOrgs).
+       화면이 가진 명단은 그 전 것이라 다시 받아 둔다 — 안 그러면 같은 기업이 한 차수에 두 줄 생긴다 */
+    const fresh = await reloadContactData();
+    if(fresh) ROUND_MEMBERS.splice(0, ROUND_MEMBERS.length, ...fresh.members);
     const have = new Set(ROUND_MEMBERS.filter(m => m.round_id === round.id).map(m => String(m.org_id)));
     const now = td() + ' ' + new Date().toTimeString().slice(0, 8);
     const rows = [];

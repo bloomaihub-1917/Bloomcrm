@@ -6,7 +6,6 @@
 ═══════════════════════════════════════════════════════════════ */
 
 import { postToSheet } from '../../api.js';
-import { CAT_KEYS, CL, ROLE_TO_CAT } from '../../constants.js';
 import { changed, removed as removedMeta, trackAction } from '../../core/audit-log.js';
 import { buildCoDB } from '../../domain/co-db.js';
 import { ensureOrgsForNames, orgIdForName } from '../../domain/orgs.js';
@@ -276,10 +275,7 @@ export function openMDBBulkEditModal(){
         <div id="mdb-bulk-org-hint" style="font-size:var(--fs-11);color:var(--i4);margin-top:4px;min-height:14px"></div>
         ${commonOrg ? `<button type="button" class="btn bs" style="margin-top:2px;font-size:var(--fs-11)" onclick="suggestMDBSplitName()">🔀 "${escapeHtml(commonOrg)}"에서 분리할 새 이름 제안</button>` : ''}
       </div>
-      <div class="fg" style="margin-top:8px"><label class="fl">카테고리 — 유지하려면 선택 안 함</label>
-        <select class="fi" id="mdb-bulk-cat"><option value="">변경 안 함</option>
-          ${CAT_KEYS.map(k=>`<option value="${k}">${CL[k]}</option>`).join('')}
-        </select></div>
+      <!-- 사람 카테고리는 11-12에 없앴다(역할은 행사 참여 기록에서 계산) — 고르는 칸을 두지 않는다 -->
       <div class="fg" style="margin-top:8px"><label class="fl">국가 — 유지하려면 선택 안 함<br>
           <span style="font-weight:400;color:var(--i4)">«비우기»를 고르면 국가를 지웁니다 — 잘못 들어간 값을 되돌릴 때 씁니다</span>
         </label>
@@ -293,7 +289,7 @@ export function openMDBBulkEditModal(){
           <option value="verified">검증됨</option><option value="pending">확인 중</option><option value="new">신규</option>
         </select></div>
       ${TAGS.map(t => `
-      <div class="fg" style="margin-top:8px"><label class="fl">${escapeHtml(t.label)} 태그 — 참가 역할·카테고리와 무관하게 계속 남는 꼬리표(다음 행사 메일링에 재사용)</label>
+      <div class="fg" style="margin-top:8px"><label class="fl">${escapeHtml(t.label)} 태그 — 참가 역할과 무관하게 계속 남는 꼬리표(다음 행사 메일링에 재사용)</label>
         <select class="fi" id="mdb-bulk-tag-${escAttr(t.key)}"><option value="">유지</option><option value="add">${escapeHtml(t.label)}로 표시</option><option value="remove">${escapeHtml(t.label)} 표시 해제</option></select></div>`).join('')}
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
         <button class="btn bs" onclick="closeMDBBulkEditModal()">취소</button>

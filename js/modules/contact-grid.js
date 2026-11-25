@@ -21,12 +21,12 @@ import { showSaveErrorToast } from '../api.js';
 import { escapeHtml, escAttr } from '../utils.js';
 import { trackAction } from '../core/audit-log.js';
 
-/* 반응을 보고서의 네 칸으로 묶는다 — 엑셀 총괄표의 긍정·보류·부정·오류와 같다 */
+/* 반응을 보고서 칸으로 묶는다 — TM 관심 상·중·하에 맞춰 관심 상 / 관심 중·하 / 부정 / 미연결 (DM 회신은 관심 상) */
 export const BUCKET = {
-  positive: '긍정', reply: '긍정', hold: '보류', low: '보류', negative: '부정',
+  positive: '관심 상', reply: '관심 상', hold: '관심 중·하', low: '관심 중·하', negative: '부정',
   noanswer: '미연결', wrongnum: '미연결', bounce: '미연결', sent: '보냄',
 };
-const BUCKETS = ['긍정', '보류', '부정', '미연결', '보냄'];
+const BUCKETS = ['관심 상', '관심 중·하', '부정', '미연결', '보냄'];
 
 let gFil = 'all';   // all | todo(이 차수 연락 전) | goal(목표 달성) | open(아직 안 끝남)
 

@@ -34,7 +34,7 @@ import { ensureOrgsForNames, orgIdForName } from '../domain/orgs.js';
 /* ── 반응 — 채널마다 누를 수 있는 것이 다르다. next: 다음 연락까지 며칠(0=곧바로),
    close: 이 반응이면 끝낸다. 값은 여기 한 곳에만 둔다. ── */
 export const REACTIONS = {
-  /* TM은 관심 상·중·하로 남긴다(이벤트코리아 TM 계획) — 보고 묶음은 긍정·보류 그대로 */
+  /* TM은 관심 상·중·하로 남긴다(이벤트코리아 TM 계획) — 보고도 관심 상 / 관심 중·하로 묶는다(contact-grid.js BUCKET) */
   positive: { label: '관심 상',  cls: 'p-green', next: 2 },
   hold:     { label: '관심 중',  cls: 'p-amber', next: 3 },
   low:      { label: '관심 하',  cls: 'p-gray',  next: 14 },
