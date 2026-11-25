@@ -79,7 +79,7 @@ function retryAt(m, atts){
 /* ── 화면 상태 ── */
 const LS_ROUND = 'contact_round';
 let curRoundId = (() => { try { return localStorage.getItem(LS_ROUND) || null; } catch(e){ return null; } })();
-let stFil = 'now';                 // now(걸 차례+다시 걸 차례) | todo | again | wait | done | all
+let stFil = 'now';                 // now(걸 차례+다시 걸 차례) | todo | again | wait | done | goal | contacted | all
 const histOpen = new Set();        // 기록을 펼친 명단 줄
 const personForm = {};             // 줄마다 열어 둔 담당자 칸 — { mid: 'new' | 연락처 id }
 const editOpen = new Set();        // 주의사항 등을 고치는 중인 줄
@@ -230,6 +230,7 @@ export function renderToday(){
   const cnt = { todo: 0, again: 0, wait: 0, done: 0 };
   all.forEach(x => cnt[x.st]++);
   const goalN = all.filter(x => x.m.goal_at).length;
+  const contactedN = all.filter(x => x.atts.length).length;
   const q = (document.getElementById('crm-q') || {}).value || '';
   const limit = +r.noanswer_limit || DEFAULT_NOANSWER_LIMIT;
   const sources = [...new Set(all.map(x => x.m.source || ''))].filter(Boolean).sort();
@@ -239,7 +240,8 @@ export function renderToday(){
   const ownN = (f) => all.filter(x => f === '__me' ? isMine(x.m) : f === '__none' ? !x.m.assignee : x.m.assignee === f).length;
   const missN = all.filter(x => x.st !== 'done' && missStreak(x.atts) >= limit).length;
   // 미연결 거르기를 켜면 상태(지금 할 곳·기다림)와 상관없이 안 끝난 곳을 다 본다 — 세는 숫자와 맞게
-  let list = all.filter(x => missFil || stFil === 'all' ? true : stFil === 'now' ? (x.st === 'todo' || x.st === 'again') : x.st === stFil)
+  let list = all.filter(x => missFil || stFil === 'all' ? true : stFil === 'now' ? (x.st === 'todo' || x.st === 'again')
+      : stFil === 'goal' ? !!x.m.goal_at : stFil === 'contacted' ? x.atts.length > 0 : x.st === stFil)
     .filter(x => matchQ(x.m, q))
     .filter(x => !srcFil || (x.m.source || '') === srcFil)
     .filter(x => !ownFil || (ownFil === '__me' ? isMine(x.m) : ownFil === '__none' ? !x.m.assignee : x.m.assignee === ownFil))
@@ -258,10 +260,14 @@ export function renderToday(){
   const t = today();
   const todayAtts = CONTACT_ATTEMPTS.filter(a => a.round_id === r.id && String(a.at || '').startsWith(t));
   const mine = todayAtts.filter(a => a.by_email === currentUser?.email).length;
-  const tile = (k, label, n, color) => `<button onclick="setContactFil('${k}')"
-      style="text-align:left;border:1px solid ${stFil === k ? 'var(--a)' : 'var(--i6)'};background:${stFil === k ? 'var(--ad)' : 'var(--W)'};border-radius:var(--r);padding:7px 10px;cursor:pointer">
-      <div style="font-size:var(--fs-10_5);color:var(--i4)">${label}</div>
-      <div style="font-size:var(--fs-17);font-weight:700;color:${color || 'var(--i1)'}">${n}</div></button>`;
+  /* 칸마다 무엇을 세는지 한 줄 설명을 붙인다 — «지금 할 곳»과 «걸 차례»가 겹쳐 헷갈렸다(11-25) */
+  const tile = (k, label, n, color, desc) => `<button onclick="setContactFil('${k}')" title="${escapeHtml(desc)}"
+      style="text-align:left;border:1px solid ${stFil === k ? 'var(--a)' : 'var(--i6)'};background:${stFil === k ? 'var(--ad)' : 'var(--W)'};border-radius:var(--r);padding:7px 10px;cursor:pointer;min-width:0">
+      <div style="font-size:var(--fs-11);color:var(--i2);font-weight:600">${label}</div>
+      <div style="font-size:var(--fs-17);font-weight:700;color:${color || 'var(--i1)'}">${n}</div>
+      <div style="font-size:var(--fs-10);color:var(--i4);line-height:1.35">${desc}</div></button>`;
+  const grp = (label, body, cols) => `<div style="min-width:0"><div style="font-size:var(--fs-10_5);color:var(--i4);font-weight:600;margin-bottom:3px">${label}</div>
+      <div style="display:grid;grid-template-columns:repeat(${cols},minmax(0,1fr));gap:6px">${body}</div></div>`;
   const period = [r.date_from, r.date_to].filter(Boolean).join(' – ');
   const dday = r.date_to ? Math.round((new Date(r.date_to) - new Date(t)) / 86400000) : null;
 
@@ -283,13 +289,15 @@ export function renderToday(){
         </span>
       </div>
       ${r.purpose ? `<div class="ct-purpose" style="font-size:var(--fs-11_5);color:var(--i3);margin-top:4px">${escapeHtml(r.purpose)}</div>` : ''}
-      <div class="ct-tiles" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:6px;margin-top:10px">
-        ${tile('now', `지금 할 곳`, cnt.todo + cnt.again, 'var(--a)')}
-        ${tile('todo', STATES.todo.label(verb), cnt.todo)}
-        ${tile('again', STATES.again.label(verb), cnt.again, 'var(--am)')}
-        ${tile('wait', '기다림', cnt.wait)}
-        ${tile('done', '끝남', cnt.done)}
-        ${tile('all', `목표 달성`, `${goalN}<span style="font-size:var(--fs-11);color:var(--i4);font-weight:500"> / ${all.length}</span>`, 'var(--g)')}
+      <div class="ct-tiles" style="display:grid;grid-template-columns:1fr 2fr 3fr;gap:12px;margin-top:10px">
+        ${grp('명단', tile('all', '전체', all.length, '', `연락함 ${contactedN} · 안 함 ${all.length - contactedN}`), 1)}
+        ${grp(`지금 ${verb} 곳 ${cnt.todo + cnt.again} <a href="javascript:void(0)" onclick="setContactFil('now')" style="color:${stFil === 'now' ? 'var(--a)' : 'var(--i4)'};font-weight:500;margin-left:4px">${stFil === 'now' ? '● 함께 보는 중' : '둘 다 보기'}</a>`,
+          tile('todo', `처음 ${verb} 곳`, cnt.todo, 'var(--a)', '이 차수에서 아직 한 번도 연락 안 함')
+          + tile('again', `다시 ${verb} 곳`, cnt.again, 'var(--am)', '연락했는데 안 끝남 · 다시 할 날이 됨'), 2)}
+        ${grp(`연락한 곳 ${contactedN}`,
+          tile('wait', '기다리는 곳', cnt.wait, '', '다음 연락일·부재중 재시도 시각 전')
+          + tile('done', '끝난 곳', cnt.done, '', `목표 달성 ${goalN} · 부정·끝냄 ${cnt.done - goalN}`)
+          + tile('goal', '목표 달성', `${goalN}<span style="font-size:var(--fs-11);color:var(--i4);font-weight:500"> / ${all.length}</span>`, 'var(--g)', escapeHtml(r.goal || '목표') + ' 이룬 곳'), 3)}
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:var(--fs-11);color:var(--i4)">
         ${sources.length > 1 ? `<select onchange="setContactSrc(this.value)" style="font-size:var(--fs-11);padding:3px 4px;border:1px solid ${srcFil ? 'var(--a)' : 'var(--i6)'};border-radius:var(--rs);color:${srcFil ? 'var(--a)' : 'var(--i2)'}">
@@ -311,7 +319,7 @@ export function renderToday(){
         ? `<div class="empty" style="height:auto;padding:40px 10px"><p style="font-size:var(--fs-12)">이 차수에 아직 명단이 없어요</p>
              <button class="btn bp bs" onclick="openFillRound()">명단 채우기</button></div>`
         : !list.length
-          ? `<div class="empty" style="height:auto;padding:30px 10px"><p style="font-size:var(--fs-12)">${q ? '찾는 곳이 없어요' : stFil === 'now' ? `지금 ${verb} 곳이 없어요 — 기다림·끝남을 눌러 보세요` : '해당하는 곳이 없어요'}</p></div>`
+          ? `<div class="empty" style="height:auto;padding:30px 10px"><p style="font-size:var(--fs-12)">${q ? '찾는 곳이 없어요' : stFil === 'now' ? `지금 ${verb} 곳이 없어요 — 기다리는 곳·끝난 곳·전체를 눌러 보세요` : '해당하는 곳이 없어요'}</p></div>`
           : list.slice(0, showLimit).map(x => card(r, x)).join('')
             + (list.length > showLimit ? `<button class="btn" style="align-self:center" onclick="contactShowMore()">${list.length - showLimit}곳 더 보기</button>` : '')}
     </div>`;
@@ -358,15 +366,18 @@ function card(r, { m, atts, st }){
     ${personForm[m.id] === id ? personFormHtml(m, p) : ''}`;
   };
 
-  return `<div id="rm-${escAttr(m.id)}" style="border:1px solid ${calling && !calling.me ? 'var(--am)' : calling ? 'var(--a)' : 'var(--i6)'};border-radius:var(--r);background:var(--W);padding:9px 12px">
+  /* 연락한 곳은 왼쪽 띠·«연락함» 표로 티 나게 — 처음 걸 곳과 섞여 보여도 바로 갈린다 */
+  const stripe = { todo: 'var(--i6)', again: 'var(--am)', wait: 'var(--a)', done: 'var(--g)' }[st];
+  return `<div id="rm-${escAttr(m.id)}" style="border:1px solid ${calling && !calling.me ? 'var(--am)' : calling ? 'var(--a)' : 'var(--i6)'};border-left:5px solid ${stripe};border-radius:var(--r);background:${st === 'done' ? 'var(--i8)' : 'var(--W)'};padding:9px 12px">
     <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
       <a href="javascript:void(0)" onclick="openContactCo('${escAttr(m.org_id)}')" style="font-size:var(--fs-13);font-weight:700;color:var(--i1)">${escapeHtml(memberName(m))}</a>
+      ${atts.length ? `<span class="pill p-blue" style="font-weight:700" title="마지막 ${escapeHtml(String(last.at || '').slice(5, 16))} ${escapeHtml(last.by_name || '')}">✓ 연락함 ${atts.length}번</span>` : `<span class="pill p-gray">연락 전</span>`}
       ${co?.country ? `<span style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(co.country)}</span>` : ''}
       ${m.source ? `<span class="pill p-gray">${escapeHtml(m.source)}</span>` : ''}
       ${m.assignee ? `<span class="pill ${isMine(m) ? 'p-blue' : 'p-gray'}" title="담당">👤 ${escapeHtml(m.assignee)}</span>` : ''}
       ${tagsOf(m).map(t => `<span class="pill ${t === '특별관 후보' ? 'p-green' : t === '소개서 하' ? 'p-amber' : 'p-gray'}">${t === '특별관 후보' ? '🌱 ' : ''}${escapeHtml(t)}</span>`).join('')}
       <span style="margin-left:auto;display:flex;gap:4px;align-items:center">
-        ${atts.length ? `<span style="font-size:var(--fs-10_5);color:var(--i4)">${atts.length}번째${miss ? ` · 미연결 ${miss}번 이어짐` : ''}</span>` : ''}
+        ${miss ? `<span style="font-size:var(--fs-10_5);color:var(--i4)">미연결 ${miss}번 이어짐</span>` : ''}
         <span class="pill ${m.goal_at ? 'p-green' : s.cls}">${m.goal_at ? `목표 달성 ${escapeHtml(m.goal_at.slice(5))}` : m.closed_at ? `끝냄${m.closed_reason ? ` · ${escapeHtml(m.closed_reason)}` : ''}` : escapeHtml(s.label(verb))}${
           st === 'wait' ? ` · ${escapeHtml(waitUntil(m, atts))}부터` : ''}</span>
       </span>
