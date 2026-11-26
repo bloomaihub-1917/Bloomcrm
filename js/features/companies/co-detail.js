@@ -7,13 +7,13 @@
 
 import { postToSheet } from '../../api.js';
 import { RP, avB, avF } from '../../constants.js';
-import { trackAction } from '../../core/audit-log.js';
+import { trackAction, removed as removedMeta } from '../../core/audit-log.js';
 import { buildCoDB } from '../../domain/co-db.js';
 import { abbrOf, normalizeCompanyKey, orgKindOf } from '../../domain/org-names.js';
 import { applyOrgLocal, batchUpsertCompanies, patchOrgFields, upsertCompanyRow } from '../../domain/org-save.js';
 import { ensureOrgsForNames, orgIdForName, reloadOrgs, suggestSector } from '../../domain/orgs.js';
 import { joinSectors } from '../../domain/sectors.js';
-import { CO_DB, ORGS, coTab, findOrgByName, orgName, selCo, setCoTab } from '../../state.js';
+import { CO_DB, ORGS, contacts, EXHIBITORS, ROUND_MEMBERS, CONTACT_ATTEMPTS, coTab, findOrgByName, orgName, selCo, setCoTab } from '../../state.js';
 import { escAttr, escapeHtml, parseLinks, safeUrl } from '../../utils.js';
 import { backToCoList, buildCoCAT, coListLabel, renderCoList, shortDate } from '../../modules/company-tab.js';
 
@@ -138,6 +138,8 @@ export function renderCoDetail(c){
                 onclick="showAssignCatCodeUI('${escAttr(c.key)}')">코드 부여</button>`}
               <button class="btn bs" style="font-size:var(--fs-10_5);padding:2px 8px" title="업체가 보낸 소개서·견적서 PDF를 읽어 회사소개를 채웁니다"
                 onclick="fillCoIntroFromPdf('${escAttr(c.key)}')">📄 소개서 PDF로 채우기</button>
+              <button class="btn bs" style="font-size:var(--fs-10_5);padding:2px 8px;color:var(--red,#c0392b)" title="잘못 넣은 기업을 기업DB에서 지웁니다"
+                onclick="deleteCompany('${escAttr(c.key)}')">삭제</button>
               <span id="co-pdf-msg-${escapeHtml(c.key)}" style="font-size:var(--fs-10_5);color:var(--i4)"></span>
               <span style="margin-left:auto;color:var(--i5);font-size:var(--fs-10_5)" title="${escapeHtml(c.updatedAt || '')}">${escapeHtml(shortDate(c.updatedAt) || '')}</span>
             </div>
@@ -230,6 +232,53 @@ export function assignCategoryCode(company, prefix){
 
 
 /* 화면의 onclick이 부르는 것 */
+/* ── 기업 지우기 ──
+   그 기업을 가리키는 기록(담당자·참가·전시·컨택 명단·기록)이 하나라도 있으면 지우지 않고 몇 건인지 보여 준다 —
+   지우면 그 기록이 없는 기업을 가리킨다. 같은 기업이 둘이면 «비슷한 기업» 합치기로 옮긴 뒤 지운다.
+   서버(routes/data.js orgRefCounts)도 같은 것을 한 번 더 막는다. */
+const REF_LABEL = {
+  contacts: '연락처', participations: '행사 참가 기록', exhibitors: '전시 참가기업',
+  round_members: '컨택 차수 명단', contact_attempts: '컨택 기록', sales_targets: '영업 DB',
+};
+const refLabel = (t, col) => (REF_LABEL[t] || t) + (col === 'org2_id' ? '(두 번째 소속)' : col === 'builder_org_id' ? '(시공사)' : '');
+
+export async function deleteCompany(key){
+  const c = CO_DB.find(x => x.key === key);
+  const org = ORGS.find(o => o.id === key);
+  if(!c) return;
+  if(!org){ alert('기업DB에 저장된 기업이 아니에요(연락처 소속 이름으로만 보이는 기업). 연락처의 소속을 고쳐 주세요.'); return; }
+  const name = c.nameKo || c.nameEn || key;
+  const local = [
+    ['연락처', contacts.filter(p => p.org_id === key || p.org2_id === key).length || c.contacts.length],
+    ['행사 참여', c.events.length],
+    ['전시 참가기업', EXHIBITORS.filter(x => x.org_id === key || x.builder_org_id === key).length],
+    ['컨택 차수 명단', ROUND_MEMBERS.filter(m => m.org_id === key).length],
+    ['컨택 기록', CONTACT_ATTEMPTS.filter(a => a.org_id === key).length],
+  ].filter(([, n]) => n > 0);
+  if(local.length){
+    alert(`"${name}"는 지울 수 없어요 — 이 기업에 이어진 기록이 있어요:\n`
+      + local.map(([l, n]) => `· ${l} ${n}건`).join('\n')
+      + `\n\n같은 기업이 따로 있다면 «비슷한 기업»에서 합쳐 주세요. 합치면 기록을 옮긴 뒤 이 기업이 지워져요.`);
+    return;
+  }
+  if(!confirm(`"${name}"를 기업DB에서 지울까요?\n이어진 담당자·행사 기록은 없어요. 활동 기록에서 되돌릴 수 있어요.`)) return;
+  const gone = { ...org };
+  const r = await postToSheet({ sheet: 'orgs', action: 'delete', row: [key] }, '기업 삭제');
+  if(!r || r.ok === false){
+    const refs = (r && r.refs) || [];
+    alert(refs.length
+      ? `"${name}"는 지우지 않았어요 — 서버에 이 기업에 이어진 기록이 있어요:\n` + refs.map(x => `· ${refLabel(x.table, x.column)} ${x.n}건`).join('\n')
+      : `지우지 못했어요: ${(r && r.error) || '네트워크를 확인해 주세요'}`);
+    return;
+  }
+  const i = ORGS.findIndex(o => o.id === key);
+  if(i >= 0) ORGS.splice(i, 1);
+  trackAction('delete', '기업 삭제', name, `기업DB에서 <b>${escapeHtml(name)}</b> 삭제`, removedMeta('orgs', key, gone));
+  buildCoDB(); buildCoCAT();
+  backToCoList();
+}
+
+window.deleteCompany = deleteCompany;
 window.switchCoT = switchCoT;
 window.toggleCoGaps = toggleCoGaps;
 window.createOrg = createOrg;

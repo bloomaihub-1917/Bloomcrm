@@ -462,6 +462,20 @@ function orgIdsIn({ data, dataRows, rows }) {
   if (dataRows) return dataRows.map((d) => d && d.id).filter(Boolean);
   return (rows || []).map((r) => r && r[0]).filter(Boolean);
 }
+/* 기업 id를 가리키는 칸(org_id·org2_id·builder_org_id 등 *org_id)이 있는 모든 표에서 건수를 센다.
+   칸 목록을 DB에서 읽어 새 표가 생겨도 빠지지 않는다. */
+async function orgRefCounts(client, ids) {
+  const cols = (await client.query(
+    `SELECT table_name, column_name FROM information_schema.columns
+      WHERE table_schema = current_schema() AND column_name LIKE '%org%id' AND table_name <> 'orgs'`)).rows;
+  const out = [];
+  for (const { table_name: t, column_name: c } of cols) {
+    const r = await client.query(`SELECT count(*)::int AS n FROM ${q(t)} WHERE ${q(c)}::text = ANY($1::text[])`, [ids]);
+    if (r.rows[0].n) out.push({ table: t, column: c, n: r.rows[0].n });
+  }
+  return out;
+}
+
 async function orgsBefore(client, ids) {
   const m = new Map();
   if (!ids.length) return m;
@@ -642,6 +656,15 @@ router.post('/', async (req, res) => {
       const def = TABLES[sheet];
       if (action === 'delete') {
         const ids = row || [];
+        /* 기업을 지우기 전에 그 기업을 가리키는 줄이 남았는지 본다 — 남았는데 지우면 연락처·전시·컨택
+           기록이 없는 기업을 가리킨다. 합치기(merge.js)는 다 옮긴 뒤 지우니 여기서 0건이다 */
+        if (sheet === 'orgs' && ids.length) {
+          const refs = await orgRefCounts(client, ids);
+          if (refs.length) {
+            await client.query('ROLLBACK');
+            return res.json({ ok: false, error: '이 기업을 가리키는 기록이 남아 있어요', refs });
+          }
+        }
         await client.query(`DELETE FROM ${def.table} WHERE ${q(def.pk)} = ANY($1::text[])`, [ids]);
       } else if (dataRows) {
         /* 객체 배열 일괄 저장 — 줄마다 «보낸 칸»만 쓴다.
