@@ -180,6 +180,8 @@ export async function loadFromSheets(hooks = {}){
           memo1: r.memo1||'', memo2: r.memo2||'', memo3: r.memo3||'', prefix: r.prefix||'',
           /* DB 갈래 — ours 수주 행사 / other 타 행사 / sales 영업 DB (db/migrations/add-contact-origin.js) */
           origin: r.origin||'',
+          /* 두 번째 소속 — 소속이 둘인 사람(교수 겸 대표 등) */
+          org2Ko: r.org2Ko||'', org2En: r.org2En||'', org2_id: r.org2_id||'',
         };
       }));
       console.log('[CRM] contacts loaded & cleaned:', contacts.length);

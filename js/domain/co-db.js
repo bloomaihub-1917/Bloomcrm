@@ -49,6 +49,10 @@ export function buildCoDB(){
       oid = o ? o.id : null;
     }
     if(oid && byOrg.has(oid)) byOrg.get(oid).push(c);
+    /* 두 번째 소속 기업에도 사람으로 보인다 */
+    let oid2 = c.org2_id;
+    if((!oid2 || !byOrg.has(oid2)) && (c.org2Ko || c.org2En)){ const o2 = orgByName(c.org2Ko || c.org2En); oid2 = o2 ? o2.id : null; }
+    if(oid2 && oid2 !== oid && byOrg.has(oid2)) byOrg.get(oid2).push(c);
   });
 
   /* 전시 참가도 같은 방식으로 */

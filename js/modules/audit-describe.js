@@ -46,7 +46,7 @@ const F = {
   nameKo: '이름', nameEn: '영문 이름', orgKo: '기업', orgEn: '영문 기업',
   titleKo: '직함', titleEn: '영문 직함', deptKo: '부서', deptEn: '영문 부서',
   country: '국가', cat: '카테고리', email1: '이메일 1', email2: '이메일 2', phone1: '연락처 1', phone2: '연락처 2',
-  beat: '분야', products: '품목', tags: '태그', prefix: '경칭', memo1: '메모 1', memo2: '메모 2', memo3: '메모 3',
+  beat: '분야', products: '품목', tags: '태그', prefix: '경칭', org2Ko: '두 번째 소속', org2En: '두 번째 소속(영문)', memo1: '메모 1', memo2: '메모 2', memo3: '메모 3',
   left_at: '퇴사 확인일', email: '이메일', phone: '연락처', send: '메일 수신',
   // 전시
   company_name: '기업명', booth_no: '부스 번호', booth_type: '부스 타입', booth_floor: '층', grade: '등급',

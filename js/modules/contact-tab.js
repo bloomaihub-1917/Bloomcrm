@@ -20,8 +20,11 @@
 import {
   EVENT_LIST, CO_DB, contacts, participations, currentUser, hasLeft, isWalkInOnly, crmV, curApp,
   CONTACT_ROUNDS, ROUND_MEMBERS, CONTACT_ATTEMPTS, COMPANY_SECTORS,
-  nextContactId,
+  nextContactId, exhibitorsForEvent,
 } from '../state.js';
+import { batchCreateExhibitors } from '../api/exh-save.js';
+import { reloadExhibitors } from '../features/exhibition/exh-calc.js';
+import { normalizeCompanyKey } from '../domain/org-names.js';
 import { saveRound, deleteRound, saveRoundMember, deleteRoundMembers, addRoundMembers, saveAttempt, deleteAttempt, addAttempts } from '../api/exh-save.js';
 import { escapeHtml, escAttr, td, nowStamp, sectorKey } from '../utils.js';
 import { trackAction } from '../core/audit-log.js';
@@ -132,9 +135,24 @@ export function setContactOwner(v){
 import { roundById, membersOf, attemptsOf, evOf, evLabel, today, addDays, genId, coList, coOf, coName, memberName, contactOf, fullContacts, peopleOf } from '../domain/rounds.js';
 export { roundById, membersOf, attemptsOf, evOf, evLabel, today, addDays, genId, coList, coOf, coName, memberName, contactOf, fullContacts, peopleOf } from '../domain/rounds.js';
 
+/* ── 목표 = 전시 참가기업 등록 (contact_rounds.goal_exh) ──
+   전시 기업 모집 차수는 «목표 달성»이 곧 그 행사 참가기업 등록이다. 목표 달성을 누르면 참가기업으로 넣고,
+   신청서·전시 화면에서 먼저 등록된 기업도 목표 달성으로 본다 — 이미 신청한 곳에 또 전화하지 않게(11-25) */
+const goalIsExh = (r) => r?.goal_exh === 'yes';
+function exhOf(m, r = roundById(m.round_id)){
+  if(!goalIsExh(r) || !r.event_id) return null;
+  const co = coOf(m.org_id);
+  const nameKey = normalizeCompanyKey(co?.nameKo || co?.nameEn || memberName(m));
+  return exhibitorsForEvent(r.event_id).find(x => x.status !== '취소' && (
+    (x.org_id && x.org_id === m.org_id) || (x.company_key && x.company_key === nameKey)
+    || normalizeCompanyKey(x.company_name || '') === nameKey)) || null;
+}
+/* 목표 달성 — 손으로 누른 것 또는 전시 참가기업으로 등록된 것 */
+export const isGoal = (m) => !!(m.goal_at || exhOf(m));
+
 /* 이 줄이 지금 무엇을 할 차례인가 */
 export function memberState(m, atts = attemptsOf(m.id)){
-  if(m.goal_at || m.closed_at) return 'done';
+  if(isGoal(m) || m.closed_at) return 'done';
   const t = today();
   if(m.hold_until && m.hold_until > t) return 'wait';
   if(!atts.length) return 'todo';
@@ -173,10 +191,13 @@ export function renderRoundNav(){
   el.innerHTML = (myN ? `<div class="seg" style="margin:4px 6px 2px"><button type="button" class="seg-b${navMine ? ' on' : ''}" onclick="setRoundNavMine(true)">내 분야 ${myN}</button><button type="button" class="seg-b${navMine ? '' : ' on'}" onclick="setRoundNavMine(false)">전체</button></div>` : '')
     + evKeys.map(k => `
       <div style="font-size:var(--fs-10_5);color:var(--i4);padding:6px 8px 2px;font-weight:600">${escapeHtml(evLabel(k))}</div>
+      <button class="nr${evAll === k ? ' on' : ''}" onclick="pickEventAll('${escAttr(k)}')" title="이 행사의 모든 차수 명단·기록을 한 번에 봐요">
+        <span style="flex:1;text-align:left">📋 행사 전체 컨택</span>
+        <span class="nbg">${CONTACT_ATTEMPTS.filter(a => (roundById(a.round_id) || {}).event_id === k).length}</span></button>
       ${byEv.get(k).sort((a, b) => (a.status === 'closed') - (b.status === 'closed')).map(r => {
         const ms = membersOf(r.id);
         const n = ms.filter(m => ['todo', 'again'].includes(memberState(m))).length;
-        return `<button class="nr${r.id === curRoundId ? ' on' : ''}" onclick="pickRound('${escAttr(r.id)}')"
+        return `<button class="nr${!evAll && r.id === curRoundId ? ' on' : ''}" onclick="pickRound('${escAttr(r.id)}')"
           style="${r.status === 'closed' ? 'opacity:.55' : ''}" title="${escapeHtml(r.purpose || r.name || '')}">
           <span class="pill p-gray" style="margin-right:4px;padding:1px 5px">${escapeHtml(r.channel || 'TM')}</span>
           <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left">${escapeHtml(r.name || '(이름 없음)')}${r.owner ? `<span style="color:var(--i4);font-size:var(--fs-10_5)"> · ${escapeHtml(r.owner)}</span>` : ''}</span>
@@ -191,6 +212,7 @@ export function setRoundNavMine(on){
   renderRoundNav();
 }
 export function pickRound(id){
+  evAll = null;
   curRoundId = id; stFil = 'now'; showLimit = 150;
   try { localStorage.setItem(LS_ROUND, id); } catch(e){}
   // 오늘 할 컨택·현황표 중 보고 있는 쪽을 다시 그린다(crm-tab.js의 renderCrm이 고른다)
@@ -214,6 +236,7 @@ function matchQ(m, q){
 export function renderToday(){
   const el = document.getElementById('v-today');
   if(!el) return;
+  if(evAll){ renderEventAll(el); return; }
   const r = roundById(curRoundId);
   const addLbl = document.getElementById('crm-add-lbl');
   if(addLbl && crmV === 'today') addLbl.textContent = r ? '명단 채우기' : '차수 만들기';
@@ -229,7 +252,7 @@ export function renderToday(){
   const all = membersOf(r.id).map(m => { const atts = attemptsOf(m.id); return { m, atts, st: memberState(m, atts) }; });
   const cnt = { todo: 0, again: 0, wait: 0, done: 0 };
   all.forEach(x => cnt[x.st]++);
-  const goalN = all.filter(x => x.m.goal_at).length;
+  const goalN = all.filter(x => isGoal(x.m)).length;
   const contactedN = all.filter(x => x.atts.length).length;
   const q = (document.getElementById('crm-q') || {}).value || '';
   const limit = +r.noanswer_limit || DEFAULT_NOANSWER_LIMIT;
@@ -241,7 +264,7 @@ export function renderToday(){
   const missN = all.filter(x => x.st !== 'done' && missStreak(x.atts) >= limit).length;
   // 미연결 거르기를 켜면 상태(지금 할 곳·기다림)와 상관없이 안 끝난 곳을 다 본다 — 세는 숫자와 맞게
   let list = all.filter(x => missFil || stFil === 'all' ? true : stFil === 'now' ? (x.st === 'todo' || x.st === 'again')
-      : stFil === 'goal' ? !!x.m.goal_at : stFil === 'contacted' ? x.atts.length > 0 : x.st === stFil)
+      : stFil === 'goal' ? isGoal(x.m) : stFil === 'contacted' ? x.atts.length > 0 : x.st === stFil)
     .filter(x => matchQ(x.m, q))
     .filter(x => !srcFil || (x.m.source || '') === srcFil)
     .filter(x => !ownFil || (ownFil === '__me' ? isMine(x.m) : ownFil === '__none' ? !x.m.assignee : x.m.assignee === ownFil))
@@ -276,7 +299,7 @@ export function renderToday(){
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <div style="font-size:var(--fs-15);font-weight:700">${escapeHtml(r.name)}</div>
         <span class="pill p-gray">${escapeHtml(evLabel(r.event_id))}</span>
-        ${r.goal ? `<span class="pill p-green">목표 ${escapeHtml(r.goal)}</span>` : ''}
+        ${goalIsExh(r) ? `<span class="pill p-green" title="목표 달성 = 이 행사 전시 참가기업 등록">목표 전시 참가기업 등록</span>` : r.goal ? `<span class="pill p-green">목표 ${escapeHtml(r.goal)}</span>` : ''}
         ${period ? `<span style="font-size:var(--fs-11);color:var(--i4)">${escapeHtml(period)}${dday !== null ? ` · ${dday >= 0 ? `D-${dday}` : '기간 지남'}` : ''}</span>` : ''}
         ${r.status === 'closed' ? '<span class="pill p-gray">닫은 차수</span>' : ''}
         <span style="margin-left:auto;display:flex;gap:5px">
@@ -325,6 +348,106 @@ export function renderToday(){
     </div>`;
 }
 
+/* ══════════════════════════════════════════
+   행사 전체 컨택 — 한 행사의 모든 차수를 한눈에
+   위: 차수별 명단·연락함·지금 할 곳·목표 달성 / 아래: 모든 연락 기록(최근 것부터).
+   기업을 누르면 그 차수 명단의 줄로 간다(openRoundMember).
+══════════════════════════════════════════ */
+let evAll = null;                  // 보고 있는 행사 key — 있으면 차수 대신 행사 전체를 보인다
+let evAllRound = '';               // 기록 거르기 — 차수
+let evAllReact = '';               // 기록 거르기 — 반응
+let evAllLimit = 200;
+export function pickEventAll(k){
+  evAll = k; evAllRound = ''; evAllReact = ''; evAllLimit = 200;
+  window.switchCV?.('today');
+  renderRoundNav(); renderToday();
+}
+export function setEvAllFil(kind, v){
+  if(kind === 'round') evAllRound = v; else evAllReact = v;
+  evAllLimit = 200; renderToday();
+}
+export function evAllMore(){ evAllLimit += 200; renderToday(); }
+
+function renderEventAll(el){
+  const k = evAll;
+  const rounds = CONTACT_ROUNDS.filter(r => r.event_id === k);
+  const addLbl = document.getElementById('crm-add-lbl');
+  if(addLbl && crmV === 'today') addLbl.textContent = '차수 만들기';
+  const rids = new Set(rounds.map(r => r.id));
+  const q = ((document.getElementById('crm-q') || {}).value || '').toLowerCase().split(/\s+/).filter(Boolean);
+  const rows = rounds.map(r => {
+    const all = membersOf(r.id).map(m => { const atts = attemptsOf(m.id); return { m, atts, st: memberState(m, atts) }; });
+    return { r, n: all.length, contacted: all.filter(x => x.atts.length).length,
+      now: all.filter(x => x.st === 'todo' || x.st === 'again').length,
+      goal: all.filter(x => isGoal(x.m)).length, atts: all.reduce((s, x) => s + x.atts.length, 0) };
+  });
+  const tot = rows.reduce((s, x) => ({ n: s.n + x.n, contacted: s.contacted + x.contacted, now: s.now + x.now, goal: s.goal + x.goal, atts: s.atts + x.atts }),
+    { n: 0, contacted: 0, now: 0, goal: 0, atts: 0 });
+  const orgN = new Set(rounds.flatMap(r => membersOf(r.id).map(m => m.org_id))).size;
+  const mById = new Map(ROUND_MEMBERS.filter(m => rids.has(m.round_id)).map(m => [m.id, m]));
+  const evAtts = CONTACT_ATTEMPTS.filter(a => rids.has(a.round_id));
+  const atts = evAtts
+    .filter(a => !evAllRound || a.round_id === evAllRound)
+    .filter(a => !evAllReact || a.reaction === evAllReact)
+    .filter(a => {
+      if(!q.length) return true;
+      const m = mById.get(a.member_id);
+      const hay = [m ? memberName(m) : coName(a.org_id), a.contact_name, a.note, a.by_name, a.channel].filter(Boolean).join(' ').toLowerCase();
+      return q.every(w => hay.includes(w));
+    })
+    .sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
+  const reacts = [...new Set(evAtts.map(a => a.reaction).filter(Boolean))];
+  const th = 'text-align:left;padding:5px 8px;font-size:var(--fs-11);color:var(--i4);font-weight:600;border-bottom:1px solid var(--i7);white-space:nowrap';
+  const tdc = 'padding:5px 8px;font-size:var(--fs-12);border-bottom:1px solid var(--i8)';
+  const num = (v, c) => `<td style="${tdc};text-align:right${c ? `;color:${c}` : ''}">${v}</td>`;
+  const sel = (kind, cur, opts, all) => `<select onchange="setEvAllFil('${kind}',this.value)" style="font-size:var(--fs-11);padding:3px 4px;border:1px solid ${cur ? 'var(--a)' : 'var(--i6)'};border-radius:var(--rs);color:${cur ? 'var(--a)' : 'var(--i2)'}">
+      <option value="">${all}</option>${opts.map(([v, l]) => `<option value="${escapeHtml(v)}"${v === cur ? ' selected' : ''}>${escapeHtml(l)}</option>`).join('')}</select>`;
+
+  el.innerHTML = `
+    <div style="padding:12px 16px;border-bottom:1px solid var(--i7);background:var(--W)">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <div style="font-size:var(--fs-15);font-weight:700">행사 전체 컨택</div>
+        <span class="pill p-gray">${escapeHtml(evLabel(k))}</span>
+        <span style="font-size:var(--fs-11);color:var(--i4)">차수 ${rounds.length} · 기업 ${orgN}곳 · 기록 ${evAtts.length}건</span>
+      </div>
+      <div style="overflow-x:auto;margin-top:10px">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr><th style="${th}">차수</th><th style="${th}">담당</th><th style="${th};text-align:right">명단</th><th style="${th};text-align:right">연락함</th>
+            <th style="${th};text-align:right">지금 할 곳</th><th style="${th};text-align:right">목표 달성</th><th style="${th};text-align:right">기록</th></tr></thead>
+          <tbody>${rows.map(x => `<tr style="cursor:pointer;${x.r.status === 'closed' ? 'opacity:.55' : ''}" onclick="pickRound('${escAttr(x.r.id)}')" title="이 차수로 가기">
+            <td style="${tdc}"><span class="pill p-gray" style="padding:1px 5px;margin-right:4px">${escapeHtml(x.r.channel || 'TM')}</span>${escapeHtml(x.r.name || '(이름 없음)')}${x.r.status === 'closed' ? ' <span style="color:var(--i4);font-size:var(--fs-10_5)">닫음</span>' : ''}</td>
+            <td style="${tdc};color:var(--i3)">${escapeHtml(x.r.owner || '')}</td>
+            ${num(x.n)}${num(x.contacted)}${num(x.now, 'var(--a)')}${num(x.goal, 'var(--g)')}${num(x.atts)}</tr>`).join('')}
+            <tr style="font-weight:700"><td style="${tdc}">합계</td><td style="${tdc}"></td>${num(tot.n)}${num(tot.contacted)}${num(tot.now)}${num(tot.goal)}${num(tot.atts)}</tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;font-size:var(--fs-11);color:var(--i4)">
+        ${sel('round', evAllRound, rounds.map(r => [r.id, r.name || '(이름 없음)']), '차수 전체')}
+        ${sel('react', evAllReact, reacts.map(x => [x, REACTIONS[x]?.label || x]), '반응 전체')}
+        <span>기록 ${atts.length}건</span>
+      </div>
+    </div>
+    <div class="sec-rows">
+      ${!atts.length ? `<div class="empty" style="height:auto;padding:30px 10px"><p style="font-size:var(--fs-12)">${evAtts.length ? '해당하는 기록이 없어요' : '이 행사에 아직 연락 기록이 없어요'}</p></div>`
+        : `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;background:var(--W)">
+          <thead><tr><th style="${th}">언제</th><th style="${th}">기업</th><th style="${th}">차수</th><th style="${th}">채널</th><th style="${th}">반응</th><th style="${th}">누가</th><th style="${th}">받은 사람 · 메모</th></tr></thead>
+          <tbody>${atts.slice(0, evAllLimit).map(a => {
+            const m = mById.get(a.member_id);
+            const rr = roundById(a.round_id);
+            return `<tr>
+              <td style="${tdc};color:var(--i4);white-space:nowrap">${escapeHtml(String(a.at || '').slice(0, 16))}</td>
+              <td style="${tdc};font-weight:600">${m ? `<a href="javascript:void(0)" onclick="openRoundMember('${escAttr(m.id)}')" style="color:var(--i1)" title="그 차수 명단에서 보기">${escapeHtml(memberName(m))}</a>` : escapeHtml(coName(a.org_id) || '')}</td>
+              <td style="${tdc};color:var(--i3)">${escapeHtml(rr?.name || '')}</td>
+              <td style="${tdc}">${escapeHtml(a.channel || '')}</td>
+              <td style="${tdc}"><span class="pill ${REACTIONS[a.reaction]?.cls || 'p-gray'}">${escapeHtml(REACTIONS[a.reaction]?.label || a.reaction || '')}</span></td>
+              <td style="${tdc};white-space:nowrap">${escapeHtml(a.by_name || '')}</td>
+              <td style="${tdc};color:var(--i3)">${escapeHtml([a.contact_name, a.note].filter(Boolean).join(' · '))}</td></tr>`;
+          }).join('')}</tbody></table></div>
+          ${atts.length > evAllLimit ? `<div style="text-align:center;margin-top:8px"><button class="btn" onclick="evAllMore()">${atts.length - evAllLimit}건 더 보기</button></div>` : ''}`}
+    </div>`;
+}
+
 /* 기다림이 언제 풀리나 — 연락 자제일 › 다음 연락일 › 부재중 다시 걸 시각 */
 function waitUntil(m, atts){
   const t = today();
@@ -345,6 +468,8 @@ function card(r, { m, atts, st }){
   const recentOther = atts[0] && atts[0].by_email && atts[0].by_email !== currentUser?.email
     && (Date.now() - new Date(String(atts[0].at).replace(' ', 'T')).getTime()) < 30 * 60000 ? atts[0] : null;
   const s = STATES[st];
+  const exh = exhOf(m, r);
+  const goal = !!(m.goal_at || exh);
   const miss = missStreak(atts);
   const limit = +r.noanswer_limit || DEFAULT_NOANSWER_LIMIT;
   const last = atts[0];
@@ -378,7 +503,7 @@ function card(r, { m, atts, st }){
       ${tagsOf(m).map(t => `<span class="pill ${t === '특별관 후보' ? 'p-green' : t === '소개서 하' ? 'p-amber' : 'p-gray'}">${t === '특별관 후보' ? '🌱 ' : ''}${escapeHtml(t)}</span>`).join('')}
       <span style="margin-left:auto;display:flex;gap:4px;align-items:center">
         ${miss ? `<span style="font-size:var(--fs-10_5);color:var(--i4)">미연결 ${miss}번 이어짐</span>` : ''}
-        <span class="pill ${m.goal_at ? 'p-green' : s.cls}">${m.goal_at ? `목표 달성 ${escapeHtml(m.goal_at.slice(5))}` : m.closed_at ? `끝냄${m.closed_reason ? ` · ${escapeHtml(m.closed_reason)}` : ''}` : escapeHtml(s.label(verb))}${
+        <span class="pill ${goal ? 'p-green' : s.cls}">${exh ? '목표 달성 · 전시 등록됨' : m.goal_at ? `목표 달성 ${escapeHtml(m.goal_at.slice(5))}` : m.closed_at ? `끝냄${m.closed_reason ? ` · ${escapeHtml(m.closed_reason)}` : ''}` : escapeHtml(s.label(verb))}${
           st === 'wait' ? ` · ${escapeHtml(waitUntil(m, atts))}부터` : ''}</span>
       </span>
     </div>
@@ -408,7 +533,7 @@ function card(r, { m, atts, st }){
         : String(m.org_id).startsWith('name:') ? ''
         : `<a href="javascript:void(0)" onclick="openPersonForm('${escAttr(m.id)}','new')" style="font-size:var(--fs-11);color:var(--a);display:inline-block;margin-top:3px">+ 담당자 추가</a>`}
     </div>
-    ${m.closed_at || m.goal_at ? '' : `<div class="ct-acts" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:6px">
+    ${m.closed_at || goal ? '' : `<div class="ct-acts" style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-top:6px">
       <select onchange="pickContactChannel('${escAttr(m.id)}',this.value)" style="font-size:var(--fs-11);padding:3px 4px;border:1px solid var(--i6);border-radius:var(--rs)">
         ${CHANNELS.map(c => `<option${c === ch ? ' selected' : ''}>${c}</option>`).join('')}</select>
       ${CH_REACTIONS[ch].map(k => `<button class="btn bs ct-r${k === 'negative' ? ' ct-neg' : ''}" onclick="recordContact('${escAttr(m.id)}','${k}')">${REACTIONS[k].label}</button>`).join('')}
@@ -418,9 +543,10 @@ function card(r, { m, atts, st }){
       ${people.some(p => /@/.test(String(p.email1 || '') + String(p.email2 || ''))) || /@/.test(String(co?.email || '')) ? `<button class="btn bs" onclick="openRoundMail('${escAttr(r.id)}','${escAttr(m.id)}')" title="이 기업에만 메일 한 통 — 보낸 것은 DM 기록으로 남아요">✉ 이 기업에 메일</button>` : ''}
     </div>`}
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:6px;font-size:var(--fs-11);color:var(--i4)">
-      ${m.closed_at || m.goal_at ? '' : `<span>다음 연락 <input type="date" value="${escapeHtml(m.next_at || '')}" onchange="setContactNext('${escAttr(m.id)}',this.value)" style="font-size:var(--fs-11);border:1px solid var(--i6);border-radius:var(--rd-4);padding:1px 3px"></span>`}
-      <a href="javascript:void(0)" onclick="toggleContactGoal('${escAttr(m.id)}')" style="color:${m.goal_at ? 'var(--i4)' : 'var(--g)'}">${m.goal_at ? '목표 달성 취소' : `✓ ${escapeHtml(r.goal || '목표')} 달성`}</a>
-      ${m.goal_at ? '' : m.closed_at
+      ${m.closed_at || goal ? '' : `<span>다음 연락 <input type="date" value="${escapeHtml(m.next_at || '')}" onchange="setContactNext('${escAttr(m.id)}',this.value)" style="font-size:var(--fs-11);border:1px solid var(--i6);border-radius:var(--rd-4);padding:1px 3px"></span>`}
+      ${exh ? `<span style="color:var(--g)" title="취소하려면 전시 화면에서 참가기업을 지우거나 취소로 바꿔요">전시 참가기업으로 등록돼 있어요</span>`
+        : `<a href="javascript:void(0)" onclick="toggleContactGoal('${escAttr(m.id)}')" style="color:${m.goal_at ? 'var(--i4)' : 'var(--g)'}">${m.goal_at ? '목표 달성 취소' : goalIsExh(r) ? '✓ 전시 참가기업으로 등록' : `✓ ${escapeHtml(r.goal || '목표')} 달성`}</a>`}
+      ${goal ? '' : m.closed_at
         ? `<a href="javascript:void(0)" onclick="reopenContactMember('${escAttr(m.id)}')" style="color:var(--a)">다시 열기</a>`
         : `<a href="javascript:void(0)" onclick="closeContactMember('${escAttr(m.id)}')" style="color:var(--i3)">끝내기</a>`}
       <a href="javascript:void(0)" onclick="toggleContactEdit('${escAttr(m.id)}')" style="color:var(--i3)">${editOpen.has(m.id) ? '닫기' : '담당·표시·주의사항 고치기'}</a>
@@ -641,6 +767,18 @@ export async function toggleContactGoal(mid){
   const m = ROUND_MEMBERS.find(x => x.id === mid);
   if(!m) return;
   const on = !m.goal_at;
+  const r0 = roundById(m.round_id);
+  if(on && goalIsExh(r0) && !exhOf(m, r0)){
+    const co = coOf(m.org_id);
+    const name = co?.nameKo || co?.nameEn || memberName(m);
+    if(!confirm(`«${name}»을(를) ${evLabel(r0.event_id)} 전시 참가기업으로 등록할까요?
+전시 화면에 «준비중»으로 들어가요.`)) return;
+    const res = await batchCreateExhibitors([{ event_id: r0.event_id, org_id: String(m.org_id || '').startsWith('name:') ? '' : String(m.org_id || ''),
+      company_key: normalizeCompanyKey(name), company_name: name, status: '준비중', note: `컨택 «${r0.name || ''}»에서 등록`, updated_at: td() }]);
+    if(!res.ok){ alert('전시 등록에 실패했어요. 네트워크 확인 후 다시 해 주세요.'); return; }
+    await reloadExhibitors();
+    trackAction('add', '전시 참가기업 추가', name, `<b>${escapeHtml(name)}</b>를 <b>${escapeHtml(evLabel(r0.event_id))}</b> 참가기업으로 추가 (컨택 목표 달성)`);
+  }
   if(await patchMember(m, { goal_at: on ? today() : '' })){
     const r = roundById(m.round_id);
     trackAction('status', on ? '컨택 목표 달성' : '컨택 목표 달성 취소', memberName(m),
@@ -842,7 +980,7 @@ export function openRoundMember(mid){
   const m = ROUND_MEMBERS.find(x => x.id === mid);
   if(!m) return;
   window.switchCV?.('today');
-  curRoundId = m.round_id; stFil = 'all';
+  curRoundId = m.round_id; stFil = 'all'; evAll = null;
   const q = document.getElementById('crm-q'); if(q) q.value = '';
   histOpen.add(mid);
   renderRoundNav(); (window.renderCrm || renderToday)();
@@ -889,6 +1027,9 @@ export function openRoundEditor(id){
         `<button type="button" class="seg-b${(r?.channel || 'TM') === c ? ' on' : ''}" data-ch="${c}" onclick="this.parentNode.querySelectorAll('.seg-b').forEach(b=>b.classList.remove('on'));this.classList.add('on')">${c === 'TM' ? 'TM (전화)' : c === 'DM' ? 'DM (메일)' : '문자'}</button>`).join('')}</div></label>
     ${fld('re-purpose', '무엇을 안내하나', r?.purpose || '', { ph: '주선신청 방법 안내, 바이어 리스트 전달' })}
     ${fld('re-goal', '목표 — 이걸 하면 그 기업은 끝나요', r?.goal || '', { ph: '주선신청' })}
+    <label style="display:flex;align-items:center;gap:6px;font-size:var(--fs-11_5);color:var(--i2);margin:-3px 0 10px;cursor:pointer">
+      <input type="checkbox" id="re-goal-exh" ${goalIsExh(r) ? 'checked' : ''} style="margin:0">
+      전시 기업 모집 — 목표 달성 = 이 행사 전시 참가기업 등록 <span style="color:var(--i4)">(누르면 참가기업으로 넣고, 전시에 등록된 곳은 달성으로 봐요)</span></label>
     <div style="display:flex;gap:8px">${fld('re-from', '시작', r?.date_from || today(), { type: 'date' })}${fld('re-to', '마감', r?.date_to || '', { type: 'date' })}</div>
     <div style="display:flex;gap:8px">${fld('re-retry', '부재중이면 몇 시간 뒤 다시 걸까요', r?.retry_hours ?? String(DEFAULT_RETRY_HOURS), { type: 'number' })}${fld('re-limit', '부재중·반송이 몇 번 이어지면 알려 줄까요', r?.noanswer_limit || String(DEFAULT_NOANSWER_LIMIT), { type: 'number' })}</div>
     ${fld('re-script', '스크립트 링크 — 통화하면서 열어 볼 문서', r?.script_url || '', { ph: 'https://claude.ai/artifact/…' })}
@@ -919,7 +1060,7 @@ export async function saveRoundEditor(id){
   const ch = document.querySelector('#re-ch .seg-b.on')?.dataset.ch || 'TM';
   const data = { event_id: v('re-ev'), name, channel: ch, purpose: v('re-purpose'), goal: v('re-goal'),
     date_from: v('re-from'), date_to: v('re-to'), noanswer_limit: v('re-limit'), retry_hours: v('re-retry'), note: v('re-note'), script_url: v('re-script'),
-    sector: v('re-sector'), owner: v('re-owner') };
+    sector: v('re-sector'), owner: v('re-owner'), goal_exh: document.getElementById('re-goal-exh')?.checked ? 'yes' : '' };
   const old = id ? roundById(id) : null;
   if(old){
     const before = { ...old };
@@ -1426,7 +1567,7 @@ export async function sendCommit(){
 
 Object.assign(window, {
   fillMode, fillPickSec, openSendToRound, openAssign, assignCommit, setContactOwner, sendRoundInfo, sendCommit,
-  pickRound, setRoundNavMine, renderToday, setContactFil, contactShowMore, toggleContactHist, toggleContactEdit,
+  pickRound, pickEventAll, setEvAllFil, evAllMore, setRoundNavMine, renderToday, setContactFil, contactShowMore, toggleContactHist, toggleContactEdit,
   pickContactPerson, pickContactChannel, recordContact, undoContactAttempt, setContactNext,
   toggleContactGoal, closeContactMember, reopenContactMember, saveContactMemberEdit, removeContactMember,
   openContactCo, openRoundMember, openPersonForm, savePersonForm,

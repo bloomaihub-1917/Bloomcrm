@@ -14,7 +14,7 @@
    열은 진하게 보이고, 위쪽 거르기(목표 달성·연락 전 …)도 그 차수를 기준으로 한다.
 ══════════════════════════════════════════════════════════════ */
 import { CONTACT_ROUNDS, CONTACT_ATTEMPTS } from '../state.js';
-import { REACTIONS, memberState, currentRoundId } from './contact-tab.js';
+import { REACTIONS, memberState, currentRoundId, isGoal } from './contact-tab.js';
 import { roundById, membersOf, attemptsOf, memberName, peopleOf, coOf, fullContacts, evLabel } from '../domain/rounds.js';
 import { loadExcelJs } from './exh-export.js';
 import { showSaveErrorToast } from '../api.js';
@@ -61,7 +61,7 @@ export function roundStats(r, rows){
     st.members++;
     st.attempts += c.atts.length;
     if(c.atts.length){ st.touched++; const b = BUCKET[c.atts[0].reaction]; if(b) st[b]++; }
-    if(c.m.goal_at) st.goal++;
+    if(isGoal(c.m)) st.goal++;
   });
   return st;
 }
@@ -82,8 +82,8 @@ export function renderGrid(){
   const q = ((document.getElementById('crm-q') || {}).value || '').trim().toLowerCase();
   const list = rows.filter(row => {
     const c = row.cells[cur.id];
-    if(gFil === 'todo' && !(c && !c.atts.length && !c.m.closed_at && !c.m.goal_at)) return false;
-    if(gFil === 'goal' && !(c && c.m.goal_at)) return false;
+    if(gFil === 'todo' && !(c && !c.atts.length && !c.m.closed_at && !isGoal(c.m))) return false;
+    if(gFil === 'goal' && !(c && isGoal(c.m))) return false;
     if(gFil === 'open' && !(c && c.st !== 'done')) return false;
     if(!q) return true;
     const co = coOf(row.org_id);
@@ -137,7 +137,7 @@ function cellHtml(c, r, on, td){
   if(!c) return `<td style="${td}${bg};color:var(--i5)">—</td>`;
   const a = c.atts[0];
   const R = a && REACTIONS[a.reaction];
-  const head = c.m.goal_at ? `<span class="pill p-green">✓ ${escapeHtml(r.goal || '목표')}</span>`
+  const head = isGoal(c.m) ? `<span class="pill p-green">✓ ${escapeHtml(r.goal || '목표')}</span>`
     : c.m.closed_at ? `<span class="pill p-gray">끝냄</span>`
     : a ? `<span class="pill ${R?.cls || 'p-gray'}">${escapeHtml(R?.label || a.reaction)}</span>`
     : `<span style="color:var(--a);font-size:var(--fs-11)">${r.channel === 'TM' ? '걸 차례' : '보낼 차례'}</span>`;

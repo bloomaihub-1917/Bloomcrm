@@ -301,6 +301,8 @@ export function contactViewPanel(c){
     <div class="ig">
       <div class="ic"><div class="il">기업</div><div class="iv">${escapeHtml(c.orgKo)||'-'}</div></div>
       <div class="ic"><div class="il">영문 기업</div><div class="iv">${escapeHtml(contactOrgEn(c))||'-'}</div></div>
+      ${(c.org2Ko || c.org2En) ? `<div class="ic"><div class="il">두 번째 소속</div><div class="iv">${escapeHtml(c.org2Ko || c.org2En)}</div></div>
+      <div class="ic"><div class="il">두 번째 소속 (영문)</div><div class="iv">${escapeHtml(c.org2Ko ? c.org2En : '') || '-'}</div></div>` : ''}
       <div class="ic"><div class="il">국가</div><div class="iv">${escapeHtml(contactCountryText(c)) || '-'}${
         (() => {
           /* 괄호만 보면 그게 거주지인지 알 수 없다 — 상세에서는 풀어 쓴다 */
@@ -419,6 +421,11 @@ export function contactEditForm(c){
       <div class="fg"><label class="fl">기업 (국문)</label><input class="fi" id="ce-org" value="${escapeHtml(c.orgKo||'')}"></div>
       <div class="fg"><label class="fl">기업 (영문)</label><input class="fi" id="ce-orgEn" value="${escapeHtml(c.orgEn||'')}"></div>
     </div>
+    ${(c.org2Ko || c.org2En) ? '' : `<div style="margin:-6px 0 12px"><button type="button" class="btn bs" onclick="this.parentNode.style.display='none';document.getElementById('ce-org2-row').style.display=''">+ 소속 하나 더</button></div>`}
+    <div class="fg-row" id="ce-org2-row" style="margin-bottom:12px${(c.org2Ko || c.org2En) ? '' : ';display:none'}">
+      <div class="fg"><label class="fl">두 번째 소속 (국문)</label><input class="fi" id="ce-org2Ko" value="${escapeHtml(c.org2Ko||'')}" placeholder="겸직하는 기관·회사"></div>
+      <div class="fg"><label class="fl">두 번째 소속 (영문)</label><input class="fi" id="ce-org2En" value="${escapeHtml(c.org2En||'')}"></div>
+    </div>
     <div class="fg-row" style="margin-bottom:12px">
       <div class="fg"><label class="fl">국가</label>
         <select class="fi" id="ce-country">${countryOptions(c.country)}</select>
@@ -519,7 +526,7 @@ export async function saveContactEdit(){
   c.products = productsEl ? productsEl.value.trim() : (c.products||'');
 
   // 기본 항목에 없는 값을 담아 두는 자유 칸 세 개
-  ['memo1','memo2','memo3','prefix'].forEach(k => {
+  ['memo1','memo2','memo3','prefix','org2Ko','org2En'].forEach(k => {
     const el = document.getElementById('ce-' + k);
     if(el) c[k] = el.value.trim();
   });
@@ -534,6 +541,16 @@ export async function saveContactEdit(){
       const oid = orgIdForName(nm);
       if(oid) c.org_id = oid;
     } catch(e){ console.warn('[db-tab] 기업 재연결 실패:', e); }
+  }
+
+  /* 두 번째 소속도 기업DB에 잇는다 — 비우면 연결도 뗀다 */
+  if(c.org2Ko !== (prev.org2Ko||'') || c.org2En !== (prev.org2En||'')){
+    const nm2 = (c.org2Ko || c.org2En || '').trim();
+    if(!nm2) c.org2_id = '';
+    else try {
+      await ensureOrgsForNames([nm2]);
+      c.org2_id = orgIdForName(nm2) || '';
+    } catch(e){ console.warn('[db-tab] 두 번째 소속 기업 연결 실패:', e); }
   }
 
   /* 섹터는 기업에 저장된다 — 연락처 저장과 별개의 길이라 따로 부른다 */

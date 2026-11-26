@@ -25,7 +25,8 @@ const getContactById = (id) => contacts.find(c => String(c.id) === String(id));
 /* 고르는 칸 — [표시 이름, 칸들]. 메일·전화는 두 칸을 한 묶음으로 본다 */
 const FIELDS = [
   ['국문 이름', ['nameKo']], ['영문 이름', ['nameEn']], ['경칭', ['prefix']],
-  ['소속(국문)', ['orgKo']], ['소속(영문)', ['orgEn']], ['부서(국문)', ['deptKo']], ['부서(영문)', ['deptEn']],
+  ['소속(국문)', ['orgKo']], ['소속(영문)', ['orgEn']],
+  ['두 번째 소속(국문)', ['org2Ko']], ['두 번째 소속(영문)', ['org2En']], ['부서(국문)', ['deptKo']], ['부서(영문)', ['deptEn']],
   ['직함(국문)', ['titleKo']], ['직함(영문)', ['titleEn']],
   ['메일', ['email1', 'email2']], ['전화', ['phone1', 'phone2']],
   ['국가', ['country']], ['메모 1', ['memo1']], ['메모 2', ['memo2']], ['메모 3', ['memo3']],

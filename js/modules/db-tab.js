@@ -153,7 +153,8 @@ export const ctryPill = (c) => {
 /* 연락처 표의 칸(서버 data.js contacts.columns) — 바꾼 칸만 골라 보낼 때 쓴다 */
 const CONTACT_COLS = new Set(['nameKo', 'nameEn', 'orgKo', 'orgEn', 'titleKo', 'titleEn', 'deptKo', 'deptEn',
   'country', 'cat', 'lang', 'source', 'date', 'status', 'email1', 'email2', 'phone1', 'phone2',
-  'beat', 'products', 'tags', 'org_id', 'left_at', 'moved_to_id', 'memo1', 'memo2', 'memo3', 'prefix']);
+  'beat', 'products', 'tags', 'org_id', 'left_at', 'moved_to_id', 'memo1', 'memo2', 'memo3', 'prefix',
+  'org2Ko', 'org2En', 'org2_id']);
 export const contactPatch = (c, before) => {
   const data = { id: c.id };
   // before에 담긴 칸만 견준다 — 스냅샷이 일부(퇴사 칸 둘)면 나머지는 안 보낸다
@@ -724,7 +725,7 @@ ${n === 2 ? `<button class="btn bs" onclick="openMDBMergeModal()"
 ══════════════════════════════════════════ */
 const Q_FIELDS = {
   이름: ['nameKo', 'nameEn'], name: ['nameKo', 'nameEn'],
-  기업: ['orgKo', 'orgEn'],   org: ['orgKo', 'orgEn'], company: ['orgKo', 'orgEn'],
+  기업: ['orgKo', 'orgEn', 'org2Ko', 'org2En'],   org: ['orgKo', 'orgEn', 'org2Ko', 'org2En'], company: ['orgKo', 'orgEn', 'org2Ko', 'org2En'],
   국가: ['country'],          country: ['country'],
   직함: ['titleKo', 'titleEn'], title: ['titleKo', 'titleEn'],
   부서: ['deptKo', 'deptEn'], dept: ['deptKo', 'deptEn'],
@@ -737,7 +738,7 @@ const Q_FIELDS = {
   출처: ['source'], source: ['source'],
   상태: ['status'], 언어: ['lang'],
 };
-const ALL_Q = ['nameKo', 'nameEn', 'orgKo', 'orgEn', 'titleKo', 'titleEn',
+const ALL_Q = ['nameKo', 'nameEn', 'orgKo', 'orgEn', 'org2Ko', 'org2En', 'titleKo', 'titleEn',
   'deptKo', 'deptEn', 'country', 'email1', 'email2', 'phone1', 'phone2',
   'tags', 'beat', 'products', 'source', 'memo1', 'memo2', 'memo3', 'prefix'];
 const hay = (c, keys) => keys.map(k => String(c[k] ?? '')).join(' ').toLowerCase();
@@ -797,7 +798,7 @@ function aiMatches(c, plan){
   if(plan.clevel && !isCLevelContact(c)) return false;
   if((plan.countries || []).length && !plan.countries.includes(String(c.country || ''))) return false;
   const has = (keys, words) => { const h = hay(c, keys); return words.some(w => h.includes(String(w).toLowerCase())); };
-  if((plan.org_keywords || []).length && !has(['orgKo', 'orgEn'], plan.org_keywords)) return false;
+  if((plan.org_keywords || []).length && !has(['orgKo', 'orgEn', 'org2Ko', 'org2En'], plan.org_keywords)) return false;
   if((plan.title_keywords || []).length && !has(['titleKo', 'titleEn'], plan.title_keywords)) return false;
   return true;
 }

@@ -17,7 +17,9 @@ const TABLES = {
       'memo1', 'memo2', 'memo3', 'prefix',
       /* 출처(ours/other/sales) — 화면은 upsertPartial로 이 칸만 보낸다.
          위치 배열 저장은 이 칸까지 오지 않으므로 덮이지 않는다 */
-      'origin'],
+      'origin',
+      /* 두 번째 소속(db/migrations/add-contact-org2.js) — 화면은 바꾼 칸만 객체로 보낸다 */
+      'org2Ko', 'org2En', 'org2_id'],
   },
   events: {
     table: 'events', pk: 'id', idPrefix: '',
@@ -221,7 +223,7 @@ const TABLES = {
     columns: ['id', 'event_id', 'name', 'channel', 'purpose', 'goal', 'date_from', 'date_to',
       'noanswer_limit', 'status', 'note', 'created_at', 'created_by',
       'mail_subject_ko', 'mail_body_ko', 'mail_subject_en', 'mail_body_en', 'retry_hours', 'script_url',
-      'sector', 'owner'],
+      'sector', 'owner', 'goal_exh'],
   },
   round_members: {
     table: 'round_members', pk: 'id', idPrefix: 'RM-',
