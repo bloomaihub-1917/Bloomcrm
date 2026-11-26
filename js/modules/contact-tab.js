@@ -97,6 +97,7 @@ const pickedChannel = {};          // 줄마다 고른 채널
 let showLimit = 150;
 let srcFil = '';                   // 명단 거르기 — 명단을 나눠 맡을 때
 let ownFil = (() => { try { return localStorage.getItem('contact_owner') || ''; } catch(e){ return ''; } })();   // '' 전체 | '__me' 내 담당 | '__none' 담당 없음 | 이름
+let intFil = '';                   // 관심도 거르기 — '' 전체 | positive | hold | low | negative | none
 let missFil = false;               // 미연결이 정한 횟수 넘게 이어진 곳만
 const memoDraft = {};              // 줄마다 치던 메모 — 화면을 다시 그려도 남게
 let busy = 0;                      // 저장 중인 일 — 이 동안 받아 온 것은 덮어쓰지 않는다
@@ -114,6 +115,25 @@ const othersCalling = (m) => { const c = callingOf(m); return c && !c.me ? 1 : 0
 
 /* ── 담당·표시 — 분야별로 나눠 맡고(assignee), 특별관 후보·소개서 등급을 표시한다(tags) ── */
 export const tagsOf = (m) => String(m.tags || '').split(',').map(s => s.trim()).filter(Boolean);
+/* ── 관심도 · 연락 안 함 ──
+   관심도 = 마지막으로 남긴 관심 반응(관심 상·중·하·부정, DM 회신은 관심 상). 부재중·보냄 같은 반응은 건너뛴다.
+   부정인 곳은 빨간 띠로 보이고 «연락 안 함»으로 옮길 수 있다 — 태그 '연락 안 함' + 끝냄.
+   연락 안 함은 그 차수의 다른 목록에서 빠지고, 같은 행사의 다른 차수에서도 빨간 표가 붙고 명단 채우기에서 못 고른다. */
+export const DNC = '연락 안 함';
+export const INTEREST = { positive: '관심 상', hold: '관심 중', low: '관심 하', negative: '부정' };
+export function interestOf(atts){
+  for(const a of atts){
+    if(a.reaction === 'reply') return 'positive';
+    if(INTEREST[a.reaction]) return a.reaction;
+  }
+  return '';
+}
+export const isDnc = (m) => tagsOf(m).includes(DNC);
+/* 이 행사에서 «연락 안 함»으로 옮긴 기업 */
+export function dncOrgs(eventId){
+  const rids = new Set(CONTACT_ROUNDS.filter(r => r.event_id === eventId).map(r => r.id));
+  return new Set(ROUND_MEMBERS.filter(m => rids.has(m.round_id) && isDnc(m)).map(m => m.org_id));
+}
 export const gradeOf = (m) => (tagsOf(m).find(t => /^소개서 [상중하]$/.test(t)) || '').slice(4);
 const isMine = (m) => !!m.assignee && [currentUser?.name, currentUser?.email].filter(Boolean).includes(m.assignee);
 /* 담당 이름 후보 — 이 행사 차수에 이미 적힌 담당 + 기록을 남긴 사람 + 나 */
@@ -262,13 +282,20 @@ export function renderToday(){
   if(ownFil && !['__me', '__none'].includes(ownFil) && !owners.includes(ownFil)) ownFil = '';
   const ownN = (f) => all.filter(x => f === '__me' ? isMine(x.m) : f === '__none' ? !x.m.assignee : x.m.assignee === f).length;
   const missN = all.filter(x => x.st !== 'done' && missStreak(x.atts) >= limit).length;
+  all.forEach(x => { x.int = interestOf(x.atts); x.dnc = isDnc(x.m); });
+  const dncN = all.filter(x => x.dnc).length;
+  const dncElse = dncOrgs(r.event_id);
+  all.forEach(x => { x.dncElse = !x.dnc && dncElse.has(x.m.org_id); });
+  const intN = (k) => all.filter(x => !x.dnc && (k === 'none' ? !x.int : x.int === k)).length;
   // 미연결 거르기를 켜면 상태(지금 할 곳·기다림)와 상관없이 안 끝난 곳을 다 본다 — 세는 숫자와 맞게
-  let list = all.filter(x => missFil || stFil === 'all' ? true : stFil === 'now' ? (x.st === 'todo' || x.st === 'again')
+  let list = all.filter(x => stFil === 'dnc' ? x.dnc : !x.dnc)
+    .filter(x => stFil === 'dnc' || missFil || intFil || stFil === 'all' ? true : stFil === 'now' ? (x.st === 'todo' || x.st === 'again')
       : stFil === 'goal' ? isGoal(x.m) : stFil === 'contacted' ? x.atts.length > 0 : x.st === stFil)
     .filter(x => matchQ(x.m, q))
     .filter(x => !srcFil || (x.m.source || '') === srcFil)
     .filter(x => !ownFil || (ownFil === '__me' ? isMine(x.m) : ownFil === '__none' ? !x.m.assignee : x.m.assignee === ownFil))
-    .filter(x => !missFil || (x.st !== 'done' && missStreak(x.atts) >= limit));
+    .filter(x => !missFil || (x.st !== 'done' && missStreak(x.atts) >= limit))
+    .filter(x => !intFil || stFil === 'dnc' || (intFil === 'none' ? !x.int : x.int === intFil));
   // 다시 걸 차례 → 걸 차례 → 기다림 → 끝남. 다시 걸 차례는 오래 전에 건 곳부터
   const ORDER = { again: 0, todo: 1, wait: 2, done: 3 };
   // 팀원이 거는 중인 곳은 그 묶음 맨 뒤로 — 같은 곳에 둘이 걸지 않게
@@ -330,6 +357,12 @@ export function renderToday(){
           <option value="__me"${ownFil === '__me' ? ' selected' : ''}>내 담당 (${ownN('__me')})</option>
           ${owners.map(o => `<option value="${escapeHtml(o)}"${o === ownFil ? ' selected' : ''}>${escapeHtml(o)} (${ownN(o)})</option>`).join('')}
           <option value="__none"${ownFil === '__none' ? ' selected' : ''}>담당 없음 (${ownN('__none')})</option></select>
+        <select onchange="setContactInt(this.value)" title="마지막으로 남긴 관심 반응으로 거른다 — 고르면 상태와 상관없이 그 관심도의 기업을 다 봐요" style="font-size:var(--fs-11);padding:3px 4px;border:1px solid ${intFil ? (intFil === 'negative' ? 'var(--re)' : 'var(--a)') : 'var(--i6)'};border-radius:var(--rs);color:${intFil ? (intFil === 'negative' ? 'var(--re)' : 'var(--a)') : 'var(--i2)'}">
+          <option value="">관심도 전체</option>
+          ${Object.entries(INTEREST).map(([k, l]) => `<option value="${k}"${intFil === k ? ' selected' : ''}>${l} (${intN(k)})</option>`).join('')}
+          <option value="none"${intFil === 'none' ? ' selected' : ''}>관심 기록 없음 (${intN('none')})</option></select>
+        ${intFil === 'negative' && list.some(x => !x.dnc) ? `<button class="btn bs" style="color:var(--re);border-color:var(--re)" onclick="moveToDnc([${list.filter(x => !x.dnc).map(x => `'${escAttr(x.m.id)}'`).join(',')}])" title="부정인 곳을 모두 «연락 안 함» 명단으로 옮겨요">🚫 이 ${list.filter(x => !x.dnc).length}곳 연락 안 함으로</button>` : ''}
+        <a href="javascript:void(0)" onclick="setContactFil('${stFil === 'dnc' ? 'now' : 'dnc'}')" style="color:${stFil === 'dnc' ? 'var(--a)' : 'var(--re)'};font-weight:600" title="부정 등으로 더 연락하지 않기로 한 곳 — 다른 목록에서는 빠져요">${stFil === 'dnc' ? '← 명단으로 돌아가기' : `🚫 연락 안 함 ${dncN}`}</a>
         ${missN ? `<label style="display:flex;align-items:center;gap:3px;cursor:pointer;color:${missFil ? 'var(--am)' : 'var(--i3)'}"><input type="checkbox" ${missFil ? 'checked' : ''} onchange="setContactMiss(this.checked)" style="margin:0">미연결 ${limit}번 이상 이어진 곳 ${missN}</label>` : ''}
         ${missFil && list.length ? `<button class="btn bs" onclick="openRoundMail('${escAttr(r.id)}',null,[${list.map(x => `'${escAttr(x.m.id)}'`).join(',')}])" title="전화가 안 닿는 곳 — 메일로 넘긴다">✉ 이 ${list.length}곳에 메일</button>` : ''}
         <span>오늘 기록 ${todayAtts.length}건 · 내 기록 ${mine}건</span>
@@ -342,8 +375,9 @@ export function renderToday(){
         ? `<div class="empty" style="height:auto;padding:40px 10px"><p style="font-size:var(--fs-12)">이 차수에 아직 명단이 없어요</p>
              <button class="btn bp bs" onclick="openFillRound()">명단 채우기</button></div>`
         : !list.length
-          ? `<div class="empty" style="height:auto;padding:30px 10px"><p style="font-size:var(--fs-12)">${q ? '찾는 곳이 없어요' : stFil === 'now' ? `지금 ${verb} 곳이 없어요 — 기다리는 곳·끝난 곳·전체를 눌러 보세요` : '해당하는 곳이 없어요'}</p></div>`
-          : list.slice(0, showLimit).map(x => card(r, x)).join('')
+          ? `<div class="empty" style="height:auto;padding:30px 10px"><p style="font-size:var(--fs-12)">${stFil === 'dnc' ? '연락 안 함으로 옮긴 곳이 없어요 — 부정인 곳에서 «연락 안 함으로»를 누르면 여기로 와요' : q ? '찾는 곳이 없어요' : stFil === 'now' ? `지금 ${verb} 곳이 없어요 — 기다리는 곳·끝난 곳·전체를 눌러 보세요` : '해당하는 곳이 없어요'}</p></div>`
+          : (stFil === 'dnc' ? `<div style="font-size:var(--fs-11_5);color:var(--re);font-weight:600">🚫 연락 안 함 ${list.length}곳 — 이 행사에서는 더 연락하지 않아요</div>` : '')
+            + list.slice(0, showLimit).map(x => card(r, x)).join('')
             + (list.length > showLimit ? `<button class="btn" style="align-self:center" onclick="contactShowMore()">${list.length - showLimit}곳 더 보기</button>` : '')}
     </div>`;
 }
@@ -457,7 +491,7 @@ function waitUntil(m, atts){
   return ra ? (ra.slice(0, 10) === t ? ra.slice(11) : ra.slice(5)) : '';
 }
 
-function card(r, { m, atts, st }){
+function card(r, { m, atts, st, int = interestOf(atts), dnc = isDnc(m), dncElse = false }){
   const verb = verbOf(r.channel);
   const ch = pickedChannel[m.id] || r.channel || 'TM';
   const people = peopleOf(m);
@@ -492,15 +526,18 @@ function card(r, { m, atts, st }){
   };
 
   /* 연락한 곳은 왼쪽 띠·«연락함» 표로 티 나게 — 처음 걸 곳과 섞여 보여도 바로 갈린다 */
-  const stripe = { todo: 'var(--i6)', again: 'var(--am)', wait: 'var(--a)', done: 'var(--g)' }[st];
-  return `<div id="rm-${escAttr(m.id)}" style="border:1px solid ${calling && !calling.me ? 'var(--am)' : calling ? 'var(--a)' : 'var(--i6)'};border-left:5px solid ${stripe};border-radius:var(--r);background:${st === 'done' ? 'var(--i8)' : 'var(--W)'};padding:9px 12px">
+  const neg = int === 'negative' || dnc || dncElse;
+  const stripe = neg ? 'var(--re)' : { todo: 'var(--i6)', again: 'var(--am)', wait: 'var(--a)', done: 'var(--g)' }[st];
+  return `<div id="rm-${escAttr(m.id)}" style="border:1px solid ${calling && !calling.me ? 'var(--am)' : calling ? 'var(--a)' : 'var(--i6)'};border-left:5px solid ${stripe};border-radius:var(--r);background:${neg ? 'var(--rb)' : st === 'done' ? 'var(--i8)' : 'var(--W)'};padding:9px 12px">
     <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
       <a href="javascript:void(0)" onclick="openContactCo('${escAttr(m.org_id)}')" style="font-size:var(--fs-13);font-weight:700;color:var(--i1)">${escapeHtml(memberName(m))}</a>
       ${atts.length ? `<span class="pill p-blue" style="font-weight:700" title="마지막 ${escapeHtml(String(last.at || '').slice(5, 16))} ${escapeHtml(last.by_name || '')}">✓ 연락함 ${atts.length}번</span>` : `<span class="pill p-gray">연락 전</span>`}
+      ${int ? `<span class="pill ${REACTIONS[int].cls}" style="${int === 'negative' ? 'font-weight:700' : ''}" title="마지막 관심 반응">${INTEREST[int]}</span>` : ''}
+      ${dnc ? `<span class="pill p-red" style="font-weight:700">🚫 연락 안 함</span>` : dncElse ? `<span class="pill p-red" style="font-weight:700" title="같은 행사의 다른 차수에서 연락 안 함으로 옮긴 곳">🚫 다른 차수에서 연락 안 함</span>` : ''}
       ${co?.country ? `<span style="font-size:var(--fs-10_5);color:var(--i4)">${escapeHtml(co.country)}</span>` : ''}
       ${m.source ? `<span class="pill p-gray">${escapeHtml(m.source)}</span>` : ''}
       ${m.assignee ? `<span class="pill ${isMine(m) ? 'p-blue' : 'p-gray'}" title="담당">👤 ${escapeHtml(m.assignee)}</span>` : ''}
-      ${tagsOf(m).map(t => `<span class="pill ${t === '특별관 후보' ? 'p-green' : t === '소개서 하' ? 'p-amber' : 'p-gray'}">${t === '특별관 후보' ? '🌱 ' : ''}${escapeHtml(t)}</span>`).join('')}
+      ${tagsOf(m).filter(t => t !== DNC).map(t => `<span class="pill ${t === '특별관 후보' ? 'p-green' : t === '소개서 하' ? 'p-amber' : 'p-gray'}">${t === '특별관 후보' ? '🌱 ' : ''}${escapeHtml(t)}</span>`).join('')}
       <span style="margin-left:auto;display:flex;gap:4px;align-items:center">
         ${miss ? `<span style="font-size:var(--fs-10_5);color:var(--i4)">미연결 ${miss}번 이어짐</span>` : ''}
         <span class="pill ${goal ? 'p-green' : s.cls}">${exh ? '목표 달성 · 전시 등록됨' : m.goal_at ? `목표 달성 ${escapeHtml(m.goal_at.slice(5))}` : m.closed_at ? `끝냄${m.closed_reason ? ` · ${escapeHtml(m.closed_reason)}` : ''}` : escapeHtml(s.label(verb))}${
@@ -549,6 +586,8 @@ function card(r, { m, atts, st }){
       ${goal ? '' : m.closed_at
         ? `<a href="javascript:void(0)" onclick="reopenContactMember('${escAttr(m.id)}')" style="color:var(--a)">다시 열기</a>`
         : `<a href="javascript:void(0)" onclick="closeContactMember('${escAttr(m.id)}')" style="color:var(--i3)">끝내기</a>`}
+      ${dnc ? `<a href="javascript:void(0)" onclick="restoreFromDnc('${escAttr(m.id)}')" style="color:var(--a)">연락 안 함 풀기</a>`
+        : neg && !goal ? `<a href="javascript:void(0)" onclick="moveToDnc(['${escAttr(m.id)}'])" style="color:var(--re);font-weight:600">🚫 연락 안 함으로 옮기기</a>` : ''}
       <a href="javascript:void(0)" onclick="toggleContactEdit('${escAttr(m.id)}')" style="color:var(--i3)">${editOpen.has(m.id) ? '닫기' : '담당·표시·주의사항 고치기'}</a>
       ${atts.length ? '' : `<a href="javascript:void(0)" onclick="removeContactMember('${escAttr(m.id)}')" style="color:var(--i4)">명단에서 빼기</a>`}
     </div>
@@ -793,6 +832,35 @@ export async function closeContactMember(mid){
   if(why === null) return;
   await patchMember(m, { closed_at: today(), closed_reason: why.trim() });
 }
+/* 연락 안 함으로 옮기기 — 태그를 달고 끝낸다. 여러 곳을 한 번에 */
+export async function moveToDnc(mids){
+  const ms = mids.map(id => ROUND_MEMBERS.find(x => x.id === id)).filter(m => m && !isDnc(m));
+  if(!ms.length) return;
+  if(ms.length > 1 && !confirm(`${ms.length}곳을 «연락 안 함» 명단으로 옮길까요?\n이 행사에서는 더 연락하지 않도록 다른 목록에서 빠져요.`)) return;
+  const t = today();
+  const rows = ms.map(m => ({ id: m.id, tags: [...tagsOf(m), DNC].join(','), closed_at: m.closed_at || t, closed_reason: m.closed_reason || DNC }));
+  const before = ms.map(m => ({ m, tags: m.tags, closed_at: m.closed_at, closed_reason: m.closed_reason }));
+  rows.forEach((row, i) => Object.assign(ms[i], row));
+  renderToday(); renderRoundNav();
+  busy++;
+  const res = ms.length === 1 ? await saveRoundMember(rows[0])
+    : await postToSheet({ sheet: 'round_members', action: 'batchUpsert', dataRows: rows }, '연락 안 함으로 옮기기');
+  busy--;
+  if(!res?.ok){
+    before.forEach(b => Object.assign(b.m, { tags: b.tags, closed_at: b.closed_at, closed_reason: b.closed_reason }));
+    renderToday(); renderRoundNav(); alert('저장하지 못했어요. 다시 해 주세요.'); return;
+  }
+  const r = roundById(ms[0].round_id);
+  trackAction('edit', '컨택 연락 안 함', r?.name || '', `${ms.length === 1 ? `«${escapeHtml(memberName(ms[0]))}»` : `${ms.length}곳`} → 연락 안 함`);
+  contactToast(`${ms.length === 1 ? `«${escapeHtml(memberName(ms[0]))}»을(를) ` : `${ms.length}곳을 `}연락 안 함으로 옮겼어요`, ms.length === 1 ? `restoreFromDnc('${escAttr(ms[0].id)}')` : '');
+}
+export async function restoreFromDnc(mid){
+  const m = ROUND_MEMBERS.find(x => x.id === mid);
+  if(!m) return;
+  const patch = { tags: tagsOf(m).filter(t => t !== DNC).join(',') };
+  if(m.closed_reason === DNC){ patch.closed_at = ''; patch.closed_reason = ''; }
+  await patchMember(m, patch);
+}
 export function reopenContactMember(mid){
   const m = ROUND_MEMBERS.find(x => x.id === mid);
   if(m) patchMember(m, { closed_at: '', closed_reason: '' });
@@ -891,6 +959,7 @@ export async function bulkRemoveCommit(){
 
 export function setContactFil(k){ stFil = k; showLimit = 150; renderToday(); }
 export function setContactSrc(v){ srcFil = v; showLimit = 150; renderToday(); }
+export function setContactInt(v){ intFil = v; showLimit = 150; renderToday(); }
 export function setContactMiss(on){ missFil = !!on; showLimit = 150; renderToday(); }
 /* 치던 메모는 담아만 둔다 — 다시 그리지 않는다 */
 /* TM 걸기 전에 이 기업이 어느 행사에 어떤 역할로 왔는지 — 기업DB(co.events)와 같은 값. 최근 행사부터 */
@@ -1236,6 +1305,8 @@ function renderFill(){
   const r = roundById(curRoundId);
   if(!r || !fill) return;
   const have = new Set(membersOf(r.id).map(m => m.org_id));
+  const dncSet = dncOrgs(r.event_id);
+  dncSet.forEach(k => have.add(k));
   const evs = [...EVENT_LIST].sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
   const roles = evRoles(fill.ev);
   const cands = fillCandidates();
@@ -1279,7 +1350,7 @@ function renderFill(){
           const inR = have.has(c.key);
           return `<label style="display:flex;gap:6px;align-items:center;font-size:var(--fs-12);padding:2px 0;${inR ? 'color:var(--i4)' : ''}">
             <input type="checkbox" ${inR ? 'disabled' : fill.picked.has(c.key) ? 'checked' : ''} onchange="fillToggle('${escAttr(c.key)}',this.checked)">
-            ${escapeHtml(coName(c))} <span style="font-size:var(--fs-10_5);color:var(--i4)">${inR ? '이미 명단에' : `담당자 ${c.contacts.filter(p => !hasLeft(p)).length}명`}</span></label>`;
+            ${escapeHtml(coName(c))} <span style="font-size:var(--fs-10_5);color:${dncSet.has(c.key) ? 'var(--re)' : 'var(--i4)'}">${dncSet.has(c.key) ? '🚫 연락 안 함' : inR ? '이미 명단에' : `담당자 ${c.contacts.filter(p => !hasLeft(p)).length}명`}</span></label>`;
         }).join('')}
       </div>
       ${fld('rf-src', '명단 이름 — 보고를 이 이름별로 나눠요', memoSrc ?? defSource)}
@@ -1318,7 +1389,8 @@ export function fillToggle(key, on){
 }
 export function fillAll(on){
   const have = new Set(membersOf(curRoundId).map(m => m.org_id));
-  fill.picked = new Set(on ? fillCandidates().filter(c => !have.has(c.key)).map(c => c.key) : []);
+  const dncSet = dncOrgs(roundById(curRoundId)?.event_id);
+  fill.picked = new Set(on ? fillCandidates().filter(c => !have.has(c.key) && !dncSet.has(c.key)).map(c => c.key) : []);
   renderFill();
 }
 /* 컨택 명단에 넣으면 그 행사의 영업 DB도 켠다(docs/manual-db-axes.md).
@@ -1567,6 +1639,7 @@ export async function sendCommit(){
 
 Object.assign(window, {
   fillMode, fillPickSec, openSendToRound, openAssign, assignCommit, setContactOwner, sendRoundInfo, sendCommit,
+  moveToDnc, restoreFromDnc, setContactInt,
   pickRound, pickEventAll, setEvAllFil, evAllMore, setRoundNavMine, renderToday, setContactFil, contactShowMore, toggleContactHist, toggleContactEdit,
   pickContactPerson, pickContactChannel, recordContact, undoContactAttempt, setContactNext,
   toggleContactGoal, closeContactMember, reopenContactMember, saveContactMemberEdit, removeContactMember,
