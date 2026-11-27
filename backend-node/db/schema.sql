@@ -1300,3 +1300,12 @@ ALTER TABLE nametag_people ADD COLUMN IF NOT EXISTS removed_by TEXT;
 ALTER TABLE contact_rounds ADD COLUMN IF NOT EXISTS sector TEXT;   -- 이 분야로 들어온 새 기업이 자동으로 붙는다
 ALTER TABLE contact_rounds ADD COLUMN IF NOT EXISTS owner  TEXT;   -- 분야 담당자 — 자동으로 붙은 기업의 assignee
 ALTER TABLE orgs ADD COLUMN IF NOT EXISTS created_by TEXT;         -- 기업을 넣은 사람(메일)
+
+-- 전시장 배치도 — 행사별 도면(홀·층) 한 장이 한 줄. booths는 부스 칸 JSON [{no,x,y,w,h}](m).
+-- 기업 배정은 exhibitors.booth_no가 정본이라 여기 두지 않는다. bg_url은 나중 도면 이미지·조감도 자리.
+CREATE TABLE IF NOT EXISTS floor_plans (
+  id TEXT PRIMARY KEY, event_id TEXT, name TEXT,
+  width TEXT, height TEXT, booths TEXT, zones TEXT, bg_url TEXT,
+  sort_order INTEGER, note TEXT, updated_at TEXT, updated_by TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_floor_plans_event ON floor_plans(event_id);

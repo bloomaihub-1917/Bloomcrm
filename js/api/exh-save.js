@@ -89,3 +89,7 @@ export async function batchCreateExhibitors(rows){
 }
 
 
+
+/* 전시장 배치도 — 도면 한 장 단위로 저장한다(부스 칸은 booths JSON 한 칸) */
+export const saveFloorPlan   = (o) => saveExhRow('floor_plans', o, '배치도 저장');
+export const deleteFloorPlan = (id) => deleteExhRow('floor_plans', id, '배치도 삭제');

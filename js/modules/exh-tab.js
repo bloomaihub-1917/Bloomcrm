@@ -850,7 +850,7 @@ export function renderExh(){
      담당이 갈리고 마감도 달라서, 기업별 드로어를 51번 열지 않고 한 화면에서
      끝낼 수 있어야 한다. */
   const VIEWS = [['dash','대시보드'], ['list','기업리스트'],
-    ['booth','부스 현황'], ['equip','비품 현황'], ['graphic','그래픽 현황'],
+    ['booth','부스 현황'], ['floor','배치도'], ['equip','비품 현황'], ['graphic','그래픽 현황'],
     ['money','금액 현황'], ['book','프로그램북'], ['onsite','현장 처리'],['watch','파일 감시']];
   const seg = `<div class="db-bar vtabs">
     <div class="seg">
@@ -872,6 +872,7 @@ export function renderExh(){
   const bodyHtml = searchOverride ? searchNote + renderInquiryPanel() + renderChecklist(list, all)
     : exhUi.exhView === 'dash'    ? window.renderDashboard(all)
     : exhUi.exhView === 'booth'   ? window.renderBoothView(list)
+    : exhUi.exhView === 'floor'   ? window.renderFloorView(list)
     : exhUi.exhView === 'equip'   ? window.renderEquipView(list)
     : exhUi.exhView === 'graphic' ? window.renderGraphicView(list)
     : exhUi.exhView === 'base'    ? window.renderGraphicView(list)   /* 옛 주소로 들어와도 그래픽으로 */

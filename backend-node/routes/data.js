@@ -133,6 +133,12 @@ const TABLES = {
       'first_seen_at', 'changed_at', 'gone_at', 'checked_at', 'checked_by', 'note'],
   },
 
+  /* 전시장 배치도 — 도면 한 장이 한 줄. 기업 배정은 exhibitors.booth_no(정본) */
+  floor_plans: {
+    table: 'floor_plans', pk: 'id', idPrefix: 'FP-',
+    columns: ['id', 'event_id', 'name', 'width', 'height', 'booths', 'zones', 'bg_url',
+      'sort_order', 'note', 'updated_at', 'updated_by'],
+  },
   /* 렌탈 비품 품목표 — 행사별로 따로 둔다(단가가 행사마다 다르다) */
   equip_catalog: {
     table: 'equip_catalog', pk: 'id', idPrefix: 'EC-',
