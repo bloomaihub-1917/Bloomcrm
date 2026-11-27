@@ -45,6 +45,7 @@ import './modules/audit-tab.js';
 import './modules/exh-tab.js';
 import './features/exhibition/exh-settings-modal.js';   // 행사 설정 모달 — 단계별 마감일 + 프로그램북 글자수 한도 — 스스로 window에 건다
 import './features/exhibition/exh-booth-view.js';   // 부스 현황 보기 — 타입별·번호 겹침·엑셀로 받기 — 스스로 window에 건다
+import './features/exhibition/exh-booth-price.js';   // 부스 단가 → 진행관리 금액 자동 — 스스로 window에 건다
 import './features/exhibition/exh-floor-plan.js';   // 배치도 — 도면에 부스를 놓고 참가기업 배정 — 스스로 window에 건다
 import './features/exhibition/exh-book.js';   // 도록 순번·기본 제공·그래픽 발주 — 스스로 window에 건다
 import './features/exhibition/exh-item-views.js';   // 금액·비품·그래픽 현황 보기 — 스스로 window에 건다

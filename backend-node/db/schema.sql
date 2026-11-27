@@ -530,6 +530,9 @@ CREATE TABLE IF NOT EXISTS code_lists (
   active     TEXT,   -- '' | 'no'(목록에서 숨김)
   sort_order TEXT
 );
+-- included(부스 기본 제공 품목 JSON), prices(부스 단가 JSON {early,pre,regular}×{krw,usd})는 마이그레이션으로 붙였다
+ALTER TABLE code_lists ADD COLUMN IF NOT EXISTS included TEXT;
+ALTER TABLE code_lists ADD COLUMN IF NOT EXISTS prices TEXT;
 CREATE INDEX IF NOT EXISTS idx_code_lists_key ON code_lists(list_key, event_id);
 
 /* 그래픽은 "무엇을 주문했나"와 "무엇을 받았나"가 따로 논다. 백월·행잉배너를
@@ -1309,3 +1312,6 @@ CREATE TABLE IF NOT EXISTS floor_plans (
   sort_order INTEGER, note TEXT, updated_at TEXT, updated_by TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_floor_plans_event ON floor_plans(event_id);
+
+-- 부스 단가 구간 — 'early'|'pre'|'regular', 비우면 신청일(app_received_at)과 행사 설정 tiers 마감일로 자동
+ALTER TABLE exhibitors ADD COLUMN IF NOT EXISTS price_tier TEXT;

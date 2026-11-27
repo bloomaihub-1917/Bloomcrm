@@ -64,7 +64,7 @@ const TABLES = {
      event_id로 행사별 덮어쓰기를 한다(schema.sql 주석 참고). */
   code_lists: {
     table: 'code_lists', pk: 'id', idPrefix: 'CD-',
-    columns: ['id', 'list_key', 'event_id', 'code', 'label', 'cls', 'note', 'active', 'sort_order', 'included'],
+    columns: ['id', 'list_key', 'event_id', 'code', 'label', 'cls', 'note', 'active', 'sort_order', 'included', 'prices'],
   },
 
   /* 기업 마스터. companies(정규화된 이름이 키인 오버레이)를 대신한다 —
@@ -85,7 +85,7 @@ const TABLES = {
     columns: ['id', 'event_id', 'org_id', 'company_key', 'company_name', 'status', 'note', 'updated_at',
       'manual_sent_at', 'manual_replied_at',
       'app_received', 'app_received_at', 'app_complete', 'app_missing', 'extra_equipment',
-      'booth_no', 'booth_floor', 'booth_type', 'booth_qty', 'grade', 'booth_confirmed', 'booth_confirmed_at',
+      'booth_no', 'booth_floor', 'booth_type', 'booth_qty', 'grade', 'booth_confirmed', 'booth_confirmed_at', 'price_tier',
       'booth_design_received_at', 'booth_design_checked_at', 'booth_design_result', 'booth_design_note', 'work_report_at',
       'booth_shared', 'scope', 'host_key',
       'fascia_name', 'base_recv_at', 'base_done_at', 'base_note',

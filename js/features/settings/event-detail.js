@@ -607,10 +607,47 @@ function evBoothHtml(ev){
       ${key === 'booth_type' ? `<div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         <span style="font-size:var(--fs-11);color:var(--i4);flex:1;min-width:160px">기본 제공 품목은 부스 타입을 <b>고칠 때</b> 들어갑니다 — 이미 부스가 정해진 기업에는 여기서 한 번에 넣으세요.</span>
         <button class="btn bs" onclick="applyBoothItemsToEvent('${escAttr(ev.key)}')">참가기업 전체에 지금 반영</button>
-      </div>` : ''}
+      </div>
+      ${tierDatesHtml(ev.key)}` : ''}
     </div>`;
   }).join('');
 }
+
+/* 부스 단가 구간 기준 — 조기·사전 각각 «마감일»과 «선착순 부스 수». 둘 다 적으면 둘 다 맞아야 한다.
+   EXH_CFG[행사].tiers에 둔다(행사마다 하나). 기업별 구간은 exh-booth-price.js가 이걸로 정한다. */
+function tierDatesHtml(evKey){
+  const raw = (EXH_CFG[evKey] || {}).tiers || {};
+  const v = (k) => (typeof raw[k] === 'string' ? { until: raw[k] } : (raw[k] || {}));
+  const row = (k, l, hint) => `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <b style="min-width:36px;font-size:var(--fs-12)">${l}</b>
+      <label style="font-size:var(--fs-11);color:var(--i4)">마감일
+        <input class="fi" type="date" value="${escAttr(v(k).until || '')}"
+          onchange="saveTierCfg('${escAttr(evKey)}','${k}','until',this.value)"></label>
+      <label style="font-size:var(--fs-11);color:var(--i4)" title="선착순으로 자르는 행사만 적어요">선착순(있을 때만)
+        <input class="fi" type="number" min="0" style="width:80px" value="${escAttr(v(k).cap || '')}" placeholder="${hint}"
+          onchange="saveTierCfg('${escAttr(evKey)}','${k}','cap',this.value)"> 부스</label></div>`;
+  return `<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--i6)">
+    <div style="font-weight:700;font-size:var(--fs-12_5);margin-bottom:4px">단가 구간 — 조기 · 사전 · 일반</div>
+    <div style="font-size:var(--fs-11);color:var(--i4);margin-bottom:8px">보통은 <b>마감일</b>로 나눠요 — 신청서 받은 날이 조기 마감일까지면 조기, 사전 마감일까지면 사전, 그 뒤는 일반. 선착순으로 자르는 행사만 부스 수를 함께 적으세요(둘 다 적으면 둘 다 맞아야 해요). 기업마다 드로어에서 직접 고를 수도 있어요.</div>
+    <div style="display:flex;flex-direction:column;gap:6px">${row('early', '조기', '—')}${row('pre', '사전', '—')}</div>
+    <div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="font-size:var(--fs-11);color:var(--i4);flex:1;min-width:160px">부스 금액은 부스 타입·수량·구간이 바뀔 때 진행관리 금액에 자동으로 들어가요. 이미 부스가 정해진 기업에는 여기서 한 번에 넣으세요.</span>
+      <button class="btn bs bp" onclick="applyBoothPricesToEvent('${escAttr(evKey)}')">부스 금액 전체 반영</button>
+    </div></div>`;
+}
+export async function saveTierCfg(evKey, tier, field, value){
+  const cfg = { ...(EXH_CFG[evKey] || {}) };
+  const tiers = { ...(cfg.tiers || {}) };
+  const cur = typeof tiers[tier] === 'string' ? { until: tiers[tier] } : { ...(tiers[tier] || {}) };
+  const v = String(value || '').trim();
+  if(v) cur[field] = v; else delete cur[field];
+  tiers[tier] = cur; cfg.tiers = tiers;
+  const r = await saveExhCfgToSheet(evKey, cfg);
+  if(!r.ok) return;
+  EXH_CFG[evKey] = cfg;
+  trackAction('edit', '단가 구간 기준', evKey, `${tier === 'early' ? '조기' : '사전'} ${field === 'cap' ? '선착순 부스 수' : '마감일'}: ${v || '(비움)'}`);
+}
+window.saveTierCfg = saveTierCfg;
 
 export async function addEvCodeRow(listKey){
   const ev = EVENT_LIST.find(e => e.key === settingsUi.evDetailKey);

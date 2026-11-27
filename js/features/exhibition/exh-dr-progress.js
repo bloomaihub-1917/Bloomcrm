@@ -697,6 +697,7 @@ function dProgress(x){
         <input class="fi" style="font-size:var(--fs-12)" value="${escapeHtml(x.booth_qty || '')}"
           onchange="setExhField('${escAttr(x.id)}','booth_qty',this.value,'부스 수량')"></div>
     </div>
+    ${window.boothPriceBlock?.(x) || ''}
     <div class="fg"><label class="fl">스폰서 등급</label>
       <select class="fi" style="font-size:var(--fs-12)" onchange="setExhField('${escAttr(x.id)}','grade',this.value,'등급')">
         <option value=""${x.grade ? '' : ' selected'}>— 없음 —</option>${grades(x.event_id).map(g => `<option value="${escapeHtml(g.code)}"${(x.grade || '') === g.code ? ' selected' : ''}>${escapeHtml(g.label)}</option>`).join('')}

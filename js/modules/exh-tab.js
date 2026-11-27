@@ -1627,6 +1627,10 @@ export async function patchExh(id, patch, label){
   }
   x.updated_at = td();
   logExhEdit(x, patch, backup);   // 어떤 계정이 무엇을 바꿨는지 항상 남긴다
+  /* 부스 금액을 정하는 값이 바뀌면 단가대로 금액 줄을 맞춘다(exh-booth-price.js) */
+  if(['booth_type', 'booth_qty', 'booth_shared', 'price_tier', 'app_received_at', 'scope', 'org_id'].some(k => k in patch)){
+    window.syncBoothPrice?.(id);
+  }
   return r;
 }
 

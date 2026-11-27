@@ -8,7 +8,8 @@
 import { postToSheet } from '../../api.js';
 import { CAT_KEYS, CL } from '../../constants.js';
 import { trackAction } from '../../core/audit-log.js';
-import { CODE_LISTS, EQUIP_CATALOG, EXH_CFG, applyCodeLists } from '../../state.js';
+import { CODE_LISTS, EQUIP_CATALOG, EXH_CFG, EXHIBITORS, applyCodeLists } from '../../state.js';
+import { saveExhibitor } from '../../api/exh-save.js';
 import { escAttr, escapeHtml } from '../../utils.js';
 import { settingsUi } from './settings-ui.js';
 import { DUE_LABEL } from '../../modules/settings-tab.js';
@@ -127,6 +128,8 @@ export function clRowsHtml(rows, readonly){
       <div style="display:flex;gap:8px;align-items:center;min-width:0">
         <span class="pill ${escAttr(c.cls || 'p-gray')}" style="min-width:80px;text-align:center">${escapeHtml(c.label || c.code)}</span>
         <code style="font-size:var(--fs-11);color:var(--i4);min-width:110px;overflow:hidden;text-overflow:ellipsis">${escapeHtml(c.code)}</code>
+        ${readonly || !CODE_REFS[c.list_key] ? '' : `<button class="btn bs" style="font-size:var(--fs-10_5)" onclick="renameCodeValue('${escAttr(c.id)}')"
+          title="저장값을 바꾸고, 이 값으로 저장된 참가기업도 함께 바꿉니다">고치기</button>`}
       </div>
       ${readonly ? '' : `
       <label class="clf clf-grow"><span class="clf-l">이름</span>
@@ -141,7 +144,10 @@ export function clRowsHtml(rows, readonly){
       ${c.list_key === 'booth_type' ? `<span class="clf"><span class="clf-l"></span>
         <button class="btn" onclick="openBoothIncluded('${escAttr(c.id)}')"
           title="이 부스에 기본으로 딸려 오는 품목이에요 — 부스 타입을 고르면 신청항목에 자동으로 들어갑니다"
-          style="height:32px;font-size:var(--fs-11)">기본 제공 ${boothInclCount(c)}건</button></span>` : ''}
+          style="height:32px;font-size:var(--fs-11)">기본 제공 ${boothInclCount(c)}건</button></span>
+      <span class="clf"><span class="clf-l"></span>
+        <button class="btn" onclick="openBoothPrices('${escAttr(c.id)}')" title="조기·사전·일반 단가(KRW·USD)"
+          style="height:32px;font-size:var(--fs-11)">${escapeHtml(boothPriceSummary(c))}</button></span>` : ''}
       <span class="clf"><span class="clf-l"></span>
         <button class="btn" onclick="toggleCodeListRow('${escAttr(c.id)}')"
           style="height:32px;font-size:var(--fs-11)">${off ? '되살리기' : '숨김'}</button></span>`}
@@ -195,6 +201,108 @@ export function openBoothIncluded(rowId){
   document.body.appendChild(pop);
   renderBoothInclLines();
 }
+/* ══════════════════════════════════════════
+   저장값 고치기 — 한번 넣으면 못 고쳤다.
+   저장값은 참가기업 줄에 그대로 적혀 있어(exhibitors.booth_type 등) 이름표만 바꾸면
+   기존 기업이 «목록에 없는 옛 값»으로 떨어진다. 그래서 그 값을 쓰는 기업도 같이 바꾼다.
+══════════════════════════════════════════ */
+const CODE_REFS = { booth_type: 'booth_type', grade: 'grade' };   // 목록 → exhibitors 칸
+export async function renameCodeValue(id){
+  const c = CODE_LISTS.find(x => x.id === id);
+  const field = c && CODE_REFS[c.list_key];
+  if(!field) return;
+  const nv = (prompt(`새 저장값 — 지금: ${c.code}`, c.code) || '').trim();
+  if(!nv || nv === c.code) return;
+  if(clRowsOf(c.list_key, c.event_id || '').some(x => x.id !== id && x.code === nv)){ alert('이미 있는 값이에요.'); return; }
+  const users = EXHIBITORS.filter(x => (!c.event_id || x.event_id === c.event_id) && (x[field] || '') === c.code);
+  if(users.length && !confirm(`«${c.code}»로 저장된 참가기업 ${users.length}곳도 «${nv}»로 바꿉니다. 진행할까요?`)) return;
+  const old = c.code, oldLabel = c.label;
+  c.code = nv;
+  if(!oldLabel || oldLabel === old) c.label = nv;   // 이름을 따로 안 정했으면 이름도 따라간다
+  const r = await saveCodeRow({ id, code: c.code, label: c.label }, '선택 목록 저장값 수정');
+  if(!r.ok){ c.code = old; c.label = oldLabel; reRenderFor(c.list_key); return; }
+  let fail = 0;
+  for(const x of users){
+    const prev = x[field];
+    x[field] = nv;
+    const s2 = await saveExhibitor({ id: x.id, [field]: nv });
+    if(!s2.ok){ x[field] = prev; fail++; }
+  }
+  applyCodeLists();
+  trackAction('edit', '선택 목록 저장값 수정', nv,
+    `${clDef(c.list_key).label} "${old}" → "${nv}" (참가기업 ${users.length - fail}곳 함께 변경)`);
+  if(fail) alert(`참가기업 ${fail}곳은 바꾸지 못했어요. 새로고침 후 다시 해 주세요.`);
+  reRenderFor(c.list_key);
+}
+
+/* ══════════════════════════════════════════
+   부스 단가 — 조기·사전·일반 × KRW·USD. code_lists.prices에 JSON으로.
+══════════════════════════════════════════ */
+export const PRICE_TIERS = [['early', '조기'], ['pre', '사전'], ['regular', '일반']];
+export function parsePrices(raw){
+  try { const o = typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {}); return o && typeof o === 'object' ? o : {}; }
+  catch { return {}; }
+}
+const fmtN = (v) => (v === '' || v == null) ? '' : Number(v).toLocaleString('ko-KR');
+function boothPriceSummary(c){
+  const p = parsePrices(c.prices);
+  const t = PRICE_TIERS.find(([k]) => p[k]?.krw || p[k]?.usd);
+  if(!t) return '금액 미정';
+  const v = p[t[0]];
+  return `금액 ${t[1]} ${[v.krw ? '₩' + fmtN(v.krw) : '', v.usd ? '$' + fmtN(v.usd) : ''].filter(Boolean).join(' / ')}`;
+}
+export function openBoothPrices(rowId){
+  const c = CODE_LISTS.find(x => x.id === rowId);
+  if(!c) return;
+  const p = parsePrices(c.prices);
+  document.getElementById('bprice-modal')?.remove();
+  const pop = document.createElement('div');
+  pop.id = 'bprice-modal';
+  pop.className = 'mw on';
+  let downOnBg = false;
+  pop.addEventListener('mousedown', (e) => { downOnBg = (e.target === pop); });
+  pop.addEventListener('click', (e) => { if(e.target === pop && downOnBg) pop.remove(); });
+  const cell = (k, cur) => `<input class="fi" inputmode="numeric" data-tier="${k}" data-cur="${cur}"
+    value="${escAttr(fmtN(p[k]?.[cur]))}" placeholder="—" style="width:100%;text-align:right;height:40px;font-size:var(--fs-14)"
+    oninput="this.value=this.value.replace(/[^0-9.,]/g,'')">`;
+  pop.innerHTML = `<div class="modal" style="max-width:680px;width:94vw">
+    <div class="mh"><div class="mt2">${escapeHtml(c.label || c.code)} — 부스 단가</div>
+      <div class="mc" style="font-size:var(--fs-13);line-height:1.6">부스 <b>1개</b> 기준 금액이에요(부가세 별도라면 아래 설명에 적어 두세요). 모르는 칸은 비워 두면 그 구간·통화는 자동으로 넣지 않아요.
+        조기·사전을 나누는 기준(선착순 부스 수·마감일)은 이 화면 아래 «단가 구간»에서 정해요.</div></div>
+    <div class="mb"><div style="display:grid;grid-template-columns:70px 1fr 1fr;gap:10px;align-items:center;font-size:var(--fs-13)">
+      <span></span><b style="text-align:right">KRW (₩)</b><b style="text-align:right">USD ($)</b>
+      ${PRICE_TIERS.map(([k, l]) => `<b>${l}</b>${cell(k, 'krw')}${cell(k, 'usd')}`).join('')}
+    </div>
+    <div class="mlbl" style="margin-top:14px">설명 (인보이스·안내에 참고할 내용)</div>
+    <textarea class="fi" id="bprice-note" rows="4" style="width:100%;font-size:var(--fs-13);line-height:1.6;resize:vertical"
+      placeholder="예: 부가세 별도 · 조립부스는 기본 벽체·상호 간판·조명·전기 콘센트 포함">${escapeHtml(p.note || '')}</textarea></div>
+    <div class="mf2">
+      <button class="btn" onclick="document.getElementById('bprice-modal').remove()">취소</button>
+      <button class="btn bp" onclick="saveBoothPrices('${escAttr(c.id)}')">저장</button>
+    </div></div>`;
+  document.body.appendChild(pop);
+}
+export async function saveBoothPrices(rowId){
+  const c = CODE_LISTS.find(x => x.id === rowId);
+  if(!c) return;
+  const out = {};
+  document.querySelectorAll('#bprice-modal input[data-tier]').forEach(i => {
+    const v = i.value.replace(/,/g, '').trim();
+    if(v === '' || !Number.isFinite(+v)) return;
+    (out[i.dataset.tier] ||= {})[i.dataset.cur] = String(+v);
+  });
+  const note = (document.getElementById('bprice-note')?.value || '').trim();
+  if(note) out.note = note;
+  const prev = c.prices;
+  c.prices = JSON.stringify(out);
+  const r = await saveCodeRow({ id: rowId, prices: c.prices }, '부스 단가');
+  if(!r.ok){ c.prices = prev; return; }
+  trackAction('edit', '부스 단가', c.label || c.code,
+    `<b>${escapeHtml(c.label || c.code)}</b> 단가: ${PRICE_TIERS.map(([k, l]) => out[k] ? `${l} ${[out[k].krw ? '₩' + fmtN(out[k].krw) : '', out[k].usd ? '$' + fmtN(out[k].usd) : ''].filter(Boolean).join('/')}` : '').filter(Boolean).join(', ') || '비움'}`);
+  document.getElementById('bprice-modal')?.remove();
+  reRenderFor(c.list_key);
+}
+
 export function closeBoothIncluded(){ document.getElementById('bincl-modal')?.remove(); }
 
 /* 품목코드를 치면 품명이 따라오게 목록을 붙여 둔다 — 부스 타입은 행사별이라
@@ -369,6 +477,9 @@ window.addCodeListRow       = addCodeListRow;
 window.editCodeListRow      = editCodeListRow;
 window.toggleCodeListRow    = toggleCodeListRow;
 window.openBoothIncluded    = openBoothIncluded;
+window.openBoothPrices = openBoothPrices;
+window.saveBoothPrices = saveBoothPrices;
+window.renameCodeValue = renameCodeValue;
 window.closeBoothIncluded   = closeBoothIncluded;
 window.addBoothInclLine     = addBoothInclLine;
 window.delBoothInclLine     = delBoothInclLine;
