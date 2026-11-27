@@ -87,9 +87,11 @@ const histOpen = new Set();        // 기록을 펼친 명단 줄
 const personForm = {};             // 줄마다 열어 둔 담당자 칸 — { mid: 'new' | 연락처 id }
 const editOpen = new Set();        // 주의사항 등을 고치는 중인 줄
 const pickedContact = {};          // 줄마다 고른 사람 — 반응 단추를 누르면 이 사람으로 기록된다
-/* 고른 사람 — 고른 적이 없으면 지난번에 연락한 사람, 그것도 없으면 맨 위 사람 */
+/* 고른 사람 — 저장해 둔 받을 사람(round_members.contact_id) › 지난번에 연락한 사람 › 맨 위 사람(이 행사·최근 행사에 온 사람).
+   한꺼번에 메일 보내기도 이 사람에게 간다(contact-mail.js) */
 export function pickedPersonId(m, people = peopleOf(m)){
   if(pickedContact[m.id] !== undefined) return pickedContact[m.id];
+  if(m.contact_id && people.some(p => String(p.id) === String(m.contact_id))) return String(m.contact_id);
   const lastCid = attemptsOf(m.id)[0]?.contact_id;
   return people.some(p => String(p.id) === String(lastCid)) ? String(lastCid) : String(people[0]?.id ?? '');
 }
@@ -152,7 +154,7 @@ export function setContactOwner(v){
 }
 
 /* 15개 함수를 ../domain/rounds.js로 옮겼다 — 이 파일에서도 쓰고, 옛 경로로 가져가는 곳도 있어 다시 내보낸다 */
-import { roundById, membersOf, attemptsOf, evOf, evLabel, today, addDays, genId, coList, coOf, coName, memberName, contactOf, fullContacts, peopleOf } from '../domain/rounds.js';
+import { roundById, membersOf, attemptsOf, evOf, evLabel, today, addDays, genId, coList, coOf, coName, memberName, contactOf, fullContacts, peopleOf, eventsOfPerson } from '../domain/rounds.js';
 export { roundById, membersOf, attemptsOf, evOf, evLabel, today, addDays, genId, coList, coOf, coName, memberName, contactOf, fullContacts, peopleOf } from '../domain/rounds.js';
 
 /* ── 목표 = 전시 참가기업 등록 (contact_rounds.goal_exh) ──
@@ -517,6 +519,8 @@ function card(r, { m, atts, st, int = interestOf(atts), dnc = isDnc(m), dncElse 
       <input type="radio" name="cp-${escAttr(m.id)}" ${id === pick ? 'checked' : ''} onchange="pickContactPerson('${escAttr(m.id)}','${escAttr(id)}')" style="margin:0">
       <span style="font-weight:600;white-space:nowrap">${escapeHtml(p.nameKo || p.nameEn || '')}</span>
       <span style="color:var(--i4)">${escapeHtml([p.deptKo, p.titleKo].filter(Boolean).join(' '))}</span>
+      ${eventsOfPerson(id).slice(0, 3).map(e => `<span class="pill ${e.key === r.event_id ? 'p-blue' : 'p-gray'}" style="padding:0 6px" title="${escapeHtml(e.roles.join('·'))}">${escapeHtml(e.label)}${e.roles.length ? ` · ${escapeHtml(e.roles[0])}` : ''}</span>`).join('')}
+      ${id === pick ? `<span style="font-size:var(--fs-10_5);color:var(--a);font-weight:600">받을 사람</span>` : ''}
       ${ch === 'TM'
         ? nums.map(n => `<a href="tel:${escapeHtml(n.replace(/[^\d+]/g, ''))}" onclick="event.stopPropagation();return markCalling('${escAttr(m.id)}',true)" style="color:var(--a)">${escapeHtml(n)}</a>`).join(' · ') || '<span style="color:var(--re)">번호 없음</span>'
         : (p.email1 ? `<span style="color:var(--i3)">${escapeHtml(p.email1)}</span>` : '<span style="color:var(--re)">메일 없음</span>')}
@@ -561,7 +565,7 @@ function card(r, { m, atts, st, int = interestOf(atts), dnc = isDnc(m), dncElse 
     ${last && !m.closed_at && !m.goal_at && last.reaction === 'bounce' ? `<div style="font-size:var(--fs-11);color:var(--re);margin-top:4px">메일이 반송됐어요 — 담당자 옆 ✎로 메일 주소를 고치세요</div>` : ''}
     ${miss >= limit && st !== 'done' ? `<div style="font-size:var(--fs-11);color:var(--am);margin-top:4px">미연결이 ${miss}번 이어졌어요 — 채널을 DM으로 바꿔 보내거나, 끝내기를 고려하세요</div>` : ''}
     <div style="margin-top:6px;padding-top:6px;border-top:1px dashed var(--i7)">
-      ${people.length > 1 ? `<div style="font-size:var(--fs-10_5);color:var(--i4);margin-bottom:2px">${ch === 'TM' ? '누구와 통화했나요' : '누구에게 보냈나요'} — 반응 단추를 누르면 고른 사람으로 기록돼요</div>` : ''}
+      ${people.length > 1 ? `<div style="font-size:var(--fs-10_5);color:var(--i4);margin-bottom:2px">받을 사람을 골라요 — 반응 기록과 메일(한꺼번에 보내기 포함)이 이 사람에게 가요. 이 행사에 왔던 사람이 위에 있어요</div>` : ''}
       ${people.length && !people.some(p => /@/.test(String(p.email1 || '') + String(p.email2 || ''))) && /@/.test(String(co?.email || ''))
         ? `<div style="font-size:var(--fs-10_5);color:var(--i4);margin-bottom:2px">담당자 메일이 없어 메일은 대표 메일(${escapeHtml(co.email)})로 가요</div>` : ''}
       ${people.length ? people.map(person).join('')
@@ -1033,7 +1037,16 @@ export function contactShowMore(){ showLimit += 150; renderToday(); }
 export function toggleContactHist(mid){ histOpen.has(mid) ? histOpen.delete(mid) : histOpen.add(mid); renderToday(); }
 export function toggleContactEdit(mid){ editOpen.has(mid) ? editOpen.delete(mid) : editOpen.add(mid); renderToday(); }
 /* 고르기만 바꿀 때는 다시 그리지 않는다 — 치던 메모가 날아간다 */
-export function pickContactPerson(mid, cid){ pickedContact[mid] = cid; }
+export function pickContactPerson(mid, cid){
+  pickedContact[mid] = cid;
+  const m = ROUND_MEMBERS.find(x => x.id === mid);
+  // 새로고침해도, 한꺼번에 보내기에도 이 사람이 받게 저장한다
+  if(m && String(m.contact_id || '') !== String(cid)){
+    const was = m.contact_id || ''; m.contact_id = String(cid);
+    saveRoundMember({ id: m.id, contact_id: String(cid) }).then(res => { if(!res.ok){ m.contact_id = was; renderToday(); } });
+  }
+  renderToday();   // «받을 사람» 표시를 옮긴다 — 치던 메모는 memoDraft에 남아 있다
+}
 export function pickContactChannel(mid, ch){
   const memo = document.getElementById('ca-memo-' + mid)?.value || '';
   pickedChannel[mid] = ch; renderToday();

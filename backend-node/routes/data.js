@@ -229,7 +229,7 @@ const TABLES = {
     table: 'round_members', pk: 'id', idPrefix: 'RM-',
     columns: ['id', 'round_id', 'org_id', 'org_name', 'source', 'caution', 'hold_until', 'call_hours',
       'next_at', 'goal_at', 'closed_at', 'closed_reason', 'created_at', 'calling_by', 'calling_at',
-      'assignee', 'tags'],
+      'assignee', 'tags', 'contact_id'],
   },
   /* 행사별 영업 DB — 한 사람 × 한 행사에 한 줄 (db/migrations/add-sales-targets.js) */
   sales_targets: {
@@ -525,10 +525,10 @@ const REPLACE_ALL_OK = new Set(['sectors']);
 /* 같은 사람이 연락처 두 줄로 생긴 것을 하나로 합친다.
    행사에서 참가자를 넣고 연사 화면에서 또 넣으면 같은 사람이 둘이 된다.
    { keep, drop }: drop을 가리키던 곳을 모두 keep으로 옮기고, keep의 빈 칸을 drop 값으로 채운 뒤 drop을 지운다.
-   연락처 id를 가리키는 곳은 CLAUDE.md의 일곱 곳과 같다. 한 트랜잭션이라 중간에 실패하면 아무것도 바뀌지 않는다. */
+   연락처 id를 가리키는 곳은 CLAUDE.md의 여덟 곳과 같다. 한 트랜잭션이라 중간에 실패하면 아무것도 바뀌지 않는다. */
 const CONTACT_REFS = [['participations', 'contact_id'], ['exhibitor_contacts', 'contact_id'],
   ['speakers', 'contact_id'], ['speaker_contacts', 'contact_id'], ['contact_attempts', 'contact_id'],
-  ['sales_targets', 'contact_id']];
+  ['sales_targets', 'contact_id'], ['round_members', 'contact_id']];
 async function mergeContacts(req, res, { keep, drop, set }) {
   keep = String(keep || ''); drop = String(drop || '');
   if (!keep || !drop || keep === drop) return res.status(400).json({ ok: false, error: '합칠 두 사람을 골라 주세요' });

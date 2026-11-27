@@ -58,8 +58,9 @@ function peopleTo(m, who){
   const ppl = mailable(m);
   if(!ppl.length){ const r = repRcpt(m); return r ? [r] : []; }
   if(who === 'all') return ppl;
-  const lastCid = attemptsOf(m.id)[0]?.contact_id;
-  return [ppl.find(p => p.id === String(lastCid)) || ppl[0]];
+  // 카드에서 고른(저장된) 받을 사람 › 지난번 연락한 사람 › 이 행사·최근 행사에 온 사람 — pickedPersonId와 같은 순서
+  const pid = String(pickedPersonId(m));
+  return [ppl.find(p => p.id === pid) || ppl[0]];
 }
 const toOf = (rs) => [...new Set(rs.flatMap(r => r.emails))];
 const rcptLabel = (rs) => rs.map(r => r.rep ? `대표 메일 ${r.emails.join(', ')}` : r.emails.join(', ')).join(', ');
@@ -148,7 +149,7 @@ function render(){
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
       <div><div class="mlbl">언어</div><select class="fi" onchange="rmSet('lang',this.value)">${opt('auto', cm.lang, '기업별 자동 (해외는 영문)')}${opt('ko', cm.lang, '모두 국문')}${opt('en', cm.lang, '모두 영문')}</select></div>
-      ${cm.only ? '<div></div>' : `<div><div class="mlbl">받는 사람</div><select class="fi" onchange="rmSet('who',this.value)">${opt('one', cm.who, '한 명 (최근 연락한 사람)')}${opt('all', cm.who, '메일 있는 담당자 모두')}</select></div>`}
+      ${cm.only ? '<div></div>' : `<div><div class="mlbl">받는 사람</div><select class="fi" onchange="rmSet('who',this.value)">${opt('one', cm.who, '한 명 (카드에서 고른 받을 사람)')}${opt('all', cm.who, '메일 있는 담당자 모두')}</select></div>`}
     </div>
     <div style="display:grid;grid-template-columns:minmax(0,.7fr) minmax(0,.9fr) minmax(0,2.4fr);gap:14px">
       ${cm.only && list[0] ? `<div>

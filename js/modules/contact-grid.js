@@ -28,6 +28,10 @@ export const BUCKET = {
 };
 const BUCKETS = ['관심 상', '관심 중·하', '부정', '미연결', '보냄'];
 
+/* 파트(차수)별로 본다 — 행사 전체 1천여 곳 × 차수 26열은 한 파트 현황을 보기 어려웠다(11-27).
+   part: 왼쪽에서 고른 차수 명단·열만 / event: 행사 전체 */
+let gScope = (() => { try { return localStorage.getItem('ct-grid-scope') || 'part'; } catch(e){ return 'part'; } })();
+export function setGridScope(v){ gScope = v; try { localStorage.setItem('ct-grid-scope', v); } catch(e){} renderGrid(); }
 let gFil = 'all';   // all | todo(이 차수 연락 전) | goal(목표 달성) | open(아직 안 끝남)
 
 /* ── 이 행사의 차수와 기업별 줄 ── */
@@ -78,7 +82,11 @@ export function renderGrid(){
       <button class="btn bp bs" onclick="openRoundEditor()">차수 만들기</button></div>`;
     return;
   }
-  const { rounds, rows } = gridData(cur.event_id);
+  const data = gridData(cur.event_id);
+  const part = gScope === 'part';
+  const rounds = part ? data.rounds.filter(r => r.id === cur.id) : data.rounds;
+  const rows = part ? data.rows.filter(row => row.cells[cur.id]) : data.rows;
+  const allStats = data.rounds.map(r => ({ r, s: roundStats(r, data.rows) }));
   const q = ((document.getElementById('crm-q') || {}).value || '').trim().toLowerCase();
   const list = rows.filter(row => {
     const c = row.cells[cur.id];
@@ -97,11 +105,13 @@ export function renderGrid(){
 
   el.innerHTML = `
     <div class="tbar" style="flex-wrap:wrap;gap:8px">
-      <span style="font-size:var(--fs-13);font-weight:700">${escapeHtml(evLabel(cur.event_id))}</span>
-      <span style="font-size:var(--fs-11);color:var(--i4)">차수 ${rounds.length}개 · ${rows.length}곳</span>
-      <div class="seg">${seg('all', '전체')}${seg('todo', '이 차수 연락 전')}${seg('open', '이 차수 안 끝남')}${seg('goal', '이 차수 목표 달성')}</div>
+      <div class="seg"><button class="seg-b${part ? ' on' : ''}" onclick="setGridScope('part')">파트별</button><button class="seg-b${part ? '' : ' on'}" onclick="setGridScope('event')">행사 전체</button></div>
+      <span style="font-size:var(--fs-13);font-weight:700">${escapeHtml(part ? cur.name : evLabel(cur.event_id))}</span>
+      <span style="font-size:var(--fs-11);color:var(--i4)">${part ? `${escapeHtml(evLabel(cur.event_id))} · ${rows.length}곳` : `차수 ${rounds.length}개 · ${rows.length}곳`}</span>
+      <div class="seg">${seg('all', '전체')}${seg('todo', '연락 전')}${seg('open', '안 끝남')}${seg('goal', '목표 달성')}</div>
       <span class="tct">${list.length}곳</span>
     </div>
+    ${part ? partStrip(allStats, cur.id) : ''}
     <div class="tw"><table style="width:100%;border-collapse:collapse;min-width:${360 + rounds.length * 150}px">
       <thead><tr>
         <th style="${th};width:34px">No</th>
@@ -130,6 +140,25 @@ export function renderGrid(){
         </tr>`;
       }).join('') : `<tr><td colspan="${4 + rounds.length}" style="${td};text-align:center;color:var(--i4);padding:30px">${rows.length ? '해당하는 곳이 없어요' : '이 행사 차수에 명단이 아직 없어요'}</td></tr>`}</tbody>
     </table></div>`;
+}
+
+/* 파트별 한눈에 — 차수마다 명단·연락·진행률·목표, 누르면 그 파트로 */
+function partStrip(allStats, curId){
+  const cell = 'padding:5px 8px;border-bottom:1px solid var(--i7);font-size:var(--fs-11);white-space:nowrap';
+  return `<div class="sec" style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;min-width:640px">
+    <thead><tr style="background:var(--i8);color:var(--i3)">${['파트(차수)', '명단', '연락함', '진행률', '관심 상', '관심 중·하', '부정', '미연결', '목표 달성']
+      .map((h, i) => `<th style="${cell};text-align:${i ? 'right' : 'left'};font-weight:600">${h}</th>`).join('')}</tr></thead>
+    <tbody>${allStats.map(({ r, s }) => {
+      const pct = s.members ? Math.round(s.touched / s.members * 100) : 0;
+      const on = r.id === curId;
+      return `<tr onclick="pickRound('${escAttr(r.id)}')" style="cursor:pointer;${on ? 'background:var(--ad);font-weight:700;color:var(--a)' : ''}">
+        <td style="${cell}">${escapeHtml(r.channel || 'TM')} · ${escapeHtml(r.name)}</td>
+        <td style="${cell};text-align:right">${s.members}</td>
+        <td style="${cell};text-align:right">${s.touched}</td>
+        <td style="${cell};text-align:right"><span style="display:inline-block;width:50px;height:6px;background:var(--i7);border-radius:3px;vertical-align:middle;margin-right:4px"><span style="display:block;height:6px;width:${pct}%;background:var(--a);border-radius:3px"></span></span>${pct}%</td>
+        ${['관심 상', '관심 중·하', '부정', '미연결'].map(b => `<td style="${cell};text-align:right;color:${s[b] ? 'inherit' : 'var(--i5)'}">${s[b] || '·'}</td>`).join('')}
+        <td style="${cell};text-align:right;color:var(--g);font-weight:600">${s.goal}</td></tr>`;
+    }).join('')}</tbody></table></div>`;
 }
 
 function cellHtml(c, r, on, td){
@@ -306,4 +335,4 @@ export async function exportContactGrid(){
   }
 }
 
-Object.assign(window, { renderGrid, setGridFil, exportContactGrid });
+Object.assign(window, { renderGrid, setGridFil, setGridScope, exportContactGrid });

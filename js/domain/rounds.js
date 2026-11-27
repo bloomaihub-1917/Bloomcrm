@@ -64,8 +64,34 @@ export function contactOf(id){
 export function fullContacts(co){
   return (co ? co.contacts : []).map(p => contactOf(p.id) || p);
 }
+/* 사람마다 온 행사 — [{ key, label, date, roles }] 최근 행사부터.
+   한 기업이라도 행사마다 온 사람이 달라서, 누구에게 연락할지 고를 때 본다(11-27) */
+let pevSig = '', pevMap = null;
+export function eventsOfPerson(cid){
+  const sig = `${participations.length}|${EVENT_LIST.length}`;
+  if(pevSig !== sig){
+    pevMap = new Map();
+    participations.forEach(p => {
+      const k = String(p.contactId);
+      if(!pevMap.has(k)) pevMap.set(k, []);
+      const list = pevMap.get(k);
+      let e = list.find(x => x.key === p.eventId);
+      if(!e){ const ev = evOf(p.eventId); list.push(e = { key: p.eventId, label: evLabel(p.eventId), date: String(ev?.date || ''), roles: [] }); }
+      if(p.role && !e.roles.includes(p.role)) e.roles.push(p.role);
+    });
+    pevMap.forEach(list => list.sort((a, b) => b.date.localeCompare(a.date)));
+    pevSig = sig;
+  }
+  return pevMap.get(String(cid)) || [];
+}
+/* 담당자 순서 — 이 차수 행사에 왔던 사람 › 최근 행사에 온 사람 › 행사 이력 없는 사람, 같으면 번호 있는 사람 먼저 */
 export function peopleOf(m){
   /* 현장 등록·연락처 없음(state.js isWalkInOnly)은 걸 곳이 없다 — 컨택 담당자에서 뺀다 */
+  const evKey = roundById(m.round_id)?.event_id || '';
+  const rank = (c) => { const evs = eventsOfPerson(c.id); return [evs.some(e => e.key === evKey) ? 1 : 0, evs[0]?.date || '']; };
   return fullContacts(coOf(m.org_id)).filter(c => !hasLeft(c) && !isWalkInOnly(c))
-    .sort((a, b) => (!!(b.phone1 || b.phone2) - !!(a.phone1 || a.phone2)));
+    .map(c => ({ c, k: rank(c) }))
+    .sort((a, b) => b.k[0] - a.k[0] || b.k[1].localeCompare(a.k[1])
+      || (!!(b.c.phone1 || b.c.phone2) - !!(a.c.phone1 || a.c.phone2)))
+    .map(x => x.c);
 }
