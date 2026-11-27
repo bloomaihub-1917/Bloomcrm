@@ -20,6 +20,24 @@ import { exhNames, exhLocked, isNoBooth, parseBooth, patchExh, boothSortKey, boo
 
 const GRID = 0.5;            // 끌어 놓을 때 맞추는 눈금(m)
 const AISLE = 3;            // 이동 동선(통로) 폭(m) — 부스 줄 사이를 이만큼 띄운다
+/* 부스 상태 — 색 하나에 뜻 하나.
+   · 확정·미정은 기업 쪽 값(진행현황의 «부스 배정 확정» = booth_confirmed/booth_confirmed_at)에서 읽는다.
+     배치도에서 바꾸면 진행현황 체크도 같이 바뀐다 — 따로 적지 않는다.
+   · 빈 부스·보류·주최측·배정불가는 칸 쪽 값(booths[].state)이다. 기업이 없을 때의 쓰임새다. */
+export const BOOTH_STATES = {
+  confirmed: { label: '확정',     fill: 'var(--ad)', stroke: 'var(--a)',  note: '배정 확정 — 진행현황 «부스 배정 확정»이 켜진 기업' },
+  pending:   { label: '미정',     fill: 'var(--yb)', stroke: 'var(--am)', note: '기업은 넣었지만 아직 확정 전' },
+  empty:     { label: '빈 부스',  fill: 'var(--W)',  stroke: 'var(--i4)', note: '아무도 없는 칸', dash: true },
+  hold:      { label: '보류',     fill: 'var(--pb)', stroke: 'var(--pu)', note: '협의 중인 기업·스폰서 몫으로 잡아 둔 칸 — 메모에 누구 몫인지', dash: true },
+  org:       { label: '주최측',   fill: 'var(--i7)', stroke: 'var(--i3)', note: '사무국·홍보관·라운지처럼 주최측이 쓰는 칸' },
+  blocked:   { label: '배정불가', fill: 'var(--rb)', stroke: 'var(--re)', note: '기둥·소화전·비상구 앞 등 배정할 수 없는 칸' },
+};
+const isConfirmed = (x) => x.booth_confirmed === 'yes' || !!x.booth_confirmed_at;
+function boothState(b, ex){
+  if(ex.length) return ex.every(isConfirmed) ? 'confirmed' : 'pending';
+  return ['hold', 'org', 'blocked'].includes(b.state) ? b.state : 'empty';
+}
+
 const fp = {
   ev: null,                  // 지금 들고 있는 도면이 어느 행사 것인지
   plans: null,               // null = 불러오는 중
@@ -27,7 +45,8 @@ const fp = {
   sel: -1,                   // 고른 부스 칸 번호(booths 배열 자리)
   selZ: -1,                  // 고른 구역 번호(zones 배열 자리) — 세미나·컨퍼런스·무대
   pick: null,                // 배정하려고 고른 기업 id — 그다음 누른 부스에 넣는다
-  zoom: 1,
+  zoom: 1,                   // 1 = 화면에 맞춤(스크롤 없이 한눈에). 키우면 그만큼 커지고 스크롤된다
+  all: false,                // 모든 홀을 나란히 한눈에
   q: '',
 };
 
@@ -44,6 +63,7 @@ async function loadPlans(ev){
     ...p, booths: parseArr(p.booths), zones: parseArr(p.zones),
   })).sort((a, b) => (+a.sort_order || 0) - (+b.sort_order || 0));
   if(!fp.plans.some(p => p.id === fp.cur)) fp.cur = fp.plans[0]?.id || null;
+  fp.all = fp.plans.length > 1;   // 홀이 여럿이면 처음엔 한눈에
   redraw();
 }
 
@@ -105,17 +125,17 @@ function redraw(){
 function fpBody(){
   if(fp.plans === null) return `<div class="sec" style="color:var(--i4);font-size:var(--fs-12)">배치도를 불러오는 중…</div>`;
   const ro = exhLocked();
-  const tabs = fp.plans.map(p => `<button class="seg-b${p.id === fp.cur ? ' on' : ''}"
+  const tabs = fp.plans.map(p => `<button class="seg-b${p.id === fp.cur && !fp.all ? ' on' : ''}"
       onclick="fpSelPlan('${escAttr(p.id)}')">${escapeHtml(p.name || '도면')} <span style="color:var(--i4)">${p.booths.length}</span></button>`).join('');
   const bar = `<div class="sec sec-bar" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-      ${fp.plans.length ? `<div class="seg">${tabs}</div>` : ''}
+      ${fp.plans.length ? `<div class="seg">${fp.plans.length > 1 ? `<button class="seg-b${fp.all ? ' on' : ''}" onclick="fpAll()" title="모든 홀을 나란히 한눈에">전체</button>` : ''}${tabs}</div>` : ''}
       ${ro ? '' : `<button class="btn bs" onclick="fpAddPlan()">+ 도면 추가</button>`}
       ${curPlan() && !ro ? `<button class="btn bs" onclick="fpEditPlan()">도면 설정</button>
         <button class="btn bs bp" onclick="fpAddRow()">+ 부스 줄 추가</button>
         <button class="btn bs" onclick="fpAddZone()" title="세미나·컨퍼런스·무대·라운지처럼 부스가 아닌 공간">+ 구역 추가</button>` : ''}
       ${curPlan() ? `<span style="margin-left:auto;display:flex;gap:4px;align-items:center">
         <button class="btn bs" onclick="fpZoom(-1)" title="작게">−</button>
-        <span style="font-size:var(--fs-11);color:var(--i4);min-width:38px;text-align:center">${Math.round(fp.zoom * 100)}%</span>
+        <span style="font-size:var(--fs-11);color:var(--i4);min-width:38px;text-align:center">${fp.zoom <= 1 ? '맞춤' : Math.round(fp.zoom * 100) + '%'}</span>
         <button class="btn bs" onclick="fpZoom(1)" title="크게">＋</button></span>` : ''}
     </div>`;
   if(!fp.plans.length){
@@ -125,6 +145,7 @@ function fpBody(){
   }
   const p = curPlan();
   const all = activeExhibitors(exhEvent).filter(x => !isNoBooth(x));
+  if(fp.all) return bar + `<div class="sec">${allPlansSvg(all)}${legend(fp.plans, all)}</div>`;
   return bar + `<div class="sec" style="display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:12px;align-items:start">
       <div>${planSvg(p, all)}${legend(p, all)}</div>
       <div>${sidePanel(p, all, ro)}</div>
@@ -132,49 +153,111 @@ function fpBody(){
 }
 
 function legend(p, all){
-  const assigned = p.booths.filter(b => exhOfBooth(b.no, all).length).length;
+  const cnt = {};
+  [].concat(...(Array.isArray(p) ? p : [p]).map(q => q.booths))
+    .forEach(b => { const k = boothState(b, exhOfBooth(b.no, all)); cnt[k] = (cnt[k] || 0) + 1; });
   return `<div style="display:flex;gap:10px;align-items:center;font-size:var(--fs-11);color:var(--i3);margin-top:6px;flex-wrap:wrap">
-    <span><i style="display:inline-block;width:10px;height:10px;background:var(--ad);border:1px solid var(--a);vertical-align:-1px"></i> 배정 ${assigned}</span>
-    <span><i style="display:inline-block;width:10px;height:10px;background:var(--W);border:1px dashed var(--i4);vertical-align:-1px"></i> 빈 부스 ${p.booths.length - assigned}</span>
-    <span><i style="display:inline-block;width:10px;height:10px;background:var(--rb);border:1px solid var(--re);vertical-align:-1px"></i> 번호 겹침</span>
+    ${Object.entries(BOOTH_STATES).map(([k, v]) => `<span title="${escAttr(v.note)}"><i style="display:inline-block;width:10px;height:10px;background:${v.fill};border:1px ${v.dash ? 'dashed' : 'solid'} ${v.stroke};vertical-align:-1px"></i> ${v.label} ${cnt[k] || 0}</span>`).join('')}
+    <span title="같은 번호가 두 칸에 있어요"><i style="display:inline-block;width:10px;height:10px;border:1.5px dotted var(--re);vertical-align:-1px"></i> 번호 겹침</span>
     <span><i style="display:inline-block;width:10px;height:10px;background:var(--pb);border:1px solid var(--pu);vertical-align:-1px"></i> 구역</span>
     <span style="color:var(--i4)">부스·구역을 끌어 옮기고, 눌러서 고르세요 · 눈금 ${GRID}m · 부스 줄 추가 시 통로 ${AISLE}m</span></div>`;
 }
 
 function planSvg(p, all){
   const W = +p.width || 60, H = +p.height || 40;
-  const px = 14 * fp.zoom;   // 1m당 화면 픽셀
+  /* 1(맞춤)이면 빈 화면 높이·폭에 맞춰 그린다 — 스크롤 없이 홀 전체가 보이게. 키우면 그때부터 스크롤 */
+  const fit = fp.zoom <= 1;
+  const px = 14 * fp.zoom;   // 키웠을 때 1m당 화면 픽셀
   const dupNo = new Set(); { const s = new Set(); p.booths.forEach(b => { const k = String(b.no).trim(); if(s.has(k)) dupNo.add(k); s.add(k); }); }
   const grid = [];
   for(let x = 0; x <= W; x += 1) grid.push(`<line x1="${x}" y1="0" x2="${x}" y2="${H}" stroke="var(--i7)" stroke-width="${x % 5 ? 0.03 : 0.07}"/>`);
   for(let y = 0; y <= H; y += 1) grid.push(`<line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="var(--i7)" stroke-width="${y % 5 ? 0.03 : 0.07}"/>`);
+  /* 여러 부스를 쓰는 기업(10-12)은 한 덩어리로 — 칸마다 이름을 찍지 않고 묶음 테두리 안에 한 번만 */
+  const exOf = p.booths.map(b => exhOfBooth(b.no, all));
+  const groups = new Map();   // 기업 id → 이 도면의 칸 자리들
+  exOf.forEach((ex, i) => { if(ex.length === 1) { const k = ex[0].id; (groups.get(k) || groups.set(k, []).get(k)).push(i); } });
+  for(const [k, idx] of [...groups]) if(idx.length < 2) groups.delete(k);
+  const inGroup = (i) => exOf[i].length === 1 && groups.has(exOf[i][0].id);
   const booths = p.booths.map((b, i) => {
-    const ex = exhOfBooth(b.no, all);
+    const ex = exOf[i];
+    const grp = inGroup(i);
     const dup = dupNo.has(String(b.no).trim());
     const sel = i === fp.sel;
-    const fill = dup ? 'var(--rb)' : ex.length ? 'var(--ad)' : 'var(--W)';
-    const stroke = sel ? 'var(--ak)' : dup ? 'var(--re)' : ex.length ? 'var(--a)' : 'var(--i4)';
+    const st = BOOTH_STATES[boothState(b, ex)];
+    const fill = st.fill;
+    const stroke = sel ? 'var(--ak)' : dup ? 'var(--re)' : grp ? st.fill : st.stroke;
     const name = ex.map(x => exhNames(x).ko).join(' / ');
     const fs = Math.min(b.w, b.h) * 0.22;
     const maxCh = Math.max(3, Math.floor(b.w / (fs * 0.95)));
     const short = name.length > maxCh ? name.slice(0, maxCh - 1) + '…' : name;
     return `<g data-i="${i}" class="fp-booth" style="cursor:${exhLocked() ? 'pointer' : 'move'}">
       <rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="${fill}" stroke="${stroke}"
-        stroke-width="${sel ? 0.18 : 0.08}" ${ex.length || dup ? '' : 'stroke-dasharray="0.3 0.2"'}/>
-      <text x="${b.x + 0.2}" y="${b.y + fs + 0.15}" font-size="${fs}" font-weight="700" fill="var(--i2)">${escapeHtml(b.no)}</text>
-      ${short ? `<text x="${b.x + b.w / 2}" y="${b.y + b.h / 2 + fs * 0.9}" font-size="${fs * 0.9}" text-anchor="middle" fill="var(--ak)">${escapeHtml(short)}</text>` : ''}
-      <title>${escapeHtml(b.no)} · ${b.w}×${b.h}m${name ? ' · ' + escapeHtml(name) : ' · 빈 부스'}</title>
+        stroke-width="${sel ? 0.18 : dup ? 0.14 : 0.08}" ${dup ? 'stroke-dasharray="0.15 0.15"' : st.dash ? 'stroke-dasharray="0.3 0.2"' : ''}/>
+      ${!ex.length && b.state === 'blocked' ? `<path d="M${b.x} ${b.y}L${b.x + b.w} ${b.y + b.h}M${b.x + b.w} ${b.y}L${b.x} ${b.y + b.h}" stroke="var(--re)" stroke-width="0.06" opacity=".6"/>` : ''}
+      ${!ex.length && b.memo ? `<text x="${b.x + b.w / 2}" y="${b.y + b.h / 2 + fs * 0.9}" font-size="${fs * 0.8}" text-anchor="middle" fill="var(--i3)">${escapeHtml(String(b.memo).slice(0, Math.max(3, Math.floor(b.w / (fs * 0.85)))))}</text>` : ''}
+      ${grp ? '' : `<text x="${b.x + 0.2}" y="${b.y + fs + 0.15}" font-size="${fs}" font-weight="700" fill="var(--i2)">${escapeHtml(b.no)}</text>`}
+      ${short && !grp ? `<text x="${b.x + b.w / 2}" y="${b.y + b.h / 2 + fs * 0.9}" font-size="${fs * 0.9}" text-anchor="middle" fill="var(--ak)">${escapeHtml(short)}</text>` : ''}
+      <title>${escapeHtml(b.no)} · ${b.w}×${b.h}m · ${st.label}${name ? ' · ' + escapeHtml(name) : ''}${b.memo ? ' · ' + escapeHtml(b.memo) : ''}</title>
     </g>`;
   }).join('');
-  return `<div style="overflow:auto;max-height:70vh;border:1px solid var(--i6);border-radius:var(--r);background:var(--i9)">
-    <svg id="fp-svg" viewBox="0 0 ${W} ${H}" width="${W * px}" height="${H * px}" style="display:block;background:var(--W);touch-action:none"
+  const size = fit ? `width="100%" style="display:block;background:var(--W);touch-action:none;max-height:calc(100vh - 290px);margin:0 auto"`
+    : `width="${W * px}" height="${H * px}" style="display:block;background:var(--W);touch-action:none"`;
+  return `<div style="overflow:auto;max-height:calc(100vh - 280px);border:1px solid var(--i6);border-radius:var(--r);background:var(--i9)">
+    <svg id="fp-svg" viewBox="0 0 ${W} ${H}" ${size} preserveAspectRatio="xMidYMin meet"
       onpointerdown="fpDown(event)">
       ${grid.join('')}
       <rect x="0" y="0" width="${W}" height="${H}" fill="none" stroke="var(--i3)" stroke-width="0.12"/>
       ${zonesSvg(p)}
       ${booths}
+      ${[...groups].map(([k, idx]) => groupSvg(p, idx, exOf[idx[0]][0])).join('')}
     </svg></div>`;
 }
+
+/* 한 기업이 쓰는 칸들을 테두리 하나로 묶고 «번호 범위 + 기업명»을 한 번 쓴다.
+   칸들이 네모를 꽉 채우면 바깥 테두리 하나, 아니면(ㄱ자 등) 칸 테두리를 그대로 두고 첫 줄 가운데에 쓴다 */
+function groupSvg(p, idx, x){
+  const bs = idx.map(i => p.booths[i]);
+  const x0 = Math.min(...bs.map(b => b.x)), y0 = Math.min(...bs.map(b => b.y));
+  const x1 = Math.max(...bs.map(b => b.x + b.w)), y1 = Math.max(...bs.map(b => b.y + b.h));
+  const area = bs.reduce((a, b) => a + b.w * b.h, 0);
+  const rect = Math.abs(area - (x1 - x0) * (y1 - y0)) < 0.01;
+  const row = rect ? bs : bs.filter(b => b.y === y0);
+  const lx0 = Math.min(...row.map(b => b.x)), lx1 = Math.max(...row.map(b => b.x + b.w));
+  const ly1 = rect ? y1 : Math.max(...row.map(b => b.y + b.h));
+  const fs = Math.min(...bs.map(b => Math.min(b.w, b.h))) * 0.22;
+  const name = exhNames(x).ko;
+  const maxCh = Math.max(3, Math.floor((lx1 - lx0) / (fs * 1.0)));
+  const short = name.length > maxCh ? name.slice(0, maxCh - 1) + '…' : name;
+  const sel = idx.includes(fp.sel);
+  const sc = isConfirmed(x) ? BOOTH_STATES.confirmed.stroke : BOOTH_STATES.pending.stroke;
+  const outline = rect
+    ? `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" fill="none" stroke="${sel ? 'var(--ak)' : sc}" stroke-width="${sel ? 0.18 : 0.12}"/>`
+    : bs.map(b => `<rect x="${b.x}" y="${b.y}" width="${b.w}" height="${b.h}" fill="none" stroke="${sc}" stroke-width="0.1"/>`).join('');
+  return `<g style="pointer-events:none">${outline}
+    <text x="${x0 + 0.2}" y="${y0 + fs + 0.15}" font-size="${fs}" font-weight="700" fill="var(--i2)">${escapeHtml(x.booth_no)}</text>
+    <text x="${(lx0 + lx1) / 2}" y="${(y0 + ly1) / 2 + fs * 0.9}" font-size="${fs * 1.05}" font-weight="700" text-anchor="middle" fill="var(--ak)">${escapeHtml(short)}</text>
+  </g>`;
+}
+
+/* 모든 홀을 한 장에 나란히 — 실제 크기 비율 그대로, 화면 폭에 맞춰. 부스를 누르면 그 홀로 들어간다 */
+function allPlansSvg(all){
+  const GAP = 6;
+  let ox = 0; const parts = []; let H = 0;
+  fp.plans.forEach(p => {
+    const W = +p.width || 60, h = +p.height || 40;
+    const keep = { sel: fp.sel, selZ: fp.selZ }; fp.sel = -1; fp.selZ = -1;
+    const inner = planSvg(p, all).match(/<svg[^>]*>([\s\S]*)<\/svg>/)[1];
+    Object.assign(fp, keep);
+    parts.push(`<g transform="translate(${ox} 4)" onclick="fpSelPlan('${escAttr(p.id)}')" style="cursor:pointer">
+      <text x="0" y="-1.2" font-size="2.2" font-weight="700" fill="var(--i1)">${escapeHtml(p.name)}</text>${inner}</g>`);
+    ox += W + GAP; H = Math.max(H, h);
+  });
+  return `<div style="border:1px solid var(--i6);border-radius:var(--r);background:var(--W)">
+    <svg viewBox="-1 0 ${ox - GAP + 2} ${H + 5}" width="100%" style="display:block;max-height:calc(100vh - 260px)" preserveAspectRatio="xMidYMin meet">
+      ${parts.join('')}</svg></div>
+    <div style="font-size:var(--fs-11);color:var(--i4);margin-top:4px">홀을 누르면 그 홀에서 배정·편집합니다</div>`;
+}
+function fpAll(){ fp.all = !fp.all; fp.sel = -1; fp.selZ = -1; fp.pick = null; redraw(); }
 
 function zonesSvg(p){
   return (p.zones || []).map((z, i) => {
@@ -219,9 +302,18 @@ function sidePanel(p, all, ro){
             <span style="flex:1;cursor:pointer;color:var(--ak)" onclick="openExhDr('${escAttr(x.id)}','progress')"
               title="${escAttr(boothTypeText(x.booth_type))}">${escapeHtml(exhNames(x).ko)}
               <span style="color:var(--i4)">${escapeHtml(x.booth_no)}</span></span>
-            ${ro ? '' : `<button class="btn bs" onclick="fpUnassign('${escAttr(x.id)}')" title="이 기업의 부스 번호를 비웁니다">빼기</button>`}
+            ${ro ? `<span class="pill ${isConfirmed(x) ? 'p-blue' : 'p-amber'}">${isConfirmed(x) ? '확정' : '미정'}</span>`
+              : `<div class="seg" title="진행현황의 «부스 배정 확정»과 같은 값이에요">
+                  <button class="seg-b${isConfirmed(x) ? '' : ' on'}" onclick="fpConfirm('${escAttr(x.id)}', false)">미정</button>
+                  <button class="seg-b${isConfirmed(x) ? ' on' : ''}" onclick="fpConfirm('${escAttr(x.id)}', true)">확정</button></div>
+                <button class="btn bs" onclick="fpPick('${escAttr(x.id)}')" title="이 기업을 고른 채로 옆 칸을 누르면 «시작-끝»으로 늘어납니다">＋칸</button>
+                <button class="btn bs" onclick="fpUnassign('${escAttr(x.id)}')" title="이 기업의 부스 번호를 비웁니다">빼기</button>`}
           </div>`).join('')
-          : `<div style="color:var(--i4)">빈 부스예요 — 아래 목록에서 기업을 고르면 여기 배정돼요.</div>`}
+          : `<div style="color:var(--i4);margin-bottom:6px">${b.state === 'blocked' ? '배정할 수 없는 칸이에요.' : '아래 목록에서 기업을 고르면 여기 배정돼요.'}</div>
+            ${ro ? `<span class="pill">${BOOTH_STATES[boothState(b, ex)].label}</span>` : `<div class="seg" style="flex-wrap:wrap">
+              ${['empty', 'hold', 'org', 'blocked'].map(k => `<button class="seg-b${boothState(b, ex) === k ? ' on' : ''}" title="${escAttr(BOOTH_STATES[k].note)}"
+                onclick="fpSetBooth('state', '${k}')">${BOOTH_STATES[k].label}</button>`).join('')}</div>
+            <input class="fi" style="width:100%;margin-top:6px" placeholder="메모 (예: A사 협의 중, 기둥)" value="${escAttr(b.memo || '')}" onchange="fpSetBooth('memo', this.value)">`}`}
       </div>
       ${ro ? '' : `<div style="display:flex;gap:6px;margin-top:8px">
         <button class="btn bs" onclick="fpDupBooth()">복제</button>
@@ -244,7 +336,7 @@ function sidePanel(p, all, ro){
   return top + `<div class="uc" style="padding:10px 12px">
     <div style="font-weight:700;font-size:var(--fs-12_5);margin-bottom:4px">배치 안 된 기업 ${waiting.length}</div>
     <div style="font-size:var(--fs-10_5);color:var(--i4);margin-bottom:6px">${
-      fp.pick ? '<b style="color:var(--a)">이제 도면에서 부스를 누르세요</b> — 그 번호로 배정됩니다' : '기업을 고른 뒤 부스를 누르면 배정돼요'}</div>
+      fp.pick ? '<b style="color:var(--a)">이제 도면에서 부스를 누르세요</b> — 그 번호로 배정되고, 붙은 칸이면 «시작-끝»으로 늘어납니다' : '기업을 고른 뒤 부스를 누르면 배정돼요'}</div>
     <input class="fi" placeholder="기업 찾기" value="${escAttr(fp.q)}" oninput="fpSearch(this.value)" style="width:100%;margin-bottom:6px">
     <div style="max-height:46vh;overflow:auto">${list || '<div style="color:var(--i4);font-size:var(--fs-11_5)">모두 배치됐어요</div>'}</div>
   </div>`;
@@ -279,7 +371,14 @@ function fpDown(e){
   const i = +g.dataset.i;
   const b = p.booths[i];
   /* 기업을 고른 채로 부스를 누르면 배정 — 끌기보다 먼저 */
-  if(fp.pick){ assign(fp.pick, b.no); return; }
+  if(fp.pick){
+    if(b.state === 'blocked' && !exhOfBooth(b.no, activeExhibitors(exhEvent)).length){
+      alert(`부스 ${b.no}은(는) 배정불가 칸이에요${b.memo ? ` (${b.memo})` : ''}. 칸을 눌러 상태를 바꾼 뒤 배정하세요.`);
+      fp.pick = null; fp.sel = i; return redraw();
+    }
+    if(b.state === 'hold' && !confirm(`부스 ${b.no}은(는) 보류 칸이에요${b.memo ? ` (${b.memo})` : ''}. 그래도 배정할까요?`)){ fp.pick = null; return redraw(); }
+    assign(fp.pick, b.no); return;
+  }
   if(exhLocked()){ fp.sel = i; redraw(); return; }
   const s = svgPoint(e);
   drag = { i, dx: s.x - b.x, dy: s.y - b.y, moved: false, x0: b.x, y0: b.y };
@@ -313,11 +412,38 @@ async function assign(exhId, no){
   fp.pick = null;
   if(!x) return redraw();
   const old = String(x.booth_no || '').trim();
-  if(old && old !== no && !confirm(`${exhNames(x).ko}의 부스 번호를 ${old} → ${no}(으)로 바꿀까요?`)) return redraw();
+  const nos = new Set(curPlan().booths.map(b => String(b.no).trim()));
+  const n = /^\d+$/.test(no) ? +no : null;
+  const op = parseBooth(old);
+  let newNo = no, qty = 1;
+  /* 여러 부스는 «시작-끝»으로 적는다 — 붙은 칸을 누르면 늘리고, 부스 수가 정해진 기업은 처음부터 그만큼 */
+  if(n !== null && old && ['single', 'range'].includes(op.kind) && (n === op.last + 1 || n === op.first - 1)
+     && confirm(`${exhNames(x).ko}의 부스를 ${old} → ${Math.min(n, op.first)}-${Math.max(n, op.last)}(으)로 늘릴까요?
+(취소하면 ${no} 한 칸으로 바꿀지 묻습니다)`)){
+    const a = Math.min(n, op.first), b = Math.max(n, op.last);
+    newNo = `${a}-${b}`; qty = b - a + 1;
+  } else {
+    const want = Math.max(1, parseInt(String(x.booth_qty || '').replace(/[^0-9]/g, ''), 10) || 1);
+    const run = n !== null && want > 1 && Array.from({ length: want }, (_, k) => String(n + k)).every(v => nos.has(v));
+    if(run && confirm(`${exhNames(x).ko}은(는) ${want}부스예요. ${n}-${n + want - 1}(으)로 배정할까요?
+(취소하면 ${no} 한 칸만)`)){
+      newNo = `${n}-${n + want - 1}`; qty = want;
+    }
+    if(old && old !== newNo && !confirm(`${exhNames(x).ko}의 부스 번호를 ${old} → ${newNo}(으)로 바꿀까요?`)) return redraw();
+  }
   const taken = exhOfBooth(no, activeExhibitors(exhEvent)).filter(e => e.id !== exhId);
   if(taken.length && !confirm(`부스 ${no}에는 이미 ${taken.map(e => exhNames(e).ko).join(', ')}이(가) 있어요. 같이 쓰는 부스로 넣을까요?`)) return redraw();
   fp.sel = curPlan().booths.findIndex(b => b.no === no);
-  await patchExh(exhId, { booth_no: no }, '배치도 배정');
+  const patch = { booth_no: newNo };
+  if(qty > 1 || /-/.test(old)) patch.booth_qty = String(qty);   // 번호와 부스 수가 어긋나면 청구액이 틀어진다
+  await patchExh(exhId, patch, '배치도 배정');
+}
+/* 진행현황 «부스 배정 확정»과 같은 칸을 켜고 끈다 — 켤 때 오늘 날짜를 함께 찍는다(toggleExhFlag와 같은 규칙) */
+function fpConfirm(exhId, on){
+  const x = activeExhibitors(exhEvent).find(e => e.id === exhId);
+  if(!x || isConfirmed(x) === on) return;
+  patchExh(exhId, on ? { booth_confirmed: 'yes', booth_confirmed_at: td() } : { booth_confirmed: '', booth_confirmed_at: '' },
+    on ? '부스 배정 확정' : '부스 배정 미정');
 }
 function fpUnassign(exhId){
   const x = activeExhibitors(exhEvent).find(e => e.id === exhId);
@@ -333,6 +459,7 @@ function askNum(msg, def){
   return Number.isFinite(n) && n > 0 ? n : NaN;
 }
 function fpAddPlan(){
+  if(!fp.plans) return;
   const name = prompt('도면 이름 (예: 1홀, 3층 그랜드볼룸)', `${(fp.plans.length + 1)}홀`);
   if(!name) return;
   const w = askNum('홀 가로 길이(m)', '60'); if(!w) return;
@@ -377,6 +504,8 @@ function fpAddRow(){
 }
 function fpSetBooth(k, v){
   const p = curPlan(); const b = p?.booths[fp.sel]; if(!b) return;
+  if(k === 'state'){ b.state = v === 'empty' ? '' : v; savePlan(p, true); return redraw(); }
+  if(k === 'memo'){ b.memo = String(v).trim(); savePlan(p); return redraw(); }
   if(k === 'no'){
     const nv = String(v).trim(); if(!nv) return redraw();
     const users = exhOfBooth(b.no, activeExhibitors(exhEvent)).filter(x => String(x.booth_no).trim() === String(b.no).trim());
@@ -425,9 +554,9 @@ function fpDelZone(){
   if(!confirm(`구역 «${z.label}»을(를) 지울까요?`)) return;
   p.zones.splice(fp.selZ, 1); fp.selZ = -1; savePlan(p); redraw();
 }
-function fpSelPlan(id){ fp.cur = id; fp.sel = -1; fp.selZ = -1; fp.pick = null; redraw(); }
+function fpSelPlan(id){ fp.all = false; fp.cur = id; fp.sel = -1; fp.selZ = -1; fp.pick = null; redraw(); }
 function fpPick(id){ fp.pick = fp.pick === id ? null : id; redraw(); }
-function fpZoom(d){ fp.zoom = Math.max(0.4, Math.min(3, +(fp.zoom + d * 0.2).toFixed(1))); redraw(); }
+function fpZoom(d){ fp.zoom = Math.max(1, Math.min(4, +(fp.zoom + d * 0.5).toFixed(1))); redraw(); }
 let qTimer = null;
 function fpSearch(v){
   fp.q = v; clearTimeout(qTimer);
@@ -439,4 +568,4 @@ function fpSearch(v){
 }
 
 Object.assign(window, { renderFloorView, fpDown, fpAddPlan, fpEditPlan, fpAddRow, fpSetBooth, fpDupBooth,
-  fpDelBooth, fpAddZone, fpSetZone, fpDelZone, fpSelPlan, fpPick, fpZoom, fpSearch, fpUnassign });
+  fpDelBooth, fpAddZone, fpSetZone, fpDelZone, fpSelPlan, fpConfirm, fpAll, fpPick, fpZoom, fpSearch, fpUnassign });
