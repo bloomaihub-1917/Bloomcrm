@@ -351,7 +351,48 @@ export async function confirmExhImport(){
 }
 
 
+/* 참가 확정하면 전시 진행관리에 바로 — 행사 DB·등록 링크에서 «전시참가기업»을 확정하면
+   그 기업을 진행관리에 넣는다(이미 있는 기업은 건너뜀). 신청서의 부스형태·부스수는
+   참가 기록 메모(«부스형태: …» 줄)에서 읽어 같이 넣는다. 실패해도 확정은 그대로 둔다 —
+   «참가기업 불러오기»로 언제든 다시 넣을 수 있다. */
+export async function autoAddExhibitorsFor(evKey, contactIds){
+  try{
+    if(!evKey || evPartDone(evKey, 'exh')) return 0;
+    const ids = new Set([...contactIds].map(String));
+    const parts = participations.filter(p => p.eventId === evKey && ids.has(String(p.contactId))
+      && p.confirmedAt && EXH_ROLES.includes(String(p.role || '').trim()));
+    if(!parts.length) return 0;
+    await reloadOrgs().catch(() => {});   // 확정하며 서버가 새로 만든 기업을 알아보게
+    const have = exhibitorsForEvent(evKey);
+    const haveKey = new Set(have.map(x => x.company_key));
+    const haveOrg = new Set(have.map(x => String(x.org_id || '')).filter(Boolean));
+    const line = (note, k) => ((String(note || '').match(new RegExp('^' + k + ':\\s*(.+)$', 'm')) || [])[1] || '').trim();
+    const rows = new Map();
+    parts.forEach(p => {
+      const c = contacts.find(x => String(x.id) === String(p.contactId));
+      const raw = c ? (c.orgKo || c.orgEn || '') : '';
+      if(!raw) return;
+      const orgId = String((c && c.org_id) || '') || orgIdForName(raw) || '';
+      const org = orgId ? getOrgById(orgId) : null;
+      const name = (org && (org.name_ko || org.name_en)) || raw;
+      const key = normalizeCompanyKey(name);
+      if(haveKey.has(key) || (orgId && haveOrg.has(orgId)) || rows.has(key)) return;
+      const qty = parseInt(line(p.note, '부스수'), 10);
+      rows.set(key, { event_id: evKey, org_id: orgId, company_key: key, company_name: name, status: '준비중',
+        updated_at: td(), booth_type: line(p.note, '부스형태'), booth_qty: qty > 0 ? String(qty) : '' });
+    });
+    if(!rows.size) return 0;
+    const r = await batchCreateExhibitors([...rows.values()]);
+    if(!r.ok) return 0;
+    await reloadExhibitors();
+    trackAction('add', '전시 참가기업 등록', `${rows.size}개사`,
+      `참가 확정한 <b>${escapeHtml(rows.size + '개사')}</b>를 전시 진행관리에 넣었어요`);
+    return rows.size;
+  }catch(e){ console.warn('[전시 진행관리 자동 추가]', e); return 0; }
+}
+
 /* 화면의 onclick이 부르는 것 */
+window.autoAddExhibitorsFor = autoAddExhibitorsFor;
 window.openExhAdd = openExhAdd;
 window.closeExhAdd = closeExhAdd;
 window.confirmExhAdd = confirmExhAdd;

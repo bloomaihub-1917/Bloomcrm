@@ -1251,6 +1251,8 @@ async function saveConfirm(rows, on){
     { table: 'participations', op: 'update-many',
       rows: touched.map(({ p, before }) => ({ row: p.id,
         before: { confirmed_at: before }, after: { confirmed_at: p.confirmedAt || '' } })) });
+  /* 전시참가기업을 확정하면 전시 진행관리에도 넣는다(exh-add.js) */
+  if(on && window.autoAddExhibitorsFor) await window.autoAddExhibitorsFor(evdbEvent, rows.map(r => r.cid));
   return true;
 }
 

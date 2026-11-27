@@ -84,6 +84,8 @@ export async function acceptPending(evKey, id){
   pending.set(evKey, pendingFor(evKey).filter(x => x.id !== id));
   if(evKey === openEv) subs = pendingFor(evKey);
   changed(evKey);
+  /* 전시참가기업이면 전시 진행관리에도 넣는다(exh-add.js) */
+  if(window.autoAddExhibitorsFor) await window.autoAddExhibitorsFor(evKey, [cid]);
   return r;
 }
 
